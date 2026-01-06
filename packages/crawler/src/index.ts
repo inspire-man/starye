@@ -3,11 +3,12 @@ import type { CrawlStrategy } from './lib/strategy'
 import process from 'node:process'
 import { BaseCrawler } from './lib/base-crawler'
 import { Site92Hm } from './strategies/site-92hm'
-import 'dotenv/config'
+import { SiteSe8 } from './strategies/site-se8'
 
 class Runner extends BaseCrawler {
   private strategies: CrawlStrategy[] = [
     new Site92Hm(),
+    new SiteSe8(),
   ]
 
   async run() {
@@ -33,16 +34,27 @@ class Runner extends BaseCrawler {
         throw new Error('Browser not initialized')
       const page = await this.browser.newPage()
 
-      // Determine if it's a detail page or chapter page
-      // Simple heuristic: if url contains 'chapter' or reads like one
-      // For 92hm, details are usually /manhua/ or /book/, reading is /chapter/
+      if (url.includes('/chapter/')) {
+        console.log('Detected Chapter URL. Fetching content...')
+        const content = await strategy.getChapterContent(url, page)
+        console.log('鉁 Chapter Content:', {
+          title: content.title,
+          imageCount: content.images.length,
+          samples: content.images.slice(0, 3),
+        })
+      }
+      else {
+        console.log('Detected Manga URL. Fetching info...')
+        const info = await strategy.getMangaInfo(url, page)
 
-      console.log('Fetching manga info...')
-      const info = await strategy.getMangaInfo(url, page)
-      console.log('鉁 Manga Info:', info)
+        // 补全 URL 为绝对路径
+        info.chapters = info.chapters.map(c => ({
+          ...c,
+          url: c.url.startsWith('http') ? c.url : `${strategy.baseUrl}${c.url}`,
+        }))
 
-      // Sync to API (Mock for now)
-      // await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
+        console.log('鉁 Manga Info:', info)
+      }
     }
     catch (e) {
       console.error('Crawl failed:', e)

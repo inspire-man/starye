@@ -20,7 +20,8 @@ export class Site92Hm implements CrawlStrategy {
       const author = document.querySelector('.author, .info p:nth-child(2)')?.textContent?.trim()
       const desc = document.querySelector('.intro, #intro')?.textContent?.trim()
 
-      const chapterEls = Array.from(document.querySelectorAll('.chapter-list a, #chapter-list a, .detail-list-form-item a'))
+      // Fixed selector based on inspection: ul#detail-list-select li a
+      const chapterEls = Array.from(document.querySelectorAll('#detail-list-select li a, .detail-list-select li a'))
 
       const chapters = chapterEls.map((el, index) => ({
         title: el.textContent?.trim() || `Chapter ${index + 1}`,
@@ -46,7 +47,7 @@ export class Site92Hm implements CrawlStrategy {
 
       // 查找所有可能的图片容器
       const images = Array.from(document.querySelectorAll('.comic-content img, #content img, .rd-article-wr img'))
-        .map(img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.src)
+        .map(img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src') || '')
         .filter(src => src && !src.includes('ad')) // Filter ads
 
       return { title, images }
