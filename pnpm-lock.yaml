@@ -48,8 +48,8 @@ importers:
   apps/api:
     dependencies:
       '@hono/zod-validator':
-        specifier: ^0.4.2
-        version: 0.4.3(hono@4.11.3)(zod@3.25.76)
+        specifier: ^0.7.6
+        version: 0.7.6(hono@4.11.3)(zod@4.3.5)
       '@starye/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -57,20 +57,20 @@ importers:
         specifier: ^0.45.1
         version: 0.45.1(@cloudflare/workers-types@4.20260103.0)
       hono:
-        specifier: ^4.0.0
+        specifier: ^4.11.3
         version: 4.11.3
       zod:
-        specifier: ^3.24.1
-        version: 3.25.76
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: ^4.20250129.0
+        specifier: ^4.20260103.0
         version: 4.20260103.0
       eslint:
-        specifier: ^9.0.0
+        specifier: ^9.39.2
         version: 9.39.2(jiti@2.6.1)
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.9.3
         version: 5.9.3
       wrangler:
         specifier: ^4.54.0
@@ -80,10 +80,10 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)
+        version: 0.30.10(@cloudflare/workers-types@4.20260103.0)
       drizzle-zod:
         specifier: ^0.8.3
-        version: 0.8.3(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0))(zod@4.3.5)
+        version: 0.8.3(drizzle-orm@0.30.10(@cloudflare/workers-types@4.20260103.0))(zod@4.3.5)
       zod:
         specifier: ^4.3.5
         version: 4.3.5
@@ -1033,11 +1033,11 @@ packages:
   '@floating-ui/vue@1.1.9':
     resolution: {integrity: sha512-BfNqNW6KA83Nexspgb9DZuz578R7HT8MZw1CfK9I6Ah4QReNWEJsXWHN+SdmOVLNGmTPDi+fDT535Df5PzMLbQ==}
 
-  '@hono/zod-validator@0.4.3':
-    resolution: {integrity: sha512-xIgMYXDyJ4Hj6ekm9T9Y27s080Nl9NXHcJkOvkXPhubOLj8hZkOL8pDnnXfvCf5xEE8Q4oMFenQUZZREUY2gqQ==}
+  '@hono/zod-validator@0.7.6':
+    resolution: {integrity: sha512-Io1B6d011Gj1KknV4rXYz4le5+5EubcWEU/speUjuw9XMMIaP3n78yXLhjd2A3PXaXaUwEAluOiAyLqhBEJgsw==}
     peerDependencies:
       hono: '>=3.9.0'
-      zod: ^3.19.1
+      zod: ^3.25.0 || ^4.0.0
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -1894,6 +1894,86 @@ packages:
   drizzle-kit@0.31.8:
     resolution: {integrity: sha512-O9EC/miwdnRDY10qRxM8P3Pg8hXe3LyU4ZipReKOgTwn4OqANmftj8XJz1UPUAS6NMHf0E2htjsbQujUTkncCg==}
     hasBin: true
+
+  drizzle-orm@0.30.10:
+    resolution: {integrity: sha512-IRy/QmMWw9lAQHpwbUh1b8fcn27S/a9zMIzqea1WNOxK9/4EB8gIo+FZWLiPXzl2n9ixGSv8BhsLZiOppWEwBw==}
+    peerDependencies:
+      '@aws-sdk/client-rds-data': '>=3'
+      '@cloudflare/workers-types': '>=3'
+      '@electric-sql/pglite': '>=0.1.1'
+      '@libsql/client': '*'
+      '@neondatabase/serverless': '>=0.1'
+      '@op-engineering/op-sqlite': '>=2'
+      '@opentelemetry/api': ^1.4.1
+      '@planetscale/database': '>=1'
+      '@types/better-sqlite3': '*'
+      '@types/pg': '*'
+      '@types/react': '>=18'
+      '@types/sql.js': '*'
+      '@vercel/postgres': '>=0.8.0'
+      '@xata.io/client': '*'
+      better-sqlite3: '>=7'
+      bun-types: '*'
+      expo-sqlite: '>=13.2.0'
+      knex: '*'
+      kysely: '*'
+      mysql2: '>=2'
+      pg: '>=8'
+      postgres: '>=3'
+      react: '>=18'
+      sql.js: '>=1'
+      sqlite3: '>=5'
+    peerDependenciesMeta:
+      '@aws-sdk/client-rds-data':
+        optional: true
+      '@cloudflare/workers-types':
+        optional: true
+      '@electric-sql/pglite':
+        optional: true
+      '@libsql/client':
+        optional: true
+      '@neondatabase/serverless':
+        optional: true
+      '@op-engineering/op-sqlite':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@planetscale/database':
+        optional: true
+      '@types/better-sqlite3':
+        optional: true
+      '@types/pg':
+        optional: true
+      '@types/react':
+        optional: true
+      '@types/sql.js':
+        optional: true
+      '@vercel/postgres':
+        optional: true
+      '@xata.io/client':
+        optional: true
+      better-sqlite3:
+        optional: true
+      bun-types:
+        optional: true
+      expo-sqlite:
+        optional: true
+      knex:
+        optional: true
+      kysely:
+        optional: true
+      mysql2:
+        optional: true
+      pg:
+        optional: true
+      postgres:
+        optional: true
+      react:
+        optional: true
+      sql.js:
+        optional: true
+      sqlite3:
+        optional: true
 
   drizzle-orm@0.45.1:
     resolution: {integrity: sha512-Te0FOdKIistGNPMq2jscdqngBRfBpC8uMFVwqjf6gtTVJHIQ/dosgV/CLBU2N4ZJBsXL5savCba9b0YJskKdcA==}
@@ -3440,9 +3520,6 @@ packages:
   zod@3.22.3:
     resolution: {integrity: sha512-EjIevzuJRiRPbVH4mGc8nApb/lVLKVpmUhAaR5R5doKGfAnGJ6Gr3CViAVjP+4FWSxCsybeWQdcgCtbX+7oZug==}
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-
   zod@4.3.5:
     resolution: {integrity: sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g==}
 
@@ -4100,10 +4177,10 @@ snapshots:
       - '@vue/composition-api'
       - vue
 
-  '@hono/zod-validator@0.4.3(hono@4.11.3)(zod@3.25.76)':
+  '@hono/zod-validator@0.7.6(hono@4.11.3)(zod@4.3.5)':
     dependencies:
       hono: 4.11.3
-      zod: 3.25.76
+      zod: 4.3.5
 
   '@humanfs/core@0.19.1': {}
 
@@ -4858,13 +4935,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  drizzle-orm@0.30.10(@cloudflare/workers-types@4.20260103.0):
+    optionalDependencies:
+      '@cloudflare/workers-types': 4.20260103.0
+
   drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260103.0
 
-  drizzle-zod@0.8.3(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0))(zod@4.3.5):
+  drizzle-zod@0.8.3(drizzle-orm@0.30.10(@cloudflare/workers-types@4.20260103.0))(zod@4.3.5):
     dependencies:
-      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20260103.0)
+      drizzle-orm: 0.30.10(@cloudflare/workers-types@4.20260103.0)
       zod: 4.3.5
 
   electron-to-chromium@1.5.267: {}
@@ -6545,8 +6626,6 @@ snapshots:
       youch-core: 0.3.3
 
   zod@3.22.3: {}
-
-  zod@3.25.76: {}
 
   zod@4.3.5: {}
 
