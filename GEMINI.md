@@ -33,12 +33,12 @@
   - **部署名称**: `dashboard`
 
 - **API (后端服务)**:
-  - **技术栈**: Hono 框架运行于 Cloudflare Workers
+  - **技术栈**: Hono v4.x 运行于 Cloudflare Workers
   - **功能**:
-    - **数据**: Drizzle ORM + D1。
-    - **鉴权**: Better Auth (User) + Service Token (Crawler)。
+    - **数据**: Drizzle ORM (Latest) + D1 (Remote/Local)。
+    - **鉴权**: Better Auth (User, GitHub OAuth) + Service Token (Crawler)。
     - **存储**: R2 Presigned URL 下发。
-    - **监控**: Discord Webhook 异常告警。
+    - **监控**: Global Error Handler + Discord Webhook (ToDo)。
   - **部署名称**: `api`
 
 - **Edge Router (统一入口)**:
@@ -59,11 +59,12 @@
 
 - **Database (数据层)**:
   - **位置**: `packages/db`
-  - **技术**: Drizzle ORM + D1。
+  - **技术**: Drizzle ORM + D1 + **Zod v4**。
+  - **优化**: 包含完整的 Drizzle Relations 定义。
 
 - **UI Library (设计系统)**:
   - **位置**: `packages/ui`
-  - **技术**: **Tailwind CSS** + **Shadcn UI (Vue)**。
+  - **技术**: **Tailwind CSS v4** + **Shadcn UI (Vue)**。
   - **策略**: 导出 `tailwind.preset` 供 Apps 消费，确保样式在 Monorepo 跨包引用时不丢失。
 
 ### 2.2 基础设施与云服务 (Cloudflare Stack - Zero Cost Optimized)
@@ -96,39 +97,40 @@
 
 ## 4. 实施阶段建议 (Todo List - Fine Grained)
 
-### Phase 1: 基础设施搭建 (Base Infrastructure)
+### Phase 1: 基础设施搭建 (Base Infrastructure) [Done]
 
-- [ ] **1.1 Monorepo Setup**:
-  - [ ] 初始化 `pnpm workspace` 和 `turbo`。
-  - [ ] 配置根目录 `.gitignore`, `.npmrc`。
-  - [ ] 安装并配置 `@antfu/eslint-config` 和 `prettier`。
-  - [ ] 创建 `packages/config` (shared tsconfig)。
-- [ ] **1.2 Database Layer**:
-  - [ ] 创建 `packages/db`。
-  - [ ] 安装 `drizzle-orm`, `drizzle-kit`。
-  - [ ] 配置 `drizzle.config.ts` (支持本地 SQLite 和远程 D1)。
-  - [ ] 初始化基础 Schema: `users`, `sessions` (Better Auth), `posts`, `media` (含 variants 字段)。
-- [ ] **1.3 UI System**:
-  - [ ] 创建 `packages/ui`。
-  - [ ] 安装 `tailwindcss`, `shadcn-vue`, `unocss` (可选)。
-  - [ ] 编写并导出 `tailwind.preset.ts`。
-  - [ ] 添加第一个组件 (Button) 验证导出。
+- [x] **1.1 Monorepo Setup**:
+  - [x] 初始化 `pnpm workspace` 和 `turbo`。
+  - [x] 配置根目录 `.gitignore`, `.npmrc`。
+  - [x] 安装并配置 `@antfu/eslint-config` (移除 Prettier 避免冲突)。
+  - [x] 配置 Husky, Lint-staged, Commitlint。
+- [x] **1.2 Database Layer**:
+  - [x] 创建 `packages/db`。
+  - [x] 安装 `drizzle-orm` (Latest), `drizzle-kit`。
+  - [x] 配置 `drizzle.config.ts` (支持本地 SQLite 和远程 D1)。
+  - [x] 初始化 Schema: User, Auth, Content, Media, Comic, Job。
+  - [x] 优化: 添加 Drizzle Relations。
+- [x] **1.3 UI System**:
+  - [x] 创建 `packages/ui`。
+  - [x] 安装 `tailwindcss` (v4), `shadcn-vue`。
+  - [x] 编写并导出 `tailwind.preset.ts`。
 
-### Phase 2: 后端核心与鉴权 (Backend Core)
+### Phase 2: 后端核心与鉴权 (Backend Core) [Done]
 
-- [ ] **2.1 API Service**:
-  - [ ] 创建 `apps/api` (Hono)。
-  - [ ] 配置 `wrangler.toml` (绑定 D1, R2)。
-  - [ ] 实现 Error Handler 中间件 (集成 Discord Webhook)。
-- [ ] **2.2 Authentication**:
-  - [ ] 集成 `better-auth`。
-  - [ ] 配置 GitHub OAuth Provider。
-  - [ ] 实现 `Service Token` 中间件 (保护爬虫接口)。
+- [x] **2.1 API Service**:
+  - [x] 创建 `apps/api` (Hono)。
+  - [x] 配置 `wrangler.toml` (绑定 D1, R2)。
+  - [x] 实现 Global Error Handler 中间件。
+  - [x] 实现 DRY Config (统一 CORS 配置)。
+- [x] **2.2 Authentication**:
+  - [x] 集成 `better-auth` (支持 Workers 环境, 动态 BaseURL)。
+  - [x] 配置 GitHub OAuth Provider。
+  - [x] 实现 `Service Token` 中间件 (保护爬虫接口)。
 - [ ] **2.3 Media Service**:
   - [ ] 实现 R2 Presigned URL 生成接口 (PUT)。
   - [ ] 编写文档：配置 R2 自定义域名和缓存规则。
 
-### Phase 3: 爬虫与自动化 (Crawler & Automation)
+### Phase 3: 爬虫与自动化 (Crawler & Automation) [Pending]
 
 - [ ] **3.1 Crawler Package**:
   - [ ] 创建 `packages/crawler`。
@@ -141,7 +143,7 @@
   - [ ] 编写 Orama 索引构建脚本。
   - [ ] 实现索引上传 R2 逻辑。
 
-### Phase 4: 前端应用开发 (Frontend Apps)
+### Phase 4: 前端应用开发 (Frontend Apps) [Pending]
 
 - [ ] **4.1 Dashboard**:
   - [ ] 创建 `apps/dashboard` (Vite)。
@@ -156,7 +158,7 @@
   - [ ] 配置 `baseURL: /comic/`。
   - [ ] 实现瀑布流阅读器。
 
-### Phase 5: 路由与集成 (Integration)
+### Phase 5: 路由与集成 (Integration) [Pending]
 
 - [ ] **5.1 Gateway**:
   - [ ] 创建 `apps/gateway`。
