@@ -142,7 +142,7 @@ async function main() {
       token: process.env.CRAWLER_SECRET || 'mock',
     },
     puppeteer: {
-      executablePath: process.env.CHROME_PATH, // Will use puppeteer bundled if undefined
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH,
     },
   })
 

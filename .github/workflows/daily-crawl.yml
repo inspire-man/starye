@@ -52,8 +52,11 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           # Puppeteer Cache
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
-          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
         run: |
+          # 动态查找 Chrome 路径
+          export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)
+          echo "Found Chrome at: $PUPPETEER_EXECUTABLE_PATH"
+
           # 如果有输入 URL 则使用，否则默认爬取首页（示例）
           TARGET="${{ inputs.target_url }}"
           if [ -z "$TARGET" ]; then

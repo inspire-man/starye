@@ -28,12 +28,15 @@ export abstract class BaseCrawler {
   }
 
   async initBrowser() {
-    // 自动寻找 Chrome 路径 (本地开发通常需要配置，GHA 有固定路径)
-    // 暂时硬编码或从环境变量读取
-    const executablePath = this.config.puppeteer?.executablePath || process.env.CHROME_PATH
-      || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Windows Default
+    // 优先使用配置路径或环境变量
+    const executablePath = this.config.puppeteer?.executablePath || process.env.PUPPETEER_EXECUTABLE_PATH
 
-    console.log('Launching browser from:', executablePath)
+    if (executablePath) {
+      console.log('Launching browser from:', executablePath)
+    }
+    else {
+      console.log('Launching browser (bundled/default)...')
+    }
 
     this.browser = await puppeteer.launch({
       executablePath,
