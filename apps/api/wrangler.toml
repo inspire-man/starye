@@ -1,7 +1,7 @@
 name = "starye-api"
 main = "src/index.ts"
 compatibility_date = "2024-04-01"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = [ "nodejs_compat" ]
 
 # Vars for secrets (set via wrangler secret put or .dev.vars)
 [vars]
