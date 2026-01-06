@@ -105,8 +105,9 @@ class Runner extends BaseCrawler {
             await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
           }
         }
-        catch (err: any) {
-          console.error(`鉁 Failed to process ${url}: ${err.message}`)
+        catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err)
+          console.error(`鉁 Failed to process ${url}: ${msg}`)
         }
         finally {
           await page.close()

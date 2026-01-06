@@ -1,3 +1,4 @@
+import type { Orama, TypedDocument } from '@orama/orama'
 import { create, insert, save } from '@orama/orama'
 
 export const searchSchema = {
@@ -8,7 +9,9 @@ export const searchSchema = {
   cover: 'string',
 } as const
 
-export interface ComicDoc {
+export type SearchSchema = typeof searchSchema
+
+export interface ComicDoc extends TypedDocument<Orama<SearchSchema>> {
   title: string
   slug: string
   author?: string
@@ -17,7 +20,7 @@ export interface ComicDoc {
 }
 
 export class SearchIndexer {
-  private db: any
+  // private db: Orama<SearchSchema> | undefined // Not really used as class prop in current logic
 
   constructor() {
     // Initialized async
@@ -31,13 +34,13 @@ export class SearchIndexer {
     // eslint-disable-next-line no-console
     console.log(`Indexing ${documents.length} documents...`)
 
-    // Batch insert is faster but simple loop is fine for < 10k items
-    await insert(db, documents as any) // Type cast if needed depending on strictness
+    // Batch insert
+    await insert(db, documents)
 
     return db
   }
 
-  async serialize(db: any) {
+  async serialize(db: Orama<SearchSchema>) {
     const saved = await save(db)
     return JSON.stringify(saved)
   }

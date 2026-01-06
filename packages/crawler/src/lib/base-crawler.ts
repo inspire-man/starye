@@ -54,7 +54,7 @@ export abstract class BaseCrawler {
   /**
    * Sync data to API
    */
-  async syncToApi(endpoint: string, data: any) {
+  async syncToApi(endpoint: string, data: unknown) {
     const url = `${this.config.api.url}${endpoint}`
     try {
       const res = await got.post(url, {
@@ -65,8 +65,9 @@ export abstract class BaseCrawler {
       }).json()
       return res
     }
-    catch (e: any) {
-      console.error(`Sync failed to ${url}: ${e.message}`)
+    catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error(`Sync failed to ${url}: ${msg}`)
       throw e
     }
   }

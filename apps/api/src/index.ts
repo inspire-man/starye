@@ -63,15 +63,18 @@ app.use(async (c, next) => {
     const auth = createAuth(c.env, c.req.raw)
     c.set('auth', auth)
   }
-  catch (e: any) {
+  catch (e: unknown) {
     console.error('Failed to initialize DB or Auth:', e)
+    const message = e instanceof Error ? e.message : 'Unknown initialization error'
+    const stack = e instanceof Error && process.env.NODE_ENV === 'development' ? e.stack : undefined
+
     // We don't throw here to allow health check to pass if it doesn't use auth,
     // but better to fail safely for routes that need it.
     // However, for debugging 1101, let's allow it to proceed and fail later or return error now.
     return c.json({
       success: false,
-      error: `Initialization Error: ${e.message}`,
-      stack: process.env.NODE_ENV === 'development' ? e.stack : undefined,
+      error: `Initialization Error: ${message}`,
+      stack,
     }, 500)
   }
 
@@ -184,12 +187,13 @@ app.post(
 
       return c.json({ success: true, message: `Synced ${data.chapters.length} chapters` })
     }
-    catch (e: any) {
+    catch (e: unknown) {
       console.error('[Sync DB Error]', e)
+      const message = e instanceof Error ? e.message : String(e)
       return c.json({
         success: false,
-        error: `Database Error: ${e.message}`,
-        details: e.toString(),
+        error: `Database Error: ${message}`,
+        details: String(e),
       }, 500)
     }
   },

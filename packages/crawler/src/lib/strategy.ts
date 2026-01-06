@@ -1,3 +1,5 @@
+import type { Page } from 'puppeteer-core'
+
 export interface MangaInfo {
   title: string
   slug: string
@@ -28,15 +30,15 @@ export interface CrawlStrategy {
   /**
    * Parse a list page (pagination) to get manga links and next page
    */
-  getMangaList?: (url: string, page: any) => Promise<{ mangas: string[], next?: string }>
+  getMangaList?: (url: string, page: Page) => Promise<{ mangas: string[], next?: string }>
 
   /**
    * Parse manga details page to get metadata and chapter list
    */
-  getMangaInfo: (url: string, page: any) => Promise<MangaInfo> // Using any for Page to avoid complex type imports here
+  getMangaInfo: (url: string, page: Page) => Promise<MangaInfo>
 
   /**
    * Parse chapter reading page to get image URLs
    */
-  getChapterContent: (url: string, page: any) => Promise<ChapterContent>
+  getChapterContent: (url: string, page: Page) => Promise<ChapterContent>
 }
