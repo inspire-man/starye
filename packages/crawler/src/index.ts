@@ -1,22 +1,55 @@
 /* eslint-disable no-console */
+import type { CrawlStrategy } from './lib/strategy'
 import process from 'node:process'
 import { BaseCrawler } from './lib/base-crawler'
+import { Site92Hm } from './strategies/site-92hm'
 import 'dotenv/config'
 
-class DemoCrawler extends BaseCrawler {
-  async run() {
-    console.log('馃敟 Starting Demo Crawl...')
-    await this.initBrowser()
-    console.log('鉁 Browser launched successfully!')
+class Runner extends BaseCrawler {
+  private strategies: CrawlStrategy[] = [
+    new Site92Hm(),
+  ]
 
-    if (this.browser) {
-      const page = await this.browser.newPage()
-      await page.goto('https://example.com')
-      console.log('鉁 Visited example.com, Title:', await page.title())
+  async run() {
+    const url = process.argv[2]
+
+    if (!url) {
+      console.warn('鈻 Please provide a target URL as an argument.')
+      console.log('Example: pnpm start https://www.92hm.life/manhua/123/')
+      return
     }
 
-    await this.closeBrowser()
-    console.log('鉁 Browser closed.')
+    const strategy = this.strategies.find(s => s.match(url))
+    if (!strategy) {
+      console.error('鈻 No strategy found for this URL:', url)
+      return
+    }
+
+    console.log(`馃敟 Starting crawl with strategy: ${strategy.name}`)
+    await this.initBrowser()
+
+    try {
+      if (!this.browser)
+        throw new Error('Browser not initialized')
+      const page = await this.browser.newPage()
+
+      // Determine if it's a detail page or chapter page
+      // Simple heuristic: if url contains 'chapter' or reads like one
+      // For 92hm, details are usually /manhua/ or /book/, reading is /chapter/
+
+      console.log('Fetching manga info...')
+      const info = await strategy.getMangaInfo(url, page)
+      console.log('鉁 Manga Info:', info)
+
+      // Sync to API (Mock for now)
+      // await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
+    }
+    catch (e) {
+      console.error('Crawl failed:', e)
+    }
+    finally {
+      await this.closeBrowser()
+    }
   }
 }
 
@@ -27,24 +60,23 @@ async function main() {
 
   if (missing.length > 0) {
     console.warn(`鈻 Missing environment variables: ${missing.join(', ')}`)
-    console.warn('Skipping crawler execution. Please configure .env for packages/crawler.')
-    return
+    // return // Allow running without env for local strategy testing
   }
 
-  const crawler = new DemoCrawler({
+  const crawler = new Runner({
     r2: {
-      accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID || 'mock',
+      accessKeyId: process.env.R2_ACCESS_KEY_ID || 'mock',
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || 'mock',
       bucketName: process.env.R2_BUCKET_NAME || 'starye-media',
       publicUrl: process.env.R2_PUBLIC_URL || 'http://localhost:3000',
     },
     api: {
       url: process.env.API_URL || 'http://localhost:8787',
-      token: process.env.CRAWLER_SECRET!,
+      token: process.env.CRAWLER_SECRET || 'mock',
     },
     puppeteer: {
-      executablePath: process.env.CHROME_PATH,
+      executablePath: process.env.CHROME_PATH, // Will use puppeteer bundled if undefined
     },
   })
 
