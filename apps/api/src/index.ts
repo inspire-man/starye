@@ -32,10 +32,10 @@ app.use(
   }),
 );
 
-// Database & Auth Injection Middleware
+// Database Injection Middleware
 app.use(async (c, next) => {
   const db = createDb(c.env.DB);
-  const auth = createAuth(c);
+  const auth = createAuth(c.env, c.req.raw);
 
   c.set("db", db);
   c.set("auth", auth);

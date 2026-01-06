@@ -1,4 +1,3 @@
-import type { Context } from "hono";
 import { createDb } from "@starye/db";
 import * as schema from "@starye/db/schema";
 import { betterAuth } from "better-auth";
@@ -15,13 +14,14 @@ export interface Env {
   ADMIN_URL?: string;
 }
 
-export function createAuth(c: Context<{ Bindings: Env } & any>) {
-  const db = createDb(c.env.DB);
+// 解耦 Context，只依赖 Env 和 Request
+export function createAuth(env: Env, request: Request) {
+  const db = createDb(env.DB);
 
   // 动态获取 BaseURL (优先环境变量，回退到请求 Origin)
-  const url = new URL(c.req.url);
+  const url = new URL(request.url);
   const origin = `${url.protocol}//${url.host}`;
-  const baseURL = c.env.BETTER_AUTH_URL || origin;
+  const baseURL = env.BETTER_AUTH_URL || origin;
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -33,18 +33,18 @@ export function createAuth(c: Context<{ Bindings: Env } & any>) {
         verification: schema.verification,
       },
     }),
-    secret: c.env.BETTER_AUTH_SECRET,
+    secret: env.BETTER_AUTH_SECRET,
     baseURL,
     socialProviders: {
       github: {
-        clientId: c.env.GITHUB_CLIENT_ID,
-        clientSecret: c.env.GITHUB_CLIENT_SECRET,
+        clientId: env.GITHUB_CLIENT_ID,
+        clientSecret: env.GITHUB_CLIENT_SECRET,
       },
     },
     // 允许前端跨域访问
     trustedOrigins: [
-      c.env.WEB_URL,
-      c.env.ADMIN_URL,
+      env.WEB_URL,
+      env.ADMIN_URL,
       "http://localhost:3000", // Nuxt dev
       "http://localhost:5173", // Vite dev
     ].filter(Boolean) as string[],
