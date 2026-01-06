@@ -10,11 +10,17 @@ export interface Env {
   DB: D1Database
   BETTER_AUTH_SECRET: string
   BETTER_AUTH_URL?: string
-  CRAWLER_SECRET: string // Added this
+  CRAWLER_SECRET: string
   GITHUB_CLIENT_ID: string
   GITHUB_CLIENT_SECRET: string
   WEB_URL?: string
   ADMIN_URL?: string
+  // R2 Configuration
+  CLOUDFLARE_ACCOUNT_ID: string
+  R2_ACCESS_KEY_ID: string
+  R2_SECRET_ACCESS_KEY: string
+  R2_BUCKET_NAME: string
+  R2_PUBLIC_URL: string // e.g. https://cdn.starye.com
 }
 
 // 解耦 Context，只依赖 Env 和 Request
