@@ -1,9 +1,15 @@
 shellEmulator: true
 
 trustPolicy: no-downgrade
-
 packages:
-  - "apps/*"
-  - "packages/*"
+  - apps/*
+  - packages/*
 overrides:
   undici: ^6.0.0
+  undici-types: ^6.20.0
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - vue-demi
+  - workerd

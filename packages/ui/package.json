@@ -11,7 +11,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "lint": "eslint .",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "build": "tsc"
   },
   "peerDependencies": {
     "vue": "^3.0.0"
@@ -20,7 +21,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "0.45.1",
     "lucide-vue-next": "^0.562.0",
     "radix-vue": "^1.9.17",
     "tailwind-merge": "^3.4.0",

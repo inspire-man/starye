@@ -13,12 +13,11 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
-    "type-check": "tsc --noEmit"
-  },
-  "peerDependencies": {
-    "drizzle-orm": "^0.30.0"
+    "type-check": "tsc --noEmit",
+    "build": "tsc"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
     "zod": "^4.3.5"
   },
