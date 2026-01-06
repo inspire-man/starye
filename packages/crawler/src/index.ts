@@ -4,6 +4,7 @@ import process from 'node:process'
 import { BaseCrawler } from './lib/base-crawler'
 import { Site92Hm } from './strategies/site-92hm'
 import { SiteSe8 } from './strategies/site-se8'
+import 'dotenv/config' // Must be first
 
 class Runner extends BaseCrawler {
   private strategies: CrawlStrategy[] = [
@@ -54,6 +55,11 @@ class Runner extends BaseCrawler {
         }))
 
         console.log('鉁 Manga Info:', info)
+
+        // Sync to API
+        console.log('Syncing to API...')
+        const res = await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
+        console.log('鉁 Sync Result:', res)
       }
     }
     catch (e) {

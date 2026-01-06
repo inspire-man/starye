@@ -94,6 +94,8 @@ export const chapters = sqliteTable('chapter', {
   chapterNumber: integer('chapter_number'),
   sortOrder: integer('sort_order').notNull(),
   publishedAt: integer('published_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
 
 export const pages = sqliteTable('page', {

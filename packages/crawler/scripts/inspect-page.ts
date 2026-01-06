@@ -27,9 +27,8 @@ async function inspect() {
       // Use standard loop instead of Array.from().map
       const elements = document.querySelectorAll('div, ul, ol')
 
-      for (const el of elements) {
-        // Basic heuristic
-        const links = el.querySelectorAll('a')
+      for (const el of Array.from(elements)) {
+        // Basic heuristic        const links = el.querySelectorAll('a')
         if (links.length > 5) {
           results.push({
             tag: el.tagName.toLowerCase(),

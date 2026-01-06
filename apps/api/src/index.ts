@@ -2,15 +2,17 @@ import type { Database } from '@starye/db'
 import type { Auth, Env } from './lib/auth'
 import { zValidator } from '@hono/zod-validator'
 import { createDb } from '@starye/db'
-import { media } from '@starye/db/schema'
+import { chapters, comics, media } from '@starye/db/schema'
+import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
-import { z } from 'zod'
 
+import { z } from 'zod'
 import { getAllowedOrigins } from './config'
 import { createAuth } from './lib/auth'
 import { generatePresignedUrl } from './lib/r2'
+
 import { serviceAuth } from './middleware/service-auth'
 
 interface Variables {
@@ -106,10 +108,82 @@ app.post(
   },
 )
 
-// Service Protected Route (Example for Crawler)
-app.post('/api/admin/sync', serviceAuth(), async (c) => {
-  return c.json({ success: true, message: 'Sync received' })
+// ...
+
+// Schema Validation for Sync
+const MangaInfoSchema = z.object({
+  title: z.string(),
+  slug: z.string(),
+  cover: z.string().optional(),
+  author: z.string().optional(),
+  description: z.string().optional(),
+  chapters: z.array(z.object({
+    title: z.string(),
+    slug: z.string(),
+    url: z.string(),
+    number: z.number(),
+  })),
 })
+
+// Sync Route (Called by Crawler)
+app.post(
+  '/api/admin/sync',
+  serviceAuth(),
+  zValidator('json', z.object({
+    type: z.literal('manga'),
+    data: MangaInfoSchema,
+  })),
+  async (c) => {
+    const { data } = c.req.valid('json')
+    const db = c.get('db')
+
+    // 1. Upsert Comic
+    const comicId = data.slug
+    await db.insert(comics).values({
+      id: comicId,
+      title: data.title,
+      slug: data.slug,
+      coverImage: data.cover,
+      author: data.author,
+      description: data.description,
+      updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: comics.id,
+      set: {
+        title: data.title,
+        coverImage: data.cover,
+        author: data.author,
+        description: data.description,
+        updatedAt: new Date(),
+      },
+    })
+
+    // 2. Upsert Chapters
+    if (data.chapters.length > 0) {
+      const chapterValues = data.chapters.map(ch => ({
+        id: `${comicId}-${ch.slug}`,
+        comicId,
+        title: ch.title,
+        slug: ch.slug,
+        chapterNumber: ch.number,
+        sortOrder: ch.number,
+        updatedAt: new Date(),
+      }))
+
+      // Batch insert (SQLite handles this well)
+      await db.insert(chapters).values(chapterValues).onConflictDoUpdate({
+        target: chapters.id,
+        set: {
+          title: sql`excluded.title`,
+          sortOrder: sql`excluded.sort_order`,
+          updatedAt: new Date(),
+        },
+      })
+    }
+
+    return c.json({ success: true, message: `Synced ${data.chapters.length} chapters` })
+  },
+)
 
 // Better Auth Routes
 app.on(['POST', 'GET'], '/api/auth/*', (c) => {
