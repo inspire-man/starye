@@ -16,6 +16,5 @@
     "json",
     "jsonc",
     "yaml"
-  ],
-  "cSpell.words": ["eslintcache", "nuxt", "Turborepo"]
+  ]
 }

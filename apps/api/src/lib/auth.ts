@@ -1,31 +1,31 @@
-import { createDb } from "@starye/db";
-import * as schema from "@starye/db/schema";
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { createDb } from '@starye/db'
+import * as schema from '@starye/db/schema'
+import { betterAuth } from 'better-auth'
+import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 
 // 定义环境类型
 export interface Env {
-  DB: D1Database;
-  BETTER_AUTH_SECRET: string;
-  BETTER_AUTH_URL?: string;
-  GITHUB_CLIENT_ID: string;
-  GITHUB_CLIENT_SECRET: string;
-  WEB_URL?: string;
-  ADMIN_URL?: string;
+  DB: D1Database
+  BETTER_AUTH_SECRET: string
+  BETTER_AUTH_URL?: string
+  GITHUB_CLIENT_ID: string
+  GITHUB_CLIENT_SECRET: string
+  WEB_URL?: string
+  ADMIN_URL?: string
 }
 
 // 解耦 Context，只依赖 Env 和 Request
 export function createAuth(env: Env, request: Request) {
-  const db = createDb(env.DB);
+  const db = createDb(env.DB)
 
   // 动态获取 BaseURL (优先环境变量，回退到请求 Origin)
-  const url = new URL(request.url);
-  const origin = `${url.protocol}//${url.host}`;
-  const baseURL = env.BETTER_AUTH_URL || origin;
+  const url = new URL(request.url)
+  const origin = `${url.protocol}//${url.host}`
+  const baseURL = env.BETTER_AUTH_URL || origin
 
   return betterAuth({
     database: drizzleAdapter(db, {
-      provider: "sqlite",
+      provider: 'sqlite',
       schema: {
         user: schema.user,
         session: schema.session,
@@ -45,18 +45,18 @@ export function createAuth(env: Env, request: Request) {
     trustedOrigins: [
       env.WEB_URL,
       env.ADMIN_URL,
-      "http://localhost:3000", // Nuxt dev
-      "http://localhost:5173", // Vite dev
+      'http://localhost:3000', // Nuxt dev
+      'http://localhost:5173', // Vite dev
     ].filter(Boolean) as string[],
     advanced: {
-      cookiePrefix: "starye",
+      cookiePrefix: 'starye',
       // Cloudflare Workers 必须的默认配置
       defaultCookieAttributes: {
-        sameSite: "none",
+        sameSite: 'none',
         secure: true,
       },
     },
-  });
+  })
 }
 
-export type Auth = ReturnType<typeof createAuth>;
+export type Auth = ReturnType<typeof createAuth>
