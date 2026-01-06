@@ -4,6 +4,7 @@ import { createDb } from '@starye/db'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
+import { getAllowedOrigins } from './config'
 import { createAuth } from './lib/auth'
 import { serviceAuth } from './middleware/service-auth'
 
@@ -19,12 +20,7 @@ app.use(
   '*',
   cors({
     origin: (origin, c) => {
-      const allowed = [
-        c.env.WEB_URL,
-        c.env.ADMIN_URL,
-        'http://localhost:3000',
-        'http://localhost:5173',
-      ].filter(Boolean)
+      const allowed = getAllowedOrigins(c.env)
       return allowed.includes(origin) ? origin : allowed[0]
     },
     credentials: true,
