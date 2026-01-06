@@ -11,9 +11,28 @@ async function main() {
   console.log(`馃敟 Starting Search Index Build...`)
   console.log(`鈻 Fetching data from ${API_URL}/api/comics`)
 
+  // Check if we are in CI but trying to hit localhost
+  if (process.env.CI && API_URL.includes('localhost')) {
+    console.warn('鈻 [WARNING] CI environment detected but API_URL is localhost. Skipping index build.')
+    console.warn('  Please configure API_URL secret to point to your deployed API.')
+    return
+  }
+
   try {
     // 1. Fetch Data
-    const response = await fetch(`${API_URL}/api/comics`)
+    let response
+    try {
+      response = await fetch(`${API_URL}/api/comics`)
+    }
+    catch (e: any) {
+      if (e.cause?.code === 'ECONNREFUSED' || e.message.includes('fetch failed')) {
+        console.warn(`鈻 [WARNING] API is not accessible (${e.message}). Skipping index build.`)
+        // Ensure we don't fail the CI job for this auxiliary step
+        return
+      }
+      throw e
+    }
+
     if (!response.ok) {
       throw new Error(`Failed to fetch comics: ${response.statusText}`)
     }
