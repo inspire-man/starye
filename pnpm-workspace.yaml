@@ -5,3 +5,5 @@ trustPolicy: no-downgrade
 packages:
   - 'apps/*'
   - 'packages/*'
+overrides:
+  undici: ^6.0.0
