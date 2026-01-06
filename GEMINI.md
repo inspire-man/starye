@@ -126,18 +126,18 @@
   - [x] 集成 `better-auth` (支持 Workers 环境, 动态 BaseURL)。
   - [x] 配置 GitHub OAuth Provider。
   - [x] 实现 `Service Token` 中间件 (保护爬虫接口)。
-- [ ] **2.3 Media Service**:
-  - [ ] 实现 R2 Presigned URL 生成接口 (PUT)。
+- [x] **2.3 Media Service**:
+  - [x] 实现 R2 Presigned URL 生成逻辑 (lib/r2.ts)。
   - [ ] 编写文档：配置 R2 自定义域名和缓存规则。
 
-### Phase 3: 爬虫与自动化 (Crawler & Automation) [Pending]
+### Phase 3: 爬虫与自动化 (Crawler & Automation) [In Progress]
 
-- [ ] **3.1 Crawler Package**:
-  - [ ] 创建 `packages/crawler`。
-  - [ ] 安装 `puppeteer`, `cheerio`, `sharp`。
-  - [ ] 编写 `ImageProcessor` 类 (生成 3 级缩略图)。
+- [x] **3.1 Crawler Package**:
+  - [x] 创建 `packages/crawler`。
+  - [x] 安装 `puppeteer`, `cheerio`, `sharp`。
+  - [x] 编写 `ImageProcessor` 类 (生成 3 级缩略图)。
 - [ ] **3.2 GitHub Actions**:
-  - [ ] 编写 `.github/workflows/daily-crawl.yml`。
+  - [x] 编写 `.github/workflows/daily-crawl.yml`。
   - [ ] 配置 Repository Secrets (`CRAWLER_SECRET`, `R2_KEYS`).
 - [ ] **3.3 Search Indexing**:
   - [ ] 编写 Orama 索引构建脚本。
