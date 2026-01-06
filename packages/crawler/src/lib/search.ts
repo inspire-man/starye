@@ -14,9 +14,9 @@ export type SearchSchema = typeof searchSchema
 export interface ComicDoc extends TypedDocument<Orama<SearchSchema>> {
   title: string
   slug: string
-  author?: string
-  description?: string
-  cover?: string
+  author: string
+  description: string
+  cover: string
 }
 
 export class SearchIndexer {
