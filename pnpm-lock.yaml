@@ -91,6 +91,9 @@ importers:
       '@aws-sdk/lib-storage':
         specifier: ^3.962.0
         version: 3.962.0(@aws-sdk/client-s3@3.962.0)
+      '@orama/orama':
+        specifier: ^3.1.18
+        version: 3.1.18
       '@starye/db':
         specifier: workspace:*
         version: link:../db
@@ -1614,6 +1617,10 @@ packages:
   '@noble/hashes@2.0.1':
     resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
     engines: {node: '>= 20.19.0'}
+
+  '@orama/orama@3.1.18':
+    resolution: {integrity: sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA==}
+    engines: {node: '>= 20.0.0'}
 
   '@pkgr/core@0.2.9':
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
@@ -6003,6 +6010,8 @@ snapshots:
   '@noble/ciphers@2.1.1': {}
 
   '@noble/hashes@2.0.1': {}
+
+  '@orama/orama@3.1.18': {}
 
   '@pkgr/core@0.2.9': {}
 

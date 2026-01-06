@@ -140,8 +140,8 @@
   - [x] 编写 `.github/workflows/daily-crawl.yml`。
   - [ ] 配置 Repository Secrets (`CRAWLER_SECRET`, `R2_KEYS`).
 - [ ] **3.3 Search Indexing**:
-  - [ ] 编写 Orama 索引构建脚本。
-  - [ ] 实现索引上传 R2 逻辑。
+  - [x] 编写 Orama 索引构建脚本。
+  - [x] 实现索引上传 R2 逻辑。
 
 ### Phase 4: 前端应用开发 (Frontend Apps) [Pending]
 

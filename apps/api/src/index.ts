@@ -83,6 +83,22 @@ app.onError((err, c) => {
 
 // ...
 
+// List Comics (For Search Indexing & Frontend)
+app.get('/api/comics', async (c) => {
+  const db = c.get('db')
+  const results = await db.query.comics.findMany({
+    columns: {
+      title: true,
+      slug: true,
+      coverImage: true,
+      author: true,
+      description: true,
+    },
+    orderBy: (comics, { desc }) => [desc(comics.updatedAt)],
+  })
+  return c.json(results)
+})
+
 // Sync Route (Called by Crawler)
 app.post(
   '/api/admin/sync',
