@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 // --- Auth (Better Auth Standard) ---
@@ -20,27 +20,19 @@ export const session = sqliteTable('session', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id),
+  userId: text('user_id').notNull().references(() => user.id),
 })
 
 export const account = sqliteTable('account', {
   id: text('id').primaryKey(),
   accountId: text('account_id').notNull(),
   providerId: text('provider_id').notNull(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id),
+  userId: text('user_id').notNull().references(() => user.id),
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
   idToken: text('id_token'),
-  accessTokenExpiresAt: integer('access_token_expires_at', {
-    mode: 'timestamp',
-  }),
-  refreshTokenExpiresAt: integer('refresh_token_expires_at', {
-    mode: 'timestamp',
-  }),
+  accessTokenExpiresAt: integer('access_token_expires_at', { mode: 'timestamp' }),
+  refreshTokenExpiresAt: integer('refresh_token_expires_at', { mode: 'timestamp' }),
   scope: text('scope'),
   password: text('password'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
@@ -65,12 +57,9 @@ export const posts = sqliteTable('post', {
   excerpt: text('excerpt'),
   coverImage: text('cover_image'),
   published: integer('published', { mode: 'boolean' }).default(false),
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(
-    sql`(strftime('%s', 'now'))`,
-  ),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(
-    sql`(strftime('%s', 'now'))`,
-  ),
+  authorId: text('author_id').references(() => user.id), // Added author relation
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
 
 // --- Media (General) ---
@@ -81,9 +70,7 @@ export const media = sqliteTable('media', {
   variants: text('variants', { mode: 'json' }), // JSON: { thumb: "url", preview: "url" }
   mimeType: text('mime_type'),
   size: integer('size'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(
-    sql`(strftime('%s', 'now'))`,
-  ),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
 
 // --- Comic (Manga) ---
@@ -95,36 +82,25 @@ export const comics = sqliteTable('comic', {
   description: text('description'),
   coverImage: text('cover_image'), // URL
   status: text('status').default('ongoing'), // ongoing, completed
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(
-    sql`(strftime('%s', 'now'))`,
-  ),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(
-    sql`(strftime('%s', 'now'))`,
-  ),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
 
 export const chapters = sqliteTable('chapter', {
   id: text('id').primaryKey(),
-  comicId: text('comic_id')
-    .notNull()
-    .references(() => comics.id),
+  comicId: text('comic_id').notNull().references(() => comics.id),
   title: text('title').notNull(),
   slug: text('slug').notNull(), // often "chapter-1"
-  number: integer('number').notNull(), // 1, 1.5, 2... (actually float might be needed for 1.5, integer is safer for index, maybe use text or real)
-  // Let's use real for chapter number to support 1.5
-  chapterNumber: integer('chapter_number'), // Keeping simple integer for now, or text. Manga chapters can be 10.5. SQLite integer is strictly int. Real is float.
-  // Using real for sorting
+  chapterNumber: integer('chapter_number'),
   sortOrder: integer('sort_order').notNull(),
   publishedAt: integer('published_at', { mode: 'timestamp' }),
 })
 
 export const pages = sqliteTable('page', {
   id: text('id').primaryKey(),
-  chapterId: text('chapter_id')
-    .notNull()
-    .references(() => chapters.id),
+  chapterId: text('chapter_id').notNull().references(() => chapters.id),
   pageNumber: integer('page_number').notNull(),
-  imageUrl: text('image_url').notNull(), // Points to R2 (Standard/Preview based on usage)
+  imageUrl: text('image_url').notNull(),
   width: integer('width'),
   height: integer('height'),
 })
@@ -132,11 +108,57 @@ export const pages = sqliteTable('page', {
 // --- System ---
 export const jobs = sqliteTable('job', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  type: text('type').notNull(), // 'sitemap', 'index_search', etc.
+  type: text('type').notNull(),
   payload: text('payload', { mode: 'json' }),
-  status: text('status').default('pending'), // pending, processing, completed, failed
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(
-    sql`(strftime('%s', 'now'))`,
-  ),
+  status: text('status').default('pending'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   processedAt: integer('processed_at', { mode: 'timestamp' }),
 })
+
+// --- Relations ---
+
+export const userRelations = relations(user, ({ many }) => ({
+  posts: many(posts),
+  sessions: many(session),
+  accounts: many(account),
+}))
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id],
+  }),
+}))
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, {
+    fields: [account.userId],
+    references: [user.id],
+  }),
+}))
+
+export const postRelations = relations(posts, ({ one }) => ({
+  author: one(user, {
+    fields: [posts.authorId],
+    references: [user.id],
+  }),
+}))
+
+export const comicRelations = relations(comics, ({ many }) => ({
+  chapters: many(chapters),
+}))
+
+export const chapterRelations = relations(chapters, ({ one, many }) => ({
+  comic: one(comics, {
+    fields: [chapters.comicId],
+    references: [comics.id],
+  }),
+  pages: many(pages),
+}))
+
+export const pageRelations = relations(pages, ({ one }) => ({
+  chapter: one(chapters, {
+    fields: [pages.chapterId],
+    references: [chapters.id],
+  }),
+}))

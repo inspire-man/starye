@@ -3,7 +3,9 @@ import type { Auth, Env } from './lib/auth'
 import { createDb } from '@starye/db'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { HTTPException } from 'hono/http-exception'
 import { createAuth } from './lib/auth'
+import { serviceAuth } from './middleware/service-auth'
 
 interface Variables {
   db: Database
@@ -17,7 +19,6 @@ app.use(
   '*',
   cors({
     origin: (origin, c) => {
-      // 允许我们在 trustedOrigins 中定义的源
       const allowed = [
         c.env.WEB_URL,
         c.env.ADMIN_URL,
@@ -32,7 +33,7 @@ app.use(
   }),
 )
 
-// Database Injection Middleware
+// Database & Auth Injection
 app.use(async (c, next) => {
   const db = createDb(c.env.DB)
   const auth = createAuth(c.env, c.req.raw)
@@ -41,6 +42,28 @@ app.use(async (c, next) => {
   c.set('auth', auth)
 
   await next()
+})
+
+// Global Error Handler
+app.onError((err, c) => {
+  console.error(`[API Error] ${err}`)
+  if (err instanceof HTTPException) {
+    return c.json({
+      success: false,
+      error: err.message,
+    }, err.status)
+  }
+  return c.json({
+    success: false,
+    error: 'Internal Server Error',
+  }, 500)
+})
+
+// --- Routes ---
+
+// Service Protected Route (Example for Crawler)
+app.post('/api/admin/sync', serviceAuth(), async (c) => {
+  return c.json({ success: true, message: 'Sync received' })
 })
 
 // Better Auth Routes

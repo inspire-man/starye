@@ -8,6 +8,7 @@ export interface Env {
   DB: D1Database
   BETTER_AUTH_SECRET: string
   BETTER_AUTH_URL?: string
+  CRAWLER_SECRET: string // Added this
   GITHUB_CLIENT_ID: string
   GITHUB_CLIENT_SECRET: string
   WEB_URL?: string
