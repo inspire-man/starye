@@ -9,6 +9,25 @@ export class Site92Hm implements CrawlStrategy {
     return url.includes('92hm.life') || url.includes('92hm.net')
   }
 
+  async getMangaList(url: string, page: Page): Promise<{ mangas: string[], next?: string }> {
+    await page.goto(url, { waitUntil: 'domcontentloaded' })
+
+    return await page.evaluate(() => {
+      // Extract Manga Links
+      const mangas = Array.from(document.querySelectorAll('.mh-item a, .item-lg a'))
+        .map(a => a.getAttribute('href'))
+        .filter((href): href is string => !!href && href.includes('/book/'))
+        // Deduplicate
+        .filter((v, i, a) => a.indexOf(v) === i)
+
+      // Extract Next Page
+      const nextEl = document.querySelector('a#nextPage')
+      const next = nextEl?.getAttribute('href') || undefined
+
+      return { mangas, next }
+    })
+  }
+
   async getMangaInfo(url: string, page: Page): Promise<MangaInfo> {
     await page.goto(url, { waitUntil: 'domcontentloaded' })
 

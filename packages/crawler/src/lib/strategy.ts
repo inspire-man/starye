@@ -26,6 +26,11 @@ export interface CrawlStrategy {
   match: (url: string) => boolean
 
   /**
+   * Parse a list page (pagination) to get manga links and next page
+   */
+  getMangaList?: (url: string, page: any) => Promise<{ mangas: string[], next?: string }>
+
+  /**
    * Parse manga details page to get metadata and chapter list
    */
   getMangaInfo: (url: string, page: any) => Promise<MangaInfo> // Using any for Page to avoid complex type imports here

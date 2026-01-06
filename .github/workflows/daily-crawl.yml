@@ -57,7 +57,7 @@ jobs:
           # 如果有输入 URL 则使用，否则默认爬取首页（示例）
           TARGET="${{ inputs.target_url }}"
           if [ -z "$TARGET" ]; then
-            TARGET="https://www.92hm.life/manhua/123/" # 默认目标
+            TARGET="https://www.92hm.life/booklist?end=0" # 默认目标: 最新更新列表
           fi
           
           echo "Starting crawl for: $TARGET"

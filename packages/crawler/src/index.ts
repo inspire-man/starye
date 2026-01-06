@@ -12,58 +12,106 @@ class Runner extends BaseCrawler {
     new SiteSe8(),
   ]
 
+  private queue: string[] = []
+  private visited = new Set<string>()
+  private MAX_PAGES = 100 // Safety limit for now
+
   async run() {
-    const url = process.argv[2]
+    const startUrl = process.argv[2]
 
-    if (!url) {
+    if (!startUrl) {
       console.warn('鈻 Please provide a target URL as an argument.')
-      console.log('Example: pnpm start https://www.92hm.life/manhua/123/')
+      console.log('Example: pnpm start https://www.92hm.life/booklist?end=0')
       return
     }
 
-    const strategy = this.strategies.find(s => s.match(url))
-    if (!strategy) {
-      console.error('鈻 No strategy found for this URL:', url)
-      return
-    }
-
-    console.log(`馃敟 Starting crawl with strategy: ${strategy.name}`)
+    this.queue.push(startUrl)
     await this.initBrowser()
 
     try {
-      if (!this.browser)
-        throw new Error('Browser not initialized')
-      const page = await this.browser.newPage()
+      let processedCount = 0
 
-      if (url.includes('/chapter/')) {
-        console.log('Detected Chapter URL. Fetching content...')
-        const content = await strategy.getChapterContent(url, page)
-        console.log('鉁 Chapter Content:', {
-          title: content.title,
-          imageCount: content.images.length,
-          samples: content.images.slice(0, 3),
-        })
+      while (this.queue.length > 0 && processedCount < this.MAX_PAGES) {
+        const url = this.queue.shift()!
+
+        if (this.visited.has(url))
+          continue
+        this.visited.add(url)
+        processedCount++
+
+        console.log(`[${processedCount}/${this.MAX_PAGES}] Processing: ${url} (Queue: ${this.queue.length})`)
+
+        const strategy = this.strategies.find(s => s.match(url))
+        if (!strategy) {
+          console.warn(`鈻 No strategy for ${url}, skipping.`)
+          continue
+        }
+
+        const page = await this.browser!.newPage()
+        try {
+          // 1. Determine Type (Heuristic)
+          const isBookList = url.includes('booklist') || url.includes('/list/')
+          const isChapter = url.includes('/chapter/') || url.includes('/read/') // Basic heuristic, strategy can refine
+          const isManga = url.includes('/book/') || url.includes('/manhua/')
+
+          if (isBookList && strategy.getMangaList) {
+            console.log('鈻 Detected List Page. Discovering...')
+            const { mangas, next } = await strategy.getMangaList(url, page)
+
+            // Add mangas to queue
+            const fullMangaUrls = mangas.map(u => u.startsWith('http') ? u : `${strategy.baseUrl}${u}`)
+            fullMangaUrls.forEach((u) => {
+              if (!this.visited.has(u))
+                this.queue.push(u)
+            })
+            console.log(`  + Discovered ${mangas.length} mangas`)
+
+            // Add next page
+            if (next) {
+              const nextUrl = next.startsWith('http') ? next : `${strategy.baseUrl}${next}`
+              if (!this.visited.has(nextUrl)) {
+                this.queue.push(nextUrl)
+                console.log(`  + Next Page found: ${nextUrl}`)
+              }
+            }
+          }
+          else if (isChapter) {
+            console.log('鈻 Detected Chapter Page. Fetching content...')
+            const content = await strategy.getChapterContent(url, page)
+            console.log('鉁 Chapter Content:', {
+              title: content.title,
+              imageCount: content.images.length,
+            })
+            // TODO: Process images
+          }
+          else if (isManga) {
+            console.log('鈻 Detected Manga Page. Syncing info...')
+            const info = await strategy.getMangaInfo(url, page)
+
+            // Normalize
+            info.chapters = info.chapters.map(c => ({
+              ...c,
+              url: c.url.startsWith('http') ? c.url : `${strategy.baseUrl}${c.url}`,
+            }))
+
+            console.log(`  Syncing ${info.title} (${info.chapters.length} chapters)...`)
+            // Sync to API
+            await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
+          }
+          else {
+            console.log('鈻 Unknown URL type, assuming Manga Info...')
+            // Fallback
+            const info = await strategy.getMangaInfo(url, page)
+            await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
+          }
+        }
+        catch (err: any) {
+          console.error(`鉁 Failed to process ${url}: ${err.message}`)
+        }
+        finally {
+          await page.close()
+        }
       }
-      else {
-        console.log('Detected Manga URL. Fetching info...')
-        const info = await strategy.getMangaInfo(url, page)
-
-        // 补全 URL 为绝对路径
-        info.chapters = info.chapters.map(c => ({
-          ...c,
-          url: c.url.startsWith('http') ? c.url : `${strategy.baseUrl}${c.url}`,
-        }))
-
-        console.log('鉁 Manga Info:', info)
-
-        // Sync to API
-        console.log('Syncing to API...')
-        const res = await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
-        console.log('鉁 Sync Result:', res)
-      }
-    }
-    catch (e) {
-      console.error('Crawl failed:', e)
     }
     finally {
       await this.closeBrowser()
