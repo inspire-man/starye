@@ -129,51 +129,61 @@ app.post(
     // eslint-disable-next-line no-console
     console.log(`[Sync] Received manga: ${data.title} (${data.chapters.length} chapters)`)
 
-    // 1. Upsert Comic
-    const comicId = data.slug
-    await db.insert(comics).values({
-      id: comicId,
-      title: data.title,
-      slug: data.slug,
-      coverImage: data.cover,
-      author: data.author,
-      description: data.description,
-      updatedAt: new Date(),
-    }).onConflictDoUpdate({
-      target: comics.id,
-      set: {
+    try {
+      // 1. Upsert Comic
+      const comicId = data.slug
+      await db.insert(comics).values({
+        id: comicId,
         title: data.title,
+        slug: data.slug,
         coverImage: data.cover,
         author: data.author,
         description: data.description,
         updatedAt: new Date(),
-      },
-    })
-
-    // 2. Upsert Chapters
-    if (data.chapters.length > 0) {
-      const chapterValues = data.chapters.map(ch => ({
-        id: `${comicId}-${ch.slug}`,
-        comicId,
-        title: ch.title,
-        slug: ch.slug,
-        chapterNumber: ch.number,
-        sortOrder: ch.number,
-        updatedAt: new Date(),
-      }))
-
-      // Batch insert
-      await db.insert(chapters).values(chapterValues).onConflictDoUpdate({
-        target: chapters.id,
+      }).onConflictDoUpdate({
+        target: comics.id,
         set: {
-          title: sql`excluded.title`,
-          sortOrder: sql`excluded.sort_order`,
+          title: data.title,
+          coverImage: data.cover,
+          author: data.author,
+          description: data.description,
           updatedAt: new Date(),
         },
       })
-    }
 
-    return c.json({ success: true, message: `Synced ${data.chapters.length} chapters` })
+      // 2. Upsert Chapters
+      if (data.chapters.length > 0) {
+        const chapterValues = data.chapters.map(ch => ({
+          id: `${comicId}-${ch.slug}`,
+          comicId,
+          title: ch.title,
+          slug: ch.slug,
+          chapterNumber: ch.number,
+          sortOrder: ch.number,
+          updatedAt: new Date(),
+        }))
+
+        // Batch insert
+        await db.insert(chapters).values(chapterValues).onConflictDoUpdate({
+          target: chapters.id,
+          set: {
+            title: sql`excluded.title`,
+            sortOrder: sql`excluded.sort_order`,
+            updatedAt: new Date(),
+          },
+        })
+      }
+
+      return c.json({ success: true, message: `Synced ${data.chapters.length} chapters` })
+    }
+    catch (e: any) {
+      console.error('[Sync DB Error]', e)
+      return c.json({
+        success: false,
+        error: `Database Error: ${e.message}`,
+        details: e.toString(),
+      }, 500)
+    }
   },
 )
 
