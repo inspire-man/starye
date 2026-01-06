@@ -1,0 +1,25 @@
+name = "starye-api"
+main = "src/index.ts"
+compatibility_date = "2024-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Vars for secrets (set via wrangler secret put or .dev.vars)
+[vars]
+# BETTER_AUTH_SECRET = "..."
+# CRAWLER_SECRET = "..."
+
+# D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "starye-db"
+database_id = "72b60b6c-806f-4795-a846-9b0d157b8225"
+
+# R2 Bucket Binding
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "starye-media"
+
+# KV Namespace (Optional, for caching if needed later)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "..."
