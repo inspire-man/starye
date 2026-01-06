@@ -1,13 +1,14 @@
 import type { Database } from '@starye/db'
 import type { Auth, Env } from './lib/auth'
+import process from 'node:process'
 import { zValidator } from '@hono/zod-validator'
 import { createDb } from '@starye/db'
 import { chapters, comics } from '@starye/db/schema'
 import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { HTTPException } from 'hono/http-exception'
 
+import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { getAllowedOrigins } from './config'
 import { createAuth } from './lib/auth'
@@ -53,11 +54,25 @@ app.use(
 
 // Database & Auth Injection
 app.use(async (c, next) => {
-  const db = createDb(c.env.DB)
-  const auth = createAuth(c.env, c.req.raw)
+  try {
+    const db = createDb(c.env.DB)
+    c.set('db', db)
 
-  c.set('db', db)
-  c.set('auth', auth)
+    // Lazy auth creation or try-catch
+    const auth = createAuth(c.env, c.req.raw)
+    c.set('auth', auth)
+  }
+  catch (e: any) {
+    console.error('Failed to initialize DB or Auth:', e)
+    // We don't throw here to allow health check to pass if it doesn't use auth,
+    // but better to fail safely for routes that need it.
+    // However, for debugging 1101, let's allow it to proceed and fail later or return error now.
+    return c.json({
+      success: false,
+      error: `Initialization Error: ${e.message}`,
+      stack: process.env.NODE_ENV === 'development' ? e.stack : undefined,
+    }, 500)
+  }
 
   await next()
 })

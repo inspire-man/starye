@@ -13,11 +13,17 @@ compatibility_flags = [ "nodejs_compat" ]
 binding = "DB"
 database_name = "starye-db"
 database_id = "72b60b6c-806f-4795-a846-9b0d157b8225"
+migrations_dir = "../../packages/db/drizzle"
 
 # R2 Bucket Binding
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "starye-media"
+
+# Custom Domain
+[[routes]]
+pattern = "api.mokelao.top"
+custom_domain = true
 
 # KV Namespace (Optional, for caching if needed later)
 # [[kv_namespaces]]
