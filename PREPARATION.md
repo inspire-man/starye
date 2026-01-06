@@ -3,15 +3,18 @@
 为了确保 **Starye** 项目从零开始处于一个干净、无冲突的环境，请在正式启动开发前执行以下准备工作。
 
 ## 1. Cloudflare 环境清理 (Reset Wrangler)
+
 旧的登录状态或过时的配置文件常会导致部署权限报错。
 
 1. **登出当前账号**:
+
    ```powershell
    npx wrangler logout
    ```
 
 2. **清理本地配置文件**:
    删除 Windows 用户目录下的 `.wrangler` 文件夹（存储了旧的 Auth Token 和缓存）。
+
    ```powershell
    # 在 PowerShell 中执行
    Remove-Item -Path "$HOME\.wrangler" -Recurse -Force -ErrorAction SilentlyContinue
@@ -26,14 +29,17 @@
 ---
 
 ## 2. 核心工具链检查
+
 本项目采用 **Monorepo (pnpm workspace)** 架构，必须确保以下工具可用。
 
 1. **Node.js**: 建议版本 `v20.x` 或更高 (LTS)。
+
    ```powershell
    node -v
    ```
 
 2. **pnpm**: 必须安装。
+
    ```powershell
    # 如果未安装
    npm install -g pnpm
@@ -50,10 +56,12 @@
 ---
 
 ## 3. 项目目录初始化
+
 确保工作目录 `D:\my-workspace\starye` 下没有旧的干扰文件。
 
 1. **清理 node_modules**:
    如果目录中已存在 `node_modules`，请先删除。
+
    ```powershell
    Remove-Item -Path "node_modules" -Recurse -Force -ErrorAction SilentlyContinue
    ```
@@ -64,6 +72,7 @@
 ---
 
 ## 4. 下一步操作
+
 当你完成 `npx wrangler login` 授权后，请回到对话框回复：
 
 **“环境已就绪，开始 Phase 1”**
