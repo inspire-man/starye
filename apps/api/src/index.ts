@@ -4,13 +4,14 @@ import process from 'node:process'
 import { zValidator } from '@hono/zod-validator'
 import { createDb } from '@starye/db'
 import { chapters, comics } from '@starye/db/schema'
-import { sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 
+import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { getAllowedOrigins } from './config'
+
 import { createAuth } from './lib/auth'
 
 import { serviceAuth } from './middleware/service-auth'
@@ -113,6 +114,7 @@ app.get('/api/comics', async (c) => {
   })
   return c.json(results)
 })
+// ...
 
 // Sync Route (Called by Crawler)
 app.post(
@@ -130,7 +132,7 @@ app.post(
     console.log(`[Sync] Received manga: ${data.title} (${data.chapters.length} chapters)`)
 
     try {
-      // 1. Upsert Comic
+      // 1. Upsert Comic (Single record, usually safe)
       const comicId = data.slug
       await db.insert(comics).values({
         id: comicId,
@@ -151,8 +153,16 @@ app.post(
         },
       })
 
-      // 2. Upsert Chapters
+      // 2. Sync Chapters (Delete all existing for this comic, then insert new)
+      // This is safer than bulk Upsert on SQLite and handles removed chapters.
       if (data.chapters.length > 0) {
+        // Transaction would be ideal but D1 REST API has limits.
+        // We do it sequentially.
+
+        // A. Delete existing chapters
+        await db.delete(chapters).where(eq(chapters.comicId, comicId))
+
+        // B. Prepare new values
         const chapterValues = data.chapters.map(ch => ({
           id: `${comicId}-${ch.slug}`,
           comicId,
@@ -163,15 +173,13 @@ app.post(
           updatedAt: new Date(),
         }))
 
-        // Batch insert
-        await db.insert(chapters).values(chapterValues).onConflictDoUpdate({
-          target: chapters.id,
-          set: {
-            title: sql`excluded.title`,
-            sortOrder: sql`excluded.sort_order`,
-            updatedAt: new Date(),
-          },
-        })
+        // C. Batch insert (SQLite supports standard batch insert fine)
+        // We split into chunks of 50 to stay within SQL variable limits
+        const chunkSize = 50
+        for (let i = 0; i < chapterValues.length; i += chunkSize) {
+          const chunk = chapterValues.slice(i, i + chunkSize)
+          await db.insert(chapters).values(chunk)
+        }
       }
 
       return c.json({ success: true, message: `Synced ${data.chapters.length} chapters` })
