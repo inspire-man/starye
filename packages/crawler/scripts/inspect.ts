@@ -5,7 +5,7 @@ import 'dotenv/config'
 const TARGET_URL = process.argv[2] || 'https://www.92hm.life/'
 
 async function inspect() {
-  console.log(`馃敟 Inspecting: ${TARGET_URL}`)
+  console.log(`🔍 Inspecting: ${TARGET_URL}`)
 
   const executablePath = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
@@ -20,7 +20,7 @@ async function inspect() {
 
   try {
     await page.goto(TARGET_URL, { waitUntil: 'networkidle2', timeout: 60000 })
-    console.log('鉁 Page Loaded')
+    console.log('✅ Page Loaded')
 
     // Extract Title
     const title = await page.title()

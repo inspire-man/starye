@@ -18,10 +18,13 @@
     "yaml"
   ],
   "cSpell.words": [
+    "booklist",
     "demi",
     "Deployables",
     "domcontentloaded",
     "esbuild",
+    "mangas",
+    "manhua",
     "mokelao",
     "networkidle",
     "Orama",
@@ -30,6 +33,8 @@
     "turborepo",
     "undici",
     "unocss",
+    "upserted",
+    "Upserting",
     "workerd"
   ]
 }

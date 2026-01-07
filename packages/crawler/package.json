@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
+    "test:api": "tsx scripts/test-api.ts",
     "build:search": "tsx scripts/build-search.ts",
     "build": "tsc",
     "lint": "eslint .",

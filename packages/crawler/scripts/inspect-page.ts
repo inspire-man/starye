@@ -4,7 +4,7 @@ import puppeteer from 'puppeteer-core'
 const TARGET_URL = process.argv[2] || 'https://www.92hm.life/book/1130'
 
 async function inspect() {
-  console.log(`馃敟 Inspecting: ${TARGET_URL}`)
+  console.log(`🔍 Inspecting: ${TARGET_URL}`)
 
   const executablePath = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
@@ -19,7 +19,7 @@ async function inspect() {
 
   try {
     await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    console.log('鉁 Page Loaded')
+    console.log('✅ Page Loaded')
 
     // Simplify evaluate to avoid serialization issues
     const candidates = await page.evaluate(() => {

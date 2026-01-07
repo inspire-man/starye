@@ -20,7 +20,7 @@ class Runner extends BaseCrawler {
     const startUrl = process.argv[2]
 
     if (!startUrl) {
-      console.warn('鈻 Please provide a target URL as an argument.')
+      console.warn('⚠️  Please provide a target URL as an argument.')
       console.log('Example: pnpm start https://www.92hm.life/booklist?end=0')
       return
     }
@@ -43,7 +43,7 @@ class Runner extends BaseCrawler {
 
         const strategy = this.strategies.find(s => s.match(url))
         if (!strategy) {
-          console.warn(`鈻 No strategy for ${url}, skipping.`)
+          console.warn(`⚠️  No strategy for ${url}, skipping.`)
           continue
         }
 
@@ -55,7 +55,7 @@ class Runner extends BaseCrawler {
           const isManga = url.includes('/book/') || url.includes('/manhua/')
 
           if (isBookList && strategy.getMangaList) {
-            console.log('鈻 Detected List Page. Discovering...')
+            console.log('📋 Detected List Page. Discovering...')
             const { mangas, next } = await strategy.getMangaList(url, page)
 
             // Add mangas to queue
@@ -76,30 +76,44 @@ class Runner extends BaseCrawler {
             }
           }
           else if (isChapter) {
-            console.log('鈻 Detected Chapter Page. Fetching content...')
+            console.log('📖 Detected Chapter Page. Fetching content...')
             const content = await strategy.getChapterContent(url, page)
-            console.log('鉁 Chapter Content:', {
+            console.log('✅ Chapter Content:', {
               title: content.title,
               imageCount: content.images.length,
             })
             // TODO: Process images
           }
           else if (isManga) {
-            console.log('鈻 Detected Manga Page. Syncing info...')
+            console.log('📚 Detected Manga Page. Syncing info...')
             const info = await strategy.getMangaInfo(url, page)
 
-            // Normalize
-            info.chapters = info.chapters.map(c => ({
-              ...c,
-              url: c.url.startsWith('http') ? c.url : `${strategy.baseUrl}${c.url}`,
-            }))
+            // Normalize and validate
+            info.chapters = info.chapters
+              .map(c => ({
+                ...c,
+                url: c.url.startsWith('http') ? c.url : `${strategy.baseUrl}${c.url}`,
+              }))
+              .filter(c => c.title && c.slug && c.url) // Remove invalid chapters
+
+            // Validate data before syncing
+            if (!info.title || !info.slug) {
+              console.error('❌ Invalid manga info: missing title or slug')
+              throw new Error('Invalid manga data')
+            }
+
+            if (info.chapters.length === 0) {
+              console.warn('⚠️  Warning: No chapters found for this manga')
+            }
 
             console.log(`  Syncing ${info.title} (${info.chapters.length} chapters)...`)
+            console.log(`  Config: API=${this.config.api.url}, Token=${this.config.api.token.substring(0, 15)}...`)
+
             // Sync to API
             await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
           }
           else {
-            console.log('鈻 Unknown URL type, assuming Manga Info...')
+            console.log('❓ Unknown URL type, assuming Manga Info...')
             // Fallback
             const info = await strategy.getMangaInfo(url, page)
             await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
@@ -107,7 +121,7 @@ class Runner extends BaseCrawler {
         }
         catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err)
-          console.error(`鉁 Failed to process ${url}: ${msg}`)
+          console.error(`❌ Failed to process ${url}: ${msg}`)
         }
         finally {
           await page.close()
@@ -126,7 +140,7 @@ async function main() {
   const missing = requiredEnv.filter(k => !process.env[k])
 
   if (missing.length > 0) {
-    console.warn(`鈻 Missing environment variables: ${missing.join(', ')}`)
+    console.warn(`⚠️  Missing environment variables: ${missing.join(', ')}`)
     // return // Allow running without env for local strategy testing
   }
 

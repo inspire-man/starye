@@ -8,12 +8,12 @@ async function main() {
   const API_URL = process.env.API_URL || 'http://localhost:8787'
   const INDEX_FILENAME = 'search-index.json'
 
-  console.log(`馃敟 Starting Search Index Build...`)
-  console.log(`鈻 Fetching data from ${API_URL}/api/comics`)
+  console.log(`🔥 Starting Search Index Build...`)
+  console.log(`📡 Fetching data from ${API_URL}/api/comics`)
 
   // Check if we are in CI but trying to hit localhost
   if (process.env.CI && API_URL.includes('localhost')) {
-    console.warn('鈻 [WARNING] CI environment detected but API_URL is localhost. Skipping index build.')
+    console.warn('⚠️  [WARNING] CI environment detected but API_URL is localhost. Skipping index build.')
     console.warn('  Please configure API_URL secret to point to your deployed API.')
     return
   }
@@ -26,7 +26,7 @@ async function main() {
     }
     catch (e: any) {
       if (e.cause?.code === 'ECONNREFUSED' || e.message.includes('fetch failed')) {
-        console.warn(`鈻 [WARNING] API is not accessible (${e.message}). Skipping index build.`)
+        console.warn(`⚠️  [WARNING] API is not accessible (${e.message}). Skipping index build.`)
         // Ensure we don't fail the CI job for this auxiliary step
         return
       }
@@ -37,7 +37,7 @@ async function main() {
       throw new Error(`Failed to fetch comics: ${response.statusText}`)
     }
     const comics = await response.json() as any[]
-    console.log(`鉁 Fetched ${comics.length} comics`)
+    console.log(`✅ Fetched ${comics.length} comics`)
 
     // 2. Build Index
     const indexer = new SearchIndexer()
@@ -53,7 +53,7 @@ async function main() {
     const serialized = await indexer.serialize(db)
     const sizeKB = (serialized.length / 1024).toFixed(2)
 
-    console.log(`鉁 Index built. Size: ${sizeKB} KB`)
+    console.log(`✅ Index built. Size: ${sizeKB} KB`)
 
     // 3. Upload to R2
     const r2Config = {
@@ -64,13 +64,13 @@ async function main() {
     }
 
     if (!r2Config.bucketName || r2Config.bucketName === 'mock') {
-      console.warn('鈻 R2 Config missing or mock, skipping upload.')
+      console.warn('⚠️  R2 Config missing or mock, skipping upload.')
       // Write to disk for local check
       // await import('fs/promises').then(fs => fs.writeFile('search-index.json', serialized))
       return
     }
 
-    console.log('鈻 Uploading to R2...')
+    console.log('📤 Uploading to R2...')
     const s3 = new S3Client({
       region: 'auto',
       endpoint: `https://${r2Config.accountId}.r2.cloudflarestorage.com`,
@@ -92,10 +92,10 @@ async function main() {
     })
 
     await upload.done()
-    console.log(`鉁 Index uploaded to R2: system/${INDEX_FILENAME}`)
+    console.log(`✅ Index uploaded to R2: system/${INDEX_FILENAME}`)
   }
   catch (error) {
-    console.error('鈻 Build failed:', error)
+    console.error('❌ Build failed:', error)
     process.exit(1)
   }
 }
