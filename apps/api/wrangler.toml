@@ -7,7 +7,7 @@ compatibility_flags = [ "nodejs_compat" ]
 [vars]
 # BETTER_AUTH_SECRET = "..."
 # CRAWLER_SECRET = "..."
-WEB_URL = "https://www.starye.org"
+WEB_URL = "https://starye.org"
 ADMIN_URL = "https://dashboard.starye.org"
 
 # D1 Database Binding

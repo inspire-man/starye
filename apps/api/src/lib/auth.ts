@@ -74,6 +74,8 @@ export function createAuth(env: Env, request: Request) {
       defaultCookieAttributes: {
         sameSite: isHttps ? 'none' : 'lax',
         secure: isHttps,
+        // 允许在所有子域共享 Cookie
+        domain: env.WEB_URL ? new URL(env.WEB_URL).hostname.replace('www.', '') : undefined,
       },
     },
   })
