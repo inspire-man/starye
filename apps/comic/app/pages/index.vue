@@ -1,17 +1,9 @@
 <script setup lang="ts">
+import type { Comic } from '@starye/db/schema'
+
 /**
  * 漫画首页 - 展示所有可用漫画 (类型安全版)
  */
-interface Comic {
-  id: string
-  title: string
-  slug: string
-  coverImage: string | null
-  author: string | null
-  description: string | null
-  isR18: boolean
-}
-
 const config = useRuntimeConfig()
 const { data: comics, pending, error } = useFetch<Comic[]>(`${config.public.apiUrl}/api/comics`)
 </script>

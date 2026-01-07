@@ -1,3 +1,4 @@
+import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
 import { relations, sql } from 'drizzle-orm'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
@@ -7,11 +8,15 @@ export const user = sqliteTable('user', {
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull(),
+  role: text('role').default('user').notNull(),
   isAdult: integer('is_adult', { mode: 'boolean' }).default(false),
   image: text('image'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 })
+
+export type User = InferSelectModel<typeof user>
+export type NewUser = InferInsertModel<typeof user>
 
 export const session = sqliteTable('session', {
   id: text('id').primaryKey(),
@@ -23,6 +28,8 @@ export const session = sqliteTable('session', {
   userAgent: text('user_agent'),
   userId: text('user_id').notNull().references(() => user.id),
 })
+
+export type Session = InferSelectModel<typeof session>
 
 export const account = sqliteTable('account', {
   id: text('id').primaryKey(),
@@ -39,6 +46,8 @@ export const account = sqliteTable('account', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 })
+
+export type Account = InferSelectModel<typeof account>
 
 export const verification = sqliteTable('verification', {
   id: text('id').primaryKey(),
@@ -63,6 +72,8 @@ export const posts = sqliteTable('post', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
 
+export type Post = InferSelectModel<typeof posts>
+
 // --- Media (General) ---
 export const media = sqliteTable('media', {
   id: text('id').primaryKey(),
@@ -73,6 +84,8 @@ export const media = sqliteTable('media', {
   size: integer('size'),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
+
+export type Media = InferSelectModel<typeof media>
 
 // --- Comic (Manga) ---
 export const comics = sqliteTable('comic', {
@@ -88,6 +101,9 @@ export const comics = sqliteTable('comic', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
 
+export type Comic = InferSelectModel<typeof comics>
+export type NewComic = InferInsertModel<typeof comics>
+
 export const chapters = sqliteTable('chapter', {
   id: text('id').primaryKey(),
   comicId: text('comic_id').notNull().references(() => comics.id),
@@ -100,6 +116,9 @@ export const chapters = sqliteTable('chapter', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
 
+export type Chapter = InferSelectModel<typeof chapters>
+export type NewChapter = InferInsertModel<typeof chapters>
+
 export const pages = sqliteTable('page', {
   id: text('id').primaryKey(),
   chapterId: text('chapter_id').notNull().references(() => chapters.id),
@@ -108,6 +127,8 @@ export const pages = sqliteTable('page', {
   width: integer('width'),
   height: integer('height'),
 })
+
+export type Page = InferSelectModel<typeof pages>
 
 // --- System ---
 export const jobs = sqliteTable('job', {

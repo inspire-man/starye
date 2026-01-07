@@ -1,5 +1,9 @@
 <template>
-  <div class="min-h-screen bg-background text-foreground antialiased">
+  <NuxtLayout>
     <NuxtPage />
-  </div>
+  </NuxtLayout>
 </template>
+
+<style>
+  @import "@starye/ui/globals.css";
+</style>
