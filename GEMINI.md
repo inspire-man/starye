@@ -143,12 +143,14 @@
   - [x] 编写 Orama 索引构建脚本。
   - [x] 实现索引上传 R2 逻辑。
 
-### Phase 4: 前端应用开发 (Frontend Apps) [Pending]
+### Phase 4: 前端应用开发 (Frontend Apps) [In Progress]
 
-- [ ] **4.1 Dashboard**:
-  - [ ] 创建 `apps/dashboard` (Vite)。
-  - [ ] 引入 `packages/ui` preset。
-  - [ ] 搭建 Layout 和 Auth Guard。
+- [x] **4.1 Dashboard**:
+  - [x] 创建 `apps/dashboard` (Vite + Vue 3)。
+  - [x] 成功集成 `@starye/ui` 与 Tailwind v4。
+  - [x] 实现基础 API 通信与漫画列表展示。
+  - [ ] 完善路由系统与侧边栏布局。
+  - [ ] 接入 Auth Guard。
 - [ ] **4.2 Blog**:
   - [ ] 创建 `apps/blog` (Nuxt 4)。
   - [ ] 配置 `baseURL: /blog/`。
