@@ -20,12 +20,12 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
-    "@vitejs/plugin-vue": "^5.2.1",
-    "@vue/tsconfig": "^0.7.0",
+    "@vitejs/plugin-vue": "^6.0.3",
+    "@vue/tsconfig": "^0.8.1",
     "autoprefixer": "^10.4.20",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
-    "vite": "6.2.0",
-    "vue-tsc": "^2.2.4"
+    "vite": "^7.3.0",
+    "vue-tsc": "^3.2.2"
   }
 }
