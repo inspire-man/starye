@@ -3,7 +3,7 @@ import { useSession, signOut } from '@/lib/auth-client'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const { data: session } = useSession()
+const session = useSession() // Don't destructure data immediately if types are ambiguous
 
 const handleLogout = async () => {
   await signOut()
@@ -50,9 +50,9 @@ const handleLogout = async () => {
     <main class="flex-1 ml-64 p-8">
       <div class="mb-8 flex items-center justify-between">
         <h1 class="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <div class="flex items-center gap-2" v-if="session">
-          <span class="text-sm text-muted-foreground">Welcome, {{ session.user.name }}</span>
-          <img :src="session.user.image || `https://ui-avatars.com/api/?name=${session.user.name}`" class="w-8 h-8 rounded-full border bg-background" />
+        <div class="flex items-center gap-2" v-if="session.data">
+          <span class="text-sm text-muted-foreground">Welcome, {{ session.data.user.name }}</span>
+          <img :src="session.data.user.image || `https://ui-avatars.com/api/?name=${session.data.user.name}`" class="w-8 h-8 rounded-full border bg-background" />
         </div>
       </div>
       

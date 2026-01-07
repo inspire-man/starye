@@ -86,7 +86,6 @@ comics.get('/:slug/:chapterSlug', async (c) => {
   const { slug, chapterSlug } = c.req.param()
   const isAdult = await checkIsAdult(c)
 
-  // 1. Get Comic Info for R18 Check
   const comic = await db.query.comics.findFirst({
     where: (comics, { eq }) => eq(comics.slug, slug),
     columns: { id: true, isR18: true, title: true },
@@ -96,7 +95,6 @@ comics.get('/:slug/:chapterSlug', async (c) => {
     throw new HTTPException(404, { message: 'Comic not found' })
   }
 
-  // STRICT SECURITY CHECK: R18 Content
   const needsProtection = comic.isR18 === true
   if (needsProtection && !isAdult) {
     throw new HTTPException(403, {

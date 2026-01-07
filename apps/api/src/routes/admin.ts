@@ -10,6 +10,16 @@ import { MangaInfoSchema } from '../types'
 
 const admin = new Hono<AppEnv>()
 
+// List Users
+admin.get('/users', serviceAuth(), async (c) => {
+  const db = c.get('db')
+  const results = await db.query.user.findMany({
+    orderBy: (user, { desc }) => [desc(user.createdAt)],
+    limit: 100, // Safety limit
+  })
+  return c.json(results)
+})
+
 // Promote/Demote User Role
 admin.patch(
   '/users/:email/role',
@@ -206,5 +216,20 @@ admin.post(
     }
   },
 )
+
+// Admin Stats
+admin.get('/stats', serviceAuth(), async (c) => {
+  const db = c.get('db')
+
+  // Efficient count using D1/SQLite
+  const comicCount = await db.$count(comics)
+  const userCount = await db.$count(user)
+
+  return c.json({
+    comics: comicCount,
+    users: userCount,
+    tasks: 0,
+  })
+})
 
 export default admin
