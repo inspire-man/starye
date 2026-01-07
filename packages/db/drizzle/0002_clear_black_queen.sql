@@ -1,0 +1,1 @@
+ALTER TABLE `comic` ADD `is_r18` integer DEFAULT true NOT NULL;

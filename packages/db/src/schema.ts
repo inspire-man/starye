@@ -7,6 +7,7 @@ export const user = sqliteTable('user', {
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull(),
+  isAdult: integer('is_adult', { mode: 'boolean' }).default(false),
   image: text('image'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
@@ -82,6 +83,7 @@ export const comics = sqliteTable('comic', {
   description: text('description'),
   coverImage: text('cover_image'), // URL
   status: text('status').default('ongoing'), // ongoing, completed
+  isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
