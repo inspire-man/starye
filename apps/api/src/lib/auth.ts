@@ -20,7 +20,7 @@ export interface Env {
   R2_ACCESS_KEY_ID: string
   R2_SECRET_ACCESS_KEY: string
   R2_BUCKET_NAME: string
-  R2_PUBLIC_URL: string // e.g. https://cdn.starye.com
+  R2_PUBLIC_URL: string
 }
 
 // 解耦 Context，只依赖 Env 和 Request
