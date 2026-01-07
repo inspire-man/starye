@@ -65,16 +65,26 @@ admin.post(
         console.log(`[Sync] 🗑️  Deleting existing chapters for: ${comicId}`)
         await db.delete(chapters).where(eq(chapters.comicId, comicId))
 
-        // B. Prepare new values
-        const chapterValues = data.chapters.map(ch => ({
-          id: `${comicId}-${ch.slug}`,
-          comicId,
-          title: ch.title,
-          slug: ch.slug,
-          chapterNumber: ch.number,
-          sortOrder: ch.number,
-          // Let database handle createdAt and updatedAt defaults
-        }))
+        // B. Prepare new values with deduplication
+        const uniqueSlugs = new Set<string>()
+        const chapterValues = []
+
+        for (const ch of data.chapters) {
+          if (uniqueSlugs.has(ch.slug)) {
+            console.warn(`[Sync] ⚠️ Duplicate chapter slug detected: ${ch.slug}, skipping.`)
+            continue
+          }
+          uniqueSlugs.add(ch.slug)
+          chapterValues.push({
+            id: `${comicId}-${ch.slug}`,
+            comicId,
+            title: ch.title,
+            slug: ch.slug,
+            chapterNumber: ch.number,
+            sortOrder: ch.number,
+            // Let database handle createdAt and updatedAt defaults
+          })
+        }
 
         // C. Batch insert (SQLite supports standard batch insert fine)
         // We split into chunks of 10 to stay within D1 API limits
