@@ -1,7 +1,9 @@
+/* eslint-disable node/prefer-global/process */
 // verify-api.ts - Node 22+ (Zero Dependency)
 
-const API_URL = 'http://127.0.0.1:8787'
-const CRAWLER_SECRET = 'crawler_sk_7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a' // 与 apps/api/.dev.vars 保持一致
+const API_URL = process.env.API_URL || 'http://127.0.0.1:8787'
+// Use environment variable or a default placeholder. NEVER commit real secrets.
+const CRAWLER_SECRET = process.env.CRAWLER_SECRET || 'your-secret-token'
 
 async function runTests() {
   console.log('🚀 Starting API Verification...\n')
