@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { LayoutDashboard, BookOpen } from 'lucide-vue-next'
+import { LayoutDashboard, BookOpen, Settings } from 'lucide-vue-next'
 </script>
 
 <template>
   <div class="flex min-h-screen bg-background text-foreground font-sans">
     <!-- Sidebar -->
-    <aside class="w-64 border-r bg-card hidden md:block">
+    <aside class="w-64 border-r bg-card hidden md:block flex flex-col">
       <div class="p-6">
         <h1 class="text-xl font-bold tracking-tight">Starye Dash</h1>
       </div>
-      <nav class="px-3 space-y-1 text-muted-foreground">
+      <nav class="px-3 space-y-1 text-muted-foreground flex-1">
         <router-link 
           to="/" 
           class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground" 
@@ -27,6 +27,16 @@ import { LayoutDashboard, BookOpen } from 'lucide-vue-next'
           漫画管理
         </router-link>
       </nav>
+      <div class="p-3 border-t">
+        <router-link 
+          to="/settings" 
+          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground transition-all hover:bg-accent hover:text-accent-foreground" 
+          active-class="bg-accent text-accent-foreground"
+        >
+          <Settings :size="18" />
+          系统设置
+        </router-link>
+      </div>
     </aside>
 
     <!-- Main -->

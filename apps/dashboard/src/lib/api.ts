@@ -1,11 +1,18 @@
 export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787'
 
+const TOKEN_KEY = 'starye_admin_token'
+export const getAdminToken = () => localStorage.getItem(TOKEN_KEY) || ''
+export const setAdminToken = (token: string) => localStorage.setItem(TOKEN_KEY, token)
+
 export async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`
+  const token = getAdminToken()
+
   const res = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'x-service-token': token,
       ...options?.headers,
     },
   })
@@ -19,14 +26,30 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
 }
 
 export interface Comic {
+  id?: string
   title: string
   slug: string
   coverImage: string | null
   author: string | null
   description: string | null
+  isR18?: boolean
+  status?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export const api = {
   API_BASE,
+  // Public API (filtered)
   getComics: () => fetchApi<Comic[]>('/api/comics'),
+
+  // Admin API (full access)
+  admin: {
+    getComics: () => fetchApi<Comic[]>('/api/admin/comics'),
+    updateComic: (id: string, data: Partial<Comic>) =>
+      fetchApi(`/api/admin/comics/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+  },
 }

@@ -10,6 +10,39 @@ import { MangaInfoSchema } from '../types'
 
 const admin = new Hono<AppEnv>()
 
+// List Comics (Admin View)
+admin.get('/comics', serviceAuth(), async (c) => {
+  const db = c.get('db')
+  const results = await db.query.comics.findMany({
+    orderBy: (comics, { desc }) => [desc(comics.updatedAt)],
+  })
+  return c.json(results)
+})
+
+// Update Comic (e.g. toggle R18)
+admin.patch(
+  '/comics/:id',
+  serviceAuth(),
+  zValidator('json', z.object({
+    isR18: z.boolean().optional(),
+    status: z.string().optional(),
+  })),
+  async (c) => {
+    const id = c.req.param('id')
+    const data = c.req.valid('json')
+    const db = c.get('db')
+
+    await db.update(comics)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(comics.id, id))
+
+    return c.json({ success: true })
+  },
+)
+
 // Sync Route (Called by Crawler)
 admin.post(
   '/sync',
