@@ -8,6 +8,7 @@ import adminRoutes from './routes/admin'
 import authRoutes from './routes/auth'
 import comicsRoutes from './routes/comics'
 import healthRoutes from './routes/health'
+import uploadRoutes from './routes/upload'
 
 const app = new Hono<AppEnv>()
 
@@ -25,6 +26,7 @@ app.route('/api/health', healthRoutes)
 app.route('/api/comics', comicsRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/auth', authRoutes)
+app.route('/api/upload', uploadRoutes)
 
 export default app
 export type AppType = typeof app

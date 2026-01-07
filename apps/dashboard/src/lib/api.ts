@@ -54,4 +54,12 @@ export const api = {
         body: JSON.stringify(data),
       }),
   },
+
+  upload: {
+    presign: (filename: string, contentType: string) =>
+      fetchApi<{ uploadUrl: string, publicUrl: string }>('/api/upload/presign', {
+        method: 'POST',
+        body: JSON.stringify({ filename, contentType }),
+      }),
+  },
 }
