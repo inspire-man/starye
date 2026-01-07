@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { api, type Comic } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 
-const session = useSession()
+useSession()
 const comics = ref<Comic[]>([])
 const loading = ref(true)
 const error = ref('')

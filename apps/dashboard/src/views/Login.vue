@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { signIn } from '@/lib/auth-client'
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 
-const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 
