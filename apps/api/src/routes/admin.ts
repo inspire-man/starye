@@ -82,14 +82,15 @@ admin.post(
             slug: ch.slug,
             chapterNumber: ch.number,
             sortOrder: ch.number,
-            // Let database handle createdAt and updatedAt defaults
+            createdAt: new Date(),
+            updatedAt: new Date(),
           })
         }
 
         // C. Batch insert (SQLite supports standard batch insert fine)
-        // We split into chunks of 10 to stay within D1 API limits
+        // We split into chunks of 5 to stay within D1 API limits
         // D1 has stricter limits than standard SQLite
-        const chunkSize = 10
+        const chunkSize = 5
         console.log(`[Sync] 📚 Inserting ${chapterValues.length} chapters in ${Math.ceil(chapterValues.length / chunkSize)} batches`)
 
         for (let i = 0; i < chapterValues.length; i += chunkSize) {
