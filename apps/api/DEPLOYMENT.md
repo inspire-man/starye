@@ -28,18 +28,15 @@ wrangler secret put GITHUB_CLIENT_ID
 wrangler secret put GITHUB_CLIENT_SECRET
 ```
 
-## 验证部署
+### 4. Verify Deployment
 
 ```bash
-# 查看已设置的密钥
-wrangler secret list
+# Health Check
+curl https://api.starye.org/
 
-# 测试 API
-curl https://api.mokelao.top/
-curl -X POST https://api.mokelao.top/api/admin/sync \
-  -H "x-service-token: YOUR_CRAWLER_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"manga","data":{"title":"Test","slug":"test","chapters":[]}}'
+# Sync Schema (Optional manual trigger)
+curl -X POST https://api.starye.org/api/admin/sync \
+  -H "Authorization: Bearer YOUR_CRAWLER_SECRET"
 ```
 
 ## 查看日志

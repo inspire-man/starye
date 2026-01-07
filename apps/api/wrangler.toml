@@ -7,6 +7,8 @@ compatibility_flags = [ "nodejs_compat" ]
 [vars]
 # BETTER_AUTH_SECRET = "..."
 # CRAWLER_SECRET = "..."
+WEB_URL = "https://www.starye.org"
+ADMIN_URL = "https://dashboard.starye.org"
 
 # D1 Database Binding
 [[d1_databases]]
@@ -22,7 +24,7 @@ bucket_name = "starye-media"
 
 # Custom Domain
 [[routes]]
-pattern = "api.mokelao.top"
+pattern = "api.starye.org"
 custom_domain = true
 
 # KV Namespace (Optional, for caching if needed later)
