@@ -35,13 +35,13 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build Comic App
+      - name: Build Comic App (SSG)
         env:
           VITE_API_URL: https://api.starye.org
-        run: pnpm --filter comic build
+        run: pnpm --filter comic generate
 
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm exec wrangler pages deploy apps/comic/.output/public --project-name=starye-comic
+        run: pnpm exec wrangler pages deploy apps/comic/dist --project-name=starye-comic
