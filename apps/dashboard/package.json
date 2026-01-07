@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@starye/ui": "workspace:*",
+    "@vueuse/core": "^14.1.0",
+    "better-auth": "^1.4.10",
     "clsx": "^2.1.1",
     "lucide-vue-next": "^0.562.0",
     "tailwind-merge": "^3.4.0",

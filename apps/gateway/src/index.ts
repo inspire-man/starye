@@ -51,7 +51,7 @@ async function proxy(request: Request, targetOrigin: string): Promise<Response> 
     method: request.method,
     headers: request.headers,
     body: request.body,
-    redirect: 'follow',
+    redirect: 'manual', // Important: Let the browser handle redirects (e.g. Auth callbacks)
   })
 
   // Add a header to indicate proxying

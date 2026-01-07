@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import type { AppEnv } from '../types'
 import { zValidator } from '@hono/zod-validator'
-import { chapters, comics } from '@starye/db/schema'
+import { chapters, comics, user } from '@starye/db/schema'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -9,6 +9,38 @@ import { serviceAuth } from '../middleware/service-auth'
 import { MangaInfoSchema } from '../types'
 
 const admin = new Hono<AppEnv>()
+
+// Promote/Demote User Role
+admin.patch(
+  '/users/:email/role',
+  serviceAuth(),
+  zValidator('json', z.object({
+    role: z.enum(['admin', 'user']),
+  })),
+  async (c) => {
+    const email = c.req.param('email')
+    const { role } = c.req.valid('json')
+    const db = c.get('db')
+
+    try {
+      const result = await db.update(user)
+        .set({ role, updatedAt: new Date() })
+        .where(eq(user.email, email))
+        .returning({ id: user.id, email: user.email, role: user.role })
+
+      if (result.length === 0) {
+        return c.json({ success: false, error: 'User not found' }, 404)
+      }
+
+      console.log(`[Admin] Updated role for ${email} to ${role}`)
+      return c.json({ success: true, user: result[0] })
+    }
+    catch (e: any) {
+      console.error(`[Admin] Failed to update role for ${email}:`, e.message)
+      return c.json({ success: false, error: e.message }, 500)
+    }
+  },
+)
 
 // List Comics (Admin View)
 admin.get('/comics', serviceAuth(), async (c) => {

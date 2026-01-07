@@ -10,6 +10,7 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@starye/db": "workspace:*",
     "@starye/ui": "workspace:*",
     "better-auth": "^1.4.10",
     "nuxt": "^4.2.2",

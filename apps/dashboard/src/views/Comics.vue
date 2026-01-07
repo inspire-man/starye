@@ -1,93 +1,165 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { api, type Comic, getAdminToken } from '@/lib/api'
+import { api, type Comic } from '@/lib/api'
+import { useSession } from '@/lib/auth-client'
 
+const { data: session } = useSession()
 const comics = ref<Comic[]>([])
 const loading = ref(true)
 const error = ref('')
-const isAdmin = ref(!!getAdminToken())
 
-onMounted(async () => {
+// Modal state
+const isEditModalOpen = ref(false)
+const editingComic = ref<Comic | null>(null)
+const updateLoading = ref(false)
+
+const loadComics = async () => {
+  loading.value = true
   try {
-    if (isAdmin.value) {
-      comics.value = await api.admin.getComics()
-    } else {
-      comics.value = await api.getComics()
-    }
+    // Admin interface returns full data including isR18
+    comics.value = await api.admin.getComics()
   } catch (e: any) {
     error.value = e.message
   } finally {
     loading.value = false
   }
-})
+}
 
-const toggleR18 = async (comic: Comic) => {
-  if (!isAdmin.value) return
+onMounted(loadComics)
+
+const openEditModal = (comic: Comic) => {
+  editingComic.value = { ...comic }
+  isEditModalOpen.value = true
+}
+
+const handleUpdate = async () => {
+  if (!editingComic.value?.id) return
+  
+  updateLoading.value = true
+  try {
+    await api.admin.updateComic(editingComic.value.id, {
+      title: editingComic.value.title,
+      author: editingComic.value.author,
+      isR18: editingComic.value.isR18,
+      status: editingComic.value.status,
+    })
+    
+    // Close modal and refresh list
+    isEditModalOpen.value = false
+    await loadComics()
+  } catch (e: any) {
+    alert('Update failed: ' + e.message)
+  } finally {
+    updateLoading.value = false
+  }
+}
+
+const toggleR18Shortcut = async (comic: Comic) => {
   const newValue = !comic.isR18
-  // Optimistic update
-  comic.isR18 = newValue
-
   try {
     if (comic.id) {
         await api.admin.updateComic(comic.id, { isR18: newValue })
+        comic.isR18 = newValue
     }
   } catch (e) {
-    // Revert
-    comic.isR18 = !newValue
-    alert('Failed to update')
+    alert('Quick update failed')
   }
 }
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 relative">
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold tracking-tight">漫画管理</h1>
-      <div class="flex gap-2 items-center">
-         <span v-if="isAdmin" class="text-xs bg-primary/10 text-primary px-2 py-1 rounded font-medium border border-primary/20">管理员模式</span>
-         <span class="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">API: {{ api.API_BASE }}</span>
+      <div>
+        <h2 class="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">Comic Library</h2>
+        <p class="text-neutral-500 mt-1">Manage metadata and visibility of your collection.</p>
+      </div>
+      <button @click="loadComics" class="p-2 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>
+      </button>
+    </div>
+
+    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div v-for="i in 6" :key="i" class="h-40 bg-neutral-200 dark:bg-neutral-800 animate-pulse rounded-2xl"></div>
+    </div>
+
+    <div v-else-if="error" class="p-6 bg-red-50 border border-red-200 text-red-600 rounded-2xl flex flex-col items-center">
+       <p class="font-bold">Backend Communication Error</p>
+       <p class="text-sm mt-1">{{ error }}</p>
+       <button @click="loadComics" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">Retry Connection</button>
+    </div>
+
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div v-for="comic in comics" :key="comic.slug" 
+           class="group bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden flex shadow-sm hover:shadow-md transition-all">
+        
+        <!-- Cover Preview -->
+        <div class="w-28 shrink-0 bg-neutral-100 dark:bg-neutral-800 relative">
+          <img v-if="comic.coverImage" :src="comic.coverImage" class="w-full h-full object-cover" />
+          <div v-else class="w-full h-full flex items-center justify-center text-neutral-400">
+             <svg class="w-8 h-8 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+          </div>
+          <div v-if="comic.isR18" class="absolute bottom-1 right-1 bg-red-500 text-[8px] text-white font-black px-1 rounded uppercase">R18</div>
+        </div>
+
+        <!-- Info -->
+        <div class="flex-1 p-4 flex flex-col">
+          <div class="flex-1">
+            <h3 class="font-bold text-sm line-clamp-1 group-hover:text-primary transition-colors">{{ comic.title }}</h3>
+            <p class="text-xs text-neutral-500 mt-1">{{ comic.author || 'Unknown Author' }}</p>
+          </div>
+          
+          <div class="mt-4 flex items-center justify-between">
+            <div class="flex gap-1">
+               <button @click="toggleR18Shortcut(comic)" 
+                       class="text-[10px] font-bold px-2 py-0.5 rounded border transition-colors"
+                       :class="comic.isR18 ? 'bg-red-50 text-red-600 border-red-200' : 'bg-green-50 text-green-600 border-green-200'">
+                 {{ comic.isR18 ? 'R18' : 'SAFE' }}
+               </button>
+            </div>
+            <button @click="openEditModal(comic)" class="text-xs font-medium text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors">
+              Edit Details
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div v-if="loading" class="text-center py-20 text-muted-foreground italic">加载中...</div>
+    <!-- Edit Modal -->
+    <div v-if="isEditModalOpen && editingComic" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="w-full max-w-lg bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl overflow-hidden border border-neutral-200 dark:border-neutral-800 animate-in fade-in zoom-in duration-200">
+        <div class="p-6 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
+          <h3 class="text-xl font-bold">Edit Comic</h3>
+          <button @click="isEditModalOpen = false" class="text-neutral-400 hover:text-neutral-900 dark:hover:text-white">
+             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        
+        <div class="p-8 space-y-5">
+          <div class="space-y-2">
+            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">Comic Title</label>
+            <input v-model="editingComic.title" class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none" />
+          </div>
+          
+          <div class="space-y-2">
+            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">Author</label>
+            <input v-model="editingComic.author" class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none" />
+          </div>
 
-    <div v-else-if="error" class="p-4 bg-red-50 text-red-600 border border-red-200 rounded-lg">
-      <p class="font-bold">无法加载数据</p>
-      <p class="text-sm">{{ error }}</p>
-      <div v-if="error.includes('401')" class="mt-2">
-        <router-link to="/settings" class="text-sm underline hover:text-red-800">前往设置页配置 Admin Token</router-link>
-      </div>
-    </div>
-
-    <div v-else-if="comics.length === 0" class="text-center py-20 border-2 border-dashed rounded-xl text-muted-foreground">
-      暂无漫画数据。
-    </div>
-
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      <div v-for="comic in comics" :key="comic.slug" class="group border rounded-xl overflow-hidden bg-card shadow-sm hover:shadow-md transition-all relative">
-        <!-- Badges -->
-        <div class="absolute top-2 right-2 z-10 flex gap-1">
-           <button
-             v-if="isAdmin"
-             @click.stop="toggleR18(comic)"
-             class="text-xs px-2 py-0.5 rounded font-bold transition-colors cursor-pointer shadow-sm border"
-             :class="comic.isR18 ? 'bg-red-500 text-white border-red-600 hover:bg-red-600' : 'bg-green-500 text-white border-green-600 hover:bg-green-600'"
-           >
-             {{ comic.isR18 ? 'R18' : 'SAFE' }}
-           </button>
-           <span v-else-if="comic.isR18" class="bg-red-500/80 text-white text-xs px-1.5 py-0.5 rounded font-bold">R18</span>
+          <div class="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-2xl border border-neutral-100 dark:border-neutral-800">
+            <div>
+              <p class="font-bold text-sm text-red-600">R18 Content</p>
+              <p class="text-[10px] text-neutral-500">Enables age verification protection</p>
+            </div>
+            <input type="checkbox" v-model="editingComic.isR18" class="w-5 h-5 accent-red-600 cursor-pointer" />
+          </div>
         </div>
 
-        <div class="aspect-[3/4] w-full bg-muted relative overflow-hidden">
-           <img v-if="comic.coverImage" :src="comic.coverImage" class="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
-           <div v-else class="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs text-center p-2 flex-col gap-2 bg-neutral-100 dark:bg-neutral-800">
-             <span>🚫 封面隐藏</span>
-             <span v-if="comic.isR18" class="text-red-400 text-[10px]">(R18 内容保护)</span>
-           </div>
-        </div>
-        <div class="p-3">
-          <h2 class="font-semibold text-sm truncate" :title="comic.title">{{ comic.title }}</h2>
-          <p class="text-xs text-muted-foreground mt-1 truncate">{{ comic.author || '未知作者' }}</p>
+        <div class="p-6 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-100 dark:border-neutral-800 flex gap-3">
+          <button @click="isEditModalOpen = false" class="flex-1 px-4 py-3 rounded-xl font-bold text-sm hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-all">Cancel</button>
+          <button @click="handleUpdate" :disabled="updateLoading" class="flex-1 px-4 py-3 bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white rounded-xl font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-all">
+            {{ updateLoading ? 'Saving...' : 'Save Changes' }}
+          </button>
         </div>
       </div>
     </div>

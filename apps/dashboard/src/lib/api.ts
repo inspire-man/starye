@@ -9,10 +9,12 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
   const token = getAdminToken()
 
   const res = await fetch(url, {
+    credentials: 'include', // Important for Better Auth Cookies
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      'x-service-token': token,
+      // Send token if present (for backward compatibility or script access)
+      ...(token ? { 'x-service-token': token } : {}),
       ...options?.headers,
     },
   })

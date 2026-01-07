@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useSession, signOut } from '~/lib/auth-client'
 
-const { data: session } = useSession()
+const session = useSession()
 const router = useRouter()
 
 const handleLogout = async () => {
@@ -9,8 +9,7 @@ const handleLogout = async () => {
   router.push('/login')
 }
 
-// Helper to safely get role (Better Auth types might lag behind DB schema)
-const userRole = computed(() => (session.value?.user as any)?.role)
+const userRole = computed(() => session.value.data?.user?.role)
 </script>
 
 <template>
@@ -18,27 +17,27 @@ const userRole = computed(() => (session.value?.user as any)?.role)
     <header class="sticky top-0 z-50 bg-background/80 backdrop-blur border-b">
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
         <NuxtLink to="/" class="font-bold text-xl tracking-tight">STARYE</NuxtLink>
-        
+
         <nav class="flex items-center gap-4">
-          <template v-if="session">
-            <NuxtLink 
-              v-if="userRole === 'admin'" 
-              to="/dashboard" 
+          <template v-if="session.data">
+            <NuxtLink
+              v-if="userRole === 'admin'"
+              to="/dashboard"
               class="text-sm font-medium text-primary hover:underline"
               target="_blank"
             >
               Admin
             </NuxtLink>
-            
+
             <NuxtLink to="/profile" class="flex items-center gap-2 text-sm font-medium hover:bg-muted px-3 py-1.5 rounded-full transition-colors">
-              <img 
-                :src="session.user.image || `https://ui-avatars.com/api/?name=${session.user.name}`" 
+              <img
+                :src="session.data.user.image || `https://ui-avatars.com/api/?name=${session.data.user.name}`"
                 class="w-6 h-6 rounded-full"
               />
-              <span>{{ session.user.name }}</span>
+              <span>{{ session.data.user.name }}</span>
             </NuxtLink>
           </template>
-          
+
           <template v-else>
             <NuxtLink to="/login" class="text-sm font-medium hover:text-primary transition-colors">
               Login

@@ -1,36 +1,42 @@
 /* eslint-disable no-console */
-import type { Env } from '../lib/auth'
+import type { AppEnv } from '../types'
 import { createMiddleware } from 'hono/factory'
 import { HTTPException } from 'hono/http-exception'
 
+/**
+ * Admin Authentication Middleware
+ *
+ * Supports two authentication methods:
+ * 1. Service Token: Via 'x-service-token' header (for crawlers/scripts)
+ * 2. User Session: Via 'starye_session' cookie (for admin users in dashboard)
+ */
 export function serviceAuth() {
-  return createMiddleware<{ Bindings: Env }>(async (c, next) => {
+  return createMiddleware<AppEnv>(async (c, next) => {
     const token = c.req.header('x-service-token')
     const secret = c.env.CRAWLER_SECRET
 
-    // 必须确保 secret 存在且长度足够安全
-    if (!secret || secret.length < 8) {
-      console.error('[Service Auth] CRAWLER_SECRET is missing or too weak', {
-        exists: !!secret,
-        length: secret?.length || 0,
-      })
-      throw new HTTPException(500, { message: 'Server Configuration Error: CRAWLER_SECRET not properly configured' })
+    // Method 1: Service Token Check
+    if (token && secret && token === secret) {
+      console.log('[Auth] ✓ Service Token authenticated')
+      return await next()
     }
 
-    if (!token) {
-      console.warn('[Service Auth] No x-service-token header provided')
-      throw new HTTPException(401, { message: 'Unauthorized: Missing service token' })
+    // Method 2: Admin Session Check
+    const auth = c.get('auth')
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+
+    if (session && (session.user as any).role === 'admin') {
+      console.log(`[Auth] ✓ Admin User authenticated: ${session.user.email}`)
+      return await next()
     }
 
-    if (token !== secret) {
-      console.warn('[Service Auth] Invalid service token provided', {
-        tokenPrefix: token.substring(0, 10),
-        secretPrefix: secret.substring(0, 10),
-      })
-      throw new HTTPException(401, { message: 'Unauthorized: Invalid service token' })
-    }
+    // Fail if neither method works
+    console.warn('[Auth] ❌ Unauthorized access attempt to Admin API', {
+      hasToken: !!token,
+      hasSession: !!session,
+      role: (session?.user as any)?.role,
+    })
 
-    console.log('[Service Auth] ✓ Service authenticated successfully')
-    await next()
+    throw new HTTPException(401, { message: 'Unauthorized: Admin access required' })
   })
 }

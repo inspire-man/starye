@@ -27,10 +27,20 @@ export interface Env {
 export function createAuth(env: Env, request: Request) {
   const db = createDb(env.DB)
 
-  // 动态获取 BaseURL (优先环境变量，回退到请求 Origin)
+  // 动态获取 BaseURL
   const url = new URL(request.url)
-  const origin = `${url.protocol}//${url.host}`
-  const baseURL = env.BETTER_AUTH_URL || origin
+
+  // 检查是否通过 Gateway 转发 (如果有自定义 Header)
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const protocol = request.headers.get('x-forwarded-proto') || 'http'
+  const origin = forwardedHost ? `${protocol}://${forwardedHost}` : `${url.protocol}//${url.host}`
+
+  // 核心：Better Auth 的 baseURL 必须指向它自己挂载的端点
+  const baseURL = env.BETTER_AUTH_URL || `${origin}/api/auth`
+  const isHttps = url.protocol === 'https:' || forwardedHost?.startsWith('https')
+
+  // eslint-disable-next-line no-console
+  console.log(`[Auth] Initializing with baseURL: ${baseURL} (Env: ${env.BETTER_AUTH_URL}, Origin: ${origin}, Secure: ${isHttps})`)
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -42,6 +52,12 @@ export function createAuth(env: Env, request: Request) {
         verification: schema.verification,
       },
     }),
+    user: {
+      additionalFields: {
+        role: { type: 'string' },
+        isAdult: { type: 'boolean' },
+      },
+    },
     secret: env.BETTER_AUTH_SECRET,
     baseURL,
     socialProviders: {
@@ -56,8 +72,8 @@ export function createAuth(env: Env, request: Request) {
       cookiePrefix: 'starye',
       // Cloudflare Workers 必须的默认配置
       defaultCookieAttributes: {
-        sameSite: 'none',
-        secure: true,
+        sameSite: isHttps ? 'none' : 'lax',
+        secure: isHttps,
       },
     },
   })
