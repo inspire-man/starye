@@ -9,7 +9,7 @@ export function corsMiddleware() {
       return allowed.includes(origin) ? origin : allowed[0]
     },
     credentials: true,
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'x-service-token'],
   })
 }

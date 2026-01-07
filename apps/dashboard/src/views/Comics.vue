@@ -26,9 +26,9 @@ const toggleR18 = async (comic: Comic) => {
   const newValue = !comic.isR18
   // Optimistic update
   comic.isR18 = newValue
-  
+
   try {
-    if (comic.id) { 
+    if (comic.id) {
         await api.admin.updateComic(comic.id, { isR18: newValue })
     }
   } catch (e) {
@@ -50,7 +50,7 @@ const toggleR18 = async (comic: Comic) => {
     </div>
 
     <div v-if="loading" class="text-center py-20 text-muted-foreground italic">加载中...</div>
-    
+
     <div v-else-if="error" class="p-4 bg-red-50 text-red-600 border border-red-200 rounded-lg">
       <p class="font-bold">无法加载数据</p>
       <p class="text-sm">{{ error }}</p>
@@ -60,14 +60,14 @@ const toggleR18 = async (comic: Comic) => {
     </div>
 
     <div v-else-if="comics.length === 0" class="text-center py-20 border-2 border-dashed rounded-xl text-muted-foreground">
-      暂无漫画数据。请运行爬虫程序抓取内容。
+      暂无漫画数据。
     </div>
 
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       <div v-for="comic in comics" :key="comic.slug" class="group border rounded-xl overflow-hidden bg-card shadow-sm hover:shadow-md transition-all relative">
         <!-- Badges -->
         <div class="absolute top-2 right-2 z-10 flex gap-1">
-           <button 
+           <button
              v-if="isAdmin"
              @click.stop="toggleR18(comic)"
              class="text-xs px-2 py-0.5 rounded font-bold transition-colors cursor-pointer shadow-sm border"

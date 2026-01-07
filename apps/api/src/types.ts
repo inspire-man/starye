@@ -10,6 +10,18 @@ export interface Variables {
 
 export interface AppEnv { Bindings: Env, Variables: Variables }
 
+// Extended User Type for Application
+export interface SessionUser {
+  id: string
+  email: string
+  emailVerified: boolean
+  name: string
+  image?: string | null
+  createdAt: Date
+  updatedAt: Date
+  isAdult: boolean // Custom field
+}
+
 // Validation Schemas
 export const ChapterSchema = z.object({
   title: z.string(),
