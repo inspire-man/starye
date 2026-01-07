@@ -28,18 +28,25 @@ admin.patch(
     status: z.string().optional(),
   })),
   async (c) => {
-    const id = c.req.param('id')
+    const id = String(c.req.param('id')) // Ensure ID is string
     const data = c.req.valid('json')
     const db = c.get('db')
 
-    await db.update(comics)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(comics.id, id))
+    try {
+      console.log(`[Admin] Updating comic ${id} with:`, data)
+      await db.update(comics)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(comics.id, id))
 
-    return c.json({ success: true })
+      return c.json({ success: true })
+    }
+    catch (e: any) {
+      console.error(`[Admin] Failed to update comic ${id}:`, e.message)
+      return c.json({ success: false, error: e.message }, 500)
+    }
   },
 )
 

@@ -31,7 +31,10 @@ comics.get('/', async (c) => {
   })
 
   const safeResults = results.map((comic) => {
-    if (comic.isR18 && !isAdult) {
+    // Explicitly check for truthy isR18
+    const needsProtection = comic.isR18 === true
+
+    if (needsProtection && !isAdult) {
       return { ...comic, coverImage: null }
     }
     return comic
@@ -66,7 +69,8 @@ comics.get('/:slug', async (c) => {
   }
 
   // R18 Protection: Hide cover if not authorized
-  if (comic.isR18 && !isAdult) {
+  const needsProtection = comic.isR18 === true
+  if (needsProtection && !isAdult) {
     return c.json({
       ...comic,
       coverImage: null,
@@ -93,7 +97,8 @@ comics.get('/:slug/:chapterSlug', async (c) => {
   }
 
   // STRICT SECURITY CHECK: R18 Content
-  if (comic.isR18 && !isAdult) {
+  const needsProtection = comic.isR18 === true
+  if (needsProtection && !isAdult) {
     throw new HTTPException(403, {
       message: 'Age verification required to access this content.',
     })

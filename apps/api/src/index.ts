@@ -20,7 +20,8 @@ app.use('*', authMiddleware())
 app.onError(errorHandler)
 
 // Routes
-app.route('/', healthRoutes)
+app.get('/', c => c.text('Starye API'))
+app.route('/api/health', healthRoutes)
 app.route('/api/comics', comicsRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/auth', authRoutes)
