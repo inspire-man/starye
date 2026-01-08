@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "test:api": "tsx scripts/test-api.ts",
     "build:search": "tsx scripts/build-search.ts",
+    "test": "vitest",
     "build": "tsc",
     "lint": "eslint .",
     "type-check": "tsc --noEmit"
@@ -26,8 +27,10 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@starye/config": "workspace:*",
     "@types/node": "^25.0.3",
     "eslint": "^9.39.2",
+    "happy-dom": "^20.1.0",
     "puppeteer": "^24.34.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
