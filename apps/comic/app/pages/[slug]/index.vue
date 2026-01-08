@@ -8,7 +8,8 @@ import { useApi } from '../../lib/api'
 const route = useRoute()
 const slug = route.params.slug as string
 
-const { data: comic, pending, error } = useApi<ComicWithChapters>(`/api/comics/${slug}`)
+const { data: response, pending, error } = useApi<ComicWithChapters>(`/api/comics/${slug}`)
+const comic = computed(() => response.value?.data)
 
 const sortedChapters = computed(() => {
   if (!comic.value?.chapters)

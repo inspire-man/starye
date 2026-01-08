@@ -8,7 +8,8 @@ import { useApi } from '../../lib/api'
 const route = useRoute()
 const { slug, chapterSlug } = route.params
 
-const { data: chapter, pending, error } = useApi<ChapterWithPages>(`/api/comics/${slug}/${chapterSlug}`)
+const { data: response, pending, error } = useApi<ChapterWithPages>(`/api/comics/${slug}/${chapterSlug}`)
+const chapter = computed(() => response.value?.data)
 
 const isForbidden = computed(() => error.value?.statusCode === 403)
 </script>
