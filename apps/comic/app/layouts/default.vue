@@ -11,15 +11,10 @@ async function handleLogout() {
 }
 
 const userRole = computed(() => session.value.data?.user?.role)
+const config = useRuntimeConfig()
 
 // 动态管理后台链接
-const adminUrl = computed(() => {
-  // eslint-disable-next-line node/prefer-global/process
-  if (process.env.NODE_ENV === 'development') {
-    return '/dashboard/'
-  }
-  return 'https://dashboard.starye.org'
-})
+const adminUrl = computed(() => config.public.adminUrl)
 </script>
 
 <template>
