@@ -26,8 +26,9 @@ async function loadUsers() {
   try {
     users.value = await api.admin.getUsers()
   }
-  catch (e: any) {
-    error.value = e.message
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    error.value = message
   }
   finally {
     loading.value = false
@@ -61,8 +62,9 @@ async function saveUser() {
     await loadUsers()
     closeEdit()
   }
-  catch (e: any) {
-    console.error(`Failed to save: ${e.message}`)
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error(`Failed to save: ${message}`)
   }
   finally {
     saving.value = false

@@ -37,8 +37,9 @@ async function handleUpload(event: Event) {
     // 3. Update local state
     editingComic.value.coverImage = presignRes.publicUrl
   }
-  catch (e: any) {
-    console.error(`Upload failed: ${e.message}`)
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error(`Upload failed: ${message}`)
   }
   finally {
     uploadLoading.value = false
@@ -51,8 +52,9 @@ async function loadComics() {
     // Admin interface returns full data including isR18
     comics.value = await api.admin.getComics()
   }
-  catch (e: any) {
-    error.value = e.message
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    error.value = message
   }
   finally {
     loading.value = false
@@ -83,8 +85,9 @@ async function handleUpdate() {
     isEditModalOpen.value = false
     await loadComics()
   }
-  catch (e: any) {
-    console.error(`Update failed: ${e.message}`)
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error(`Update failed: ${message}`)
   }
   finally {
     updateLoading.value = false

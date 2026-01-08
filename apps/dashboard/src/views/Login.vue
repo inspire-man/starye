@@ -14,8 +14,9 @@ async function handleGitHubLogin() {
       callbackURL: `${window.location.origin}/dashboard/`, // Redirect to dashboard home (absolute URL)
     })
   }
-  catch (e: any) {
-    error.value = e.message || 'Login failed'
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    error.value = message || 'Login failed'
     loading.value = false
   }
 }

@@ -30,6 +30,10 @@ const router = createRouter({
   routes,
 })
 
+interface UserWithRole {
+  role: string
+}
+
 router.beforeEach(async (to, _from, next) => {
   if (to.meta.public)
     return next()
@@ -44,7 +48,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // RBAC Check
-  const role = (session.user as any).role
+  const role = (session.user as unknown as UserWithRole).role
   // eslint-disable-next-line no-console
   console.log('[Auth Guard] User Role:', role)
 
