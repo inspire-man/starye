@@ -46,9 +46,10 @@ admin.patch(
       console.log(`[Admin] Updated role for ${email} to ${role}`)
       return c.json({ success: true, user: result[0] })
     }
-    catch (e: any) {
-      console.error(`[Admin] Failed to update role for ${email}:`, e.message)
-      return c.json({ success: false, error: e.message }, 500)
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin] Failed to update role for ${email}:`, message)
+      return c.json({ success: false, error: message }, 500)
     }
   },
 )
@@ -125,9 +126,10 @@ admin.patch(
 
       return c.json({ success: true })
     }
-    catch (e: any) {
-      console.error(`[Admin] Failed to update comic ${id}:`, e.message)
-      return c.json({ success: false, error: e.message }, 500)
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin] Failed to update comic ${id}:`, message)
+      return c.json({ success: false, error: message }, 500)
     }
   },
 )

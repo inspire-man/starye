@@ -39,8 +39,9 @@ upload.post(
         key,
       })
     }
-    catch (e: any) {
-      return c.json({ error: e.message }, 500)
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error'
+      return c.json({ error: message }, 500)
     }
   },
 )

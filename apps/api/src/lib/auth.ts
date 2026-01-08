@@ -67,7 +67,7 @@ export function createAuth(env: Env, request: Request) {
       },
     },
     callbacks: {
-      session: async ({ session, user }: { session: any, user: any }) => {
+      session: async ({ session, user }: { session: schema.Session, user: schema.User }) => {
         return {
           session,
           user: {

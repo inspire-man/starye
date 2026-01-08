@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import type { AppEnv } from '../types'
+import type { AppEnv, SessionUser } from '../types'
 import { createMiddleware } from 'hono/factory'
 import { HTTPException } from 'hono/http-exception'
 
@@ -24,10 +24,11 @@ export function serviceAuth(allowedRoles: string[] = ['admin']) {
     // Method 2: Session Role Check
     const auth = c.get('auth')
     const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    const userRole = (session?.user as any)?.role
+    const user = session?.user as unknown as SessionUser | undefined
+    const userRole = user?.role
 
-    if (session && allowedRoles.includes(userRole)) {
-      console.log(`[Auth] ✓ User authenticated: ${session.user.email} (Role: ${userRole})`)
+    if (session && userRole && allowedRoles.includes(userRole)) {
+      console.log(`[Auth] ✓ User authenticated: ${user.email} (Role: ${userRole})`)
       return await next()
     }
 
