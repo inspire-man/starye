@@ -11,7 +11,7 @@ async function handleGitHubLogin() {
   try {
     await signIn.social({
       provider: 'github',
-      callbackURL: `${window.location.origin}/dashboard/`, // Redirect to dashboard home (absolute URL)
+      callbackURL: `${window.location.origin}/`,
     })
   }
   catch (e: unknown) {
