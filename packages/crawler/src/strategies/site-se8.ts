@@ -21,6 +21,9 @@ export class SiteSe8 implements CrawlStrategy {
       const author = document.querySelector('.author, .de-info__author')?.textContent?.trim()
       const desc = document.querySelector('.de-info__description, .intro')?.textContent?.trim()
 
+      const statusText = document.querySelector('.de-info__status, .status')?.textContent?.trim()
+      const status = statusText?.includes('连载') ? 'ongoing' : 'completed'
+
       // Selector based on inspection: ul.chapter__list-box li a
       const chapterEls = Array.from(document.querySelectorAll('.chapter__list-box li a'))
 
@@ -31,7 +34,7 @@ export class SiteSe8 implements CrawlStrategy {
         number: index + 1, // Se8 appears to be asc order
       })).filter(c => c.url)
 
-      return { title, cover, author, description: desc, chapters }
+      return { title, cover, author, description: desc, status, chapters }
     })
 
     return {
@@ -51,9 +54,19 @@ export class SiteSe8 implements CrawlStrategy {
         .map(img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src'))
         .filter((src): src is string => !!src && !src.includes('ad'))
 
-      return { title, images }
+      const prev = document.querySelector('a.prev')?.getAttribute('href') || undefined
+      const next = document.querySelector('a.next')?.getAttribute('href') || undefined
+
+      return { title, images, prev, next }
     })
 
-    return data
+    // Extract slugs from URL: /comic/slug/chapter-slug
+    const parts = url.replace('https://se8.us', '').split('/').filter(Boolean)
+    // Assuming structure /comic/SLUG/CHAPTER_SLUG or similar
+    // Often se8 is /manhua/SLUG/CHAPTER_ID.html
+    const comicSlug = parts[1] || '' // index 0 is 'manhua' probably
+    const chapterSlug = parts[2]?.replace('.html', '') || ''
+
+    return { ...data, comicSlug, chapterSlug }
   }
 }

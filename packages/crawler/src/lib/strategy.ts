@@ -6,6 +6,8 @@ export interface MangaInfo {
   cover?: string
   author?: string
   description?: string
+  status?: string
+  isR18?: boolean
   chapters: {
     title: string
     slug: string
@@ -16,6 +18,10 @@ export interface MangaInfo {
 
 export interface ChapterContent {
   title: string
+  comicSlug: string
+  chapterSlug: string
+  prev?: string
+  next?: string
   images: string[]
 }
 

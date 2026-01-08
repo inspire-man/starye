@@ -81,8 +81,59 @@ class Runner extends BaseCrawler {
             console.log('✅ Chapter Content:', {
               title: content.title,
               imageCount: content.images.length,
+              comicSlug: content.comicSlug,
+              chapterSlug: content.chapterSlug,
             })
-            // TODO: Process images
+
+            // Process images
+            if (content.images.length > 0) {
+              console.log(`  Processing ${content.images.length} images...`)
+              const processedUrls: string[] = []
+
+              // Process in batches of 3 to avoid OOM
+              const BATCH_SIZE = 3
+              for (let i = 0; i < content.images.length; i += BATCH_SIZE) {
+                const batch = content.images.slice(i, i + BATCH_SIZE)
+                console.log(`  Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(content.images.length / BATCH_SIZE)}`)
+
+                const results = await Promise.all(batch.map(async (imgUrl, idx) => {
+                  try {
+                    // Index is relative to batch, calculate global index
+                    const globalIdx = i + idx
+                    const filename = String(globalIdx + 1).padStart(3, '0')
+                    const prefix = `comics/${content.comicSlug}/${content.chapterSlug}`
+
+                    const processed = await this.imageProcessor.process(imgUrl, prefix, filename)
+                    // Prefer preview, fallback to original
+                    const selected = processed.find(p => p.variant === 'preview') || processed.find(p => p.variant === 'original')
+                    return selected?.url
+                  }
+                  catch (e) {
+                    console.error(`  ❌ Failed to process image ${imgUrl}:`, e)
+                    return null
+                  }
+                }))
+
+                processedUrls.push(...results.filter((u): u is string => !!u))
+              }
+
+              if (processedUrls.length > 0) {
+                console.log(`  Syncing ${processedUrls.length} pages to API...`)
+                await this.syncToApi('/api/admin/sync', {
+                  type: 'chapter',
+                  data: {
+                    comicSlug: content.comicSlug,
+                    chapterSlug: content.chapterSlug,
+                    title: content.title,
+                    images: processedUrls,
+                    // width/height not easily available without more logic, defaulting to 0 in API
+                  },
+                })
+              }
+              else {
+                console.warn('⚠️  No images were successfully processed.')
+              }
+            }
           }
           else if (isManga) {
             console.log('📚 Detected Manga Page. Syncing info...')

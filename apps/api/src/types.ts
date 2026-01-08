@@ -36,8 +36,20 @@ export const MangaInfoSchema = z.object({
   cover: z.string().optional(),
   author: z.string().optional(),
   description: z.string().optional(),
+  status: z.string().optional(),
+  isR18: z.boolean().optional(),
   chapters: z.array(ChapterSchema),
+})
+
+export const ChapterContentSchema = z.object({
+  comicSlug: z.string(),
+  chapterSlug: z.string(),
+  title: z.string(),
+  images: z.array(z.string()), // Array of image URLs (already uploaded)
+  width: z.number().optional(),
+  height: z.number().optional(),
 })
 
 export type ChapterInput = z.infer<typeof ChapterSchema>
 export type MangaInfoInput = z.infer<typeof MangaInfoSchema>
+export type ChapterContentInput = z.infer<typeof ChapterContentSchema>

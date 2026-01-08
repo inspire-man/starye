@@ -38,6 +38,8 @@ export class Site92Hm implements CrawlStrategy {
       const cover = document.querySelector('.cover img, .book-cover img')?.getAttribute('src') || ''
       const author = document.querySelector('.author, .info p:nth-child(2)')?.textContent?.trim()
       const desc = document.querySelector('.intro, #intro')?.textContent?.trim()
+      const statusText = document.querySelector('.status, .info .red')?.textContent?.trim()
+      const status = statusText?.includes('连载') ? 'ongoing' : 'completed'
 
       // Fixed selector based on inspection: ul#detail-list-select li a
       const chapterEls = Array.from(document.querySelectorAll('#detail-list-select li a, .detail-list-select li a'))
@@ -49,7 +51,7 @@ export class Site92Hm implements CrawlStrategy {
         number: chapterEls.length - index, // Assuming list is desc
       })).filter(c => c.url)
 
-      return { title, cover, author, description: desc, chapters }
+      return { title, cover, author, description: desc, status, chapters }
     })
 
     return {
@@ -69,9 +71,18 @@ export class Site92Hm implements CrawlStrategy {
         .map(img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src') || '')
         .filter(src => src && !src.includes('ad')) // Filter ads
 
-      return { title, images }
+      const prev = document.querySelector('a.prev')?.getAttribute('href') || undefined
+      const next = document.querySelector('a.next')?.getAttribute('href') || undefined
+
+      return { title, images, prev, next }
     })
 
-    return data
+    // Extract slugs from URL: /read/123/456
+    // 123 = comicSlug, 456 = chapterSlug
+    const parts = url.replace('https://www.92hm.life', '').split('/').filter(Boolean)
+    const comicSlug = parts[1] || ''
+    const chapterSlug = parts[2] || ''
+
+    return { ...data, comicSlug, chapterSlug }
   }
 }
