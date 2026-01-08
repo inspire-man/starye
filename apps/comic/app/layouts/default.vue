@@ -11,6 +11,15 @@ async function handleLogout() {
 }
 
 const userRole = computed(() => session.value.data?.user?.role)
+
+// 动态管理后台链接
+const adminUrl = computed(() => {
+  // eslint-disable-next-line node/prefer-global/process
+  if (process.env.NODE_ENV === 'development') {
+    return '/dashboard/'
+  }
+  return 'https://dashboard.starye.org'
+})
 </script>
 
 <template>
@@ -30,14 +39,14 @@ const userRole = computed(() => session.value.data?.user?.role)
           </button>
 
           <template v-if="session.data">
-            <NuxtLink
+            <a
               v-if="userRole === 'admin'"
-              to="/dashboard/"
+              :href="adminUrl"
               class="text-sm font-medium text-primary hover:underline"
               target="_blank"
             >
               Admin
-            </NuxtLink>
+            </a>
 
             <NuxtLink to="/profile" class="flex items-center gap-2 text-sm font-medium hover:bg-muted px-3 py-1.5 rounded-full transition-colors">
               <img
