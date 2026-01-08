@@ -1,5 +1,7 @@
 import type { Page } from 'puppeteer-core'
 import type { ChapterContent, CrawlStrategy, MangaInfo } from '../lib/strategy'
+import { Window } from 'happy-dom'
+import { parseChapterContent, parseMangaInfo } from './site-92hm-parser'
 
 export class Site92Hm implements CrawlStrategy {
   name = '92hm'
@@ -11,74 +13,53 @@ export class Site92Hm implements CrawlStrategy {
 
   async getMangaList(url: string, page: Page): Promise<{ mangas: string[], next?: string }> {
     await page.goto(url, { waitUntil: 'domcontentloaded' })
+    const html = await page.content()
 
-    return await page.evaluate(() => {
-      // Extract Manga Links
-      const mangas = Array.from(document.querySelectorAll('.mh-item a, .item-lg a'))
-        .map(a => a.getAttribute('href'))
-        .filter((href): href is string => !!href && href.includes('/book/'))
-        // Deduplicate
-        .filter((v, i, a) => a.indexOf(v) === i)
+    // Parse locally
+    const window = new Window()
+    const document = window.document
+    document.write(html)
 
-      // Extract Next Page
-      const nextEl = document.querySelector('a#nextPage')
-      const next = nextEl?.getAttribute('href') || undefined
+    // Reuse logic (could also be in parser if complex)
+    const mangas = Array.from(document.querySelectorAll('.mh-item a, .item-lg a'))
+      .map(a => a.getAttribute('href'))
+      .filter((href): href is string => !!href && href.includes('/book/'))
+      .filter((v, i, a) => a.indexOf(v) === i)
 
-      return { mangas, next }
-    })
+    const nextEl = document.querySelector('a#nextPage')
+    const next = nextEl?.getAttribute('href') || undefined
+
+    window.close()
+    return { mangas, next }
   }
 
   async getMangaInfo(url: string, page: Page): Promise<MangaInfo> {
     await page.goto(url, { waitUntil: 'domcontentloaded' })
+    const html = await page.content()
 
-    // 猜测的选择器，需要根据实际 DOM 调整
-    // 假设标题在 h1，封面在 .cover img，章节在 .chapter-list a
-    const info = await page.evaluate(() => {
-      const title = document.querySelector('h1')?.textContent?.trim() || 'Unknown Title'
-      const cover = document.querySelector('.cover img, .book-cover img')?.getAttribute('src') || ''
-      const author = document.querySelector('.author, .info p:nth-child(2)')?.textContent?.trim()
-      const desc = document.querySelector('.intro, #intro')?.textContent?.trim()
-      const statusText = document.querySelector('.status, .info .red')?.textContent?.trim()
-      const status = statusText?.includes('连载') ? 'ongoing' : 'completed'
+    const window = new Window()
+    const document = window.document
+    document.write(html)
 
-      // Fixed selector based on inspection: ul#detail-list-select li a
-      const chapterEls = Array.from(document.querySelectorAll('#detail-list-select li a, .detail-list-select li a'))
+    const info = parseMangaInfo(document as unknown as Document, url)
 
-      const chapters = chapterEls.map((el, index) => ({
-        title: el.textContent?.trim() || `Chapter ${index + 1}`,
-        slug: el.getAttribute('href')?.split('/').pop() || '',
-        url: el.getAttribute('href') || '',
-        number: chapterEls.length - index, // Assuming list is desc
-      })).filter(c => c.url)
-
-      return { title, cover, author, description: desc, status, chapters }
-    })
-
-    return {
-      ...info,
-      slug: url.split('/').pop() || '',
-    }
+    window.close()
+    return info
   }
 
   async getChapterContent(url: string, page: Page): Promise<ChapterContent> {
-    await page.goto(url, { waitUntil: 'networkidle2' }) // Wait for images to load
+    await page.goto(url, { waitUntil: 'networkidle2' })
+    const html = await page.content()
 
-    const data = await page.evaluate(() => {
-      const title = document.querySelector('h1')?.textContent?.trim() || ''
+    const window = new Window()
+    const document = window.document
+    document.write(html)
 
-      // 查找所有可能的图片容器
-      const images = Array.from(document.querySelectorAll('.comic-content img, #content img, .rd-article-wr img'))
-        .map(img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src') || '')
-        .filter(src => src && !src.includes('ad')) // Filter ads
+    const data = parseChapterContent(document as unknown as Document)
 
-      const prev = document.querySelector('a.prev')?.getAttribute('href') || undefined
-      const next = document.querySelector('a.next')?.getAttribute('href') || undefined
-
-      return { title, images, prev, next }
-    })
+    window.close()
 
     // Extract slugs from URL: /read/123/456
-    // 123 = comicSlug, 456 = chapterSlug
     const parts = url.replace('https://www.92hm.life', '').split('/').filter(Boolean)
     const comicSlug = parts[1] || ''
     const chapterSlug = parts[2] || ''
