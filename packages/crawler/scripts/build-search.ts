@@ -30,7 +30,9 @@ async function main() {
     // 1. Fetch Data
     let response
     try {
-      response = await fetch(`${API_URL}/api/comics`)
+      // Set a high limit to fetch all comics (assuming < 10000 for now)
+      // Ideally this should support pagination traversal
+      response = await fetch(`${API_URL}/api/comics?limit=10000`)
     }
     catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e)
@@ -54,6 +56,7 @@ async function main() {
     // 2. Build Index
     const indexer = new SearchIndexer()
     const documents = comics.map(c => ({
+      id: c.slug,
       title: c.title,
       slug: c.slug,
       author: c.author || '',
