@@ -4,7 +4,7 @@ import process from 'node:process'
 import { BaseCrawler } from './lib/base-crawler'
 import { Site92Hm } from './strategies/site-92hm'
 import { SiteSe8 } from './strategies/site-se8'
-import 'dotenv/config' // Must be first
+import 'dotenv/config'
 
 class Runner extends BaseCrawler {
   private strategies: CrawlStrategy[] = [
@@ -14,7 +14,7 @@ class Runner extends BaseCrawler {
 
   private queue: string[] = []
   private visited = new Set<string>()
-  private MAX_PAGES = 100 // Safety limit for now
+  private MAX_PAGES = 100 // 安全限制，防止无限爬取
 
   async run() {
     const startUrl = process.argv[2]
@@ -49,16 +49,16 @@ class Runner extends BaseCrawler {
 
         const page = await this.browser!.newPage()
         try {
-          // 1. Determine Type (Heuristic)
+          // 1. 判断页面类型 (启发式)
           const isBookList = url.includes('booklist') || url.includes('/list/')
-          const isChapter = url.includes('/chapter/') || url.includes('/read/') // Basic heuristic, strategy can refine
+          const isChapter = url.includes('/chapter/') || url.includes('/read/')
           const isManga = url.includes('/book/') || url.includes('/manhua/')
 
           if (isBookList && strategy.getMangaList) {
             console.log('📋 Detected List Page. Discovering...')
             const { mangas, next } = await strategy.getMangaList(url, page)
 
-            // Add mangas to queue
+            // 添加漫画到队列
             const fullMangaUrls = mangas.map(u => u.startsWith('http') ? u : `${strategy.baseUrl}${u}`)
             fullMangaUrls.forEach((u) => {
               if (!this.visited.has(u))
@@ -66,7 +66,7 @@ class Runner extends BaseCrawler {
             })
             console.log(`  + Discovered ${mangas.length} mangas`)
 
-            // Add next page
+            // 添加下一页
             if (next) {
               const nextUrl = next.startsWith('http') ? next : `${strategy.baseUrl}${next}`
               if (!this.visited.has(nextUrl)) {
@@ -85,12 +85,12 @@ class Runner extends BaseCrawler {
               chapterSlug: content.chapterSlug,
             })
 
-            // Process images
+            // 处理图片
             if (content.images.length > 0) {
               console.log(`  Processing ${content.images.length} images...`)
               const processedUrls: string[] = []
 
-              // Process in batches of 3 to avoid OOM
+              // 分批处理以防止内存溢出 (OOM)
               const BATCH_SIZE = 3
               for (let i = 0; i < content.images.length; i += BATCH_SIZE) {
                 const batch = content.images.slice(i, i + BATCH_SIZE)
@@ -98,13 +98,13 @@ class Runner extends BaseCrawler {
 
                 const results = await Promise.all(batch.map(async (imgUrl, idx) => {
                   try {
-                    // Index is relative to batch, calculate global index
+                    // 索引是相对于 batch 的，计算全局索引
                     const globalIdx = i + idx
                     const filename = String(globalIdx + 1).padStart(3, '0')
                     const prefix = `comics/${content.comicSlug}/${content.chapterSlug}`
 
                     const processed = await this.imageProcessor.process(imgUrl, prefix, filename)
-                    // Prefer preview, fallback to original
+                    // 优先使用预览图，回退到原图
                     const selected = processed.find(p => p.variant === 'preview') || processed.find(p => p.variant === 'original')
                     return selected?.url
                   }
@@ -126,7 +126,7 @@ class Runner extends BaseCrawler {
                     chapterSlug: content.chapterSlug,
                     title: content.title,
                     images: processedUrls,
-                    // width/height not easily available without more logic, defaulting to 0 in API
+                    // width/height 需要更复杂的逻辑获取，暂默认为 0
                   },
                 })
               }
@@ -139,15 +139,15 @@ class Runner extends BaseCrawler {
             console.log('📚 Detected Manga Page. Syncing info...')
             const info = await strategy.getMangaInfo(url, page)
 
-            // Normalize and validate
+            // 标准化和校验
             info.chapters = info.chapters
               .map(c => ({
                 ...c,
                 url: c.url.startsWith('http') ? c.url : `${strategy.baseUrl}${c.url}`,
               }))
-              .filter(c => c.title && c.slug && c.url) // Remove invalid chapters
+              .filter(c => c.title && c.slug && c.url) // 移除无效章节
 
-            // Validate data before syncing
+            // 同步前校验数据
             if (!info.title || !info.slug) {
               console.error('❌ Invalid manga info: missing title or slug')
               throw new Error('Invalid manga data')
@@ -160,12 +160,12 @@ class Runner extends BaseCrawler {
             console.log(`  Syncing ${info.title} (${info.chapters.length} chapters)...`)
             console.log(`  Config: API=${this.config.api.url}, Token=${this.config.api.token.substring(0, 15)}...`)
 
-            // Sync to API
+            // 同步到 API
             await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
           }
           else {
             console.log('❓ Unknown URL type, assuming Manga Info...')
-            // Fallback
+            // 兜底逻辑
             const info = await strategy.getMangaInfo(url, page)
             await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
           }
@@ -186,13 +186,13 @@ class Runner extends BaseCrawler {
 }
 
 async function main() {
-  // Validate Env
+  // 校验环境变量
   const requiredEnv = ['CLOUDFLARE_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'CRAWLER_SECRET']
   const missing = requiredEnv.filter(k => !process.env[k])
 
   if (missing.length > 0) {
     console.warn(`⚠️  Missing environment variables: ${missing.join(', ')}`)
-    // return // Allow running without env for local strategy testing
+    // return // 允许本地测试策略时不带环境变量
   }
 
   const crawler = new Runner({

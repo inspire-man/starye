@@ -2,7 +2,7 @@ import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
 import { relations, sql } from 'drizzle-orm'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-// --- Auth (Better Auth Standard) ---
+// --- 用户认证 (Better Auth 标准表) ---
 export const user = sqliteTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -58,28 +58,28 @@ export const verification = sqliteTable('verification', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }),
 })
 
-// --- Content (Blog) ---
+// --- 博客内容 ---
 export const posts = sqliteTable('post', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(),
-  content: text('content'), // Markdown
+  content: text('content'), // Markdown 格式
   excerpt: text('excerpt'),
   coverImage: text('cover_image'),
   published: integer('published', { mode: 'boolean' }).default(false),
-  authorId: text('author_id').references(() => user.id), // Added author relation
+  authorId: text('author_id').references(() => user.id),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
 
 export type Post = InferSelectModel<typeof posts>
 
-// --- Media (General) ---
+// --- 媒体资源 (R2) ---
 export const media = sqliteTable('media', {
   id: text('id').primaryKey(),
-  key: text('key').notNull().unique(), // R2 Key
-  url: text('url').notNull(), // Public CDN URL (Original)
-  variants: text('variants', { mode: 'json' }), // JSON: { thumb: "url", preview: "url" }
+  key: text('key').notNull().unique(), // R2 存储 Key
+  url: text('url').notNull(), // 公开 CDN 地址 (原图)
+  variants: text('variants', { mode: 'json' }), // 缩略图变体 JSON: { thumb: "url", preview: "url" }
   mimeType: text('mime_type'),
   size: integer('size'),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
@@ -87,15 +87,15 @@ export const media = sqliteTable('media', {
 
 export type Media = InferSelectModel<typeof media>
 
-// --- Comic (Manga) ---
+// --- 漫画业务 ---
 export const comics = sqliteTable('comic', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(),
   author: text('author'),
   description: text('description'),
-  coverImage: text('cover_image'), // URL
-  status: text('status').default('ongoing'), // ongoing, completed
+  coverImage: text('cover_image'),
+  status: text('status').default('ongoing'), // ongoing: 连载中, completed: 已完结
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
@@ -108,7 +108,7 @@ export const chapters = sqliteTable('chapter', {
   id: text('id').primaryKey(),
   comicId: text('comic_id').notNull().references(() => comics.id),
   title: text('title').notNull(),
-  slug: text('slug').notNull(), // often "chapter-1"
+  slug: text('slug').notNull(),
   chapterNumber: integer('chapter_number'),
   sortOrder: integer('sort_order').notNull(),
   publishedAt: integer('published_at', { mode: 'timestamp' }),
@@ -130,7 +130,7 @@ export const pages = sqliteTable('page', {
 
 export type Page = InferSelectModel<typeof pages>
 
-// --- System ---
+// --- 系统任务 ---
 export const jobs = sqliteTable('job', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   type: text('type').notNull(),
@@ -140,7 +140,7 @@ export const jobs = sqliteTable('job', {
   processedAt: integer('processed_at', { mode: 'timestamp' }),
 })
 
-// --- Relations ---
+// --- 关联关系定义 ---
 
 export const userRelations = relations(user, ({ many }) => ({
   posts: many(posts),

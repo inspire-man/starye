@@ -10,17 +10,17 @@ import { ChapterContentSchema, MangaInfoSchema } from '../types'
 
 const admin = new Hono<AppEnv>()
 
-// List Users
+// 获取用户列表
 admin.get('/users', serviceAuth(), async (c) => {
   const db = c.get('db')
   const results = await db.query.user.findMany({
     orderBy: (user, { desc }) => [desc(user.createdAt)],
-    limit: 100, // Safety limit
+    limit: 100, // 安全限制
   })
   return c.json(results)
 })
 
-// Promote/Demote User Role
+// 提升/降级用户角色
 admin.patch(
   '/users/:email/role',
   serviceAuth(),
@@ -52,7 +52,7 @@ admin.patch(
   },
 )
 
-// List Comics (Admin View)
+// 获取漫画列表 (管理员视图)
 admin.get('/comics', serviceAuth(), async (c) => {
   const db = c.get('db')
   const results = await db.query.comics.findMany({
@@ -61,7 +61,7 @@ admin.get('/comics', serviceAuth(), async (c) => {
   return c.json(results)
 })
 
-// Update Comic (e.g. toggle R18)
+// 更新漫画信息 (例如：切换 R18 状态)
 admin.patch(
   '/comics/:id',
   serviceAuth(),
@@ -70,7 +70,7 @@ admin.patch(
     status: z.string().optional(),
   })),
   async (c) => {
-    const id = String(c.req.param('id')) // Ensure ID is string
+    const id = String(c.req.param('id')) // 确保 ID 为字符串
     const data = c.req.valid('json')
     const db = c.get('db')
 
@@ -92,7 +92,7 @@ admin.patch(
   },
 )
 
-// Sync Route (Called by Crawler)
+// 同步路由 (由爬虫调用)
 admin.post(
   '/sync',
   serviceAuth(),
@@ -115,7 +115,7 @@ admin.post(
       })
 
       try {
-        // 1. Upsert Comic (Single record, usually safe)
+        // 1. 更新或插入漫画 (Upsert)
         const comicId = data.slug
         console.log(`[Sync] 📝 Upserting comic: ${comicId}`)
 
@@ -128,7 +128,7 @@ admin.post(
           description: data.description,
           status: data.status || 'ongoing',
           isR18: data.isR18 ?? true,
-          // Let database handle createdAt and updatedAt defaults on insert
+          // 插入时由数据库处理 createdAt/updatedAt 默认值
         }).onConflictDoUpdate({
           target: comics.id,
           set: {
@@ -137,23 +137,23 @@ admin.post(
             author: data.author,
             description: data.description,
             status: data.status || 'ongoing',
-            updatedAt: new Date(), // Manually update on conflict
+            updatedAt: new Date(), // 冲突时手动更新时间
           },
         })
 
         console.log(`[Sync] ✓ Comic upserted successfully`)
 
-        // 2. Sync Chapters (Delete all existing for this comic, then insert new)
-        // This is safer than bulk Upsert on SQLite and handles removed chapters.
+        // 2. 同步章节 (删除现有章节，插入新章节)
+        // 相比批量 Upsert，这在 SQLite 上更安全且能处理被移除的章节
         if (data.chapters.length > 0) {
-          // Transaction would be ideal but D1 REST API has limits.
-          // We do it sequentially.
+          // 理想情况下应使用事务，但 D1 REST API 有限制
+          // 这里采用顺序执行
 
-          // A. Delete existing chapters
+          // A. 删除现有章节
           console.log(`[Sync] 🗑️  Deleting existing chapters for: ${comicId}`)
           await db.delete(chapters).where(eq(chapters.comicId, comicId))
 
-          // B. Prepare new values with deduplication
+          // B. 准备数据并去重
           const uniqueSlugs = new Set<string>()
           const chapterValues = []
 
@@ -175,9 +175,7 @@ admin.post(
             })
           }
 
-          // C. Batch insert (SQLite supports standard batch insert fine)
-          // We split into chunks of 5 to stay within D1 API limits
-          // D1 has stricter limits than standard SQLite
+          // C. 批量插入 (按块分批，避免触达 D1 限制)
           const chunkSize = 5
           console.log(`[Sync] 📚 Inserting ${chapterValues.length} chapters in ${Math.ceil(chapterValues.length / chunkSize)} batches`)
 
@@ -193,7 +191,7 @@ admin.post(
             catch (batchError: unknown) {
               const errorMsg = batchError instanceof Error ? batchError.message : String(batchError)
               console.error(`[Sync] ❌ Batch ${batchNum}/${totalBatches} failed:`, errorMsg)
-              throw batchError // Re-throw to be caught by outer catch
+              throw batchError // 抛出异常以便外层捕获
             }
           }
 
@@ -227,27 +225,21 @@ admin.post(
       console.log(`[Sync] 📥 Received chapter pages: ${chapterId} (${data.images.length} pages)`)
 
       try {
-        // 1. Verify chapter exists (optional but good)
-        // For performance, we might skip this and rely on FK constraints, but explicit check is better for debugging
+        // 1. 验证章节是否存在 (可选)
         const chapter = await db.query.chapters.findFirst({
           where: eq(chapters.id, chapterId),
         })
 
         if (!chapter) {
           console.warn(`[Sync] ⚠️ Chapter not found: ${chapterId}. Attempting to create placeholder...`)
-          // Create placeholder chapter if missing?
-          // Or return error. Returning error is safer to ensure consistency.
-          // BUT: If the chapter sync happened moments ago, it should be there.
-          // If we are running chapter sync independently, we might need to ensure manga exists.
-          // Let's create it if missing, but we need title/number which we might not have perfectly.
-          // Fallback: Error out.
+          // 如果章节不存在，直接报错，要求先同步漫画信息
           return c.json({ success: false, error: 'Chapter not found. Please sync manga info first.' }, 404)
         }
 
-        // 2. Delete existing pages
+        // 2. 删除现有页面
         await db.delete(pages).where(eq(pages.chapterId, chapterId))
 
-        // 3. Insert new pages
+        // 3. 插入新页面
         if (data.images.length > 0) {
           const pageValues = data.images.map((url, index) => ({
             id: `${chapterId}-${index + 1}`,
@@ -258,7 +250,7 @@ admin.post(
             height: data.height || 0,
           }))
 
-          const chunkSize = 10 // Pages are simple, can do larger chunks
+          const chunkSize = 10 // 页面数据较简单，可以使用更大的 Batch
           for (let i = 0; i < pageValues.length; i += chunkSize) {
             const chunk = pageValues.slice(i, i + chunkSize)
             await db.insert(pages).values(chunk)
@@ -276,11 +268,11 @@ admin.post(
   },
 )
 
-// Admin Stats
+// 管理后台统计信息
 admin.get('/stats', serviceAuth(), async (c) => {
   const db = c.get('db')
 
-  // Efficient count using D1/SQLite
+  // 使用 D1/SQLite 高效计数
   const comicCount = await db.$count(comics)
   const userCount = await db.$count(user)
 
