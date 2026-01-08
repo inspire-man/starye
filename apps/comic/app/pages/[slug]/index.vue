@@ -7,6 +7,22 @@ import { useApi } from '../../lib/api'
 
 const route = useRoute()
 const slug = route.params.slug as string
+const router = useRouter()
+
+// Reserved slugs that should not be treated as comics
+const RESERVED_SLUGS = ['dashboard', 'admin', 'api', 'login', 'logout', 'settings', 'profile']
+
+if (RESERVED_SLUGS.includes(slug)) {
+  // If we are in the comic app but hitting a reserved slug that belongs to another app/route,
+  // we should probably redirect to the correct place or 404.
+  // For 'dashboard', let's try to redirect to the dashboard URL if configured, or just 404 to avoid confusion.
+  if (slug === 'dashboard') {
+     // Check if we are in a dev environment where dashboard might be on a different port?
+     // For now, just throw 404 to stop showing the detail page.
+     throw createError({ statusCode: 404, statusMessage: 'Page Not Found' })
+  }
+  throw createError({ statusCode: 404, statusMessage: 'Page Not Found' })
+}
 
 const { data: response, pending, error } = useApi<ComicWithChapters>(`/api/comics/${slug}`)
 const comic = computed(() => response.value?.data)
