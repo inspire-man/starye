@@ -8,7 +8,7 @@ const router = useRouter()
 
 const page = computed({
   get: () => Number(route.query.page) || 1,
-  set: (val) => router.push({ query: { ...route.query, page: val } })
+  set: val => router.push({ query: { ...route.query, page: val } }),
 })
 
 const limit = 24
@@ -18,14 +18,15 @@ const { data: response, pending, error } = useApi<Comic[]>('/api/comics', {
     page,
     limit,
   },
-  watch: [page]
+  watch: [page],
 })
 
 const comics = computed(() => response.value?.data || [])
 const meta = computed(() => response.value?.meta)
 
 function changePage(newPage: number) {
-  if (newPage < 1 || (meta.value && newPage > meta.value.totalPages)) return
+  if (newPage < 1 || (meta.value && newPage > meta.value.totalPages))
+    return
   page.value = newPage
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -34,9 +35,13 @@ function changePage(newPage: number) {
 <template>
   <div class="container mx-auto py-12 px-4">
     <header class="mb-12">
-      <h1 class="text-3xl font-bold tracking-tight mb-2">{{ $t('comic.all_comics') }}</h1>
-       <nav class="text-sm text-muted-foreground">
-        <NuxtLink to="/" class="hover:text-primary">{{ $t('comic.home') }}</NuxtLink>
+      <h1 class="text-3xl font-bold tracking-tight mb-2">
+        {{ $t('comic.all_comics') }}
+      </h1>
+      <nav class="text-sm text-muted-foreground">
+        <NuxtLink to="/" class="hover:text-primary">
+          {{ $t('comic.home') }}
+        </NuxtLink>
         <span class="mx-2">/</span>
         <span>{{ $t('comic.explore') }}</span>
       </nav>
@@ -47,8 +52,12 @@ function changePage(newPage: number) {
     </div>
 
     <div v-else-if="error" class="p-6 bg-destructive/10 text-destructive rounded-xl border border-destructive/20">
-      <p class="font-bold">{{ $t('common.error') }}</p>
-      <p class="text-sm opacity-80">{{ error.message }}</p>
+      <p class="font-bold">
+        {{ $t('common.error') }}
+      </p>
+      <p class="text-sm opacity-80">
+        {{ error.message }}
+      </p>
     </div>
 
     <div v-else class="flex flex-col gap-8">
@@ -70,20 +79,20 @@ function changePage(newPage: number) {
       <div v-if="meta && meta.totalPages > 1" class="flex justify-center items-center gap-4 mt-8">
         <button
           :disabled="page === 1"
-          @click="changePage(page - 1)"
           class="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          @click="changePage(page - 1)"
         >
           {{ $t('common.prev') }}
         </button>
-        
+
         <span class="text-sm font-medium">
           {{ page }} / {{ meta.totalPages }}
         </span>
-        
+
         <button
           :disabled="page === meta.totalPages"
-          @click="changePage(page + 1)"
           class="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          @click="changePage(page + 1)"
         >
           {{ $t('common.next') }}
         </button>

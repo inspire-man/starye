@@ -12,7 +12,7 @@ interface Props {
 
 withDefaults(defineProps<Props>(), {
   labelAdultOnly: 'Adult Only',
-  labelUnknownAuthor: 'Unknown Author'
+  labelUnknownAuthor: 'Unknown Author',
 })
 </script>
 
@@ -25,8 +25,8 @@ withDefaults(defineProps<Props>(), {
         :alt="title"
         loading="lazy"
         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-      />
-      
+      >
+
       <!-- Placeholder / R18 Mask -->
       <div v-else class="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-neutral-100 dark:bg-neutral-900">
         <span class="text-3xl mb-2">🔞</span>
@@ -42,9 +42,9 @@ withDefaults(defineProps<Props>(), {
     <h3 class="font-bold leading-tight line-clamp-2 text-sm group-hover:text-primary transition-colors">
       {{ title }}
     </h3>
-    
+
     <p class="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
       {{ author || labelUnknownAuthor }}
     </p>
   </RouterLink>
