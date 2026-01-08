@@ -7,6 +7,7 @@
     "dev": "wrangler dev --port 8787",
     "deploy": "wrangler deploy",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",
     "build": "tsc"
   },

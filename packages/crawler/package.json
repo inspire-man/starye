@@ -11,6 +11,7 @@
     "test": "vitest",
     "build": "tsc",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

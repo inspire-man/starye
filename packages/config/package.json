@@ -4,5 +4,9 @@
   "private": true,
   "exports": {
     "./vitest-base": "./vitest-base.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   }
 }

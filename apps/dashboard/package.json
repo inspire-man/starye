@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "deploy": "wrangler pages deploy dist",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
