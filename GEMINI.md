@@ -136,7 +136,9 @@
 - [x] **3.1 Crawler Package**:
   - [x] 创建 `packages/crawler`。
   - [x] 安装 `puppeteer`, `cheerio`, `sharp`。
-  - [x] 编写 `ImageProcessor` 类 (生成 3 级缩略图)。
+  - [x] 编写 `ImageProcessor` 类 (生成 3 级缩略图, 批量并发处理)。
+  - [x] **Refactor**: 将 DOM 解析逻辑抽离为纯函数 (`*-parser.ts`)，引入 `happy-dom` 实现本地解析。
+  - [x] **Testing**: 搭建 Vitest 测试环境，编写策略单元测试 (离线 Fixture 模式)。
 - [ ] **3.2 GitHub Actions**:
   - [x] 编写 `.github/workflows/daily-crawl.yml`。
   - [ ] 配置 Repository Secrets (`CRAWLER_SECRET`, `R2_KEYS`).
@@ -163,9 +165,12 @@
 
 ### Phase 5: 路由与集成 (Integration) [Pending]
 
-- [ ] **5.1 Gateway**:
+- [x] **5.1 Testing Infrastructure**:
+  - [x] 根目录集成 `vitest` 与 `turbo` 管道。
+  - [x] 创建 `@starye/config` 共享测试配置。
+- [ ] **5.2 Gateway**:
   - [ ] 创建 `apps/gateway`。
   - [ ] 实现路由分发逻辑。
   - [ ] 编写本地开发网关脚本 (`dev:gateway`)。
-- [ ] **5.2 E2E Test**:
+- [ ] **5.3 E2E Test**:
   - [ ] 验证全链路流程 (爬虫 -> 库 -> 前端展示)。
