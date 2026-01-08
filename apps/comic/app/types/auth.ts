@@ -22,8 +22,3 @@ export interface ExtendedSession {
     userAgent?: string
   }
 }
-
-// Type guard to check if session data exists
-export function hasSessionData(session: any): session is { data: ExtendedSession } {
-  return session?.data?.user !== undefined
-}

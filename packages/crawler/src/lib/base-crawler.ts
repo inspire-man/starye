@@ -2,7 +2,7 @@ import type { Browser } from 'puppeteer-core'
 import type { R2Config } from './image-processor'
 /* eslint-disable no-console */
 import process from 'node:process'
-import got from 'got'
+import got, { HTTPError } from 'got'
 import puppeteer from 'puppeteer-core'
 import { ImageProcessor } from './image-processor'
 
@@ -72,8 +72,8 @@ export abstract class BaseCrawler {
     }
     catch (e: unknown) {
       // 详细的错误日志
-      if (e && typeof e === 'object' && 'response' in e) {
-        const response = (e as any).response
+      if (e instanceof HTTPError) {
+        const response = e.response
         console.error(`[API] ❌ Sync failed to ${url}:`, {
           status: response?.statusCode,
           statusMessage: response?.statusMessage,

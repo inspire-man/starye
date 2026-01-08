@@ -4,6 +4,14 @@ import { Upload } from '@aws-sdk/lib-storage'
 import { SearchIndexer } from '../src/lib/search'
 import 'dotenv/config'
 
+interface Comic {
+  title: string
+  slug: string
+  author?: string | null
+  description?: string | null
+  coverImage?: string | null
+}
+
 async function main() {
   const API_URL = process.env.API_URL || 'http://localhost:8787'
   const INDEX_FILENAME = 'search-index.json'
@@ -24,9 +32,10 @@ async function main() {
     try {
       response = await fetch(`${API_URL}/api/comics`)
     }
-    catch (e: any) {
-      if (e.cause?.code === 'ECONNREFUSED' || e.message.includes('fetch failed')) {
-        console.warn(`⚠️  [WARNING] API is not accessible (${e.message}). Skipping index build.`)
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      if ((e as any).cause?.code === 'ECONNREFUSED' || message.includes('fetch failed')) {
+        console.warn(`⚠️  [WARNING] API is not accessible (${message}). Skipping index build.`)
         // Ensure we don't fail the CI job for this auxiliary step
         return
       }
@@ -36,7 +45,10 @@ async function main() {
     if (!response.ok) {
       throw new Error(`Failed to fetch comics: ${response.statusText}`)
     }
-    const comics = await response.json() as any[]
+
+    // API returns { data: Comic[], meta: ... }
+    const json = await response.json() as { data: Comic[] }
+    const comics = json.data
     console.log(`✅ Fetched ${comics.length} comics`)
 
     // 2. Build Index

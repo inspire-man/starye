@@ -4,8 +4,20 @@
  * 测试 API 连接和认证
  */
 import process from 'node:process'
-import got from 'got'
+import got, { HTTPError } from 'got'
 import 'dotenv/config'
+
+interface HealthResponse {
+  status: string
+  [key: string]: unknown
+}
+
+interface SyncResponse {
+  success: boolean
+  message?: string
+  error?: string
+  [key: string]: unknown
+}
 
 async function testApiConnection() {
   const apiUrl = process.env.API_URL || 'http://localhost:8787'
@@ -33,11 +45,12 @@ async function testApiConnection() {
   // 2. 测试健康检查
   console.log('\n🏥 测试健康检查...')
   try {
-    const healthResponse = await got.get(`${apiUrl}/`).json<any>()
+    const healthResponse = await got.get(`${apiUrl}/`).json<HealthResponse>()
     console.log('  ✅ 健康检查成功:', healthResponse)
   }
-  catch (e: any) {
-    console.error('  ❌ 健康检查失败:', e.message)
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error('  ❌ 健康检查失败:', message)
     return
   }
 
@@ -65,19 +78,20 @@ async function testApiConnection() {
       headers: {
         'x-service-token': token,
       },
-    }).json<any>()
+    }).json<SyncResponse>()
 
     console.log('  ✅ 认证成功!')
     console.log('  📊 响应:', response)
   }
-  catch (e: any) {
+  catch (e: unknown) {
     console.error('  ❌ 认证失败:')
-    if (e.response) {
+    if (e instanceof HTTPError && e.response) {
       console.error(`     状态码: ${e.response.statusCode}`)
       console.error(`     响应体:`, e.response.body)
     }
     else {
-      console.error(`     错误: ${e.message}`)
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`     错误: ${message}`)
     }
     return
   }
