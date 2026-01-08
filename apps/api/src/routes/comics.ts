@@ -1,4 +1,6 @@
 import type { AppEnv, SessionUser } from '../types'
+import { comics as comicsTable } from '@starye/db/schema'
+import { count } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 
@@ -18,17 +20,26 @@ comics.get('/', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
-  const results = await db.query.comics.findMany({
-    columns: {
-      title: true,
-      slug: true,
-      coverImage: true,
-      author: true,
-      description: true,
-      isR18: true,
-    },
-    orderBy: (comics, { desc }) => [desc(comics.updatedAt)],
-  })
+  const page = Number(c.req.query('page')) || 1
+  const limit = Number(c.req.query('limit')) || 20
+  const offset = (page - 1) * limit
+
+  const [results, totalResult] = await Promise.all([
+    db.query.comics.findMany({
+      columns: {
+        title: true,
+        slug: true,
+        coverImage: true,
+        author: true,
+        description: true,
+        isR18: true,
+      },
+      orderBy: (comics, { desc }) => [desc(comics.updatedAt)],
+      limit,
+      offset,
+    }),
+    db.select({ value: count() }).from(comicsTable).then(res => res[0].value),
+  ])
 
   const safeResults = results.map((comic) => {
     // Explicitly check for truthy isR18
@@ -40,7 +51,15 @@ comics.get('/', async (c) => {
     return comic
   })
 
-  return c.json(safeResults)
+  return c.json({
+    data: safeResults,
+    meta: {
+      total: totalResult,
+      page,
+      limit,
+      totalPages: Math.ceil(totalResult / limit),
+    },
+  })
 })
 
 // 2. Comic Details (With Chapters)
@@ -72,12 +91,14 @@ comics.get('/:slug', async (c) => {
   const needsProtection = comic.isR18 === true
   if (needsProtection && !isAdult) {
     return c.json({
-      ...comic,
-      coverImage: null,
+      data: {
+        ...comic,
+        coverImage: null,
+      },
     })
   }
 
-  return c.json(comic)
+  return c.json({ data: comic })
 })
 
 // 3. Read Chapter (Pages)
@@ -125,7 +146,7 @@ comics.get('/:slug/:chapterSlug', async (c) => {
     throw new HTTPException(404, { message: 'Chapter not found' })
   }
 
-  return c.json(chapter)
+  return c.json({ data: chapter })
 })
 
 export default comics

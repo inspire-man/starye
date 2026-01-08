@@ -2,14 +2,13 @@
 /**
  * 漫画详情页
  */
+import { useApi } from '../../lib/api'
+
 const route = useRoute()
-const config = useRuntimeConfig()
 const slug = route.params.slug
 
-const { data: comic, pending, error } = useFetch<any>(`${config.public.apiUrl}/api/comics/${slug}`, {
-  credentials: 'include',
-  headers: useRequestHeaders(['cookie']),
-})
+const { data: response, pending, error } = useApi<any>(`/api/comics/${slug}`)
+const comic = computed(() => response.value?.data)
 
 const sortedChapters = computed(() => {
   if (!comic.value?.chapters) return []

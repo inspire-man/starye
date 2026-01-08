@@ -23,4 +23,7 @@ export default {
   home: '首页',
   no_description: '暂无简介',
   restricted_tag: 'R18',
+  all_comics: '全部漫画',
+  explore: '发现',
+  view_all: '查看全部',
 }

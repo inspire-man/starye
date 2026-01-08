@@ -12,4 +12,6 @@ export default {
   search: '搜索',
   error: '出错了',
   success: '成功',
+  prev: '上一页',
+  next: '下一页',
 }

@@ -2,7 +2,7 @@
 import type { AppEnv } from '../types'
 import { zValidator } from '@hono/zod-validator'
 import { chapters, comics, pages, user } from '@starye/db/schema'
-import { eq } from 'drizzle-orm'
+import { count, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { serviceAuth } from '../middleware/service-auth'
@@ -77,10 +77,28 @@ admin.patch(
 // 获取漫画列表 (管理员视图) - admin, comic_admin
 admin.get('/comics', serviceAuth(['admin', 'comic_admin']), async (c) => {
   const db = c.get('db')
-  const results = await db.query.comics.findMany({
-    orderBy: (comics, { desc }) => [desc(comics.updatedAt)],
+  const page = Number(c.req.query('page')) || 1
+  const limit = Number(c.req.query('limit')) || 20
+  const offset = (page - 1) * limit
+
+  const [results, totalResult] = await Promise.all([
+    db.query.comics.findMany({
+      orderBy: (comics, { desc }) => [desc(comics.updatedAt)],
+      limit,
+      offset,
+    }),
+    db.select({ value: count() }).from(comics).then(res => res[0].value),
+  ])
+
+  return c.json({
+    data: results,
+    meta: {
+      total: totalResult,
+      page,
+      limit,
+      totalPages: Math.ceil(totalResult / limit),
+    },
   })
-  return c.json(results)
 })
 
 // 更新漫画信息 - admin, comic_admin

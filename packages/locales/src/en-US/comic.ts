@@ -23,4 +23,7 @@ export default {
   home: 'Home',
   no_description: 'No description available',
   restricted_tag: 'R18',
+  all_comics: 'All Comics',
+  explore: 'Explore',
+  view_all: 'View All',
 }

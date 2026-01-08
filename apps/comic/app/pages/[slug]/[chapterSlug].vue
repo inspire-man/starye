@@ -2,14 +2,13 @@
 /**
  * 章节阅读器
  */
+import { useApi } from '../../lib/api'
+
 const route = useRoute()
-const config = useRuntimeConfig()
 const { slug, chapterSlug } = route.params
 
-const { data: chapter, pending, error } = useFetch<any>(`${config.public.apiUrl}/api/comics/${slug}/${chapterSlug}`, {
-  credentials: 'include',
-  headers: useRequestHeaders(['cookie']),
-})
+const { data: response, pending, error } = useApi<any>(`/api/comics/${slug}/${chapterSlug}`)
+const chapter = computed(() => response.value?.data)
 
 const isForbidden = computed(() => error.value?.statusCode === 403)
 </script>

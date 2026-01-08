@@ -40,10 +40,20 @@ export interface Comic {
   updatedAt?: string
 }
 
+export interface Paginated<T> {
+  data: T[]
+  meta: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+  }
+}
+
 export const api = {
   API_BASE,
   // Public API (filtered)
-  getComics: () => fetchApi<Comic[]>('/api/comics'),
+  getComics: () => fetchApi<Paginated<Comic>>('/api/comics?limit=50'),
 
   // Admin API (full access)
   admin: {

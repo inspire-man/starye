@@ -12,4 +12,6 @@ export default {
   search: 'Search',
   error: 'Error',
   success: 'Success',
+  prev: 'Previous',
+  next: 'Next',
 }
