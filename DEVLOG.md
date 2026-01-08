@@ -61,3 +61,33 @@ return parse(doc);
     4. 性能权衡：序列化 HTML 的开销 vs 开发体验的提升。
 
 ---
+
+## 2026-01-08: D1 数据库迁移踩坑 (The Missing Migrations)
+
+### 🚨 事故现场
+在部署爬虫新逻辑后，同步漫画数据时 API 频繁报错 `500 Internal Server Error`。
+日志详情：
+```json
+{
+  "error": "Database Error: Failed query: insert into \"comic\" ... values ...",
+  "details": "SqliteError: no such column: is_r18"
+}
+```
+
+### 🧐 根因分析 (Root Cause)
+1.  **Schema 变更**: 我们在代码库中更新了 `drizzle schema`，增加了 `is_r18` 和 `status` 字段，并生成了 migration 文件 (`0002_xxx.sql`)。
+2.  **部署脱节**: 代码部署到了 Cloudflare Workers，API 开始尝试写入新字段。
+3.  **Migration 缺失**: 远程 D1 数据库**并没有自动应用**这些变更。Worker 代码是最新的，但数据库结构还停留在旧版本。
+
+### ✅ 解决方案 (Resolution)
+必须显式运行命令将迁移应用到远程数据库：
+```powershell
+pnpm --filter api exec wrangler d1 migrations apply starye-db --remote
+```
+
+### 🧠 经验总结 (Lesson Learned)
+*   **Infrastructure as Code != Auto Sync**: 代码里的 SQL 文件存在不代表数据库已经变更。
+*   **Pipeline Checklist**: 在 CI/CD 流程中，`deploy` 之前必须包含 `db:migrate` 步骤（或者在开发流程中严格执行）。
+*   **Better Errors**: 应该捕获 SQLite 错误并返回更明确的 400 Bad Request 或 500 错误码，指明 "Database schema mismatch"。
+
+---
