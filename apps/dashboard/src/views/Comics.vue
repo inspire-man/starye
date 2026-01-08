@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { Comic } from '@/lib/api'
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 
+const { t } = useI18n()
 useSession()
 const comics = ref<Comic[]>([])
 const loading = ref(true)
@@ -113,10 +115,10 @@ async function toggleR18Shortcut(comic: Comic) {
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-          Comic Library
+          {{ t('dashboard.comic_library') }}
         </h2>
         <p class="text-neutral-500 mt-1">
-          Manage metadata and visibility of your collection.
+          {{ t('dashboard.manage_metadata') }}
         </p>
       </div>
       <button class="p-2 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg transition-colors" @click="loadComics">
@@ -130,13 +132,13 @@ async function toggleR18Shortcut(comic: Comic) {
 
     <div v-else-if="error" class="p-6 bg-red-50 border border-red-200 text-red-600 rounded-2xl flex flex-col items-center">
       <p class="font-bold">
-        Backend Communication Error
+        {{ t('dashboard.backend_communication_error') }}
       </p>
       <p class="text-sm mt-1">
         {{ error }}
       </p>
       <button class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm" @click="loadComics">
-        Retry Connection
+        {{ t('dashboard.retry_connection') }}
       </button>
     </div>
 
@@ -163,7 +165,7 @@ async function toggleR18Shortcut(comic: Comic) {
               {{ comic.title }}
             </h3>
             <p class="text-xs text-neutral-500 mt-1">
-              {{ comic.author || 'Unknown Author' }}
+              {{ comic.author || t('dashboard.unknown_author') }}
             </p>
           </div>
 
@@ -174,11 +176,11 @@ async function toggleR18Shortcut(comic: Comic) {
                 :class="comic.isR18 ? 'bg-red-50 text-red-600 border-red-200' : 'bg-green-50 text-green-600 border-green-200'"
                 @click="toggleR18Shortcut(comic)"
               >
-                {{ comic.isR18 ? 'R18' : 'SAFE' }}
+                {{ comic.isR18 ? 'R18' : t('dashboard.safe') }}
               </button>
             </div>
             <button class="text-xs font-medium text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors" @click="openEditModal(comic)">
-              Edit Details
+              {{ t('dashboard.edit_details') }}
             </button>
           </div>
         </div>
@@ -190,7 +192,7 @@ async function toggleR18Shortcut(comic: Comic) {
       <div class="w-full max-w-lg bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl overflow-hidden border border-neutral-200 dark:border-neutral-800 animate-in fade-in zoom-in duration-200">
         <div class="p-6 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
           <h3 class="text-xl font-bold">
-            Edit Comic
+            {{ t('dashboard.edit_comic') }}
           </h3>
           <button class="text-neutral-400 hover:text-neutral-900 dark:hover:text-white" @click="isEditModalOpen = false">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -199,7 +201,7 @@ async function toggleR18Shortcut(comic: Comic) {
 
         <div class="p-8 space-y-5">
           <div class="space-y-2">
-            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">Cover Image</label>
+            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.cover_image') }}</label>
             <div class="flex items-center gap-4">
               <div class="w-16 h-24 bg-neutral-100 dark:bg-neutral-800 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 relative group">
                 <img v-if="editingComic.coverImage" :src="editingComic.coverImage" class="w-full h-full object-cover">
@@ -216,7 +218,7 @@ async function toggleR18Shortcut(comic: Comic) {
                 >
                 <label class="inline-flex items-center px-3 py-2 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-xs font-bold rounded-lg cursor-pointer transition-colors">
                   <svg class="w-3 h-3 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                  Upload New Cover
+                  {{ t('dashboard.upload_new_cover') }}
                   <input type="file" class="hidden" accept="image/*" @change="handleUpload">
                 </label>
               </div>
@@ -224,22 +226,22 @@ async function toggleR18Shortcut(comic: Comic) {
           </div>
 
           <div class="space-y-2">
-            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">Comic Title</label>
+            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.comic_title') }}</label>
             <input v-model="editingComic.title" class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none">
           </div>
 
           <div class="space-y-2">
-            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">Author</label>
+            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.author') }}</label>
             <input v-model="editingComic.author" class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none">
           </div>
 
           <div class="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-2xl border border-neutral-100 dark:border-neutral-800">
             <div>
               <p class="font-bold text-sm text-red-600">
-                R18 Content
+                {{ t('dashboard.r18_content') }}
               </p>
               <p class="text-[10px] text-neutral-500">
-                Enables age verification protection
+                {{ t('dashboard.enables_age_verification') }}
               </p>
             </div>
             <input v-model="editingComic.isR18" type="checkbox" class="w-5 h-5 accent-red-600 cursor-pointer">
@@ -248,10 +250,10 @@ async function toggleR18Shortcut(comic: Comic) {
 
         <div class="p-6 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-100 dark:border-neutral-800 flex gap-3">
           <button class="flex-1 px-4 py-3 rounded-xl font-bold text-sm hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-all" @click="isEditModalOpen = false">
-            Cancel
+            {{ t('dashboard.cancel') }}
           </button>
           <button :disabled="updateLoading" class="flex-1 px-4 py-3 bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white rounded-xl font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-all" @click="handleUpdate">
-            {{ updateLoading ? 'Saving...' : 'Save Changes' }}
+            {{ updateLoading ? t('dashboard.saving') : t('dashboard.save_changes') }}
           </button>
         </div>
       </div>

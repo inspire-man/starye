@@ -1,0 +1,67 @@
+export default {
+  // Layout
+  admin_console: '管理控制台',
+  dashboard: '仪表板',
+  welcome_back: '欢迎回来',
+  system_operational: '系统运行正常',
+  sign_out: '登出',
+  welcome: '欢迎',
+
+  // Navigation
+  overview: '概览',
+  comics: '漫画',
+  users: '用户',
+  settings: '设置',
+
+  // Home
+  total_comics: '总漫画数',
+  total_users: '总用户数',
+  pending_tasks: '待处理任务',
+
+  // Login
+  admin_console_title: '管理控制台',
+  authorized_personnel_only: '仅限授权人员',
+  sign_in_with_github: '使用 GitHub 登录',
+  login_failed: '登录失败',
+
+  // Comics
+  comic_library: '漫画库',
+  manage_metadata: '管理元数据和可见性',
+  backend_communication_error: '后端通信错误',
+  retry_connection: '重试连接',
+  unknown_author: '未知作者',
+  edit_details: '编辑详情',
+  edit_comic: '编辑漫画',
+  cover_image: '封面图片',
+  upload_new_cover: '上传新封面',
+  comic_title: '漫画标题',
+  author: '作者',
+  r18_content: 'R18 内容',
+  enables_age_verification: '启用年龄验证保护',
+  cancel: '取消',
+  save_changes: '保存更改',
+  saving: '保存中...',
+  safe: '安全',
+
+  // Users
+  user_management: '用户管理',
+  user: '用户',
+  role: '角色',
+  status: '状态',
+  joined: '加入时间',
+  actions: '操作',
+  edit: '编辑',
+  edit_user: '编辑用户',
+  age_verification_18: '年龄验证 (18+)',
+  allow_access_restricted: '允许访问受限内容',
+  standard: '标准',
+  saving_dots: '保存中...',
+
+  // Settings
+  system_settings: '系统设置',
+  admin_access_permissions: '管理员访问权限',
+  enter_service_token: '请输入 Service Token (CRAWLER_SECRET) 以启用完整管理功能。',
+  service_token: 'Service Token',
+  save_config: '保存配置',
+  saved: '已保存',
+}

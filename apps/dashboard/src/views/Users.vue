@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/lib/api'
+
+const { t } = useI18n()
 
 interface User {
   id: string
@@ -78,7 +81,7 @@ onMounted(loadUsers)
   <div>
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-bold">
-        User Management
+        {{ t('dashboard.user_management') }}
       </h2>
       <button class="p-2 hover:bg-muted rounded-lg" @click="loadUsers">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
@@ -98,19 +101,19 @@ onMounted(loadUsers)
         <thead class="bg-muted/30 border-b">
           <tr>
             <th class="px-6 py-3 font-medium text-muted-foreground">
-              User
+              {{ t('dashboard.user') }}
             </th>
             <th class="px-6 py-3 font-medium text-muted-foreground">
-              Role
+              {{ t('dashboard.role') }}
             </th>
             <th class="px-6 py-3 font-medium text-muted-foreground">
-              Status
+              {{ t('dashboard.status') }}
             </th>
             <th class="px-6 py-3 font-medium text-muted-foreground">
-              Joined
+              {{ t('dashboard.joined') }}
             </th>
             <th class="px-6 py-3 font-medium text-muted-foreground text-right">
-              Actions
+              {{ t('dashboard.actions') }}
             </th>
           </tr>
         </thead>
@@ -143,14 +146,14 @@ onMounted(loadUsers)
             </td>
             <td class="px-6 py-4">
               <span v-if="user.isAdult" class="text-xs font-bold text-green-600 border border-green-200 bg-green-50 px-2 py-0.5 rounded">18+</span>
-              <span v-else class="text-xs text-muted-foreground">Standard</span>
+              <span v-else class="text-xs text-muted-foreground">{{ t('dashboard.standard') }}</span>
             </td>
             <td class="px-6 py-4 text-muted-foreground font-mono text-xs">
               {{ new Date(user.createdAt).toLocaleDateString() }}
             </td>
             <td class="px-6 py-4 text-right">
               <button class="text-xs font-medium hover:text-primary transition-colors" @click="openEdit(user)">
-                Edit
+                {{ t('dashboard.edit') }}
               </button>
             </td>
           </tr>
@@ -162,15 +165,15 @@ onMounted(loadUsers)
     <div v-if="editingUser" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div class="bg-background rounded-xl shadow-lg max-w-sm w-full p-6 space-y-6 animate-in fade-in zoom-in duration-200">
         <h3 class="text-lg font-bold">
-          Edit User
+          {{ t('dashboard.edit_user') }}
         </h3>
 
         <div class="space-y-4">
           <div class="space-y-2">
-            <label class="text-sm font-medium">Role</label>
+            <label class="text-sm font-medium">{{ t('dashboard.role') }}</label>
             <select v-model="editForm.role" class="w-full p-2 border rounded-lg bg-background">
               <option value="user">
-                User
+                {{ t('dashboard.user') }}
               </option>
               <option value="comic_admin">
                 Comic Admin
@@ -183,9 +186,9 @@ onMounted(loadUsers)
 
           <div class="flex items-center justify-between p-3 border rounded-lg">
             <div class="space-y-0.5">
-              <label class="text-sm font-medium block">Age Verification (18+)</label>
+              <label class="text-sm font-medium block">{{ t('dashboard.age_verification_18') }}</label>
               <p class="text-xs text-muted-foreground">
-                Allow access to restricted content
+                {{ t('dashboard.allow_access_restricted') }}
               </p>
             </div>
             <input v-model="editForm.isAdult" type="checkbox" class="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary">
@@ -194,10 +197,10 @@ onMounted(loadUsers)
 
         <div class="flex justify-end gap-3">
           <button class="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg" @click="closeEdit">
-            Cancel
+            {{ t('dashboard.cancel') }}
           </button>
           <button :disabled="saving" class="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 rounded-lg disabled:opacity-50" @click="saveUser">
-            {{ saving ? 'Saving...' : 'Save Changes' }}
+            {{ saving ? t('dashboard.saving_dots') : t('dashboard.save_changes') }}
           </button>
         </div>
       </div>
