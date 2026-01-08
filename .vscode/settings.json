@@ -39,6 +39,11 @@
     "unocss",
     "upserted",
     "Upserting",
+    "VITE",
+    "vueuse",
     "workerd"
+  ],
+  "conventionalCommits.scopes": [
+    "ci"
   ]
 }

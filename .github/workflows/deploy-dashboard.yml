@@ -36,6 +36,8 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Build Dashboard
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.starye.org' }}
         run: pnpm --filter dashboard build
 
       - name: Deploy to Cloudflare Pages
@@ -46,3 +48,4 @@ jobs:
           projectName: 'starye-dashboard'
           directory: 'apps/dashboard/dist'
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+

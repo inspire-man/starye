@@ -1,0 +1,5 @@
+name = "starye-dashboard"
+compatibility_date = "2026-01-08"
+
+[env.production.vars]
+VITE_API_URL = "https://api.starye.org"
