@@ -36,6 +36,10 @@ export default defineNuxtConfig({
   // Global CSS
   css: ['./app/assets/css/main.css'],
 
+  build: {
+    transpile: ['@starye/ui'],
+  },
+
   runtimeConfig: {
     public: {
       // eslint-disable-next-line node/prefer-global/process
