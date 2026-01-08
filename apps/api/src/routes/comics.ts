@@ -1,3 +1,4 @@
+import type { Context } from 'hono'
 import type { AppEnv, SessionUser } from '../types'
 import { comics as comicsTable } from '@starye/db/schema'
 import { count } from 'drizzle-orm'
@@ -7,7 +8,7 @@ import { HTTPException } from 'hono/http-exception'
 const comics = new Hono<AppEnv>()
 
 // Helper to check adult status
-async function checkIsAdult(c: any) {
+async function checkIsAdult(c: Context<AppEnv>) {
   const auth = c.get('auth')
   const session = await auth.api.getSession({ headers: c.req.raw.headers })
   // Safe cast since we know our schema

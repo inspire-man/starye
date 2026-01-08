@@ -2,17 +2,21 @@
 /**
  * 漫画详情页
  */
+import type { ComicWithChapters } from '../../types/content'
 import { useApi } from '../../lib/api'
 
 const route = useRoute()
-const slug = route.params.slug
+const slug = route.params.slug as string
 
-const { data: response, pending, error } = useApi<any>(`/api/comics/${slug}`)
-const comic = computed(() => response.value?.data)
+const { data: comic, pending, error } = useApi<ComicWithChapters>(`/api/comics/${slug}`)
 
 const sortedChapters = computed(() => {
   if (!comic.value?.chapters) return []
-  return [...comic.value.chapters].sort((a: any, b: any) => a.chapterNumber - b.chapterNumber)
+  return [...comic.value.chapters].sort((a, b) => {
+    const numA = a.chapterNumber ?? 0
+    const numB = b.chapterNumber ?? 0
+    return numA - numB
+  })
 })
 </script>
 

@@ -2,13 +2,13 @@
 /**
  * 章节阅读器
  */
+import type { ChapterWithPages } from '../../types/content'
 import { useApi } from '../../lib/api'
 
 const route = useRoute()
 const { slug, chapterSlug } = route.params
 
-const { data: response, pending, error } = useApi<any>(`/api/comics/${slug}/${chapterSlug}`)
-const chapter = computed(() => response.value?.data)
+const { data: chapter, pending, error } = useApi<ChapterWithPages>(`/api/comics/${slug}/${chapterSlug}`)
 
 const isForbidden = computed(() => error.value?.statusCode === 403)
 </script>

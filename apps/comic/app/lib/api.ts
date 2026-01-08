@@ -15,7 +15,7 @@ export interface ApiResponse<T> {
 /**
  * Wrapper around useFetch for standardized API calls
  */
-export function useApi<T>(
+export function useApi<T = unknown>(
   url: string | (() => string),
   options: UseFetchOptions<ApiResponse<T>> = {},
 ) {
