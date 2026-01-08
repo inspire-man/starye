@@ -7,7 +7,7 @@ const handleGitHubLogin = async () => {
   loading.value = true
   await signIn.social({
     provider: 'github',
-    callbackURL: '/profile' // Redirect to profile after login
+    callbackURL: `${window.location.origin}/profile` // Use absolute URL
   })
 }
 </script>

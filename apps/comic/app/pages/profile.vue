@@ -16,8 +16,13 @@ watchEffect(() => {
 })
 
 const handleLogout = async () => {
-  await signOut()
-  router.push('/login')
+  await signOut({
+    fetchOptions: {
+      onSuccess: () => {
+        router.push('/login')
+      }
+    }
+  })
 }
 
 const verifyAge = async () => {
@@ -85,7 +90,7 @@ const verifyAge = async () => {
           Admin Console
         </h2>
         <div class="grid grid-cols-2 gap-4">
-          <a href="/dashboard" target="_blank" class="p-4 bg-muted/50 hover:bg-muted rounded-lg text-center transition-colors">
+          <a href="/dashboard/" target="_blank" class="p-4 bg-muted/50 hover:bg-muted rounded-lg text-center transition-colors">
             <span class="block font-bold">Content Dashboard</span>
             <span class="text-xs text-muted-foreground">Manage comics & chapters</span>
           </a>

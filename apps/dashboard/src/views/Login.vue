@@ -11,7 +11,7 @@ const handleGitHubLogin = async () => {
   try {
     await signIn.social({
       provider: 'github',
-      callbackURL: '/dashboard/' // Redirect to dashboard home (under subpath)
+      callbackURL: `${window.location.origin}/dashboard/` // Redirect to dashboard home (absolute URL)
     })
   } catch (e: any) {
     error.value = e.message || 'Login failed'

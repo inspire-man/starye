@@ -39,8 +39,16 @@ export function createAuth(env: Env, request: Request) {
   const baseURL = env.BETTER_AUTH_URL || `${origin}/api/auth`
   const isHttps = url.protocol === 'https:' || forwardedHost?.startsWith('https')
 
+  // 使用 origin 的 hostname 来判断是否为本地开发，这比 request.url 更准确（因为 Gateway 会传递原始 Host）
+  const originHostname = new URL(baseURL).hostname
+  const isLocalDev = originHostname === 'localhost' || originHostname === '127.0.0.1' || originHostname === '[::1]' || originHostname.match(/\d+\.\d+\.\d+\.\d+/)
+
+  const cookieDomain = (env.WEB_URL && !isLocalDev)
+    ? new URL(env.WEB_URL).hostname.replace('www.', '')
+    : undefined
+
   // eslint-disable-next-line no-console
-  console.log(`[Auth] Initializing with baseURL: ${baseURL} (Env: ${env.BETTER_AUTH_URL}, Origin: ${origin}, Secure: ${isHttps})`)
+  console.log(`[Auth Debug] baseURL=${baseURL}, isHttps=${isHttps}, cookieDomain=${cookieDomain}, originHostname=${originHostname}`)
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -72,10 +80,10 @@ export function createAuth(env: Env, request: Request) {
       cookiePrefix: 'starye',
       // Cloudflare Workers 必须的默认配置
       defaultCookieAttributes: {
+        // 在本地 HTTP 开发时，SameSite 必须是 Lax 或 Strict，不能是 None (None 需要 Secure)
         sameSite: isHttps ? 'none' : 'lax',
         secure: isHttps,
-        // 允许在所有子域共享 Cookie
-        domain: env.WEB_URL ? new URL(env.WEB_URL).hostname.replace('www.', '') : undefined,
+        domain: cookieDomain,
       },
     },
   })

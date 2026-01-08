@@ -22,7 +22,7 @@ const userRole = computed(() => session.value.data?.user?.role)
           <template v-if="session.data">
             <NuxtLink
               v-if="userRole === 'admin'"
-              to="/dashboard"
+              to="/dashboard/"
               class="text-sm font-medium text-primary hover:underline"
               target="_blank"
             >

@@ -6,8 +6,13 @@ const router = useRouter()
 const session = useSession() // Don't destructure data immediately if types are ambiguous
 
 const handleLogout = async () => {
-  await signOut()
-  router.push('/login')
+  await signOut({
+    fetchOptions: {
+      onSuccess: () => {
+        router.push('/login')
+      }
+    }
+  })
 }
 </script>
 

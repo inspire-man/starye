@@ -29,6 +29,11 @@ export default {
     // 2. Dashboard
     // Dashboard is an SPA. We might need to handle assets carefully.
     if (path.startsWith('/dashboard')) {
+      // Fix: Redirect /dashboard to /dashboard/ to handle Vite base path correctly
+      if (path === '/dashboard') {
+        return Response.redirect(`${url.origin}/dashboard/`, 301)
+      }
+
       // Vite dev server usually serves from root.
       // Rewrite /dashboard/assets/x.js -> /assets/x.js if needed.
       // For simplicity, let's assume Dashboard runs on /dashboard base locally?
