@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useSession, signOut } from '~/lib/auth-client'
 
+const { locale, setLocale } = useI18n()
 const session = useSession()
 const router = useRouter()
 
@@ -19,6 +20,13 @@ const userRole = computed(() => session.value.data?.user?.role)
         <NuxtLink to="/" class="font-bold text-xl tracking-tight">STARYE</NuxtLink>
 
         <nav class="flex items-center gap-4">
+          <button 
+            @click="setLocale(locale === 'zh' ? 'en' : 'zh')" 
+            class="text-sm font-medium hover:text-primary transition-colors"
+          >
+            {{ locale === 'zh' ? 'EN' : '中文' }}
+          </button>
+
           <template v-if="session.data">
             <NuxtLink
               v-if="userRole === 'admin'"

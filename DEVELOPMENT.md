@@ -25,21 +25,21 @@
 ```ts
 /**
  * 计算漫画章节的解锁费用
- * 
+ *
  * 基于用户等级和章节的新旧程度动态计算
  * @param chapterId 章节ID
  * @param userLevel 用户等级 (0-5)
  * @returns 需要消耗的积分数量
  */
 function calculateUnlockCost(chapterId: string, userLevel: number): number {
-  const baseCost = 10;
-  
+  const baseCost = 10
+
   // VIP 用户 (等级 > 3) 享受半价优惠
   if (userLevel > 3) {
-    return baseCost * 0.5;
+    return baseCost * 0.5
   }
-  
-  return baseCost;
+
+  return baseCost
 }
 ```
 
@@ -48,11 +48,11 @@ function calculateUnlockCost(chapterId: string, userLevel: number): number {
 ```ts
 // 计算函数
 function calculate(id: string, level: number) {
-  const cost = 10; // 定义基础费用
+  const cost = 10 // 定义基础费用
   // 如果等级大于3
   if (level > 3) {
-    return cost * 0.5; // 返回一半
+    return cost * 0.5 // 返回一半
   }
-  return cost;
+  return cost
 }
 ```

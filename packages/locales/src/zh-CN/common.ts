@@ -1,0 +1,15 @@
+export default {
+  confirm: '确定',
+  cancel: '取消',
+  loading: '加载中...',
+  save: '保存',
+  delete: '删除',
+  edit: '编辑',
+  back: '返回',
+  login: '登录',
+  logout: '登出',
+  register: '注册',
+  search: '搜索',
+  error: '出错了',
+  success: '成功',
+}

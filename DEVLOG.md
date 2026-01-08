@@ -91,3 +91,28 @@ pnpm --filter api exec wrangler d1 migrations apply starye-db --remote
 *   **Better Errors**: 应该捕获 SQLite 错误并返回更明确的 400 Bad Request 或 500 错误码，指明 "Database schema mismatch"。
 
 ---
+
+## 2026-01-08: R18 鉴权修复与多语言架构规划
+
+### 🐛 线上 Bug 修复 (Bug Fixes)
+1.  **R18 权限不同步**:
+    *   **现象**: 后台开启用户 R18 权限后，前端漫画封面仍被屏蔽。
+    *   **原因**:
+        1.  `better-auth` 默认 Session 回调未透传 `isAdult` 字段。
+        2.  跨域请求（Frontend -> API）未携带 Cookie (`credentials: 'include'`)。
+        3.  Nuxt SSR 服务端请求未转发客户端 Cookie。
+    *   **修复**:
+        *   API 端：显式重写 `session` callback 注入 `isAdult`。
+        *   前端：`useFetch` 增加 `credentials: 'include'` 和 `headers: useRequestHeaders(['cookie'])`。
+2.  **数据库迁移自动化**:
+    *   **现象**: 代码部署后，远程数据库 Schema 未更新。
+    *   **修复**: 新增 GitHub Actions `.github/workflows/deploy-migrations.yml`，监听 `packages/db` 变更自动执行 `d1 migrations apply`。
+
+### 🌍 多语言架构 (I18n Architecture)
+为了支持中英双语切换，决定采用 **Monorepo Shared Locale** 模式：
+*   **Core**: `packages/locales` 存放纯 JSON/TS 翻译文件，作为单一事实来源 (SSOT)。
+*   **Consumer**:
+    *   `apps/comic` (Nuxt): 使用 `@nuxtjs/i18n` 消费共享包。
+    *   `apps/dashboard` (Vue): 使用 `vue-i18n` 消费共享包。
+    *   `apps/api`: (可选) 仅返回 Error Code，文案由前端映射。
+*   **优势**: 避免文案散落在各处，确保术语一致性，降低维护成本。

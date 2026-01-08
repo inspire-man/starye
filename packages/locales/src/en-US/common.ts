@@ -1,0 +1,15 @@
+export default {
+  confirm: 'Confirm',
+  cancel: 'Cancel',
+  loading: 'Loading...',
+  save: 'Save',
+  delete: 'Delete',
+  edit: 'Edit',
+  back: 'Back',
+  login: 'Login',
+  logout: 'Logout',
+  register: 'Register',
+  search: 'Search',
+  error: 'Error',
+  success: 'Success',
+}

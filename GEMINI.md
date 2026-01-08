@@ -110,7 +110,7 @@
   - [x] 安装 `drizzle-orm` (Latest), `drizzle-kit`。
   - [x] 配置 `drizzle.config.ts` (支持本地 SQLite 和远程 D1)。
   - [x] 初始化 Schema: User, Auth, Content, Media, Comic, Job。
-  - [x] 优化: 添加 Drizzle Relations。
+  - [x] 初始化 Drizzle Relations。
 - [x] **1.3 UI System**:
   - [x] 创建 `packages/ui`。
   - [x] 安装 `tailwindcss` (v4), `shadcn-vue`。
@@ -139,8 +139,9 @@
   - [x] 编写 `ImageProcessor` 类 (生成 3 级缩略图, 批量并发处理)。
   - [x] **Refactor**: 将 DOM 解析逻辑抽离为纯函数 (`*-parser.ts`)，引入 `happy-dom` 实现本地解析。
   - [x] **Testing**: 搭建 Vitest 测试环境，编写策略单元测试 (离线 Fixture 模式)。
-- [ ] **3.2 GitHub Actions**:
+- [x] **3.2 GitHub Actions**:
   - [x] 编写 `.github/workflows/daily-crawl.yml`。
+  - [x] 新增 `.github/workflows/deploy-migrations.yml` (DB Sync)。
   - [ ] 配置 Repository Secrets (`CRAWLER_SECRET`, `R2_KEYS`).
 - [ ] **3.3 Search Indexing**:
   - [x] 编写 Orama 索引构建脚本。
@@ -158,10 +159,11 @@
   - [ ] 创建 `apps/blog` (Nuxt 4)。
   - [ ] 配置 `baseURL: /blog/`。
   - [ ] 实现首页与文章详情页。
-- [ ] **4.3 Comic**:
-  - [ ] 创建 `apps/comic` (Nuxt 4)。
-  - [ ] 配置 `baseURL: /comic/`。
-  - [ ] 实现瀑布流阅读器。
+- [x] **4.3 Comic**:
+  - [x] 创建 `apps/comic` (Nuxt 4)。
+  - [x] 配置 `baseURL: /comic/`。
+  - [x] 实现瀑布流阅读器。
+  - [x] 修复跨域鉴权问题。
 
 ### Phase 5: 路由与集成 (Integration) [Pending]
 
@@ -174,3 +176,16 @@
   - [ ] 编写本地开发网关脚本 (`dev:gateway`)。
 - [ ] **5.3 E2E Test**:
   - [ ] 验证全链路流程 (爬虫 -> 库 -> 前端展示)。
+
+### Phase 6: 多语言 (Internationalization) [In Progress]
+
+- [x] **6.1 Shared Locales Package**:
+  - [x] 创建 `packages/locales`。
+  - [x] 定义中英双语 JSON 结构 (Common, Auth, Comic, Dashboard)。
+- [x] **6.2 Comic App Integration**:
+  - [x] 安装 `@nuxtjs/i18n`。
+  - [x] 替换首页文本。
+  - [x] 替换详情页与阅读器文本。
+- [ ] **6.3 Dashboard Integration**:
+  - [ ] 安装 `vue-i18n`。
+  - [ ] 替换硬编码文本。
