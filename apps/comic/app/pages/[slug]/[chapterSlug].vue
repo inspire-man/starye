@@ -6,7 +6,10 @@ const route = useRoute()
 const config = useRuntimeConfig()
 const { slug, chapterSlug } = route.params
 
-const { data: chapter, pending, error } = useFetch<any>(`${config.public.apiUrl}/api/comics/${slug}/${chapterSlug}`)
+const { data: chapter, pending, error } = useFetch<any>(`${config.public.apiUrl}/api/comics/${slug}/${chapterSlug}`, {
+  credentials: 'include',
+  headers: useRequestHeaders(['cookie']),
+})
 
 const isForbidden = computed(() => error.value?.statusCode === 403)
 </script>

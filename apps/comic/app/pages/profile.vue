@@ -3,7 +3,6 @@ import { useSession, signOut } from '~/lib/auth-client'
 
 const session = useSession()
 const router = useRouter()
-const verifying = ref(false)
 
 const userRole = computed(() => session.value.data?.user?.role)
 const isAdult = computed(() => session.value.data?.user?.isAdult)
@@ -23,41 +22,6 @@ const handleLogout = async () => {
       }
     }
   })
-}
-
-const verifyAge = async () => {
-  verifying.value = true
-  try {
-    // Call custom API endpoint or use better-auth update if configured
-    // Since we don't have a direct better-auth plugin for this yet,
-    // we'll simulate it or assume an API exists.
-    // For now, let's try updating via a custom user update route if available,
-    // or just console log as a placeholder for the next step.
-
-    // Ideally: await authClient.user.update({ isAdult: true })
-    // But standard client might not type this.
-
-    // Let's rely on a custom API route we'll build next: POST /api/user/verify-age
-    const config = useRuntimeConfig()
-    const res = await fetch(`${config.public.apiUrl}/api/auth/verify-age`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-            // Cookie is sent automatically
-        }
-    })
-
-    if (res.ok) {
-        // Refresh session to get new claim
-        window.location.reload()
-    } else {
-        alert('Verification failed')
-    }
-  } catch (e) {
-    console.error(e)
-  } finally {
-    verifying.value = false
-  }
 }
 </script>
 
@@ -112,15 +76,11 @@ const verifyAge = async () => {
           <div>
             <h3 class="font-medium">Age Verification Required</h3>
             <p class="text-sm text-muted-foreground mt-1 mb-4">
-              To access restricted content (R18), you must verify that you are over 18 years old.
+              To access restricted content (R18), your account needs to be verified by an administrator.
             </p>
-            <button
-              @click="verifyAge"
-              :disabled="verifying"
-              class="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-bold disabled:opacity-50"
-            >
-              {{ verifying ? 'Verifying...' : 'I am 18+ (Verify Now)' }}
-            </button>
+            <div class="px-4 py-3 bg-muted text-muted-foreground rounded-lg text-sm">
+              Status: <span class="font-bold">Unverified</span>. Please contact support or an admin.
+            </div>
           </div>
         </div>
 

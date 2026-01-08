@@ -6,7 +6,10 @@ const route = useRoute()
 const config = useRuntimeConfig()
 const slug = route.params.slug
 
-const { data: comic, pending, error } = useFetch<any>(`${config.public.apiUrl}/api/comics/${slug}`)
+const { data: comic, pending, error } = useFetch<any>(`${config.public.apiUrl}/api/comics/${slug}`, {
+  credentials: 'include',
+  headers: useRequestHeaders(['cookie']),
+})
 
 const sortedChapters = computed(() => {
   if (!comic.value?.chapters) return []

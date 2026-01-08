@@ -66,6 +66,17 @@ export function createAuth(env: Env, request: Request) {
         isAdult: { type: 'boolean' },
       },
     },
+    callbacks: {
+      session: async ({ session, user }: { session: any, user: any }) => {
+        return {
+          session,
+          user: {
+            ...user,
+            isAdult: !!user.isAdult,
+          },
+        }
+      },
+    },
     secret: env.BETTER_AUTH_SECRET,
     baseURL,
     socialProviders: {

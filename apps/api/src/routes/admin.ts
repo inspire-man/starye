@@ -10,8 +10,8 @@ import { ChapterContentSchema, MangaInfoSchema } from '../types'
 
 const admin = new Hono<AppEnv>()
 
-// 获取用户列表
-admin.get('/users', serviceAuth(), async (c) => {
+// 获取用户列表 (仅超级管理员)
+admin.get('/users', serviceAuth(['admin']), async (c) => {
   const db = c.get('db')
   const results = await db.query.user.findMany({
     orderBy: (user, { desc }) => [desc(user.createdAt)],
@@ -20,12 +20,13 @@ admin.get('/users', serviceAuth(), async (c) => {
   return c.json(results)
 })
 
-// 提升/降级用户角色
+// 提升/降级用户角色 (仅超级管理员)
+// 支持设置的角色: admin, comic_admin, user
 admin.patch(
   '/users/:email/role',
-  serviceAuth(),
+  serviceAuth(['admin']),
   zValidator('json', z.object({
-    role: z.enum(['admin', 'user']),
+    role: z.enum(['admin', 'comic_admin', 'user']),
   })),
   async (c) => {
     const email = c.req.param('email')
@@ -52,8 +53,29 @@ admin.patch(
   },
 )
 
-// 获取漫画列表 (管理员视图)
-admin.get('/comics', serviceAuth(), async (c) => {
+// 修改用户状态 (例如 isAdult) - 允许 admin 和 comic_admin
+admin.patch(
+  '/users/:email/status',
+  serviceAuth(['admin', 'comic_admin']),
+  zValidator('json', z.object({
+    isAdult: z.boolean().optional(),
+  })),
+  async (c) => {
+    const email = c.req.param('email')
+    const { isAdult } = c.req.valid('json')
+    const db = c.get('db')
+
+    if (isAdult === undefined)
+      return c.json({ success: true })
+
+    await db.update(user).set({ isAdult, updatedAt: new Date() }).where(eq(user.email, email))
+    console.log(`[Admin] Updated isAdult for ${email} to ${isAdult}`)
+    return c.json({ success: true })
+  },
+)
+
+// 获取漫画列表 (管理员视图) - admin, comic_admin
+admin.get('/comics', serviceAuth(['admin', 'comic_admin']), async (c) => {
   const db = c.get('db')
   const results = await db.query.comics.findMany({
     orderBy: (comics, { desc }) => [desc(comics.updatedAt)],
@@ -61,10 +83,10 @@ admin.get('/comics', serviceAuth(), async (c) => {
   return c.json(results)
 })
 
-// 更新漫画信息 (例如：切换 R18 状态)
+// 更新漫画信息 - admin, comic_admin
 admin.patch(
   '/comics/:id',
-  serviceAuth(),
+  serviceAuth(['admin', 'comic_admin']),
   zValidator('json', z.object({
     isR18: z.boolean().optional(),
     status: z.string().optional(),
@@ -92,10 +114,10 @@ admin.patch(
   },
 )
 
-// 同步路由 (由爬虫调用)
+// 同步路由 (由爬虫调用) - 允许 admin, comic_admin (或 Service Token)
 admin.post(
   '/sync',
-  serviceAuth(),
+  serviceAuth(['admin', 'comic_admin']),
   zValidator('json', z.discriminatedUnion('type', [
     z.object({ type: z.literal('manga'), data: MangaInfoSchema }),
     z.object({ type: z.literal('chapter'), data: ChapterContentSchema }),

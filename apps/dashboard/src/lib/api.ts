@@ -50,6 +50,16 @@ export const api = {
     getStats: () => fetchApi<{ comics: number, users: number, tasks: number }>('/api/admin/stats'),
     getComics: () => fetchApi<Comic[]>('/api/admin/comics'),
     getUsers: () => fetchApi<any[]>('/api/admin/users'), // TODO: Type User properly
+    updateUserRole: (email: string, role: string) =>
+      fetchApi(`/api/admin/users/${email}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    updateUserStatus: (email: string, isAdult: boolean) =>
+      fetchApi(`/api/admin/users/${email}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isAdult }),
+      }),
     updateComic: (id: string, data: Partial<Comic>) =>
       fetchApi(`/api/admin/comics/${id}`, {
         method: 'PATCH',
