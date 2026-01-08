@@ -13,7 +13,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  base: '/dashboard/',
+  // eslint-disable-next-line node/prefer-global/process
+  base: process.env.NODE_ENV === 'production' ? '/' : '/dashboard/',
   server: {
     port: 5173,
     host: '0.0.0.0',
