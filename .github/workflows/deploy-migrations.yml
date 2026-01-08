@@ -35,5 +35,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply starye-db --remote
-          workingDirectory: packages/db
+          command: d1 migrations apply starye-db --remote -y
+          workingDirectory: apps/api
