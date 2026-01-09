@@ -22,7 +22,7 @@ export class SiteSe8 implements CrawlStrategy {
       const desc = document.querySelector('.de-info__description, .intro')?.textContent?.trim()
 
       const statusText = document.querySelector('.de-info__status, .status')?.textContent?.trim()
-      const status = statusText?.includes('连载') ? 'ongoing' : 'completed'
+      const status = statusText?.includes('连载') ? 'serializing' : 'completed'
 
       // Selector based on inspection: ul.chapter__list-box li a
       const chapterEls = Array.from(document.querySelectorAll('.chapter__list-box li a'))
