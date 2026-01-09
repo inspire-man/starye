@@ -109,7 +109,7 @@ export type NewComic = InferInsertModel<typeof comics>
 
 export const chapters = sqliteTable('chapter', {
   id: text('id').primaryKey(),
-  comicId: text('comic_id').notNull().references(() => comics.id),
+  comicId: text('comic_id').notNull().references(() => comics.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   slug: text('slug').notNull(),
   chapterNumber: integer('chapter_number'),
@@ -124,7 +124,7 @@ export type NewChapter = InferInsertModel<typeof chapters>
 
 export const pages = sqliteTable('page', {
   id: text('id').primaryKey(),
-  chapterId: text('chapter_id').notNull().references(() => chapters.id),
+  chapterId: text('chapter_id').notNull().references(() => chapters.id, { onDelete: 'cascade' }),
   pageNumber: integer('page_number').notNull(),
   imageUrl: text('image_url').notNull(),
   width: integer('width'),

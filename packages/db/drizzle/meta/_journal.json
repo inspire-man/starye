@@ -43,6 +43,13 @@
       "when": 1767974016187,
       "tag": "0005_brown_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1767986582686,
+      "tag": "0006_wet_night_thrasher",
+      "breakpoints": true
     }
   ]
 }

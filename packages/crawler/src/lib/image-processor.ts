@@ -2,6 +2,7 @@ import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { S3Client } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
+import CacheableLookup from 'cacheable-lookup'
 import got from 'got'
 import sharp from 'sharp'
 import { z } from 'zod'
@@ -34,6 +35,7 @@ export class ImageProcessor {
   private publicUrl: string
   private httpAgent: HttpAgent
   private httpsAgent: HttpsAgent
+  private dnsCache: CacheableLookup
 
   constructor(config: R2Config) {
     this.s3 = new S3Client({
@@ -47,14 +49,19 @@ export class ImageProcessor {
     this.bucket = config.bucketName
     this.publicUrl = config.publicUrl
 
-    // Optimized agents for high concurrency
-    this.httpAgent = new HttpAgent({ keepAlive: true, maxSockets: 100 })
-    this.httpsAgent = new HttpsAgent({ keepAlive: true, maxSockets: 100 })
+    // DNS Cache to prevent lookup timeouts
+    this.dnsCache = new CacheableLookup()
+
+    // Optimized agents: Limit maxSockets to avoid "too many open files" or target rate limits
+    this.httpAgent = new HttpAgent({ keepAlive: true, maxSockets: 50 })
+    this.httpsAgent = new HttpsAgent({ keepAlive: true, maxSockets: 50 })
+
+    this.dnsCache.install(this.httpAgent)
+    this.dnsCache.install(this.httpsAgent)
   }
 
   /**
-   * Process an image URL: download, resize/convert, and upload to R2
-   * @param imageUrl Source URL
+   * Process an image URL: download, resize/convert, and upload to R2   * @param imageUrl Source URL
    * @param keyPrefix Prefix for R2 keys (e.g. "comics/one-piece/ch1")
    * @param filename Base filename without extension (e.g. "001")
    */

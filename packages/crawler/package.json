@@ -19,6 +19,7 @@
     "@aws-sdk/lib-storage": "^3.962.0",
     "@orama/orama": "^3.1.18",
     "@starye/db": "workspace:*",
+    "cacheable-lookup": "^7.0.0",
     "cheerio": "^1.1.2",
     "dotenv": "^17.2.3",
     "drizzle-orm": "0.45.1",

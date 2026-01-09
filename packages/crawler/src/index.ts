@@ -17,7 +17,7 @@ class Runner extends BaseCrawler {
   private MAX_PAGES = 100000
   private processedCount = 0
   private activeWorkers = 0
-  private CONCURRENCY = Number(process.env.CONCURRENCY) || 20
+  private CONCURRENCY = Number(process.env.CONCURRENCY) || 5
 
   async run() {
     const startUrl = process.argv[2]
