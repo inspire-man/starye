@@ -147,7 +147,25 @@ comics.get('/:slug/:chapterSlug', async (c) => {
     throw new HTTPException(404, { message: 'Chapter not found' })
   }
 
-  return c.json({ data: chapter })
+  // 3. Get Navigation Info (Lightweight)
+  const allChapters = await db.query.chapters.findMany({
+    where: (chapters, { eq }) => eq(chapters.comicId, comic.id),
+    columns: { slug: true, title: true, sortOrder: true },
+    orderBy: (chapters, { asc }) => [asc(chapters.sortOrder)],
+  })
+
+  const currentIndex = allChapters.findIndex(ch => ch.slug === chapterSlug)
+  const prevChapter = currentIndex > 0 ? allChapters[currentIndex - 1] : null
+  const nextChapter = currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1] : null
+
+  return c.json({
+    data: {
+      ...chapter,
+      prevChapter,
+      nextChapter,
+      allChapters, // For TOC
+    },
+  })
 })
 
 export default comics

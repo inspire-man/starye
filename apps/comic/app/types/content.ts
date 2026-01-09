@@ -12,4 +12,7 @@ export interface ChapterWithComic extends Chapter {
 
 export interface ChapterWithPages extends ChapterWithComic {
   pages: Page[]
+  prevChapter?: { title: string, slug: string } | null
+  nextChapter?: { title: string, slug: string } | null
+  allChapters?: { title: string, slug: string }[]
 }

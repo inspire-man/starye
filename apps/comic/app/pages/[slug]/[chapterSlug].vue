@@ -4,6 +4,7 @@
  */
 import type { ChapterWithPages } from '../../types/content'
 import { useApi } from '../../lib/api'
+import ChapterNav from '../../components/ChapterNav.vue'
 
 const route = useRoute()
 const { slug, chapterSlug } = route.params
@@ -73,13 +74,17 @@ const isForbidden = computed(() => error.value?.statusCode === 403)
         </div>
       </div>
 
-      <footer class="w-full py-20 px-8 flex flex-col items-center border-t border-white/5 mt-10">
-        <div class="w-12 h-1 bg-primary/20 rounded-full mb-10" />
-        <NuxtLink :to="`/${slug}`" replace class="px-10 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all font-black italic tracking-widest uppercase text-xs">
-          {{ $t('comic.return_to_chapters') }}
-        </NuxtLink>
-      </footer>
+      <div class="h-32" />
     </main>
+
+    <ChapterNav 
+      v-if="chapter"
+      :slug="slug as string"
+      :current-slug="chapterSlug as string"
+      :chapters="chapter.allChapters || []"
+      :prev="chapter.prevChapter"
+      :next="chapter.nextChapter"
+    />
   </div>
 </template>
 
