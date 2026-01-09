@@ -58,7 +58,7 @@ export const api = {
   // Admin API (full access)
   admin: {
     getStats: () => fetchApi<{ comics: number, users: number, tasks: number }>('/api/admin/stats'),
-    getComics: () => fetchApi<Comic[]>('/api/admin/comics'),
+    getComics: () => fetchApi<Paginated<Comic>>('/api/admin/comics'),
     getUsers: () => fetchApi<any[]>('/api/admin/users'), // TODO: Type User properly
     updateUserRole: (email: string, role: string) =>
       fetchApi(`/api/admin/users/${email}/role`, {

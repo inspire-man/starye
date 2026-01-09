@@ -52,7 +52,8 @@ async function loadComics() {
   loading.value = true
   try {
     // Admin interface returns full data including isR18
-    comics.value = await api.admin.getComics()
+    const response = await api.admin.getComics()
+    comics.value = response.data
   }
   catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e)
