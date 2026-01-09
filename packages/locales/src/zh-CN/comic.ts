@@ -26,4 +26,15 @@ export default {
   all_comics: '全部漫画',
   explore: '发现',
   view_all: '查看全部',
+  all_regions: '全部地区',
+  all_genres: '全部题材',
+  all_status: '全部状态',
+  serializing: '连载中',
+  completed: '已完结',
+  regions: {
+    韩国: '韩国',
+    日本: '日本',
+    台湾: '台湾',
+    中国: '中国',
+  },
 }

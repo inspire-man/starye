@@ -41,10 +41,15 @@ const { data: response, pending, error } = useApi<Comic[]>('/api/comics', {
 const comics = computed(() => response.value?.data || [])
 const meta = computed(() => response.value?.meta)
 
-// Hardcoded filter options - in a real app, this could come from an API
-const REGIONS = ['韩国', '日本', '台湾']
+const { t } = useI18n()
+
+// Options with i18n
+const regionOptions = computed(() => ['韩国', '日本', '台湾'].map(r => ({ label: t(`comic.regions.${r}`), value: r })))
 const GENRES = ['青春', '性感', '长腿', '多人', '御姐', '巨乳', '新婚', '媳妇', '暧昧', '清纯', '调教', '少妇', '风骚', '同居', '淫乱', '好友', '女神', '诱惑', '偷情', '出轨', '正妹', '家教']
-const STATUS_OPTIONS = [{ label: 'serializing', value: 'serializing' }, { label: 'completed', value: 'completed' }]
+const statusOptions = computed(() => [
+  { label: t('comic.serializing'), value: 'serializing' },
+  { label: t('comic.completed'), value: 'completed' },
+])
 
 function changePage(newPage: number) {
   if (newPage < 1 || (meta.value && newPage > meta.value.totalPages))
@@ -81,8 +86,8 @@ function clearFilters() {
         <option value="">
           {{ $t('comic.all_regions') }}
         </option>
-        <option v-for="r in REGIONS" :key="r" :value="r">
-          {{ r }}
+        <option v-for="r in regionOptions" :key="r.value" :value="r.value">
+          {{ r.label }}
         </option>
       </select>
       <select v-model="filters.genre" class="px-3 py-2 text-sm rounded-lg border bg-background">
@@ -97,8 +102,8 @@ function clearFilters() {
         <option value="">
           {{ $t('comic.all_status') }}
         </option>
-        <option v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">
-          {{ $t(`comic.${s.label}`) }}
+        <option v-for="s in statusOptions" :key="s.value" :value="s.value">
+          {{ s.label }}
         </option>
       </select>
       <button class="px-3 py-2 text-sm text-muted-foreground hover:text-foreground" @click="clearFilters">

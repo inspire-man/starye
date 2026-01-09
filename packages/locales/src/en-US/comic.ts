@@ -26,4 +26,15 @@ export default {
   all_comics: 'All Comics',
   explore: 'Explore',
   view_all: 'View All',
+  all_regions: 'All Regions',
+  all_genres: 'All Genres',
+  all_status: 'All Status',
+  serializing: 'Ongoing',
+  completed: 'Completed',
+  regions: {
+    韩国: 'Korea',
+    日本: 'Japan',
+    台湾: 'Taiwan',
+    中国: 'China',
+  },
 }

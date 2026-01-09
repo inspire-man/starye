@@ -14,4 +14,5 @@ export default {
   success: 'Success',
   prev: 'Previous',
   next: 'Next',
+  clear: 'Clear',
 }
