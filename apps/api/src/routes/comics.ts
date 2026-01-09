@@ -1,7 +1,7 @@
 import type { Context } from 'hono'
 import type { AppEnv, SessionUser } from '../types'
 import { comics as comicsTable } from '@starye/db/schema'
-import { count } from 'drizzle-orm'
+import { and, count, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 
@@ -25,8 +25,23 @@ comics.get('/', async (c) => {
   const limit = Number(c.req.query('limit')) || 20
   const offset = (page - 1) * limit
 
+  const region = c.req.query('region')
+  const genre = c.req.query('genre')
+  const status = c.req.query('status')
+
+  const conditions = []
+  if (region)
+    conditions.push(eq(comicsTable.region, region))
+  if (status)
+    conditions.push(eq(comicsTable.status, status as 'serializing' | 'completed'))
+  if (genre)
+    conditions.push(sql`${comicsTable.genres} LIKE ${`%${genre}%`}`)
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
   const [results, totalResult] = await Promise.all([
     db.query.comics.findMany({
+      where: whereClause,
       columns: {
         title: true,
         slug: true,
@@ -39,7 +54,7 @@ comics.get('/', async (c) => {
       limit,
       offset,
     }),
-    db.select({ value: count() }).from(comicsTable).then(res => res[0].value),
+    db.select({ value: count() }).from(comicsTable).where(whereClause).then(res => res[0].value),
   ])
 
   const safeResults = results.map((comic) => {

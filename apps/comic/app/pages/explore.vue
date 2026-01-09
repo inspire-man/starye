@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { Comic } from '@starye/db/schema'
+import { reactive, computed, watch } from 'vue'
 import { ComicCard } from '@starye/ui'
 import { useApi } from '../lib/api'
+
+definePageMeta({
+  keepalive: true,
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -11,24 +16,47 @@ const page = computed({
   set: val => router.push({ query: { ...route.query, page: val } }),
 })
 
+const filters = reactive({
+  region: route.query.region || '',
+  genre: route.query.genre || '',
+  status: route.query.status || '',
+})
+
+// Sync filters back to URL
+watch(filters, (newFilters) => {
+  router.push({ query: { ...newFilters, page: 1 } }) // Reset to page 1 on filter change
+})
+
 const limit = 24
 
 const { data: response, pending, error } = useApi<Comic[]>('/api/comics', {
-  query: {
-    page,
+  // Use a computed property for the query to ensure reactivity
+  query: computed(() => ({
+    page: page.value,
     limit,
-  },
-  watch: [page],
+    ...filters,
+  })),
 })
 
 const comics = computed(() => response.value?.data || [])
 const meta = computed(() => response.value?.meta)
+
+// Hardcoded filter options - in a real app, this could come from an API
+const REGIONS = ['韩国', '日本', '台湾']
+const GENRES = ['青春', '性感', '长腿', '多人', '御姐', '巨乳', '新婚', '媳妇', '暧昧', '清纯', '调教', '少妇', '风骚', '同居', '淫乱', '好友', '女神', '诱惑', '偷情', '出轨', '正妹', '家教']
+const STATUS_OPTIONS = [{ label: 'serializing', value: 'serializing' }, { label: 'completed', value: 'completed' }]
 
 function changePage(newPage: number) {
   if (newPage < 1 || (meta.value && newPage > meta.value.totalPages))
     return
   page.value = newPage
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function clearFilters() {
+  filters.region = ''
+  filters.genre = ''
+  filters.status = ''
 }
 </script>
 
@@ -46,6 +74,37 @@ function changePage(newPage: number) {
         <span>{{ $t('comic.explore') }}</span>
       </nav>
     </header>
+
+    <!-- Filters -->
+    <div class="mb-8 p-4 bg-muted/50 rounded-2xl flex flex-wrap gap-4 items-center">
+      <select v-model="filters.region" class="px-3 py-2 text-sm rounded-lg border bg-background">
+        <option value="">
+          {{ $t('comic.all_regions') }}
+        </option>
+        <option v-for="r in REGIONS" :key="r" :value="r">
+          {{ r }}
+        </option>
+      </select>
+      <select v-model="filters.genre" class="px-3 py-2 text-sm rounded-lg border bg-background">
+        <option value="">
+          {{ $t('comic.all_genres') }}
+        </option>
+        <option v-for="g in GENRES" :key="g" :value="g">
+          {{ g }}
+        </option>
+      </select>
+      <select v-model="filters.status" class="px-3 py-2 text-sm rounded-lg border bg-background">
+        <option value="">
+          {{ $t('comic.all_status') }}
+        </option>
+        <option v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">
+          {{ $t(`comic.${s.label}`) }}
+        </option>
+      </select>
+      <button class="px-3 py-2 text-sm text-muted-foreground hover:text-foreground" @click="clearFilters">
+        {{ $t('common.clear') }}
+      </button>
+    </div>
 
     <div v-if="pending" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
       <div v-for="i in 12" :key="i" class="aspect-[3/4] bg-muted animate-pulse rounded-xl" />

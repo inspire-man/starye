@@ -15,8 +15,8 @@ const isOpen = ref(false)
 <template>
   <div>
     <!-- Backdrop -->
-    <div 
-      v-if="isOpen" 
+    <div
+      v-if="isOpen"
       class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
       @click="isOpen = false"
     />
@@ -24,7 +24,7 @@ const isOpen = ref(false)
     <!-- Drawer / Dropdown -->
     <div
       v-if="isOpen"
-      class="fixed bottom-[88px] left-0 right-0 bg-neutral-900 border-t border-white/10 max-h-[60vh] overflow-y-auto p-4 shadow-2xl z-50 animate-in slide-in-from-bottom-10"
+      class="fixed bottom-[88px] left-0 right-0 bg-neutral-900 border-t border-white/10 max-h-[60vh] overflow-y-auto px-4 shadow-2xl z-50 animate-in slide-in-from-bottom-10"
     >
       <div class="flex justify-between items-center mb-4 sticky top-0 bg-neutral-900 z-10 py-2 border-b border-white/5">
         <h3 class="text-sm font-bold uppercase tracking-widest text-neutral-400">
