@@ -18,7 +18,7 @@ const isForbidden = computed(() => error.value?.statusCode === 403)
   <div class="min-h-screen bg-[#0a0a0a] text-neutral-100 flex flex-col">
     <header class="sticky top-0 z-50 bg-black/60 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-5">
-        <NuxtLink :to="`/${slug}`" class="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all">
+        <NuxtLink :to="`/${slug}`" replace class="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg>
         </NuxtLink>
         <div>
@@ -75,7 +75,7 @@ const isForbidden = computed(() => error.value?.statusCode === 403)
 
       <footer class="w-full py-20 px-8 flex flex-col items-center border-t border-white/5 mt-10">
         <div class="w-12 h-1 bg-primary/20 rounded-full mb-10" />
-        <NuxtLink :to="`/${slug}`" class="px-10 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all font-black italic tracking-widest uppercase text-xs">
+        <NuxtLink :to="`/${slug}`" replace class="px-10 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all font-black italic tracking-widest uppercase text-xs">
           {{ $t('comic.return_to_chapters') }}
         </NuxtLink>
       </footer>
