@@ -289,6 +289,19 @@ class Runner extends BaseCrawler {
         if (info.title && info.slug) {
           console.log(`  Syncing ${info.title} (${info.chapters.length} chapters)...`)
           await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
+
+          // Enqueue chapters for processing
+          let addedCount = 0
+          for (const chapter of info.chapters) {
+            const chapterUrl = chapter.url.startsWith('http') ? chapter.url : `${strategy.baseUrl}${chapter.url}`
+            // Optional: Check constraint (e.g. only latest 5 if full scan to save time?)
+            // For now, enqueue all. The check-chapter logic in isChapter will skip existing ones.
+            if (!this.visited.has(chapterUrl)) {
+              this.queue.push(chapterUrl)
+              addedCount++
+            }
+          }
+          console.log(`  + Enqueued ${addedCount} chapters for ${info.title}`)
         }
       }
     }
