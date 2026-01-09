@@ -1,3 +1,5 @@
+import { Agent as HttpAgent } from 'node:http'
+import { Agent as HttpsAgent } from 'node:https'
 import { S3Client } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
 import got from 'got'
@@ -30,6 +32,8 @@ export class ImageProcessor {
   private s3: S3Client
   private bucket: string
   private publicUrl: string
+  private httpAgent: HttpAgent
+  private httpsAgent: HttpsAgent
 
   constructor(config: R2Config) {
     this.s3 = new S3Client({
@@ -42,6 +46,10 @@ export class ImageProcessor {
     })
     this.bucket = config.bucketName
     this.publicUrl = config.publicUrl
+
+    // Optimized agents for high concurrency
+    this.httpAgent = new HttpAgent({ keepAlive: true, maxSockets: 100 })
+    this.httpsAgent = new HttpsAgent({ keepAlive: true, maxSockets: 100 })
   }
 
   /**
@@ -56,15 +64,19 @@ export class ImageProcessor {
 
     // Start downloading and pipe to sharp
     const downloadStream = got.stream(imageUrl, {
+      agent: {
+        http: this.httpAgent,
+        https: this.httpsAgent,
+      },
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         'Referer': new URL(imageUrl).origin,
       },
       timeout: {
-        request: 30000,
+        request: 60000, // Increased timeout
       },
       retry: {
-        limit: 3,
+        limit: 5, // Increased retries
       },
     })
 

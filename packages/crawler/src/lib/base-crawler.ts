@@ -74,6 +74,12 @@ export abstract class BaseCrawler {
         timeout: {
           request: 30000, // 30 seconds timeout
         },
+        retry: {
+          limit: 5,
+          methods: ['POST', 'GET', 'PUT', 'HEAD', 'DELETE', 'OPTIONS', 'TRACE'],
+          statusCodes: [408, 413, 429, 500, 502, 503, 504],
+          errorCodes: ['ETIMEDOUT', 'ECONNRESET', 'EADDRINUSE', 'ECONNREFUSED', 'EPIPE', 'ENOTFOUND', 'ENETUNREACH', 'EAI_AGAIN'],
+        },
       }).json()
       // console.log(`[API] ✅ Success`)
       return res
