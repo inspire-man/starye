@@ -39,6 +39,7 @@ export class SiteSe8 implements CrawlStrategy {
 
     return {
       ...info,
+      status: info.status as 'serializing' | 'completed',
       slug: url.split('/').filter(Boolean).pop() || '',
     }
   }
