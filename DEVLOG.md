@@ -4,6 +4,32 @@
 
 ---
 
+## 2026-01-09: 完善 92hm 漫画源爬虫策略
+
+### 🎯 目标
+根据用户提供的新 URL（列表页、搜索页、详情页、阅读页），全面增强 `92hm` 数据源的爬虫能力，并同步扩展数据库模型以容纳更丰富的漫画元数据。
+
+### 📝 规划与设计 (Planning & Design)
+
+1.  **数据库 Schema 扩展 (`packages/db`)**:
+    *   分析发现，`Comic` 表需要增加以下字段来存储详情页信息：
+        *   `author` (作者)
+        *   `description` (简介)
+        *   `status` (连载状态: `serializing` | `completed`)
+        *   `region` (地区)
+        *   `genres` (题材, `string[]`)
+        *   `sourceUrl` (源 URL, 用于追更)
+2.  **爬虫策略重构 (`packages/crawler`)**:
+    *   将原有的单一策略函数，拆分为职责更明确的模块：
+        *   `discover.ts`: 实现从列表页 (`booklist`) 和搜索页 (`search`) 发现漫画，获取其详情页 URL。
+        *   `parser-detail.ts`: 负责解析详情页 (`book/:id`)，提取上述所有元数据和章节列表。
+        *   `parser-chapter.ts`: 负责解析阅读页 (`chapter/:id`)，提取页面中的所有漫画图片 URL。
+3.  **任务流程编排**:
+    *   **全量同步**: 遍历 `booklist` 的所有分类和页码 -> `discover` -> `parser-detail` -> DB Insert/Update。
+    *   **单章同步**: `parser-detail` (获取最新章节) -> `parser-chapter` -> Image Processing -> DB Insert/Update。
+
+---
+
 ## 2026-01-08: 爬虫架构重构与测试体系搭建
 
 ### 🎯 目标

@@ -93,9 +93,12 @@ export const comics = sqliteTable('comic', {
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(),
   author: text('author'),
-  description: text('description'),
+  description: text('description'), // 漫画简介
   coverImage: text('cover_image'),
-  status: text('status').default('ongoing'), // ongoing: 连载中, completed: 已完结
+  sourceUrl: text('source_url').unique(), // 源 URL，用于追更
+  status: text('status', { enum: ['serializing', 'completed'] }).default('serializing'), // serializing: 连载中, completed: 已完结
+  region: text('region'), // 地区
+  genres: text('genres', { mode: 'json' }), // 题材/标签
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),

@@ -30,6 +30,7 @@ Thumbs.db
 !.env.example
 .dev.vars
 *.pem
+.error
 
 # Cloudflare Wrangler
 .wrangler/

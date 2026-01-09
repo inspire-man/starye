@@ -18,12 +18,22 @@
     "yaml"
   ],
   "cSpell.words": [
+    "adsbygoogle",
     "booklist",
+    "chapterlist",
     "chokidar",
+    "comiclist",
+    "comicpage",
     "demi",
     "Deployables",
     "domcontentloaded",
+    "effectspeed",
     "esbuild",
+    "fanye",
+    "historys",
+    "isload",
+    "KHTML",
+    "lazyload",
     "mangas",
     "manhua",
     "mokelao",
@@ -41,7 +51,8 @@
     "Upserting",
     "VITE",
     "vueuse",
-    "workerd"
+    "workerd",
+    "wxqrcode"
   ],
   "conventionalCommits.scopes": [
     "ci",

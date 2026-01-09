@@ -1,56 +1,58 @@
+import { existsSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import process from 'node:process'
 import puppeteer from 'puppeteer-core'
 
-const TARGET_URL = process.argv[2] || 'https://www.92hm.life/book/1130'
+// 从命令行参数获取 URL，如果没有则使用指定的默认值
+const TARGET_URL = process.argv[2] || 'https://www.92hm.life/book/826'
+const OUTPUT_FILENAME = process.argv[3] || 'page_content.html'
 
-async function inspect() {
-  console.log(`🔍 Inspecting: ${TARGET_URL}`)
+async function dumpHtml() {
+  console.log(`🔍 Dumping HTML from: ${TARGET_URL}`)
 
-  const executablePath = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+  // 自动查找本地安装的 Chrome 或 Edge
+  const possiblePaths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  ]
+  const executablePath = possiblePaths.find(path => existsSync(path))
+
+  if (!executablePath) {
+    console.error('❌ Could not find a local installation of Chrome or Edge.')
+    process.exit(1)
+  }
+  console.log(`✅ Found browser: ${executablePath}`)
 
   const browser = await puppeteer.launch({
     executablePath,
-    headless: false,
-    defaultViewport: { width: 1280, height: 800 },
-    args: ['--no-sandbox'],
+    headless: true, // 使用无头模式可以提高速度
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   })
 
   const page = await browser.newPage()
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
   try {
-    await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    console.log('✅ Page Loaded')
+    // 增加超时时间并等待网络空闲，确保动态内容加载完成
+    await page.goto(TARGET_URL, { waitUntil: 'networkidle2', timeout: 60000 })
+    console.log('✅ Page loaded successfully.')
 
-    // Simplify evaluate to avoid serialization issues
-    const candidates = await page.evaluate(() => {
-      const results = []
-      // Use standard loop instead of Array.from().map
-      const elements = document.querySelectorAll('div, ul, ol')
+    const htmlContent = await page.content()
+    const outputPath = join(process.cwd(), OUTPUT_FILENAME)
 
-      for (const el of Array.from(elements)) {
-        // Basic heuristic        const links = el.querySelectorAll('a')
-        if (links.length > 5) {
-          results.push({
-            tag: el.tagName.toLowerCase(),
-            id: el.id,
-            class: el.className,
-            linksCount: links.length,
-            firstLinkText: links[0]?.textContent?.trim().slice(0, 20) || '',
-          })
-        }
-      }
-      return results
-    })
-
-    console.log('--- Potential Chapter Containers ---')
-    console.table(candidates)
+    await writeFile(outputPath, htmlContent, 'utf-8')
+    console.log(`📄 HTML content has been saved to: ${outputPath}`)
   }
   catch (e) {
-    console.error('Error:', e)
+    console.error('❌ Error fetching page:', e)
   }
   finally {
-    // Keep open
+    await browser.close()
+    console.log('🚪 Browser closed.')
   }
 }
 
-inspect()
+dumpHtml()

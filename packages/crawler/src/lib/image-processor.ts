@@ -55,7 +55,25 @@ export class ImageProcessor {
     const pipeline = sharp({ failOn: 'none' })
 
     // Start downloading and pipe to sharp
-    const downloadStream = got.stream(imageUrl)
+    const downloadStream = got.stream(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Referer': new URL(imageUrl).origin,
+      },
+      timeout: {
+        request: 30000,
+      },
+      retry: {
+        limit: 3,
+      },
+    })
+
+    downloadStream.on('error', (err) => {
+      // Prevent unhandled error event crash
+      // The error will likely propagate to the pipeline or result in broken streams that subsequent tasks will detect
+      console.warn(`[ImageProcessor] Download stream error for ${imageUrl}: ${err.message}`)
+    })
+
     downloadStream.pipe(pipeline)
 
     // Define variants

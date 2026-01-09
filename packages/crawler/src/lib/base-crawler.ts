@@ -3,8 +3,12 @@ import type { R2Config } from './image-processor'
 /* eslint-disable no-console */
 import process from 'node:process'
 import got, { HTTPError } from 'got'
-import puppeteer from 'puppeteer-core'
+import puppeteer from 'puppeteer-extra'
+import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { ImageProcessor } from './image-processor'
+
+// 使用 Stealth Plugin 增强隐匿性
+puppeteer.use(StealthPlugin())
 
 export interface CrawlerConfig {
   r2: R2Config
@@ -54,12 +58,16 @@ export abstract class BaseCrawler {
   /**
    * Sync data to API
    */
-  async syncToApi(endpoint: string, data: unknown) {
+  async syncToApi(endpoint: string, data: unknown, options?: { method?: 'GET' | 'POST', searchParams?: Record<string, string> }) {
     const url = `${this.config.api.url}${endpoint}`
+    const method = options?.method || 'POST'
+
     try {
-      console.log(`[API] 📤 Syncing to ${url}...`)
-      const res = await got.post(url, {
-        json: data,
+      // console.log(`[API] 📤 ${method} ${url}...`) // Reduce noise
+      const res = await got(url, {
+        method,
+        json: method === 'POST' ? data : undefined,
+        searchParams: options?.searchParams,
         headers: {
           'x-service-token': this.config.api.token,
         },
@@ -67,7 +75,7 @@ export abstract class BaseCrawler {
           request: 30000, // 30 seconds timeout
         },
       }).json()
-      console.log(`[API] ✅ Sync successful`)
+      // console.log(`[API] ✅ Success`)
       return res
     }
     catch (e: unknown) {

@@ -6,8 +6,11 @@ export interface MangaInfo {
   cover?: string
   author?: string
   description?: string
-  status?: string
+  status?: 'serializing' | 'completed'
   isR18?: boolean
+  sourceUrl?: string
+  region?: string
+  genres?: string[]
   chapters: {
     title: string
     slug: string

@@ -134,6 +134,41 @@ admin.patch(
   },
 )
 
+// 检查章节状态
+admin.get(
+  '/check-chapter',
+  serviceAuth(['admin', 'comic_admin']),
+  zValidator('query', z.object({
+    comicSlug: z.string(),
+    chapterSlug: z.string(),
+  })),
+  async (c) => {
+    const { comicSlug, chapterSlug } = c.req.valid('query')
+    const db = c.get('db')
+    const chapterId = `${comicSlug}-${chapterSlug}`
+
+    const chapter = await db.query.chapters.findFirst({
+      where: eq(chapters.id, chapterId),
+      with: {
+        pages: true,
+      },
+    })
+
+    if (!chapter) {
+      return c.json({ exists: false, count: 0, hasFailures: false })
+    }
+
+    // 检查是否有失败的图片 (使用 Placeholder)
+    const hasFailures = chapter.pages.some(p => p.imageUrl.includes('placehold.co') || p.imageUrl.includes('failed'))
+
+    return c.json({
+      exists: true,
+      count: chapter.pages.length,
+      hasFailures,
+    })
+  },
+)
+
 // 同步路由 (由爬虫调用) - 允许 admin, comic_admin (或 Service Token)
 admin.post(
   '/sync',
@@ -161,6 +196,11 @@ admin.post(
         const comicId = data.slug
         console.log(`[Sync] 📝 Upserting comic: ${comicId}`)
 
+        // 类型适配: 确保 status 符合数据库枚举
+        const status = (data.status === 'completed' || data.status === 'serializing')
+          ? data.status
+          : 'serializing'
+
         await db.insert(comics).values({
           id: comicId,
           title: data.title,
@@ -168,8 +208,11 @@ admin.post(
           coverImage: data.cover,
           author: data.author,
           description: data.description,
-          status: data.status || 'ongoing',
+          status,
           isR18: data.isR18 ?? true,
+          sourceUrl: data.sourceUrl,
+          region: data.region,
+          genres: data.genres,
           // 插入时由数据库处理 createdAt/updatedAt 默认值
         }).onConflictDoUpdate({
           target: comics.id,
@@ -178,7 +221,10 @@ admin.post(
             coverImage: data.cover,
             author: data.author,
             description: data.description,
-            status: data.status || 'ongoing',
+            status,
+            sourceUrl: data.sourceUrl,
+            region: data.region,
+            genres: data.genres,
             updatedAt: new Date(), // 冲突时手动更新时间
           },
         })

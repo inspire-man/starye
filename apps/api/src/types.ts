@@ -37,8 +37,11 @@ export const MangaInfoSchema = z.object({
   cover: z.string().optional(),
   author: z.string().optional(),
   description: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(['serializing', 'completed']).or(z.string()).optional(),
   isR18: z.boolean().optional(),
+  sourceUrl: z.string().optional(),
+  region: z.string().optional(),
+  genres: z.array(z.string()).optional(),
   chapters: z.array(ChapterSchema),
 })
 
