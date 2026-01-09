@@ -17,7 +17,7 @@ class Runner extends BaseCrawler {
   private MAX_PAGES = 100000
   private processedCount = 0
   private activeWorkers = 0
-  private CONCURRENCY = Number(process.env.CONCURRENCY) || 5
+  private CONCURRENCY = Number(process.env.CONCURRENCY) || 2
 
   async run() {
     const startUrl = process.argv[2]
@@ -215,10 +215,10 @@ class Runner extends BaseCrawler {
             let lastError
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
               try {
-                // 强超时控制：每张图最多给 20 秒
+                // 强超时控制：每张图最多给 60 秒
                 const processPromise = this.imageProcessor.process(imgUrl, prefix, filename)
                 const timeoutPromise = new Promise((_, reject) =>
-                  setTimeout(() => reject(new Error('Process timeout')), 20000),
+                  setTimeout(() => reject(new Error('Process timeout')), 60000),
                 )
 
                 const processed = await Promise.race([processPromise, timeoutPromise]) as any

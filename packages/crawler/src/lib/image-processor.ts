@@ -66,11 +66,8 @@ export class ImageProcessor {
    * @param filename Base filename without extension (e.g. "001")
    */
   async process(imageUrl: string, keyPrefix: string, filename: string): Promise<ProcessedImage[]> {
-    // Create the main pipeline
-    const pipeline = sharp({ failOn: 'none' })
-
-    // Start downloading and pipe to sharp
-    const downloadStream = got.stream(imageUrl, {
+    // 1. Download to buffer first to release the source server connection ASAP
+    const imageBuffer = await got(imageUrl, {
       agent: {
         http: this.httpAgent,
         https: this.httpsAgent,
@@ -85,15 +82,10 @@ export class ImageProcessor {
       retry: {
         limit: 5, // Increased retries
       },
-    })
+    }).buffer()
 
-    downloadStream.on('error', (err) => {
-      // Prevent unhandled error event crash
-      // The error will likely propagate to the pipeline or result in broken streams that subsequent tasks will detect
-      console.warn(`[ImageProcessor] Download stream error for ${imageUrl}: ${err.message}`)
-    })
-
-    downloadStream.pipe(pipeline)
+    // 2. Create the main pipeline from buffer
+    const pipeline = sharp(imageBuffer, { failOn: 'none' })
 
     // Define variants
     const tasks = [
