@@ -1,0 +1,16 @@
+export default {
+  title: '电影库',
+  subtitle: '高清成人电影在线观看与管理',
+  view_all: '查看全部',
+  adult_only: '18禁',
+  release_date: '发布日期',
+  duration: '时长',
+  minutes: '分钟',
+  publisher: '片商',
+  actors: '演员',
+  genres: '题材',
+  series: '系列',
+  code: '番号',
+  play: '立即观看',
+  player: '播放源',
+}

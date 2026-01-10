@@ -27,6 +27,13 @@
   - **内容保护**: 默认所有漫画标记为 R18。仅登录且通过年龄验证的用户可见封面及阅读内容。未验证用户仅可见标题/章节列表。
   - **部署名称**: `comic`
 
+- **movie (电影库)**:
+  - **技术栈**: Nuxt 4 (Vue 3)
+  - **Base URL**: `/movie/`
+  - **功能**: 在线观看、元数据展示、高级搜索。
+  - **内容保护**: 继承 Comic 的 R18 鉴权机制。
+  - **部署名称**: `movie`
+
 - **Dashboard (后台管理)**:
   - **技术栈**: Vue 3 + Vite SPA
   - **Base URL**: `/dashboard/`
@@ -191,3 +198,21 @@
 - [ ] **6.3 Dashboard Integration**:
   - [ ] 安装 `vue-i18n`。
   - [ ] 替换硬编码文本。
+
+### Phase 7: 电影模块开发 (Movie Module) [Pending]
+
+- [ ] **7.1 Database Layer**:
+  - [ ] 在 `packages/db/src/schema.ts` 中添加 `movies` 和 `players` 表结构及关系。
+  - [ ] 生成并应用数据库迁移。
+- [ ] **7.2 Crawler Strategy**:
+  - [ ] 分析 `javdb` 网站结构，确定数据源 (API 或 HTML)。
+  - [ ] 在 `packages/crawler` 中实现 `javdb` 的爬虫策略和解析器。
+  - [ ] 编写单元测试。
+- [ ] **7.3 API Routes**:
+  - [ ] 在 `apps/api` 中添加 `/movies` 相关路由。
+  - [ ] 复用 R18 鉴权中间件。
+- [ ] **7.4 Frontend App**:
+  - [ ] 创建 `apps/movie` (Nuxt 4)。
+  - [ ] 实现电影列表、详情和播放页面。
+- [ ] **7.5 Automation**:
+  - [ ] 创建 GitHub Actions 工作流 `daily-movie-crawl.yml` 用于每日数据同步。

@@ -1,5 +1,7 @@
 import type { Page } from 'puppeteer-core'
 
+// --- Manga (Comic) Specific Interfaces ---
+
 export interface MangaInfo {
   title: string
   slug: string
@@ -50,4 +52,36 @@ export interface CrawlStrategy {
    * Parse chapter reading page to get image URLs
    */
   getChapterContent: (url: string, page: Page) => Promise<ChapterContent>
+}
+
+// --- Movie Specific Interfaces ---
+
+export interface MovieInfo {
+  title: string
+  slug: string
+  code: string
+  description?: string
+  coverImage?: string
+  releaseDate?: number // timestamp
+  duration?: number // minutes
+  sourceUrl: string
+  actors?: string[]
+  genres?: string[]
+  series?: string
+  publisher?: string
+  isR18: boolean
+  players: {
+    sourceName: string
+    sourceUrl: string
+    quality?: string
+    sortOrder: number
+  }[]
+}
+
+export interface MovieCrawlStrategy {
+  name: string
+  baseUrl: string
+  match: (url: string) => boolean
+  getMovieList: (url: string, page: Page) => Promise<{ movies: string[], next?: string }>
+  getMovieInfo: (url: string, page: Page) => Promise<MovieInfo>
 }

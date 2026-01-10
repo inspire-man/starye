@@ -133,6 +133,45 @@ export const pages = sqliteTable('page', {
 
 export type Page = InferSelectModel<typeof pages>
 
+// --- 电影业务 ---
+export const movies = sqliteTable('movie', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(), // 电影标题
+  slug: text('slug').notNull().unique(), // URL Slug
+  code: text('code').notNull().unique(), // 番号 (如: SSIS-123)
+  description: text('description'), // 简介
+  coverImage: text('cover_image'), // 封面图
+  releaseDate: integer('release_date', { mode: 'timestamp' }), // 发布日期
+  duration: integer('duration'), // 时长（分钟）
+  sourceUrl: text('source_url').unique(), // 源 URL，用于追更
+  // 元数据
+  actors: text('actors', { mode: 'json' }), // 演员列表 string[]
+  genres: text('genres', { mode: 'json' }), // 题材/标签 string[]
+  series: text('series'), // 系列名称
+  publisher: text('publisher'), // 片商/发行商
+  // R18 标记 (默认 true)
+  isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+})
+
+export type Movie = InferSelectModel<typeof movies>
+export type NewMovie = InferInsertModel<typeof movies>
+
+export const players = sqliteTable('player', {
+  id: text('id').primaryKey(),
+  movieId: text('movie_id').notNull().references(() => movies.id, { onDelete: 'cascade' }),
+  sourceName: text('source_name').notNull(), // 源名称 (如: "云播", "磁力")
+  sourceUrl: text('source_url').notNull(), // 播放链接或磁力链接
+  quality: text('quality'), // 画质 (HD, SD 等)
+  sortOrder: integer('sort_order').notNull(), // 排序
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+})
+
+export type Player = InferSelectModel<typeof players>
+export type NewPlayer = InferInsertModel<typeof players>
+
 // --- 系统任务 ---
 export const jobs = sqliteTable('job', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -188,5 +227,16 @@ export const pageRelations = relations(pages, ({ one }) => ({
   chapter: one(chapters, {
     fields: [pages.chapterId],
     references: [chapters.id],
+  }),
+}))
+
+export const movieRelations = relations(movies, ({ many }) => ({
+  players: many(players),
+}))
+
+export const playerRelations = relations(players, ({ one }) => ({
+  movie: one(movies, {
+    fields: [players.movieId],
+    references: [movies.id],
   }),
 }))

@@ -54,6 +54,29 @@ export const ChapterContentSchema = z.object({
   height: z.number().optional(),
 })
 
+export const MovieInfoSchema = z.object({
+  title: z.string(),
+  slug: z.string(),
+  code: z.string(),
+  description: z.string().optional(),
+  coverImage: z.string().optional(),
+  releaseDate: z.number().optional(), // timestamp in seconds
+  duration: z.number().optional(),
+  sourceUrl: z.string(),
+  actors: z.array(z.string()).optional(),
+  genres: z.array(z.string()).optional(),
+  series: z.string().optional(),
+  publisher: z.string().optional(),
+  isR18: z.boolean().default(true),
+  players: z.array(z.object({
+    sourceName: z.string(),
+    sourceUrl: z.string(),
+    quality: z.string().optional(),
+    sortOrder: z.number(),
+  })),
+})
+
 export type ChapterInput = z.infer<typeof ChapterSchema>
 export type MangaInfoInput = z.infer<typeof MangaInfoSchema>
 export type ChapterContentInput = z.infer<typeof ChapterContentSchema>
+export type MovieInfoInput = z.infer<typeof MovieInfoSchema>

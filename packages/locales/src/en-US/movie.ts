@@ -1,0 +1,16 @@
+export default {
+  title: 'Movie Library',
+  subtitle: 'High quality adult movies collection',
+  view_all: 'View All',
+  adult_only: 'R18',
+  release_date: 'Release Date',
+  duration: 'Duration',
+  minutes: 'min',
+  publisher: 'Publisher',
+  actors: 'Actors',
+  genres: 'Genres',
+  series: 'Series',
+  code: 'Code',
+  play: 'Watch Now',
+  player: 'Source',
+}

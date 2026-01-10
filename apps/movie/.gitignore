@@ -1,0 +1,8 @@
+.nuxt
+.output
+.nitro
+.cache
+node_modules
+*.log
+.env
+dist

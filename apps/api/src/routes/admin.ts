@@ -1,12 +1,12 @@
 /* eslint-disable no-console */
 import type { AppEnv } from '../types'
 import { zValidator } from '@hono/zod-validator'
-import { chapters, comics, pages, user } from '@starye/db/schema'
+import { chapters, comics, movies, pages, players, user } from '@starye/db/schema'
 import { count, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { serviceAuth } from '../middleware/service-auth'
-import { ChapterContentSchema, MangaInfoSchema } from '../types'
+import { ChapterContentSchema, MangaInfoSchema, MovieInfoSchema } from '../types'
 
 const admin = new Hono<AppEnv>()
 
@@ -176,10 +176,55 @@ admin.post(
   zValidator('json', z.discriminatedUnion('type', [
     z.object({ type: z.literal('manga'), data: MangaInfoSchema }),
     z.object({ type: z.literal('chapter'), data: ChapterContentSchema }),
+    z.object({ type: z.literal('movie'), data: MovieInfoSchema }),
   ])),
   async (c) => {
     const payload = c.req.valid('json')
     const db = c.get('db')
+
+    if (payload.type === 'movie') {
+      const { data } = payload
+      console.log(`[Sync] 🎬 Received movie: ${data.title} (${data.code})`)
+
+      try {
+        const { players: playerData, ...movieData } = data
+        const movieId = movieData.slug // 使用 slug 作为内部 ID 也是可以的，或者 UUID
+
+        // 1. Upsert Movie
+        await db.insert(movies).values({
+          ...movieData,
+          id: movieId,
+          releaseDate: movieData.releaseDate ? new Date(movieData.releaseDate * 1000) : null,
+          updatedAt: new Date(),
+        }).onConflictDoUpdate({
+          target: movies.slug,
+          set: {
+            ...movieData,
+            releaseDate: movieData.releaseDate ? new Date(movieData.releaseDate * 1000) : null,
+            updatedAt: new Date(),
+          },
+        })
+
+        // 2. Sync Players
+        if (playerData && playerData.length > 0) {
+          await db.delete(players).where(eq(players.movieId, movieId))
+          await db.insert(players).values(
+            playerData.map(p => ({
+              ...p,
+              id: crypto.randomUUID(),
+              movieId,
+            })),
+          )
+        }
+
+        console.log(`[Sync] ✅ Movie synced: ${data.code}`)
+        return c.json({ success: true, id: movieId })
+      }
+      catch (e: unknown) {
+        console.error('[Sync] ❌ Movie Sync Error:', e)
+        return c.json({ success: false, error: String(e) }, 500)
+      }
+    }
 
     if (payload.type === 'manga') {
       const { data } = payload
