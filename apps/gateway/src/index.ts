@@ -29,20 +29,21 @@ export default {
     // 2. Dashboard
     // Dashboard is an SPA. We might need to handle assets carefully.
     if (path.startsWith('/dashboard')) {
-      // Fix: Redirect /dashboard to /dashboard/ to handle Vite base path correctly
       if (path === '/dashboard') {
         return Response.redirect(`${url.origin}/dashboard/`, 301)
       }
-
-      // Vite dev server usually serves from root.
-      // Rewrite /dashboard/assets/x.js -> /assets/x.js if needed.
-      // For simplicity, let's assume Dashboard runs on /dashboard base locally?
-      // Actually, Vite dev server is tricky to proxy under a subpath without config.
-
-      // Let's just proxy to the port.
       return proxy(request, 'http://localhost:5173')
     }
-    // 3. Comic App (Main Site)
+
+    // 3. Movie App
+    if (path.startsWith('/movie')) {
+      if (path === '/movie') {
+        return Response.redirect(`${url.origin}/movie/`, 301)
+      }
+      return proxy(request, 'http://localhost:3001')
+    }
+
+    // 4. Comic App (Main Site)
     // Default fallthrough
     return proxy(request, 'http://127.0.0.1:3000')
   },

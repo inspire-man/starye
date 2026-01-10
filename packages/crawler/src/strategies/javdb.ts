@@ -17,7 +17,7 @@ export class JavDBStrategy implements MovieCrawlStrategy {
     const window = new Window()
     const document = window.document
     document.write(html)
-    const result = parseMovieList(document)
+    const result = parseMovieList(document as any)
     window.close()
     return result
   }
@@ -28,7 +28,7 @@ export class JavDBStrategy implements MovieCrawlStrategy {
     const window = new Window()
     const document = window.document
     document.write(html)
-    const info = parseMovieInfo(document, url)
+    const info = parseMovieInfo(document as any, url)
     window.close()
     return info
   }

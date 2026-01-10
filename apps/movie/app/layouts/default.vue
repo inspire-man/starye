@@ -24,6 +24,10 @@ const adminUrl = computed(() => config.public.adminUrl)
         </NuxtLink>
 
         <nav class="flex items-center gap-4">
+          <a href="/" class="text-sm font-bold text-muted-foreground hover:text-primary transition-colors">
+            Comic
+          </a>
+
           <button
             class="text-sm font-medium hover:text-primary transition-colors"
             @click="setLocale(locale === 'zh' ? 'en' : 'zh')"
