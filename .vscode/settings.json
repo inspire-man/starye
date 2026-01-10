@@ -57,6 +57,7 @@
   "conventionalCommits.scopes": [
     "ci",
     "dashboard",
-    "crawler"
+    "crawler",
+    "comic"
   ]
 }
