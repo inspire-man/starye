@@ -165,9 +165,11 @@
   - [ ] 完善路由系统与侧边栏布局。
   - [ ] 接入 Auth Guard。
 - [ ] **4.2 Blog**:
-  - [ ] 创建 `apps/blog` (Nuxt 4)。
-  - [ ] 配置 `baseURL: /blog/`。
-  - [ ] 实现首页与文章详情页。
+  - [x] 创建 `apps/blog` (Nuxt 4).
+  - [x] 配置 `baseURL: /blog/`.
+  - [x] 实现首页与文章详情页 (首页已完成, 详情页待办).
+  - [x] 集成 `@starye/ui` 和 Tailwind v4.
+  - [x] 集成 `i18n` (本地配置).
 - [x] **4.3 Comic**:
   - [x] 创建 `apps/comic` (Nuxt 4)。
   - [x] 配置 `baseURL: /comic/`。
