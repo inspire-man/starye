@@ -23,12 +23,18 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^20.3.0
         version: 20.3.0
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
       '@types/node':
         specifier: ^25.0.3
         version: 25.0.3
       '@vitest/coverage-v8':
         specifier: ^4.0.16
         version: 4.0.16(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      better-sqlite3:
+        specifier: ^12.6.0
+        version: 12.6.0
       eslint:
         specifier: ^9.39.2
         version: 9.39.2(jiti@2.6.1)
@@ -67,10 +73,10 @@ importers:
         version: link:../../packages/db
       better-auth:
         specifier: ^1.4.10
-        version: 1.4.10(better-sqlite3@12.5.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
+        version: 1.4.10(better-sqlite3@12.6.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
       drizzle-orm:
         specifier: 0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)
+        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)
       hono:
         specifier: ^4.11.3
         version: 4.11.3
@@ -107,7 +113,7 @@ importers:
         version: 14.1.0
       nuxt:
         specifier: ^4.2.2
-        version: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
+        version: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
       vue:
         specifier: ^3.5.26
         version: 3.5.26(typescript@5.9.3)
@@ -117,7 +123,7 @@ importers:
     devDependencies:
       '@nuxtjs/i18n':
         specifier: ^10.2.1
-        version: 10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))
+        version: 10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -135,10 +141,10 @@ importers:
         version: link:../../packages/ui
       better-auth:
         specifier: ^1.4.10
-        version: 1.4.10(better-sqlite3@12.5.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
+        version: 1.4.10(better-sqlite3@12.6.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
       nuxt:
         specifier: ^4.2.2
-        version: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
+        version: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
       vue:
         specifier: ^3.5.26
         version: 3.5.26(typescript@5.9.3)
@@ -148,7 +154,7 @@ importers:
     devDependencies:
       '@nuxtjs/i18n':
         specifier: ^10.2.1
-        version: 10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))
+        version: 10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -166,7 +172,7 @@ importers:
         version: 14.1.0(vue@3.5.26(typescript@5.9.3))
       better-auth:
         specifier: ^1.4.10
-        version: 1.4.10(better-sqlite3@12.5.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
+        version: 1.4.10(better-sqlite3@12.6.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -236,10 +242,10 @@ importers:
         version: link:../../packages/ui
       better-auth:
         specifier: ^1.4.10
-        version: 1.4.10(better-sqlite3@12.5.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
+        version: 1.4.10(better-sqlite3@12.6.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
       nuxt:
         specifier: ^4.2.2
-        version: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
+        version: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
       vue:
         specifier: ^3.5.26
         version: 3.5.26(typescript@5.9.3)
@@ -249,7 +255,7 @@ importers:
     devDependencies:
       '@nuxtjs/i18n':
         specifier: ^10.2.1
-        version: 10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))
+        version: 10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -281,7 +287,7 @@ importers:
         version: 17.2.3
       drizzle-orm:
         specifier: 0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)
+        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)
       got:
         specifier: ^14.6.6
         version: 14.6.6
@@ -333,10 +339,10 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: ^0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)
+        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)
       drizzle-zod:
         specifier: ^0.8.3
-        version: 0.8.3(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(zod@4.3.5)
+        version: 0.8.3(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(zod@4.3.5)
       zod:
         specifier: ^4.3.5
         version: 4.3.5
@@ -367,7 +373,7 @@ importers:
         version: 2.1.1
       drizzle-orm:
         specifier: 0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)
+        version: 0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)
       lucide-vue-next:
         specifier: ^0.562.0
         version: 0.562.0(vue@3.5.26(typescript@5.9.3))
@@ -3504,6 +3510,9 @@ packages:
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
+  '@types/better-sqlite3@7.6.13':
+    resolution: {integrity: sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==}
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -4096,8 +4105,8 @@ packages:
       zod:
         optional: true
 
-  better-sqlite3@12.5.0:
-    resolution: {integrity: sha512-WwCZ/5Diz7rsF29o27o0Gcc1Du+l7Zsv7SYtVPG0X3G/uUI1LqdxrQI7c9Hs2FWpqXXERjW9hp6g3/tH7DlVKg==}
+  better-sqlite3@12.6.0:
+    resolution: {integrity: sha512-FXI191x+D6UPWSze5IzZjhz+i9MK9nsuHsmTX9bXVl52k06AfZ2xql0lrgIUuzsMsJ7Vgl5kIptvDgBLIV3ZSQ==}
     engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x}
 
   bindings@1.5.0:
@@ -10109,7 +10118,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@nuxt/nitro-server@4.2.2(better-sqlite3@12.5.0)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(ioredis@5.9.0)(magicast@0.5.1)(nuxt@4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2))(typescript@5.9.3)':
+  '@nuxt/nitro-server@4.2.2(677a58af52a79ef112e2a81eb5525b02)':
     dependencies:
       '@nuxt/devalue': 2.0.2
       '@nuxt/kit': 4.2.2(magicast@0.5.1)
@@ -10126,15 +10135,15 @@ snapshots:
       impound: 1.0.0
       klona: 2.0.6
       mocked-exports: 0.1.1
-      nitropack: 2.12.9(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))
-      nuxt: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
+      nitropack: 2.12.9(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))
+      nuxt: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
       pathe: 2.0.3
       pkg-types: 2.3.0
       radix3: 1.1.2
       std-env: 3.10.0
       ufo: 1.6.1
       unctx: 2.5.0
-      unstorage: 1.17.3(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(ioredis@5.9.0)
+      unstorage: 1.17.3(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(ioredis@5.9.0)
       vue: 3.5.26(typescript@5.9.3)
       vue-bundle-renderer: 2.2.0
       vue-devtools-stub: 0.1.0
@@ -10198,7 +10207,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@nuxt/vite-builder@4.2.2(@types/node@25.0.3)(eslint@9.39.2(jiti@2.6.1))(lightningcss@1.30.2)(magicast@0.5.1)(nuxt@4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2))(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.2(typescript@5.9.3))(vue@3.5.26(typescript@5.9.3))(yaml@2.8.2)':
+  '@nuxt/vite-builder@4.2.2(@types/node@25.0.3)(eslint@9.39.2(jiti@2.6.1))(lightningcss@1.30.2)(magicast@0.5.1)(nuxt@4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2))(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.2(typescript@5.9.3))(vue@3.5.26(typescript@5.9.3))(yaml@2.8.2)':
     dependencies:
       '@nuxt/kit': 4.2.2(magicast@0.5.1)
       '@rollup/plugin-replace': 6.0.3(rollup@4.55.1)
@@ -10218,7 +10227,7 @@ snapshots:
       magic-string: 0.30.21
       mlly: 1.8.0
       mocked-exports: 0.1.1
-      nuxt: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
+      nuxt: 4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2)
       pathe: 2.0.3
       pkg-types: 2.3.0
       postcss: 8.5.6
@@ -10257,7 +10266,7 @@ snapshots:
       - vue-tsc
       - yaml
 
-  '@nuxtjs/i18n@10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))':
+  '@nuxtjs/i18n@10.2.1(@vue/compiler-dom@3.5.26)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(magicast@0.5.1)(rollup@4.55.1)(vue@3.5.26(typescript@5.9.3))':
     dependencies:
       '@intlify/core': 11.2.8
       '@intlify/h3': 0.7.4
@@ -10284,7 +10293,7 @@ snapshots:
       ufo: 1.6.1
       unplugin: 2.3.11
       unplugin-vue-router: 0.16.2(@vue/compiler-sfc@3.5.26)(vue-router@4.6.4(vue@3.5.26(typescript@5.9.3)))(vue@3.5.26(typescript@5.9.3))
-      unstorage: 1.17.3(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(ioredis@5.9.0)
+      unstorage: 1.17.3(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(ioredis@5.9.0)
       vue-i18n: 11.2.8(vue@3.5.26(typescript@5.9.3))
       vue-router: 4.6.4(vue@3.5.26(typescript@5.9.3))
     transitivePeerDependencies:
@@ -11255,6 +11264,10 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@types/better-sqlite3@7.6.13':
+    dependencies:
+      '@types/node': 25.0.3
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -11900,7 +11913,7 @@ snapshots:
 
   basic-ftp@5.1.0: {}
 
-  better-auth@1.4.10(better-sqlite3@12.5.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3)):
+  better-auth@1.4.10(better-sqlite3@12.6.0)(drizzle-kit@0.31.8)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(vitest@4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3)):
     dependencies:
       '@better-auth/core': 1.4.10(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.7(zod@4.3.5))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0)
       '@better-auth/telemetry': 1.4.10(@better-auth/core@1.4.10(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.7(zod@4.3.5))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))
@@ -11915,9 +11928,9 @@ snapshots:
       nanostores: 1.1.0
       zod: 4.3.5
     optionalDependencies:
-      better-sqlite3: 12.5.0
+      better-sqlite3: 12.6.0
       drizzle-kit: 0.31.8
-      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)
+      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)
       vitest: 4.0.16(@types/node@25.0.3)(happy-dom@20.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
       vue: 3.5.26(typescript@5.9.3)
 
@@ -11930,11 +11943,10 @@ snapshots:
     optionalDependencies:
       zod: 4.3.5
 
-  better-sqlite3@12.5.0:
+  better-sqlite3@12.6.0:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3
-    optional: true
 
   bindings@1.5.0:
     dependencies:
@@ -11947,7 +11959,6 @@ snapshots:
       buffer: 5.6.0
       inherits: 2.0.4
       readable-stream: 3.6.2
-    optional: true
 
   blake3-wasm@2.1.5: {}
 
@@ -12091,8 +12102,7 @@ snapshots:
     dependencies:
       readdirp: 5.0.0
 
-  chownr@1.1.4:
-    optional: true
+  chownr@1.1.4: {}
 
   chownr@3.0.0: {}
 
@@ -12362,10 +12372,10 @@ snapshots:
 
   data-uri-to-buffer@6.0.2: {}
 
-  db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)):
+  db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)):
     optionalDependencies:
-      better-sqlite3: 12.5.0
-      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)
+      better-sqlite3: 12.6.0
+      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)
 
   debug@4.4.3:
     dependencies:
@@ -12382,10 +12392,8 @@ snapshots:
   decompress-response@6.0.0:
     dependencies:
       mimic-response: 3.1.0
-    optional: true
 
-  deep-extend@0.6.0:
-    optional: true
+  deep-extend@0.6.0: {}
 
   deep-is@0.1.4: {}
 
@@ -12483,15 +12491,16 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9):
+  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260103.0
-      better-sqlite3: 12.5.0
+      '@types/better-sqlite3': 7.6.13
+      better-sqlite3: 12.6.0
       kysely: 0.28.9
 
-  drizzle-zod@0.8.3(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(zod@4.3.5):
+  drizzle-zod@0.8.3(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(zod@4.3.5):
     dependencies:
-      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)
+      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)
       zod: 4.3.5
 
   dunder-proto@1.0.1:
@@ -13045,8 +13054,7 @@ snapshots:
 
   exit-hook@2.2.1: {}
 
-  expand-template@2.0.3:
-    optional: true
+  expand-template@2.0.3: {}
 
   expect-type@1.3.0: {}
 
@@ -13162,8 +13170,7 @@ snapshots:
 
   fresh@2.0.0: {}
 
-  fs-constants@1.0.0:
-    optional: true
+  fs-constants@1.0.0: {}
 
   fs-extra@10.1.0:
     dependencies:
@@ -13263,8 +13270,7 @@ snapshots:
     dependencies:
       git-up: 8.1.1
 
-  github-from-package@0.0.0:
-    optional: true
+  github-from-package@0.0.0: {}
 
   github-slugger@2.0.0: {}
 
@@ -13488,8 +13494,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  ini@1.3.8:
-    optional: true
+  ini@1.3.8: {}
 
   ini@4.1.1: {}
 
@@ -14284,8 +14289,7 @@ snapshots:
 
   mimic-function@5.0.1: {}
 
-  mimic-response@3.1.0:
-    optional: true
+  mimic-response@3.1.0: {}
 
   mimic-response@4.0.0: {}
 
@@ -14351,8 +14355,7 @@ snapshots:
       for-in: 0.1.8
       is-extendable: 0.1.1
 
-  mkdirp-classic@0.5.3:
-    optional: true
+  mkdirp-classic@0.5.3: {}
 
   mlly@1.8.0:
     dependencies:
@@ -14381,8 +14384,7 @@ snapshots:
 
   nanotar@0.2.0: {}
 
-  napi-build-utils@2.0.0:
-    optional: true
+  napi-build-utils@2.0.0: {}
 
   natural-compare@1.4.0: {}
 
@@ -14390,7 +14392,7 @@ snapshots:
 
   netmask@2.0.2: {}
 
-  nitropack@2.12.9(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)):
+  nitropack@2.12.9(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.1
       '@rollup/plugin-alias': 5.1.1(rollup@4.55.1)
@@ -14411,7 +14413,7 @@ snapshots:
       cookie-es: 2.0.0
       croner: 9.1.0
       crossws: 0.3.5
-      db0: 0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))
+      db0: 0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))
       defu: 6.1.4
       destr: 2.0.5
       dot-prop: 10.1.0
@@ -14457,7 +14459,7 @@ snapshots:
       unenv: 2.0.0-rc.24
       unimport: 5.6.0
       unplugin-utils: 0.3.1
-      unstorage: 1.17.3(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(ioredis@5.9.0)
+      unstorage: 1.17.3(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(ioredis@5.9.0)
       untyped: 2.0.0
       unwasm: 0.3.11
       youch: 4.1.0-beta.13
@@ -14495,7 +14497,6 @@ snapshots:
   node-abi@3.85.0:
     dependencies:
       semver: 7.7.3
-    optional: true
 
   node-addon-api@7.1.1: {}
 
@@ -14536,16 +14537,16 @@ snapshots:
 
   nuxt-define@1.0.0: {}
 
-  nuxt@4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2):
+  nuxt@4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2):
     dependencies:
       '@dxup/nuxt': 0.2.2(magicast@0.5.1)
       '@nuxt/cli': 3.32.0(cac@6.7.14)(magicast@0.5.1)
       '@nuxt/devtools': 3.1.1(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.26(typescript@5.9.3))
       '@nuxt/kit': 4.2.2(magicast@0.5.1)
-      '@nuxt/nitro-server': 4.2.2(better-sqlite3@12.5.0)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(ioredis@5.9.0)(magicast@0.5.1)(nuxt@4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2))(typescript@5.9.3)
+      '@nuxt/nitro-server': 4.2.2(677a58af52a79ef112e2a81eb5525b02)
       '@nuxt/schema': 4.2.2
       '@nuxt/telemetry': 2.6.6(magicast@0.5.1)
-      '@nuxt/vite-builder': 4.2.2(@types/node@25.0.3)(eslint@9.39.2(jiti@2.6.1))(lightningcss@1.30.2)(magicast@0.5.1)(nuxt@4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.5.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2))(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.2(typescript@5.9.3))(vue@3.5.26(typescript@5.9.3))(yaml@2.8.2)
+      '@nuxt/vite-builder': 4.2.2(@types/node@25.0.3)(eslint@9.39.2(jiti@2.6.1))(lightningcss@1.30.2)(magicast@0.5.1)(nuxt@4.2.2(@parcel/watcher@2.5.1)(@types/node@25.0.3)(@vue/compiler-sfc@3.5.26)(better-sqlite3@12.6.0)(cac@6.7.14)(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))(eslint@9.39.2(jiti@2.6.1))(ioredis@5.9.0)(lightningcss@1.30.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.2(typescript@5.9.3))(yaml@2.8.2))(optionator@0.9.4)(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.2(typescript@5.9.3))(vue@3.5.26(typescript@5.9.3))(yaml@2.8.2)
       '@unhead/vue': 2.1.1(vue@3.5.26(typescript@5.9.3))
       '@vue/shared': 3.5.26
       c12: 3.3.3(magicast@0.5.1)
@@ -15155,7 +15156,6 @@ snapshots:
       simple-get: 4.0.1
       tar-fs: 2.1.4
       tunnel-agent: 0.6.0
-    optional: true
 
   prelude-ls@1.2.1: {}
 
@@ -15331,7 +15331,6 @@ snapshots:
       ini: 1.3.8
       minimist: 1.2.8
       strip-json-comments: 2.0.1
-    optional: true
 
   readable-stream@2.3.8:
     dependencies:
@@ -15616,15 +15615,13 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  simple-concat@1.0.1:
-    optional: true
+  simple-concat@1.0.1: {}
 
   simple-get@4.0.1:
     dependencies:
       decompress-response: 6.0.0
       once: 1.4.0
       simple-concat: 1.0.1
-    optional: true
 
   simple-git@3.30.0:
     dependencies:
@@ -15772,8 +15769,7 @@ snapshots:
 
   strip-indent@4.1.1: {}
 
-  strip-json-comments@2.0.1:
-    optional: true
+  strip-json-comments@2.0.1: {}
 
   strip-json-comments@3.1.1: {}
 
@@ -15837,7 +15833,6 @@ snapshots:
       mkdirp-classic: 0.5.3
       pump: 3.0.3
       tar-stream: 2.2.0
-    optional: true
 
   tar-fs@3.1.1:
     dependencies:
@@ -15858,7 +15853,6 @@ snapshots:
       fs-constants: 1.0.0
       inherits: 2.0.4
       readable-stream: 3.6.2
-    optional: true
 
   tar-stream@3.1.7:
     dependencies:
@@ -15949,7 +15943,6 @@ snapshots:
   tunnel-agent@0.6.0:
     dependencies:
       safe-buffer: 5.2.1
-    optional: true
 
   turbo-darwin-64@2.7.3:
     optional: true
@@ -16140,7 +16133,7 @@ snapshots:
       picomatch: 4.0.3
       webpack-virtual-modules: 0.6.2
 
-  unstorage@1.17.3(db0@0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9)))(ioredis@5.9.0):
+  unstorage@1.17.3(db0@0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9)))(ioredis@5.9.0):
     dependencies:
       anymatch: 3.1.3
       chokidar: 5.0.0
@@ -16151,7 +16144,7 @@ snapshots:
       ofetch: 1.5.1
       ufo: 1.6.1
     optionalDependencies:
-      db0: 0.3.4(better-sqlite3@12.5.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(better-sqlite3@12.5.0)(kysely@0.28.9))
+      db0: 0.3.4(better-sqlite3@12.6.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260103.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.0)(kysely@0.28.9))
       ioredis: 5.9.0
 
   untun@0.1.3:

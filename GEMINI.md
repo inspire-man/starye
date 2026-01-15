@@ -162,8 +162,9 @@
   - [x] 创建 `apps/dashboard` (Vite + Vue 3)。
   - [x] 成功集成 `@starye/ui` 与 Tailwind v4。
   - [x] 实现基础 API 通信与漫画列表展示。
-  - [ ] 完善路由系统与侧边栏布局。
-  - [ ] 接入 Auth Guard。
+  - [x] 完善路由系统与侧边栏布局。
+  - [x] 接入 Auth Guard。
+  - [x] 博客文章管理 (CRUD)。
 - [x] **4.2 Blog**:
   - [x] 创建 `apps/blog` (Nuxt 4).
   - [x] 配置 `baseURL: /blog/`.
@@ -185,9 +186,10 @@
 - [x] **5.2 Gateway**:
   - [x] 创建 `apps/gateway`。
   - [x] 实现路由分发逻辑 (Blog -> 3002, Movie -> 3001, Default -> 3000)。
-  - [ ] 编写本地开发网关脚本 (`dev:gateway`)。
-- [ ] **5.3 E2E Test**:
-  - [ ] 验证全链路流程 (爬虫 -> 库 -> 前端展示)。
+  - [x] 编写本地开发网关脚本 (`dev:gateway`).
+- [x] **5.3 E2E Test**:
+  - [x] 验证全链路流程 (爬虫 -> 库 -> 前端展示)。
+  - [x] 集成 GitHub Actions CI 流程。
 
 ### Phase 6: 多语言 (Internationalization) [In Progress]
 
@@ -202,20 +204,20 @@
   - [ ] 安装 `vue-i18n`。
   - [ ] 替换硬编码文本。
 
-### Phase 7: 电影模块开发 (Movie Module) [Pending]
+### Phase 7: 电影模块开发 (Movie Module) [Completed]
 
-- [ ] **7.1 Database Layer**:
-  - [ ] 在 `packages/db/src/schema.ts` 中添加 `movies` 和 `players` 表结构及关系。
-  - [ ] 生成并应用数据库迁移。
-- [ ] **7.2 Crawler Strategy**:
-  - [ ] 分析 `javdb` 网站结构，确定数据源 (API 或 HTML)。
-  - [ ] 在 `packages/crawler` 中实现 `javdb` 的爬虫策略和解析器。
-  - [ ] 编写单元测试。
-- [ ] **7.3 API Routes**:
-  - [ ] 在 `apps/api` 中添加 `/movies` 相关路由。
-  - [ ] 复用 R18 鉴权中间件。
-- [ ] **7.4 Frontend App**:
-  - [ ] 创建 `apps/movie` (Nuxt 4)。
-  - [ ] 实现电影列表、详情和播放页面。
-- [ ] **7.5 Automation**:
-  - [ ] 创建 GitHub Actions 工作流 `daily-movie-crawl.yml` 用于每日数据同步。
+- [x] **7.1 Database Layer**:
+  - [x] 在 `packages/db/src/schema.ts` 中添加 `movies` 和 `players` 表结构及关系。
+  - [x] 生成并应用数据库迁移。
+- [x] **7.2 Crawler Strategy**:
+  - [x] 分析 `javdb` 网站结构，确定数据源 (API 或 HTML)。
+  - [x] 在 `packages/crawler` 中实现 `javdb` 的爬虫策略和解析器。
+  - [x] 新增 `javbus` 策略。
+- [x] **7.3 API Routes**:
+  - [x] 在 `apps/api` 中添加 `/movies` 相关路由。
+  - [x] 复用 R18 鉴权中间件。
+- [x] **7.4 Frontend App**:
+  - [x] 创建 `apps/movie` (Nuxt 4)。
+  - [x] 实现电影列表、详情和播放页面。
+- [x] **7.5 Automation**:
+  - [x] 创建 GitHub Actions 工作流 `daily-movie-crawl.yml` 用于每日数据同步。
