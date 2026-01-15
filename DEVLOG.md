@@ -4,6 +4,31 @@
 
 ---
 
+## 2026-01-15: 博客模块实现与网关集成
+
+### 🎯 目标
+搭建 `apps/blog` 基础架构，实现文章列表展示与详情页 Markdown 渲染，并通过 Gateway 统一路由入口，确保多应用并行开发的端口隔离。
+
+### 🛠️ 技术实现 (Implementation)
+
+1.  **网关路由 (Gateway Routing)**:
+    *   在 `apps/gateway` 中配置 `/blog` 路径转发至 `http://localhost:3002`。
+    *   调整 `apps/blog` 开发端口为 `3002`，避免与 Movie App (3001) 冲突。
+2.  **API 扩展**:
+    *   新增 `apps/api/src/routes/posts.ts`，提供 RESTful 接口：
+        *   `GET /api/posts`: 分页获取已发布文章。
+        *   `GET /api/posts/:slug`: 获取文章详情及元数据。
+3.  **博客前端 (Blog App)**:
+    *   使用 `Nuxt 4` 构建，集成 `markdown-it` 实现 Markdown -> HTML 渲染。
+    *   **列表页**: 响应式网格布局，展示封面、摘要、作者及发布时间。
+    *   **详情页**: 采用 `prose` (Tailwind Typography) 优化排版，集成 SEO Meta 信息。
+
+### 📝 经验总结 (Learnings)
+*   **Hono 路由拆分**: 随着业务增加，将路由按模块拆分到 `routes/*.ts` 并通过 `app.route()` 挂载，能有效保持 `index.ts` 简洁。
+*   **端口管理**: 在 Monorepo 多应用并行开发时，提前规划好端口分配表（Gateway: 3000, Movie: 3001, Blog: 3002, Dashboard: 5173, API: 8787）至关重要。
+
+---
+
 ## 2026-01-09: 完善 92hm 漫画源爬虫策略
 
 ### 🎯 目标

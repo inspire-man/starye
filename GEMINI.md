@@ -164,26 +164,27 @@
   - [x] 实现基础 API 通信与漫画列表展示。
   - [ ] 完善路由系统与侧边栏布局。
   - [ ] 接入 Auth Guard。
-- [ ] **4.2 Blog**:
+- [x] **4.2 Blog**:
   - [x] 创建 `apps/blog` (Nuxt 4).
   - [x] 配置 `baseURL: /blog/`.
-  - [x] 实现首页与文章详情页 (首页已完成, 详情页待办).
+  - [x] 实现首页与文章详情页.
   - [x] 集成 `@starye/ui` 和 Tailwind v4.
   - [x] 集成 `i18n` (本地配置).
+  - [x] 集成网关路由与 API.
 - [x] **4.3 Comic**:
   - [x] 创建 `apps/comic` (Nuxt 4)。
   - [x] 配置 `baseURL: /comic/`。
   - [x] 实现瀑布流阅读器。
   - [x] 修复跨域鉴权问题。
 
-### Phase 5: 路由与集成 (Integration) [Pending]
+### Phase 5: 路由与集成 (Integration) [In Progress]
 
 - [x] **5.1 Testing Infrastructure**:
   - [x] 根目录集成 `vitest` 与 `turbo` 管道。
   - [x] 创建 `@starye/config` 共享测试配置。
-- [ ] **5.2 Gateway**:
-  - [ ] 创建 `apps/gateway`。
-  - [ ] 实现路由分发逻辑。
+- [x] **5.2 Gateway**:
+  - [x] 创建 `apps/gateway`。
+  - [x] 实现路由分发逻辑 (Blog -> 3002, Movie -> 3001, Default -> 3000)。
   - [ ] 编写本地开发网关脚本 (`dev:gateway`)。
 - [ ] **5.3 E2E Test**:
   - [ ] 验证全链路流程 (爬虫 -> 库 -> 前端展示)。

@@ -1,64 +1,60 @@
 <template>
-  <div class="container mx-auto px-4 py-8">
-    <div class="max-w-4xl mx-auto">
-      <header class="mb-12 text-center">
-        <h1 class="text-4xl font-bold tracking-tight mb-4">{{ $t('welcome') }}</h1>
-        <p class="text-muted-foreground text-lg">Exploring technology, design, and life.</p>
+  <div class="container mx-auto px-4 py-12 md:py-16">
+    <div class="max-w-6xl mx-auto">
+      <header class="mb-16 text-center max-w-2xl mx-auto">
+        <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
+          {{ $t('welcome') }}
+        </h1>
+        <p class="text-muted-foreground text-lg md:text-xl leading-relaxed">
+          Exploring the frontiers of technology, design, and digital life.
+        </p>
       </header>
 
-      <div v-if="pending" class="space-y-8">
-        <div v-for="i in 3" :key="i" class="animate-pulse">
-          <div class="h-64 bg-muted rounded-xl mb-4" />
-          <div class="h-8 bg-muted rounded w-3/4 mb-2" />
-          <div class="h-4 bg-muted rounded w-1/2" />
+      <div v-if="pending" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div v-for="i in 6" :key="i" class="animate-pulse rounded-xl border bg-card p-0 overflow-hidden h-full">
+          <div class="h-48 bg-muted w-full" />
+          <div class="p-5 space-y-3">
+            <div class="h-6 bg-muted rounded w-3/4" />
+            <div class="h-4 bg-muted rounded w-full" />
+            <div class="h-4 bg-muted rounded w-2/3" />
+            <div class="pt-4 flex gap-2">
+              <div class="h-4 bg-muted rounded w-20" />
+            </div>
+          </div>
         </div>
       </div>
 
-      <div v-else-if="error" class="text-center py-12 text-destructive">
-        <p>Failed to load posts.</p>
-        <button class="mt-4 btn btn-outline" @click="refresh">Try Again</button>
+      <div v-else-if="error" class="text-center py-24 bg-muted/30 rounded-3xl border border-dashed">
+        <div class="mb-4 text-destructive text-4xl">⚠️</div>
+        <p class="text-lg font-medium mb-2">Unable to load posts</p>
+        <p class="text-muted-foreground text-sm mb-6">{{ error.message }}</p>
+        <button class="px-6 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-sm" @click="refresh">
+          Try Again
+        </button>
       </div>
 
-      <div v-else class="grid gap-8 md:grid-cols-2 lg:grid-cols-2">
-        <article
+      <div v-else class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <PostCard
           v-for="post in posts"
           :key="post.slug"
-          class="group relative flex flex-col space-y-3"
-        >
-          <NuxtLink :to="`/${post.slug}`" class="block overflow-hidden rounded-xl border bg-card text-card-foreground shadow transition-colors hover:bg-muted/50">
-            <div v-if="post.coverImage" class="aspect-video w-full overflow-hidden">
-              <img
-                :src="post.coverImage"
-                :alt="post.title"
-                class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                loading="lazy"
-              >
-            </div>
-            <div v-else class="aspect-video w-full bg-muted flex items-center justify-center text-muted-foreground">
-              <span class="text-4xl opacity-20">#</span>
-            </div>
+          :title="post.title"
+          :href="`/${post.slug}`"
+          :cover="post.coverImage"
+          :excerpt="post.excerpt"
+          :author="post.author?.name"
+          :date="formatDate(post.createdAt)"
+        />
+      </div>
 
-            <div class="p-6">
-              <h2 class="text-2xl font-bold tracking-tight mb-2 group-hover:underline decoration-primary decoration-2 underline-offset-4">
-                {{ post.title }}
-              </h2>
-              <p v-if="post.excerpt" class="text-muted-foreground line-clamp-3">
-                {{ post.excerpt }}
-              </p>
-              <div class="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <span v-if="post.author?.name">{{ post.author.name }}</span>
-                <span>•</span>
-                <time :datetime="post.createdAt">{{ formatDate(post.createdAt) }}</time>
-              </div>
-            </div>
-          </NuxtLink>
-        </article>
+      <div v-if="!pending && !error && posts.length === 0" class="text-center py-24 text-muted-foreground">
+        <p>No posts found.</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { PostCard } from '@starye/ui'
 import type { ApiResponse, Post } from '~/types'
 
 const config = useRuntimeConfig()
