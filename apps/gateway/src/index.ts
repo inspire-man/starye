@@ -35,7 +35,15 @@ export default {
       return proxy(request, 'http://localhost:5173')
     }
 
-    // 3. Movie App
+    // 3. Blog App
+    if (path.startsWith('/blog')) {
+      if (path === '/blog') {
+        return Response.redirect(`${url.origin}/blog/`, 301)
+      }
+      return proxy(request, 'http://localhost:3002')
+    }
+
+    // 4. Movie App
     if (path.startsWith('/movie')) {
       if (path === '/movie') {
         return Response.redirect(`${url.origin}/movie/`, 301)
@@ -43,7 +51,7 @@ export default {
       return proxy(request, 'http://localhost:3001')
     }
 
-    // 4. Comic App (Main Site)
+    // 5. Comic App (Main Site)
     // Default fallthrough
     return proxy(request, 'http://127.0.0.1:3000')
   },

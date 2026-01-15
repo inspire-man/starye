@@ -9,6 +9,7 @@ import authRoutes from './routes/auth'
 import comicsRoutes from './routes/comics'
 import healthRoutes from './routes/health'
 import moviesRoutes from './routes/movies'
+import postsRoutes from './routes/posts'
 import uploadRoutes from './routes/upload'
 
 const app = new Hono<AppEnv>()
@@ -26,6 +27,7 @@ app.get('/', c => c.text('Starye API'))
 app.route('/api/health', healthRoutes)
 app.route('/api/comics', comicsRoutes)
 app.route('/api/movies', moviesRoutes)
+app.route('/api/posts', postsRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/upload', uploadRoutes)
