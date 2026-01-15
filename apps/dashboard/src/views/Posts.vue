@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { authClient } from '@/lib/auth-client'
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 interface Post {
@@ -16,6 +17,7 @@ interface Post {
 }
 
 const router = useRouter()
+const { t } = useI18n()
 const posts = ref<Post[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -58,7 +60,7 @@ async function createPost() {
 }
 
 async function deletePost(id: string) {
-  if (!confirm('Are you sure you want to delete this post?'))
+  if (!confirm(t('dashboard.delete_confirm')))
     return
 
   try {
@@ -84,18 +86,18 @@ onMounted(() => {
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-bold tracking-tight">Blog Posts</h1>
-        <p class="text-muted-foreground">Manage your blog content.</p>
+        <h1 class="text-3xl font-bold tracking-tight">{{ t('dashboard.blog_posts') }}</h1>
+        <p class="text-muted-foreground">{{ t('dashboard.manage_blog') }}</p>
       </div>
       <button 
         @click="createPost"
         class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
       >
-        New Post
+        {{ t('dashboard.new_post') }}
       </button>
     </div>
 
-    <div v-if="loading" class="py-10 text-center">Loading...</div>
+    <div v-if="loading" class="py-10 text-center">{{ t('dashboard.saving') }}</div>
     <div v-else-if="error" class="text-destructive">{{ error }}</div>
 
     <div v-else class="rounded-md border bg-card">
@@ -103,11 +105,11 @@ onMounted(() => {
         <table class="w-full caption-bottom text-sm">
           <thead class="[&_tr]:border-b">
             <tr class="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Title</th>
-              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Slug</th>
-              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
-              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Date</th>
-              <th class="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Actions</th>
+              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">{{ t('dashboard.title') }}</th>
+              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">{{ t('dashboard.slug') }}</th>
+              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">{{ t('dashboard.status') }}</th>
+              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">{{ t('dashboard.date') }}</th>
+              <th class="h-12 px-4 text-right align-middle font-medium text-muted-foreground">{{ t('dashboard.actions') }}</th>
             </tr>
           </thead>
           <tbody class="[&_tr:last-child]:border-0">
@@ -119,14 +121,14 @@ onMounted(() => {
                   class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   :class="post.published ? 'border-transparent bg-primary text-primary-foreground hover:bg-primary/80' : 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80'"
                 >
-                  {{ post.published ? 'Published' : 'Draft' }}
+                  {{ post.published ? t('dashboard.published') : t('dashboard.draft') }}
                 </span>
               </td>
               <td class="p-4 align-middle text-muted-foreground">{{ formatDate(post.createdAt) }}</td>
               <td class="p-4 align-middle text-right">
                 <div class="flex justify-end gap-2">
-                  <button @click="editPost(post.id)" class="text-sm font-medium hover:underline">Edit</button>
-                  <button @click="deletePost(post.id)" class="text-sm font-medium text-destructive hover:underline">Delete</button>
+                  <button @click="editPost(post.id)" class="text-sm font-medium hover:underline">{{ t('dashboard.edit') }}</button>
+                  <button @click="deletePost(post.id)" class="text-sm font-medium text-destructive hover:underline">{{ t('dashboard.delete') }}</button>
                 </div>
               </td>
             </tr>

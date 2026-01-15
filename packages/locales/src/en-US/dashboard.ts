@@ -64,4 +64,23 @@ export default {
   service_token: 'Service Token',
   save_config: 'Save Config',
   saved: 'Saved',
+
+  // Posts
+  posts: 'Posts',
+  blog_posts: 'Blog Posts',
+  manage_blog: 'Manage your blog content',
+  new_post: 'New Post',
+  title: 'Title',
+  slug: 'Slug',
+  published: 'Published',
+  draft: 'Draft',
+  date: 'Date',
+  delete: 'Delete',
+  delete_confirm: 'Are you sure you want to delete this post?',
+  edit_post: 'Edit Post',
+  create_post: 'Create Post',
+  excerpt: 'Excerpt',
+  content_markdown: 'Content (Markdown)',
+  back: 'Back',
+  save: 'Save',
 }

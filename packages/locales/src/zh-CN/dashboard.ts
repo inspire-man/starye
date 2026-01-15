@@ -64,4 +64,23 @@ export default {
   service_token: 'Service Token',
   save_config: '保存配置',
   saved: '已保存',
+
+  // Posts
+  posts: '文章',
+  blog_posts: '博客文章',
+  manage_blog: '管理博客内容',
+  new_post: '新建文章',
+  title: '标题',
+  slug: 'Slug',
+  published: '已发布',
+  draft: '草稿',
+  date: '日期',
+  delete: '删除',
+  delete_confirm: '确定要删除这篇文章吗？',
+  edit_post: '编辑文章',
+  create_post: '创建文章',
+  excerpt: '摘要',
+  content_markdown: '内容 (Markdown)',
+  back: '返回',
+  save: '保存',
 }
