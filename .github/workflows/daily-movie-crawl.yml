@@ -7,14 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       target_url:
-        description: 'Specific URL to crawl (Default: https://javdb457.com/)'
+        description: 'Specific URL to crawl (Optional)'
         required: false
         type: string
 
 jobs:
-  crawl:
+  crawl-movie:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
 
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
       - name: Build Packages
         run: pnpm build --filter=@starye/crawler...
 
-      - name: Run Movie Crawler
+      - name: Run Crawler
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -50,32 +50,20 @@ jobs:
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
           API_URL: ${{ secrets.API_URL }}
+          # Puppeteer Cache
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
         run: |
           # 动态查找 Chrome 路径
           export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)
           echo "Found Chrome at: $PUPPETEER_EXECUTABLE_PATH"
 
-          # 确定目标 URL
+          # 如果有输入 URL 则使用，否则默认爬取 JavDB 首页 (最新更新)
           TARGET="${{ inputs.target_url }}"
           if [ -z "$TARGET" ]; then
-            TARGET="https://javdb457.com/"
+            TARGET="https://javdb457.com/censored" # 有码影片更新
           fi
 
-          echo "Starting movie crawl for: $TARGET"
+          echo "Starting crawl for: $TARGET"
 
           # 启动爬虫
           pnpm --filter @starye/crawler start "$TARGET"
-
-      - name: Notify Discord on Failure
-        if: failure()
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            curl -H "Content-Type: application/json" \
-            -d '{"content": "❌ **Movie Crawl Failed!** Check GitHub Actions logs."}' \
-            "$DISCORD_WEBHOOK_URL"
-          else
-            echo "No Discord Webhook URL configured."
-          fi
