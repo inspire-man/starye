@@ -1,24 +1,50 @@
-import type { AppEnv } from '../types'
+import type { AppEnv, SessionUser } from '../types'
+import { zValidator } from '@hono/zod-validator'
 import { posts as postsTable } from '@starye/db/schema'
 import { and, count, desc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import { z } from 'zod'
+import { serviceAuth } from '../middleware/service-auth'
 
 const posts = new Hono<AppEnv>()
 
-// 1. List Posts (Public)
+// Schema for creating/updating posts
+const PostSchema = z.object({
+  title: z.string().min(1),
+  slug: z.string().min(1).regex(/^[a-z0-9-]+$/, 'Slug must be kebab-case'),
+  content: z.string().optional(),
+  excerpt: z.string().optional(),
+  coverImage: z.string().nullable().optional(),
+  published: z.boolean().default(false),
+})
+
+// 1. List Posts (Public + Admin Drafts)
 posts.get('/', async (c) => {
   const db = c.get('db')
   const page = Number(c.req.query('page')) || 1
   const limit = Number(c.req.query('limit')) || 10
   const offset = (page - 1) * limit
-
-  // Only show published posts for public API
-  // Add ?draft=true for admin (would need auth check, keeping simple for now)
   const isDraft = c.req.query('draft') === 'true'
-  const conditions = []
 
-  if (!isDraft) {
+  // Determine if user is allowed to see drafts
+  let canSeeDrafts = false
+  if (isDraft) {
+    try {
+      const auth = c.get('auth')
+      const session = await auth.api.getSession({ headers: c.req.raw.headers })
+      const user = session?.user as unknown as SessionUser | undefined
+      if (user?.role === 'admin') {
+        canSeeDrafts = true
+      }
+    }
+    catch {
+      // Ignore auth errors, just treat as public
+    }
+  }
+
+  const conditions = []
+  if (!canSeeDrafts) {
     conditions.push(eq(postsTable.published, true))
   }
 
@@ -62,7 +88,23 @@ posts.get('/', async (c) => {
   })
 })
 
-// 2. Post Details
+// 2. Get Post by ID (Admin)
+posts.get('/admin/:id', serviceAuth(['admin']), async (c) => {
+  const db = c.get('db')
+  const id = c.req.param('id')
+
+  const post = await db.query.posts.findFirst({
+    where: (posts, { eq }) => eq(posts.id, id),
+  })
+
+  if (!post) {
+    throw new HTTPException(404, { message: 'Post not found' })
+  }
+
+  return c.json({ data: post })
+})
+
+// 3. Post Details (Public + Admin Preview)
 posts.get('/:slug', async (c) => {
   const db = c.get('db')
   const slug = c.req.param('slug')
@@ -83,17 +125,104 @@ posts.get('/:slug', async (c) => {
     throw new HTTPException(404, { message: 'Post not found' })
   }
 
-  // If not published, check auth (skipping for now, just hiding)
-  // Ideally, we'd check if the user is the author or admin
   if (!post.published) {
-    // For now, simple logic: if not published, 404 unless we implement admin auth here
-    // Or maybe we just return it but frontend handles it?
-    // Let's stick to strict: 404 if not published.
-    // throw new HTTPException(404, { message: 'Post not found' })
-    // Actually, let's allow it for now for previewing, assuming draft query param or similar mechanism later.
+    // Check auth for unpublished posts
+    const auth = c.get('auth')
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const user = session?.user as unknown as SessionUser | undefined
+    if (user?.role !== 'admin') {
+      throw new HTTPException(404, { message: 'Post not found' })
+    }
   }
 
   return c.json({ data: post })
 })
+
+// 4. Create Post (Admin)
+posts.post(
+  '/',
+  serviceAuth(['admin']),
+  zValidator('json', PostSchema),
+  async (c) => {
+    const data = c.req.valid('json')
+    const db = c.get('db')
+    const auth = c.get('auth')
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const user = session?.user
+
+    if (!user) {
+      throw new HTTPException(401, { message: 'Unauthorized' })
+    }
+
+    const id = crypto.randomUUID()
+
+    try {
+      await db.insert(postsTable).values({
+        id,
+        ...data,
+        authorId: user.id,
+        updatedAt: new Date(),
+      })
+
+      return c.json({ success: true, id, slug: data.slug })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      if (message.includes('UNIQUE constraint failed')) {
+        throw new HTTPException(409, { message: 'Slug already exists' })
+      }
+      throw new HTTPException(500, { message })
+    }
+  },
+)
+
+// 5. Update Post (Admin)
+posts.put(
+  '/:id',
+  serviceAuth(['admin']),
+  zValidator('json', PostSchema.partial()),
+  async (c) => {
+    const id = c.req.param('id')
+    const data = c.req.valid('json')
+    const db = c.get('db')
+
+    try {
+      const result = await db.update(postsTable)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(postsTable.id, id))
+        .returning({ id: postsTable.id })
+
+      if (result.length === 0) {
+        throw new HTTPException(404, { message: 'Post not found' })
+      }
+
+      return c.json({ success: true })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      throw new HTTPException(500, { message })
+    }
+  },
+)
+
+// 6. Delete Post (Admin)
+posts.delete(
+  '/:id',
+  serviceAuth(['admin']),
+  async (c) => {
+    const id = c.req.param('id')
+    const db = c.get('db')
+
+    const result = await db.delete(postsTable)
+      .where(eq(postsTable.id, id))
+      .returning({ id: postsTable.id })
+
+    if (result.length === 0) {
+      throw new HTTPException(404, { message: 'Post not found' })
+    }
+
+    return c.json({ success: true })
+  },
+)
 
 export default posts

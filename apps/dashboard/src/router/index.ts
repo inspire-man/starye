@@ -4,6 +4,8 @@ import { authClient } from '@/lib/auth-client'
 import Comics from '@/views/Comics.vue'
 import Home from '@/views/Home.vue'
 import Login from '@/views/Login.vue'
+import PostEditor from '@/views/PostEditor.vue'
+import Posts from '@/views/Posts.vue'
 import Settings from '@/views/Settings.vue'
 import Users from '@/views/Users.vue'
 
@@ -19,6 +21,8 @@ const routes = [
     children: [
       { path: '', component: Home },
       { path: 'comics', component: Comics },
+      { path: 'posts', component: Posts },
+      { path: 'posts/:id', component: PostEditor },
       { path: 'users', component: Users },
       { path: 'settings', component: Settings },
     ],
