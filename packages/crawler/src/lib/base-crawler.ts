@@ -45,8 +45,44 @@ export abstract class BaseCrawler {
     this.browser = await puppeteer.launch({
       executablePath,
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      ignoreDefaultArgs: ['--enable-automation'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--window-size=1920,1080',
+        '--disable-blink-features=AutomationControlled',
+      ],
     })
+  }
+
+  async createPage() {
+    if (!this.browser)
+      throw new Error('Browser not initialized')
+    const page = await this.browser.newPage()
+    await page.setViewport({ width: 1920, height: 1080 })
+
+    // Manual Stealth Injections
+    await page.evaluateOnNewDocument(() => {
+      // 1. Overwrite the `plugins` property to use a custom getter.
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      })
+      // 2. Pass the Webdriver Test.
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => false,
+      })
+      // 3. Pass the Chrome Test.
+      // @ts-expect-error Mocking window.chrome for stealth
+      window.chrome = {
+        // @ts-expect-error Mocking runtime for stealth
+        runtime: {},
+        loadTimes() {},
+        csi() {},
+        app: {},
+      }
+    })
+
+    return page
   }
 
   async closeBrowser() {

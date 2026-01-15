@@ -2,7 +2,8 @@
 import type { CrawlStrategy, MovieCrawlStrategy } from './lib/strategy'
 import process from 'node:process'
 import { BaseCrawler } from './lib/base-crawler'
-import { JavDBStrategy } from './strategies/javdb'
+// import { JavDBStrategy } from './strategies/javdb'
+import { JavBusStrategy } from './strategies/javbus'
 import { Site92Hm } from './strategies/site-92hm'
 import { SiteSe8 } from './strategies/site-se8'
 import 'dotenv/config'
@@ -13,7 +14,8 @@ class Runner extends BaseCrawler {
   private strategies: Strategy[] = [
     new Site92Hm(),
     new SiteSe8(),
-    new JavDBStrategy(),
+    // new JavDBStrategy(),
+    new JavBusStrategy(),
   ]
 
   private queue: string[] = []
@@ -117,7 +119,7 @@ class Runner extends BaseCrawler {
       return
     }
 
-    const page = await this.browser!.newPage()
+    const page = await this.createPage()
     page.on('console', msg => console.log('PAGE LOG:', msg.text()))
 
     try {
@@ -135,7 +137,14 @@ class Runner extends BaseCrawler {
   }
 
   private async processMovie(url: string, page: any, strategy: MovieCrawlStrategy) {
-    const isDetail = url.includes('/v/')
+    let isDetail = url.includes('/v/') // JavDB
+
+    if (strategy.name === 'javbus') {
+      const path = new URL(url).pathname
+      // JavBus detail URLs are like /SSIS-001. A simple regex can check for this pattern.
+      // It should not match list pages like /genre/sub, /page/2, etc.
+      isDetail = /^\/[A-Z]+-\d+$/i.test(path)
+    }
 
     if (isDetail) {
       console.log('🎬 Detected Movie Detail Page. Syncing info...')
