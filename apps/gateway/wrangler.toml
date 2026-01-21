@@ -19,7 +19,9 @@ COMIC_ORIGIN = "https://comic-pages.pages.dev"
 [[routes]]
 pattern = "starye.org"
 custom_domain = true
+override_existing_dns_record = true
 
 [[routes]]
 pattern = "www.starye.org"
 custom_domain = true
+override_existing_dns_record = true
