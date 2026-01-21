@@ -13,3 +13,13 @@ DASHBOARD_ORIGIN = "https://dashboard.starye.org"
 BLOG_ORIGIN = "https://blog-pages.pages.dev"
 MOVIE_ORIGIN = "https://movie-pages.pages.dev"
 COMIC_ORIGIN = "https://comic-pages.pages.dev"
+
+# Custom Domain Binding
+# This worker handles all traffic for the main domain
+[[routes]]
+pattern = "starye.org"
+custom_domain = true
+
+[[routes]]
+pattern = "www.starye.org"
+custom_domain = true
