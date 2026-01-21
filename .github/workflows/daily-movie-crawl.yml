@@ -1,9 +1,9 @@
 name: Daily Movie Crawl
 
 on:
-  schedule:
-    # 每天凌晨 3 点运行 (UTC+8 对应 UTC 19:00)
-    - cron: '0 19 * * *'
+  # schedule:
+  #   # 每天凌晨 3 点运行 (UTC+8 对应 UTC 19:00)
+  #   - cron: '0 19 * * *'
   workflow_dispatch:
     inputs:
       target_url:
