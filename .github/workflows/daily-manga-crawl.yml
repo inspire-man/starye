@@ -1,9 +1,9 @@
 name: Daily Manga Crawl
 
 on:
-  # schedule:
-  #   # 每天凌晨 2 点运行 (UTC+8 对应 UTC 18:00)
-  #   - cron: '0 18 * * *'
+  schedule:
+    # 每天凌晨 2 点运行 (UTC+8 对应 UTC 18:00)
+    - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       target_url:
