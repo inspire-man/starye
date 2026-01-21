@@ -1,3 +1,35 @@
+<script setup lang="ts">
+import type { ApiResponse, Post } from '~/types'
+import { PostCard } from '@starye/ui'
+
+const config = useRuntimeConfig()
+
+useHead({
+  title: 'Blog - Starye',
+  meta: [
+    { name: 'description', content: 'Personal blog of Starye' },
+  ],
+})
+
+const { data, pending, error, refresh } = await useFetch<ApiResponse<Post[]>>('/api/posts', {
+  baseURL: config.public.apiUrl,
+  query: {
+    limit: 10,
+    published: true,
+  },
+})
+
+const posts = computed(() => data.value?.data || [])
+
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+</script>
+
 <template>
   <div class="container mx-auto px-4 py-12 md:py-16">
     <div class="max-w-6xl mx-auto">
@@ -25,12 +57,18 @@
       </div>
 
       <div v-else-if="error" class="text-center py-24 bg-muted/30 rounded-3xl border border-dashed">
-        <div class="mb-4 text-destructive text-4xl">⚠️</div>
-        <p class="text-lg font-medium mb-2">Unable to load posts</p>
-        <p class="text-muted-foreground text-sm mb-6">{{ error.message }}</p>
-        <button class="px-6 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-sm" @click="refresh">
+        <div class="mb-4 text-destructive text-4xl">
+          ⚠️
+        </div>
+        <p class="text-lg font-medium mb-2">
+          Unable to load posts
+        </p>
+        <p class="text-muted-foreground text-sm mb-6">
+          {{ error.message }}
+        </p>
+        <Button class="px-6 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-sm" @click="refresh">
           Try Again
-        </button>
+        </Button>
       </div>
 
       <div v-else class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -52,36 +90,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { PostCard } from '@starye/ui'
-import type { ApiResponse, Post } from '~/types'
-
-const config = useRuntimeConfig()
-const { t } = useI18n()
-
-useHead({
-  title: 'Blog - Starye',
-  meta: [
-    { name: 'description', content: 'Personal blog of Starye' },
-  ],
-})
-
-const { data, pending, error, refresh } = await useFetch<ApiResponse<Post[]>>('/api/posts', {
-  baseURL: config.public.apiUrl,
-  query: {
-    limit: 10,
-    published: true,
-  },
-})
-
-const posts = computed(() => data.value?.data || [])
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-}
-</script>

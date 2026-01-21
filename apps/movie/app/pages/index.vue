@@ -9,7 +9,8 @@ const { data: response, pending, error } = useApi<Movie[]>('/api/movies', {
 const featuredMovies = computed(() => response.value?.data || [])
 
 function formatDate(dateStr: any) {
-  if (!dateStr) return ''
+  if (!dateStr)
+    return ''
   return new Date(dateStr).toLocaleDateString()
 }
 </script>
@@ -59,14 +60,14 @@ function formatDate(dateStr: any) {
                 {{ $t('movie.adult_only') }}
               </span>
             </div>
-            
+
             <div class="absolute bottom-2 left-2">
               <span class="text-[10px] font-bold bg-black/60 text-white px-1.5 py-0.5 rounded backdrop-blur-sm uppercase tracking-wider">
                 {{ movie.code }}
               </span>
             </div>
           </div>
-          
+
           <div class="px-1">
             <h3 class="font-bold leading-snug line-clamp-2 group-hover:text-primary transition-colors text-sm md:text-base">
               {{ movie.title }}

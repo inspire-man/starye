@@ -161,6 +161,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@starye/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@starye/locales':
         specifier: workspace:*
         version: link:../../packages/locales

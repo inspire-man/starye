@@ -3,8 +3,8 @@
  * 章节阅读器
  */
 import type { ChapterWithPages } from '../../types/content'
-import { useApi } from '../../lib/api'
 import ChapterNav from '../../components/ChapterNav.vue'
+import { useApi } from '../../lib/api'
 
 const route = useRoute()
 const { slug, chapterSlug } = route.params
@@ -77,7 +77,7 @@ const isForbidden = computed(() => error.value?.statusCode === 403)
       <div class="h-32" />
     </main>
 
-    <ChapterNav 
+    <ChapterNav
       v-if="chapter"
       :slug="slug as string"
       :current-slug="chapterSlug as string"

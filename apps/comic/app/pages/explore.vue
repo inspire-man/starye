@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Comic } from '@starye/db/schema'
-import { reactive, computed, watch } from 'vue'
 import { ComicCard } from '@starye/ui'
+import { computed, reactive, watch } from 'vue'
 import { useApi } from '../lib/api'
 
 definePageMeta({

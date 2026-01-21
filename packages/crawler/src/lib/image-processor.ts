@@ -61,7 +61,8 @@ export class ImageProcessor {
   }
 
   /**
-   * Process an image URL: download, resize/convert, and upload to R2   * @param imageUrl Source URL
+   * Process an image URL: download, resize/convert, and upload to R2
+   * @param imageUrl Source URL
    * @param keyPrefix Prefix for R2 keys (e.g. "comics/one-piece/ch1")
    * @param filename Base filename without extension (e.g. "001")
    */

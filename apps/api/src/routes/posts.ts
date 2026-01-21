@@ -54,6 +54,7 @@ posts.get('/', async (c) => {
     db.query.posts.findMany({
       where: whereClause,
       columns: {
+        id: true,
         title: true,
         slug: true,
         excerpt: true,

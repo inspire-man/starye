@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const props = defineProps<{
+defineProps<{
   slug: string
   currentSlug: string
   chapters: { title: string, slug: string }[]
@@ -15,15 +15,14 @@ const isOpen = ref(false)
 <template>
   <div class="relative z-50">
     <!-- Backdrop -->
-    <div 
-      v-if="isOpen" 
+    <div
+      v-if="isOpen"
       class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300"
       @click="isOpen = false"
     />
 
     <!-- Navigation Container -->
     <div class="fixed bottom-0 inset-x-0 z-50 flex flex-col justify-end pointer-events-none">
-      
       <!-- Drawer / Dropdown -->
       <div
         v-if="isOpen"
@@ -91,6 +90,7 @@ const isOpen = ref(false)
     </div>
   </div>
 </template>
+
 <style scoped>
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 20px);
