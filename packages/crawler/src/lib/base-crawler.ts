@@ -74,7 +74,6 @@ export abstract class BaseCrawler {
       // 3. Pass the Chrome Test.
       // @ts-expect-error Mocking window.chrome for stealth
       window.chrome = {
-        // @ts-expect-error Mocking runtime for stealth
         runtime: {},
         loadTimes() {},
         csi() {},

@@ -108,7 +108,7 @@ admin.patch(
   serviceAuth(['admin', 'comic_admin']),
   zValidator('json', z.object({
     isR18: z.boolean().optional(),
-    status: z.string().optional(),
+    status: z.enum(['serializing', 'completed']).optional(),
   })),
   async (c) => {
     const id = String(c.req.param('id')) // 确保 ID 为字符串
