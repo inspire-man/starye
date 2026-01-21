@@ -4,3 +4,12 @@ compatibility_date = "2024-04-01"
 
 [dev]
 port = 8080 # 本地统一入口端口
+
+[vars]
+# 生产环境各模块的原始访问地址 (可以是 Cloudflare Pages 的默认域名或子域名)
+# 部署后请在 Cloudflare Dashboard 修改这些值为真实生产地址
+API_ORIGIN = "https://api.starye.org"
+DASHBOARD_ORIGIN = "https://dashboard.starye.org"
+BLOG_ORIGIN = "https://blog-pages.pages.dev"
+MOVIE_ORIGIN = "https://movie-pages.pages.dev"
+COMIC_ORIGIN = "https://comic-pages.pages.dev"

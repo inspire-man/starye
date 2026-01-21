@@ -47,7 +47,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       // eslint-disable-next-line node/prefer-global/process
-      apiUrl: process.env.VITE_API_URL || 'http://localhost:8787',
+      apiUrl: process.env.VITE_API_URL || '/api',
       // eslint-disable-next-line node/prefer-global/process
       adminUrl: process.env.VITE_ADMIN_URL || '/dashboard/',
     },

@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
 
   app: {
-    baseURL: '/blog/',
+    // baseURL: '/', // Hosted at root
   },
 
   modules: [
@@ -47,7 +47,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       // eslint-disable-next-line node/prefer-global/process
-      apiUrl: process.env.VITE_API_URL || 'http://localhost:8080',
+      apiUrl: process.env.VITE_API_URL || '/api',
     },
   },
 
