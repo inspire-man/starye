@@ -14,7 +14,7 @@ describe('92hm Parser Enhanced', () => {
               <p class="subtitle">作者：老王</p>
               <p class="subtitle">状态：连载中</p>
               <p class="subtitle">地区：日本</p>
-              <p class="subtitle">题材：热血 冒险</p>
+              <p class="subtitle">题材：<a href="/tag/热血">热血</a> <a href="/tag/冒险">冒险</a></p>
               <p class="content">简介：这是一个非常精彩的故事。</p>
           </div>
       </div>
@@ -45,10 +45,10 @@ describe('92hm Parser Enhanced', () => {
     const html = `
       <div class="info">
           <h1>Completed Manga</h1>
-          <p>Author: Jane Doe</p>
-          <p>Status: Completed</p>
-          <p>Region: CN</p>
-          <p>Tags: Romance,Comedy</p>
+          <p class="subtitle">Author: Jane Doe</p>
+          <p class="subtitle">Status: Completed</p>
+          <p class="subtitle">Region: CN</p>
+          <p class="subtitle">Tags: <a href="/tag/Romance">Romance</a> <a href="/tag/Comedy">Comedy</a></p>
       </div>
     `
     const window = new Window()

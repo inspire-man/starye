@@ -1,9 +1,8 @@
 import type { Page } from 'puppeteer-core'
 import type { ChapterContent, CrawlStrategy, MangaInfo } from '../lib/strategy'
-import * as cheerio from 'cheerio'
 import got from 'got'
 import { Window } from 'happy-dom'
-import { parseMangaInfo } from './site-92hm-parser'
+import { parseChapterContent, parseMangaInfo, parseMangaList } from './site-92hm-parser'
 
 export class Site92Hm implements CrawlStrategy {
   name = '92hm'
@@ -17,54 +16,18 @@ export class Site92Hm implements CrawlStrategy {
     await page.goto(url, { waitUntil: 'domcontentloaded' })
     const html = await page.content()
 
-    // Parse locally
     const window = new Window()
     const document = window.document
     document.write(html)
 
-    // 检测错误页面 (如 ThinkPHP 错误页)
-    if (document.title.includes('系统发生错误') || document.body.textContent?.includes('PDOException')) {
-      console.warn(`⚠️ Target site returned error page for: ${url}`)
-      window.close()
-      return { mangas: [], next: undefined }
-    }
+    const result = parseMangaList(document as unknown as Document)
 
-    // Reuse logic (could also be in parser if complex)
-    // 增强选择器：同时涵盖列表页常用的 .mh-item 和搜索结果页可能用到的其他类名
-    // 使用更通用的策略：查找所有 href 包含 /book/ 的链接
-    const mangas = Array.from(document.querySelectorAll('a'))
-      .map(a => a.getAttribute('href'))
-      .filter((href): href is string => !!href && (href.includes('/book/') || href.match(/\/book\/\d+/) !== null))
-      // 过滤掉非详情页链接并去重
-      .filter(u => !u.includes('booklist') && !u.includes('history'))
-      .filter((v, i, a) => a.indexOf(v) === i)
-
-    // 增强的下一页提取逻辑
-    let next: string | undefined
-    const allLinks = Array.from(document.querySelectorAll('a'))
-
-    // 1. 优先尝试文本匹配
-    const nextLinkByText = allLinks.find((a) => {
-      const text = a.textContent?.trim() || ''
-      return text.includes('下一页') || text.includes('Next') || text === '>' || text === '»'
-    })
-
-    if (nextLinkByText) {
-      next = nextLinkByText.getAttribute('href') || undefined
-    }
-    // 2. 兜底尝试常见的分页选择器
-    else {
-      const nextEl = document.querySelector('a#nextPage, a.next, .pagination a:last-child, .page a:last-child')
-      next = nextEl?.getAttribute('href') || undefined
-    }
-
-    // 确保 next 是相对路径或绝对路径，并清理
-    if (next && next.startsWith('javascript')) {
-      next = undefined
+    if (result.mangas.length === 0 && !result.next) {
+      console.warn(`⚠️ No mangas found for: ${url}`)
     }
 
     window.close()
-    return { mangas, next }
+    return result
   }
 
   async getMangaInfo(url: string, page: Page): Promise<MangaInfo> {
@@ -82,13 +45,16 @@ export class Site92Hm implements CrawlStrategy {
   }
 
   async getChapterContent(url: string, page: Page): Promise<ChapterContent> {
-    const parseResult = (data: any) => {
+    const enrichResult = (data: ReturnType<typeof parseChapterContent>) => {
       // Extract slugs from URL or data
-      const parts = url.replace('https://www.92hm.life', '').split('/').filter(Boolean)
+      // TODO: Handle baseUrl dynamically if possible, though strict replace is fine for now
+      const pathOnly = url.replace(/^https?:\/\/[^/]+/, '')
+      const parts = pathOnly.split('/').filter(Boolean)
 
       let comicSlug = data.extractedComicSlug
       let chapterSlug = ''
 
+      // URL Structure: /chapter/{id} OR /read/{comicId}/{chapterId}
       if (parts[0] === 'chapter') {
         chapterSlug = parts[1]
       }
@@ -102,10 +68,26 @@ export class Site92Hm implements CrawlStrategy {
         console.warn(`⚠️ Could not determine comicSlug for ${url}. Sync might fail.`)
       }
 
-      return { ...data, comicSlug, chapterSlug }
+      return {
+        title: data.title,
+        images: data.images,
+        prev: data.prev,
+        next: data.next,
+        comicSlug: comicSlug || '',
+        chapterSlug,
+      }
     }
 
-    // 1. Fast Path: Try Cheerio first
+    const parseFromHtml = (html: string) => {
+      const window = new Window()
+      const document = window.document
+      document.write(html)
+      const data = parseChapterContent(document as unknown as Document)
+      window.close()
+      return data
+    }
+
+    // 1. Fast Path: Try got first (avoid browser overhead)
     try {
       const response = await got(url, {
         headers: {
@@ -116,24 +98,10 @@ export class Site92Hm implements CrawlStrategy {
       })
 
       if (response.statusCode === 200) {
-        const $ = cheerio.load(response.body)
-        const title = $('h1.title, h1, .title').first().text().trim()
-        const prev = $('.fanye a:first-child[href], a.prev, .prev a').attr('href')
-        const next = $('.fanye a:last-child[href], a.next, .next a').attr('href')
-
-        const images = $('.comicpage img, .comiclist img, .comic-content img, #content img, .rd-article-wr img, .reader-main img').toArray().map(el => $(el).attr('data-original') || $(el).attr('data-src') || $(el).attr('src') || '').filter(src => src && !src.includes('/ad/') && !src.includes('logo') && !src.includes('wxqrcode.jpg')).filter((v, i, a) => a.indexOf(v) === i)
-
-        let extractedComicSlug = ''
-        const comicHref = $('a.comic-name').attr('href') || $('.breadcrumb a[href*="/book/"]').attr('href') || $('.path a[href*="/book/"]').attr('href')
-        if (comicHref) {
-          const match = comicHref.match(/\/book\/(\d+)/)
-          if (match)
-            extractedComicSlug = match[1]
-        }
-
-        if (images.length > 0) {
-          console.warn(`⚡ [FastPath] Parsed ${images.length} images via Cheerio.`)
-          return parseResult({ title, images, prev, next, extractedComicSlug })
+        const data = parseFromHtml(response.body)
+        if (data.images.length > 0) {
+          console.warn(`⚡ [FastPath] Parsed ${data.images.length} images via HappyDOM.`)
+          return enrichResult(data)
         }
       }
     }
@@ -143,35 +111,9 @@ export class Site92Hm implements CrawlStrategy {
 
     // 2. Slow Path: Puppeteer
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    const html = await page.content()
+    const data = parseFromHtml(html)
 
-    // Execute parsing directly in browser context
-    const data = await page.evaluate(() => {
-      const title = document.querySelector('h1.title, h1, .title')?.textContent?.trim() || ''
-
-      const rawImages = Array.from(document.querySelectorAll('.comicpage img, .comiclist img, .comic-content img, #content img, .rd-article-wr img, .reader-main img'))
-
-      const mappedImages = rawImages.map(img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src') || '')
-
-      const images = mappedImages
-        .filter(src => src && !src.includes('/ad/') && !src.includes('logo') && !src.includes('wxqrcode.jpg'))
-        .filter((v, i, a) => a.indexOf(v) === i)
-
-      const prev = document.querySelector('.fanye a:first-child[href], a.prev, .prev a')?.getAttribute('href') || undefined
-      const next = document.querySelector('.fanye a:last-child[href], a.next, .next a')?.getAttribute('href') || undefined
-
-      // Extract comic ID from page content (breadcrumbs or hidden fields)
-      let extractedComicSlug = ''
-      const comicLink = document.querySelector('a.comic-name, .breadcrumb a[href*="/book/"], .path a[href*="/book/"]')
-      if (comicLink) {
-        const href = comicLink.getAttribute('href')
-        const match = href?.match(/\/book\/(\d+)/)
-        if (match)
-          extractedComicSlug = match[1]
-      }
-
-      return { title, images, prev, next, extractedComicSlug }
-    })
-
-    return parseResult(data)
+    return enrichResult(data)
   }
 }

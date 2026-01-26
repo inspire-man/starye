@@ -24,7 +24,7 @@ describe('site92Hm Parser', () => {
     expect(info.author).toBe('Test Author') // Logic now strips "Author:" prefix
     expect(info.cover).toBe('https://example.com/cover.jpg')
     expect(info.description).toContain('This is a test description')
-    expect(info.status).toBe('ongoing')
+    expect(info.status).toBe('serializing')
 
     expect(info.chapters).toHaveLength(2)
     expect(info.chapters[0].title).toBe('Chapter 2')
