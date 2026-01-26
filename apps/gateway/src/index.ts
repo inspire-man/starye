@@ -59,9 +59,12 @@ async function proxy(request: Request, targetOrigin: string): Promise<Response> 
   const cleanOrigin = targetOrigin.endsWith('/') ? targetOrigin.slice(0, -1) : targetOrigin
   const targetUrl = new URL(url.pathname + url.search, cleanOrigin)
 
+  const headers = new Headers(request.headers)
+  headers.delete('host') // Let fetch set the correct host header for the target
+
   const newRequest = new Request(targetUrl, {
     method: request.method,
-    headers: new Headers(request.headers),
+    headers,
     body: request.body,
     redirect: 'manual',
   })
@@ -74,8 +77,7 @@ async function proxy(request: Request, targetOrigin: string): Promise<Response> 
   try {
     const response = await fetch(newRequest)
     // Create a new response to allow modifying headers (like CORS or Cookies)
-    const newResponse = new Response(response.body, response)
-    return newResponse
+    return new Response(response.body, response)
   }
   catch (e) {
     return new Response(`Gateway Error: Failed to connect to ${targetOrigin}\n${e}`, { status: 502 })

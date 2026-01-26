@@ -10,9 +10,9 @@ port = 8080 # 本地统一入口端口
 # 部署后请在 Cloudflare Dashboard 修改这些值为真实生产地址
 API_ORIGIN = "https://api.starye.org"
 DASHBOARD_ORIGIN = "https://dashboard.starye.org"
-BLOG_ORIGIN = "https://blog-pages.pages.dev"
-MOVIE_ORIGIN = "https://movie-pages.pages.dev"
-COMIC_ORIGIN = "https://comic-pages.pages.dev"
+BLOG_ORIGIN = "https://blog.starye.org"
+MOVIE_ORIGIN = "https://movie.starye.org"
+COMIC_ORIGIN = "https://comic.starye.org"
 
 # Custom Domain Binding
 # This worker handles all traffic for the main domain

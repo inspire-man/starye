@@ -14,7 +14,7 @@ on:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 360
 
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
