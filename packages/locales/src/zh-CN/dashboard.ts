@@ -54,7 +54,6 @@ export default {
   user_management: '用户管理',
   user: '用户',
   role: '角色',
-  status: '状态',
   joined: '加入时间',
   actions: '操作',
   edit: '编辑',

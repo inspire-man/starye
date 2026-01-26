@@ -54,7 +54,6 @@ export default {
   user_management: 'User Management',
   user: 'User',
   role: 'Role',
-  status: 'Status',
   joined: 'Joined',
   actions: 'Actions',
   edit: 'Edit',
