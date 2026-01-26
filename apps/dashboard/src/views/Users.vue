@@ -141,7 +141,7 @@ onMounted(loadUsers)
                   'bg-neutral-50 text-neutral-600 border-neutral-200': user.role === 'user',
                 }"
               >
-                {{ user.role.replace('_', ' ') }}
+                {{ user.role === 'admin' ? 'Admin' : (user.role === 'comic_admin' ? 'Comic Admin' : t('dashboard.user')) }}
               </span>
             </td>
             <td class="px-6 py-4">

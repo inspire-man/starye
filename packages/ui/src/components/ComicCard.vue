@@ -5,14 +5,20 @@ interface Props {
   cover?: string | null
   author?: string | null
   isR18?: boolean
+  region?: string | null
+  status?: string | null
   // i18n 文本传入
   labelAdultOnly?: string
   labelUnknownAuthor?: string
+  labelSerializing?: string
+  labelCompleted?: string
 }
 
 withDefaults(defineProps<Props>(), {
   labelAdultOnly: 'Adult Only',
   labelUnknownAuthor: 'Unknown Author',
+  labelSerializing: 'Serializing',
+  labelCompleted: 'Completed',
 })
 </script>
 
@@ -36,6 +42,16 @@ withDefaults(defineProps<Props>(), {
       <!-- R18 Badge (Overlay on cover) -->
       <div v-if="isR18 && cover" class="absolute top-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur text-white text-[9px] font-bold rounded border border-white/20 uppercase">
         R18
+      </div>
+
+      <!-- Region Badge (Overlay on cover) -->
+      <div v-if="region" class="absolute bottom-2 left-2 px-1.5 py-0.5 bg-white/80 dark:bg-black/60 backdrop-blur text-foreground text-[9px] font-bold rounded border border-white/20">
+        {{ region }}
+      </div>
+
+      <!-- Status Badge -->
+      <div v-if="status" class="absolute top-2 left-2 px-1.5 py-0.5 backdrop-blur text-white text-[9px] font-bold rounded border border-white/20" :class="status === 'serializing' ? 'bg-primary/80' : 'bg-green-600/80'">
+        {{ status === 'serializing' ? labelSerializing : labelCompleted }}
       </div>
     </div>
 

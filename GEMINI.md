@@ -147,7 +147,7 @@
   - [x] **Refactor**: 将 DOM 解析逻辑抽离为纯函数 (`*-parser.ts`)，引入 `happy-dom` 实现本地解析。
   - [x] **Testing**: 搭建 Vitest 测试环境，编写策略单元测试 (离线 Fixture 模式)。
   - [ ] **Enhancement**: 扩展 `Comic` 数据表结构 (作者, 状态, 简介等)。
-  - [ ] **Refactor**: 将 `92hm` 源策略重构为列表页、详情页、章节页独立解析器。
+  - [x] **Refactor**: 将 `92hm` 源策略重构为列表页、详情页、章节页独立解析器。
 - [x] **3.2 GitHub Actions**:
   - [x] 编写 `.github/workflows/daily-crawl.yml`。
   - [x] 新增 `.github/workflows/deploy-migrations.yml` (DB Sync)。

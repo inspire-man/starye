@@ -35,7 +35,9 @@ export interface Comic {
   author: string | null
   description: string | null
   isR18?: boolean
-  status?: string
+  status?: 'serializing' | 'completed'
+  region?: string | null
+  genres?: string[] | null
   createdAt?: string
   updatedAt?: string
 }

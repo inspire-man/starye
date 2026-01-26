@@ -107,8 +107,13 @@ admin.patch(
   '/comics/:id',
   serviceAuth(['admin', 'comic_admin']),
   zValidator('json', z.object({
-    isR18: z.boolean().optional(),
+    title: z.string().optional(),
+    author: z.string().optional(),
+    description: z.string().optional(),
     status: z.enum(['serializing', 'completed']).optional(),
+    isR18: z.boolean().optional(),
+    region: z.string().optional(),
+    genres: z.array(z.string()).optional(),
   })),
   async (c) => {
     const id = String(c.req.param('id')) // 确保 ID 为字符串

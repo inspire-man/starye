@@ -132,10 +132,14 @@ function clearFilters() {
           :title="comic.title"
           :cover="comic.coverImage"
           :author="comic.author"
+          :region="comic.region"
+          :status="comic.status"
           :href="`/${comic.slug}`"
           :is-r18="comic.isR18"
           :label-adult-only="$t('comic.adult_only')"
           :label-unknown-author="$t('comic.unknown_author')"
+          :label-serializing="$t('comic.serializing')"
+          :label-completed="$t('comic.completed')"
         />
       </div>
 

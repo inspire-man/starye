@@ -80,8 +80,13 @@ async function handleUpdate() {
     await api.admin.updateComic(editingComic.value.id, {
       title: editingComic.value.title,
       author: editingComic.value.author,
+      description: editingComic.value.description,
       isR18: editingComic.value.isR18,
-      status: editingComic.value.status,
+      status: editingComic.value.status as any,
+      region: editingComic.value.region,
+      genres: Array.isArray(editingComic.value.genres)
+        ? editingComic.value.genres
+        : (typeof editingComic.value.genres === 'string' ? (editingComic.value.genres as string).split(',').map(s => s.trim()).filter(Boolean) : []),
     })
 
     // Close modal and refresh list
@@ -234,6 +239,42 @@ async function toggleR18Shortcut(comic: Comic) {
           <div class="space-y-2">
             <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.author') }}</label>
             <input v-model="editingComic.author" class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none">
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-2">
+              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.region') }}</label>
+              <input v-model="editingComic.region" class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm">
+            </div>
+            <div class="space-y-2">
+              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.status') }}</label>
+              <select v-model="editingComic.status" class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm appearance-none">
+                <option value="serializing">
+                  {{ t('dashboard.serializing') }}
+                </option>
+                <option value="completed">
+                  {{ t('dashboard.completed') }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.genres') }} ({{ t('dashboard.separate_by_comma') || 'Split by comma' }})</label>
+            <input
+              :value="Array.isArray(editingComic.genres) ? editingComic.genres.join(', ') : editingComic.genres"
+              class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm"
+              @input="e => editingComic!.genres = (e.target as HTMLInputElement).value.split(',').map(s => s.trim())"
+            >
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.description') }}</label>
+            <textarea
+              v-model="editingComic.description"
+              rows="3"
+              class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm resize-none"
+            />
           </div>
 
           <div class="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-2xl border border-neutral-100 dark:border-neutral-800">

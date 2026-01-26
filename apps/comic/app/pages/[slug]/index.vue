@@ -94,7 +94,15 @@ const sortedChapters = computed(() => {
           {{ comic.title }}
         </h1>
 
-        <div class="flex flex-wrap gap-3 mt-6">
+        <div class="flex items-center gap-2 mt-2 text-sm font-bold text-muted-foreground">
+          <span v-if="comic.region" class="px-2 py-0.5 bg-muted rounded">{{ comic.region }}</span>
+          <span v-if="comic.region && comic.status" class="opacity-20">•</span>
+          <span v-if="comic.status" :class="comic.status === 'serializing' ? 'text-primary' : 'text-green-600'">
+            {{ $t(`comic.${comic.status}`) }}
+          </span>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mt-6">
           <div class="px-3 py-1 bg-primary/5 border border-primary/10 text-primary text-xs font-bold rounded-lg flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
             {{ comic.author || $t('comic.unknown_author') }}
@@ -102,6 +110,18 @@ const sortedChapters = computed(() => {
           <div v-if="comic.isR18" class="px-3 py-1 bg-destructive text-destructive-foreground text-[10px] font-black uppercase tracking-widest rounded-lg">
             {{ $t('comic.restricted_tag') }}
           </div>
+
+          <!-- Genres Tags -->
+          <template v-if="comic.genres && Array.isArray(comic.genres)">
+            <NuxtLink
+              v-for="genre in (comic.genres as string[])"
+              :key="genre"
+              :to="`/explore?genre=${genre}`"
+              class="px-3 py-1 bg-muted hover:bg-primary hover:text-primary-foreground text-muted-foreground text-[10px] font-bold rounded-lg transition-colors"
+            >
+              {{ genre }}
+            </NuxtLink>
+          </template>
         </div>
 
         <div class="mt-10">
