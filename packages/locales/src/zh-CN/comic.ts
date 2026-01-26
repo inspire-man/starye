@@ -31,6 +31,7 @@ export default {
   all_status: '全部状态',
   serializing: '连载中',
   completed: '已完结',
+  search_placeholder: '搜索漫画...',
   regions: {
     韩国: '韩国',
     日本: '日本',

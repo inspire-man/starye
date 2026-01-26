@@ -146,7 +146,7 @@
   - [x] 编写 `ImageProcessor` 类 (生成 3 级缩略图, 批量并发处理)。
   - [x] **Refactor**: 将 DOM 解析逻辑抽离为纯函数 (`*-parser.ts`)，引入 `happy-dom` 实现本地解析。
   - [x] **Testing**: 搭建 Vitest 测试环境，编写策略单元测试 (离线 Fixture 模式)。
-  - [ ] **Enhancement**: 扩展 `Comic` 数据表结构 (作者, 状态, 简介等)。
+  - [x] **Enhancement**: 扩展 `Comic` 数据表结构 (作者, 状态, 简介等)。
   - [x] **Refactor**: 将 `92hm` 源策略重构为列表页、详情页、章节页独立解析器。
 - [x] **3.2 GitHub Actions**:
   - [x] 编写 `.github/workflows/daily-crawl.yml`。
@@ -200,9 +200,9 @@
   - [x] 安装 `@nuxtjs/i18n`。
   - [x] 替换首页文本。
   - [x] 替换详情页与阅读器文本。
-- [ ] **6.3 Dashboard Integration**:
-  - [ ] 安装 `vue-i18n`。
-  - [ ] 替换硬编码文本。
+- [x] **6.3 Dashboard Integration**:
+  - [x] 安装 `vue-i18n`。
+  - [x] 替换硬编码文本。
 
 ### Phase 7: 电影模块开发 (Movie Module) [Completed]
 

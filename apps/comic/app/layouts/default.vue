@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { signOut, useSession } from '~/lib/auth-client'
+import SearchDialog from '~/components/SearchDialog.vue'
 
 const { locale, setLocale } = useI18n()
 const session = useSession()
 const router = useRouter()
+const isSearchOpen = ref(false)
 
 async function handleLogout() {
   await signOut()
@@ -26,6 +28,10 @@ const adminUrl = computed(() => config.public.adminUrl)
         </NuxtLink>
 
         <nav class="flex items-center gap-4">
+          <button class="p-2 text-muted-foreground hover:text-foreground transition-colors" @click="isSearchOpen = true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+          </button>
+
           <a href="/movie/" class="text-sm font-bold text-muted-foreground hover:text-primary transition-colors">
             Movie
           </a>
@@ -78,5 +84,7 @@ const adminUrl = computed(() => config.public.adminUrl)
     <footer class="border-t py-8 text-center text-xs text-muted-foreground">
       &copy; 2026 Starye Project. All rights reserved.
     </footer>
+
+    <SearchDialog :open="isSearchOpen" @close="isSearchOpen = false" />
   </div>
 </template>

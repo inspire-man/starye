@@ -31,6 +31,7 @@ export default {
   all_status: 'All Status',
   serializing: 'Ongoing',
   completed: 'Completed',
+  search_placeholder: 'Search comics...',
   regions: {
     韩国: 'Korea',
     日本: 'Japan',

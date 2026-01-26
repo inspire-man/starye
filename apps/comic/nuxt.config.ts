@@ -50,6 +50,8 @@ export default defineNuxtConfig({
       apiUrl: process.env.VITE_API_URL || '/api',
       // eslint-disable-next-line node/prefer-global/process
       adminUrl: process.env.VITE_ADMIN_URL || '/dashboard/',
+      // eslint-disable-next-line node/prefer-global/process
+      r2Url: process.env.VITE_R2_URL || 'https://media.starye.org',
     },
   },
 

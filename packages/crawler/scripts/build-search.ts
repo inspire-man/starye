@@ -10,6 +10,9 @@ interface Comic {
   author?: string | null
   description?: string | null
   coverImage?: string | null
+  region?: string | null
+  status?: string | null
+  genres?: string[] | null
 }
 
 async function main() {
@@ -62,6 +65,9 @@ async function main() {
       author: c.author || '',
       description: c.description || '',
       cover: c.coverImage || '',
+      region: c.region || '',
+      status: c.status || '',
+      genres: c.genres || [],
     }))
 
     const db = await indexer.build(documents)

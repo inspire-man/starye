@@ -7,6 +7,9 @@ export const searchSchema = {
   author: 'string',
   description: 'string',
   cover: 'string',
+  region: 'string',
+  status: 'string',
+  genres: 'string[]',
 } as const
 
 export type SearchSchema = typeof searchSchema
@@ -17,6 +20,9 @@ export interface ComicDoc extends TypedDocument<Orama<SearchSchema>> {
   author: string
   description: string
   cover: string
+  region: string
+  status: string
+  genres: string[]
 }
 
 export class SearchIndexer {
