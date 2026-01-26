@@ -195,6 +195,22 @@ class Runner extends BaseCrawler {
     else if (isChapter) {
       const content = await strategy.getChapterContent(url, page)
       if (content.images.length > 0) {
+        // Optimization: Check if chapter exists and is complete
+        try {
+          const check = await this.syncToApi('/api/admin/check-chapter', undefined, {
+            method: 'GET',
+            searchParams: { comicSlug: content.comicSlug, chapterSlug: content.chapterSlug },
+          }) as any
+
+          if (check.exists && !check.hasFailures && check.count >= content.images.length) {
+            console.log(`⏩ [Skip] Chapter ${content.comicSlug}/${content.chapterSlug} already exists (${check.count}/${content.images.length} images).`)
+            return
+          }
+        }
+        catch (e) {
+          console.warn('⚠️ Failed to check chapter status, proceeding with crawl.', e)
+        }
+
         const processedUrls: string[] = []
         for (let i = 0; i < content.images.length; i++) {
           try {

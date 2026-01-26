@@ -26,7 +26,8 @@ const REGION_MAP: Record<string, string> = {
 
 export function parseMangaList(doc: Document | Element): { mangas: string[], next?: string } {
   // 检测错误页面 (如 ThinkPHP 错误页)
-  if (doc.title?.includes('系统发生错误') || doc.body?.textContent?.includes('PDOException')) {
+  const d = doc as unknown as { title?: string, body?: { textContent?: string } }
+  if (d.title?.includes('系统发生错误') || d.body?.textContent?.includes('PDOException')) {
     return { mangas: [], next: undefined }
   }
 
