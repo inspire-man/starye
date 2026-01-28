@@ -100,6 +100,7 @@ export const comics = sqliteTable('comic', {
   region: text('region'), // 地区
   genres: text('genres', { mode: 'json' }), // 题材/标签
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
+  sortOrder: integer('sort_order').default(0), // 人工排序/权重 (越大越靠前)
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })

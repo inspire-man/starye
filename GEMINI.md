@@ -152,7 +152,7 @@
   - [x] 编写 `.github/workflows/daily-crawl.yml`。
   - [x] 新增 `.github/workflows/deploy-migrations.yml` (DB Sync)。
   - [ ] 配置 Repository Secrets (`CRAWLER_SECRET`, `R2_KEYS`).
-- [ ] **3.3 Search Indexing**:
+- [x] **3.3 Search Indexing**:
   - [x] 编写 Orama 索引构建脚本。
   - [x] 实现索引上传 R2 逻辑。
 

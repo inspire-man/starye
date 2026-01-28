@@ -1,0 +1,1 @@
+ALTER TABLE `comic` ADD `sort_order` integer DEFAULT 0;
