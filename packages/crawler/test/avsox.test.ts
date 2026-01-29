@@ -57,6 +57,25 @@ describe('avSoxStrategy', () => {
     expect(result.next).toBe('https://avsox.click/cn/censored/page/2')
   })
 
+  it('should find next page by text content if ID is missing', async () => {
+    const strategy = new AvSoxStrategy()
+    const mockPage = {
+      goto: vi.fn(),
+      content: vi.fn().mockResolvedValue(`
+        <html>
+          <body>
+            <div class="pagination">
+              <a href="/cn/censored/page/2">下一页</a>
+            </div>
+          </body>
+        </html>
+      `),
+    } as any
+
+    const result = await strategy.getMovieList('https://avsox.click/cn/censored', mockPage)
+    expect(result.next).toBe('https://avsox.click/cn/censored/page/2')
+  })
+
   it('should normalize cover image in getMovieInfo', async () => {
     const strategy = new AvSoxStrategy()
     const mockPage = {

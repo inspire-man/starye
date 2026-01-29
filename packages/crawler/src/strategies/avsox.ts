@@ -37,6 +37,17 @@ export class AvSoxStrategy implements MovieCrawlStrategy {
     // Commonly .pagination .next or similar.
     let next = $('.pagination a#next').attr('href') || $('.pagination a[rel="next"]').attr('href')
 
+    if (!next) {
+      // Fallback: Check for text content
+      $('.pagination a').each((_, el) => {
+        const text = $(el).text().trim()
+        if (text === '下一页' || text === 'Next' || text.includes('下一页')) {
+          next = $(el).attr('href')
+          return false // break loop
+        }
+      })
+    }
+
     if (next) {
       if (next.startsWith('//')) {
         next = `https:${next}`
