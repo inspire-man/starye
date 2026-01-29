@@ -29,7 +29,9 @@ export default {
       if (path === '/dashboard') {
         return Response.redirect(`${url.origin}/dashboard/`, 301)
       }
-      return proxy(request, env.DASHBOARD_ORIGIN || 'http://localhost:5173')
+      // Dashboard is a pure SPA deployed at root of Pages
+      // We need to strip the /dashboard prefix so it requests /assets/... from the Pages origin
+      return proxy(request, env.DASHBOARD_ORIGIN || 'http://localhost:5173', p => p.replace(/^\/dashboard/, ''))
     }
 
     // 3. Movie App
@@ -53,11 +55,17 @@ export default {
   },
 }
 
-async function proxy(request: Request, targetOrigin: string): Promise<Response> {
+async function proxy(request: Request, targetOrigin: string, pathRewrite?: (path: string) => string): Promise<Response> {
   const url = new URL(request.url)
   // Ensure targetOrigin doesn't end with slash to avoid double slash
   const cleanOrigin = targetOrigin.endsWith('/') ? targetOrigin.slice(0, -1) : targetOrigin
-  const targetUrl = new URL(url.pathname + url.search, cleanOrigin)
+
+  let targetPath = url.pathname
+  if (pathRewrite) {
+    targetPath = pathRewrite(targetPath)
+  }
+
+  const targetUrl = new URL(targetPath + url.search, cleanOrigin)
 
   const headers = new Headers(request.headers)
   headers.delete('host') // Let fetch set the correct host header for the target
