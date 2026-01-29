@@ -17,8 +17,14 @@ export class AvSoxStrategy implements MovieCrawlStrategy {
 
     const movies: string[] = []
     $('#waterfall a.movie-box').each((_, el) => {
-      const href = $(el).attr('href')
+      let href = $(el).attr('href')
       if (href) {
+        if (href.startsWith('//')) {
+          href = `https:${href}`
+        }
+        else if (href.startsWith('/')) {
+          href = `${this.baseUrl}${href}`
+        }
         movies.push(href)
       }
     })
@@ -29,7 +35,16 @@ export class AvSoxStrategy implements MovieCrawlStrategy {
     // Python script didn't show list parsing logic, only search.
     // I'll assume standard pagination or check later.
     // Commonly .pagination .next or similar.
-    const next = $('.pagination a#next').attr('href') || $('.pagination a[rel="next"]').attr('href')
+    let next = $('.pagination a#next').attr('href') || $('.pagination a[rel="next"]').attr('href')
+
+    if (next) {
+      if (next.startsWith('//')) {
+        next = `https:${next}`
+      }
+      else if (next.startsWith('/')) {
+        next = `${this.baseUrl}${next}`
+      }
+    }
 
     return { movies, next }
   }
@@ -40,7 +55,15 @@ export class AvSoxStrategy implements MovieCrawlStrategy {
     const $ = cheerio.load(html)
 
     const title = $('h3').first().text().trim()
-    const cover = $('.bigImage').attr('href') || ''
+    let cover = $('.bigImage').attr('href') || ''
+    if (cover) {
+      if (cover.startsWith('//')) {
+        cover = `https:${cover}`
+      }
+      else if (cover.startsWith('/')) {
+        cover = `${this.baseUrl}${cover}`
+      }
+    }
 
     // Parse Info Block
     const infoBlock = $('.info')
