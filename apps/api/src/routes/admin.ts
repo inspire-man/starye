@@ -112,6 +112,7 @@ admin.patch(
     description: z.string().optional(),
     status: z.enum(['serializing', 'completed']).optional(),
     isR18: z.boolean().optional(),
+    metadataLocked: z.boolean().optional(),
     region: z.string().optional(),
     genres: z.array(z.string()).optional(),
   })),
@@ -138,6 +139,49 @@ admin.patch(
     }
   },
 )
+
+// 获取漫画章节列表 (管理后台)
+admin.get('/comics/:id/chapters', serviceAuth(['admin', 'comic_admin']), async (c) => {
+  const id = c.req.param('id')
+  const db = c.get('db')
+
+  const results = await db.query.chapters.findMany({
+    where: eq(chapters.comicId, id),
+    orderBy: (chapters, { asc }) => [asc(chapters.sortOrder)],
+  })
+
+  return c.json(results)
+})
+
+// 获取章节详情 (含图片)
+admin.get('/chapters/:id', serviceAuth(['admin', 'comic_admin']), async (c) => {
+  const id = c.req.param('id')
+  const db = c.get('db')
+
+  const chapter = await db.query.chapters.findFirst({
+    where: eq(chapters.id, id),
+    with: {
+      pages: {
+        orderBy: (pages, { asc }) => [asc(pages.pageNumber)],
+      },
+    },
+  })
+
+  if (!chapter) {
+    return c.json({ error: 'Chapter not found' }, 404)
+  }
+
+  return c.json(chapter)
+})
+
+// 删除章节
+admin.delete('/chapters/:id', serviceAuth(['admin', 'comic_admin']), async (c) => {
+  const id = c.req.param('id')
+  const db = c.get('db')
+
+  await db.delete(chapters).where(eq(chapters.id, id))
+  return c.json({ success: true })
+})
 
 // 获取漫画已存在的章节列表 (用于爬虫去重)
 admin.get(
@@ -294,8 +338,7 @@ admin.post(
           ? data.status
           : 'serializing'
 
-        await db.insert(comics).values({
-          id: comicId,
+        const comicData = {
           title: data.title,
           slug: data.slug,
           coverImage: data.cover,
@@ -306,23 +349,33 @@ admin.post(
           sourceUrl: data.sourceUrl,
           region: data.region,
           genres: data.genres,
-          // 插入时由数据库处理 createdAt/updatedAt 默认值
-        }).onConflictDoUpdate({
-          target: comics.id,
-          set: {
-            title: data.title,
-            coverImage: data.cover,
-            author: data.author,
-            description: data.description,
-            status,
-            sourceUrl: data.sourceUrl,
-            region: data.region,
-            genres: data.genres,
-            updatedAt: new Date(), // 冲突时手动更新时间
-          },
+        }
+
+        // 1. Check Lock Status & Upsert
+        const existing = await db.query.comics.findFirst({
+          where: eq(comics.id, comicId),
+          columns: { id: true, metadataLocked: true },
         })
 
-        console.log(`[Sync] ✓ Comic upserted successfully`)
+        if (existing) {
+          if (!existing.metadataLocked) {
+            await db.update(comics)
+              .set({ ...comicData, updatedAt: new Date() })
+              .where(eq(comics.id, comicId))
+            console.log(`[Sync] ✓ Comic updated (Metadata Unlocked)`)
+          }
+          else {
+            console.log(`[Sync] 🔒 Comic metadata locked, skipping update.`)
+            // Still update timestamp to show activity
+            await db.update(comics)
+              .set({ updatedAt: new Date() })
+              .where(eq(comics.id, comicId))
+          }
+        }
+        else {
+          await db.insert(comics).values({ ...comicData, id: comicId })
+          console.log(`[Sync] ✓ New Comic inserted`)
+        }
 
         // 2. 同步章节 (删除现有章节，插入新章节)
         // 相比批量 Upsert，这在 SQLite 上更安全且能处理被移除的章节

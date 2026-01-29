@@ -35,11 +35,21 @@ export interface Comic {
   author: string | null
   description: string | null
   isR18?: boolean
+  metadataLocked?: boolean
   status?: 'serializing' | 'completed'
   region?: string | null
   genres?: string[] | null
   createdAt?: string
   updatedAt?: string
+}
+
+export interface Chapter {
+  id: string
+  title: string
+  slug: string
+  sortOrder: number
+  sourcePageCount?: number | null
+  pages?: { id: string, imageUrl: string, pageNumber: number }[]
 }
 
 export interface Paginated<T> {
@@ -77,6 +87,10 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
+    // Chapter Management
+    getChapters: (comicId: string) => fetchApi<Chapter[]>(`/api/admin/comics/${comicId}/chapters`),
+    getChapter: (id: string) => fetchApi<Chapter>(`/api/admin/chapters/${id}`),
+    deleteChapter: (id: string) => fetchApi(`/api/admin/chapters/${id}`, { method: 'DELETE' }),
   },
 
   upload: {
