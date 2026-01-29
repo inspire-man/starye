@@ -199,7 +199,11 @@ class Runner extends BaseCrawler {
         try {
           const check = await this.syncToApi('/api/admin/check-chapter', undefined, {
             method: 'GET',
-            searchParams: { comicSlug: content.comicSlug, chapterSlug: content.chapterSlug },
+            searchParams: {
+              comicSlug: content.comicSlug,
+              chapterSlug: content.chapterSlug,
+              sourceCount: String(content.images.length),
+            },
           }) as any
 
           if (check.exists && !check.hasFailures && check.count >= content.images.length) {
@@ -229,11 +233,36 @@ class Runner extends BaseCrawler {
     else if (isManga) {
       const info = await strategy.getMangaInfo(url, page)
       await this.syncToApi('/api/admin/sync', { type: 'manga', data: info })
+
+      // Optimization: Fetch existing chapters to skip what's already done
+      let existingChapters: Set<string> = new Set()
+      try {
+        const existingList = await this.syncToApi(`/api/admin/comics/${info.slug}/existing-chapters`, undefined, { method: 'GET' }) as string[]
+        existingChapters = new Set(existingList)
+      }
+      catch {
+        console.warn(`⚠️ Failed to fetch existing chapters for ${info.slug}, proceeding with full crawl.`)
+      }
+
+      let skippedCount = 0
       info.chapters.forEach((c) => {
         const cUrl = c.url.startsWith('http') ? c.url : `${strategy.baseUrl}${c.url}`
+
+        // Use the slug from MangaInfo (parsed from strategies)
+        if (c.slug && existingChapters.has(c.slug)) {
+          skippedCount++
+          // Mark as visited to prevent reprocessing if encountered elsewhere
+          this.visited.add(cUrl)
+          return
+        }
+
         if (!this.visited.has(cUrl))
           this.queue.push(cUrl)
       })
+
+      if (skippedCount > 0) {
+        console.log(`⏩ [Smart Skip] Skipped ${skippedCount}/${info.chapters.length} existing chapters for ${info.title}`)
+      }
     }
   }
 }

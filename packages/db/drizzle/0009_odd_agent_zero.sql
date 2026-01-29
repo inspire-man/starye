@@ -1,0 +1,1 @@
+ALTER TABLE `chapter` ADD `source_page_count` integer;

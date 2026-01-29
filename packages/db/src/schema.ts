@@ -114,6 +114,7 @@ export const chapters = sqliteTable('chapter', {
   title: text('title').notNull(),
   slug: text('slug').notNull(),
   chapterNumber: integer('chapter_number'),
+  sourcePageCount: integer('source_page_count'), // 源站图片数量 (用于完整性校验)
   sortOrder: integer('sort_order').notNull(),
   publishedAt: integer('published_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),

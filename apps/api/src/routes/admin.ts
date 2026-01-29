@@ -139,6 +139,35 @@ admin.patch(
   },
 )
 
+// 获取漫画已存在的章节列表 (用于爬虫去重)
+admin.get(
+  '/comics/:slug/existing-chapters',
+  serviceAuth(['admin', 'comic_admin']),
+  async (c) => {
+    const slug = c.req.param('slug')
+    const db = c.get('db')
+
+    // 智能查询：仅返回 "已验证完整" 的章节
+    // 完整定义：页面数量 (count) == 源站数量 (source_page_count)
+    const result = await db
+      .select({
+        slug: chapters.slug,
+        count: count(pages.id),
+        expected: chapters.sourcePageCount,
+      })
+      .from(chapters)
+      .leftJoin(pages, eq(pages.chapterId, chapters.id))
+      .where(eq(chapters.comicId, slug))
+      .groupBy(chapters.id)
+      .having(({ count, expected }) =>
+        // 只有当期望值存在且相等时，才视为 "完整"
+        expected ? eq(count, expected) : undefined,
+      )
+
+    return c.json(result.map(r => r.slug))
+  },
+)
+
 // 检查章节状态
 admin.get(
   '/check-chapter',
@@ -146,9 +175,10 @@ admin.get(
   zValidator('query', z.object({
     comicSlug: z.string(),
     chapterSlug: z.string(),
+    sourceCount: z.coerce.number().optional(), // 新增：源站图片数量
   })),
   async (c) => {
-    const { comicSlug, chapterSlug } = c.req.valid('query')
+    const { comicSlug, chapterSlug, sourceCount } = c.req.valid('query')
     const db = c.get('db')
     const chapterId = `${comicSlug}-${chapterSlug}`
 
@@ -163,12 +193,25 @@ admin.get(
       return c.json({ exists: false, count: 0, hasFailures: false })
     }
 
+    const currentCount = chapter.pages.length
     // 检查是否有失败的图片 (使用 Placeholder)
     const hasFailures = chapter.pages.some(p => p.imageUrl.includes('placehold.co') || p.imageUrl.includes('failed'))
 
+    // Side Effect: 如果提供了 sourceCount 且匹配，更新 sourcePageCount 以标记为"已验证"
+    if (sourceCount && currentCount >= sourceCount && !hasFailures) {
+      if (chapter.sourcePageCount !== sourceCount) {
+        // 异步更新，不阻塞响应
+        c.executionCtx.waitUntil(
+          db.update(chapters)
+            .set({ sourcePageCount: sourceCount, updatedAt: new Date() })
+            .where(eq(chapters.id, chapterId)),
+        )
+      }
+    }
+
     return c.json({
       exists: true,
-      count: chapter.pages.length,
+      count: currentCount,
       hasFailures,
     })
   },
@@ -307,6 +350,7 @@ admin.post(
               title: ch.title,
               slug: ch.slug,
               chapterNumber: ch.number,
+              sourcePageCount: null,
               sortOrder: ch.number,
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -373,6 +417,11 @@ admin.post(
           // 如果章节不存在，直接报错，要求先同步漫画信息
           return c.json({ success: false, error: 'Chapter not found. Please sync manga info first.' }, 404)
         }
+
+        // 1.1 更新元数据 (Source Count)
+        await db.update(chapters)
+          .set({ sourcePageCount: data.images.length, updatedAt: new Date() })
+          .where(eq(chapters.id, chapterId))
 
         // 2. 删除现有页面
         await db.delete(pages).where(eq(pages.chapterId, chapterId))
