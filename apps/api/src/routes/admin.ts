@@ -336,7 +336,7 @@ admin.post(
         // 类型适配: 确保 status 符合数据库枚举
         const status = (data.status === 'completed' || data.status === 'serializing')
           ? data.status
-          : 'serializing'
+          : 'serializing' as 'serializing' | 'completed'
 
         const comicData = {
           title: data.title,
