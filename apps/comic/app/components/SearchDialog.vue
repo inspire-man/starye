@@ -27,7 +27,7 @@ watch(() => props.open, async (isOpen) => {
 
 // Debounced search
 let timeout: any
-const handleInput = () => {
+function handleInput() {
   clearTimeout(timeout)
   timeout = setTimeout(async () => {
     if (!query.value.trim()) {
@@ -44,7 +44,7 @@ const handleInput = () => {
   }, 300)
 }
 
-const close = () => {
+function close() {
   emit('close')
   query.value = ''
   results.value = []
@@ -84,8 +84,12 @@ const close = () => {
           >
             <img v-if="item.cover" :src="item.cover" class="w-12 h-16 object-cover rounded bg-muted">
             <div class="flex-1 min-w-0">
-              <h4 class="font-bold text-sm group-hover:text-primary truncate">{{ item.title }}</h4>
-              <p class="text-xs text-muted-foreground mt-1 truncate">{{ item.author }}</p>
+              <h4 class="font-bold text-sm group-hover:text-primary truncate">
+                {{ item.title }}
+              </h4>
+              <p class="text-xs text-muted-foreground mt-1 truncate">
+                {{ item.author }}
+              </p>
               <div class="flex gap-2 mt-2">
                 <span v-if="item.region" class="text-[10px] px-1.5 py-0.5 bg-muted-foreground/10 rounded text-muted-foreground">{{ item.region }}</span>
                 <span v-if="item.status" class="text-[10px] px-1.5 py-0.5 bg-muted-foreground/10 rounded text-muted-foreground">{{ item.status }}</span>

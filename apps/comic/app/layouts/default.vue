@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { signOut, useSession } from '~/lib/auth-client'
 import SearchDialog from '~/components/SearchDialog.vue'
+import { signOut, useSession } from '~/lib/auth-client'
 
 const { locale, setLocale } = useI18n()
 const session = useSession()
