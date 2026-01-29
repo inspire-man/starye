@@ -1,9 +1,10 @@
 import type { Context } from 'hono'
 import type { AppEnv, SessionUser } from '../types'
-import { movies as moviesTable } from '@starye/db/schema'
-import { and, count, sql } from 'drizzle-orm'
+import { movies as moviesTable, players as playersTable } from '@starye/db/schema'
+import { and, count, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import { serviceAuth } from '../middleware/service-auth'
 
 const movies = new Hono<AppEnv>()
 
@@ -14,6 +15,86 @@ async function checkIsAdult(c: Context<AppEnv>) {
   const user = session?.user as SessionUser | undefined
   return user?.isAdult === true
 }
+
+// 3. 同步电影数据 (Crawler)
+movies.post('/sync', serviceAuth(), async (c) => {
+  const db = c.get('db')
+  const body = await c.req.json()
+  const { type, data } = body
+
+  if (type !== 'movie' || !data) {
+    throw new HTTPException(400, { message: 'Invalid payload' })
+  }
+
+  // 映射数据
+  const code = data.code || data.slug
+  const movieData = {
+    title: data.title,
+    slug: data.slug,
+    code,
+    description: data.description,
+    coverImage: data.coverImage,
+    releaseDate: data.releaseDate ? new Date(data.releaseDate * 1000) : null,
+    duration: data.duration,
+    sourceUrl: data.sourceUrl,
+    actors: data.actors || [],
+    genres: data.genres || [],
+    series: data.series,
+    publisher: data.publisher,
+    isR18: data.isR18,
+  }
+
+  // 查找是否存在 (优先匹配 code)
+  const existing = await db.query.movies.findFirst({
+    where: (movies, { eq }) => eq(movies.code, code),
+  })
+
+  let movieId = existing?.id
+
+  if (existing) {
+    // 更新
+    await db.update(moviesTable)
+      .set({
+        ...movieData,
+        updatedAt: new Date(),
+      })
+      .where(eq(moviesTable.id, existing.id))
+  }
+  else {
+    // 新增
+    movieId = crypto.randomUUID()
+    await db.insert(moviesTable).values({
+      id: movieId,
+      ...movieData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+  }
+
+  // 处理播放源 (全量覆盖)
+  if (movieId && data.players && Array.isArray(data.players)) {
+    // 删除旧的
+    await db.delete(playersTable).where(eq(playersTable.movieId, movieId))
+
+    // 插入新的
+    if (data.players.length > 0) {
+      const newPlayers = data.players.map((p: any, index: number) => ({
+        id: crypto.randomUUID(),
+        movieId: movieId!,
+        sourceName: p.sourceName || 'Unknown',
+        sourceUrl: p.sourceUrl,
+        quality: p.quality,
+        sortOrder: p.sortOrder || index,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }))
+
+      await db.insert(playersTable).values(newPlayers)
+    }
+  }
+
+  return c.json({ success: true, id: movieId })
+})
 
 // 1. 获取电影列表 (带分页和过滤)
 movies.get('/', async (c) => {
