@@ -71,6 +71,13 @@
       "when": 1769690091122,
       "tag": "0009_odd_agent_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1769696049893,
+      "tag": "0010_majestic_tarot",
+      "breakpoints": true
     }
   ]
 }

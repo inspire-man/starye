@@ -1,0 +1,1 @@
+ALTER TABLE `comic` ADD `metadata_locked` integer DEFAULT false NOT NULL;

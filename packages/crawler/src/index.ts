@@ -3,6 +3,7 @@ import type { CrawlStrategy, MovieCrawlStrategy } from './lib/strategy'
 import process from 'node:process'
 import { BaseCrawler } from './lib/base-crawler'
 // import { JavDBStrategy } from './strategies/javdb'
+import { AvSoxStrategy } from './strategies/avsox'
 import { JavBusStrategy } from './strategies/javbus'
 import { Site92Hm } from './strategies/site-92hm'
 import { SiteSe8 } from './strategies/site-se8'
@@ -16,6 +17,7 @@ class Runner extends BaseCrawler {
     new SiteSe8(),
     // new JavDBStrategy(),
     new JavBusStrategy(),
+    new AvSoxStrategy(),
   ]
 
   private queue: string[] = []
@@ -58,6 +60,7 @@ class Runner extends BaseCrawler {
 
         // 增加电影抓取入口
         this.queue.push('https://javdb457.com/')
+        this.queue.push('https://avsox.click/cn/censored')
 
         console.log(`✅ Generated ${this.queue.length} seed URLs.`)
       }
@@ -138,6 +141,8 @@ class Runner extends BaseCrawler {
 
   private async processMovie(url: string, page: any, strategy: MovieCrawlStrategy) {
     let isDetail = url.includes('/v/') // JavDB
+    if (url.includes('/movie/'))
+      isDetail = true // AvSox
 
     if (strategy.name === 'javbus') {
       const path = new URL(url).pathname
