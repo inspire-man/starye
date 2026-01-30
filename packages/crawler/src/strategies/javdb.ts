@@ -11,9 +11,11 @@ export class JavDBStrategy implements MovieCrawlStrategy {
 
   private async _preparePage(page: Page) {
     await page.setViewport({ width: 1920, height: 1080 })
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
+    // Remove manual User-Agent to let StealthPlugin handle it naturally
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
+      // Allow browser to handle Accept and other headers naturally where possible,
+      // but JavDB might expect these specific ones.
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
       'Referer': 'https://www.google.com/',
     })

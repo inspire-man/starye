@@ -61,26 +61,6 @@ export abstract class BaseCrawler {
     const page = await this.browser.newPage()
     await page.setViewport({ width: 1920, height: 1080 })
 
-    // Manual Stealth Injections
-    await page.evaluateOnNewDocument(() => {
-      // 1. Overwrite the `plugins` property to use a custom getter.
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5],
-      })
-      // 2. Pass the Webdriver Test.
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      })
-      // 3. Pass the Chrome Test.
-      // @ts-expect-error Mocking window.chrome for stealth
-      window.chrome = {
-        runtime: {},
-        loadTimes() {},
-        csi() {},
-        app: {},
-      }
-    })
-
     return page
   }
 
