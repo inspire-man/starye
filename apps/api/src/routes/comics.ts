@@ -4,6 +4,7 @@ import { comics as comicsTable } from '@starye/db/schema'
 import { and, count, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import { requireAuth } from '../middleware/guard'
 
 const comics = new Hono<AppEnv>()
 
@@ -17,7 +18,7 @@ async function checkIsAdult(c: Context<AppEnv>) {
 }
 
 // 1. List Comics (For Search Indexing & Frontend)
-comics.get('/', async (c) => {
+comics.get('/', requireAuth(['comic_admin']), async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
@@ -79,7 +80,7 @@ comics.get('/', async (c) => {
 })
 
 // 2. Comic Details (With Chapters)
-comics.get('/:slug', async (c) => {
+comics.get('/:slug', requireAuth(['comic_admin']), async (c) => {
   const db = c.get('db')
   const slug = c.req.param('slug')
   const isAdult = await checkIsAdult(c)
@@ -118,7 +119,7 @@ comics.get('/:slug', async (c) => {
 })
 
 // 3. Read Chapter (Pages)
-comics.get('/:slug/:chapterSlug', async (c) => {
+comics.get('/:slug/:chapterSlug', requireAuth(['comic_admin']), async (c) => {
   const db = c.get('db')
   const { slug, chapterSlug } = c.req.param()
   const isAdult = await checkIsAdult(c)

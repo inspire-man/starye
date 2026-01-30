@@ -78,6 +78,13 @@
       "when": 1769696049893,
       "tag": "0010_majestic_tarot",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1769800612560,
+      "tag": "0011_freezing_moondragon",
+      "breakpoints": true
     }
   ]
 }

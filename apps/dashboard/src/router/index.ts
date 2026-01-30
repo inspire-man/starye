@@ -56,7 +56,8 @@ router.beforeEach(async (to, _from, next) => {
   // eslint-disable-next-line no-console
   console.log('[Auth Guard] User Role:', role)
 
-  if (role !== 'admin') {
+  const allowedRoles = ['super_admin', 'admin', 'comic_admin', 'movie_admin']
+  if (!allowedRoles.includes(role)) {
     // Optional: Redirect to unauthorized page or show alert
     // For now, redirect to login (or maybe external home)
     return next('/login')

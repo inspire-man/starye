@@ -1,3 +1,4 @@
+import type { NewMovie, NewPlayer } from '@starye/db'
 import type { Page } from 'puppeteer-core'
 
 // --- Manga (Comic) Specific Interfaces ---
@@ -56,26 +57,21 @@ export interface CrawlStrategy {
 
 // --- Movie Specific Interfaces ---
 
-export interface MovieInfo {
+// Use DB types as base to ensure compatibility
+export interface MovieInfo extends Partial<Omit<NewMovie, 'releaseDate' | 'actors' | 'genres'>> {
+  // Required fields for Crawler
   title: string
   slug: string
   code: string
-  description?: string
-  coverImage?: string
-  releaseDate?: number // timestamp
-  duration?: number // minutes
   sourceUrl: string
+  isR18: boolean
+
+  // Overrides for scraping convenience (DB uses specific types like Date or JSON string)
+  releaseDate?: number // timestamp in seconds
   actors?: string[]
   genres?: string[]
-  series?: string
-  publisher?: string
-  isR18: boolean
-  players: {
-    sourceName: string
-    sourceUrl: string
-    quality?: string
-    sortOrder: number
-  }[]
+
+  players: Omit<NewPlayer, 'id' | 'movieId' | 'createdAt' | 'updatedAt'>[]
 }
 
 export interface MovieCrawlStrategy {

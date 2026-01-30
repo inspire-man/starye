@@ -27,9 +27,17 @@ export function serviceAuth(allowedRoles: string[] = ['admin']) {
     const user = session?.user as unknown as SessionUser | undefined
     const userRole = user?.role
 
-    if (session && userRole && allowedRoles.includes(userRole)) {
-      console.log(`[Auth] ✓ User authenticated: ${user.email} (Role: ${userRole})`)
-      return await next()
+    if (session && userRole) {
+      // Super Admin and Admin always have access
+      if (userRole === 'super_admin' || userRole === 'admin') {
+        console.log(`[Auth] ✓ Admin authenticated: ${user.email} (Role: ${userRole})`)
+        return await next()
+      }
+
+      if (allowedRoles.includes(userRole)) {
+        console.log(`[Auth] ✓ User authenticated: ${user.email} (Role: ${userRole})`)
+        return await next()
+      }
     }
 
     // Fail

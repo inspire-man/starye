@@ -175,6 +175,46 @@ export const players = sqliteTable('player', {
 export type Player = InferSelectModel<typeof players>
 export type NewPlayer = InferInsertModel<typeof players>
 
+// --- 女优表 ---
+export const actors = sqliteTable('actor', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  slug: text('slug').notNull().unique(), // URL Slug
+  avatar: text('avatar'), // 头像
+  bio: text('bio'), // 简介
+  birthDate: integer('birth_date', { mode: 'timestamp' }), // 生日
+  height: integer('height'), // 身高 (cm)
+  measurements: text('measurements'), // 三围
+  nationality: text('nationality'), // 国籍
+  socialLinks: text('social_links', { mode: 'json' }), // 社交媒体链接 { twitter, instagram, etc }
+  movieCount: integer('movie_count').default(0).notNull(), // 作品数量
+  isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+})
+
+export type Actor = InferSelectModel<typeof actors>
+export type NewActor = InferInsertModel<typeof actors>
+
+// --- 厂商表 ---
+export const publishers = sqliteTable('publisher', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  slug: text('slug').notNull().unique(), // URL Slug
+  logo: text('logo'), // Logo
+  website: text('website'), // 官网
+  description: text('description'), // 简介
+  foundedYear: integer('founded_year'), // 成立年份
+  country: text('country'), // 国家
+  movieCount: integer('movie_count').default(0).notNull(), // 作品数量
+  isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+})
+
+export type Publisher = InferSelectModel<typeof publishers>
+export type NewPublisher = InferInsertModel<typeof publishers>
+
 // --- 系统任务 ---
 export const jobs = sqliteTable('job', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -242,4 +282,12 @@ export const playerRelations = relations(players, ({ one }) => ({
     fields: [players.movieId],
     references: [movies.id],
   }),
+}))
+
+export const actorRelations = relations(actors, () => ({
+  // 可以通过 actors JSON 字段关联，但不建立外键
+}))
+
+export const publisherRelations = relations(publishers, () => ({
+  // 可以通过 publisher 字段关联，但不建立外键
 }))
