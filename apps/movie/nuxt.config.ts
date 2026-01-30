@@ -30,7 +30,7 @@ export default defineNuxtConfig({
   // Tailwind v4 integration via Vite plugin
   vite: {
     plugins: [
-      tailwindcss(),
+      tailwindcss() as any,
     ],
     optimizeDeps: {
       exclude: ['@starye/locales'],

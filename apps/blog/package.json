@@ -8,7 +8,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "deploy": "nuxt build && wrangler pages deploy .output/public --project-name blog-pages",
+    "deploy": "pnpm build && wrangler pages deploy dist --project-name blog-pages",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

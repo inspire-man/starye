@@ -54,28 +54,5 @@ export default defineNuxtConfig({
   // Deployment configuration
   nitro: {
     preset: 'cloudflare-pages',
-    prerender: {
-      routes: ['/blog/', '/blog/login'],
-      crawlLinks: true,
-      failOnError: false,
-    },
-    cloudflare: {
-      pages: {
-        routes: {
-          include: ['/blog/*'],
-          exclude: [],
-        },
-      },
-    },
-  },
-
-  // SPA fallback for client-side routing
-  ssr: true,
-
-  // Router options
-  router: {
-    options: {
-      strict: false,
-    },
   },
 })
