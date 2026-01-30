@@ -13,6 +13,7 @@ overrides:
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - esbuild
+  - puppeteer
   - sharp
   - vue-demi
   - workerd

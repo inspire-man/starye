@@ -158,6 +158,28 @@ class Runner extends BaseCrawler {
       const info = await strategy.getMovieInfo(url, page)
 
       if (info.title && info.slug) {
+        // Upload cover image to R2
+        if (info.coverImage) {
+          try {
+            console.log(`  Uploading cover: ${info.coverImage}`)
+            // Using 'cover' as filename, stored in movies/{slug}/
+            const uploaded = await this.imageProcessor.process(
+              info.coverImage,
+              `movies/${info.slug}`,
+              'cover',
+            )
+            // Prefer preview (optimized), fallback to original
+            const selected = uploaded.find(p => p.variant === 'preview') || uploaded.find(p => p.variant === 'original')
+            if (selected) {
+              info.coverImage = selected.url
+            }
+          }
+          catch (e) {
+            console.warn(`  ⚠️ Failed to upload cover image: ${e instanceof Error ? e.message : String(e)}`)
+            // Fallback: keep original URL if upload fails (though likely CORS/hotlink blocked)
+          }
+        }
+
         console.log(`  Syncing Movie: ${info.title} (${info.code})...`)
         await this.syncToApi('/api/movies/sync', { type: 'movie', data: info })
       }

@@ -19,6 +19,11 @@ export interface CrawlerConfig {
   puppeteer?: {
     executablePath?: string
   }
+  proxy?: {
+    server: string // 例如: 'http://proxy.example.com:8080' 或 'socks5://127.0.0.1:9050'
+    username?: string
+    password?: string
+  }
 }
 
 export abstract class BaseCrawler {
@@ -42,16 +47,37 @@ export abstract class BaseCrawler {
       console.log('Launching browser (bundled/default)...')
     }
 
+    const launchArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-infobars',
+      '--window-size=1920,1080',
+      '--lang=zh-CN,zh',
+      '--disable-blink-features=AutomationControlled',
+      // 增强反检测参数
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu',
+      '--hide-scrollbars',
+      '--mute-audio',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+    ]
+
+    // 如果配置了代理，添加代理参数
+    if (this.config.proxy?.server) {
+      launchArgs.push(`--proxy-server=${this.config.proxy.server}`)
+      console.log('Using proxy:', this.config.proxy.server)
+    }
+
     this.browser = await puppeteer.launch({
       executablePath,
       headless: true,
+      args: launchArgs,
       ignoreDefaultArgs: ['--enable-automation'],
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--window-size=1920,1080',
-        '--disable-blink-features=AutomationControlled',
-      ],
     })
   }
 
@@ -60,6 +86,46 @@ export abstract class BaseCrawler {
       throw new Error('Browser not initialized')
     const page = await this.browser.newPage()
     await page.setViewport({ width: 1920, height: 1080 })
+
+    // 如果配置了代理认证，设置认证信息
+    if (this.config.proxy?.username && this.config.proxy?.password) {
+      await page.authenticate({
+        username: this.config.proxy.username,
+        password: this.config.proxy.password,
+      })
+    }
+
+    // 增强反检测：覆盖 webdriver 等属性
+    await page.evaluateOnNewDocument(() => {
+      // 覆盖 navigator.webdriver
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      })
+
+      // 覆盖 Chrome 对象
+      // @ts-expect-error - Type 'Window' has no properties named 'chrome'
+      window.chrome = {
+        runtime: {},
+      }
+
+      // 覆盖 permissions
+      const originalQuery = window.navigator.permissions.query
+      window.navigator.permissions.query = parameters => (
+        parameters.name === 'notifications'
+          ? Promise.resolve({ state: Notification.permission } as PermissionStatus)
+          : originalQuery(parameters)
+      )
+
+      // 覆盖 plugins
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      })
+
+      // 覆盖 languages
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['zh-CN', 'zh', 'en-US', 'en'],
+      })
+    })
 
     return page
   }
@@ -107,17 +173,19 @@ export abstract class BaseCrawler {
           status: response?.statusCode,
           statusMessage: response?.statusMessage,
           body: response?.body,
-          headers: response?.headers,
         })
       }
       else {
+        // 如果是连接错误（如 API 未启动），仅警告不中断，方便单机测试爬虫逻辑
         const msg = e instanceof Error ? e.message : String(e)
-        console.error(`[API] ❌ Sync failed to ${url}: ${msg}`)
-        if (e instanceof Error && e.stack) {
-          console.error('Stack trace:', e.stack)
+        if (msg.includes('ECONNREFUSED')) {
+          console.warn(`[API] ⚠️  API is offline (${url}). Skipping data sync.`)
+          return null
         }
+        console.error(`[API] ❌ Sync failed to ${url}: ${msg}`)
       }
-      throw e
+      // 不再抛出异常，保证爬虫继续运行
+      return null
     }
   }
 

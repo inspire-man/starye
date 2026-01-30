@@ -10,6 +10,24 @@ on:
         description: 'Specific URL to crawl (Optional)'
         required: false
         type: string
+      max_movies:
+        description: 'Maximum number of movies to crawl'
+        required: false
+        default: '50'
+        type: string
+      max_pages:
+        description: 'Maximum number of pages to crawl'
+        required: false
+        default: '5'
+        type: string
+      use_optimized:
+        description: 'Use optimized crawler with queue management'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   crawl-movie:
@@ -35,13 +53,81 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
+      - name: Install Chrome Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gconf-service libasound2 libatk1.0-0 \
+            libcairo2 libcups2 libdbus-1-3 \
+            libexpat1 libfontconfig1 libgcc1 \
+            libgconf-2-4 libgdk-pixbuf2.0-0 \
+            libglib2.0-0 libgtk-3-0 libnspr4 \
+            libpango-1.0-0 libpangocairo-1.0-0 \
+            libstdc++6 libx11-6 libx11-xcb1 libxcb1 \
+            libxcomposite1 libxcursor1 libxdamage1 libxext6 \
+            libxfixes3 libxi6 libxrandr2 libxrender1 \
+            libxss1 libxtst6 ca-certificates fonts-liberation \
+            libappindicator1 libnss3 lsb-release xdg-utils \
+            wget google-chrome-stable
+
       - name: Install Dependencies
         run: pnpm install
 
       - name: Build Packages
         run: pnpm build --filter=@starye/crawler...
 
-      - name: Run Crawler
+      - name: Run Optimized Crawler
+        if: ${{ github.event.inputs.use_optimized != 'false' }}
+        env:
+          # R2 配置
+          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_URL }}
+
+          # API 配置
+          API_URL: ${{ secrets.API_URL }}
+          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+
+          # 代理配置（可选）
+          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+          PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+          PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+
+          # 爬虫配置
+          MAX_MOVIES: ${{ github.event.inputs.max_movies || '50' }}
+          MAX_PAGES: ${{ github.event.inputs.max_pages || '5' }}
+          START_URL: ${{ github.event.inputs.target_url || 'https://www.javbus.com' }}
+          USE_RANDOM_MIRROR: 'true'
+
+          # 并发配置（GitHub Actions 使用较低并发）
+          LIST_CONCURRENCY: '1'
+          DETAIL_CONCURRENCY: '2'
+          IMAGE_CONCURRENCY: '2'
+          API_CONCURRENCY: '2'
+
+          # 延迟配置（GitHub Actions 使用较长延迟）
+          LIST_DELAY: '10000'
+          DETAIL_DELAY: '6000'
+          IMAGE_DELAY: '3000'
+          API_DELAY: '1000'
+
+          # 显示配置
+          SHOW_PROGRESS: 'true'
+          SHOW_STATS: 'true'
+          STATS_INTERVAL: '60000'
+
+          # Puppeteer 配置
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+        run: |
+          export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)
+          echo "Found Chrome at: $PUPPETEER_EXECUTABLE_PATH"
+          echo "Starting optimized crawler..."
+          pnpm --filter @starye/crawler run test:optimized
+
+      - name: Run Legacy Crawler
+        if: ${{ github.event.inputs.use_optimized == 'false' }}
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -50,20 +136,26 @@ jobs:
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
           API_URL: ${{ secrets.API_URL }}
-          # Puppeteer Cache
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
         run: |
-          # 动态查找 Chrome 路径
           export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)
           echo "Found Chrome at: $PUPPETEER_EXECUTABLE_PATH"
 
-          # 如果有输入 URL 则使用，否则默认爬取 JavDB 首页 (最新更新)
           TARGET="${{ inputs.target_url }}"
           if [ -z "$TARGET" ]; then
-            TARGET="https://www.javbus.com" # 有码影片更新
+            TARGET="https://www.javbus.com"
           fi
 
-          echo "Starting crawl for: $TARGET"
-
-          # 启动爬虫
+          echo "Starting legacy crawler for: $TARGET"
           pnpm --filter @starye/crawler start "$TARGET"
+
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawler-logs-${{ github.run_number }}
+          path: |
+            packages/crawler/*.log
+            packages/crawler/*.png
+          retention-days: 7
+

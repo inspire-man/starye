@@ -4,6 +4,8 @@ import { useApi } from '../lib/api'
 
 const { data: response, pending, error } = useApi<Movie[]>('/api/movies', {
   query: { limit: 24 },
+  server: false, // 强制在客户端请求，避免 SSR 相对路径报错
+  lazy: true, // 懒加载，不阻塞页面导航
 })
 
 const featuredMovies = computed(() => response.value?.data || [])
@@ -73,7 +75,7 @@ function formatDate(dateStr: any) {
               {{ movie.title }}
             </h3>
             <p class="text-xs text-muted-foreground mt-1.5 flex items-center gap-2">
-              <calendar-icon class="w-3 h-3" />
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>
               {{ formatDate(movie.releaseDate) }}
             </p>
           </div>
