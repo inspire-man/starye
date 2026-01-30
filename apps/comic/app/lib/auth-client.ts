@@ -2,8 +2,10 @@ import type { Ref } from 'vue'
 import type { ExtendedSession } from '~/types/auth'
 import { createAuthClient } from 'better-auth/vue'
 
+const config = useRuntimeConfig()
+
 const authClient = createAuthClient({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080',
+  baseURL: config.public.apiUrl as string,
 })
 
 export const { signIn, signUp, signOut } = authClient

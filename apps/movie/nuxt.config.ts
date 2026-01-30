@@ -47,7 +47,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       // eslint-disable-next-line node/prefer-global/process
-      apiUrl: process.env.VITE_API_URL || '/api',
+      apiUrl: process.env.NUXT_PUBLIC_API_URL || process.env.VITE_API_URL || 'https://starye.org',
       // eslint-disable-next-line node/prefer-global/process
       adminUrl: process.env.VITE_ADMIN_URL || '/dashboard/',
     },
