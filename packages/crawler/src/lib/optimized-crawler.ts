@@ -279,13 +279,24 @@ export abstract class OptimizedCrawler {
             movieInfo.coverImage = previewImage.url
           }
           this.stats.imagesDownloaded++
+        }).catch((error) => {
+          // 图片下载失败不影响整体流程
+          console.warn(`⚠️  图片下载失败: ${error.message}`)
         })
       }
 
       // 同步到 API
       await this.queueManager.addApiTask(async () => {
-        await this.syncToApi('/api/movies', movieInfo)
-        this.stats.apiSynced++
+        const result = await this.syncToApi('/movies/sync', {
+          type: 'movie',
+          data: movieInfo,
+        })
+        if (result) {
+          this.stats.apiSynced++
+        }
+      }).catch((error) => {
+        // API 同步失败不影响整体流程
+        console.warn(`⚠️  API 同步任务失败: ${error.message}`)
       })
 
       this.stats.moviesSuccess++
@@ -317,18 +328,25 @@ export abstract class OptimizedCrawler {
       })
 
       if (!response.ok) {
-        throw new Error(`API 返回错误: ${response.status}`)
+        console.warn(`⚠️  API 返回错误 ${response.status}: ${url}`)
+        // 不抛出异常，只记录警告
+        return null
       }
 
       return await response.json()
     }
     catch (error) {
-      // API 离线时不中断爬虫
-      if (error instanceof Error && error.message.includes('ECONNREFUSED')) {
-        console.warn('⚠️  API 离线，跳过同步')
-        return null
+      // API 错误不应该中断爬虫
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('fetch failed')) {
+        console.warn('⚠️  API 离线或无法连接，跳过同步')
       }
-      throw error
+      else {
+        console.warn(`⚠️  API 同步失败: ${errorMessage}`)
+      }
+
+      return null
     }
   }
 
