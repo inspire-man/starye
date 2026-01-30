@@ -48,7 +48,8 @@ router.beforeEach(async (to, _from, next) => {
   console.log('[Auth Guard] Session:', session)
 
   if (!session) {
-    return next('/login')
+    window.location.href = `/blog/login?redirect=${encodeURIComponent(window.location.pathname)}`
+    return
   }
 
   // RBAC Check
@@ -58,9 +59,8 @@ router.beforeEach(async (to, _from, next) => {
 
   const allowedRoles = ['super_admin', 'admin', 'comic_admin', 'movie_admin']
   if (!allowedRoles.includes(role)) {
-    // Optional: Redirect to unauthorized page or show alert
-    // For now, redirect to login (or maybe external home)
-    return next('/login')
+    window.location.href = `/blog/login?error=insufficient_permissions&redirect=${encodeURIComponent(window.location.pathname)}`
+    return
   }
 
   next()

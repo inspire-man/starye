@@ -1,23 +1,27 @@
 import { useSession } from '~/lib/auth-client'
 
 export default defineNuxtRouteMiddleware(async (to) => {
-  // Allow access to login page
-  if (to.path === '/login')
-    return
-
   const session = useSession()
 
-  // If session is not active, redirect to login
+  // 检查是否已登录
+
   if (!session.value.data) {
-    return navigateTo('/login')
+    const redirectUrl = `/blog/login?redirect=${encodeURIComponent(to.fullPath)}`
+
+    return navigateTo(redirectUrl, { external: true })
   }
 
   const user = session.value.data.user
+
   const role = user.role
+
   const allowedRoles = ['super_admin', 'admin', 'comic_admin']
 
-  // Check if user has required role
+  // 检查权限
+
   if (!role || !allowedRoles.includes(role)) {
-    return navigateTo('/login?error=insufficient_permissions')
+    const errorUrl = `/blog/login?error=insufficient_permissions&redirect=${encodeURIComponent(to.fullPath)}`
+
+    return navigateTo(errorUrl, { external: true })
   }
 })
