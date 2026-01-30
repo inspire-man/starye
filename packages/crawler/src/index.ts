@@ -2,9 +2,10 @@
 import type { CrawlStrategy, MovieCrawlStrategy } from './lib/strategy'
 import process from 'node:process'
 import { BaseCrawler } from './lib/base-crawler'
-// import { JavDBStrategy } from './strategies/javdb'
-import { AvSoxStrategy } from './strategies/avsox'
 import { JavBusStrategy } from './strategies/javbus'
+// import { JavDBStrategy } from './strategies/javdb'
+// import { AvSoxStrategy } from './strategies/avsox'
+import { JavDBStrategy } from './strategies/javdb'
 import { Site92Hm } from './strategies/site-92hm'
 import { SiteSe8 } from './strategies/site-se8'
 import 'dotenv/config'
@@ -15,9 +16,9 @@ class Runner extends BaseCrawler {
   private strategies: Strategy[] = [
     new Site92Hm(),
     new SiteSe8(),
-    // new JavDBStrategy(),
+    new JavDBStrategy(),
     new JavBusStrategy(),
-    new AvSoxStrategy(),
+    // new AvSoxStrategy(),
   ]
 
   private queue: string[] = []
@@ -60,7 +61,8 @@ class Runner extends BaseCrawler {
 
         // 增加电影抓取入口
         this.queue.push('https://javdb457.com/')
-        this.queue.push('https://avsox.click/cn/censored')
+        // this.queue.push('https://avsox.click/cn/censored')
+        this.queue.push('https://www.javbus.com/')
 
         console.log(`✅ Generated ${this.queue.length} seed URLs.`)
       }

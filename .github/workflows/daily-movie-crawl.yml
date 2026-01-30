@@ -60,7 +60,7 @@ jobs:
           # 如果有输入 URL 则使用，否则默认爬取 JavDB 首页 (最新更新)
           TARGET="${{ inputs.target_url }}"
           if [ -z "$TARGET" ]; then
-            TARGET="https://javdb457.com/censored" # 有码影片更新
+            TARGET="https://www.javbus.com" # 有码影片更新
           fi
 
           echo "Starting crawl for: $TARGET"
