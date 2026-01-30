@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import type { Movie, Player } from '@starye/db/schema'
-import { useAuth } from '../composables/useAuth'
 import { useApi } from '../lib/api'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
-const { isAdult } = useAuth()
 
 const slug = route.params.slug as string
 
@@ -111,7 +108,7 @@ function goToPublisher(publisherName: string) {
             </h1>
 
             <!-- Genres -->
-            <div v-if="movie.genres && movie.genres.length" class="flex flex-wrap gap-2">
+            <div v-if="movie.genres" class="flex flex-wrap gap-2">
               <NuxtLink
                 v-for="genre in movie.genres"
                 :key="genre"
@@ -173,7 +170,7 @@ function goToPublisher(publisherName: string) {
           </div>
 
           <!-- Actors -->
-          <div v-if="movie.actors && movie.actors.length" class="p-6 bg-white/5 border border-white/10 rounded-xl">
+          <div v-if="movie.actors" class="p-6 bg-white/5 border border-white/10 rounded-xl">
             <h2 class="text-lg font-bold text-white mb-4">
               ⭐ 出演女优
             </h2>
@@ -181,7 +178,7 @@ function goToPublisher(publisherName: string) {
               <button
                 v-for="actor in movie.actors"
                 :key="actor"
-                class="px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-white border border-purple-500/30 rounded-lg font-bold text-sm transition-all hover:scale-105"
+                class="px-4 py-2 bg-linear-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-white border border-purple-500/30 rounded-lg font-bold text-sm transition-all hover:scale-105"
                 @click="goToActor(actor)"
               >
                 {{ actor }}

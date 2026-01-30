@@ -7,7 +7,8 @@ const loading = ref(false)
 // 错误信息处理
 const error = computed(() => {
   const err = route.query.error as string
-  if (err === 'insufficient_permissions') return '权限不足：需要管理员身份。'
+  if (err === 'insufficient_permissions')
+    return '权限不足：需要管理员身份。'
   return err
 })
 
@@ -17,11 +18,11 @@ const redirectPath = computed(() => (route.query.redirect as string) || '/')
 
 async function handleGitHubLogin() {
   loading.value = true
-  
+
   // 构建绝对路径的 Callback URL
   // 例如：https://starye.org/movie/
   const callbackURL = new URL(redirectPath.value, window.location.origin).toString()
-  
+
   await signIn.social({
     provider: 'github',
     callbackURL,
