@@ -1,29 +1,30 @@
 /* eslint-disable no-console */
 /**
- * 优化的 JavBus 爬虫 - 使用队列管理器
- * 支持高效并发处理和 GitHub Actions 运行
+ * JavBus 爬虫 - 重构版
+ * 使用优化的基类和工具
  */
 
 import type { Page } from 'puppeteer-core'
-import type { OptimizedCrawlerConfig } from '../lib/optimized-crawler'
 import type { MovieInfo } from '../lib/strategy'
-import { OptimizedCrawler } from '../lib/optimized-crawler'
+import type { OptimizedCrawlerConfig } from '../types/config'
+import {
+  CLOUDFLARE_INDICATORS,
+  DEFAULT_COOKIES,
+  DEFAULT_HEADERS,
+  DRIVER_VERIFY_INDICATORS,
+  JAVBUS_MIRRORS,
+  TIMEOUTS,
+  USER_AGENT,
+} from '../constants'
+import { OptimizedCrawler } from '../core/optimized-crawler'
 
 export interface JavBusCrawlerConfig extends OptimizedCrawlerConfig {
-  startUrl?: string // 起始 URL
-  useRandomMirror?: boolean // 是否随机使用镜像站点
+  startUrl?: string
+  useRandomMirror?: boolean
 }
 
 export class JavBusCrawler extends OptimizedCrawler {
   private currentPage = 1
-  private mirrorSites = [
-    'https://www.javbus.com',
-    'https://busdmm.bond',
-    'https://dmmbus.cyou',
-    'https://cdnbus.cyou',
-    'https://javsee.cyou',
-  ]
-
   private currentMirror: string
 
   constructor(config: JavBusCrawlerConfig) {
@@ -31,92 +32,97 @@ export class JavBusCrawler extends OptimizedCrawler {
 
     // 选择镜像站点
     if (config.useRandomMirror) {
-      this.currentMirror = this.mirrorSites[Math.floor(Math.random() * this.mirrorSites.length)]
+      this.currentMirror = JAVBUS_MIRRORS[Math.floor(Math.random() * JAVBUS_MIRRORS.length)]
       console.log(`🔄 使用随机镜像: ${this.currentMirror}`)
     }
     else {
-      this.currentMirror = config.startUrl || this.mirrorSites[0]
+      this.currentMirror = config.startUrl || JAVBUS_MIRRORS[0]
     }
   }
 
   /**
-   * 准备页面（设置 Cookie、User-Agent 等）
+   * 准备页面
    */
-  private async preparePage(page: Page, url: string) {
-    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    await page.setUserAgent(UA)
-
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-      'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-      'Sec-Ch-Ua-Mobile': '?0',
-      'Sec-Ch-Ua-Platform': '"Windows"',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-User': '?1',
-      'Upgrade-Insecure-Requests': '1',
-    })
+  private async preparePage(page: Page, url: string): Promise<void> {
+    await page.setUserAgent(USER_AGENT)
+    await page.setExtraHTTPHeaders(DEFAULT_HEADERS)
 
     // 设置 Cookie
     const urlObj = new URL(url)
     const domain = urlObj.hostname
 
     await page.setCookie(
-      { name: 'existmag', value: 'all', domain, path: '/' },
-      { name: 'age_verified', value: '1', domain, path: '/' },
-      { name: 'dv', value: '1', domain, path: '/' },
+      ...DEFAULT_COOKIES.map(cookie => ({
+        ...cookie,
+        domain,
+        path: '/',
+      })),
     )
 
     // 导航到页面
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 })
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: TIMEOUTS.navigation })
     }
     catch (e: any) {
       console.warn(`⚠️  导航超时: ${e.message}`)
     }
 
-    // 检测 Cloudflare
-    await this.waitForCloudflare(page)
+    // 检测反爬虫机制
+    await this.detectAntiBot(page)
   }
 
   /**
-   * 等待 Cloudflare 挑战完成
+   * 检测反爬虫机制
    */
-  private async waitForCloudflare(page: Page) {
-    try {
-      const pageState = await page.evaluate(() => {
-        const title = document.title
-        const bodyText = document.body.textContent || ''
-        return {
-          title,
-          hasCloudflare: title.includes('Just a moment') || title.includes('DDoS protection'),
-          hasDriverVerify: title.includes('driver-verify') || bodyText.includes('Driver Knowledge Test'),
-        }
-      })
+  private async detectAntiBot(page: Page): Promise<void> {
+    const pageState = await page.evaluate((cloudflareIndicators, driverVerifyIndicators) => {
+      const title = document.title
+      const bodyText = document.body.textContent || ''
 
-      if (pageState.hasDriverVerify) {
-        throw new Error('❌ 检测到 Driver Verify - IP 已被封禁！请更换 IP 或使用代理')
+      return {
+        title,
+        hasCloudflare: cloudflareIndicators.some(indicator => title.includes(indicator)),
+        hasDriverVerify: driverVerifyIndicators.some(indicator =>
+          title.includes(indicator) || bodyText.includes(indicator),
+        ),
+        bodyLength: bodyText.length,
       }
+    }, CLOUDFLARE_INDICATORS, DRIVER_VERIFY_INDICATORS)
 
-      if (pageState.hasCloudflare) {
-        console.log('⏳ 等待 Cloudflare 挑战...')
-        await page.waitForFunction(
-          () => {
-            const title = document.title
-            return !title.includes('Just a moment') && !title.includes('DDoS protection')
-          },
-          { timeout: 60000 },
-        )
-        console.log('✅ Cloudflare 挑战通过')
-      }
+    // 检测 Driver Verify（最严重）
+    if (pageState.hasDriverVerify) {
+      throw new Error(
+        '❌ 检测到 Driver Verify - IP 已被封禁！\n'
+        + '建议措施：\n'
+        + '  1. 更换 IP 地址（使用代理或 VPN）\n'
+        + '  2. 使用镜像站点\n'
+        + '  3. 等待 24 小时后重试\n'
+        + '  4. 降低爬取频率',
+      )
     }
-    catch (e: any) {
-      if (e.message.includes('Driver Verify')) {
-        throw e
-      }
-      console.warn('⚠️  Cloudflare 检测失败:', e.message)
+
+    // 检测 Cloudflare
+    if (pageState.hasCloudflare) {
+      console.log('⏳ 等待 Cloudflare 挑战...')
+      const startTime = Date.now()
+
+      await page.waitForFunction(
+        (indicators) => {
+          const title = document.title
+          return !indicators.some(indicator => title.includes(indicator))
+        },
+        { timeout: TIMEOUTS.cloudflare },
+        CLOUDFLARE_INDICATORS,
+      )
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+      console.log(`✅ Cloudflare 挑战通过 (${elapsed}s)`)
+    }
+
+    // 检测空白页面
+    if (pageState.bodyLength < 100) {
+      console.warn(`⚠️  页面内容异常短 (${pageState.bodyLength} 字符)`)
+      console.warn(`⚠️  标题: "${pageState.title}"`)
     }
   }
 
@@ -125,7 +131,7 @@ export class JavBusCrawler extends OptimizedCrawler {
    */
   private async getMovieLinks(page: Page): Promise<string[]> {
     try {
-      await page.waitForSelector('.movie-box', { timeout: 15000 })
+      await page.waitForSelector('.movie-box', { timeout: TIMEOUTS.selector })
     }
     catch {
       console.warn('⚠️  未找到 .movie-box 元素')
@@ -146,7 +152,7 @@ export class JavBusCrawler extends OptimizedCrawler {
     await this.preparePage(page, url)
 
     try {
-      await page.waitForSelector('h3', { timeout: 15000 })
+      await page.waitForSelector('h3', { timeout: TIMEOUTS.selector })
     }
     catch {
       console.warn('⚠️  未找到标题元素')
@@ -226,27 +232,23 @@ export class JavBusCrawler extends OptimizedCrawler {
    */
   async run(): Promise<void> {
     console.log('🚀 启动 JavBus 优化爬虫')
-    console.log(`📊 配置: 最大影片=${this.config.maxMovies}, 最大页数=${this.config.maxPages}`)
-    console.log(`⚙️  并发: 列表=${this.config.listPageConcurrency}, 详情=${this.config.detailPageConcurrency}, 图片=${this.config.imageConcurrency}`)
+    console.log(`📊 配置: 最大影片=${this.config.limits.maxMovies}, 最大页数=${this.config.limits.maxPages}`)
+    console.log(`⚙️  并发: 列表=${this.config.concurrency.listPage}, 详情=${this.config.concurrency.detailPage}, 图片=${this.config.concurrency.image}`)
 
-    this.stats.startTime = Date.now()
-
-    // 初始化
-    await this.initBrowser()
-    this.initProgressBar()
-    this.startStatsMonitor()
+    await this.init()
 
     try {
       // 主循环：爬取列表页
       while (true) {
         // 检查是否达到限制
-        if (this.config.maxPages && this.currentPage > this.config.maxPages) {
-          console.log(`✅ 达到最大页数限制: ${this.config.maxPages}`)
+        if (this.config.limits.maxPages && this.currentPage > this.config.limits.maxPages) {
+          console.log(`✅ 达到最大页数限制: ${this.config.limits.maxPages}`)
           break
         }
 
-        if (this.config.maxMovies && this.stats.moviesSuccess >= this.config.maxMovies) {
-          console.log(`✅ 达到最大影片数限制: ${this.config.maxMovies}`)
+        const stats = this.getStats()
+        if (this.config.limits.maxMovies && stats.moviesSuccess >= this.config.limits.maxMovies) {
+          console.log(`✅ 达到最大影片数限制: ${this.config.limits.maxMovies}`)
           break
         }
 
@@ -265,7 +267,7 @@ export class JavBusCrawler extends OptimizedCrawler {
             const movieLinks = await this.getMovieLinks(page)
 
             console.log(`✅ 第 ${this.currentPage} 页找到 ${movieLinks.length} 部影片`)
-            this.stats.moviesFound += movieLinks.length
+            this.progressMonitor.incrementMoviesFound(movieLinks.length)
 
             if (movieLinks.length === 0) {
               console.warn('⚠️  未找到影片，可能已到最后一页')
@@ -274,8 +276,8 @@ export class JavBusCrawler extends OptimizedCrawler {
 
             // 添加详情页任务
             for (const movieUrl of movieLinks) {
-              // 检查是否达到限制
-              if (this.config.maxMovies && this.stats.moviesSuccess >= this.config.maxMovies) {
+              const currentStats = this.getStats()
+              if (this.config.limits.maxMovies && currentStats.moviesSuccess >= this.config.limits.maxMovies) {
                 break
               }
 
@@ -297,8 +299,8 @@ export class JavBusCrawler extends OptimizedCrawler {
 
         this.currentPage++
 
-        // 检查是否应该停止
-        if (this.config.maxMovies && this.stats.moviesSuccess >= this.config.maxMovies) {
+        const currentStats = this.getStats()
+        if (this.config.limits.maxMovies && currentStats.moviesSuccess >= this.config.limits.maxMovies) {
           break
         }
       }
@@ -308,7 +310,7 @@ export class JavBusCrawler extends OptimizedCrawler {
       await this.queueManager.waitForAll()
 
       console.log('\n✅ 爬取完成！')
-      this.printStats()
+      this.progressMonitor.printStats()
       this.queueManager.printStats()
     }
     catch (error) {

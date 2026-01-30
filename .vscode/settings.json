@@ -20,6 +20,7 @@
   "cSpell.words": [
     "adsbygoogle",
     "apng",
+    "backgrounding",
     "booklist",
     "busdmm",
     "cdnbus",
@@ -37,6 +38,7 @@
     "existmag",
     "fanye",
     "historys",
+    "infobars",
     "isload",
     "javbus",
     "javdb",
@@ -69,6 +71,7 @@
     "ci",
     "dashboard",
     "crawler",
-    "comic"
+    "comic",
+    "movie"
   ]
 }
