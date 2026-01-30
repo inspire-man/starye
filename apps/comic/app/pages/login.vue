@@ -2,12 +2,14 @@
 import { signIn } from '~/lib/auth-client'
 
 const loading = ref(false)
+const route = useRoute()
+const error = computed(() => route.query.error)
 
 async function handleGitHubLogin() {
   loading.value = true
   await signIn.social({
     provider: 'github',
-    callbackURL: `${window.location.origin}/profile`, // Use absolute URL
+    callbackURL: `${window.location.origin}/`,
   })
 }
 </script>
@@ -22,6 +24,10 @@ async function handleGitHubLogin() {
         <p class="text-sm text-muted-foreground">
           Sign in to access your library
         </p>
+      </div>
+
+      <div v-if="error" class="p-3 bg-red-50 text-red-600 text-xs rounded-lg font-medium border border-red-100">
+        {{ error === 'insufficient_permissions' ? 'Access Denied: Administrator role required.' : error }}
       </div>
 
       <button

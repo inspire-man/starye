@@ -2,6 +2,8 @@
 import { signIn } from '~/lib/auth-client'
 
 const loading = ref(false)
+const route = useRoute()
+const error = computed(() => route.query.error)
 
 async function handleGitHubLogin() {
   loading.value = true
@@ -23,6 +25,10 @@ async function handleGitHubLogin() {
         <p class="text-sm text-muted-foreground">
           Sign in with GitHub to access the full movie library and verify your age.
         </p>
+      </div>
+
+      <div v-if="error" class="p-4 bg-red-500/10 text-red-500 text-sm rounded-xl font-bold border border-red-500/20">
+        {{ error === 'insufficient_permissions' ? 'Access Denied: Administrator role required.' : error }}
       </div>
 
       <button
