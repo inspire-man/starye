@@ -32,8 +32,13 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Deploy Blog
+      - name: Build Blog App (SSG)
+        env:
+          VITE_API_URL: https://api.starye.org
+        run: pnpm --filter blog generate
+
+      - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm --filter blog run deploy
+        run: pnpm exec wrangler pages deploy apps/blog/dist --project-name=blog-pages
