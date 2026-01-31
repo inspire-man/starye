@@ -4,7 +4,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   let sessionData
 
   if (import.meta.server) {
-    const headers = useRequestHeaders(['cookie'])
+    const headers = useRequestHeaders(['cookie', 'user-agent'])
     // eslint-disable-next-line no-console
     console.log('[SSR Auth] Fetching session with headers:', headers)
 
