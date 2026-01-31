@@ -49,7 +49,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       accountId: process.env.CLOUDFLARE_ACCOUNT_ID || '',
       accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-      bucket: process.env.R2_BUCKET_NAME || 'starye-media',
+      bucketName: process.env.R2_BUCKET_NAME || 'starye-media',
       publicUrl: process.env.R2_PUBLIC_URL || 'https://media.starye.org',
     },
     api: {
@@ -63,8 +63,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     // Strategy Selector
     if (url.includes('92hm')) {
       const strategy = new Site92Hm()
-      const crawler = new ComicCrawler(config, strategy)
-      await crawler.run(url)
+      const crawler = new ComicCrawler(config, strategy, url)
+      await crawler.run()
     }
     else {
       console.error('❌ Unsupported URL strategy')

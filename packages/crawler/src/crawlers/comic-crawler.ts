@@ -5,17 +5,21 @@ import type { CrawlStrategy } from '../lib/strategy'
 import { BaseCrawler } from '../lib/base-crawler'
 
 export class ComicCrawler extends BaseCrawler {
-  constructor(config: CrawlerConfig, private strategy: CrawlStrategy) {
+  constructor(
+    config: CrawlerConfig,
+    private strategy: CrawlStrategy,
+    private startUrl: string,
+  ) {
     super(config)
   }
 
-  async run(startUrl: string) {
+  async run() {
     await this.initBrowser()
     const page = await this.createPage()
 
     try {
-      console.log(`🚀 Starting crawl for: ${startUrl}`)
-      await this.processUrl(startUrl, page)
+      console.log(`🚀 Starting crawl for: ${this.startUrl}`)
+      await this.processUrl(this.startUrl, page)
     }
     catch (error) {
       console.error('❌ Crawl failed:', error)
