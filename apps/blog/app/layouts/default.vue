@@ -30,7 +30,8 @@ function handleLogout() {
             <span class="text-sm font-medium">{{ user.name }}</span>
             <button
               class="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-              @click="handleLogout">
+              @click="handleLogout"
+            >
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
@@ -40,8 +41,10 @@ function handleLogout() {
             </button>
           </div>
           <div v-else>
-            <NuxtLink to="/login"
-              class="text-sm font-bold px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90">
+            <NuxtLink
+              to="/login"
+              class="text-sm font-bold px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90"
+            >
               Login
             </NuxtLink>
           </div>
