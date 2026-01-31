@@ -19,9 +19,13 @@ export default {
     const url = new URL(request.url)
     const path = url.pathname
 
+    // Detect local development environment based on hostname
+    const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.startsWith('192.168.') || url.hostname.startsWith('10.')
+
     // 1. API Service
     if (path.startsWith('/api')) {
-      return proxy(request, env.API_ORIGIN || 'http://127.0.0.1:8787')
+      const target = isLocal ? 'http://127.0.0.1:8787' : (env.API_ORIGIN || 'http://127.0.0.1:8787')
+      return proxy(request, target)
     }
 
     // 2. Dashboard
@@ -31,7 +35,8 @@ export default {
       }
       // Dashboard is a pure SPA deployed at root of Pages
       // We need to strip the /dashboard prefix so it requests /assets/... from the Pages origin
-      return proxy(request, env.DASHBOARD_ORIGIN || 'http://localhost:5173', p => p.replace(/^\/dashboard/, ''))
+      const target = isLocal ? 'http://localhost:5173' : (env.DASHBOARD_ORIGIN || 'http://localhost:5173')
+      return proxy(request, target, p => p.replace(/^\/dashboard/, ''))
     }
 
     // 3. Movie App
@@ -39,7 +44,8 @@ export default {
       if (path === '/movie') {
         return Response.redirect(`${url.origin}/movie/`, 301)
       }
-      return proxy(request, env.MOVIE_ORIGIN || 'http://localhost:3001')
+      const target = isLocal ? 'http://localhost:3001' : (env.MOVIE_ORIGIN || 'http://localhost:3001')
+      return proxy(request, target)
     }
 
     // 4. Comic App
@@ -47,14 +53,16 @@ export default {
       if (path === '/comic') {
         return Response.redirect(`${url.origin}/comic/`, 301)
       }
-      return proxy(request, env.COMIC_ORIGIN || 'http://localhost:3000')
+      const target = isLocal ? 'http://localhost:3000' : (env.COMIC_ORIGIN || 'http://localhost:3000')
+      return proxy(request, target)
     }
 
     // 5. Blog App (Default / Main Site)
     if (path === '/') {
       return Response.redirect(`${url.origin}/blog/`, 301)
     }
-    return proxy(request, env.BLOG_ORIGIN || 'http://127.0.0.1:3002')
+    const target = isLocal ? 'http://127.0.0.1:3002' : (env.BLOG_ORIGIN || 'http://127.0.0.1:3002')
+    return proxy(request, target)
   },
 }
 
