@@ -4,7 +4,6 @@ import { actors as actorsTable, movies as moviesTable, players as playersTable, 
 import { and, count, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
-import { requireAuth } from '../middleware/guard'
 import { serviceAuth } from '../middleware/service-auth'
 
 const movies = new Hono<AppEnv>()
@@ -168,7 +167,7 @@ movies.post('/sync', serviceAuth(), async (c) => {
 })
 
 // 1. 获取电影列表 (带分页和过滤)
-movies.get('/', requireAuth(['movie_admin']), async (c) => {
+movies.get('/', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
@@ -225,7 +224,7 @@ movies.get('/', requireAuth(['movie_admin']), async (c) => {
 })
 
 // 2. 获取电影详情
-movies.get('/:slug', requireAuth(['movie_admin']), async (c) => {
+movies.get('/:slug', async (c) => {
   const db = c.get('db')
   const slug = c.req.param('slug')
   const isAdult = await checkIsAdult(c)
@@ -258,7 +257,7 @@ movies.get('/:slug', requireAuth(['movie_admin']), async (c) => {
 })
 
 // 4. 获取热门电影（按创建时间排序，最新的）
-movies.get('/featured/hot', requireAuth(['movie_admin']), async (c) => {
+movies.get('/featured/hot', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
@@ -291,7 +290,7 @@ movies.get('/featured/hot', requireAuth(['movie_admin']), async (c) => {
 })
 
 // 5. 获取所有女优列表（从独立表查询）
-movies.get('/actors/list', requireAuth(['movie_admin']), async (c) => {
+movies.get('/actors/list', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
@@ -331,7 +330,7 @@ movies.get('/actors/list', requireAuth(['movie_admin']), async (c) => {
 })
 
 // 6. 获取女优详情（包含作品列表）
-movies.get('/actors/:slug', requireAuth(['movie_admin']), async (c) => {
+movies.get('/actors/:slug', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
   const actorSlug = c.req.param('slug')
@@ -393,7 +392,7 @@ movies.get('/actors/:slug', requireAuth(['movie_admin']), async (c) => {
 })
 
 // 7. 获取所有厂商列表（从独立表查询）
-movies.get('/publishers/list', requireAuth(['movie_admin']), async (c) => {
+movies.get('/publishers/list', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
@@ -433,7 +432,7 @@ movies.get('/publishers/list', requireAuth(['movie_admin']), async (c) => {
 })
 
 // 8. 获取厂商详情（包含作品列表）
-movies.get('/publishers/:slug', requireAuth(['movie_admin']), async (c) => {
+movies.get('/publishers/:slug', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
   const publisherSlug = c.req.param('slug')
@@ -496,7 +495,7 @@ movies.get('/publishers/:slug', requireAuth(['movie_admin']), async (c) => {
 })
 
 // 9. 获取所有类型/标签列表（从 genres 字段提取）
-movies.get('/genres/list', requireAuth(['movie_admin']), async (c) => {
+movies.get('/genres/list', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
@@ -535,7 +534,7 @@ movies.get('/genres/list', requireAuth(['movie_admin']), async (c) => {
 })
 
 // 10. 获取首页数据（热门影片 + 热门女优）
-movies.get('/home/featured', requireAuth(['movie_admin']), async (c) => {
+movies.get('/home/featured', async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
