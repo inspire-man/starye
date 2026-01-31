@@ -51,6 +51,9 @@ export default {
     }
 
     // 5. Blog App (Default / Main Site)
+    if (path === '/') {
+      return Response.redirect(`${url.origin}/blog/`, 301)
+    }
     return proxy(request, env.BLOG_ORIGIN || 'http://127.0.0.1:3002')
   },
 }

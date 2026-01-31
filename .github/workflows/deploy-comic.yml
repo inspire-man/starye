@@ -37,7 +37,7 @@ jobs:
 
       - name: Build Comic App (SSG)
         env:
-          VITE_API_URL: https://api.starye.org
+          VITE_API_URL: https://starye.org
         run: pnpm --filter comic generate
 
       - name: Deploy to Cloudflare Pages

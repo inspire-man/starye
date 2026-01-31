@@ -37,7 +37,7 @@ jobs:
 
       - name: Build Dashboard
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_API_URL: https://starye.org
         run: pnpm --filter dashboard build
 
       - name: Deploy to Cloudflare Pages

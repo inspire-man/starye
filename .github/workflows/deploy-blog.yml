@@ -34,7 +34,7 @@ jobs:
 
       - name: Build Blog App (SSG)
         env:
-          VITE_API_URL: https://api.starye.org
+          VITE_API_URL: https://starye.org
         run: pnpm --filter blog generate
 
       - name: Deploy to Cloudflare Pages
