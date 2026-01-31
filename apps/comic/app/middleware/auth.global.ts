@@ -6,7 +6,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // 检查是否已登录
 
   if (!session.value.data) {
-    const redirectUrl = `/blog/login?redirect=${encodeURIComponent(to.fullPath)}`
+    const targetPath = to.fullPath.startsWith('/comic') ? to.fullPath : `/comic${to.fullPath.startsWith('/') ? '' : '/'}${to.fullPath}`
+    // Clean up potential double slashes just in case
+    const cleanTargetPath = targetPath.replace('//', '/')
+    const redirectUrl = `/blog/login?redirect=${encodeURIComponent(cleanTargetPath)}`
 
     return navigateTo(redirectUrl, { external: true })
   }
@@ -20,7 +23,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // 检查权限
 
   if (!role || !allowedRoles.includes(role)) {
-    const errorUrl = `/blog/login?error=insufficient_permissions&redirect=${encodeURIComponent(to.fullPath)}`
+    const targetPath = to.fullPath.startsWith('/comic') ? to.fullPath : `/comic${to.fullPath.startsWith('/') ? '' : '/'}${to.fullPath}`
+    const cleanTargetPath = targetPath.replace('//', '/')
+    const errorUrl = `/blog/login?error=insufficient_permissions&redirect=${encodeURIComponent(cleanTargetPath)}`
 
     return navigateTo(errorUrl, { external: true })
   }

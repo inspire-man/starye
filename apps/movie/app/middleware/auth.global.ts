@@ -7,8 +7,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (!session.value.data) {
     // 跳转到统一登录页，并携带当前路径以便跳回
-
-    const redirectUrl = `/blog/login?redirect=${encodeURIComponent(to.fullPath)}`
+    const targetPath = to.fullPath.startsWith('/movie') ? to.fullPath : `/movie${to.fullPath.startsWith('/') ? '' : '/'}${to.fullPath}`
+    const cleanTargetPath = targetPath.replace('//', '/')
+    const redirectUrl = `/blog/login?redirect=${encodeURIComponent(cleanTargetPath)}`
 
     return navigateTo(redirectUrl, { external: true })
   }
@@ -22,7 +23,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // 检查角色权限
 
   if (!role || !allowedRoles.includes(role)) {
-    const errorUrl = `/blog/login?error=insufficient_permissions&redirect=${encodeURIComponent(to.fullPath)}`
+    const targetPath = to.fullPath.startsWith('/movie') ? to.fullPath : `/movie${to.fullPath.startsWith('/') ? '' : '/'}${to.fullPath}`
+    const cleanTargetPath = targetPath.replace('//', '/')
+    const errorUrl = `/blog/login?error=insufficient_permissions&redirect=${encodeURIComponent(cleanTargetPath)}`
 
     return navigateTo(errorUrl, { external: true })
   }
