@@ -23,12 +23,12 @@ function handleLogout() {
           <NuxtLink to="/" class="hover:underline">
             Home
           </NuxtLink>
-          
+
           <div v-if="user" class="flex items-center gap-2">
-            <img 
-              v-if="user.image" 
-              :src="user.image" 
-              alt="User Avatar" 
+            <img
+              v-if="user.image"
+              :src="user.image"
+              alt="User Avatar"
               class="w-8 h-8 rounded-full border"
             >
             <span class="text-sm font-medium">{{ user.name }}</span>

@@ -8,6 +8,8 @@ const authClient = createAuthClient({
   baseURL: `${apiUrl}/api/auth`,
 })
 
+export { authClient }
+
 export const { signIn, signUp, signOut } = authClient
 
 export function useSession() {
