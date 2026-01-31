@@ -5,12 +5,22 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (import.meta.server) {
     const headers = useRequestHeaders(['cookie'])
-    const { data } = await authClient.getSession({
-      fetchOptions: {
-        headers,
-      },
-    })
-    sessionData = data
+    // eslint-disable-next-line no-console
+    console.log('[SSR Auth] Fetching session with headers:', headers)
+
+    try {
+      const { data, error } = await authClient.getSession({
+        fetchOptions: {
+          headers,
+        },
+      })
+      // eslint-disable-next-line no-console
+      console.log('[SSR Auth] Result:', { data, error })
+      sessionData = data
+    }
+    catch (e) {
+      console.error('[SSR Auth] Exception:', e)
+    }
   }
   else {
     const session = useSession()
