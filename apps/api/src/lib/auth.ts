@@ -49,7 +49,7 @@ export function createAuth(env: Env, request: Request) {
 
   const trustedOrigins = getAllowedOrigins(env)
   // eslint-disable-next-line no-console
-  console.log(`[Auth Debug] baseURL=${baseURL}, isHttps=${isHttps}, trustedOrigins=${JSON.stringify(trustedOrigins)}`)
+  console.log(`[Auth Debug] baseURL=${baseURL}, isHttps=${isHttps}, cookieDomain=${cookieDomain}, WEB_URL=${env.WEB_URL}, trustedOrigins=${JSON.stringify(trustedOrigins)}`)
 
   return betterAuth({
     database: drizzleAdapter(db, {

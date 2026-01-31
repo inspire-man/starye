@@ -2,7 +2,9 @@ import type { Ref } from 'vue'
 import type { ExtendedSession } from '~/types/auth'
 import { createAuthClient } from 'better-auth/vue'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+// Prioritize Runtime Config compatible env vars, then Vite vars, then production fallback
+// eslint-disable-next-line node/prefer-global/process
+const apiUrl = process.env.NUXT_PUBLIC_API_URL || import.meta.env.VITE_API_URL || 'https://starye.org'
 
 const authClient = createAuthClient({
   baseURL: `${apiUrl}/api/auth`,
