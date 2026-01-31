@@ -30,18 +30,14 @@ export function createAuth(env: Env, request: Request) {
   // 动态获取 BaseURL
   const url = new URL(request.url)
 
-  // 检查是否通过 Gateway 转发 (如果有自定义 Header)
+  // 检查是否通过 Gateway 转发
   const forwardedHost = request.headers.get('x-forwarded-host')
-  const protocol = request.headers.get('x-forwarded-proto') || 'http'
-  const origin = forwardedHost ? `${protocol}://${forwardedHost}` : `${url.protocol}//${url.host}`
+  const forwardedProto = request.headers.get('x-forwarded-proto')
+  const origin = forwardedHost ? `${forwardedProto || 'https'}://${forwardedHost}` : `${url.protocol}//${url.host}`
 
   // 核心：Better Auth 的 baseURL 必须指向它自己挂载的端点
   const baseURL = env.BETTER_AUTH_URL || `${origin}/api/auth`
-  const isHttps = url.protocol === 'https:' || forwardedHost?.startsWith('https')
-
-  // 使用 origin 的 hostname 来判断是否为本地开发，这比 request.url 更准确（因为 Gateway 会传递原始 Host）
-  const originHostname = new URL(baseURL).hostname
-  const isLocalDev = originHostname === 'localhost' || originHostname === '127.0.0.1' || originHostname === '[::1]' || originHostname.match(/\d+\.\d+\.\d+\.\d+/)
+  const isHttps = url.protocol === 'https:' || forwardedProto === 'https'
 
   const cookieDomain = (env.WEB_URL && !isLocalDev)
     ? new URL(env.WEB_URL).hostname.replace('www.', '')
@@ -49,7 +45,7 @@ export function createAuth(env: Env, request: Request) {
 
   const trustedOrigins = getAllowedOrigins(env)
   // eslint-disable-next-line no-console
-  console.log(`[Auth Debug] baseURL=${baseURL}, isHttps=${isHttps}, cookieDomain=${cookieDomain}, WEB_URL=${env.WEB_URL}, trustedOrigins=${JSON.stringify(trustedOrigins)}`)
+  console.log(`[Auth Debug] baseURL=${baseURL}, isHttps=${isHttps}, cookieDomain=${cookieDomain}, origin=${origin}, forwardedHost=${forwardedHost}`)
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -87,15 +83,16 @@ export function createAuth(env: Env, request: Request) {
       },
     },
     // 允许前端跨域访问
-    trustedOrigins: getAllowedOrigins(env),
+    trustedOrigins,
     advanced: {
       cookiePrefix: 'starye',
       // Cloudflare Workers 必须的默认配置
       defaultCookieAttributes: {
-        // 在本地 HTTP 开发时，SameSite 必须是 Lax 或 Strict，不能是 None (None 需要 Secure)
-        sameSite: isHttps ? 'none' : 'lax',
+        // 在顶级域名共享时，Lax 是最合适的（比 None 更安全，且不需要跨站点权限）
+        sameSite: isLocalDev ? 'lax' : (isHttps ? 'lax' : 'lax'),
         secure: isHttps,
         domain: cookieDomain,
+        path: '/', // 极其重要：确保 Cookie 在 /comic, /movie 等路径下也有效
       },
     },
   })
