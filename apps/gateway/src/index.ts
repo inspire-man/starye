@@ -12,6 +12,7 @@ interface Env {
   BLOG_ORIGIN?: string
   MOVIE_ORIGIN?: string
   COMIC_ORIGIN?: string
+  AUTH_ORIGIN?: string
 }
 
 export default {
@@ -57,7 +58,16 @@ export default {
       return proxy(request, target)
     }
 
-    // 5. Blog App (Default / Main Site)
+    // 5. Auth Service (Identity Provider)
+    if (path.startsWith('/auth')) {
+      if (path === '/auth') {
+        return Response.redirect(`${url.origin}/auth/`, 301)
+      }
+      const target = isLocal ? 'http://localhost:3003' : (env.AUTH_ORIGIN || 'http://localhost:3003')
+      return proxy(request, target)
+    }
+
+    // 6. Blog App (Default / Main Site)
     if (path === '/') {
       return Response.redirect(`${url.origin}/blog/`, 301)
     }

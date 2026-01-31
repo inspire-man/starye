@@ -33,7 +33,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     // 跳转到统一登录页，并携带当前路径以便跳回
     const targetPath = to.fullPath.startsWith('/movie') ? to.fullPath : `/movie${to.fullPath.startsWith('/') ? '' : '/'}${to.fullPath}`
     const cleanTargetPath = targetPath.replace('//', '/')
-    const redirectUrl = `/blog/login?redirect=${encodeURIComponent(cleanTargetPath)}`
+    const redirectUrl = `/auth/login?redirect=${encodeURIComponent(cleanTargetPath)}`
 
     return navigateTo(redirectUrl, { external: true })
   }
@@ -49,7 +49,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (!role || !allowedRoles.includes(role)) {
     const targetPath = to.fullPath.startsWith('/movie') ? to.fullPath : `/movie${to.fullPath.startsWith('/') ? '' : '/'}${to.fullPath}`
     const cleanTargetPath = targetPath.replace('//', '/')
-    const errorUrl = `/blog/login?error=insufficient_permissions&redirect=${encodeURIComponent(cleanTargetPath)}`
+    const errorUrl = `/auth/login?error=insufficient_permissions&redirect=${encodeURIComponent(cleanTargetPath)}`
 
     return navigateTo(errorUrl, { external: true })
   }

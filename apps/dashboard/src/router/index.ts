@@ -48,7 +48,7 @@ router.beforeEach(async (to, _from, next) => {
   console.log('[Auth Guard] Session:', session)
 
   if (!session) {
-    window.location.href = `/blog/login?redirect=${encodeURIComponent(window.location.pathname)}`
+    window.location.href = `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`
     return
   }
 
@@ -59,7 +59,7 @@ router.beforeEach(async (to, _from, next) => {
 
   const allowedRoles = ['super_admin', 'admin', 'comic_admin', 'movie_admin']
   if (!allowedRoles.includes(role)) {
-    window.location.href = `/blog/login?error=insufficient_permissions&redirect=${encodeURIComponent(window.location.pathname)}`
+    window.location.href = `/auth/login?error=insufficient_permissions&redirect=${encodeURIComponent(window.location.pathname)}`
     return
   }
 
