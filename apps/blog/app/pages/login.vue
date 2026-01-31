@@ -22,13 +22,11 @@ async function handleGitHubLogin() {
   // 构建绝对路径的 Callback URL
   // 例如：https://starye.org/movie/
   const callbackURL = new URL(redirectPath.value, window.location.origin).toString()
-  
+
+  // eslint-disable-next-line no-console
   console.log('[Login] callbackURL:', callbackURL)
 
-  await signIn.social({
-    provider: 'github',
-    callbackURL,
-  })
+  await signIn.social({ provider: 'github', callbackURL })
 }
 </script>
 
