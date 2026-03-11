@@ -1,8 +1,8 @@
 import { createAuthClient } from 'better-auth/vue'
 
-// Prioritize Runtime Config compatible env vars, then Vite vars, then local dev fallback
-// eslint-disable-next-line node/prefer-global/process
-const apiUrl = process.env.NUXT_PUBLIC_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080'
+// For client-side code, use Vite's import.meta.env instead of process.env
+// In production, VITE_API_URL will be replaced by the build-time value
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 export const authClient = createAuthClient({
   baseURL: `${apiUrl}/api/auth`,

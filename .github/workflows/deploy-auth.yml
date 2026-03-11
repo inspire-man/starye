@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -34,7 +34,7 @@ jobs:
 
       - name: Build Auth App (SSG)
         env:
-          NUXT_PUBLIC_API_URL: https://starye.org
+          VITE_API_URL: https://starye.org
         run: pnpm --filter starye-auth generate
 
       - name: Deploy to Cloudflare Pages
