@@ -22,12 +22,27 @@ export class Site92Hm implements CrawlStrategy {
 
     const result = parseMangaList(document as unknown as Document)
 
-    if (result.mangas.length === 0 && !result.next) {
+    // ✅ 将相对路径转换为绝对 URL
+    const mangas = result.mangas.map((mangaUrl) => {
+      if (mangaUrl.startsWith('http')) {
+        return mangaUrl // 已经是完整 URL
+      }
+      // 相对路径，拼接 baseUrl
+      return `${this.baseUrl}${mangaUrl.startsWith('/') ? '' : '/'}${mangaUrl}`
+    })
+
+    // ✅ 处理 next 页面 URL
+    let next = result.next
+    if (next && !next.startsWith('http')) {
+      next = `${this.baseUrl}${next.startsWith('/') ? '' : '/'}${next}`
+    }
+
+    if (mangas.length === 0 && !next) {
       console.warn(`⚠️ No mangas found for: ${url}`)
     }
 
     window.close()
-    return result
+    return { mangas, next }
   }
 
   async getMangaInfo(url: string, page: Page): Promise<MangaInfo> {
@@ -39,6 +54,20 @@ export class Site92Hm implements CrawlStrategy {
     document.write(html)
 
     const info = parseMangaInfo(document as unknown as Document, url)
+
+    // ✅ 标准化 chapters 中的相对 URL
+    if (info.chapters) {
+      info.chapters = info.chapters.map((chapter) => {
+        let chapterUrl = chapter.url
+        if (chapterUrl && !chapterUrl.startsWith('http')) {
+          chapterUrl = `${this.baseUrl}${chapterUrl.startsWith('/') ? '' : '/'}${chapterUrl}`
+        }
+        return {
+          ...chapter,
+          url: chapterUrl,
+        }
+      })
+    }
 
     window.close()
     return info
@@ -68,11 +97,20 @@ export class Site92Hm implements CrawlStrategy {
         console.warn(`⚠️ Could not determine comicSlug for ${url}. Sync might fail.`)
       }
 
+      // ✅ 将相对路径的 prev/next 转换为绝对 URL
+      const normalizeUrl = (relativeUrl?: string) => {
+        if (!relativeUrl)
+          return undefined
+        if (relativeUrl.startsWith('http'))
+          return relativeUrl
+        return `${this.baseUrl}${relativeUrl.startsWith('/') ? '' : '/'}${relativeUrl}`
+      }
+
       return {
         title: data.title,
         images: data.images,
-        prev: data.prev,
-        next: data.next,
+        prev: normalizeUrl(data.prev),
+        next: normalizeUrl(data.next),
         comicSlug: comicSlug || '',
         chapterSlug,
       }
