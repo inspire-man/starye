@@ -10,7 +10,7 @@ export class SiteSe8 implements CrawlStrategy {
   }
 
   async getMangaInfo(url: string, page: Page): Promise<MangaInfo> {
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 })
 
     const info = await page.evaluate(() => {
       // 标题去掉 "- 韩漫库..." 后缀

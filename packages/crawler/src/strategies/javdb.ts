@@ -41,7 +41,7 @@ export class JavDBStrategy implements MovieCrawlStrategy {
 
   async getMovieList(url: string, page: Page): Promise<{ movies: string[], next?: string }> {
     await this._preparePage(page)
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 })
     await this._handleChallenge(page)
 
     return page.evaluate(() => {
@@ -72,7 +72,7 @@ export class JavDBStrategy implements MovieCrawlStrategy {
 
   async getMovieInfo(url: string, page: Page): Promise<MovieInfo> {
     await this._preparePage(page)
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 })
     await this._handleChallenge(page)
 
     return page.evaluate((pageUrl) => {

@@ -4,6 +4,40 @@ import got from 'got'
 import { Window } from 'happy-dom'
 import { parseChapterContent, parseMangaInfo, parseMangaList } from './site-92hm-parser'
 
+/**
+ * 重试包装器：处理网络超时和临时错误
+ */
+async function retryPageGoto(
+  page: Page,
+  url: string,
+  options: { waitUntil: 'domcontentloaded', timeout: number },
+  maxRetries = 3,
+): Promise<void> {
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await page.goto(url, options)
+      return // 成功
+    }
+    catch (error) {
+      lastError = error as Error
+      const isTimeout = error instanceof Error && error.message.includes('Navigation timeout')
+
+      if (attempt < maxRetries && isTimeout) {
+        console.warn(`⚠️ 导航超时 (尝试 ${attempt}/${maxRetries}): ${url}`)
+        console.warn(`   等待 ${attempt * 2} 秒后重试...`)
+        await new Promise(resolve => setTimeout(resolve, attempt * 2000)) // 指数退避
+        continue
+      }
+
+      throw error // 非超时错误或已达最大重试次数
+    }
+  }
+
+  throw lastError || new Error('Unknown error during retry')
+}
+
 export class Site92Hm implements CrawlStrategy {
   name = '92hm'
   baseUrl = 'https://www.92hm.life'
@@ -13,7 +47,7 @@ export class Site92Hm implements CrawlStrategy {
   }
 
   async getMangaList(url: string, page: Page): Promise<{ mangas: string[], next?: string }> {
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await retryPageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 90000 })
     const html = await page.content()
 
     const window = new Window()
@@ -46,7 +80,7 @@ export class Site92Hm implements CrawlStrategy {
   }
 
   async getMangaInfo(url: string, page: Page): Promise<MangaInfo> {
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await retryPageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 90000 })
     const html = await page.content()
 
     const window = new Window()
@@ -148,7 +182,7 @@ export class Site92Hm implements CrawlStrategy {
     }
 
     // 2. Slow Path: Puppeteer
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await retryPageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 90000 })
     const html = await page.content()
     const data = parseFromHtml(html)
 

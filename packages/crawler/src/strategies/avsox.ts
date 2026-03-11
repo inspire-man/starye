@@ -11,7 +11,7 @@ export class AvSoxStrategy implements MovieCrawlStrategy {
   }
 
   async getMovieList(url: string, page: Page): Promise<{ movies: string[], next?: string }> {
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 })
     const html = await page.content()
     const $ = cheerio.load(html)
 
@@ -61,7 +61,7 @@ export class AvSoxStrategy implements MovieCrawlStrategy {
   }
 
   async getMovieInfo(url: string, page: Page): Promise<MovieInfo> {
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 })
     const html = await page.content()
     const $ = cheerio.load(html)
 
