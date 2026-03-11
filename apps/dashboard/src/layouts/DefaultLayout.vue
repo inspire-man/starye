@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { signOut, useSession } from '@/lib/auth-client'
 
-const router = useRouter()
 const { t, locale } = useI18n()
 const session = useSession() // Don't destructure data immediately if types are ambiguous
 
@@ -14,13 +12,14 @@ function toggleLocale() {
 }
 
 async function handleLogout() {
-  await signOut({
-    fetchOptions: {
-      onSuccess: () => {
-        router.push('/login')
-      },
-    },
-  })
+  try {
+    await signOut()
+    // 登出成功后重定向到中央登录页
+    window.location.href = '/auth/login'
+  }
+  catch (error) {
+    console.error('登出失败:', error)
+  }
 }
 </script>
 

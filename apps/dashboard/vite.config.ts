@@ -13,6 +13,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // 始终使用 /dashboard/ 作为 base，与 Gateway 路由保持一致
   base: '/dashboard/',
   server: {
     port: 5173,

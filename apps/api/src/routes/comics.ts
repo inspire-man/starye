@@ -18,7 +18,7 @@ async function checkIsAdult(c: Context<AppEnv>) {
 }
 
 // 1. List Comics (For Search Indexing & Frontend)
-comics.get('/', requireAuth(['comic_admin']), async (c) => {
+comics.get('/', requireAuth(['super_admin', 'admin', 'comic_admin']), async (c) => {
   const db = c.get('db')
   const isAdult = await checkIsAdult(c)
 
@@ -80,7 +80,7 @@ comics.get('/', requireAuth(['comic_admin']), async (c) => {
 })
 
 // 2. Comic Details (With Chapters)
-comics.get('/:slug', requireAuth(['comic_admin']), async (c) => {
+comics.get('/:slug', requireAuth(['super_admin', 'admin', 'comic_admin']), async (c) => {
   const db = c.get('db')
   const slug = c.req.param('slug')
   const isAdult = await checkIsAdult(c)
@@ -119,7 +119,7 @@ comics.get('/:slug', requireAuth(['comic_admin']), async (c) => {
 })
 
 // 3. Read Chapter (Pages)
-comics.get('/:slug/:chapterSlug', requireAuth(['comic_admin']), async (c) => {
+comics.get('/:slug/:chapterSlug', requireAuth(['super_admin', 'admin', 'comic_admin']), async (c) => {
   const db = c.get('db')
   const { slug, chapterSlug } = c.req.param()
   const isAdult = await checkIsAdult(c)

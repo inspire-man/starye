@@ -1,4 +1,4 @@
-import { authClient, useSession } from '~/lib/auth-client'
+import { authClient } from '~/lib/auth-client'
 
 export default defineNuxtRouteMiddleware(async (to) => {
   let sessionData
@@ -23,15 +23,24 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
   }
   else {
-    const session = useSession()
-    sessionData = session.value.data
+    // 客户端：主动获取 Session，而不是依赖 useSession 的响应式状态
+    // eslint-disable-next-line no-console
+    console.log('[CSR Auth] Fetching session on client side')
+
+    try {
+      const { data, error } = await authClient.getSession()
+      // eslint-disable-next-line no-console
+      console.log('[CSR Auth] Result:', { data, error })
+      sessionData = data
+    }
+    catch (e) {
+      console.error('[CSR Auth] Exception:', e)
+    }
   }
 
   // 检查是否已登录
-
   if (!sessionData) {
     const targetPath = to.fullPath.startsWith('/comic') ? to.fullPath : `/comic${to.fullPath.startsWith('/') ? '' : '/'}${to.fullPath}`
-    // Clean up potential double slashes just in case
     const cleanTargetPath = targetPath.replace('//', '/')
     const redirectUrl = `/auth/login?redirect=${encodeURIComponent(cleanTargetPath)}`
 
@@ -39,12 +48,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   const user = sessionData.user
-
   const role = user.role
-
   const allowedRoles = ['super_admin', 'admin', 'comic_admin']
 
-  // 检查权限
+  // eslint-disable-next-line no-console
+  console.log('[Comic Auth] User role:', role, 'Allowed roles:', allowedRoles)
 
   if (!role || !allowedRoles.includes(role)) {
     const targetPath = to.fullPath.startsWith('/comic') ? to.fullPath : `/comic${to.fullPath.startsWith('/') ? '' : '/'}${to.fullPath}`

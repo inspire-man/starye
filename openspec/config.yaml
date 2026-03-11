@@ -1,0 +1,59 @@
+context: |
+  项目名称: starye（个人全栈项目，Cloudflare 为主）
+  技术栈:
+    - 后端: TypeScript + Cloudflare Workers + D1(SQLite) + Drizzle ORM
+    - 鉴权: better-auth（GitHub 登录、会话存储在 D1）
+    - 前端 Dashboard: Vue 3 + TypeScript + vue-router + vue-i18n + Vite
+    - 代理网关: Cloudflare Worker 反向代理 (apps/gateway)
+    - packages/db: Drizzle schema 与数据库访问
+  项目结构（部分）:
+    - apps/api: 提供 REST API、鉴权、文件存储等能力
+    - apps/dashboard: 管理后台（如 PostEditor 等内容管理）
+    - apps/gateway: 将 /api、/dashboard、/movie、/comic、/auth 等路径路由到对应服务
+    - packages/db: Drizzle schema 与数据库访问
+  部署与运行:
+    - Worker 运行环境，无 Node.js 内置模块，需使用 Web 标准 API（Request/Response、fetch 等）
+    - Cookie/Session 必须兼容 Cloudflare 平台（secure/sameSite 域名等在 auth.ts 已处理）
+  编码与文档约定:
+    - 代码与配置使用 TypeScript/ESM 风格，ESLint 使用 @antfu/eslint-config
+    - Vue 组件优先使用 <script setup> + Composition API
+    - 中文为主的注释与文档；OpenSpec 产物（proposal/spec/tasks 等）也使用中文
+    - 需求描述中可使用 MUST/SHALL 等关键字，方便后续检索与验证
+  设计原则:
+    - 遵循最小可行改动：先小步提交、再重构
+    - 后端 API 要考虑 Cloudflare Workers 的资源限制（CPU 时间、内存、无文件系统）
+    - Dashboard 调用 API 时统一通过 authClient，保持鉴权与错误处理一致
+
+rules:
+  proposal:
+    - 使用中文撰写，结构建议为「背景 / 目标 / 非目标 / 风险 / 里程碑」
+    - 明确列出范围外内容，并在文中至少包含一个 MUST/SHALL 关键字
+  spec:
+    - 使用中文撰写，建议结构为「背景 / 需求列表 / 接口或组件设计 / 状态与边界情况 / 风险」
+    - 每条核心需求行末加上 MUST/SHALL 便于追踪
+  tasks:
+    - 将任务拆解为 0.5–2 小时可完成的粒度，避免过大
+    - 每个任务需包含明确的完成标准（可以是验证步骤或可观察结果）
+  change:
+    - 变更目录命名遵循 `YYYY-mm-dd-{{Feature name}}`，例如 `2026-01-27-user-export`
+    - 变更说明中简要列出本次涉及的 apps（如 api/dashboard/gateway）与主要风险点
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

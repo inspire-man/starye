@@ -66,9 +66,9 @@ function formatDate(dateString: string) {
         <p class="text-muted-foreground text-sm mb-6">
           {{ error.message }}
         </p>
-        <Button class="px-6 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-sm" @click="refresh">
+        <button class="px-6 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-sm" @click="refresh">
           Try Again
-        </Button>
+        </button>
       </div>
 
       <div v-else class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

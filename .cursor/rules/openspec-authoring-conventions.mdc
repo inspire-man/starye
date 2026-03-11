@@ -1,0 +1,15 @@
+---
+alwaysApply: false
+---
+## Project Conventions
+
+### OpenSpec Authoring Conventions
+- 语言策略:
+  - 对话与生成文档 (proposal.md, design.md, tasks.md, spec.md 描述部分): 使用中文
+  - 代码注释: 使用中文
+- Requirement 描述格式:
+  - 为便于归档, 每条 Requirement 的描述行末尾需包含至少一个 MUST/SHALL 关键字
+  - 其余内容保持中文
+- Changes 目录命名规范:
+  - 格式: `YYYY-mm-dd-{{Feature name}}`
+  - 示例: `2026-01-27-user-export`

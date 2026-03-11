@@ -15,9 +15,6 @@ interface Env {
   AUTH_ORIGIN?: string
 }
 
-// Move regex to module scope to avoid re-compilation
-const DASHBOARD_PREFIX_REGEX = /^\/dashboard/
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -37,10 +34,9 @@ export default {
       if (path === '/dashboard') {
         return Response.redirect(`${url.origin}/dashboard/`, 301)
       }
-      // Dashboard is a pure SPA deployed at root of Pages
-      // We need to strip the /dashboard prefix so it requests /assets/... from the Pages origin
+      // Dashboard 使用 base: '/dashboard/'，不需要路径重写
       const target = isLocal ? 'http://localhost:5173' : (env.DASHBOARD_ORIGIN || 'http://localhost:5173')
-      return proxy(request, target, p => p.replace(DASHBOARD_PREFIX_REGEX, ''))
+      return proxy(request, target)
     }
 
     // 3. Movie App
@@ -48,7 +44,7 @@ export default {
       if (path === '/movie') {
         return Response.redirect(`${url.origin}/movie/`, 301)
       }
-      const target = isLocal ? 'http://localhost:3001' : (env.MOVIE_ORIGIN || 'http://localhost:3001')
+      const target = isLocal ? 'http://localhost:3004' : (env.MOVIE_ORIGIN || 'http://localhost:3004')
       return proxy(request, target)
     }
 
@@ -57,7 +53,7 @@ export default {
       if (path === '/comic') {
         return Response.redirect(`${url.origin}/comic/`, 301)
       }
-      const target = isLocal ? 'http://localhost:3000' : (env.COMIC_ORIGIN || 'http://localhost:3000')
+      const target = isLocal ? 'http://localhost:3003' : (env.COMIC_ORIGIN || 'http://localhost:3003')
       return proxy(request, target)
     }
 
@@ -66,7 +62,7 @@ export default {
       if (path === '/auth') {
         return Response.redirect(`${url.origin}/auth/`, 301)
       }
-      const target = isLocal ? 'http://localhost:3003' : (env.AUTH_ORIGIN || 'http://localhost:3003')
+      const target = isLocal ? 'http://localhost:3005' : (env.AUTH_ORIGIN || 'http://localhost:3005')
       return proxy(request, target)
     }
 

@@ -3,8 +3,12 @@ import { Github, Loader2 } from 'lucide-vue-next'
 import { signIn, useSession } from '~/lib/auth-client'
 
 const route = useRoute()
-const { data: session, isPending } = useSession()
+const sessionData = useSession()
 const loading = ref(false)
+
+// 安全访问 session 数据
+const session = computed(() => sessionData.value?.data || null)
+const isPending = computed(() => sessionData.value?.isPending || false)
 
 // 错误信息处理
 const error = computed(() => {
@@ -21,21 +25,44 @@ const redirectPath = computed(() => {
   return path.startsWith('http') ? path : (path.startsWith('/') ? path : `/${path}`)
 })
 
-// 核心逻辑：如果已经有 Session，则执行跳转
+// 核心逻辑：如果已经有 Session 且没有权限错误，则执行跳转
+// 添加防抖，避免频繁触发
+let redirectTimer: NodeJS.Timeout | null = null
 watchEffect(() => {
-  if (session.value && !isPending.value) {
+  // 如果有权限错误，不自动跳转（避免无限循环）
+  if (error.value) {
+    return
+  }
+
+  if (session.value && !isPending.value && redirectPath.value !== '/auth/login') {
     const target = decodeURIComponent(redirectPath.value)
+
+    // 避免重定向到自己
+    if (target === window.location.pathname || target === '/auth/login') {
+      // eslint-disable-next-line no-console
+      console.log('[Login] Already on target page, skipping redirect')
+      return
+    }
+
     // eslint-disable-next-line no-console
     console.log('[Login] Session detected, redirecting to:', target)
 
-    // 使用 window.location.href 确保跨应用跳转（Nuxt 路由可能无法跨域）
-    if (target.startsWith('http')) {
-      window.location.href = target
+    // 清除之前的定时器
+    if (redirectTimer) {
+      clearTimeout(redirectTimer)
     }
-    else {
-      // 如果是相对路径，跳转到网关域下的对应应用
-      window.location.href = target
-    }
+
+    // 延迟跳转，避免 watchEffect 多次触发
+    redirectTimer = setTimeout(() => {
+      // 使用 window.location.href 确保跨应用跳转（Nuxt 路由可能无法跨域）
+      if (target.startsWith('http')) {
+        window.location.href = target
+      }
+      else {
+        // 如果是相对路径，跳转到网关域下的对应应用
+        window.location.href = target
+      }
+    }, 100)
   }
 })
 

@@ -3,12 +3,17 @@ import { signOut, useSession } from '~/lib/auth-client'
 
 const { locale, setLocale } = useI18n()
 const session = useSession()
-const router = useRouter()
 const route = useRoute()
 
 async function handleLogout() {
-  await signOut()
-  router.push('/login')
+  try {
+    await signOut()
+    // 登出成功后重定向到登录页
+    window.location.href = '/auth/login'
+  }
+  catch (error) {
+    console.error('登出失败:', error)
+  }
 }
 
 const userRole = computed(() => session.value.data?.user?.role)

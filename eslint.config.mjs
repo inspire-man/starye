@@ -9,6 +9,11 @@ export default antfu({
     '**/.output',
     '**/.nuxt',
     '**/.wrangler',
+    '.agent/*',
+    '.cursor/*',
+    '.github/*',
+    '.trae/*',
+    'openspec/*',
   ],
   rules: {
     'e18e/prefer-static-regex': 'off',

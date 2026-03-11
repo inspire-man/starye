@@ -1,13 +1,25 @@
 <script setup lang="ts">
-import { useSession } from '~/lib/auth-client'
+import { signOut, useSession } from '~/lib/auth-client'
 
 const session = useSession()
 const { t } = useI18n()
+const route = useRoute()
 const user = computed(() => session.value.data?.user)
 
-function handleLogout() {
-  // Redirect to login after logout or just refresh
-  window.location.href = '/api/auth/sign-out'
+async function handleLogout() {
+  try {
+    await signOut()
+    // 登出成功后刷新页面或重定向
+    window.location.href = '/blog/'
+  }
+  catch (error) {
+    console.error('登出失败:', error)
+  }
+}
+
+function getLoginUrl() {
+  const currentPath = route.fullPath
+  return `/auth/login?redirect=${encodeURIComponent(`/blog${currentPath}`)}`
 }
 </script>
 
@@ -41,12 +53,12 @@ function handleLogout() {
             </button>
           </div>
           <div v-else>
-            <NuxtLink
-              to="/login"
+            <a
+              :href="getLoginUrl()"
               class="text-sm font-bold px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90"
             >
               Login
-            </NuxtLink>
+            </a>
           </div>
         </div>
       </nav>
