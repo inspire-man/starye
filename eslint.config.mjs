@@ -1,6 +1,8 @@
 import antfu from '@antfu/eslint-config'
 
 export default antfu({
+  typescript: true,
+  vue: true,
   ignores: [
     '**/dist',
     '**/node_modules',
@@ -8,4 +10,7 @@ export default antfu({
     '**/.nuxt',
     '**/.wrangler',
   ],
+  rules: {
+    'e18e/prefer-static-regex': 'off',
+  },
 })

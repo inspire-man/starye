@@ -81,7 +81,7 @@ export class JavBusStrategy implements MovieCrawlStrategy {
     }
 
     return page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('.movie-box'))
+      const items = [...document.querySelectorAll('.movie-box')]
       const movies = items
         .map(a => (a as HTMLAnchorElement).href)
         .filter((href): href is string => !!href)
@@ -124,7 +124,7 @@ export class JavBusStrategy implements MovieCrawlStrategy {
 
         const infoMap: Record<string, string> = {}
         const els = document.querySelectorAll('.info p')
-        for (const el of Array.from(els)) {
+        for (const el of [...els]) {
           const text = el.textContent || ''
           // Split by first colon
           const splitIndex = text.indexOf(':')
@@ -147,14 +147,14 @@ export class JavBusStrategy implements MovieCrawlStrategy {
 
         const genres: string[] = []
         const genreEls = document.querySelectorAll('.genre label a')
-        for (const el of Array.from(genreEls)) {
+        for (const el of [...genreEls]) {
           if (el.textContent)
             genres.push(el.textContent.trim())
         }
 
         const actors: string[] = []
         const actorEls = document.querySelectorAll('.star-name a')
-        for (const el of Array.from(actorEls)) {
+        for (const el of [...actorEls]) {
           if (el.textContent)
             actors.push(el.textContent.trim())
         }
@@ -340,7 +340,7 @@ export class JavBusStrategy implements MovieCrawlStrategy {
       console.log(`[JavBus] Age verification detected. Attempting bypass...`)
 
       const clicked = await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('a, button, div, span'))
+        const links = [...document.querySelectorAll('a, button, div, span')]
         const keywords = ['成年', 'ENTER', 'YES', '进入', '進入']
         for (const link of links) {
           const txt = link.textContent?.trim() || ''

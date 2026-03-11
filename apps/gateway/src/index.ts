@@ -15,6 +15,9 @@ interface Env {
   AUTH_ORIGIN?: string
 }
 
+// Move regex to module scope to avoid re-compilation
+const DASHBOARD_PREFIX_REGEX = /^\/dashboard/
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -37,7 +40,7 @@ export default {
       // Dashboard is a pure SPA deployed at root of Pages
       // We need to strip the /dashboard prefix so it requests /assets/... from the Pages origin
       const target = isLocal ? 'http://localhost:5173' : (env.DASHBOARD_ORIGIN || 'http://localhost:5173')
-      return proxy(request, target, p => p.replace(/^\/dashboard/, ''))
+      return proxy(request, target, p => p.replace(DASHBOARD_PREFIX_REGEX, ''))
     }
 
     // 3. Movie App

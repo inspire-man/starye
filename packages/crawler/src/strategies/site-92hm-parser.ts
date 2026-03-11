@@ -33,8 +33,7 @@ export function parseMangaList(doc: Document | Element): { mangas: string[], nex
 
   // 增强选择器：同时涵盖列表页常用的 .mh-item 和搜索结果页可能用到的其他类名
   // 使用更通用的策略：查找所有 href 包含 /book/ 的链接
-  const mangas = Array.from(doc.querySelectorAll('a'))
-    .map(a => a.getAttribute('href'))
+  const mangas = Array.from(doc.querySelectorAll('a'), a => a.getAttribute('href'))
     .filter((href): href is string => !!href && (href.includes('/book/') || href.match(/\/book\/\d+/) !== null))
     // 过滤掉非详情页链接并去重
     .filter(u => !u.includes('booklist') && !u.includes('history'))
@@ -42,7 +41,7 @@ export function parseMangaList(doc: Document | Element): { mangas: string[], nex
 
   // 增强的下一页提取逻辑
   let next: string | undefined
-  const allLinks = Array.from(doc.querySelectorAll('a'))
+  const allLinks = [...doc.querySelectorAll('a')]
 
   // 1. 优先尝试文本匹配
   const nextLinkByText = allLinks.find((a) => {
@@ -72,7 +71,7 @@ export function parseMangaInfo(doc: Document | Element, url: string): MangaInfo 
   const cover = doc.querySelector('.cover img, .book-cover img, .banner_detail_form .cover img')?.getAttribute('src') || ''
 
   // 获取所有可能包含元数据的 span 标签
-  const blocks = Array.from(doc.querySelectorAll('.info p.subtitle, .info p.tip span.block'))
+  const blocks = [...doc.querySelectorAll('.info p.subtitle, .info p.tip span.block')]
 
   // 提取元数据
   const author = findValueByLabel(blocks, '作者') || findValueByLabel(blocks, 'Author')
@@ -94,7 +93,7 @@ export function parseMangaInfo(doc: Document | Element, url: string): MangaInfo 
   }
 
   // 题材/标签处理：直接查找标签容器下的所有 A 标签
-  const genreLinks = Array.from(doc.querySelectorAll('.info p.tip span.block a[href*="tag="], a[href*="tag="], a[href*="/tag/"]'))
+  const genreLinks = [...doc.querySelectorAll('.info p.tip span.block a[href*="tag="], a[href*="tag="], a[href*="/tag/"]')]
   const genres = genreLinks.map(a => a.textContent?.trim()).filter((v): v is string => !!v && v !== '全部').filter((v, i, a) => a.indexOf(v) === i)
 
   // 状态处理
@@ -102,7 +101,7 @@ export function parseMangaInfo(doc: Document | Element, url: string): MangaInfo 
   const desc = doc.querySelector('.intro, #intro, .content')?.textContent?.replace('简介：', '').trim()
 
   // 章节解析
-  const chapterEls = Array.from(doc.querySelectorAll('#detail-list-select li a, .detail-list-select li a, #chapterlist a'))
+  const chapterEls = [...doc.querySelectorAll('#detail-list-select li a, .detail-list-select li a, #chapterlist a')]
 
   const chapters = chapterEls.map((el, index) => {
     const href = el.getAttribute('href') || ''
@@ -135,8 +134,7 @@ export function parseChapterContent(doc: Document | Element): { title: string, i
 
   // 92hm 图片容器可能有多种类名
   // 根据真实 HTML，图片在 .comicpage 容器的 div 子元素中
-  const images = Array.from(doc.querySelectorAll('.comicpage img, .comiclist img, .comic-content img, #content img, .rd-article-wr img, .reader-main img'))
-    .map(img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src') || '')
+  const images = Array.from(doc.querySelectorAll('.comicpage img, .comiclist img, .comic-content img, #content img, .rd-article-wr img, .reader-main img'), img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src') || '')
     .filter(src => src && !src.includes('/ad/') && !src.includes('logo') && !src.includes('wxqrcode.jpg'))
     // 去重，防止同一个图片被解析多次
     .filter((v, i, a) => a.indexOf(v) === i)

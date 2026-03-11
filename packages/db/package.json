@@ -23,10 +23,10 @@
   "dependencies": {
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260103.0",
-    "drizzle-kit": "^0.31.8"
+    "@cloudflare/workers-types": "^4.20260310.1",
+    "drizzle-kit": "^0.31.9"
   }
 }

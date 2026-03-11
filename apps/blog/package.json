@@ -16,15 +16,15 @@
     "@starye/locales": "workspace:*",
     "@starye/ui": "workspace:*",
     "@types/markdown-it": "^14.1.2",
-    "better-auth": "^1.4.10",
-    "markdown-it": "^14.1.0",
-    "nuxt": "^4.2.2",
-    "vue": "^3.5.26",
-    "vue-router": "^4.6.4"
+    "better-auth": "^1.5.4",
+    "markdown-it": "^14.1.1",
+    "nuxt": "^4.3.1",
+    "vue": "^3.5.30",
+    "vue-router": "^5.0.3"
   },
   "devDependencies": {
-    "@nuxtjs/i18n": "^10.2.1",
-    "@tailwindcss/vite": "^4.1.18",
-    "tailwindcss": "^4.0.0"
+    "@nuxtjs/i18n": "^10.2.3",
+    "@tailwindcss/vite": "^4.2.1",
+    "tailwindcss": "^4.2.1"
   }
 }

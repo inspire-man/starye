@@ -29,7 +29,7 @@ const comic = computed(() => response.value?.data)
 const sortedChapters = computed(() => {
   if (!comic.value?.chapters)
     return []
-  return [...comic.value.chapters].sort((a, b) => {
+  return comic.value.chapters.toSorted((a, b) => {
     const numA = a.chapterNumber ?? 0
     const numB = b.chapterNumber ?? 0
     return numA - numB

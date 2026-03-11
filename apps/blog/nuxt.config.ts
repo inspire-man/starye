@@ -54,5 +54,8 @@ export default defineNuxtConfig({
   // Deployment configuration
   nitro: {
     preset: 'cloudflare-pages',
+    routeRules: {
+      '/login': { redirect: '/auth/login' },
+    },
   },
 })

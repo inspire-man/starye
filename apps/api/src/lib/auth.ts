@@ -5,6 +5,9 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 
 import { getAllowedOrigins } from '../config'
 
+// Move regex to module scope to avoid re-compilation
+const IP_ADDRESS_REGEX = /\d+\.\d+\.\d+\.\d+/
+
 // 定义环境类型
 export interface Env {
   DB: D1Database
@@ -38,6 +41,9 @@ export function createAuth(env: Env, request: Request) {
   // 核心：Better Auth 的 baseURL 必须指向它自己挂载的端点
   const baseURL = env.BETTER_AUTH_URL || `${origin}/api/auth`
   const isHttps = url.protocol === 'https:' || forwardedProto === 'https'
+
+  const originHostname = new URL(baseURL).hostname
+  const isLocalDev = originHostname === 'localhost' || originHostname === '127.0.0.1' || originHostname === '[::1]' || !!originHostname.match(IP_ADDRESS_REGEX)
 
   const cookieDomain = (env.WEB_URL && !isLocalDev)
     ? new URL(env.WEB_URL).hostname.replace('www.', '')

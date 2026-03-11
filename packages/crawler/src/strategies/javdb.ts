@@ -45,7 +45,7 @@ export class JavDBStrategy implements MovieCrawlStrategy {
     await this._handleChallenge(page)
 
     return page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('.movie-list .item a.box'))
+      const items = [...document.querySelectorAll('.movie-list .item a.box')]
       // eslint-disable-next-line no-console
       console.log(`Found ${items.length} movie items in DOM`)
 
@@ -77,7 +77,7 @@ export class JavDBStrategy implements MovieCrawlStrategy {
 
     return page.evaluate((pageUrl) => {
       function findValueByLabel(doc: Document | Element, label: string): string | undefined {
-        const blocks = Array.from(doc.querySelectorAll('.panel-block'))
+        const blocks = [...doc.querySelectorAll('.panel-block')]
         for (const block of blocks) {
           const strong = block.querySelector('strong')
           if (strong && strong.textContent?.includes(label)) {
@@ -100,19 +100,19 @@ export class JavDBStrategy implements MovieCrawlStrategy {
       const publisher = findValueByLabel(document, '片商')
       const series = findValueByLabel(document, '系列')
 
-      const genreEls = Array.from(document.querySelectorAll('.panel-block strong'))
+      const genreEls = [...document.querySelectorAll('.panel-block strong')]
         .find(el => el.textContent?.includes('類別'))
         ?.parentElement
         ?.querySelectorAll('.value a')
-      const genres = genreEls ? Array.from(genreEls).map(a => a.textContent?.trim()).filter(Boolean) as string[] : []
+      const genres = genreEls ? Array.from(genreEls, a => a.textContent?.trim()).filter(Boolean) as string[] : []
 
-      const actorEls = Array.from(document.querySelectorAll('.panel-block strong'))
+      const actorEls = [...document.querySelectorAll('.panel-block strong')]
         .find(el => el.textContent?.includes('演員'))
         ?.parentElement
         ?.querySelectorAll('.value a')
-      const actors = actorEls ? Array.from(actorEls).map(a => a.textContent?.trim()).filter(Boolean) as string[] : []
+      const actors = actorEls ? Array.from(actorEls, a => a.textContent?.trim()).filter(Boolean) as string[] : []
 
-      const magnetItems = Array.from(document.querySelectorAll('#magnets-content .item'))
+      const magnetItems = [...document.querySelectorAll('#magnets-content .item')]
       const players = magnetItems.map((item, index) => {
         const name = item.querySelector('.name')?.textContent?.trim() || '磁力链接'
         const magnetUrl = (item.querySelector('a[href^="magnet:"]') as HTMLAnchorElement)?.href || ''

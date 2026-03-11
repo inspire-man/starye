@@ -14,12 +14,17 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 const sqlite = new Database('./data/starye.db')
 const db = drizzle(sqlite, { schema: { movies, actors, publishers } })
 
+// Move regex to module scope to avoid re-compilation
+const SPECIAL_CHARS_REGEX = /[^\w\s-]/g
+const SPACES_REGEX = /\s+/g
+const MULTI_HYPHEN_REGEX = /-+/g
+
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[^\w\s-]/g, '') // 移除特殊字符
-    .replace(/\s+/g, '-') // 空格转为连字符
-    .replace(/-+/g, '-') // 多个连字符合并为一个
+    .replace(SPECIAL_CHARS_REGEX, '') // 移除特殊字符
+    .replace(SPACES_REGEX, '-') // 空格转为连字符
+    .replace(MULTI_HYPHEN_REGEX, '-') // 多个连字符合并为一个
     .trim()
 }
 

@@ -29,13 +29,13 @@ async function inspect() {
     // Dump body HTML structure (simplified) to console
     const body = await page.evaluate(() => {
       // Simple heuristic to find comic lists or chapter lists
-      const links = Array.from(document.querySelectorAll('a')).slice(0, 20).map(a => ({
+      const links = [...document.querySelectorAll('a')].slice(0, 20).map(a => ({
         text: a.textContent?.trim(),
         href: a.href,
         class: a.className,
       }))
 
-      const images = Array.from(document.querySelectorAll('img')).slice(0, 5).map(img => ({
+      const images = [...document.querySelectorAll('img')].slice(0, 5).map(img => ({
         src: img.src,
         alt: img.alt,
         class: img.className,

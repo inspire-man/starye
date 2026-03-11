@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@starye/ui/assets/css/main.css";
+@import "@starye/ui/globals.css";
 
 @theme {
   --color-border: hsl(var(--border));

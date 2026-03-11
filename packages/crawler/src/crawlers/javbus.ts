@@ -138,7 +138,7 @@ export class JavBusCrawler extends OptimizedCrawler {
     }
 
     return page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('.movie-box'))
+      const items = [...document.querySelectorAll('.movie-box')]
       return items
         .map(a => (a as HTMLAnchorElement).href)
         .filter((href): href is string => !!href)
@@ -171,7 +171,7 @@ export class JavBusCrawler extends OptimizedCrawler {
 
         const infoMap: Record<string, string> = {}
         const els = document.querySelectorAll('.info p')
-        for (const el of Array.from(els)) {
+        for (const el of [...els]) {
           const text = el.textContent || ''
           const splitIndex = text.indexOf(':')
           if (splitIndex > -1) {
@@ -192,14 +192,14 @@ export class JavBusCrawler extends OptimizedCrawler {
 
         const genres: string[] = []
         const genreEls = document.querySelectorAll('.genre label a')
-        for (const el of Array.from(genreEls)) {
+        for (const el of [...genreEls]) {
           if (el.textContent)
             genres.push(el.textContent.trim())
         }
 
         const actors: string[] = []
         const actorEls = document.querySelectorAll('.star-name a')
-        for (const el of Array.from(actorEls)) {
+        for (const el of [...actorEls]) {
           if (el.textContent)
             actors.push(el.textContent.trim())
         }

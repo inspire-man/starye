@@ -6,6 +6,9 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { serviceAuth } from '../middleware/service-auth'
 
+// Move regex to module scope to avoid re-compilation
+const SLUG_REGEX = /\s+/g
+
 const movies = new Hono<AppEnv>()
 
 // --- 辅助函数：检查成人状态 ---
@@ -99,7 +102,7 @@ movies.post('/sync', serviceAuth(), async (c) => {
       if (!actorName || !actorName.trim())
         continue
 
-      const slug = actorName.toLowerCase().replace(/\s+/g, '-')
+      const slug = actorName.toLowerCase().replace(SLUG_REGEX, '-')
 
       // 检查是否存在
       const existingActor = await db.query.actors.findFirst({
@@ -133,7 +136,7 @@ movies.post('/sync', serviceAuth(), async (c) => {
   // 同步厂商数据
   if (data.publisher && data.publisher.trim()) {
     const publisherName = data.publisher.trim()
-    const slug = publisherName.toLowerCase().replace(/\s+/g, '-')
+    const slug = publisherName.toLowerCase().replace(SLUG_REGEX, '-')
 
     // 检查是否存在
     const existingPublisher = await db.query.publishers.findFirst({
@@ -526,8 +529,7 @@ movies.get('/genres/list', async (c) => {
   })
 
   // 转换为数组并排序（按作品数量降序）
-  const genreList = Array.from(genreCountMap.entries())
-    .map(([name, count]) => ({ name, count }))
+  const genreList = Array.from(genreCountMap.entries(), ([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
 
   return c.json({ data: genreList })

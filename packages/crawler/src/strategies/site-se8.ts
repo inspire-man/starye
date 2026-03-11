@@ -25,7 +25,7 @@ export class SiteSe8 implements CrawlStrategy {
       const status = statusText?.includes('连载') ? 'serializing' : 'completed'
 
       // Selector based on inspection: ul.chapter__list-box li a
-      const chapterEls = Array.from(document.querySelectorAll('.chapter__list-box li a'))
+      const chapterEls = [...document.querySelectorAll('.chapter__list-box li a')]
 
       const chapters = chapterEls.map((el, index) => ({
         title: el.textContent?.trim() || `Chapter ${index + 1}`,
@@ -51,8 +51,7 @@ export class SiteSe8 implements CrawlStrategy {
       const title = document.querySelector('h1')?.textContent?.trim() || ''
 
       // Se8 reading page image selector (heuristic)
-      const images = Array.from(document.querySelectorAll('.rd-article-wr img, .comic-list img, .lazy'))
-        .map(img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src'))
+      const images = Array.from(document.querySelectorAll('.rd-article-wr img, .comic-list img, .lazy'), img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.getAttribute('src'))
         .filter((src): src is string => !!src && !src.includes('ad'))
 
       const prev = document.querySelector('a.prev')?.getAttribute('href') || undefined
