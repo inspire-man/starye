@@ -85,6 +85,13 @@
       "when": 1769800612560,
       "tag": "0011_freezing_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1773225308637,
+      "tag": "0012_lumpy_garia",
+      "breakpoints": true
     }
   ]
 }

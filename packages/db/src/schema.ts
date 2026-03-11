@@ -102,6 +102,12 @@ export const comics = sqliteTable('comic', {
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
   metadataLocked: integer('metadata_locked', { mode: 'boolean' }).default(false).notNull(), // 锁定元数据，防止爬虫覆盖
   sortOrder: integer('sort_order').default(0), // 人工排序/权重 (越大越靠前)
+  // 爬取状态字段
+  crawlStatus: text('crawl_status', { enum: ['pending', 'partial', 'complete'] }).default('pending'), // pending: 未爬取, partial: 部分完成, complete: 完全完成
+  lastCrawledAt: integer('last_crawled_at', { mode: 'timestamp' }), // 最后爬取时间
+  totalChapters: integer('total_chapters').default(0), // 总章节数
+  crawledChapters: integer('crawled_chapters').default(0), // 已爬取章节数
+  isSerializing: integer('is_serializing', { mode: 'boolean' }).default(true), // 是否连载中（用于判断是否需要持续更新）
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })

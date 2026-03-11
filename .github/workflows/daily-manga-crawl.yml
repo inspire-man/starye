@@ -52,6 +52,21 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           # Puppeteer Cache
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
+          # Crawler Configuration (CI defaults are used if not set)
+          # 漫画并发数 (默认: 5)
+          # CRAWLER_CONCURRENCY_MANGA: 5
+          # 章节并发数 (默认: 2)
+          # CRAWLER_CONCURRENCY_CHAPTER: 2
+          # 图片批量上传数 (默认: 10)
+          # CRAWLER_CONCURRENCY_IMAGE_BATCH: 10
+          # 每次运行最大漫画数 (默认: 20)
+          # CRAWLER_LIMIT_MAX_MANGAS_PER_RUN: 20
+          # 新漫画最大章节数 (默认: 5)
+          # CRAWLER_LIMIT_MAX_CHAPTERS_PER_NEW: 5
+          # 更新漫画最大章节数 (默认: 20)
+          # CRAWLER_LIMIT_MAX_CHAPTERS_PER_UPDATE: 20
+          # 软超时时间（分钟，默认: 300）
+          # CRAWLER_LIMIT_TIMEOUT_MINUTES: 300
         run: |
           # 动态查找 Chrome 路径
           export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)
@@ -67,6 +82,8 @@ jobs:
 
           # 使用 puppeteer-headful (xvfb) 或者直接使用 chrome-headless-shell
           # 这里假设 base-crawler 配置了自动使用 headless
+          # Node.js 内存限制（可选，默认 ~4GB 足够）：
+          # NODE_OPTIONS="--max-old-space-size=5120" pnpm --filter @starye/crawler start "$TARGET"
 
           pnpm --filter @starye/crawler start "$TARGET"
 

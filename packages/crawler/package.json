@@ -29,6 +29,7 @@
     "drizzle-orm": "0.45.1",
     "got": "^14.6.6",
     "got-scraping": "^4.2.1",
+    "p-map": "^7.0.4",
     "p-queue": "^9.1.0",
     "puppeteer-core": "^24.39.0",
     "puppeteer-extra": "^3.3.6",

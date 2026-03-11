@@ -523,4 +523,172 @@ admin.get('/stats', serviceAuth(), async (c) => {
   })
 })
 
+// 批量查询漫画爬取状态 (用于爬虫增量爬取)
+admin.get('/comics/batch-status', serviceAuth(['admin', 'comic_admin']), async (c) => {
+  const slugsParam = c.req.query('slugs')
+  if (!slugsParam) {
+    return c.json({ error: 'slugs parameter is required' }, 400)
+  }
+
+  const slugs = slugsParam.split(',').map(s => s.trim()).filter(Boolean)
+  if (slugs.length === 0) {
+    return c.json({ error: 'slugs parameter is required' }, 400)
+  }
+
+  const db = c.get('db')
+  const startTime = Date.now()
+
+  try {
+    // 使用 SQL IN 查询批量获取漫画状态
+    const results = await db.query.comics.findMany({
+      where: (comics, { inArray }) => inArray(comics.slug, slugs),
+      columns: {
+        slug: true,
+        crawlStatus: true,
+        lastCrawledAt: true,
+        totalChapters: true,
+        crawledChapters: true,
+        isSerializing: true,
+        status: true,
+      },
+    })
+
+    // 构建响应对象
+    const statusMap: Record<string, any> = {}
+    for (const slug of slugs) {
+      const result = results.find(r => r.slug === slug)
+      if (result) {
+        statusMap[slug] = {
+          exists: true,
+          status: result.crawlStatus,
+          totalChapters: result.totalChapters,
+          crawledChapters: result.crawledChapters,
+          lastCrawledAt: result.lastCrawledAt?.toISOString(),
+          isSerializing: result.isSerializing,
+          comicStatus: result.status,
+        }
+      }
+      else {
+        statusMap[slug] = {
+          exists: false,
+        }
+      }
+    }
+
+    const elapsed = Date.now() - startTime
+    console.log(`[BatchStatus] 批量查询 ${slugs.length} 个漫画，耗时 ${elapsed}ms`)
+
+    if (elapsed > 1000) {
+      console.warn(`[BatchStatus] ⚠️ 批量查询过慢，耗时 ${elapsed}ms`)
+    }
+
+    return c.json(statusMap)
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error('[BatchStatus] ❌ Database operation failed:', message)
+    return c.json({ error: 'Database operation failed' }, 500)
+  }
+})
+
+// 更新漫画爬取进度
+admin.post(
+  '/comics/:slug/progress',
+  serviceAuth(['admin', 'comic_admin']),
+  zValidator('json', z.object({
+    status: z.enum(['pending', 'partial', 'complete']),
+    crawledChapters: z.number(),
+    totalChapters: z.number(),
+  })),
+  async (c) => {
+    const slug = c.req.param('slug')
+    const { status, crawledChapters, totalChapters } = c.req.valid('json')
+    const db = c.get('db')
+
+    try {
+      // 检查漫画是否存在
+      const comic = await db.query.comics.findFirst({
+        where: eq(comics.slug, slug),
+        columns: { id: true },
+      })
+
+      if (!comic) {
+        return c.json({ error: 'Comic not found' }, 404)
+      }
+
+      // 更新进度（使用事务保证原子性）
+      await db.update(comics)
+        .set({
+          crawlStatus: status,
+          crawledChapters,
+          totalChapters,
+          lastCrawledAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(comics.slug, slug))
+
+      console.log(`[Progress] 更新漫画进度: ${slug}, status=${status}, ${crawledChapters}/${totalChapters}`)
+      return c.json({ success: true })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Progress] ❌ Failed to update progress for ${slug}:`, message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+// 获取爬取统计信息
+admin.get('/comics/crawl-stats', serviceAuth(['admin', 'comic_admin']), async (c) => {
+  const db = c.get('db')
+  const sinceParam = c.req.query('since')
+
+  try {
+    // 基础统计查询
+    const allComics = await db.query.comics.findMany({
+      columns: {
+        crawlStatus: true,
+        isSerializing: true,
+        lastCrawledAt: true,
+      },
+    })
+
+    // 过滤时间范围（如果提供）
+    let filteredComics = allComics
+    if (sinceParam) {
+      const sinceDate = new Date(sinceParam)
+      filteredComics = allComics.filter(c =>
+        c.lastCrawledAt && c.lastCrawledAt >= sinceDate,
+      )
+    }
+
+    // 统计
+    const total = filteredComics.length
+    const pending = filteredComics.filter(c => c.crawlStatus === 'pending').length
+    const partial = filteredComics.filter(c => c.crawlStatus === 'partial').length
+    const complete = filteredComics.filter(c => c.crawlStatus === 'complete').length
+    const serializing = filteredComics.filter(c => c.isSerializing).length
+
+    // 获取最近爬取时间
+    const lastCrawlAt = allComics
+      .filter(c => c.lastCrawledAt)
+      .sort((a, b) => (b.lastCrawledAt?.getTime() || 0) - (a.lastCrawledAt?.getTime() || 0))[0]
+      ?.lastCrawledAt
+
+    return c.json({
+      total,
+      pending,
+      partial,
+      complete,
+      serializing,
+      lastCrawlAt: lastCrawlAt?.toISOString() || null,
+    })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error('[CrawlStats] ❌ Database operation failed:', message)
+    return c.json({ error: 'Database operation failed' }, 500)
+  }
+})
+
 export default admin
