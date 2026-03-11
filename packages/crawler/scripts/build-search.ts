@@ -2,6 +2,7 @@ import process from 'node:process'
 import { S3Client } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
 import { SearchIndexer } from '../src/lib/search'
+
 import 'dotenv/config'
 
 interface Comic {
@@ -17,6 +18,7 @@ interface Comic {
 
 async function main() {
   const API_URL = process.env.API_URL || 'http://localhost:8787'
+  const SERVICE_TOKEN = process.env.CRAWLER_SECRET
   const INDEX_FILENAME = 'search-index.json'
 
   console.log(`🔥 Starting Search Index Build...`)
@@ -35,7 +37,13 @@ async function main() {
     try {
       // Set a high limit to fetch all comics (assuming < 10000 for now)
       // Ideally this should support pagination traversal
-      response = await fetch(`${API_URL}/api/comics?limit=10000`)
+      const headers: HeadersInit = {}
+      if (SERVICE_TOKEN) {
+        headers['x-service-token'] = SERVICE_TOKEN
+        console.log('🔑 Using service token for authentication')
+      }
+
+      response = await fetch(`${API_URL}/api/comics?limit=10000`, { headers })
     }
     catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e)
