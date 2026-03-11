@@ -5,6 +5,14 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".output/**", ".next/**"]
     },
+    "@starye/db#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@starye/ui#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "type-check": {
       "dependsOn": ["^build"],
       "outputs": []
