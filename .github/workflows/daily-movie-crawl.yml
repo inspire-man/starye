@@ -2,8 +2,8 @@ name: Daily Movie Crawl
 
 on:
   schedule:
-    # 每天凌晨 3 点运行 (UTC+8 对应 UTC 19:00)
-    - cron: '0 19 * * *'
+    # 每天早上 8 点运行 (UTC+8 对应 UTC 00:00) - 电影爬虫，错开漫画爬虫（02:00 AM）
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       target_url:
@@ -13,12 +13,12 @@ on:
       max_movies:
         description: 'Maximum number of movies to crawl'
         required: false
-        default: '500'
+        default: '200'
         type: string
       max_pages:
         description: 'Maximum number of pages to crawl'
         required: false
-        default: '5'
+        default: '10'
         type: string
       use_optimized:
         description: 'Use optimized crawler with queue management'
@@ -101,9 +101,9 @@ jobs:
           PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
           PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
 
-          # 爬虫配置
-          MAX_MOVIES: ${{ github.event.inputs.max_movies || '50' }}
-          MAX_PAGES: ${{ github.event.inputs.max_pages || '5' }}
+          # 爬虫配置（充分利用 6 小时时间）
+          MAX_MOVIES: ${{ github.event.inputs.max_movies || '200' }}
+          MAX_PAGES: ${{ github.event.inputs.max_pages || '10' }}
           START_URL: ${{ github.event.inputs.target_url || 'https://www.javbus.com' }}
           USE_RANDOM_MIRROR: 'true'
 

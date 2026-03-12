@@ -1,53 +1,126 @@
 import type { Page } from 'puppeteer-core'
+import type { CrawlContext } from '../lib/anti-detection'
 import type { ChapterContent, CrawlStrategy, MangaInfo } from '../lib/strategy'
 import got from 'got'
 import { Window } from 'happy-dom'
+import { DEFAULT_MANGA_ANTI_DETECTION } from '../config/crawl.config'
+import { CrawlerSession, DelayStrategy, ErrorClassifier, SuccessRateMonitor } from '../lib/anti-detection'
 import { parseChapterContent, parseMangaInfo, parseMangaList } from './site-92hm-parser'
-
-/**
- * 重试包装器：处理网络超时和临时错误
- */
-async function retryPageGoto(
-  page: Page,
-  url: string,
-  options: { waitUntil: 'domcontentloaded', timeout: number },
-  maxRetries = 3,
-): Promise<void> {
-  let lastError: Error | null = null
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      await page.goto(url, options)
-      return // 成功
-    }
-    catch (error) {
-      lastError = error as Error
-      const isTimeout = error instanceof Error && error.message.includes('Navigation timeout')
-
-      if (attempt < maxRetries && isTimeout) {
-        console.warn(`⚠️ 导航超时 (尝试 ${attempt}/${maxRetries}): ${url}`)
-        console.warn(`   等待 ${attempt * 2} 秒后重试...`)
-        await new Promise(resolve => setTimeout(resolve, attempt * 2000)) // 指数退避
-        continue
-      }
-
-      throw error // 非超时错误或已达最大重试次数
-    }
-  }
-
-  throw lastError || new Error('Unknown error during retry')
-}
 
 export class Site92Hm implements CrawlStrategy {
   name = '92hm'
   baseUrl = 'https://www.92hm.life'
 
+  private session: CrawlerSession
+  private monitor: SuccessRateMonitor
+  private delayStrategy: DelayStrategy
+  private initialized = false
+
+  constructor() {
+    this.session = new CrawlerSession(this.baseUrl)
+    this.monitor = new SuccessRateMonitor(DEFAULT_MANGA_ANTI_DETECTION.successRateWindow)
+    this.delayStrategy = new DelayStrategy(DEFAULT_MANGA_ANTI_DETECTION)
+  }
+
   match(url: string): boolean {
     return url.includes('92hm.life') || url.includes('92hm.net')
   }
 
+  /**
+   * 智能页面导航：集成反检测和错误恢复
+   */
+  private async _smartGoto(page: Page, url: string): Promise<void> {
+    // 首次调用时初始化会话
+    if (!this.initialized) {
+      await this.session.initialize(page)
+      this.initialized = true
+    }
+
+    // 检查会话是否需要刷新
+    if (this.session.shouldRefresh()) {
+      await this.session.refreshSession(page)
+    }
+
+    // 应用 Cookie
+    await this.session.applyCookies(page)
+
+    // 创建爬取上下文
+    const context: CrawlContext = {
+      url,
+      retries: 0,
+      currentDelay: 0,
+      currentTimeout: 90000,
+      headerIndex: 0,
+      maxRetries: DEFAULT_MANGA_ANTI_DETECTION.maxRetries,
+      baseDelay: DEFAULT_MANGA_ANTI_DETECTION.baseDelay,
+      maxDelay: DEFAULT_MANGA_ANTI_DETECTION.maxDelay,
+    }
+
+    // 智能延迟
+    const delay = this.delayStrategy.calculateDelay()
+    if (delay > 0) {
+      // console.log(`[Site92Hm] ⏳ Waiting ${(delay / 1000).toFixed(1)}s before ${url}`)
+      await this._sleep(delay)
+    }
+
+    // 检查是否需要降速
+    if (this.monitor.shouldSlowDown(DEFAULT_MANGA_ANTI_DETECTION.lowSuccessRateThreshold)) {
+      this.delayStrategy.increaseMultiplier(DEFAULT_MANGA_ANTI_DETECTION.autoSlowdownMultiplier)
+    }
+
+    // 带错误恢复的导航
+    let currentContext = context
+    while (true) {
+      try {
+        // 应用请求头（可能轮换）
+        await this.session.applyHeaders(page, currentContext.headerIndex)
+
+        // 导航
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: currentContext.currentTimeout,
+        })
+
+        // 成功
+        this.monitor.record(true)
+        return
+      }
+      catch (error) {
+        this.monitor.record(false)
+
+        const { action, updatedContext } = await ErrorClassifier.handleCrawlError(
+          error as Error,
+          currentContext,
+          DEFAULT_MANGA_ANTI_DETECTION,
+        )
+
+        if (action === 'RETRY') {
+          currentContext = updatedContext
+          continue
+        }
+        else if (action === 'SKIP') {
+          throw error // 抛出错误，让上层处理
+        }
+        else if (action === 'ABORT_ALL') {
+          throw new Error(`IP possibly banned. Aborting all tasks. Original error: ${(error as Error).message}`)
+        }
+      }
+    }
+  }
+
+  private async _sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  /**
+   * 获取成功率统计
+   */
+  getSuccessRateStats() {
+    return this.monitor.getStats()
+  }
+
   async getMangaList(url: string, page: Page): Promise<{ mangas: string[], next?: string }> {
-    await retryPageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 90000 })
+    await this._smartGoto(page, url)
     const html = await page.content()
 
     const window = new Window()
@@ -80,7 +153,7 @@ export class Site92Hm implements CrawlStrategy {
   }
 
   async getMangaInfo(url: string, page: Page): Promise<MangaInfo> {
-    await retryPageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 90000 })
+    await this._smartGoto(page, url)
     const html = await page.content()
 
     const window = new Window()
@@ -182,7 +255,7 @@ export class Site92Hm implements CrawlStrategy {
     }
 
     // 2. Slow Path: Puppeteer
-    await retryPageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 90000 })
+    await this._smartGoto(page, url)
     const html = await page.content()
     const data = parseFromHtml(html)
 

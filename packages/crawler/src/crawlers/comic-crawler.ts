@@ -2,8 +2,10 @@
 import type { Page } from 'puppeteer-core'
 import type { CrawlerConfig } from '../lib/base-crawler'
 import type { CrawlStrategy } from '../lib/strategy'
+import type { Site92Hm } from '../strategies/site-92hm'
 import pMap from 'p-map'
 import { CRAWL_CONFIG } from '../config/crawl.config'
+import { FailedTaskRecorder } from '../lib/anti-detection'
 import { BaseCrawler } from '../lib/base-crawler'
 
 interface MangaStatus {
@@ -17,12 +19,15 @@ interface MangaStatus {
 }
 
 export class ComicCrawler extends BaseCrawler {
+  private failedTasks: FailedTaskRecorder
+
   constructor(
     config: CrawlerConfig,
     private strategy: CrawlStrategy,
     private startUrl: string,
   ) {
     super(config)
+    this.failedTasks = new FailedTaskRecorder()
   }
 
   async run() {
@@ -37,6 +42,20 @@ export class ComicCrawler extends BaseCrawler {
       console.error('❌ Crawl failed:', error)
     }
     finally {
+      // 输出成功率统计
+      if ((this.strategy as Site92Hm).getSuccessRateStats) {
+        const stats = (this.strategy as Site92Hm).getSuccessRateStats()
+        console.log(`
+📊 成功率统计:
+  总请求: ${stats.total}
+  成功: ${stats.successes}
+  失败: ${stats.failures}
+  成功率: ${(stats.successRate * 100).toFixed(1)}%`)
+      }
+
+      // 输出失败任务摘要
+      this.failedTasks.printSummary()
+
       await this.closeBrowser()
     }
   }
@@ -119,6 +138,7 @@ export class ComicCrawler extends BaseCrawler {
         }
         catch (e) {
           console.error(`❌ Failed to process manga ${mangaUrl}:`, e)
+          this.failedTasks.record(mangaUrl, e as Error, 1)
         }
       }, { concurrency: CRAWL_CONFIG.concurrency.manga })
 

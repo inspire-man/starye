@@ -2,7 +2,7 @@ name: Daily Manga Crawl
 
 on:
   schedule:
-    # 每天凌晨 2 点运行 (UTC+8 对应 UTC 18:00)
+    # 每天凌晨 2 点运行 (UTC+8 对应 UTC 18:00) - 漫画爬虫
     - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
@@ -52,21 +52,21 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           # Puppeteer Cache
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
-          # Crawler Configuration (CI defaults are used if not set)
-          # 漫画并发数 (默认: 5)
-          # CRAWLER_CONCURRENCY_MANGA: 5
+          # Crawler Configuration - 充分利用 6 小时时间 (350 分钟软超时)
+          # 漫画并发数 (默认: 2)
+          CRAWLER_MANGA_CONCURRENCY: 2
           # 章节并发数 (默认: 2)
-          # CRAWLER_CONCURRENCY_CHAPTER: 2
+          CRAWLER_CHAPTER_CONCURRENCY: 2
           # 图片批量上传数 (默认: 10)
-          # CRAWLER_CONCURRENCY_IMAGE_BATCH: 10
-          # 每次运行最大漫画数 (默认: 20)
-          # CRAWLER_LIMIT_MAX_MANGAS_PER_RUN: 20
+          CRAWLER_IMAGE_BATCH: 10
+          # 每次运行最大漫画数 (增加到 60，充分利用时间)
+          CRAWLER_MAX_MANGAS: 60
           # 新漫画最大章节数 (默认: 5)
-          # CRAWLER_LIMIT_MAX_CHAPTERS_PER_NEW: 5
+          CRAWLER_MAX_CHAPTERS_NEW: 5
           # 更新漫画最大章节数 (默认: 20)
-          # CRAWLER_LIMIT_MAX_CHAPTERS_PER_UPDATE: 20
-          # 软超时时间（分钟，默认: 300）
-          # CRAWLER_LIMIT_TIMEOUT_MINUTES: 300
+          CRAWLER_MAX_CHAPTERS_UPDATE: 20
+          # 软超时时间（350 分钟，留 10 分钟缓冲）
+          CRAWLER_TIMEOUT_MINUTES: 350
         run: |
           # 动态查找 Chrome 路径
           export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)

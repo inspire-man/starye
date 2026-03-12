@@ -4,6 +4,8 @@
  * 支持环境检测、环境变量覆盖、参数验证
  */
 
+import type { AntiDetectionConfig } from '../lib/anti-detection'
+
 export interface CrawlConfig {
   // 并发控制
   concurrency: {
@@ -29,8 +31,52 @@ export interface CrawlConfig {
     maxAttempts: number // 最大重试次数
     backoffMs: number // 退避时间（毫秒）
   }
+  // 反检测配置
+  antiDetection: AntiDetectionConfig
   // 环境信息
   isCI: boolean // 是否运行在 CI 环境
+}
+
+/**
+ * 默认反检测配置 - 漫画爬虫（保守）
+ */
+export const DEFAULT_MANGA_ANTI_DETECTION: AntiDetectionConfig = {
+  baseDelay: 8000, // 8 秒基础延迟
+  randomDelay: 4000, // 0-4 秒随机延迟
+  errorBackoffMultiplier: 2.0, // 错误时延迟翻倍
+  maxDelay: 30000, // 最大 30 秒
+
+  maxRetries: 3,
+  retryDelayMultiplier: 2.0,
+  longBackoffDuration: 60000, // 1 分钟
+
+  successRateWindow: 20,
+  lowSuccessRateThreshold: 0.7,
+  autoSlowdownMultiplier: 1.5,
+
+  enableSessionManagement: true,
+  enableHeaderRotation: true,
+}
+
+/**
+ * 默认反检测配置 - 影片爬虫（稳定）
+ */
+export const DEFAULT_MOVIE_ANTI_DETECTION: AntiDetectionConfig = {
+  baseDelay: 6000, // 6 秒基础延迟（当前稳定值）
+  randomDelay: 4000,
+  errorBackoffMultiplier: 1.5,
+  maxDelay: 20000,
+
+  maxRetries: 2,
+  retryDelayMultiplier: 1.5,
+  longBackoffDuration: 60000,
+
+  successRateWindow: 20,
+  lowSuccessRateThreshold: 0.7,
+  autoSlowdownMultiplier: 1.3,
+
+  enableSessionManagement: false, // Movie 爬虫暂不启用
+  enableHeaderRotation: false,
 }
 
 /**
@@ -57,6 +103,7 @@ const DEFAULT_CONFIG: CrawlConfig = {
     maxAttempts: 3,
     backoffMs: 1000, // 1 秒
   },
+  antiDetection: DEFAULT_MANGA_ANTI_DETECTION, // 默认使用漫画配置
   isCI: false,
 }
 
@@ -119,14 +166,69 @@ function getEnvOverrides(): Partial<CrawlConfig> {
     }
   }
 
+  // 反检测配置
+  if (process.env.CRAWLER_BASE_DELAY) {
+    overrides.antiDetection = {
+      ...DEFAULT_CONFIG.antiDetection,
+      baseDelay: Number.parseInt(process.env.CRAWLER_BASE_DELAY, 10),
+    }
+  }
+  if (process.env.CRAWLER_MAX_RETRIES) {
+    overrides.antiDetection = {
+      ...overrides.antiDetection || DEFAULT_CONFIG.antiDetection,
+      maxRetries: Number.parseInt(process.env.CRAWLER_MAX_RETRIES, 10),
+    }
+  }
+  if (process.env.CRAWLER_ENABLE_SESSION) {
+    overrides.antiDetection = {
+      ...overrides.antiDetection || DEFAULT_CONFIG.antiDetection,
+      enableSessionManagement: process.env.CRAWLER_ENABLE_SESSION === 'true',
+    }
+  }
+
   return overrides
+}
+
+/**
+ * 验证反检测配置
+ */
+function validateAntiDetectionConfig(config: AntiDetectionConfig): void {
+  // 验证延迟范围
+  if (config.baseDelay < 1000) {
+    throw new Error('baseDelay 必须 >= 1000ms（至少 1 秒）')
+  }
+  if (config.maxDelay < config.baseDelay) {
+    throw new Error('maxDelay 必须 >= baseDelay')
+  }
+  if (config.errorBackoffMultiplier < 1.0) {
+    throw new Error('errorBackoffMultiplier 必须 >= 1.0')
+  }
+
+  // 验证重试参数
+  if (config.maxRetries < 0 || config.maxRetries > 10) {
+    throw new Error('maxRetries 必须在 0-10 范围内')
+  }
+  if (config.retryDelayMultiplier < 1.0) {
+    throw new Error('retryDelayMultiplier 必须 >= 1.0')
+  }
+  if (config.longBackoffDuration < 10000) {
+    throw new Error('longBackoffDuration 必须 >= 10000ms')
+  }
+
+  // 验证监控参数
+  if (config.successRateWindow < 5 || config.successRateWindow > 100) {
+    console.warn('⚠️  successRateWindow 建议在 5-100 范围内')
+  }
+  if (config.lowSuccessRateThreshold <= 0 || config.lowSuccessRateThreshold >= 1) {
+    throw new Error('lowSuccessRateThreshold 必须在 0-1 之间')
+  }
 }
 
 /**
  * 配置验证
  */
 function validateConfig(config: CrawlConfig): void {
-  const { concurrency, limits, isCI } = config
+  const { concurrency, limits, isCI, antiDetection } = config
 
   // 验证并发数
   if (concurrency.manga <= 0 || concurrency.chapter <= 0 || concurrency.imageBatch <= 0) {
@@ -147,6 +249,9 @@ function validateConfig(config: CrawlConfig): void {
   if (limits.maxChaptersPerNew > limits.maxChaptersPerUpdate) {
     console.warn('⚠️  新漫画章节限制大于更新限制，可能不合理')
   }
+
+  // 验证反检测配置
+  validateAntiDetectionConfig(antiDetection)
 }
 
 /**
@@ -172,6 +277,7 @@ export function loadCrawlConfig(): Readonly<CrawlConfig> {
   console.log(`  限流配置: maxMangasPerRun=${config.limits.maxMangasPerRun}, maxChaptersPerNew=${config.limits.maxChaptersPerNew}, maxChaptersPerUpdate=${config.limits.maxChaptersPerUpdate}`)
   console.log(`  增量策略: ${config.incremental.enabled ? '启用' : '禁用'}`)
   console.log(`  软超时: ${config.limits.timeoutMinutes} 分钟`)
+  console.log(`  反检测: baseDelay=${config.antiDetection.baseDelay}ms, maxRetries=${config.antiDetection.maxRetries}, session=${config.antiDetection.enableSessionManagement ? '启用' : '禁用'}`)
 
   // 冻结配置，防止运行时修改
   return Object.freeze(config)
