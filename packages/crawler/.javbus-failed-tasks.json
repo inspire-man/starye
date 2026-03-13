@@ -1,0 +1,30 @@
+[
+  {
+    "url": "https://www.javbus.com/YAKO-088",
+    "errorType": "UNKNOWN",
+    "errorMessage": "Execution context was destroyed, most likely because of a navigation.",
+    "attempts": 1,
+    "timestamp": "2026-03-13T06:44:20.807Z"
+  },
+  {
+    "url": "https://www.javbus.com/AWAW-018",
+    "errorType": "UNKNOWN",
+    "errorMessage": "Execution context was destroyed, most likely because of a navigation.",
+    "attempts": 1,
+    "timestamp": "2026-03-13T06:44:20.857Z"
+  },
+  {
+    "url": "https://www.javbus.com/NPH-222",
+    "errorType": "UNKNOWN",
+    "errorMessage": "Execution context was destroyed, most likely because of a navigation.",
+    "attempts": 1,
+    "timestamp": "2026-03-13T06:45:46.998Z"
+  },
+  {
+    "url": "https://www.javbus.com/NPH-221",
+    "errorType": "UNKNOWN",
+    "errorMessage": "Cannot read properties of null (reading 'textContent')",
+    "attempts": 1,
+    "timestamp": "2026-03-13T06:45:47.008Z"
+  }
+]

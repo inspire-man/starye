@@ -2,13 +2,25 @@
 import type { AppEnv } from '../types'
 import { zValidator } from '@hono/zod-validator'
 import { chapters, comics, movies, pages, players, user } from '@starye/db/schema'
-import { count, eq } from 'drizzle-orm'
+import { and, count, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { serviceAuth } from '../middleware/service-auth'
 import { ChapterContentSchema, MangaInfoSchema, MovieInfoSchema } from '../types'
+import adminActorsRoutes from './admin-actors'
+import adminAuditLogsRoutes from './admin-audit-logs'
+import adminCrawlersRoutes from './admin-crawlers'
+import adminMoviesRoutes from './admin-movies'
+import adminPublishersRoutes from './admin-publishers'
 
 const admin = new Hono<AppEnv>()
+
+// 挂载子路由
+admin.route('/movies', adminMoviesRoutes)
+admin.route('/crawlers', adminCrawlersRoutes)
+admin.route('/actors', adminActorsRoutes)
+admin.route('/publishers', adminPublishersRoutes)
+admin.route('/audit-logs', adminAuditLogsRoutes)
 
 // 获取用户列表 (仅超级管理员)
 admin.get('/users', serviceAuth(['admin']), async (c) => {
@@ -690,5 +702,149 @@ admin.get('/comics/crawl-stats', serviceAuth(['admin', 'comic_admin']), async (c
     return c.json({ error: 'Database operation failed' }, 500)
   }
 })
+
+// 批量操作漫画
+admin.post(
+  '/comics/bulk-operation',
+  serviceAuth(['admin', 'comic_admin']),
+  zValidator('json', z.object({
+    ids: z.array(z.string()).min(1).max(100),
+    operation: z.enum(['update_r18', 'lock_metadata', 'unlock_metadata', 'update_sort_order', 'delete']),
+    payload: z.record(z.string(), z.any()).optional(),
+  })),
+  async (c) => {
+    const { ids, operation, payload } = c.req.valid('json')
+    const db = c.get('db')
+
+    const results = {
+      success: [] as string[],
+      failed: [] as { id: string, reason: string }[],
+    }
+
+    const BATCH_SIZE = 20
+
+    try {
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE)
+
+        for (const id of batch) {
+          try {
+            const comic = await db.query.comics.findFirst({
+              where: eq(comics.id, id),
+            })
+
+            if (!comic) {
+              results.failed.push({ id, reason: 'Comic not found' })
+              continue
+            }
+
+            let updateData: any = {}
+
+            switch (operation) {
+              case 'update_r18':
+                updateData = { isR18: payload?.isR18 ?? true }
+                break
+
+              case 'lock_metadata':
+                updateData = { metadataLocked: true }
+                break
+
+              case 'unlock_metadata':
+                updateData = { metadataLocked: false }
+                break
+
+              case 'update_sort_order':
+                updateData = { sortOrder: payload?.sortOrder ?? 0 }
+                break
+
+              case 'delete':
+                await db.delete(comics).where(eq(comics.id, id))
+                results.success.push(id)
+                continue
+
+              default:
+                results.failed.push({ id, reason: 'Unknown operation' })
+                continue
+            }
+
+            if (operation !== 'delete' as any) {
+              await db.update(comics)
+                .set({ ...updateData, updatedAt: new Date() })
+                .where(eq(comics.id, id))
+            }
+
+            results.success.push(id)
+          }
+          catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            results.failed.push({ id, reason: message })
+          }
+        }
+      }
+
+      console.log(`[Admin/Comics] ✓ Bulk operation complete: ${results.success.length} success, ${results.failed.length} failed`)
+
+      return c.json(results)
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Comics] ❌ Bulk operation failed:', message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+// 批量删除章节
+admin.post(
+  '/comics/:id/chapters/bulk-delete',
+  serviceAuth(['admin', 'comic_admin']),
+  zValidator('json', z.object({
+    chapterIds: z.array(z.string()).min(1).max(100),
+  })),
+  async (c) => {
+    const comicId = c.req.param('id')
+    const { chapterIds } = c.req.valid('json')
+    const db = c.get('db')
+
+    const results = {
+      success: [] as string[],
+      failed: [] as { id: string, reason: string }[],
+    }
+
+    try {
+      for (const chapterId of chapterIds) {
+        try {
+          const chapter = await db.query.chapters.findFirst({
+            where: and(
+              eq(chapters.id, chapterId),
+              eq(chapters.comicId, comicId),
+            ),
+          })
+
+          if (!chapter) {
+            results.failed.push({ id: chapterId, reason: 'Chapter not found or not belong to this comic' })
+            continue
+          }
+
+          await db.delete(chapters).where(eq(chapters.id, chapterId))
+          results.success.push(chapterId)
+        }
+        catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          results.failed.push({ id: chapterId, reason: message })
+        }
+      }
+
+      console.log(`[Admin/Chapters] ✓ Bulk delete complete: ${results.success.length} success, ${results.failed.length} failed`)
+
+      return c.json(results)
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Chapters] ❌ Bulk delete failed:', message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
 
 export default admin

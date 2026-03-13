@@ -160,6 +160,14 @@ export const movies = sqliteTable('movie', {
   publisher: text('publisher'), // 片商/发行商
   // R18 标记 (默认 true)
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
+  // 管理字段
+  metadataLocked: integer('metadata_locked', { mode: 'boolean' }).default(false).notNull(), // 锁定元数据，防止爬虫覆盖
+  sortOrder: integer('sort_order').default(0), // 人工排序/权重 (越大越靠前)
+  // 爬取状态字段
+  crawlStatus: text('crawl_status', { enum: ['pending', 'partial', 'complete'] }).default('complete'), // pending: 未爬取, partial: 部分完成, complete: 完全完成
+  lastCrawledAt: integer('last_crawled_at', { mode: 'timestamp' }), // 最后爬取时间
+  totalPlayers: integer('total_players').default(0), // 总播放源数量
+  crawledPlayers: integer('crawled_players').default(0), // 已爬取播放源数量
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })
@@ -231,6 +239,25 @@ export const jobs = sqliteTable('job', {
   processedAt: integer('processed_at', { mode: 'timestamp' }),
 })
 
+// --- 审计日志 ---
+export const auditLogs = sqliteTable('audit_log', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id), // 操作者
+  userEmail: text('user_email').notNull(), // 冗余存储，便于查询
+  action: text('action').notNull(), // CREATE, UPDATE, DELETE, BULK_UPDATE, BULK_DELETE
+  resourceType: text('resource_type').notNull(), // comic, movie, chapter, player, actor, publisher, user
+  resourceId: text('resource_id'), // 资源 ID（批量操作时为 null）
+  resourceIdentifier: text('resource_identifier'), // 资源标识符（slug, code 等）
+  affectedCount: integer('affected_count').default(1), // 批量操作影响的数量
+  changes: text('changes', { mode: 'json' }), // 变更详情 JSON { before: {...}, after: {...} }
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+})
+
+export type AuditLog = InferSelectModel<typeof auditLogs>
+export type NewAuditLog = InferInsertModel<typeof auditLogs>
+
 // --- 关联关系定义 ---
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -296,4 +323,11 @@ export const actorRelations = relations(actors, () => ({
 
 export const publisherRelations = relations(publishers, () => ({
   // 可以通过 publisher 字段关联，但不建立外键
+}))
+
+export const auditLogRelations = relations(auditLogs, ({ one }) => ({
+  user: one(user, {
+    fields: [auditLogs.userId],
+    references: [user.id],
+  }),
 }))

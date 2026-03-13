@@ -1,9 +1,91 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useResourceGuard } from '@/composables/useResourceGuard'
 import { signOut, useSession } from '@/lib/auth-client'
 
 const { t, locale } = useI18n()
-const session = useSession() // Don't destructure data immediately if types are ambiguous
+const session = useSession()
+const { canAccessComics, canAccessMovies, canAccessGlobal } = useResourceGuard()
+
+const iconMap: Record<string, string> = {
+  'home': '🏠',
+  'book': '📚',
+  'film': '🎬',
+  'activity': '📊',
+  'users': '👥',
+  'building': '🏢',
+  'clipboard': '📋',
+  'file-text': '📄',
+  'settings': '⚙️',
+}
+
+function getIcon(iconName: string) {
+  return iconMap[iconName] || '•'
+}
+
+const menuItems = computed(() => [
+  {
+    path: '/',
+    label: t('dashboard.overview'),
+    icon: 'home',
+    show: true,
+  },
+  {
+    path: '/comics',
+    label: t('dashboard.comics'),
+    icon: 'book',
+    show: canAccessComics.value,
+  },
+  {
+    path: '/movies',
+    label: '电影管理',
+    icon: 'film',
+    show: canAccessMovies.value,
+  },
+  {
+    path: '/crawlers',
+    label: '爬虫监控',
+    icon: 'activity',
+    show: canAccessComics.value || canAccessMovies.value,
+  },
+  {
+    path: '/actors',
+    label: '演员管理',
+    icon: 'users',
+    show: canAccessMovies.value,
+  },
+  {
+    path: '/publishers',
+    label: '厂商管理',
+    icon: 'building',
+    show: canAccessMovies.value,
+  },
+  {
+    path: '/audit-logs',
+    label: '审计日志',
+    icon: 'clipboard',
+    show: canAccessGlobal.value,
+  },
+  {
+    path: '/posts',
+    label: t('dashboard.posts'),
+    icon: 'file-text',
+    show: canAccessGlobal.value,
+  },
+  {
+    path: '/users',
+    label: t('dashboard.users'),
+    icon: 'users',
+    show: canAccessGlobal.value,
+  },
+  {
+    path: '/settings',
+    label: t('dashboard.settings'),
+    icon: 'settings',
+    show: true,
+  },
+].filter(item => item.show))
 
 function toggleLocale() {
   const newLocale = locale.value === 'zh' ? 'en' : 'zh'
@@ -14,7 +96,6 @@ function toggleLocale() {
 async function handleLogout() {
   try {
     await signOut()
-    // 登出成功后重定向到中央登录页
     window.location.href = '/auth/login'
   }
   catch (error) {
@@ -32,25 +113,19 @@ async function handleLogout() {
       </div>
 
       <nav class="flex-1 p-4 space-y-1">
-        <RouterLink to="/" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted" active-class="" exact-active-class="bg-muted text-primary">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
-          {{ t('dashboard.overview') }}
-        </RouterLink>
-        <RouterLink to="/comics" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted" active-class="bg-muted text-primary">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
-          {{ t('dashboard.comics') }}
-        </RouterLink>
-        <RouterLink to="/posts" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted" active-class="bg-muted text-primary">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
-          {{ t('dashboard.posts') }}
-        </RouterLink>
-        <RouterLink to="/users" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted" active-class="bg-muted text-primary">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-          {{ t('dashboard.users') }}
-        </RouterLink>
-        <RouterLink to="/settings" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted" active-class="bg-muted text-primary">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
-          {{ t('dashboard.settings') }}
+        <RouterLink
+          v-for="item in menuItems"
+          :key="item.path"
+          :to="item.path"
+          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
+          active-class=""
+          :exact-active-class="item.path === '/' ? 'bg-muted text-primary' : ''"
+          :class="{ 'bg-muted text-primary': item.path !== '/' && $route.path.startsWith(item.path) }"
+        >
+          <span class="text-lg">
+            {{ getIcon(item.icon) }}
+          </span>
+          {{ item.label }}
         </RouterLink>
       </nav>
 

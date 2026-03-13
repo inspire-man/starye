@@ -6,6 +6,7 @@ import { z } from 'zod'
 export interface Variables {
   db: Database
   auth: Auth
+  user?: SessionUser
 }
 
 export interface AppEnv { Bindings: Env, Variables: Variables }

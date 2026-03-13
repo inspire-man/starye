@@ -90,6 +90,7 @@
     "libnss",
     "libpango",
     "libpangocairo",
+    "libsql",
     "libstdc",
     "libx",
     "libxcb",

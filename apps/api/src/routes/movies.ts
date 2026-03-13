@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import type { Context } from 'hono'
 import type { AppEnv, SessionUser } from '../types'
 import { actors as actorsTable, movies as moviesTable, players as playersTable, publishers as publishersTable } from '@starye/db/schema'
@@ -54,14 +55,38 @@ movies.post('/sync', serviceAuth(), async (c) => {
 
   let movieId = existing?.id
 
+  // 计算爬虫状态
+  const playerCount = data.players?.length || 0
+  const crawlData = {
+    crawlStatus: playerCount > 0 ? 'complete' : 'pending',
+    lastCrawledAt: new Date(),
+    totalPlayers: playerCount,
+    crawledPlayers: playerCount,
+  }
+
   if (existing) {
-    // 更新
-    await db.update(moviesTable)
-      .set({
-        ...movieData,
-        updatedAt: new Date(),
-      })
-      .where(eq(moviesTable.id, existing.id))
+    // 如果元数据被锁定，只更新播放源相关字段，跳过元数据更新
+    if (existing.metadataLocked) {
+      console.log(`⏭️  元数据已锁定，跳过更新: ${code}`)
+      await db.update(moviesTable)
+        .set({
+          ...crawlData,
+          crawlStatus: crawlData.crawlStatus as any,
+          updatedAt: new Date(),
+        })
+        .where(eq(moviesTable.id, existing.id))
+    }
+    else {
+      // 元数据未锁定，正常更新
+      await db.update(moviesTable)
+        .set({
+          ...movieData,
+          ...crawlData,
+          crawlStatus: crawlData.crawlStatus as any,
+          updatedAt: new Date(),
+        })
+        .where(eq(moviesTable.id, existing.id))
+    }
   }
   else {
     // 新增
@@ -69,6 +94,10 @@ movies.post('/sync', serviceAuth(), async (c) => {
     await db.insert(moviesTable).values({
       id: movieId,
       ...movieData,
+      ...crawlData,
+      crawlStatus: crawlData.crawlStatus as any,
+      metadataLocked: false,
+      sortOrder: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
