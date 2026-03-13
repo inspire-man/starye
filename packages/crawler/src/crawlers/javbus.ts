@@ -17,15 +17,19 @@ import {
   USER_AGENT,
 } from '../constants'
 import { OptimizedCrawler } from '../core/optimized-crawler'
+import { FailedTaskRecorder } from '../lib/anti-detection'
 
 export interface JavBusCrawlerConfig extends OptimizedCrawlerConfig {
   startUrl?: string
   useRandomMirror?: boolean
+  recoveryMode?: boolean
 }
 
 export class JavBusCrawler extends OptimizedCrawler {
   private currentPage = 1
   private currentMirror: string
+  private failedTasks: FailedTaskRecorder
+  private failedTasksFile = './.javbus-failed-tasks.json'
 
   constructor(config: JavBusCrawlerConfig) {
     super(config)
@@ -38,6 +42,8 @@ export class JavBusCrawler extends OptimizedCrawler {
     else {
       this.currentMirror = config.startUrl || JAVBUS_MIRRORS[0]
     }
+
+    this.failedTasks = new FailedTaskRecorder()
   }
 
   /**
@@ -146,91 +152,104 @@ export class JavBusCrawler extends OptimizedCrawler {
   }
 
   /**
-   * 获取影片信息
+   * 获取影片信息（重写以添加错误记录）
    */
   protected async getMovieInfo(url: string, page: Page): Promise<MovieInfo | null> {
-    await this.preparePage(page, url)
-
     try {
-      await page.waitForSelector('h3', { timeout: TIMEOUTS.selector })
-    }
-    catch {
-      console.warn('⚠️  未找到标题元素')
-      return null
-    }
+      await this.preparePage(page, url)
 
-    return page.evaluate((pageUrl) => {
       try {
-        const titleEl = document.querySelector('h3')
-        if (!titleEl)
-          throw new Error('未找到标题')
-
-        const title = titleEl.textContent?.trim() || ''
-        const bigImage = document.querySelector('.bigImage img') as HTMLImageElement
-        const coverImage = bigImage?.src || ''
-
-        const infoMap: Record<string, string> = {}
-        const els = document.querySelectorAll('.info p')
-        for (const el of [...els]) {
-          const text = el.textContent || ''
-          const splitIndex = text.indexOf(':')
-          if (splitIndex > -1) {
-            const key = text.substring(0, splitIndex + 1).trim()
-            const value = text.substring(splitIndex + 1).trim()
-            infoMap[key] = value
-          }
-        }
-
-        const code = infoMap['識別碼:'] || title.split(' ')[0]
-        const dateText = infoMap['發行日期:']
-        const releaseDate = dateText ? new Date(dateText).getTime() / 1000 : 0
-        const durationText = infoMap['長度:']
-        const duration = Number.parseInt(durationText) || 0
-        const publisher = infoMap['發行商:']
-        const series = infoMap['系列:']
-        const studio = infoMap['製作商:']
-
-        const genres: string[] = []
-        const genreEls = document.querySelectorAll('.genre label a')
-        for (const el of [...genreEls]) {
-          if (el.textContent)
-            genres.push(el.textContent.trim())
-        }
-
-        const actors: string[] = []
-        const actorEls = document.querySelectorAll('.star-name a')
-        for (const el of [...actorEls]) {
-          if (el.textContent)
-            actors.push(el.textContent.trim())
-        }
-
-        return {
-          title,
-          slug: pageUrl.split('/').pop() || '',
-          code,
-          description: '',
-          coverImage: coverImage || '',
-          releaseDate,
-          duration,
-          sourceUrl: pageUrl,
-          actors,
-          genres,
-          series,
-          publisher: publisher || studio,
-          isR18: true,
-          players: [],
-        }
+        await page.waitForSelector('h3', { timeout: TIMEOUTS.selector })
       }
       catch {
+        console.warn('⚠️  未找到标题元素')
         return null
       }
-    }, url)
+
+      return page.evaluate((pageUrl) => {
+        try {
+          const titleEl = document.querySelector('h3')
+          if (!titleEl)
+            throw new Error('未找到标题')
+
+          const title = titleEl.textContent?.trim() || ''
+          const bigImage = document.querySelector('.bigImage img') as HTMLImageElement
+          const coverImage = bigImage?.src || ''
+
+          const infoMap: Record<string, string> = {}
+          const els = document.querySelectorAll('.info p')
+          for (const el of [...els]) {
+            const text = el.textContent || ''
+            const splitIndex = text.indexOf(':')
+            if (splitIndex > -1) {
+              const key = text.substring(0, splitIndex + 1).trim()
+              const value = text.substring(splitIndex + 1).trim()
+              infoMap[key] = value
+            }
+          }
+
+          const code = infoMap['識別碼:'] || title.split(' ')[0]
+          const dateText = infoMap['發行日期:']
+          const releaseDate = dateText ? new Date(dateText).getTime() / 1000 : 0
+          const durationText = infoMap['長度:']
+          const duration = Number.parseInt(durationText) || 0
+          const publisher = infoMap['發行商:']
+          const series = infoMap['系列:']
+          const studio = infoMap['製作商:']
+
+          const genres: string[] = []
+          const genreEls = document.querySelectorAll('.genre label a')
+          for (const el of [...genreEls]) {
+            if (el.textContent)
+              genres.push(el.textContent.trim())
+          }
+
+          const actors: string[] = []
+          const actorEls = document.querySelectorAll('.star-name a')
+          for (const el of [...actorEls]) {
+            if (el.textContent)
+              actors.push(el.textContent.trim())
+          }
+
+          return {
+            title,
+            slug: pageUrl.split('/').pop() || '',
+            code,
+            description: '',
+            coverImage: coverImage || '',
+            releaseDate,
+            duration,
+            sourceUrl: pageUrl,
+            actors,
+            genres,
+            series,
+            publisher: publisher || studio,
+            isR18: true,
+            players: [],
+          }
+        }
+        catch {
+          return null
+        }
+      }, url)
+    }
+    catch (error) {
+      // 记录失败任务
+      this.failedTasks.record(url, error as Error, 1)
+      throw error
+    }
   }
 
   /**
    * 运行爬虫
    */
   async run(): Promise<void> {
+    // 恢复模式：加载失败任务并重试
+    if ((this.config as JavBusCrawlerConfig).recoveryMode) {
+      await this.runRecoveryMode()
+      return
+    }
+
     console.log('🚀 启动 JavBus 优化爬虫')
     console.log(`📊 配置: 最大影片=${this.config.limits.maxMovies}, 最大页数=${this.config.limits.maxPages}`)
     console.log(`⚙️  并发: 列表=${this.config.concurrency.listPage}, 详情=${this.config.concurrency.detailPage}, 图片=${this.config.concurrency.image}`)
@@ -274,11 +293,29 @@ export class JavBusCrawler extends OptimizedCrawler {
               return
             }
 
-            // 添加详情页任务
+            // 批量查询影片状态
+            const movieCodes = movieLinks.map(url => url.split('/').pop() || '')
+            const statusMap = await this.apiClient.batchQueryMovieStatus(movieCodes)
+            const existingCount = Object.values(statusMap).filter(s => s.exists).length
+
+            if (existingCount > 0) {
+              console.log(`  ℹ️  跳过 ${existingCount}/${movieLinks.length} 个已存在的影片`)
+            }
+
+            // 添加详情页任务（跳过已存在的）
             for (const movieUrl of movieLinks) {
               const currentStats = this.getStats()
               if (this.config.limits.maxMovies && currentStats.moviesSuccess >= this.config.limits.maxMovies) {
                 break
+              }
+
+              const code = movieUrl.split('/').pop() || ''
+              const status = statusMap[code]
+
+              // 跳过已存在的影片
+              if (status?.exists) {
+                console.log(`  ⏭️  跳过已存在影片: ${code}`)
+                continue
               }
 
               this.queueManager.addDetailPageTask(async () => {
@@ -318,6 +355,78 @@ export class JavBusCrawler extends OptimizedCrawler {
       throw error
     }
     finally {
+      // 输出失败任务摘要
+      this.failedTasks.printSummary()
+
+      // 保存失败任务
+      if (this.failedTasks.getFailedTasks().length > 0) {
+        await this.failedTasks.saveToFile(this.failedTasksFile)
+      }
+
+      await this.cleanup()
+    }
+  }
+
+  /**
+   * 恢复模式：重试失败的任务
+   */
+  private async runRecoveryMode(): Promise<void> {
+    console.log('🔄 启动恢复模式')
+    await this.init()
+
+    try {
+      await this.failedTasks.loadFromFile(this.failedTasksFile)
+      const recoverableTasks = this.failedTasks.getRecoverableTasks()
+
+      if (recoverableTasks.length === 0) {
+        console.log('ℹ️  没有可恢复的失败任务')
+        return
+      }
+
+      console.log(`📋 开始恢复 ${recoverableTasks.length} 个失败任务`)
+      this.failedTasks.clear()
+
+      // 逐个重试失败的影片
+      let successCount = 0
+      let failCount = 0
+
+      for (const task of recoverableTasks) {
+        try {
+          const page = await this.createPage()
+          try {
+            console.log(`🔄 重试: ${task.url}`)
+            await this.processMovie(task.url, page)
+            successCount++
+          }
+          finally {
+            await page.close()
+          }
+        }
+        catch (error) {
+          console.error(`❌ 恢复失败: ${task.url}`, error)
+          this.failedTasks.record(task.url, error as Error, 1)
+          failCount++
+        }
+      }
+
+      console.log(`
+📊 恢复完成:
+  成功: ${successCount}/${recoverableTasks.length}
+  失败: ${failCount}/${recoverableTasks.length}`)
+    }
+    catch (error) {
+      console.error('❌ 恢复模式运行失败:', error)
+      throw error
+    }
+    finally {
+      // 输出失败任务摘要
+      this.failedTasks.printSummary()
+
+      // 保存失败任务
+      if (this.failedTasks.getFailedTasks().length > 0) {
+        await this.failedTasks.saveToFile(this.failedTasksFile)
+      }
+
       await this.cleanup()
     }
   }

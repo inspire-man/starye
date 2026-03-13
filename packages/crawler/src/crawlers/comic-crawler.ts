@@ -20,11 +20,15 @@ interface MangaStatus {
 
 export class ComicCrawler extends BaseCrawler {
   private failedTasks: FailedTaskRecorder
+  private failedTasksFile = './.crawler-failed-tasks.json'
 
   constructor(
     config: CrawlerConfig,
     private strategy: CrawlStrategy,
     private startUrl: string,
+    private options: {
+      recoveryMode?: boolean
+    } = {},
   ) {
     super(config)
     this.failedTasks = new FailedTaskRecorder()
@@ -35,8 +39,26 @@ export class ComicCrawler extends BaseCrawler {
     const page = await this.createPage()
 
     try {
-      console.log(`🚀 Starting crawl for: ${this.startUrl}`)
-      await this.processUrl(this.startUrl, page)
+      // 恢复模式：加载失败任务并重试
+      if (this.options.recoveryMode) {
+        await this.failedTasks.loadFromFile(this.failedTasksFile)
+        const recoverableTasks = this.failedTasks.getRecoverableTasks()
+
+        if (recoverableTasks.length === 0) {
+          console.log('ℹ️  没有可恢复的失败任务')
+          return
+        }
+
+        console.log(`🔄 恢复模式：重试 ${recoverableTasks.length} 个失败任务`)
+        this.failedTasks.clear()
+
+        await this.processRecoveryTasks(recoverableTasks, page)
+      }
+      else {
+        // 正常模式
+        console.log(`🚀 Starting crawl for: ${this.startUrl}`)
+        await this.processUrl(this.startUrl, page)
+      }
     }
     catch (error) {
       console.error('❌ Crawl failed:', error)
@@ -56,8 +78,43 @@ export class ComicCrawler extends BaseCrawler {
       // 输出失败任务摘要
       this.failedTasks.printSummary()
 
+      // 保存失败任务
+      if (this.failedTasks.getFailedTasks().length > 0) {
+        await this.failedTasks.saveToFile(this.failedTasksFile)
+      }
+
       await this.closeBrowser()
     }
+  }
+
+  /**
+   * 处理恢复任务
+   */
+  private async processRecoveryTasks(tasks: Array<{ url: string }>, page: Page) {
+    let successCount = 0
+    let failCount = 0
+
+    console.log(`
+📋 开始恢复 ${tasks.length} 个失败任务...`)
+
+    for (const task of tasks) {
+      try {
+        console.log(`
+🔄 重试: ${task.url}`)
+        await this.processManga(task.url, page, {})
+        successCount++
+      }
+      catch (error) {
+        console.error(`❌ 恢复失败: ${task.url}`, error)
+        this.failedTasks.record(task.url, error as Error, 1)
+        failCount++
+      }
+    }
+
+    console.log(`
+📊 恢复完成:
+  成功: ${successCount}/${tasks.length}
+  失败: ${failCount}/${tasks.length}`)
   }
 
   private extractSlug(url: string): string {

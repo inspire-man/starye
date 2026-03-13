@@ -536,6 +536,57 @@ export class FailedTaskRecorder {
   }
 
   /**
+   * 获取可恢复的任务列表
+   * 排除不可恢复的错误类型（如 HTTP_ERROR）
+   */
+  getRecoverableTasks(): FailedTask[] {
+    const nonRecoverableTypes: ErrorType[] = ['HTTP_ERROR']
+    return this.tasks.filter(task => !nonRecoverableTypes.includes(task.errorType))
+  }
+
+  /**
+   * 保存失败任务到 JSON 文件
+   */
+  async saveToFile(filePath: string): Promise<void> {
+    try {
+      const fs = await import('node:fs/promises')
+      const data = JSON.stringify(this.tasks, null, 2)
+      await fs.writeFile(filePath, data, 'utf-8')
+      console.log(`💾 失败任务已保存到: ${filePath} (${this.tasks.length} 个任务)`)
+    }
+    catch (error) {
+      console.error(`❌ 保存失败任务时出错:`, error)
+    }
+  }
+
+  /**
+   * 从 JSON 文件加载失败任务
+   */
+  async loadFromFile(filePath: string): Promise<void> {
+    try {
+      const fs = await import('node:fs/promises')
+      const data = await fs.readFile(filePath, 'utf-8')
+      const loaded = JSON.parse(data) as FailedTask[]
+
+      // 转换 timestamp 字符串回 Date 对象
+      this.tasks = loaded.map(task => ({
+        ...task,
+        timestamp: new Date(task.timestamp),
+      }))
+
+      console.log(`📂 已加载 ${this.tasks.length} 个失败任务从: ${filePath}`)
+    }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        console.log(`ℹ️  未找到失败任务文件: ${filePath}`)
+      }
+      else {
+        console.error(`❌ 加载失败任务时出错:`, error)
+      }
+    }
+  }
+
+  /**
    * 输出失败摘要
    */
   printSummary(): void {
@@ -556,6 +607,19 @@ export class FailedTaskRecorder {
         console.log(`    ... and ${tasks.length - 5} more`)
       }
     }
+
+    // 提示可恢复的任务数量
+    const recoverable = this.getRecoverableTasks()
+    if (recoverable.length > 0) {
+      console.log(`\n💡 其中 ${recoverable.length} 个任务可以恢复重试`)
+    }
+  }
+
+  /**
+   * 清空记录
+   */
+  clear(): void {
+    this.tasks = []
   }
 }
 
