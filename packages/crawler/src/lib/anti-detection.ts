@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import type { Page, Protocol } from 'puppeteer-core'
+import type { Cookie, Page } from 'puppeteer-core'
 
 /**
  * 错误类型分类
@@ -381,7 +381,7 @@ export class HeaderRotator {
  */
 export class CrawlerSession {
   private baseUrl: string
-  private cookies: Protocol.Network.Cookie[] = []
+  private cookies: Cookie[] = []
   private initialized = false
   private headerRotator: HeaderRotator
   private sessionStartTime = Date.now()
