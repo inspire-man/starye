@@ -206,23 +206,7 @@ async function handleUpdate() {
   }
 }
 
-async function _handleDelete(id: string) {
-  if (!confirm('确认删除此电影？'))
-    return
-
-  try {
-    await api.admin.deleteMovie(id)
-    await loadMovies()
-  }
-  catch (e: unknown) {
-    console.error(e)
-    alert(`删除失败: ${String(e)}`)
-  }
-}
-
 function handleBatchOperation(operationId: string) {
-  const _selectedMovies = movies.value.filter(m => selectedIds.value.includes(m.id))
-
   confirmDialogData.value = {
     title: '确认批量操作',
     message: `即将对 ${selectedCount.value} 部电影执行操作`,

@@ -4,7 +4,7 @@
 
 ### 迁移 0013: 管理后台增强（Movies 表扩展 + 审计日志）
 
-**日期**: 2026-03-13  
+**日期**: 2026-03-13
 **变更**: enhance-admin-dashboard
 
 #### 新增字段（Movies 表）
@@ -115,19 +115,19 @@ wrangler d1 execute <database-name> --file=packages/db/drizzle/0013_rainy_bastio
 
 ```sql
 -- 验证新增字段
-SELECT 
-  code, 
+SELECT
+  code,
   title,
   metadataLocked,
   sortOrder,
   crawlStatus,
   totalPlayers,
   crawledPlayers
-FROM movie 
+FROM movie
 LIMIT 5;
 
 -- 验证索引
-SELECT * FROM sqlite_master 
+SELECT * FROM sqlite_master
 WHERE type='index' AND tbl_name='movie';
 ```
 
@@ -138,7 +138,7 @@ WHERE type='index' AND tbl_name='movie';
 SELECT * FROM audit_log LIMIT 1;
 
 -- 验证索引
-SELECT * FROM sqlite_master 
+SELECT * FROM sqlite_master
 WHERE type='index' AND tbl_name='audit_log';
 ```
 
