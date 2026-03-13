@@ -1,3 +1,4 @@
+/* eslint-disable node/prefer-global/process */
 import type { Page } from 'puppeteer-core'
 import type { CrawlContext } from '../lib/anti-detection'
 import type { ChapterContent, CrawlStrategy, MangaInfo } from '../lib/strategy'
@@ -15,11 +16,19 @@ export class Site92Hm implements CrawlStrategy {
   private monitor: SuccessRateMonitor
   private delayStrategy: DelayStrategy
   private initialized = false
+  private useLegacyMode: boolean
 
   constructor() {
     this.session = new CrawlerSession(this.baseUrl)
     this.monitor = new SuccessRateMonitor(DEFAULT_MANGA_ANTI_DETECTION.successRateWindow)
     this.delayStrategy = new DelayStrategy(DEFAULT_MANGA_ANTI_DETECTION)
+
+    // 检查是否启用 Legacy 模式（回滚开关）
+    this.useLegacyMode = process.env.USE_LEGACY_MODE === 'true'
+
+    if (this.useLegacyMode) {
+      console.warn('⚠️  Legacy Mode 已启用：使用简单重试逻辑（关闭反检测）')
+    }
   }
 
   match(url: string): boolean {
@@ -30,6 +39,10 @@ export class Site92Hm implements CrawlStrategy {
    * 智能页面导航：集成反检测和错误恢复
    */
   private async _smartGoto(page: Page, url: string): Promise<void> {
+    // Legacy 模式：使用简单的重试逻辑
+    if (this.useLegacyMode) {
+      return this._legacyGoto(page, url)
+    }
     // 首次调用时初始化会话
     if (!this.initialized) {
       await this.session.initialize(page)
@@ -110,6 +123,37 @@ export class Site92Hm implements CrawlStrategy {
 
   private async _sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  /**
+   * Legacy 模式：简单的页面导航（用于回滚）
+   */
+  private async _legacyGoto(page: Page, url: string): Promise<void> {
+    const maxRetries = 2
+    let lastError: Error | null = null
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          // 简单延迟
+          await this._sleep(3000 * attempt)
+          console.warn(`[Legacy] Retry ${attempt}/${maxRetries}: ${url}`)
+        }
+
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000,
+        })
+
+        return
+      }
+      catch (error) {
+        lastError = error as Error
+        console.warn(`[Legacy] Attempt ${attempt + 1} failed: ${lastError.message}`)
+      }
+    }
+
+    throw lastError || new Error('Legacy goto failed')
   }
 
   /**

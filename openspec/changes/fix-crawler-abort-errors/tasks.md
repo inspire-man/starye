@@ -15,7 +15,7 @@
 - [x] 2.3 定义影片爬虫的专用配置（baseDelay: 6000ms, maxRetries: 2）
 - [x] 2.4 实现配置验证函数 `validateAntiDetectionConfig`
 - [x] 2.5 添加环境变量支持（`CRAWLER_BASE_DELAY`, `CRAWLER_MAX_RETRIES` 等）
-- [ ] 2.6 添加配置文档（JSDoc + README）
+- [x] 2.6 添加配置文档（JSDoc + README）
 
 ## 3. 请求头伪装实现
 
@@ -142,11 +142,11 @@
 
 ## 17. 文档更新
 
-- [ ] 17.1 更新 `packages/crawler/README.md`，添加反检测配置说明
-- [ ] 17.2 添加配置示例（漫画 vs Movie）
-- [ ] 17.3 添加故障排查指南（常见错误及解决方案）
-- [ ] 17.4 添加性能优化建议
-- [ ] 17.5 更新 GitHub Actions workflow 注释
+- [x] 17.1 更新 `packages/crawler/README.md`，添加反检测配置说明
+- [x] 17.2 添加配置示例（漫画 vs Movie）
+- [x] 17.3 添加故障排查指南（常见错误及解决方案）
+- [x] 17.4 添加性能优化建议
+- [x] 17.5 更新 GitHub Actions workflow 注释
 
 ## 18. 监控和日志优化
 
@@ -158,10 +158,10 @@
 
 ## 19. 回滚准备
 
-- [ ] 19.1 在 GitHub Actions 中添加 `USE_LEGACY_MODE` 环境变量支持
-- [ ] 19.2 实现 legacy mode 逻辑（使用原有的简单重试）
+- [x] 19.1 在 GitHub Actions 中添加 `USE_LEGACY_MODE` 环境变量支持
+- [x] 19.2 实现 legacy mode 逻辑（使用原有的简单重试）
 - [ ] 19.3 测试 legacy mode 可以正常工作
-- [ ] 19.4 文档化回滚步骤
+- [x] 19.4 文档化回滚步骤
 
 ## 20. 最终验证
 
@@ -169,6 +169,6 @@
 - [ ] 20.2 ERR_ABORTED 错误率 < 5%
 - [ ] 20.3 成功率 > 95%
 - [ ] 20.4 Movie 爬虫保持稳定（或优化后稳定）
-- [ ] 20.5 代码通过 lint 和 type-check
-- [ ] 20.6 所有配置项都有文档说明
+- [x] 20.5 代码通过 lint 和 type-check
+- [x] 20.6 所有配置项都有文档说明
 - [ ] 20.7 失败任务记录功能正常工作
