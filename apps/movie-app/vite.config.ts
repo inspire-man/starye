@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [vue()],
-  base: '/',
+  base: '/movie/',
   server: {
     port: 3004,
     proxy: {

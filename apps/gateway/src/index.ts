@@ -45,9 +45,8 @@ export default {
         return Response.redirect(`${url.origin}/movie/`, 301)
       }
       const target = isLocal ? 'http://localhost:3004' : (env.MOVIE_ORIGIN || 'http://localhost:3004')
-      // 在生产环境中，移除 /movie 前缀（因为 Pages 部署在根路径）
-      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/movie/, '') || '/'
-      return proxy(request, target, pathRewrite)
+      // 直接转发路径，不重写（应用使用 base: '/movie/'）
+      return proxy(request, target)
     }
 
     // 4. Comic App
@@ -56,9 +55,8 @@ export default {
         return Response.redirect(`${url.origin}/comic/`, 301)
       }
       const target = isLocal ? 'http://localhost:3003' : (env.COMIC_ORIGIN || 'http://localhost:3003')
-      // 在生产环境中，移除 /comic 前缀（因为 Pages 部署在根路径）
-      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/comic/, '') || '/'
-      return proxy(request, target, pathRewrite)
+      // 直接转发路径，不重写（应用使用 base: '/comic/'）
+      return proxy(request, target)
     }
 
     // 5. Auth Service (Identity Provider)

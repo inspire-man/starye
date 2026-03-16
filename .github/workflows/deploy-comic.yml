@@ -45,5 +45,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          # 部署到 Cloudflare Pages（项目已存在，无需创建）
+          # 尝试创建项目（如果不存在）
+          pnpm exec wrangler pages project create starye-comic --production-branch=main || true
+          # 部署到 Cloudflare Pages
           pnpm exec wrangler pages deploy apps/comic-app/dist --project-name=starye-comic --commit-dirty=true
