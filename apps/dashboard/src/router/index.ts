@@ -11,6 +11,7 @@ import Movies from '@/views/Movies.vue'
 import PostEditor from '@/views/PostEditor.vue'
 import Posts from '@/views/Posts.vue'
 import Publishers from '@/views/Publishers.vue'
+import R18Whitelist from '@/views/R18Whitelist.vue'
 import Settings from '@/views/Settings.vue'
 import Unauthorized from '@/views/Unauthorized.vue'
 import Users from '@/views/Users.vue'
@@ -62,6 +63,11 @@ const routes = [
       {
         path: 'audit-logs',
         component: AuditLogs,
+        meta: { requiredRoles: ['admin', 'super_admin'] },
+      },
+      {
+        path: 'r18-whitelist',
+        component: R18Whitelist,
         meta: { requiredRoles: ['admin', 'super_admin'] },
       },
       {

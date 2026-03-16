@@ -12,6 +12,7 @@ import adminAuditLogsRoutes from './admin-audit-logs'
 import adminCrawlersRoutes from './admin-crawlers'
 import adminMoviesRoutes from './admin-movies'
 import adminPublishersRoutes from './admin-publishers'
+import adminR18WhitelistRoutes from './admin-r18-whitelist'
 
 const admin = new Hono<AppEnv>()
 
@@ -21,6 +22,7 @@ admin.route('/crawlers', adminCrawlersRoutes)
 admin.route('/actors', adminActorsRoutes)
 admin.route('/publishers', adminPublishersRoutes)
 admin.route('/audit-logs', adminAuditLogsRoutes)
+admin.route('/r18-whitelist', adminR18WhitelistRoutes)
 
 // 获取用户列表 (仅超级管理员)
 admin.get('/users', serviceAuth(['admin']), async (c) => {

@@ -20,8 +20,9 @@ export interface SessionUser {
   image?: string | null
   createdAt: Date
   updatedAt: Date
-  role: string // Custom field
-  isAdult: boolean // Custom field
+  role: string
+  isAdult: boolean
+  isR18Verified: boolean
 }
 
 // Validation Schemas

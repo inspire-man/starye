@@ -67,6 +67,7 @@ export function createAuth(env: Env, request: Request) {
       additionalFields: {
         role: { type: 'string' },
         isAdult: { type: 'boolean' },
+        isR18Verified: { type: 'boolean' },
       },
     },
     callbacks: {
@@ -76,6 +77,7 @@ export function createAuth(env: Env, request: Request) {
           user: {
             ...user,
             isAdult: !!user.isAdult,
+            isR18Verified: !!user.isR18Verified,
           },
         }
       },

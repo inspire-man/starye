@@ -136,12 +136,13 @@ onMounted(loadUsers)
               <span
                 class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border capitalize"
                 :class="{
+                  'bg-red-50 text-red-700 border-red-200': user.role === 'super_admin',
                   'bg-purple-50 text-purple-700 border-purple-200': user.role === 'admin',
                   'bg-blue-50 text-blue-700 border-blue-200': user.role === 'comic_admin',
                   'bg-neutral-50 text-neutral-600 border-neutral-200': user.role === 'user',
                 }"
               >
-                {{ user.role === 'admin' ? 'Admin' : (user.role === 'comic_admin' ? 'Comic Admin' : t('dashboard.user')) }}
+                {{ user.role === 'super_admin' ? 'Super Admin' : (user.role === 'admin' ? 'Admin' : (user.role === 'comic_admin' ? 'Comic Admin' : t('dashboard.user'))) }}
               </span>
             </td>
             <td class="px-6 py-4">
@@ -180,6 +181,9 @@ onMounted(loadUsers)
               </option>
               <option value="admin">
                 Admin
+              </option>
+              <option value="super_admin">
+                Super Admin
               </option>
             </select>
           </div>

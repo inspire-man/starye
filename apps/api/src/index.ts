@@ -10,6 +10,9 @@ import comicsRoutes from './routes/comics'
 import healthRoutes from './routes/health'
 import moviesRoutes from './routes/movies'
 import postsRoutes from './routes/posts'
+import publicComicsRoutes from './routes/public-comics'
+import publicMoviesRoutes from './routes/public-movies'
+import publicProgressRoutes from './routes/public-progress'
 import uploadRoutes from './routes/upload'
 
 const app = new Hono<AppEnv>()
@@ -31,6 +34,10 @@ app.route('/api/posts', postsRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/upload', uploadRoutes)
+// 公开 API
+app.route('/api/public/comics', publicComicsRoutes)
+app.route('/api/public/movies', publicMoviesRoutes)
+app.route('/api/public/progress', publicProgressRoutes)
 
 export default app
 export type AppType = typeof app

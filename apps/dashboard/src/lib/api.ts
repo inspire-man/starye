@@ -1,3 +1,5 @@
+import type { User } from 'better-auth'
+
 export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787'
 
 const TOKEN_KEY = 'starye_admin_token'
@@ -304,6 +306,21 @@ export const api = {
       }
       return await response.blob()
     },
+
+    // R18 白名单管理
+    getR18Whitelist: () =>
+      fetchApi<{ success: boolean, data: User[] }>('/api/admin/r18-whitelist'),
+
+    addToR18Whitelist: (userId?: string, email?: string) =>
+      fetchApi('/api/admin/r18-whitelist', {
+        method: 'POST',
+        body: JSON.stringify({ userId, email }),
+      }),
+
+    removeFromR18Whitelist: (userId: string) =>
+      fetchApi(`/api/admin/r18-whitelist/${userId}`, {
+        method: 'DELETE',
+      }),
   },
 
   upload: {

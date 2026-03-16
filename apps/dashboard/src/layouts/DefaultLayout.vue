@@ -17,6 +17,7 @@ const iconMap: Record<string, string> = {
   'building': '🏢',
   'clipboard': '📋',
   'file-text': '📄',
+  'shield': '🔞',
   'settings': '⚙️',
 }
 
@@ -65,6 +66,12 @@ const menuItems = computed(() => [
     path: '/audit-logs',
     label: '审计日志',
     icon: 'clipboard',
+    show: canAccessGlobal.value,
+  },
+  {
+    path: '/r18-whitelist',
+    label: 'R18 白名单',
+    icon: 'shield',
     show: canAccessGlobal.value,
   },
   {

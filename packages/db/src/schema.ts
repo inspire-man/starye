@@ -1,6 +1,6 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
 import { relations, sql } from 'drizzle-orm'
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // --- 用户认证 (Better Auth 标准表) ---
 export const user = sqliteTable('user', {
@@ -10,6 +10,7 @@ export const user = sqliteTable('user', {
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull(),
   role: text('role').default('user').notNull(),
   isAdult: integer('is_adult', { mode: 'boolean' }).default(false),
+  isR18Verified: integer('is_r18_verified', { mode: 'boolean' }).default(false).notNull(), // R18 白名单标记
   image: text('image'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
@@ -258,12 +259,42 @@ export const auditLogs = sqliteTable('audit_log', {
 export type AuditLog = InferSelectModel<typeof auditLogs>
 export type NewAuditLog = InferInsertModel<typeof auditLogs>
 
+// --- 用户进度 ---
+export const readingProgress = sqliteTable('reading_progress', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  chapterId: text('chapter_id').notNull().references(() => chapters.id, { onDelete: 'cascade' }),
+  page: integer('page').notNull(), // 当前阅读页码
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => ({
+  userChapterIdx: uniqueIndex('idx_reading_progress_user_chapter').on(table.userId, table.chapterId),
+}))
+
+export type ReadingProgress = InferSelectModel<typeof readingProgress>
+export type NewReadingProgress = InferInsertModel<typeof readingProgress>
+
+export const watchingProgress = sqliteTable('watching_progress', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  movieCode: text('movie_code').notNull().references(() => movies.code, { onDelete: 'cascade' }),
+  progress: integer('progress').notNull(), // 播放进度（秒）
+  duration: integer('duration'), // 总时长（秒）
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => ({
+  userMovieIdx: uniqueIndex('idx_watching_progress_user_movie').on(table.userId, table.movieCode),
+}))
+
+export type WatchingProgress = InferSelectModel<typeof watchingProgress>
+export type NewWatchingProgress = InferInsertModel<typeof watchingProgress>
+
 // --- 关联关系定义 ---
 
 export const userRelations = relations(user, ({ many }) => ({
   posts: many(posts),
   sessions: many(session),
   accounts: many(account),
+  readingProgress: many(readingProgress),
+  watchingProgress: many(watchingProgress),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -329,5 +360,27 @@ export const auditLogRelations = relations(auditLogs, ({ one }) => ({
   user: one(user, {
     fields: [auditLogs.userId],
     references: [user.id],
+  }),
+}))
+
+export const readingProgressRelations = relations(readingProgress, ({ one }) => ({
+  user: one(user, {
+    fields: [readingProgress.userId],
+    references: [user.id],
+  }),
+  chapter: one(chapters, {
+    fields: [readingProgress.chapterId],
+    references: [chapters.id],
+  }),
+}))
+
+export const watchingProgressRelations = relations(watchingProgress, ({ one }) => ({
+  user: one(user, {
+    fields: [watchingProgress.userId],
+    references: [user.id],
+  }),
+  movie: one(movies, {
+    fields: [watchingProgress.movieCode],
+    references: [movies.code],
   }),
 }))

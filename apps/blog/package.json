@@ -16,9 +16,9 @@
     "@starye/locales": "workspace:*",
     "@starye/ui": "workspace:*",
     "@types/markdown-it": "^14.1.2",
-    "better-auth": "^1.5.4",
+    "better-auth": "^1.5.5",
     "markdown-it": "^14.1.1",
-    "nuxt": "^4.3.1",
+    "nuxt": "^4.4.2",
     "vue": "^3.5.30",
     "vue-router": "^5.0.3"
   },
