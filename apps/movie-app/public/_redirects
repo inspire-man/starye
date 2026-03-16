@@ -1,2 +1,2 @@
 # SPA fallback - 所有非文件请求都返回 index.html
-/movie/* /movie/index.html 200
+/* /index.html 200
