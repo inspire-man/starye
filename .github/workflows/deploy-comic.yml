@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'apps/comic/**'
+      - 'apps/comic-app/**'
       - 'packages/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -35,17 +35,15 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build Comic App (SSG)
+      - name: Build Comic App
         env:
           VITE_API_URL: https://starye.org
-        run: pnpm --filter comic generate
+        run: pnpm --filter @starye/comic-app run build
 
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          # 尝试创建项目（如果不存在）
-          pnpm exec wrangler pages project create starye-comic --production-branch=main || true
-          # 部署到 Cloudflare Pages
-          pnpm exec wrangler pages deploy apps/comic/dist --project-name=starye-comic --commit-dirty=true
+          # 部署到 Cloudflare Pages（项目已存在，无需创建）
+          pnpm exec wrangler pages deploy apps/comic-app/dist --project-name=starye-comic --commit-dirty=true
