@@ -46,7 +46,7 @@ async function fetchPosts() {
   loading.value = true
   try {
     // Admin request to get all posts including drafts
-    const response = await authClient.$fetch<PostsListResponse>(`${import.meta.env.VITE_API_URL}/api/posts?draft=true&limit=50`)
+    const response = await authClient.$fetch<PostsListResponse>(`/api/posts?draft=true&limit=50`)
     if (response.error)
       throw response.error
 
@@ -98,7 +98,7 @@ async function confirmDelete() {
   deleteConfirmId.value = null
 
   try {
-    const response = await authClient.$fetch<ApiSuccessResponse>(`${import.meta.env.VITE_API_URL}/api/posts/${id}`, {
+    const response = await authClient.$fetch<ApiSuccessResponse>(`/api/posts/${id}`, {
       method: 'DELETE',
     })
 

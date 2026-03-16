@@ -13,8 +13,8 @@ export default defineConfig(({ mode }) => ({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // 开发环境: 使用 /dashboard/ 与 Gateway 路由保持一致
-  // 生产环境: 使用 / 因为部署到独立的 Cloudflare Pages 项目
+  // 生产环境：使用 / 因为 Pages 部署在根路径，Gateway 负责路径重写
+  // 开发环境：使用 /dashboard/ 与 Gateway 路由保持一致
   base: mode === 'production' ? '/' : '/dashboard/',
   server: {
     port: 5173,

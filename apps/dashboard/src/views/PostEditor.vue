@@ -55,7 +55,7 @@ async function fetchPost() {
 
   loading.value = true
   try {
-    const response = await authClient.$fetch(`${import.meta.env.VITE_API_URL}/api/posts/admin/${route.params.id}`)
+    const response = await authClient.$fetch(`/api/posts/admin/${route.params.id}`)
     if (response.error)
       throw response.error
 
@@ -91,8 +91,8 @@ async function save() {
   saving.value = true
   try {
     const url = isNew
-      ? `${import.meta.env.VITE_API_URL}/api/posts`
-      : `${import.meta.env.VITE_API_URL}/api/posts/${route.params.id}`
+      ? `/api/posts`
+      : `/api/posts/${route.params.id}`
 
     const method = isNew ? 'POST' : 'PUT'
 

@@ -1,8 +1,2 @@
-# Cloudflare Pages SPA 路由配置
-# Dashboard 部署到独立的 Cloudflare Pages 项目，根路径为 /
-
-# 静态资源直接返回（带有正确的 MIME type）
-/assets/*  /assets/:splat  200
-
-# 所有其他路径返回 index.html（SPA fallback）
-/*         /index.html     200
+# SPA fallback - 所有非文件请求都返回 index.html
+/* /index.html 200

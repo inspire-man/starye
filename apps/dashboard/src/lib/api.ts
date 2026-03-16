@@ -1,6 +1,7 @@
 import type { User } from 'better-auth'
 
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787'
+// 使用相对路径，通过 Gateway 转发到 API
+export const API_BASE = '/api'
 
 const TOKEN_KEY = 'starye_admin_token'
 export const getAdminToken = () => localStorage.getItem(TOKEN_KEY) || ''

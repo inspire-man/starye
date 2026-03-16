@@ -34,9 +34,10 @@ export default {
       if (path === '/dashboard') {
         return Response.redirect(`${url.origin}/dashboard/`, 301)
       }
-      // Dashboard 使用 base: '/dashboard/'，不需要路径重写
       const target = isLocal ? 'http://localhost:5173' : (env.DASHBOARD_ORIGIN || 'http://localhost:5173')
-      return proxy(request, target)
+      // 生产环境：移除 /dashboard 前缀（Pages 部署在根路径）
+      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/dashboard/, '') || '/'
+      return proxy(request, target, pathRewrite)
     }
 
     // 3. Movie App
