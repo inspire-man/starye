@@ -1,5 +1,5 @@
 ---
-alwaysApply: false
+alwaysApply: true
 ---
 ## Project Conventions
 
@@ -13,3 +13,5 @@ alwaysApply: false
 - Changes 目录命名规范:
   - 格式: `YYYY-mm-dd-{{Feature name}}`
   - 示例: `2026-01-27-user-export`
+- 总结策略:
+  - 无需生成总结文件

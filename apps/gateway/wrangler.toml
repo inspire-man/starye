@@ -6,14 +6,14 @@ compatibility_date = "2024-04-01"
 port = 8080 # 本地统一入口端口
 
 [vars]
-# 生产环境各模块的原始访问地址 (可以是 Cloudflare Pages 的默认域名或子域名)
-# 部署后请在 Cloudflare Dashboard 修改这些值为真实生产地址
+# 生产环境各模块的原始访问地址
+# 使用 Cloudflare Pages 默认域名
 API_ORIGIN = "https://api.starye.org"
 AUTH_ORIGIN = "https://starye-auth.pages.dev"
 DASHBOARD_ORIGIN = "https://starye-dashboard.pages.dev"
 BLOG_ORIGIN = "https://blog.starye.org"
-MOVIE_ORIGIN = "https://movie.starye.org"
-COMIC_ORIGIN = "https://comic.starye.org"
+MOVIE_ORIGIN = "https://starye-movie.pages.dev"
+COMIC_ORIGIN = "https://starye-comic.pages.dev"
 
 # Custom Domain Binding
 # This worker handles all traffic for the main domain
