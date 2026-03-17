@@ -135,18 +135,18 @@ export interface Paginated<T> {
 export const api = {
   API_BASE,
   // Public API (filtered)
-  getComics: () => fetchApi<Paginated<Comic>>('/api/comics?limit=50'),
+  getComics: () => fetchApi<Paginated<Comic>>('/comics?limit=50'),
 
   // Admin API (full access)
   admin: {
-    getStats: () => fetchApi<{ comics: number, users: number, tasks: number }>('/api/admin/stats'),
+    getStats: () => fetchApi<{ comics: number, users: number, tasks: number }>('/admin/stats'),
 
     getComics: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
       return fetchApi<Paginated<Comic>>(`/api/admin/comics${query ? `?${query}` : ''}`)
     },
 
-    getUsers: () => fetchApi<any[]>('/api/admin/users'),
+    getUsers: () => fetchApi<any[]>('/admin/users'),
 
     updateUserRole: (email: string, role: string) =>
       fetchApi(`/api/admin/users/${email}/role`, {
@@ -171,7 +171,7 @@ export const api = {
     deleteChapter: (id: string) => fetchApi(`/api/admin/chapters/${id}`, { method: 'DELETE' }),
 
     bulkOperationComics: (ids: string[], operation: string, payload?: any) =>
-      fetchApi('/api/admin/comics/bulk-operation', {
+      fetchApi('/admin/comics/bulk-operation', {
         method: 'POST',
         body: JSON.stringify({ ids, operation, payload }),
       }),
@@ -199,7 +199,7 @@ export const api = {
       fetchApi(`/api/admin/movies/${id}`, { method: 'DELETE' }),
 
     bulkOperationMovies: (ids: string[], operation: string, payload?: any) =>
-      fetchApi('/api/admin/movies/bulk-operation', {
+      fetchApi('/admin/movies/bulk-operation', {
         method: 'POST',
         body: JSON.stringify({ ids, operation, payload }),
       }),
@@ -244,7 +244,7 @@ export const api = {
       }),
 
     mergeActors: (sourceId: string, targetId: string) =>
-      fetchApi('/api/admin/actors/merge', {
+      fetchApi('/admin/actors/merge', {
         method: 'POST',
         body: JSON.stringify({ sourceId, targetId }),
       }),
@@ -265,25 +265,25 @@ export const api = {
       }),
 
     mergePublishers: (sourceId: string, targetId: string) =>
-      fetchApi('/api/admin/publishers/merge', {
+      fetchApi('/admin/publishers/merge', {
         method: 'POST',
         body: JSON.stringify({ sourceId, targetId }),
       }),
 
     getCrawlerStats: () =>
-      fetchApi<any>('/api/admin/crawlers/stats'),
+      fetchApi<any>('/admin/crawlers/stats'),
 
     getFailedTasks: () =>
-      fetchApi<any>('/api/admin/crawlers/failed-tasks'),
+      fetchApi<any>('/admin/crawlers/failed-tasks'),
 
     recoverCrawler: (type: 'comic' | 'movie') =>
-      fetchApi('/api/admin/crawlers/recover', {
+      fetchApi('/admin/crawlers/recover', {
         method: 'POST',
         body: JSON.stringify({ type }),
       }),
 
     clearFailedTasks: (type: 'comic' | 'movie') =>
-      fetchApi('/api/admin/crawlers/clear-failed', {
+      fetchApi('/admin/crawlers/clear-failed', {
         method: 'POST',
         body: JSON.stringify({ type }),
       }),
@@ -310,10 +310,10 @@ export const api = {
 
     // R18 白名单管理
     getR18Whitelist: () =>
-      fetchApi<{ success: boolean, data: User[] }>('/api/admin/r18-whitelist'),
+      fetchApi<{ success: boolean, data: User[] }>('/admin/r18-whitelist'),
 
     addToR18Whitelist: (userId?: string, email?: string) =>
-      fetchApi('/api/admin/r18-whitelist', {
+      fetchApi('/admin/r18-whitelist', {
         method: 'POST',
         body: JSON.stringify({ userId, email }),
       }),
@@ -326,7 +326,7 @@ export const api = {
 
   upload: {
     presign: (filename: string, contentType: string) =>
-      fetchApi<{ uploadUrl: string, publicUrl: string }>('/api/upload/presign', {
+      fetchApi<{ uploadUrl: string, publicUrl: string }>('/upload/presign', {
         method: 'POST',
         body: JSON.stringify({ filename, contentType }),
       }),
