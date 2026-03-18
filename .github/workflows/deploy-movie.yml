@@ -48,4 +48,7 @@ jobs:
           # 尝试创建项目（如果不存在）
           pnpm exec wrangler pages project create starye-movie --production-branch=main || true
           # 部署到 Cloudflare Pages
-          pnpm exec wrangler pages deploy apps/movie-app/dist --project-name=starye-movie --commit-dirty=true
+          pnpm exec wrangler pages deploy apps/movie-app/dist \
+            --project-name=starye-movie \
+            --branch=main \
+            --commit-hash=${{ github.sha }}

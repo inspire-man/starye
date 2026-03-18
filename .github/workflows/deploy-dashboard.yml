@@ -48,5 +48,8 @@ jobs:
           # 尝试创建项目（如果不存在）
           pnpm exec wrangler pages project create starye-dashboard --production-branch=main || true
           # 部署到 Cloudflare Pages
-          pnpm exec wrangler pages deploy apps/dashboard/dist --project-name=starye-dashboard --commit-dirty=true
+          pnpm exec wrangler pages deploy apps/dashboard/dist \
+            --project-name=starye-dashboard \
+            --branch=main \
+            --commit-hash=${{ github.sha }}
 
