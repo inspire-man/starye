@@ -605,67 +605,7 @@ admin.get('/comics/batch-status', serviceAuth(['admin', 'comic_admin']), async (
   }
 })
 
-// 批量查询电影状态 (用于爬虫增量爬取)
-admin.get('/movies/batch-status', serviceAuth(['admin']), async (c) => {
-  const codesParam = c.req.query('codes')
-  if (!codesParam) {
-    return c.json({ error: 'codes parameter is required' }, 400)
-  }
-
-  const codes = codesParam.split(',').map(s => s.trim()).filter(Boolean)
-  if (codes.length === 0) {
-    return c.json({ error: 'codes parameter is required' }, 400)
-  }
-
-  const db = c.get('db')
-  const startTime = Date.now()
-
-  try {
-    // 使用 SQL IN 查询批量获取电影状态
-    const results = await db.query.movies.findMany({
-      where: (movies, { inArray }) => inArray(movies.code, codes),
-      columns: {
-        code: true,
-        slug: true,
-        updatedAt: true,
-      },
-    })
-
-    // 构建响应对象
-    const statusMap: Record<string, any> = {}
-    for (const code of codes) {
-      const result = results.find(r => r.code === code)
-      if (result) {
-        statusMap[code] = {
-          exists: true,
-          code: result.code,
-          slug: result.slug,
-          updatedAt: result.updatedAt?.toISOString(),
-        }
-      }
-      else {
-        statusMap[code] = {
-          exists: false,
-          code,
-        }
-      }
-    }
-
-    const elapsed = Date.now() - startTime
-    console.log(`[BatchStatus] 批量查询 ${codes.length} 个电影，耗时 ${elapsed}ms`)
-
-    if (elapsed > 1000) {
-      console.warn(`[BatchStatus] ⚠️ 批量查询过慢，耗时 ${elapsed}ms`)
-    }
-
-    return c.json(statusMap)
-  }
-  catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error('[BatchStatus] ❌ Database operation failed:', message)
-    return c.json({ error: 'Database operation failed' }, 500)
-  }
-})
+// 批量查询电影状态已移至 admin-movies.ts
 
 // 更新漫画爬取进度
 admin.post(

@@ -22,6 +22,16 @@ export function serviceAuth(allowedRoles: string[] = ['admin']) {
     // Method 1: Service Token Check (Always allows Root Access)
     if (token && secret && token === secret) {
       console.log('[Auth] ✓ Service Token authenticated')
+      // Set a virtual admin user for service token requests
+      // This allows downstream middlewares (like requireResource) to work correctly
+      c.set('user', {
+        id: 'service-token',
+        email: 'service@system',
+        role: 'super_admin',
+        isAdult: true,
+        emailVerified: true,
+        createdAt: new Date(),
+      } as SessionUser)
       return await next()
     }
 
