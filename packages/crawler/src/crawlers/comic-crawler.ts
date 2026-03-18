@@ -22,6 +22,21 @@ export class ComicCrawler extends BaseCrawler {
   private failedTasks: FailedTaskRecorder
   private failedTasksFile = './.crawler-failed-tasks.json'
 
+  // 统计信息
+  private stats = {
+    totalMangas: 0,
+    processedMangas: 0,
+    skippedMangas: 0,
+    failedMangas: 0,
+    newMangas: 0,
+    updatedMangas: 0,
+    totalChapters: 0,
+    processedChapters: 0,
+    skippedChapters: 0,
+    failedChapters: 0,
+    skippedReasons: new Map<string, { count: number, titles: string[] }>(),
+  }
+
   constructor(
     config: CrawlerConfig,
     private strategy: CrawlStrategy,
@@ -35,6 +50,9 @@ export class ComicCrawler extends BaseCrawler {
   }
 
   async run() {
+    const startTime = Date.now()
+    ;(this as any).startTime = startTime
+
     await this.initBrowser()
     const page = await this.createPage()
 
@@ -64,11 +82,14 @@ export class ComicCrawler extends BaseCrawler {
       console.error('❌ Crawl failed:', error)
     }
     finally {
+      // 输出详细统计
+      this.printFinalStats()
+
       // 输出成功率统计
       if ((this.strategy as Site92Hm).getSuccessRateStats) {
         const stats = (this.strategy as Site92Hm).getSuccessRateStats()
         console.log(`
-📊 成功率统计:
+📊 API 成功率统计:
   总请求: ${stats.total}
   成功: ${stats.successes}
   失败: ${stats.failures}
@@ -146,7 +167,8 @@ export class ComicCrawler extends BaseCrawler {
       }
 
       const { mangas, next } = await this.strategy.getMangaList(currentUrl, page)
-      console.log(`✅ Found ${mangas.length} mangas on page ${pageCount}`)
+      console.log(`✅ 发现 ${mangas.length} 个漫画`)
+      this.stats.totalMangas += mangas.length
 
       // 检查 maxMangasPerRun 限制
       const remainingSlots = CRAWL_CONFIG.limits.maxMangasPerRun - totalProcessedMangas
@@ -162,15 +184,20 @@ export class ComicCrawler extends BaseCrawler {
       const slugs = mangasToProcess.map(mangaUrl => this.extractSlug(mangaUrl))
       const statusMap = await this.batchQueryStatus(slugs)
 
+      // 统计已存在的漫画
+      const existingCount = [...statusMap.values()].filter(s => s.exists).length
+      console.log(`  📚 已存在漫画: ${existingCount}/${slugs.length}`)
+
       // 优先级排序
       const sortedMangas = this.sortMangasByPriority(mangasToProcess, statusMap)
 
       console.log(`
-📊 漫画优先级排序完成:`)
+📊 漫画优先级排序完成 (前5个):`)
       sortedMangas.slice(0, 5).forEach((mangaUrl, i) => {
         const slug = this.extractSlug(mangaUrl)
         const status = statusMap.get(slug)
-        console.log(`  ${i + 1}. ${slug} - status: ${status?.status || 'new'}`)
+        const priority = this.calculatePriority(status)
+        console.log(`  ${i + 1}. ${slug} - 状态: ${status?.status || 'new'}, 优先级: ${priority}`)
       })
 
       // 漫画级并发处理
@@ -189,13 +216,26 @@ export class ComicCrawler extends BaseCrawler {
         try {
           const slug = this.extractSlug(mangaUrl)
           const status = statusMap.get(slug)
+          const isNew = !status || !status.exists
+
           console.log(`
-📘 处理漫画 ${processedMangaCount}/${sortedMangas.length}: ${mangaUrl} (状态: ${status?.status || 'new'})`)
+📘 [${processedMangaCount}/${sortedMangas.length}] 处理漫画: ${slug}`)
+          console.log(`   状态: ${status?.status || 'new'} | 新漫画: ${isNew ? '是' : '否'}`)
+
           await this.processManga(mangaUrl, page, status || {})
+
+          this.stats.processedMangas++
+          if (isNew) {
+            this.stats.newMangas++
+          }
+          else {
+            this.stats.updatedMangas++
+          }
         }
         catch (e) {
-          console.error(`❌ Failed to process manga ${mangaUrl}:`, e)
+          console.error(`❌ 漫画处理失败 ${mangaUrl}:`, e)
           this.failedTasks.record(mangaUrl, e as Error, 1)
+          this.stats.failedMangas++
         }
       }, { concurrency: CRAWL_CONFIG.concurrency.manga })
 
@@ -300,13 +340,14 @@ export class ComicCrawler extends BaseCrawler {
   }
 
   private async processManga(url: string, page: Page, status: Partial<MangaStatus>) {
-    console.log(`
-📘 Processing Manga: ${url}`)
     const info = await this.strategy.getMangaInfo(url, page)
 
     // 检查是否跳过（已完结且已完成）
     if (status.exists && status.status === 'complete' && !status.isSerializing) {
-      console.log(`⏭️  跳过已完结漫画: ${info.title}`)
+      const reason = '已完结且爬取完成'
+      console.log(`⏭️  跳过: ${info.title} (${reason})`)
+      this.recordSkip(reason, info.title)
+      this.stats.skippedMangas++
       return
     }
 
@@ -367,6 +408,15 @@ export class ComicCrawler extends BaseCrawler {
       // 4. 确定要处理的章节列表（根据状态应用限制）
       let chaptersToProcess = info.chapters.filter(ch => !existingChapters.includes(ch.slug))
 
+      // 统计跳过的章节
+      const skippedChapterCount = existingChapters.length
+      if (skippedChapterCount > 0) {
+        console.log(`  ⏭️  跳过 ${skippedChapterCount} 个已存在章节`)
+        this.stats.skippedChapters += skippedChapterCount
+      }
+
+      this.stats.totalChapters += info.chapters.length
+
       if (status.exists) {
         if (status.status === 'pending') {
           // 新漫画：限制章节数
@@ -390,14 +440,14 @@ export class ComicCrawler extends BaseCrawler {
         console.log(`  📏 限制章节数: 处理 ${chaptersToProcess.length}/${info.chapters.length} 章（新漫画）`)
       }
 
-      console.log(`  📚 准备处理 ${chaptersToProcess.length} 个章节（跳过 ${existingChapters.length} 个已存在）`)
+      console.log(`  📚 将处理 ${chaptersToProcess.length} 个章节 (总计 ${info.chapters.length}, 已存在 ${existingChapters.length})`)
 
       // 5. Process Chapters (并发处理)
       let processedCount = 0
 
       await pMap(chaptersToProcess, async (chapter) => {
         processedCount++
-        console.log(`📖 处理章节 ${processedCount}/${chaptersToProcess.length} - ${chapter.title}`)
+        console.log(`  📖 [${processedCount}/${chaptersToProcess.length}] ${chapter.title}`)
         try {
           const content = await this.strategy.getChapterContent(chapter.url, page)
 
@@ -453,10 +503,12 @@ export class ComicCrawler extends BaseCrawler {
           })
 
           crawledChapters++
-          console.log(`  ✅ 章节 ${processedCount}/${chaptersToProcess.length} - ${chapter.title} 完成`)
+          this.stats.processedChapters++
+          console.log(`  ✅ 章节完成: ${chapter.title}`)
         }
         catch (e) {
-          console.error(`  ❌ 章节 ${chapter.title} 处理失败:`, e)
+          console.error(`  ❌ 章节失败: ${chapter.title}`, e)
+          this.stats.failedChapters++
         }
       }, { concurrency: CRAWL_CONFIG.concurrency.chapter })
 
@@ -488,5 +540,68 @@ export class ComicCrawler extends BaseCrawler {
     catch (e) {
       console.warn(`  ⚠️ 进度更新失败:`, e)
     }
+  }
+
+  private recordSkip(reason: string, title: string) {
+    if (!this.stats.skippedReasons.has(reason)) {
+      this.stats.skippedReasons.set(reason, { count: 0, titles: [] })
+    }
+    const record = this.stats.skippedReasons.get(reason)!
+    record.count++
+    if (record.titles.length < 5) {
+      record.titles.push(title)
+    }
+  }
+
+  private printFinalStats() {
+    const elapsed = Date.now() - (this as any).startTime || 0
+    const minutes = Math.floor(elapsed / 60000)
+    const seconds = Math.floor((elapsed % 60000) / 1000)
+
+    console.log(`
+╔════════════════════════════════════════════════════════════╗
+║                    📊 爬取统计报告                          ║
+╠════════════════════════════════════════════════════════════╣
+║ ⏱️  运行时间: ${minutes}分${seconds}秒                        ║
+╠════════════════════════════════════════════════════════════╣
+║ 📚 漫画统计:                                                ║
+║    • 发现总数: ${this.stats.totalMangas}                     ║
+║    • 成功处理: ${this.stats.processedMangas} (新: ${this.stats.newMangas}, 更新: ${this.stats.updatedMangas})  ║
+║    • 跳过数量: ${this.stats.skippedMangas}                   ║
+║    • 失败数量: ${this.stats.failedMangas}                    ║
+╠════════════════════════════════════════════════════════════╣
+║ 📖 章节统计:                                                ║
+║    • 总章节数: ${this.stats.totalChapters}                   ║
+║    • 成功处理: ${this.stats.processedChapters}               ║
+║    • 跳过数量: ${this.stats.skippedChapters}                 ║
+║    • 失败数量: ${this.stats.failedChapters}                  ║
+╠════════════════════════════════════════════════════════════╣`)
+
+    if (this.stats.skippedReasons.size > 0) {
+      console.log(`║ ⏭️  跳过原因统计:                                           ║`)
+      for (const [reason, data] of this.stats.skippedReasons.entries()) {
+        console.log(`║    • ${reason}: ${data.count} 个                          ║`)
+        if (data.titles.length > 0) {
+          data.titles.forEach((title) => {
+            const truncated = title.length > 30 ? `${title.substring(0, 30)}...` : title
+            console.log(`║      - ${truncated}${' '.repeat(Math.max(0, 33 - truncated.length))}║`)
+          })
+        }
+      }
+      console.log(`╠════════════════════════════════════════════════════════════╣`)
+    }
+
+    const successRate = this.stats.totalMangas > 0
+      ? ((this.stats.processedMangas / this.stats.totalMangas) * 100).toFixed(1)
+      : '0.0'
+    const chapterSuccessRate = this.stats.totalChapters > 0
+      ? ((this.stats.processedChapters / this.stats.totalChapters) * 100).toFixed(1)
+      : '0.0'
+
+    console.log(`║ 🎯 成功率:                                                  ║
+║    • 漫画: ${successRate}%                                    ║
+║    • 章节: ${chapterSuccessRate}%                             ║
+╚════════════════════════════════════════════════════════════╝
+`)
   }
 }
