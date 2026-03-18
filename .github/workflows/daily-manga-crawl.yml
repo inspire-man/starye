@@ -108,10 +108,8 @@ jobs:
 
           # 使用 puppeteer-headful (xvfb) 或者直接使用 chrome-headless-shell
           # 这里假设 base-crawler 配置了自动使用 headless
-          # Node.js 内存限制（可选，默认 ~4GB 足够）：
-          # NODE_OPTIONS="--max-old-space-size=5120" pnpm --filter @starye/crawler start "$TARGET"
-
-          pnpm --filter @starye/crawler start "$TARGET"
+          # Node.js 内存限制：增加到 6GB 以处理大量图片
+          NODE_OPTIONS="--max-old-space-size=6144" pnpm --filter @starye/crawler start "$TARGET"
 
       - name: Build & Upload Search Index
         if: success()

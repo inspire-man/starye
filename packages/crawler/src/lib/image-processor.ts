@@ -65,9 +65,14 @@ export class ImageProcessor {
    * @param imageUrl Source URL
    * @param keyPrefix Prefix for R2 keys (e.g. "comics/one-piece/ch1")
    * @param filename Base filename without extension (e.g. "001")
+   * @param refererUrl Optional referer URL for anti-hotlinking protection (defaults to origin + '/')
    */
-  async process(imageUrl: string, keyPrefix: string, filename: string): Promise<ProcessedImage[]> {
+  async process(imageUrl: string, keyPrefix: string, filename: string, refererUrl?: string): Promise<ProcessedImage[]> {
     // 1. Download to buffer first to release the source server connection ASAP
+    // 设置 Referer：优先使用传入的 refererUrl，否则使用 origin + '/' (避免防盗链)
+    const parsedUrl = new URL(imageUrl)
+    const defaultReferer = `${parsedUrl.origin}/`
+
     const imageBuffer = await got(imageUrl, {
       agent: {
         http: this.httpAgent,
@@ -75,13 +80,16 @@ export class ImageProcessor {
       },
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'Referer': new URL(imageUrl).origin,
+        'Referer': refererUrl || defaultReferer,
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
       },
       timeout: {
         request: 60000, // Increased timeout
       },
       retry: {
         limit: 5, // Increased retries
+        methods: ['GET'], // 只对 GET 请求重试
       },
     }).buffer()
 
