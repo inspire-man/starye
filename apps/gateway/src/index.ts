@@ -35,8 +35,8 @@ export default {
         return Response.redirect(`${url.origin}/dashboard/`, 301)
       }
       const target = isLocal ? 'http://localhost:5173' : (env.DASHBOARD_ORIGIN || 'http://localhost:5173')
-      // 生产环境：移除 /dashboard 前缀（Pages 部署在根路径）
-      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/dashboard/, '') || '/'
+      // 本地和生产都剥离 /dashboard 前缀（Dashboard 使用 base: '/' 构建）
+      const pathRewrite = (p: string) => p.replace(/^\/dashboard/, '') || '/'
       return proxy(request, target, pathRewrite)
     }
 
