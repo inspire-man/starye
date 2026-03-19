@@ -27,6 +27,22 @@ starye/
 - **前端**: Vue 3 + Nuxt 3 + TypeScript + Vite
 - **网关**: Cloudflare Worker 反向代理
 - **部署**: Cloudflare Pages + Workers
+- **存储**: Cloudflare R2 Object Storage（图片和媒体文件）
+
+## 核心功能
+
+### Dashboard 管理后台
+- 用户管理和 R18 白名单控制
+- 漫画和电影元数据管理
+- 演员和出版商资料管理
+- **图片上传**：支持封面、头像等图片直接上传到 R2（仅管理员，最大 10MB）
+- 爬虫任务监控和管理
+- 操作审计日志查询和导出
+
+### 用户应用
+- 漫画/电影浏览和搜索
+- 阅读进度和观看进度自动保存
+- GitHub 登录和 R18 内容访问控制
 
 ## 本地开发
 

@@ -11,6 +11,7 @@ const IP_ADDRESS_REGEX = /\d+\.\d+\.\d+\.\d+/
 // 定义环境类型
 export interface Env {
   DB: D1Database
+  BUCKET: R2Bucket
   BETTER_AUTH_SECRET: string
   BETTER_AUTH_URL?: string
   CRAWLER_SECRET: string

@@ -9,6 +9,7 @@ compatibility_flags = [ "nodejs_compat" ]
 # CRAWLER_SECRET = "..."
 WEB_URL = "https://starye.org"
 ADMIN_URL = "https://dashboard.starye.org"
+# R2_PUBLIC_URL = "https://cdn.starye.org" # 配置 R2 public bucket 的 CDN 域名
 
 # D1 Database Binding
 [[d1_databases]]

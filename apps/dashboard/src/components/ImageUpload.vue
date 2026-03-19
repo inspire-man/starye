@@ -5,34 +5,52 @@
  * 支持：
  * - 预览
  * - 拖拽上传
- * - 加载状态
+ * - 自动上传到服务器
+ * - 加载状态和错误提示
  */
 
 import { ref } from 'vue'
+import { api } from '@/lib/api'
 
 interface Props {
-  modelValue?: string
-  loading?: boolean
+  modelValue?: string | null
   accept?: string
 }
 
 withDefaults(defineProps<Props>(), {
   modelValue: '',
-  loading: false,
   accept: 'image/*',
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
-  'upload': [file: File]
 }>()
 
 const isDragging = ref(false)
+const uploading = ref(false)
+const uploadError = ref('')
+
+async function handleUpload(file: File) {
+  uploading.value = true
+  uploadError.value = ''
+
+  try {
+    const response = await api.upload.uploadImage(file)
+    emit('update:modelValue', response.url)
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    uploadError.value = message
+  }
+  finally {
+    uploading.value = false
+  }
+}
 
 function handleFileSelect(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (file) {
-    emit('upload', file)
+    handleUpload(file)
   }
 }
 
@@ -40,7 +58,7 @@ function handleDrop(event: DragEvent) {
   isDragging.value = false
   const file = event.dataTransfer?.files?.[0]
   if (file) {
-    emit('upload', file)
+    handleUpload(file)
   }
 }
 
@@ -61,13 +79,17 @@ function handleDragLeave() {
       class="preview-container"
     >
       <img :src="modelValue" alt="Preview" class="preview-image">
-      <div v-if="loading" class="loading-overlay">
+      <div v-if="uploading" class="loading-overlay">
         <div class="spinner" />
+        <p class="loading-text">
+          上传中...
+        </p>
       </div>
     </div>
 
     <div
-      class="upload-zone" :class="[isDragging && 'dragging']"
+      class="upload-zone"
+      :class="[isDragging && 'dragging', uploading && 'uploading']"
       @drop.prevent="handleDrop"
       @dragover.prevent="handleDragOver"
       @dragleave="handleDragLeave"
@@ -75,14 +97,18 @@ function handleDragLeave() {
       <input
         type="file"
         :accept="accept"
+        :disabled="uploading"
         class="file-input"
         @change="handleFileSelect"
       >
       <div class="upload-prompt">
-        <span class="icon">📤</span>
-        <p>点击或拖拽图片到此处上传</p>
+        <span class="icon">{{ uploading ? '⏳' : '📤' }}</span>
+        <p>{{ uploading ? '上传中...' : '点击或拖拽图片到此处上传' }}</p>
         <p class="hint">
-          支持 JPG, PNG, WebP 格式
+          支持 JPG, PNG, GIF, WebP 格式，最大 10MB
+        </p>
+        <p v-if="uploadError" class="error-message">
+          {{ uploadError }}
         </p>
       </div>
     </div>
@@ -114,10 +140,18 @@ function handleDragLeave() {
 .loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.75rem;
+}
+
+.loading-text {
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .spinner {
@@ -149,6 +183,12 @@ function handleDragLeave() {
   background: #eff6ff;
 }
 
+.upload-zone.uploading {
+  cursor: wait;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
 .file-input {
   position: absolute;
   inset: 0;
@@ -174,5 +214,12 @@ function handleDragLeave() {
 .hint {
   font-size: 0.75rem;
   color: #6b7280;
+}
+
+.error-message {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #dc2626;
+  font-weight: 500;
 }
 </style>

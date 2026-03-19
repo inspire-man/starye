@@ -122,6 +122,14 @@ export interface AuditLog {
   createdAt: string
 }
 
+export interface UploadResponse {
+  id: string
+  url: string
+  key: string
+  size: number
+  mimeType: string
+}
+
 export interface Paginated<T> {
   data: T[]
   meta: {
@@ -330,5 +338,34 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ filename, contentType }),
       }),
+
+    /**
+     * 直接上传图片到服务器
+     * @param file - 要上传的图片文件
+     * @returns 上传结果，包含图片 URL 和元数据
+     */
+    uploadImage: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const token = getAdminToken()
+      const url = `${API_BASE}/upload`
+
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...(token ? { 'x-service-token': token } : {}),
+        },
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: 'Unknown error' }))
+        throw new Error(error.error || `Upload failed with status ${res.status}`)
+      }
+
+      return res.json()
+    },
   },
 }

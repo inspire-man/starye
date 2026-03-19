@@ -241,8 +241,7 @@ onMounted(loadPublishers)
             <div class="form-field">
               <label>标志</label>
               <ImageUpload
-                :current-url="editingPublisher?.logo || undefined"
-                @upload="(file: File) => console.log('TODO: Upload', file)"
+                v-model="editingPublisher!.logo"
               />
             </div>
 

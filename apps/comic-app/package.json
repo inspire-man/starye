@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "vite --port 3003",
+    "dev": "vite --port 3000",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview --port 3003"
+    "preview": "vite preview --port 3000"
   },
   "dependencies": {
     "axios": "^1.13.6",

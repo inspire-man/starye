@@ -241,8 +241,7 @@ onMounted(loadActors)
             <div class="form-field">
               <label>头像</label>
               <ImageUpload
-                :current-url="editingActor?.avatar || undefined"
-                @upload="(file: File) => console.log('TODO: Upload', file)"
+                v-model="editingActor!.avatar"
               />
             </div>
 

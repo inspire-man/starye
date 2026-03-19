@@ -1,2 +1,3 @@
-# SPA fallback - 所有非文件请求都返回 index.html
-/dashboard/* /dashboard/index.html 200
+# SPA fallback for Vue Router
+# 重定向所有非静态文件请求到 index.html
+/* /index.html 200

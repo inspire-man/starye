@@ -34,7 +34,6 @@ const error = ref('')
 const isEditModalOpen = ref(false)
 const editingMovie = ref<Movie | null>(null)
 const updateLoading = ref(false)
-const uploadLoading = ref(false)
 
 const activeTab = ref<'metadata' | 'players'>('metadata')
 const players = ref<Player[]>([])
@@ -346,8 +345,6 @@ const tableColumns = [
               <div class="form-row">
                 <ImageUpload
                   v-model="editingMovie.coverImage as string"
-                  :loading="uploadLoading"
-                  @upload="(file) => console.log('TODO: Upload', file)"
                 />
               </div>
 

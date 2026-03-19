@@ -44,7 +44,7 @@ export default {
       if (path === '/movie') {
         return Response.redirect(`${url.origin}/movie/`, 301)
       }
-      const target = isLocal ? 'http://localhost:3004' : (env.MOVIE_ORIGIN || 'http://localhost:3004')
+      const target = isLocal ? 'http://localhost:3001' : (env.MOVIE_ORIGIN || 'http://localhost:3001')
       // 生产环境：移除 /movie 前缀（Pages 部署在根路径）
       const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/movie/, '') || '/'
       return proxy(request, target, pathRewrite)
@@ -55,7 +55,7 @@ export default {
       if (path === '/comic') {
         return Response.redirect(`${url.origin}/comic/`, 301)
       }
-      const target = isLocal ? 'http://localhost:3003' : (env.COMIC_ORIGIN || 'http://localhost:3003')
+      const target = isLocal ? 'http://localhost:3000' : (env.COMIC_ORIGIN || 'http://localhost:3000')
       // 生产环境：移除 /comic 前缀（Pages 部署在根路径）
       const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/comic/, '') || '/'
       return proxy(request, target, pathRewrite)
@@ -66,7 +66,7 @@ export default {
       if (path === '/auth') {
         return Response.redirect(`${url.origin}/auth/`, 301)
       }
-      const target = isLocal ? 'http://localhost:3005' : (env.AUTH_ORIGIN || 'http://localhost:3005')
+      const target = isLocal ? 'http://localhost:3003' : (env.AUTH_ORIGIN || 'http://localhost:3003')
       return proxy(request, target)
     }
 
