@@ -20,8 +20,14 @@ export default {
     const url = new URL(request.url)
     const path = url.pathname
 
-    // Detect local development environment based on hostname
-    const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.startsWith('192.168.') || url.hostname.startsWith('10.')
+    // Detect local development environment
+    // 本地开发时，即使通过 starye.org 访问（Cloudflare tunnel），也应使用本地配置
+    const isLocal = url.hostname === 'localhost'
+      || url.hostname === '127.0.0.1'
+      || url.hostname.startsWith('192.168.')
+      || url.hostname.startsWith('10.')
+    // Wrangler dev 环境检测：如果有 .dev.vars 配置，说明在本地
+      || !!(env.API_ORIGIN && env.API_ORIGIN.includes('127.0.0.1'))
 
     // 1. API Service
     if (path.startsWith('/api')) {
@@ -34,9 +40,14 @@ export default {
       if (path === '/dashboard') {
         return Response.redirect(`${url.origin}/dashboard/`, 301)
       }
+
       const target = isLocal ? 'http://localhost:5173' : (env.DASHBOARD_ORIGIN || 'http://localhost:5173')
-      // 本地和生产都剥离 /dashboard 前缀（Dashboard 使用 base: '/' 构建）
-      const pathRewrite = (p: string) => p.replace(/^\/dashboard/, '') || '/'
+
+      // 路径重写规则：
+      // - 本地开发：保持 /dashboard 前缀（Vite base: '/dashboard/'）
+      // - 生产环境：剥离 /dashboard 前缀（Pages base: '/'）
+      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/dashboard/, '') || '/'
+
       return proxy(request, target, pathRewrite)
     }
 

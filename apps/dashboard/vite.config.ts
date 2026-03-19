@@ -3,7 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 
-export default defineConfig(() => ({
+export default defineConfig(({ mode }) => ({
   plugins: [
     vue(),
     tailwindcss(),
@@ -13,8 +13,8 @@ export default defineConfig(() => ({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // 生产环境部署到 Cloudflare Pages 根路径，通过 Gateway 时添加 /dashboard/ 前缀
-  base: '/',
+  // 生产环境部署到 Cloudflare Pages 根路径，本地开发使用 /dashboard/ 前缀
+  base: mode === 'production' ? '/' : '/dashboard/',
   server: {
     port: 5173,
     host: '0.0.0.0',
