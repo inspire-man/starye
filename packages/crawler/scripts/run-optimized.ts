@@ -7,6 +7,12 @@ import process from 'node:process'
 import { JavBusCrawler } from '../src/crawlers/javbus'
 
 async function main() {
+  // 验证必需的环境变量
+  if (!process.env.MAX_MOVIES) {
+    console.error('❌ Error: MAX_MOVIES environment variable is required')
+    process.exit(1)
+  }
+
   // 从环境变量读取配置
   const config: JavBusCrawlerConfig = {
     r2: {
@@ -33,7 +39,7 @@ async function main() {
 
     // 爬虫配置
     limits: {
-      maxMovies: Number.parseInt(process.env.MAX_MOVIES || '50'),
+      maxMovies: Number.parseInt(process.env.MAX_MOVIES),
       maxPages: Number.parseInt(process.env.MAX_PAGES || '5'),
     },
 
@@ -77,6 +83,7 @@ async function main() {
   console.log(`  详情页延迟: ${config.delay?.detailPage}ms`)
   console.log(`  使用代理: ${config.proxy ? config.proxy.server : '否'}`)
   console.log(`  随机镜像: ${config.useRandomMirror ? '是' : '否'}`)
+  console.log(`  增量模式: 已启用（批量状态查询）`)
 
   const crawler = new JavBusCrawler(config)
 

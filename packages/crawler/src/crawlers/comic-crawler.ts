@@ -180,15 +180,18 @@ export class ComicCrawler extends BaseCrawler {
       // 限制本页处理数量
       const mangasToProcess = mangas.slice(0, remainingSlots)
 
-      // 批量状态查询
+      // === 增量爬取逻辑 ===
+      // 批量查询漫画状态，获取已存在漫画的章节数和更新状态
+      // 通过一次 API 调用获取所有漫画的状态，避免逐个查询
       const slugs = mangasToProcess.map(mangaUrl => this.extractSlug(mangaUrl))
       const statusMap = await this.batchQueryStatus(slugs)
 
-      // 统计已存在的漫画
+      // 统计增量命中率：已存在的漫画数量
       const existingCount = [...statusMap.values()].filter(s => s.exists).length
       console.log(`  📚 已存在漫画: ${existingCount}/${slugs.length}`)
 
-      // 优先级排序
+      // 优先级排序：新漫画 > 更新漫画 > 完结漫画
+      // 确保有限资源优先处理高价值内容
       const sortedMangas = this.sortMangasByPriority(mangasToProcess, statusMap)
 
       console.log(`

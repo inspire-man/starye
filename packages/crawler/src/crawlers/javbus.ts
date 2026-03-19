@@ -293,16 +293,22 @@ export class JavBusCrawler extends OptimizedCrawler {
               return
             }
 
-            // 批量查询影片状态
+            // === 增量爬取逻辑 ===
+            // 批量查询影片状态，避免重复爬取已存在内容
+            // 使用批量查询 API 一次性获取所有影片的存在状态，相比逐个查询大幅提升性能
             const movieCodes = movieLinks.map(url => url.split('/').pop() || '')
             const statusMap = await this.apiClient.batchQueryMovieStatus(movieCodes)
             const existingCount = Object.values(statusMap).filter(s => s.exists).length
+
+            // 更新增量统计，用于最终报告中显示增量命中率
+            this.progressMonitor.incrementMoviesSkippedExisting(existingCount)
 
             if (existingCount > 0) {
               console.log(`  ℹ️  跳过 ${existingCount}/${movieLinks.length} 个已存在的影片`)
             }
 
             // 添加详情页任务（跳过已存在的）
+            // 仅处理 statusMap 中标记为不存在的影片，实现增量爬取
             for (const movieUrl of movieLinks) {
               const currentStats = this.getStats()
               if (this.config.limits.maxMovies && currentStats.moviesSuccess >= this.config.limits.maxMovies) {
@@ -312,7 +318,7 @@ export class JavBusCrawler extends OptimizedCrawler {
               const code = movieUrl.split('/').pop() || ''
               const status = statusMap[code]
 
-              // 跳过已存在的影片
+              // 增量过滤：跳过数据库中已存在的影片
               if (status?.exists) {
                 console.log(`  ⏭️  跳过已存在影片: ${code}`)
                 continue

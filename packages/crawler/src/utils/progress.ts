@@ -12,6 +12,7 @@ export interface ProgressStats {
   moviesFailed: number
   imagesDownloaded: number
   apiSynced: number
+  moviesSkippedExisting: number
   startTime: number
 }
 
@@ -29,6 +30,7 @@ export class ProgressMonitor {
       moviesFailed: 0,
       imagesDownloaded: 0,
       apiSynced: 0,
+      moviesSkippedExisting: 0,
       startTime: Date.now(),
     }
   }
@@ -111,13 +113,27 @@ export class ProgressMonitor {
     this.stats.apiSynced++
   }
 
+  /**
+   * 增量统计：累计跳过的已存在影片数量
+   * 用于计算增量命中率（已存在 / 总发现）
+   */
+  incrementMoviesSkippedExisting(count: number = 1): void {
+    this.stats.moviesSkippedExisting += count
+  }
+
   printStats(): void {
     const elapsed = Math.round((Date.now() - this.stats.startTime) / 1000)
     const rate = elapsed > 0 ? (this.stats.moviesSuccess / elapsed * 60).toFixed(2) : '0.00'
+    const incrementalHitRate = this.stats.moviesFound > 0
+      ? ((this.stats.moviesSkippedExisting / this.stats.moviesFound) * 100).toFixed(1)
+      : '0.0'
+    const newMoviesCount = this.stats.moviesFound - this.stats.moviesSkippedExisting
 
     console.log('\n📈 爬虫统计:')
     console.log(`  运行时间: ${elapsed}s`)
     console.log(`  发现影片: ${this.stats.moviesFound}`)
+    console.log(`  已存在: ${this.stats.moviesSkippedExisting} (${incrementalHitRate}%)`)
+    console.log(`  新增: ${newMoviesCount} (${(100 - Number.parseFloat(incrementalHitRate)).toFixed(1)}%)`)
     console.log(`  处理中: ${this.stats.moviesProcessed}`)
     console.log(`  成功: ${this.stats.moviesSuccess}`)
     console.log(`  失败: ${this.stats.moviesFailed}`)
