@@ -43,9 +43,9 @@ export default {
 
       const target = isLocal ? 'http://localhost:5173' : (env.DASHBOARD_ORIGIN || 'http://localhost:5173')
 
-      // 路径重写规则：
-      // - 本地开发：保持 /dashboard 前缀（Vite base: '/dashboard/'）
-      // - 生产环境：剥离 /dashboard 前缀（Pages base: '/'）
+      // 路径重写：仅在生产环境剥离 /dashboard 前缀
+      // - 本地：Vite base='/dashboard/'，保持完整路径
+      // - 生产：Pages 部署在根路径，剥离前缀
       const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/dashboard/, '') || '/'
 
       return proxy(request, target, pathRewrite)
