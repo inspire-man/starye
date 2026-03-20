@@ -7,20 +7,14 @@ import process from 'node:process'
 import { JavBusCrawler } from '../src/crawlers/javbus'
 
 async function main() {
-  // 验证必需的环境变量
-  if (!process.env.MAX_MOVIES) {
-    console.error('❌ Error: MAX_MOVIES environment variable is required')
-    process.exit(1)
-  }
-
   // 从环境变量读取配置
   const config: JavBusCrawlerConfig = {
     r2: {
-      accountId: process.env.R2_ACCOUNT_ID || '',
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID || '',
       accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
       bucketName: process.env.R2_BUCKET_NAME || '',
-      publicUrl: process.env.R2_PUBLIC_DOMAIN || '',
+      publicUrl: process.env.R2_PUBLIC_URL || '',
     },
     api: {
       url: process.env.API_URL || 'http://localhost:3000',
@@ -39,8 +33,8 @@ async function main() {
 
     // 爬虫配置
     limits: {
-      maxMovies: Number.parseInt(process.env.MAX_MOVIES),
-      maxPages: Number.parseInt(process.env.MAX_PAGES || '5'),
+      maxMovies: Number.parseInt(process.env.MAX_MOVIES || '1000'),
+      maxPages: Number.parseInt(process.env.MAX_PAGES || '100'),
     },
 
     // 并发配置

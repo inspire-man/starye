@@ -14,6 +14,7 @@
     "migrate": "drizzle-kit migrate",
     "migrate:actors": "tsx scripts/migrate-actors-publishers.ts",
     "sync:actors": "tsx scripts/sync-actors-publishers.ts",
+    "clean-data": "tsx scripts/clean-data.ts",
     "studio": "drizzle-kit studio",
     "type-check": "tsc --noEmit",
     "build": "tsc",

@@ -13,6 +13,17 @@ export function databaseMiddleware() {
       // Lazy auth creation
       const auth = createAuth(c.env, c.req.raw)
       c.set('auth', auth)
+
+      // 自动获取并设置用户信息到 context（如果已登录）
+      try {
+        const session = await auth.api.getSession({ headers: c.req.raw.headers })
+        if (session?.user) {
+          c.set('user', session.user as any)
+        }
+      }
+      catch {
+        // 忽略错误，用户未登录
+      }
     }
     catch (e: unknown) {
       console.error('Failed to initialize DB or Auth:', e)

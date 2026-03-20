@@ -9,13 +9,79 @@ export interface Movie {
   duration?: number
   rating?: number
   isR18: boolean
-  actors?: string[]
+  actors?: ActorSummary[]
+  publishers?: PublisherSummary[]
   genres?: string[]
   series?: string
-  publisher?: string
   sourceUrl: string
   createdAt: Date
   updatedAt: Date
+}
+
+export interface ActorSummary {
+  id: string
+  name: string
+  slug: string
+  avatar?: string
+}
+
+export interface Actor extends ActorSummary {
+  bio?: string
+  birthDate?: number
+  height?: number
+  measurements?: string
+  cupSize?: string
+  bloodType?: string
+  nationality?: string
+  debutDate?: number
+  isActive?: boolean
+  retireDate?: number
+  movieCount: number
+  hasDetailsCrawled: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ActorDetail extends Actor {
+  relatedMovies: Array<{
+    id: string
+    code: string
+    title: string
+    slug: string
+    coverImage?: string
+    releaseDate?: number
+    duration?: number
+  }>
+}
+
+export interface PublisherSummary {
+  id: string
+  name: string
+  slug: string
+  logo?: string
+}
+
+export interface Publisher extends PublisherSummary {
+  website?: string
+  description?: string
+  foundedYear?: number
+  country?: string
+  movieCount: number
+  hasDetailsCrawled: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface PublisherDetail extends Publisher {
+  relatedMovies: Array<{
+    id: string
+    code: string
+    title: string
+    slug: string
+    coverImage?: string
+    releaseDate?: number
+    duration?: number
+  }>
 }
 
 export interface Player {

@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import type { Context } from 'hono'
 import type { AppEnv, SessionUser } from '../types'
-import { actors as actorsTable, movies as moviesTable, players as playersTable, publishers as publishersTable } from '@starye/db/schema'
+import { actors as actorsTable, movieActors, moviePublishers, movies as moviesTable, players as playersTable, publishers as publishersTable } from '@starye/db/schema'
 import { and, count, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
@@ -125,74 +125,165 @@ movies.post('/sync', serviceAuth(), async (c) => {
     }
   }
 
-  // 同步女优数据
-  if (data.actors && Array.isArray(data.actors)) {
+  // 同步女优数据（优先使用 actorDetails，回退到 actors）
+  const actorIds: string[] = []
+  const actorDetailsData = data.actorDetails && Array.isArray(data.actorDetails) ? data.actorDetails : []
+
+  if (actorDetailsData.length > 0) {
+    // 使用 actorDetails（包含 sourceUrl 和 sourceId）
+    for (const actorInfo of actorDetailsData) {
+      const { name, url } = actorInfo
+      if (!name || !name.trim())
+        continue
+
+      const slug = name.toLowerCase().replace(SLUG_REGEX, '-')
+      const sourceId = url ? url.split('/').pop() || slug : slug
+      const sourceUrl = url || ''
+
+      // 检查是否存在（根据 source + sourceId，避免重复）
+      const existingActor = await db.query.actors.findFirst({
+        where: and(
+          eq(actorsTable.source, 'javbus'),
+          eq(actorsTable.sourceId, sourceId),
+        ),
+      })
+
+      if (existingActor) {
+        actorIds.push(existingActor.id)
+      }
+      else {
+        // 新增女优（标记为待爬取详情）
+        const newActorId = crypto.randomUUID()
+        await db.insert(actorsTable).values({
+          id: newActorId,
+          name,
+          slug,
+          source: 'javbus',
+          sourceId,
+          sourceUrl,
+          hasDetailsCrawled: false, // 标记为待爬取
+          movieCount: 0, // 将通过关联表统计
+          isR18: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        actorIds.push(newActorId)
+      }
+    }
+  }
+  else if (data.actors && Array.isArray(data.actors)) {
+    // 回退：使用旧的 actors 数组（仅名称）
     for (const actorName of data.actors) {
       if (!actorName || !actorName.trim())
         continue
 
       const slug = actorName.toLowerCase().replace(SLUG_REGEX, '-')
 
-      // 检查是否存在
+      // 检查是否存在（根据名称）
       const existingActor = await db.query.actors.findFirst({
         where: eq(actorsTable.name, actorName),
       })
 
       if (existingActor) {
-        // 更新作品数量
-        await db.update(actorsTable)
-          .set({
-            movieCount: sql`${actorsTable.movieCount} + 1`,
-            updatedAt: new Date(),
-          })
-          .where(eq(actorsTable.id, existingActor.id))
+        actorIds.push(existingActor.id)
       }
       else {
-        // 新增女优
+        // 新增女优（使用 slug 作为 sourceId）
+        const newActorId = crypto.randomUUID()
         await db.insert(actorsTable).values({
-          id: crypto.randomUUID(),
+          id: newActorId,
           name: actorName,
           slug,
-          movieCount: 1,
+          source: 'javbus',
+          sourceId: slug,
+          hasDetailsCrawled: false,
+          movieCount: 0,
           isR18: true,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
+        actorIds.push(newActorId)
       }
     }
   }
 
-  // 同步厂商数据
+  // 同步厂商数据（优先使用 publisherUrl）
+  let publisherId: string | null = null
+
   if (data.publisher && data.publisher.trim()) {
     const publisherName = data.publisher.trim()
     const slug = publisherName.toLowerCase().replace(SLUG_REGEX, '-')
+    const sourceId = data.publisherUrl ? data.publisherUrl.split('/').pop() || slug : slug
+    const sourceUrl = data.publisherUrl || ''
 
-    // 检查是否存在
-    const existingPublisher = await db.query.publishers.findFirst({
-      where: eq(publishersTable.name, publisherName),
-    })
+    // 检查是否存在（根据 source + sourceId）
+    let existingPublisher
+    if (data.publisherUrl) {
+      existingPublisher = await db.query.publishers.findFirst({
+        where: and(
+          eq(publishersTable.source, 'javbus'),
+          eq(publishersTable.sourceId, sourceId),
+        ),
+      })
+    }
+    else {
+      existingPublisher = await db.query.publishers.findFirst({
+        where: eq(publishersTable.name, publisherName),
+      })
+    }
 
     if (existingPublisher) {
-      // 更新作品数量
-      await db.update(publishersTable)
-        .set({
-          movieCount: sql`${publishersTable.movieCount} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(publishersTable.id, existingPublisher.id))
+      publisherId = existingPublisher.id
     }
     else {
       // 新增厂商
+      publisherId = crypto.randomUUID()
       await db.insert(publishersTable).values({
-        id: crypto.randomUUID(),
+        id: publisherId,
         name: publisherName,
         slug,
-        movieCount: 1,
+        source: 'javbus',
+        sourceId,
+        sourceUrl,
+        hasDetailsCrawled: false,
+        movieCount: 0,
         isR18: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
     }
+  }
+
+  // 创建影片-女优关联记录（任务 3.9）
+  if (movieId && actorIds.length > 0) {
+    // 删除旧的关联
+    await db.delete(movieActors).where(eq(movieActors.movieId, movieId))
+
+    // 创建新的关联
+    const newMovieActors = actorIds.map((actorId, index) => ({
+      id: crypto.randomUUID(),
+      movieId: movieId!,
+      actorId,
+      sortOrder: index,
+      createdAt: new Date(),
+    }))
+
+    await db.insert(movieActors).values(newMovieActors)
+  }
+
+  // 创建影片-厂商关联记录
+  if (movieId && publisherId) {
+    // 删除旧的关联
+    await db.delete(moviePublishers).where(eq(moviePublishers.movieId, movieId))
+
+    // 创建新的关联
+    await db.insert(moviePublishers).values({
+      id: crypto.randomUUID(),
+      movieId: movieId!,
+      publisherId,
+      sortOrder: 0,
+      createdAt: new Date(),
+    })
   }
 
   return c.json({ success: true, id: movieId })
@@ -229,6 +320,33 @@ movies.get('/', async (c) => {
         releaseDate: true,
         isR18: true,
       },
+      with: {
+        movieActors: {
+          with: {
+            actor: {
+              columns: {
+                id: true,
+                name: true,
+                slug: true,
+                avatar: true,
+              },
+            },
+          },
+          orderBy: (movieActors, { asc }) => [asc(movieActors.sortOrder)],
+        },
+        moviePublishers: {
+          with: {
+            publisher: {
+              columns: {
+                id: true,
+                name: true,
+                slug: true,
+                logo: true,
+              },
+            },
+          },
+        },
+      },
       orderBy: (movies, { desc }) => [desc(movies.createdAt)],
       limit,
       offset,
@@ -236,12 +354,28 @@ movies.get('/', async (c) => {
     db.select({ value: count() }).from(moviesTable).where(whereClause).then(res => res[0].value),
   ])
 
-  // R18 保护
+  // R18 保护 + 格式转换
   const safeResults = results.map((movie) => {
+    const actorsData = movie.movieActors.map(ma => ma.actor)
+    const publishersData = movie.moviePublishers.map(mp => mp.publisher)
+
     if (movie.isR18 && !isAdult) {
-      return { ...movie, coverImage: null }
+      return {
+        ...movie,
+        coverImage: null,
+        actors: actorsData,
+        publishers: publishersData,
+        movieActors: undefined,
+        moviePublishers: undefined,
+      }
     }
-    return movie
+    return {
+      ...movie,
+      actors: actorsData,
+      publishers: publishersData,
+      movieActors: undefined,
+      moviePublishers: undefined,
+    }
   })
 
   return c.json({
@@ -267,12 +401,41 @@ movies.get('/:slug', async (c) => {
       players: {
         orderBy: (players, { asc }) => [asc(players.sortOrder)],
       },
+      movieActors: {
+        with: {
+          actor: {
+            columns: {
+              id: true,
+              name: true,
+              slug: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: (movieActors, { asc }) => [asc(movieActors.sortOrder)],
+      },
+      moviePublishers: {
+        with: {
+          publisher: {
+            columns: {
+              id: true,
+              name: true,
+              slug: true,
+              logo: true,
+            },
+          },
+        },
+      },
     },
   })
 
   if (!movie) {
     throw new HTTPException(404, { message: 'Movie not found' })
   }
+
+  // 转换为新格式
+  const actorsData = movie.movieActors.map(ma => ma.actor)
+  const publishersData = movie.moviePublishers.map(mp => mp.publisher)
 
   // R18 保护
   if (movie.isR18 && !isAdult) {
@@ -281,11 +444,23 @@ movies.get('/:slug', async (c) => {
         ...movie,
         coverImage: null,
         players: [],
+        actors: actorsData,
+        publishers: publishersData,
+        movieActors: undefined,
+        moviePublishers: undefined,
       },
     })
   }
 
-  return c.json({ data: movie })
+  return c.json({
+    data: {
+      ...movie,
+      actors: actorsData,
+      publishers: publishersData,
+      movieActors: undefined,
+      moviePublishers: undefined,
+    },
+  })
 })
 
 // 4. 获取热门电影（按创建时间排序，最新的）

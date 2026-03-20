@@ -211,6 +211,27 @@ export class JavBusCrawler extends OptimizedCrawler {
               actors.push(el.textContent.trim())
           }
 
+          // 解析女优详情页 URL（任务 3.1）
+          const actorDetails: Array<{ name: string, url: string }> = []
+          for (const el of [...actorEls]) {
+            const name = el.textContent ? el.textContent.trim() : ''
+            const url = (el as HTMLAnchorElement).href || ''
+            if (name && url) {
+              actorDetails.push({ name, url })
+            }
+          }
+
+          // 解析厂商详情页 URL（任务 3.6）
+          let publisherUrl = ''
+          const publisherEl = Array.from(document.querySelectorAll('.info p'))
+            .find(el => el.textContent?.includes('發行商:'))
+          if (publisherEl) {
+            const publisherLink = publisherEl.querySelector('a') as HTMLAnchorElement
+            if (publisherLink) {
+              publisherUrl = publisherLink.href || ''
+            }
+          }
+
           return {
             title,
             slug: pageUrl.split('/').pop() || '',
@@ -221,9 +242,11 @@ export class JavBusCrawler extends OptimizedCrawler {
             duration,
             sourceUrl: pageUrl,
             actors,
+            actorDetails, // 新增：女优详情页 URL 列表
             genres,
             series,
             publisher: publisher || studio,
+            publisherUrl, // 新增：厂商详情页 URL
             isR18: true,
             players: [],
           }

@@ -159,6 +159,27 @@ export class JavBusStrategy implements MovieCrawlStrategy {
             actors.push(el.textContent.trim())
         }
 
+        // 解析女优详情页 URL（任务 3.1）
+        const actorDetails: Array<{ name: string, url: string }> = []
+        for (const el of [...actorEls]) {
+          const name = el.textContent ? el.textContent.trim() : ''
+          const url = (el as HTMLAnchorElement).href || ''
+          if (name && url) {
+            actorDetails.push({ name, url })
+          }
+        }
+
+        // 解析厂商详情页 URL（任务 3.6）
+        let publisherUrl = ''
+        const publisherEl = Array.from(document.querySelectorAll('.info p'))
+          .find(el => el.textContent?.includes('發行商:'))
+        if (publisherEl) {
+          const publisherLink = publisherEl.querySelector('a') as HTMLAnchorElement
+          if (publisherLink) {
+            publisherUrl = publisherLink.href || ''
+          }
+        }
+
         return {
           title,
           slug: pageUrl.split('/').pop() || '',
@@ -169,9 +190,11 @@ export class JavBusStrategy implements MovieCrawlStrategy {
           duration,
           sourceUrl: pageUrl,
           actors,
+          actorDetails, // 新增：女优详情页 URL 列表
           genres,
           series,
           publisher: publisher || studio,
+          publisherUrl, // 新增：厂商详情页 URL
           isR18: true,
           players: [],
         }
@@ -359,6 +382,206 @@ export class JavBusStrategy implements MovieCrawlStrategy {
     }
     catch (e) {
       console.warn('[JavBus] Age verification logic error:', e)
+    }
+  }
+
+  /**
+   * 爬取女优详情页（任务 3.2）
+   * 访问女优详情页，解析详细信息
+   */
+  async crawlActorDetails(url: string, page: Page): Promise<{
+    source: string
+    sourceId: string
+    sourceUrl: string
+    avatar?: string
+    cover?: string
+    bio?: string
+    birthDate?: Date
+    height?: number
+    measurements?: string
+    cupSize?: string
+    bloodType?: string
+    nationality?: string
+    debutDate?: Date
+    isActive?: boolean
+  } | null> {
+    try {
+      await this._smartDelay() // 请求延迟（任务 3.10）
+      await this._preparePage(page, url)
+
+      // 等待内容加载
+      try {
+        await page.waitForSelector('.avatar-box', { timeout: 10000 })
+      }
+      catch {
+        console.warn(`[JavBus] 女优详情页加载超时: ${url}`)
+        return null // 失败降级（任务 3.4）
+      }
+
+      const actorInfo = await page.evaluate(() => {
+        try {
+          // 头像
+          const avatarEl = document.querySelector('.avatar-box img') as HTMLImageElement
+          const avatar = avatarEl ? avatarEl.src : ''
+
+          // 封面图（如果有）
+          const coverEl = document.querySelector('.photo-frame img') as HTMLImageElement
+          const cover = coverEl ? coverEl.src : ''
+
+          // 基本信息
+          const infoMap: Record<string, string> = {}
+          const infoEls = document.querySelectorAll('.info p')
+          for (const el of [...infoEls]) {
+            const text = el.textContent || ''
+            const splitIndex = text.indexOf(':')
+            if (splitIndex > -1) {
+              const key = text.substring(0, splitIndex + 1).trim()
+              const value = text.substring(splitIndex + 1).trim()
+              infoMap[key] = value
+            }
+          }
+
+          // 简介
+          const bioEl = document.querySelector('.bio')
+          const bio = bioEl ? bioEl.textContent?.trim() : ''
+
+          return {
+            avatar,
+            cover,
+            bio: bio || '',
+            birthDate: infoMap['生日:'] || '',
+            height: infoMap['身高:'] || '',
+            measurements: infoMap['三围:'] || '',
+            cupSize: infoMap['罩杯:'] || '',
+            bloodType: infoMap['血型:'] || '',
+            nationality: infoMap['国籍:'] || '',
+            debutDate: infoMap['出道日期:'] || '',
+            isActive: infoMap['状态:'] || '',
+          }
+        }
+        catch (e: any) {
+          console.error(`[JavBus] 解析女优详情失败: ${e.message}`)
+          return null
+        }
+      })
+
+      if (!actorInfo) {
+        return null
+      }
+
+      // 从 URL 提取 sourceId
+      const urlParts = url.split('/')
+      const sourceId = urlParts.at(-1) || ''
+
+      return {
+        source: 'javbus',
+        sourceId,
+        sourceUrl: url,
+        avatar: actorInfo.avatar || undefined,
+        cover: actorInfo.cover || undefined,
+        bio: actorInfo.bio || undefined,
+        birthDate: actorInfo.birthDate ? new Date(actorInfo.birthDate) : undefined,
+        height: actorInfo.height ? Number.parseInt(actorInfo.height) : undefined,
+        measurements: actorInfo.measurements || undefined,
+        cupSize: actorInfo.cupSize || undefined,
+        bloodType: actorInfo.bloodType || undefined,
+        nationality: actorInfo.nationality || undefined,
+        debutDate: actorInfo.debutDate ? new Date(actorInfo.debutDate) : undefined,
+        isActive: actorInfo.isActive ? actorInfo.isActive === '活跃' : undefined,
+      }
+    }
+    catch (e: any) {
+      console.error(`[JavBus] ❌ 爬取女优详情失败: ${url}`, e.message)
+      return null // 失败降级（任务 3.4）
+    }
+  }
+
+  /**
+   * 爬取厂商详情页（任务 3.7）
+   * 访问厂商详情页，解析详细信息
+   */
+  async crawlPublisherDetails(url: string, page: Page): Promise<{
+    source: string
+    sourceId: string
+    sourceUrl: string
+    logo?: string
+    website?: string
+    description?: string
+    foundedYear?: number
+    country?: string
+  } | null> {
+    try {
+      await this._smartDelay() // 请求延迟（任务 3.10）
+      await this._preparePage(page, url)
+
+      // 等待内容加载
+      try {
+        await page.waitForSelector('.logo', { timeout: 10000 })
+      }
+      catch {
+        console.warn(`[JavBus] 厂商详情页加载超时: ${url}`)
+        return null // 失败降级（任务 3.8）
+      }
+
+      const publisherInfo = await page.evaluate(() => {
+        try {
+          // Logo
+          const logoEl = document.querySelector('.logo img') as HTMLImageElement
+          const logo = logoEl ? logoEl.src : ''
+
+          // 基本信息
+          const infoMap: Record<string, string> = {}
+          const infoEls = document.querySelectorAll('.info p')
+          for (const el of [...infoEls]) {
+            const text = el.textContent || ''
+            const splitIndex = text.indexOf(':')
+            if (splitIndex > -1) {
+              const key = text.substring(0, splitIndex + 1).trim()
+              const value = text.substring(splitIndex + 1).trim()
+              infoMap[key] = value
+            }
+          }
+
+          // 简介
+          const descEl = document.querySelector('.description')
+          const description = descEl ? descEl.textContent?.trim() : ''
+
+          return {
+            logo,
+            website: infoMap['官网:'] || '',
+            description: description || '',
+            foundedYear: infoMap['成立年份:'] || '',
+            country: infoMap['国家:'] || '',
+          }
+        }
+        catch (e: any) {
+          console.error(`[JavBus] 解析厂商详情失败: ${e.message}`)
+          return null
+        }
+      })
+
+      if (!publisherInfo) {
+        return null
+      }
+
+      // 从 URL 提取 sourceId
+      const urlParts = url.split('/')
+      const sourceId = urlParts.at(-1) || ''
+
+      return {
+        source: 'javbus',
+        sourceId,
+        sourceUrl: url,
+        logo: publisherInfo.logo || undefined,
+        website: publisherInfo.website || undefined,
+        description: publisherInfo.description || undefined,
+        foundedYear: publisherInfo.foundedYear ? Number.parseInt(publisherInfo.foundedYear) : undefined,
+        country: publisherInfo.country || undefined,
+      }
+    }
+    catch (e: any) {
+      console.error(`[JavBus] ❌ 爬取厂商详情失败: ${url}`, e.message)
+      return null // 失败降级（任务 3.8）
     }
   }
 }

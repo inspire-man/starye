@@ -12,11 +12,13 @@
 
 import type { Movie, Player } from '@/lib/api'
 import { onMounted, ref, watch } from 'vue'
+import ActorSelector from '@/components/ActorSelector.vue'
 import BatchOperationMenu from '@/components/BatchOperationMenu.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DataTable from '@/components/DataTable.vue'
 import FilterPanel from '@/components/FilterPanel.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
+import PublisherSelector from '@/components/PublisherSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useBatchSelect } from '@/composables/useBatchSelect'
 import { useFilters } from '@/composables/useFilters'
@@ -34,6 +36,10 @@ const error = ref('')
 const isEditModalOpen = ref(false)
 const editingMovie = ref<Movie | null>(null)
 const updateLoading = ref(false)
+
+// 女优和厂商选择器状态
+const selectedActors = ref<{ id: string, name: string, sortOrder: number }[]>([])
+const selectedPublishers = ref<{ id: string, name: string, sortOrder: number }[]>([])
 
 const activeTab = ref<'metadata' | 'players'>('metadata')
 const players = ref<Player[]>([])
@@ -157,6 +163,30 @@ function openEditModal(movie: Movie) {
   editingMovie.value = { ...movie }
   isEditModalOpen.value = true
   activeTab.value = 'metadata'
+
+  // 初始化女优和厂商选择器数据
+  if (movie.actors && Array.isArray(movie.actors)) {
+    selectedActors.value = movie.actors.map((actor, index) => ({
+      id: typeof actor === 'string' ? '' : actor.id,
+      name: typeof actor === 'string' ? actor : actor.name,
+      sortOrder: index,
+    }))
+  }
+  else {
+    selectedActors.value = []
+  }
+
+  if (movie.publishers && Array.isArray(movie.publishers)) {
+    selectedPublishers.value = movie.publishers.map((publisher, index) => ({
+      id: typeof publisher === 'string' ? '' : publisher.id,
+      name: typeof publisher === 'string' ? publisher : publisher.name,
+      sortOrder: index,
+    }))
+  }
+  else {
+    selectedPublishers.value = []
+  }
+
   if (movie.id) {
     loadPlayers(movie.id)
   }
@@ -192,6 +222,10 @@ async function handleUpdate() {
       genres: editingMovie.value.genres,
       publisher: editingMovie.value.publisher,
     })
+
+    // 更新女优和厂商关联
+    await api.admin.updateMovieActors(editingMovie.value.id, selectedActors.value)
+    await api.admin.updateMoviePublishers(editingMovie.value.id, selectedPublishers.value)
 
     isEditModalOpen.value = false
     await loadMovies()
@@ -366,6 +400,14 @@ const tableColumns = [
               <div class="form-row">
                 <label>厂商</label>
                 <input v-model="editingMovie.publisher" type="text">
+              </div>
+
+              <div class="form-row">
+                <ActorSelector v-model="selectedActors" />
+              </div>
+
+              <div class="form-row">
+                <PublisherSelector v-model="selectedPublishers" />
               </div>
 
               <div class="form-row-inline">

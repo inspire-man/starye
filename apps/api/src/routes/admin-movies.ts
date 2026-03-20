@@ -805,4 +805,110 @@ adminMovies.post(
   },
 )
 
+/**
+ * PUT /api/admin/movies/:id/actors
+ * 更新电影的女优关联
+ */
+adminMovies.put(
+  '/:id/actors',
+  zValidator('json', z.object({
+    actors: z.array(z.object({
+      id: z.string(),
+      sortOrder: z.number(),
+    })),
+  })),
+  async (c) => {
+    const movieId = c.req.param('id')
+    const { actors: actorList } = c.req.valid('json')
+    const db = c.get('db')
+
+    try {
+      const { movieActors } = await import('@starye/db/schema')
+
+      // 删除现有关联
+      await db.delete(movieActors).where(eq(movieActors.movieId, movieId))
+
+      // 创建新关联
+      if (actorList.length > 0) {
+        await db.insert(movieActors).values(
+          actorList.map(actor => ({
+            id: crypto.randomUUID(),
+            movieId,
+            actorId: actor.id,
+            sortOrder: actor.sortOrder,
+            createdAt: new Date(),
+          })),
+        )
+      }
+
+      await createAuditLog(c, {
+        action: 'UPDATE',
+        resourceType: 'movie',
+        resourceId: movieId,
+        changes: { actors: actorList.length },
+      })
+
+      return c.json({ success: true })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Movies] ❌ Update actors failed:', message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+/**
+ * PUT /api/admin/movies/:id/publishers
+ * 更新电影的厂商关联
+ */
+adminMovies.put(
+  '/:id/publishers',
+  zValidator('json', z.object({
+    publishers: z.array(z.object({
+      id: z.string(),
+      sortOrder: z.number(),
+    })),
+  })),
+  async (c) => {
+    const movieId = c.req.param('id')
+    const { publishers: publisherList } = c.req.valid('json')
+    const db = c.get('db')
+
+    try {
+      const { moviePublishers } = await import('@starye/db/schema')
+
+      // 删除现有关联
+      await db.delete(moviePublishers).where(eq(moviePublishers.movieId, movieId))
+
+      // 创建新关联
+      if (publisherList.length > 0) {
+        await db.insert(moviePublishers).values(
+          publisherList.map(publisher => ({
+            id: crypto.randomUUID(),
+            movieId,
+            publisherId: publisher.id,
+            sortOrder: publisher.sortOrder,
+            createdAt: new Date(),
+          })),
+        )
+      }
+
+      await createAuditLog(c, {
+        action: 'UPDATE',
+        resourceType: 'movie',
+        resourceId: movieId,
+        changes: { publishers: publisherList.length },
+      })
+
+      return c.json({ success: true })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Movies] ❌ Update publishers failed:', message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
 export default adminMovies

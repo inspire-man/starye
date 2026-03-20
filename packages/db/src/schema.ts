@@ -1,6 +1,6 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
 import { relations, sql } from 'drizzle-orm'
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // --- 用户认证 (Better Auth 标准表) ---
 export const user = sqliteTable('user', {
@@ -193,20 +193,35 @@ export type NewPlayer = InferInsertModel<typeof players>
 // --- 女优表 ---
 export const actors = sqliteTable('actor', {
   id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   slug: text('slug').notNull().unique(), // URL Slug
   avatar: text('avatar'), // 头像
+  cover: text('cover'), // 封面大图
   bio: text('bio'), // 简介
   birthDate: integer('birth_date', { mode: 'timestamp' }), // 生日
   height: integer('height'), // 身高 (cm)
   measurements: text('measurements'), // 三围
+  cupSize: text('cup_size'), // 罩杯
+  bloodType: text('blood_type'), // 血型
   nationality: text('nationality'), // 国籍
+  debutDate: integer('debut_date', { mode: 'timestamp' }), // 出道日期
+  isActive: integer('is_active', { mode: 'boolean' }).default(true), // 是否活跃
+  retireDate: integer('retire_date', { mode: 'timestamp' }), // 引退日期
   socialLinks: text('social_links', { mode: 'json' }), // 社交媒体链接 { twitter, instagram, etc }
   movieCount: integer('movie_count').default(0).notNull(), // 作品数量
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
+  // 爬虫字段
+  source: text('source').default('javbus').notNull(), // 'javbus' | 'javdb'
+  sourceId: text('source_id').default('').notNull(), // 原站 ID
+  sourceUrl: text('source_url'), // 详情页 URL
+  hasDetailsCrawled: integer('has_details_crawled', { mode: 'boolean' }).default(false), // 是否已爬取详情
+  crawlFailureCount: integer('crawl_failure_count').default(0), // 失败次数
+  lastCrawlAttempt: integer('last_crawl_attempt', { mode: 'timestamp' }), // 最后尝试时间
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-})
+}, table => ({
+  uniqueSourceId: uniqueIndex('idx_actor_source_id').on(table.source, table.sourceId),
+}))
 
 export type Actor = InferSelectModel<typeof actors>
 export type NewActor = InferInsertModel<typeof actors>
@@ -214,7 +229,7 @@ export type NewActor = InferInsertModel<typeof actors>
 // --- 厂商表 ---
 export const publishers = sqliteTable('publisher', {
   id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   slug: text('slug').notNull().unique(), // URL Slug
   logo: text('logo'), // Logo
   website: text('website'), // 官网
@@ -223,12 +238,51 @@ export const publishers = sqliteTable('publisher', {
   country: text('country'), // 国家
   movieCount: integer('movie_count').default(0).notNull(), // 作品数量
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
+  // 爬虫字段
+  source: text('source').default('javbus').notNull(), // 'javbus' | 'javdb'
+  sourceId: text('source_id').default('').notNull(), // 原站 ID
+  sourceUrl: text('source_url'), // 详情页 URL
+  hasDetailsCrawled: integer('has_details_crawled', { mode: 'boolean' }).default(false), // 是否已爬取详情
+  crawlFailureCount: integer('crawl_failure_count').default(0), // 失败次数
+  lastCrawlAttempt: integer('last_crawl_attempt', { mode: 'timestamp' }), // 最后尝试时间
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-})
+}, table => ({
+  uniqueSourceId: uniqueIndex('idx_publisher_source_id').on(table.source, table.sourceId),
+}))
 
 export type Publisher = InferSelectModel<typeof publishers>
 export type NewPublisher = InferInsertModel<typeof publishers>
+
+// --- 电影-女优关联表 ---
+export const movieActors = sqliteTable('movie_actor', {
+  id: text('id').primaryKey(),
+  movieId: text('movie_id').notNull().references(() => movies.id, { onDelete: 'cascade' }),
+  actorId: text('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  sortOrder: integer('sort_order').default(0), // 保持原站顺序
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+}, table => ({
+  uniqueMovieActor: uniqueIndex('idx_movie_actor').on(table.movieId, table.actorId),
+  actorIdx: index('idx_movie_actor_actor_id').on(table.actorId), // 反向查询索引（普通索引）
+}))
+
+export type MovieActor = InferSelectModel<typeof movieActors>
+export type NewMovieActor = InferInsertModel<typeof movieActors>
+
+// --- 电影-厂商关联表 ---
+export const moviePublishers = sqliteTable('movie_publisher', {
+  id: text('id').primaryKey(),
+  movieId: text('movie_id').notNull().references(() => movies.id, { onDelete: 'cascade' }),
+  publisherId: text('publisher_id').notNull().references(() => publishers.id, { onDelete: 'cascade' }),
+  sortOrder: integer('sort_order').default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+}, table => ({
+  uniqueMoviePublisher: uniqueIndex('idx_movie_pub').on(table.movieId, table.publisherId),
+  publisherIdx: index('idx_movie_pub_publisher_id').on(table.publisherId), // 反向查询索引（普通索引）
+}))
+
+export type MoviePublisher = InferSelectModel<typeof moviePublishers>
+export type NewMoviePublisher = InferInsertModel<typeof moviePublishers>
 
 // --- 系统任务 ---
 export const jobs = sqliteTable('job', {
@@ -339,6 +393,8 @@ export const pageRelations = relations(pages, ({ one }) => ({
 
 export const movieRelations = relations(movies, ({ many }) => ({
   players: many(players),
+  movieActors: many(movieActors),
+  moviePublishers: many(moviePublishers),
 }))
 
 export const playerRelations = relations(players, ({ one }) => ({
@@ -348,12 +404,34 @@ export const playerRelations = relations(players, ({ one }) => ({
   }),
 }))
 
-export const actorRelations = relations(actors, () => ({
-  // 可以通过 actors JSON 字段关联，但不建立外键
+export const actorRelations = relations(actors, ({ many }) => ({
+  movieActors: many(movieActors),
 }))
 
-export const publisherRelations = relations(publishers, () => ({
-  // 可以通过 publisher 字段关联，但不建立外键
+export const publisherRelations = relations(publishers, ({ many }) => ({
+  moviePublishers: many(moviePublishers),
+}))
+
+export const movieActorRelations = relations(movieActors, ({ one }) => ({
+  movie: one(movies, {
+    fields: [movieActors.movieId],
+    references: [movies.id],
+  }),
+  actor: one(actors, {
+    fields: [movieActors.actorId],
+    references: [actors.id],
+  }),
+}))
+
+export const moviePublisherRelations = relations(moviePublishers, ({ one }) => ({
+  movie: one(movies, {
+    fields: [moviePublishers.movieId],
+    references: [movies.id],
+  }),
+  publisher: one(publishers, {
+    fields: [moviePublishers.publisherId],
+    references: [publishers.id],
+  }),
 }))
 
 export const auditLogRelations = relations(auditLogs, ({ one }) => ({

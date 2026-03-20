@@ -259,4 +259,121 @@ adminActors.post(
   },
 )
 
+/**
+ * POST /api/admin/actors
+ * 创建新女优
+ */
+adminActors.post(
+  '/',
+  zValidator('json', z.object({
+    name: z.string().min(1),
+  })),
+  async (c) => {
+    const { name } = c.req.valid('json')
+    const db = c.get('db')
+
+    try {
+      const slug = name.toLowerCase().replace(/\s+/g, '-')
+
+      const newActor = {
+        id: crypto.randomUUID(),
+        name,
+        slug,
+        source: 'manual',
+        sourceId: slug,
+        movieCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      await db.insert(actors).values(newActor)
+
+      await createAuditLog(c, {
+        action: 'CREATE',
+        resourceType: 'actor',
+        resourceId: newActor.id,
+        resourceIdentifier: name,
+        changes: { name },
+      })
+
+      console.log(`[Admin/Actors] ✓ Created actor: ${name}`)
+
+      return c.json({
+        id: newActor.id,
+        name: newActor.name,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to create actor:', message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+/**
+ * POST /api/admin/actors/batch-recrawl
+ * 批量标记演员为待重新爬取
+ * 重置 crawlFailureCount 和 hasDetailsCrawled，下次爬虫运行时会重新尝试
+ */
+adminActors.post(
+  '/batch-recrawl',
+  zValidator('json', z.object({
+    ids: z.array(z.string()).min(1).max(100),
+  })),
+  async (c) => {
+    const { ids } = c.req.valid('json')
+    const db = c.get('db')
+
+    try {
+      let successCount = 0
+
+      for (const id of ids) {
+        const actor = await db.query.actors.findFirst({
+          where: eq(actors.id, id),
+        })
+
+        if (!actor) {
+          console.warn(`[Admin/Actors] ⚠️ Actor not found: ${id}`)
+          continue
+        }
+
+        await db
+          .update(actors)
+          .set({
+            hasDetailsCrawled: false,
+            crawlFailureCount: 0,
+            lastCrawlAttempt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(actors.id, id))
+
+        await createAuditLog(c, {
+          action: 'UPDATE',
+          resourceType: 'actor',
+          resourceId: id,
+          resourceIdentifier: actor.name,
+          changes: { action: 'mark_for_recrawl' },
+        })
+
+        successCount++
+      }
+
+      console.log(`[Admin/Actors] ✓ Marked ${successCount}/${ids.length} actors for recrawl`)
+
+      return c.json({
+        success: true,
+        total: ids.length,
+        marked: successCount,
+        message: `已标记 ${successCount} 个演员为待重新爬取`,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to batch recrawl:', message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
 export default adminActors

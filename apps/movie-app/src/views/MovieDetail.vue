@@ -104,13 +104,14 @@ onMounted(() => {
             <div v-if="movie.actors && movie.actors.length > 0" class="flex items-start text-sm">
               <span class="text-gray-400 w-24 flex-shrink-0">演员：</span>
               <div class="flex flex-wrap gap-2">
-                <span
+                <RouterLink
                   v-for="actor in movie.actors"
-                  :key="actor"
+                  :key="actor.id"
+                  :to="`/actors/${actor.slug}`"
                   class="bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-gray-600 cursor-pointer transition"
                 >
-                  {{ actor }}
-                </span>
+                  {{ actor.name }}
+                </RouterLink>
               </div>
             </div>
 
@@ -127,9 +128,18 @@ onMounted(() => {
               </div>
             </div>
 
-            <div v-if="movie.publisher" class="flex items-center text-sm">
-              <span class="text-gray-400 w-24">制作商：</span>
-              <span class="text-white">{{ movie.publisher }}</span>
+            <div v-if="movie.publishers && movie.publishers.length > 0" class="flex items-start text-sm">
+              <span class="text-gray-400 w-24 flex-shrink-0">制作商：</span>
+              <div class="flex flex-wrap gap-2">
+                <RouterLink
+                  v-for="publisher in movie.publishers"
+                  :key="publisher.id"
+                  :to="`/publishers/${publisher.slug}`"
+                  class="bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-gray-600 cursor-pointer transition"
+                >
+                  {{ publisher.name }}
+                </RouterLink>
+              </div>
             </div>
 
             <div v-if="movie.series" class="flex items-center text-sm">

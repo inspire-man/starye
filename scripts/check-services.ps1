@@ -19,8 +19,8 @@ foreach ($name in $services.Keys) {
     $check = netstat -ano | Select-String ":$port " | Select-String "LISTENING"
 
     if ($check) {
-        $pid = ($check -split '\s+')[-1]
-        Write-Host "[OK] $name on port $port (PID: $pid)" -ForegroundColor Green
+        $processId = ($check -split '\s+')[-1]
+        Write-Host "[OK] $name on port $port (PID: $processId)" -ForegroundColor Green
         $running += $name
     } else {
         Write-Host "[!!] $name on port $port - NOT RUNNING" -ForegroundColor Red

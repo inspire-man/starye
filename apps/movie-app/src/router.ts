@@ -16,6 +16,26 @@ const router = createRouter({
       component: () => import('./views/Search.vue'),
     },
     {
+      path: '/actors',
+      name: 'actors',
+      component: () => import('./views/Actors.vue'),
+    },
+    {
+      path: '/actors/:slug',
+      name: 'actor-detail',
+      component: () => import('./views/ActorDetail.vue'),
+    },
+    {
+      path: '/publishers',
+      name: 'publishers',
+      component: () => import('./views/Publishers.vue'),
+    },
+    {
+      path: '/publishers/:slug',
+      name: 'publisher-detail',
+      component: () => import('./views/PublisherDetail.vue'),
+    },
+    {
       path: '/movie/:code',
       name: 'movie-detail',
       component: () => import('./views/MovieDetail.vue'),

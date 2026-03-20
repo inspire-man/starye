@@ -1,4 +1,4 @@
-import type { ApiResponse, Movie, MovieDetail, PaginatedResponse, WatchingProgress } from './types'
+import type { Actor, ActorDetail, ApiResponse, Movie, MovieDetail, PaginatedResponse, Publisher, PublisherDetail, WatchingProgress } from './types'
 import axios from 'axios'
 
 const api = axios.create({
@@ -24,6 +24,51 @@ export const movieApi = {
   async getMovieDetail(code: string): Promise<ApiResponse<MovieDetail>> {
     const { data } = await api.get(`/public/movies/${code}`)
     return data
+  },
+}
+
+export const actorApi = {
+  async getActors(params?: {
+    page?: number
+    limit?: number
+    sort?: 'name' | 'movieCount' | 'createdAt'
+    nationality?: string
+    isActive?: boolean
+    hasDetails?: boolean
+  }): Promise<PaginatedResponse<Actor>> {
+    const { data } = await api.get('/actors', { params })
+    return {
+      success: true,
+      data: data.data,
+      pagination: data.meta,
+    }
+  },
+
+  async getActorDetail(slug: string): Promise<ApiResponse<ActorDetail>> {
+    const { data } = await api.get(`/actors/${slug}`)
+    return { success: true, data }
+  },
+}
+
+export const publisherApi = {
+  async getPublishers(params?: {
+    page?: number
+    limit?: number
+    sort?: 'name' | 'movieCount' | 'createdAt'
+    country?: string
+    hasDetails?: boolean
+  }): Promise<PaginatedResponse<Publisher>> {
+    const { data } = await api.get('/publishers', { params })
+    return {
+      success: true,
+      data: data.data,
+      pagination: data.meta,
+    }
+  },
+
+  async getPublisherDetail(slug: string): Promise<ApiResponse<PublisherDetail>> {
+    const { data } = await api.get(`/publishers/${slug}`)
+    return { success: true, data }
   },
 }
 

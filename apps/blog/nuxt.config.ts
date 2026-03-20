@@ -25,21 +25,12 @@ export default defineNuxtConfig({
       cookieKey: 'starye_i18n',
       redirectOn: 'root',
     },
-    // 内联翻译，避免加载外部文件导致 404
-    messages: {
-      en: {
-        welcome: 'Welcome to Starye Blog',
-      },
-      zh: {
-        welcome: '欢迎来到星野博客',
-      },
-    },
   },
 
   // Tailwind v4 integration via Vite plugin
   vite: {
     plugins: [
-      tailwindcss() as any,
+      tailwindcss(),
     ],
     optimizeDeps: {
       exclude: ['@starye/locales'],

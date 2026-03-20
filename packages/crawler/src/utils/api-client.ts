@@ -18,7 +18,7 @@ export class ApiClient {
           'x-service-token': this.config.token,
         },
         body: JSON.stringify(data),
-        signal: AbortSignal.timeout(this.config.timeout || 30000),
+        signal: AbortSignal.timeout(this.config.timeout || 60000), // 增加超时到 60 秒
       })
 
       if (!response.ok) {
@@ -78,7 +78,7 @@ export class ApiClient {
         headers: {
           'x-service-token': this.config.token,
         },
-        signal: AbortSignal.timeout(this.config.timeout || 30000),
+        signal: AbortSignal.timeout(this.config.timeout || 60000), // 增加超时到 60 秒
       })
 
       if (!response.ok) {

@@ -9,7 +9,6 @@ export default defineConfig({
   ],
   base: '/movie/',
   server: {
-    port: 3004,
     proxy: {
       '/api': {
         target: 'http://localhost:8787',

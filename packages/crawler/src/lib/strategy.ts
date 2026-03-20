@@ -71,6 +71,12 @@ export interface MovieInfo extends Partial<Omit<NewMovie, 'releaseDate' | 'actor
   actors?: string[]
   genres?: string[]
 
+  // 新增：女优详情页信息（任务 3.1）
+  actorDetails?: Array<{ name: string, url: string }>
+
+  // 新增：厂商详情页 URL（任务 3.6）
+  publisherUrl?: string
+
   players: Omit<NewPlayer, 'id' | 'movieId' | 'createdAt' | 'updatedAt'>[]
 }
 

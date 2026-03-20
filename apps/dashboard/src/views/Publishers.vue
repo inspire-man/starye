@@ -25,6 +25,8 @@ const mergingPublishers = ref(false)
 
 const { filters } = useFilters({
   search: '',
+  hasDetails: undefined as boolean | undefined,
+  minFailureCount: undefined as number | undefined,
 })
 
 const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
@@ -83,6 +85,12 @@ async function loadPublishers() {
     }
     if (filters.value.search) {
       params.search = filters.value.search
+    }
+    if (filters.value.hasDetails !== undefined) {
+      params.hasDetails = filters.value.hasDetails
+    }
+    if (filters.value.minFailureCount !== undefined) {
+      params.minFailureCount = filters.value.minFailureCount
     }
 
     const response = await api.admin.getPublishers(params)
@@ -183,6 +191,39 @@ onMounted(loadPublishers)
         class="search-input"
         @input="loadPublishers"
       >
+      <select
+        v-model="filters.hasDetails"
+        class="filter-select"
+        @change="loadPublishers"
+      >
+        <option :value="undefined">
+          全部（详情）
+        </option>
+        <option :value="true">
+          已补全详情
+        </option>
+        <option :value="false">
+          待补全详情
+        </option>
+      </select>
+      <select
+        v-model="filters.minFailureCount"
+        class="filter-select"
+        @change="loadPublishers"
+      >
+        <option :value="undefined">
+          全部（失败次数）
+        </option>
+        <option :value="1">
+          失败 ≥ 1 次
+        </option>
+        <option :value="2">
+          失败 ≥ 2 次
+        </option>
+        <option :value="3">
+          失败 ≥ 3 次
+        </option>
+      </select>
       <div class="filter-info">
         共 {{ totalItems }} 个厂商
       </div>
@@ -348,6 +389,7 @@ onMounted(loadPublishers)
   display: flex;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  align-items: center;
 }
 
 .search-input {
@@ -356,6 +398,20 @@ onMounted(loadPublishers)
   border: 1px solid #d1d5db;
   border-radius: 0.375rem;
   font-size: 0.875rem;
+}
+
+.filter-select {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.filter-select:hover {
+  border-color: #9ca3af;
 }
 
 .filter-info {

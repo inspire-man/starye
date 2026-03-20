@@ -64,7 +64,8 @@ export interface Movie {
   coverImage?: string | null
   releaseDate?: string | null
   duration?: number | null
-  actors?: string[] | null
+  actors?: (string | { id: string, name: string })[] | null
+  publishers?: (string | { id: string, name: string })[] | null
   genres?: string[] | null
   publisher?: string | null
   isR18: boolean
@@ -257,6 +258,24 @@ export const api = {
         body: JSON.stringify({ sourceId, targetId }),
       }),
 
+    createActor: (data: { name: string }) =>
+      fetchApi<{ id: string, name: string }>('/admin/actors', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    batchRecrawlActors: (ids: string[]) =>
+      fetchApi<{ success: boolean, total: number, marked: number, message: string }>('/admin/actors/batch-recrawl', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+
+    updateMovieActors: (movieId: string, actors: { id: string, name: string, sortOrder: number }[]) =>
+      fetchApi(`/admin/movies/${movieId}/actors`, {
+        method: 'PUT',
+        body: JSON.stringify({ actors }),
+      }),
+
     getPublishers: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
       return fetchApi<Paginated<Publisher>>(`/admin/publishers${query ? `?${query}` : ''}`)
@@ -276,6 +295,18 @@ export const api = {
       fetchApi('/admin/publishers/merge', {
         method: 'POST',
         body: JSON.stringify({ sourceId, targetId }),
+      }),
+
+    createPublisher: (data: { name: string }) =>
+      fetchApi<{ id: string, name: string }>('/admin/publishers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    updateMoviePublishers: (movieId: string, publishers: { id: string, name: string, sortOrder: number }[]) =>
+      fetchApi(`/admin/movies/${movieId}/publishers`, {
+        method: 'PUT',
+        body: JSON.stringify({ publishers }),
       }),
 
     getCrawlerStats: () =>

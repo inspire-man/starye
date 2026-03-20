@@ -9,6 +9,8 @@
     "test:api": "tsx scripts/test-api.ts",
     "test:optimized": "tsx scripts/run-optimized.ts",
     "test:anti-detection": "tsx scripts/test-anti-detection.ts",
+    "test:single": "tsx scripts/test-single-movie.ts",
+    "test:full": "tsx scripts/test-full-flow.ts",
     "build:search": "tsx scripts/build-search.ts",
     "test": "vitest",
     "test:unit": "vitest run",

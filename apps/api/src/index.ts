@@ -1,9 +1,9 @@
 import type { AppEnv } from './types'
 import { Hono } from 'hono'
-import { authMiddleware } from './middleware/auth'
 import { corsMiddleware } from './middleware/cors'
 import { databaseMiddleware } from './middleware/database'
 import { errorHandler } from './middleware/error-handler'
+import actorsRoutes from './routes/actors'
 import adminRoutes from './routes/admin'
 import authRoutes from './routes/auth'
 import comicsRoutes from './routes/comics'
@@ -13,6 +13,7 @@ import postsRoutes from './routes/posts'
 import publicComicsRoutes from './routes/public-comics'
 import publicMoviesRoutes from './routes/public-movies'
 import publicProgressRoutes from './routes/public-progress'
+import publishersRoutes from './routes/publishers'
 import uploadRoutes from './routes/upload'
 
 const app = new Hono<AppEnv>()
@@ -20,7 +21,6 @@ const app = new Hono<AppEnv>()
 // Global Middlewares
 app.use('*', corsMiddleware())
 app.use('*', databaseMiddleware())
-app.use('*', authMiddleware())
 
 // Global Error Handler
 app.onError(errorHandler)
@@ -28,6 +28,8 @@ app.onError(errorHandler)
 // Routes
 app.get('/', c => c.text('Starye API'))
 app.route('/api/health', healthRoutes)
+app.route('/api/actors', actorsRoutes)
+app.route('/api/publishers', publishersRoutes)
 app.route('/api/comics', comicsRoutes)
 app.route('/api/movies', moviesRoutes)
 app.route('/api/posts', postsRoutes)

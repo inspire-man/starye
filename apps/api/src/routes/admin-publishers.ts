@@ -248,4 +248,56 @@ adminPublishers.post(
   },
 )
 
+/**
+ * POST /api/admin/publishers
+ * 创建新厂商
+ */
+adminPublishers.post(
+  '/',
+  zValidator('json', z.object({
+    name: z.string().min(1),
+  })),
+  async (c) => {
+    const { name } = c.req.valid('json')
+    const db = c.get('db')
+
+    try {
+      const slug = name.toLowerCase().replace(/\s+/g, '-')
+
+      const newPublisher = {
+        id: crypto.randomUUID(),
+        name,
+        slug,
+        source: 'manual',
+        sourceId: slug,
+        movieCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      await db.insert(publishers).values(newPublisher)
+
+      await createAuditLog(c, {
+        action: 'CREATE',
+        resourceType: 'publisher',
+        resourceId: newPublisher.id,
+        resourceIdentifier: name,
+        changes: { name },
+      })
+
+      console.log(`[Admin/Publishers] ✓ Created publisher: ${name}`)
+
+      return c.json({
+        id: newPublisher.id,
+        name: newPublisher.name,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Publishers] ❌ Failed to create publisher:', message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
 export default adminPublishers

@@ -1,3 +1,4 @@
+<!-- eslint-disable no-alert -->
 <script setup lang="ts">
 import type { Actor, Movie } from '@/lib/api'
 import { computed, onMounted, ref } from 'vue'
@@ -23,8 +24,15 @@ const mergeSourceId = ref<string>('')
 const mergeTargetId = ref<string>('')
 const mergingActors = ref(false)
 
+// 批量操作相关
+const selectedActors = ref<Set<string>>(new Set())
+const isBatchOperating = ref(false)
+
 const { filters } = useFilters({
   search: '',
+  hasDetails: undefined as boolean | undefined,
+  isActive: undefined as boolean | undefined,
+  minFailureCount: undefined as number | undefined,
 })
 
 const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
@@ -37,6 +45,7 @@ function toggleSort(field: string) {
 }
 
 const tableColumns = [
+  { key: 'select', label: '选择', sortable: false },
   { key: 'avatar', label: '头像', sortable: false },
   { key: 'name', label: '名称', sortable: true },
   { key: 'movieCount', label: '作品数', sortable: true },
@@ -83,6 +92,15 @@ async function loadActors() {
     }
     if (filters.value.search) {
       params.search = filters.value.search
+    }
+    if (filters.value.hasDetails !== undefined) {
+      params.hasDetails = filters.value.hasDetails
+    }
+    if (filters.value.isActive !== undefined) {
+      params.isActive = filters.value.isActive
+    }
+    if (filters.value.minFailureCount !== undefined) {
+      params.minFailureCount = filters.value.minFailureCount
     }
 
     const response = await api.admin.getActors(params)
@@ -159,6 +177,53 @@ async function handleMerge() {
   }
 }
 
+// 批量操作函数
+function toggleActorSelection(actorId: string) {
+  if (selectedActors.value.has(actorId)) {
+    selectedActors.value.delete(actorId)
+  }
+  else {
+    selectedActors.value.add(actorId)
+  }
+}
+
+function toggleSelectAll() {
+  if (selectedActors.value.size === filteredActors.value.length) {
+    selectedActors.value.clear()
+  }
+  else {
+    selectedActors.value.clear()
+    filteredActors.value.forEach(actor => selectedActors.value.add(actor.id))
+  }
+}
+
+const hasSelection = computed(() => selectedActors.value.size > 0)
+
+async function handleBatchRecrawl() {
+  if (selectedActors.value.size === 0)
+    return
+
+  if (!confirm(`确定要标记 ${selectedActors.value.size} 个演员为"待重新爬取"吗？下次爬虫运行时会尝试补全详情。`))
+    return
+
+  isBatchOperating.value = true
+  try {
+    // 批量调用 API 将选中的演员标记为需要重新爬取
+    const ids = Array.from(selectedActors.value)
+    await api.admin.batchRecrawlActors(ids)
+
+    selectedActors.value.clear()
+    await loadActors()
+  }
+  catch (e) {
+    console.error('Batch recrawl failed:', e)
+    alert('批量操作失败，请重试')
+  }
+  finally {
+    isBatchOperating.value = false
+  }
+}
+
 onMounted(loadActors)
 </script>
 
@@ -183,9 +248,74 @@ onMounted(loadActors)
         class="search-input"
         @input="loadActors"
       >
+      <select
+        v-model="filters.hasDetails"
+        class="filter-select"
+        @change="loadActors"
+      >
+        <option :value="undefined">
+          全部（详情）
+        </option>
+        <option :value="true">
+          已补全详情
+        </option>
+        <option :value="false">
+          待补全详情
+        </option>
+      </select>
+      <select
+        v-model="filters.isActive"
+        class="filter-select"
+        @change="loadActors"
+      >
+        <option :value="undefined">
+          全部（状态）
+        </option>
+        <option :value="true">
+          活跃
+        </option>
+        <option :value="false">
+          已引退
+        </option>
+      </select>
+      <select
+        v-model="filters.minFailureCount"
+        class="filter-select"
+        @change="loadActors"
+      >
+        <option :value="undefined">
+          全部（失败次数）
+        </option>
+        <option :value="1">
+          失败 ≥ 1 次
+        </option>
+        <option :value="2">
+          失败 ≥ 2 次
+        </option>
+        <option :value="3">
+          失败 ≥ 3 次
+        </option>
+      </select>
       <div class="filter-info">
         共 {{ totalItems }} 个演员
       </div>
+    </div>
+
+    <div v-if="hasSelection" class="batch-actions">
+      <span class="batch-info">已选择 {{ selectedActors.size }} 个演员</span>
+      <button
+        class="btn-primary"
+        :disabled="isBatchOperating"
+        @click="handleBatchRecrawl"
+      >
+        {{ isBatchOperating ? '处理中...' : '重新爬取详情' }}
+      </button>
+      <button class="btn-secondary" @click="toggleSelectAll">
+        {{ selectedActors.size === filteredActors.length ? '取消全选' : '全选当前页' }}
+      </button>
+      <button class="btn-secondary" @click="selectedActors.clear()">
+        取消选择
+      </button>
     </div>
 
     <div v-if="error" class="error-message">
@@ -205,6 +335,13 @@ onMounted(loadActors)
       @sort="toggleSort"
       @page-change="(page) => { goToPage(page); loadActors() }"
     >
+      <template #cell-select="{ item }">
+        <input
+          type="checkbox"
+          :checked="selectedActors.has(item.id)"
+          @click.stop="toggleActorSelection(item.id)"
+        >
+      </template>
       <template #cell-avatar="{ item }">
         <img
           v-if="item.avatar"
@@ -348,6 +485,7 @@ onMounted(loadActors)
   display: flex;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  align-items: center;
 }
 
 .search-input {
@@ -356,6 +494,20 @@ onMounted(loadActors)
   border: 1px solid #d1d5db;
   border-radius: 0.375rem;
   font-size: 0.875rem;
+}
+
+.filter-select {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.filter-select:hover {
+  border-color: #9ca3af;
 }
 
 .filter-info {
@@ -548,5 +700,28 @@ onMounted(loadActors)
 
 .merge-form {
   margin-top: 1rem;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.batch-info {
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

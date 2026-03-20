@@ -9,7 +9,6 @@ export default defineConfig({
   ],
   base: '/comic/',
   server: {
-    port: 3003,
     proxy: {
       '/api': {
         target: 'http://localhost:8787',

@@ -19,7 +19,7 @@ export default defineNuxtConfig({
   // Tailwind v4 integration via Vite plugin
   vite: {
     plugins: [
-      tailwindcss() as any,
+      tailwindcss(),
     ],
   },
 
