@@ -29,16 +29,16 @@ ALTER TABLE `actor` ADD `blood_type` text;--> statement-breakpoint
 ALTER TABLE `actor` ADD `debut_date` integer;--> statement-breakpoint
 ALTER TABLE `actor` ADD `is_active` integer DEFAULT true;--> statement-breakpoint
 ALTER TABLE `actor` ADD `retire_date` integer;--> statement-breakpoint
-ALTER TABLE `actor` ADD `source` text NOT NULL;--> statement-breakpoint
-ALTER TABLE `actor` ADD `source_id` text NOT NULL;--> statement-breakpoint
+ALTER TABLE `actor` ADD `source` text DEFAULT 'javbus' NOT NULL;--> statement-breakpoint
+ALTER TABLE `actor` ADD `source_id` text DEFAULT '' NOT NULL;--> statement-breakpoint
 ALTER TABLE `actor` ADD `source_url` text;--> statement-breakpoint
 ALTER TABLE `actor` ADD `has_details_crawled` integer DEFAULT false;--> statement-breakpoint
 ALTER TABLE `actor` ADD `crawl_failure_count` integer DEFAULT 0;--> statement-breakpoint
 ALTER TABLE `actor` ADD `last_crawl_attempt` integer;--> statement-breakpoint
 CREATE UNIQUE INDEX `idx_actor_source_id` ON `actor` (`source`,`source_id`);--> statement-breakpoint
 DROP INDEX `publisher_name_unique`;--> statement-breakpoint
-ALTER TABLE `publisher` ADD `source` text NOT NULL;--> statement-breakpoint
-ALTER TABLE `publisher` ADD `source_id` text NOT NULL;--> statement-breakpoint
+ALTER TABLE `publisher` ADD `source` text DEFAULT 'javbus' NOT NULL;--> statement-breakpoint
+ALTER TABLE `publisher` ADD `source_id` text DEFAULT '' NOT NULL;--> statement-breakpoint
 ALTER TABLE `publisher` ADD `source_url` text;--> statement-breakpoint
 ALTER TABLE `publisher` ADD `has_details_crawled` integer DEFAULT false;--> statement-breakpoint
 ALTER TABLE `publisher` ADD `crawl_failure_count` integer DEFAULT 0;--> statement-breakpoint
