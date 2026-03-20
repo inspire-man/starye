@@ -28,7 +28,7 @@ CREATE TABLE `__new_actor` (
 	`updated_at` integer DEFAULT (strftime('%s', 'now'))
 );
 --> statement-breakpoint
-INSERT INTO `__new_actor`("id", "name", "slug", "avatar", "cover", "bio", "birth_date", "height", "measurements", "cup_size", "blood_type", "nationality", "debut_date", "is_active", "retire_date", "social_links", "movie_count", "is_r18", "source", "source_id", "source_url", "has_details_crawled", "crawl_failure_count", "last_crawl_attempt", "created_at", "updated_at") SELECT "id", "name", "slug", "avatar", "cover", "bio", "birth_date", "height", "measurements", "cup_size", "blood_type", "nationality", "debut_date", "is_active", "retire_date", "social_links", "movie_count", "is_r18", "source", "source_id", "source_url", "has_details_crawled", "crawl_failure_count", "last_crawl_attempt", "created_at", "updated_at" FROM `actor`;--> statement-breakpoint
+INSERT INTO `__new_actor`("id", "name", "slug", "avatar", "cover", "bio", "birth_date", "height", "measurements", "cup_size", "blood_type", "nationality", "debut_date", "is_active", "retire_date", "social_links", "movie_count", "is_r18", "source", "source_id", "source_url", "has_details_crawled", "crawl_failure_count", "last_crawl_attempt", "created_at", "updated_at") SELECT "id", "name", "slug", "avatar", "cover", "bio", "birth_date", "height", "measurements", "cup_size", "blood_type", "nationality", "debut_date", "is_active", "retire_date", "social_links", "movie_count", "is_r18", "source", COALESCE(NULLIF("source_id", ''), "id"), "source_url", "has_details_crawled", "crawl_failure_count", "last_crawl_attempt", "created_at", "updated_at" FROM `actor`;--> statement-breakpoint
 DROP TABLE `actor`;--> statement-breakpoint
 ALTER TABLE `__new_actor` RENAME TO `actor`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
@@ -55,7 +55,7 @@ CREATE TABLE `__new_publisher` (
 	`updated_at` integer DEFAULT (strftime('%s', 'now'))
 );
 --> statement-breakpoint
-INSERT INTO `__new_publisher`("id", "name", "slug", "logo", "website", "description", "founded_year", "country", "movie_count", "is_r18", "source", "source_id", "source_url", "has_details_crawled", "crawl_failure_count", "last_crawl_attempt", "created_at", "updated_at") SELECT "id", "name", "slug", "logo", "website", "description", "founded_year", "country", "movie_count", "is_r18", "source", "source_id", "source_url", "has_details_crawled", "crawl_failure_count", "last_crawl_attempt", "created_at", "updated_at" FROM `publisher`;--> statement-breakpoint
+INSERT INTO `__new_publisher`("id", "name", "slug", "logo", "website", "description", "founded_year", "country", "movie_count", "is_r18", "source", "source_id", "source_url", "has_details_crawled", "crawl_failure_count", "last_crawl_attempt", "created_at", "updated_at") SELECT "id", "name", "slug", "logo", "website", "description", "founded_year", "country", "movie_count", "is_r18", "source", COALESCE(NULLIF("source_id", ''), "id"), "source_url", "has_details_crawled", "crawl_failure_count", "last_crawl_attempt", "created_at", "updated_at" FROM `publisher`;--> statement-breakpoint
 DROP TABLE `publisher`;--> statement-breakpoint
 ALTER TABLE `__new_publisher` RENAME TO `publisher`;--> statement-breakpoint
 CREATE UNIQUE INDEX `publisher_slug_unique` ON `publisher` (`slug`);--> statement-breakpoint
