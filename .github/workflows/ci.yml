@@ -33,5 +33,11 @@ jobs:
       - name: Type Check
         run: pnpm type-check
 
+      - name: Setup Test Environment
+        run: |
+          echo "CLOUDFLARE_ACCOUNT_ID=test" >> $GITHUB_ENV
+          echo "CLOUDFLARE_DATABASE_ID=test" >> $GITHUB_ENV
+          echo "CLOUDFLARE_D1_TOKEN=test" >> $GITHUB_ENV
+
       - name: Run E2E Tests
         run: pnpm test:e2e

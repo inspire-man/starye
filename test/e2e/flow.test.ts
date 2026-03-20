@@ -1,7 +1,6 @@
 /* eslint-disable regexp/no-super-linear-backtracking */
 import type { D1Database } from '@cloudflare/workers-types'
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error relative import
 import app from '../../apps/api/src/index'
 
 // Mock D1 Database (Pure JS)
@@ -17,7 +16,19 @@ class MockD1Database {
         return {
           all: async () => {
             if (query.includes('from "movie"')) {
-              return { results: this.data.movie }
+              // 返回带有关联数据的结构
+              const results = this.data.movie.map(movie => ({
+                ...movie,
+                movie_actors: [],
+                movie_publishers: [],
+              }))
+              return { results }
+            }
+            if (query.includes('from "movie_actors"')) {
+              return { results: [] }
+            }
+            if (query.includes('from "movie_publishers"')) {
+              return { results: [] }
             }
             return { results: [] }
           },
@@ -40,7 +51,15 @@ class MockD1Database {
           },
           first: async () => {
             if (query.includes('from "movie"')) {
-              return this.data.movie[0] || null
+              const movie = this.data.movie[0] || null
+              if (movie) {
+                return {
+                  ...movie,
+                  movie_actors: [],
+                  movie_publishers: [],
+                }
+              }
+              return null
             }
             return null
           },
