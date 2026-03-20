@@ -10,8 +10,8 @@ DROP TABLE IF EXISTS `movie_publisher`;
 -- 2. 清理可能已创建的索引（按创建顺序的反序删除）
 DROP INDEX IF EXISTS `idx_watching_progress_user_movie`;
 DROP INDEX IF EXISTS `idx_reading_progress_user_chapter`;
-DROP INDEX IF EXISTS `idx_publisher_source_id`;
-DROP INDEX IF EXISTS `idx_actor_source_id`;
+-- 注意：0015 迁移已不再创建 idx_actor_source_id 和 idx_publisher_source_id
+-- 这些索引会在 0016 重建表时创建
 DROP INDEX IF EXISTS `idx_movie_pub_publisher_id`;
 DROP INDEX IF EXISTS `idx_movie_pub`;
 DROP INDEX IF EXISTS `idx_movie_actor_actor_id`;

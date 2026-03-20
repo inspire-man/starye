@@ -35,7 +35,6 @@ ALTER TABLE `actor` ADD `source_url` text;--> statement-breakpoint
 ALTER TABLE `actor` ADD `has_details_crawled` integer DEFAULT false;--> statement-breakpoint
 ALTER TABLE `actor` ADD `crawl_failure_count` integer DEFAULT 0;--> statement-breakpoint
 ALTER TABLE `actor` ADD `last_crawl_attempt` integer;--> statement-breakpoint
-CREATE UNIQUE INDEX `idx_actor_source_id` ON `actor` (`source`,`source_id`);--> statement-breakpoint
 DROP INDEX `publisher_name_unique`;--> statement-breakpoint
 ALTER TABLE `publisher` ADD `source` text DEFAULT 'javbus' NOT NULL;--> statement-breakpoint
 ALTER TABLE `publisher` ADD `source_id` text DEFAULT '' NOT NULL;--> statement-breakpoint
@@ -43,6 +42,5 @@ ALTER TABLE `publisher` ADD `source_url` text;--> statement-breakpoint
 ALTER TABLE `publisher` ADD `has_details_crawled` integer DEFAULT false;--> statement-breakpoint
 ALTER TABLE `publisher` ADD `crawl_failure_count` integer DEFAULT 0;--> statement-breakpoint
 ALTER TABLE `publisher` ADD `last_crawl_attempt` integer;--> statement-breakpoint
-CREATE UNIQUE INDEX `idx_publisher_source_id` ON `publisher` (`source`,`source_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `idx_reading_progress_user_chapter` ON `reading_progress` (`user_id`,`chapter_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `idx_watching_progress_user_movie` ON `watching_progress` (`user_id`,`movie_code`);
