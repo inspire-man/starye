@@ -22,7 +22,7 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@libsql/client": "^0.17.0",
+    "@libsql/client": "^0.17.2",
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
     "nanoid": "^5.1.7",
