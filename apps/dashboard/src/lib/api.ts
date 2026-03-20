@@ -303,7 +303,7 @@ export const api = {
 
     exportAuditLogs: async (format: 'json' | 'csv', params?: Record<string, any>): Promise<Blob> => {
       const query = new URLSearchParams({ ...params, format }).toString()
-      const response = await fetch(`${API_BASE}/api/admin/audit-logs/export?${query}`, {
+      const response = await fetch(`${API_BASE}/admin/audit-logs/export?${query}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
