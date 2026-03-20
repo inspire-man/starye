@@ -44,8 +44,11 @@ jobs:
         run: |
           # 尝试创建项目（如果不存在）
           pnpm exec wrangler pages project create starye-auth --production-branch=main || true
-          # 部署到 Cloudflare Pages
+          # 部署到 Cloudflare Pages（使用英文 commit message 避免 UTF-8 编码问题）
+          COMMIT_MSG=$(git log -1 --format=%s | iconv -f UTF-8 -t ASCII//TRANSLIT//IGNORE || echo "Deploy Auth Service")
           pnpm exec wrangler pages deploy apps/auth/dist \
             --project-name=starye-auth \
             --branch=main \
-            --commit-hash=${{ github.sha }}
+            --commit-hash=${{ github.sha }} \
+            --commit-message="$COMMIT_MSG" \
+            --commit-dirty=true
