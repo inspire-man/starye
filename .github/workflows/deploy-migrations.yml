@@ -30,13 +30,13 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Cleanup Failed Migrations (if any)
+      - name: Fix Missing Tables (if any)
         uses: cloudflare/wrangler-action@v3
         continue-on-error: true
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 execute starye-db --remote --file=./scripts/cleanup-failed-migration.sql
+          command: d1 execute starye-db --remote --file=./scripts/fix-missing-tables.sql
 
       - name: Apply Migrations
         uses: cloudflare/wrangler-action@v3
