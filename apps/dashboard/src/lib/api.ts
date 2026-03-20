@@ -151,32 +151,32 @@ export const api = {
 
     getComics: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<Comic>>(`/api/admin/comics${query ? `?${query}` : ''}`)
+      return fetchApi<Paginated<Comic>>(`/admin/comics${query ? `?${query}` : ''}`)
     },
 
     getUsers: () => fetchApi<any[]>('/admin/users'),
 
     updateUserRole: (email: string, role: string) =>
-      fetchApi(`/api/admin/users/${email}/role`, {
+      fetchApi(`/admin/users/${email}/role`, {
         method: 'PATCH',
         body: JSON.stringify({ role }),
       }),
 
     updateUserStatus: (email: string, isAdult: boolean) =>
-      fetchApi(`/api/admin/users/${email}/status`, {
+      fetchApi(`/admin/users/${email}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ isAdult }),
       }),
 
     updateComic: (id: string, data: Partial<Comic>) =>
-      fetchApi(`/api/admin/comics/${id}`, {
+      fetchApi(`/admin/comics/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
 
-    getChapters: (comicId: string) => fetchApi<Chapter[]>(`/api/admin/comics/${comicId}/chapters`),
-    getChapter: (id: string) => fetchApi<Chapter>(`/api/admin/chapters/${id}`),
-    deleteChapter: (id: string) => fetchApi(`/api/admin/chapters/${id}`, { method: 'DELETE' }),
+    getChapters: (comicId: string) => fetchApi<Chapter[]>(`/admin/comics/${comicId}/chapters`),
+    getChapter: (id: string) => fetchApi<Chapter>(`/admin/chapters/${id}`),
+    deleteChapter: (id: string) => fetchApi(`/admin/chapters/${id}`, { method: 'DELETE' }),
 
     bulkOperationComics: (ids: string[], operation: string, payload?: any) =>
       fetchApi('/admin/comics/bulk-operation', {
@@ -185,26 +185,26 @@ export const api = {
       }),
 
     bulkDeleteChapters: (comicId: string, chapterIds: string[]) =>
-      fetchApi(`/api/admin/comics/${comicId}/chapters/bulk-delete`, {
+      fetchApi(`/admin/comics/${comicId}/chapters/bulk-delete`, {
         method: 'POST',
         body: JSON.stringify({ chapterIds }),
       }),
 
     getMovies: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<Movie>>(`/api/admin/movies${query ? `?${query}` : ''}`)
+      return fetchApi<Paginated<Movie>>(`/admin/movies${query ? `?${query}` : ''}`)
     },
 
-    getMovie: (id: string) => fetchApi<Movie>(`/api/admin/movies/${id}`),
+    getMovie: (id: string) => fetchApi<Movie>(`/admin/movies/${id}`),
 
     updateMovie: (id: string, data: Partial<Movie>) =>
-      fetchApi(`/api/admin/movies/${id}`, {
+      fetchApi(`/admin/movies/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
 
     deleteMovie: (id: string) =>
-      fetchApi(`/api/admin/movies/${id}`, { method: 'DELETE' }),
+      fetchApi(`/admin/movies/${id}`, { method: 'DELETE' }),
 
     bulkOperationMovies: (ids: string[], operation: string, payload?: any) =>
       fetchApi('/admin/movies/bulk-operation', {
@@ -213,40 +213,40 @@ export const api = {
       }),
 
     getPlayers: (movieId: string) =>
-      fetchApi<{ movieId: string, players: Player[], total: number }>(`/api/admin/movies/${movieId}/players`),
+      fetchApi<{ movieId: string, players: Player[], total: number }>(`/admin/movies/${movieId}/players`),
 
     addPlayer: (movieId: string, data: { sourceName: string, sourceUrl: string, quality?: string }) =>
-      fetchApi(`/api/admin/movies/${movieId}/players`, {
+      fetchApi(`/admin/movies/${movieId}/players`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     updatePlayer: (playerId: string, data: Partial<Player>) =>
-      fetchApi(`/api/admin/movies/players/${playerId}`, {
+      fetchApi(`/admin/movies/players/${playerId}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
 
     deletePlayer: (playerId: string) =>
-      fetchApi(`/api/admin/movies/players/${playerId}`, { method: 'DELETE' }),
+      fetchApi(`/admin/movies/players/${playerId}`, { method: 'DELETE' }),
 
     batchImportPlayers: (movieId: string, players: Array<{ sourceName: string, sourceUrl: string, quality?: string }>) =>
-      fetchApi(`/api/admin/movies/${movieId}/players/batch-import`, {
+      fetchApi(`/admin/movies/${movieId}/players/batch-import`, {
         method: 'POST',
         body: JSON.stringify({ players }),
       }),
 
     getActors: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<Actor>>(`/api/admin/actors${query ? `?${query}` : ''}`)
+      return fetchApi<Paginated<Actor>>(`/admin/actors${query ? `?${query}` : ''}`)
     },
 
-    getActor: (id: string) => fetchApi<Actor & { relatedMovies: Movie[] }>(`/api/admin/actors/${id}`),
+    getActor: (id: string) => fetchApi<Actor & { relatedMovies: Movie[] }>(`/admin/actors/${id}`),
 
-    getActorDetail: (id: string) => fetchApi<{ actor: Actor, movies: Movie[] }>(`/api/admin/actors/${id}`),
+    getActorDetail: (id: string) => fetchApi<{ actor: Actor, movies: Movie[] }>(`/admin/actors/${id}`),
 
     updateActor: (id: string, data: Partial<Actor>) =>
-      fetchApi(`/api/admin/actors/${id}`, {
+      fetchApi(`/admin/actors/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
@@ -259,15 +259,15 @@ export const api = {
 
     getPublishers: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<Publisher>>(`/api/admin/publishers${query ? `?${query}` : ''}`)
+      return fetchApi<Paginated<Publisher>>(`/admin/publishers${query ? `?${query}` : ''}`)
     },
 
-    getPublisher: (id: string) => fetchApi<Publisher & { relatedMovies: Movie[] }>(`/api/admin/publishers/${id}`),
+    getPublisher: (id: string) => fetchApi<Publisher & { relatedMovies: Movie[] }>(`/admin/publishers/${id}`),
 
-    getPublisherDetail: (id: string) => fetchApi<{ publisher: Publisher, movies: Movie[] }>(`/api/admin/publishers/${id}`),
+    getPublisherDetail: (id: string) => fetchApi<{ publisher: Publisher, movies: Movie[] }>(`/admin/publishers/${id}`),
 
     updatePublisher: (id: string, data: Partial<Publisher>) =>
-      fetchApi(`/api/admin/publishers/${id}`, {
+      fetchApi(`/admin/publishers/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
@@ -298,7 +298,7 @@ export const api = {
 
     getAuditLogs: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<AuditLog>>(`/api/admin/audit-logs${query ? `?${query}` : ''}`)
+      return fetchApi<Paginated<AuditLog>>(`/admin/audit-logs${query ? `?${query}` : ''}`)
     },
 
     exportAuditLogs: async (format: 'json' | 'csv', params?: Record<string, any>): Promise<Blob> => {
@@ -327,7 +327,7 @@ export const api = {
       }),
 
     removeFromR18Whitelist: (userId: string) =>
-      fetchApi(`/api/admin/r18-whitelist/${userId}`, {
+      fetchApi(`/admin/r18-whitelist/${userId}`, {
         method: 'DELETE',
       }),
   },

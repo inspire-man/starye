@@ -43,24 +43,29 @@ const menuItems = computed(() => [
     label: '电影管理',
     icon: 'film',
     show: canAccessMovies.value,
+    children: [
+      {
+        path: '/movies',
+        label: '电影列表',
+        show: canAccessMovies.value,
+      },
+      {
+        path: '/actors',
+        label: '演员管理',
+        show: canAccessMovies.value,
+      },
+      {
+        path: '/publishers',
+        label: '厂商管理',
+        show: canAccessMovies.value,
+      },
+    ],
   },
   {
     path: '/crawlers',
     label: '爬虫监控',
     icon: 'activity',
     show: canAccessComics.value || canAccessMovies.value,
-  },
-  {
-    path: '/actors',
-    label: '演员管理',
-    icon: 'users',
-    show: canAccessMovies.value,
-  },
-  {
-    path: '/publishers',
-    label: '厂商管理',
-    icon: 'building',
-    show: canAccessMovies.value,
   },
   {
     path: '/audit-logs',
@@ -120,20 +125,43 @@ async function handleLogout() {
       </div>
 
       <nav class="flex-1 p-4 space-y-1">
-        <RouterLink
-          v-for="item in menuItems"
-          :key="item.path"
-          :to="item.path"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
-          active-class=""
-          :exact-active-class="item.path === '/' ? 'bg-muted text-primary' : ''"
-          :class="{ 'bg-muted text-primary': item.path !== '/' && $route.path.startsWith(item.path) }"
-        >
-          <span class="text-lg">
-            {{ getIcon(item.icon) }}
-          </span>
-          {{ item.label }}
-        </RouterLink>
+        <template v-for="item in menuItems" :key="item.path">
+          <!-- 有子菜单的项 -->
+          <div v-if="item.children" class="space-y-1">
+            <div class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground">
+              <span class="text-lg">
+                {{ getIcon(item.icon) }}
+              </span>
+              {{ item.label }}
+            </div>
+            <RouterLink
+              v-for="child in item.children.filter(c => c.show)"
+              :key="child.path"
+              :to="child.path"
+              class="flex items-center gap-3 pl-10 pr-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
+              active-class=""
+              :exact-active-class="child.path === '/' ? 'bg-muted text-primary' : ''"
+              :class="{ 'bg-muted text-primary': child.path !== '/' && $route.path.startsWith(child.path) }"
+            >
+              {{ child.label }}
+            </RouterLink>
+          </div>
+
+          <!-- 无子菜单的项 -->
+          <RouterLink
+            v-else
+            :to="item.path"
+            class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
+            active-class=""
+            :exact-active-class="item.path === '/' ? 'bg-muted text-primary' : ''"
+            :class="{ 'bg-muted text-primary': item.path !== '/' && $route.path.startsWith(item.path) }"
+          >
+            <span class="text-lg">
+              {{ getIcon(item.icon) }}
+            </span>
+            {{ item.label }}
+          </RouterLink>
+        </template>
       </nav>
 
       <div class="p-4 space-y-2 border-t">
