@@ -14,11 +14,17 @@ const userStore = useUserStore()
             影库
           </RouterLink>
 
-          <nav class="hidden md:flex space-x-4">
-            <RouterLink to="/" class="text-gray-300 hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition">
+          <nav class="hidden md:flex space-x-2">
+            <RouterLink to="/" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
               首页
             </RouterLink>
-            <RouterLink to="/search" class="text-gray-300 hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition">
+            <RouterLink to="/actors" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+              女优
+            </RouterLink>
+            <RouterLink to="/publishers" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+              厂商
+            </RouterLink>
+            <RouterLink to="/search" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
               搜索
             </RouterLink>
           </nav>

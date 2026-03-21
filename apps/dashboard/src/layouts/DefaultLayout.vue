@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useResourceGuard } from '@/composables/useResourceGuard'
 import { signOut, useSession } from '@/lib/auth-client'
@@ -7,6 +7,12 @@ import { signOut, useSession } from '@/lib/auth-client'
 const { t, locale } = useI18n()
 const session = useSession()
 const { canAccessComics, canAccessMovies, canAccessGlobal } = useResourceGuard()
+
+// 侧边栏折叠状态
+const sidebarCollapsed = ref(false)
+
+// 菜单展开状态
+const expandedMenus = ref<Set<string>>(new Set(['movies', 'comics']))
 
 const iconMap: Record<string, string> = {
   'home': '🏠',
@@ -25,21 +31,42 @@ function getIcon(iconName: string) {
   return iconMap[iconName] || '•'
 }
 
+function toggleMenu(menuKey: string) {
+  if (expandedMenus.value.has(menuKey)) {
+    expandedMenus.value.delete(menuKey)
+  }
+  else {
+    expandedMenus.value.add(menuKey)
+  }
+}
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
 const menuItems = computed(() => [
   {
+    key: 'home',
     path: '/',
     label: t('dashboard.overview'),
     icon: 'home',
     show: true,
   },
   {
-    path: '/comics',
-    label: t('dashboard.comics'),
+    key: 'comics',
+    label: '漫画管理',
     icon: 'book',
     show: canAccessComics.value,
+    children: [
+      {
+        path: '/comics',
+        label: '漫画列表',
+        show: canAccessComics.value,
+      },
+    ],
   },
   {
-    path: '/movies',
+    key: 'movies',
     label: '电影管理',
     icon: 'film',
     show: canAccessMovies.value,
@@ -62,36 +89,42 @@ const menuItems = computed(() => [
     ],
   },
   {
+    key: 'crawlers',
     path: '/crawlers',
     label: '爬虫监控',
     icon: 'activity',
     show: canAccessComics.value || canAccessMovies.value,
   },
   {
+    key: 'audit-logs',
     path: '/audit-logs',
     label: '审计日志',
     icon: 'clipboard',
     show: canAccessGlobal.value,
   },
   {
+    key: 'r18-whitelist',
     path: '/r18-whitelist',
     label: 'R18 白名单',
     icon: 'shield',
     show: canAccessGlobal.value,
   },
   {
+    key: 'posts',
     path: '/posts',
     label: t('dashboard.posts'),
     icon: 'file-text',
     show: canAccessGlobal.value,
   },
   {
+    key: 'users',
     path: '/users',
     label: t('dashboard.users'),
     icon: 'users',
     show: canAccessGlobal.value,
   },
   {
+    key: 'settings',
     path: '/settings',
     label: t('dashboard.settings'),
     icon: 'settings',
@@ -119,65 +152,125 @@ async function handleLogout() {
 <template>
   <div class="flex min-h-screen bg-muted/40">
     <!-- Sidebar -->
-    <aside class="w-64 bg-background border-r flex flex-col fixed inset-y-0 z-10">
-      <div class="h-14 flex items-center px-6 border-b font-bold tracking-tight text-lg">
-        {{ t('dashboard.admin_console') }}
+    <aside
+      class="bg-background border-r flex flex-col fixed inset-y-0 z-10 transition-all duration-300"
+      :class="sidebarCollapsed ? 'w-16' : 'w-64'"
+    >
+      <div class="h-14 flex items-center justify-between px-4 border-b">
+        <span v-if="!sidebarCollapsed" class="font-bold tracking-tight text-lg">
+          {{ t('dashboard.admin_console') }}
+        </span>
+        <button
+          class="p-1 rounded-lg hover:bg-muted transition-colors"
+          :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+          @click="toggleSidebar"
+        >
+          <svg
+            class="w-5 h-5 transition-transform"
+            :class="{ 'rotate-180': sidebarCollapsed }"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
       </div>
 
-      <nav class="flex-1 p-4 space-y-1">
-        <template v-for="item in menuItems" :key="item.path">
+      <nav class="flex-1 p-2 space-y-1 overflow-y-auto">
+        <template v-for="item in menuItems" :key="item.key">
           <!-- 有子菜单的项 -->
           <div v-if="item.children" class="space-y-1">
-            <div class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground">
-              <span class="text-lg">
+            <button
+              class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+              :class="{ 'justify-center': sidebarCollapsed }"
+              :title="sidebarCollapsed ? item.label : ''"
+              @click="toggleMenu(item.key)"
+            >
+              <span class="text-lg flex-shrink-0">
                 {{ getIcon(item.icon) }}
               </span>
-              {{ item.label }}
-            </div>
-            <RouterLink
-              v-for="child in item.children.filter(c => c.show)"
-              :key="child.path"
-              :to="child.path"
-              class="flex items-center gap-3 pl-10 pr-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
-              active-class=""
-              :exact-active-class="child.path === '/' ? 'bg-muted text-primary' : ''"
-              :class="{ 'bg-muted text-primary': child.path !== '/' && $route.path.startsWith(child.path) }"
+              <span v-if="!sidebarCollapsed" class="flex-1 text-left">{{ item.label }}</span>
+              <svg
+                v-if="!sidebarCollapsed"
+                class="w-4 h-4 transition-transform flex-shrink-0"
+                :class="{ 'rotate-90': expandedMenus.has(item.key) }"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+
+            <!-- 子菜单 -->
+            <div
+              v-if="!sidebarCollapsed"
+              v-show="expandedMenus.has(item.key)"
+              class="space-y-1 pl-4"
             >
-              {{ child.label }}
-            </RouterLink>
+              <RouterLink
+                v-for="child in item.children.filter(c => c.show)"
+                :key="child.path"
+                :to="child.path"
+                class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
+                active-class=""
+                :exact-active-class="child.path === '/' ? 'bg-muted text-primary' : ''"
+                :class="{ 'bg-muted text-primary': child.path !== '/' && $route.path.startsWith(child.path) }"
+              >
+                <span class="w-1 h-1 rounded-full bg-current" />
+                {{ child.label }}
+              </RouterLink>
+            </div>
           </div>
 
           <!-- 无子菜单的项 -->
           <RouterLink
             v-else
-            :to="item.path"
+            :to="item.path!"
             class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
+            :class="{ 'justify-center': sidebarCollapsed }"
             active-class=""
             :exact-active-class="item.path === '/' ? 'bg-muted text-primary' : ''"
-            :class="{ 'bg-muted text-primary': item.path !== '/' && $route.path.startsWith(item.path) }"
+            :title="sidebarCollapsed ? item.label : ''"
           >
-            <span class="text-lg">
+            <span class="text-lg flex-shrink-0">
               {{ getIcon(item.icon) }}
             </span>
-            {{ item.label }}
+            <span v-if="!sidebarCollapsed">{{ item.label }}</span>
           </RouterLink>
         </template>
       </nav>
 
-      <div class="p-4 space-y-2 border-t">
-        <button class="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium hover:bg-muted transition-colors" @click="toggleLocale">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
-          {{ locale === 'zh' ? 'English' : '简体中文' }}
+      <div class="p-2 space-y-1 border-t">
+        <button
+          class="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+          :class="{ 'justify-center': sidebarCollapsed }"
+          :title="sidebarCollapsed ? (locale === 'zh' ? 'English' : '简体中文') : ''"
+          @click="toggleLocale"
+        >
+          <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+          <span v-if="!sidebarCollapsed">{{ locale === 'zh' ? 'English' : '简体中文' }}</span>
         </button>
-        <button class="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors" @click="handleLogout">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-          {{ t('dashboard.sign_out') }}
+        <button
+          class="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          :class="{ 'justify-center': sidebarCollapsed }"
+          :title="sidebarCollapsed ? t('dashboard.sign_out') : ''"
+          @click="handleLogout"
+        >
+          <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+          <span v-if="!sidebarCollapsed">{{ t('dashboard.sign_out') }}</span>
         </button>
       </div>
     </aside>
 
     <!-- Content -->
-    <main class="flex-1 ml-64 p-8">
+    <main
+      class="flex-1 p-8 transition-all duration-300"
+      :class="sidebarCollapsed ? 'ml-16' : 'ml-64'"
+    >
       <div class="mb-8 flex items-center justify-between">
         <h1 class="text-2xl font-bold tracking-tight">
           {{ t('dashboard.dashboard') }}

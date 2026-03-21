@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MovieDetail } from '../types'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { movieApi } from '../api'
 
@@ -35,6 +35,13 @@ async function fetchMovieDetail() {
     loading.value = false
   }
 }
+
+// 监听路由变化，自动刷新影片详情
+watch(() => route.params.code, (newCode, oldCode) => {
+  if (newCode && newCode !== oldCode) {
+    fetchMovieDetail()
+  }
+})
 
 onMounted(() => {
   fetchMovieDetail()
@@ -92,23 +99,23 @@ onMounted(() => {
 
           <div class="space-y-3">
             <div v-if="movie.releaseDate" class="flex items-center text-sm">
-              <span class="text-gray-400 w-24">发行日期：</span>
+              <span class="text-gray-300 w-24 font-medium">发行日期：</span>
               <span class="text-white">{{ formatDate(movie.releaseDate) }}</span>
             </div>
 
             <div v-if="movie.duration" class="flex items-center text-sm">
-              <span class="text-gray-400 w-24">时长：</span>
+              <span class="text-gray-300 w-24 font-medium">时长：</span>
               <span class="text-white">{{ Math.floor(movie.duration / 60) }} 分钟</span>
             </div>
 
             <div v-if="movie.actors && movie.actors.length > 0" class="flex items-start text-sm">
-              <span class="text-gray-400 w-24 flex-shrink-0">演员：</span>
+              <span class="text-gray-300 w-24 flex-shrink-0 font-medium">演员：</span>
               <div class="flex flex-wrap gap-2">
                 <RouterLink
                   v-for="actor in movie.actors"
-                  :key="actor.id"
+                  :key="actor.id || actor.slug"
                   :to="`/actors/${actor.slug}`"
-                  class="bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-gray-600 cursor-pointer transition"
+                  class="bg-primary-600 hover:bg-primary-500 text-white px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200"
                 >
                   {{ actor.name }}
                 </RouterLink>
@@ -116,12 +123,12 @@ onMounted(() => {
             </div>
 
             <div v-if="movie.genres && movie.genres.length > 0" class="flex items-start text-sm">
-              <span class="text-gray-400 w-24 flex-shrink-0">标签：</span>
+              <span class="text-gray-300 w-24 flex-shrink-0 font-medium">标签：</span>
               <div class="flex flex-wrap gap-2">
                 <span
                   v-for="genre in movie.genres"
                   :key="genre"
-                  class="bg-primary-900/30 text-primary-400 px-2 py-1 rounded text-xs"
+                  class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-2 py-1 rounded text-xs"
                 >
                   {{ genre }}
                 </span>
@@ -129,13 +136,13 @@ onMounted(() => {
             </div>
 
             <div v-if="movie.publishers && movie.publishers.length > 0" class="flex items-start text-sm">
-              <span class="text-gray-400 w-24 flex-shrink-0">制作商：</span>
+              <span class="text-gray-300 w-24 flex-shrink-0 font-medium">制作商：</span>
               <div class="flex flex-wrap gap-2">
                 <RouterLink
                   v-for="publisher in movie.publishers"
-                  :key="publisher.id"
+                  :key="publisher.id || publisher.slug"
                   :to="`/publishers/${publisher.slug}`"
-                  class="bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-gray-600 cursor-pointer transition"
+                  class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200"
                 >
                   {{ publisher.name }}
                 </RouterLink>
@@ -143,18 +150,18 @@ onMounted(() => {
             </div>
 
             <div v-if="movie.series" class="flex items-center text-sm">
-              <span class="text-gray-400 w-24">系列：</span>
+              <span class="text-gray-300 w-24 font-medium">系列：</span>
               <RouterLink
                 :to="`/series/${encodeURIComponent(movie.series)}`"
-                class="text-primary-400 hover:text-primary-300 hover:underline cursor-pointer"
+                class="text-primary-400 hover:text-primary-300 hover:underline font-medium cursor-pointer"
               >
                 {{ movie.series }}
               </RouterLink>
             </div>
 
             <div v-if="movie.description" class="flex items-start text-sm pt-2">
-              <span class="text-gray-400 w-24 flex-shrink-0">简介：</span>
-              <p class="text-gray-300 flex-1">
+              <span class="text-gray-300 w-24 flex-shrink-0 font-medium">简介：</span>
+              <p class="text-gray-200 flex-1 leading-relaxed">
                 {{ movie.description }}
               </p>
             </div>
