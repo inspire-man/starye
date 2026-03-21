@@ -624,7 +624,7 @@ movies.get('/:identifier', async (c) => {
   }
   const relatedMovies = Array.from(relatedMoviesMap.values()).slice(0, 12)
 
-  // R18 保护
+  // R18 保护：只隐藏封面和播放源，保留演员和制作商信息供导航使用
   if (movie.isR18 && !isAdult) {
     return c.json({
       data: {
@@ -633,7 +633,7 @@ movies.get('/:identifier', async (c) => {
         players: [],
         actors: actorsData,
         publishers: publishersData,
-        relatedMovies: relatedMovies.filter((m: any) => !m.isR18 || isAdult),
+        relatedMovies: [],
         movieActors: undefined,
         moviePublishers: undefined,
       },

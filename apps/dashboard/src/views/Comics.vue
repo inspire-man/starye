@@ -3,6 +3,7 @@ import type { Chapter, Comic } from '@/lib/api'
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import Pagination from '@/components/Pagination.vue'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 import { api } from '@/lib/api'
@@ -24,6 +25,8 @@ const { filters } = useFilters({
   status: '',
   region: '',
 })
+
+const pageSize = ref(18)
 
 // Modal state
 const isEditModalOpen = ref(false)
@@ -94,16 +97,19 @@ async function loadComics() {
 
 // 监听路由变化
 watch(() => route.query.page, (newPage) => {
-  if (newPage) {
-    goToPage(Number(newPage))
+  if (newPage && Number(newPage) !== currentPage.value) {
     loadComics()
   }
 }, { immediate: false })
 
-// 监听筛选条件变化
+// 监听筛选条件变化（重置到第一页）
 watch(filters, () => {
-  goToPage(1)
-  loadComics()
+  if (currentPage.value !== 1) {
+    goToPage(1)
+  }
+  else {
+    loadComics()
+  }
 }, { deep: true })
 
 onMounted(loadComics)
@@ -322,26 +328,19 @@ async function toggleR18Shortcut(comic: Comic) {
       </div>
     </div>
 
-    <!-- 分页器 -->
-    <div v-if="totalPages > 1" class="pagination">
-      <button
-        class="page-btn"
-        :disabled="currentPage === 1"
-        @click="goToPage(currentPage - 1); loadComics()"
-      >
-        上一页
-      </button>
-      <span class="page-info">
-        第 {{ currentPage }} / {{ totalPages }} 页（共 {{ total }} 条）
-      </span>
-      <button
-        class="page-btn"
-        :disabled="currentPage === totalPages"
-        @click="goToPage(currentPage + 1); loadComics()"
-      >
-        下一页
-      </button>
-    </div>
+    <!-- 增强的分页器 -->
+    <Pagination
+      v-if="totalPages > 1"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total="total"
+      :page-size="pageSize"
+      :page-sizes="[10, 18, 30, 50]"
+      layout="total, sizes, prev, pager, next, jumper"
+      :background="true"
+      @update:current-page="goToPage"
+      @update:page-size="(size) => { pageSize = size; goToPage(1) }"
+    />
 
     <!-- Edit Modal -->
     <div
@@ -635,37 +634,5 @@ async function toggleR18Shortcut(comic: Comic) {
   border-radius: 6px;
   font-size: 0.875rem;
   background: white;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.5rem;
-}
-
-.page-btn {
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.page-btn:disabled {
-  background: #d1d5db;
-  cursor: not-allowed;
-}
-
-.page-info {
-  color: #6b7280;
-  font-size: 0.875rem;
 }
 </style>
