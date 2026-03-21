@@ -82,6 +82,25 @@ jobs:
       - name: Build Packages
         run: pnpm build --filter=@starye/crawler...
 
+      - name: Health Check API
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+        run: |
+          echo "Checking API health at: $API_URL"
+
+          # 尝试访问 API 健康检查端点
+          HEALTH_URL="${API_URL}/api/health"
+          echo "Testing: $HEALTH_URL"
+
+          if curl -f -s -m 10 "$HEALTH_URL" > /dev/null 2>&1; then
+            echo "✅ API is healthy and accessible"
+          else
+            echo "⚠️  Warning: API health check failed"
+            echo "API might be unavailable. Crawler will attempt to continue..."
+            echo "Note: Movie data will not be synced to database if API is down."
+          fi
+
       - name: Run Optimized Crawler
         if: ${{ github.event.inputs.use_optimized != 'false' }}
         env:
