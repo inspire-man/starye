@@ -18,7 +18,7 @@ const loading = ref(true)
 const error = ref('')
 
 // 分页和筛选
-const { currentPage, limit, totalPages, total, setMeta, goToPage } = usePagination(18)
+const { currentPage, totalPages, total, setMeta, goToPage } = usePagination(18)
 const { filters } = useFilters({
   search: '',
   isR18: 'all',
@@ -67,7 +67,7 @@ async function loadComics() {
   try {
     const params: Record<string, any> = {
       page: currentPage.value,
-      limit: limit.value,
+      limit: pageSize.value,
     }
 
     if (filters.value.search) {
@@ -95,12 +95,18 @@ async function loadComics() {
   }
 }
 
-// 监听路由变化
+// 监听路由变化，当页码改变时加载数据
 watch(() => route.query.page, (newPage) => {
-  if (newPage && Number(newPage) !== currentPage.value) {
-    loadComics()
+  const targetPage = newPage ? Number(newPage) : 1
+  if (targetPage !== currentPage.value) {
+    // 不要在这里调用 loadComics，由 currentPage 的变化触发
   }
 }, { immediate: false })
+
+// 监听 currentPage 变化，真正加载数据
+watch(currentPage, () => {
+  loadComics()
+})
 
 // 监听筛选条件变化（重置到第一页）
 watch(filters, () => {

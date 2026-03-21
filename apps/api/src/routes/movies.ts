@@ -558,9 +558,16 @@ movies.get('/:identifier', async (c) => {
     throw new HTTPException(404, { message: 'Movie not found' })
   }
 
-  // 转换为新格式
-  const actorsData = movie.movieActors?.map((ma: any) => ma.actor) || []
-  const publishersData = movie.moviePublishers?.map((mp: any) => mp.publisher) || []
+  // 转换为新格式（确保正确映射）
+  const actorsData = (movie.movieActors || [])
+    .map((ma: any) => ma.actor)
+    .filter((actor: any) => actor && actor.id && actor.name && actor.slug)
+
+  const publishersData = (movie.moviePublishers || [])
+    .map((mp: any) => mp.publisher)
+    .filter((publisher: any) => publisher && publisher.id && publisher.name && publisher.slug)
+
+  console.log(`[Movie Detail] ${movie.code} - Actors: ${actorsData.length}, Publishers: ${publishersData.length}`)
 
   // 查询相关影片（基于系列、演员或制作商）
   const relatedMoviesQuery = []

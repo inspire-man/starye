@@ -82,12 +82,22 @@ onMounted(() => {
         <div class="flex-1">
           <div class="flex items-start justify-between mb-4">
             <div>
-              <h1 class="text-3xl font-bold text-white mb-2">
+              <h1 class="text-3xl font-bold text-white mb-3">
                 {{ movie.title }}
               </h1>
-              <p class="text-primary-400 font-mono">
-                {{ movie.code }}
-              </p>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="bg-gray-700/80 text-primary-400 font-mono text-sm px-3 py-1.5 rounded-md border border-gray-600">
+                  {{ movie.code }}
+                </span>
+                <RouterLink
+                  v-if="movie.series"
+                  :to="`/series/${encodeURIComponent(movie.series)}`"
+                  class="bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600/30 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <span class="mr-1">📂</span>
+                  {{ movie.series }}
+                </RouterLink>
+              </div>
             </div>
             <span
               v-if="movie.isR18"
@@ -147,16 +157,6 @@ onMounted(() => {
                   {{ publisher.name }}
                 </RouterLink>
               </div>
-            </div>
-
-            <div v-if="movie.series" class="flex items-center text-sm">
-              <span class="text-gray-300 w-24 font-medium">系列：</span>
-              <RouterLink
-                :to="`/series/${encodeURIComponent(movie.series)}`"
-                class="text-primary-400 hover:text-primary-300 hover:underline font-medium cursor-pointer"
-              >
-                {{ movie.series }}
-              </RouterLink>
             </div>
 
             <div v-if="movie.description" class="flex items-start text-sm pt-2">
