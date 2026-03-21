@@ -97,6 +97,17 @@ export interface Actor {
   avatar?: string | null
   bio?: string | null
   movieCount: number
+  hasDetailsCrawled: boolean
+  sourceUrl?: string | null
+  nationality?: string | null
+  birthDate?: number | null
+  height?: number | null
+  measurements?: string | null
+  cupSize?: string | null
+  bloodType?: string | null
+  debutDate?: number | null
+  isActive?: boolean | null
+  crawlFailureCount?: number
 }
 
 export interface Publisher {
@@ -107,6 +118,11 @@ export interface Publisher {
   website?: string | null
   movieCount: number
   hasDetailsCrawled: boolean
+  sourceUrl?: string | null
+  country?: string | null
+  foundedYear?: number | null
+  description?: string | null
+  crawlFailureCount?: number
 }
 
 export interface AuditLog {
