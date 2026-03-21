@@ -9,7 +9,7 @@
 import type { AppEnv } from '../types'
 import { zValidator } from '@hono/zod-validator'
 import { actors, movies } from '@starye/db/schema'
-import { count, desc, eq, like } from 'drizzle-orm'
+import { and, count, desc, eq, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { captureResourceState, createAuditLog } from '../middleware/audit-logger'
@@ -18,6 +18,43 @@ import { requireResource } from '../middleware/resource-guard'
 const adminActors = new Hono<AppEnv>()
 
 adminActors.use('/*', requireResource('movie'))
+
+/**
+ * GET /api/admin/actors/stats
+ * 女优统计信息
+ */
+adminActors.get('/stats', async (c) => {
+  const db = c.get('db')
+
+  try {
+    const [totalCount, pendingCount, withSourceUrlCount] = await Promise.all([
+      db.select({ value: count() }).from(actors).then(res => res[0]?.value || 0),
+      db
+        .select({ value: count() })
+        .from(actors)
+        .where(eq(actors.hasDetailsCrawled, false))
+        .then(res => res[0]?.value || 0),
+      db
+        .select({ value: count() })
+        .from(actors)
+        .where(and(eq(actors.hasDetailsCrawled, false), like(actors.sourceUrl, '%/star/%')))
+        .then(res => res[0]?.value || 0),
+    ])
+
+    return c.json({
+      total: totalCount,
+      crawled: totalCount - pendingCount,
+      pending: pendingCount,
+      withSourceUrl: withSourceUrlCount, // 有 sourceUrl 的女优（可以爬取详情）
+      crawledPercentage: totalCount > 0 ? Math.round(((totalCount - pendingCount) / totalCount) * 100) : 0,
+    })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error('[Admin/Actors] ❌ Failed to query stats:', message)
+    return c.json({ error: 'Database operation failed' }, 500)
+  }
+})
 
 /**
  * GET /api/admin/actors
@@ -29,14 +66,25 @@ adminActors.get(
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(50),
     search: z.string().optional(),
+    onlyPending: z.enum(['true', 'false']).optional(), // 仅显示待爬取详情的女优
   })),
   async (c) => {
-    const { page, limit, search } = c.req.valid('query')
+    const { page, limit, search, onlyPending } = c.req.valid('query')
     const db = c.get('db')
     const offset = (page - 1) * limit
 
     try {
-      const whereClause = search ? like(actors.name, `%${search}%`) : undefined
+      let whereClause
+
+      if (onlyPending === 'true') {
+        // 仅显示 hasDetailsCrawled = false 的女优
+        whereClause = search
+          ? and(eq(actors.hasDetailsCrawled, false), like(actors.name, `%${search}%`))
+          : eq(actors.hasDetailsCrawled, false)
+      }
+      else {
+        whereClause = search ? like(actors.name, `%${search}%`) : undefined
+      }
 
       const [results, totalResult] = await Promise.all([
         db.query.actors.findMany({

@@ -13,6 +13,16 @@ const publishers = ref<Publisher[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+// 统计信息
+const stats = ref({
+  total: 0,
+  crawled: 0,
+  pending: 0,
+  withSourceUrl: 0, // 有 sourceUrl 的厂商数量
+  crawledPercentage: 0,
+})
+const loadingStats = ref(false)
+
 const isEditModalOpen = ref(false)
 const editingPublisher = ref<Publisher | null>(null)
 const relatedMovies = ref<Movie[]>([])
@@ -25,8 +35,7 @@ const mergingPublishers = ref(false)
 
 const { filters } = useFilters({
   search: '',
-  hasDetails: undefined as boolean | undefined,
-  minFailureCount: undefined as number | undefined,
+  onlyPending: false, // 仅显示待爬取的厂商
 })
 
 const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
@@ -73,6 +82,24 @@ const filteredPublishers = computed(() => {
   return result
 })
 
+async function loadStats() {
+  loadingStats.value = true
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/publishers/stats`, {
+      credentials: 'include',
+    })
+    if (response.ok) {
+      stats.value = await response.json()
+    }
+  }
+  catch (e) {
+    console.error('Failed to load stats:', e)
+  }
+  finally {
+    loadingStats.value = false
+  }
+}
+
 async function loadPublishers() {
   loading.value = true
   error.value = null
@@ -80,17 +107,12 @@ async function loadPublishers() {
     const params: any = {
       page: currentPage.value,
       limit: pageSize.value,
-      sortBy: sortField.value,
-      sortOrder: sortOrder.value,
     }
     if (filters.value.search) {
       params.search = filters.value.search
     }
-    if (filters.value.hasDetails !== undefined) {
-      params.hasDetails = filters.value.hasDetails
-    }
-    if (filters.value.minFailureCount !== undefined) {
-      params.minFailureCount = filters.value.minFailureCount
+    if (filters.value.onlyPending) {
+      params.onlyPending = 'true'
     }
 
     const response = await api.admin.getPublishers(params)
@@ -167,7 +189,10 @@ async function handleMerge() {
   }
 }
 
-onMounted(loadPublishers)
+onMounted(() => {
+  loadStats()
+  loadPublishers()
+})
 </script>
 
 <template>
@@ -183,6 +208,40 @@ onMounted(loadPublishers)
       </div>
     </div>
 
+    <!-- 统计卡片 -->
+    <div class="stats-cards">
+      <div class="stat-card">
+        <div class="stat-label">
+          总厂商数
+        </div>
+        <div class="stat-value">
+          {{ stats.total }}
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">
+          已爬取详情
+        </div>
+        <div class="stat-value text-green">
+          {{ stats.crawled }}
+        </div>
+        <div class="stat-subtitle">
+          {{ stats.crawledPercentage }}%
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">
+          待爬取详情
+        </div>
+        <div class="stat-value text-orange">
+          {{ stats.pending }}
+        </div>
+        <div class="stat-subtitle">
+          其中 {{ stats.withSourceUrl }} 个有详情页链接
+        </div>
+      </div>
+    </div>
+
     <div class="filter-bar">
       <input
         v-model="filters.search"
@@ -191,39 +250,14 @@ onMounted(loadPublishers)
         class="search-input"
         @input="loadPublishers"
       >
-      <select
-        v-model="filters.hasDetails"
-        class="filter-select"
-        @change="loadPublishers"
-      >
-        <option :value="undefined">
-          全部（详情）
-        </option>
-        <option :value="true">
-          已补全详情
-        </option>
-        <option :value="false">
-          待补全详情
-        </option>
-      </select>
-      <select
-        v-model="filters.minFailureCount"
-        class="filter-select"
-        @change="loadPublishers"
-      >
-        <option :value="undefined">
-          全部（失败次数）
-        </option>
-        <option :value="1">
-          失败 ≥ 1 次
-        </option>
-        <option :value="2">
-          失败 ≥ 2 次
-        </option>
-        <option :value="3">
-          失败 ≥ 3 次
-        </option>
-      </select>
+      <label class="filter-checkbox">
+        <input
+          v-model="filters.onlyPending"
+          type="checkbox"
+          @change="loadPublishers"
+        >
+        <span>仅显示待爬取详情</span>
+      </label>
       <div class="filter-info">
         共 {{ totalItems }} 个厂商
       </div>
@@ -604,5 +638,66 @@ onMounted(loadPublishers)
 
 .merge-form {
   margin-top: 1rem;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  background: white;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.filter-checkbox:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.stat-value.text-green {
+  color: #10b981;
+}
+
+.stat-value.text-orange {
+  color: #f59e0b;
+}
+
+.stat-subtitle {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
 }
 </style>

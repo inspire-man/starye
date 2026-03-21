@@ -106,6 +106,7 @@ export interface Publisher {
   logo?: string | null
   website?: string | null
   movieCount: number
+  hasDetailsCrawled: boolean
 }
 
 export interface AuditLog {

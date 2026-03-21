@@ -276,8 +276,12 @@ export class JavBusCrawler extends OptimizedCrawler {
     console.log('🚀 启动 JavBus 优化爬虫')
     console.log(`📊 配置: 最大影片=${this.config.limits.maxMovies}, 最大页数=${this.config.limits.maxPages}`)
     console.log(`⚙️  并发: 列表=${this.config.concurrency.listPage}, 详情=${this.config.concurrency.detailPage}, 图片=${this.config.concurrency.image}`)
+    console.log(`🔄 增量模式: 已启用（自动跳过已存在影片）`)
 
     await this.init()
+
+    // 启用增量模式进度跟踪
+    this.progressMonitor.enableIncrementalMode()
 
     try {
       // 主循环：爬取列表页
@@ -378,6 +382,16 @@ export class JavBusCrawler extends OptimizedCrawler {
       console.log('\n✅ 爬取完成！')
       this.progressMonitor.printStats()
       this.queueManager.printStats()
+
+      // 增量模式说明
+      const stats = this.getStats()
+      const newMoviesCount = stats.moviesFound - stats.moviesSkippedExisting
+      const maxMovies = this.config.limits.maxMovies || 0
+      if (newMoviesCount > 0 && maxMovies > 0 && stats.moviesSuccess < maxMovies) {
+        console.log(`\n💡 说明: 虽然配置的最大影片数为 ${maxMovies}，但由于增量模式，`)
+        console.log(`   实际只发现了 ${newMoviesCount} 部新影片需要处理。`)
+        console.log(`   已成功处理 ${stats.moviesSuccess}/${newMoviesCount} 部 (${((stats.moviesSuccess / newMoviesCount) * 100).toFixed(1)}%)`)
+      }
     }
     catch (error) {
       console.error('\n❌ 爬虫运行失败:', error)

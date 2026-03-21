@@ -194,6 +194,7 @@ async function createActor() {
         >
         <span>{{ actor.name }}</span>
         <span class="movie-count">({{ actor.movieCount }} 作品)</span>
+        <span v-if="!actor.hasDetailsCrawled" class="status-badge pending" title="详情待爬取">⚠️</span>
       </div>
     </div>
 
@@ -348,6 +349,15 @@ async function createActor() {
   margin-left: auto;
   font-size: 0.75rem;
   color: #6b7280;
+}
+
+.status-badge {
+  font-size: 0.875rem;
+  margin-left: 0.25rem;
+}
+
+.status-badge.pending {
+  color: #f59e0b;
 }
 
 .loading {
