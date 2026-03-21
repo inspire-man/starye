@@ -38,6 +38,31 @@ export class ImageProcessor {
   private dnsCache: CacheableLookup
 
   constructor(config: R2Config) {
+    // 验证 R2 配置
+    const validation = R2ConfigSchema.safeParse(config)
+    if (!validation.success) {
+      throw new Error(
+        `R2 配置无效: ${validation.error.message}\n\n`
+        + '请检查以下环境变量:\n'
+        + '  - CLOUDFLARE_ACCOUNT_ID\n'
+        + '  - R2_ACCESS_KEY_ID\n'
+        + '  - R2_SECRET_ACCESS_KEY\n'
+        + '  - R2_BUCKET_NAME\n'
+        + '  - R2_PUBLIC_URL\n\n'
+        + '确保这些变量在 .env 文件或环境中正确设置。',
+      )
+    }
+
+    // 额外验证：确保 accountId 不为空
+    if (!config.accountId || config.accountId.trim() === '') {
+      throw new Error(
+        'R2 配置错误: CLOUDFLARE_ACCOUNT_ID 不能为空\n\n'
+        + '这会导致无效的 R2 endpoint: https://.r2.cloudflarestorage.com\n'
+        + '并引发 DNS 解析错误: getaddrinfo ENOTFOUND .r2.cloudflarestorage.com\n\n'
+        + '请在 packages/crawler/.env 文件中设置正确的 CLOUDFLARE_ACCOUNT_ID。',
+      )
+    }
+
     this.s3 = new S3Client({
       region: 'auto',
       endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,

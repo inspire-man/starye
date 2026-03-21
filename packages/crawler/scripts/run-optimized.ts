@@ -5,6 +5,7 @@
 import type { JavBusCrawlerConfig } from '../src/crawlers/javbus'
 import process from 'node:process'
 import { JavBusCrawler } from '../src/crawlers/javbus'
+import 'dotenv/config'
 
 async function main() {
   // 从环境变量读取配置
