@@ -122,8 +122,8 @@ onMounted(() => {
               <span class="text-gray-300 w-24 flex-shrink-0 font-medium">演员：</span>
               <div v-if="movie.actors && movie.actors.length > 0" class="flex flex-wrap gap-2">
                 <RouterLink
-                  v-for="actor in movie.actors"
-                  :key="actor.id || actor.slug || actor"
+                  v-for="(actor, index) in movie.actors"
+                  :key="typeof actor === 'object' ? (actor.id || actor.slug || `actor-${index}`) : `actor-str-${index}`"
                   :to="typeof actor === 'object' && actor.slug ? `/actors/${actor.slug}` : '#'"
                   class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200" :class="[
                     typeof actor === 'object' && actor.slug
@@ -158,8 +158,8 @@ onMounted(() => {
               <span class="text-gray-300 w-24 flex-shrink-0 font-medium">制作商：</span>
               <div v-if="movie.publishers && movie.publishers.length > 0" class="flex flex-wrap gap-2">
                 <RouterLink
-                  v-for="publisher in movie.publishers"
-                  :key="publisher.id || publisher.slug || publisher"
+                  v-for="(publisher, index) in movie.publishers"
+                  :key="typeof publisher === 'object' ? (publisher.id || publisher.slug || `publisher-${index}`) : `publisher-str-${index}`"
                   :to="typeof publisher === 'object' && publisher.slug ? `/publishers/${publisher.slug}` : '#'"
                   class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200" :class="[
                     typeof publisher === 'object' && publisher.slug

@@ -17,6 +17,7 @@
     "clean-data": "tsx scripts/clean-data.ts",
     "cleanup:preview": "tsx scripts/cleanup-backup-fields.ts --preview",
     "cleanup:execute": "tsx scripts/cleanup-backup-fields.ts --execute",
+    "cleanup:covers": "tsx scripts/cleanup-invalid-covers.ts",
     "studio": "drizzle-kit studio",
     "type-check": "tsc --noEmit",
     "build": "tsc",
