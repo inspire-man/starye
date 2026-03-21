@@ -127,7 +127,7 @@ onMounted(() => {
                   :to="`/actors/${actor.slug}`"
                   class="bg-primary-600 hover:bg-primary-500 text-white px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200"
                 >
-                  {{ actor.name }}
+                  {{ actor }}
                 </RouterLink>
               </div>
             </div>
@@ -166,37 +166,7 @@ onMounted(() => {
               </p>
             </div>
           </div>
-
-          <div class="mt-6">
-            <RouterLink
-              :to="`/movie/${movie.code}/play`"
-              class="inline-block bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-md font-medium transition"
-            >
-              立即播放
-            </RouterLink>
-          </div>
         </div>
-      </div>
-    </div>
-
-    <div v-if="movie.players && movie.players.length > 0" class="bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 class="text-xl font-bold text-white mb-4">
-        播放源
-      </h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        <RouterLink
-          v-for="player in movie.players"
-          :key="player.id"
-          :to="`/movie/${movie.code}/play?player=${player.id}`"
-          class="border border-gray-700 hover:border-primary-500 hover:bg-gray-700 rounded-md p-3 transition"
-        >
-          <p class="text-white font-medium">
-            {{ player.sourceName }}
-          </p>
-          <p v-if="player.quality" class="text-sm text-gray-400">
-            {{ player.quality }}
-          </p>
-        </RouterLink>
       </div>
     </div>
 

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '@/lib/api'
-import { onMounted, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
 import Pagination from '@/components/Pagination.vue'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
@@ -10,7 +9,6 @@ import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 
 const { t } = useI18n()
-const route = useRoute()
 useSession()
 
 const comics = ref<Comic[]>([])
@@ -95,30 +93,30 @@ async function loadComics() {
   }
 }
 
-// 监听路由变化，当页码改变时加载数据
-watch(() => route.query.page, (newPage) => {
-  const targetPage = newPage ? Number(newPage) : 1
-  if (targetPage !== currentPage.value) {
-    // 不要在这里调用 loadComics，由 currentPage 的变化触发
-  }
-}, { immediate: false })
-
-// 监听 currentPage 变化，真正加载数据
+// 监听 currentPage 变化时加载数据
 watch(currentPage, () => {
   loadComics()
-})
+}, { immediate: true })
 
-// 监听筛选条件变化（重置到第一页）
-watch(filters, () => {
-  if (currentPage.value !== 1) {
-    goToPage(1)
-  }
-  else {
-    loadComics()
-  }
-}, { deep: true })
-
-onMounted(loadComics)
+// 监听实际的筛选条件变化（不包括 page）
+watch(
+  [
+    () => filters.value.search,
+    () => filters.value.isR18,
+    () => filters.value.status,
+    () => filters.value.region,
+  ],
+  () => {
+    // 筛选条件变化时重置到第一页
+    if (currentPage.value !== 1) {
+      goToPage(1)
+    }
+    // 如果已经在第一页，手动触发加载（因为 currentPage 不会变化）
+    else {
+      loadComics()
+    }
+  },
+)
 
 function openEditModal(comic: Comic) {
   editingComic.value = { ...comic }
