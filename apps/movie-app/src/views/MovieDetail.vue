@@ -118,18 +118,27 @@ onMounted(() => {
               <span class="text-white">{{ Math.floor(movie.duration / 60) }} 分钟</span>
             </div>
 
-            <div v-if="movie.actors && movie.actors.length > 0" class="flex items-start text-sm">
+            <div class="flex items-start text-sm">
               <span class="text-gray-300 w-24 flex-shrink-0 font-medium">演员：</span>
-              <div class="flex flex-wrap gap-2">
+              <div v-if="movie.actors && movie.actors.length > 0" class="flex flex-wrap gap-2">
                 <RouterLink
                   v-for="actor in movie.actors"
-                  :key="actor.id || actor.slug"
-                  :to="`/actors/${actor.slug}`"
-                  class="bg-primary-600 hover:bg-primary-500 text-white px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200"
+                  :key="actor.id || actor.slug || actor"
+                  :to="typeof actor === 'object' && actor.slug ? `/actors/${actor.slug}` : '#'"
+                  class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200" :class="[
+                    typeof actor === 'object' && actor.slug
+                      ? 'bg-primary-600 hover:bg-primary-500 text-white cursor-pointer'
+                      : 'bg-gray-600 text-gray-300 cursor-not-allowed',
+                  ]"
+                  @click.prevent="typeof actor !== 'object' || !actor.slug ? null : undefined"
                 >
-                  {{ actor }}
+                  {{ typeof actor === 'object' ? actor.name : actor }}
+                  <span v-if="typeof actor !== 'object' || !actor.slug" class="ml-1 text-[10px] opacity-70">
+                    (未同步)
+                  </span>
                 </RouterLink>
               </div>
+              <span v-else class="text-gray-400 text-xs">暂无数据</span>
             </div>
 
             <div v-if="movie.genres && movie.genres.length > 0" class="flex items-start text-sm">
@@ -145,18 +154,27 @@ onMounted(() => {
               </div>
             </div>
 
-            <div v-if="movie.publishers && movie.publishers.length > 0" class="flex items-start text-sm">
+            <div class="flex items-start text-sm">
               <span class="text-gray-300 w-24 flex-shrink-0 font-medium">制作商：</span>
-              <div class="flex flex-wrap gap-2">
+              <div v-if="movie.publishers && movie.publishers.length > 0" class="flex flex-wrap gap-2">
                 <RouterLink
                   v-for="publisher in movie.publishers"
-                  :key="publisher.id || publisher.slug"
-                  :to="`/publishers/${publisher.slug}`"
-                  class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200"
+                  :key="publisher.id || publisher.slug || publisher"
+                  :to="typeof publisher === 'object' && publisher.slug ? `/publishers/${publisher.slug}` : '#'"
+                  class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200" :class="[
+                    typeof publisher === 'object' && publisher.slug
+                      ? 'bg-green-600 hover:bg-green-500 text-white cursor-pointer'
+                      : 'bg-gray-600 text-gray-300 cursor-not-allowed',
+                  ]"
+                  @click.prevent="typeof publisher !== 'object' || !publisher.slug ? null : undefined"
                 >
-                  {{ publisher.name }}
+                  {{ typeof publisher === 'object' ? publisher.name : publisher }}
+                  <span v-if="typeof publisher !== 'object' || !publisher.slug" class="ml-1 text-[10px] opacity-70">
+                    (未同步)
+                  </span>
                 </RouterLink>
               </div>
+              <span v-else class="text-gray-400 text-xs">暂无数据</span>
             </div>
 
             <div v-if="movie.description" class="flex items-start text-sm pt-2">

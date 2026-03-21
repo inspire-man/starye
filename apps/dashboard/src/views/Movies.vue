@@ -11,7 +11,7 @@
  */
 
 import type { Movie, Player } from '@/lib/api'
-import { onMounted, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import ActorSelector from '@/components/ActorSelector.vue'
 import BatchOperationMenu from '@/components/BatchOperationMenu.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -156,9 +156,30 @@ async function loadMovies() {
   }
 }
 
-onMounted(loadMovies)
+// 监听 currentPage 变化时加载数据
+watch(currentPage, () => {
+  loadMovies()
+}, { immediate: true })
 
-watch([currentPage, sortBy, sortOrder], loadMovies)
+// 监听排序变化
+watch([sortBy, sortOrder], () => {
+  loadMovies()
+})
+
+// 监听实际的筛选条件变化（不包括 page）
+watch(
+  [
+    () => filters.value.search,
+    () => filters.value.isR18,
+    () => filters.value.crawlStatus,
+    () => filters.value.metadataLocked,
+  ],
+  () => {
+    // 筛选条件变化时不需要重置页码，因为 usePagination 的 currentPage 是 computed
+    // 直接加载即可
+    loadMovies()
+  },
+)
 
 function openEditModal(movie: Movie) {
   editingMovie.value = { ...movie }

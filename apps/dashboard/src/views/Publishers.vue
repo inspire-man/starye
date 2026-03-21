@@ -43,6 +43,7 @@ const { filters } = useFilters({
   search: '',
   crawlStatus: '', // 爬取状态筛选：'' | 'complete' | 'pending' | 'failed' | 'no-link'
   country: '', // 国家筛选
+  hasDetails: '', // 是否有详情：'' | 'true' | 'false'
 })
 
 const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
@@ -145,6 +146,9 @@ async function loadPublishers() {
     }
     if (filters.value.country) {
       params.country = filters.value.country
+    }
+    if (filters.value.hasDetails) {
+      params.hasDetails = filters.value.hasDetails === 'true'
     }
 
     const response = await api.admin.getPublishers(params)
@@ -315,6 +319,21 @@ onMounted(() => {
         </option>
         <option v-for="c in countries" :key="c" :value="c">
           {{ c }}
+        </option>
+      </select>
+      <select
+        v-model="filters.hasDetails"
+        class="filter-select"
+        @change="loadPublishers"
+      >
+        <option value="">
+          全部详情
+        </option>
+        <option value="true">
+          ✅ 有详情
+        </option>
+        <option value="false">
+          📝 无详情
         </option>
       </select>
       <div class="filter-info">

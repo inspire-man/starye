@@ -48,6 +48,7 @@ const { filters } = useFilters({
   search: '',
   crawlStatus: '', // 爬取状态筛选：'' | 'complete' | 'pending' | 'failed' | 'no-link'
   nationality: '', // 国籍筛选
+  hasDetails: '', // 是否有详情：'' | 'true' | 'false'
 })
 
 const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
@@ -152,6 +153,9 @@ async function loadActors() {
     }
     if (filters.value.nationality) {
       params.nationality = filters.value.nationality
+    }
+    if (filters.value.hasDetails) {
+      params.hasDetails = filters.value.hasDetails === 'true'
     }
 
     const response = await api.admin.getActors(params)
@@ -369,6 +373,21 @@ onMounted(() => {
         </option>
         <option v-for="nat in nationalities" :key="nat" :value="nat">
           {{ nat }}
+        </option>
+      </select>
+      <select
+        v-model="filters.hasDetails"
+        class="filter-select"
+        @change="loadActors"
+      >
+        <option value="">
+          全部详情
+        </option>
+        <option value="true">
+          ✅ 有详情
+        </option>
+        <option value="false">
+          📝 无详情
         </option>
       </select>
       <div class="filter-info">
