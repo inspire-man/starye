@@ -82,24 +82,24 @@ function resetFilters() {
             @keyup.enter="search"
           >
 
-          <div class="flex flex-wrap gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <input
               v-model="filters.actor"
               type="text"
               placeholder="演员"
-              class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              class="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
             >
 
             <input
               v-model="filters.publisher"
               type="text"
               placeholder="制作商"
-              class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              class="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
             >
 
             <select
               v-model="filters.sortBy"
-              class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              class="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
             >
               <option value="releaseDate">
                 发行日期
@@ -113,14 +113,14 @@ function resetFilters() {
             </select>
 
             <button
-              class="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2 rounded-md font-medium transition"
+              class="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-all shadow-md hover:shadow-lg"
               @click="search"
             >
               搜索
             </button>
 
             <button
-              class="border border-gray-700 hover:bg-gray-700 text-white px-6 py-2 rounded-md font-medium transition"
+              class="border border-gray-700 hover:bg-gray-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-all"
               @click="resetFilters"
             >
               重置
