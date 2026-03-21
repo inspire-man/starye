@@ -24,270 +24,358 @@ async function checkIsAdult(c: Context<AppEnv>) {
 // 3. 同步电影数据 (Crawler)
 movies.post('/sync', serviceAuth(), async (c) => {
   const db = c.get('db')
-  const body = await c.req.json()
-  const { type, data } = body
 
-  if (type !== 'movie' || !data) {
-    throw new HTTPException(400, { message: 'Invalid payload' })
-  }
+  try {
+    const body = await c.req.json()
+    const { type, data } = body
 
-  // 映射数据
-  const code = data.code || data.slug
-  const movieData = {
-    title: data.title,
-    slug: data.slug,
-    code,
-    description: data.description,
-    coverImage: data.coverImage,
-    releaseDate: data.releaseDate ? new Date(data.releaseDate * 1000) : null,
-    duration: data.duration,
-    sourceUrl: data.sourceUrl,
-    actors: data.actors || [],
-    genres: data.genres || [],
-    series: data.series,
-    publisher: data.publisher,
-    isR18: data.isR18,
-  }
+    if (type !== 'movie' || !data) {
+      throw new HTTPException(400, { message: 'Invalid payload' })
+    }
 
-  // 查找是否存在 (优先匹配 code)
-  const existing = await db.query.movies.findFirst({
-    where: (movies, { eq }) => eq(movies.code, code),
-  })
+    // 映射数据
+    const code = data.code || data.slug
 
-  let movieId = existing?.id
+    // 验证必需字段
+    if (!data.title || !data.slug || !code) {
+      console.error('缺少必需字段:', { title: data.title, slug: data.slug, code })
+      throw new HTTPException(400, { message: 'Missing required fields: title, slug, or code' })
+    }
 
-  // 计算爬虫状态
-  const playerCount = data.players?.length || 0
-  const crawlData = {
-    crawlStatus: playerCount > 0 ? 'complete' : 'pending',
-    lastCrawledAt: new Date(),
-    totalPlayers: playerCount,
-    crawledPlayers: playerCount,
-  }
+    const movieData = {
+      title: data.title,
+      slug: data.slug,
+      code,
+      description: data.description,
+      coverImage: data.coverImage,
+      releaseDate: data.releaseDate ? new Date(data.releaseDate * 1000) : null,
+      duration: data.duration,
+      sourceUrl: data.sourceUrl,
+      actors: data.actors || [],
+      genres: data.genres || [],
+      series: data.series,
+      publisher: data.publisher,
+      isR18: data.isR18,
+    }
 
-  if (existing) {
+    // 查找是否存在 (优先匹配 code)
+    let existing
+    try {
+      existing = await db.query.movies.findFirst({
+        where: (movies, { eq }) => eq(movies.code, code),
+      })
+    }
+    catch (error) {
+      console.error('查询现有电影失败:', error)
+      throw error
+    }
+
+    let movieId = existing?.id
+
+    // 计算爬虫状态
+    const playerCount = data.players?.length || 0
+    const crawlData = {
+      crawlStatus: playerCount > 0 ? 'complete' : 'pending',
+      lastCrawledAt: new Date(),
+      totalPlayers: playerCount,
+      crawledPlayers: playerCount,
+    }
+
+    if (existing) {
     // 如果元数据被锁定，只更新播放源相关字段，跳过元数据更新
-    if (existing.metadataLocked) {
-      console.log(`⏭️  元数据已锁定，跳过更新: ${code}`)
-      await db.update(moviesTable)
-        .set({
-          ...crawlData,
-          crawlStatus: crawlData.crawlStatus as any,
-          updatedAt: new Date(),
-        })
-        .where(eq(moviesTable.id, existing.id))
+      try {
+        if (existing.metadataLocked) {
+          console.log(`⏭️  元数据已锁定，跳过更新: ${code}`)
+          await db.update(moviesTable)
+            .set({
+              ...crawlData,
+              crawlStatus: crawlData.crawlStatus as any,
+              updatedAt: new Date(),
+            })
+            .where(eq(moviesTable.id, existing.id))
+        }
+        else {
+        // 元数据未锁定，正常更新
+          await db.update(moviesTable)
+            .set({
+              ...movieData,
+              ...crawlData,
+              crawlStatus: crawlData.crawlStatus as any,
+              updatedAt: new Date(),
+            })
+            .where(eq(moviesTable.id, existing.id))
+        }
+      }
+      catch (error) {
+        console.error(`更新电影失败 (${code}):`, error)
+        throw error
+      }
     }
     else {
-      // 元数据未锁定，正常更新
-      await db.update(moviesTable)
-        .set({
+    // 新增
+      try {
+        movieId = crypto.randomUUID()
+        await db.insert(moviesTable).values({
+          id: movieId,
           ...movieData,
           ...crawlData,
           crawlStatus: crawlData.crawlStatus as any,
-          updatedAt: new Date(),
-        })
-        .where(eq(moviesTable.id, existing.id))
-    }
-  }
-  else {
-    // 新增
-    movieId = crypto.randomUUID()
-    await db.insert(moviesTable).values({
-      id: movieId,
-      ...movieData,
-      ...crawlData,
-      crawlStatus: crawlData.crawlStatus as any,
-      metadataLocked: false,
-      sortOrder: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
-  }
-
-  // 处理播放源 (全量覆盖)
-  if (movieId && data.players && Array.isArray(data.players)) {
-    // 删除旧的
-    await db.delete(playersTable).where(eq(playersTable.movieId, movieId))
-
-    // 插入新的
-    if (data.players.length > 0) {
-      const newPlayers = data.players.map((p: any, index: number) => ({
-        id: crypto.randomUUID(),
-        movieId: movieId!,
-        sourceName: p.sourceName || 'Unknown',
-        sourceUrl: p.sourceUrl,
-        quality: p.quality,
-        sortOrder: p.sortOrder || index,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }))
-
-      await db.insert(playersTable).values(newPlayers)
-    }
-  }
-
-  // 同步女优数据（优先使用 actorDetails，回退到 actors）
-  const actorIds: string[] = []
-  const actorDetailsData = data.actorDetails && Array.isArray(data.actorDetails) ? data.actorDetails : []
-
-  if (actorDetailsData.length > 0) {
-    // 使用 actorDetails（包含 sourceUrl 和 sourceId）
-    for (const actorInfo of actorDetailsData) {
-      const { name, url } = actorInfo
-      if (!name || !name.trim())
-        continue
-
-      const slug = name.toLowerCase().replace(SLUG_REGEX, '-')
-      const sourceId = url ? url.split('/').pop() || slug : slug
-      const sourceUrl = url || ''
-
-      // 检查是否存在（根据 source + sourceId，避免重复）
-      const existingActor = await db.query.actors.findFirst({
-        where: and(
-          eq(actorsTable.source, 'javbus'),
-          eq(actorsTable.sourceId, sourceId),
-        ),
-      })
-
-      if (existingActor) {
-        actorIds.push(existingActor.id)
-      }
-      else {
-        // 新增女优（标记为待爬取详情）
-        const newActorId = crypto.randomUUID()
-        await db.insert(actorsTable).values({
-          id: newActorId,
-          name,
-          slug,
-          source: 'javbus',
-          sourceId,
-          sourceUrl,
-          hasDetailsCrawled: false, // 标记为待爬取
-          movieCount: 0, // 将通过关联表统计
-          isR18: true,
+          metadataLocked: false,
+          sortOrder: 0,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
-        actorIds.push(newActorId)
+      }
+      catch (error) {
+        console.error(`插入新电影失败 (${code}):`, error)
+        throw error
       }
     }
-  }
-  else if (data.actors && Array.isArray(data.actors)) {
-    // 回退：使用旧的 actors 数组（仅名称）
-    for (const actorName of data.actors) {
-      if (!actorName || !actorName.trim())
-        continue
 
-      const slug = actorName.toLowerCase().replace(SLUG_REGEX, '-')
+    // 处理播放源 (全量覆盖)
+    if (movieId && data.players && Array.isArray(data.players)) {
+      try {
+      // 删除旧的
+        await db.delete(playersTable).where(eq(playersTable.movieId, movieId))
 
-      // 检查是否存在（根据名称）
-      const existingActor = await db.query.actors.findFirst({
-        where: eq(actorsTable.name, actorName),
-      })
+        // 插入新的
+        if (data.players.length > 0) {
+          const newPlayers = data.players.map((p: any, index: number) => ({
+            id: crypto.randomUUID(),
+            movieId: movieId!,
+            sourceName: p.sourceName || 'Unknown',
+            sourceUrl: p.sourceUrl,
+            quality: p.quality,
+            sortOrder: p.sortOrder || index,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }))
 
-      if (existingActor) {
-        actorIds.push(existingActor.id)
+          await db.insert(playersTable).values(newPlayers)
+        }
       }
-      else {
-        // 新增女优（使用 slug 作为 sourceId）
-        const newActorId = crypto.randomUUID()
-        await db.insert(actorsTable).values({
-          id: newActorId,
-          name: actorName,
-          slug,
-          source: 'javbus',
-          sourceId: slug,
-          hasDetailsCrawled: false,
-          movieCount: 0,
-          isR18: true,
+      catch (error) {
+        console.error('播放源处理失败:', error)
+      // 不抛出错误，允许电影数据继续保存
+      }
+    }
+
+    // 同步女优数据（优先使用 actorDetails，回退到 actors）
+    const actorIds: string[] = []
+    const actorDetailsData = data.actorDetails && Array.isArray(data.actorDetails) ? data.actorDetails : []
+
+    try {
+      if (actorDetailsData.length > 0) {
+      // 使用 actorDetails（包含 sourceUrl 和 sourceId）
+        for (const actorInfo of actorDetailsData) {
+          const { name, url } = actorInfo
+          if (!name || !name.trim())
+            continue
+
+          const slug = name.toLowerCase().replace(SLUG_REGEX, '-')
+          const sourceId = url ? url.split('/').pop() || slug : slug
+          const sourceUrl = url || ''
+
+          try {
+          // 检查是否存在（根据 source + sourceId，避免重复）
+            const existingActor = await db.query.actors.findFirst({
+              where: and(
+                eq(actorsTable.source, 'javbus'),
+                eq(actorsTable.sourceId, sourceId),
+              ),
+            })
+
+            if (existingActor) {
+              actorIds.push(existingActor.id)
+            }
+            else {
+            // 新增女优（标记为待爬取详情）
+              const newActorId = crypto.randomUUID()
+              await db.insert(actorsTable).values({
+                id: newActorId,
+                name,
+                slug,
+                source: 'javbus',
+                sourceId,
+                sourceUrl,
+                hasDetailsCrawled: false,
+                movieCount: 0,
+                isR18: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              actorIds.push(newActorId)
+            }
+          }
+          catch (error) {
+            console.error(`处理女优失败 (${name}):`, error)
+          // 继续处理其他女优
+          }
+        }
+      }
+      else if (data.actors && Array.isArray(data.actors)) {
+      // 回退：使用旧的 actors 数组（仅名称）
+        for (const actorName of data.actors) {
+          if (!actorName || !actorName.trim())
+            continue
+
+          const slug = actorName.toLowerCase().replace(SLUG_REGEX, '-')
+
+          try {
+          // 检查是否存在（根据名称）
+            const existingActor = await db.query.actors.findFirst({
+              where: eq(actorsTable.name, actorName),
+            })
+
+            if (existingActor) {
+              actorIds.push(existingActor.id)
+            }
+            else {
+            // 新增女优（使用 slug 作为 sourceId）
+              const newActorId = crypto.randomUUID()
+              await db.insert(actorsTable).values({
+                id: newActorId,
+                name: actorName,
+                slug,
+                source: 'javbus',
+                sourceId: slug,
+                hasDetailsCrawled: false,
+                movieCount: 0,
+                isR18: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              actorIds.push(newActorId)
+            }
+          }
+          catch (error) {
+            console.error(`处理女优失败 (${actorName}):`, error)
+          // 继续处理其他女优
+          }
+        }
+      }
+    }
+    catch (error) {
+      console.error('女优数据处理失败:', error)
+    // 不抛出错误，允许电影数据继续保存
+    }
+
+    // 同步厂商数据（优先使用 publisherUrl）
+    let publisherId: string | null = null
+
+    try {
+      if (data.publisher && data.publisher.trim()) {
+        const publisherName = data.publisher.trim()
+        const slug = publisherName.toLowerCase().replace(SLUG_REGEX, '-')
+        const sourceId = data.publisherUrl ? data.publisherUrl.split('/').pop() || slug : slug
+        const sourceUrl = data.publisherUrl || ''
+
+        // 检查是否存在（根据 source + sourceId）
+        let existingPublisher
+        if (data.publisherUrl) {
+          existingPublisher = await db.query.publishers.findFirst({
+            where: and(
+              eq(publishersTable.source, 'javbus'),
+              eq(publishersTable.sourceId, sourceId),
+            ),
+          })
+        }
+        else {
+          existingPublisher = await db.query.publishers.findFirst({
+            where: eq(publishersTable.name, publisherName),
+          })
+        }
+
+        if (existingPublisher) {
+          publisherId = existingPublisher.id
+        }
+        else {
+        // 新增厂商
+          publisherId = crypto.randomUUID()
+          await db.insert(publishersTable).values({
+            id: publisherId,
+            name: publisherName,
+            slug,
+            source: 'javbus',
+            sourceId,
+            sourceUrl,
+            hasDetailsCrawled: false,
+            movieCount: 0,
+            isR18: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })
+        }
+      }
+    }
+    catch (error) {
+      console.error('厂商数据处理失败:', error)
+    // 不抛出错误，允许电影数据继续保存
+    }
+
+    // 创建影片-女优关联记录（任务 3.9）
+    if (movieId && actorIds.length > 0) {
+      try {
+      // 删除旧的关联
+        await db.delete(movieActors).where(eq(movieActors.movieId, movieId))
+
+        // 创建新的关联
+        const newMovieActors = actorIds.map((actorId, index) => ({
+          id: crypto.randomUUID(),
+          movieId: movieId!,
+          actorId,
+          sortOrder: index,
           createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        actorIds.push(newActorId)
+        }))
+
+        await db.insert(movieActors).values(newMovieActors)
+      }
+      catch (error) {
+        console.error('创建影片-女优关联失败:', error)
+      // 不抛出错误，允许电影数据继续保存
       }
     }
+
+    // 创建影片-厂商关联记录
+    if (movieId && publisherId) {
+      try {
+      // 删除旧的关联
+        await db.delete(moviePublishers).where(eq(moviePublishers.movieId, movieId))
+
+        // 创建新的关联
+        await db.insert(moviePublishers).values({
+          id: crypto.randomUUID(),
+          movieId: movieId!,
+          publisherId,
+          sortOrder: 0,
+          createdAt: new Date(),
+        })
+      }
+      catch (error) {
+        console.error('创建影片-厂商关联失败:', error)
+      // 不抛出错误，允许电影数据继续保存
+      }
+    }
+
+    return c.json({ success: true, id: movieId })
   }
-
-  // 同步厂商数据（优先使用 publisherUrl）
-  let publisherId: string | null = null
-
-  if (data.publisher && data.publisher.trim()) {
-    const publisherName = data.publisher.trim()
-    const slug = publisherName.toLowerCase().replace(SLUG_REGEX, '-')
-    const sourceId = data.publisherUrl ? data.publisherUrl.split('/').pop() || slug : slug
-    const sourceUrl = data.publisherUrl || ''
-
-    // 检查是否存在（根据 source + sourceId）
-    let existingPublisher
-    if (data.publisherUrl) {
-      existingPublisher = await db.query.publishers.findFirst({
-        where: and(
-          eq(publishersTable.source, 'javbus'),
-          eq(publishersTable.sourceId, sourceId),
-        ),
-      })
-    }
-    else {
-      existingPublisher = await db.query.publishers.findFirst({
-        where: eq(publishersTable.name, publisherName),
-      })
-    }
-
-    if (existingPublisher) {
-      publisherId = existingPublisher.id
-    }
-    else {
-      // 新增厂商
-      publisherId = crypto.randomUUID()
-      await db.insert(publishersTable).values({
-        id: publisherId,
-        name: publisherName,
-        slug,
-        source: 'javbus',
-        sourceId,
-        sourceUrl,
-        hasDetailsCrawled: false,
-        movieCount: 0,
-        isR18: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-    }
-  }
-
-  // 创建影片-女优关联记录（任务 3.9）
-  if (movieId && actorIds.length > 0) {
-    // 删除旧的关联
-    await db.delete(movieActors).where(eq(movieActors.movieId, movieId))
-
-    // 创建新的关联
-    const newMovieActors = actorIds.map((actorId, index) => ({
-      id: crypto.randomUUID(),
-      movieId: movieId!,
-      actorId,
-      sortOrder: index,
-      createdAt: new Date(),
-    }))
-
-    await db.insert(movieActors).values(newMovieActors)
-  }
-
-  // 创建影片-厂商关联记录
-  if (movieId && publisherId) {
-    // 删除旧的关联
-    await db.delete(moviePublishers).where(eq(moviePublishers.movieId, movieId))
-
-    // 创建新的关联
-    await db.insert(moviePublishers).values({
-      id: crypto.randomUUID(),
-      movieId: movieId!,
-      publisherId,
-      sortOrder: 0,
-      createdAt: new Date(),
+  catch (error) {
+    console.error('❌ /api/movies/sync 错误:', error)
+    console.error('错误详情:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     })
-  }
 
-  return c.json({ success: true, id: movieId })
+    // 返回详细错误信息用于调试
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        details: process.env.NODE_ENV === 'development' ? error : undefined,
+      },
+      500,
+    )
+  }
 })
 
 // 1. 获取电影列表 (带分页和过滤)

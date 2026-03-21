@@ -22,7 +22,20 @@ export class ApiClient {
       })
 
       if (!response.ok) {
+        // 尝试获取错误详情
+        let errorDetails = ''
+        try {
+          const errorBody = await response.json()
+          errorDetails = errorBody.error || errorBody.message || JSON.stringify(errorBody)
+        }
+        catch {
+          errorDetails = await response.text().catch(() => 'No error details')
+        }
+
         console.warn(`⚠️  API 返回错误 ${response.status}: ${url}`)
+        if (errorDetails) {
+          console.warn(`   错误详情: ${errorDetails}`)
+        }
         return null
       }
 
