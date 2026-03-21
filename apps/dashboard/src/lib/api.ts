@@ -65,7 +65,9 @@ export interface Movie {
   releaseDate?: string | null
   duration?: number | null
   actors?: (string | { id: string, name: string })[] | null
+  actorNames?: string[] | null
   publishers?: (string | { id: string, name: string })[] | null
+  publisherNames?: string[] | null
   genres?: string[] | null
   publisher?: string | null
   isR18: boolean

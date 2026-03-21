@@ -1,15 +1,29 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '@/lib/api'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
+import { useFilters } from '@/composables/useFilters'
+import { usePagination } from '@/composables/usePagination'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 
 const { t } = useI18n()
+const route = useRoute()
 useSession()
+
 const comics = ref<Comic[]>([])
 const loading = ref(true)
 const error = ref('')
+
+// 分页和筛选
+const { currentPage, limit, totalPages, total, setMeta, goToPage } = usePagination(18)
+const { filters } = useFilters({
+  search: '',
+  isR18: 'all',
+  status: '',
+  region: '',
+})
 
 // Modal state
 const isEditModalOpen = ref(false)
@@ -48,8 +62,27 @@ async function handleUpload(event: Event) {
 async function loadComics() {
   loading.value = true
   try {
-    const response = await api.admin.getComics()
+    const params: Record<string, any> = {
+      page: currentPage.value,
+      limit: limit.value,
+    }
+
+    if (filters.value.search) {
+      params.search = filters.value.search
+    }
+    if (filters.value.isR18 && filters.value.isR18 !== 'all') {
+      params.isR18 = filters.value.isR18
+    }
+    if (filters.value.status) {
+      params.status = filters.value.status
+    }
+    if (filters.value.region) {
+      params.region = filters.value.region
+    }
+
+    const response = await api.admin.getComics(params)
     comics.value = response.data
+    setMeta({ total: response.meta.total, totalPages: response.meta.totalPages })
   }
   catch (e: unknown) {
     error.value = String(e)
@@ -58,6 +91,20 @@ async function loadComics() {
     loading.value = false
   }
 }
+
+// 监听路由变化
+watch(() => route.query.page, (newPage) => {
+  if (newPage) {
+    goToPage(Number(newPage))
+    loadComics()
+  }
+}, { immediate: false })
+
+// 监听筛选条件变化
+watch(filters, () => {
+  goToPage(1)
+  loadComics()
+}, { deep: true })
 
 onMounted(loadComics)
 
@@ -141,7 +188,7 @@ async function toggleR18Shortcut(comic: Comic) {
           {{ t('dashboard.comic_library') }}
         </h2>
         <p class="text-neutral-500 mt-1">
-          {{ t('dashboard.manage_metadata') }}
+          共 {{ total }} 部漫画
         </p>
       </div>
       <button
@@ -153,6 +200,44 @@ async function toggleR18Shortcut(comic: Comic) {
           <path d="M21 3v5h-5" />
         </svg>
       </button>
+    </div>
+
+    <!-- 筛选器 -->
+    <div class="filter-bar">
+      <input
+        v-model="filters.search"
+        type="text"
+        placeholder="搜索漫画标题或作者..."
+        class="filter-input"
+      >
+      <select v-model="filters.isR18" class="filter-select">
+        <option value="all">
+          全部类型
+        </option>
+        <option value="true">
+          R18
+        </option>
+        <option value="false">
+          一般
+        </option>
+      </select>
+      <select v-model="filters.status" class="filter-select">
+        <option value="">
+          全部状态
+        </option>
+        <option value="serializing">
+          连载中
+        </option>
+        <option value="completed">
+          已完结
+        </option>
+      </select>
+      <input
+        v-model="filters.region"
+        type="text"
+        placeholder="地区..."
+        class="filter-input-sm"
+      >
     </div>
 
     <!-- Loading / Error States (Same as before) -->
@@ -235,6 +320,27 @@ async function toggleR18Shortcut(comic: Comic) {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 分页器 -->
+    <div v-if="totalPages > 1" class="pagination">
+      <button
+        class="page-btn"
+        :disabled="currentPage === 1"
+        @click="goToPage(currentPage - 1); loadComics()"
+      >
+        上一页
+      </button>
+      <span class="page-info">
+        第 {{ currentPage }} / {{ totalPages }} 页（共 {{ total }} 条）
+      </span>
+      <button
+        class="page-btn"
+        :disabled="currentPage === totalPages"
+        @click="goToPage(currentPage + 1); loadComics()"
+      >
+        下一页
+      </button>
     </div>
 
     <!-- Edit Modal -->
@@ -496,3 +602,70 @@ async function toggleR18Shortcut(comic: Comic) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.filter-bar {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.filter-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.filter-input-sm {
+  width: 150px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.filter-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.page-btn {
+  padding: 0.5rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.page-btn:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+.page-info {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+</style>

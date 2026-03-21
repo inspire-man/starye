@@ -144,7 +144,12 @@ onMounted(() => {
 
             <div v-if="movie.series" class="flex items-center text-sm">
               <span class="text-gray-400 w-24">系列：</span>
-              <span class="text-white">{{ movie.series }}</span>
+              <RouterLink
+                :to="`/series/${encodeURIComponent(movie.series)}`"
+                class="text-primary-400 hover:text-primary-300 hover:underline cursor-pointer"
+              >
+                {{ movie.series }}
+              </RouterLink>
             </div>
 
             <div v-if="movie.description" class="flex items-start text-sm pt-2">

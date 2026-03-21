@@ -26,6 +26,7 @@ import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
+import { formatDateTime } from '@/lib/date-utils'
 
 useSession()
 
@@ -268,11 +269,16 @@ async function executeBatchOperation() {
 }
 
 const tableColumns = [
+  { key: 'coverImage', label: '封面', width: '100px', sortable: false },
   { key: 'code', label: '番号', width: '120px' },
   { key: 'title', label: '标题', sortable: true },
+  { key: 'actors', label: '女优', width: '200px' },
   { key: 'publisher', label: '厂商', width: '150px' },
   { key: 'releaseDate', label: '发布日期', width: '120px', sortable: true },
+  { key: 'isR18', label: 'R18', width: '60px' },
+  { key: 'metadataLocked', label: '锁定', width: '60px' },
   { key: 'crawlStatus', label: '状态', width: '120px' },
+  { key: 'createdAt', label: '创建时间', width: '180px', sortable: true },
 ]
 </script>
 
@@ -337,6 +343,39 @@ const tableColumns = [
       @row-click="openEditModal"
       @page-change="(page) => $router.push({ query: { ...$route.query, page } })"
     >
+      <template #cell-coverImage="{ item }">
+        <img
+          v-if="item.coverImage"
+          :src="item.coverImage"
+          :alt="item.title"
+          class="movie-cover-thumb"
+        >
+        <span v-else class="no-cover">无</span>
+      </template>
+
+      <template #cell-actors="{ item }">
+        <span v-if="item.actorNames && item.actorNames.length > 0" class="actor-tags">
+          <span v-for="(actor, idx) in item.actorNames.slice(0, 3)" :key="idx" class="actor-tag">
+            {{ actor }}
+          </span>
+          <span v-if="item.actorNames.length > 3" class="more-tag">
+            +{{ item.actorNames.length - 3 }}
+          </span>
+        </span>
+        <span v-else>-</span>
+      </template>
+
+      <template #cell-isR18="{ item }">
+        <span :class="item.isR18 ? 'badge-r18' : 'badge-general'">
+          {{ item.isR18 ? 'R18' : '一般' }}
+        </span>
+      </template>
+
+      <template #cell-metadataLocked="{ item }">
+        <span v-if="item.metadataLocked" class="badge-locked">🔒</span>
+        <span v-else class="badge-unlocked">🔓</span>
+      </template>
+
       <template #cell-crawlStatus="{ item }">
         <StatusBadge
           :status="item.crawlStatus || 'complete'"
@@ -346,6 +385,10 @@ const tableColumns = [
 
       <template #cell-releaseDate="{ item }">
         {{ item.releaseDate ? new Date(item.releaseDate).toLocaleDateString('zh-CN') : '-' }}
+      </template>
+
+      <template #cell-createdAt="{ item }">
+        {{ formatDateTime(item.createdAt) }}
       </template>
     </DataTable>
 
@@ -760,5 +803,61 @@ const tableColumns = [
 
 .btn-secondary:hover {
   background: #f9fafb;
+}
+
+.movie-cover-thumb {
+  width: 60px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.no-cover {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.actor-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.actor-tag {
+  padding: 2px 8px;
+  background: #e0e7ff;
+  color: #4338ca;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+
+.more-tag {
+  padding: 2px 8px;
+  background: #f3f4f6;
+  color: #6b7280;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+
+.badge-r18 {
+  padding: 2px 8px;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-general {
+  padding: 2px 8px;
+  background: #f3f4f6;
+  color: #6b7280;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.badge-locked,
+.badge-unlocked {
+  font-size: 1rem;
 }
 </style>

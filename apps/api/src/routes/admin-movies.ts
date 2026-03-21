@@ -211,6 +211,29 @@ adminMovies.get(
           orderBy: orderByClause,
           limit: filter.limit,
           offset,
+          with: {
+            movieActors: {
+              with: {
+                actor: {
+                  columns: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+              orderBy: (movieActors, { asc }) => [asc(movieActors.sortOrder)],
+            },
+            moviePublishers: {
+              with: {
+                publisher: {
+                  columns: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
         }),
         db
           .select({ value: count() })
@@ -219,8 +242,20 @@ adminMovies.get(
           .then(res => res[0]?.value || 0),
       ])
 
+      // 添加 actorNames 和 publisherNames 字段
+      const enrichedResults = results.map((movie) => {
+        const actorNames = movie.movieActors?.map(ma => ma.actor?.name).filter(Boolean) || []
+        const publisherNames = movie.moviePublishers?.map(mp => mp.publisher?.name).filter(Boolean) || []
+
+        return {
+          ...movie,
+          actorNames,
+          publisherNames,
+        }
+      })
+
       return c.json({
-        data: results,
+        data: enrichedResults,
         meta: {
           total: totalResult,
           page: filter.page,

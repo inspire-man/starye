@@ -510,14 +510,18 @@ movies.get('/', async (c) => {
   })
 })
 
-// 2. 获取电影详情
-movies.get('/:slug', async (c) => {
+// 2. 获取电影详情（通过 slug 或 code）
+movies.get('/:identifier', async (c) => {
   const db = c.get('db')
-  const slug = c.req.param('slug')
+  const identifier = c.req.param('identifier')
   const isAdult = await checkIsAdult(c)
 
+  // 尝试通过 code 或 slug 查找
   const movie = await db.query.movies.findFirst({
-    where: (movies, { eq }) => eq(movies.slug, slug),
+    where: (movies, { eq, or }) => or(
+      eq(movies.code, identifier),
+      eq(movies.slug, identifier),
+    ),
     with: {
       players: {
         orderBy: (players, { asc }) => [asc(players.sortOrder)],
@@ -558,6 +562,68 @@ movies.get('/:slug', async (c) => {
   const actorsData = movie.movieActors?.map((ma: any) => ma.actor) || []
   const publishersData = movie.moviePublishers?.map((mp: any) => mp.publisher) || []
 
+  // 查询相关影片（基于系列、演员或制作商）
+  const relatedMoviesQuery = []
+
+  // 优先级1：相同系列
+  if (movie.series) {
+    relatedMoviesQuery.push(
+      db.query.movies.findMany({
+        where: (movies, { eq, and, not }) => and(
+          eq(movies.series, movie.series!),
+          not(eq(movies.id, movie.id)),
+        ),
+        columns: {
+          id: true,
+          code: true,
+          title: true,
+          slug: true,
+          coverImage: true,
+          isR18: true,
+        },
+        limit: 6,
+      }),
+    )
+  }
+
+  // 优先级2：相同演员
+  if (actorsData.length > 0) {
+    const actorIds = actorsData.map((a: any) => a.id)
+    relatedMoviesQuery.push(
+      db.query.movieActors.findMany({
+        where: (movieActors, { inArray, not }) => and(
+          inArray(movieActors.actorId, actorIds),
+          not(eq(movieActors.movieId, movie.id)),
+        ),
+        with: {
+          movie: {
+            columns: {
+              id: true,
+              code: true,
+              title: true,
+              slug: true,
+              coverImage: true,
+              isR18: true,
+            },
+          },
+        },
+        limit: 6,
+      }),
+    )
+  }
+
+  const relatedResults = await Promise.all(relatedMoviesQuery)
+
+  // 合并并去重
+  const relatedMoviesMap = new Map()
+  for (const result of relatedResults.flat()) {
+    const movieData = 'movie' in result ? result.movie : result
+    if (movieData && !relatedMoviesMap.has(movieData.id)) {
+      relatedMoviesMap.set(movieData.id, movieData)
+    }
+  }
+  const relatedMovies = Array.from(relatedMoviesMap.values()).slice(0, 12)
+
   // R18 保护
   if (movie.isR18 && !isAdult) {
     return c.json({
@@ -567,6 +633,7 @@ movies.get('/:slug', async (c) => {
         players: [],
         actors: actorsData,
         publishers: publishersData,
+        relatedMovies: relatedMovies.filter((m: any) => !m.isR18 || isAdult),
         movieActors: undefined,
         moviePublishers: undefined,
       },
@@ -578,6 +645,7 @@ movies.get('/:slug', async (c) => {
       ...movie,
       actors: actorsData,
       publishers: publishersData,
+      relatedMovies: relatedMovies.filter((m: any) => !m.isR18 || isAdult),
       movieActors: undefined,
       moviePublishers: undefined,
     },

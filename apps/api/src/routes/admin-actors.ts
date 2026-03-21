@@ -8,7 +8,7 @@
 
 import type { AppEnv } from '../types'
 import { zValidator } from '@hono/zod-validator'
-import { actors, movies } from '@starye/db/schema'
+import { actors, movieActors, movies } from '@starye/db/schema'
 import { and, count, desc, eq, gt, isNotNull, isNull, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -261,49 +261,7 @@ adminActors.get(
 
 /**
  * GET /api/admin/actors/:id
- * 演员详情（包含关联电影列表）
- */
-adminActors.get('/:id', async (c) => {
-  const actorId = c.req.param('id')
-  const db = c.get('db')
-
-  try {
-    const actor = await db.query.actors.findFirst({
-      where: eq(actors.id, actorId),
-    })
-
-    if (!actor) {
-      return c.json({ error: 'Actor not found' }, 404)
-    }
-
-    const relatedMovies = await db.query.movies.findMany({
-      where: like(movies.actors, `%${actor.name}%`),
-      columns: {
-        id: true,
-        code: true,
-        title: true,
-        coverImage: true,
-        releaseDate: true,
-      },
-      orderBy: desc(movies.releaseDate),
-      limit: 100,
-    })
-
-    return c.json({
-      ...actor,
-      relatedMovies,
-    })
-  }
-  catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error(`[Admin/Actors] ❌ Failed to get actor ${actorId}:`, message)
-    return c.json({ error: 'Database operation failed' }, 500)
-  }
-})
-
-/**
- * GET /api/admin/actors/:id
- * 获取单个演员详情
+ * 获取单个演员详情（包含关联电影列表）
  */
 adminActors.get('/:id', async (c) => {
   const actorId = c.req.param('id')
@@ -322,10 +280,30 @@ adminActors.get('/:id', async (c) => {
         })
 
         if (!actor) {
-          return { error: 'Actor not found', status: 404 }
+          return { error: 'Actor not found', status: 404, data: null, movies: [] }
         }
 
-        return { data: actor, status: 200 }
+        // 查询关联的电影（通过 movieActors 关联表）
+        const movieRelations = await db.query.movieActors.findMany({
+          where: eq(movieActors.actorId, actorId),
+          with: {
+            movie: {
+              columns: {
+                id: true,
+                code: true,
+                title: true,
+                coverImage: true,
+                releaseDate: true,
+              },
+            },
+          },
+          orderBy: desc(movieActors.sortOrder),
+          limit: 100,
+        })
+
+        const movies = movieRelations.map(rel => rel.movie).filter(Boolean)
+
+        return { data: actor, movies, status: 200 }
       },
       cache,
     ).then((result) => {
