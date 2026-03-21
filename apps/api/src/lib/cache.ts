@@ -59,12 +59,17 @@ export class CacheManager {
     misses: 0,
   }
 
-  constructor(private kv: KVNamespace) {}
+  constructor(private kv: KVNamespace | undefined) {}
 
   /**
    * 获取缓存数据
    */
   async get<T>(key: string): Promise<T | null> {
+    if (!this.kv) {
+      this.stats.misses++
+      return null
+    }
+
     try {
       const cached = await this.kv.get(key, 'json')
       if (cached) {
@@ -107,6 +112,10 @@ export class CacheManager {
    * 设置缓存数据
    */
   async set<T>(key: string, value: T, options?: CacheOptions): Promise<void> {
+    if (!this.kv) {
+      return
+    }
+
     try {
       const ttl = options?.ttl || CacheTTL.LIST
       await this.kv.put(key, JSON.stringify(value), {
@@ -122,6 +131,10 @@ export class CacheManager {
    * 删除缓存数据
    */
   async delete(key: string): Promise<void> {
+    if (!this.kv) {
+      return
+    }
+
     try {
       await this.kv.delete(key)
     }
@@ -134,9 +147,13 @@ export class CacheManager {
    * 批量删除缓存（通过前缀匹配）
    */
   async deleteByPrefix(prefix: string): Promise<void> {
+    if (!this.kv) {
+      return
+    }
+
     try {
       const list = await this.kv.list({ prefix })
-      const deletePromises = list.keys.map(key => this.kv.delete(key.name))
+      const deletePromises = list.keys.map(key => this.kv!.delete(key.name))
       await Promise.all(deletePromises)
     }
     catch (e) {

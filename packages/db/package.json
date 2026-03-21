@@ -11,7 +11,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit migrate",
+    "migrate": "echo '提示：D1 数据库迁移请使用 wrangler 命令：' && echo '本地: cd apps/api && wrangler d1 migrations apply starye-db --local' && echo '生产: cd apps/api && wrangler d1 migrations apply starye-db --remote'",
     "migrate:actors": "tsx scripts/migrate-actors-publishers.ts",
     "sync:actors": "tsx scripts/sync-actors-publishers.ts",
     "clean-data": "tsx scripts/clean-data.ts",

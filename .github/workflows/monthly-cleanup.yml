@@ -2,8 +2,8 @@ name: Monthly Data Cleanup
 
 on:
   schedule:
-    # 每月 1 号凌晨 3 点运行 (UTC+8 对应 UTC 19:00 on the last day of previous month)
-    - cron: '0 19 L * *'
+    # 每月 1 号 UTC 19:00 运行（北京时间次日凌晨 3:00）
+    - cron: '0 19 1 * *'
   workflow_dispatch:
     inputs:
       dry_run:

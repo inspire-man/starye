@@ -28,11 +28,11 @@ bucket_name = "starye-media"
 pattern = "api.starye.org"
 custom_domain = true
 
-# KV Namespace for caching
-[[kv_namespaces]]
-binding = "CACHE"
-id = "placeholder" # 生产环境需要创建真实的 KV namespace ID
-preview_id = "placeholder" # 开发环境会自动使用本地 KV
+# KV Namespace for caching (暂时禁用，需要先创建真实的 KV namespace)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "your-kv-namespace-id" # 生产环境需要创建真实的 KV namespace ID
+# preview_id = "your-preview-kv-id" # 开发环境会自动使用本地 KV
 
 [observability]
 
