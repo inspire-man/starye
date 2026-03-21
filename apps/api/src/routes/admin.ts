@@ -9,6 +9,7 @@ import { serviceAuth } from '../middleware/service-auth'
 import { ChapterContentSchema, MangaInfoSchema, MovieInfoSchema } from '../types'
 import adminActorsRoutes from './admin-actors'
 import adminAuditLogsRoutes from './admin-audit-logs'
+import adminCacheRoutes from './admin-cache'
 import adminCrawlersRoutes from './admin-crawlers'
 import adminMoviesRoutes from './admin-movies'
 import adminPublishersRoutes from './admin-publishers'
@@ -23,6 +24,7 @@ admin.route('/actors', adminActorsRoutes)
 admin.route('/publishers', adminPublishersRoutes)
 admin.route('/audit-logs', adminAuditLogsRoutes)
 admin.route('/r18-whitelist', adminR18WhitelistRoutes)
+admin.route('/cache', adminCacheRoutes)
 
 // 获取用户列表 (仅超级管理员)
 admin.get('/users', serviceAuth(['admin']), async (c) => {

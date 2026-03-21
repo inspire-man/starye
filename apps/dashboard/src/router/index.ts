@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { authClient } from '@/lib/auth-client'
+import ActorDetail from '@/views/ActorDetail.vue'
 import Actors from '@/views/Actors.vue'
 import AuditLogs from '@/views/AuditLogs.vue'
 import Comics from '@/views/Comics.vue'
@@ -53,6 +54,11 @@ const routes = [
       {
         path: 'actors',
         component: Actors,
+        meta: { requiredRoles: ['admin', 'super_admin', 'movie_admin'] },
+      },
+      {
+        path: 'actors/:id',
+        component: ActorDetail,
         meta: { requiredRoles: ['admin', 'super_admin', 'movie_admin'] },
       },
       {

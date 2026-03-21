@@ -147,21 +147,18 @@
 
 ## 15. 生产环境部署
 
-- [ ] 15.1 合并代码到 `main` 分支
-- [ ] 15.2 触发 GitHub Actions，部署 API 和 Movie App
-- [ ] 15.3 在生产环境执行数据库迁移（选择低峰期，凌晨 2-4 点）
-- [ ] 15.4 执行 `pnpm --filter @starye/db db:push-prod`
-- [ ] 15.5 执行生产数据迁移脚本 `node scripts/migrate-actor-publisher.js --env production`
-- [ ] 15.6 验证生产数据：检查 `movie_actors` 和 `movie_publishers` 记录数量
-- [ ] 15.7 监控 API 响应时间（Cloudflare Analytics）
-- [ ] 15.8 监控爬虫失败率
-- [ ] 15.9 如有异常，执行回滚脚本
+- [x] 15.1 合并代码到 `main` 分支
+- [x] 15.2 触发 GitHub Actions，部署 API 和 Movie App
+- [x] 15.3 在生产环境执行数据库迁移（选择低峰期，凌晨 2-4 点）
+- [x] 15.4 执行 `pnpm --filter @starye/db db:push-prod`
+- [x] 15.5 执行生产数据迁移脚本 `node scripts/migrate-actor-publisher.js --env production`
+- [x] 15.6 验证生产数据：检查 `movie_actors` 和 `movie_publishers` 记录数量
+- [x] 15.7 监控 API 响应时间（Cloudflare Analytics）
+- [x] 15.8 监控爬虫失败率
+- [x] 15.9 如有异常，执行回滚脚本
 
-## 16. 后续优化（可选）
+## 16. 后续优化
 
-- [ ] 16.1 为热门女优/厂商列表添加缓存（Cloudflare KV）
-- [ ] 16.2 实现女优别名管理界面（Dashboard）
-- [ ] 16.3 添加女优之间的关系图谱（合作频率分析）
-- [ ] 16.4 支持用户收藏女优/厂商功能
-- [ ] 16.5 为爬虫添加代理池，降低反爬风险
-- [ ] 16.6 定期清理 3 个月前的备份字段（`movies.actors`, `movies.publisher`）
+后续优化任务已移动到新的变更 `actor-publisher-optimizations` 中。
+
+参见：`openspec/changes/actor-publisher-optimizations/`

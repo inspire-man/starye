@@ -15,6 +15,8 @@
     "migrate:actors": "tsx scripts/migrate-actors-publishers.ts",
     "sync:actors": "tsx scripts/sync-actors-publishers.ts",
     "clean-data": "tsx scripts/clean-data.ts",
+    "cleanup:preview": "tsx scripts/cleanup-backup-fields.ts --preview",
+    "cleanup:execute": "tsx scripts/cleanup-backup-fields.ts --execute",
     "studio": "drizzle-kit studio",
     "type-check": "tsc --noEmit",
     "build": "tsc",

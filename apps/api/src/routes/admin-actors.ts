@@ -9,9 +9,10 @@
 import type { AppEnv } from '../types'
 import { zValidator } from '@hono/zod-validator'
 import { actors, movies } from '@starye/db/schema'
-import { and, count, desc, eq, like } from 'drizzle-orm'
+import { and, count, desc, eq, gt, isNotNull, isNull, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { CacheKeys, CacheManager, CacheTTL, withCache } from '../lib/cache'
 import { captureResourceState, createAuditLog } from '../middleware/audit-logger'
 import { requireResource } from '../middleware/resource-guard'
 
@@ -20,34 +21,81 @@ const adminActors = new Hono<AppEnv>()
 adminActors.use('/*', requireResource('movie'))
 
 /**
+ * GET /api/admin/actors/nationalities
+ * 获取所有不同的国籍列表（用于筛选器）
+ */
+adminActors.get('/nationalities', async (c) => {
+  const db = c.get('db')
+  const cache = new CacheManager(c.env.CACHE)
+
+  try {
+    const cacheKey = CacheKeys.actorNationalities()
+
+    return await withCache(
+      cacheKey,
+      CacheTTL.STATS,
+      async () => {
+        const results = await db
+          .selectDistinct({ nationality: actors.nationality })
+          .from(actors)
+          .where(isNotNull(actors.nationality))
+          .orderBy(actors.nationality)
+
+        const nationalities = results
+          .map(r => r.nationality)
+          .filter(n => n && n.trim() !== '')
+
+        return { nationalities }
+      },
+      cache,
+    ).then(result => c.json(result))
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error('[Admin/Actors] ❌ Failed to get nationalities:', message)
+    return c.json({ error: 'Database operation failed' }, 500)
+  }
+})
+
+/**
  * GET /api/admin/actors/stats
  * 女优统计信息
  */
 adminActors.get('/stats', async (c) => {
   const db = c.get('db')
+  const cache = new CacheManager(c.env.CACHE)
 
   try {
-    const [totalCount, pendingCount, withSourceUrlCount] = await Promise.all([
-      db.select({ value: count() }).from(actors).then(res => res[0]?.value || 0),
-      db
-        .select({ value: count() })
-        .from(actors)
-        .where(eq(actors.hasDetailsCrawled, false))
-        .then(res => res[0]?.value || 0),
-      db
-        .select({ value: count() })
-        .from(actors)
-        .where(and(eq(actors.hasDetailsCrawled, false), like(actors.sourceUrl, '%/star/%')))
-        .then(res => res[0]?.value || 0),
-    ])
+    const cacheKey = CacheKeys.actorStats()
 
-    return c.json({
-      total: totalCount,
-      crawled: totalCount - pendingCount,
-      pending: pendingCount,
-      withSourceUrl: withSourceUrlCount, // 有 sourceUrl 的女优（可以爬取详情）
-      crawledPercentage: totalCount > 0 ? Math.round(((totalCount - pendingCount) / totalCount) * 100) : 0,
-    })
+    return await withCache(
+      cacheKey,
+      CacheTTL.STATS,
+      async () => {
+        const [totalCount, pendingCount, withSourceUrlCount] = await Promise.all([
+          db.select({ value: count() }).from(actors).then(res => res[0]?.value || 0),
+          db
+            .select({ value: count() })
+            .from(actors)
+            .where(eq(actors.hasDetailsCrawled, false))
+            .then(res => res[0]?.value || 0),
+          db
+            .select({ value: count() })
+            .from(actors)
+            .where(and(eq(actors.hasDetailsCrawled, false), like(actors.sourceUrl, '%/star/%')))
+            .then(res => res[0]?.value || 0),
+        ])
+
+        return {
+          total: totalCount,
+          crawled: totalCount - pendingCount,
+          pending: pendingCount,
+          withSourceUrl: withSourceUrlCount,
+          crawledPercentage: totalCount > 0 ? Math.round(((totalCount - pendingCount) / totalCount) * 100) : 0,
+        }
+      },
+      cache,
+    ).then(result => c.json(result))
   }
   catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e)
@@ -58,7 +106,7 @@ adminActors.get('/stats', async (c) => {
 
 /**
  * GET /api/admin/actors
- * 演员列表（按作品数排序，支持搜索）
+ * 演员列表（按作品数排序，支持搜索和筛选）
  */
 adminActors.get(
   '/',
@@ -66,49 +114,142 @@ adminActors.get(
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(50),
     search: z.string().optional(),
-    onlyPending: z.enum(['true', 'false']).optional(), // 仅显示待爬取详情的女优
+    onlyPending: z.enum(['true', 'false']).optional(), // 向后兼容
+    crawlStatus: z.enum(['complete', 'pending', 'failed', 'no-link']).optional(), // 爬取状态筛选
+    nationality: z.string().optional(), // 国籍筛选
   })),
   async (c) => {
-    const { page, limit, search, onlyPending } = c.req.valid('query')
+    const { page, limit, search, onlyPending, crawlStatus, nationality } = c.req.valid('query')
     const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
     const offset = (page - 1) * limit
 
     try {
-      let whereClause
-
-      if (onlyPending === 'true') {
-        // 仅显示 hasDetailsCrawled = false 的女优
-        whereClause = search
-          ? and(eq(actors.hasDetailsCrawled, false), like(actors.name, `%${search}%`))
-          : eq(actors.hasDetailsCrawled, false)
-      }
-      else {
-        whereClause = search ? like(actors.name, `%${search}%`) : undefined
+      // 构建筛选器对象用于缓存键
+      const filters = {
+        search: search || '',
+        crawlStatus: crawlStatus || '',
+        nationality: nationality || '',
+        onlyPending: onlyPending || '',
       }
 
-      const [results, totalResult] = await Promise.all([
-        db.query.actors.findMany({
-          where: whereClause,
-          orderBy: desc(actors.movieCount),
-          limit,
-          offset,
-        }),
-        db
-          .select({ value: count() })
-          .from(actors)
-          .where(whereClause)
-          .then(res => res[0]?.value || 0),
-      ])
+      const cacheKey = CacheKeys.actorList(page, limit, filters)
 
-      return c.json({
-        data: results,
-        meta: {
-          total: totalResult,
-          page,
-          limit,
-          totalPages: Math.ceil(totalResult / limit),
+      return await withCache(
+        cacheKey,
+        CacheTTL.LIST,
+        async () => {
+          const conditions = []
+
+          // 搜索条件
+          if (search) {
+            conditions.push(like(actors.name, `%${search}%`))
+          }
+
+          // 爬取状态筛选（优先使用新参数，兼容旧参数）
+          if (crawlStatus) {
+            switch (crawlStatus) {
+              case 'complete':
+                conditions.push(eq(actors.hasDetailsCrawled, true))
+                break
+              case 'pending':
+                conditions.push(
+                  and(
+                    eq(actors.hasDetailsCrawled, false),
+                    eq(actors.crawlFailureCount, 0),
+                    isNotNull(actors.sourceUrl),
+                  )!,
+                )
+                break
+              case 'failed':
+                conditions.push(
+                  and(
+                    eq(actors.hasDetailsCrawled, false),
+                    gt(actors.crawlFailureCount, 0),
+                  )!,
+                )
+                break
+              case 'no-link':
+                conditions.push(
+                  and(
+                    eq(actors.hasDetailsCrawled, false),
+                    isNull(actors.sourceUrl),
+                  )!,
+                )
+                break
+            }
+          }
+          else if (onlyPending === 'true') {
+            // 向后兼容旧参数
+            conditions.push(eq(actors.hasDetailsCrawled, false))
+          }
+
+          // 国籍筛选
+          if (nationality) {
+            conditions.push(eq(actors.nationality, nationality))
+          }
+
+          const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
+          // 如果有搜索条件，先获取所有可能匹配的演员（包括别名匹配）
+          let results: typeof actors.$inferSelect[]
+          let totalResult: number
+
+          if (search) {
+            // 获取更多结果以支持别名搜索
+            const allResults = await db.query.actors.findMany({
+              where: whereClause,
+              orderBy: desc(actors.movieCount),
+            })
+
+            // 在内存中筛选：匹配名称或别名
+            const searchLower = search.toLowerCase()
+            const filteredResults = allResults.filter((actor) => {
+              // 匹配名称
+              if (actor.name.toLowerCase().includes(searchLower)) {
+                return true
+              }
+
+              // 匹配别名
+              const aliases = (actor.aliases as string[]) || []
+              return aliases.some(alias => alias.toLowerCase().includes(searchLower))
+            })
+
+            totalResult = filteredResults.length
+            results = filteredResults.slice(offset, offset + limit)
+          }
+          else {
+            // 无搜索条件时使用原有逻辑
+            const [queryResults, countResult] = await Promise.all([
+              db.query.actors.findMany({
+                where: whereClause,
+                orderBy: desc(actors.movieCount),
+                limit,
+                offset,
+              }),
+              db
+                .select({ value: count() })
+                .from(actors)
+                .where(whereClause)
+                .then(res => res[0]?.value || 0),
+            ])
+
+            results = queryResults
+            totalResult = countResult
+          }
+
+          return {
+            data: results,
+            meta: {
+              total: totalResult,
+              page,
+              limit,
+              totalPages: Math.ceil(totalResult / limit),
+            },
+          }
         },
-      })
+        cache,
+      ).then(result => c.json(result))
     }
     catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e)
@@ -161,6 +302,47 @@ adminActors.get('/:id', async (c) => {
 })
 
 /**
+ * GET /api/admin/actors/:id
+ * 获取单个演员详情
+ */
+adminActors.get('/:id', async (c) => {
+  const actorId = c.req.param('id')
+  const db = c.get('db')
+  const cache = new CacheManager(c.env.CACHE)
+
+  try {
+    const cacheKey = CacheKeys.actorDetail(actorId)
+
+    return await withCache(
+      cacheKey,
+      CacheTTL.DETAIL,
+      async () => {
+        const actor = await db.query.actors.findFirst({
+          where: eq(actors.id, actorId),
+        })
+
+        if (!actor) {
+          return { error: 'Actor not found', status: 404 }
+        }
+
+        return { data: actor, status: 200 }
+      },
+      cache,
+    ).then((result) => {
+      if (result.status === 404) {
+        return c.json({ error: result.error }, 404)
+      }
+      return c.json(result)
+    })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error(`[Admin/Actors] ❌ Failed to get actor ${actorId}:`, message)
+    return c.json({ error: 'Database operation failed' }, 500)
+  }
+})
+
+/**
  * PATCH /api/admin/actors/:id
  * 编辑演员信息
  */
@@ -180,6 +362,7 @@ adminActors.patch(
     const actorId = c.req.param('id')
     const data = c.req.valid('json')
     const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
 
     try {
       const before = await captureResourceState(c, 'actor', actorId)
@@ -201,7 +384,14 @@ adminActors.patch(
         .set(updateData)
         .where(eq(actors.id, actorId))
 
-      console.log(`[Admin/Actors] ✓ Updated actor ${actorId}`)
+      // 清除相关缓存
+      await Promise.all([
+        cache.delete(CacheKeys.actorDetail(actorId)),
+        cache.deleteByPrefix('actors:list:'),
+        cache.delete(CacheKeys.actorStats()),
+      ])
+
+      console.log(`[Admin/Actors] ✓ Updated actor ${actorId} and cleared cache`)
       return c.json({ success: true })
     }
     catch (e: unknown) {
@@ -240,6 +430,7 @@ adminActors.post(
   async (c) => {
     const { sourceId, targetId } = c.req.valid('json')
     const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
 
     try {
       const [sourceActor, targetActor] = await Promise.all([
@@ -274,6 +465,9 @@ adminActors.post(
         .where(eq(actors.id, targetId))
 
       await db.delete(actors).where(eq(actors.id, sourceId))
+
+      // 清除相关缓存
+      await cache.clearActorCache()
 
       const mergeChanges: Record<string, any> = {
         operation: 'merge',
@@ -360,6 +554,119 @@ adminActors.post(
 )
 
 /**
+ * POST /api/admin/actors/:id/aliases
+ * 添加女优别名
+ */
+adminActors.post(
+  '/:id/aliases',
+  requireResource('movie'),
+  zValidator('json', z.object({
+    alias: z.string().min(1).max(100),
+  })),
+  async (c) => {
+    const actorId = c.req.param('id')
+    const { alias } = c.req.valid('json')
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
+
+    try {
+      const actor = await db.query.actors.findFirst({
+        where: eq(actors.id, actorId),
+      })
+
+      if (!actor) {
+        return c.json({ error: 'Actor not found' }, 404)
+      }
+
+      const currentAliases = (actor.aliases as string[]) || []
+
+      // 检查别名是否已存在
+      if (currentAliases.includes(alias)) {
+        return c.json({ error: 'Alias already exists' }, 400)
+      }
+
+      const updatedAliases = [...currentAliases, alias]
+
+      await db.update(actors)
+        .set({ aliases: updatedAliases, updatedAt: new Date() })
+        .where(eq(actors.id, actorId))
+
+      // 清除缓存
+      await Promise.all([
+        cache.delete(CacheKeys.actorDetail(actorId)),
+        cache.deleteByPrefix('actors:list:'),
+      ])
+
+      console.log(`[Admin/Actors] ✓ Added alias "${alias}" to actor ${actorId}`)
+
+      return c.json({
+        success: true,
+        aliases: updatedAliases,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin/Actors] ❌ Failed to add alias to actor ${actorId}:`, message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+/**
+ * DELETE /api/admin/actors/:id/aliases/:alias
+ * 删除女优别名
+ */
+adminActors.delete(
+  '/:id/aliases/:alias',
+  requireResource('movie'),
+  async (c) => {
+    const actorId = c.req.param('id')
+    const alias = c.req.param('alias')
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
+
+    try {
+      const actor = await db.query.actors.findFirst({
+        where: eq(actors.id, actorId),
+      })
+
+      if (!actor) {
+        return c.json({ error: 'Actor not found' }, 404)
+      }
+
+      const currentAliases = (actor.aliases as string[]) || []
+      const updatedAliases = currentAliases.filter(a => a !== alias)
+
+      if (currentAliases.length === updatedAliases.length) {
+        return c.json({ error: 'Alias not found' }, 404)
+      }
+
+      await db.update(actors)
+        .set({ aliases: updatedAliases, updatedAt: new Date() })
+        .where(eq(actors.id, actorId))
+
+      // 清除缓存
+      await Promise.all([
+        cache.delete(CacheKeys.actorDetail(actorId)),
+        cache.deleteByPrefix('actors:list:'),
+      ])
+
+      console.log(`[Admin/Actors] ✓ Removed alias "${alias}" from actor ${actorId}`)
+
+      return c.json({
+        success: true,
+        aliases: updatedAliases,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin/Actors] ❌ Failed to remove alias from actor ${actorId}:`, message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+/**
  * POST /api/admin/actors/batch-recrawl
  * 批量标记演员为待重新爬取
  * 重置 crawlFailureCount 和 hasDetailsCrawled，下次爬虫运行时会重新尝试
@@ -372,6 +679,7 @@ adminActors.post(
   async (c) => {
     const { ids } = c.req.valid('json')
     const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
 
     try {
       let successCount = 0
@@ -407,7 +715,10 @@ adminActors.post(
         successCount++
       }
 
-      console.log(`[Admin/Actors] ✓ Marked ${successCount}/${ids.length} actors for recrawl`)
+      // 清除相关缓存
+      await cache.clearActorCache()
+
+      console.log(`[Admin/Actors] ✓ Marked ${successCount}/${ids.length} actors for recrawl and cleared cache`)
 
       return c.json({
         success: true,

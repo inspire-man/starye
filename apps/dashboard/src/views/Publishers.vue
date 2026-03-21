@@ -2,12 +2,14 @@
 import type { Movie, Publisher } from '@/lib/api'
 import { computed, onMounted, ref } from 'vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import DataTable from '@/components/DataTable.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
 import { api } from '@/lib/api'
+import { formatDateTime } from '@/lib/date-utils'
 
 const publishers = ref<Publisher[]>([])
 const loading = ref(false)
@@ -33,9 +35,14 @@ const mergeSourceId = ref<string>('')
 const mergeTargetId = ref<string>('')
 const mergingPublishers = ref(false)
 
+// 国家选项列表
+const countries = ref<string[]>([])
+const loadingCountries = ref(false)
+
 const { filters } = useFilters({
   search: '',
-  onlyPending: false, // 仅显示待爬取的厂商
+  crawlStatus: '', // 爬取状态筛选：'' | 'complete' | 'pending' | 'failed' | 'no-link'
+  country: '', // 国家筛选
 })
 
 const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
@@ -48,9 +55,12 @@ function toggleSort(field: string) {
 }
 
 const tableColumns = [
-  { key: 'logo', label: '标志', sortable: false },
-  { key: 'name', label: '名称', sortable: true },
-  { key: 'movieCount', label: '作品数', sortable: true },
+  { key: 'logo', label: '标志', sortable: false, width: '60px' },
+  { key: 'name', label: '名称', sortable: true, width: '200px' },
+  { key: 'movieCount', label: '作品数', sortable: true, width: '80px' },
+  { key: 'crawlStatus', label: '爬取状态', sortable: false, width: '120px' },
+  { key: 'country', label: '国家', sortable: false, width: '80px' },
+  { key: 'createdAt', label: '创建时间', sortable: true, width: '180px' },
 ]
 
 const filteredPublishers = computed(() => {
@@ -100,6 +110,25 @@ async function loadStats() {
   }
 }
 
+async function loadCountries() {
+  loadingCountries.value = true
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/publishers/countries`, {
+      credentials: 'include',
+    })
+    if (response.ok) {
+      const data = await response.json()
+      countries.value = data.countries || []
+    }
+  }
+  catch (e) {
+    console.error('Failed to load countries:', e)
+  }
+  finally {
+    loadingCountries.value = false
+  }
+}
+
 async function loadPublishers() {
   loading.value = true
   error.value = null
@@ -111,8 +140,11 @@ async function loadPublishers() {
     if (filters.value.search) {
       params.search = filters.value.search
     }
-    if (filters.value.onlyPending) {
-      params.onlyPending = 'true'
+    if (filters.value.crawlStatus) {
+      params.crawlStatus = filters.value.crawlStatus
+    }
+    if (filters.value.country) {
+      params.country = filters.value.country
     }
 
     const response = await api.admin.getPublishers(params)
@@ -191,6 +223,7 @@ async function handleMerge() {
 
 onMounted(() => {
   loadStats()
+  loadCountries()
   loadPublishers()
 })
 </script>
@@ -250,14 +283,40 @@ onMounted(() => {
         class="search-input"
         @input="loadPublishers"
       >
-      <label class="filter-checkbox">
-        <input
-          v-model="filters.onlyPending"
-          type="checkbox"
-          @change="loadPublishers"
-        >
-        <span>仅显示待爬取详情</span>
-      </label>
+      <select
+        v-model="filters.crawlStatus"
+        class="filter-select"
+        @change="loadPublishers"
+      >
+        <option value="">
+          全部状态
+        </option>
+        <option value="complete">
+          ✅ 已完成
+        </option>
+        <option value="pending">
+          ⚠️ 待爬取
+        </option>
+        <option value="failed">
+          ❌ 爬取失败
+        </option>
+        <option value="no-link">
+          🔗 无链接
+        </option>
+      </select>
+      <select
+        v-model="filters.country"
+        class="filter-select"
+        :disabled="loadingCountries"
+        @change="loadPublishers"
+      >
+        <option value="">
+          全部国家
+        </option>
+        <option v-for="c in countries" :key="c" :value="c">
+          {{ c }}
+        </option>
+      </select>
       <div class="filter-info">
         共 {{ totalItems }} 个厂商
       </div>
@@ -290,6 +349,19 @@ onMounted(() => {
         <div v-else class="publisher-logo-placeholder">
           {{ item.name.charAt(0) }}
         </div>
+      </template>
+      <template #cell-crawlStatus="{ item }">
+        <CrawlStatusTag
+          :has-details-crawled="item.hasDetailsCrawled"
+          :source-url="item.sourceUrl"
+          :crawl-failure-count="item.crawlFailureCount"
+        />
+      </template>
+      <template #cell-country="{ item }">
+        {{ item.country || '-' }}
+      </template>
+      <template #cell-createdAt="{ item }">
+        {{ formatDateTime(item.createdAt) }}
       </template>
     </DataTable>
 
@@ -640,27 +712,6 @@ onMounted(() => {
   margin-top: 1rem;
 }
 
-.filter-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  background: white;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.filter-checkbox:hover {
-  border-color: #9ca3af;
-  background: #f9fafb;
-}
-
-.filter-checkbox input[type="checkbox"] {
-  cursor: pointer;
-}
-
 .stats-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -699,5 +750,13 @@ onMounted(() => {
   font-size: 0.75rem;
   color: #9ca3af;
   margin-top: 0.25rem;
+}
+
+/* 响应式设计：最小宽度 1280px */
+@media (max-width: 1280px) {
+  .publishers-page {
+    max-width: 100%;
+    padding: 0 1rem;
+  }
 }
 </style>

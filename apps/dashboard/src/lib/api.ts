@@ -108,6 +108,9 @@ export interface Actor {
   debutDate?: number | null
   isActive?: boolean | null
   crawlFailureCount?: number
+  aliases?: string[] | null
+  createdAt?: number | null
+  updatedAt?: number | null
 }
 
 export interface Publisher {
@@ -123,6 +126,8 @@ export interface Publisher {
   foundedYear?: number | null
   description?: string | null
   crawlFailureCount?: number
+  createdAt?: number | null
+  updatedAt?: number | null
 }
 
 export interface AuditLog {

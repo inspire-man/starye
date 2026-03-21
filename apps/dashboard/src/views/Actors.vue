@@ -3,12 +3,14 @@
 import type { Actor, Movie } from '@/lib/api'
 import { computed, onMounted, ref } from 'vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import DataTable from '@/components/DataTable.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
 import { api } from '@/lib/api'
+import { formatDateTime } from '@/lib/date-utils'
 
 const actors = ref<Actor[]>([])
 const loading = ref(false)
@@ -38,9 +40,14 @@ const mergingActors = ref(false)
 const selectedActors = ref<Set<string>>(new Set())
 const isBatchOperating = ref(false)
 
+// 国籍选项列表
+const nationalities = ref<string[]>([])
+const loadingNationalities = ref(false)
+
 const { filters } = useFilters({
   search: '',
-  onlyPending: false, // 仅显示待爬取的女优
+  crawlStatus: '', // 爬取状态筛选：'' | 'complete' | 'pending' | 'failed' | 'no-link'
+  nationality: '', // 国籍筛选
 })
 
 const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
@@ -53,10 +60,14 @@ function toggleSort(field: string) {
 }
 
 const tableColumns = [
-  { key: 'select', label: '选择', sortable: false },
-  { key: 'avatar', label: '头像', sortable: false },
-  { key: 'name', label: '名称', sortable: true },
-  { key: 'movieCount', label: '作品数', sortable: true },
+  { key: 'select', label: '选择', sortable: false, width: '40px' },
+  { key: 'avatar', label: '头像', sortable: false, width: '60px' },
+  { key: 'name', label: '名称', sortable: true, width: '200px' },
+  { key: 'movieCount', label: '作品数', sortable: true, width: '80px' },
+  { key: 'crawlStatus', label: '爬取状态', sortable: false, width: '120px' },
+  { key: 'nationality', label: '国籍', sortable: false, width: '80px' },
+  { key: 'createdAt', label: '创建时间', sortable: true, width: '180px' },
+  { key: 'actions', label: '操作', sortable: false, width: '100px' },
 ]
 
 const filteredActors = computed(() => {
@@ -106,6 +117,25 @@ async function loadStats() {
   }
 }
 
+async function loadNationalities() {
+  loadingNationalities.value = true
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/actors/nationalities`, {
+      credentials: 'include',
+    })
+    if (response.ok) {
+      const data = await response.json()
+      nationalities.value = data.nationalities || []
+    }
+  }
+  catch (e) {
+    console.error('Failed to load nationalities:', e)
+  }
+  finally {
+    loadingNationalities.value = false
+  }
+}
+
 async function loadActors() {
   loading.value = true
   error.value = null
@@ -117,8 +147,11 @@ async function loadActors() {
     if (filters.value.search) {
       params.search = filters.value.search
     }
-    if (filters.value.onlyPending) {
-      params.onlyPending = 'true'
+    if (filters.value.crawlStatus) {
+      params.crawlStatus = filters.value.crawlStatus
+    }
+    if (filters.value.nationality) {
+      params.nationality = filters.value.nationality
     }
 
     const response = await api.admin.getActors(params)
@@ -244,6 +277,7 @@ async function handleBatchRecrawl() {
 
 onMounted(() => {
   loadStats()
+  loadNationalities()
   loadActors()
 })
 </script>
@@ -303,14 +337,40 @@ onMounted(() => {
         class="search-input"
         @input="loadActors"
       >
-      <label class="filter-checkbox">
-        <input
-          v-model="filters.onlyPending"
-          type="checkbox"
-          @change="loadActors"
-        >
-        <span>仅显示待爬取详情</span>
-      </label>
+      <select
+        v-model="filters.crawlStatus"
+        class="filter-select"
+        @change="loadActors"
+      >
+        <option value="">
+          全部状态
+        </option>
+        <option value="complete">
+          ✅ 已完成
+        </option>
+        <option value="pending">
+          ⚠️ 待爬取
+        </option>
+        <option value="failed">
+          ❌ 爬取失败
+        </option>
+        <option value="no-link">
+          🔗 无链接
+        </option>
+      </select>
+      <select
+        v-model="filters.nationality"
+        class="filter-select"
+        :disabled="loadingNationalities"
+        @change="loadActors"
+      >
+        <option value="">
+          全部国籍
+        </option>
+        <option v-for="nat in nationalities" :key="nat" :value="nat">
+          {{ nat }}
+        </option>
+      </select>
       <div class="filter-info">
         共 {{ totalItems }} 个演员
       </div>
@@ -367,6 +427,24 @@ onMounted(() => {
         <div v-else class="actor-avatar-placeholder">
           {{ item.name.charAt(0) }}
         </div>
+      </template>
+      <template #cell-crawlStatus="{ item }">
+        <CrawlStatusTag
+          :has-details-crawled="item.hasDetailsCrawled"
+          :source-url="item.sourceUrl"
+          :crawl-failure-count="item.crawlFailureCount"
+        />
+      </template>
+      <template #cell-nationality="{ item }">
+        {{ item.nationality || '-' }}
+      </template>
+      <template #cell-createdAt="{ item }">
+        {{ formatDateTime(item.createdAt) }}
+      </template>
+      <template #cell-actions="{ item }">
+        <router-link :to="`/actors/${item.id}`" class="action-link" @click.stop>
+          查看详情
+        </router-link>
       </template>
     </DataTable>
 
@@ -531,27 +609,6 @@ onMounted(() => {
   padding: 0 1rem;
   color: #6b7280;
   font-size: 0.875rem;
-}
-
-.filter-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  background: white;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.filter-checkbox:hover {
-  border-color: #9ca3af;
-  background: #f9fafb;
-}
-
-.filter-checkbox input[type="checkbox"] {
-  cursor: pointer;
 }
 
 .stats-cards {
@@ -799,5 +856,26 @@ onMounted(() => {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.action-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.action-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* 响应式设计：最小宽度 1280px */
+@media (max-width: 1280px) {
+  .actors-page {
+    max-width: 100%;
+    padding: 0 1rem;
+  }
 }
 </style>

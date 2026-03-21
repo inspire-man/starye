@@ -12,6 +12,7 @@ const IP_ADDRESS_REGEX = /\d+\.\d+\.\d+\.\d+/
 export interface Env {
   DB: D1Database
   BUCKET: R2Bucket
+  CACHE: KVNamespace
   BETTER_AUTH_SECRET: string
   BETTER_AUTH_URL?: string
   CRAWLER_SECRET: string

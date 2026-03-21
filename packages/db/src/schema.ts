@@ -208,6 +208,7 @@ export const actors = sqliteTable('actor', {
   isActive: integer('is_active', { mode: 'boolean' }).default(true), // 是否活跃
   retireDate: integer('retire_date', { mode: 'timestamp' }), // 引退日期
   socialLinks: text('social_links', { mode: 'json' }), // 社交媒体链接 { twitter, instagram, etc }
+  aliases: text('aliases', { mode: 'json' }), // 别名列表 string[]
   movieCount: integer('movie_count').default(0).notNull(), // 作品数量
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
   // 爬虫字段

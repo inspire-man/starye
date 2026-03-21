@@ -1,0 +1,81 @@
+name: Monthly Data Cleanup
+
+on:
+  schedule:
+    # 每月 1 号凌晨 3 点运行 (UTC+8 对应 UTC 19:00 on the last day of previous month)
+    - cron: '0 19 L * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (preview only)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  cleanup-backup-fields:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.3.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Build Database Package
+        run: pnpm --filter=@starye/db build
+
+      - name: Download Production Database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+        run: |
+          echo "⬇️  下载生产数据库备份..."
+          # 使用 Cloudflare API 导出数据库
+          mkdir -p ./temp
+          # 这里需要实际的 API 调用逻辑
+          echo "注意：需要实现数据库下载逻辑"
+
+      - name: Run Cleanup Preview
+        if: ${{ github.event.inputs.dry_run == 'true' || github.event_name == 'schedule' }}
+        run: |
+          echo "🔍 运行清理预览..."
+          pnpm --filter=@starye/db run cleanup:preview
+
+      - name: Run Cleanup Execution
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        run: |
+          echo "🗑️  执行清理操作..."
+          pnpm --filter=@starye/db run cleanup:execute
+
+      - name: Upload Cleanup Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-report-${{ github.run_number }}
+          path: |
+            packages/db/cleanup-*.log
+          retention-days: 30
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "❌ 清理任务失败，请检查日志"
+          # 这里可以集成通知服务（Slack, Discord 等）
