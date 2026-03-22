@@ -312,6 +312,7 @@ adminMovies.patch(
   zValidator('json', z.object({
     title: z.string().optional(),
     description: z.string().optional(),
+    coverImage: z.string().optional(),
     isR18: z.boolean().optional(),
     metadataLocked: z.boolean().optional(),
     sortOrder: z.number().optional(),

@@ -5,6 +5,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import DataTable from '@/components/DataTable.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
+import Pagination from '@/components/Pagination.vue'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
@@ -192,6 +193,7 @@ async function handleUpdate() {
   try {
     await api.admin.updatePublisher(editingPublisher.value.id, {
       name: editingPublisher.value.name,
+      logo: editingPublisher.value.logo,
     })
     isEditModalOpen.value = false
     await loadPublishers()
@@ -383,6 +385,16 @@ onMounted(() => {
         {{ formatDateTime(item.createdAt) }}
       </template>
     </DataTable>
+
+    <!-- 分页器 -->
+    <Pagination
+      v-if="totalPages > 1"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total="totalItems"
+      :page-size="pageSize"
+      @page-change="goToPage"
+    />
 
     <Teleport to="body">
       <div v-if="isEditModalOpen" class="modal-overlay" @click.self="isEditModalOpen = false">

@@ -18,6 +18,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DataTable from '@/components/DataTable.vue'
 import FilterPanel from '@/components/FilterPanel.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
+import Pagination from '@/components/Pagination.vue'
 import PublisherSelector from '@/components/PublisherSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useBatchSelect } from '@/composables/useBatchSelect'
@@ -58,9 +59,12 @@ const { filters, applyFilters, resetFilters } = useFilters({
   search: '',
 })
 
-const { currentPage, limit, totalPages, setMeta } = usePagination(20)
+const { currentPage, limit, totalPages, setMeta, goToPage } = usePagination(20)
 const { sortBy, sortOrder, updateSort } = useSorting('updatedAt', 'desc')
 const { selected, toggleItem, toggleAll, clearSelection, selectedCount, selectedIds } = useBatchSelect(movies)
+
+// 获取 total 用于分页组件
+const total = ref(0)
 
 const filterFields = [
   {
@@ -147,6 +151,7 @@ async function loadMovies() {
     const response = await api.admin.getMovies(params)
     movies.value = response.data
     setMeta(response.meta)
+    total.value = response.meta.total
   }
   catch (e: unknown) {
     error.value = String(e)
@@ -243,12 +248,15 @@ async function handleUpdate() {
     await api.admin.updateMovie(editingMovie.value.id, {
       title: editingMovie.value.title,
       description: editingMovie.value.description,
+      coverImage: editingMovie.value.coverImage,
       isR18: editingMovie.value.isR18,
       metadataLocked: editingMovie.value.metadataLocked,
       sortOrder: editingMovie.value.sortOrder,
       actors: editingMovie.value.actors,
       genres: editingMovie.value.genres,
       publisher: editingMovie.value.publisher,
+      releaseDate: editingMovie.value.releaseDate,
+      duration: editingMovie.value.duration,
     })
 
     // 更新女优和厂商关联
@@ -418,6 +426,16 @@ const tableColumns = [
         {{ formatDateTime(item.createdAt) }}
       </template>
     </DataTable>
+
+    <!-- 分页器 -->
+    <Pagination
+      v-if="totalPages > 1"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total="total"
+      :page-size="limit"
+      @page-change="goToPage"
+    />
 
     <Teleport to="body">
       <div v-if="isEditModalOpen" class="modal-overlay" @click="isEditModalOpen = false">
