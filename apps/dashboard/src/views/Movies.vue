@@ -186,42 +186,53 @@ watch(
   },
 )
 
-function openEditModal(movie: Movie) {
+async function openEditModal(movie: Movie) {
   editingMovie.value = { ...movie }
   isEditModalOpen.value = true
   activeTab.value = 'metadata'
 
-  // 初始化女优和厂商选择器数据
-  if (movie.actors && Array.isArray(movie.actors)) {
-    // 只保留有 ID 的 actor（过滤掉旧的字符串格式）
-    selectedActors.value = movie.actors
-      .filter(actor => typeof actor !== 'string' && actor.id)
-      .map((actor, index) => ({
-        id: typeof actor !== 'string' ? actor.id : '',
-        name: typeof actor !== 'string' ? actor.name : '',
-        sortOrder: index,
-      }))
+  // 重新获取完整的电影数据（包含关联的女优和厂商）
+  try {
+    const fullMovie = await api.admin.getMovie(movie.id)
+    editingMovie.value = fullMovie
+
+    // 初始化女优选择器数据
+    if (fullMovie.movieActors && Array.isArray(fullMovie.movieActors)) {
+      selectedActors.value = fullMovie.movieActors
+        .filter((ma: any) => ma.actor && ma.actor.id)
+        .map((ma: any, index: number) => ({
+          id: ma.actor!.id,
+          name: ma.actor!.name,
+          sortOrder: ma.sortOrder ?? index,
+        }))
+    }
+    else {
+      selectedActors.value = []
+    }
+
+    // 初始化厂商选择器数据
+    if (fullMovie.moviePublishers && Array.isArray(fullMovie.moviePublishers)) {
+      selectedPublishers.value = fullMovie.moviePublishers
+        .filter((mp: any) => mp.publisher && mp.publisher.id)
+        .map((mp: any, index: number) => ({
+          id: mp.publisher!.id,
+          name: mp.publisher!.name,
+          sortOrder: mp.sortOrder ?? index,
+        }))
+    }
+    else {
+      selectedPublishers.value = []
+    }
+
+    if (fullMovie.id) {
+      loadPlayers(fullMovie.id)
+    }
   }
-  else {
+  catch (e) {
+    console.error('Failed to load movie details:', e)
+    // 失败时回退到使用列表数据
     selectedActors.value = []
-  }
-
-  if (movie.publishers && Array.isArray(movie.publishers)) {
-    // 只保留有 ID 的 publisher（过滤掉旧的字符串格式）
-    selectedPublishers.value = movie.publishers
-      .filter(publisher => typeof publisher !== 'string' && publisher.id)
-      .map((publisher, index) => ({
-        id: typeof publisher !== 'string' ? publisher.id : '',
-        name: typeof publisher !== 'string' ? publisher.name : '',
-        sortOrder: index,
-      }))
-  }
-  else {
     selectedPublishers.value = []
-  }
-
-  if (movie.id) {
-    loadPlayers(movie.id)
   }
 }
 

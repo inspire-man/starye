@@ -90,45 +90,81 @@ const menuItems = computed(() => [
   },
   {
     key: 'crawlers',
-    path: '/crawlers',
     label: '爬虫监控',
     icon: 'activity',
     show: canAccessComics.value || canAccessMovies.value,
+    children: [
+      {
+        path: '/crawlers',
+        label: '爬虫列表',
+        show: canAccessComics.value || canAccessMovies.value,
+      },
+    ],
   },
   {
-    key: 'audit-logs',
-    path: '/audit-logs',
+    key: 'audit',
     label: '审计日志',
     icon: 'clipboard',
     show: canAccessGlobal.value,
+    children: [
+      {
+        path: '/audit-logs',
+        label: '日志列表',
+        show: canAccessGlobal.value,
+      },
+    ],
   },
   {
-    key: 'r18-whitelist',
-    path: '/r18-whitelist',
+    key: 'r18',
     label: 'R18 白名单',
     icon: 'shield',
     show: canAccessGlobal.value,
+    children: [
+      {
+        path: '/r18-whitelist',
+        label: '白名单列表',
+        show: canAccessGlobal.value,
+      },
+    ],
   },
   {
-    key: 'posts',
-    path: '/posts',
-    label: t('dashboard.posts'),
+    key: 'blog',
+    label: '博客管理',
     icon: 'file-text',
     show: canAccessGlobal.value,
+    children: [
+      {
+        path: '/posts',
+        label: '文章列表',
+        show: canAccessGlobal.value,
+      },
+    ],
   },
   {
-    key: 'users',
-    path: '/users',
-    label: t('dashboard.users'),
+    key: 'user-management',
+    label: '用户管理',
     icon: 'users',
     show: canAccessGlobal.value,
+    children: [
+      {
+        path: '/users',
+        label: '用户列表',
+        show: canAccessGlobal.value,
+      },
+    ],
   },
   {
     key: 'settings',
-    path: '/settings',
-    label: t('dashboard.settings'),
+    label: '设置',
     icon: 'settings',
     show: true,
+    children: [
+      {
+        path: '/settings',
+        label: '系统设置',
+        show: true,
+      },
+    ],
   },
 ].filter(item => item.show))
 

@@ -287,6 +287,27 @@ adminMovies.get('/:id', async (c) => {
         players: {
           orderBy: (players, { asc }) => [asc(players.sortOrder)],
         },
+        movieActors: {
+          with: {
+            actor: {
+              columns: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: (movieActors, { asc }) => [asc(movieActors.sortOrder)],
+        },
+        moviePublishers: {
+          with: {
+            publisher: {
+              columns: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     })
 

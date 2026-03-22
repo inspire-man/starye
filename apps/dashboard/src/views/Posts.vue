@@ -3,7 +3,6 @@ import type { Post } from '@starye/db/schema'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { authClient } from '@/lib/auth-client'
 
 // API 返回的 Post 类型（包含 author 关系）
 interface PostWithAuthor extends Pick<Post, 'id' | 'title' | 'slug' | 'published' | 'createdAt' | 'updatedAt'> {
@@ -11,27 +10,6 @@ interface PostWithAuthor extends Pick<Post, 'id' | 'title' | 'slug' | 'published
     name: string
     image?: string | null
   } | null
-}
-
-// API 响应类型
-interface PostsListResponse {
-  data: {
-    data: PostWithAuthor[]
-    meta: {
-      total: number
-      page: number
-      limit: number
-      totalPages: number
-    }
-  }
-  error?: never
-}
-
-interface ApiSuccessResponse {
-  data: {
-    success: true
-  }
-  error?: never
 }
 
 const router = useRouter()
@@ -46,16 +24,16 @@ async function fetchPosts() {
   loading.value = true
   try {
     // Admin request to get all posts including drafts
-    const response = await authClient.$fetch<PostsListResponse>(`/api/posts?draft=true&limit=50`)
-    if (response.error)
-      throw response.error
+    const response = await fetch('/api/posts?draft=true&limit=50', {
+      credentials: 'include',
+    })
 
-    // 类型守卫：确保响应格式正确
-    if (!response.data || typeof response.data !== 'object' || !('data' in response.data))
-      throw new Error('Invalid response format')
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
 
-    const apiData = response.data as unknown as { data: PostWithAuthor[], meta: unknown }
-    posts.value = apiData.data
+    const result = await response.json()
+    posts.value = result.data || []
   }
   catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Failed to fetch posts'
@@ -98,12 +76,14 @@ async function confirmDelete() {
   deleteConfirmId.value = null
 
   try {
-    const response = await authClient.$fetch<ApiSuccessResponse>(`/api/posts/${id}`, {
+    const response = await fetch(`/api/posts/${id}`, {
       method: 'DELETE',
+      credentials: 'include',
     })
 
-    if (response.error)
-      throw response.error
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
 
     posts.value = posts.value.filter(p => p.id !== id)
   }

@@ -79,6 +79,14 @@ export interface Movie {
   crawledPlayers?: number
   createdAt?: string
   updatedAt?: string
+  movieActors?: Array<{
+    sortOrder: number
+    actor?: { id: string, name: string }
+  }>
+  moviePublishers?: Array<{
+    sortOrder: number
+    publisher?: { id: string, name: string }
+  }>
 }
 
 export interface Player {
