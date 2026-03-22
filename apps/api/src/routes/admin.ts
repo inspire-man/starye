@@ -528,15 +528,62 @@ admin.post(
 admin.get('/stats', serviceAuth(), async (c) => {
   const db = c.get('db')
 
-  // 使用 D1/SQLite 高效计数
-  const comicCount = await db.$count(comics)
-  const userCount = await db.$count(user)
+  try {
+    // 并行查询所有统计数据
+    const [
+      comicCount,
+      movieCount,
+      actorCount,
+      publisherCount,
+      userCount,
+      crawlingMovies,
+      crawlingComics,
+      pendingActors,
+      pendingPublishers,
+    ] = await Promise.all([
+      db.$count(comics),
+      db.$count(movies),
+      db.$count(actors),
+      db.$count(publishers),
+      db.$count(user),
+      // 正在爬取的电影（爬取状态为 partial）
+      db.$count(movies, eq(movies.crawlStatus, 'partial')),
+      // 正在爬取的漫画
+      db.$count(comics, eq(comics.crawlStatus, 'partial')),
+      // 待爬取详情的女优
+      db.$count(actors, eq(actors.hasDetailsCrawled, false)),
+      // 待爬取详情的厂商
+      db.$count(publishers, eq(publishers.hasDetailsCrawled, false)),
+    ])
 
-  return c.json({
-    comics: comicCount,
-    users: userCount,
-    tasks: 0,
-  })
+    return c.json({
+      comics: comicCount,
+      movies: movieCount,
+      actors: actorCount,
+      publishers: publisherCount,
+      users: userCount,
+      crawling: {
+        movies: crawlingMovies,
+        comics: crawlingComics,
+      },
+      pending: {
+        actors: pendingActors,
+        publishers: pendingPublishers,
+      },
+    })
+  }
+  catch (error) {
+    console.error('[Admin/Stats] Failed to get stats:', error)
+    return c.json({
+      comics: 0,
+      movies: 0,
+      actors: 0,
+      publishers: 0,
+      users: 0,
+      crawling: { movies: 0, comics: 0 },
+      pending: { actors: 0, publishers: 0 },
+    })
+  }
 })
 
 // 批量查询漫画爬取状态 (用于爬虫增量爬取)
