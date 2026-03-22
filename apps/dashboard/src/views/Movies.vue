@@ -188,22 +188,28 @@ function openEditModal(movie: Movie) {
 
   // 初始化女优和厂商选择器数据
   if (movie.actors && Array.isArray(movie.actors)) {
-    selectedActors.value = movie.actors.map((actor, index) => ({
-      id: typeof actor === 'string' ? '' : actor.id,
-      name: typeof actor === 'string' ? actor : actor.name,
-      sortOrder: index,
-    }))
+    // 只保留有 ID 的 actor（过滤掉旧的字符串格式）
+    selectedActors.value = movie.actors
+      .filter(actor => typeof actor !== 'string' && actor.id)
+      .map((actor, index) => ({
+        id: typeof actor !== 'string' ? actor.id : '',
+        name: typeof actor !== 'string' ? actor.name : '',
+        sortOrder: index,
+      }))
   }
   else {
     selectedActors.value = []
   }
 
   if (movie.publishers && Array.isArray(movie.publishers)) {
-    selectedPublishers.value = movie.publishers.map((publisher, index) => ({
-      id: typeof publisher === 'string' ? '' : publisher.id,
-      name: typeof publisher === 'string' ? publisher : publisher.name,
-      sortOrder: index,
-    }))
+    // 只保留有 ID 的 publisher（过滤掉旧的字符串格式）
+    selectedPublishers.value = movie.publishers
+      .filter(publisher => typeof publisher !== 'string' && publisher.id)
+      .map((publisher, index) => ({
+        id: typeof publisher !== 'string' ? publisher.id : '',
+        name: typeof publisher !== 'string' ? publisher.name : '',
+        sortOrder: index,
+      }))
   }
   else {
     selectedPublishers.value = []

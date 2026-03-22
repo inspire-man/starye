@@ -198,7 +198,22 @@ export class Site92Hm implements CrawlStrategy {
 
   async getMangaInfo(url: string, page: Page): Promise<MangaInfo> {
     await this._smartGoto(page, url)
-    const html = await page.content()
+
+    // 等待页面稳定后再获取内容
+    await this._sleep(1000)
+
+    let html: string
+    try {
+      html = await page.content()
+    }
+    catch {
+      // 如果执行上下文被销毁，重试一次
+      console.warn(`[Site92Hm] ⚠️ Content extraction failed, retrying: ${url}`)
+      await this._sleep(2000)
+      await this._smartGoto(page, url)
+      await this._sleep(1000)
+      html = await page.content()
+    }
 
     const window = new Window()
     const document = window.document
@@ -300,7 +315,23 @@ export class Site92Hm implements CrawlStrategy {
 
     // 2. Slow Path: Puppeteer
     await this._smartGoto(page, url)
-    const html = await page.content()
+
+    // 等待页面稳定后再获取内容
+    await this._sleep(1000)
+
+    let html: string
+    try {
+      html = await page.content()
+    }
+    catch {
+      // 如果执行上下文被销毁，重试一次
+      console.warn(`[Site92Hm] ⚠️ Content extraction failed, retrying: ${url}`)
+      await this._sleep(2000)
+      await this._smartGoto(page, url)
+      await this._sleep(1000)
+      html = await page.content()
+    }
+
     const data = parseFromHtml(html)
 
     return enrichResult(data)

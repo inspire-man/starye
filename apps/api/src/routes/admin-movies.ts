@@ -848,7 +848,7 @@ adminMovies.put(
   '/:id/actors',
   zValidator('json', z.object({
     actors: z.array(z.object({
-      id: z.string(),
+      id: z.string().min(1),
       sortOrder: z.number(),
     })),
   })),
@@ -860,13 +860,20 @@ adminMovies.put(
     try {
       const { movieActors } = await import('@starye/db/schema')
 
+      // 过滤掉无效的 actor ID
+      const validActors = actorList.filter(actor => actor.id && actor.id.trim() !== '')
+
+      if (validActors.length !== actorList.length) {
+        console.warn(`[Admin/Movies] ⚠️ Filtered out ${actorList.length - validActors.length} invalid actor IDs`)
+      }
+
       // 删除现有关联
       await db.delete(movieActors).where(eq(movieActors.movieId, movieId))
 
       // 创建新关联
-      if (actorList.length > 0) {
+      if (validActors.length > 0) {
         await db.insert(movieActors).values(
-          actorList.map(actor => ({
+          validActors.map(actor => ({
             id: crypto.randomUUID(),
             movieId,
             actorId: actor.id,
