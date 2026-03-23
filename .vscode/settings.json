@@ -141,6 +141,7 @@
     "dashboard",
     "crawler",
     "comic",
-    "movie"
+    "movie",
+    "openspec"
   ]
 }
