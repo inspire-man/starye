@@ -180,7 +180,15 @@ export const api = {
 
   // Admin API (full access)
   admin: {
-    getStats: () => fetchApi<{ comics: number, users: number, tasks: number }>('/admin/stats'),
+    getStats: () => fetchApi<{
+      comics: number
+      movies: number
+      actors: number
+      publishers: number
+      users: number
+      crawling: { movies: number, comics: number }
+      pending: { actors: number, publishers: number }
+    }>('/admin/stats'),
 
     getComics: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
