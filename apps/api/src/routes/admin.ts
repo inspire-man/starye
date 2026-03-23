@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import type { AppEnv } from '../types'
 import { zValidator } from '@hono/zod-validator'
-import { chapters, comics, movies, pages, players, user } from '@starye/db/schema'
+import { actors, chapters, comics, movies, pages, players, publishers, user } from '@starye/db/schema'
 import { and, count, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'

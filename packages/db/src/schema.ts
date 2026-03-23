@@ -220,9 +220,12 @@ export const actors = sqliteTable('actor', {
   lastCrawlAttempt: integer('last_crawl_attempt', { mode: 'timestamp' }), // 最后尝试时间
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-}, table => ({
-  uniqueSourceId: uniqueIndex('idx_actor_source_id').on(table.source, table.sourceId),
-}))
+})
+
+// 女优表索引
+export const actorsIndexes = {
+  uniqueSourceId: uniqueIndex('idx_actor_source_id').on(actors.source, actors.sourceId),
+}
 
 export type Actor = InferSelectModel<typeof actors>
 export type NewActor = InferInsertModel<typeof actors>
@@ -248,9 +251,12 @@ export const publishers = sqliteTable('publisher', {
   lastCrawlAttempt: integer('last_crawl_attempt', { mode: 'timestamp' }), // 最后尝试时间
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-}, table => ({
-  uniqueSourceId: uniqueIndex('idx_publisher_source_id').on(table.source, table.sourceId),
-}))
+})
+
+// 厂商表索引
+export const publishersIndexes = {
+  uniqueSourceId: uniqueIndex('idx_publisher_source_id').on(publishers.source, publishers.sourceId),
+}
 
 export type Publisher = InferSelectModel<typeof publishers>
 export type NewPublisher = InferInsertModel<typeof publishers>
@@ -262,10 +268,13 @@ export const movieActors = sqliteTable('movie_actor', {
   actorId: text('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
   sortOrder: integer('sort_order').default(0), // 保持原站顺序
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-}, table => ({
-  uniqueMovieActor: uniqueIndex('idx_movie_actor').on(table.movieId, table.actorId),
-  actorIdx: index('idx_movie_actor_actor_id').on(table.actorId), // 反向查询索引（普通索引）
-}))
+})
+
+// 电影-女优关联表索引
+export const movieActorsIndexes = {
+  uniqueMovieActor: uniqueIndex('idx_movie_actor').on(movieActors.movieId, movieActors.actorId),
+  actorIdx: index('idx_movie_actor_actor_id').on(movieActors.actorId), // 反向查询索引（普通索引）
+}
 
 export type MovieActor = InferSelectModel<typeof movieActors>
 export type NewMovieActor = InferInsertModel<typeof movieActors>
@@ -277,10 +286,13 @@ export const moviePublishers = sqliteTable('movie_publisher', {
   publisherId: text('publisher_id').notNull().references(() => publishers.id, { onDelete: 'cascade' }),
   sortOrder: integer('sort_order').default(0),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-}, table => ({
-  uniqueMoviePublisher: uniqueIndex('idx_movie_pub').on(table.movieId, table.publisherId),
-  publisherIdx: index('idx_movie_pub_publisher_id').on(table.publisherId), // 反向查询索引（普通索引）
-}))
+})
+
+// 电影-厂商关联表索引
+export const moviePublishersIndexes = {
+  uniqueMoviePublisher: uniqueIndex('idx_movie_pub').on(moviePublishers.movieId, moviePublishers.publisherId),
+  publisherIdx: index('idx_movie_pub_publisher_id').on(moviePublishers.publisherId), // 反向查询索引（普通索引）
+}
 
 export type MoviePublisher = InferSelectModel<typeof moviePublishers>
 export type NewMoviePublisher = InferInsertModel<typeof moviePublishers>
@@ -321,9 +333,12 @@ export const readingProgress = sqliteTable('reading_progress', {
   chapterId: text('chapter_id').notNull().references(() => chapters.id, { onDelete: 'cascade' }),
   page: integer('page').notNull(), // 当前阅读页码
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
-}, table => ({
-  userChapterIdx: uniqueIndex('idx_reading_progress_user_chapter').on(table.userId, table.chapterId),
-}))
+})
+
+// 阅读进度表索引
+export const readingProgressIndexes = {
+  userChapterIdx: uniqueIndex('idx_reading_progress_user_chapter').on(readingProgress.userId, readingProgress.chapterId),
+}
 
 export type ReadingProgress = InferSelectModel<typeof readingProgress>
 export type NewReadingProgress = InferInsertModel<typeof readingProgress>
@@ -335,9 +350,12 @@ export const watchingProgress = sqliteTable('watching_progress', {
   progress: integer('progress').notNull(), // 播放进度（秒）
   duration: integer('duration'), // 总时长（秒）
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
-}, table => ({
-  userMovieIdx: uniqueIndex('idx_watching_progress_user_movie').on(table.userId, table.movieCode),
-}))
+})
+
+// 观看进度表索引
+export const watchingProgressIndexes = {
+  userMovieIdx: uniqueIndex('idx_watching_progress_user_movie').on(watchingProgress.userId, watchingProgress.movieCode),
+}
 
 export type WatchingProgress = InferSelectModel<typeof watchingProgress>
 export type NewWatchingProgress = InferInsertModel<typeof watchingProgress>

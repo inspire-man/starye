@@ -2,9 +2,9 @@
 import { computed } from 'vue'
 
 interface Props {
-  hasDetailsCrawled: boolean
+  hasDetailsCrawled?: boolean | null
   sourceUrl?: string | null
-  crawlFailureCount?: number
+  crawlFailureCount?: number | null
 }
 
 const props = defineProps<Props>()
