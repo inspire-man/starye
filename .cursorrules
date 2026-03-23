@@ -1,0 +1,71 @@
+# Starye 项目规则
+
+## 文档参考策略
+
+当用户咨询以下技术栈时，优先查阅本地文档：
+
+### 技术栈文档映射
+
+- **Hono** (`docs/hono/llms-full.txt`) - Web framework built on Web Standards
+- **Better Auth** (`docs/better-auth/llms-full.txt`) - TypeScript authentication framework
+- **Nuxt** (`docs/nuxt/llms-full.txt`) - Vue framework for building web applications
+- **Zod** (`docs/zod/llms-full.txt`) - TypeScript-first schema validation
+- **Vite** (`docs/vite/llms-full.txt`) - Next generation frontend tooling
+- **Vitest** (`docs/vitest/llms-full.txt`) - Vite-native unit test framework
+- **Vue** (`docs/vue/llms-full.txt`) - The Progressive JavaScript Framework
+- **Turborepo** (`docs/turborepo/llms-full.txt`) - High-performance build system for monorepos
+- **Drizzle ORM** (`docs/drizzle/llms-full.txt`) - TypeScript ORM for SQL databases
+
+### 查找流程
+
+#### 快速路径（使用章节索引）
+
+1. 读取 `docs/_sections.json` 章节索引
+2. 根据关键词匹配相关章节
+3. 使用 Read 工具的 `offset` 和 `limit` 参数精确读取章节内容
+
+**示例**：
+用户问："Hono 如何配置 CORS？"
+1. 读取 `docs/_sections.json`
+2. 在 `hono.sections` 中查找包含 "cors" 关键词的章节
+3. 假设找到章节: `start_line=234, end_line=267`
+4. 使用 Read 工具: `offset=234, limit=34` 读取 `docs/hono/llms-full.txt`
+
+#### 降级路径（使用 Grep 搜索）
+
+当章节索引未命中时，使用 Grep 工具搜索关键词：
+
+**示例**：
+用户问："Hono 中如何处理 WebSocket？"
+1. 快速路径未找到匹配章节
+2. 使用 Grep 搜索: `pattern="websocket"`, `path="docs/hono/llms-full.txt"`
+3. 读取匹配结果的上下文（使用 `-C 3` 获取前后 3 行）
+
+#### 兜底路径（使用 WebSearch）
+
+当本地文档不存在或未覆盖查询主题时，使用 WebSearch 工具查询官方网站。
+
+### 大文件处理指引
+
+- 如果 `docs/_sections.json` 中某个框架标记了 `size_warning`，必须使用章节索引进行精确行范围读取
+- 不要尝试一次性读取整个文档（特别是 Better Auth 等大型文档）
+- 优先使用 Read 工具的 `offset` 和 `limit` 参数
+
+### 文档更新说明
+
+- 可通过 `docs/_meta.json` 的 `last_updated` 字段判断文档更新时间
+- 如果文档可能过时，建议用户运行 `pnpm docs:sync` 更新文档
+- 文档同步建议频率：每周一次
+
+### 技术栈识别
+
+- 自动识别用户查询或代码上下文中涉及的技术栈
+- 从 import 语句推断框架（如 `import { Hono } from 'hono'`）
+- 支持多技术栈组合查询（如 "如何在 Hono 中使用 Zod 验证？"）
+
+### 响应要求
+
+- 回答技术栈相关问题时，优先引用本地官方文档内容
+- 在回答中标注信息来源（如 "根据 Hono 官方文档..."）
+- 如果使用了 WebSearch，应明确说明
+- 确保答案基于文档实际内容，不凭记忆推测

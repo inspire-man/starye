@@ -1,5 +1,6 @@
 {
   "name": "starye-monorepo",
+  "type": "module",
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@10.32.1",
@@ -21,6 +22,9 @@
     "test": "turbo run test",
     "test:e2e": "vitest run test/e2e/flow.test.ts",
     "type-check": "turbo run type-check",
+    "docs:sync": "pwsh -ExecutionPolicy Bypass -File ./scripts/sync-docs.ps1",
+    "docs:meta": "node scripts/generate-meta.js",
+    "docs:index": "node scripts/generate-sections.js",
     "prepare": "husky"
   },
   "devDependencies": {
