@@ -68,6 +68,7 @@
     "headful",
     "historys",
     "iconify",
+    "ilike",
     "infobars",
     "isload",
     "javbus",
@@ -120,6 +121,7 @@
     "recrawl",
     "Referer",
     "Retryable",
+    "rhinobase",
     "scrapy",
     "Shadcn",
     "SSIS",
@@ -142,6 +144,8 @@
     "crawler",
     "comic",
     "movie",
-    "openspec"
-  ]
+    "openspec",
+    "api"
+  ],
+  "vitest.maximumConfigs": 10
 }

@@ -69,7 +69,11 @@ export const authApi = {
   },
 
   async signOut() {
-    await api.post('/auth/sign-out')
+    await api.post('/auth/sign-out', {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
     window.location.reload()
   },
 }

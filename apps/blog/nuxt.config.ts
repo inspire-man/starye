@@ -33,6 +33,11 @@ export default defineNuxtConfig({
       tailwindcss(),
     ],
     optimizeDeps: {
+      include: [
+        'clsx',
+        'tailwind-merge',
+        'better-auth/vue',
+      ],
       exclude: ['@starye/locales'],
     },
   },
