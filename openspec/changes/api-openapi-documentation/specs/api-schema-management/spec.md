@@ -1,240 +1,97 @@
-## Capability
+## ADDED Requirements
 
-建立统一的 API Schema 组织和管理规范，确保 1000+ 行 Schema 定义的可维护性。
+### Requirement: Schema 目录结构组织
 
-## Requirements
+系统 MUST 在 `apps/api/src/schemas/` 创建按领域分类的目录结构，SHALL 包含 `common.ts`、`responses.ts`、`comic.ts`、`movie.ts`、`actor.ts`、`crawler.ts` 和统一导出的 `index.ts`。
 
-### R1: 三层目录结构
+#### Scenario: 通用 schema 管理
+- **WHEN** 创建分页、slug、timestamp 等通用验证逻辑
+- **THEN** 这些 schema 定义在 `schemas/common.ts` 中，并通过 `index.ts` 导出供其他路由使用
 
-必须建立 `schemas/` 目录，按职责分为三层 MUST
+#### Scenario: 响应格式标准化
+- **WHEN** 需要定义 `SuccessResponse`、`ErrorResponse` 等通用响应格式
+- **THEN** 这些 schema 定义在 `schemas/responses.ts` 中，支持泛型参数以包装业务数据
 
-- 必须创建 `schemas/common/` 存放通用响应模板 MUST
-- 必须创建 `schemas/entities/` 存放领域实体 Schema MUST
-- 路由模块必须在各自目录下创建 `route-schemas.ts` 文件 MUST
+#### Scenario: 领域 schema 隔离
+- **WHEN** 定义漫画相关的 `ComicItemSchema`、`ChapterSchema`
+- **THEN** 这些 schema 定义在 `schemas/comic.ts` 中，避免与电影或演员 schema 混杂
 
-### R2: 通用响应模板
+### Requirement: Valibot 类型强制转换
 
-必须实现可复用的响应 Schema 构建函数 MUST
+系统 SHALL 使用 Valibot 的 `pipe` 和转换 actions（如 `toNumber()`、`trim()`）处理 query 参数和 form 数据，MUST 对所有数值型 query 参数使用 `v.pipe(v.string(), v.toNumber())` 模式。
 
-- 必须实现 `dataResponse<T>(schema)` 包装单对象响应 MUST
-- 必须实现 `paginatedResponse<T>(itemSchema)` 生成分页响应 MUST
-- 必须实现 `errorResponse` 定义错误响应结构 MUST
-- 必须实现 `commonErrorResponses` 常量对象（400, 403, 404, 500）MUST
-- 必须实现 `withCommonErrors(successResponses, errorCodes)` 合并响应 MUST
+#### Scenario: 分页参数强制转换
+- **WHEN** query 参数定义为 `page: v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))`
+- **THEN** 接收到字符串 "5" 时自动转换为数字 5，并进行后续验证
 
-### R3: 实体 Schema 管理
+#### Scenario: 字符串 trim 处理
+- **WHEN** 搜索关键词定义为 `v.pipe(v.string(), v.trim(), v.minLength(1))`
+- **THEN** 接收到 " 海贼王 " 时自动去除前后空格，得到 "海贼王"
 
-实体 Schema 必须集中定义在 `schemas/entities/` 目录 MUST
+#### Scenario: NaN 检测
+- **WHEN** query 参数使用 `toNumber()` 转换失败（如输入 "abc"）
+- **THEN** 系统返回 400 错误，提示数值转换失败
 
-- 每个实体必须有独立的 `.schema.ts` 文件 MUST
-- 必须导出完整实体 Schema（如 `movieSchema`）MUST
-- 必须导出列表精简版（如 `movieListItemSchema`）MUST
-- 应该导出详情扩展版（如 `movieDetailSchema`，含关联数据）SHOULD
-- 实体 Schema 不得包含路由逻辑 MUST
+### Requirement: Object Schema 类型选择
 
-### R4: 路由 Schema 组织
+系统 MUST 根据使用场景选择合适的 object schema 类型：API 请求使用 `v.object()`（移除未知字段），配置文件使用 `v.looseObject()`（允许扩展）。
 
-路由专属 Schema 必须定义在 `routes/{module}/route-schemas.ts` MUST
+#### Scenario: API 请求验证
+- **WHEN** 定义 `CreateComicSchema = v.object({ title: v.string(), slug: v.string() })`
+- **THEN** 接收到包含 `{ title: '海贼王', slug: 'one-piece', extra: 'ignored' }` 时，移除 `extra` 字段，只验证和保留 title 和 slug
 
-- 必须定义请求参数 Schema（query, params, body）MUST
-- 必须定义响应 Schema（组合 entities 和 common 模板）MUST
-- 必须导出完整的 `RouteConfig` 对象（可直接用于 `describeRoute()`）MUST
-- 路由 Schema 文件必须保持简洁（每个路由 15-30 行）MUST
+#### Scenario: 配置文件验证
+- **WHEN** 定义 `R2ConfigSchema = v.looseObject({ accountId: v.string(), ... })`
+- **THEN** 允许配置文件包含未定义的额外字段，便于未来扩展
 
-### R5: 命名规范
+### Requirement: Schema Metadata 与引用
 
-所有 Schema 和配置对象必须遵循统一的命名规范 MUST
+系统 SHALL 使用 `metadata({ ref: 'Name' })` 为可复用的 schema 添加引用名，MUST 在 OpenAPI 生成时使用 `$ref` 引用而非内联定义。
 
-**Entity Schema 命名**:
-- `{entity}Schema` - 完整实体（如 `movieSchema`）MUST
-- `{entity}ListItemSchema` - 列表项精简版（如 `movieListItemSchema`）MUST
-- `{entity}DetailSchema` - 详情含关联（如 `movieDetailSchema`）MUST
+#### Scenario: 定义通用 schema 引用
+- **WHEN** 定义 `PaginationSchema = v.pipe(v.object({ ... }), v.metadata({ ref: 'PaginationParams' }))`
+- **THEN** 该 schema 在 OpenAPI 文档中注册为 `#/components/schemas/PaginationParams`
 
-**Route Schema 命名**:
-- `{route}{Action}QuerySchema` - 查询参数（如 `movieListQuerySchema`）MUST
-- `{route}{Action}ParamsSchema` - 路径参数（如 `movieDetailParamsSchema`）MUST
-- `{route}{Action}BodySchema` - 请求体（如 `movieCreateBodySchema`）MUST
-- `{route}{Action}ResponseSchema` - 响应（如 `movieListResponseSchema`）MUST
+#### Scenario: 继承通用 schema
+- **WHEN** 定义 `GetComicQuerySchema = v.object({ ...v.entries(PaginationSchema), keyword: v.optional(...) })`
+- **THEN** 该 schema 继承 PaginationSchema 的所有字段，并添加额外的 keyword 字段
 
-**Route Config 命名**:
-- `{route}{Action}RouteConfig` - describeRoute 配置（如 `movieListRouteConfig`）MUST
+### Requirement: 示例数据标注
 
-### R6: DRY 原则
+系统 MUST 为关键 schema 字段使用 `.examples()` 添加示例数据，SHALL 在字符串、数字等基础类型上使用 `.description()` 添加字段说明。
 
-必须避免重复定义，充分利用辅助函数 MUST
+#### Scenario: Query 参数示例
+- **WHEN** 定义 `keyword: v.pipe(v.string(), v.examples(['海贼王', 'one piece']), v.description('搜索关键词'))`
+- **THEN** OpenAPI 文档包含示例和描述，帮助前端开发者理解字段用途
 
-- 禁止在多个路由中重复定义相同的错误响应结构 MUST
-- 必须使用 `withCommonErrors()` 合并通用错误 MUST
-- 必须使用 `dataResponse()` 和 `paginatedResponse()` 构建响应 MUST
-- 实体 Schema 必须复用，不得在路由中重复定义实体字段 MUST
+#### Scenario: 对象示例
+- **WHEN** 定义 `ComicItemSchema = v.pipe(v.object({ ... }), v.examples([{ id: 'cm001', title: '海贼王', ... }]))`
+- **THEN** OpenAPI 文档的 response 示例包含完整的结构化数据
 
-### R7: 文档注释
+### Requirement: 类型推导与导出
 
-所有 Schema 文件必须包含 JSDoc 注释 MUST
+系统 SHALL 使用 `v.InferOutput<typeof Schema>` 推导 TypeScript 类型，MUST 为所有公开的 schema 导出对应的类型定义。
 
-- 每个导出的 Schema 必须有注释说明用途 MUST
-- 复杂 Schema 必须注明使用场景和示例 MUST
-- 通用模板必须说明参数含义和返回值 MUST
+#### Scenario: Schema 类型导出
+- **WHEN** 定义 `export const ComicItemSchema = v.object({ ... })` 和 `export type ComicItem = v.InferOutput<typeof ComicItemSchema>`
+- **THEN** 其他模块可以导入 `ComicItem` 类型用于函数签名和变量声明
 
-## Acceptance Criteria
+#### Scenario: 类型推导验证
+- **WHEN** 使用 `const data = v.parse(ComicItemSchema, input)`
+- **THEN** TypeScript 自动推导 `data` 的类型为 `ComicItem`，提供完整的类型安全
 
-### AC1: 目录结构验证
+### Requirement: Zod 完全移除
 
-- [ ] `apps/api/src/schemas/` 目录存在
-- [ ] `apps/api/src/schemas/common/` 目录存在
-- [ ] `apps/api/src/schemas/entities/` 目录存在
-- [ ] 至少一个路由模块有 `route-schemas.ts` 文件
+系统 MUST 从所有文件中移除 Zod 相关 import 和 schema 定义，SHALL 确保 `apps/api/package.json` 和 `packages/crawler/package.json` 不包含 `zod` 或 `@hono/zod-validator` 依赖。
 
-### AC2: 通用模板验证
+#### Scenario: API 依赖清理
+- **WHEN** 执行 `pnpm remove zod @hono/zod-validator` 在 `apps/api`
+- **THEN** package.json 的 dependencies 不再包含 Zod 相关包
 
-- [ ] `schemas/common/responses.ts` 文件存在
-- [ ] `dataResponse<T>()` 函数可用且返回正确结构
-- [ ] `paginatedResponse<T>()` 函数可用且返回正确结构
-- [ ] `withCommonErrors()` 函数正确合并响应
-- [ ] 所有函数都有 JSDoc 注释
+#### Scenario: Crawler 依赖清理
+- **WHEN** 执行 `pnpm remove zod` 在 `packages/crawler`
+- **THEN** package.json 的 dependencies 不再包含 `zod`
 
-### AC3: 实体 Schema 验证
-
-- [ ] `schemas/entities/movie.schema.ts` 存在
-- [ ] 导出 `movieSchema`, `movieListItemSchema`, `movieDetailSchema`
-- [ ] Schema 定义完整（包含所有必要字段）
-- [ ] 有 JSDoc 注释说明用途
-
-### AC4: 路由 Schema 验证
-
-- [ ] `routes/movies/route-schemas.ts` 存在
-- [ ] 导出至少一个 QuerySchema
-- [ ] 导出至少一个 ResponseSchema
-- [ ] 导出至少一个 RouteConfig
-- [ ] 路由 Schema 复用了 entities 和 common 模板
-
-### AC5: 命名规范验证
-
-- [ ] 所有 Schema 命名符合规范（手动检查或通过 lint）
-- [ ] 没有不符合规范的命名（如 `getMoviesQuery` 应为 `movieListQuerySchema`）
-- [ ] RouteConfig 以 `RouteConfig` 结尾
-
-### AC6: DRY 原则验证
-
-- [ ] 搜索代码中没有重复定义的错误响应结构
-- [ ] 所有路由都使用 `withCommonErrors()` 而非手动定义
-- [ ] 实体字段没有在路由 Schema 中重复定义
-
-### AC7: 文档注释验证
-
-- [ ] 每个导出的 Schema 都有 JSDoc 注释
-- [ ] 通用模板的注释包含使用示例
-- [ ] 复杂 Schema 的注释说明了使用场景
-
-## Implementation Notes
-
-### 文件结构示例
-
-```
-apps/api/src/
-├── schemas/
-│   ├── common/
-│   │   ├── responses.ts        (~80 行)
-│   │   │   export dataResponse<T>()
-│   │   │   export paginatedResponse<T>()
-│   │   │   export errorResponse
-│   │   │   export commonErrorResponses
-│   │   │   export withCommonErrors()
-│   │   │
-│   │   ├── pagination.ts       (~20 行)
-│   │   │   export paginationMeta
-│   │   │
-│   │   └── errors.ts           (可选，未来扩展)
-│   │
-│   └── entities/
-│       ├── movie.schema.ts     (~100 行)
-│       │   export movieSchema
-│       │   export movieListItemSchema
-│       │   export movieDetailSchema
-│       │
-│       ├── actor.schema.ts     (~80 行)
-│       ├── publisher.schema.ts (~70 行)
-│       └── comic.schema.ts     (~90 行)
-│
-└── routes/
-    ├── movies/
-    │   ├── index.ts            (路由定义)
-    │   ├── route-schemas.ts    (~150 行)
-    │   │   export movieListQuerySchema
-    │   │   export movieListResponseSchema
-    │   │   export movieListRouteConfig
-    │   │   export movieDetailParamsSchema
-    │   │   export movieDetailResponseSchema
-    │   │   export movieDetailRouteConfig
-    │   │   // ... 其他 8 个路由
-    │   │
-    │   ├── handlers/
-    │   └── services/
-    │
-    └── actors/
-        ├── index.ts
-        ├── route-schemas.ts    (~80 行)
-        └── ...
-```
-
-### 通用模板实现示例
-
-```typescript
-// schemas/common/responses.ts
-
-/**
- * 通用成功响应 - 包装单个对象
- * 
- * @example
- * const response = dataResponse(movieSchema)
- * // 生成: { data: Movie }
- */
-export const dataResponse = <T extends z.ZodTypeAny>(schema: T) =>
-  z.object({ data: schema })
-
-/**
- * 分页列表响应
- * 
- * @example
- * const response = paginatedResponse(movieListItemSchema)
- * // 生成: { data: Movie[], meta: { total, page, pageSize } }
- */
-export const paginatedResponse = <T extends z.ZodTypeAny>(itemSchema: T) =>
-  z.object({
-    data: z.array(itemSchema),
-    meta: paginationMeta
-  })
-
-/**
- * 合并通用错误响应
- * 
- * @example
- * const responses = withCommonErrors(
- *   { 200: { ... } },
- *   [403, 404, 500]
- * )
- * // 生成: { 200: {...}, 403: {...}, 404: {...}, 500: {...} }
- */
-export function withCommonErrors<T extends Record<number, any>>(
-  successResponses: T,
-  errorCodes: Array<400 | 403 | 404 | 500> = [500]
-) {
-  const errors = Object.fromEntries(
-    errorCodes.map(code => [code, commonErrorResponses[code]])
-  )
-  return { ...successResponses, ...errors }
-}
-```
-
-### 预期工作量
-
-- 创建通用模板: 2-3 小时
-- 创建实体 Schema (4 个核心实体): 4-5 小时
-- 创建路由 Schema (50+ 路由): 每个路由 20 分钟 = 16-20 小时
-- **总计**: 22-28 小时（约 3-4 天）
-
-## Dependencies
-
-- 依赖 Zod v4.3.6+ 的类型系统
-- 依赖 `hono-openapi` 的 `resolver()` 函数
-- 依赖项目现有的路由结构
+#### Scenario: Import 语句替换
+- **WHEN** 搜索所有 `import { z } from 'zod'` 和 `import { zValidator } from '@hono/zod-validator'`
+- **THEN** 所有匹配的 import 被替换为 Valibot 和 hono-openapi 的 import

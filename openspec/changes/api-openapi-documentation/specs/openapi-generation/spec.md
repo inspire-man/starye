@@ -1,165 +1,77 @@
-## Capability
+## ADDED Requirements
 
-使用 rhinobase/hono-openapi 中间件为 Hono API 自动生成 OpenAPI 3.1 规范。
+### Requirement: 自动生成 OpenAPI 3.0 规范
 
-## Requirements
+系统 SHALL 为所有 API 端点自动生成完整的 OpenAPI 3.0 规范文档，包括 request schemas、response schemas、security definitions 和 tags。MUST 通过 `openAPIRouteHandler` 在 `/openapi.json` 端点提供标准的 JSON 格式文档。
 
-### R1: 集成 hono-openapi 中间件
+#### Scenario: 访问 OpenAPI 规范文档
+- **WHEN** 用户访问 `GET /openapi.json`
+- **THEN** 系统返回包含 `openapi: "3.0.0"`、`info`、`servers`、`paths` 和 `components` 的完整 JSON 文档
 
-系统必须集成 rhinobase/hono-openapi 包，通过 `describeRoute()` 中间件为路由添加 OpenAPI 元数据 MUST
+#### Scenario: Request schema 自动推导
+- **WHEN** 路由使用 `validator('query', QuerySchema)` 定义验证
+- **THEN** OpenAPI 文档的 `paths[path][method].parameters` 自动包含该 schema 定义，无需手动编写
 
-- 必须使用 v1.3.0 或更高版本（修复了路径参数泄漏 bug）MUST
-- 必须通过 `openAPISpecs()` 函数生成 `/openapi.json` 端点 MUST
-- 生成的规范必须符合 OpenAPI 3.1.0 标准 MUST
+#### Scenario: Response schema 定义
+- **WHEN** 路由使用 `describeRoute()` 定义 responses 并使用 `resolver(ResponseSchema)`
+- **THEN** OpenAPI 文档的 `paths[path][method].responses` 包含正确的 schema 引用和示例数据
 
-### R2: 保持 RPC 类型推导完整性
+### Requirement: Schema 引用与复用
 
-`describeRoute()` 中间件的添加不得破坏 Hono RPC 客户端的类型推导 MUST
+系统 MUST 支持通过 `metadata({ ref: 'Name' })` 定义可复用的 schema 组件，SHALL 在生成的 OpenAPI 文档中使用 `$ref` 引用而非内联定义，以减少文档冗余。
 
-- Dashboard 的 `hc<AppType>()` 必须能正确推导所有路由类型 MUST
-- `apiClient.api.{module}.{endpoint}.$get()` 的自动补全必须正常工作 MUST
-- TypeScript 编译不得出现类型错误 MUST
+#### Scenario: 定义可复用 schema
+- **WHEN** schema 使用 `v.pipe(..., v.metadata({ ref: 'PaginationParams' }))`
+- **THEN** OpenAPI 文档的 `components.schemas` 包含 `PaginationParams` 定义
 
-### R3: 支持 Zod schema 转换
+#### Scenario: 引用复用 schema
+- **WHEN** 多个端点使用同一个带 ref 的 schema
+- **THEN** 各端点在 OpenAPI 文档中使用 `{ $ref: '#/components/schemas/PaginationParams' }` 引用，而非重复定义
 
-必须正确将 Zod schema 转换为 OpenAPI JSON Schema MUST
+### Requirement: Security Scheme 配置
 
-- 必须支持 Zod v4.x 的所有常用类型（string, number, boolean, array, object）MUST
-- 必须正确转换 `z.union()` 为 `oneOf` MUST
-- 必须正确转换 `z.enum()` 为 `enum` MUST
-- 必须正确处理 `.optional()`, `.default()`, `.nullable()` 等修饰符 MUST
-- 必须通过 `resolver()` 函数包装 Zod schema 用于 OpenAPI MUST
+系统 SHALL 在 OpenAPI 文档的 `components.securitySchemes` 中定义 Better Auth 的 cookie 认证方案，MUST 标记需要认证的 Admin 路由。
 
-### R4: 支持完整的路由描述
+#### Scenario: Cookie 认证定义
+- **WHEN** OpenAPI 文档生成
+- **THEN** `components.securitySchemes` 包含 `cookieAuth` 定义（type: apiKey, in: cookie, name: better-auth.session_token）
 
-必须支持为路由定义完整的 OpenAPI 元数据 MUST
+#### Scenario: 受保护路由标记
+- **WHEN** Admin 路由（如 `/admin/comics`）在 OpenAPI 文档中生成
+- **THEN** 该路由的 `security` 字段包含 `[{ cookieAuth: [] }]`
 
-- 必须支持 `tags` 字段（用于路由分组）MUST
-- 必须支持 `summary` 和 `description` 字段 MUST
-- 必须支持 `request` 定义（query, params, body）MUST
-- 必须支持 `responses` 定义（多状态码、多 content-type）MUST
-- 必须支持 `deprecated` 标记（可选）SHOULD
+### Requirement: Tags 与分组
 
-### R5: 嵌套路由隔离
+系统 MUST 通过 `describeRoute()` 的 `tags` 字段为 API 端点分组，SHALL 在 OpenAPI 文档的 `tags` 顶层定义所有标签及其描述。
 
-嵌套路由的 `describeRoute()` 元数据不得污染其他路由 MUST
+#### Scenario: 路由分组
+- **WHEN** 路由定义 `describeRoute({ tags: ['Comics'] })`
+- **THEN** OpenAPI 文档的 `paths[path][method].tags` 包含 `['Comics']`
 
-- `/api/movies/actors` 的 tags 不得影响 `/api/actors` MUST
-- 路径参数定义必须正确隔离 MUST
-- 验证 v1.3.0 的 PR #225 修复是否生效 MUST
+#### Scenario: Tags 元信息
+- **WHEN** OpenAPI 文档生成
+- **THEN** `tags` 顶层数组包含 `{ name: 'Comics', description: '漫画相关接口' }` 等所有分组的元信息
 
-### R6: 文档端点配置
+### Requirement: OperationId 命名规范
 
-必须提供 OpenAPI 规范的访问端点和配置能力 MUST
+系统 SHALL 为每个 API 端点生成唯一的 `operationId`，MUST 遵循 `{动词}{资源}{后缀}` 的命名规范（如 `getComicsList`、`createComic`）。
 
-- 必须暴露 `/openapi.json` 端点返回完整规范 MUST
-- 必须支持配置 `info` 对象（title, version, description）MUST
-- 必须支持配置 `servers` 数组（production, development 等）MUST
-- 应该支持配置全局 `security` 定义（可选）SHOULD
+#### Scenario: 列表接口 operationId
+- **WHEN** 定义 `GET /comics` 的 `describeRoute({ operationId: 'getComicsList' })`
+- **THEN** OpenAPI 文档的 `paths['/comics'].get.operationId` 为 `getComicsList`
 
-## Acceptance Criteria
+#### Scenario: 详情接口 operationId
+- **WHEN** 定义 `GET /comics/:slug` 的 `describeRoute({ operationId: 'getComicDetail' })`
+- **THEN** OpenAPI 文档的 `paths['/comics/{slug}'].get.operationId` 为 `getComicDetail`
 
-### AC1: 基础集成验证
+### Requirement: Examples 与文档增强
 
-- [ ] 安装 `hono-openapi` 包成功
-- [ ] `/openapi.json` 端点可访问
-- [ ] 返回的 JSON 符合 OpenAPI 3.1.0 规范
-- [ ] `info.title` 和 `info.version` 显示正确
+系统 MUST 支持通过 Valibot 的 `.examples()` 方法为 schema 字段添加示例数据，SHALL 将这些示例包含在 OpenAPI 文档的 `examples` 字段中。
 
-### AC2: RPC 兼容性验证
+#### Scenario: Query 参数示例
+- **WHEN** schema 定义 `v.pipe(v.string(), v.examples(['海贼王', 'one piece']))`
+- **THEN** OpenAPI 文档的对应参数包含 `examples: ['海贼王', 'one piece']`
 
-- [ ] Dashboard 的 `hc<AppType>()` 编译无错误
-- [ ] 类型自动补全正常（`apiClient.api.movies.$get`）
-- [ ] 运行时 API 调用成功
-- [ ] 添加 `describeRoute()` 前后对比无差异
-
-### AC3: Schema 转换验证
-
-- [ ] Zod `z.object()` 转换为 OpenAPI `object` 类型
-- [ ] Zod `z.union([z.enum(...), z.literal('')])` 转换为 `oneOf`
-- [ ] Zod `.optional()` 生成 `required: false`
-- [ ] Zod `.default()` 生成 `default` 字段
-
-### AC4: 路由元数据验证
-
-- [ ] 为测试路由添加 `describeRoute({ tags: ['Test'], summary: '...' })`
-- [ ] OpenAPI spec 包含该路由的 `tags` 和 `summary`
-- [ ] `request.query` 的 schema 正确显示
-- [ ] `responses.200` 的 schema 正确显示
-
-### AC5: 嵌套路由隔离验证
-
-- [ ] 为 `/api/movies/actors` 添加 `tags: ['Movies', 'Actors']`
-- [ ] 为 `/api/actors` 添加 `tags: ['Actors']`
-- [ ] 验证两个路由的 tags 不会互相影响
-- [ ] 验证路径参数定义正确
-
-### AC6: 文档端点配置验证
-
-- [ ] `/openapi.json` 包含配置的 `servers` 数组
-- [ ] `info` 对象包含 title, version, description
-- [ ] 所有路由都在 `paths` 对象中
-
-## Implementation Notes
-
-### 技术选型理由
-
-选择 rhinobase/hono-openapi 而非官方 `@hono/zod-openapi` 的原因：
-- ✅ 中间件模式不改变路由类型链，完全兼容 RPC
-- ✅ 支持 Zod v4（官方方案有已知问题）
-- ✅ 社区活跃，持续维护
-- ⚠️ 第三方依赖，需关注维护状态
-
-### 关键风险
-
-1. **Zod v4 兼容性**: 最新版本（v1.3.0）刚支持 Zod v4，可能有边界情况
-   - 缓解：POC 阶段充分测试 union types, 复杂嵌套等场景
-   
-2. **路径参数泄漏**: Issue #119 报告的 bug，v1.3.0 已修复但需验证
-   - 缓解：POC 测试嵌套路由的隔离性
-
-3. **第三方维护风险**: 作者停更或有重大 bug
-   - 缓解：代码开源可 fork，核心逻辑简单易维护
-
-### 使用示例
-
-```typescript
-import { describeRoute } from 'hono-openapi'
-import { resolver } from 'hono-openapi/zod'
-import { z } from 'zod'
-
-const querySchema = z.object({
-  page: z.coerce.number().min(1).default(1)
-})
-
-const responseSchema = z.object({
-  data: z.array(z.object({ id: z.string() })),
-  meta: z.object({ total: z.number() })
-})
-
-app.get(
-  '/movies',
-  describeRoute({
-    tags: ['Movies'],
-    summary: '获取电影列表',
-    responses: {
-      200: {
-        description: 'Success',
-        content: {
-          'application/json': {
-            schema: resolver(responseSchema)
-          }
-        }
-      }
-    }
-  }),
-  zValidator('query', querySchema),
-  handler
-)
-```
-
-## Dependencies
-
-- 依赖 `hono` 的方法链路由模式（已在 `api-hono-rpc-refactor` 中完成）
-- 依赖 `@hono/zod-validator` 进行参数验证
-- 依赖 `zod` v4.3.6+
+#### Scenario: Response 示例
+- **WHEN** schema 通过 `.examples([{ id: 'cm001', title: '海贼王' }])` 定义
+- **THEN** OpenAPI 文档的 response 包含完整的示例对象

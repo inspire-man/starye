@@ -1,315 +1,129 @@
-## Phase 1: 基础设施搭建
+## 1. 基础设施搭建（PR 1）
 
-### 1.1 安装依赖包
-- [ ] 安装 `hono-openapi` 和 `@hono/swagger-ui`
-  ```bash
-  pnpm add hono-openapi @hono/swagger-ui -F api
-  ```
+- [ ] 1.1 在 `apps/api` 移除 `zod` 和 `@hono/zod-validator` 依赖
+- [ ] 1.2 在 `apps/api` 安装 `valibot`、`@valibot/to-json-schema`、`hono-openapi`、`@scalar/hono-api-reference` 最新版本
+- [ ] 1.3 修改 `apps/api/tsconfig.json` 添加 `composite: true` 和 `declaration: true`
+- [ ] 1.4 修改 `apps/dashboard/tsconfig.json` 添加 `references: [{ "path": "../api" }]`
+- [ ] 1.5 运行 `pnpm type-check` 验证 TypeScript 配置正确
+- [ ] 1.6 创建 `apps/api/src/schemas/` 目录结构
+- [ ] 1.7 创建 `schemas/common.ts` 定义 PaginationSchema、SlugSchema、TimestampSchema
+- [ ] 1.8 创建 `schemas/responses.ts` 定义 SuccessResponseSchema、ErrorResponseSchema 泛型
+- [ ] 1.9 创建 `schemas/index.ts` 统一导出所有 schemas
+- [ ] 1.10 在 `apps/api/src/index.ts` 配置 `openAPIRouteHandler` 生成 `/openapi.json` 端点
+- [ ] 1.11 在 `apps/api/src/index.ts` 配置 Scalar UI 中间件挂载到 `/docs` 端点（theme: moon, darkMode: true）
+- [ ] 1.12 启动 dev server 并访问 `/openapi.json` 验证基础 OpenAPI 结构返回
+- [ ] 1.13 访问 `/docs` 验证 Scalar UI 正常加载和渲染
+- [ ] 1.14 测试 Scalar UI 的搜索快捷键（Ctrl/Cmd+K）和主题显示
 
-### 1.2 创建 Schema 目录结构
-- [ ] 创建 `apps/api/src/schemas/` 目录
-- [ ] 创建 `apps/api/src/schemas/common/` 子目录
-- [ ] 创建 `apps/api/src/schemas/entities/` 子目录
+## 2. Comics 路由迁移（PR 2 第 1 部分）
 
-### 1.3 实现通用响应模板
-- [ ] 创建 `schemas/common/responses.ts`
-  - 实现 `dataResponse<T>()` 辅助函数
-  - 实现 `paginatedResponse<T>()` 辅助函数
-  - 实现 `errorResponse` schema
-  - 实现 `commonErrorResponses` 常量对象
-  - 实现 `withCommonErrors()` 辅助函数
-- [ ] 创建 `schemas/common/pagination.ts`
-  - 实现 `paginationMeta` schema
-- [ ] 添加 JSDoc 注释说明使用场景
+- [ ] 2.1 创建 `schemas/comic.ts` 文件
+- [ ] 2.2 定义 `ComicItemSchema` 使用 `v.pipe()` 添加 `.examples()` 和 `metadata({ ref: 'ComicItem' })`
+- [ ] 2.3 定义 `ComicsListDataSchema` 包含 items 和 pagination
+- [ ] 2.4 定义 `GetComicsQuerySchema` 使用 `v.entries(PaginationSchema)` 继承分页参数
+- [ ] 2.5 在 `GetComicsQuerySchema` 的 page/limit 字段使用 `v.pipe(v.string(), v.toNumber())` 处理类型转换
+- [ ] 2.6 修改 `routes/public/comics/index.ts` 替换 `zValidator` 为 `validator`
+- [ ] 2.7 修改 `routes/public/comics/index.ts` 替换 Zod schemas import 为 Valibot schemas
+- [ ] 2.8 为 `GET /comics` 添加 `describeRoute()` 元数据（summary、tags、operationId: 'getComicsList'）
+- [ ] 2.9 为 `GET /comics/:slug` 添加 `describeRoute()` 元数据（operationId: 'getComicDetail'）
+- [ ] 2.10 在 `/docs` 中验证 Comics tag 下的端点正确显示
+- [ ] 2.11 测试 query 参数验证（page=abc 应返回 400 错误）
+- [ ] 2.12 在 `apps/dashboard` 中测试 RPC 客户端调用 comics API 的类型推导
+- [ ] 2.13 验证 OpenAPI 文档中 ComicItem schema 的 $ref 引用正确
 
-### 1.4 创建示例 Entity Schema
-- [ ] 创建 `schemas/entities/movie.schema.ts`
-  - 实现 `movieSchema`（完整字段）
-  - 实现 `movieListItemSchema`（列表项精简版）
-  - 实现 `movieDetailSchema`（详情含关联数据）
-- [ ] 创建 `schemas/entities/actor.schema.ts`
-  - 实现 `actorSchema`
-  - 实现 `actorListItemSchema`
-  - 实现 `actorDetailSchema`
+## 3. Movies 路由迁移（PR 2 第 2 部分）
 
----
+- [ ] 3.1 创建 `schemas/movie.ts` 定义 MovieItemSchema、MoviesListDataSchema
+- [ ] 3.2 定义 `GetMoviesQuerySchema` 使用类型转换和 examples
+- [ ] 3.3 修改 `routes/public/movies/index.ts` 替换 `zValidator` 为 `validator`
+- [ ] 3.4 为所有 movies 端点添加 `describeRoute()` 元数据（tags: ['Movies']）
+- [ ] 3.5 在 `/docs` 中验证 Movies tag 下的端点正确显示
+- [ ] 3.6 测试 RPC 类型推导
 
-## Phase 2: POC 验证
+## 4. Actors 路由迁移（PR 2 第 3 部分）
 
-### 2.1 配置 OpenAPI 生成端点
-- [ ] 在 `apps/api/src/index.ts` 中引入 `openAPISpecs`
-- [ ] 添加 `/openapi.json` 端点
-  ```typescript
-  import { openAPISpecs } from 'hono-openapi'
-  
-  app.get('/openapi.json', openAPISpecs({
-    documentation: {
-      openapi: '3.1.0',
-      info: {
-        title: 'Starye API',
-        version: '1.0.0',
-        description: '星野项目 API 文档'
-      },
-      servers: [
-        { url: 'https://api.starye.com', description: 'Production' },
-        { url: 'http://localhost:8787', description: 'Development' }
-      ]
-    }
-  }))
-  ```
+- [ ] 4.1 创建 `schemas/actor.ts` 定义 ActorItemSchema、GetActorsQuerySchema
+- [ ] 4.2 修改 `routes/actors/index.ts` 和 `routes/actors/handlers/actors.handler.ts` 迁移验证逻辑
+- [ ] 4.3 为所有 actors 端点添加 `describeRoute()` 元数据（tags: ['Actors']）
+- [ ] 4.4 在 `/docs` 中验证 Actors tag 下的端点正确显示
 
-### 2.2 集成 Swagger UI
-- [ ] 在 `apps/api/src/index.ts` 中引入 `swaggerUI`
-- [ ] 添加 `/docs` 端点
-  ```typescript
-  import { swaggerUI } from '@hono/swagger-ui'
-  
-  app.get('/docs', swaggerUI({ url: '/openapi.json' }))
-  ```
+## 5. Progress 路由迁移（PR 2 第 4 部分）
 
-### 2.3 为 health 路由添加文档
-- [ ] 在 `routes/health/index.ts` 中添加 `describeRoute()`
-  - 定义 response schema
-  - 设置 tags 为 `['Health']`
-  - 添加 summary 和 description
-- [ ] 验证 `/openapi.json` 包含 health 路由
-- [ ] 验证 Swagger UI 显示 health 路由
+- [ ] 5.1 在 `schemas/common.ts` 或创建 `schemas/progress.ts` 定义进度相关 schemas
+- [ ] 5.2 修改 `routes/public/progress/index.ts` 迁移 `SaveReadingProgressSchema`、`GetReadingProgressSchema` 等
+- [ ] 5.3 为所有 progress 端点添加 `describeRoute()` 元数据（tags: ['Progress']）
+- [ ] 5.4 测试阅读进度保存和获取的验证逻辑
 
-### 2.4 为 movies 路由添加完整文档
-- [ ] 创建 `routes/movies/route-schemas.ts`
-  - 定义 `movieListQuerySchema`
-  - 定义 `movieListResponseSchema`
-  - 定义 `movieListRouteConfig`
-  - 定义 `movieDetailParamsSchema`
-  - 定义 `movieDetailResponseSchema`
-  - 定义 `movieDetailRouteConfig`
-- [ ] 在 `routes/movies/index.ts` 中应用 `describeRoute()`
-  - GET `/` - 电影列表
-  - GET `/:identifier` - 电影详情
+## 6. Admin Comics 路由迁移（PR 3 第 1 部分）
 
-### 2.5 POC 验证清单
-- [ ] 访问 `/openapi.json`，检查 schema 格式
-  - [ ] request parameters 正确（query, params）
-  - [ ] response schemas 正确（200, 403, 404, 500）
-  - [ ] Zod union types 转换为 `oneOf`
-- [ ] 访问 `/docs`，测试 Swagger UI
-  - [ ] 界面加载正常
-  - [ ] 可以执行接口调用
-  - [ ] 响应示例显示正确
-- [ ] 验证 RPC 兼容性
-  - [ ] Dashboard 的 `hc<AppType>()` 类型推导正常
-  - [ ] `apiClient.api.movies.$get()` 自动补全可用
-  - [ ] TypeScript 编译无错误
-- [ ] 检查嵌套路由 tags
-  - [ ] `/api/movies/actors` 的 tags 不会影响 `/api/actors`
-  - [ ] 每个路由的 tags 独立正确
+- [ ] 6.1 扩展 `schemas/comic.ts` 添加 Admin 专用 schemas（CreateComicSchema、UpdateComicSchema）
+- [ ] 6.2 修改 `routes/admin/comics/index.ts` 迁移所有 Admin comics 端点
+- [ ] 6.3 为 Admin comics 端点添加 `describeRoute()` 元数据（tags: ['Admin']，security: cookieAuth）
+- [ ] 6.4 在 `/docs` 中验证 Admin comics 端点显示认证要求
 
-### 2.6 输出 POC 报告
-- [ ] 记录验证结果
-  - RPC 兼容性评估
-  - 文档生成质量评估
-  - 发现的问题清单
-- [ ] 估算全量迁移工作量
-  - 每个路由平均耗时
-  - 总体时间预估
-- [ ] 决策：继续全量迁移 or 调整方案
+## 7. Admin Movies 路由迁移（PR 3 第 2 部分）
 
----
+- [ ] 7.1 扩展 `schemas/movie.ts` 添加 Admin 专用 schemas
+- [ ] 7.2 迁移 `routes/admin/movies/services/movie.service.ts` 的 `MovieFilterSchema` 到 Valibot
+- [ ] 7.3 修改 `routes/admin/movies/index.ts` 迁移所有 Admin movies 端点
+- [ ] 7.4 为 Admin movies 端点添加 `describeRoute()` 元数据
 
-## Phase 3: 全量迁移（按 POC 结果决定）
+## 8. Admin Actors & Publishers 路由迁移（PR 3 第 3 部分）
 
-### 3.1 完成 P0 核心 API 文档
+- [ ] 8.1 扩展 `schemas/actor.ts` 添加 Admin 专用 schemas
+- [ ] 8.2 修改 `routes/admin/actors/index.ts` 迁移所有 Admin actors 端点
+- [ ] 8.3 修改 `routes/admin/publishers/index.ts` 迁移 publishers 端点（如存在）
+- [ ] 8.4 为所有 Admin 端点添加 `describeRoute()` 元数据
 
-#### 3.1.1 actors 路由
-- [ ] 创建 `routes/actors/route-schemas.ts`
-- [ ] 为 GET `/` 添加文档（演员列表）
-- [ ] 为 GET `/:slug` 添加文档（演员详情）
+## 9. Shared Schemas 迁移（PR 3 第 4 部分）
 
-#### 3.1.2 publishers 路由
-- [ ] 创建 `routes/publishers/route-schemas.ts`
-- [ ] 为 GET `/` 添加文档（出版社列表）
-- [ ] 为 GET `/:slug` 添加文档（出版社详情）
+- [ ] 9.1 创建 `schemas/crawler.ts` 文件
+- [ ] 9.2 迁移 `apps/api/src/types.ts` 中的 `ChapterSchema`、`MangaInfoSchema`、`MovieInfoSchema` 到 `schemas/crawler.ts`
+- [ ] 9.3 更新所有引用 `types.ts` 的文件改为从 `schemas/crawler` 导入
+- [ ] 9.4 删除 `apps/api/src/types.ts` 文件
+- [ ] 9.5 验证 crawler 相关功能正常工作
 
-#### 3.1.3 创建缺失的 Entity Schema
-- [ ] 创建 `schemas/entities/publisher.schema.ts`
-- [ ] 创建 `schemas/entities/comic.schema.ts`（如需要）
+## 10. Crawler 包迁移（PR 3 第 5 部分）
 
-### 3.2 完成 P1 公开 API 文档
+- [ ] 10.1 在 `packages/crawler` 移除 `zod` 依赖
+- [ ] 10.2 在 `packages/crawler` 安装 `valibot` 最新版本
+- [ ] 10.3 修改 `packages/crawler/src/lib/image-processor.ts` 迁移 `R2ConfigSchema` 到 Valibot `v.looseObject()`
+- [ ] 10.4 更新 image-processor 的 import 语句
+- [ ] 10.5 运行 crawler 相关 tests 验证功能正常
 
-#### 3.2.1 public/movies 路由
-- [ ] 创建 `routes/public/movies/route-schemas.ts`（如需要）
-- [ ] 为所有公开电影路由添加文档
+## 11. 全局清理与验证（PR 3 第 6 部分）
 
-#### 3.2.2 public/comics 路由
-- [ ] 创建 `routes/public/comics/route-schemas.ts`
-- [ ] 为所有公开漫画路由添加文档
-- [ ] 定义 comic response schemas
+- [ ] 11.1 全局搜索 `import.*from ['"]zod['"]` 确认无残留 Zod import
+- [ ] 11.2 全局搜索 `zValidator` 确认无残留调用
+- [ ] 11.3 全局搜索 `@hono/zod-validator` 确认无残留 import
+- [ ] 11.4 检查 `apps/api/package.json` 确认 dependencies 中无 zod 相关包
+- [ ] 11.5 检查 `packages/crawler/package.json` 确认 dependencies 中无 zod
+- [ ] 11.6 运行 `pnpm install` 更新 pnpm-lock.yaml
+- [ ] 11.7 运行 `pnpm -r type-check` 验证所有包的类型检查通过
+- [ ] 11.8 运行 `pnpm test` 验证所有测试通过
 
-#### 3.2.3 public/progress 路由
-- [ ] 创建 `routes/public/progress/route-schemas.ts`
-- [ ] 为进度记录路由添加文档
+## 12. OpenAPI 文档完善（PR 3 第 7 部分）
 
-### 3.3 完成 P2 管理 API 文档
+- [ ] 12.1 检查所有 tags（Comics、Movies、Actors、Progress、Admin、Auth）在 OpenAPI info.tags 中定义
+- [ ] 12.2 确认所有 operationIds 唯一且符合命名规范（getComicsList、createComic 等）
+- [ ] 12.3 为关键 Public API schemas 补充 `.examples()` 示例数据
+- [ ] 12.4 为所有字段添加 `.description()` 说明
+- [ ] 12.5 在 `/docs` 中浏览所有 API 端点，确认文档清晰完整
+- [ ] 12.6 测试 Scalar UI 的请求功能（使用 Better Auth cookie 测试 Admin 端点）
 
-#### 3.3.1 admin/movies 路由
-- [ ] 创建 `routes/admin/movies/route-schemas.ts`
-- [ ] 为所有管理电影路由添加文档
+## 13. RPC 客户端验证（PR 3 第 8 部分）
 
-#### 3.3.2 admin/actors 路由
-- [ ] 创建 `routes/admin/actors/route-schemas.ts`
-- [ ] 为所有管理演员路由添加文档
+- [ ] 13.1 在 `apps/dashboard` 中创建测试文件验证 RPC 类型推导
+- [ ] 13.2 测试调用 `client.comics.$get()` 的类型提示
+- [ ] 13.3 测试调用 `client.comics[':slug'].$get()` 的参数类型推导
+- [ ] 13.4 测试调用 Admin 端点的类型推导
+- [ ] 13.5 验证 response 数据的类型自动推导（无需手动 `as` 断言）
 
-#### 3.3.3 admin/publishers 路由
-- [ ] 创建 `routes/admin/publishers/route-schemas.ts`
-- [ ] 为所有管理出版社路由添加文档
+## 14. 最终检查与文档更新（PR 3 第 9 部分）
 
-#### 3.3.4 admin/crawlers 路由
-- [ ] 创建 `routes/admin/crawlers/route-schemas.ts`
-- [ ] 为爬虫管理路由添加文档
-
-#### 3.3.5 admin/audit-logs 路由
-- [ ] 创建 `routes/admin/audit-logs/route-schemas.ts`
-- [ ] 为审计日志路由添加文档
-
-#### 3.3.6 admin/r18-whitelist 路由
-- [ ] 创建 `routes/admin/r18-whitelist/route-schemas.ts`
-- [ ] 为 R18 白名单路由添加文档
-
-#### 3.3.7 admin/cache 路由
-- [ ] 创建 `routes/admin/cache/route-schemas.ts`
-- [ ] 为缓存管理路由添加文档
-
-### 3.4 完成 P3 其他 API 文档
-
-#### 3.4.1 auth 路由
-- [ ] 创建 `routes/auth/route-schemas.ts`（如需要）
-- [ ] 为认证相关路由添加文档
-
-#### 3.4.2 upload 路由
-- [ ] 创建 `routes/upload/route-schemas.ts`
-- [ ] 为上传路由添加文档
-
-#### 3.4.3 posts 路由
-- [ ] 创建 `routes/posts/route-schemas.ts`
-- [ ] 为文章路由添加文档
-
-### 3.5 完成 comics 路由
-- [ ] 创建 `routes/comics/route-schemas.ts`
-- [ ] 为所有漫画路由添加文档
-
----
-
-## Phase 4: 验证与优化
-
-### 4.1 全量验证
-- [ ] 检查所有路由都有 `describeRoute()`
-  - 可通过 grep 搜索未添加的路由：`grep -r "\.get\|\.post\|\.patch\|\.delete" --include="*.ts" | grep -v describeRoute`
-- [ ] 验证 OpenAPI spec 完整性
-  - [ ] 访问 `/openapi.json`
-  - [ ] 检查所有路由都在 `paths` 中
-  - [ ] 检查所有 schemas 正确定义
-- [ ] Swagger UI 全面测试
-  - [ ] 测试所有 GET 接口
-  - [ ] 测试所有 POST/PATCH/DELETE 接口
-  - [ ] 验证参数验证是否正确
-
-### 4.2 RPC 客户端回归测试
-- [ ] Dashboard 集成测试
-  - [ ] `hc<AppType>()` 类型推导完整
-  - [ ] 所有 API 调用正常
-  - [ ] TypeScript 编译无错误
-- [ ] comic-app 和 movie-app（如需要）
-  - [ ] 现有 axios 调用不受影响
-
-### 4.3 代码质量检查
-- [ ] 所有 Schema 文件都有 JSDoc 注释
-- [ ] 命名符合规范（{entity}Schema, {route}{Action}RouteConfig）
-- [ ] 无重复定义（使用 `withCommonErrors` 等辅助函数）
-- [ ] 添加 ESLint 规则（可选）
-  - 强制要求路由必须有 `describeRoute()`
-  - 强制要求 Schema 有注释
-
-### 4.4 文档优化（可选）
-- [ ] 为关键接口添加 `examples`
-- [ ] 为 admin API 添加 security schemes（JWT/Session）
-- [ ] 添加更详细的 description
-
-### 4.5 性能检查
-- [ ] 验证 `/openapi.json` 响应时间
-  - 目标：< 100ms
-- [ ] 验证添加 `describeRoute()` 后的请求性能
-  - 确保中间件不影响接口响应时间
-
----
-
-## Phase 5: 文档与交付
-
-### 5.1 更新项目文档
-- [ ] 在 `apps/api/README.md` 中添加 OpenAPI 文档说明
-  - 如何访问 Swagger UI
-  - 如何查看 OpenAPI 规范
-  - Schema 组织结构说明
-- [ ] 更新开发指南
-  - 新增路由时如何添加 `describeRoute()`
-  - Schema 命名规范
-  - 通用模板使用指南
-
-### 5.2 CI/CD 集成（可选）
-- [ ] 添加 OpenAPI spec 验证
-  - 检查所有路由都有文档
-  - 检查 schema 格式正确
-- [ ] 生成静态文档（可选）
-  - 使用 Redoc 或其他工具生成静态 HTML
-
-### 5.3 通知团队
-- [ ] 通知前端团队 Swagger UI 地址
-- [ ] 通知外部开发者（如有）
-- [ ] 更新 API 文档链接
-
----
-
-## 回滚计划
-
-如果在任何阶段发现严重问题，按以下步骤回滚：
-
-### Phase 1 失败
-- [ ] 删除 `schemas/` 目录
-- [ ] 卸载依赖：`pnpm remove hono-openapi @hono/swagger-ui -F api`
-- [ ] 无其他影响
-
-### Phase 2 失败
-- [ ] 移除 POC 路由的 `describeRoute()`
-- [ ] 注释掉 `/openapi.json` 和 `/docs` 端点
-- [ ] 保留 `schemas/` 目录供后续使用
-
-### Phase 3 失败
-- [ ] Git 回滚到上一个工作的 commit
-- [ ] 已完成的路由保留，未完成的停止迁移
-- [ ] 评估是否切换到其他方案
-
----
-
-## 里程碑与时间估算
-
-| 阶段 | 任务数 | 预估时间 | 里程碑 |
-|------|-------|---------|-------|
-| Phase 1 | 10 | 1-2 天 | 基础设施完成 |
-| Phase 2 | 15 | 1 天 | POC 验证完成 |
-| Phase 3.1 | 10 | 2-3 天 | P0 核心 API 完成 |
-| Phase 3.2 | 8 | 2 天 | P1 公开 API 完成 |
-| Phase 3.3 | 15 | 3-4 天 | P2 管理 API 完成 |
-| Phase 3.4-3.5 | 8 | 1-2 天 | P3 其他 API 完成 |
-| Phase 4 | 12 | 1 天 | 验证与优化完成 |
-| Phase 5 | 6 | 0.5 天 | 文档与交付完成 |
-| **总计** | **84** | **11-15 天** | **全部完成** |
-
----
-
-## 注意事项
-
-1. **每完成一组路由提交一次 commit**，便于回滚
-2. **优先解决 POC 阶段发现的问题**，避免批量返工
-3. **遇到 rhinobase/hono-openapi 的 bug 立即提 issue**，不要等待
-4. **保持 Schema 命名一致性**，使用统一的命名规范
-5. **充分利用通用模板**，避免重复代码
-6. **定期测试 RPC 客户端**，确保类型推导不被破坏
+- [ ] 14.1 访问 `/openapi.json` 下载完整的 OpenAPI 规范并人工 review
+- [ ] 14.2 使用 OpenAPI 在线验证工具检查规范合规性
+- [ ] 14.3 在 `/docs` 中测试所有 HTTP 方法（GET、POST、PATCH、DELETE）
+- [ ] 14.4 检查所有 response schemas 的 $ref 引用是否正确解析
+- [ ] 14.5 更新项目 README 添加 `/docs` 端点说明（如需要）
+- [ ] 14.6 创建 PR 并邀请 code review

@@ -1,51 +1,52 @@
 ## Why
 
-当前 `apps/api` 缺少完整的 API 文档，主要问题包括：
-
-1. **缺失 OpenAPI 规范**：API 路由虽然使用 Zod 进行参数验证，但未生成标准的 OpenAPI/Swagger 文档，外部开发者和前端团队难以快速了解接口定义 MUST
-2. **文档与代码分离**：如果手动维护文档，容易出现代码与文档不同步的问题，增加维护成本 MUST
-3. **接口测试效率低**：缺少 Swagger UI 等交互式文档工具，接口调试需要手动构造请求，开发效率受影响 MUST
-4. **类型安全需保证**：现有 Hono RPC 客户端依赖完整的类型推导，任何文档方案不能破坏 RPC 的类型安全性 MUST
-
-基于 rhinobase/hono-openapi 中间件方案，本次变更将在保持 RPC 类型安全的前提下，为所有 API 路由生成完整的 OpenAPI 3.1 规范和 Swagger UI 文档。
+Starye API 当前缺乏完整的 API 文档，导致前端开发时需要频繁查阅代码或手动测试接口。同时，项目使用 Zod 进行验证，但 Valibot 提供了更小的 bundle size（4KB vs 14KB）、更灵活的类型强制转换管道，以及与 Hono OpenAPI 的原生集成。通过本次变更，我们将建立标准化的 API 文档工作流，并优化验证库选型。MUST 为所有 API 端点生成完整的 OpenAPI 3.0 规范，SHALL 使用 Valibot 替换所有 Zod 验证逻辑。
 
 ## What Changes
 
-- **OpenAPI 生成**：集成 rhinobase/hono-openapi 中间件，通过 `describeRoute()` 为路由添加 OpenAPI 元数据
-- **Schema 组织规范**：建立 `schemas/` 目录结构，统一管理通用响应模板、实体 Schema 和路由专属 Schema
-- **Swagger UI 集成**：添加 `/docs` 端点，提供交互式 API 文档界面
-- **全量文档覆盖**：为所有 50+ 路由添加完整的 OpenAPI 描述，包括请求参数、响应结构、错误码等
-- **POC 验证**：先对 2-3 个路由进行验证，确认 RPC 兼容性和文档生成质量后再全量迁移
+- **移除依赖**：从 `apps/api` 和 `packages/crawler` 移除 `zod` 和 `@hono/zod-validator`
+- **新增依赖**：添加 `valibot`、`@valibot/to-json-schema`、`hono-openapi`、`@scalar/hono-api-reference`（使用 `pnpm add` 安装最新版本）
+- **验证迁移**：将所有 `zValidator` 调用替换为 `hono-openapi` 的 `validator`，所有 Zod schema 转换为 Valibot schema
+- **Schema 组织**：创建 `apps/api/src/schemas/` 目录结构，按领域分类管理所有验证 schema（common、comic、movie、actor、responses 等）
+- **OpenAPI 生成**：在 `apps/api/src/index.ts` 配置 `openAPIRouteHandler`，自动生成 `/openapi.json` 端点
+- **文档 UI**：集成 Scalar UI（`moon` 主题 + 深色模式 + 自定义品牌 CSS），提供 `/docs` 交互式文档页面
+- **TypeScript 优化**：在 `apps/api/tsconfig.json` 启用 `composite: true` 和 `declaration: true`，在 `apps/dashboard/tsconfig.json` 添加 project references，确保 RPC 类型推导正确
+- **路由文档化**：为所有路由添加 `describeRoute()` 元数据（summary、description、tags、operationId、responses）
+- **保留 api-types**：保持 `packages/api-types` 作为类型契约层，未来可扩展客户端辅助函数
 
 ## Capabilities
 
 ### New Capabilities
 
-- `openapi-generation`: 使用 rhinobase/hono-openapi 自动生成 OpenAPI 3.1 规范 MUST
-- `api-schema-management`: 统一的 Schema 组织和管理规范，确保可维护性 MUST
-- `swagger-ui-integration`: Swagger UI 文档界面，提供交互式接口测试能力 MUST
+- `openapi-generation`: OpenAPI 3.0 规范的自动生成，包括 routes、schemas、security definitions
+- `api-schema-management`: API 验证 schema 的统一组织与管理（基于 Valibot）
+- `swagger-ui-integration`: Scalar UI 的集成与配置（主题、品牌、搜索优化）
 
 ### Modified Capabilities
 
-无现有能力的需求级变更（仅新增文档层，不修改业务逻辑）。
+<!-- 无现有 capabilities 被修改 -->
 
 ## Impact
 
-**受影响模块**：
-- `apps/api/src/routes/**`（所有路由文件需添加 `describeRoute()`）
-- `apps/api/src/index.ts`（新增 `/openapi.json` 和 `/docs` 端点）
-- `apps/api/package.json`（新增 `hono-openapi` 和 `@hono/swagger-ui` 依赖）
+**影响范围：**
+- **API 路由**：所有 `apps/api/src/routes/` 下的路由文件（约 15+ 文件）
+- **共享 Schema**：`apps/api/src/types.ts` 迁移到 `apps/api/src/schemas/crawler.ts`
+- **Crawler 包**：`packages/crawler/src/lib/image-processor.ts` 的 `R2ConfigSchema` 迁移
+- **Admin 服务**：`apps/api/src/routes/admin/movies/services/movie.service.ts` 的 `MovieFilterSchema` 迁移
+- **依赖清理**：`apps/api/package.json` 和 `packages/crawler/package.json` 的依赖更新
 
-**新增目录**：
-- `apps/api/src/schemas/`（Schema 定义和通用模板）
+**破坏性变更：**
+- 无（内部验证库更换，对外 API 契约不变）
 
-**兼容性**：
-- ✅ API 接口不变（仅添加元数据，不修改路由逻辑）
-- ✅ RPC 客户端不受影响（`describeRoute` 为纯中间件，不改变类型链）
-- ✅ 现有调用方无需修改
+**新增端点：**
+- `GET /openapi.json`：OpenAPI 规范文档
+- `GET /docs`：Scalar UI 交互式文档页面
 
-**预期工作量**：
-- 基础设施搭建：1-2 天
-- POC 验证：1 天
-- 全量迁移（50+ 路由）：1-2 周
-- Response Schema 定义：约 1000-1500 行代码
+**性能提升：**
+- API bundle size 减少约 10KB（Zod 14KB → Valibot 4KB）
+- 类型推导性能提升（通过 TypeScript Project References）
+
+**开发体验改进：**
+- 前端开发者可通过 `/docs` 快速查阅接口文档
+- RPC 客户端类型推导更稳定
+- Schema 复用通过 `metadata({ ref })` 简化

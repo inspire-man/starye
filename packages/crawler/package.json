@@ -20,8 +20,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1014.0",
-    "@aws-sdk/lib-storage": "^3.1014.0",
+    "@aws-sdk/client-s3": "^3.1015.0",
+    "@aws-sdk/lib-storage": "^3.1015.0",
     "@orama/orama": "^3.1.18",
     "@starye/db": "workspace:*",
     "cacheable-lookup": "^7.0.0",
@@ -45,9 +45,9 @@
     "@types/got": "^9.6.12",
     "@types/node": "^25.5.0",
     "eslint": "^10.1.0",
-    "happy-dom": "^20.8.4",
+    "happy-dom": "^20.8.7",
     "puppeteer": "^24.40.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
