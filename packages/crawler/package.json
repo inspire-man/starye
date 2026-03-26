@@ -16,6 +16,7 @@
     "crawl:publisher": "tsx scripts/run-publisher.ts",
     "test": "vitest",
     "test:unit": "vitest run",
+    "test:auth": "tsx scripts/test-api-auth.ts",
     "build": "tsc",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
