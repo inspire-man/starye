@@ -4,9 +4,11 @@
  * 爬取厂商详情页（Logo、官网、简介等信息）
  */
 
+import type { R2Config } from '../lib/image-processor'
 import type { ApiConfig, BrowserConfig } from '../types/config'
 import pMap from 'p-map'
 import { FailedTaskRecorder } from '../lib/anti-detection'
+import { ImageProcessor } from '../lib/image-processor'
 import { JavBusStrategy } from '../strategies/javbus'
 import { ApiClient } from '../utils/api-client'
 import { BrowserManager } from '../utils/browser'
@@ -14,6 +16,7 @@ import { BrowserManager } from '../utils/browser'
 export interface PublisherCrawlerConfig {
   browserConfig: BrowserConfig
   apiConfig: ApiConfig
+  r2Config: R2Config
   maxPublishers?: number
   concurrency?: number
   delay?: number
@@ -33,6 +36,7 @@ export class PublisherCrawler {
   private browserManager: BrowserManager
   private apiClient: ApiClient
   private strategy: JavBusStrategy
+  private imageProcessor: ImageProcessor
   private failedTasks: FailedTaskRecorder
   private failedTasksFile = './.publisher-failed-tasks.json'
 
@@ -69,6 +73,7 @@ export class PublisherCrawler {
     )
     this.apiClient = new ApiClient(config.apiConfig)
     this.strategy = new JavBusStrategy()
+    this.imageProcessor = new ImageProcessor(config.r2Config)
     this.failedTasks = new FailedTaskRecorder()
 
     this.maxPublishers = config.maxPublishers || 150
@@ -235,6 +240,27 @@ export class PublisherCrawler {
       // 降低阈值：只要有 logo 就认为是有效数据
       if (completeness < 0.5) {
         throw new Error(`数据过少 (${(completeness * 100).toFixed(0)}%)`)
+      }
+
+      // 上传 logo 到 R2（如果有）
+      if (details.logo) {
+        try {
+          console.log(`   📤 上传 logo 到 R2...`)
+          const logoImages = await this.imageProcessor.process(
+            details.logo,
+            `publishers/${publisher.id}`,
+            'logo',
+          )
+          const preview = logoImages.find(i => i.variant === 'preview')
+          if (preview) {
+            details.logo = preview.url
+            console.log(`   ✅ Logo 已上传: ${preview.url}`)
+          }
+        }
+        catch (e) {
+          console.warn(`   ⚠️  Logo 上传失败（继续执行）:`, e instanceof Error ? e.message : String(e))
+          // Logo 上传失败不阻塞流程
+        }
       }
 
       // 同步到 API

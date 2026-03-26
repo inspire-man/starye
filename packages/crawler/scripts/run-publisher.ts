@@ -27,6 +27,13 @@ async function main() {
       token: process.env.CRAWLER_SECRET || '',
       timeout: Number.parseInt(process.env.API_TIMEOUT || '60000'),
     },
+    r2Config: {
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID || process.env.R2_ACCOUNT_ID || '',
+      accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+      bucketName: process.env.R2_BUCKET_NAME || '',
+      publicUrl: process.env.R2_PUBLIC_URL || '',
+    },
     maxPublishers: Number.parseInt(process.env.MAX_PUBLISHERS || '150'),
     concurrency: Number.parseInt(process.env.PUBLISHER_CONCURRENCY || '2'),
     delay: Number.parseInt(process.env.PUBLISHER_DELAY || '8000'),

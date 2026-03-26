@@ -4,9 +4,11 @@
  * 爬取女优详情页（头像、简介、生日等信息）
  */
 
+import type { R2Config } from '../lib/image-processor'
 import type { ApiConfig, BrowserConfig } from '../types/config'
 import pMap from 'p-map'
 import { FailedTaskRecorder } from '../lib/anti-detection'
+import { ImageProcessor } from '../lib/image-processor'
 import { JavBusStrategy } from '../strategies/javbus'
 import { ApiClient } from '../utils/api-client'
 import { BrowserManager } from '../utils/browser'
@@ -14,6 +16,7 @@ import { BrowserManager } from '../utils/browser'
 export interface ActorCrawlerConfig {
   browserConfig: BrowserConfig
   apiConfig: ApiConfig
+  r2Config: R2Config
   maxActors?: number
   concurrency?: number
   delay?: number
@@ -33,6 +36,7 @@ export class ActorCrawler {
   private browserManager: BrowserManager
   private apiClient: ApiClient
   private strategy: JavBusStrategy
+  private imageProcessor: ImageProcessor
   private failedTasks: FailedTaskRecorder
   private failedTasksFile = './.actor-failed-tasks.json'
 
@@ -70,6 +74,7 @@ export class ActorCrawler {
     )
     this.apiClient = new ApiClient(config.apiConfig)
     this.strategy = new JavBusStrategy()
+    this.imageProcessor = new ImageProcessor(config.r2Config)
     this.failedTasks = new FailedTaskRecorder()
 
     this.maxActors = config.maxActors || 150
@@ -236,6 +241,27 @@ export class ActorCrawler {
       // 降低阈值：只要有头像就认为是有效数据
       if (completeness < 0.5) {
         throw new Error(`数据过少 (${(completeness * 100).toFixed(0)}%)`)
+      }
+
+      // 上传头像到 R2（如果有）
+      if (details.avatar) {
+        try {
+          console.log(`   📤 上传头像到 R2...`)
+          const avatarImages = await this.imageProcessor.process(
+            details.avatar,
+            `actors/${actor.id}`,
+            'avatar',
+          )
+          const preview = avatarImages.find(i => i.variant === 'preview')
+          if (preview) {
+            details.avatar = preview.url
+            console.log(`   ✅ 头像已上传: ${preview.url}`)
+          }
+        }
+        catch (e) {
+          console.warn(`   ⚠️  头像上传失败（继续执行）:`, e instanceof Error ? e.message : String(e))
+          // 头像上传失败不阻塞流程
+        }
       }
 
       // 同步到 API
