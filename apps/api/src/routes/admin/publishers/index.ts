@@ -344,10 +344,15 @@ adminPublishers.get(
     const db = c.get('db')
 
     try {
-      // 筛选条件：未爬取、有 sourceUrl、失败次数 < 3
-      const results = await db.query.publishers.findMany({
+      // 筛选条件：
+      // 1. 未爬取详情的厂商（hasDetailsCrawled=false）
+      // 2. 已爬取但 logo 是外链的厂商（logo 不以 R2_PUBLIC_URL 开头）
+      // 3. 有 sourceUrl
+      // 4. 失败次数 < 3
+      const r2PublicUrl = c.env.R2_PUBLIC_URL || ''
+
+      const allPublishers = await db.query.publishers.findMany({
         where: and(
-          eq(publishers.hasDetailsCrawled, false),
           isNotNull(publishers.sourceUrl),
           lt(publishers.crawlFailureCount, 3),
         ),
@@ -358,20 +363,46 @@ adminPublishers.get(
           movieCount: true,
           crawlFailureCount: true,
           lastCrawlAttempt: true,
+          hasDetailsCrawled: true,
+          logo: true,
         },
         orderBy: [desc(publishers.movieCount), publishers.crawlFailureCount, publishers.lastCrawlAttempt],
-        limit,
+        limit: limit * 2, // 多取一些，过滤后可能不够
       })
+
+      // 过滤：未爬取 或 已爬取但 logo 是外链
+      const results = allPublishers.filter((publisher) => {
+        // 未爬取的直接包含
+        if (!publisher.hasDetailsCrawled) {
+          return true
+        }
+        // 已爬取但 logo 是外链的也包含（需要补全）
+        if (publisher.logo && !publisher.logo.startsWith(r2PublicUrl)) {
+          return true
+        }
+        return false
+      }).slice(0, limit) // 取前 limit 个
 
       // 统计高优先级数量（movieCount >= 10）
       const highPriorityCount = results.filter(p => p.movieCount >= 10).length
+      const needsLogoUpdate = results.filter(p => p.hasDetailsCrawled && p.logo && !p.logo.startsWith(r2PublicUrl)).length
 
-      console.log(`[Admin/Publishers] ✓ Returned ${results.length} pending publishers (${highPriorityCount} high priority)`)
+      console.log(`[Admin/Publishers] ✓ Returned ${results.length} pending publishers (${highPriorityCount} high priority, ${needsLogoUpdate} need logo update)`)
 
       return c.json({
-        publishers: results,
+        publishers: results.map(p => ({
+          id: p.id,
+          name: p.name,
+          sourceUrl: p.sourceUrl,
+          movieCount: p.movieCount,
+          crawlFailureCount: p.crawlFailureCount,
+          lastCrawlAttempt: p.lastCrawlAttempt,
+          hasDetailsCrawled: p.hasDetailsCrawled,
+          needsLogoUpdate: p.hasDetailsCrawled && p.logo ? !p.logo.startsWith(r2PublicUrl) : false,
+        })),
         total: results.length,
         highPriority: highPriorityCount,
+        needsLogoUpdate,
       })
     }
     catch (e: unknown) {

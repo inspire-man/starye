@@ -405,10 +405,15 @@ adminActors.get(
     const db = c.get('db')
 
     try {
-      // 筛选条件：未爬取、有 sourceUrl、失败次数 < 3
-      const results = await db.query.actors.findMany({
+      // 筛选条件：
+      // 1. 未爬取详情的女优（hasDetailsCrawled=false）
+      // 2. 已爬取但头像是外链的女优（头像不以 R2_PUBLIC_URL 开头）
+      // 3. 有 sourceUrl
+      // 4. 失败次数 < 3
+      const r2PublicUrl = c.env.R2_PUBLIC_URL || ''
+
+      const allActors = await db.query.actors.findMany({
         where: and(
-          eq(actors.hasDetailsCrawled, false),
           isNotNull(actors.sourceUrl),
           lt(actors.crawlFailureCount, 3),
         ),
@@ -419,20 +424,46 @@ adminActors.get(
           movieCount: true,
           crawlFailureCount: true,
           lastCrawlAttempt: true,
+          hasDetailsCrawled: true,
+          avatar: true,
         },
         orderBy: [desc(actors.movieCount), actors.crawlFailureCount, actors.lastCrawlAttempt],
-        limit,
+        limit: limit * 2, // 多取一些，过滤后可能不够
       })
+
+      // 过滤：未爬取 或 已爬取但头像是外链
+      const results = allActors.filter((actor) => {
+        // 未爬取的直接包含
+        if (!actor.hasDetailsCrawled) {
+          return true
+        }
+        // 已爬取但头像是外链的也包含（需要补全）
+        if (actor.avatar && !actor.avatar.startsWith(r2PublicUrl)) {
+          return true
+        }
+        return false
+      }).slice(0, limit) // 取前 limit 个
 
       // 统计高优先级数量（movieCount >= 10）
       const highPriorityCount = results.filter(a => a.movieCount >= 10).length
+      const needsAvatarUpdate = results.filter(a => a.hasDetailsCrawled && a.avatar && !a.avatar.startsWith(r2PublicUrl)).length
 
-      console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority)`)
+      console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority, ${needsAvatarUpdate} need avatar update)`)
 
       return c.json({
-        actors: results,
+        actors: results.map(a => ({
+          id: a.id,
+          name: a.name,
+          sourceUrl: a.sourceUrl,
+          movieCount: a.movieCount,
+          crawlFailureCount: a.crawlFailureCount,
+          lastCrawlAttempt: a.lastCrawlAttempt,
+          hasDetailsCrawled: a.hasDetailsCrawled,
+          needsAvatarUpdate: a.hasDetailsCrawled && a.avatar ? !a.avatar.startsWith(r2PublicUrl) : false,
+        })),
         total: results.length,
         highPriority: highPriorityCount,
+        needsAvatarUpdate,
       })
     }
     catch (e: unknown) {

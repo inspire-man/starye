@@ -30,6 +30,8 @@ interface PendingPublisher {
   movieCount: number
   crawlFailureCount: number
   lastCrawlAttempt: Date | null
+  hasDetailsCrawled?: boolean
+  needsLogoUpdate?: boolean
 }
 
 export class PublisherCrawler {
@@ -226,7 +228,14 @@ export class PublisherCrawler {
       console.log(`   URL: ${publisher.sourceUrl}`)
       console.log(`   作品数: ${publisher.movieCount}, 失败次数: ${publisher.crawlFailureCount}`)
 
-      // 调用 Strategy 爬取详情
+      // 如果是 logo 补全模式（已爬取但需要更新 logo）
+      if (publisher.needsLogoUpdate && publisher.hasDetailsCrawled) {
+        console.log(`   🔄 仅补全 logo（已爬取）`)
+        await this.processLogoUpdate(publisher, page)
+        return
+      }
+
+      // 完整爬取模式
       const details = await this.strategy.crawlPublisherDetails(publisher.sourceUrl, page)
 
       if (!details) {
@@ -287,6 +296,56 @@ export class PublisherCrawler {
     }
     finally {
       await page.close()
+    }
+  }
+
+  /**
+   * 仅更新 logo（logo 补全模式）
+   */
+  private async processLogoUpdate(publisher: PendingPublisher, page: any): Promise<void> {
+    try {
+      // 只爬取页面获取 logo
+      const details = await this.strategy.crawlPublisherDetails(publisher.sourceUrl, page)
+
+      if (!details || !details.logo) {
+        throw new Error('未能获取 logo')
+      }
+
+      // 上传 logo 到 R2
+      console.log(`   📤 上传 logo 到 R2...`)
+      const logoImages = await this.imageProcessor.process(
+        details.logo,
+        `publishers/${publisher.id}`,
+        'logo',
+      )
+      const preview = logoImages.find(i => i.variant === 'preview')
+
+      if (!preview) {
+        throw new Error('Logo 处理失败')
+      }
+
+      // 仅更新 logo 字段
+      const result = await this.apiClient.syncPublisherDetails(publisher.id, {
+        source: details.source,
+        sourceId: details.sourceId,
+        sourceUrl: details.sourceUrl,
+        logo: preview.url,
+      })
+
+      if (!result || !result.success) {
+        throw new Error('API 同步失败')
+      }
+
+      this.stats.processedPublishers++
+      console.log(`   ✅ Logo 已更新: ${preview.url}`)
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.log(`   ❌ Logo 更新失败: ${errorMessage}`)
+
+      const errorObj = error instanceof Error ? error : new Error(errorMessage)
+      this.failedTasks.record(publisher.sourceUrl, errorObj, publisher.crawlFailureCount + 1)
+      this.stats.failedPublishers++
     }
   }
 

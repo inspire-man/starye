@@ -30,6 +30,8 @@ interface PendingActor {
   movieCount: number
   crawlFailureCount: number
   lastCrawlAttempt: Date | null
+  hasDetailsCrawled?: boolean
+  needsAvatarUpdate?: boolean
 }
 
 export class ActorCrawler {
@@ -227,7 +229,14 @@ export class ActorCrawler {
       console.log(`   URL: ${actor.sourceUrl}`)
       console.log(`   作品数: ${actor.movieCount}, 失败次数: ${actor.crawlFailureCount}`)
 
-      // 调用 Strategy 爬取详情
+      // 如果是头像补全模式（已爬取但需要更新头像）
+      if (actor.needsAvatarUpdate && actor.hasDetailsCrawled) {
+        console.log(`   🔄 仅补全头像（已爬取）`)
+        await this.processAvatarUpdate(actor, page)
+        return
+      }
+
+      // 完整爬取模式
       const details = await this.strategy.crawlActorDetails(actor.sourceUrl, page)
 
       if (!details) {
@@ -288,6 +297,56 @@ export class ActorCrawler {
     }
     finally {
       await page.close()
+    }
+  }
+
+  /**
+   * 仅更新头像（头像补全模式）
+   */
+  private async processAvatarUpdate(actor: PendingActor, page: any): Promise<void> {
+    try {
+      // 只爬取页面获取头像
+      const details = await this.strategy.crawlActorDetails(actor.sourceUrl, page)
+
+      if (!details || !details.avatar) {
+        throw new Error('未能获取头像')
+      }
+
+      // 上传头像到 R2
+      console.log(`   📤 上传头像到 R2...`)
+      const avatarImages = await this.imageProcessor.process(
+        details.avatar,
+        `actors/${actor.id}`,
+        'avatar',
+      )
+      const preview = avatarImages.find(i => i.variant === 'preview')
+
+      if (!preview) {
+        throw new Error('头像处理失败')
+      }
+
+      // 仅更新头像字段
+      const result = await this.apiClient.syncActorDetails(actor.id, {
+        source: details.source,
+        sourceId: details.sourceId,
+        sourceUrl: details.sourceUrl,
+        avatar: preview.url,
+      })
+
+      if (!result || !result.success) {
+        throw new Error('API 同步失败')
+      }
+
+      this.stats.processedActors++
+      console.log(`   ✅ 头像已更新: ${preview.url}`)
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.log(`   ❌ 头像更新失败: ${errorMessage}`)
+
+      const errorObj = error instanceof Error ? error : new Error(errorMessage)
+      this.failedTasks.record(actor.sourceUrl, errorObj, actor.crawlFailureCount + 1)
+      this.stats.failedActors++
     }
   }
 
