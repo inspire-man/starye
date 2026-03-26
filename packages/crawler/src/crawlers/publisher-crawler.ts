@@ -44,7 +44,6 @@ export class PublisherCrawler {
 
   // 统计信息
   private stats = {
-    totalPublishers: 0,
     processedPublishers: 0,
     skippedPublishers: 0,
     failedPublishers: 0,
@@ -139,8 +138,9 @@ export class PublisherCrawler {
       console.warn(`⚠️  待爬取厂商数量较少（${pendingPublishers.length}），可能需要先运行电影爬虫`)
     }
 
-    this.stats.totalPublishers = pendingPublishers.length
-    console.log(`✅ 获取到 ${pendingPublishers.length} 个待爬取厂商\n`)
+    // 不再预设 totalPublishers，改为获取到的数量（用于日志参考）
+    const fetchedCount = pendingPublishers.length
+    console.log(`✅ 获取到 ${fetchedCount} 个待爬取厂商\n`)
 
     // 优先级排序
     const sortedPublishers = this.sortByPriority(pendingPublishers)
@@ -151,11 +151,11 @@ export class PublisherCrawler {
       async (publisher, index) => {
         // 检查软超时
         if (this.shouldStop()) {
-          console.log(`\n⏱️  接近超时限制，优雅退出（已处理 ${index}/${sortedPublishers.length}）`)
+          console.log(`\n⏱️  接近超时限制，优雅退出（已处理 ${this.stats.processedPublishers}/${fetchedCount}）`)
           return
         }
 
-        await this.processPublisher(publisher)
+        await this.processPublisher(publisher, index + 1, fetchedCount)
       },
       { concurrency: this.concurrency },
     )
@@ -178,8 +178,6 @@ export class PublisherCrawler {
 
     console.log(`📝 找到 ${recoverableTasks.length} 个可恢复的失败任务`)
     this.failedTasks.clear()
-
-    this.stats.totalPublishers = recoverableTasks.length
 
     // TODO: 将失败任务转换为 PendingPublisher 格式并处理
     console.log('⚠️  恢复模式开发中...')
@@ -220,11 +218,11 @@ export class PublisherCrawler {
   /**
    * 处理单个厂商
    */
-  private async processPublisher(publisher: PendingPublisher): Promise<void> {
+  private async processPublisher(publisher: PendingPublisher, currentIndex: number, totalFetched: number): Promise<void> {
     const page = await this.browserManager.createPage()
 
     try {
-      console.log(`\n[${this.stats.processedPublishers + this.stats.failedPublishers + 1}/${this.stats.totalPublishers}] 爬取厂商: ${publisher.name}`)
+      console.log(`\n[${currentIndex}/${totalFetched}] 爬取厂商: ${publisher.name}`)
       console.log(`   URL: ${publisher.sourceUrl}`)
       console.log(`   作品数: ${publisher.movieCount}, 失败次数: ${publisher.crawlFailureCount}`)
 
@@ -412,17 +410,19 @@ export class PublisherCrawler {
     const elapsed = Date.now() - this.startTime
     const elapsedMinutes = Math.floor(elapsed / 60000)
 
+    const totalProcessed = this.stats.processedPublishers + this.stats.failedPublishers + this.stats.skippedPublishers
+
     console.log(`\n${'='.repeat(60)}`)
     console.log('📊 厂商爬取统计报告')
     console.log('='.repeat(60))
 
-    console.log(`\n总数: ${this.stats.totalPublishers}`)
+    console.log(`\n总数: ${totalProcessed}`)
     console.log(`成功: ${this.stats.processedPublishers} ✅`)
     console.log(`失败: ${this.stats.failedPublishers} ❌`)
     console.log(`跳过: ${this.stats.skippedPublishers}`)
 
-    const successRate = this.stats.totalPublishers > 0
-      ? ((this.stats.processedPublishers / this.stats.totalPublishers) * 100).toFixed(1)
+    const successRate = totalProcessed > 0
+      ? ((this.stats.processedPublishers / totalProcessed) * 100).toFixed(1)
       : '0.0'
     console.log(`成功率: ${successRate}%`)
 

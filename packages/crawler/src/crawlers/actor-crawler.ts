@@ -44,7 +44,6 @@ export class ActorCrawler {
 
   // 统计信息
   private stats = {
-    totalActors: 0,
     processedActors: 0,
     skippedActors: 0,
     failedActors: 0,
@@ -140,8 +139,9 @@ export class ActorCrawler {
       console.warn(`⚠️  待爬取女优数量较少（${pendingActors.length}），可能需要先运行电影爬虫`)
     }
 
-    this.stats.totalActors = pendingActors.length
-    console.log(`✅ 获取到 ${pendingActors.length} 个待爬取女优\n`)
+    // 不再预设 totalActors，改为获取到的数量（用于日志参考）
+    const fetchedCount = pendingActors.length
+    console.log(`✅ 获取到 ${fetchedCount} 个待爬取女优\n`)
 
     // 优先级排序
     const sortedActors = this.sortByPriority(pendingActors)
@@ -152,11 +152,11 @@ export class ActorCrawler {
       async (actor, index) => {
         // 检查软超时
         if (this.shouldStop()) {
-          console.log(`\n⏱️  接近超时限制，优雅退出（已处理 ${index}/${sortedActors.length}）`)
+          console.log(`\n⏱️  接近超时限制，优雅退出（已处理 ${this.stats.processedActors}/${fetchedCount}）`)
           return
         }
 
-        await this.processActor(actor)
+        await this.processActor(actor, index + 1, fetchedCount)
       },
       { concurrency: this.concurrency },
     )
@@ -179,8 +179,6 @@ export class ActorCrawler {
 
     console.log(`📝 找到 ${recoverableTasks.length} 个可恢复的失败任务`)
     this.failedTasks.clear()
-
-    this.stats.totalActors = recoverableTasks.length
 
     // TODO: 将失败任务转换为 PendingActor 格式并处理
     console.log('⚠️  恢复模式开发中...')
@@ -221,11 +219,11 @@ export class ActorCrawler {
   /**
    * 处理单个女优
    */
-  private async processActor(actor: PendingActor): Promise<void> {
+  private async processActor(actor: PendingActor, currentIndex: number, totalFetched: number): Promise<void> {
     const page = await this.browserManager.createPage()
 
     try {
-      console.log(`\n[${this.stats.processedActors + this.stats.failedActors + 1}/${this.stats.totalActors}] 爬取女优: ${actor.name}`)
+      console.log(`\n[${currentIndex}/${totalFetched}] 爬取女优: ${actor.name}`)
       console.log(`   URL: ${actor.sourceUrl}`)
       console.log(`   作品数: ${actor.movieCount}, 失败次数: ${actor.crawlFailureCount}`)
 
@@ -417,17 +415,19 @@ export class ActorCrawler {
     const elapsed = Date.now() - this.startTime
     const elapsedMinutes = Math.floor(elapsed / 60000)
 
+    const totalProcessed = this.stats.processedActors + this.stats.failedActors + this.stats.skippedActors
+
     console.log(`\n${'='.repeat(60)}`)
     console.log('📊 女优爬取统计报告')
     console.log('='.repeat(60))
 
-    console.log(`\n总数: ${this.stats.totalActors}`)
+    console.log(`\n总数: ${totalProcessed}`)
     console.log(`成功: ${this.stats.processedActors} ✅`)
     console.log(`失败: ${this.stats.failedActors} ❌`)
     console.log(`跳过: ${this.stats.skippedActors}`)
 
-    const successRate = this.stats.totalActors > 0
-      ? ((this.stats.processedActors / this.stats.totalActors) * 100).toFixed(1)
+    const successRate = totalProcessed > 0
+      ? ((this.stats.processedActors / totalProcessed) * 100).toFixed(1)
       : '0.0'
     console.log(`成功率: ${successRate}%`)
 
