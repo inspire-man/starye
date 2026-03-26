@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "url": "https://www.javbus.com/star/1474",
+    "errorType": "UNKNOWN",
+    "errorMessage": "Input buffer contains unsupported image format",
+    "attempts": 1,
+    "timestamp": "2026-03-26T18:47:28.121Z"
+  },
+  {
+    "url": "https://www.javbus.com/star/138l",
+    "errorType": "UNKNOWN",
+    "errorMessage": "Input buffer contains unsupported image format",
+    "attempts": 1,
+    "timestamp": "2026-03-26T18:47:35.226Z"
+  },
+  {
+    "url": "https://www.javbus.com/star/xjv",
+    "errorType": "UNKNOWN",
+    "errorMessage": "Input buffer contains unsupported image format",
+    "attempts": 1,
+    "timestamp": "2026-03-26T18:47:36.659Z"
+  }
+]

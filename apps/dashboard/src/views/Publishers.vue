@@ -67,7 +67,6 @@ watch(
   () => {
     applyFilters()
   },
-  { deep: true },
 )
 
 // 监听 pageSize 变化时加载数据

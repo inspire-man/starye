@@ -14,16 +14,33 @@ export function useFilters<T extends Record<string, any>>(initialFilters: T) {
   const route = useRoute()
   const router = useRouter()
 
-  const filters = ref<T>({
-    ...initialFilters,
-    ...(route.query as any),
-  } as T)
+  // 从 URL query 中提取筛选参数（排除分页参数）
+  const extractFilters = (query: Record<string, any>): T => {
+    const result = { ...initialFilters }
+    Object.keys(initialFilters).forEach((key) => {
+      if (query[key] !== undefined) {
+        result[key] = query[key]
+      }
+    })
+    return result as T
+  }
+
+  const filters = ref<T>(extractFilters(route.query))
 
   const applyFilters = () => {
+    // 清理空值，避免 URL 污染
+    const cleanFilters: Record<string, any> = {}
+    Object.entries(filters.value).forEach(([key, value]) => {
+      if (value !== '' && value !== null && value !== undefined) {
+        cleanFilters[key] = value
+      }
+    })
+
     router.push({
       query: {
-        ...filters.value,
-        page: 1,
+        ...route.query, // 保留 page 和 limit
+        ...cleanFilters,
+        page: '1', // 筛选条件变化时重置到第一页
       },
     })
   }
@@ -36,10 +53,7 @@ export function useFilters<T extends Record<string, any>>(initialFilters: T) {
   watch(
     () => route.query,
     (newQuery) => {
-      filters.value = {
-        ...initialFilters,
-        ...newQuery,
-      } as T
+      filters.value = extractFilters(newQuery)
     },
   )
 
