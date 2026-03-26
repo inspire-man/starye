@@ -96,6 +96,47 @@ API_URL=http://localhost:3000
 CRAWLER_SECRET=xxx
 ```
 
+#### 代理池配置（可选）
+
+代理池提供了更强的反检测能力和 IP 轮换机制，适用于高频爬取场景：
+
+```bash
+# 代理服务器列表（逗号分隔）
+PROXY_POOL=proxy1.com:8080,proxy2.com:8080,proxy3.com:8080
+
+# 代理认证（如需要）
+PROXY_USERNAME=user
+PROXY_PASSWORD=pass
+
+# 代理协议（默认: http）
+PROXY_PROTOCOL=http  # 可选: http | https | socks5
+
+# 轮换策略（默认: on-failure）
+PROXY_ROTATION_STRATEGY=on-failure  # 可选: round-robin | on-failure | least-latency
+
+# 健康检查配置
+PROXY_HEALTH_CHECK_INTERVAL=300000   # 健康检查间隔（毫秒，默认: 5分钟）
+PROXY_HEALTH_CHECK_TIMEOUT=10000     # 健康检查超时（毫秒，默认: 10秒）
+PROXY_MAX_CONSECUTIVE_FAILURES=3     # 最大连续失败次数（默认: 3）
+PROXY_TEST_URL=https://www.google.com  # 健康检查测试 URL
+```
+
+**轮换策略说明**:
+- `round-robin`: 轮询所有健康代理，平衡负载
+- `on-failure`: 使用首选代理直到失败才切换，减少切换开销
+- `least-latency`: 自动选择延迟最低的代理，优化性能
+
+**健康检查机制**:
+- 定期测试所有代理的可用性
+- 连续失败达到阈值后自动标记为不健康
+- 成功后重置失败计数并更新延迟统计
+- 实时监控代理池状态
+
+**使用建议**:
+- 本地开发：使用 `on-failure` 策略 + 较长健康检查间隔（10分钟）
+- 生产环境：使用 `least-latency` 策略 + 较短健康检查间隔（3分钟）
+- 高频爬取：使用 `round-robin` 策略平衡代理负载
+
 #### 爬虫配置（旧版，JavBus 使用）
 ```bash
 MAX_MOVIES=50              # **必需**：最大爬取影片数（无默认值，必须显式设置）

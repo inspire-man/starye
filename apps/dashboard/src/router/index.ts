@@ -6,11 +6,13 @@ import Actors from '@/views/Actors.vue'
 import AuditLogs from '@/views/AuditLogs.vue'
 import Comics from '@/views/Comics.vue'
 import Crawlers from '@/views/Crawlers.vue'
+import Favorites from '@/views/Favorites.vue'
 import Home from '@/views/Home.vue'
 import Login from '@/views/Login.vue'
 import Movies from '@/views/Movies.vue'
 import PostEditor from '@/views/PostEditor.vue'
 import Posts from '@/views/Posts.vue'
+import PublisherDetail from '@/views/PublisherDetail.vue'
 import Publishers from '@/views/Publishers.vue'
 import R18Whitelist from '@/views/R18Whitelist.vue'
 import Settings from '@/views/Settings.vue'
@@ -67,6 +69,11 @@ const routes = [
         meta: { requiredRoles: ['admin', 'super_admin', 'movie_admin'] },
       },
       {
+        path: 'publishers/:id',
+        component: PublisherDetail,
+        meta: { requiredRoles: ['admin', 'super_admin', 'movie_admin'] },
+      },
+      {
         path: 'audit-logs',
         component: AuditLogs,
         meta: { requiredRoles: ['admin', 'super_admin'] },
@@ -94,6 +101,10 @@ const routes = [
       {
         path: 'settings',
         component: Settings,
+      },
+      {
+        path: 'favorites',
+        component: Favorites,
       },
     ],
   },

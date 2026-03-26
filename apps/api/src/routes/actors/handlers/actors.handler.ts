@@ -1,7 +1,7 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { HTTPException } from 'hono/http-exception'
-import { getActorBySlug, getActors } from '../services/actor.service'
+import { getActorBySlug, getActorRelations, getActors } from '../services/actor.service'
 import { checkUserAdultStatus } from '../services/auth.service'
 
 /**
@@ -66,5 +66,47 @@ export async function getActorDetail(c: Context<AppEnv>) {
     const message = e instanceof Error ? e.message : String(e)
     console.error(`[Actors] ❌ Failed to get actor ${slug}:`, message)
     return c.json({ error: 'Database operation failed' }, 500)
+  }
+}
+
+/**
+ * GET /actors/:id/relations - 获取女优合作关系
+ */
+export async function getActorRelationsHandler(c: Context<AppEnv>) {
+  const db = c.get('db')
+  const actorId = c.req.param('id')!
+  const minCollaborations = Number(c.req.query('minCollaborations')) || 3
+  const limit = Number(c.req.query('limit')) || 20
+
+  // R18 权限校验
+  const isAdult = await checkUserAdultStatus(c)
+  if (!isAdult) {
+    return c.json({ error: 'Adult verification required' }, 403)
+  }
+
+  try {
+    const relations = await getActorRelations({
+      db,
+      actorId,
+      minCollaborations,
+      limit,
+    })
+
+    return c.json({
+      success: true,
+      data: {
+        actorId,
+        relations,
+        meta: {
+          totalPartners: relations.length,
+          minCollaborations,
+        },
+      },
+    })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error(`[Actors] ❌ Failed to get relations for ${actorId}:`, message)
+    return c.json({ error: 'Failed to get actor relations' }, 500)
   }
 }

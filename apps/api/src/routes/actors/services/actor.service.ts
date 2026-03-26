@@ -148,3 +148,106 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
     relatedMovies: relatedMoviesData,
   }
 }
+
+export interface ActorRelation {
+  partnerId: string
+  partnerName: string
+  partnerSlug: string
+  partnerAvatar: string | null
+  collaborationCount: number
+  sharedMovieIds: string[]
+}
+
+export interface GetActorRelationsOptions {
+  db: Database
+  actorId: string
+  minCollaborations?: number
+  limit?: number
+}
+
+export async function getActorRelations(options: GetActorRelationsOptions): Promise<ActorRelation[]> {
+  const { db, actorId, minCollaborations = 3, limit = 20 } = options
+
+  // 1. 获取该女优参与的所有电影
+  const actorMoviesData = await db
+    .select({
+      movieId: movieActors.movieId,
+    })
+    .from(movieActors)
+    .where(eq(movieActors.actorId, actorId))
+
+  const movieIds = actorMoviesData.map(m => m.movieId)
+
+  if (movieIds.length === 0) {
+    return []
+  }
+
+  // 2. 获取这些电影的所有女优（除自己外）
+  const collaborators = await db
+    .select({
+      actorId: movieActors.actorId,
+      movieId: movieActors.movieId,
+      name: actors.name,
+      slug: actors.slug,
+      avatar: actors.avatar,
+    })
+    .from(movieActors)
+    .innerJoin(actors, eq(movieActors.actorId, actors.id))
+    .where(and(
+      eq(actors.isActive, true),
+    ))
+
+  // 3. 统计合作频率
+  const collaborationMap = new Map<string, {
+    partner: { id: string, name: string, slug: string, avatar: string | null }
+    count: number
+    movieIds: string[]
+  }>()
+
+  for (const collab of collaborators) {
+    // 跳过自己
+    if (collab.actorId === actorId)
+      continue
+    // 只统计目标女优参与的电影
+    if (!movieIds.includes(collab.movieId))
+      continue
+
+    const partnerId = collab.actorId
+    const existing = collaborationMap.get(partnerId)
+
+    if (existing) {
+      existing.count++
+      if (!existing.movieIds.includes(collab.movieId)) {
+        existing.movieIds.push(collab.movieId)
+      }
+    }
+    else {
+      collaborationMap.set(partnerId, {
+        partner: {
+          id: collab.actorId,
+          name: collab.name,
+          slug: collab.slug,
+          avatar: collab.avatar,
+        },
+        count: 1,
+        movieIds: [collab.movieId],
+      })
+    }
+  }
+
+  // 4. 转换为结果数组
+  const relations: ActorRelation[] = Array.from(collaborationMap.values())
+    .filter(item => item.count >= minCollaborations)
+    .map(item => ({
+      partnerId: item.partner.id,
+      partnerName: item.partner.name,
+      partnerSlug: item.partner.slug,
+      partnerAvatar: item.partner.avatar,
+      collaborationCount: item.count,
+      sharedMovieIds: item.movieIds,
+    }))
+    .sort((a, b) => b.collaborationCount - a.collaborationCount)
+    .slice(0, limit)
+
+  return relations
+}

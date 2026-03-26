@@ -9,6 +9,7 @@ import { actorsRoutes } from './routes/actors'
 import { adminMainRoutes } from './routes/admin/main'
 import { authRoutes } from './routes/auth'
 import { comicsRoutes } from './routes/comics'
+import { favoritesRoutes } from './routes/favorites'
 import { healthRoutes } from './routes/health'
 import { moviesRoutes } from './routes/movies'
 import { postsRoutes } from './routes/posts'
@@ -36,6 +37,7 @@ const routes = app
   .route('/api/comics', comicsRoutes)
   .route('/api/movies', moviesRoutes)
   .route('/api/posts', postsRoutes)
+  .route('/api/favorites', favoritesRoutes)
   .route('/api/admin', adminMainRoutes)
   .route('/api/auth', authRoutes)
   .route('/api/upload', uploadRoutes)
@@ -97,6 +99,10 @@ Starye 是一个现代化的内容聚合平台，支持漫画、电影和演员�
           {
             name: 'Progress',
             description: '用户进度追踪',
+          },
+          {
+            name: 'Favorites',
+            description: '用户收藏',
           },
           {
             name: 'Admin',

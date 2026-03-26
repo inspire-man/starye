@@ -49,6 +49,26 @@ adminCrawlers.get('/stats', async (c) => {
 
   const stats: any = {}
 
+  // 代理池状态（如果配置了）
+  // eslint-disable-next-line node/prefer-global/process
+  const proxyPoolEnabled = !!process.env.PROXY_POOL
+  if (proxyPoolEnabled) {
+    stats.proxyPool = {
+      enabled: true,
+      status: 'Proxy pool status available in crawler logs',
+      // eslint-disable-next-line node/prefer-global/process
+      healthCheckInterval: Number(process.env.PROXY_HEALTH_CHECK_INTERVAL) || 300000,
+      // eslint-disable-next-line node/prefer-global/process
+      strategy: process.env.PROXY_ROTATION_STRATEGY || 'on-failure',
+    }
+  }
+  else {
+    stats.proxyPool = {
+      enabled: false,
+      message: 'Proxy pool not configured',
+    }
+  }
+
   try {
     if (canViewComics) {
       const comicStats = await db.query.comics.findMany({

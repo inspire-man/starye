@@ -6,12 +6,15 @@
  * - 显示女优基本信息
  * - 别名管理（添加、删除）
  * - 基本信息编辑
+ * - 合作关系图谱
  */
 
 import type { Actor } from '@/lib/api'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ActorRelationGraph from '@/components/ActorRelationGraph.vue'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
+import FavoriteButton from '@/components/FavoriteButton.vue'
 import { fetchApi } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 import { formatDateTime } from '@/lib/date-utils'
@@ -163,6 +166,13 @@ onMounted(() => {
       <h1 class="title">
         女优详情
       </h1>
+      <div class="header-actions">
+        <FavoriteButton
+          v-if="actor?.id"
+          entity-type="actor"
+          :entity-id="actor?.id"
+        />
+      </div>
     </div>
 
     <!-- 加载状态 -->
@@ -346,6 +356,22 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- 合作关系图谱卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <h2>合作关系图谱</h2>
+          <span class="badge">查看高频合作伙伴</span>
+        </div>
+
+        <div class="card-body graph-card-body">
+          <ActorRelationGraph
+            v-if="actor.id"
+            :actor-id="actor.id"
+            :actor-name="actor.name"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -362,6 +388,10 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   margin-bottom: 24px;
+}
+
+.header-actions {
+  margin-left: auto;
 }
 
 .back-button {
@@ -639,6 +669,10 @@ onMounted(() => {
   text-align: center;
   color: #9ca3af;
   font-size: 14px;
+}
+
+.graph-card-body {
+  padding: 0;
 }
 
 @media (max-width: 768px) {

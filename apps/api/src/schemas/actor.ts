@@ -135,3 +135,74 @@ export const ActorsListDataSchema = v.pipe(
 )
 
 export type ActorsListData = v.InferOutput<typeof ActorsListDataSchema>
+
+/**
+ * 演员合作关系项 Schema
+ */
+export const ActorRelationItemSchema = v.pipe(
+  v.object({
+    partnerId: v.pipe(v.string(), v.description('合作伙伴 ID')),
+    partnerName: v.pipe(v.string(), v.description('合作伙伴名称')),
+    partnerSlug: v.pipe(v.string(), v.description('合作伙伴 slug')),
+    partnerAvatar: v.nullable(v.pipe(v.string(), v.url(), v.description('合作伙伴头像'))),
+    collaborationCount: v.pipe(v.number(), v.integer(), v.minValue(1), v.description('合作次数')),
+    sharedMovieIds: v.pipe(v.array(v.string()), v.description('共同作品 ID 列表')),
+  }),
+  v.metadata({ ref: 'ActorRelationItem' }),
+)
+
+export type ActorRelationItem = v.InferOutput<typeof ActorRelationItemSchema>
+
+/**
+ * 获取演员关系的 Param Schema
+ */
+export const GetActorRelationsParamSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1), v.description('演员 ID')),
+})
+
+/**
+ * 获取演员关系的 Query Schema
+ */
+export const GetActorRelationsQuerySchema = v.object({
+  minCollaborations: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(20),
+      v.description('最小合作次数，默认 3'),
+    ),
+    '3',
+  ),
+  limit: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(50),
+      v.description('返回结果数量限制，默认 20'),
+    ),
+    '20',
+  ),
+})
+
+export type GetActorRelationsQuery = v.InferOutput<typeof GetActorRelationsQuerySchema>
+
+/**
+ * 演员关系列表数据 Schema
+ */
+export const ActorRelationsDataSchema = v.pipe(
+  v.object({
+    actorId: v.pipe(v.string(), v.description('演员 ID')),
+    relations: v.pipe(v.array(ActorRelationItemSchema), v.description('合作关系列表')),
+    meta: v.object({
+      totalPartners: v.pipe(v.number(), v.integer(), v.minValue(0), v.description('合作伙伴总数')),
+      minCollaborations: v.pipe(v.number(), v.integer(), v.description('最小合作次数筛选条件')),
+    }),
+  }),
+  v.metadata({ ref: 'ActorRelationsData' }),
+)
+
+export type ActorRelationsData = v.InferOutput<typeof ActorRelationsDataSchema>

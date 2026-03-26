@@ -1,9 +1,9 @@
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
-import { ActorDetailSchema, ActorsListDataSchema, GetActorParamSchema, GetActorsQuerySchema } from '../../schemas/actor'
+import { ActorDetailSchema, ActorRelationsDataSchema, ActorsListDataSchema, GetActorParamSchema, GetActorRelationsParamSchema, GetActorRelationsQuerySchema, GetActorsQuerySchema } from '../../schemas/actor'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../schemas/responses'
-import { getActorDetail, getActorList } from './handlers/actors.handler'
+import { getActorDetail, getActorList, getActorRelationsHandler } from './handlers/actors.handler'
 
 /**
  * Actors 路由 - 使用链式调用以支持 RPC 类型推导
@@ -37,6 +37,44 @@ export const actorsRoutes = new Hono<AppEnv>()
     }),
     validator('query', GetActorsQuerySchema),
     getActorList,
+  )
+  .get(
+    '/:id/relations',
+    describeRoute({
+      summary: '获取演员合作关系',
+      description: '返回该演员的高频合作伙伴列表',
+      tags: ['Actors'],
+      operationId: 'getActorRelations',
+      responses: {
+        200: {
+          description: '成功返回合作关系',
+          content: {
+            'application/json': {
+              schema: resolver(SuccessResponseSchema(ActorRelationsDataSchema, '成功返回合作关系')),
+            },
+          },
+        },
+        403: {
+          description: '需要成人内容验证',
+          content: {
+            'application/json': {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+        500: {
+          description: '服务器内部错误',
+          content: {
+            'application/json': {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    validator('param', GetActorRelationsParamSchema),
+    validator('query', GetActorRelationsQuerySchema),
+    getActorRelationsHandler,
   )
   .get(
     '/:slug',

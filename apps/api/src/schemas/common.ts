@@ -133,3 +133,15 @@ export const StatusSchema = v.pipe(
 )
 
 export type Status = v.InferOutput<typeof StatusSchema>
+
+/**
+ * 通用 ID Schema
+ */
+export const IdSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.description('实体 ID'),
+)
+
+export type Id = v.InferOutput<typeof IdSchema>

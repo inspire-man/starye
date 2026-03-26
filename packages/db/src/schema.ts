@@ -360,6 +360,22 @@ export const watchingProgressIndexes = {
 export type WatchingProgress = InferSelectModel<typeof watchingProgress>
 export type NewWatchingProgress = InferInsertModel<typeof watchingProgress>
 
+// --- 用户收藏 ---
+export const userFavorites = sqliteTable('user_favorites', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  entityType: text('entity_type', { enum: ['actor', 'publisher', 'movie', 'comic'] }).notNull(),
+  entityId: text('entity_id').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => ({
+  userEntityIdx: uniqueIndex('idx_user_favorites_user_entity').on(table.userId, table.entityType, table.entityId),
+  entityTypeIdx: index('idx_user_favorites_entity_type').on(table.entityType),
+  entityIdIdx: index('idx_user_favorites_entity_id').on(table.entityId),
+}))
+
+export type UserFavorite = InferSelectModel<typeof userFavorites>
+export type NewUserFavorite = InferInsertModel<typeof userFavorites>
+
 // --- 关联关系定义 ---
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -368,6 +384,7 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   readingProgress: many(readingProgress),
   watchingProgress: many(watchingProgress),
+  favorites: many(userFavorites),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -479,5 +496,12 @@ export const watchingProgressRelations = relations(watchingProgress, ({ one }) =
   movie: one(movies, {
     fields: [watchingProgress.movieCode],
     references: [movies.code],
+  }),
+}))
+
+export const userFavoritesRelations = relations(userFavorites, ({ one }) => ({
+  user: one(user, {
+    fields: [userFavorites.userId],
+    references: [user.id],
   }),
 }))
