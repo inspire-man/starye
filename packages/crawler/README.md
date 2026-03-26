@@ -32,6 +32,7 @@ src/
 
 ### 本地运行
 
+#### 电影爬虫
 ```bash
 # 测试 10 部影片
 MAX_MOVIES=10 pnpm run test:optimized
@@ -39,6 +40,44 @@ MAX_MOVIES=10 pnpm run test:optimized
 # 完整测试
 pnpm run test:optimized
 ```
+
+#### 女优爬虫
+```bash
+# 本地测试（最多 5 个女优）
+MAX_ACTORS=5 pnpm crawl:actor
+
+# 正常运行（默认 100 个）
+pnpm crawl:actor
+
+# 恢复模式（重试失败任务）
+RECOVERY_MODE=true pnpm crawl:actor
+```
+
+#### 厂商爬虫
+```bash
+# 本地测试（最多 5 个厂商）
+MAX_PUBLISHERS=5 pnpm crawl:publisher
+
+# 正常运行（默认 100 个）
+pnpm crawl:publisher
+
+# 恢复模式
+RECOVERY_MODE=true pnpm crawl:publisher
+```
+
+### GitHub Actions 触发
+
+#### 女优爬虫
+- **定时任务**: 每天 00:00 UTC 自动运行
+- **手动触发**: Actions → Daily Actor Crawl → Run workflow
+  - `max_actors`: 最大爬取数量（默认 150）
+  - `recovery_mode`: 是否启用恢复模式（默认 false）
+
+#### 厂商爬虫
+- **定时任务**: 每天 08:00 UTC 自动运行
+- **手动触发**: Actions → Daily Publisher Crawl → Run workflow
+  - `max_publishers`: 最大爬取数量（默认 100）
+  - `recovery_mode`: 是否启用恢复模式（默认 false）
 
 ### 环境变量
 
@@ -101,6 +140,30 @@ DETAIL_DELAY=5000
 IMAGE_DELAY=2000
 API_DELAY=1000
 ```
+
+#### 女优/厂商爬虫配置
+
+```bash
+# 并发控制
+ACTOR_CONCURRENCY=2              # 女优并发数 (默认: 2)
+ACTOR_DELAY=8000                 # 女优请求延迟（毫秒，默认: 8000）
+PUBLISHER_CONCURRENCY=2          # 厂商并发数 (默认: 2)
+PUBLISHER_DELAY=8000             # 厂商请求延迟（毫秒，默认: 8000）
+
+# 数量限制
+MAX_ACTORS=150                   # 女优最大爬取数（默认: 100）
+MAX_PUBLISHERS=100               # 厂商最大爬取数（默认: 100）
+
+# 恢复模式
+RECOVERY_MODE=false              # 是否恢复失败任务（默认: false）
+```
+
+**工作流程**:
+1. **数据来源**: 女优/厂商从电影爬虫中自动收集（batch-sync）
+2. **增量爬取**: 自动跳过已爬取且头像/logo已在 R2 的记录
+3. **头像补全**: 已爬取但图片是外链的会自动补全到 R2
+4. **优先级排序**: 按作品数量、失败次数、最后尝试时间排序
+5. **失败恢复**: 失败任务保存到 `.actor-failed-tasks.json` / `.publisher-failed-tasks.json`
 
 #### 漫画爬虫配置（新版，Comic Crawler 使用）
 

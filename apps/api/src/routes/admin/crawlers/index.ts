@@ -94,6 +94,85 @@ adminCrawlers.get('/stats', async (c) => {
         complete: movieStats.filter(m => m.crawlStatus === 'complete').length,
         lastCrawlAt: lastCrawl?.toISOString() || null,
       }
+
+      // 女优统计
+      const actorStats = await db.query.actors.findMany({
+        columns: {
+          hasDetailsCrawled: true,
+          crawlFailureCount: true,
+          lastCrawlAttempt: true,
+          sourceUrl: true,
+        },
+      })
+
+      const lastActorCrawl = actorStats
+        .filter(a => a.lastCrawlAttempt)
+        .sort((a, b) => (b.lastCrawlAttempt?.getTime() || 0) - (a.lastCrawlAttempt?.getTime() || 0))[0]
+        ?.lastCrawlAttempt
+
+      const actorsPending = actorStats.filter(a => !a.hasDetailsCrawled && a.sourceUrl && (a.crawlFailureCount ?? 0) < 3).length
+      const actorsFailed = actorStats.filter(a => (a.crawlFailureCount ?? 0) >= 3).length
+
+      stats.actors = {
+        total: actorStats.length,
+        crawled: actorStats.filter(a => a.hasDetailsCrawled).length,
+        pending: actorsPending,
+        failed: actorsFailed,
+        lastCrawlAt: lastActorCrawl?.toISOString() || null,
+      }
+
+      // 厂商统计
+      const publisherStats = await db.query.publishers.findMany({
+        columns: {
+          hasDetailsCrawled: true,
+          crawlFailureCount: true,
+          lastCrawlAttempt: true,
+          sourceUrl: true,
+        },
+      })
+
+      const lastPublisherCrawl = publisherStats
+        .filter(p => p.lastCrawlAttempt)
+        .sort((a, b) => (b.lastCrawlAttempt?.getTime() || 0) - (a.lastCrawlAttempt?.getTime() || 0))[0]
+        ?.lastCrawlAttempt
+
+      const publishersPending = publisherStats.filter(p => !p.hasDetailsCrawled && p.sourceUrl && (p.crawlFailureCount ?? 0) < 3).length
+      const publishersFailed = publisherStats.filter(p => (p.crawlFailureCount ?? 0) >= 3).length
+
+      stats.publishers = {
+        total: publisherStats.length,
+        crawled: publisherStats.filter(p => p.hasDetailsCrawled).length,
+        pending: publishersPending,
+        failed: publishersFailed,
+        lastCrawlAt: lastPublisherCrawl?.toISOString() || null,
+      }
+
+      // 告警逻辑（任务 15.4）
+      const alerts: string[] = []
+
+      // 女优失败率告警
+      if (actorStats.length > 50) {
+        const actorFailureRate = actorsFailed / actorStats.length
+        if (actorFailureRate > 0.5) {
+          const alert = `⚠️ 女优爬取失败率过高: ${(actorFailureRate * 100).toFixed(1)}% (${actorsFailed}/${actorStats.length})`
+          alerts.push(alert)
+          console.error(`[Crawlers/Stats] ${alert}`)
+        }
+      }
+
+      // 厂商失败率告警
+      if (publisherStats.length > 50) {
+        const publisherFailureRate = publishersFailed / publisherStats.length
+        if (publisherFailureRate > 0.5) {
+          const alert = `⚠️ 厂商爬取失败率过高: ${(publisherFailureRate * 100).toFixed(1)}% (${publishersFailed}/${publisherStats.length})`
+          alerts.push(alert)
+          console.error(`[Crawlers/Stats] ${alert}`)
+        }
+      }
+
+      if (alerts.length > 0) {
+        stats.alerts = alerts
+      }
     }
 
     return c.json(stats)

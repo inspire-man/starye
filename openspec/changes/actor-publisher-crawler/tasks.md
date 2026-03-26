@@ -182,17 +182,17 @@
 
 ## 15. 监控与告警 (Phase 5.5)
 
-- [ ] 15.1 在 `apps/api/src/routes/admin/crawlers/index.ts` 的 `/stats` 端口添加女优/厂商统计
-- [ ] 15.2 添加统计字段：actors.pending, actors.crawled, publishers.pending, publishers.crawled
+- [x] 15.1 在 `apps/api/src/routes/admin/crawlers/index.ts` 的 `/stats` 端口添加女优/厂商统计
+- [x] 15.2 添加统计字段：actors.pending, actors.crawled, publishers.pending, publishers.crawled
 - [ ] 15.3 在 dashboard 的 Crawlers 页面展示女优/厂商爬取进度（如需要）
-- [ ] 15.4 添加告警逻辑：如果失败率 > 50%，输出 ERROR 级别日志
+- [x] 15.4 添加告警逻辑：如果失败率 > 50%，输出 ERROR 级别日志
 - [ ] 15.5 验证 GitHub Actions 日志可见性：确保统计报告在 Actions UI 中清晰展示
 
 ## 16. 文档与清理 (Phase 5.6)
 
-- [ ] 16.1 更新 `packages/crawler/README.md` 添加女优/厂商爬虫使用说明
-- [ ] 16.2 添加配置示例：本地运行、GitHub Actions 触发、恢复模式
-- [ ] 16.3 更新项目 README 添加爬虫调度时间说明
+- [x] 16.1 更新 `packages/crawler/README.md` 添加女优/厂商爬虫使用说明
+- [x] 16.2 添加配置示例：本地运行、GitHub Actions 触发、恢复模式
+- [x] 16.3 更新项目 README 添加爬虫调度时间说明
 - [ ] 16.4 检查 OpenAPI 文档：确认新端口在 `/docs` 中正确展示
 - [ ] 16.5 清理临时测试数据：删除测试女优/厂商记录
 - [ ] 16.6 验证 git status：确认所有新文件已添加，无遗漏
