@@ -18,7 +18,6 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DataTable from '@/components/DataTable.vue'
 import FilterPanel from '@/components/FilterPanel.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
-import Pagination from '@/components/Pagination.vue'
 import PublisherSelector from '@/components/PublisherSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useBatchSelect } from '@/composables/useBatchSelect'
@@ -48,7 +47,7 @@ const players = ref<Player[]>([])
 const playersLoading = ref(false)
 
 const { filters, applyFilters, resetFilters } = useFilters({
-  isR18: 'all',
+  isR18: '',
   crawlStatus: '',
   metadataLocked: '',
   actor: '',
@@ -72,7 +71,6 @@ const filterFields = [
     label: 'R18',
     type: 'select' as const,
     options: [
-      { value: 'all', label: '全部' },
       { value: 'true', label: '是' },
       { value: 'false', label: '否' },
     ],
@@ -82,7 +80,6 @@ const filterFields = [
     label: '爬取状态',
     type: 'select' as const,
     options: [
-      { value: '', label: '全部' },
       { value: 'pending', label: '等待中' },
       { value: 'partial', label: '部分完成' },
       { value: 'complete', label: '已完成' },
@@ -93,7 +90,6 @@ const filterFields = [
     label: '元数据锁定',
     type: 'select' as const,
     options: [
-      { value: '', label: '全部' },
       { value: 'true', label: '已锁定' },
       { value: 'false', label: '未锁定' },
     ],
@@ -387,7 +383,7 @@ const tableColumns = [
       @toggle-select="toggleItem"
       @toggle-select-all="toggleAll"
       @row-click="openEditModal"
-      @page-change="(page) => $router.push({ query: { ...$route.query, page } })"
+      @page-change="(page) => { goToPage(page); loadMovies() }"
     >
       <template #cell-coverImage="{ item }">
         <img
@@ -437,16 +433,6 @@ const tableColumns = [
         {{ formatDateTime(item.createdAt) }}
       </template>
     </DataTable>
-
-    <!-- 分页器 -->
-    <Pagination
-      v-if="totalPages > 1"
-      :current-page="currentPage"
-      :total-pages="totalPages"
-      :total="total"
-      :page-size="limit"
-      @page-change="goToPage"
-    />
 
     <Teleport to="body">
       <div v-if="isEditModalOpen" class="modal-overlay" @click="isEditModalOpen = false">
