@@ -7,9 +7,9 @@
 import type { ApiConfig, BrowserConfig } from '../types/config'
 import pMap from 'p-map'
 import { FailedTaskRecorder } from '../lib/anti-detection'
-import { BrowserManager } from '../lib/browser-manager'
 import { JavBusStrategy } from '../strategies/javbus'
 import { ApiClient } from '../utils/api-client'
+import { BrowserManager } from '../utils/browser'
 
 export interface PublisherCrawlerConfig {
   browserConfig: BrowserConfig
@@ -63,7 +63,10 @@ export class PublisherCrawler {
   private readonly SOFT_TIMEOUT = 19800000 // 5.5 小时（毫秒）
 
   constructor(config: PublisherCrawlerConfig) {
-    this.browserManager = new BrowserManager(config.browserConfig)
+    this.browserManager = new BrowserManager(
+      config.browserConfig.puppeteer,
+      config.browserConfig.proxy,
+    )
     this.apiClient = new ApiClient(config.apiConfig)
     this.strategy = new JavBusStrategy()
     this.failedTasks = new FailedTaskRecorder()
@@ -85,7 +88,7 @@ export class PublisherCrawler {
       console.log(`⚙️  配置: maxPublishers=${this.maxPublishers}, concurrency=${this.concurrency}, delay=${this.delay}ms\n`)
 
       // 初始化浏览器
-      await this.browserManager.init()
+      await this.browserManager.launch()
 
       // 恢复模式
       if (this.recoveryMode) {
@@ -251,7 +254,8 @@ export class PublisherCrawler {
       console.log(`   ❌ 失败: ${errorMessage}`)
 
       // 记录失败任务
-      this.failedTasks.record(publisher.sourceUrl, errorMessage, publisher.crawlFailureCount + 1)
+      const errorObj = error instanceof Error ? error : new Error(errorMessage)
+      this.failedTasks.record(publisher.sourceUrl, errorObj, publisher.crawlFailureCount + 1)
       this.stats.failedPublishers++
     }
     finally {

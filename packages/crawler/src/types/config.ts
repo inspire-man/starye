@@ -16,6 +16,11 @@ export interface PuppeteerConfig {
   timeout?: number
 }
 
+export interface BrowserConfig {
+  puppeteer?: PuppeteerConfig
+  proxy?: ProxyConfig
+}
+
 export interface ApiConfig {
   url: string
   token: string
