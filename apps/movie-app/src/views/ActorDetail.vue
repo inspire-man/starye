@@ -3,6 +3,7 @@ import type { ActorDetail } from '../types'
 import { onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { actorApi } from '../api'
+import ActorRelations from '../components/ActorRelations.vue'
 
 const route = useRoute()
 const loading = ref(true)
@@ -170,6 +171,13 @@ onMounted(() => {
             </RouterLink>
           </div>
         </div>
+
+        <!-- 合作关系 -->
+        <ActorRelations
+          v-if="actor.id"
+          :actor-id="actor.id"
+          :actor-name="actor.name"
+        />
       </div>
     </div>
   </div>

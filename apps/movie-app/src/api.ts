@@ -48,6 +48,29 @@ export const actorApi = {
     const { data } = await api.get(`/actors/${slug}`)
     return { success: true, data }
   },
+
+  async getActorRelations(actorId: string, params?: {
+    minCollaborations?: number
+    limit?: number
+  }): Promise<ApiResponse<{
+    actorId: string
+    actorName: string
+    relations: Array<{
+      partnerId: string
+      partnerName: string
+      partnerSlug: string
+      partnerAvatar?: string
+      collaborationCount: number
+      sharedMovies: Array<{
+        movieId: string
+        movieCode: string
+        movieTitle: string
+      }>
+    }>
+  }>> {
+    const { data } = await api.get(`/actors/${actorId}/relations`, { params })
+    return { success: true, data: data.data }
+  },
 }
 
 export const publisherApi = {

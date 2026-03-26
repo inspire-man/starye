@@ -106,14 +106,12 @@ publicMovies.get(
 
       return c.json({
         success: true,
-        data: {
-          data,
-          pagination: {
-            page,
-            limit,
-            total: totalResult,
-            totalPages: Math.ceil(totalResult / limit),
-          },
+        data,
+        pagination: {
+          page,
+          limit,
+          total: totalResult,
+          totalPages: Math.ceil(totalResult / limit),
         },
       })
     }
