@@ -98,18 +98,18 @@ jobs:
           CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
         run: |
           echo "Testing API authentication..."
-          
+
           if [ -z "$CRAWLER_SECRET" ]; then
             echo "❌ ERROR: CRAWLER_SECRET is not configured in GitHub Secrets"
             exit 1
           fi
-          
+
           # 测试爬虫端口认证
           TEST_URL="${API_URL}/api/admin/actors/pending?limit=1"
           echo "Testing: $TEST_URL"
-          
+
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "x-service-token: $CRAWLER_SECRET" "$TEST_URL")
-          
+
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ API authentication successful (HTTP $HTTP_CODE)"
           elif [ "$HTTP_CODE" = "401" ]; then
