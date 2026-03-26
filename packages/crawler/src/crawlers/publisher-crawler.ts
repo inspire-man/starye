@@ -232,7 +232,8 @@ export class PublisherCrawler {
       const completeness = this.calculateCompleteness(details)
       console.log(`   数据完整度: ${(completeness * 100).toFixed(0)}%`)
 
-      if (completeness < 0.3) {
+      // 降低阈值：只要有 logo 就认为是有效数据
+      if (completeness < 0.5) {
         throw new Error(`数据过少 (${(completeness * 100).toFixed(0)}%)`)
       }
 
@@ -274,12 +275,14 @@ export class PublisherCrawler {
    * - country: 15%
    */
   private calculateCompleteness(details: any): number {
+    // 调整权重：聚焦在实际可获取的数据（主要是 logo）
+    // JavBus 厂商页面通常只提供 logo，其他字段很少有数据
     const fields = [
-      { key: 'logo', weight: 0.30 },
-      { key: 'website', weight: 0.20 },
-      { key: 'description', weight: 0.20 },
-      { key: 'foundedYear', weight: 0.15 },
-      { key: 'country', weight: 0.15 },
+      { key: 'logo', weight: 0.70 }, // 提高到 70%（最重要）
+      { key: 'website', weight: 0.10 },
+      { key: 'description', weight: 0.10 },
+      { key: 'foundedYear', weight: 0.05 },
+      { key: 'country', weight: 0.05 },
     ]
 
     let score = 0

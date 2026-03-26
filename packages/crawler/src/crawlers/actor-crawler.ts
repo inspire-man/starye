@@ -233,7 +233,8 @@ export class ActorCrawler {
       const completeness = this.calculateCompleteness(details)
       console.log(`   数据完整度: ${(completeness * 100).toFixed(0)}%`)
 
-      if (completeness < 0.3) {
+      // 降低阈值：只要有头像就认为是有效数据
+      if (completeness < 0.5) {
         throw new Error(`数据过少 (${(completeness * 100).toFixed(0)}%)`)
       }
 
@@ -276,13 +277,15 @@ export class ActorCrawler {
    * - nationality: 15%
    */
   private calculateCompleteness(details: any): number {
+    // 调整权重：聚焦在实际可获取的数据（主要是头像）
+    // JavBus 女优页面通常只提供头像，其他字段很少有数据
     const fields = [
-      { key: 'avatar', weight: 0.25 },
-      { key: 'bio', weight: 0.20 },
-      { key: 'birthDate', weight: 0.15 },
-      { key: 'height', weight: 0.15 },
-      { key: 'measurements', weight: 0.10 },
-      { key: 'nationality', weight: 0.15 },
+      { key: 'avatar', weight: 0.70 }, // 提高到 70%（最重要）
+      { key: 'bio', weight: 0.10 },
+      { key: 'birthDate', weight: 0.05 },
+      { key: 'height', weight: 0.05 },
+      { key: 'measurements', weight: 0.05 },
+      { key: 'nationality', weight: 0.05 },
     ]
 
     let score = 0
