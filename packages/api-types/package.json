@@ -8,6 +8,7 @@
   },
   "types": "./src/index.ts",
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260317.1"
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "api": "workspace:*"
   }
 }

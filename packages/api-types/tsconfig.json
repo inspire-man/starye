@@ -3,5 +3,8 @@
   "compilerOptions": {
     "noEmit": true
   },
+  "references": [
+    { "path": "../../apps/api" }
+  ],
   "include": ["src/**/*"]
 }
