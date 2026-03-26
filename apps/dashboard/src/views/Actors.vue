@@ -126,7 +126,7 @@ async function loadNationalities() {
       credentials: 'include',
     })
     if (response.ok) {
-      const data = await response.json()
+      const data = await response.json() as { nationalities?: string[] }
       nationalities.value = data.nationalities || []
     }
   }

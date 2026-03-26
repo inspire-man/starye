@@ -1,7 +1,8 @@
 import type { AppEnv } from '../../types'
-import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
-import { z } from 'zod'
+import { describeRoute, resolver, validator } from 'hono-openapi'
+import { ActorDetailSchema, ActorsListDataSchema, GetActorParamSchema, GetActorsQuerySchema } from '../../schemas/actor'
+import { ErrorResponseSchema, SuccessResponseSchema } from '../../schemas/responses'
 import { getActorDetail, getActorList } from './handlers/actors.handler'
 
 /**
@@ -10,14 +11,67 @@ import { getActorDetail, getActorList } from './handlers/actors.handler'
 export const actorsRoutes = new Hono<AppEnv>()
   .get(
     '/',
-    zValidator('query', z.object({
-      page: z.coerce.number().min(1).default(1),
-      limit: z.coerce.number().min(1).max(100).default(20),
-      sort: z.enum(['name', 'movieCount', 'createdAt']).default('name'),
-      nationality: z.string().optional(),
-      isActive: z.coerce.boolean().optional(),
-      hasDetails: z.coerce.boolean().optional(),
-    })),
+    describeRoute({
+      summary: '获取演员列表',
+      description: '支持分页、排序、国籍筛选等',
+      tags: ['Actors'],
+      operationId: 'getActorsList',
+      responses: {
+        200: {
+          description: '成功返回演员列表',
+          content: {
+            'application/json': {
+              schema: resolver(SuccessResponseSchema(ActorsListDataSchema, '成功返回演员列表')),
+            },
+          },
+        },
+        500: {
+          description: '服务器内部错误',
+          content: {
+            'application/json': {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    validator('query', GetActorsQuerySchema),
     getActorList,
   )
-  .get('/:slug', getActorDetail)
+  .get(
+    '/:slug',
+    describeRoute({
+      summary: '获取演员详情',
+      description: '根据 slug 获取演员的完整信息',
+      tags: ['Actors'],
+      operationId: 'getActorDetail',
+      responses: {
+        200: {
+          description: '成功返回演员详情',
+          content: {
+            'application/json': {
+              schema: resolver(SuccessResponseSchema(ActorDetailSchema, '成功返回演员详情')),
+            },
+          },
+        },
+        404: {
+          description: '演员不存在',
+          content: {
+            'application/json': {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+        500: {
+          description: '服务器内部错误',
+          content: {
+            'application/json': {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    validator('param', GetActorParamSchema),
+    getActorDetail,
+  )

@@ -10,11 +10,11 @@
  */
 
 import type { AppEnv } from '../../../types'
-import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
-import { z } from 'zod'
+import { describeRoute, validator } from 'hono-openapi'
 import { canAccessCrawler } from '../../../lib/permissions'
 import { serviceAuth } from '../../../middleware/service-auth'
+import { CrawlerActionSchema } from '../../../schemas/admin'
 
 const adminCrawlers = new Hono<AppEnv>()
 
@@ -163,9 +163,17 @@ adminCrawlers.get('/failed-tasks', async (c) => {
  */
 adminCrawlers.post(
   '/recover',
-  zValidator('json', z.object({
-    type: z.enum(['comic', 'movie']),
-  })),
+  describeRoute({
+    summary: '恢复爬虫任务',
+    description: '返回恢复爬虫任务的指令',
+    tags: ['Admin'],
+    operationId: 'recoverCrawlerTasks',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '恢复指令' },
+    },
+  }),
+  validator('json', CrawlerActionSchema),
   async (c) => {
     const { type } = c.req.valid('json')
     const user = c.get('user')
@@ -207,9 +215,17 @@ adminCrawlers.post(
  */
 adminCrawlers.post(
   '/clear-failed',
-  zValidator('json', z.object({
-    type: z.enum(['comic', 'movie']),
-  })),
+  describeRoute({
+    summary: '清理失败任务',
+    description: '清理爬虫失败任务文件',
+    tags: ['Admin'],
+    operationId: 'clearFailedCrawlerTasks',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '清理结果' },
+    },
+  }),
+  validator('json', CrawlerActionSchema),
   async (c) => {
     const { type } = c.req.valid('json')
     const user = c.get('user')

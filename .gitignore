@@ -57,6 +57,11 @@ coverage/
 .eslintcache/
 *.tsbuildinfo
 
+# TypeScript declaration files (generated)
+*.d.ts
+*.d.ts.map
+!src/**/*.d.ts
+
 # Husky
 .husky/_/
 

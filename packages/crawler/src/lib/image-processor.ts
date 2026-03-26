@@ -5,18 +5,18 @@ import { Upload } from '@aws-sdk/lib-storage'
 import CacheableLookup from 'cacheable-lookup'
 import got from 'got'
 import sharp from 'sharp'
-import { z } from 'zod'
+import * as v from 'valibot'
 
-// Configuration Schema
-export const R2ConfigSchema = z.object({
-  accountId: z.string(),
-  accessKeyId: z.string(),
-  secretAccessKey: z.string(),
-  bucketName: z.string(),
-  publicUrl: z.string(), // e.g. https://cdn.starye.com
+// Configuration Schema (使用 looseObject 允许未来扩展配置项)
+export const R2ConfigSchema = v.looseObject({
+  accountId: v.pipe(v.string(), v.description('Cloudflare 账户 ID')),
+  accessKeyId: v.pipe(v.string(), v.description('R2 访问密钥 ID')),
+  secretAccessKey: v.pipe(v.string(), v.description('R2 访问密钥')),
+  bucketName: v.pipe(v.string(), v.description('R2 存储桶名称')),
+  publicUrl: v.pipe(v.string(), v.url(), v.description('公开访问 URL，例如 https://cdn.starye.com')),
 })
 
-export type R2Config = z.infer<typeof R2ConfigSchema>
+export type R2Config = v.InferOutput<typeof R2ConfigSchema>
 
 export type ImageVariant = 'thumb' | 'preview' | 'original'
 
@@ -39,10 +39,11 @@ export class ImageProcessor {
 
   constructor(config: R2Config) {
     // 验证 R2 配置
-    const validation = R2ConfigSchema.safeParse(config)
+    const validation = v.safeParse(R2ConfigSchema, config)
     if (!validation.success) {
+      const errorMessage = validation.issues.map(issue => `  - ${issue.path?.join('.')}: ${issue.message}`).join('\n')
       throw new Error(
-        `R2 配置无效: ${validation.error.message}\n\n`
+        `R2 配置无效:\n${errorMessage}\n\n`
         + '请检查以下环境变量:\n'
         + '  - CLOUDFLARE_ACCOUNT_ID\n'
         + '  - R2_ACCESS_KEY_ID\n'

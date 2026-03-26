@@ -1,12 +1,11 @@
 /* eslint-disable no-console */
 import type { AppEnv } from '../../../types'
-import { zValidator } from '@hono/zod-validator'
 import { actors, chapters, comics, movies, pages, players, publishers, user } from '@starye/db/schema'
 import { and, count, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { z } from 'zod'
+import { describeRoute, validator } from 'hono-openapi'
 import { serviceAuth } from '../../../middleware/service-auth'
-import { ChapterContentSchema, MangaInfoSchema, MovieInfoSchema } from '../../../types'
+import { BatchDeleteChaptersSchema, BatchOperationComicsSchema, GetChapterInfoQuerySchema, SubmitCrawlerDataSchema, UpdateComicMetadataSchema, UpdateComicProgressSchema, UpdateUserRoleSchema, UpdateUserStatusSchema } from '../../../schemas/admin'
 import { adminActorsRoutes } from '../actors'
 import { adminAuditLogsRoutes } from '../audit-logs'
 import { adminCacheRoutes } from '../cache'
@@ -40,10 +39,18 @@ admin.get('/users', serviceAuth(['admin']), async (c) => {
 // 支持设置的角色: admin, comic_admin, user
 admin.patch(
   '/users/:email/role',
+  describeRoute({
+    summary: '更新用户角色',
+    description: '提升或降级用户的角色权限',
+    tags: ['Admin'],
+    operationId: 'updateUserRole',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+    },
+  }),
   serviceAuth(['admin']),
-  zValidator('json', z.object({
-    role: z.enum(['admin', 'comic_admin', 'user']),
-  })),
+  validator('json', UpdateUserRoleSchema),
   async (c) => {
     const email = c.req.param('email')
     const { role } = c.req.valid('json')
@@ -73,10 +80,18 @@ admin.patch(
 // 修改用户状态 (例如 isAdult) - 允许 admin 和 comic_admin
 admin.patch(
   '/users/:email/status',
+  describeRoute({
+    summary: '更新用户状态',
+    description: '修改用户的状态（如成年标记）',
+    tags: ['Admin'],
+    operationId: 'updateUserStatus',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+    },
+  }),
   serviceAuth(['admin', 'comic_admin']),
-  zValidator('json', z.object({
-    isAdult: z.boolean().optional(),
-  })),
+  validator('json', UpdateUserStatusSchema),
   async (c) => {
     const email = c.req.param('email')
     const { isAdult } = c.req.valid('json')
@@ -121,17 +136,18 @@ admin.get('/comics', serviceAuth(['admin', 'comic_admin']), async (c) => {
 // 更新漫画信息 - admin, comic_admin
 admin.patch(
   '/comics/:id',
+  describeRoute({
+    summary: '更新漫画信息',
+    description: '更新指定漫画的元数据',
+    tags: ['Admin'],
+    operationId: 'updateComicMetadata',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+    },
+  }),
   serviceAuth(['admin', 'comic_admin']),
-  zValidator('json', z.object({
-    title: z.string().optional(),
-    author: z.string().optional(),
-    description: z.string().optional(),
-    status: z.enum(['serializing', 'completed']).optional(),
-    isR18: z.boolean().optional(),
-    metadataLocked: z.boolean().optional(),
-    region: z.string().optional(),
-    genres: z.array(z.string()).optional(),
-  })),
+  validator('json', UpdateComicMetadataSchema),
   async (c) => {
     const id = String(c.req.param('id')) // 确保 ID 为字符串
     const data = c.req.valid('json')
@@ -231,12 +247,18 @@ admin.get(
 // 检查章节状态
 admin.get(
   '/check-chapter',
+  describeRoute({
+    summary: '检查章节状态',
+    description: '检查指定章节的状态信息',
+    tags: ['Admin'],
+    operationId: 'checkChapterStatus',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '章节状态' },
+    },
+  }),
   serviceAuth(['admin', 'comic_admin']),
-  zValidator('query', z.object({
-    comicSlug: z.string(),
-    chapterSlug: z.string(),
-    sourceCount: z.coerce.number().optional(), // 新增：源站图片数量
-  })),
+  validator('query', GetChapterInfoQuerySchema),
   async (c) => {
     const { comicSlug, chapterSlug, sourceCount } = c.req.valid('query')
     const db = c.get('db')
@@ -280,12 +302,18 @@ admin.get(
 // 同步路由 (由爬虫调用) - 允许 admin, comic_admin (或 Service Token)
 admin.post(
   '/sync',
+  describeRoute({
+    summary: '同步爬虫数据',
+    description: '爬虫提交抓取的数据到数据库',
+    tags: ['Admin'],
+    operationId: 'syncCrawlerData',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '同步成功' },
+    },
+  }),
   serviceAuth(['admin', 'comic_admin']),
-  zValidator('json', z.discriminatedUnion('type', [
-    z.object({ type: z.literal('manga'), data: MangaInfoSchema }),
-    z.object({ type: z.literal('chapter'), data: ChapterContentSchema }),
-    z.object({ type: z.literal('movie'), data: MovieInfoSchema }),
-  ])),
+  validator('json', SubmitCrawlerDataSchema),
   async (c) => {
     const payload = c.req.valid('json')
     const db = c.get('db')
@@ -659,12 +687,18 @@ admin.get('/comics/batch-status', serviceAuth(['admin', 'comic_admin']), async (
 // 更新漫画爬取进度
 admin.post(
   '/comics/:slug/progress',
+  describeRoute({
+    summary: '更新漫画爬取进度',
+    description: '更新指定漫画的爬取进度',
+    tags: ['Admin'],
+    operationId: 'updateComicProgress',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+    },
+  }),
   serviceAuth(['admin', 'comic_admin']),
-  zValidator('json', z.object({
-    status: z.enum(['pending', 'partial', 'complete']),
-    crawledChapters: z.number(),
-    totalChapters: z.number(),
-  })),
+  validator('json', UpdateComicProgressSchema),
   async (c) => {
     const slug = c.req.param('slug')
     const { status, crawledChapters, totalChapters } = c.req.valid('json')
@@ -759,12 +793,18 @@ admin.get('/comics/crawl-stats', serviceAuth(['admin', 'comic_admin']), async (c
 // 批量操作漫画
 admin.post(
   '/comics/bulk-operation',
+  describeRoute({
+    summary: '批量操作漫画',
+    description: '批量更新漫画状态或元数据',
+    tags: ['Admin'],
+    operationId: 'bulkOperateComics',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '操作成功' },
+    },
+  }),
   serviceAuth(['admin', 'comic_admin']),
-  zValidator('json', z.object({
-    ids: z.array(z.string()).min(1).max(100),
-    operation: z.enum(['update_r18', 'lock_metadata', 'unlock_metadata', 'update_sort_order', 'delete']),
-    payload: z.record(z.string(), z.any()).optional(),
-  })),
+  validator('json', BatchOperationComicsSchema),
   async (c) => {
     const { ids, operation, payload } = c.req.valid('json')
     const db = c.get('db')
@@ -850,10 +890,18 @@ admin.post(
 // 批量删除章节
 admin.post(
   '/comics/:id/chapters/bulk-delete',
+  describeRoute({
+    summary: '批量删除章节',
+    description: '批量删除指定漫画的章节',
+    tags: ['Admin'],
+    operationId: 'bulkDeleteComicChapters',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '删除成功' },
+    },
+  }),
   serviceAuth(['admin', 'comic_admin']),
-  zValidator('json', z.object({
-    chapterIds: z.array(z.string()).min(1).max(100),
-  })),
+  validator('json', BatchDeleteChaptersSchema),
   async (c) => {
     const comicId = c.req.param('id')
     const { chapterIds } = c.req.valid('json')

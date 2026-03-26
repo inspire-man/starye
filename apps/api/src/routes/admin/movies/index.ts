@@ -7,110 +7,104 @@
  */
 
 import type { InferInsertModel, SQL } from 'drizzle-orm'
+import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
-import { zValidator } from '@hono/zod-validator'
 import { movies, players } from '@starye/db/schema'
 import { and, count, desc, eq, gte, like, lte, or } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { describeRoute, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
-import { z } from 'zod'
 import { captureResourceState, computeChanges, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
 import { serviceAuth } from '../../../middleware/service-auth'
+import { AddPlayerSchema, BatchImportPlayersSchema, BatchOperationMoviesSchema, MovieFilterSchema, UpdateMovieActorsSchema, UpdateMovieMetadataSchema, UpdateMoviePublishersSchema, UpdatePlayerSchema } from '../../../schemas/admin'
 
 const adminMovies = new Hono<AppEnv>()
 
 // 批量查询电影状态 (用于爬虫增量爬取)
 // 使用 serviceAuth 认证，必须在 requireResource 中间件之前定义
-adminMovies.get('/batch-status', serviceAuth(['admin']), async (c) => {
-  const codesParam = c.req.query('codes')
-  if (!codesParam) {
-    return c.json({ error: 'codes parameter is required' }, 400)
-  }
+adminMovies.get(
+  '/batch-status',
+  describeRoute({
+    summary: '批量查询电影状态',
+    description: '用于爬虫增量爬取，查询指定电影编号的状态',
+    tags: ['Admin'],
+    operationId: 'getMoviesBatchStatus',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '电影状态列表' },
+    },
+  }),
+  serviceAuth(['admin']),
+  async (c) => {
+    const codesParam = c.req.query('codes')
+    if (!codesParam) {
+      return c.json({ error: 'codes parameter is required' }, 400)
+    }
 
-  const codes = codesParam.split(',').map(s => s.trim()).filter(Boolean)
-  if (codes.length === 0) {
-    return c.json({ error: 'codes parameter is required' }, 400)
-  }
+    const codes = codesParam.split(',').map(s => s.trim()).filter(Boolean)
+    if (codes.length === 0) {
+      return c.json({ error: 'codes parameter is required' }, 400)
+    }
 
-  const db = c.get('db')
-  const startTime = Date.now()
+    const db = c.get('db')
+    const startTime = Date.now()
 
-  try {
+    try {
     // 使用 SQL IN 查询批量获取电影状态
-    const results = await db.query.movies.findMany({
-      where: (movies, { inArray }) => inArray(movies.code, codes),
-      columns: {
-        code: true,
-        slug: true,
-        updatedAt: true,
-      },
-    })
+      const results = await db.query.movies.findMany({
+        where: (movies, { inArray }) => inArray(movies.code, codes),
+        columns: {
+          code: true,
+          slug: true,
+          updatedAt: true,
+        },
+      })
 
-    // 构建响应对象
-    const statusMap: Record<string, any> = {}
-    for (const code of codes) {
-      const result = results.find(r => r.code === code)
-      if (result) {
-        statusMap[code] = {
-          exists: true,
-          code: result.code,
-          slug: result.slug,
-          updatedAt: result.updatedAt?.toISOString(),
+      // 构建响应对象
+      const statusMap: Record<string, any> = {}
+      for (const code of codes) {
+        const result = results.find(r => r.code === code)
+        if (result) {
+          statusMap[code] = {
+            exists: true,
+            code: result.code,
+            slug: result.slug,
+            updatedAt: result.updatedAt?.toISOString(),
+          }
+        }
+        else {
+          statusMap[code] = {
+            exists: false,
+            code,
+          }
         }
       }
-      else {
-        statusMap[code] = {
-          exists: false,
-          code,
-        }
+
+      const elapsed = Date.now() - startTime
+      console.log(`[BatchStatus] 批量查询 ${codes.length} 个电影，耗时 ${elapsed}ms`)
+
+      if (elapsed > 1000) {
+        console.warn(`[BatchStatus] ⚠️ 批量查询过慢，耗时 ${elapsed}ms`)
       }
+
+      return c.json(statusMap)
     }
-
-    const elapsed = Date.now() - startTime
-    console.log(`[BatchStatus] 批量查询 ${codes.length} 个电影，耗时 ${elapsed}ms`)
-
-    if (elapsed > 1000) {
-      console.warn(`[BatchStatus] ⚠️ 批量查询过慢，耗时 ${elapsed}ms`)
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[BatchStatus] ❌ Database operation failed:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
     }
-
-    return c.json(statusMap)
-  }
-  catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error('[BatchStatus] ❌ Database operation failed:', message)
-    return c.json({ error: 'Database operation failed' }, 500)
-  }
-})
+  },
+)
 
 // 所有其他路由都需要 movie 资源权限
 adminMovies.use('/*', requireResource('movie'))
 
 /**
- * 筛选参数 Schema
- */
-const MovieFilterSchema = z.object({
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  isR18: z.union([z.enum(['true', 'false', 'all']), z.literal('')]).optional().default('all'),
-  crawlStatus: z.union([z.enum(['pending', 'partial', 'complete']), z.literal('')]).optional(),
-  metadataLocked: z.union([z.enum(['true', 'false']), z.literal('')]).optional(),
-  actor: z.string().optional(),
-  publisher: z.string().optional(),
-  genre: z.string().optional(),
-  releaseDateFrom: z.string().optional(),
-  releaseDateTo: z.string().optional(),
-  createdAtFrom: z.string().optional(),
-  createdAtTo: z.string().optional(),
-  search: z.string().optional(),
-  sortBy: z.enum(['releaseDate', 'createdAt', 'updatedAt', 'sortOrder', 'title']).default('updatedAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-})
-
-/**
  * 构建筛选条件
  */
-function buildMovieFilters(filter: z.infer<typeof MovieFilterSchema>) {
+function buildMovieFilters(filter: MovieFilter) {
   const conditions: SQL[] = []
 
   if (filter.isR18 === 'true') {
@@ -197,7 +191,17 @@ function buildOrderBy(sortBy: string, sortOrder: 'asc' | 'desc') {
  */
 adminMovies.get(
   '/',
-  zValidator('query', MovieFilterSchema),
+  describeRoute({
+    summary: '获取电影列表（管理）',
+    description: '支持分页、筛选、排序的电影列表接口',
+    tags: ['Admin'],
+    operationId: 'getAdminMoviesList',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '电影列表' },
+    },
+  }),
+  validator('query', MovieFilterSchema),
   async (c) => {
     const filter = c.req.valid('query')
     const db = c.get('db')
@@ -278,53 +282,67 @@ adminMovies.get(
  * GET /api/admin/movies/:id
  * 电影详情查询
  */
-adminMovies.get('/:id', async (c) => {
-  const id = c.req.param('id')
-  const db = c.get('db')
+adminMovies.get(
+  '/:id',
+  describeRoute({
+    summary: '获取电影详情（管理）',
+    description: '获取指定电影的详细信息',
+    tags: ['Admin'],
+    operationId: 'getAdminMovieDetail',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '电影详情' },
+      404: { description: '电影不存在' },
+    },
+  }),
+  async (c) => {
+    const id = c.req.param('id')
+    const db = c.get('db')
 
-  try {
-    const movie = await db.query.movies.findFirst({
-      where: eq(movies.id, id),
-      with: {
-        players: {
-          orderBy: (players, { asc }) => [asc(players.sortOrder)],
-        },
-        movieActors: {
-          with: {
-            actor: {
-              columns: {
-                id: true,
-                name: true,
+    try {
+      const movie = await db.query.movies.findFirst({
+        where: eq(movies.id, id),
+        with: {
+          players: {
+            orderBy: (players, { asc }) => [asc(players.sortOrder)],
+          },
+          movieActors: {
+            with: {
+              actor: {
+                columns: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+            orderBy: (movieActors, { asc }) => [asc(movieActors.sortOrder)],
+          },
+          moviePublishers: {
+            with: {
+              publisher: {
+                columns: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
-          orderBy: (movieActors, { asc }) => [asc(movieActors.sortOrder)],
         },
-        moviePublishers: {
-          with: {
-            publisher: {
-              columns: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-    })
+      })
 
-    if (!movie) {
-      return c.json({ error: 'Movie not found' }, 404)
+      if (!movie) {
+        return c.json({ error: 'Movie not found' }, 404)
+      }
+
+      return c.json(movie)
     }
-
-    return c.json(movie)
-  }
-  catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error(`[Admin/Movies] ❌ Failed to get movie ${id}:`, message)
-    return c.json({ error: 'Database operation failed' }, 500)
-  }
-})
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin/Movies] ❌ Failed to get movie ${id}:`, message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
 
 /**
  * PATCH /api/admin/movies/:id
@@ -332,19 +350,18 @@ adminMovies.get('/:id', async (c) => {
  */
 adminMovies.patch(
   '/:id',
-  zValidator('json', z.object({
-    title: z.string().optional(),
-    description: z.string().optional(),
-    coverImage: z.string().optional(),
-    isR18: z.boolean().optional(),
-    metadataLocked: z.boolean().optional(),
-    sortOrder: z.number().optional(),
-    actors: z.array(z.string()).optional(),
-    genres: z.array(z.string()).optional(),
-    publisher: z.string().optional(),
-    releaseDate: z.string().optional(),
-    duration: z.number().optional(),
-  })),
+  describeRoute({
+    summary: '更新电影元数据',
+    description: '更新指定电影的元数据信息',
+    tags: ['Admin'],
+    operationId: 'updateAdminMovieMetadata',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+      404: { description: '电影不存在' },
+    },
+  }),
+  validator('json', UpdateMovieMetadataSchema),
   async (c) => {
     const id = c.req.param('id')
     const data = c.req.valid('json')
@@ -451,36 +468,49 @@ adminMovies.delete('/:id', async (c) => {
  * GET /api/admin/movies/:id/players
  * 查询电影的所有播放源
  */
-adminMovies.get('/:id/players', async (c) => {
-  const movieId = c.req.param('id')
-  const db = c.get('db')
+adminMovies.get(
+  '/:id/players',
+  describeRoute({
+    summary: '获取电影播放源',
+    description: '获取指定电影的所有播放源',
+    tags: ['Admin'],
+    operationId: 'getMoviePlayers',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '播放源列表' },
+    },
+  }),
+  async (c) => {
+    const movieId = c.req.param('id')
+    const db = c.get('db')
 
-  try {
-    const movie = await db.query.movies.findFirst({
-      where: eq(movies.id, movieId),
-    })
+    try {
+      const movie = await db.query.movies.findFirst({
+        where: eq(movies.id, movieId),
+      })
 
-    if (!movie) {
-      return c.json({ error: 'Movie not found' }, 404)
+      if (!movie) {
+        return c.json({ error: 'Movie not found' }, 404)
+      }
+
+      const playerList = await db.query.players.findMany({
+        where: eq(players.movieId, movieId),
+        orderBy: (players, { asc }) => [asc(players.sortOrder)],
+      })
+
+      return c.json({
+        movieId,
+        players: playerList,
+        total: playerList.length,
+      })
     }
-
-    const playerList = await db.query.players.findMany({
-      where: eq(players.movieId, movieId),
-      orderBy: (players, { asc }) => [asc(players.sortOrder)],
-    })
-
-    return c.json({
-      movieId,
-      players: playerList,
-      total: playerList.length,
-    })
-  }
-  catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error(`[Admin/Players] ❌ Failed to get players for ${movieId}:`, message)
-    return c.json({ error: 'Database operation failed' }, 500)
-  }
-})
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin/Players] ❌ Failed to get players for ${movieId}:`, message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
 
 /**
  * POST /api/admin/movies/:id/players
@@ -488,11 +518,17 @@ adminMovies.get('/:id/players', async (c) => {
  */
 adminMovies.post(
   '/:id/players',
-  zValidator('json', z.object({
-    sourceName: z.string(),
-    sourceUrl: z.string().url(),
-    quality: z.string().optional(),
-  })),
+  describeRoute({
+    summary: '添加电影播放源',
+    description: '为指定电影添加新的播放源',
+    tags: ['Admin'],
+    operationId: 'addMoviePlayersManual',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '添加成功' },
+    },
+  }),
+  validator('json', AddPlayerSchema),
   async (c) => {
     const movieId = c.req.param('id')
     const { sourceName, sourceUrl, quality } = c.req.valid('json')
@@ -566,11 +602,17 @@ adminMovies.post(
  */
 adminMovies.patch(
   '/players/:id',
-  zValidator('json', z.object({
-    sourceName: z.string().optional(),
-    sourceUrl: z.string().url().optional(),
-    quality: z.string().optional(),
-  })),
+  describeRoute({
+    summary: '更新播放源',
+    description: '更新指定播放源的信息',
+    tags: ['Admin'],
+    operationId: 'updatePlayer',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+    },
+  }),
+  validator('json', UpdatePlayerSchema),
   async (c) => {
     const playerId = c.req.param('id')
     const data = c.req.valid('json')
@@ -670,13 +712,17 @@ adminMovies.delete('/players/:id', async (c) => {
  */
 adminMovies.post(
   '/:id/players/batch-import',
-  zValidator('json', z.object({
-    players: z.array(z.object({
-      sourceName: z.string(),
-      sourceUrl: z.string().url(),
-      quality: z.string().optional(),
-    })),
-  })),
+  describeRoute({
+    summary: '批量导入播放源',
+    description: '为指定电影批量导入播放源',
+    tags: ['Admin'],
+    operationId: 'batchImportMoviePlayers',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '导入成功' },
+    },
+  }),
+  validator('json', BatchImportPlayersSchema),
   async (c) => {
     const movieId = c.req.param('id')
     const { players: playerData } = c.req.valid('json')
@@ -766,11 +812,17 @@ adminMovies.post(
  */
 adminMovies.post(
   '/bulk-operation',
-  zValidator('json', z.object({
-    ids: z.array(z.string()).min(1).max(100),
-    operation: z.enum(['update_r18', 'lock_metadata', 'unlock_metadata', 'update_sort_order', 'delete']),
-    payload: z.record(z.string(), z.any()).optional(),
-  })),
+  describeRoute({
+    summary: '批量操作电影',
+    description: '批量更新电影状态、元数据或删除',
+    tags: ['Admin'],
+    operationId: 'bulkOperateMovies',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '操作成功' },
+    },
+  }),
+  validator('json', BatchOperationMoviesSchema),
   async (c) => {
     const { ids, operation, payload } = c.req.valid('json')
     const db = c.get('db')
@@ -871,12 +923,18 @@ adminMovies.post(
  */
 adminMovies.put(
   '/:id/actors',
-  zValidator('json', z.object({
-    actors: z.array(z.object({
-      id: z.string().min(1),
-      sortOrder: z.number(),
-    })),
-  })),
+  describeRoute({
+    summary: '更新电影演员',
+    description: '更新指定电影的演员关联',
+    tags: ['Admin'],
+    operationId: 'updateMovieActors',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+      404: { description: '电影不存在' },
+    },
+  }),
+  validator('json', UpdateMovieActorsSchema),
   async (c) => {
     const movieId = c.req.param('id')
     const { actors: actorList } = c.req.valid('json')
@@ -931,12 +989,18 @@ adminMovies.put(
  */
 adminMovies.put(
   '/:id/publishers',
-  zValidator('json', z.object({
-    publishers: z.array(z.object({
-      id: z.string(),
-      sortOrder: z.number(),
-    })),
-  })),
+  describeRoute({
+    summary: '更新电影厂商',
+    description: '更新指定电影的厂商关联',
+    tags: ['Admin'],
+    operationId: 'updateMoviePublishers',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+      404: { description: '电影不存在' },
+    },
+  }),
+  validator('json', UpdateMoviePublishersSchema),
   async (c) => {
     const movieId = c.req.param('id')
     const { publishers: publisherList } = c.req.valid('json')

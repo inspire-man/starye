@@ -1,5 +1,7 @@
 import type { AppEnv } from './types'
+import { Scalar } from '@scalar/hono-api-reference'
 import { Hono } from 'hono'
+import { openAPIRouteHandler } from 'hono-openapi'
 import { corsMiddleware } from './middleware/cors'
 import { databaseMiddleware } from './middleware/database'
 import { errorHandler } from './middleware/error-handler'
@@ -41,6 +43,119 @@ const routes = app
   .route('/api/public/comics', publicComicsRoutes)
   .route('/api/public/movies', publicMoviesRoutes)
   .route('/api/public/progress', publicProgressRoutes)
+  // OpenAPI 文档
+  .get(
+    '/api/openapi.json',
+    openAPIRouteHandler(app, {
+      documentation: {
+        openapi: '3.0.0',
+        info: {
+          title: 'Starye API',
+          version: '1.0.0',
+          description: `
+Starye 是一个现代化的内容聚合平台，支持漫画、电影和演员信息的管理与浏览。
+
+## 功能特性
+- 🎬 电影与漫画内容管理
+- 👤 演员信息与关联
+- 📖 阅读进度追踪
+- 🔒 基于 Better Auth 的认证系统
+- 🚀 高性能 Edge Runtime
+          `.trim(),
+          contact: {
+            name: 'Starye Team',
+            url: 'https://github.com/your-org/starye',
+          },
+        },
+        servers: [
+          {
+            url: 'http://localhost:8787',
+            description: '本地开发环境',
+          },
+          {
+            url: 'https://api.starye.com',
+            description: '生产环境',
+          },
+        ],
+        tags: [
+          {
+            name: 'Comics',
+            description: '漫画相关接口',
+          },
+          {
+            name: 'Movies',
+            description: '电影相关接口',
+          },
+          {
+            name: 'Actors',
+            description: '演员相关接口',
+          },
+          {
+            name: 'Publishers',
+            description: '出版商相关接口',
+          },
+          {
+            name: 'Progress',
+            description: '用户进度追踪',
+          },
+          {
+            name: 'Admin',
+            description: '管理后台接口（需要认证）',
+          },
+          {
+            name: 'Auth',
+            description: '认证与授权',
+          },
+          {
+            name: 'Upload',
+            description: '文件上传',
+          },
+          {
+            name: 'Health',
+            description: '健康检查',
+          },
+        ],
+        components: {
+          securitySchemes: {
+            cookieAuth: {
+              type: 'apiKey',
+              in: 'cookie',
+              name: 'better-auth.session_token',
+              description: 'Better Auth 会话 token（自动管理）',
+            },
+          },
+        },
+      },
+    }),
+  )
+  // Scalar UI 文档页面
+  .get(
+    '/api/docs',
+    Scalar({
+      url: '/api/openapi.json',
+      theme: 'moon',
+      darkMode: true,
+      searchHotKey: 'k',
+      defaultOpenAllTags: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+      authentication: {
+        preferredSecurityScheme: 'cookieAuth',
+      },
+      pageTitle: 'Starye API Documentation',
+      customCss: `
+        :root {
+          --scalar-color-accent: #6366f1;
+          --scalar-color-1: #1e293b;
+          --scalar-color-2: #0f172a;
+        }
+      `,
+      // sources: [
+      //   { url: '/', title: 'API' },
+      //   { url: '/api/auth/open-api/generate-schema', title: 'Auth' },
+      // ],
+    }),
+  )
 
 export default routes
 // Export the routes type for RPC, not the app type

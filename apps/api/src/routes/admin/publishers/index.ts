@@ -7,14 +7,14 @@
  */
 
 import type { AppEnv } from '../../../types'
-import { zValidator } from '@hono/zod-validator'
 import { movies, publishers } from '@starye/db/schema'
 import { and, count, desc, eq, gt, isNotNull, isNull, like } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { z } from 'zod'
+import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
+import { CreatePublisherSchema, GetAdminPublishersQuerySchema, MergePublishersSchema, UpdatePublisherSchema } from '../../../schemas/admin'
 
 const adminPublishers = new Hono<AppEnv>()
 
@@ -110,14 +110,17 @@ adminPublishers.get('/stats', async (c) => {
  */
 adminPublishers.get(
   '/',
-  zValidator('query', z.object({
-    page: z.coerce.number().min(1).default(1),
-    limit: z.coerce.number().min(1).max(100).default(50),
-    search: z.string().optional(),
-    onlyPending: z.enum(['true', 'false']).optional(), // 向后兼容
-    crawlStatus: z.enum(['complete', 'pending', 'failed', 'no-link']).optional(), // 爬取状态筛选
-    country: z.string().optional(), // 国家筛选
-  })),
+  describeRoute({
+    summary: '获取厂商列表（管理）',
+    description: '支持分页、搜索、筛选的厂商列表接口',
+    tags: ['Admin'],
+    operationId: 'getAdminPublishersList',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '厂商列表' },
+    },
+  }),
+  validator('query', GetAdminPublishersQuerySchema),
   async (c) => {
     const { page, limit, search, onlyPending, crawlStatus, country } = c.req.valid('query')
     const db = c.get('db')
@@ -274,14 +277,17 @@ adminPublishers.get('/:id', async (c) => {
  */
 adminPublishers.patch(
   '/:id',
-  zValidator('json', z.object({
-    name: z.string().optional(),
-    logo: z.string().optional(),
-    website: z.string().optional(),
-    description: z.string().optional(),
-    foundedYear: z.number().optional(),
-    country: z.string().optional(),
-  })),
+  describeRoute({
+    summary: '更新厂商信息',
+    description: '更新指定厂商的元数据',
+    tags: ['Admin'],
+    operationId: 'updatePublisherInfo',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+    },
+  }),
+  validator('json', UpdatePublisherSchema),
   async (c) => {
     const publisherId = c.req.param('id')
     const data = c.req.valid('json')
@@ -338,10 +344,17 @@ adminPublishers.post('/:id/logo', async (c) => {
  */
 adminPublishers.post(
   '/merge',
-  zValidator('json', z.object({
-    sourceId: z.string(),
-    targetId: z.string(),
-  })),
+  describeRoute({
+    summary: '合并厂商',
+    description: '将多个重复的厂商记录合并为一个',
+    tags: ['Admin'],
+    operationId: 'mergePublisherRecords',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '合并成功' },
+    },
+  }),
+  validator('json', MergePublishersSchema),
   async (c) => {
     const { sourceId, targetId } = c.req.valid('json')
     const db = c.get('db')
@@ -422,9 +435,18 @@ adminPublishers.post(
  */
 adminPublishers.post(
   '/',
-  zValidator('json', z.object({
-    name: z.string().min(1),
-  })),
+  describeRoute({
+    summary: '创建厂商',
+    description: '创建新的厂商记录',
+    tags: ['Admin'],
+    operationId: 'createPublisher',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '创建成功' },
+      400: { description: '验证失败' },
+    },
+  }),
+  validator('json', CreatePublisherSchema),
   async (c) => {
     const { name } = c.req.valid('json')
     const db = c.get('db')

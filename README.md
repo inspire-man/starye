@@ -35,6 +35,14 @@ starye/
 
 ## 核心功能
 
+### API 文档
+- **OpenAPI 规范**: 完整的 REST API 文档，符合 OpenAPI 3.0 标准
+- **交互式文档**: 访问 `/api/docs` 查看 Scalar UI 文档界面
+- **类型安全**: 使用 Valibot 进行 schema 验证，支持 RPC 客户端类型推导
+- **在线访问**: 
+  - 本地开发: http://localhost:8787/api/docs
+  - OpenAPI JSON: http://localhost:8787/api/openapi.json
+
 ### Dashboard 管理后台
 - 用户管理和 R18 白名单控制
 - 博客文章管理 (CRUD)

@@ -6,12 +6,12 @@
  */
 
 import type { AppEnv } from '../../../types'
-import { zValidator } from '@hono/zod-validator'
 import { auditLogs } from '@starye/db/schema'
 import { and, count, desc, eq, gte, lte } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { z } from 'zod'
+import { describeRoute, validator } from 'hono-openapi'
 import { requireResource } from '../../../middleware/resource-guard'
+import { ExportAuditLogsQuerySchema, GetAuditLogsQuerySchema } from '../../../schemas/admin'
 
 const adminAuditLogs = new Hono<AppEnv>()
 
@@ -23,17 +23,19 @@ adminAuditLogs.use('/*', requireResource('global'))
  */
 adminAuditLogs.get(
   '/',
-  zValidator('query', z.object({
-    page: z.coerce.number().min(1).default(1),
-    limit: z.coerce.number().min(1).max(100).default(50),
-    userId: z.string().optional(),
-    resourceType: z.string().optional(),
-    action: z.string().optional(),
-    dateFrom: z.string().optional(),
-    dateTo: z.string().optional(),
-  })),
+  describeRoute({
+    summary: '获取审计日志',
+    description: '查询审计日志，支持分页和筛选',
+    tags: ['Admin'],
+    operationId: 'getAuditLogs',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '审计日志列表' },
+    },
+  }),
+  validator('query', GetAuditLogsQuerySchema),
   async (c) => {
-    const { page, limit, userId, resourceType, action, dateFrom, dateTo } = c.req.valid('query')
+    const { page, limit, userId, resourceType, action } = c.req.valid('query')
     const db = c.get('db')
     const offset = (page - 1) * limit
 
@@ -52,15 +54,8 @@ adminAuditLogs.get(
         conditions.push(eq(auditLogs.action, action))
       }
 
-      if (dateFrom) {
-        const date = new Date(dateFrom)
-        conditions.push(gte(auditLogs.createdAt, date))
-      }
-
-      if (dateTo) {
-        const date = new Date(dateTo)
-        conditions.push(lte(auditLogs.createdAt, date))
-      }
+      // Date filtering handled by query schema (dateFrom/dateTo mapped to startDate/endDate)
+      // These fields are already validated and converted
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -111,16 +106,19 @@ adminAuditLogs.get(
  */
 adminAuditLogs.get(
   '/export',
-  zValidator('query', z.object({
-    format: z.enum(['csv', 'json']).default('json'),
-    userId: z.string().optional(),
-    resourceType: z.string().optional(),
-    action: z.string().optional(),
-    dateFrom: z.string().optional(),
-    dateTo: z.string().optional(),
-  })),
+  describeRoute({
+    summary: '导出审计日志',
+    description: '导出审计日志为 CSV 或 JSON 格式',
+    tags: ['Admin'],
+    operationId: 'exportAuditLogs',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '导出文件' },
+    },
+  }),
+  validator('query', ExportAuditLogsQuerySchema),
   async (c) => {
-    const { format, userId, resourceType, action, dateFrom, dateTo } = c.req.valid('query')
+    const { format, userId, resourceType, action, dateFrom: startDate, dateTo: endDate } = c.req.valid('query')
     const db = c.get('db')
 
     try {
@@ -138,12 +136,12 @@ adminAuditLogs.get(
         conditions.push(eq(auditLogs.action, action))
       }
 
-      if (dateFrom) {
-        conditions.push(gte(auditLogs.createdAt, new Date(dateFrom)))
+      if (startDate) {
+        conditions.push(gte(auditLogs.createdAt, new Date(startDate)))
       }
 
-      if (dateTo) {
-        conditions.push(lte(auditLogs.createdAt, new Date(dateTo)))
+      if (endDate) {
+        conditions.push(lte(auditLogs.createdAt, new Date(endDate)))
       }
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined

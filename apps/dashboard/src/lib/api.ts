@@ -23,7 +23,7 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
   })
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ message: 'Unknown error' }))
+    const error = await res.json().catch(() => ({ message: 'Unknown error' })) as { message?: string }
     throw new Error(error.message || `Request failed with status ${res.status}`)
   }
 
@@ -432,8 +432,8 @@ export const api = {
       })
 
       if (!res.ok) {
-        const error = await res.json().catch(() => ({ message: 'Unknown error' }))
-        throw new Error(error.error || `Upload failed with status ${res.status}`)
+        const error = await res.json().catch(() => ({ message: 'Unknown error' })) as { error?: string, message?: string }
+        throw new Error(error.error || error.message || `Upload failed with status ${res.status}`)
       }
 
       return res.json()

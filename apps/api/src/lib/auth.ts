@@ -2,6 +2,7 @@ import { createDb } from '@starye/db'
 import * as schema from '@starye/db/schema'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { openAPI } from 'better-auth/plugins'
 
 import { getAllowedOrigins } from '../config'
 
@@ -105,6 +106,9 @@ export function createAuth(env: Env, request: Request) {
         path: '/', // 极其重要：确保 Cookie 在 /comic, /movie 等路径下也有效
       },
     },
+    plugins: [
+      openAPI(),
+    ],
   })
 }
 

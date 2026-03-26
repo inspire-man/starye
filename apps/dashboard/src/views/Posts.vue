@@ -32,7 +32,7 @@ async function fetchPosts() {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const result = await response.json()
+    const result = await response.json() as { data?: any[] }
     posts.value = result.data || []
   }
   catch (e: unknown) {

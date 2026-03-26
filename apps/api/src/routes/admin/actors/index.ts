@@ -7,14 +7,14 @@
  */
 
 import type { AppEnv } from '../../../types'
-import { zValidator } from '@hono/zod-validator'
 import { actors, movieActors, movies } from '@starye/db/schema'
 import { and, count, desc, eq, gt, isNotNull, isNull, like } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { z } from 'zod'
+import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
+import { AddActorAliasSchema, BatchDeleteSchema, CreateActorSchema, GetAdminActorsQuerySchema, MergeActorsSchema, UpdateActorSchema } from '../../../schemas/admin'
 
 const adminActors = new Hono<AppEnv>()
 
@@ -24,85 +24,111 @@ adminActors.use('/*', requireResource('movie'))
  * GET /api/admin/actors/nationalities
  * 获取所有不同的国籍列表（用于筛选器）
  */
-adminActors.get('/nationalities', async (c) => {
-  const db = c.get('db')
-  const cache = new CacheManager(c.env.CACHE)
+adminActors.get(
+  '/nationalities',
+  describeRoute({
+    summary: '获取演员国籍列表',
+    description: '返回所有不同的演员国籍，用于筛选器',
+    tags: ['Admin'],
+    operationId: 'getActorNationalities',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '国籍列表' },
+    },
+  }),
+  async (c) => {
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
 
-  try {
-    const cacheKey = CacheKeys.actorNationalities()
+    try {
+      const cacheKey = CacheKeys.actorNationalities()
 
-    return await withCache(
-      cacheKey,
-      CacheTTL.STATS,
-      async () => {
-        const results = await db
-          .selectDistinct({ nationality: actors.nationality })
-          .from(actors)
-          .where(isNotNull(actors.nationality))
-          .orderBy(actors.nationality)
+      return await withCache(
+        cacheKey,
+        CacheTTL.STATS,
+        async () => {
+          const results = await db
+            .selectDistinct({ nationality: actors.nationality })
+            .from(actors)
+            .where(isNotNull(actors.nationality))
+            .orderBy(actors.nationality)
 
-        const nationalities = results
-          .map(r => r.nationality)
-          .filter(n => n && n.trim() !== '')
+          const nationalities = results
+            .map(r => r.nationality)
+            .filter(n => n && n.trim() !== '')
 
-        return { nationalities }
-      },
-      cache,
-    ).then(result => c.json(result))
-  }
-  catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error('[Admin/Actors] ❌ Failed to get nationalities:', message)
-    return c.json({ error: 'Database operation failed' }, 500)
-  }
-})
+          return { nationalities }
+        },
+        cache,
+      ).then(result => c.json(result))
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to get nationalities:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
 
 /**
  * GET /api/admin/actors/stats
  * 女优统计信息
  */
-adminActors.get('/stats', async (c) => {
-  const db = c.get('db')
-  const cache = new CacheManager(c.env.CACHE)
+adminActors.get(
+  '/stats',
+  describeRoute({
+    summary: '获取演员统计信息',
+    description: '返回演员数量统计，包括待审核、爬取失败等状态',
+    tags: ['Admin'],
+    operationId: 'getAdminActorsStats',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '统计信息' },
+    },
+  }),
+  async (c) => {
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
 
-  try {
-    const cacheKey = CacheKeys.actorStats()
+    try {
+      const cacheKey = CacheKeys.actorStats()
 
-    return await withCache(
-      cacheKey,
-      CacheTTL.STATS,
-      async () => {
-        const [totalCount, pendingCount, withSourceUrlCount] = await Promise.all([
-          db.select({ value: count() }).from(actors).then(res => res[0]?.value || 0),
-          db
-            .select({ value: count() })
-            .from(actors)
-            .where(eq(actors.hasDetailsCrawled, false))
-            .then(res => res[0]?.value || 0),
-          db
-            .select({ value: count() })
-            .from(actors)
-            .where(and(eq(actors.hasDetailsCrawled, false), like(actors.sourceUrl, '%/star/%')))
-            .then(res => res[0]?.value || 0),
-        ])
+      return await withCache(
+        cacheKey,
+        CacheTTL.STATS,
+        async () => {
+          const [totalCount, pendingCount, withSourceUrlCount] = await Promise.all([
+            db.select({ value: count() }).from(actors).then(res => res[0]?.value || 0),
+            db
+              .select({ value: count() })
+              .from(actors)
+              .where(eq(actors.hasDetailsCrawled, false))
+              .then(res => res[0]?.value || 0),
+            db
+              .select({ value: count() })
+              .from(actors)
+              .where(and(eq(actors.hasDetailsCrawled, false), like(actors.sourceUrl, '%/star/%')))
+              .then(res => res[0]?.value || 0),
+          ])
 
-        return {
-          total: totalCount,
-          crawled: totalCount - pendingCount,
-          pending: pendingCount,
-          withSourceUrl: withSourceUrlCount,
-          crawledPercentage: totalCount > 0 ? Math.round(((totalCount - pendingCount) / totalCount) * 100) : 0,
-        }
-      },
-      cache,
-    ).then(result => c.json(result))
-  }
-  catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error('[Admin/Actors] ❌ Failed to query stats:', message)
-    return c.json({ error: 'Database operation failed' }, 500)
-  }
-})
+          return {
+            total: totalCount,
+            crawled: totalCount - pendingCount,
+            pending: pendingCount,
+            withSourceUrl: withSourceUrlCount,
+            crawledPercentage: totalCount > 0 ? Math.round(((totalCount - pendingCount) / totalCount) * 100) : 0,
+          }
+        },
+        cache,
+      ).then(result => c.json(result))
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to query stats:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
 
 /**
  * GET /api/admin/actors
@@ -110,14 +136,17 @@ adminActors.get('/stats', async (c) => {
  */
 adminActors.get(
   '/',
-  zValidator('query', z.object({
-    page: z.coerce.number().min(1).default(1),
-    limit: z.coerce.number().min(1).max(100).default(50),
-    search: z.string().optional(),
-    onlyPending: z.enum(['true', 'false']).optional(), // 向后兼容
-    crawlStatus: z.enum(['complete', 'pending', 'failed', 'no-link']).optional(), // 爬取状态筛选
-    nationality: z.string().optional(), // 国籍筛选
-  })),
+  describeRoute({
+    summary: '获取演员列表（管理）',
+    description: '支持分页、搜索、筛选、排序的演员列表接口',
+    tags: ['Admin'],
+    operationId: 'getAdminActorsList',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '演员列表' },
+    },
+  }),
+  validator('query', GetAdminActorsQuerySchema),
   async (c) => {
     const { page, limit, search, onlyPending, crawlStatus, nationality } = c.req.valid('query')
     const db = c.get('db')
@@ -263,62 +292,76 @@ adminActors.get(
  * GET /api/admin/actors/:id
  * 获取单个演员详情（包含关联电影列表）
  */
-adminActors.get('/:id', async (c) => {
-  const actorId = c.req.param('id')
-  const db = c.get('db')
-  const cache = new CacheManager(c.env.CACHE)
+adminActors.get(
+  '/:id',
+  describeRoute({
+    summary: '获取演员详情（管理）',
+    description: '获取指定演员的详细信息，包含关联电影列表',
+    tags: ['Admin'],
+    operationId: 'getAdminActorDetail',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '演员详情' },
+      404: { description: '演员不存在' },
+    },
+  }),
+  async (c) => {
+    const actorId = c.req.param('id')
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
 
-  try {
-    const cacheKey = CacheKeys.actorDetail(actorId)
+    try {
+      const cacheKey = CacheKeys.actorDetail(actorId)
 
-    return await withCache(
-      cacheKey,
-      CacheTTL.DETAIL,
-      async () => {
-        const actor = await db.query.actors.findFirst({
-          where: eq(actors.id, actorId),
-        })
+      return await withCache(
+        cacheKey,
+        CacheTTL.DETAIL,
+        async () => {
+          const actor = await db.query.actors.findFirst({
+            where: eq(actors.id, actorId),
+          })
 
-        if (!actor) {
-          return { error: 'Actor not found', status: 404, data: null, movies: [] }
-        }
+          if (!actor) {
+            return { error: 'Actor not found', status: 404, data: null, movies: [] }
+          }
 
-        // 查询关联的电影（通过 movieActors 关联表）
-        const movieRelations = await db.query.movieActors.findMany({
-          where: eq(movieActors.actorId, actorId),
-          with: {
-            movie: {
-              columns: {
-                id: true,
-                code: true,
-                title: true,
-                coverImage: true,
-                releaseDate: true,
+          // 查询关联的电影（通过 movieActors 关联表）
+          const movieRelations = await db.query.movieActors.findMany({
+            where: eq(movieActors.actorId, actorId),
+            with: {
+              movie: {
+                columns: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  coverImage: true,
+                  releaseDate: true,
+                },
               },
             },
-          },
-          orderBy: desc(movieActors.sortOrder),
-          limit: 100,
-        })
+            orderBy: desc(movieActors.sortOrder),
+            limit: 100,
+          })
 
-        const movies = movieRelations.map(rel => rel.movie).filter(Boolean)
+          const movies = movieRelations.map(rel => rel.movie).filter(Boolean)
 
-        return { data: actor, movies, status: 200 }
-      },
-      cache,
-    ).then((result) => {
-      if (result.status === 404) {
-        return c.json({ error: result.error }, 404)
-      }
-      return c.json(result)
-    })
-  }
-  catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error(`[Admin/Actors] ❌ Failed to get actor ${actorId}:`, message)
-    return c.json({ error: 'Database operation failed' }, 500)
-  }
-})
+          return { data: actor, movies, status: 200 }
+        },
+        cache,
+      ).then((result) => {
+        if (result.status === 404) {
+          return c.json({ error: result.error }, 404)
+        }
+        return c.json(result)
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin/Actors] ❌ Failed to get actor ${actorId}:`, message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
 
 /**
  * PATCH /api/admin/actors/:id
@@ -326,16 +369,18 @@ adminActors.get('/:id', async (c) => {
  */
 adminActors.patch(
   '/:id',
-  zValidator('json', z.object({
-    name: z.string().optional(),
-    bio: z.string().optional(),
-    avatar: z.string().optional(),
-    birthDate: z.string().optional(),
-    height: z.number().optional(),
-    measurements: z.string().optional(),
-    nationality: z.string().optional(),
-    socialLinks: z.record(z.string(), z.string()).optional(),
-  })),
+  describeRoute({
+    summary: '更新演员信息',
+    description: '更新指定演员的元数据',
+    tags: ['Admin'],
+    operationId: 'updateAdminActor',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '更新成功' },
+      404: { description: '演员不存在' },
+    },
+  }),
+  validator('json', UpdateActorSchema),
   async (c) => {
     const actorId = c.req.param('id')
     const data = c.req.valid('json')
@@ -401,10 +446,17 @@ adminActors.post('/:id/avatar', async (c) => {
  */
 adminActors.post(
   '/merge',
-  zValidator('json', z.object({
-    sourceId: z.string(),
-    targetId: z.string(),
-  })),
+  describeRoute({
+    summary: '合并演员',
+    description: '将多个重复的演员记录合并为一个',
+    tags: ['Admin'],
+    operationId: 'mergeAdminActors',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '合并成功' },
+    },
+  }),
+  validator('json', MergeActorsSchema),
   async (c) => {
     const { sourceId, targetId } = c.req.valid('json')
     const db = c.get('db')
@@ -485,9 +537,18 @@ adminActors.post(
  */
 adminActors.post(
   '/',
-  zValidator('json', z.object({
-    name: z.string().min(1),
-  })),
+  describeRoute({
+    summary: '创建演员',
+    description: '创建新的演员记录',
+    tags: ['Admin'],
+    operationId: 'createAdminActor',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '创建成功' },
+      400: { description: '验证失败' },
+    },
+  }),
+  validator('json', CreateActorSchema),
   async (c) => {
     const { name } = c.req.valid('json')
     const db = c.get('db')
@@ -537,10 +598,18 @@ adminActors.post(
  */
 adminActors.post(
   '/:id/aliases',
+  describeRoute({
+    summary: '添加演员别名',
+    description: '为指定演员添加别名',
+    tags: ['Admin'],
+    operationId: 'addActorAlias',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '添加成功' },
+    },
+  }),
   requireResource('movie'),
-  zValidator('json', z.object({
-    alias: z.string().min(1).max(100),
-  })),
+  validator('json', AddActorAliasSchema),
   async (c) => {
     const actorId = c.req.param('id')
     const { alias } = c.req.valid('json')
@@ -596,6 +665,16 @@ adminActors.post(
  */
 adminActors.delete(
   '/:id/aliases/:alias',
+  describeRoute({
+    summary: '删除演员别名',
+    description: '删除指定演员的别名',
+    tags: ['Admin'],
+    operationId: 'deleteActorAlias',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '删除成功' },
+    },
+  }),
   requireResource('movie'),
   async (c) => {
     const actorId = c.req.param('id')
@@ -651,9 +730,17 @@ adminActors.delete(
  */
 adminActors.post(
   '/batch-recrawl',
-  zValidator('json', z.object({
-    ids: z.array(z.string()).min(1).max(100),
-  })),
+  describeRoute({
+    summary: '批量重新爬取演员',
+    description: '批量标记演员为待重新爬取状态',
+    tags: ['Admin'],
+    operationId: 'batchRecrawlActors',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '操作成功' },
+    },
+  }),
+  validator('json', BatchDeleteSchema),
   async (c) => {
     const { ids } = c.req.valid('json')
     const db = c.get('db')
