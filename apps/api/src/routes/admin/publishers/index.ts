@@ -14,6 +14,7 @@ import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
+import { serviceAuth } from '../../../middleware/service-auth'
 import {
   BatchQueryPublisherStatusSchema,
   BatchSyncPublishersSchema,
@@ -449,12 +450,13 @@ adminPublishers.get(
     description: '批量查询多个厂商的爬取状态，用于爬虫增量优化',
     tags: ['Admin'],
     operationId: 'batchQueryPublisherStatus',
-    security: [{ cookieAuth: [] }],
+    security: [{ serviceAuth: [] }],
     responses: {
       200: { description: '状态映射' },
       400: { description: '参数错误' },
     },
   }),
+  serviceAuth(['admin']),
   validator('query', BatchQueryPublisherStatusSchema),
   async (c) => {
     const { ids: idsParam } = c.req.valid('query')
@@ -533,11 +535,12 @@ adminPublishers.get(
     description: '返回待爬取的厂商列表，按优先级排序',
     tags: ['Admin'],
     operationId: 'getPendingPublishers',
-    security: [{ cookieAuth: [] }],
+    security: [{ serviceAuth: [] }],
     responses: {
       200: { description: '待爬取厂商列表' },
     },
   }),
+  serviceAuth(['admin']),
   validator('query', GetPendingPublishersQuerySchema),
   async (c) => {
     const { limit } = c.req.valid('query')
@@ -593,12 +596,13 @@ adminPublishers.post(
     description: '更新厂商的详细信息并标记为已爬取',
     tags: ['Admin'],
     operationId: 'syncPublisherDetails',
-    security: [{ cookieAuth: [] }],
+    security: [{ serviceAuth: [] }],
     responses: {
       200: { description: '同步成功' },
       404: { description: '厂商不存在' },
     },
   }),
+  serviceAuth(['admin']),
   validator('json', SyncPublisherDetailsSchema),
   async (c) => {
     const publisherId = c.req.param('id')
@@ -676,11 +680,12 @@ adminPublishers.post(
     description: '批量创建或更新厂商的 sourceUrl',
     tags: ['Admin'],
     operationId: 'batchSyncPublishers',
-    security: [{ cookieAuth: [] }],
+    security: [{ serviceAuth: [] }],
     responses: {
       200: { description: '同步成功' },
     },
   }),
+  serviceAuth(['admin']),
   validator('json', BatchSyncPublishersSchema),
   async (c) => {
     const { publishers: publishersData } = c.req.valid('json')

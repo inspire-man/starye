@@ -14,6 +14,7 @@ import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
+import { serviceAuth } from '../../../middleware/service-auth'
 import {
   AddActorAliasSchema,
   BatchDeleteSchema,
@@ -745,12 +746,13 @@ adminActors.get(
     description: '批量查询多个演员的爬取状态，用于爬虫增量优化',
     tags: ['Admin'],
     operationId: 'batchQueryActorStatus',
-    security: [{ cookieAuth: [] }],
+    security: [{ serviceAuth: [] }],
     responses: {
       200: { description: '状态映射' },
       400: { description: '参数错误' },
     },
   }),
+  serviceAuth(['admin']),
   validator('query', BatchQueryActorStatusSchema),
   async (c) => {
     const { ids: idsParam } = c.req.valid('query')
@@ -829,11 +831,12 @@ adminActors.get(
     description: '返回待爬取的演员列表，按优先级排序',
     tags: ['Admin'],
     operationId: 'getPendingActors',
-    security: [{ cookieAuth: [] }],
+    security: [{ serviceAuth: [] }],
     responses: {
       200: { description: '待爬取演员列表' },
     },
   }),
+  serviceAuth(['admin']),
   validator('query', GetPendingActorsQuerySchema),
   async (c) => {
     const { limit } = c.req.valid('query')
@@ -889,12 +892,13 @@ adminActors.post(
     description: '更新演员的详细信息并标记为已爬取',
     tags: ['Admin'],
     operationId: 'syncActorDetails',
-    security: [{ cookieAuth: [] }],
+    security: [{ serviceAuth: [] }],
     responses: {
       200: { description: '同步成功' },
       404: { description: '演员不存在' },
     },
   }),
+  serviceAuth(['admin']),
   validator('json', SyncActorDetailsSchema),
   async (c) => {
     const actorId = c.req.param('id')
@@ -977,11 +981,12 @@ adminActors.post(
     description: '批量创建或更新演员的 sourceUrl',
     tags: ['Admin'],
     operationId: 'batchSyncActors',
-    security: [{ cookieAuth: [] }],
+    security: [{ serviceAuth: [] }],
     responses: {
       200: { description: '同步成功' },
     },
   }),
+  serviceAuth(['admin']),
   validator('json', BatchSyncActorsSchema),
   async (c) => {
     const { actors: actorsData } = c.req.valid('json')
