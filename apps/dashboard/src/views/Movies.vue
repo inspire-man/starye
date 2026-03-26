@@ -59,7 +59,7 @@ const { filters, applyFilters, resetFilters } = useFilters({
   search: '',
 })
 
-const { currentPage, limit, totalPages, setMeta, goToPage } = usePagination(20)
+const { currentPage, limit, totalPages, setMeta, goToPage, updatePageSize } = usePagination(20)
 const { sortBy, sortOrder, updateSort } = useSorting('updatedAt', 'desc')
 const { selected, toggleItem, toggleAll, clearSelection, selectedCount, selectedIds } = useBatchSelect(movies)
 
@@ -71,28 +71,10 @@ watch(currentPage, () => {
   loadMovies()
 }, { immediate: true })
 
-// 监听筛选条件变化时重置到第一页
-watch(
-  [
-    () => filters.value.search,
-    () => filters.value.isR18,
-    () => filters.value.crawlStatus,
-    () => filters.value.metadataLocked,
-    () => filters.value.actor,
-    () => filters.value.publisher,
-    () => filters.value.genre,
-    () => filters.value.releaseDateFrom,
-    () => filters.value.releaseDateTo,
-  ],
-  () => {
-    if (currentPage.value !== 1) {
-      goToPage(1)
-    }
-    else {
-      loadMovies()
-    }
-  },
-)
+// 监听 limit 变化时加载数据
+watch(limit, () => {
+  loadMovies()
+})
 
 const filterFields = [
   {
@@ -471,7 +453,7 @@ const tableColumns = [
       layout="total, sizes, prev, pager, next, jumper"
       :background="true"
       @update:current-page="goToPage"
-      @update:page-size="(size) => { limit = size; goToPage(1) }"
+      @update:page-size="updatePageSize"
     />
 
     <Teleport to="body">

@@ -45,14 +45,14 @@ const isBatchOperating = ref(false)
 const nationalities = ref<string[]>([])
 const loadingNationalities = ref(false)
 
-const { filters } = useFilters({
+const { filters, applyFilters } = useFilters({
   search: '',
   crawlStatus: '', // 爬取状态筛选：'' | 'complete' | 'pending' | 'failed' | 'no-link'
   nationality: '', // 国籍筛选
   hasDetails: '', // 是否有详情：'' | 'true' | 'false'
 })
 
-const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
+const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage, updatePageSize } = usePagination()
 
 const { sortBy: sortField, sortOrder, updateSort } = useSorting('movieCount', 'desc')
 
@@ -61,7 +61,7 @@ watch(currentPage, () => {
   loadActors()
 }, { immediate: true })
 
-// 监听筛选条件变化时重置到第一页
+// 监听筛选条件变化时应用到 URL
 watch(
   [
     () => filters.value.search,
@@ -70,14 +70,15 @@ watch(
     () => filters.value.hasDetails,
   ],
   () => {
-    if (currentPage.value !== 1) {
-      goToPage(1)
-    }
-    else {
-      loadActors()
-    }
+    applyFilters()
   },
+  { deep: true },
 )
+
+// 监听 pageSize 变化时加载数据
+watch(pageSize, () => {
+  loadActors()
+})
 
 function toggleSort(field: string) {
   const newOrder = sortField.value === field && sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -495,7 +496,7 @@ onMounted(() => {
       layout="total, sizes, prev, pager, next, jumper"
       :background="true"
       @update:current-page="goToPage"
-      @update:page-size="(size) => { pageSize = size; goToPage(1) }"
+      @update:page-size="updatePageSize"
     />
 
     <Teleport to="body">

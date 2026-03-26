@@ -31,6 +31,16 @@ export function usePagination(defaultLimit = 20) {
     })
   }
 
+  const updatePageSize = (size: number) => {
+    router.push({
+      query: {
+        ...route.query,
+        limit: String(size),
+        page: '1',
+      },
+    })
+  }
+
   const nextPage = () => {
     if (currentPage.value < totalPages.value) {
       goToPage(currentPage.value + 1)
@@ -54,6 +64,7 @@ export function usePagination(defaultLimit = 20) {
     totalPages,
     total,
     goToPage,
+    updatePageSize,
     nextPage,
     prevPage,
     setMeta,
