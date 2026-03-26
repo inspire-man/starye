@@ -92,6 +92,38 @@ jobs:
             exit 1
           fi
 
+      - name: Test API Authentication
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+        run: |
+          echo "Testing API authentication..."
+          
+          if [ -z "$CRAWLER_SECRET" ]; then
+            echo "❌ ERROR: CRAWLER_SECRET is not configured in GitHub Secrets"
+            exit 1
+          fi
+          
+          # 测试爬虫端口认证
+          TEST_URL="${API_URL}/api/admin/publishers/pending?limit=1"
+          echo "Testing: $TEST_URL"
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "x-service-token: $CRAWLER_SECRET" "$TEST_URL")
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ API authentication successful (HTTP $HTTP_CODE)"
+          elif [ "$HTTP_CODE" = "401" ]; then
+            echo "❌ ERROR: Authentication failed (HTTP 401)"
+            echo "Possible causes:"
+            echo "  1. CRAWLER_SECRET in GitHub Secrets doesn't match API server's CRAWLER_SECRET"
+            echo "  2. API server is not running the latest code with serviceAuth middleware"
+            echo "  3. API server's CRAWLER_SECRET env var is not set correctly"
+            exit 1
+          else
+            echo "⚠️  Unexpected HTTP code: $HTTP_CODE"
+            exit 1
+          fi
+
       - name: Run Publisher Crawler
         env:
           # API 配置
