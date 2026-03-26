@@ -14,7 +14,6 @@ import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
-import { serviceAuth } from '../../../middleware/service-auth'
 import {
   AddActorAliasSchema,
   BatchDeleteSchema,
@@ -752,7 +751,6 @@ adminActors.get(
       400: { description: '参数错误' },
     },
   }),
-  serviceAuth(['admin']),
   validator('query', BatchQueryActorStatusSchema),
   async (c) => {
     const { ids: idsParam } = c.req.valid('query')
@@ -836,7 +834,6 @@ adminActors.get(
       200: { description: '待爬取演员列表' },
     },
   }),
-  serviceAuth(['admin']),
   validator('query', GetPendingActorsQuerySchema),
   async (c) => {
     const { limit } = c.req.valid('query')
@@ -898,7 +895,6 @@ adminActors.post(
       404: { description: '演员不存在' },
     },
   }),
-  serviceAuth(['admin']),
   validator('json', SyncActorDetailsSchema),
   async (c) => {
     const actorId = c.req.param('id')
@@ -986,7 +982,6 @@ adminActors.post(
       200: { description: '同步成功' },
     },
   }),
-  serviceAuth(['admin']),
   validator('json', BatchSyncActorsSchema),
   async (c) => {
     const { actors: actorsData } = c.req.valid('json')

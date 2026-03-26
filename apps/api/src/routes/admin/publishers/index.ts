@@ -14,7 +14,6 @@ import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
-import { serviceAuth } from '../../../middleware/service-auth'
 import {
   BatchQueryPublisherStatusSchema,
   BatchSyncPublishersSchema,
@@ -456,7 +455,6 @@ adminPublishers.get(
       400: { description: '参数错误' },
     },
   }),
-  serviceAuth(['admin']),
   validator('query', BatchQueryPublisherStatusSchema),
   async (c) => {
     const { ids: idsParam } = c.req.valid('query')
@@ -540,7 +538,6 @@ adminPublishers.get(
       200: { description: '待爬取厂商列表' },
     },
   }),
-  serviceAuth(['admin']),
   validator('query', GetPendingPublishersQuerySchema),
   async (c) => {
     const { limit } = c.req.valid('query')
@@ -602,7 +599,6 @@ adminPublishers.post(
       404: { description: '厂商不存在' },
     },
   }),
-  serviceAuth(['admin']),
   validator('json', SyncPublisherDetailsSchema),
   async (c) => {
     const publisherId = c.req.param('id')
@@ -685,7 +681,6 @@ adminPublishers.post(
       200: { description: '同步成功' },
     },
   }),
-  serviceAuth(['admin']),
   validator('json', BatchSyncPublishersSchema),
   async (c) => {
     const { publishers: publishersData } = c.req.valid('json')

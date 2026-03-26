@@ -5,16 +5,21 @@
  * - admin 可以访问所有资源
  * - comic_admin 只能访问漫画相关资源
  * - movie_admin 只能访问电影相关资源
+ * - service token（爬虫）拥有完全访问权限
  */
 
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Resource } from '../lib/permissions'
-import type { AppEnv } from '../types'
+import type { AppEnv, SessionUser } from '../types'
 import { HTTPException } from 'hono/http-exception'
 import { hasPermission } from '../lib/permissions'
 
 /**
  * 资源权限检查中间件
+ *
+ * 支持两种认证方式：
+ * 1. Service Token: 通过 x-service-token header（用于爬虫脚本）
+ * 2. User Session: 通过 cookie（用于管理后台用户）
  *
  * @param resource - 资源类型（'comic', 'movie', 'global'）
  * @returns Hono 中间件
@@ -36,6 +41,25 @@ import { hasPermission } from '../lib/permissions'
  */
 export function requireResource(resource: Resource): MiddlewareHandler<AppEnv> {
   return async (c: Context<AppEnv>, next) => {
+    // 首先检查 service token（用于爬虫）
+    const token = c.req.header('x-service-token')
+    const secret = c.env.CRAWLER_SECRET
+
+    if (token && secret && token === secret) {
+      // Service token 始终拥有完全访问权限
+      // 设置虚拟用户以支持下游中间件
+      c.set('user', {
+        id: 'service-token',
+        email: 'service@system',
+        role: 'super_admin',
+        isAdult: true,
+        emailVerified: true,
+        createdAt: new Date(),
+      } as SessionUser)
+      return await next()
+    }
+
+    // 然后检查 session 用户
     const user = c.get('user')
 
     if (!user) {
