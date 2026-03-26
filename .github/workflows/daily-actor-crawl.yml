@@ -1,0 +1,132 @@
+name: Daily Actor Crawl
+
+on:
+  schedule:
+    # 每天 00:00 UTC 运行（电影爬虫之后）
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      max_actors:
+        description: 'Maximum number of actors to crawl'
+        required: false
+        default: '150'
+        type: string
+      recovery_mode:
+        description: 'Enable recovery mode (retry failed tasks)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  crawl-actors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.3.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install Chrome Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2t64 libatk1.0-0 libatk-bridge2.0-0 \
+            libcairo2 libcups2 libdbus-1-3 \
+            libexpat1 libfontconfig1 libgcc-s1 \
+            libgdk-pixbuf-2.0-0 libglib2.0-0 libgtk-3-0 \
+            libnspr4 libnss3 libpango-1.0-0 libpangocairo-1.0-0 \
+            libstdc++6 libx11-6 libx11-xcb1 libxcb1 \
+            libxcomposite1 libxcursor1 libxdamage1 libxext6 \
+            libxfixes3 libxi6 libxrandr2 libxrender1 \
+            libxss1 libxtst6 ca-certificates fonts-liberation \
+            libnss3 lsb-release xdg-utils wget \
+            libgbm1 libdrm2 libxshmfence1
+
+      - name: Install Chrome
+        run: |
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
+          rm google-chrome-stable_current_amd64.deb
+          google-chrome --version
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Build Packages
+        run: pnpm build --filter=@starye/crawler...
+
+      - name: Health Check API
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+        run: |
+          echo "Checking API health at: $API_URL"
+
+          HEALTH_URL="${API_URL}/api/health"
+          echo "Testing: $HEALTH_URL"
+
+          if curl -f -s -m 10 "$HEALTH_URL" > /dev/null 2>&1; then
+            echo "✅ API is healthy and accessible"
+          else
+            echo "⚠️  Warning: API health check failed"
+            echo "API might be unavailable. Crawler will attempt to continue..."
+            echo "Note: Actor data will not be synced if API is down."
+            exit 1
+          fi
+
+      - name: Run Actor Crawler
+        env:
+          # API 配置
+          API_URL: ${{ secrets.API_URL }}
+          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+
+          # 代理配置（可选）
+          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+          PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+          PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+
+          # 女优爬虫配置
+          MAX_ACTORS: ${{ github.event.inputs.max_actors || '150' }}
+          ACTOR_CONCURRENCY: '2'
+          ACTOR_DELAY: '8000'
+          RECOVERY_MODE: ${{ github.event.inputs.recovery_mode || 'false' }}
+
+          # 浏览器配置
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+        run: |
+          export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)
+          echo "Found Chrome at: $PUPPETEER_EXECUTABLE_PATH"
+          echo "Starting actor crawler..."
+          echo "  MAX_ACTORS: $MAX_ACTORS"
+          echo "  ACTOR_CONCURRENCY: $ACTOR_CONCURRENCY"
+          echo "  ACTOR_DELAY: $ACTOR_DELAY"
+          echo "  RECOVERY_MODE: $RECOVERY_MODE"
+          pnpm --filter @starye/crawler run crawl:actor
+
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: actor-crawler-logs-${{ github.run_number }}
+          path: |
+            packages/crawler/.actor-failed-tasks.json
+            packages/crawler/*.log
+          retention-days: 7

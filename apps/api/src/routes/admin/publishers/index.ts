@@ -8,13 +8,22 @@
 
 import type { AppEnv } from '../../../types'
 import { movies, publishers } from '@starye/db/schema'
-import { and, count, desc, eq, gt, isNotNull, isNull, like } from 'drizzle-orm'
+import { and, count, desc, eq, gt, inArray, isNotNull, isNull, like, lt } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
-import { CreatePublisherSchema, GetAdminPublishersQuerySchema, MergePublishersSchema, UpdatePublisherSchema } from '../../../schemas/admin'
+import {
+  BatchQueryPublisherStatusSchema,
+  BatchSyncPublishersSchema,
+  CreatePublisherSchema,
+  GetAdminPublishersQuerySchema,
+  GetPendingPublishersQuerySchema,
+  MergePublishersSchema,
+  SyncPublisherDetailsSchema,
+  UpdatePublisherSchema,
+} from '../../../schemas/admin'
 
 const adminPublishers = new Hono<AppEnv>()
 
@@ -424,6 +433,319 @@ adminPublishers.post(
     catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e)
       console.error('[Admin/Publishers] ❌ Failed to merge publishers:', message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+/**
+ * GET /api/admin/publishers/batch-status
+ * 批量查询厂商状态
+ */
+adminPublishers.get(
+  '/batch-status',
+  describeRoute({
+    summary: '批量查询厂商状态',
+    description: '批量查询多个厂商的爬取状态，用于爬虫增量优化',
+    tags: ['Admin'],
+    operationId: 'batchQueryPublisherStatus',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '状态映射' },
+      400: { description: '参数错误' },
+    },
+  }),
+  validator('query', BatchQueryPublisherStatusSchema),
+  async (c) => {
+    const { ids: idsParam } = c.req.valid('query')
+    const db = c.get('db')
+
+    try {
+      const startTime = Date.now()
+
+      // 解析 IDs
+      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean)
+
+      if (ids.length === 0) {
+        return c.json({ error: 'No IDs provided' }, 400)
+      }
+
+      if (ids.length > 200) {
+        return c.json({ error: 'Too many IDs (max 200)' }, 400)
+      }
+
+      // 批量查询
+      const results = await db.query.publishers.findMany({
+        where: inArray(publishers.id, ids),
+        columns: {
+          id: true,
+          hasDetailsCrawled: true,
+          crawlFailureCount: true,
+          movieCount: true,
+          lastCrawlAttempt: true,
+          sourceUrl: true,
+        },
+      })
+
+      // 构建状态映射
+      const statusMap: Record<string, any> = {}
+      for (const id of ids) {
+        const result = results.find(r => r.id === id)
+        statusMap[id] = result
+          ? {
+              exists: true,
+              hasDetailsCrawled: result.hasDetailsCrawled,
+              crawlFailureCount: result.crawlFailureCount,
+              movieCount: result.movieCount,
+              lastCrawlAttempt: result.lastCrawlAttempt,
+              sourceUrl: result.sourceUrl,
+            }
+          : { exists: false }
+      }
+
+      const elapsed = Date.now() - startTime
+
+      // 性能日志
+      if (elapsed > 1000) {
+        console.warn(`[Admin/Publishers] ⚠️ Batch status query took ${elapsed}ms for ${ids.length} IDs`)
+      }
+
+      console.log(`[Admin/Publishers] ✓ Batch status query: ${ids.length} IDs in ${elapsed}ms`)
+
+      return c.json(statusMap)
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Publishers] ❌ Failed to batch query status:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+/**
+ * GET /api/admin/publishers/pending
+ * 获取待爬取的厂商列表
+ */
+adminPublishers.get(
+  '/pending',
+  describeRoute({
+    summary: '获取待爬取厂商列表',
+    description: '返回待爬取的厂商列表，按优先级排序',
+    tags: ['Admin'],
+    operationId: 'getPendingPublishers',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '待爬取厂商列表' },
+    },
+  }),
+  validator('query', GetPendingPublishersQuerySchema),
+  async (c) => {
+    const { limit } = c.req.valid('query')
+    const db = c.get('db')
+
+    try {
+      // 筛选条件：未爬取、有 sourceUrl、失败次数 < 3
+      const results = await db.query.publishers.findMany({
+        where: and(
+          eq(publishers.hasDetailsCrawled, false),
+          isNotNull(publishers.sourceUrl),
+          lt(publishers.crawlFailureCount, 3),
+        ),
+        columns: {
+          id: true,
+          name: true,
+          sourceUrl: true,
+          movieCount: true,
+          crawlFailureCount: true,
+          lastCrawlAttempt: true,
+        },
+        orderBy: [desc(publishers.movieCount), publishers.crawlFailureCount, publishers.lastCrawlAttempt],
+        limit,
+      })
+
+      // 统计高优先级数量（movieCount >= 10）
+      const highPriorityCount = results.filter(p => p.movieCount >= 10).length
+
+      console.log(`[Admin/Publishers] ✓ Returned ${results.length} pending publishers (${highPriorityCount} high priority)`)
+
+      return c.json({
+        publishers: results,
+        total: results.length,
+        highPriority: highPriorityCount,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Publishers] ❌ Failed to get pending publishers:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+/**
+ * POST /api/admin/publishers/:id/details
+ * 同步厂商详情
+ */
+adminPublishers.post(
+  '/:id/details',
+  describeRoute({
+    summary: '同步厂商详情',
+    description: '更新厂商的详细信息并标记为已爬取',
+    tags: ['Admin'],
+    operationId: 'syncPublisherDetails',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '同步成功' },
+      404: { description: '厂商不存在' },
+    },
+  }),
+  validator('json', SyncPublisherDetailsSchema),
+  async (c) => {
+    const publisherId = c.req.param('id')
+    const details = c.req.valid('json')
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
+
+    try {
+      const publisher = await db.query.publishers.findFirst({
+        where: eq(publishers.id, publisherId),
+      })
+
+      if (!publisher) {
+        return c.json({ error: 'Publisher not found' }, 404)
+      }
+
+      // 计算数据完整度（权重：logo 30%, website 20%, description 20%, foundedYear 15%, country 15%）
+      const fields = [
+        { key: 'logo', weight: 0.30 },
+        { key: 'website', weight: 0.20 },
+        { key: 'description', weight: 0.20 },
+        { key: 'foundedYear', weight: 0.15 },
+        { key: 'country', weight: 0.15 },
+      ]
+
+      let completeness = 0
+      for (const field of fields) {
+        const value = details[field.key as keyof typeof details]
+        if (value !== null && value !== undefined && value !== '') {
+          completeness += field.weight
+        }
+      }
+
+      // 更新数据库
+      const updateData: any = {
+        ...details,
+        hasDetailsCrawled: true,
+        crawlFailureCount: 0,
+        lastCrawlAttempt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      await db.update(publishers).set(updateData).where(eq(publishers.id, publisherId))
+
+      // 清除缓存
+      await Promise.all([
+        cache.delete(CacheKeys.publisherDetail(publisherId)),
+        cache.deleteByPrefix('publishers:list:'),
+        cache.delete(CacheKeys.publisherStats()),
+      ])
+
+      console.log(`[Admin/Publishers] ✓ Synced details for publisher ${publisherId} (completeness: ${(completeness * 100).toFixed(0)}%)`)
+
+      return c.json({
+        success: true,
+        dataCompleteness: completeness,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin/Publishers] ❌ Failed to sync details for publisher ${publisherId}:`, message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+/**
+ * POST /api/admin/publishers/batch-sync
+ * 批量同步厂商
+ */
+adminPublishers.post(
+  '/batch-sync',
+  describeRoute({
+    summary: '批量同步厂商',
+    description: '批量创建或更新厂商的 sourceUrl',
+    tags: ['Admin'],
+    operationId: 'batchSyncPublishers',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '同步成功' },
+    },
+  }),
+  validator('json', BatchSyncPublishersSchema),
+  async (c) => {
+    const { publishers: publishersData } = c.req.valid('json')
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
+
+    try {
+      let createdCount = 0
+      let updatedCount = 0
+
+      for (const publisherData of publishersData) {
+        // 查找是否已存在
+        const existing = await db.query.publishers.findFirst({
+          where: eq(publishers.name, publisherData.name),
+        })
+
+        if (existing) {
+          // 更新 sourceUrl
+          await db
+            .update(publishers)
+            .set({
+              sourceUrl: publisherData.sourceUrl,
+              updatedAt: new Date(),
+            })
+            .where(eq(publishers.id, existing.id))
+
+          updatedCount++
+        }
+        else {
+          // 创建新记录
+          const slug = publisherData.name.toLowerCase().replace(/\s+/g, '-')
+          const newPublisher = {
+            id: crypto.randomUUID(),
+            name: publisherData.name,
+            slug,
+            source: 'javbus',
+            sourceId: slug,
+            sourceUrl: publisherData.sourceUrl,
+            movieCount: 0,
+            hasDetailsCrawled: false,
+            crawlFailureCount: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+
+          await db.insert(publishers).values(newPublisher)
+          createdCount++
+        }
+      }
+
+      // 清除缓存
+      await cache.clearPublisherCache()
+
+      console.log(`[Admin/Publishers] ✓ Batch sync: created ${createdCount}, updated ${updatedCount}`)
+
+      return c.json({
+        success: true,
+        created: createdCount,
+        updated: updatedCount,
+        total: publishersData.length,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Publishers] ❌ Failed to batch sync publishers:', message)
       return c.json({ error: message }, 500)
     }
   },

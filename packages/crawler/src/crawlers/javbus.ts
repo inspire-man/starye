@@ -31,6 +31,10 @@ export class JavBusCrawler extends OptimizedCrawler {
   private failedTasks: FailedTaskRecorder
   private failedTasksFile = './.javbus-failed-tasks.json'
 
+  // 收集女优和厂商信息（用于批量同步）
+  private collectedActorDetails: Map<string, { name: string, sourceUrl: string }> = new Map()
+  private collectedPublisherUrls: Map<string, { name: string, sourceUrl: string }> = new Map()
+
   constructor(config: JavBusCrawlerConfig) {
     super(config)
 
@@ -149,6 +153,38 @@ export class JavBusCrawler extends OptimizedCrawler {
         .map(a => (a as HTMLAnchorElement).href)
         .filter((href): href is string => !!href)
     })
+  }
+
+  /**
+   * 重写 processMovie 以收集 actor/publisher 信息
+   */
+  protected override async processMovie(url: string, page: Page): Promise<MovieInfo | null> {
+    const movieInfo = await super.processMovie(url, page)
+
+    if (movieInfo) {
+      // 收集女优信息
+      if (movieInfo.actorDetails && Array.isArray(movieInfo.actorDetails)) {
+        for (const actor of movieInfo.actorDetails) {
+          if (actor.name && actor.url) {
+            // 使用 name 作为 key 去重
+            this.collectedActorDetails.set(actor.name, {
+              name: actor.name,
+              sourceUrl: actor.url,
+            })
+          }
+        }
+      }
+
+      // 收集厂商信息
+      if (movieInfo.publisherUrl && movieInfo.publisher) {
+        this.collectedPublisherUrls.set(movieInfo.publisher, {
+          name: movieInfo.publisher,
+          sourceUrl: movieInfo.publisherUrl,
+        })
+      }
+    }
+
+    return movieInfo
   }
 
   /**
@@ -383,6 +419,9 @@ export class JavBusCrawler extends OptimizedCrawler {
       this.progressMonitor.printStats()
       this.queueManager.printStats()
 
+      // 同步女优和厂商信息
+      await this.syncActorsAndPublishers()
+
       // 增量模式说明
       const stats = this.getStats()
       const newMoviesCount = stats.moviesFound - stats.moviesSkippedExisting
@@ -471,6 +510,59 @@ export class JavBusCrawler extends OptimizedCrawler {
       }
 
       await this.cleanup()
+    }
+  }
+
+  /**
+   * 同步女优和厂商信息
+   */
+  private async syncActorsAndPublishers(): Promise<void> {
+    try {
+      const actorCount = this.collectedActorDetails.size
+      const publisherCount = this.collectedPublisherUrls.size
+
+      if (actorCount === 0 && publisherCount === 0) {
+        console.log('\nℹ️  未收集到女优或厂商信息，跳过同步')
+        return
+      }
+
+      console.log('\n📤 同步女优和厂商信息...')
+      console.log(`  收集到 ${actorCount} 个女优，${publisherCount} 个厂商`)
+
+      // 同步女优
+      if (actorCount > 0) {
+        const actors = Array.from(this.collectedActorDetails.values())
+        console.log(`  📡 同步 ${actors.length} 个女优...`)
+
+        const actorResult = await this.apiClient.batchSyncActors(actors)
+
+        if (actorResult) {
+          console.log(`  ✅ 女优同步完成: 新建 ${actorResult.created || 0}, 更新 ${actorResult.updated || 0}`)
+        }
+        else {
+          console.warn('  ⚠️  女优同步失败（非阻塞错误）')
+        }
+      }
+
+      // 同步厂商
+      if (publisherCount > 0) {
+        const publishers = Array.from(this.collectedPublisherUrls.values())
+        console.log(`  📡 同步 ${publishers.length} 个厂商...`)
+
+        const publisherResult = await this.apiClient.batchSyncPublishers(publishers)
+
+        if (publisherResult) {
+          console.log(`  ✅ 厂商同步完成: 新建 ${publisherResult.created || 0}, 更新 ${publisherResult.updated || 0}`)
+        }
+        else {
+          console.warn('  ⚠️  厂商同步失败（非阻塞错误）')
+        }
+      }
+    }
+    catch (error) {
+      // 同步失败不应影响爬虫主流程
+      console.error('❌ 女优/厂商同步失败:', error)
+      console.log('ℹ️  此错误不影响影片数据')
     }
   }
 }

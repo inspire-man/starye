@@ -8,13 +8,24 @@
 
 import type { AppEnv } from '../../../types'
 import { actors, movieActors, movies } from '@starye/db/schema'
-import { and, count, desc, eq, gt, isNotNull, isNull, like } from 'drizzle-orm'
+import { and, count, desc, eq, gt, inArray, isNotNull, isNull, like, lt } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
-import { AddActorAliasSchema, BatchDeleteSchema, CreateActorSchema, GetAdminActorsQuerySchema, MergeActorsSchema, UpdateActorSchema } from '../../../schemas/admin'
+import {
+  AddActorAliasSchema,
+  BatchDeleteSchema,
+  BatchQueryActorStatusSchema,
+  BatchSyncActorsSchema,
+  CreateActorSchema,
+  GetAdminActorsQuerySchema,
+  GetPendingActorsQuerySchema,
+  MergeActorsSchema,
+  SyncActorDetailsSchema,
+  UpdateActorSchema,
+} from '../../../schemas/admin'
 
 const adminActors = new Hono<AppEnv>()
 
@@ -718,6 +729,324 @@ adminActors.delete(
     catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e)
       console.error(`[Admin/Actors] ❌ Failed to remove alias from actor ${actorId}:`, message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+/**
+ * GET /api/admin/actors/batch-status
+ * 批量查询女优状态
+ */
+adminActors.get(
+  '/batch-status',
+  describeRoute({
+    summary: '批量查询演员状态',
+    description: '批量查询多个演员的爬取状态，用于爬虫增量优化',
+    tags: ['Admin'],
+    operationId: 'batchQueryActorStatus',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '状态映射' },
+      400: { description: '参数错误' },
+    },
+  }),
+  validator('query', BatchQueryActorStatusSchema),
+  async (c) => {
+    const { ids: idsParam } = c.req.valid('query')
+    const db = c.get('db')
+
+    try {
+      const startTime = Date.now()
+
+      // 解析 IDs
+      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean)
+
+      if (ids.length === 0) {
+        return c.json({ error: 'No IDs provided' }, 400)
+      }
+
+      if (ids.length > 200) {
+        return c.json({ error: 'Too many IDs (max 200)' }, 400)
+      }
+
+      // 批量查询
+      const results = await db.query.actors.findMany({
+        where: inArray(actors.id, ids),
+        columns: {
+          id: true,
+          hasDetailsCrawled: true,
+          crawlFailureCount: true,
+          movieCount: true,
+          lastCrawlAttempt: true,
+          sourceUrl: true,
+        },
+      })
+
+      // 构建状态映射
+      const statusMap: Record<string, any> = {}
+      for (const id of ids) {
+        const result = results.find(r => r.id === id)
+        statusMap[id] = result
+          ? {
+              exists: true,
+              hasDetailsCrawled: result.hasDetailsCrawled,
+              crawlFailureCount: result.crawlFailureCount,
+              movieCount: result.movieCount,
+              lastCrawlAttempt: result.lastCrawlAttempt,
+              sourceUrl: result.sourceUrl,
+            }
+          : { exists: false }
+      }
+
+      const elapsed = Date.now() - startTime
+
+      // 性能日志
+      if (elapsed > 1000) {
+        console.warn(`[Admin/Actors] ⚠️ Batch status query took ${elapsed}ms for ${ids.length} IDs`)
+      }
+
+      console.log(`[Admin/Actors] ✓ Batch status query: ${ids.length} IDs in ${elapsed}ms`)
+
+      return c.json(statusMap)
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to batch query status:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+/**
+ * GET /api/admin/actors/pending
+ * 获取待爬取的女优列表
+ */
+adminActors.get(
+  '/pending',
+  describeRoute({
+    summary: '获取待爬取演员列表',
+    description: '返回待爬取的演员列表，按优先级排序',
+    tags: ['Admin'],
+    operationId: 'getPendingActors',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '待爬取演员列表' },
+    },
+  }),
+  validator('query', GetPendingActorsQuerySchema),
+  async (c) => {
+    const { limit } = c.req.valid('query')
+    const db = c.get('db')
+
+    try {
+      // 筛选条件：未爬取、有 sourceUrl、失败次数 < 3
+      const results = await db.query.actors.findMany({
+        where: and(
+          eq(actors.hasDetailsCrawled, false),
+          isNotNull(actors.sourceUrl),
+          lt(actors.crawlFailureCount, 3),
+        ),
+        columns: {
+          id: true,
+          name: true,
+          sourceUrl: true,
+          movieCount: true,
+          crawlFailureCount: true,
+          lastCrawlAttempt: true,
+        },
+        orderBy: [desc(actors.movieCount), actors.crawlFailureCount, actors.lastCrawlAttempt],
+        limit,
+      })
+
+      // 统计高优先级数量（movieCount >= 10）
+      const highPriorityCount = results.filter(a => a.movieCount >= 10).length
+
+      console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority)`)
+
+      return c.json({
+        actors: results,
+        total: results.length,
+        highPriority: highPriorityCount,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to get pending actors:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+/**
+ * POST /api/admin/actors/:id/details
+ * 同步女优详情
+ */
+adminActors.post(
+  '/:id/details',
+  describeRoute({
+    summary: '同步演员详情',
+    description: '更新演员的详细信息并标记为已爬取',
+    tags: ['Admin'],
+    operationId: 'syncActorDetails',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '同步成功' },
+      404: { description: '演员不存在' },
+    },
+  }),
+  validator('json', SyncActorDetailsSchema),
+  async (c) => {
+    const actorId = c.req.param('id')
+    const details = c.req.valid('json')
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
+
+    try {
+      const actor = await db.query.actors.findFirst({
+        where: eq(actors.id, actorId),
+      })
+
+      if (!actor) {
+        return c.json({ error: 'Actor not found' }, 404)
+      }
+
+      // 计算数据完整度（权重：avatar 25%, bio 20%, birthDate 15%, height 15%, measurements 10%, nationality 15%）
+      const fields = [
+        { key: 'avatar', weight: 0.25 },
+        { key: 'bio', weight: 0.20 },
+        { key: 'birthDate', weight: 0.15 },
+        { key: 'height', weight: 0.15 },
+        { key: 'measurements', weight: 0.10 },
+        { key: 'nationality', weight: 0.15 },
+      ]
+
+      let completeness = 0
+      for (const field of fields) {
+        const value = details[field.key as keyof typeof details]
+        if (value !== null && value !== undefined && value !== '') {
+          completeness += field.weight
+        }
+      }
+
+      // 更新数据库
+      const updateData: any = {
+        ...details,
+        hasDetailsCrawled: true,
+        crawlFailureCount: 0,
+        lastCrawlAttempt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      if (details.birthDate) {
+        updateData.birthDate = new Date(details.birthDate)
+      }
+
+      await db.update(actors).set(updateData).where(eq(actors.id, actorId))
+
+      // 清除缓存
+      await Promise.all([
+        cache.delete(CacheKeys.actorDetail(actorId)),
+        cache.deleteByPrefix('actors:list:'),
+        cache.delete(CacheKeys.actorStats()),
+      ])
+
+      console.log(`[Admin/Actors] ✓ Synced details for actor ${actorId} (completeness: ${(completeness * 100).toFixed(0)}%)`)
+
+      return c.json({
+        success: true,
+        dataCompleteness: completeness,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error(`[Admin/Actors] ❌ Failed to sync details for actor ${actorId}:`, message)
+      return c.json({ error: message }, 500)
+    }
+  },
+)
+
+/**
+ * POST /api/admin/actors/batch-sync
+ * 批量同步女优
+ */
+adminActors.post(
+  '/batch-sync',
+  describeRoute({
+    summary: '批量同步演员',
+    description: '批量创建或更新演员的 sourceUrl',
+    tags: ['Admin'],
+    operationId: 'batchSyncActors',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '同步成功' },
+    },
+  }),
+  validator('json', BatchSyncActorsSchema),
+  async (c) => {
+    const { actors: actorsData } = c.req.valid('json')
+    const db = c.get('db')
+    const cache = new CacheManager(c.env.CACHE)
+
+    try {
+      let createdCount = 0
+      let updatedCount = 0
+
+      for (const actorData of actorsData) {
+        // 查找是否已存在
+        const existing = await db.query.actors.findFirst({
+          where: eq(actors.name, actorData.name),
+        })
+
+        if (existing) {
+          // 更新 sourceUrl
+          await db
+            .update(actors)
+            .set({
+              sourceUrl: actorData.sourceUrl,
+              updatedAt: new Date(),
+            })
+            .where(eq(actors.id, existing.id))
+
+          updatedCount++
+        }
+        else {
+          // 创建新记录
+          const slug = actorData.name.toLowerCase().replace(/\s+/g, '-')
+          const newActor = {
+            id: crypto.randomUUID(),
+            name: actorData.name,
+            slug,
+            source: 'javbus',
+            sourceId: slug,
+            sourceUrl: actorData.sourceUrl,
+            movieCount: 0,
+            hasDetailsCrawled: false,
+            crawlFailureCount: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+
+          await db.insert(actors).values(newActor)
+          createdCount++
+        }
+      }
+
+      // 清除缓存
+      await cache.clearActorCache()
+
+      console.log(`[Admin/Actors] ✓ Batch sync: created ${createdCount}, updated ${updatedCount}`)
+
+      return c.json({
+        success: true,
+        created: createdCount,
+        updated: updatedCount,
+        total: actorsData.length,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to batch sync actors:', message)
       return c.json({ error: message }, 500)
     }
   },

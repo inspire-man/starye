@@ -343,3 +343,104 @@ export const UpdateMoviePublishersSchema = v.object({
     }),
   ),
 })
+
+/**
+ * Admin 批量查询演员状态 Schema
+ */
+export const BatchQueryActorStatusSchema = v.object({
+  ids: v.pipe(v.string(), v.trim(), v.minLength(1)),
+})
+
+export type BatchQueryActorStatus = v.InferOutput<typeof BatchQueryActorStatusSchema>
+
+/**
+ * Admin 获取待爬取演员列表 Schema
+ */
+export const GetPendingActorsQuerySchema = v.object({
+  limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1), v.maxValue(200)), '150'),
+})
+
+export type GetPendingActorsQuery = v.InferOutput<typeof GetPendingActorsQuerySchema>
+
+/**
+ * Admin 同步演员详情 Schema
+ */
+export const SyncActorDetailsSchema = v.object({
+  avatar: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  cover: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  bio: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  birthDate: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  height: v.optional(v.nullable(v.number())),
+  measurements: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  nationality: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  bloodType: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+})
+
+export type SyncActorDetails = v.InferOutput<typeof SyncActorDetailsSchema>
+
+/**
+ * Admin 批量查询出版商状态 Schema
+ */
+export const BatchQueryPublisherStatusSchema = v.object({
+  ids: v.pipe(v.string(), v.trim(), v.minLength(1)),
+})
+
+export type BatchQueryPublisherStatus = v.InferOutput<typeof BatchQueryPublisherStatusSchema>
+
+/**
+ * Admin 获取待爬取出版商列表 Schema
+ */
+export const GetPendingPublishersQuerySchema = v.object({
+  limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1), v.maxValue(200)), '100'),
+})
+
+export type GetPendingPublishersQuery = v.InferOutput<typeof GetPendingPublishersQuerySchema>
+
+/**
+ * Admin 同步出版商详情 Schema
+ */
+export const SyncPublisherDetailsSchema = v.object({
+  logo: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  website: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  description: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  foundedYear: v.optional(v.nullable(v.pipe(v.number(), v.integer()))),
+  country: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+})
+
+export type SyncPublisherDetails = v.InferOutput<typeof SyncPublisherDetailsSchema>
+
+/**
+ * Admin 批量同步演员 Schema
+ */
+export const BatchSyncActorsSchema = v.object({
+  actors: v.pipe(
+    v.array(
+      v.object({
+        name: v.pipe(v.string(), v.trim(), v.minLength(1)),
+        sourceUrl: v.pipe(v.string(), v.url()),
+      }),
+    ),
+    v.minLength(1),
+    v.maxLength(200),
+  ),
+})
+
+export type BatchSyncActors = v.InferOutput<typeof BatchSyncActorsSchema>
+
+/**
+ * Admin 批量同步出版商 Schema
+ */
+export const BatchSyncPublishersSchema = v.object({
+  publishers: v.pipe(
+    v.array(
+      v.object({
+        name: v.pipe(v.string(), v.trim(), v.minLength(1)),
+        sourceUrl: v.pipe(v.string(), v.url()),
+      }),
+    ),
+    v.minLength(1),
+    v.maxLength(200),
+  ),
+})
+
+export type BatchSyncPublishers = v.InferOutput<typeof BatchSyncPublishersSchema>
