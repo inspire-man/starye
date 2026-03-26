@@ -18,6 +18,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DataTable from '@/components/DataTable.vue'
 import FilterPanel from '@/components/FilterPanel.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
+import Pagination from '@/components/Pagination.vue'
 import PublisherSelector from '@/components/PublisherSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useBatchSelect } from '@/composables/useBatchSelect'
@@ -64,6 +65,34 @@ const { selected, toggleItem, toggleAll, clearSelection, selectedCount, selected
 
 // 获取 total 用于分页组件
 const total = ref(0)
+
+// 监听页码变化时自动加载
+watch(currentPage, () => {
+  loadMovies()
+}, { immediate: true })
+
+// 监听筛选条件变化时重置到第一页
+watch(
+  [
+    () => filters.value.search,
+    () => filters.value.isR18,
+    () => filters.value.crawlStatus,
+    () => filters.value.metadataLocked,
+    () => filters.value.actor,
+    () => filters.value.publisher,
+    () => filters.value.genre,
+    () => filters.value.releaseDateFrom,
+    () => filters.value.releaseDateTo,
+  ],
+  () => {
+    if (currentPage.value !== 1) {
+      goToPage(1)
+    }
+    else {
+      loadMovies()
+    }
+  },
+)
 
 const filterFields = [
   {
@@ -313,7 +342,7 @@ async function executeBatchOperation() {
 const tableColumns = [
   { key: 'coverImage', label: '封面', width: '100px', sortable: false },
   { key: 'code', label: '番号', width: '120px' },
-  { key: 'title', label: '标题', sortable: true },
+  { key: 'title', label: '标题', minWidth: '200px', sortable: true },
   { key: 'actors', label: '女优', width: '200px' },
   { key: 'publisher', label: '厂商', width: '150px' },
   { key: 'releaseDate', label: '发布日期', width: '120px', sortable: true },
@@ -377,13 +406,10 @@ const tableColumns = [
       :loading="loading"
       :selectable="true"
       :selected-ids="selected"
-      :current-page="currentPage"
-      :total-pages="totalPages"
       empty-message="暂无电影数据"
       @toggle-select="toggleItem"
       @toggle-select-all="toggleAll"
       @row-click="openEditModal"
-      @page-change="(page) => { goToPage(page); loadMovies() }"
     >
       <template #cell-coverImage="{ item }">
         <img
@@ -433,6 +459,20 @@ const tableColumns = [
         {{ formatDateTime(item.createdAt) }}
       </template>
     </DataTable>
+
+    <!-- 分页器 -->
+    <Pagination
+      v-if="totalPages > 1"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total="total"
+      :page-size="limit"
+      :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next, jumper"
+      :background="true"
+      @update:current-page="goToPage"
+      @update:page-size="(size) => { limit = size; goToPage(1) }"
+    />
 
     <Teleport to="body">
       <div v-if="isEditModalOpen" class="modal-overlay" @click="isEditModalOpen = false">

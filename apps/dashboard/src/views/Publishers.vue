@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { Movie, Publisher } from '@/lib/api'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import DataTable from '@/components/DataTable.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
+import Pagination from '@/components/Pagination.vue'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
@@ -49,6 +50,29 @@ const { filters } = useFilters({
 const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
 
 const { sortBy: sortField, sortOrder, updateSort } = useSorting('movieCount', 'desc')
+
+// 监听页码变化时自动加载
+watch(currentPage, () => {
+  loadPublishers()
+}, { immediate: true })
+
+// 监听筛选条件变化时重置到第一页
+watch(
+  [
+    () => filters.value.search,
+    () => filters.value.crawlStatus,
+    () => filters.value.country,
+    () => filters.value.hasDetails,
+  ],
+  () => {
+    if (currentPage.value !== 1) {
+      goToPage(1)
+    }
+    else {
+      loadPublishers()
+    }
+  },
+)
 
 function toggleSort(field: string) {
   const newOrder = sortField.value === field && sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -229,7 +253,6 @@ async function handleMerge() {
 onMounted(() => {
   loadStats()
   loadCountries()
-  loadPublishers()
 })
 </script>
 
@@ -286,12 +309,10 @@ onMounted(() => {
         type="text"
         placeholder="搜索厂商名称..."
         class="search-input"
-        @input="loadPublishers"
       >
       <select
         v-model="filters.crawlStatus"
         class="filter-select"
-        @change="loadPublishers"
       >
         <option value="">
           全部状态
@@ -313,7 +334,6 @@ onMounted(() => {
         v-model="filters.country"
         class="filter-select"
         :disabled="loadingCountries"
-        @change="loadPublishers"
       >
         <option value="">
           全部国家
@@ -325,7 +345,6 @@ onMounted(() => {
       <select
         v-model="filters.hasDetails"
         class="filter-select"
-        @change="loadPublishers"
       >
         <option value="">
           全部详情
@@ -350,14 +369,11 @@ onMounted(() => {
       :data="filteredPublishers"
       :columns="tableColumns"
       :loading="loading"
-      :current-page="currentPage"
-      :total-pages="totalPages"
       :sort-field="sortField"
       :sort-order="sortOrder"
       empty-message="暂无厂商数据"
       @row-click="openEditModal"
       @sort="toggleSort"
-      @page-change="(page) => { goToPage(page); loadPublishers() }"
     >
       <template #cell-logo="{ item }">
         <img
@@ -384,6 +400,20 @@ onMounted(() => {
         {{ formatDateTime(item.createdAt) }}
       </template>
     </DataTable>
+
+    <!-- 分页器 -->
+    <Pagination
+      v-if="totalPages > 1"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total="totalItems"
+      :page-size="pageSize"
+      :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next, jumper"
+      :background="true"
+      @update:current-page="goToPage"
+      @update:page-size="(size) => { pageSize = size; goToPage(1) }"
+    />
 
     <Teleport to="body">
       <div v-if="isEditModalOpen" class="modal-overlay" @click.self="isEditModalOpen = false">

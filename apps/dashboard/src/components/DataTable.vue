@@ -18,6 +18,7 @@ export interface Column<T> {
   sortable?: boolean
   render?: (item: T) => string
   width?: string
+  minWidth?: string
 }
 
 interface Props {
@@ -26,8 +27,6 @@ interface Props {
   loading?: boolean
   selectable?: boolean
   selectedIds?: Set<string>
-  currentPage?: number
-  totalPages?: number
   emptyMessage?: string
 }
 
@@ -35,8 +34,6 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false,
   selectable: false,
   selectedIds: () => new Set(),
-  currentPage: 1,
-  totalPages: 1,
   emptyMessage: '暂无数据',
 })
 
@@ -44,7 +41,6 @@ const emit = defineEmits<{
   toggleSelect: [id: string]
   toggleSelectAll: []
   sort: [key: string]
-  pageChange: [page: number]
   rowClick: [item: T]
 }>()
 
@@ -62,10 +58,6 @@ function handleSelect(id: string) {
 
 function handleSort(key: string) {
   emit('sort', key)
-}
-
-function handlePageChange(page: number) {
-  emit('pageChange', page)
 }
 
 function handleRowClick(item: T) {
@@ -105,7 +97,7 @@ function getCellValue(item: T, column: Column<T>): string {
             <th
               v-for="column in columns"
               :key="column.key"
-              :style="{ width: column.width }"
+              :style="{ width: column.width, minWidth: column.minWidth }"
               :class="{ sortable: column.sortable }"
               @click="column.sortable && handleSort(column.key)"
             >
@@ -130,6 +122,7 @@ function getCellValue(item: T, column: Column<T>): string {
             <td
               v-for="column in columns"
               :key="column.key"
+              :style="{ width: column.width, minWidth: column.minWidth }"
             >
               <slot :name="`cell-${column.key}`" :item="item" :value="getCellValue(item, column)">
                 {{ getCellValue(item, column) }}
@@ -138,22 +131,6 @@ function getCellValue(item: T, column: Column<T>): string {
           </tr>
         </tbody>
       </table>
-
-      <div v-if="totalPages > 1" class="pagination">
-        <button
-          :disabled="currentPage === 1"
-          @click="handlePageChange(currentPage - 1)"
-        >
-          上一页
-        </button>
-        <span>第 {{ currentPage }} / {{ totalPages }} 页</span>
-        <button
-          :disabled="currentPage === totalPages"
-          @click="handlePageChange(currentPage + 1)"
-        >
-          下一页
-        </button>
-      </div>
     </div>
   </div>
 </template>
@@ -192,6 +169,7 @@ function getCellValue(item: T, column: Column<T>): string {
 
 table {
   width: 100%;
+  min-width: 800px;
   border-collapse: collapse;
   background: white;
   border-radius: 0.5rem;
@@ -243,37 +221,5 @@ tr {
 
 tbody tr:hover {
   background: #f9fafb;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.pagination button {
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.pagination button:disabled {
-  background: #d1d5db;
-  cursor: not-allowed;
-}
-
-.pagination button:not(:disabled):hover {
-  background: #2563eb;
-}
-
-.pagination span {
-  font-size: 0.875rem;
-  color: #6b7280;
 }
 </style>
