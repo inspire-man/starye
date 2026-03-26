@@ -25,7 +25,7 @@ export class ApiClient {
         // 尝试获取错误详情
         let errorDetails = ''
         try {
-          const errorBody = await response.json()
+          const errorBody = await response.json() as { error?: string, message?: string }
           errorDetails = errorBody.error || errorBody.message || JSON.stringify(errorBody)
         }
         catch {
@@ -127,7 +127,7 @@ export class ApiClient {
         return []
       }
 
-      const data = await response.json()
+      const data = await response.json() as { actors?: any[] }
       return data.actors || []
     }
     catch (error) {
@@ -195,7 +195,7 @@ export class ApiClient {
         return []
       }
 
-      const data = await response.json()
+      const data = await response.json() as { publishers?: any[] }
       return data.publishers || []
     }
     catch (error) {

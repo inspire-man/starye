@@ -1,8 +1,7 @@
 /// <reference types="vitest" />
-import type { UserConfigExport } from 'vitest/config'
 import { defineConfig } from 'vitest/config'
 
-export const baseVitestConfig: UserConfigExport = defineConfig({
+export const baseVitestConfig = defineConfig({
   test: {
     globals: true, // 使用全局 describe, it, expect
     environment: 'node', // 默认环境，crawler 会覆盖为 happy-dom

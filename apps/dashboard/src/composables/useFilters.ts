@@ -16,7 +16,7 @@ export function useFilters<T extends Record<string, any>>(initialFilters: T) {
 
   // 从 URL query 中提取筛选参数（排除分页参数）
   const extractFilters = (query: Record<string, any>): T => {
-    const result = { ...initialFilters }
+    const result: Record<string, any> = { ...initialFilters }
     Object.keys(initialFilters).forEach((key) => {
       if (query[key] !== undefined) {
         result[key] = query[key]

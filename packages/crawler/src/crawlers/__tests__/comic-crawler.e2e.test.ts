@@ -41,7 +41,7 @@ describe('comic-crawler E2E', () => {
         },
       )
 
-      const statusMap = await response.json()
+      const statusMap = await response.json() as Record<string, { exists: boolean, slug: string }>
 
       expect(statusMap['manga-001'].exists).toBe(true)
       expect(statusMap['manga-002'].exists).toBe(false)
@@ -79,9 +79,9 @@ describe('comic-crawler E2E', () => {
         },
       )
 
-      const statusMap = await response.json()
+      const statusMap = await response.json() as Record<string, { exists: boolean }>
 
-      expect(Object.values(statusMap).every((s: any) => s.exists)).toBe(true)
+      expect(Object.values(statusMap).every(s => s.exists)).toBe(true)
     })
   })
 
@@ -125,14 +125,19 @@ describe('comic-crawler E2E', () => {
         },
       )
 
-      const statusMap = await response.json()
+      const statusMap = await response.json() as Record<string, {
+        exists: boolean
+        slug: string
+        chapterCount: number
+        chapters: Array<{ chapterNum: string, exists: boolean }>
+      }>
 
       // 验证章节增量逻辑
       expect(statusMap['manga-001'].exists).toBe(true)
       expect(statusMap['manga-001'].chapterCount).toBe(10)
       expect(statusMap['manga-001'].chapters).toHaveLength(3)
 
-      const newChapters = statusMap['manga-001'].chapters.filter((c: any) => !c.exists)
+      const newChapters = statusMap['manga-001'].chapters.filter(c => !c.exists)
       expect(newChapters).toHaveLength(1)
       expect(newChapters[0].chapterNum).toBe('3')
     })
