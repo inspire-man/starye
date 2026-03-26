@@ -386,6 +386,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260317.1
         version: 4.20260317.1
+      api:
+        specifier: workspace:*
+        version: link:../../apps/api
 
   packages/config: {}
 
