@@ -300,6 +300,150 @@ adminActors.get(
 )
 
 /**
+ * GET /api/admin/actors/batch-status
+ * 批量查询女优状态（爬虫专用端口）
+ */
+adminActors.get(
+  '/batch-status',
+  describeRoute({
+    summary: '批量查询演员状态',
+    description: '批量查询多个演员的爬取状态，用于爬虫增量优化',
+    tags: ['Admin'],
+    operationId: 'batchQueryActorStatus',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '状态映射' },
+      400: { description: '参数错误' },
+    },
+  }),
+  validator('query', BatchQueryActorStatusSchema),
+  async (c) => {
+    const { ids: idsParam } = c.req.valid('query')
+    const db = c.get('db')
+
+    try {
+      const startTime = Date.now()
+
+      // 解析 IDs
+      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean)
+
+      if (ids.length === 0) {
+        return c.json({ error: 'No IDs provided' }, 400)
+      }
+
+      if (ids.length > 200) {
+        return c.json({ error: 'Too many IDs (max 200)' }, 400)
+      }
+
+      // 批量查询
+      const results = await db.query.actors.findMany({
+        where: inArray(actors.id, ids),
+        columns: {
+          id: true,
+          hasDetailsCrawled: true,
+          crawlFailureCount: true,
+          movieCount: true,
+          lastCrawlAttempt: true,
+          sourceUrl: true,
+        },
+      })
+
+      // 构建状态映射
+      const statusMap: Record<string, any> = {}
+      for (const id of ids) {
+        const result = results.find(r => r.id === id)
+        statusMap[id] = result
+          ? {
+              exists: true,
+              hasDetailsCrawled: result.hasDetailsCrawled,
+              crawlFailureCount: result.crawlFailureCount,
+              movieCount: result.movieCount,
+              lastCrawlAttempt: result.lastCrawlAttempt,
+              sourceUrl: result.sourceUrl,
+            }
+          : { exists: false }
+      }
+
+      const elapsed = Date.now() - startTime
+
+      // 性能日志
+      if (elapsed > 1000) {
+        console.warn(`[Admin/Actors] ⚠️ Batch status query took ${elapsed}ms for ${ids.length} IDs`)
+      }
+
+      console.log(`[Admin/Actors] ✓ Batch status query: ${ids.length} IDs in ${elapsed}ms`)
+
+      return c.json(statusMap)
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to batch query status:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+/**
+ * GET /api/admin/actors/pending
+ * 获取待爬取的女优列表（爬虫专用端口）
+ */
+adminActors.get(
+  '/pending',
+  describeRoute({
+    summary: '获取待爬取演员列表',
+    description: '返回待爬取的演员列表，按优先级排序',
+    tags: ['Admin'],
+    operationId: 'getPendingActors',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '待爬取演员列表' },
+    },
+  }),
+  validator('query', GetPendingActorsQuerySchema),
+  async (c) => {
+    const { limit } = c.req.valid('query')
+    const db = c.get('db')
+
+    try {
+      // 筛选条件：未爬取、有 sourceUrl、失败次数 < 3
+      const results = await db.query.actors.findMany({
+        where: and(
+          eq(actors.hasDetailsCrawled, false),
+          isNotNull(actors.sourceUrl),
+          lt(actors.crawlFailureCount, 3),
+        ),
+        columns: {
+          id: true,
+          name: true,
+          sourceUrl: true,
+          movieCount: true,
+          crawlFailureCount: true,
+          lastCrawlAttempt: true,
+        },
+        orderBy: [desc(actors.movieCount), actors.crawlFailureCount, actors.lastCrawlAttempt],
+        limit,
+      })
+
+      // 统计高优先级数量（movieCount >= 10）
+      const highPriorityCount = results.filter(a => a.movieCount >= 10).length
+
+      console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority)`)
+
+      return c.json({
+        actors: results,
+        total: results.length,
+        highPriority: highPriorityCount,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Actors] ❌ Failed to get pending actors:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+/**
  * GET /api/admin/actors/:id
  * 获取单个演员详情（包含关联电影列表）
  */
@@ -730,150 +874,6 @@ adminActors.delete(
       const message = e instanceof Error ? e.message : String(e)
       console.error(`[Admin/Actors] ❌ Failed to remove alias from actor ${actorId}:`, message)
       return c.json({ error: message }, 500)
-    }
-  },
-)
-
-/**
- * GET /api/admin/actors/batch-status
- * 批量查询女优状态
- */
-adminActors.get(
-  '/batch-status',
-  describeRoute({
-    summary: '批量查询演员状态',
-    description: '批量查询多个演员的爬取状态，用于爬虫增量优化',
-    tags: ['Admin'],
-    operationId: 'batchQueryActorStatus',
-    security: [{ serviceAuth: [] }],
-    responses: {
-      200: { description: '状态映射' },
-      400: { description: '参数错误' },
-    },
-  }),
-  validator('query', BatchQueryActorStatusSchema),
-  async (c) => {
-    const { ids: idsParam } = c.req.valid('query')
-    const db = c.get('db')
-
-    try {
-      const startTime = Date.now()
-
-      // 解析 IDs
-      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean)
-
-      if (ids.length === 0) {
-        return c.json({ error: 'No IDs provided' }, 400)
-      }
-
-      if (ids.length > 200) {
-        return c.json({ error: 'Too many IDs (max 200)' }, 400)
-      }
-
-      // 批量查询
-      const results = await db.query.actors.findMany({
-        where: inArray(actors.id, ids),
-        columns: {
-          id: true,
-          hasDetailsCrawled: true,
-          crawlFailureCount: true,
-          movieCount: true,
-          lastCrawlAttempt: true,
-          sourceUrl: true,
-        },
-      })
-
-      // 构建状态映射
-      const statusMap: Record<string, any> = {}
-      for (const id of ids) {
-        const result = results.find(r => r.id === id)
-        statusMap[id] = result
-          ? {
-              exists: true,
-              hasDetailsCrawled: result.hasDetailsCrawled,
-              crawlFailureCount: result.crawlFailureCount,
-              movieCount: result.movieCount,
-              lastCrawlAttempt: result.lastCrawlAttempt,
-              sourceUrl: result.sourceUrl,
-            }
-          : { exists: false }
-      }
-
-      const elapsed = Date.now() - startTime
-
-      // 性能日志
-      if (elapsed > 1000) {
-        console.warn(`[Admin/Actors] ⚠️ Batch status query took ${elapsed}ms for ${ids.length} IDs`)
-      }
-
-      console.log(`[Admin/Actors] ✓ Batch status query: ${ids.length} IDs in ${elapsed}ms`)
-
-      return c.json(statusMap)
-    }
-    catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e)
-      console.error('[Admin/Actors] ❌ Failed to batch query status:', message)
-      return c.json({ error: 'Database operation failed' }, 500)
-    }
-  },
-)
-
-/**
- * GET /api/admin/actors/pending
- * 获取待爬取的女优列表
- */
-adminActors.get(
-  '/pending',
-  describeRoute({
-    summary: '获取待爬取演员列表',
-    description: '返回待爬取的演员列表，按优先级排序',
-    tags: ['Admin'],
-    operationId: 'getPendingActors',
-    security: [{ serviceAuth: [] }],
-    responses: {
-      200: { description: '待爬取演员列表' },
-    },
-  }),
-  validator('query', GetPendingActorsQuerySchema),
-  async (c) => {
-    const { limit } = c.req.valid('query')
-    const db = c.get('db')
-
-    try {
-      // 筛选条件：未爬取、有 sourceUrl、失败次数 < 3
-      const results = await db.query.actors.findMany({
-        where: and(
-          eq(actors.hasDetailsCrawled, false),
-          isNotNull(actors.sourceUrl),
-          lt(actors.crawlFailureCount, 3),
-        ),
-        columns: {
-          id: true,
-          name: true,
-          sourceUrl: true,
-          movieCount: true,
-          crawlFailureCount: true,
-          lastCrawlAttempt: true,
-        },
-        orderBy: [desc(actors.movieCount), actors.crawlFailureCount, actors.lastCrawlAttempt],
-        limit,
-      })
-
-      // 统计高优先级数量（movieCount >= 10）
-      const highPriorityCount = results.filter(a => a.movieCount >= 10).length
-
-      console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority)`)
-
-      return c.json({
-        actors: results,
-        total: results.length,
-        highPriority: highPriorityCount,
-      })
-    }
-    catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e)
-      console.error('[Admin/Actors] ❌ Failed to get pending actors:', message)
-      return c.json({ error: 'Database operation failed' }, 500)
     }
   },
 )

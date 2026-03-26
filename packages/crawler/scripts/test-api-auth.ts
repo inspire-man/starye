@@ -33,7 +33,7 @@ async function testEndpoint(
 
     if (!success) {
       try {
-        const body = await response.json()
+        const body: any = await response.json()
         error = body.error || body.message || `HTTP ${response.status}`
       }
       catch {

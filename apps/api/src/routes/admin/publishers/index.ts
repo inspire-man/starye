@@ -239,6 +239,150 @@ adminPublishers.get(
 )
 
 /**
+ * GET /api/admin/publishers/batch-status
+ * 批量查询厂商状态（爬虫专用端口）
+ */
+adminPublishers.get(
+  '/batch-status',
+  describeRoute({
+    summary: '批量查询厂商状态',
+    description: '批量查询多个厂商的爬取状态，用于爬虫增量优化',
+    tags: ['Admin'],
+    operationId: 'batchQueryPublisherStatus',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '状态映射' },
+      400: { description: '参数错误' },
+    },
+  }),
+  validator('query', BatchQueryPublisherStatusSchema),
+  async (c) => {
+    const { ids: idsParam } = c.req.valid('query')
+    const db = c.get('db')
+
+    try {
+      const startTime = Date.now()
+
+      // 解析 IDs
+      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean)
+
+      if (ids.length === 0) {
+        return c.json({ error: 'No IDs provided' }, 400)
+      }
+
+      if (ids.length > 200) {
+        return c.json({ error: 'Too many IDs (max 200)' }, 400)
+      }
+
+      // 批量查询
+      const results = await db.query.publishers.findMany({
+        where: inArray(publishers.id, ids),
+        columns: {
+          id: true,
+          hasDetailsCrawled: true,
+          crawlFailureCount: true,
+          movieCount: true,
+          lastCrawlAttempt: true,
+          sourceUrl: true,
+        },
+      })
+
+      // 构建状态映射
+      const statusMap: Record<string, any> = {}
+      for (const id of ids) {
+        const result = results.find(r => r.id === id)
+        statusMap[id] = result
+          ? {
+              exists: true,
+              hasDetailsCrawled: result.hasDetailsCrawled,
+              crawlFailureCount: result.crawlFailureCount,
+              movieCount: result.movieCount,
+              lastCrawlAttempt: result.lastCrawlAttempt,
+              sourceUrl: result.sourceUrl,
+            }
+          : { exists: false }
+      }
+
+      const elapsed = Date.now() - startTime
+
+      // 性能日志
+      if (elapsed > 1000) {
+        console.warn(`[Admin/Publishers] ⚠️ Batch status query took ${elapsed}ms for ${ids.length} IDs`)
+      }
+
+      console.log(`[Admin/Publishers] ✓ Batch status query: ${ids.length} IDs in ${elapsed}ms`)
+
+      return c.json(statusMap)
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Publishers] ❌ Failed to batch query status:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+/**
+ * GET /api/admin/publishers/pending
+ * 获取待爬取的厂商列表（爬虫专用端口）
+ */
+adminPublishers.get(
+  '/pending',
+  describeRoute({
+    summary: '获取待爬取厂商列表',
+    description: '返回待爬取的厂商列表，按优先级排序',
+    tags: ['Admin'],
+    operationId: 'getPendingPublishers',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '待爬取厂商列表' },
+    },
+  }),
+  validator('query', GetPendingPublishersQuerySchema),
+  async (c) => {
+    const { limit } = c.req.valid('query')
+    const db = c.get('db')
+
+    try {
+      // 筛选条件：未爬取、有 sourceUrl、失败次数 < 3
+      const results = await db.query.publishers.findMany({
+        where: and(
+          eq(publishers.hasDetailsCrawled, false),
+          isNotNull(publishers.sourceUrl),
+          lt(publishers.crawlFailureCount, 3),
+        ),
+        columns: {
+          id: true,
+          name: true,
+          sourceUrl: true,
+          movieCount: true,
+          crawlFailureCount: true,
+          lastCrawlAttempt: true,
+        },
+        orderBy: [desc(publishers.movieCount), publishers.crawlFailureCount, publishers.lastCrawlAttempt],
+        limit,
+      })
+
+      // 统计高优先级数量（movieCount >= 10）
+      const highPriorityCount = results.filter(p => p.movieCount >= 10).length
+
+      console.log(`[Admin/Publishers] ✓ Returned ${results.length} pending publishers (${highPriorityCount} high priority)`)
+
+      return c.json({
+        publishers: results,
+        total: results.length,
+        highPriority: highPriorityCount,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Publishers] ❌ Failed to get pending publishers:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+/**
  * GET /api/admin/publishers/:id
  * 厂商详情（包含关联电影列表）
  */
@@ -434,150 +578,6 @@ adminPublishers.post(
       const message = e instanceof Error ? e.message : String(e)
       console.error('[Admin/Publishers] ❌ Failed to merge publishers:', message)
       return c.json({ error: message }, 500)
-    }
-  },
-)
-
-/**
- * GET /api/admin/publishers/batch-status
- * 批量查询厂商状态
- */
-adminPublishers.get(
-  '/batch-status',
-  describeRoute({
-    summary: '批量查询厂商状态',
-    description: '批量查询多个厂商的爬取状态，用于爬虫增量优化',
-    tags: ['Admin'],
-    operationId: 'batchQueryPublisherStatus',
-    security: [{ serviceAuth: [] }],
-    responses: {
-      200: { description: '状态映射' },
-      400: { description: '参数错误' },
-    },
-  }),
-  validator('query', BatchQueryPublisherStatusSchema),
-  async (c) => {
-    const { ids: idsParam } = c.req.valid('query')
-    const db = c.get('db')
-
-    try {
-      const startTime = Date.now()
-
-      // 解析 IDs
-      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean)
-
-      if (ids.length === 0) {
-        return c.json({ error: 'No IDs provided' }, 400)
-      }
-
-      if (ids.length > 200) {
-        return c.json({ error: 'Too many IDs (max 200)' }, 400)
-      }
-
-      // 批量查询
-      const results = await db.query.publishers.findMany({
-        where: inArray(publishers.id, ids),
-        columns: {
-          id: true,
-          hasDetailsCrawled: true,
-          crawlFailureCount: true,
-          movieCount: true,
-          lastCrawlAttempt: true,
-          sourceUrl: true,
-        },
-      })
-
-      // 构建状态映射
-      const statusMap: Record<string, any> = {}
-      for (const id of ids) {
-        const result = results.find(r => r.id === id)
-        statusMap[id] = result
-          ? {
-              exists: true,
-              hasDetailsCrawled: result.hasDetailsCrawled,
-              crawlFailureCount: result.crawlFailureCount,
-              movieCount: result.movieCount,
-              lastCrawlAttempt: result.lastCrawlAttempt,
-              sourceUrl: result.sourceUrl,
-            }
-          : { exists: false }
-      }
-
-      const elapsed = Date.now() - startTime
-
-      // 性能日志
-      if (elapsed > 1000) {
-        console.warn(`[Admin/Publishers] ⚠️ Batch status query took ${elapsed}ms for ${ids.length} IDs`)
-      }
-
-      console.log(`[Admin/Publishers] ✓ Batch status query: ${ids.length} IDs in ${elapsed}ms`)
-
-      return c.json(statusMap)
-    }
-    catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e)
-      console.error('[Admin/Publishers] ❌ Failed to batch query status:', message)
-      return c.json({ error: 'Database operation failed' }, 500)
-    }
-  },
-)
-
-/**
- * GET /api/admin/publishers/pending
- * 获取待爬取的厂商列表
- */
-adminPublishers.get(
-  '/pending',
-  describeRoute({
-    summary: '获取待爬取厂商列表',
-    description: '返回待爬取的厂商列表，按优先级排序',
-    tags: ['Admin'],
-    operationId: 'getPendingPublishers',
-    security: [{ serviceAuth: [] }],
-    responses: {
-      200: { description: '待爬取厂商列表' },
-    },
-  }),
-  validator('query', GetPendingPublishersQuerySchema),
-  async (c) => {
-    const { limit } = c.req.valid('query')
-    const db = c.get('db')
-
-    try {
-      // 筛选条件：未爬取、有 sourceUrl、失败次数 < 3
-      const results = await db.query.publishers.findMany({
-        where: and(
-          eq(publishers.hasDetailsCrawled, false),
-          isNotNull(publishers.sourceUrl),
-          lt(publishers.crawlFailureCount, 3),
-        ),
-        columns: {
-          id: true,
-          name: true,
-          sourceUrl: true,
-          movieCount: true,
-          crawlFailureCount: true,
-          lastCrawlAttempt: true,
-        },
-        orderBy: [desc(publishers.movieCount), publishers.crawlFailureCount, publishers.lastCrawlAttempt],
-        limit,
-      })
-
-      // 统计高优先级数量（movieCount >= 10）
-      const highPriorityCount = results.filter(p => p.movieCount >= 10).length
-
-      console.log(`[Admin/Publishers] ✓ Returned ${results.length} pending publishers (${highPriorityCount} high priority)`)
-
-      return c.json({
-        publishers: results,
-        total: results.length,
-        highPriority: highPriorityCount,
-      })
-    }
-    catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e)
-      console.error('[Admin/Publishers] ❌ Failed to get pending publishers:', message)
-      return c.json({ error: 'Database operation failed' }, 500)
     }
   },
 )
