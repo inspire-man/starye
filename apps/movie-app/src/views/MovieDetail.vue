@@ -1,16 +1,122 @@
 <script setup lang="ts">
-import type { MovieDetail } from '../types'
-import { onMounted, ref, watch } from 'vue'
+import type { MovieDetail, Player } from '../types'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import QrcodeVue from 'qrcode.vue'
 import { movieApi } from '../api'
+import { sortPlaybackSources, getSourceTypeIcon, getQualityBadgeClass } from '../utils/playbackSources'
+import { copyToClipboard, copyMagnetLinks } from '../utils/clipboard'
+import { isMagnetLink } from '../utils/magnetLink'
+import { useDownloadList } from '../composables/useDownloadList'
 
 const route = useRoute()
 const loading = ref(true)
 const error = ref('')
 const movie = ref<MovieDetail | null>(null)
 
+// 下载列表管理
+const { isInDownloadList, addToDownloadList } = useDownloadList()
+
+// 二维码弹窗
+const qrcodeModal = ref({ show: false, content: '', title: '' })
+
+// Toast 提示
+const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
+
+function showToast(message: string, type: 'success' | 'error' = 'success') {
+  toast.value = { show: true, message, type }
+  setTimeout(() => {
+    toast.value.show = false
+  }, 3000)
+}
+
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString('zh-CN')
+}
+
+// 播放源相关逻辑
+const sortedPlayers = computed(() => {
+  if (!movie.value?.players || movie.value.players.length === 0) {
+    return []
+  }
+  return sortPlaybackSources(movie.value.players)
+})
+
+const magnetLinks = computed(() => {
+  return sortedPlayers.value.filter(p => isMagnetLink(p.sourceUrl))
+})
+
+// 复制单个磁链
+async function copyMagnetLink(player: Player) {
+  try {
+    const success = await copyToClipboard(player.sourceUrl)
+    if (success) {
+      showToast('磁链已复制到剪贴板')
+    }
+    else {
+      showToast('复制失败，请手动复制', 'error')
+    }
+  }
+  catch (error) {
+    showToast('复制失败，请手动复制', 'error')
+  }
+}
+
+// 批量复制所有磁链
+async function copyAllMagnetLinks() {
+  if (magnetLinks.value.length === 0) {
+    showToast('暂无磁力链接', 'error')
+    return
+  }
+
+  try {
+    const links = magnetLinks.value.map(p => ({
+      sourceName: p.sourceName,
+      sourceUrl: p.sourceUrl,
+      quality: p.quality || undefined,
+    }))
+    const success = await copyMagnetLinks(links)
+
+    if (success) {
+      showToast(`已复制 ${links.length} 个磁力链接`)
+    }
+    else {
+      showToast('复制失败，请手动复制', 'error')
+    }
+  }
+  catch (error) {
+    showToast('复制失败，请手动复制', 'error')
+  }
+}
+
+// 添加到下载列表
+function addToList() {
+  if (!movie.value)
+    return
+
+  try {
+    // 如果有磁链，使用第一个高清磁链
+    const firstMagnet = magnetLinks.value[0]?.sourceUrl
+    addToDownloadList(movie.value, firstMagnet)
+    showToast('已添加到下载列表')
+  }
+  catch (error: any) {
+    showToast(error.message || '添加失败', 'error')
+  }
+}
+
+// 显示二维码
+function showQRCode(player: Player) {
+  qrcodeModal.value = {
+    show: true,
+    content: player.sourceUrl,
+    title: `${player.sourceName} ${player.quality ? `[${player.quality}]` : ''}`,
+  }
+}
+
+// 关闭二维码弹窗
+function closeQRCode() {
+  qrcodeModal.value.show = false
 }
 
 async function fetchMovieDetail() {
@@ -119,7 +225,7 @@ onMounted(() => {
             </div>
 
             <div class="flex items-start text-sm">
-              <span class="text-gray-300 w-24 flex-shrink-0 font-medium">演员：</span>
+              <span class="text-gray-300 w-24 shrink-0 font-medium">演员：</span>
               <div v-if="movie.actors && movie.actors.length > 0" class="flex flex-wrap gap-2">
                 <RouterLink
                   v-for="(actor, index) in movie.actors"
@@ -142,7 +248,7 @@ onMounted(() => {
             </div>
 
             <div v-if="movie.genres && movie.genres.length > 0" class="flex items-start text-sm">
-              <span class="text-gray-300 w-24 flex-shrink-0 font-medium">标签：</span>
+              <span class="text-gray-300 w-24 shrink-0 font-medium">标签：</span>
               <div class="flex flex-wrap gap-2">
                 <span
                   v-for="genre in movie.genres"
@@ -155,7 +261,7 @@ onMounted(() => {
             </div>
 
             <div class="flex items-start text-sm">
-              <span class="text-gray-300 w-24 flex-shrink-0 font-medium">制作商：</span>
+              <span class="text-gray-300 w-24 shrink-0 font-medium">制作商：</span>
               <div v-if="movie.publishers && movie.publishers.length > 0" class="flex flex-wrap gap-2">
                 <RouterLink
                   v-for="(publisher, index) in movie.publishers"
@@ -178,7 +284,7 @@ onMounted(() => {
             </div>
 
             <div v-if="movie.description" class="flex items-start text-sm pt-2">
-              <span class="text-gray-300 w-24 flex-shrink-0 font-medium">简介：</span>
+              <span class="text-gray-300 w-24 shrink-0 font-medium">简介：</span>
               <p class="text-gray-200 flex-1 leading-relaxed">
                 {{ movie.description }}
               </p>
@@ -187,6 +293,159 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- 播放源区块 -->
+    <div v-if="sortedPlayers.length > 0" class="bg-gray-800 rounded-lg shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-white">
+          播放源
+        </h2>
+        <div class="flex gap-2">
+          <button
+            v-if="magnetLinks.length > 0"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+            @click="copyAllMagnetLinks"
+          >
+            📋 复制全部磁链
+          </button>
+          <button
+            :disabled="isInDownloadList(movie.id)"
+            class="px-4 py-2 text-sm rounded-lg transition-colors"
+            :class="isInDownloadList(movie.id)
+              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              : 'bg-green-600 hover:bg-green-700 text-white'"
+            @click="addToList"
+          >
+            {{ isInDownloadList(movie.id) ? '✓ 已在列表' : '➕ 添加到下载列表' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div
+          v-for="player in sortedPlayers"
+          :key="player.id"
+          class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-lg">{{ getSourceTypeIcon(player) }}</span>
+                <span class="text-white font-medium truncate">
+                  {{ player.sourceName }}
+                </span>
+                <span
+                  v-if="player.quality"
+                  class="px-2 py-0.5 text-xs font-semibold rounded"
+                  :class="getQualityBadgeClass(player.quality)"
+                >
+                  {{ player.quality }}
+                </span>
+              </div>
+              <div class="text-xs text-gray-400 truncate">
+                {{ isMagnetLink(player.sourceUrl) ? 'magnet:...' : player.sourceUrl }}
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-2 flex-shrink-0">
+              <button
+                v-if="isMagnetLink(player.sourceUrl)"
+                class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                @click="copyMagnetLink(player)"
+              >
+                📋 复制
+              </button>
+              <a
+                v-if="isMagnetLink(player.sourceUrl)"
+                :href="player.sourceUrl"
+                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded text-center transition-colors whitespace-nowrap"
+              >
+                🔗 打开
+              </a>
+              <button
+                v-if="isMagnetLink(player.sourceUrl)"
+                class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                @click="showQRCode(player)"
+              >
+                📱 二维码
+              </button>
+              <a
+                v-else
+                :href="player.sourceUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded text-center transition-colors whitespace-nowrap"
+              >
+                ▶️ 播放
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 无播放源提示 -->
+    <div v-else-if="!loading && movie" class="bg-gray-800 rounded-lg shadow-lg p-6">
+      <h2 class="text-xl font-bold text-white mb-4">
+        播放源
+      </h2>
+      <div class="text-center py-8 text-gray-400">
+        <p class="text-lg mb-2">
+          暂无播放源
+        </p>
+        <p class="text-sm">
+          该影片尚未添加播放源信息
+        </p>
+      </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <Transition name="toast">
+      <div
+        v-if="toast.show"
+        class="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm"
+        :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'"
+      >
+        {{ toast.message }}
+      </div>
+    </Transition>
+
+    <!-- 二维码 Modal -->
+    <Transition name="modal">
+      <div
+        v-if="qrcodeModal.show"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        @click.self="closeQRCode"
+      >
+        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-sm w-full p-6 relative">
+          <button
+            class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            @click="closeQRCode"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <h3 class="text-lg font-bold text-white mb-4">
+            {{ qrcodeModal.title }}
+          </h3>
+
+          <div class="bg-white p-4 rounded-lg flex items-center justify-center mb-4">
+            <QrcodeVue
+              :value="qrcodeModal.content"
+              :size="240"
+              level="H"
+              render-as="svg"
+            />
+          </div>
+
+          <p class="text-xs text-gray-400 text-center">
+            使用手机扫描二维码获取磁力链接
+          </p>
+        </div>
+      </div>
+    </Transition>
 
     <div v-if="movie.relatedMovies && movie.relatedMovies.length > 0" class="bg-gray-800 rounded-lg shadow-lg p-6">
       <h2 class="text-xl font-bold text-white mb-4">
@@ -200,7 +459,7 @@ onMounted(() => {
           class="group cursor-pointer"
         >
           <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
-            <div class="aspect-[3/4] bg-gray-700">
+            <div class="aspect-3/4 bg-gray-700">
               <img
                 v-if="related.coverImage"
                 :src="related.coverImage"
@@ -218,3 +477,47 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Toast 动画 */
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(100px);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(100px);
+}
+
+/* Modal 动画 */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-active > div,
+.modal-leave-active > div {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from > div {
+  transform: scale(0.9);
+  opacity: 0;
+}
+
+.modal-leave-to > div {
+  transform: scale(0.9);
+  opacity: 0;
+}
+</style>

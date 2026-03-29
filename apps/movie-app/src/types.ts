@@ -131,3 +131,17 @@ export interface User {
   image?: string
   isR18Verified: boolean
 }
+
+// 下载状态类型
+export type DownloadStatus = 'planned' | 'downloading' | 'completed'
+
+// 下载列表项接口
+export interface DownloadListItem {
+  movieId: string
+  movieCode: string
+  title: string
+  coverImage?: string
+  magnetLink?: string
+  status: DownloadStatus
+  addedAt: number
+}
