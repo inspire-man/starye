@@ -148,6 +148,13 @@
 - [x] 12.3 验证映射表质量：随机抽样 100 个女优，检查映射准确率
 - [x] 12.4 提交映射表到版本库：`git add .seesaawiki-actor-map.json .seesaawiki-publisher-map.json`
 - [x] 12.5 提交并推送：`git commit -m "feat: add seesaawiki name mapping tables"`
+- [x] 12.6 **问题诊断**：发现映射表质量问题，许多URL指向404或厂商页面
+- [x] 12.7 **优化索引爬虫**（commit: be731d8）：
+  - 修复URL构建逻辑：统一使用"女優ページ一覧：X行"格式
+  - 加强页面过滤规则：过滤索引页、说明页、wiki页面
+  - 添加内容类型检测：在Parser中识别厂商页面
+  - 优化ActorCrawler：自动跳过厂商页面，不记为失败
+- [ ] 12.8 重新运行优化后的索引爬虫，生成高质量映射表
 
 ## 13. 生产环境爬虫部署
 
