@@ -269,7 +269,8 @@ feat: Aria2 集成和评分系统
 - [x] 代码已提交到 main 分支
 - [x] 代码已推送到 GitHub
 - [x] CI/CD 工作流已触发
-- [x] **CI 问题修复**: 修复 vite.config.ts 和 lint 错误 (commit: a642232)
+- [x] **CI 问题修复 1**: 修复 vite.config.ts 和 lint 错误 (commit: a642232)
+- [x] **CI 问题修复 2**: 修复测试命令 turbo 参数传递 (commit: ce18e82)
 - [ ] CI 测试通过（重新运行中）
 - [ ] API 部署成功（等待中）
 - [ ] 前端部署成功（等待中）
@@ -298,5 +299,31 @@ feat: Aria2 集成和评分系统
 - ✅ 前端构建通过 (2.68s)
 - ✅ Lint 检查通过 (10/10 任务)
 - ✅ 提交并推送 (commit: a642232)
+
+**状态**: 已修复，CI 重新运行中
+
+### 修复 2: CI 测试命令错误 (2026-03-27)
+
+**问题**:
+CI 运行 `pnpm test --run` 失败，错误信息：
+```
+ERROR  unexpected argument '--run' found
+tip: to pass '--run' as a value, use '-- --run'
+```
+
+**根本原因**:
+- CI 配置使用 `pnpm test --run`
+- 但 package.json 中 test 脚本是 `turbo run test`
+- Turbo 不认识 `--run` 参数，无法正确传递给底层的 vitest
+
+**修复方案**:
+- 修改 CI 配置为 `pnpm test`（不传递 --run 参数）
+- Vitest 在 CI 环境中会自动检测 `CI=true` 环境变量
+- 自动使用 run 模式，无需显式传递参数
+
+**验证**:
+- ✅ 本地测试：`CI=true pnpm test` 成功运行
+- ✅ 各包的 test 脚本都配置为 `vitest`
+- ✅ 提交并推送 (commit: ce18e82)
 
 **状态**: 已修复，CI 重新运行中
