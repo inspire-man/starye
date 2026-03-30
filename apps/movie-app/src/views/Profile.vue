@@ -5,6 +5,9 @@ import { RouterLink } from 'vue-router'
 import { progressApi } from '../api'
 import { useUserStore } from '../stores/user'
 import { useDownloadList } from '../composables/useDownloadList'
+import { useRating } from '../composables/useRating'
+import Aria2Settings from '../components/Aria2Settings.vue'
+import DownloadTaskPanel from '../components/DownloadTaskPanel.vue'
 
 const userStore = useUserStore()
 const loadingHistory = ref(false)
@@ -13,8 +16,14 @@ const watchingHistory = ref<WatchingProgress[]>([])
 // 下载列表管理
 const { getDownloadList, removeFromDownloadList, updateDownloadStatus, stats, removeMultiple } = useDownloadList()
 
+// 评分管理
+const { getUserRatingHistory } = useRating()
+const myRatings = ref<any[]>([])
+const loadingRatings = ref(false)
+
 // Tab 状态
-const activeTab = ref<'history' | 'downloads'>('history')
+type TabType = 'history' | 'downloads' | 'aria2-settings' | 'aria2-tasks' | 'my-ratings'
+const activeTab = ref<TabType>('history')
 
 // 下载列表筛选
 const downloadFilter = ref<DownloadStatus | 'all'>('all')
@@ -148,6 +157,20 @@ function getStatusText(status: DownloadStatus): string {
   return statusMap[status]
 }
 
+// 加载我的评分历史
+async function loadMyRatings() {
+  loadingRatings.value = true
+  try {
+    myRatings.value = await getUserRatingHistory()
+  }
+  catch (error) {
+    console.error('加载评分历史失败', error)
+  }
+  finally {
+    loadingRatings.value = false
+  }
+}
+
 // 更新状态
 function changeStatus(movieId: string, status: DownloadStatus) {
   const success = updateDownloadStatus(movieId, status)
@@ -243,9 +266,9 @@ onMounted(() => {
 
       <!-- Tab 切换 -->
       <div class="bg-gray-800 rounded-lg shadow-lg">
-        <div class="flex border-b border-gray-700">
+        <div class="flex flex-wrap border-b border-gray-700">
           <button
-            class="flex-1 px-6 py-4 text-center font-medium transition-colors"
+            class="flex-1 min-w-[120px] px-4 py-4 text-center font-medium transition-colors text-sm"
             :class="activeTab === 'history'
               ? 'text-primary-400 border-b-2 border-primary-400'
               : 'text-gray-400 hover:text-gray-300'"
@@ -254,7 +277,7 @@ onMounted(() => {
             📺 观看历史
           </button>
           <button
-            class="flex-1 px-6 py-4 text-center font-medium transition-colors relative"
+            class="flex-1 min-w-[120px] px-4 py-4 text-center font-medium transition-colors relative text-sm"
             :class="activeTab === 'downloads'
               ? 'text-primary-400 border-b-2 border-primary-400'
               : 'text-gray-400 hover:text-gray-300'"
@@ -267,6 +290,33 @@ onMounted(() => {
             >
               {{ stats.total }}
             </span>
+          </button>
+          <button
+            class="flex-1 min-w-[120px] px-4 py-4 text-center font-medium transition-colors text-sm"
+            :class="activeTab === 'aria2-settings'
+              ? 'text-primary-400 border-b-2 border-primary-400'
+              : 'text-gray-400 hover:text-gray-300'"
+            @click="activeTab = 'aria2-settings'"
+          >
+            ⚙️ Aria2 设置
+          </button>
+          <button
+            class="flex-1 min-w-[120px] px-4 py-4 text-center font-medium transition-colors text-sm"
+            :class="activeTab === 'aria2-tasks'
+              ? 'text-primary-400 border-b-2 border-primary-400'
+              : 'text-gray-400 hover:text-gray-300'"
+            @click="activeTab = 'aria2-tasks'"
+          >
+            ⬇️ 下载任务
+          </button>
+          <button
+            class="flex-1 min-w-[120px] px-4 py-4 text-center font-medium transition-colors text-sm"
+            :class="activeTab === 'my-ratings'
+              ? 'text-primary-400 border-b-2 border-primary-400'
+              : 'text-gray-400 hover:text-gray-300'"
+            @click="activeTab = 'my-ratings'; if (myRatings.length === 0) loadMyRatings()"
+          >
+            ⭐ 我的评分
           </button>
         </div>
 
@@ -465,6 +515,96 @@ onMounted(() => {
                   >
                     移除
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Aria2 设置 Tab -->
+        <div v-show="activeTab === 'aria2-settings'" class="p-6">
+          <Aria2Settings />
+        </div>
+
+        <!-- Aria2 下载任务 Tab -->
+        <div v-show="activeTab === 'aria2-tasks'" class="p-6">
+          <DownloadTaskPanel />
+        </div>
+
+        <!-- 我的评分 Tab -->
+        <div v-show="activeTab === 'my-ratings'" class="p-6">
+          <div v-if="loadingRatings" class="text-center py-8 text-gray-400">
+            加载中...
+          </div>
+
+          <div v-else-if="myRatings.length === 0" class="text-center py-8 text-gray-400">
+            <p class="text-lg mb-2">
+              暂无评分记录
+            </p>
+            <p class="text-sm">
+              快去为播放源评分吧！
+            </p>
+          </div>
+
+          <div v-else class="space-y-4">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-white">
+                我的评分历史
+              </h3>
+              <span class="text-sm text-gray-400">
+                共 {{ myRatings.length }} 条评分
+              </span>
+            </div>
+
+            <div class="grid gap-4">
+              <div
+                v-for="rating in myRatings"
+                :key="rating.playerId"
+                class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors"
+              >
+                <div class="flex items-start gap-4">
+                  <!-- 左侧：评分和影片信息 -->
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="text-yellow-400 font-bold">
+                        {{ '⭐'.repeat(rating.score) }}{{ '☆'.repeat(5 - rating.score) }}
+                      </span>
+                      <span class="text-white">
+                        {{ rating.score }} 星
+                      </span>
+                    </div>
+
+                    <!-- 影片标题和代码（如果有） -->
+                    <div v-if="rating.movieCode" class="mb-2">
+                      <RouterLink
+                        :to="`/movie/${rating.movieCode}`"
+                        class="text-white hover:text-primary-400 transition-colors font-medium"
+                      >
+                        {{ rating.movieTitle || rating.movieCode }}
+                      </RouterLink>
+                      <span class="text-xs text-gray-500 ml-2">
+                        {{ rating.movieCode }}
+                      </span>
+                    </div>
+
+                    <div class="text-sm text-gray-400 space-y-1">
+                      <p>播放源 ID: {{ rating.playerId }}</p>
+                      <p>评分时间: {{ formatDate(new Date(rating.createdAt).getTime()) }}</p>
+                      <p v-if="rating.updatedAt !== rating.createdAt">
+                        更新时间: {{ formatDate(new Date(rating.updatedAt).getTime()) }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- 右侧：查看详情按钮 -->
+                  <div v-if="rating.movieCode" class="flex-shrink-0">
+                    <RouterLink
+                      :to="`/movie/${rating.movieCode}`"
+                      class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      查看影片
+                    </RouterLink>
+                  </div>
                 </div>
               </div>
             </div>

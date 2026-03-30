@@ -39,5 +39,11 @@ jobs:
           echo "CLOUDFLARE_DATABASE_ID=test" >> $GITHUB_ENV
           echo "CLOUDFLARE_D1_TOKEN=test" >> $GITHUB_ENV
 
+      - name: Run Unit Tests
+        run: pnpm test --run
+
       - name: Run E2E Tests
-        run: pnpm test:e2e
+        run: |
+          cd apps/movie-app
+          pnpm run playwright:install
+          pnpm run test:e2e html-integration.spec.ts

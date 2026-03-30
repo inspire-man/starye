@@ -8,6 +8,9 @@ import { sortPlaybackSources, getSourceTypeIcon, getQualityBadgeClass } from '..
 import { copyToClipboard, copyMagnetLinks } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
 import { useDownloadList } from '../composables/useDownloadList'
+import { useRating } from '../composables/useRating'
+import { useAria2 } from '../composables/useAria2'
+import RatingStars from '../components/RatingStars.vue'
 
 const route = useRoute()
 const loading = ref(true)
@@ -17,8 +20,20 @@ const movie = ref<MovieDetail | null>(null)
 // 下载列表管理
 const { isInDownloadList, addToDownloadList } = useDownloadList()
 
+// 评分管理
+const { getPlayerRating, submitRating } = useRating()
+
+// Aria2 管理
+const { isConnected: aria2Connected, addMagnetTask } = useAria2()
+
+// 调试模式（从 localStorage 读取，可以在控制台执行 localStorage.setItem('debugMode', 'true') 开启）
+const debugMode = ref(localStorage.getItem('debugMode') === 'true')
+
 // 二维码弹窗
 const qrcodeModal = ref({ show: false, content: '', title: '' })
+
+// 评分弹窗
+const ratingModal = ref({ show: false, player: null as Player | null })
 
 // Toast 提示
 const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
@@ -117,6 +132,54 @@ function showQRCode(player: Player) {
 // 关闭二维码弹窗
 function closeQRCode() {
   qrcodeModal.value.show = false
+}
+
+// 显示评分弹窗
+function showRatingModal(player: Player) {
+  ratingModal.value = {
+    show: true,
+    player,
+  }
+}
+
+// 关闭评分弹窗
+function closeRatingModal() {
+  ratingModal.value.show = false
+  ratingModal.value.player = null
+}
+
+// 提交评分
+async function handleSubmitRating(score: number) {
+  if (!ratingModal.value.player)
+    return
+
+  const success = await submitRating(ratingModal.value.player.id, score)
+  if (success) {
+    // 刷新影片详情以更新评分
+    await fetchMovieDetail()
+    closeRatingModal()
+  }
+}
+
+// 添加到 Aria2
+async function addToAria2(player: Player) {
+  if (!aria2Connected.value) {
+    showToast('请先在个人中心配置 Aria2 连接', 'error')
+    return
+  }
+
+  if (!isMagnetLink(player.sourceUrl)) {
+    showToast('只支持添加磁力链接到 Aria2', 'error')
+    return
+  }
+
+  try {
+    await addMagnetTask(player.sourceUrl)
+    showToast('已添加到 Aria2')
+  }
+  catch (error: any) {
+    showToast(error.message || '添加失败', 'error')
+  }
 }
 
 async function fetchMovieDetail() {
@@ -327,7 +390,7 @@ onMounted(() => {
           :key="player.id"
           class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors"
         >
-          <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start justify-between gap-3 mb-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-2">
                 <span class="text-lg">{{ getSourceTypeIcon(player) }}</span>
@@ -341,9 +404,44 @@ onMounted(() => {
                 >
                   {{ player.quality }}
                 </span>
+                <span
+                  v-if="getPlayerRating(player).recommendationTag"
+                  class="text-xs"
+                  :title="getPlayerRating(player).recommendationTag"
+                >
+                  {{ getPlayerRating(player).recommendationTag === '🏆 强烈推荐' ? '🏆' : '👍' }}
+                </span>
               </div>
-              <div class="text-xs text-gray-400 truncate">
+              <div class="text-xs text-gray-400 truncate mb-2">
                 {{ isMagnetLink(player.sourceUrl) ? 'magnet:...' : player.sourceUrl }}
+              </div>
+
+              <!-- 评分显示 -->
+              <div class="flex items-center gap-2">
+                <RatingStars
+                  :model-value="player.averageRating || 0"
+                  :show-stats="true"
+                  :count="player.ratingCount"
+                  size="small"
+                />
+              </div>
+
+              <!-- 调试信息：自动评分详情（仅调试模式） -->
+              <div v-if="debugMode" class="mt-2 p-2 bg-gray-800 rounded text-xs space-y-1">
+                <div class="text-gray-400 font-semibold">🔍 自动评分详情</div>
+                <div class="text-gray-300">
+                  综合评分: <span class="text-yellow-400">{{ getPlayerRating(player).compositeScore?.toFixed(1) ?? 'N/A' }}</span>
+                </div>
+                <div class="text-gray-300">
+                  自动评分: <span class="text-blue-400">{{ getPlayerRating(player).autoScore.toFixed(1) }}</span>
+                </div>
+                <div class="text-gray-300">
+                  用户评分: <span class="text-green-400">{{ player.averageRating?.toFixed(1) || 'N/A' }}</span>
+                  ({{ player.ratingCount || 0 }} 人)
+                </div>
+                <div class="text-gray-400 text-[10px] mt-1">
+                  提示: 在浏览器控制台执行 localStorage.setItem('debugMode', 'false') 可关闭调试模式
+                </div>
               </div>
             </div>
 
@@ -354,6 +452,13 @@ onMounted(() => {
                 @click="copyMagnetLink(player)"
               >
                 📋 复制
+              </button>
+              <button
+                v-if="isMagnetLink(player.sourceUrl) && aria2Connected"
+                class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                @click="addToAria2(player)"
+              >
+                ⬇️ Aria2
               </button>
               <a
                 v-if="isMagnetLink(player.sourceUrl)"
@@ -378,6 +483,12 @@ onMounted(() => {
               >
                 ▶️ 播放
               </a>
+              <button
+                class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                @click="showRatingModal(player)"
+              >
+                ⭐ 评分
+              </button>
             </div>
           </div>
         </div>
@@ -443,6 +554,60 @@ onMounted(() => {
           <p class="text-xs text-gray-400 text-center">
             使用手机扫描二维码获取磁力链接
           </p>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 评分 Modal -->
+    <Transition name="modal">
+      <div
+        v-if="ratingModal.show && ratingModal.player"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        @click.self="closeRatingModal"
+      >
+        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+          <button
+            class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            @click="closeRatingModal"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <h3 class="text-lg font-bold text-white mb-4">
+            评分播放源
+          </h3>
+
+          <div class="mb-4">
+            <p class="text-gray-300 text-sm mb-2">
+              {{ ratingModal.player.sourceName }}
+              <span v-if="ratingModal.player.quality" class="text-primary-400">
+                [{{ ratingModal.player.quality }}]
+              </span>
+            </p>
+          </div>
+
+          <div class="mb-6">
+            <p class="text-gray-400 text-sm mb-3">
+              请为该播放源评分（1-5 星）
+            </p>
+            <div class="flex justify-center">
+              <RatingStars
+                :model-value="ratingModal.player.userScore || 0"
+                :interactive="true"
+                size="large"
+                @change="handleSubmitRating"
+              />
+            </div>
+          </div>
+
+          <div v-if="ratingModal.player.averageRating" class="text-center text-sm text-gray-400">
+            <p>
+              当前平均评分: {{ ratingModal.player.averageRating.toFixed(1) }} 分
+              ({{ ratingModal.player.ratingCount }} 人评价)
+            </p>
+          </div>
         </div>
       </div>
     </Transition>

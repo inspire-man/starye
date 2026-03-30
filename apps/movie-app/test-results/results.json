@@ -1,0 +1,419 @@
+{
+  "config": {
+    "configFile": "D:\\my-workspace\\starye\\apps\\movie-app\\playwright.config.ts",
+    "rootDir": "D:/my-workspace/starye/apps/movie-app/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/my-workspace/starye/apps/movie-app/test-results",
+        "repeatEach": 1,
+        "retries": 1,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "D:/my-workspace/starye/apps/movie-app/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": {
+      "command": "pnpm run dev",
+      "url": "http://localhost:5173",
+      "timeout": 30000,
+      "reuseExistingServer": true
+    }
+  },
+  "suites": [
+    {
+      "title": "html-integration.spec.ts",
+      "file": "html-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "HTML 集成测试（无服务依赖）",
+          "file": "html-integration.spec.ts",
+          "line": 15,
+          "column": 6,
+          "specs": [
+            {
+              "title": "25.2 Aria2 配置界面交互",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1576,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "✅ 25.2 Aria2 配置测试通过\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-03-30T02:39:01.553Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a0a983a7afd6a2a9c2a2-550f0a3832d5ba5f5a86",
+              "file": "html-integration.spec.ts",
+              "line": 16,
+              "column": 3
+            },
+            {
+              "title": "26.1-26.3 评分提交和修改",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2196,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "✅ 26.1-26.3 评分测试通过\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-03-30T02:39:03.266Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a0a983a7afd6a2a9c2a2-3de3d9bce3e8c444e58d",
+              "file": "html-integration.spec.ts",
+              "line": 41,
+              "column": 3
+            },
+            {
+              "title": "25.3-25.4 添加下载任务",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 996,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "✅ 25.3-25.4 添加任务测试通过\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-03-30T02:39:05.478Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a0a983a7afd6a2a9c2a2-5ed00e5f8d04ba805791",
+              "file": "html-integration.spec.ts",
+              "line": 70,
+              "column": 3
+            },
+            {
+              "title": "25.5 任务控制（暂停/恢复/删除）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1952,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "✅ 25.5 任务控制测试通过\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-03-30T02:39:06.489Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a0a983a7afd6a2a9c2a2-8bd47fe4992f7435f2dd",
+              "file": "html-integration.spec.ts",
+              "line": 93,
+              "column": 3
+            },
+            {
+              "title": "25.8 批量添加任务",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1902,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "✅ 25.8 批量添加测试通过 (10 个任务)\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-03-30T02:39:08.453Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a0a983a7afd6a2a9c2a2-02820c3169b4998adc29",
+              "file": "html-integration.spec.ts",
+              "line": 115,
+              "column": 3
+            },
+            {
+              "title": "26.6 评分频率测试（模拟）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3660,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "✅ 26.6 评分频率测试通过 (12 次提交)\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-03-30T02:39:10.368Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a0a983a7afd6a2a9c2a2-b49e17b98c30e10db0d5",
+              "file": "html-integration.spec.ts",
+              "line": 132,
+              "column": 3
+            },
+            {
+              "title": "27.7 响应式布局（移动端）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 639,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "✅ 27.7 移动端布局测试通过\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-03-30T02:39:14.043Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a0a983a7afd6a2a9c2a2-ef0007cb64b6734584d8",
+              "file": "html-integration.spec.ts",
+              "line": 160,
+              "column": 3
+            },
+            {
+              "title": "完整集成测试流程",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4013,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "开始完整集成测试流程...\n"
+                        },
+                        {
+                          "text": "✓ 步骤 1: Aria2 配置完成\n"
+                        },
+                        {
+                          "text": "✓ 步骤 2: 添加下载任务完成\n"
+                        },
+                        {
+                          "text": "✓ 步骤 3: 提交评分完成\n"
+                        },
+                        {
+                          "text": "✓ 步骤 4: 批量添加完成\n"
+                        },
+                        {
+                          "text": "✅ 完整集成测试通过 (14 个操作成功)\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-03-30T02:39:14.694Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a0a983a7afd6a2a9c2a2-392491d2aa3fcbc7d4c3",
+              "file": "html-integration.spec.ts",
+              "line": 182,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-03-30T02:38:59.657Z",
+    "duration": 19179.037,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

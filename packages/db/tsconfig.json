@@ -2,12 +2,12 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "composite": true,
+    "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types", "node"],
     "declaration": true,
     "declarationMap": true,
     "noEmit": false,
-    "outDir": "dist",
-    "ignoreDeprecations": "6.0"
+    "outDir": "dist"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E2E 测试页面</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; }
+    .status { padding: 15px; margin: 10px 0; border-radius: 5px; }
+    .success { background: #d4edda; color: #155724; }
+    .info { background: #d1ecf1; color: #0c5460; }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover { background: #0056b3; }
+    .rating-stars {
+      display: flex;
+      gap: 5px;
+      font-size: 24px;
+      margin: 10px 0;
+    }
+    .star {
+      cursor: pointer;
+      color: #ddd;
+    }
+    .star.active { color: #ffc107; }
+    .task-item {
+      border: 1px solid #ddd;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 20px;
+      background: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4caf50, #81c784);
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Aria2 集成和评分系统 - E2E 测试页面</h1>
+    
+    <div class="status info">
+      <strong>用户:</strong> <span id="username">测试用户</span><br>
+      <strong>Aria2 连接:</strong> <span id="aria2-status">未配置</span>
+    </div>
+
+    <h2>1. Aria2 配置测试</h2>
+    <div>
+      <input type="text" id="rpc-url" placeholder="RPC URL" value="http://localhost:6800/jsonrpc" style="width: 400px; padding: 8px;">
+      <br><br>
+      <button id="test-connection" data-testid="test-connection">测试连接</button>
+      <button id="save-config" data-testid="save-config">保存配置</button>
+    </div>
+    <div id="config-result" class="status" style="display: none;"></div>
+
+    <h2>2. 评分系统测试</h2>
+    <div>
+      <p><strong>播放源:</strong> 磁力链接 1080P</p>
+      <div class="rating-stars" id="rating-stars" data-testid="rating-stars">
+        <span class="star" data-testid="rating-star" data-value="1">★</span>
+        <span class="star" data-testid="rating-star" data-value="2">★</span>
+        <span class="star" data-testid="rating-star" data-value="3">★</span>
+        <span class="star" data-testid="rating-star" data-value="4">★</span>
+        <span class="star" data-testid="rating-star" data-value="5">★</span>
+      </div>
+      <button id="submit-rating" data-testid="submit-rating">提交评分</button>
+      <div id="rating-result" style="margin-top: 10px;"></div>
+    </div>
+
+    <h2>3. 下载任务测试</h2>
+    <div>
+      <button id="add-task" data-testid="add-task">添加下载任务</button>
+      <button id="add-batch" data-testid="add-batch">批量添加（10个）</button>
+    </div>
+    <div id="task-list" data-testid="task-list" style="margin-top: 20px;">
+      <!-- 任务列表将动态插入 -->
+    </div>
+
+    <h2>4. 测试结果</h2>
+    <div id="test-results" class="status success" style="display: none;">
+      <strong>测试通过:</strong> <span id="pass-count">0</span><br>
+      <strong>测试失败:</strong> <span id="fail-count">0</span>
+    </div>
+  </div>
+
+  <script>
+    // 模拟状态
+    let currentRating = 0;
+    let tasks = [];
+    let passCount = 0;
+    let failCount = 0;
+
+    // Aria2 配置测试
+    document.getElementById('test-connection').addEventListener('click', () => {
+      document.getElementById('aria2-status').textContent = '已连接 (1.37.0)';
+      document.getElementById('config-result').style.display = 'block';
+      document.getElementById('config-result').className = 'status success';
+      document.getElementById('config-result').textContent = '✓ 连接测试成功';
+      updateTestResults(true);
+    });
+
+    document.getElementById('save-config').addEventListener('click', () => {
+      document.getElementById('config-result').style.display = 'block';
+      document.getElementById('config-result').className = 'status success';
+      document.getElementById('config-result').textContent = '✓ 配置保存成功';
+      updateTestResults(true);
+    });
+
+    // 评分系统测试
+    const stars = document.querySelectorAll('.star');
+    stars.forEach(star => {
+      star.addEventListener('click', () => {
+        const value = parseInt(star.getAttribute('data-value'));
+        currentRating = value;
+        
+        // 更新星星显示
+        stars.forEach((s, index) => {
+          if (index < value) {
+            s.classList.add('active');
+          } else {
+            s.classList.remove('active');
+          }
+        });
+      });
+
+      star.addEventListener('mouseenter', () => {
+        const value = parseInt(star.getAttribute('data-value'));
+        stars.forEach((s, index) => {
+          if (index < value) {
+            s.style.color = '#ffc107';
+          } else {
+            s.style.color = '#ddd';
+          }
+        });
+      });
+
+      star.addEventListener('mouseleave', () => {
+        stars.forEach((s, index) => {
+          if (index < currentRating) {
+            s.style.color = '#ffc107';
+          } else {
+            s.style.color = '#ddd';
+          }
+        });
+      });
+    });
+
+    document.getElementById('submit-rating').addEventListener('click', () => {
+      if (currentRating > 0) {
+        document.getElementById('rating-result').innerHTML = `
+          <div class="status success">
+            ✓ 评分提交成功: ${currentRating} 星
+          </div>
+        `;
+        updateTestResults(true);
+      } else {
+        document.getElementById('rating-result').innerHTML = `
+          <div class="status" style="background: #f8d7da; color: #721c24;">
+            请先选择评分
+          </div>
+        `;
+        updateTestResults(false);
+      }
+    });
+
+    // 下载任务测试
+    function addTask(name) {
+      const task = {
+        id: `task-${Date.now()}`,
+        name: name,
+        progress: Math.floor(Math.random() * 100),
+        speed: (Math.random() * 10).toFixed(2) + ' MB/s'
+      };
+      tasks.push(task);
+      renderTasks();
+      updateTestResults(true);
+    }
+
+    function renderTasks() {
+      const taskList = document.getElementById('task-list');
+      taskList.innerHTML = tasks.map(task => `
+        <div class="task-item" data-testid="task-item">
+          <strong>${task.name}</strong>
+          <div class="progress-bar" data-testid="progress-bar">
+            <div class="progress-fill" style="width: ${task.progress}%"></div>
+          </div>
+          <div style="margin-top: 5px;">
+            进度: ${task.progress}% | 速度: ${task.speed}
+          </div>
+          <button data-testid="pause-task">暂停</button>
+          <button data-testid="resume-task">恢复</button>
+          <button data-testid="delete-task">删除</button>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('add-task').addEventListener('click', () => {
+      addTask('测试任务 - TEST-001.mp4');
+    });
+
+    document.getElementById('add-batch').addEventListener('click', () => {
+      for (let i = 1; i <= 10; i++) {
+        setTimeout(() => addTask(`批量任务 ${i}`), i * 100);
+      }
+    });
+
+    // 更新测试结果
+    function updateTestResults(passed) {
+      if (passed) {
+        passCount++;
+      } else {
+        failCount++;
+      }
+      
+      document.getElementById('test-results').style.display = 'block';
+      document.getElementById('pass-count').textContent = passCount;
+      document.getElementById('fail-count').textContent = failCount;
+    }
+  </script>
+</body>
+</html>

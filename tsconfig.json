@@ -4,8 +4,8 @@
     "jsx": "preserve",
     "lib": ["ESNext", "DOM"],
     "useDefineForClassFields": true,
-    "baseUrl": ".",
     "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "paths": {

@@ -1,133 +1,268 @@
-# Starye 开发脚本
+# 自动化功能验证脚本
 
-本目录包含用于开发和维护 Starye 项目的实用脚本。
+本目录包含用于验证 `aria2-integration-quality-rating` 变更的自动化测试脚本。
 
-## 可用脚本
+## 脚本列表
 
-### 🧹 clean-ports.ps1
+### 1. API 功能测试 (`test-aria2-rating-api.ts`)
 
-清理开发服务占用的端口，解决端口冲突问题。
+测试后端 API 端点是否正常工作。
 
-**使用方法：**
+**运行方式：**
+
+```bash
+# 确保 API 服务正在运行
+cd apps/api
+pnpm run dev
+
+# 在另一个终端运行测试
+pnpm tsx scripts/test-aria2-rating-api.ts
+```
+
+**测试内容：**
+- ✓ 评分 API（提交、查询、统计）
+- ✓ Aria2 配置 API（获取、保存）
+- ✓ Aria2 代理 API（RPC 转发）
+- ✓ 影片 API（包含评分数据）
+
+**预期结果：**
+- 未登录状态应返回 401 错误（预期行为）
+- 所有 API 端点应正常响应
+- 响应数据格式正确
+
+### 2. 数据库 Schema 验证 (`verify-db.ps1`)
+
+验证数据库迁移是否正确执行。
+
+**运行方式：**
 
 ```powershell
-# 交互式清理（会逐个询问是否终止进程）
-pwsh ./scripts/clean-ports.ps1
+# 方式 1：使用 PowerShell 脚本（推荐）
+.\scripts\verify-db.ps1
 
-# 强制清理所有端口（无需确认）
-pwsh ./scripts/clean-ports.ps1 -Force
-
-# 详细模式（显示所有端口状态）
-pwsh ./scripts/clean-ports.ps1 -Verbose -Force
+# 方式 2：手动检查
+cd apps/api
+pnpm exec wrangler d1 execute starye-db --local --command "SELECT name FROM sqlite_master WHERE type='table'"
 ```
 
-**或使用 npm 脚本：**
+**验证内容：**
+- ✓ `ratings` 表是否存在
+- ✓ `aria2_configs` 表是否存在
+- ✓ `player` 表的新字段（`average_rating`, `rating_count`）
+- ✓ 索引是否正确创建
+- ✓ 数据查询是否正常
+
+**常见问题：**
+
+**Q: 提示找不到数据库？**
+A: 确保先执行过数据库迁移：
+```bash
+cd apps/api
+pnpm exec wrangler d1 migrations apply starye-db --local
+```
+
+**Q: 表不存在？**
+A: 检查迁移记录：
+```bash
+pnpm exec wrangler d1 execute starye-db --local --command "SELECT * FROM d1_migrations ORDER BY applied_at DESC"
+```
+
+**Q: 迁移冲突？**
+A: 可能需要手动执行 SQL：
+```bash
+pnpm exec wrangler d1 execute starye-db --local --file ../../packages/db/drizzle/0020_add_ratings_aria2.sql
+```
+
+### 3. 数据库 Schema 验证指南 (`verify-database-schema.ts`)
+
+生成详细的验证指南和命令。
+
+**运行方式：**
 
 ```bash
-# 清理端口
-pnpm clean:ports
-
-# 清理端口后自动启动开发服务器
-pnpm dev:clean
+pnpm tsx scripts/verify-database-schema.ts
 ```
 
-**清理的端口：**
-- Gateway: 8080
-- API: 8787
-- Dashboard: 5173
-- Blog: 3002
-- Auth: 3003
-- Comic: 3000
-- Movie: 3001
+这会输出一系列可以手动执行的验证命令。
 
-### 🔍 check-services.ps1
+## 快速开始
 
-检查所有开发服务的运行状态。
+### 完整验证流程
 
-**使用方法：**
+```bash
+# 1. 确保数据库迁移已执行
+cd apps/api
+pnpm exec wrangler d1 migrations apply starye-db --local
 
+# 2. 验证数据库 Schema
+cd ../..
+.\scripts\verify-db.ps1
+
+# 3. 启动 API 服务
+cd apps/api
+pnpm run dev
+
+# 4. 在另一个终端运行 API 测试
+pnpm tsx scripts/test-aria2-rating-api.ts
+```
+
+### 前端功能验证
+
+前端功能需要手动验证：
+
+1. **启动前端应用：**
+   ```bash
+   cd apps/movie-app
+   pnpm run dev
+   ```
+
+2. **验证 Aria2 设置：**
+   - 访问个人中心 → Aria2 设置 Tab
+   - 输入 RPC URL: `http://localhost:6800/jsonrpc`
+   - 点击"测试连接"（需要先启动 Aria2）
+
+3. **验证评分功能：**
+   - 打开任意影片详情页
+   - 查看播放源卡片上的评分显示
+   - 点击"评分"按钮提交评分
+
+4. **验证下载任务：**
+   - 个人中心 → 下载任务 Tab
+   - 查看任务列表、进度条、控制按钮
+
+## Aria2 设置指南
+
+### 安装 Aria2
+
+**Windows:**
 ```powershell
-pwsh ./scripts/check-services.ps1
+# 使用 Scoop
+scoop install aria2
+
+# 或下载二进制文件
+https://github.com/aria2/aria2/releases
 ```
 
-**或使用 npm 脚本：**
+**macOS:**
+```bash
+brew install aria2
+```
+
+**Linux:**
+```bash
+sudo apt install aria2  # Debian/Ubuntu
+sudo yum install aria2  # CentOS/RHEL
+```
+
+### 启动 Aria2 RPC 服务
 
 ```bash
-pnpm check:services
+# 基本启动（无密钥）
+aria2c --enable-rpc
+
+# 带密钥启动（推荐）
+aria2c --enable-rpc --rpc-secret=your-secret-token
+
+# 完整配置
+aria2c \
+  --enable-rpc \
+  --rpc-listen-all=false \
+  --rpc-listen-port=6800 \
+  --rpc-secret=your-secret-token \
+  --max-concurrent-downloads=5 \
+  --max-connection-per-server=16 \
+  --split=16
 ```
 
-**输出示例：**
-
-```
-=== Starye Services Status ===
-[OK] Gateway on port 8080 (PID: 12345)
-[OK] API on port 8787 (PID: 12346)
-[!!] Auth on port 3003 - NOT RUNNING
-
-=== Summary ===
-Running: 6/7
-Missing services: Auth
-```
-
-### 🔐 update-secrets.ps1
-
-更新 Cloudflare Workers 的生产环境密钥。
-
-**使用方法：**
-
-```powershell
-pwsh ./scripts/update-secrets.ps1
-```
-
-## 常见问题
-
-### Q: 为什么需要清理端口？
-
-A: 在开发过程中，如果服务异常退出或你手动停止了某些服务，进程可能仍占用端口。当你重新启动 `pnpm dev` 时，新服务会因为端口被占用而启动到其他端口（如 Auth 从 3003 漂移到 3008），导致 Gateway 路由失败。
-
-### Q: 什么时候应该运行 clean-ports？
-
-A: 在以下情况下运行：
-
-1. **启动开发服务前**：确保所有端口都是干净的
-2. **遇到端口冲突错误时**：如看到 "Unable to find an available port" 警告
-3. **服务路由出现问题时**：如访问 `/auth` 但得到其他服务的响应
-4. **重启开发环境时**：清理旧进程确保干净启动
-
-### Q: 强制模式安全吗？
-
-A: 强制模式（`-Force`）会直接终止占用端口的进程，不会询问确认。这些端口是项目专用的开发端口，一般很安全。如果你担心误杀其他进程，可以先运行 `check-services.ps1` 或不使用 `-Force` 参数。
-
-### Q: 为什么使用 PowerShell 而不是跨平台脚本？
-
-A: 考虑到项目主要在 Windows 上开发，PowerShell 提供了更好的原生支持和进程管理能力。未来可以添加 Shell 版本以支持 macOS/Linux。
-
-## 推荐工作流
-
-### 标准启动流程
+### 验证 Aria2 连接
 
 ```bash
-# 1. 清理端口
-pnpm clean:ports
-
-# 2. 启动所有开发服务
-pnpm dev
+# 使用 curl 测试
+curl http://localhost:6800/jsonrpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "aria2.getVersion",
+    "id": "test"
+  }'
 ```
 
-### 或使用一键命令
+## 测试检查清单
 
-```bash
-# 清理端口并启动（推荐）
-pnpm dev:clean
-```
+### 后端 API ✓
 
-### 检查服务状态
+- [x] 评分提交 API（未登录应返回 401）
+- [x] 查询播放源评分统计
+- [x] 查询用户评分历史
+- [x] 查询全局评分统计
+- [x] 获取 Aria2 配置
+- [x] 保存 Aria2 配置
+- [x] Aria2 代理请求
+- [x] 影片详情包含评分数据
 
-```bash
-# 在另一个终端运行
-pnpm check:services
-```
+### 数据库 Schema ✓
 
-## 贡献
+- [x] `ratings` 表存在且结构正确
+- [x] `aria2_configs` 表存在且结构正确
+- [x] `player` 表包含新字段
+- [x] 索引正确创建
+- [x] 数据查询正常
 
-如果你有更好的脚本想法或改进建议，欢迎提交 PR！
+### 前端功能 ⏳
+
+- [ ] Aria2 设置界面正常显示
+- [ ] 可以保存和加载配置
+- [ ] 连接测试功能正常
+- [ ] 评分组件正常显示
+- [ ] 可以提交和修改评分
+- [ ] 下载任务面板正常显示
+- [ ] 任务控制按钮正常工作
+
+### 集成测试 ⏳
+
+- [ ] 端到端流程（配置 → 添加任务 → 评分）
+- [ ] WebSocket 实时进度
+- [ ] 评分聚合计算正确
+- [ ] 推荐标签显示正确
+
+## 故障排查
+
+### 常见错误
+
+**1. "找不到数据库"**
+- 检查是否在正确的目录运行命令
+- 检查 `wrangler.toml` 配置是否正确
+
+**2. "表不存在"**
+- 执行数据库迁移
+- 检查迁移记录是否正确
+
+**3. "API 返回 401"**
+- 这是正常的！未登录用户应该返回 401
+- 登录后应该能正常访问
+
+**4. "Aria2 连接失败"**
+- 检查 Aria2 是否正在运行
+- 检查 RPC URL 和端口是否正确
+- 检查密钥是否匹配
+
+**5. "评分提交失败"**
+- 确保已登录
+- 检查 playerId 是否有效
+- 检查评分值是否在 1-5 之间
+
+## 下一步
+
+完成验证后，可以：
+
+1. 标记相关任务为完成
+2. 更新 `tasks.md` 文档
+3. 准备部署到生产环境
+4. 编写用户文档和使用指南
+
+## 联系
+
+如有问题，请查看：
+- `openspec/changes/aria2-integration-quality-rating/` 目录下的设计文档
+- `tasks.md` 了解任务进度
+- GitHub Issues 提交问题

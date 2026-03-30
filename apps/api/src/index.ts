@@ -7,6 +7,7 @@ import { databaseMiddleware } from './middleware/database'
 import { errorHandler } from './middleware/error-handler'
 import { actorsRoutes } from './routes/actors'
 import { adminMainRoutes } from './routes/admin/main'
+import aria2Routes from './routes/aria2'
 import { authRoutes } from './routes/auth'
 import { comicsRoutes } from './routes/comics'
 import { favoritesRoutes } from './routes/favorites'
@@ -17,6 +18,7 @@ import { publicComicsRoutes } from './routes/public/comics'
 import { publicMoviesRoutes } from './routes/public/movies'
 import { publicProgressRoutes } from './routes/public/progress'
 import { publishersRoutes } from './routes/publishers'
+import ratingsRoutes from './routes/ratings'
 import { uploadRoutes } from './routes/upload'
 
 const app = new Hono<AppEnv>()
@@ -38,6 +40,8 @@ const routes = app
   .route('/api/movies', moviesRoutes)
   .route('/api/posts', postsRoutes)
   .route('/api/favorites', favoritesRoutes)
+  .route('/api/ratings', ratingsRoutes)
+  .route('/api/aria2', aria2Routes)
   .route('/api/admin', adminMainRoutes)
   .route('/api/auth', authRoutes)
   .route('/api/upload', uploadRoutes)

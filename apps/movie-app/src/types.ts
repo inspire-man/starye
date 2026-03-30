@@ -89,8 +89,14 @@ export interface Player {
   movieId: string
   sourceName: string
   sourceUrl: string
+  source?: string
   quality?: string
   sortOrder: number
+  magnetLink?: string
+  // 评分相关字段
+  averageRating?: number // 平均用户评分 (1-5)
+  ratingCount?: number // 评分人数
+  userScore?: number // 当前用户的评分 (1-5)
 }
 
 export interface MovieDetail extends Movie {
@@ -144,4 +150,69 @@ export interface DownloadListItem {
   magnetLink?: string
   status: DownloadStatus
   addedAt: number
+}
+
+// Aria2 相关类型
+export interface Aria2Config {
+  rpcUrl: string
+  secret?: string
+  useProxy: boolean
+}
+
+export interface Aria2Task {
+  gid: string
+  status: Aria2Status
+  totalLength: string
+  completedLength: string
+  uploadLength: string
+  downloadSpeed: string
+  uploadSpeed: string
+  files?: Aria2File[]
+  infoHash?: string
+}
+
+export type Aria2Status = 'active' | 'waiting' | 'paused' | 'error' | 'complete' | 'removed'
+
+export interface Aria2File {
+  index: string
+  path: string
+  length: string
+  completedLength: string
+  selected: string
+}
+
+// 评分相关类型
+export interface Rating {
+  id: string
+  playerId: string
+  userId: string
+  score: number // 1-5
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface RatingStats {
+  averageRating: number
+  ratingCount: number
+  distribution: RatingDistribution
+}
+
+export interface RatingDistribution {
+  star1: number
+  star2: number
+  star3: number
+  star4: number
+  star5: number
+}
+
+export interface AutoScoreWeights {
+  quality: number
+  fileSize: number
+  source: number
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean
+  data?: T
+  error?: string
 }

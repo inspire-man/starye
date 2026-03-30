@@ -7,12 +7,21 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/e2e/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
+      '**/.{idea,git,cache,output,temp}/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       exclude: [
         'node_modules/**',
         'dist/**',
+        'e2e/**',
         '**/*.test.ts',
         '**/*.config.ts',
         'src/main.ts',

@@ -44,10 +44,15 @@ export async function getMovieDetail(c: Context<AppEnv>) {
     headers: c.req.raw.headers,
   })
 
+  // 获取当前用户 ID（用于查询用户评分）
+  const session = await auth.api.getSession({ headers: c.req.raw.headers })
+  const userId = session?.user?.id
+
   const movie = await getMovieByIdentifier({
     db,
     identifier,
     isAdult,
+    userId,
   })
 
   if (!movie) {

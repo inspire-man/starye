@@ -89,7 +89,11 @@ describe('movies handlers', () => {
 
       const app = new Hono<AppEnv>()
       const mockDb = {} as any
-      const mockAuth = {} as any
+      const mockAuth = {
+        api: {
+          getSession: vi.fn().mockResolvedValue(null)
+        }
+      } as any
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
@@ -109,6 +113,7 @@ describe('movies handlers', () => {
         db: mockDb,
         identifier: 'test-slug',
         isAdult: true,
+        userId: undefined,
       })
     })
 
@@ -118,7 +123,11 @@ describe('movies handlers', () => {
 
       const app = new Hono<AppEnv>()
       const mockDb = {} as any
-      const mockAuth = {} as any
+      const mockAuth = {
+        api: {
+          getSession: vi.fn().mockResolvedValue(null)
+        }
+      } as any
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
@@ -139,7 +148,11 @@ describe('movies handlers', () => {
 
       const app = new Hono<AppEnv>()
       const mockDb = {} as any
-      const mockAuth = {} as any
+      const mockAuth = {
+        api: {
+          getSession: vi.fn().mockResolvedValue(null)
+        }
+      } as any
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
@@ -155,6 +168,7 @@ describe('movies handlers', () => {
         db: mockDb,
         identifier: 'test',
         isAdult: false,
+        userId: undefined,
       })
     })
   })

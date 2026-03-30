@@ -49,6 +49,9 @@ interface MovieDetailResult extends Omit<Movie, 'actors' | 'publishers'> {
     sourceUrl: string
     quality: string | null
     sortOrder: number
+    averageRating?: number
+    ratingCount?: number
+    userScore?: number
   }>
   relatedMovies: Array<{
     id: string
@@ -204,10 +207,11 @@ export interface GetMovieByIdentifierOptions {
   db: Database
   identifier: string
   isAdult: boolean
+  userId?: string
 }
 
 export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions): Promise<MovieDetailResult | null> {
-  const { db, identifier, isAdult } = options
+  const { db, identifier, isAdult, userId } = options
 
   const movie = await db.query.movies.findFirst({
     where: (movies, { eq, or }) => or(
@@ -216,6 +220,15 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     ),
     with: {
       players: {
+        columns: {
+          id: true,
+          sourceName: true,
+          sourceUrl: true,
+          quality: true,
+          sortOrder: true,
+          averageRating: true,
+          ratingCount: true,
+        },
         orderBy: (players, { asc }) => [asc(players.sortOrder)],
       },
       movieActors: {
@@ -327,6 +340,37 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     .slice(0, 12)
     .filter(m => !m.isR18 || isAdult)
 
+  // 如果有 userId，查询用户对播放源的评分
+  let userScores: Map<string, number> | undefined
+  if (userId && movie.players && movie.players.length > 0) {
+    const playerIds = movie.players.map(p => p.id)
+    await import('@starye/db/schema')
+    const userRatings = await db.query.ratings.findMany({
+      where: (ratings, { and, eq, inArray }) => and(
+        eq(ratings.userId, userId),
+        inArray(ratings.playerId, playerIds),
+      ),
+      columns: {
+        playerId: true,
+        score: true,
+      },
+    })
+
+    userScores = new Map(userRatings.map(r => [r.playerId, r.score]))
+  }
+
+  // 构建 players 数据（包含评分信息）
+  const playersWithRatings = movie.players?.map(player => ({
+    id: player.id,
+    sourceName: player.sourceName,
+    sourceUrl: player.sourceUrl,
+    quality: player.quality,
+    sortOrder: player.sortOrder,
+    averageRating: player.averageRating || undefined,
+    ratingCount: player.ratingCount || undefined,
+    userScore: userScores?.get(player.id),
+  }))
+
   if (movie.isR18 && !isAdult) {
     return {
       ...movie,
@@ -340,6 +384,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
 
   return {
     ...movie,
+    players: playersWithRatings,
     actors: actorsData,
     publishers: publishersData,
     relatedMovies,

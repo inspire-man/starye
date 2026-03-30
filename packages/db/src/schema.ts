@@ -183,9 +183,13 @@ export const players = sqliteTable('player', {
   sourceUrl: text('source_url').notNull(), // 播放链接或磁力链接
   quality: text('quality'), // 画质 (HD, SD 等)
   sortOrder: integer('sort_order').notNull(), // 排序
+  averageRating: integer('average_rating', { mode: 'number' }), // 平均评分（0-100）
+  ratingCount: integer('rating_count').default(0), // 评分人数
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-})
+}, table => ({
+  ratingIdx: index('idx_player_rating').on(table.averageRating),
+}))
 
 export type Player = InferSelectModel<typeof players>
 export type NewPlayer = InferInsertModel<typeof players>
@@ -376,6 +380,58 @@ export const userFavorites = sqliteTable('user_favorites', {
 export type UserFavorite = InferSelectModel<typeof userFavorites>
 export type NewUserFavorite = InferInsertModel<typeof userFavorites>
 
+// --- 播放源评分 ---
+export const ratings = sqliteTable('ratings', {
+  id: text('id').primaryKey(),
+  playerId: text('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  score: integer('score').notNull().$type<1 | 2 | 3 | 4 | 5>(), // 1-5 星
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => ({
+  playerUserIdx: uniqueIndex('idx_ratings_player_user').on(table.playerId, table.userId),
+  playerIdx: index('idx_ratings_player').on(table.playerId),
+  userIdx: index('idx_ratings_user').on(table.userId),
+  createdAtIdx: index('idx_ratings_created_at').on(table.createdAt),
+}))
+
+export type Rating = InferSelectModel<typeof ratings>
+export type NewRating = InferInsertModel<typeof ratings>
+
+// --- Aria2 配置 ---
+export const aria2Configs = sqliteTable('aria2_configs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
+  rpcUrl: text('rpc_url').notNull(),
+  secret: text('secret'), // 加密存储的密钥
+  useProxy: integer('use_proxy', { mode: 'boolean' }).default(false).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+})
+
+export type Aria2Config = InferSelectModel<typeof aria2Configs>
+export type NewAria2Config = InferInsertModel<typeof aria2Configs>
+
+// --- 评分关联关系 ---
+export const ratingsRelations = relations(ratings, ({ one }) => ({
+  player: one(players, {
+    fields: [ratings.playerId],
+    references: [players.id],
+  }),
+  user: one(user, {
+    fields: [ratings.userId],
+    references: [user.id],
+  }),
+}))
+
+// Aria2 配置关联关系
+export const aria2ConfigsRelations = relations(aria2Configs, ({ one }) => ({
+  user: one(user, {
+    fields: [aria2Configs.userId],
+    references: [user.id],
+  }),
+}))
+
 // --- 关联关系定义 ---
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -385,6 +441,8 @@ export const userRelations = relations(user, ({ many }) => ({
   readingProgress: many(readingProgress),
   watchingProgress: many(watchingProgress),
   favorites: many(userFavorites),
+  ratings: many(ratings),
+  aria2Config: many(aria2Configs),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -433,11 +491,12 @@ export const movieRelations = relations(movies, ({ many }) => ({
   moviePublishers: many(moviePublishers),
 }))
 
-export const playerRelations = relations(players, ({ one }) => ({
+export const playerRelations = relations(players, ({ one, many }) => ({
   movie: one(movies, {
     fields: [players.movieId],
     references: [movies.id],
   }),
+  ratings: many(ratings),
 }))
 
 export const actorRelations = relations(actors, ({ many }) => ({

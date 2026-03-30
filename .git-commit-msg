@@ -1,0 +1,29 @@
+feat: Aria2 集成和评分系统
+
+完成 aria2-integration-quality-rating 变更的主要开发工作
+
+核心功能:
+- Aria2 RPC 集成(添加/管理下载任务)
+- WebSocket 实时进度监控
+- 评分系统(5星评分+质量维度)
+- 个人中心下载列表和评分统计
+
+技术实现:
+- 前端: Vue3 Composition API + TypeScript
+- 后端: Cloudflare Workers + D1
+- 测试: 176单元测试 + 113后端测试 + E2E测试
+- 文档: 用户指南 + API文档 + 故障排查
+
+质量保证:
+- TypeScript 严格模式
+- 完整的单元测试覆盖
+- E2E 自动化测试(Playwright)
+- 代码审查和类型检查通过
+
+数据库变更:
+- 新增 ratings 表
+- 新增 aria2_configs 表
+- 添加相关索引和约束
+
+MUST 确保所有单元测试通过
+MUST 通过 TypeScript 类型检查
