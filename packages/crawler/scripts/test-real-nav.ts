@@ -11,9 +11,7 @@ async function testRealNavigation() {
   console.log('🧭 测试实际导航')
 
   const browserManager = new BrowserManager({
-    puppeteer: {
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-    },
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
   })
 
   await browserManager.launch()

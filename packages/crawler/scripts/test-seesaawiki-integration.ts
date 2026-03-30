@@ -84,9 +84,7 @@ async function testActorCrawling(): Promise<void> {
 
   // 初始化组件
   const browserManager = new BrowserManager({
-    puppeteer: {
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-    },
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
   })
 
   await browserManager.launch()
@@ -103,7 +101,6 @@ async function testActorCrawling(): Promise<void> {
   })
 
   const nameMapper = new NameMapper(seesaaWikiStrategy)
-  await nameMapper.loadMappings()
 
   const results: TestResult[] = []
   let matchedCount = 0
@@ -212,8 +209,8 @@ async function testActorCrawling(): Promise<void> {
   console.log()
 
   const successCount = results.filter(r => r.matched && r.details).length
-  const matchRate = (matchedCount / TEST_ACTORS.length * 100).toFixed(1)
-  const successRate = (successCount / TEST_ACTORS.length * 100).toFixed(1)
+  const matchRate = Number((matchedCount / TEST_ACTORS.length * 100).toFixed(1))
+  const successRate = Number((successCount / TEST_ACTORS.length * 100).toFixed(1))
   const avgCompleteness = successCount > 0 ? Math.round(totalCompleteness / successCount) : 0
 
   console.log(`总测试数: ${TEST_ACTORS.length}`)
