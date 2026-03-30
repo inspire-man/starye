@@ -48,7 +48,7 @@
 - [x] 5.3 遍历所有五十音行，爬取厂商索引
 - [x] 5.4 合并索引数据，生成完整名字映射表
 - [x] 5.5 在 `packages/crawler/package.json` 添加 script: `"crawl:seesaawiki:index": "tsx src/scripts/crawl-seesaawiki-index.ts"`
-- [ ] 5.6 本地运行索引爬虫，验证映射表生成
+- [x] 5.6 本地运行索引爬虫，验证映射表生成
 
 ## 6. ActorCrawler 重构
 
