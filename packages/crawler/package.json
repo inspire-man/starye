@@ -36,6 +36,7 @@
     "drizzle-orm": "0.45.2",
     "got": "^14.6.6",
     "got-scraping": "^4.2.1",
+    "iconv-lite": "^0.7.2",
     "p-map": "^7.0.4",
     "p-queue": "^9.1.0",
     "puppeteer-core": "^24.40.0",

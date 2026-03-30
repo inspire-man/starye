@@ -310,6 +310,15 @@ export class ActorCrawler {
         sourceUrl: string
         avatar?: string
         bio?: string
+        birthDate?: number
+        height?: number
+        measurements?: string
+        cupSize?: string
+        bloodType?: string
+        nationality?: string
+        debutDate?: number
+        retireDate?: number
+        aliases?: string[]
         twitter?: string
         instagram?: string
         blog?: string
@@ -318,7 +327,16 @@ export class ActorCrawler {
         source: 'seesaawiki' as const,
         sourceId: nameMapping.wikiName,
         sourceUrl: nameMapping.wikiUrl,
-        bio: wikiDetails.reading || undefined,
+        bio: wikiDetails.bio || wikiDetails.reading || undefined, // 优先使用bio，fallback到reading
+        birthDate: wikiDetails.birthDate || undefined,
+        height: wikiDetails.height || undefined,
+        measurements: wikiDetails.measurements || undefined,
+        cupSize: wikiDetails.cupSize || undefined,
+        bloodType: wikiDetails.bloodType || undefined,
+        nationality: wikiDetails.nationality || undefined,
+        debutDate: wikiDetails.debutDate || undefined,
+        retireDate: wikiDetails.retireDate || undefined,
+        aliases: wikiDetails.aliases.length > 0 ? wikiDetails.aliases : undefined,
         twitter: wikiDetails.twitter || undefined,
         instagram: wikiDetails.instagram || undefined,
         blog: wikiDetails.blog || undefined,

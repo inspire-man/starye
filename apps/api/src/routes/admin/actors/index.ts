@@ -432,24 +432,32 @@ adminActors.get(
         limit: limit * 2, // 多取一些，过滤后可能不够
       })
 
-      // 过滤：未爬取 或 已爬取但头像是外链
+      // 过滤逻辑：
+      // 1. 未爬取的女优
+      // 2. 数据源不是SeesaaWiki的女优（需要从SeesaaWiki重新爬取）
+      // 3. 已爬取但头像是外链的女优（需要补全头像）
       const results = allActors.filter((actor) => {
         // 未爬取的直接包含
         if (!actor.hasDetailsCrawled) {
           return true
         }
-        // 已爬取但头像是外链的也包含（需要补全）
+        // 数据源不是SeesaaWiki，需要重新爬取
+        if (actor.source !== 'seesaawiki') {
+          return true
+        }
+        // 已从SeesaaWiki爬取，但头像是外链（需要补全）
         if (actor.avatar && !actor.avatar.startsWith(r2PublicUrl)) {
           return true
         }
         return false
       }).slice(0, limit) // 取前 limit 个
 
-      // 统计高优先级数量（movieCount >= 10）
+      // 统计各类数量
       const highPriorityCount = results.filter(a => a.movieCount >= 10).length
-      const needsAvatarUpdate = results.filter(a => a.hasDetailsCrawled && a.avatar && !a.avatar.startsWith(r2PublicUrl)).length
+      const needsSeesaaWikiRecrawl = results.filter(a => a.hasDetailsCrawled && a.source !== 'seesaawiki').length
+      const needsAvatarUpdate = results.filter(a => a.hasDetailsCrawled && a.source === 'seesaawiki' && a.avatar && !a.avatar.startsWith(r2PublicUrl)).length
 
-      console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority, ${needsAvatarUpdate} need avatar update)`)
+      console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority, ${needsSeesaaWikiRecrawl} need SeesaaWiki recrawl, ${needsAvatarUpdate} need avatar update)`)
 
       return c.json({
         actors: results.map(a => ({
@@ -465,6 +473,7 @@ adminActors.get(
         })),
         total: results.length,
         highPriority: highPriorityCount,
+        needsSeesaaWikiRecrawl,
         needsAvatarUpdate,
       })
     }
@@ -944,23 +953,35 @@ adminActors.post(
         return c.json({ error: 'Actor not found' }, 404)
       }
 
-      // 计算数据完整度（SeesaaWiki 权重：avatar 30%, socialLinks 15%, bio 10%, 其他 45%）
+      // 计算数据完整度（SeesaaWiki 权重分配）
       const fields = [
-        { key: 'avatar', weight: 0.30 },
+        { key: 'avatar', weight: 0.15 },
         { key: 'twitter', weight: 0.05 },
         { key: 'instagram', weight: 0.05 },
         { key: 'blog', weight: 0.05 },
         { key: 'bio', weight: 0.10 },
         { key: 'birthDate', weight: 0.10 },
-        { key: 'height', weight: 0.10 },
-        { key: 'measurements', weight: 0.10 },
-        { key: 'nationality', weight: 0.15 },
+        { key: 'height', weight: 0.08 },
+        { key: 'measurements', weight: 0.08 },
+        { key: 'cupSize', weight: 0.04 },
+        { key: 'bloodType', weight: 0.04 },
+        { key: 'nationality', weight: 0.06 },
+        { key: 'debutDate', weight: 0.10 },
+        { key: 'retireDate', weight: 0.05 },
+        { key: 'aliases', weight: 0.05 },
       ]
 
       let completeness = 0
       for (const field of fields) {
         const value = details[field.key as keyof typeof details]
-        if (value !== null && value !== undefined && value !== '') {
+        // 检查数组字段
+        if (Array.isArray(value)) {
+          if (value.length > 0) {
+            completeness += field.weight
+          }
+        }
+        // 检查普通字段
+        else if (value !== null && value !== undefined && value !== '') {
           completeness += field.weight
         }
       }
@@ -974,8 +995,20 @@ adminActors.post(
         updatedAt: new Date(),
       }
 
+      // 处理日期字段（Unix时间戳转Date）
       if (details.birthDate) {
-        updateData.birthDate = new Date(details.birthDate)
+        updateData.birthDate = new Date(details.birthDate * 1000) // Unix时间戳转毫秒
+      }
+      if (details.debutDate) {
+        updateData.debutDate = new Date(details.debutDate * 1000)
+      }
+      if (details.retireDate) {
+        updateData.retireDate = new Date(details.retireDate * 1000)
+      }
+
+      // 处理别名字段（数组转JSON字符串）
+      if (details.aliases && Array.isArray(details.aliases)) {
+        updateData.aliases = JSON.stringify(details.aliases)
       }
 
       await db.update(actors).set(updateData).where(eq(actors.id, actorId))

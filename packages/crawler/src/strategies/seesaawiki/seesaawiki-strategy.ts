@@ -12,11 +12,23 @@ import type {
   PublisherDetails,
 } from './types'
 import * as cheerio from 'cheerio'
+import * as iconv from 'iconv-lite'
 import {
   parseActorIndexPage,
   parseActorPage,
   parsePublisherPage,
 } from './parser'
+
+/**
+ * 使用 EUC-JP 编码构造 SeesaaWiki URL
+ * SeesaaWiki 使用 EUC-JP 编码而不是 UTF-8
+ */
+function encodeEucJpUrl(pageName: string): string {
+  const encoded = iconv.encode(pageName, 'euc-jp')
+  return Array.from(encoded)
+    .map(byte => `%${byte.toString(16).padStart(2, '0')}`)
+    .join('')
+}
 
 export interface SeesaaWikiConfig {
   baseDelay?: number // 基础延迟 (ms)
@@ -157,11 +169,28 @@ export class SeesaaWikiStrategy {
     await this._smartDelay()
 
     // 构建索引页 URL
-    // 所有五十音行都使用统一格式：女優ページ一覧：X行
-    const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
-    const url = `${this.baseUrl}/d/女優ページ一覧：${gojuonLine}行${suffix}`
+    // 使用 EUC-JP 编码（SeesaaWiki 的编码格式）
+    let pageName: string
 
-    console.warn(`[SeesaaWiki] 爬取女优索引页: ${url}`)
+    // 特殊处理：
+    // - あ行和英数：从总索引页爬取
+    // - ら和わ：合并为"ら・わ行"
+    // - 其他：独立页面
+    if (gojuonLine === 'あ' || gojuonLine === '英数') {
+      pageName = '女優ページ一覧'
+    }
+    else if (gojuonLine === 'ら' || gojuonLine === 'わ') {
+      pageName = '女優ページ一覧：ら・わ行'
+    }
+    else {
+      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
+      pageName = `女優ページ一覧：${gojuonLine}行${suffix}`
+    }
+
+    const encodedPageName = encodeEucJpUrl(pageName)
+    const url = `${this.baseUrl}/d/${encodedPageName}`
+
+    console.warn(`[SeesaaWiki] 爬取女优索引页: ${pageName}`)
 
     try {
       await this._preparePage(page, url)
@@ -170,11 +199,21 @@ export class SeesaaWikiStrategy {
       const html = await page.content()
       const $ = cheerio.load(html)
 
+      // 检查是否404
+      if ($('.page-404').length > 0) {
+        console.warn(`[SeesaaWiki] ⚠️  索引页不存在: ${pageName}`)
+        return {
+          actors: [],
+          hasNextPage: false,
+        }
+      }
+
       // 解析女优列表
       const actors = parseActorIndexPage($, gojuonLine)
 
-      // 检查是否有下一页
-      const nextPageLink = $('#wikibody').find('a:contains("次のページ")').attr('href')
+      // 检查是否有下一页（总索引页不分页）
+      const isMainIndex = pageName === '女優ページ一覧'
+      const nextPageLink = isMainIndex ? null : $('#wikibody').find('a:contains("次のページ")').attr('href')
       const hasNextPage = !!nextPageLink
 
       return {
@@ -184,111 +223,101 @@ export class SeesaaWikiStrategy {
       }
     }
     catch (error) {
-      console.error(`[SeesaaWiki] 爬取索引页失败: ${url}`, error)
+      console.error(`[SeesaaWiki] 爬取索引页失败: ${pageName}`, error)
       throw error
     }
   }
 
   /**
-   * 爬取五十音索引页（厂商）
-   * 注：厂商索引页格式与女优类似，但路径不同
+   * 从首页直接提取所有厂商链接
+   * 注：厂商没有独立的五十音行索引页，所有厂商链接都列在首页中
    */
-  async fetchPublisherIndexPage(gojuonLine: GojuonLine, page: Page, pageNumber = 1) {
+  async fetchAllPublishersFromHomePage(page: Page): Promise<Array<{ name: string, wikiUrl: string }>> {
     await this._smartDelay()
 
-    // 构建索引页 URL
-    // 所有五十音行都使用统一格式：メーカーページ一覧：X行
-    const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
-    const url = `${this.baseUrl}/d/メーカーページ一覧：${gojuonLine}行${suffix}`
-
-    console.warn(`[SeesaaWiki] 爬取厂商索引页: ${url}`)
+    const homeUrl = `${this.baseUrl}/`
+    console.warn('[SeesaaWiki] 从首页提取所有厂商链接...')
 
     try {
-      await this._preparePage(page, url)
+      await this._preparePage(page, homeUrl)
 
       const html = await page.content()
       const $ = cheerio.load(html)
 
-      // 厂商索引页解析（简化版，类似女优）
       const publishers: Array<{ name: string, wikiUrl: string }> = []
+      const seenUrls = new Set<string>()
 
-      $('#wiki-content .list-1 > li').each((_, el) => {
+      // 查找所有包含"wiki"的链接（厂商页面的标识）
+      $('#wiki-content a').each((_, el) => {
         const text = $(el).text().trim()
-        const link = $(el).find('a').first()
-        const href = link.attr('href')
+        const href = $(el).attr('href')
 
-        // 跳过目录项和空项
-        if (!text || !href || text === '目次') {
+        if (!text || !href)
+          return
+
+        // 必须包含"wiki"且链接指向本站
+        if (!text.toLowerCase().includes('wiki') || !href.startsWith(this.baseUrl)) {
           return
         }
 
-        // 过滤非厂商页面（说明页、分类页等）
+        // 排除关键词（论坛、说明页等）
         const excludeKeywords = [
-          '一覧',
-          '検索',
+          'bbs',
           '編集',
           'FAQ',
+          '一覧',
+          '検索',
           '概要',
-          'サンプル',
-          'ノウハウ',
-          '方針',
           'ガイド',
           'メンバー',
           'アナウンス',
-          'ページ',
-          '歴史',
-          'VR作品',
-          '着エロ',
-          'アダルトサイト',
-          '同人',
-          'サークル',
-          'FANZA',
-          'MGS',
-          '動画',
-          '無修正',
-          'タイトル',
+          '履歴',
+          '女優',
+          'AV女優',
+          'シリーズ',
+          '作成',
+          '要望',
         ]
 
-        // 检查是否包含排除关键词
-        const hasExcludeKeyword = excludeKeywords.some(keyword => text.includes(keyword))
-
-        // 检查是否为五十音行索引（如"あ行"、"か行～さ行"、"ら・わ行"）
-        const isGojuonIndex = /^[あかさたなはまやらわ]行/.test(text)
-          || /[あかさたなはまやらわ]行$/.test(text)
-          || /^[あかさたなはまやらわ]・[あかさたなはまやらわ]行$/.test(text)
-
-        // 检查是否为字母行索引（如"A行～Z行"）
-        const isAlphabetIndex = /^[A-Z]行/.test(text) || /[A-Z]行～[A-Z]行$/.test(text)
-
-        // 厂商名长度应合理
-        const isTooLong = text.length > 30
-        const isTooShort = text.length < 2
-
-        if (hasExcludeKeyword || isGojuonIndex || isAlphabetIndex || isTooLong || isTooShort) {
+        const hasExcludeKeyword = excludeKeywords.some(keyword => text.includes(keyword) || href.includes(keyword))
+        if (hasExcludeKeyword)
           return
-        }
 
-        // 提取厂商名（去掉可能的" wiki"后缀）
-        const publisherName = text.replace(/\s+wiki$/i, '').trim()
+        // 检查长度
+        if (text.length < 2 || text.length > 50)
+          return
+
+        // 提取厂商名（去掉" wiki"后缀）
+        const publisherName = text.replace(/\s*wiki\s*$/i, '').trim()
+
+        // 去重
+        if (seenUrls.has(href))
+          return
+        seenUrls.add(href)
 
         publishers.push({
           name: publisherName,
-          wikiUrl: new URL(href, this.baseUrl).href,
+          wikiUrl: href,
         })
       })
 
-      const nextPageLink = $('#wiki-content').find('a:contains("次のページ")').attr('href')
-      const hasNextPage = !!nextPageLink
-
-      return {
-        publishers,
-        hasNextPage,
-        nextPageNumber: hasNextPage ? pageNumber + 1 : undefined,
-      }
+      console.warn(`[SeesaaWiki] 从首页提取到 ${publishers.length} 个厂商`)
+      return publishers
     }
     catch (error) {
-      console.error(`[SeesaaWiki] 爬取厂商索引页失败: ${url}`, error)
+      console.error('[SeesaaWiki] 从首页提取厂商失败', error)
       throw error
+    }
+  }
+
+  /**
+   * @deprecated 厂商没有五十音行索引页，请使用 fetchAllPublishersFromHomePage
+   */
+  async fetchPublisherIndexPage(_gojuonLine: GojuonLine, _page: Page, _pageNumber = 1) {
+    console.warn('[SeesaaWiki] ⚠️  fetchPublisherIndexPage 已废弃，厂商没有五十音行索引页')
+    return {
+      publishers: [],
+      hasNextPage: false,
     }
   }
 

@@ -381,11 +381,15 @@ export const SyncActorDetailsSchema = v.object({
   avatar: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   cover: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   bio: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
-  birthDate: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  birthDate: v.optional(v.nullable(v.number())), // Unix时间戳
   height: v.optional(v.nullable(v.number())),
   measurements: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  cupSize: v.optional(v.nullable(v.pipe(v.string(), v.trim()))), // 添加罩杯字段
   nationality: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
   bloodType: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  debutDate: v.optional(v.nullable(v.number())), // 添加出道日期
+  retireDate: v.optional(v.nullable(v.number())), // 添加退役日期
+  aliases: v.optional(v.nullable(v.array(v.pipe(v.string(), v.trim())))), // 添加别名数组
   twitter: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   instagram: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   blog: v.optional(v.nullable(v.pipe(v.string(), v.url()))),

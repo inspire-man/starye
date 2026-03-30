@@ -618,10 +618,13 @@ function isNonActorPage(text: string, href: string): boolean {
 
 /**
  * 解析索引页，提取女优列表
+ * 支持两种模式：
+ * 1. 独立行页面（か行、さ行等）：提取该页面的所有女优
+ * 2. 总索引页（女優ページ一覧）：根据 gojuonLine 过滤女优
  */
 export function parseActorIndexPage(
   $: CheerioAPI,
-  _gojuonLine: string,
+  gojuonLine: string,
 ): ActorIndexEntry[] {
   const actors: ActorIndexEntry[] = []
 
@@ -631,13 +634,33 @@ export function parseActorIndexPage(
     const link = $(el).find('a').first()
     const href = link.attr('href')
 
-    // 跳过目录项和空项
-    if (!text || !href || text === '目次')
+    // 跳过目录项、空项和锚点链接
+    if (!text || !href || text === '目次' || href.startsWith('#'))
       return
 
     // 过滤非女优页面
     if (isNonActorPage(text, href)) {
       return
+    }
+
+    // 如果是总索引页（女優ページ一覧），需要根据 gojuonLine 过滤
+    // 对于あ行：只提取以あ段假名开头的女优
+    // 对于英数：只提取以英文字母或数字开头的女优
+    if (gojuonLine === 'あ' || gojuonLine === '英数') {
+      const firstChar = text.charAt(0)
+
+      if (gojuonLine === 'あ') {
+        // あ行：あいうえお（平假名和片假名）
+        const isALine = /^[あいうえおアイウエオ]/.test(firstChar)
+        if (!isALine)
+          return
+      }
+      else if (gojuonLine === '英数') {
+        // 英数：A-Z, a-z, 0-9
+        const isAlphanumeric = /^[A-Z0-9]/i.test(firstChar)
+        if (!isAlphanumeric)
+          return
+      }
     }
 
     // 解析别名格式: "名字A = 名字B = 名字C"

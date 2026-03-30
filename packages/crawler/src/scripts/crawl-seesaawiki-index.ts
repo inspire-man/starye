@@ -108,41 +108,27 @@ async function main() {
     }
 
     // 爬取厂商索引
-    console.warn('\n📋 开始爬取厂商索引...')
-    for (const line of GOJUON_LINES) {
-      console.warn(`\n[厂商] 爬取五十音行: ${line}`)
+    console.warn('\n📋 开始爬取厂商索引（从首页）...')
+    try {
+      const publishers = await strategy.fetchAllPublishersFromHomePage(page)
 
-      try {
-        let pageNumber = 1
-        let hasNextPage = true
+      console.warn(`  找到 ${publishers.length} 个厂商`)
 
-        while (hasNextPage) {
-          const result = await strategy.fetchPublisherIndexPage(line, page, pageNumber)
+      for (const entry of publishers) {
+        publisherMappings.push({
+          javbusName: entry.name,
+          wikiName: entry.name,
+          wikiUrl: entry.wikiUrl,
+          lastUpdated: Math.floor(Date.now() / 1000),
+        })
 
-          console.warn(`  页 ${pageNumber}: 找到 ${result.publishers.length} 个厂商`)
-
-          for (const entry of result.publishers) {
-            publisherMappings.push({
-              javbusName: entry.name,
-              wikiName: entry.name,
-              wikiUrl: entry.wikiUrl,
-              lastUpdated: Math.floor(Date.now() / 1000),
-            })
-
-            totalPublishers++
-          }
-
-          hasNextPage = result.hasNextPage
-          if (hasNextPage) {
-            pageNumber = result.nextPageNumber ?? pageNumber + 1
-          }
-        }
-
-        console.warn(`  ✅ ${line}行完成，共 ${totalPublishers} 个厂商`)
+        totalPublishers++
       }
-      catch (error) {
-        console.error(`  ❌ ${line}行失败`, error)
-      }
+
+      console.warn(`  ✅ 厂商索引完成，共 ${totalPublishers} 个厂商`)
+    }
+    catch (error) {
+      console.error('  ❌ 厂商索引失败', error)
     }
 
     await page.close()
