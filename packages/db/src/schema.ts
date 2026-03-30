@@ -213,10 +213,14 @@ export const actors = sqliteTable('actor', {
   retireDate: integer('retire_date', { mode: 'timestamp' }), // 引退日期
   socialLinks: text('social_links', { mode: 'json' }), // 社交媒体链接 { twitter, instagram, etc }
   aliases: text('aliases', { mode: 'json' }), // 别名列表 string[]
+  blog: text('blog'), // 博客链接
+  twitter: text('twitter'), // Twitter handle
+  instagram: text('instagram'), // Instagram handle
+  wikiUrl: text('wiki_url'), // SeesaaWiki 页面 URL
   movieCount: integer('movie_count').default(0).notNull(), // 作品数量
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
   // 爬虫字段
-  source: text('source').default('javbus').notNull(), // 'javbus' | 'javdb'
+  source: text('source').default('javbus').notNull(), // 'javbus' | 'javdb' | 'seesaawiki'
   sourceId: text('source_id').default('').notNull(), // 原站 ID
   sourceUrl: text('source_url'), // 详情页 URL
   hasDetailsCrawled: integer('has_details_crawled', { mode: 'boolean' }).default(false), // 是否已爬取详情
@@ -244,10 +248,15 @@ export const publishers = sqliteTable('publisher', {
   description: text('description'), // 简介
   foundedYear: integer('founded_year'), // 成立年份
   country: text('country'), // 国家
+  twitter: text('twitter'), // Twitter handle
+  instagram: text('instagram'), // Instagram handle
+  wikiUrl: text('wiki_url'), // SeesaaWiki 页面 URL
+  parentPublisher: text('parent_publisher'), // 母公司/品牌
+  brandSeries: text('brand_series'), // 品牌系列标识
   movieCount: integer('movie_count').default(0).notNull(), // 作品数量
   isR18: integer('is_r18', { mode: 'boolean' }).default(true).notNull(),
   // 爬虫字段
-  source: text('source').default('javbus').notNull(), // 'javbus' | 'javdb'
+  source: text('source').default('javbus').notNull(), // 'javbus' | 'javdb' | 'seesaawiki'
   sourceId: text('source_id').default('').notNull(), // 原站 ID
   sourceUrl: text('source_url'), // 详情页 URL
   hasDetailsCrawled: integer('has_details_crawled', { mode: 'boolean' }).default(false), // 是否已爬取详情

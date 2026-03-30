@@ -1,33 +1,33 @@
 ## 1. 数据库 Schema 迁移
 
-- [ ] 1.1 在 `packages/db/src/schema.ts` 的 `actors` 表新增字段：`blog`, `twitter`, `instagram`, `wikiUrl`
-- [ ] 1.2 在 `packages/db/src/schema.ts` 的 `publishers` 表新增字段：`twitter`, `instagram`, `wikiUrl`, `parentPublisher`, `brandSeries`
-- [ ] 1.3 运行 `pnpm --filter @starye/db generate` 生成 Drizzle 迁移 SQL
-- [ ] 1.4 本地测试迁移 SQL（使用开发数据库）
-- [ ] 1.5 验证新字段的默认值为 null，不影响现有数据
+- [x] 1.1 在 `packages/db/src/schema.ts` 的 `actors` 表新增字段：`blog`, `twitter`, `instagram`, `wikiUrl`
+- [x] 1.2 在 `packages/db/src/schema.ts` 的 `publishers` 表新增字段：`twitter`, `instagram`, `wikiUrl`, `parentPublisher`, `brandSeries`
+- [x] 1.3 运行 `pnpm --filter @starye/db generate` 生成 Drizzle 迁移 SQL
+- [x] 1.4 本地测试迁移 SQL（使用开发数据库）
+- [x] 1.5 验证新字段的默认值为 null，不影响现有数据
 
 ## 2. SeesaaWiki 爬虫策略核心实现
 
-- [ ] 2.1 创建 `packages/crawler/src/strategies/seesaawiki/types.ts`，定义 Wiki 数据结构类型
-- [ ] 2.2 创建 `packages/crawler/src/strategies/seesaawiki/parser.ts`，实现 Wiki 标记语言解析器
-- [ ] 2.3 在 `parser.ts` 实现女优页面解析：提取主名、读音、别名
-- [ ] 2.4 在 `parser.ts` 实现女优页面解析：提取社交链接（Twitter、Instagram、博客）
-- [ ] 2.5 在 `parser.ts` 实现女优页面解析：提取出道日期和退役日期
-- [ ] 2.6 在 `parser.ts` 实现厂商页面解析：提取 Logo、官网、社交媒体
-- [ ] 2.7 在 `parser.ts` 实现厂商页面解析：提取系列关系（parentPublisher、brandSeries）
-- [ ] 2.8 实现日期格式解析（支持"2012年7月13日"、"2012/07/13"等多种格式）
-- [ ] 2.9 实现容错解析：处理格式变体、缺失字段、编码问题
+- [x] 2.1 创建 `packages/crawler/src/strategies/seesaawiki/types.ts`，定义 Wiki 数据结构类型
+- [x] 2.2 创建 `packages/crawler/src/strategies/seesaawiki/parser.ts`，实现 Wiki 标记语言解析器
+- [x] 2.3 在 `parser.ts` 实现女优页面解析：提取主名、读音、别名
+- [x] 2.4 在 `parser.ts` 实现女优页面解析：提取社交链接（Twitter、Instagram、博客）
+- [x] 2.5 在 `parser.ts` 实现女优页面解析：提取出道日期和退役日期
+- [x] 2.6 在 `parser.ts` 实现厂商页面解析：提取 Logo、官网、社交媒体
+- [x] 2.7 在 `parser.ts` 实现厂商页面解析：提取系列关系（parentPublisher、brandSeries）
+- [x] 2.8 实现日期格式解析（支持"2012年7月13日"、"2012/07/13"等多种格式）
+- [x] 2.9 实现容错解析：处理格式变体、缺失字段、编码问题
 
 ## 3. SeesaaWiki 爬虫策略类
 
-- [ ] 3.1 创建 `packages/crawler/src/strategies/seesaawiki/seesaawiki-strategy.ts`，实现基础类结构
-- [ ] 3.2 实现 `fetchActorDetails(wikiUrl: string)` 方法，调用 parser 解析女优详情
-- [ ] 3.3 实现 `fetchPublisherDetails(wikiUrl: string)` 方法，调用 parser 解析厂商详情
-- [ ] 3.4 实现 `fetchIndexPage(gojuonLine: string)` 方法，爬取五十音索引页
-- [ ] 3.5 在索引页解析中实现别名提取（格式："名字A = 名字B"）
-- [ ] 3.6 在索引页解析中实现改名关系提取（格式："名字A ⇒ 名字B"）
-- [ ] 3.7 实现分页索引处理（如"あ-2"、"あ-3"）
-- [ ] 3.8 配置反爬虫策略：baseDelay=8000ms, randomDelay=4000ms, maxRetries=2
+- [x] 3.1 创建 `packages/crawler/src/strategies/seesaawiki/seesaawiki-strategy.ts`，实现基础类结构
+- [x] 3.2 实现 `fetchActorDetails(wikiUrl: string)` 方法，调用 parser 解析女优详情
+- [x] 3.3 实现 `fetchPublisherDetails(wikiUrl: string)` 方法，调用 parser 解析厂商详情
+- [x] 3.4 实现 `fetchIndexPage(gojuonLine: string)` 方法，爬取五十音索引页
+- [x] 3.5 在索引页解析中实现别名提取（格式："名字A = 名字B"）
+- [x] 3.6 在索引页解析中实现改名关系提取（格式："名字A ⇒ 名字B"）
+- [x] 3.7 实现分页索引处理（如"あ-2"、"あ-3"）
+- [x] 3.8 配置反爬虫策略：baseDelay=8000ms, randomDelay=4000ms, maxRetries=2
 
 ## 4. 名字映射系统实现
 

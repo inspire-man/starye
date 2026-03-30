@@ -141,6 +141,13 @@
       "when": 1774556069772,
       "tag": "0019_previous_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1774851156518,
+      "tag": "0020_lively_spitfire",
+      "breakpoints": true
     }
   ]
 }
