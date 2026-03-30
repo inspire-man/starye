@@ -253,9 +253,9 @@ export class SeesaaWikiStrategy {
         const hasExcludeKeyword = excludeKeywords.some(keyword => text.includes(keyword))
 
         // 检查是否为五十音行索引（如"あ行"、"か行～さ行"、"ら・わ行"）
-        const isGojuonIndex = /^[あかさたなはまやらわ]行/.test(text) 
-            || /[あかさたなはまやらわ]行$/.test(text)
-            || /^[あかさたなはまやらわ]・[あかさたなはまやらわ]行$/.test(text)
+        const isGojuonIndex = /^[あかさたなはまやらわ]行/.test(text)
+          || /[あかさたなはまやらわ]行$/.test(text)
+          || /^[あかさたなはまやらわ]・[あかさたなはまやらわ]行$/.test(text)
 
         // 检查是否为字母行索引（如"A行～Z行"）
         const isAlphabetIndex = /^[A-Z]行/.test(text) || /[A-Z]行～[A-Z]行$/.test(text)

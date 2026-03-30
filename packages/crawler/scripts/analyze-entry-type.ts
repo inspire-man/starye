@@ -36,7 +36,7 @@ async function analyzeType() {
 
     try {
       await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 })
-      
+
       const html = await page.content()
       const $ = cheerio.load(html)
 

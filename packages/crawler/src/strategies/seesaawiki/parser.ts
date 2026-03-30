@@ -182,25 +182,23 @@ export function parseActorPage(
   $: CheerioAPI,
   html: string,
   wikiUrl: string,
-): ParseResult<ActorDetails> {
+): ParseResult<ActorDetails | null> {
   const errors: ParseError[] = []
   const warnings: string[] = []
 
   // 检测内容类型
   const content = $('#wiki-content').text()
   const contentType = detectContentType(content)
-  
+
   if (contentType === 'publisher') {
     errors.push({
       field: '_contentType',
-      message: '此页面是厂商页面，不是女优页面',
-      severity: 'error',
+      reason: '此页面是厂商页面，不是女优页面',
     })
     return {
       data: null,
       errors,
       warnings: [],
-      confidence: 0,
     }
   }
 
@@ -571,9 +569,9 @@ function isNonActorPage(text: string, href: string): boolean {
   }
 
   // 检查是否为单纯的五十音行（如"あ行"、"か行～さ行"、"ら・わ行"）
-  if (/^[あかさたなはまやらわ]行/.test(text) 
-      || /[あかさたなはまやらわ]行$/.test(text)
-      || /^[あかさたなはまやらわ]・[あかさたなはまやらわ]行$/.test(text)) {
+  if (/^[あかさたなはまやらわ]行/.test(text)
+    || /[あかさたなはまやらわ]行$/.test(text)
+    || /^[あかさたなはまやらわ]・[あかさたなはまやらわ]行$/.test(text)) {
     return true
   }
 

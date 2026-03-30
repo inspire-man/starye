@@ -3,8 +3,8 @@
  */
 
 import process from 'node:process'
-import { BrowserManager } from '../src/utils/browser'
 import { SeesaaWikiStrategy } from '../src/strategies/seesaawiki/seesaawiki-strategy'
+import { BrowserManager } from '../src/utils/browser'
 import 'dotenv/config'
 
 async function testFilter() {
