@@ -4,12 +4,10 @@
     "jsx": "preserve",
     "lib": ["ESNext", "DOM"],
     "useDefineForClassFields": true,
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "moduleResolution": "bundler",
     "paths": {
-      "@starye/*": ["packages/*/src"]
+      "@starye/*": ["./packages/*/src"]
     },
     "resolveJsonModule": true,
     "strict": true,

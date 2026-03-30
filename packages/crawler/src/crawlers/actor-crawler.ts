@@ -278,7 +278,7 @@ export class ActorCrawler {
         // 检查是否是内容类型错误（厂商页面而非女优页面）
         const contentTypeError = wikiResult.errors.find(e => e.field === '_contentType')
         if (contentTypeError) {
-          console.log(`   ⚠️  ${contentTypeError.message}，跳过此条目`)
+          console.log(`   ⚠️  ${contentTypeError.reason}，跳过此条目`)
           this.stats.nameMappingFailed++ // 将此情况统计为映射失败
           return // 跳过，不记录为失败任务
         }

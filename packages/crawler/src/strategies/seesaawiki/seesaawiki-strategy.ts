@@ -89,7 +89,7 @@ export class SeesaaWikiStrategy {
   /**
    * 爬取女优详情页
    */
-  async fetchActorDetails(wikiUrl: string, page: Page): Promise<ParseResult<ActorDetails>> {
+  async fetchActorDetails(wikiUrl: string, page: Page): Promise<ParseResult<ActorDetails | null>> {
     await this._smartDelay()
 
     console.warn(`[SeesaaWiki] 爬取女优详情: ${wikiUrl}`)
