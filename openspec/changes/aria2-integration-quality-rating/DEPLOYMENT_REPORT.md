@@ -271,6 +271,7 @@ feat: Aria2 集成和评分系统
 - [x] CI/CD 工作流已触发
 - [x] **CI 问题修复 1**: 修复 vite.config.ts 和 lint 错误 (commit: a642232)
 - [x] **CI 问题修复 2**: 修复测试命令 turbo 参数传递 (commit: ce18e82)
+- [x] **CI 问题修复 3**: 禁用 Playwright webServer 配置 (commit: f0ba55c)
 - [ ] CI 测试通过（重新运行中）
 - [ ] API 部署成功（等待中）
 - [ ] 前端部署成功（等待中）
@@ -325,5 +326,43 @@ tip: to pass '--run' as a value, use '-- --run'
 - ✅ 本地测试：`CI=true pnpm test` 成功运行
 - ✅ 各包的 test 脚本都配置为 `vitest`
 - ✅ 提交并推送 (commit: ce18e82)
+
+**状态**: 已修复，CI 重新运行中
+
+### 修复 3: Playwright webServer 配置超时 (2026-03-27)
+
+**问题**:
+E2E 测试失败，错误信息：
+```
+Error: Timed out waiting 30000ms from config.webServer.
+```
+
+**根本原因**:
+- `playwright.config.ts` 配置了 `webServer`，尝试启动或连接 `http://localhost:5173`
+- 在 CI 环境中，开发服务器无法成功启动或响应
+- 但 `html-integration.spec.ts` 测试完全基于静态 HTML 文件（`e2e-test.html`）
+- 测试使用 `file://` 协议和完整的 API mock，不需要任何服务器
+
+**修复方案**:
+- 注释掉 `playwright.config.ts` 中的 `webServer` 配置
+- `html-integration.spec.ts` 使用本地文件路径：
+  ```javascript
+  const htmlFilePath = path.join(process.cwd(), 'e2e-test.html')
+  const htmlFileUrl = `file://${htmlFilePath.replace(/\\/g, '/')}`
+  ```
+- 如果其他 E2E 测试需要真实服务器，应手动启动或使用 `--headed` 模式
+
+**验证**:
+- ✅ 本地 E2E 测试：8/8 通过 (18.6s)
+- ✅ 所有测试场景覆盖：
+  - 25.2 Aria2 配置界面交互
+  - 26.1-26.3 评分提交和修改
+  - 25.3-25.4 添加下载任务
+  - 25.5 任务控制（暂停/恢复/删除）
+  - 25.8 批量添加任务
+  - 26.6 评分频率测试
+  - 27.7 响应式布局（移动端）
+  - 完整集成测试流程（14 个操作）
+- ✅ 提交并推送 (commit: f0ba55c)
 
 **状态**: 已修复，CI 重新运行中
