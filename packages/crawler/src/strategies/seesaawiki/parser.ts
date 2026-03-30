@@ -3,7 +3,7 @@
  * 负责解析 Wiki 页面的 HTML 内容，提取女优和厂商信息
  */
 
-import type * as cheerio from 'cheerio'
+import type { Cheerio, CheerioAPI } from 'cheerio'
 import type {
   ActorDetails,
   ActorIndexEntry,
@@ -98,7 +98,7 @@ export function cleanWikiMarkup(text: string): string {
 /**
  * 提取社交链接
  */
-export function extractSocialLinks($: cheerio.CheerioAPI, $content: cheerio.Cheerio<cheerio.Element>) {
+export function extractSocialLinks($: CheerioAPI, $content: Cheerio<any>) {
   const result: {
     twitter?: string
     instagram?: string
@@ -158,7 +158,7 @@ export function extractSocialLinks($: cheerio.CheerioAPI, $content: cheerio.Chee
  * 解析女优页面
  */
 export function parseActorPage(
-  $: cheerio.CheerioAPI,
+  $: CheerioAPI,
   html: string,
   wikiUrl: string,
 ): ParseResult<ActorDetails> {
@@ -291,7 +291,7 @@ export function parseActorPage(
  * 解析厂商页面
  */
 export function parsePublisherPage(
-  $: cheerio.CheerioAPI,
+  $: CheerioAPI,
   html: string,
   wikiUrl: string,
 ): ParseResult<PublisherDetails> {
@@ -378,7 +378,7 @@ export function parsePublisherPage(
  * 解析索引页，提取女优列表
  */
 export function parseActorIndexPage(
-  $: cheerio.CheerioAPI,
+  $: CheerioAPI,
   _gojuonLine: string,
 ): ActorIndexEntry[] {
   const actors: ActorIndexEntry[] = []
