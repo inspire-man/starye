@@ -72,3 +72,18 @@ docs/*/.version
 
 # example
 examples*
+
+# SeesaaWiki
+.seesaawiki*
+
+# JavBus
+.javbus*
+
+# JavLibrary
+.javlibrary*
+
+# JavSearch
+.javsearch*
+
+# Index Crawl Log
+.index-crawl-log*

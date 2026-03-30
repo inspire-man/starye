@@ -84,6 +84,13 @@ export interface IndexPageResult {
   nextPageNumber?: number
 }
 
+// 厂商索引页解析结果
+export interface PublisherIndexPageResult {
+  publishers: PublisherIndexEntry[]
+  hasNextPage: boolean
+  nextPageNumber?: number
+}
+
 // 解析错误
 export interface ParseError {
   field: string // 字段名

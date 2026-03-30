@@ -82,6 +82,8 @@
     "isload",
     "javbus",
     "javdb",
+    "javlibrary",
+    "javsearch",
     "javsee",
     "KHTML",
     "lazyload",

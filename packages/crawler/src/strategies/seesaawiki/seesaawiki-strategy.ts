@@ -10,6 +10,7 @@ import type {
   IndexPageResult,
   ParseResult,
   PublisherDetails,
+  PublisherIndexPageResult,
 } from './types'
 import * as cheerio from 'cheerio'
 import * as iconv from 'iconv-lite'
@@ -313,7 +314,7 @@ export class SeesaaWikiStrategy {
   /**
    * @deprecated 厂商没有五十音行索引页，请使用 fetchAllPublishersFromHomePage
    */
-  async fetchPublisherIndexPage(_gojuonLine: GojuonLine, _page: Page, _pageNumber = 1) {
+  async fetchPublisherIndexPage(_gojuonLine: GojuonLine, _page: Page, _pageNumber = 1): Promise<PublisherIndexPageResult> {
     console.warn('[SeesaaWiki] ⚠️  fetchPublisherIndexPage 已废弃，厂商没有五十音行索引页')
     return {
       publishers: [],
