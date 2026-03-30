@@ -383,13 +383,14 @@ export function parseActorIndexPage(
 ): ActorIndexEntry[] {
   const actors: ActorIndexEntry[] = []
 
-  // 索引页通常使用列表格式
-  $('#wikibody li').each((_, el) => {
+  // 索引页使用 #wiki-content 容器，列表在 .list-1 类的 ul 中
+  $('#wiki-content .list-1 > li').each((_, el) => {
     const text = $(el).text().trim()
     const link = $(el).find('a').first()
     const href = link.attr('href')
 
-    if (!text || !href)
+    // 跳过目录项和空项
+    if (!text || !href || text === '目次')
       return
 
     // 解析别名格式: "名字A = 名字B = 名字C"

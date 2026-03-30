@@ -25,6 +25,10 @@ export const UpdateActorSchema = v.object({
   measurements: v.optional(v.pipe(v.string(), v.trim())),
   nationality: v.optional(v.pipe(v.string(), v.trim())),
   socialLinks: v.optional(v.record(v.string(), v.pipe(v.string(), v.url()))),
+  twitter: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  instagram: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  blog: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  wikiUrl: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
 })
 
 /**
@@ -141,6 +145,11 @@ export const UpdatePublisherSchema = v.object({
   logo: v.optional(v.pipe(v.string(), v.url())),
   website: v.optional(v.pipe(v.string(), v.url())),
   foundedYear: v.optional(v.pipe(v.number(), v.integer())),
+  twitter: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  instagram: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  wikiUrl: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  parentPublisher: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  brandSeries: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
 })
 
 /**
@@ -366,6 +375,9 @@ export type GetPendingActorsQuery = v.InferOutput<typeof GetPendingActorsQuerySc
  * Admin 同步演员详情 Schema
  */
 export const SyncActorDetailsSchema = v.object({
+  source: v.optional(v.picklist(['javbus', 'seesaawiki', 'manual'])),
+  sourceId: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  sourceUrl: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   avatar: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   cover: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   bio: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
@@ -374,6 +386,10 @@ export const SyncActorDetailsSchema = v.object({
   measurements: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
   nationality: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
   bloodType: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  twitter: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  instagram: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  blog: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  wikiUrl: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
 })
 
 export type SyncActorDetails = v.InferOutput<typeof SyncActorDetailsSchema>
@@ -400,11 +416,19 @@ export type GetPendingPublishersQuery = v.InferOutput<typeof GetPendingPublisher
  * Admin 同步出版商详情 Schema
  */
 export const SyncPublisherDetailsSchema = v.object({
+  source: v.optional(v.picklist(['javbus', 'seesaawiki', 'manual'])),
+  sourceId: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  sourceUrl: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   logo: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   website: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
   description: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
   foundedYear: v.optional(v.nullable(v.pipe(v.number(), v.integer()))),
   country: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  twitter: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  instagram: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  wikiUrl: v.optional(v.nullable(v.pipe(v.string(), v.url()))),
+  parentPublisher: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
+  brandSeries: v.optional(v.nullable(v.pipe(v.string(), v.trim()))),
 })
 
 export type SyncPublisherDetails = v.InferOutput<typeof SyncPublisherDetailsSchema>

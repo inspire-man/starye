@@ -9,7 +9,9 @@ import type { ApiConfig, BrowserConfig } from '../types/config'
 import pMap from 'p-map'
 import { FailedTaskRecorder } from '../lib/anti-detection'
 import { ImageProcessor } from '../lib/image-processor'
+import { NameMapper } from '../lib/name-mapper'
 import { JavBusStrategy } from '../strategies/javbus'
+import { SeesaaWikiStrategy } from '../strategies/seesaawiki/seesaawiki-strategy'
 import { ApiClient } from '../utils/api-client'
 import { BrowserManager } from '../utils/browser'
 
@@ -37,7 +39,9 @@ interface PendingActor {
 export class ActorCrawler {
   private browserManager: BrowserManager
   private apiClient: ApiClient
-  private strategy: JavBusStrategy
+  private javbusStrategy: JavBusStrategy // 保留作为头像备用
+  private seesaaWikiStrategy: SeesaaWikiStrategy // 主数据源
+  private nameMapper: NameMapper
   private imageProcessor: ImageProcessor
   private failedTasks: FailedTaskRecorder
   private failedTasksFile = './.actor-failed-tasks.json'
@@ -47,13 +51,16 @@ export class ActorCrawler {
     processedActors: 0,
     skippedActors: 0,
     failedActors: 0,
+    nameMappingFailed: 0,
     dataCompleteness: {
       hasAvatar: 0,
+      hasAliases: 0,
+      hasTwitter: 0,
+      hasInstagram: 0,
+      hasBlog: 0,
+      hasDebutDate: 0,
+      hasRetireDate: 0,
       hasBio: 0,
-      hasBirthDate: 0,
-      hasHeight: 0,
-      hasMeasurements: 0,
-      hasNationality: 0,
     },
     averageCompleteness: 0,
   }
@@ -74,9 +81,13 @@ export class ActorCrawler {
       config.browserConfig.proxy,
     )
     this.apiClient = new ApiClient(config.apiConfig)
-    this.strategy = new JavBusStrategy()
+    this.javbusStrategy = new JavBusStrategy()
+    this.seesaaWikiStrategy = new SeesaaWikiStrategy()
     this.imageProcessor = new ImageProcessor(config.r2Config)
     this.failedTasks = new FailedTaskRecorder()
+
+    // 初始化名字映射器
+    this.nameMapper = new NameMapper(this.seesaaWikiStrategy)
 
     this.maxActors = config.maxActors || 150
     this.concurrency = config.concurrency || 2
@@ -115,6 +126,9 @@ export class ActorCrawler {
     finally {
       // 保存失败任务
       await this.failedTasks.saveToFile(this.failedTasksFile)
+
+      // 保存名字映射表
+      await this.nameMapper.saveMappings()
 
       // 关闭浏览器
       await this.browserManager.close()
@@ -224,7 +238,7 @@ export class ActorCrawler {
 
     try {
       console.log(`\n[${currentIndex}/${totalFetched}] 爬取女优: ${actor.name}`)
-      console.log(`   URL: ${actor.sourceUrl}`)
+      console.log(`   JavBus URL: ${actor.sourceUrl}`)
       console.log(`   作品数: ${actor.movieCount}, 失败次数: ${actor.crawlFailureCount}`)
 
       // 如果是头像补全模式（已爬取但需要更新头像）
@@ -234,20 +248,85 @@ export class ActorCrawler {
         return
       }
 
-      // 完整爬取模式
-      const details = await this.strategy.crawlActorDetails(actor.sourceUrl, page)
+      // 阶段 1: 名字匹配（获取 Wiki URL）
+      console.log(`   🔍 匹配 SeesaaWiki 名字...`)
+      const nameMapping = await this.nameMapper.matchActorName(actor.name, page)
 
-      if (!details) {
-        throw new Error('解析失败：未能提取女优详情')
+      if (!nameMapping) {
+        // 名字匹配失败，记录并跳过
+        console.log(`   ⚠️  名字匹配失败，使用 JavBus 备用`)
+        this.stats.nameMappingFailed++
+        this.failedTasks.record(
+          actor.sourceUrl,
+          new Error('Name mapping failed'),
+          actor.crawlFailureCount + 1,
+        )
+
+        // 备用：使用 JavBus 爬取头像
+        await this.processFallbackJavBus(actor, page)
+        return
+      }
+
+      console.log(`   ✅ 匹配成功: ${actor.name} -> ${nameMapping.wikiName}`)
+      console.log(`   Wiki URL: ${nameMapping.wikiUrl}`)
+
+      // 阶段 2: 爬取 SeesaaWiki 详情
+      console.log(`   📡 爬取 SeesaaWiki 详情...`)
+      const wikiResult = await this.seesaaWikiStrategy.fetchActorDetails(nameMapping.wikiUrl, page)
+
+      if (!wikiResult.data) {
+        const errorMsg = wikiResult.errors.length > 0
+          ? wikiResult.errors.map(e => `${e.field}: ${e.reason}`).join(', ')
+          : '未知错误'
+        throw new Error(`SeesaaWiki 解析失败: ${errorMsg}`)
+      }
+
+      const wikiDetails = wikiResult.data
+
+      // 打印警告（如有）
+      if (wikiResult.warnings.length > 0) {
+        console.warn(`   ⚠️  解析警告: ${wikiResult.warnings.join('; ')}`)
+      }
+
+      // 准备同步数据
+      const details: {
+        source: 'seesaawiki'
+        sourceId: string
+        sourceUrl: string
+        avatar?: string
+        bio?: string
+        twitter?: string
+        instagram?: string
+        blog?: string
+        wikiUrl: string
+      } = {
+        source: 'seesaawiki' as const,
+        sourceId: nameMapping.wikiName,
+        sourceUrl: nameMapping.wikiUrl,
+        bio: wikiDetails.reading || undefined,
+        twitter: wikiDetails.twitter || undefined,
+        instagram: wikiDetails.instagram || undefined,
+        blog: wikiDetails.blog || undefined,
+        wikiUrl: nameMapping.wikiUrl,
       }
 
       // 数据完整度检查
-      const completeness = this.calculateCompleteness(details)
+      const completeness = this.calculateCompleteness(details, wikiDetails)
       console.log(`   数据完整度: ${(completeness * 100).toFixed(0)}%`)
 
-      // 降低阈值：只要有头像就认为是有效数据
-      if (completeness < 0.5) {
-        throw new Error(`数据过少 (${(completeness * 100).toFixed(0)}%)`)
+      // 如果没有头像，尝试从 JavBus 补全
+      if (!details.avatar) {
+        console.log(`   🔄 Wiki 无头像，尝试从 JavBus 补全...`)
+        try {
+          const javbusDetails = await this.javbusStrategy.crawlActorDetails(actor.sourceUrl, page)
+          if (javbusDetails?.avatar) {
+            details.avatar = javbusDetails.avatar
+            console.log(`   ✅ JavBus 头像补全成功`)
+          }
+        }
+        catch (e) {
+          console.warn(`   ⚠️  JavBus 头像补全失败:`, e instanceof Error ? e.message : String(e))
+        }
       }
 
       // 上传头像到 R2（如果有）
@@ -267,7 +346,6 @@ export class ActorCrawler {
         }
         catch (e) {
           console.warn(`   ⚠️  头像上传失败（继续执行）:`, e instanceof Error ? e.message : String(e))
-          // 头像上传失败不阻塞流程
         }
       }
 
@@ -280,7 +358,7 @@ export class ActorCrawler {
 
       // 更新统计
       this.stats.processedActors++
-      this.updateDataCompletenessStats(details)
+      this.updateDataCompletenessStats(details, wikiDetails)
 
       console.log(`   ✅ 成功`)
     }
@@ -299,12 +377,57 @@ export class ActorCrawler {
   }
 
   /**
+   * 备用方案：使用 JavBus（当名字匹配失败时）
+   */
+  private async processFallbackJavBus(actor: PendingActor, page: any): Promise<void> {
+    try {
+      console.log(`   🔄 回退到 JavBus 数据源...`)
+      const details = await this.javbusStrategy.crawlActorDetails(actor.sourceUrl, page)
+
+      if (!details || !details.avatar) {
+        throw new Error('JavBus 也未能获取有效数据')
+      }
+
+      // 上传头像到 R2
+      console.log(`   📤 上传头像到 R2...`)
+      const avatarImages = await this.imageProcessor.process(
+        details.avatar,
+        `actors/${actor.id}`,
+        'avatar',
+      )
+      const preview = avatarImages.find(i => i.variant === 'preview')
+
+      if (!preview) {
+        throw new Error('头像处理失败')
+      }
+
+      details.avatar = preview.url
+
+      // 同步到 API（仅头像，标记 source 为 javbus）
+      const result = await this.apiClient.syncActorDetails(actor.id, details)
+
+      if (!result || !result.success) {
+        throw new Error('API 同步失败')
+      }
+
+      this.stats.processedActors++
+      this.updateDataCompletenessStats(details, null)
+      console.log(`   ✅ JavBus 备用成功`)
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.log(`   ❌ JavBus 备用也失败: ${errorMessage}`)
+      throw error
+    }
+  }
+
+  /**
    * 仅更新头像（头像补全模式）
    */
   private async processAvatarUpdate(actor: PendingActor, page: any): Promise<void> {
     try {
       // 只爬取页面获取头像
-      const details = await this.strategy.crawlActorDetails(actor.sourceUrl, page)
+      const details = await this.javbusStrategy.crawlActorDetails(actor.sourceUrl, page)
 
       if (!details || !details.avatar) {
         throw new Error('未能获取头像')
@@ -351,33 +474,46 @@ export class ActorCrawler {
   /**
    * 计算数据完整度
    *
-   * 字段权重:
-   * - avatar: 25%
-   * - bio: 20%
-   * - birthDate: 15%
-   * - height: 15%
-   * - measurements: 10%
-   * - nationality: 15%
+   * SeesaaWiki 权重:
+   * - avatar: 30%
+   * - aliases: 15%
+   * - socialLinks: 15% (twitter/instagram/blog 各 5%)
+   * - debutDate: 10%
+   * - bio: 10%
+   * - 其他: 20% (退役日期、作品列表等)
    */
-  private calculateCompleteness(details: any): number {
-    // 调整权重：聚焦在实际可获取的数据（主要是头像）
-    // JavBus 女优页面通常只提供头像，其他字段很少有数据
-    const fields = [
-      { key: 'avatar', weight: 0.70 }, // 提高到 70%（最重要）
-      { key: 'bio', weight: 0.10 },
-      { key: 'birthDate', weight: 0.05 },
-      { key: 'height', weight: 0.05 },
-      { key: 'measurements', weight: 0.05 },
-      { key: 'nationality', weight: 0.05 },
-    ]
-
+  private calculateCompleteness(details: any, wikiDetails: any): number {
     let score = 0
-    for (const field of fields) {
-      const value = details[field.key]
-      if (value !== null && value !== undefined && value !== '') {
-        score += field.weight
-      }
-    }
+
+    // 头像 (30%)
+    if (details.avatar)
+      score += 0.30
+
+    // 别名 (15%)
+    if (wikiDetails?.aliases && wikiDetails.aliases.length > 0)
+      score += 0.15
+
+    // 社交链接 (15%)
+    if (details.twitter)
+      score += 0.05
+    if (details.instagram)
+      score += 0.05
+    if (details.blog)
+      score += 0.05
+
+    // 出道日期 (10%)
+    if (wikiDetails?.debutDate)
+      score += 0.10
+
+    // 简介/读音 (10%)
+    if (details.bio)
+      score += 0.10
+
+    // 其他 (20%)
+    if (wikiDetails?.retireDate)
+      score += 0.10
+    if (wikiDetails?.works && wikiDetails.works.length > 0)
+      score += 0.10
 
     return score
   }
@@ -385,19 +521,23 @@ export class ActorCrawler {
   /**
    * 更新数据完整度统计
    */
-  private updateDataCompletenessStats(details: any): void {
+  private updateDataCompletenessStats(details: any, wikiDetails: any): void {
     if (details.avatar)
       this.stats.dataCompleteness.hasAvatar++
     if (details.bio)
       this.stats.dataCompleteness.hasBio++
-    if (details.birthDate)
-      this.stats.dataCompleteness.hasBirthDate++
-    if (details.height)
-      this.stats.dataCompleteness.hasHeight++
-    if (details.measurements)
-      this.stats.dataCompleteness.hasMeasurements++
-    if (details.nationality)
-      this.stats.dataCompleteness.hasNationality++
+    if (wikiDetails?.aliases && wikiDetails.aliases.length > 0)
+      this.stats.dataCompleteness.hasAliases++
+    if (details.twitter)
+      this.stats.dataCompleteness.hasTwitter++
+    if (details.instagram)
+      this.stats.dataCompleteness.hasInstagram++
+    if (details.blog)
+      this.stats.dataCompleteness.hasBlog++
+    if (wikiDetails?.debutDate)
+      this.stats.dataCompleteness.hasDebutDate++
+    if (wikiDetails?.retireDate)
+      this.stats.dataCompleteness.hasRetireDate++
   }
 
   /**
@@ -418,38 +558,43 @@ export class ActorCrawler {
     const totalProcessed = this.stats.processedActors + this.stats.failedActors + this.stats.skippedActors
 
     console.log(`\n${'='.repeat(60)}`)
-    console.log('📊 女优爬取统计报告')
+    console.log('📊 女优爬取统计报告 (SeesaaWiki 数据源)')
     console.log('='.repeat(60))
 
     console.log(`\n总数: ${totalProcessed}`)
     console.log(`成功: ${this.stats.processedActors} ✅`)
     console.log(`失败: ${this.stats.failedActors} ❌`)
     console.log(`跳过: ${this.stats.skippedActors}`)
+    console.log(`名字匹配失败: ${this.stats.nameMappingFailed}`)
 
     const successRate = totalProcessed > 0
       ? ((this.stats.processedActors / totalProcessed) * 100).toFixed(1)
       : '0.0'
     console.log(`成功率: ${successRate}%`)
 
-    // 数据完整度统计
+    // 数据完整度统计（基于 SeesaaWiki 新字段）
     if (this.stats.processedActors > 0) {
       const processed = this.stats.processedActors
-      console.log(`\n数据完整度:`)
+      console.log(`\n数据完整度 (SeesaaWiki):`)
       console.log(`  - 头像: ${((this.stats.dataCompleteness.hasAvatar / processed) * 100).toFixed(0)}%`)
+      console.log(`  - 别名: ${((this.stats.dataCompleteness.hasAliases / processed) * 100).toFixed(0)}%`)
+      console.log(`  - Twitter: ${((this.stats.dataCompleteness.hasTwitter / processed) * 100).toFixed(0)}%`)
+      console.log(`  - Instagram: ${((this.stats.dataCompleteness.hasInstagram / processed) * 100).toFixed(0)}%`)
+      console.log(`  - 博客: ${((this.stats.dataCompleteness.hasBlog / processed) * 100).toFixed(0)}%`)
+      console.log(`  - 出道日期: ${((this.stats.dataCompleteness.hasDebutDate / processed) * 100).toFixed(0)}%`)
+      console.log(`  - 退役日期: ${((this.stats.dataCompleteness.hasRetireDate / processed) * 100).toFixed(0)}%`)
       console.log(`  - 简介: ${((this.stats.dataCompleteness.hasBio / processed) * 100).toFixed(0)}%`)
-      console.log(`  - 生日: ${((this.stats.dataCompleteness.hasBirthDate / processed) * 100).toFixed(0)}%`)
-      console.log(`  - 身高: ${((this.stats.dataCompleteness.hasHeight / processed) * 100).toFixed(0)}%`)
-      console.log(`  - 三围: ${((this.stats.dataCompleteness.hasMeasurements / processed) * 100).toFixed(0)}%`)
-      console.log(`  - 国籍: ${((this.stats.dataCompleteness.hasNationality / processed) * 100).toFixed(0)}%`)
 
-      // 计算平均完整度
+      // 计算平均完整度（使用新权重）
       const totalWeight = (
-        this.stats.dataCompleteness.hasAvatar * 0.25
-        + this.stats.dataCompleteness.hasBio * 0.20
-        + this.stats.dataCompleteness.hasBirthDate * 0.15
-        + this.stats.dataCompleteness.hasHeight * 0.15
-        + this.stats.dataCompleteness.hasMeasurements * 0.10
-        + this.stats.dataCompleteness.hasNationality * 0.15
+        this.stats.dataCompleteness.hasAvatar * 0.30
+        + this.stats.dataCompleteness.hasAliases * 0.15
+        + this.stats.dataCompleteness.hasTwitter * 0.05
+        + this.stats.dataCompleteness.hasInstagram * 0.05
+        + this.stats.dataCompleteness.hasBlog * 0.05
+        + this.stats.dataCompleteness.hasDebutDate * 0.10
+        + this.stats.dataCompleteness.hasBio * 0.10
+        + this.stats.dataCompleteness.hasRetireDate * 0.10
       )
       this.stats.averageCompleteness = totalWeight / processed
 
@@ -463,6 +608,12 @@ export class ActorCrawler {
       console.log(`\n⚠️  失败任务已保存到: ${this.failedTasksFile}`)
       console.log(`   使用 --recovery 模式可重试`)
     }
+
+    // 名字映射统计
+    const mapperStats = this.nameMapper.getStats()
+    console.log(`\n📊 名字映射统计:`)
+    console.log(`  - 女优映射: ${mapperStats.actorMappings} 条`)
+    console.log(`  - 未匹配: ${mapperStats.unmappedActors} 条`)
 
     console.log(`${'='.repeat(60)}\n`)
   }

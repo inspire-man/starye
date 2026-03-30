@@ -14,6 +14,7 @@
     "build:search": "tsx scripts/build-search.ts",
     "crawl:actor": "tsx scripts/run-actor.ts",
     "crawl:publisher": "tsx scripts/run-publisher.ts",
+    "crawl:seesaawiki:index": "tsx src/scripts/crawl-seesaawiki-index.ts",
     "test": "vitest",
     "test:unit": "vitest run",
     "test:auth": "tsx scripts/test-api-auth.ts",

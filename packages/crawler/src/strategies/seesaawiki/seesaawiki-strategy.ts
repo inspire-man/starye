@@ -157,8 +157,16 @@ export class SeesaaWikiStrategy {
     await this._smartDelay()
 
     // 构建索引页 URL
-    const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
-    const url = `${this.baseUrl}/d/女優ページ一覧(${gojuonLine})${suffix}`
+    // あ行使用基础路径，其他行使用冒号分隔格式
+    let url: string
+    if (gojuonLine === 'あ') {
+      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
+      url = `${this.baseUrl}/d/女優ページ一覧${suffix}`
+    }
+    else {
+      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
+      url = `${this.baseUrl}/d/女優ページ一覧：${gojuonLine}行${suffix}`
+    }
 
     console.warn(`[SeesaaWiki] 爬取女优索引页: ${url}`)
 
@@ -195,8 +203,17 @@ export class SeesaaWikiStrategy {
   async fetchPublisherIndexPage(gojuonLine: GojuonLine, page: Page, pageNumber = 1) {
     await this._smartDelay()
 
-    const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
-    const url = `${this.baseUrl}/d/メーカーページ一覧(${gojuonLine})${suffix}`
+    // 构建索引页 URL
+    // あ行使用基础路径，其他行使用冒号分隔格式
+    let url: string
+    if (gojuonLine === 'あ') {
+      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
+      url = `${this.baseUrl}/d/メーカーページ一覧${suffix}`
+    }
+    else {
+      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
+      url = `${this.baseUrl}/d/メーカーページ一覧：${gojuonLine}行${suffix}`
+    }
 
     console.warn(`[SeesaaWiki] 爬取厂商索引页: ${url}`)
 
@@ -209,20 +226,23 @@ export class SeesaaWikiStrategy {
       // 厂商索引页解析（简化版，类似女优）
       const publishers: Array<{ name: string, wikiUrl: string }> = []
 
-      $('#wikibody li').each((_, el) => {
+      $('#wiki-content .list-1 > li').each((_, el) => {
         const link = $(el).find('a').first()
         const name = link.text().trim()
         const href = link.attr('href')
 
-        if (name && href) {
-          publishers.push({
-            name,
-            wikiUrl: new URL(href, this.baseUrl).href,
-          })
+        // 跳过目录项
+        if (!name || !href || name === '目次') {
+          return
         }
+
+        publishers.push({
+          name,
+          wikiUrl: new URL(href, this.baseUrl).href,
+        })
       })
 
-      const nextPageLink = $('#wikibody').find('a:contains("次のページ")').attr('href')
+      const nextPageLink = $('#wiki-content').find('a:contains("次のページ")').attr('href')
       const hasNextPage = !!nextPageLink
 
       return {

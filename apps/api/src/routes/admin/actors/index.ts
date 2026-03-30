@@ -942,12 +942,15 @@ adminActors.post(
         return c.json({ error: 'Actor not found' }, 404)
       }
 
-      // 计算数据完整度（权重：avatar 25%, bio 20%, birthDate 15%, height 15%, measurements 10%, nationality 15%）
+      // 计算数据完整度（SeesaaWiki 权重：avatar 30%, socialLinks 15%, bio 10%, 其他 45%）
       const fields = [
-        { key: 'avatar', weight: 0.25 },
-        { key: 'bio', weight: 0.20 },
-        { key: 'birthDate', weight: 0.15 },
-        { key: 'height', weight: 0.15 },
+        { key: 'avatar', weight: 0.30 },
+        { key: 'twitter', weight: 0.05 },
+        { key: 'instagram', weight: 0.05 },
+        { key: 'blog', weight: 0.05 },
+        { key: 'bio', weight: 0.10 },
+        { key: 'birthDate', weight: 0.10 },
+        { key: 'height', weight: 0.10 },
         { key: 'measurements', weight: 0.10 },
         { key: 'nationality', weight: 0.15 },
       ]

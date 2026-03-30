@@ -31,61 +31,61 @@
 
 ## 4. 名字映射系统实现
 
-- [ ] 4.1 创建 `packages/crawler/src/lib/name-mapper.ts`，定义 `NameMapper` 类
-- [ ] 4.2 实现映射表文件加载：读取 `.seesaawiki-actor-map.json` 和 `.seesaawiki-publisher-map.json`
-- [ ] 4.3 实现精确匹配逻辑：直接构建 Wiki URL 并尝试访问
-- [ ] 4.4 实现五十音自动定位：根据名字首字符定位五十音行
-- [ ] 4.5 实现索引搜索逻辑：在索引页中搜索女优名和别名
-- [ ] 4.6 实现别名反向索引：建立 aliasToMain Map
-- [ ] 4.7 实现映射缓存持久化：新增映射后立即写入文件
-- [ ] 4.8 实现未匹配名单记录：写入 `.seesaawiki-unmapped-actors.json` 和 `.seesaawiki-unmapped-publishers.json`
-- [ ] 4.9 实现映射质量校验工具：统计覆盖率、冲突检测
+- [x] 4.1 创建 `packages/crawler/src/lib/name-mapper.ts`，定义 `NameMapper` 类
+- [x] 4.2 实现映射表文件加载：读取 `.seesaawiki-actor-map.json` 和 `.seesaawiki-publisher-map.json`
+- [x] 4.3 实现精确匹配逻辑：直接构建 Wiki URL 并尝试访问
+- [x] 4.4 实现五十音自动定位：根据名字首字符定位五十音行
+- [x] 4.5 实现索引搜索逻辑：在索引页中搜索女优名和别名
+- [x] 4.6 实现别名反向索引：建立 aliasToMain Map
+- [x] 4.7 实现映射缓存持久化：新增映射后立即写入文件
+- [x] 4.8 实现未匹配名单记录：写入 `.seesaawiki-unmapped-actors.json` 和 `.seesaawiki-unmapped-publishers.json`
+- [x] 4.9 实现映射质量校验工具：统计覆盖率、冲突检测
 
 ## 5. 索引爬虫独立脚本
 
-- [ ] 5.1 创建 `packages/crawler/src/scripts/crawl-seesaawiki-index.ts`，实现索引页全量爬取
-- [ ] 5.2 遍历所有五十音行（あ、か、さ、た、な、は、ま、や、ら、わ），爬取女优索引
-- [ ] 5.3 遍历所有五十音行，爬取厂商索引
-- [ ] 5.4 合并索引数据，生成完整名字映射表
-- [ ] 5.5 在 `packages/crawler/package.json` 添加 script: `"crawl:seesaawiki:index": "tsx src/scripts/crawl-seesaawiki-index.ts"`
+- [x] 5.1 创建 `packages/crawler/src/scripts/crawl-seesaawiki-index.ts`，实现索引页全量爬取
+- [x] 5.2 遍历所有五十音行（あ、か、さ、た、な、は、ま、や、ら、わ），爬取女优索引
+- [x] 5.3 遍历所有五十音行，爬取厂商索引
+- [x] 5.4 合并索引数据，生成完整名字映射表
+- [x] 5.5 在 `packages/crawler/package.json` 添加 script: `"crawl:seesaawiki:index": "tsx src/scripts/crawl-seesaawiki-index.ts"`
 - [ ] 5.6 本地运行索引爬虫，验证映射表生成
 
 ## 6. ActorCrawler 重构
 
-- [ ] 6.1 修改 `packages/crawler/src/crawlers/actor-crawler.ts`，引入 `SeesaaWikiStrategy` 和 `NameMapper`
-- [ ] 6.2 在 `ActorCrawler` 构造函数中初始化 `NameMapper`
-- [ ] 6.3 修改 `processActor()` 方法：调用 `nameMapper.matchActorName()` 获取 Wiki URL
-- [ ] 6.4 修改 `processActor()` 方法：调用 `seesaaWikiStrategy.fetchActorDetails()` 爬取详情
-- [ ] 6.5 修改数据完整度计算权重：`avatar: 30%, aliases: 15%, socialLinks: 15%, debutDate: 10%, bio: 10%, 其他: 20%`
-- [ ] 6.6 在同步到 API 时，包含新增字段：`twitter`, `instagram`, `blog`, `wikiUrl`
-- [ ] 6.7 更新 `source` 字段为 "seesaawiki"
-- [ ] 6.8 处理名字匹配失败：记录到 `FailedTaskRecorder`，标记为 "name_mapping_failed"
-- [ ] 6.9 保留 JavBus 头像爬取作为备用（可选）
+- [x] 6.1 修改 `packages/crawler/src/crawlers/actor-crawler.ts`，引入 `SeesaaWikiStrategy` 和 `NameMapper`
+- [x] 6.2 在 `ActorCrawler` 构造函数中初始化 `NameMapper`
+- [x] 6.3 修改 `processActor()` 方法：调用 `nameMapper.matchActorName()` 获取 Wiki URL
+- [x] 6.4 修改 `processActor()` 方法：调用 `seesaaWikiStrategy.fetchActorDetails()` 爬取详情
+- [x] 6.5 修改数据完整度计算权重：`avatar: 30%, aliases: 15%, socialLinks: 15%, debutDate: 10%, bio: 10%, 其他: 20%`
+- [x] 6.6 在同步到 API 时，包含新增字段：`twitter`, `instagram`, `blog`, `wikiUrl`
+- [x] 6.7 更新 `source` 字段为 "seesaawiki"
+- [x] 6.8 处理名字匹配失败：记录到 `FailedTaskRecorder`，标记为 "name_mapping_failed"
+- [x] 6.9 保留 JavBus 头像爬取作为备用（可选）
 
 ## 7. PublisherCrawler 重构
 
-- [ ] 7.1 修改 `packages/crawler/src/crawlers/publisher-crawler.ts`，引入 `SeesaaWikiStrategy` 和 `NameMapper`
-- [ ] 7.2 在 `PublisherCrawler` 构造函数中初始化 `NameMapper`
-- [ ] 7.3 修改 `processPublisher()` 方法：调用 `nameMapper.matchPublisherName()` 获取 Wiki URL
-- [ ] 7.4 修改 `processPublisher()` 方法：调用 `seesaaWikiStrategy.fetchPublisherDetails()` 爬取详情
-- [ ] 7.5 修改数据完整度计算权重：`logo: 30%, website: 20%, twitter: 10%, instagram: 10%, description: 15%, 系列关系: 15%`
-- [ ] 7.6 在同步到 API 时，包含新增字段：`twitter`, `instagram`, `wikiUrl`, `parentPublisher`, `brandSeries`
-- [ ] 7.7 更新 `source` 字段为 "seesaawiki"
-- [ ] 7.8 处理名字匹配失败：记录到 `FailedTaskRecorder`
+- [x] 7.1 修改 `packages/crawler/src/crawlers/publisher-crawler.ts`，引入 `SeesaaWikiStrategy` 和 `NameMapper`
+- [x] 7.2 在 `PublisherCrawler` 构造函数中初始化 `NameMapper`
+- [x] 7.3 修改 `processPublisher()` 方法：调用 `nameMapper.matchPublisherName()` 获取 Wiki URL
+- [x] 7.4 修改 `processPublisher()` 方法：调用 `seesaaWikiStrategy.fetchPublisherDetails()` 爬取详情
+- [x] 7.5 修改数据完整度计算权重：`logo: 30%, website: 20%, twitter: 10%, instagram: 10%, description: 15%, 系列关系: 15%`
+- [x] 7.6 在同步到 API 时，包含新增字段：`twitter`, `instagram`, `wikiUrl`, `parentPublisher`, `brandSeries`
+- [x] 7.7 更新 `source` 字段为 "seesaawiki"
+- [x] 7.8 处理名字匹配失败：记录到 `FailedTaskRecorder`
 
 ## 8. API 端点扩展
 
-- [ ] 8.1 在 `apps/api/src/routes/admin/actors.ts` 的 PATCH 端点，接受新字段：`twitter`, `instagram`, `blog`, `wikiUrl`
-- [ ] 8.2 在 `apps/api/src/routes/admin/publishers.ts` 的 PATCH 端点，接受新字段：`twitter`, `instagram`, `wikiUrl`, `parentPublisher`, `brandSeries`
-- [ ] 8.3 验证新字段的序列化和反序列化
-- [ ] 8.4 验证向后兼容性：旧数据的新字段为 null，不影响查询和展示
+- [x] 8.1 在 `apps/api/src/routes/admin/actors.ts` 的 PATCH 端点，接受新字段：`twitter`, `instagram`, `blog`, `wikiUrl`
+- [x] 8.2 在 `apps/api/src/routes/admin/publishers.ts` 的 PATCH 端点，接受新字段：`twitter`, `instagram`, `wikiUrl`, `parentPublisher`, `brandSeries`
+- [x] 8.3 验证新字段的序列化和反序列化
+- [x] 8.4 验证向后兼容性：旧数据的新字段为 null，不影响查询和展示
 - [ ] 8.5 （可选）新增别名查询端点：`GET /api/admin/actors/search-by-alias?alias=xxx`
 
 ## 9. GitHub Actions 调整
 
-- [ ] 9.1 修改 `.github/workflows/daily-actor-crawl.yml`，无需修改环境变量（使用相同配置）
-- [ ] 9.2 修改 `.github/workflows/daily-publisher-crawl.yml`，无需修改环境变量
-- [ ] 9.3 验证 workflow 中的超时设置（360 分钟足够）
+- [x] 9.1 修改 `.github/workflows/daily-actor-crawl.yml`，无需修改环境变量（使用相同配置）
+- [x] 9.2 修改 `.github/workflows/daily-publisher-crawl.yml`，无需修改环境变量
+- [x] 9.3 验证 workflow 中的超时设置（360 分钟足够）
 - [ ] 9.4 （可选）新增索引爬虫 workflow：每周运行一次，更新名字映射表
 
 ## 10. 本地测试和验证

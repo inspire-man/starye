@@ -9,7 +9,9 @@ import type { ApiConfig, BrowserConfig } from '../types/config'
 import pMap from 'p-map'
 import { FailedTaskRecorder } from '../lib/anti-detection'
 import { ImageProcessor } from '../lib/image-processor'
+import { NameMapper } from '../lib/name-mapper'
 import { JavBusStrategy } from '../strategies/javbus'
+import { SeesaaWikiStrategy } from '../strategies/seesaawiki/seesaawiki-strategy'
 import { ApiClient } from '../utils/api-client'
 import { BrowserManager } from '../utils/browser'
 
@@ -37,7 +39,9 @@ interface PendingPublisher {
 export class PublisherCrawler {
   private browserManager: BrowserManager
   private apiClient: ApiClient
-  private strategy: JavBusStrategy
+  private javbusStrategy: JavBusStrategy // 保留作为 Logo 备用
+  private seesaaWikiStrategy: SeesaaWikiStrategy // 主数据源
+  private nameMapper: NameMapper
   private imageProcessor: ImageProcessor
   private failedTasks: FailedTaskRecorder
   private failedTasksFile = './.publisher-failed-tasks.json'
@@ -47,12 +51,15 @@ export class PublisherCrawler {
     processedPublishers: 0,
     skippedPublishers: 0,
     failedPublishers: 0,
+    nameMappingFailed: 0,
     dataCompleteness: {
       hasLogo: 0,
       hasWebsite: 0,
+      hasTwitter: 0,
+      hasInstagram: 0,
       hasDescription: 0,
-      hasFoundedYear: 0,
-      hasCountry: 0,
+      hasParentPublisher: 0,
+      hasBrandSeries: 0,
     },
     averageCompleteness: 0,
   }
@@ -73,9 +80,13 @@ export class PublisherCrawler {
       config.browserConfig.proxy,
     )
     this.apiClient = new ApiClient(config.apiConfig)
-    this.strategy = new JavBusStrategy()
+    this.javbusStrategy = new JavBusStrategy()
+    this.seesaaWikiStrategy = new SeesaaWikiStrategy()
     this.imageProcessor = new ImageProcessor(config.r2Config)
     this.failedTasks = new FailedTaskRecorder()
+
+    // 初始化名字映射器
+    this.nameMapper = new NameMapper(this.seesaaWikiStrategy)
 
     this.maxPublishers = config.maxPublishers || 150
     this.concurrency = config.concurrency || 2
@@ -114,6 +125,9 @@ export class PublisherCrawler {
     finally {
       // 保存失败任务
       await this.failedTasks.saveToFile(this.failedTasksFile)
+
+      // 保存名字映射表
+      await this.nameMapper.saveMappings()
 
       // 关闭浏览器
       await this.browserManager.close()
@@ -223,7 +237,7 @@ export class PublisherCrawler {
 
     try {
       console.log(`\n[${currentIndex}/${totalFetched}] 爬取厂商: ${publisher.name}`)
-      console.log(`   URL: ${publisher.sourceUrl}`)
+      console.log(`   JavBus URL: ${publisher.sourceUrl}`)
       console.log(`   作品数: ${publisher.movieCount}, 失败次数: ${publisher.crawlFailureCount}`)
 
       // 如果是 logo 补全模式（已爬取但需要更新 logo）
@@ -233,20 +247,77 @@ export class PublisherCrawler {
         return
       }
 
-      // 完整爬取模式
-      const details = await this.strategy.crawlPublisherDetails(publisher.sourceUrl, page)
+      // 阶段 1: 名字匹配（获取 Wiki URL）
+      console.log(`   🔍 匹配 SeesaaWiki 名字...`)
+      const nameMapping = await this.nameMapper.matchPublisherName(publisher.name, page)
 
-      if (!details) {
-        throw new Error('解析失败：未能提取厂商详情')
+      if (!nameMapping) {
+        // 名字匹配失败，记录并跳过
+        console.log(`   ⚠️  名字匹配失败，使用 JavBus 备用`)
+        this.stats.nameMappingFailed++
+        this.failedTasks.record(
+          publisher.sourceUrl,
+          new Error('Name mapping failed'),
+          publisher.crawlFailureCount + 1,
+        )
+
+        // 备用：使用 JavBus 爬取 Logo
+        await this.processFallbackJavBus(publisher, page)
+        return
+      }
+
+      console.log(`   ✅ 匹配成功: ${publisher.name} -> ${nameMapping.wikiName}`)
+      console.log(`   Wiki URL: ${nameMapping.wikiUrl}`)
+
+      // 阶段 2: 爬取 SeesaaWiki 详情
+      console.log(`   📡 爬取 SeesaaWiki 详情...`)
+      const wikiResult = await this.seesaaWikiStrategy.fetchPublisherDetails(nameMapping.wikiUrl, page)
+
+      if (!wikiResult.data) {
+        const errorMsg = wikiResult.errors.length > 0
+          ? wikiResult.errors.map(e => `${e.field}: ${e.reason}`).join(', ')
+          : '未知错误'
+        throw new Error(`SeesaaWiki 解析失败: ${errorMsg}`)
+      }
+
+      const wikiDetails = wikiResult.data
+
+      // 打印警告（如有）
+      if (wikiResult.warnings.length > 0) {
+        console.warn(`   ⚠️  解析警告: ${wikiResult.warnings.join('; ')}`)
+      }
+
+      // 准备同步数据
+      const details = {
+        source: 'seesaawiki' as const,
+        sourceId: nameMapping.wikiName,
+        sourceUrl: nameMapping.wikiUrl,
+        logo: wikiDetails.logo || undefined,
+        website: wikiDetails.website || undefined,
+        twitter: wikiDetails.twitter || undefined,
+        instagram: wikiDetails.instagram || undefined,
+        wikiUrl: nameMapping.wikiUrl,
+        parentPublisher: wikiDetails.parentPublisher || undefined,
+        brandSeries: wikiDetails.brandSeries || undefined,
       }
 
       // 数据完整度检查
-      const completeness = this.calculateCompleteness(details)
+      const completeness = this.calculateCompleteness(details, wikiDetails)
       console.log(`   数据完整度: ${(completeness * 100).toFixed(0)}%`)
 
-      // 降低阈值：只要有 logo 就认为是有效数据
-      if (completeness < 0.5) {
-        throw new Error(`数据过少 (${(completeness * 100).toFixed(0)}%)`)
+      // 如果没有 Logo，尝试从 JavBus 补全
+      if (!details.logo) {
+        console.log(`   🔄 Wiki 无 Logo，尝试从 JavBus 补全...`)
+        try {
+          const javbusDetails = await this.javbusStrategy.crawlPublisherDetails(publisher.sourceUrl, page)
+          if (javbusDetails?.logo) {
+            details.logo = javbusDetails.logo
+            console.log(`   ✅ JavBus Logo 补全成功`)
+          }
+        }
+        catch (e) {
+          console.warn(`   ⚠️  JavBus Logo 补全失败:`, e instanceof Error ? e.message : String(e))
+        }
       }
 
       // 上传 logo 到 R2（如果有）
@@ -266,7 +337,6 @@ export class PublisherCrawler {
         }
         catch (e) {
           console.warn(`   ⚠️  Logo 上传失败（继续执行）:`, e instanceof Error ? e.message : String(e))
-          // Logo 上传失败不阻塞流程
         }
       }
 
@@ -279,7 +349,7 @@ export class PublisherCrawler {
 
       // 更新统计
       this.stats.processedPublishers++
-      this.updateDataCompletenessStats(details)
+      this.updateDataCompletenessStats(details, wikiDetails)
 
       console.log(`   ✅ 成功`)
     }
@@ -298,12 +368,57 @@ export class PublisherCrawler {
   }
 
   /**
+   * 备用方案：使用 JavBus（当名字匹配失败时）
+   */
+  private async processFallbackJavBus(publisher: PendingPublisher, page: any): Promise<void> {
+    try {
+      console.log(`   🔄 回退到 JavBus 数据源...`)
+      const details = await this.javbusStrategy.crawlPublisherDetails(publisher.sourceUrl, page)
+
+      if (!details || !details.logo) {
+        throw new Error('JavBus 也未能获取有效数据')
+      }
+
+      // 上传 logo 到 R2
+      console.log(`   📤 上传 logo 到 R2...`)
+      const logoImages = await this.imageProcessor.process(
+        details.logo,
+        `publishers/${publisher.id}`,
+        'logo',
+      )
+      const preview = logoImages.find(i => i.variant === 'preview')
+
+      if (!preview) {
+        throw new Error('Logo 处理失败')
+      }
+
+      details.logo = preview.url
+
+      // 同步到 API（仅 logo，标记 source 为 javbus）
+      const result = await this.apiClient.syncPublisherDetails(publisher.id, details)
+
+      if (!result || !result.success) {
+        throw new Error('API 同步失败')
+      }
+
+      this.stats.processedPublishers++
+      this.updateDataCompletenessStats(details, null)
+      console.log(`   ✅ JavBus 备用成功`)
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.log(`   ❌ JavBus 备用也失败: ${errorMessage}`)
+      throw error
+    }
+  }
+
+  /**
    * 仅更新 logo（logo 补全模式）
    */
   private async processLogoUpdate(publisher: PendingPublisher, page: any): Promise<void> {
     try {
       // 只爬取页面获取 logo
-      const details = await this.strategy.crawlPublisherDetails(publisher.sourceUrl, page)
+      const details = await this.javbusStrategy.crawlPublisherDetails(publisher.sourceUrl, page)
 
       if (!details || !details.logo) {
         throw new Error('未能获取 logo')
@@ -350,31 +465,40 @@ export class PublisherCrawler {
   /**
    * 计算数据完整度
    *
-   * 字段权重:
+   * SeesaaWiki 权重:
    * - logo: 30%
    * - website: 20%
-   * - description: 20%
-   * - foundedYear: 15%
-   * - country: 15%
+   * - twitter: 10%
+   * - instagram: 10%
+   * - description: 15%
+   * - 系列关系: 15% (parentPublisher/brandSeries)
    */
-  private calculateCompleteness(details: any): number {
-    // 调整权重：聚焦在实际可获取的数据（主要是 logo）
-    // JavBus 厂商页面通常只提供 logo，其他字段很少有数据
-    const fields = [
-      { key: 'logo', weight: 0.70 }, // 提高到 70%（最重要）
-      { key: 'website', weight: 0.10 },
-      { key: 'description', weight: 0.10 },
-      { key: 'foundedYear', weight: 0.05 },
-      { key: 'country', weight: 0.05 },
-    ]
-
+  private calculateCompleteness(details: any, wikiDetails: any): number {
     let score = 0
-    for (const field of fields) {
-      const value = details[field.key]
-      if (value !== null && value !== undefined && value !== '') {
-        score += field.weight
-      }
-    }
+
+    // Logo (30%)
+    if (details.logo)
+      score += 0.30
+
+    // 官网 (20%)
+    if (details.website)
+      score += 0.20
+
+    // 社交媒体 (20%)
+    if (details.twitter)
+      score += 0.10
+    if (details.instagram)
+      score += 0.10
+
+    // 简介 (15%)
+    if (wikiDetails?.description)
+      score += 0.15
+
+    // 系列关系 (15%)
+    if (details.parentPublisher)
+      score += 0.075
+    if (details.brandSeries)
+      score += 0.075
 
     return score
   }
@@ -382,17 +506,21 @@ export class PublisherCrawler {
   /**
    * 更新数据完整度统计
    */
-  private updateDataCompletenessStats(details: any): void {
+  private updateDataCompletenessStats(details: any, wikiDetails: any): void {
     if (details.logo)
       this.stats.dataCompleteness.hasLogo++
     if (details.website)
       this.stats.dataCompleteness.hasWebsite++
-    if (details.description)
+    if (details.twitter)
+      this.stats.dataCompleteness.hasTwitter++
+    if (details.instagram)
+      this.stats.dataCompleteness.hasInstagram++
+    if (wikiDetails?.description)
       this.stats.dataCompleteness.hasDescription++
-    if (details.foundedYear)
-      this.stats.dataCompleteness.hasFoundedYear++
-    if (details.country)
-      this.stats.dataCompleteness.hasCountry++
+    if (details.parentPublisher)
+      this.stats.dataCompleteness.hasParentPublisher++
+    if (details.brandSeries)
+      this.stats.dataCompleteness.hasBrandSeries++
   }
 
   /**
@@ -413,36 +541,41 @@ export class PublisherCrawler {
     const totalProcessed = this.stats.processedPublishers + this.stats.failedPublishers + this.stats.skippedPublishers
 
     console.log(`\n${'='.repeat(60)}`)
-    console.log('📊 厂商爬取统计报告')
+    console.log('📊 厂商爬取统计报告 (SeesaaWiki 数据源)')
     console.log('='.repeat(60))
 
     console.log(`\n总数: ${totalProcessed}`)
     console.log(`成功: ${this.stats.processedPublishers} ✅`)
     console.log(`失败: ${this.stats.failedPublishers} ❌`)
     console.log(`跳过: ${this.stats.skippedPublishers}`)
+    console.log(`名字匹配失败: ${this.stats.nameMappingFailed}`)
 
     const successRate = totalProcessed > 0
       ? ((this.stats.processedPublishers / totalProcessed) * 100).toFixed(1)
       : '0.0'
     console.log(`成功率: ${successRate}%`)
 
-    // 数据完整度统计
+    // 数据完整度统计（基于 SeesaaWiki 新字段）
     if (this.stats.processedPublishers > 0) {
       const processed = this.stats.processedPublishers
-      console.log(`\n数据完整度:`)
+      console.log(`\n数据完整度 (SeesaaWiki):`)
       console.log(`  - Logo: ${((this.stats.dataCompleteness.hasLogo / processed) * 100).toFixed(0)}%`)
       console.log(`  - 官网: ${((this.stats.dataCompleteness.hasWebsite / processed) * 100).toFixed(0)}%`)
+      console.log(`  - Twitter: ${((this.stats.dataCompleteness.hasTwitter / processed) * 100).toFixed(0)}%`)
+      console.log(`  - Instagram: ${((this.stats.dataCompleteness.hasInstagram / processed) * 100).toFixed(0)}%`)
       console.log(`  - 简介: ${((this.stats.dataCompleteness.hasDescription / processed) * 100).toFixed(0)}%`)
-      console.log(`  - 成立年份: ${((this.stats.dataCompleteness.hasFoundedYear / processed) * 100).toFixed(0)}%`)
-      console.log(`  - 国家: ${((this.stats.dataCompleteness.hasCountry / processed) * 100).toFixed(0)}%`)
+      console.log(`  - 母公司: ${((this.stats.dataCompleteness.hasParentPublisher / processed) * 100).toFixed(0)}%`)
+      console.log(`  - 子品牌: ${((this.stats.dataCompleteness.hasBrandSeries / processed) * 100).toFixed(0)}%`)
 
-      // 计算平均完整度
+      // 计算平均完整度（使用新权重）
       const totalWeight = (
         this.stats.dataCompleteness.hasLogo * 0.30
         + this.stats.dataCompleteness.hasWebsite * 0.20
-        + this.stats.dataCompleteness.hasDescription * 0.20
-        + this.stats.dataCompleteness.hasFoundedYear * 0.15
-        + this.stats.dataCompleteness.hasCountry * 0.15
+        + this.stats.dataCompleteness.hasTwitter * 0.10
+        + this.stats.dataCompleteness.hasInstagram * 0.10
+        + this.stats.dataCompleteness.hasDescription * 0.15
+        + this.stats.dataCompleteness.hasParentPublisher * 0.075
+        + this.stats.dataCompleteness.hasBrandSeries * 0.075
       )
       this.stats.averageCompleteness = totalWeight / processed
 
@@ -456,6 +589,12 @@ export class PublisherCrawler {
       console.log(`\n⚠️  失败任务已保存到: ${this.failedTasksFile}`)
       console.log(`   使用 --recovery 模式可重试`)
     }
+
+    // 名字映射统计
+    const mapperStats = this.nameMapper.getStats()
+    console.log(`\n📊 名字映射统计:`)
+    console.log(`  - 厂商映射: ${mapperStats.publisherMappings} 条`)
+    console.log(`  - 未匹配: ${mapperStats.unmappedPublishers} 条`)
 
     console.log(`${'='.repeat(60)}\n`)
   }

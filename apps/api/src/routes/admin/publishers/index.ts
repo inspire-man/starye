@@ -646,13 +646,17 @@ adminPublishers.post(
         return c.json({ error: 'Publisher not found' }, 404)
       }
 
-      // 计算数据完整度（权重：logo 30%, website 20%, description 20%, foundedYear 15%, country 15%）
+      // 计算数据完整度（SeesaaWiki 权重：logo 30%, website 20%, socialMedia 20%, description 15%, 系列关系 15%）
       const fields = [
         { key: 'logo', weight: 0.30 },
         { key: 'website', weight: 0.20 },
-        { key: 'description', weight: 0.20 },
-        { key: 'foundedYear', weight: 0.15 },
-        { key: 'country', weight: 0.15 },
+        { key: 'twitter', weight: 0.10 },
+        { key: 'instagram', weight: 0.10 },
+        { key: 'description', weight: 0.15 },
+        { key: 'parentPublisher', weight: 0.075 },
+        { key: 'brandSeries', weight: 0.075 },
+        { key: 'foundedYear', weight: 0.05 },
+        { key: 'country', weight: 0.05 },
       ]
 
       let completeness = 0
