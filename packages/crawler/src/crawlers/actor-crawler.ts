@@ -34,6 +34,7 @@ interface PendingActor {
   lastCrawlAttempt: Date | null
   hasDetailsCrawled?: boolean
   needsAvatarUpdate?: boolean
+  source?: string // 数据源：'javbus' | 'seesaawiki'
 }
 
 export class ActorCrawler {
@@ -242,10 +243,16 @@ export class ActorCrawler {
       console.log(`   作品数: ${actor.movieCount}, 失败次数: ${actor.crawlFailureCount}`)
 
       // 如果是头像补全模式（已爬取但需要更新头像）
-      if (actor.needsAvatarUpdate && actor.hasDetailsCrawled) {
-        console.log(`   🔄 仅补全头像（已爬取）`)
+      // 只有当数据源已经是 SeesaaWiki 时才跳过详情爬取
+      if (actor.needsAvatarUpdate && actor.hasDetailsCrawled && actor.source === 'seesaawiki') {
+        console.log(`   🔄 仅补全头像（已从 SeesaaWiki 爬取）`)
         await this.processAvatarUpdate(actor, page)
         return
+      }
+
+      // 如果数据源不是 SeesaaWiki，需要重新爬取详情
+      if (actor.hasDetailsCrawled && actor.source !== 'seesaawiki') {
+        console.log(`   🔄 数据源为 ${actor.source}，需要从 SeesaaWiki 重新爬取`)
       }
 
       // 阶段 1: 名字匹配（获取 Wiki URL）

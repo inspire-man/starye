@@ -426,6 +426,7 @@ adminActors.get(
           lastCrawlAttempt: true,
           hasDetailsCrawled: true,
           avatar: true,
+          source: true, // 添加 source 字段
         },
         orderBy: [desc(actors.movieCount), actors.crawlFailureCount, actors.lastCrawlAttempt],
         limit: limit * 2, // 多取一些，过滤后可能不够
@@ -460,6 +461,7 @@ adminActors.get(
           lastCrawlAttempt: a.lastCrawlAttempt,
           hasDetailsCrawled: a.hasDetailsCrawled,
           needsAvatarUpdate: a.hasDetailsCrawled && a.avatar ? !a.avatar.startsWith(r2PublicUrl) : false,
+          source: a.source, // 添加 source 字段
         })),
         total: results.length,
         highPriority: highPriorityCount,
