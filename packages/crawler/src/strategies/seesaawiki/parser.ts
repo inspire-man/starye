@@ -155,6 +155,27 @@ export function extractSocialLinks($: CheerioAPI, $content: Cheerio<any>) {
 }
 
 /**
+ * 检测页面内容类型（女优 vs 厂商）
+ */
+function detectContentType(
+  content: string,
+): 'actor' | 'publisher' | 'unknown' {
+  const actorKeywords = ['身長', '生年月日', 'スリーサイズ', 'カップ', '血液型']
+  const publisherKeywords = ['メーカー', 'レーベル', 'サイト']
+
+  const actorScore = actorKeywords.filter(k => content.includes(k)).length
+  const publisherScore = publisherKeywords.filter(k => content.includes(k)).length
+
+  if (actorScore > publisherScore && actorScore >= 2) {
+    return 'actor'
+  }
+  if (publisherScore > actorScore && publisherScore >= 2) {
+    return 'publisher'
+  }
+  return 'unknown'
+}
+
+/**
  * 解析女优页面
  */
 export function parseActorPage(
@@ -164,6 +185,24 @@ export function parseActorPage(
 ): ParseResult<ActorDetails> {
   const errors: ParseError[] = []
   const warnings: string[] = []
+
+  // 检测内容类型
+  const content = $('#wiki-content').text()
+  const contentType = detectContentType(content)
+  
+  if (contentType === 'publisher') {
+    errors.push({
+      field: '_contentType',
+      message: '此页面是厂商页面，不是女优页面',
+      severity: 'error',
+    })
+    return {
+      data: null,
+      errors,
+      warnings: [],
+      confidence: 0,
+    }
+  }
 
   // 提取主名（页面标题）
   const title = $('#wiki-content h1, #wiki-content h2').first().text().trim()
@@ -487,6 +526,99 @@ export function parsePublisherPage(
 }
 
 /**
+ * 检查是否为非女优页面（说明页、分类页等）
+ */
+function isNonActorPage(text: string, href: string): boolean {
+  // 过滤包含这些关键词的页面
+  const excludeKeywords = [
+    'wiki', // wiki相关页面
+    '一覧', // 各种列表页
+    'タイトル', // 作品标题列表
+    '検索', // 搜索相关
+    '編集', // 编辑相关
+    'FAQ', // 帮助页面
+    '概要', // 说明页
+    'サンプル', // 示例页
+    'ノウハウ', // 指南
+    '方針', // 方针
+    'ガイド', // 指南
+    'メンバー', // 成员
+    'アナウンス', // 公告
+    'ページ', // 页面管理
+    '歴史', // 历史记录
+    'VR作品', // 分类页
+    '着エロ', // 分类页
+    'アダルトサイト', // 分类页
+    '同人', // 分类页
+    'サークル', // 团体
+    'FANZA', // 站点名
+    'MGS', // 站点名
+    '動画', // 视频分类
+    '無修正', // 分类标签
+    'グラビアアイドル', // 其他类型艺人
+    '行', // 五十音行索引（如"あ行"、"か行"）
+    'リスト', // 列表页
+    '専用', // 专用页面
+    'まとめ', // 汇总页
+    'リンク集', // 链接集合
+  ]
+
+  // 检查文本是否包含排除关键词
+  for (const keyword of excludeKeywords) {
+    if (text.includes(keyword)) {
+      return true
+    }
+  }
+
+  // 检查是否为单纯的五十音行（如"あ行"、"か行～さ行"、"ら・わ行"）
+  if (/^[あかさたなはまやらわ]行/.test(text) 
+      || /[あかさたなはまやらわ]行$/.test(text)
+      || /^[あかさたなはまやらわ]・[あかさたなはまやらわ]行$/.test(text)) {
+    return true
+  }
+
+  // 检查是否为字母行（如"A行～Z行"）
+  if (/^[A-Z]行/.test(text) || /[A-Z]行～[A-Z]行$/.test(text)) {
+    return true
+  }
+
+  // 检查URL是否包含排除模式
+  const excludeUrlPatterns = [
+    '%c1%b4%a5%bf%a5%a4%a5%c8%a5%eb', // 全タイトル
+    '%b8%a1%ba%f7', // 検索
+    '%ca%d4%bd%b8', // 編集
+    'wiki%b3%b5', // wiki概要
+    'wiki%b1%dc', // wiki閲覧
+    '%a5%da%a1%bc%a5%b8', // ページ
+    '%b0%ec%cd%f7', // 一覧
+  ]
+
+  for (const pattern of excludeUrlPatterns) {
+    if (href.includes(pattern)) {
+      return true
+    }
+  }
+
+  // 名字长度过长（通常是页面标题而不是人名）
+  if (text.length > 20) {
+    return true
+  }
+
+  // 名字过短（少于2个字符，可能是标记或符号）
+  if (text.length < 2) {
+    return true
+  }
+
+  // 包含特殊格式标记（如括号内容过长）
+  const bracketMatch = text.match(/[（(]([^）)]+)[）)]/g)
+  if (bracketMatch && bracketMatch.some(m => m.length > 15)) {
+    return true
+  }
+
+  return false
+}
+
+/**
  * 解析索引页，提取女优列表
  */
 export function parseActorIndexPage(
@@ -504,6 +636,11 @@ export function parseActorIndexPage(
     // 跳过目录项和空项
     if (!text || !href || text === '目次')
       return
+
+    // 过滤非女优页面
+    if (isNonActorPage(text, href)) {
+      return
+    }
 
     // 解析别名格式: "名字A = 名字B = 名字C"
     const parts = text.split('=').map(p => cleanWikiMarkup(p).trim())

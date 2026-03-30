@@ -47,6 +47,7 @@
   ],
   "cSpell.words": [
     "adsbygoogle",
+    "ameblo",
     "apng",
     "backgrounding",
     "booklist",
@@ -115,6 +116,7 @@
     "libxshmfence",
     "libxss",
     "libxtst",
+    "lineblog",
     "lucide",
     "mangas",
     "manhua",
@@ -125,6 +127,7 @@
     "Nuxt",
     "nuxtjs",
     "nyaa",
+    "onlyfans",
     "Orama",
     "pixbuf",
     "presign",
@@ -154,7 +157,8 @@
     "wikibody",
     "workerd",
     "wxqrcode",
-    "xgplayer"
+    "xgplayer",
+    "youtu"
   ],
   "conventionalCommits.scopes": [
     "ci",

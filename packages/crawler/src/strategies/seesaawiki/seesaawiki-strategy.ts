@@ -157,16 +157,9 @@ export class SeesaaWikiStrategy {
     await this._smartDelay()
 
     // 构建索引页 URL
-    // あ行使用基础路径，其他行使用冒号分隔格式
-    let url: string
-    if (gojuonLine === 'あ') {
-      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
-      url = `${this.baseUrl}/d/女優ページ一覧${suffix}`
-    }
-    else {
-      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
-      url = `${this.baseUrl}/d/女優ページ一覧：${gojuonLine}行${suffix}`
-    }
+    // 所有五十音行都使用统一格式：女優ページ一覧：X行
+    const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
+    const url = `${this.baseUrl}/d/女優ページ一覧：${gojuonLine}行${suffix}`
 
     console.warn(`[SeesaaWiki] 爬取女优索引页: ${url}`)
 
@@ -204,16 +197,9 @@ export class SeesaaWikiStrategy {
     await this._smartDelay()
 
     // 构建索引页 URL
-    // あ行使用基础路径，其他行使用冒号分隔格式
-    let url: string
-    if (gojuonLine === 'あ') {
-      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
-      url = `${this.baseUrl}/d/メーカーページ一覧${suffix}`
-    }
-    else {
-      const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
-      url = `${this.baseUrl}/d/メーカーページ一覧：${gojuonLine}行${suffix}`
-    }
+    // 所有五十音行都使用统一格式：メーカーページ一覧：X行
+    const suffix = pageNumber > 1 ? `-${pageNumber}` : ''
+    const url = `${this.baseUrl}/d/メーカーページ一覧：${gojuonLine}行${suffix}`
 
     console.warn(`[SeesaaWiki] 爬取厂商索引页: ${url}`)
 
@@ -227,17 +213,66 @@ export class SeesaaWikiStrategy {
       const publishers: Array<{ name: string, wikiUrl: string }> = []
 
       $('#wiki-content .list-1 > li').each((_, el) => {
+        const text = $(el).text().trim()
         const link = $(el).find('a').first()
-        const name = link.text().trim()
         const href = link.attr('href')
 
-        // 跳过目录项
-        if (!name || !href || name === '目次') {
+        // 跳过目录项和空项
+        if (!text || !href || text === '目次') {
           return
         }
 
+        // 过滤非厂商页面（说明页、分类页等）
+        const excludeKeywords = [
+          '一覧',
+          '検索',
+          '編集',
+          'FAQ',
+          '概要',
+          'サンプル',
+          'ノウハウ',
+          '方針',
+          'ガイド',
+          'メンバー',
+          'アナウンス',
+          'ページ',
+          '歴史',
+          'VR作品',
+          '着エロ',
+          'アダルトサイト',
+          '同人',
+          'サークル',
+          'FANZA',
+          'MGS',
+          '動画',
+          '無修正',
+          'タイトル',
+        ]
+
+        // 检查是否包含排除关键词
+        const hasExcludeKeyword = excludeKeywords.some(keyword => text.includes(keyword))
+
+        // 检查是否为五十音行索引（如"あ行"、"か行～さ行"、"ら・わ行"）
+        const isGojuonIndex = /^[あかさたなはまやらわ]行/.test(text) 
+            || /[あかさたなはまやらわ]行$/.test(text)
+            || /^[あかさたなはまやらわ]・[あかさたなはまやらわ]行$/.test(text)
+
+        // 检查是否为字母行索引（如"A行～Z行"）
+        const isAlphabetIndex = /^[A-Z]行/.test(text) || /[A-Z]行～[A-Z]行$/.test(text)
+
+        // 厂商名长度应合理
+        const isTooLong = text.length > 30
+        const isTooShort = text.length < 2
+
+        if (hasExcludeKeyword || isGojuonIndex || isAlphabetIndex || isTooLong || isTooShort) {
+          return
+        }
+
+        // 提取厂商名（去掉可能的" wiki"后缀）
+        const publisherName = text.replace(/\s+wiki$/i, '').trim()
+
         publishers.push({
-          name,
+          name: publisherName,
           wikiUrl: new URL(href, this.baseUrl).href,
         })
       })
