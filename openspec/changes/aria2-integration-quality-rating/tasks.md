@@ -314,9 +314,9 @@
 
 ## 31. 生产部署
 
-- [ ] 31.1 合并代码到 `main` 分支
-- [ ] 31.2 触发前端部署（GitHub Actions → Cloudflare Pages）
-- [ ] 31.3 触发后端部署（`pnpm --filter api run deploy`）
+- [x] 31.1 合并代码到 `main` 分支
+- [x] 31.2 触发前端部署（GitHub Actions → Cloudflare Pages）
+- [x] 31.3 触发后端部署（`pnpm --filter api run deploy`）
 - [ ] 31.4 执行生产数据库迁移
 - [ ] 31.5 验证生产环境功能正常
 - [ ] 31.6 监控首 24 小时错误率和使用率

@@ -91,8 +91,8 @@ describe('movies handlers', () => {
       const mockDb = {} as any
       const mockAuth = {
         api: {
-          getSession: vi.fn().mockResolvedValue(null)
-        }
+          getSession: vi.fn().mockResolvedValue(null),
+        },
       } as any
 
       app.use('*', async (c, next) => {
@@ -125,8 +125,8 @@ describe('movies handlers', () => {
       const mockDb = {} as any
       const mockAuth = {
         api: {
-          getSession: vi.fn().mockResolvedValue(null)
-        }
+          getSession: vi.fn().mockResolvedValue(null),
+        },
       } as any
 
       app.use('*', async (c, next) => {
@@ -150,8 +150,8 @@ describe('movies handlers', () => {
       const mockDb = {} as any
       const mockAuth = {
         api: {
-          getSession: vi.fn().mockResolvedValue(null)
-        }
+          getSession: vi.fn().mockResolvedValue(null),
+        },
       } as any
 
       app.use('*', async (c, next) => {

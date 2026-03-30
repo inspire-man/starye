@@ -693,5 +693,5 @@ curl -X POST https://api.example.com/api/aria2/rpc \
 
 ---
 
-**最后更新**: 2026-03-30  
+**最后更新**: 2026-03-30
 **文档版本**: v1.2.0
