@@ -1,162 +1,8 @@
-<template>
-  <div class="download-task-panel">
-    <div class="panel-header">
-      <h3 class="panel-title">下载任务</h3>
-
-      <!-- 筛选和操作 -->
-      <div class="panel-actions">
-        <select v-model="filterStatus" class="status-filter">
-          <option value="all">全部任务</option>
-          <option value="active">下载中</option>
-          <option value="waiting">等待中</option>
-          <option value="stopped">已停止</option>
-          <option value="complete">已完成</option>
-          <option value="error">出错</option>
-        </select>
-
-        <select v-model="sortBy" class="sort-select">
-          <option value="addedTime">添加时间</option>
-          <option value="progress">下载进度</option>
-          <option value="speed">下载速度</option>
-          <option value="eta">剩余时间</option>
-        </select>
-
-        <button class="btn-icon" title="刷新" @click="handleRefresh">
-          🔄
-        </button>
-      </div>
-    </div>
-
-    <!-- 批量操作 -->
-    <div v-if="hasActiveTasks" class="batch-actions">
-      <button class="btn btn-small" @click="handlePauseAll">
-        全部暂停
-      </button>
-      <button class="btn btn-small" @click="handleUnpauseAll">
-        全部恢复
-      </button>
-    </div>
-
-    <!-- 任务列表 -->
-    <div v-if="isLoading" class="loading-container">
-      <div class="loading-spinner"></div>
-      <span>加载中...</span>
-    </div>
-
-    <div v-else-if="filteredTasks.length === 0" class="empty-state">
-      <div class="empty-icon">📥</div>
-      <p class="empty-text">{{ emptyMessage }}</p>
-    </div>
-
-    <div v-else class="task-list">
-      <div
-        v-for="task in sortedTasks"
-        :key="task.gid"
-        class="task-item"
-        :class="`status-${task.status}`"
-      >
-        <!-- 任务信息 -->
-        <div class="task-info">
-          <div class="task-name">
-            {{ getTaskName(task) }}
-          </div>
-
-          <div class="task-meta">
-            <span class="task-size">{{ formatFileSize(Number.parseInt(task.totalLength)) }}</span>
-            <span class="task-status-badge" :class="`badge-${task.status}`">
-              {{ getStatusText(task.status) }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 进度条 -->
-        <div v-if="task.status === 'active' || task.status === 'paused'" class="task-progress">
-          <div class="progress-bar">
-            <div
-              class="progress-fill"
-              :style="{ width: `${getProgress(task)}%` }"
-            ></div>
-          </div>
-
-          <div class="progress-stats">
-            <span class="progress-percent">{{ getProgress(task) }}%</span>
-            <span v-if="task.status === 'active'" class="progress-speed">
-              {{ formatSpeed(Number.parseInt(task.downloadSpeed)) }}
-            </span>
-            <span v-if="task.status === 'active'" class="progress-eta">
-              ETA: {{ getETA(task) }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 任务控制 -->
-        <div class="task-controls">
-          <button
-            v-if="task.status === 'active'"
-            class="btn-icon"
-            title="暂停"
-            @click="handlePause(task.gid)"
-          >
-            ⏸️
-          </button>
-
-          <button
-            v-if="task.status === 'paused' || task.status === 'waiting'"
-            class="btn-icon"
-            title="恢复"
-            @click="handleUnpause(task.gid)"
-          >
-            ▶️
-          </button>
-
-          <button
-            v-if="task.status === 'complete' || task.status === 'error' || task.status === 'removed'"
-            class="btn-icon"
-            title="删除"
-            @click="handleRemove(task.gid)"
-          >
-            🗑️
-          </button>
-
-          <button
-            v-if="task.status !== 'complete'"
-            class="btn-icon btn-danger"
-            title="强制删除"
-            @click="handleForceRemove(task.gid)"
-          >
-            ❌
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 全局统计（底部） -->
-    <div v-if="globalStats" class="global-stats">
-      <div class="stat-item">
-        <span class="stat-label">总速度</span>
-        <span class="stat-value">{{ formatSpeed(Number.parseInt(globalStats.downloadSpeed)) }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">活跃任务</span>
-        <span class="stat-value">{{ globalStats.numActive }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">等待任务</span>
-        <span class="stat-value">{{ globalStats.numWaiting }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">已停止</span>
-        <span class="stat-value">{{ globalStats.numStopped }}</span>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Aria2TaskStatus } from '../utils/aria2Client'
-import { calculateETA, calculateProgress, formatFileSize, formatSpeed } from '../utils/aria2Client'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useAria2 } from '../composables/useAria2'
+import { calculateETA, calculateProgress, formatFileSize, formatSpeed } from '../utils/aria2Client'
 
 type FilterStatus = 'all' | 'active' | 'waiting' | 'stopped' | 'complete' | 'error'
 type SortBy = 'addedTime' | 'progress' | 'speed' | 'eta'
@@ -402,6 +248,186 @@ onUnmounted(() => {
   stopAutoRefresh()
 })
 </script>
+
+<template>
+  <div class="download-task-panel">
+    <div class="panel-header">
+      <h3 class="panel-title">
+        下载任务
+      </h3>
+
+      <!-- 筛选和操作 -->
+      <div class="panel-actions">
+        <select v-model="filterStatus" class="status-filter">
+          <option value="all">
+            全部任务
+          </option>
+          <option value="active">
+            下载中
+          </option>
+          <option value="waiting">
+            等待中
+          </option>
+          <option value="stopped">
+            已停止
+          </option>
+          <option value="complete">
+            已完成
+          </option>
+          <option value="error">
+            出错
+          </option>
+        </select>
+
+        <select v-model="sortBy" class="sort-select">
+          <option value="addedTime">
+            添加时间
+          </option>
+          <option value="progress">
+            下载进度
+          </option>
+          <option value="speed">
+            下载速度
+          </option>
+          <option value="eta">
+            剩余时间
+          </option>
+        </select>
+
+        <button class="btn-icon" title="刷新" @click="handleRefresh">
+          🔄
+        </button>
+      </div>
+    </div>
+
+    <!-- 批量操作 -->
+    <div v-if="hasActiveTasks" class="batch-actions">
+      <button class="btn btn-small" @click="handlePauseAll">
+        全部暂停
+      </button>
+      <button class="btn btn-small" @click="handleUnpauseAll">
+        全部恢复
+      </button>
+    </div>
+
+    <!-- 任务列表 -->
+    <div v-if="isLoading" class="loading-container">
+      <div class="loading-spinner" />
+      <span>加载中...</span>
+    </div>
+
+    <div v-else-if="filteredTasks.length === 0" class="empty-state">
+      <div class="empty-icon">
+        📥
+      </div>
+      <p class="empty-text">
+        {{ emptyMessage }}
+      </p>
+    </div>
+
+    <div v-else class="task-list">
+      <div
+        v-for="task in sortedTasks"
+        :key="task.gid"
+        class="task-item"
+        :class="`status-${task.status}`"
+      >
+        <!-- 任务信息 -->
+        <div class="task-info">
+          <div class="task-name">
+            {{ getTaskName(task) }}
+          </div>
+
+          <div class="task-meta">
+            <span class="task-size">{{ formatFileSize(Number.parseInt(task.totalLength)) }}</span>
+            <span class="task-status-badge" :class="`badge-${task.status}`">
+              {{ getStatusText(task.status) }}
+            </span>
+          </div>
+        </div>
+
+        <!-- 进度条 -->
+        <div v-if="task.status === 'active' || task.status === 'paused'" class="task-progress">
+          <div class="progress-bar">
+            <div
+              class="progress-fill"
+              :style="{ width: `${getProgress(task)}%` }"
+            />
+          </div>
+
+          <div class="progress-stats">
+            <span class="progress-percent">{{ getProgress(task) }}%</span>
+            <span v-if="task.status === 'active'" class="progress-speed">
+              {{ formatSpeed(Number.parseInt(task.downloadSpeed)) }}
+            </span>
+            <span v-if="task.status === 'active'" class="progress-eta">
+              ETA: {{ getETA(task) }}
+            </span>
+          </div>
+        </div>
+
+        <!-- 任务控制 -->
+        <div class="task-controls">
+          <button
+            v-if="task.status === 'active'"
+            class="btn-icon"
+            title="暂停"
+            @click="handlePause(task.gid)"
+          >
+            ⏸️
+          </button>
+
+          <button
+            v-if="task.status === 'paused' || task.status === 'waiting'"
+            class="btn-icon"
+            title="恢复"
+            @click="handleUnpause(task.gid)"
+          >
+            ▶️
+          </button>
+
+          <button
+            v-if="task.status === 'complete' || task.status === 'error' || task.status === 'removed'"
+            class="btn-icon"
+            title="删除"
+            @click="handleRemove(task.gid)"
+          >
+            🗑️
+          </button>
+
+          <button
+            v-if="task.status !== 'complete'"
+            class="btn-icon btn-danger"
+            title="强制删除"
+            @click="handleForceRemove(task.gid)"
+          >
+            ❌
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全局统计（底部） -->
+    <div v-if="globalStats" class="global-stats">
+      <div class="stat-item">
+        <span class="stat-label">总速度</span>
+        <span class="stat-value">{{ formatSpeed(Number.parseInt(globalStats.downloadSpeed)) }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">活跃任务</span>
+        <span class="stat-value">{{ globalStats.numActive }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">等待任务</span>
+        <span class="stat-value">{{ globalStats.numWaiting }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">已停止</span>
+        <span class="stat-value">{{ globalStats.numStopped }}</span>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .download-task-panel {

@@ -145,7 +145,7 @@ function resetFilters() {
           class="group cursor-pointer"
         >
           <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
-            <div class="aspect-[3/4] bg-gray-800">
+            <div class="aspect-3/4 bg-gray-800">
               <img
                 v-if="movie.coverImage"
                 :src="movie.coverImage"

@@ -103,20 +103,35 @@
 
 **✅ 已验证正常工作：**
 - NameMapper 三阶段匹配（100% 成功率）
-- SeesaaWikiStrategy 页面爬取
-- 社交链接提取（twitter, instagram, blog）
-- 映射表生成和使用
+- SeesaaWikiStrategy 页面爬取基础架构
+- 映射表生成机制
 
-**⚠️ 需要补充 (`packages/crawler/src/strategies/seesaawiki/parser.ts`)：**
-- `bio`（简介/个人资料）提取
-- `birthDate`（生日）提取
-- `height`（身高）提取
-- `measurements`（三围）提取
-- `cupSize`（罩杯）提取
-- `bloodType`（血型）提取
-- `nationality`（国籍）提取
+**✅ 已完成的Parser改进（2026-03-30）：**
+- ✅ 修复HTML选择器：`#wikibody` → `#wiki-content`
+- ✅ 新增字段提取逻辑：`bio`, `birthDate`, `height`, `measurements`, `cupSize`, `bloodType`, `nationality`
+- ✅ 社交链接提取（twitter, instagram, blog）
 
-**说明：** 核心架构完整且功能正常，Parser 字段提取需要分析 SeesaaWiki 实际 HTML 结构后补充。
+**🚨 发现的关键问题（需优先解决）：**
+
+**问题1: 索引爬虫URL质量问题**
+- **现象：** 测试时所有女优URL都返回404页面（"ページが見つかりませんでした"）
+- **根因：** 索引爬虫爬取的"女優ページ一覧"包含大量非女优页面（说明页、厂商页、作品列表等）
+- **影响：** 映射表中3,311条记录，大部分指向404或非女优页面
+- **解决方案：** 
+  1. 调整索引爬虫，过滤非女优页面（跳过包含"wiki"、"一覧"、"タイトル"等关键词的条目）
+  2. 验证URL有效性（访问时检查是否404）
+  3. 考虑从其他入口获取女优列表（如从实际的女优分类页）
+
+**问题2: SeesaaWiki页面编码**
+- **现象：** 页面使用EUC-JP编码（`charset=EUC-JP`）
+- **影响：** URL中的日文字符应使用EUC-JP编码（如`%b3%b5`）而非UTF-8编码（如`%E4%B8%89`）
+- **当前状态：** 大部分映射表URL使用了正确的EUC-JP编码，但仍有部分UTF-8编码的URL
+- **建议：** URL构建和保存时确保使用页面原始编码
+
+**说明：** 
+- Parser字段提取逻辑已完善，但因URL问题无法验证实际效果
+- 需要先修复索引爬虫和URL问题，再重新测试Parser
+- 核心架构（NameMapper、SeesaaWikiStrategy）设计正确，问题在于数据质量
 
 ## 11. 数据库迁移部署
 

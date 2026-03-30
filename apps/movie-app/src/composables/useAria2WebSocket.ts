@@ -1,9 +1,10 @@
+/* eslint-disable no-console */
 /**
  * Aria2 WebSocket 实时进度跟踪 Composable
  */
 
-import { onBeforeUnmount, ref } from 'vue'
 import type { Aria2TaskStatus } from '../utils/aria2Client'
+import { onBeforeUnmount, ref } from 'vue'
 import { useToast } from './useToast'
 
 // WebSocket 连接状态

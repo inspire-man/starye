@@ -1,54 +1,3 @@
-<template>
-  <div class="rating-stars">
-    <!-- 星星显示区 -->
-    <div class="stars-container" @mouseleave="handleMouseLeave">
-      <div
-        v-for="index in 5"
-        :key="index"
-        class="star-wrapper"
-        :class="{ disabled: !interactive }"
-        @mouseenter="() => handleMouseEnter(index)"
-        @click="() => handleClick(index)"
-        @touchstart="() => handleTouchStart(index)"
-      >
-        <!-- 背景空星 -->
-        <svg
-          class="star-icon empty"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-            stroke="currentColor"
-            stroke-width="2"
-            fill="none"
-          />
-        </svg>
-
-        <!-- 前景满星 -->
-        <svg
-          class="star-icon filled"
-          :style="{ clipPath: getClipPath(index) }"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-          />
-        </svg>
-      </div>
-    </div>
-
-    <!-- 评分数值和人数 -->
-    <div v-if="showStats" class="rating-stats">
-      <span class="rating-value">{{ displayValue.toFixed(1) }}</span>
-      <span v-if="count !== undefined" class="rating-count">({{ formatCount(count) }})</span>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
@@ -154,6 +103,57 @@ function handleTouchStart(index: number) {
   }, 100)
 }
 </script>
+
+<template>
+  <div class="rating-stars">
+    <!-- 星星显示区 -->
+    <div class="stars-container" @mouseleave="handleMouseLeave">
+      <div
+        v-for="index in 5"
+        :key="index"
+        class="star-wrapper"
+        :class="{ disabled: !interactive }"
+        @mouseenter="() => handleMouseEnter(index)"
+        @click="() => handleClick(index)"
+        @touchstart="() => handleTouchStart(index)"
+      >
+        <!-- 背景空星 -->
+        <svg
+          class="star-icon empty"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+            stroke="currentColor"
+            stroke-width="2"
+            fill="none"
+          />
+        </svg>
+
+        <!-- 前景满星 -->
+        <svg
+          class="star-icon filled"
+          :style="{ clipPath: getClipPath(index) }"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+          />
+        </svg>
+      </div>
+    </div>
+
+    <!-- 评分数值和人数 -->
+    <div v-if="showStats" class="rating-stats">
+      <span class="rating-value">{{ displayValue.toFixed(1) }}</span>
+      <span v-if="count !== undefined" class="rating-count">({{ formatCount(count) }})</span>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .rating-stars {

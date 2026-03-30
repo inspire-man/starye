@@ -33,7 +33,11 @@ interface TestResult {
 
 // 测试用女优列表（从 JavBus 中选取一些知名女优）
 const TEST_ACTORS = [
-  '三上悠亜', // 只测试第一个，用于调试
+  '三上悠亜',
+  '橋本ありな',
+  '明日花キララ',
+  '天使もえ',
+  '波多野結衣',
 ]
 
 async function calculateCompleteness(details: any): Promise<number> {

@@ -68,6 +68,7 @@
     "eslintcache",
     "existmag",
     "fanye",
+    "fanza",
     "Favorited",
     "Gojuon",
     "headful",
@@ -76,6 +77,7 @@
     "iconify",
     "ilike",
     "infobars",
+    "infohash",
     "isload",
     "javbus",
     "javdb",
@@ -122,6 +124,7 @@
     "networkidle",
     "Nuxt",
     "nuxtjs",
+    "nyaa",
     "Orama",
     "pixbuf",
     "presign",
@@ -136,7 +139,9 @@
     "SSIS",
     "starye",
     "strftime",
+    "sukebei",
     "tasklist",
+    "Toastification",
     "trae",
     "turborepo",
     "undici",
@@ -148,7 +153,8 @@
     "vueuse",
     "wikibody",
     "workerd",
-    "wxqrcode"
+    "wxqrcode",
+    "xgplayer"
   ],
   "conventionalCommits.scopes": [
     "ci",

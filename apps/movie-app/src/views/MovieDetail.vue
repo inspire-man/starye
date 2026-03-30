@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import type { MovieDetail, Player } from '../types'
+import QrcodeVue from 'qrcode.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import QrcodeVue from 'qrcode.vue'
 import { movieApi } from '../api'
-import { sortPlaybackSources, getSourceTypeIcon, getQualityBadgeClass } from '../utils/playbackSources'
-import { copyToClipboard, copyMagnetLinks } from '../utils/clipboard'
-import { isMagnetLink } from '../utils/magnetLink'
+import RatingStars from '../components/RatingStars.vue'
+import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useRating } from '../composables/useRating'
-import { useAria2 } from '../composables/useAria2'
-import RatingStars from '../components/RatingStars.vue'
+import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
+import { isMagnetLink } from '../utils/magnetLink'
+import { getQualityBadgeClass, getSourceTypeIcon, sortPlaybackSources } from '../utils/playbackSources'
 
 const route = useRoute()
 const loading = ref(true)
@@ -72,7 +72,7 @@ async function copyMagnetLink(player: Player) {
       showToast('复制失败，请手动复制', 'error')
     }
   }
-  catch (error) {
+  catch {
     showToast('复制失败，请手动复制', 'error')
   }
 }
@@ -99,7 +99,7 @@ async function copyAllMagnetLinks() {
       showToast('复制失败，请手动复制', 'error')
     }
   }
-  catch (error) {
+  catch {
     showToast('复制失败，请手动复制', 'error')
   }
 }
@@ -236,7 +236,7 @@ onMounted(() => {
   <div v-else-if="movie" class="space-y-6">
     <div class="bg-gray-800 rounded-lg shadow-lg p-6">
       <div class="flex flex-col md:flex-row gap-6">
-        <div class="flex-shrink-0">
+        <div class="shrink-0">
           <img
             v-if="movie.coverImage"
             :src="movie.coverImage"
@@ -428,7 +428,9 @@ onMounted(() => {
 
               <!-- 调试信息：自动评分详情（仅调试模式） -->
               <div v-if="debugMode" class="mt-2 p-2 bg-gray-800 rounded text-xs space-y-1">
-                <div class="text-gray-400 font-semibold">🔍 自动评分详情</div>
+                <div class="text-gray-400 font-semibold">
+                  🔍 自动评分详情
+                </div>
                 <div class="text-gray-300">
                   综合评分: <span class="text-yellow-400">{{ getPlayerRating(player).compositeScore?.toFixed(1) ?? 'N/A' }}</span>
                 </div>
@@ -445,7 +447,7 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="flex flex-col gap-2 flex-shrink-0">
+            <div class="flex flex-col gap-2 shrink-0">
               <button
                 v-if="isMagnetLink(player.sourceUrl)"
                 class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded transition-colors whitespace-nowrap"

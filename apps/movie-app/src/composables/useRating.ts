@@ -2,8 +2,8 @@
  * 播放源评分 Composable
  */
 
-import { ref } from 'vue'
 import type { Player } from '../types'
+import { ref } from 'vue'
 import {
   calculateAutoScore,
   calculateCompositeScore,
@@ -67,7 +67,7 @@ export function useRating() {
   function calculatePlayerAutoScore(player: Player): number {
     // 解析文件大小（如果 magnetLink 中包含大小信息）
     const fileSizeGB = null // TODO: 从 magnetLink 解析文件大小
-    
+
     return calculateAutoScore(
       player.quality ?? null,
       fileSizeGB,

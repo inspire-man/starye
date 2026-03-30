@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Toast 通知 Composable
  * 简化实现，可后续集成第三方 Toast 库

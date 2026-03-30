@@ -1,13 +1,14 @@
+<!-- eslint-disable no-alert -->
 <script setup lang="ts">
 import type { DownloadStatus, WatchingProgress } from '../types'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { progressApi } from '../api'
-import { useUserStore } from '../stores/user'
-import { useDownloadList } from '../composables/useDownloadList'
-import { useRating } from '../composables/useRating'
 import Aria2Settings from '../components/Aria2Settings.vue'
 import DownloadTaskPanel from '../components/DownloadTaskPanel.vue'
+import { useDownloadList } from '../composables/useDownloadList'
+import { useRating } from '../composables/useRating'
+import { useUserStore } from '../stores/user'
 
 const userStore = useUserStore()
 const loadingHistory = ref(false)
@@ -454,7 +455,7 @@ onMounted(() => {
                 </div>
 
                 <!-- 封面 -->
-                <RouterLink :to="`/movie/${item.movieCode}`" class="flex-shrink-0">
+                <RouterLink :to="`/movie/${item.movieCode}`" class="shrink-0">
                   <div class="w-20 h-28 bg-gray-800 rounded overflow-hidden">
                     <img
                       v-if="item.coverImage"
@@ -597,7 +598,7 @@ onMounted(() => {
                   </div>
 
                   <!-- 右侧：查看详情按钮 -->
-                  <div v-if="rating.movieCode" class="flex-shrink-0">
+                  <div v-if="rating.movieCode" class="shrink-0">
                     <RouterLink
                       :to="`/movie/${rating.movieCode}`"
                       class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm rounded-lg transition-colors whitespace-nowrap"

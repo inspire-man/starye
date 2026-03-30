@@ -7,7 +7,7 @@ export function validateMagnetLink(url: string): boolean {
 
   // 标准磁力链接格式：magnet:?xt=urn:btih:...
   // 支持32-40位的infohash（SHA1为40位，短hash为32位）
-  const magnetRegex = /^magnet:\?xt=urn:btih:[a-fA-F0-9]{32,40}(&.*)?$/
+  const magnetRegex = /^magnet:\?xt=urn:btih:[a-fA-F0-9]{32,40}(?:&.*)?$/
 
   return magnetRegex.test(url)
 }
@@ -26,7 +26,7 @@ export function extractInfoHash(url: string): string | null {
   if (!isMagnetLink(url))
     return null
 
-  const match = url.match(/urn:btih:([a-fA-F0-9]{32,40})/i)
+  const match = url.match(/urn:btih:([a-f0-9]{32,40})/i)
   return match ? match[1] : null
 }
 

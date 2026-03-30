@@ -166,7 +166,7 @@ export function parseActorPage(
   const warnings: string[] = []
 
   // 提取主名（页面标题）
-  const title = $('#wikibody h1').first().text().trim()
+  const title = $('#wiki-content h1, #wiki-content h2').first().text().trim()
   let name = title
   let reading: string | undefined
 
@@ -179,7 +179,7 @@ export function parseActorPage(
 
   // 提取别名
   const aliases: string[] = []
-  const aliasText = $('#wikibody')
+  const aliasText = $('#wiki-content')
     .find(':contains("別名")')
     .first()
     .parent()
@@ -195,11 +195,116 @@ export function parseActorPage(
   }
 
   // 提取社交链接
-  const socialLinks = extractSocialLinks($, $('#wikibody'))
+  const socialLinks = extractSocialLinks($, $('#wiki-content'))
+
+  // 提取生日
+  let birthDate: number | undefined
+  const birthText = $('#wiki-content')
+    .find(':contains("生年月日")')
+    .first()
+    .parent()
+    .text()
+  if (birthText && birthText.includes('生年月日')) {
+    const birthMatch = birthText.match(/生年月日[：:]\s*([^\n]+)/)
+    if (birthMatch) {
+      const parsed = parseJapaneseDate(birthMatch[1])
+      if (parsed) {
+        birthDate = parsed
+      }
+      else {
+        warnings.push(`Failed to parse birth date: ${birthMatch[1]}`)
+      }
+    }
+  }
+
+  // 提取身高
+  let height: number | undefined
+  const heightText = $('#wiki-content')
+    .find(':contains("身長")')
+    .first()
+    .parent()
+    .text()
+  if (heightText && heightText.includes('身長')) {
+    const heightMatch = heightText.match(/身長[：:]\s*(\d+)/)
+    if (heightMatch) {
+      height = Number.parseInt(heightMatch[1], 10)
+    }
+  }
+
+  // 提取三围
+  let measurements: string | undefined
+  const measurementsText = $('#wiki-content')
+    .find(':contains("サイズ"), :contains("スリーサイズ")')
+    .first()
+    .parent()
+    .text()
+  if (measurementsText) {
+    // 匹配格式: B88-W58-H85 或 88-58-85
+    const measurementsMatch = measurementsText.match(/B?(\d)[-\s]*W?(\d)[-\s]*H?(\d)/)
+    if (measurementsMatch) {
+      const [, bust, waist, hip] = measurementsMatch
+      measurements = `${bust}-${waist}-${hip}`
+    }
+  }
+
+  // 提取罩杯
+  let cupSize: string | undefined
+  if (measurementsText) {
+    const cupMatch = measurementsText.match(/([A-Z])カップ/)
+    if (cupMatch) {
+      cupSize = cupMatch[1]
+    }
+  }
+
+  // 提取血型
+  let bloodType: string | undefined
+  const bloodText = $('#wiki-content')
+    .find(':contains("血液型")')
+    .first()
+    .parent()
+    .text()
+  if (bloodText && bloodText.includes('血液型')) {
+    const bloodMatch = bloodText.match(/血液型[：:]\s*([ABO]{1,2}±?)/)
+    if (bloodMatch) {
+      bloodType = bloodMatch[1]
+    }
+  }
+
+  // 提取国籍/出身地
+  let nationality: string | undefined
+  const nationalityText = $('#wiki-content')
+    .find(':contains("出身地"), :contains("国籍")')
+    .first()
+    .parent()
+    .text()
+  if (nationalityText) {
+    const nationalityMatch = nationalityText.match(/(?:出身地|国籍)[：:]\s*([^\n]+)/)
+    if (nationalityMatch) {
+      nationality = cleanWikiMarkup(nationalityMatch[1]).trim()
+    }
+  }
+
+  // 提取简介/个人资料（通常在"プロフィール"或页面开头）
+  let bio: string | undefined
+  const profileSection = $('#wiki-content')
+    .find(':contains("プロフィール"), :contains("略歴")')
+    .first()
+    .parent()
+  if (profileSection.length > 0) {
+    // 提取该段落之后的文本，直到下一个标题
+    const bioText = profileSection
+      .nextAll('p, div')
+      .first()
+      .text()
+      .trim()
+    if (bioText && bioText.length > 10) {
+      bio = cleanWikiMarkup(bioText).substring(0, 500) // 限制长度
+    }
+  }
 
   // 提取出道日期
   let debutDate: number | undefined
-  const debutText = $('#wikibody')
+  const debutText = $('#wiki-content')
     .find(':contains("デビュー")')
     .first()
     .parent()
@@ -224,7 +329,7 @@ export function parseActorPage(
   // 提取引退日期
   let retireDate: number | undefined
   let isActive = true
-  const retireText = $('#wikibody')
+  const retireText = $('#wiki-content')
     .find(':contains("引退")')
     .first()
     .parent()
@@ -251,7 +356,7 @@ export function parseActorPage(
 
   // 提取作品列表（可选）
   const works: Work[] = []
-  $('#wikibody')
+  $('#wiki-content')
     .find('li')
     .each((_, el) => {
       const text = $(el).text().trim()
@@ -275,6 +380,13 @@ export function parseActorPage(
       name,
       reading,
       aliases,
+      bio,
+      birthDate,
+      height,
+      measurements,
+      cupSize,
+      bloodType,
+      nationality,
       debutDate,
       retireDate,
       isActive,
@@ -299,12 +411,12 @@ export function parsePublisherPage(
   const warnings: string[] = []
 
   // 提取厂商名（页面标题）
-  const title = $('#wikibody h1').first().text().trim()
+  const title = $('#wiki-content h1, #wiki-content h2').first().text().trim()
   const name = title.replace(/\s+wiki$/i, '').trim()
 
   // 提取 Logo
   let logo: string | undefined
-  const logoImg = $('#wikibody img').first()
+  const logoImg = $('#wiki-content img').first()
   if (logoImg.length > 0) {
     logo = logoImg.attr('src')
     // 如果是相对路径，转换为绝对路径
@@ -315,7 +427,7 @@ export function parsePublisherPage(
 
   // 提取官网
   let website: string | undefined
-  const websiteText = $('#wikibody')
+  const websiteText = $('#wiki-content')
     .find(':contains("公式サイト"), :contains("公式")')
     .first()
     .parent()
@@ -328,11 +440,11 @@ export function parsePublisherPage(
   }
 
   // 提取社交链接
-  const socialLinks = extractSocialLinks($, $('#wikibody'))
+  const socialLinks = extractSocialLinks($, $('#wiki-content'))
 
   // 提取简介
   let description: string | undefined
-  const firstPara = $('#wikibody p').first().text().trim()
+  const firstPara = $('#wiki-content p').first().text().trim()
   if (firstPara && firstPara.length > 10) {
     description = cleanWikiMarkup(firstPara).substring(0, 1000)
   }
@@ -341,7 +453,7 @@ export function parsePublisherPage(
   let parentPublisher: string | undefined
   let brandSeries: string | undefined
 
-  const bodyText = $('#wikibody').text()
+  const bodyText = $('#wiki-content').text()
 
   // 检测母公司（如 "KMP系1レーベル"）
   const parentMatch = bodyText.match(/([^、。\n]+)系\d*レーベル/)

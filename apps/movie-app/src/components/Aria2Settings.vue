@@ -1,113 +1,7 @@
-<template>
-  <div class="aria2-settings">
-    <h3 class="settings-title">Aria2 连接设置</h3>
-
-    <!-- 配置向导提示（首次使用） -->
-    <div v-if="showWizard" class="wizard-banner">
-      <div class="wizard-icon">💡</div>
-      <div class="wizard-content">
-        <p class="wizard-title">首次使用指南</p>
-        <p class="wizard-text">
-          请先配置 Aria2 RPC 连接信息。如果 Aria2 在本机运行，通常使用
-          <code>http://localhost:6800/jsonrpc</code>
-        </p>
-        <button class="wizard-close" @click="showWizard = false">
-          知道了
-        </button>
-      </div>
-    </div>
-
-    <!-- 配置表单 -->
-    <div class="settings-form">
-      <!-- RPC URL -->
-      <div class="form-group">
-        <label for="rpc-url" class="form-label">RPC URL</label>
-        <input
-          id="rpc-url"
-          v-model="formData.rpcUrl"
-          type="url"
-          class="form-input"
-          placeholder="http://localhost:6800/jsonrpc"
-          :disabled="isTestingConnection"
-        >
-        <p v-if="urlError" class="form-error">{{ urlError }}</p>
-        <p class="form-hint">
-          Aria2 JSON-RPC 地址（默认端口 6800）
-        </p>
-      </div>
-
-      <!-- 密钥（可选） -->
-      <div class="form-group">
-        <label for="rpc-secret" class="form-label">密钥（可选）</label>
-        <input
-          id="rpc-secret"
-          v-model="formData.secret"
-          type="password"
-          class="form-input"
-          placeholder="留空表示无密钥"
-          :disabled="isTestingConnection"
-        >
-        <p class="form-hint">
-          如果 Aria2 配置了 <code>rpc-secret</code>，请在此填入
-        </p>
-      </div>
-
-      <!-- 使用代理 -->
-      <div class="form-group checkbox-group">
-        <label class="checkbox-label">
-          <input
-            v-model="formData.useProxy"
-            type="checkbox"
-            class="checkbox-input"
-            :disabled="isTestingConnection"
-          >
-          <span>通过服务器代理（解决跨域问题）</span>
-        </label>
-        <p class="form-hint">
-          如果浏览器无法直接访问 Aria2（跨域或网络隔离），可启用此选项
-        </p>
-      </div>
-
-      <!-- 操作按钮 -->
-      <div class="form-actions">
-        <button
-          class="btn btn-test"
-          :disabled="!canTest || isTestingConnection"
-          @click="handleTestConnection"
-        >
-          <span v-if="isTestingConnection" class="loading-spinner"></span>
-          {{ isTestingConnection ? '测试中...' : '测试连接' }}
-        </button>
-
-        <button
-          class="btn btn-save"
-          :disabled="!canSave || isSaving"
-          @click="handleSave"
-        >
-          <span v-if="isSaving" class="loading-spinner"></span>
-          {{ isSaving ? '保存中...' : '保存配置' }}
-        </button>
-      </div>
-    </div>
-
-    <!-- 连接状态指示器 -->
-    <div class="connection-status">
-      <div class="status-indicator" :class="statusClass">
-        <div class="status-dot"></div>
-        <span class="status-text">{{ statusText }}</span>
-      </div>
-
-      <div v-if="aria2Version" class="version-info">
-        Aria2 版本: {{ aria2Version }}
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { Aria2Config } from '../composables/useAria2'
 import { computed, onMounted, ref } from 'vue'
 import { useAria2 } from '../composables/useAria2'
-import type { Aria2Config } from '../composables/useAria2'
 
 const {
   config,
@@ -247,6 +141,120 @@ onMounted(async () => {
   }
 })
 </script>
+
+<template>
+  <div class="aria2-settings">
+    <h3 class="settings-title">
+      Aria2 连接设置
+    </h3>
+
+    <!-- 配置向导提示（首次使用） -->
+    <div v-if="showWizard" class="wizard-banner">
+      <div class="wizard-icon">
+        💡
+      </div>
+      <div class="wizard-content">
+        <p class="wizard-title">
+          首次使用指南
+        </p>
+        <p class="wizard-text">
+          请先配置 Aria2 RPC 连接信息。如果 Aria2 在本机运行，通常使用
+          <code>http://localhost:6800/jsonrpc</code>
+        </p>
+        <button class="wizard-close" @click="showWizard = false">
+          知道了
+        </button>
+      </div>
+    </div>
+
+    <!-- 配置表单 -->
+    <div class="settings-form">
+      <!-- RPC URL -->
+      <div class="form-group">
+        <label for="rpc-url" class="form-label">RPC URL</label>
+        <input
+          id="rpc-url"
+          v-model="formData.rpcUrl"
+          type="url"
+          class="form-input"
+          placeholder="http://localhost:6800/jsonrpc"
+          :disabled="isTestingConnection"
+        >
+        <p v-if="urlError" class="form-error">
+          {{ urlError }}
+        </p>
+        <p class="form-hint">
+          Aria2 JSON-RPC 地址（默认端口 6800）
+        </p>
+      </div>
+
+      <!-- 密钥（可选） -->
+      <div class="form-group">
+        <label for="rpc-secret" class="form-label">密钥（可选）</label>
+        <input
+          id="rpc-secret"
+          v-model="formData.secret"
+          type="password"
+          class="form-input"
+          placeholder="留空表示无密钥"
+          :disabled="isTestingConnection"
+        >
+        <p class="form-hint">
+          如果 Aria2 配置了 <code>rpc-secret</code>，请在此填入
+        </p>
+      </div>
+
+      <!-- 使用代理 -->
+      <div class="form-group checkbox-group">
+        <label class="checkbox-label">
+          <input
+            v-model="formData.useProxy"
+            type="checkbox"
+            class="checkbox-input"
+            :disabled="isTestingConnection"
+          >
+          <span>通过服务器代理（解决跨域问题）</span>
+        </label>
+        <p class="form-hint">
+          如果浏览器无法直接访问 Aria2（跨域或网络隔离），可启用此选项
+        </p>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="form-actions">
+        <button
+          class="btn btn-test"
+          :disabled="!canTest || isTestingConnection"
+          @click="handleTestConnection"
+        >
+          <span v-if="isTestingConnection" class="loading-spinner" />
+          {{ isTestingConnection ? '测试中...' : '测试连接' }}
+        </button>
+
+        <button
+          class="btn btn-save"
+          :disabled="!canSave || isSaving"
+          @click="handleSave"
+        >
+          <span v-if="isSaving" class="loading-spinner" />
+          {{ isSaving ? '保存中...' : '保存配置' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 连接状态指示器 -->
+    <div class="connection-status">
+      <div class="status-indicator" :class="statusClass">
+        <div class="status-dot" />
+        <span class="status-text">{{ statusText }}</span>
+      </div>
+
+      <div v-if="aria2Version" class="version-info">
+        Aria2 版本: {{ aria2Version }}
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .aria2-settings {

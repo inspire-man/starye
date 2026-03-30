@@ -123,7 +123,7 @@ onUnmounted(() => {
 
 <template>
   <div class="fixed inset-0 bg-black z-50">
-    <div class="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 z-10">
+    <div class="absolute top-0 left-0 right-0 bg-linear-to-b from-black/80 to-transparent p-4 z-10">
       <div class="container mx-auto flex items-center justify-between">
         <button
           class="text-white hover:text-primary-400 transition flex items-center gap-2"

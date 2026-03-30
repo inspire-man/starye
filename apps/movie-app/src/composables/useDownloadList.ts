@@ -1,5 +1,5 @@
-import { computed, ref } from 'vue'
 import type { MovieDetail } from '../types'
+import { computed, ref } from 'vue'
 
 // 下载状态类型
 export type DownloadStatus = 'planned' | 'downloading' | 'completed'

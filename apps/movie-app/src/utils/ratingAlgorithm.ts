@@ -177,7 +177,7 @@ export function extractFileSizeFromMagnet(magnetLink: string): number | null {
     }
 
     // 尝试从文件名提取大小（如：[1.2GB]、(2.5GB)）
-    const sizeMatch = dn.match(/[\[\(](\d+\.?\d*)\s*(GB|MB)[\]\)]/i)
+    const sizeMatch = dn.match(/[[(](\d+(?:\.\d*)?)\s*(GB|MB)[\])]/i)
 
     if (sizeMatch) {
       const size = Number.parseFloat(sizeMatch[1])

@@ -7,7 +7,8 @@
     "declaration": true,
     "declarationMap": true,
     "noEmit": false,
-    "outDir": "dist"
+    "outDir": "dist",
+    "ignoreDeprecations": "6.0"
   },
   "references": [
     { "path": "../../packages/db" }
