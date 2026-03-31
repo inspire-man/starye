@@ -1,6 +1,6 @@
 # 名字映射表更新流程
 
-**日期**: 2026-03-31  
+**日期**: 2026-03-31
 **目的**: 定期维护女优和厂商的 JavBus ↔ SeesaaWiki 名字映射表
 
 ## 为什么需要定期更新
@@ -121,29 +121,29 @@ gh workflow run daily-publisher-crawl.yml
 name: Weekly Index Crawl
 on:
   schedule:
-    - cron: '0 2 * * 0'  # 每周日 02:00 UTC
+    - cron: '0 2 * * 0' # 每周日 02:00 UTC
   workflow_dispatch:
 
 jobs:
   crawl-index:
     runs-on: ubuntu-latest
-    timeout-minutes: 180  # 3小时
+    timeout-minutes: 180 # 3小时
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'pnpm'
-      
+          cache: pnpm
+
       - run: pnpm install
-      
+
       - name: 运行女优索引爬虫
         run: pnpm --filter @starye/crawler tsx scripts/run-actor-index-crawler.ts
-        
+
       - name: 运行厂商索引爬虫
         run: pnpm --filter @starye/crawler tsx scripts/run-publisher-index-crawler.ts
-        
+
       - name: 提交映射表更新
         run: |
           git config user.name "GitHub Actions Bot"
