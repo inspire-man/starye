@@ -330,7 +330,7 @@ export class ActorCrawler {
       } = {
         source: 'seesaawiki' as const,
         sourceId: nameMapping.wikiName,
-        sourceUrl: nameMapping.wikiUrl,
+        sourceUrl: actor.sourceUrl, // 保持原始 JavBus URL
         bio: wikiDetails.bio || wikiDetails.reading || undefined, // 优先使用bio，fallback到reading
         birthDate: wikiDetails.birthDate || undefined,
         height: wikiDetails.height || undefined,

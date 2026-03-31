@@ -289,6 +289,56 @@
 - [ ] 13.5 在 GitHub Actions 手动触发厂商爬虫：`daily-publisher-crawl.yml`
 - [ ] 13.6 监控厂商爬虫日志，检查系列关系提取是否正确
 - [ ] 13.7 验证第一批厂商数据质量
+- [x] 13.8 **生产环境问题诊断和修复**（2026-03-31）：
+  - [x] **问题 1: URL 字段混淆**（严重，已修复）
+    - 🐛 **根本原因**：`actor-crawler.ts:333` 和 `publisher-crawler.ts:298` 将 `nameMapping.wikiUrl` 赋值给了 `sourceUrl` 字段
+    - 💥 **影响**：数据库中 `sourceUrl` 被覆盖为 SeesaaWiki URL，导致：
+      - 日志显示 "JavBus URL: https://seesaawiki.jp/..." 
+      - 下次爬取时访问错误的 URL
+      - 引发页面加载超时（JavBus 爬虫尝试访问 SeesaaWiki URL）
+    - ✅ **修复**：将 `sourceUrl: nameMapping.wikiUrl` 改为 `sourceUrl: actor.sourceUrl` / `sourceUrl: publisher.sourceUrl`
+    - ✅ **修复文件**：
+      - `packages/crawler/src/crawlers/actor-crawler.ts`
+      - `packages/crawler/src/crawlers/publisher-crawler.ts`
+  - [ ] **问题 2: SeesaaWiki 数据完整度低**
+    - 📊 **数据统计**（150 个女优样本）：
+      - 头像: 100% ✅
+      - 别名: 0% ❌
+      - Twitter: 0% ❌
+      - Instagram: 0% ❌
+      - 博客: 0% ❌
+      - 出道日期: 0% ❌
+      - 退役日期: 0% ❌
+      - 简介: 0% ❌
+      - **平均完整度: 30%**（仅头像有数据）
+    - 📊 **厂商数据统计**（1 个厂商样本）：
+      - Logo: 0% ❌
+      - 官网: 0% ❌
+      - Twitter: 0% ❌
+      - Instagram: 0% ❌
+      - 简介: 0% ❌
+      - 母公司: 0% ❌
+      - 子品牌: 0% ❌
+      - **平均完整度: 0%**（所有字段都没数据）
+    - 🔍 **可能原因**：
+      1. SeesaaWiki 页面结构与选择器不匹配
+      2. 解析器的字段选择器需要调整
+      3. 页面内容格式变化（Wiki 标记语言变化）
+      4. 需要实际查看爬取的 HTML 来诊断
+    - [ ] **诊断步骤**：
+      - [ ] 添加调试日志，输出解析器实际抓取的原始文本
+      - [ ] 随机抽样 5-10 个女优，手动访问 SeesaaWiki 页面，对比字段是否存在
+      - [ ] 检查解析器的选择器是否正确匹配实际 HTML 结构
+      - [ ] 验证日期解析函数是否正常工作
+      - [ ] 验证社交链接提取函数是否正常工作
+  - [ ] **问题 3: 频繁超时**
+    - ⏱️ **超时类型**：
+      - JavBus 访问 SeesaaWiki URL（由问题 1 引起，已修复）
+      - JavBus 自身超时（可能是反爬虫或网络问题）
+    - [ ] **优化措施**：
+      - [ ] 调整超时阈值（当前可能过短）
+      - [ ] 增加重试机制
+      - [ ] 添加更详细的超时错误日志
 
 ## 14. 监控和优化
 

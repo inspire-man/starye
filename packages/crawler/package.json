@@ -16,6 +16,7 @@
     "crawl:publisher": "tsx scripts/run-publisher.ts",
     "crawl:seesaawiki:index": "tsx src/scripts/crawl-seesaawiki-index.ts",
     "test:seesaawiki": "tsx scripts/test-seesaawiki-integration.ts",
+    "diagnose:seesaawiki": "tsx scripts/diagnose-seesaawiki-parser.ts",
     "test": "vitest",
     "test:unit": "vitest run",
     "test:auth": "tsx scripts/test-api-auth.ts",

@@ -295,7 +295,7 @@ export class PublisherCrawler {
       const details = {
         source: 'seesaawiki' as const,
         sourceId: nameMapping.wikiName,
-        sourceUrl: nameMapping.wikiUrl,
+        sourceUrl: publisher.sourceUrl, // 保持原始 JavBus URL
         logo: wikiDetails.logo || undefined,
         website: wikiDetails.website || undefined,
         twitter: wikiDetails.twitter || undefined,
