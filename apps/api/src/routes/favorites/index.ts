@@ -5,7 +5,7 @@ import * as v from 'valibot'
 import { requireAuth } from '../../middleware/guard'
 import { AddFavoriteBodySchema, DeleteFavoriteParamSchema, FavoritesListDataSchema, GetFavoritesQuerySchema } from '../../schemas/favorite'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../schemas/responses'
-import { addFavoriteHandler, deleteFavoriteHandler, getFavoriteList } from './handlers/favorite.handler'
+import { addFavoriteHandler, checkFavoriteHandler, deleteFavoriteHandler, getFavoriteList } from './handlers/favorite.handler'
 
 /**
  * Favorites 路由
@@ -135,4 +135,34 @@ export const favoritesRoutes = new Hono<AppEnv>()
     }),
     validator('param', DeleteFavoriteParamSchema),
     deleteFavoriteHandler,
+  )
+  .get(
+    '/check/:entityType/:entityId',
+    describeRoute({
+      summary: '检查是否已收藏',
+      description: '检查指定实体是否已被当前用户收藏',
+      tags: ['Favorites'],
+      operationId: 'checkFavorite',
+      responses: {
+        200: {
+          description: '成功返回收藏状态',
+          content: {
+            'application/json': {
+              schema: resolver(SuccessResponseSchema(v.object({
+                isFavorited: v.boolean(),
+              }), '成功返回收藏状态')),
+            },
+          },
+        },
+        401: {
+          description: '未认证',
+          content: {
+            'application/json': {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    checkFavoriteHandler,
   )

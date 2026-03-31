@@ -216,3 +216,11 @@ export interface ApiResponse<T = any> {
   data?: T
   error?: string
 }
+
+export interface Favorite {
+  id: string
+  userId: string
+  entityType: 'actor' | 'publisher' | 'movie' | 'comic'
+  entityId: string
+  createdAt: number
+}

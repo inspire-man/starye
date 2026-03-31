@@ -1,4 +1,4 @@
-import type { Actor, ActorDetail, ApiResponse, Movie, MovieDetail, PaginatedResponse, Publisher, PublisherDetail, WatchingProgress } from './types'
+import type { Actor, ActorDetail, ApiResponse, Favorite, Movie, MovieDetail, PaginatedResponse, Publisher, PublisherDetail, WatchingProgress } from './types'
 import axios from 'axios'
 
 const api = axios.create({
@@ -139,5 +139,40 @@ export const authApi = {
       },
     })
     window.location.reload()
+  },
+}
+
+export const favoritesApi = {
+  async getFavorites(params?: {
+    page?: number
+    limit?: number
+    entityType?: 'actor' | 'publisher' | 'movie' | 'comic'
+  }): Promise<PaginatedResponse<Favorite>> {
+    const { data } = await api.get('/favorites', { params })
+    return {
+      success: true,
+      data: data.data,
+      pagination: data.meta,
+    }
+  },
+
+  async addFavorite(entityType: 'actor' | 'publisher' | 'movie' | 'comic', entityId: string): Promise<ApiResponse<{ id: string, alreadyExists: boolean }>> {
+    const { data } = await api.post('/favorites', { entityType, entityId })
+    return data
+  },
+
+  async deleteFavorite(favoriteId: string): Promise<ApiResponse<{ success: boolean }>> {
+    const { data } = await api.delete(`/favorites/${favoriteId}`)
+    return data
+  },
+
+  async checkFavorite(entityType: 'actor' | 'publisher' | 'movie' | 'comic', entityId: string): Promise<boolean> {
+    try {
+      const { data } = await api.get(`/favorites/check/${entityType}/${entityId}`)
+      return data.isFavorited || false
+    }
+    catch {
+      return false
+    }
   },
 }

@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import type { SelectOption } from '../components/Select.vue'
 import type { Movie } from '../types'
 import { reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { movieApi } from '../api'
+import Select from '../components/Select.vue'
 
 const searched = ref(false)
 const movies = ref<Movie[]>([])
@@ -20,6 +22,13 @@ const filters = reactive({
   sortBy: 'releaseDate',
   sortOrder: 'desc' as 'asc' | 'desc',
 })
+
+// 排序选项配置
+const sortOptions: SelectOption<string>[] = [
+  { label: '发行日期', value: 'releaseDate', icon: '📅' },
+  { label: '最近更新', value: 'updatedAt', icon: '🔄' },
+  { label: '最新上架', value: 'createdAt', icon: '✨' },
+]
 
 async function search() {
   searched.value = true
@@ -97,20 +106,12 @@ function resetFilters() {
               class="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
             >
 
-            <select
+            <Select
               v-model="filters.sortBy"
-              class="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-            >
-              <option value="releaseDate">
-                发行日期
-              </option>
-              <option value="updatedAt">
-                最近更新
-              </option>
-              <option value="createdAt">
-                最新上架
-              </option>
-            </select>
+              :options="sortOptions"
+              placeholder="选择排序"
+              size="default"
+            />
 
             <button
               class="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-all shadow-md hover:shadow-lg"

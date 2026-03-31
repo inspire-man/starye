@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import type { SelectOption } from '../components/Select.vue'
 import type { Movie } from '../types'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { movieApi } from '../api'
+import Select from '../components/Select.vue'
 import { useUserStore } from '../stores/user'
 
 const userStore = useUserStore()
@@ -20,6 +22,13 @@ const filters = reactive({
   sortBy: 'releaseDate',
   sortOrder: 'desc' as 'asc' | 'desc',
 })
+
+// 排序选项配置
+const sortOptions: SelectOption<string>[] = [
+  { label: '发行日期', value: 'releaseDate', icon: '📅' },
+  { label: '最近更新', value: 'updatedAt', icon: '🔄' },
+  { label: '最新上架', value: 'createdAt', icon: '✨' },
+]
 
 async function fetchMovies() {
   loading.value = true
@@ -97,20 +106,12 @@ onMounted(() => {
           @keyup.enter="searchMovies"
         >
 
-        <select
+        <Select
           v-model="filters.sortBy"
-          class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        >
-          <option value="releaseDate">
-            发行日期
-          </option>
-          <option value="updatedAt">
-            最近更新
-          </option>
-          <option value="createdAt">
-            最新上架
-          </option>
-        </select>
+          :options="sortOptions"
+          placeholder="选择排序方式"
+          size="default"
+        />
       </div>
     </div>
 

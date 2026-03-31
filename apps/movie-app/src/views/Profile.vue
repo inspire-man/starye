@@ -1,16 +1,20 @@
 <!-- eslint-disable no-alert -->
 <script setup lang="ts">
+import type { SelectOption } from '../components/Select.vue'
 import type { DownloadStatus, WatchingProgress } from '../types'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { progressApi } from '../api'
 import Aria2Settings from '../components/Aria2Settings.vue'
 import DownloadTaskPanel from '../components/DownloadTaskPanel.vue'
+import Select from '../components/Select.vue'
 import { useDownloadList } from '../composables/useDownloadList'
+import { useMobileDetect } from '../composables/useMobileDetect'
 import { useRating } from '../composables/useRating'
 import { useUserStore } from '../stores/user'
 
 const userStore = useUserStore()
+const { isMobile } = useMobileDetect()
 const loadingHistory = ref(false)
 const watchingHistory = ref<WatchingProgress[]>([])
 
@@ -26,9 +30,26 @@ const loadingRatings = ref(false)
 type TabType = 'history' | 'downloads' | 'aria2-settings' | 'aria2-tasks' | 'my-ratings'
 const activeTab = ref<TabType>('history')
 
+// Tab 选项配置
+const tabOptions: SelectOption<TabType>[] = [
+  { label: '📺 观看历史', value: 'history' },
+  { label: '📥 我的下载', value: 'downloads' },
+  { label: '⚙️ Aria2 设置', value: 'aria2-settings' },
+  { label: '⬇️ 下载任务', value: 'aria2-tasks' },
+  { label: '⭐ 我的评分', value: 'my-ratings' },
+]
+
 // 下载列表筛选
 const downloadFilter = ref<DownloadStatus | 'all'>('all')
 const selectedItems = ref<Set<string>>(new Set())
+
+// 下载状态选项配置
+const downloadFilterOptions: SelectOption<DownloadStatus | 'all'>[] = [
+  { label: '全部状态', value: 'all' },
+  { label: '计划下载', value: 'planned', icon: '📋' },
+  { label: '下载中', value: 'downloading', icon: '⬇️' },
+  { label: '已完成', value: 'completed', icon: '✅' },
+]
 
 // Toast 提示
 const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
@@ -267,7 +288,19 @@ onMounted(() => {
 
       <!-- Tab 切换 -->
       <div class="bg-gray-800 rounded-lg shadow-lg">
-        <div class="flex flex-wrap border-b border-gray-700">
+        <!-- 移动端：下拉选择器 -->
+        <div v-if="isMobile" class="p-4 border-b border-gray-700">
+          <Select
+            v-model="activeTab"
+            :options="tabOptions"
+            placeholder="选择页面"
+            size="default"
+            @change="if (activeTab === 'my-ratings' && myRatings.length === 0) loadMyRatings()"
+          />
+        </div>
+
+        <!-- 桌面端：Tab 按钮 -->
+        <div v-else class="flex flex-wrap border-b border-gray-700">
           <button
             class="flex-1 min-w-[120px] px-4 py-4 text-center font-medium transition-colors text-sm"
             :class="activeTab === 'history'
@@ -373,23 +406,12 @@ onMounted(() => {
             </div>
 
             <div class="flex gap-2">
-              <select
+              <Select
                 v-model="downloadFilter"
-                class="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="all">
-                  全部状态
-                </option>
-                <option value="planned">
-                  计划下载
-                </option>
-                <option value="downloading">
-                  下载中
-                </option>
-                <option value="completed">
-                  已完成
-                </option>
-              </select>
+                :options="downloadFilterOptions"
+                placeholder="筛选状态"
+                size="small"
+              />
 
               <button
                 v-if="selectedItems.size > 0"

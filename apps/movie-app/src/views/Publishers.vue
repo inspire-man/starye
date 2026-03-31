@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import type { SelectOption } from '../components/Select.vue'
 import type { Publisher } from '../types'
 import { onMounted, reactive, ref } from 'vue'
 import { publisherApi } from '../api'
+import Select from '../components/Select.vue'
 
 const loading = ref(true)
 const publishers = ref<Publisher[]>([])
@@ -17,6 +19,19 @@ const filters = reactive({
   country: '',
   hasDetails: undefined as boolean | undefined,
 })
+
+// 选项配置
+const sortOptions: SelectOption<string>[] = [
+  { label: '按名称', value: 'name', icon: '🔤' },
+  { label: '按作品数', value: 'movieCount', icon: '🎬' },
+  { label: '按创建时间', value: 'createdAt', icon: '📅' },
+]
+
+const detailsOptions: SelectOption<boolean | undefined>[] = [
+  { label: '全部', value: undefined },
+  { label: '已补全', value: true, icon: '✅' },
+  { label: '待补全', value: false, icon: '⏳' },
+]
 
 async function fetchPublishers() {
   loading.value = true
@@ -69,17 +84,12 @@ onMounted(() => {
       <div class="filters">
         <div class="filter-group">
           <label>排序</label>
-          <select v-model="filters.sort" @change="applyFilters">
-            <option value="name">
-              按名称
-            </option>
-            <option value="movieCount">
-              按作品数
-            </option>
-            <option value="createdAt">
-              按创建时间
-            </option>
-          </select>
+          <Select
+            v-model="filters.sort"
+            :options="sortOptions"
+            size="default"
+            @change="applyFilters"
+          />
         </div>
 
         <div class="filter-group">
@@ -94,17 +104,12 @@ onMounted(() => {
 
         <div class="filter-group">
           <label>详情</label>
-          <select v-model="filters.hasDetails" @change="applyFilters">
-            <option :value="undefined">
-              全部
-            </option>
-            <option :value="true">
-              已补全
-            </option>
-            <option :value="false">
-              待补全
-            </option>
-          </select>
+          <Select
+            v-model="filters.hasDetails"
+            :options="detailsOptions"
+            size="default"
+            @change="applyFilters"
+          />
         </div>
       </div>
 

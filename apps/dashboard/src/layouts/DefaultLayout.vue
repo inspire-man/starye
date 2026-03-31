@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useResourceGuard } from '@/composables/useResourceGuard'
 import { signOut, useSession } from '@/lib/auth-client'
@@ -8,8 +8,25 @@ const { t, locale } = useI18n()
 const session = useSession()
 const { canAccessComics, canAccessMovies, canAccessGlobal } = useResourceGuard()
 
-// 侧边栏折叠状态
+// 移动端检测
+const isMobile = ref(false)
+function updateMobileState() {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  updateMobileState()
+  window.addEventListener('resize', updateMobileState)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateMobileState)
+})
+
+// 侧边栏状态
+// 移动端使用抽屉模式（默认关闭），桌面端使用折叠模式（默认展开）
 const sidebarCollapsed = ref(false)
+const mobileDrawerOpen = ref(false)
 
 // 菜单展开状态
 const expandedMenus = ref<Set<string>>(new Set(['movies', 'comics']))
@@ -40,8 +57,24 @@ function toggleMenu(menuKey: string) {
   }
 }
 
+function handleMenuItemClick() {
+  // 移动端点击菜单项后关闭抽屉
+  if (isMobile.value) {
+    closeMobileDrawer()
+  }
+}
+
 function toggleSidebar() {
-  sidebarCollapsed.value = !sidebarCollapsed.value
+  if (isMobile.value) {
+    mobileDrawerOpen.value = !mobileDrawerOpen.value
+  }
+  else {
+    sidebarCollapsed.value = !sidebarCollapsed.value
+  }
+}
+
+function closeMobileDrawer() {
+  mobileDrawerOpen.value = false
 }
 
 const menuItems = computed(() => [
@@ -197,10 +230,21 @@ async function handleLogout() {
 
 <template>
   <div class="flex min-h-screen bg-muted/40">
-    <!-- Sidebar -->
+    <!-- 移动端遮罩 -->
+    <div
+      v-if="isMobile && mobileDrawerOpen"
+      class="fixed inset-0 bg-black/50 z-40 transition-opacity"
+      @click="closeMobileDrawer"
+    />
+
+    <!-- Sidebar（桌面端固定，移动端抽屉） -->
     <aside
-      class="bg-background border-r flex flex-col fixed inset-y-0 z-10 transition-all duration-300"
-      :class="sidebarCollapsed ? 'w-16' : 'w-64'"
+      class="bg-background border-r flex flex-col transition-all duration-300"
+      :class="[
+        isMobile
+          ? ['fixed inset-y-0 left-0 z-50 w-64', mobileDrawerOpen ? 'translate-x-0' : '-translate-x-full']
+          : ['fixed inset-y-0 z-10', sidebarCollapsed ? 'w-16' : 'w-64'],
+      ]"
     >
       <div class="h-14 flex items-center justify-between px-4 border-b">
         <span v-if="!sidebarCollapsed" class="font-bold tracking-tight text-lg">
@@ -265,6 +309,7 @@ async function handleLogout() {
                 active-class=""
                 :exact-active-class="child.path === '/' ? 'bg-muted text-primary' : ''"
                 :class="{ 'bg-muted text-primary': child.path !== '/' && $route.path.startsWith(child.path) }"
+                @click="handleMenuItemClick"
               >
                 <span class="w-1 h-1 rounded-full bg-current" />
                 {{ child.label }}
@@ -281,6 +326,7 @@ async function handleLogout() {
             active-class=""
             :exact-active-class="item.path === '/' ? 'bg-muted text-primary' : ''"
             :title="sidebarCollapsed ? item.label : ''"
+            @click="handleMenuItemClick"
           >
             <span class="text-lg shrink-0">
               {{ getIcon(item.icon) }}
@@ -314,15 +360,29 @@ async function handleLogout() {
 
     <!-- Content -->
     <main
-      class="flex-1 p-8 transition-all duration-300"
-      :class="sidebarCollapsed ? 'ml-16' : 'ml-64'"
+      class="flex-1 p-4 md:p-8 transition-all duration-300"
+      :class="isMobile ? 'ml-0' : (sidebarCollapsed ? 'ml-16' : 'ml-64')"
     >
-      <div class="mb-8 flex items-center justify-between">
-        <h1 class="text-2xl font-bold tracking-tight">
+      <div class="mb-6 md:mb-8 flex items-center justify-between gap-4">
+        <!-- 移动端汉堡菜单 -->
+        <button
+          v-if="isMobile"
+          class="p-2 rounded-lg hover:bg-muted transition-colors"
+          @click="toggleSidebar"
+        >
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+
+        <h1 class="text-xl md:text-2xl font-bold tracking-tight">
           {{ t('dashboard.dashboard') }}
         </h1>
+
         <div v-if="session.data" class="flex items-center gap-2">
-          <span class="text-sm text-muted-foreground">{{ t('dashboard.welcome') }}, {{ session.data.user.name }}</span>
+          <span class="text-sm text-muted-foreground hidden md:inline">{{ t('dashboard.welcome') }}, {{ session.data.user.name }}</span>
           <img :src="session.data.user.image || `https://ui-avatars.com/api/?name=${session.data.user.name}`" class="w-8 h-8 rounded-full border bg-background">
         </div>
       </div>

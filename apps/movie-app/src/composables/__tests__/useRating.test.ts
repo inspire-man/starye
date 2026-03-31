@@ -1,9 +1,9 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { useRating } from './useRating'
-import type { Player } from '../types'
+import type { Player } from '../../types'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useRating } from '../useRating'
 
 // Mock fetch
-global.fetch = vi.fn()
+globalThis.fetch = vi.fn()
 
 // Mock useToast
 vi.mock('./useToast', () => ({
@@ -64,7 +64,7 @@ describe('useRating', () => {
         movieId: 'movie-1',
         sourceName: 'Test',
         sourceUrl: 'https://test.com',
-        quality: null,
+        quality: undefined,
         sortOrder: 1,
       }
 

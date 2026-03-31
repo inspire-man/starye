@@ -7,6 +7,7 @@ import { movieApi } from '../api'
 import RatingStars from '../components/RatingStars.vue'
 import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
+import { useFavorites } from '../composables/useFavorites'
 import { useRating } from '../composables/useRating'
 import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
@@ -19,6 +20,11 @@ const movie = ref<MovieDetail | null>(null)
 
 // 下载列表管理
 const { isInDownloadList, addToDownloadList } = useDownloadList()
+
+// 收藏管理
+const { addFavorite, checkIsFavorited } = useFavorites()
+const isFavorited = ref(false)
+const favoritingLoading = ref(false)
 
 // 评分管理
 const { getPlayerRating, submitRating } = useRating()
@@ -192,6 +198,8 @@ async function fetchMovieDetail() {
 
     if (response.success && response.data) {
       movie.value = response.data
+      // 检查收藏状态
+      await checkFavoriteStatus()
     }
     else {
       error.value = response.error || '加载失败'
@@ -202,6 +210,54 @@ async function fetchMovieDetail() {
   }
   finally {
     loading.value = false
+  }
+}
+
+// 检查收藏状态
+async function checkFavoriteStatus() {
+  if (!movie.value)
+    return
+
+  try {
+    isFavorited.value = await checkIsFavorited('movie', movie.value.id)
+  }
+  catch (e) {
+    console.error('[MovieDetail] 检查收藏状态失败:', e)
+  }
+}
+
+// 切换收藏
+async function toggleFavorite() {
+  if (!movie.value || favoritingLoading.value)
+    return
+
+  favoritingLoading.value = true
+
+  try {
+    if (isFavorited.value) {
+      // 取消收藏 - 需要先找到 favoriteId
+      // 注意：这里简化处理，实际应该从收藏列表中获取 favoriteId
+      // 或者在检查收藏状态时同时保存 favoriteId
+      showToast('取消收藏功能开发中', 'error')
+    }
+    else {
+      // 添加收藏
+      const result = await addFavorite('movie', movie.value.id)
+      if (result.success) {
+        isFavorited.value = true
+        showToast(result.alreadyExists ? '已在收藏夹中' : '已添加到收藏夹')
+      }
+      else {
+        showToast(result.error || '收藏失败', 'error')
+      }
+    }
+  }
+  catch (e) {
+    showToast('操作失败', 'error')
+    console.error('[MovieDetail] 收藏操作失败:', e)
+  }
+  finally {
+    favoritingLoading.value = false
   }
 }
 
@@ -363,7 +419,7 @@ onMounted(() => {
         <h2 class="text-xl font-bold text-white">
           播放源
         </h2>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap">
           <button
             v-if="magnetLinks.length > 0"
             class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
@@ -380,6 +436,17 @@ onMounted(() => {
             @click="addToList"
           >
             {{ isInDownloadList(movie.id) ? '✓ 已在列表' : '➕ 添加到下载列表' }}
+          </button>
+          <button
+            :disabled="favoritingLoading"
+            class="px-4 py-2 text-sm rounded-lg transition-colors"
+            :class="isFavorited
+              ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+              : 'bg-gray-700 hover:bg-gray-600 text-white'"
+            @click="toggleFavorite"
+          >
+            <span v-if="favoritingLoading">⟳</span>
+            <span v-else>{{ isFavorited ? '⭐ 已收藏' : '☆ 收藏' }}</span>
           </button>
         </div>
       </div>

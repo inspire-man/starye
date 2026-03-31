@@ -1,7 +1,7 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { HTTPException } from 'hono/http-exception'
-import { addFavorite, deleteFavorite, getFavorites } from '../services/favorite.service'
+import { addFavorite, checkFavorite, deleteFavorite, getFavorites } from '../services/favorite.service'
 
 /**
  * GET /favorites - 获取收藏列表
@@ -102,5 +102,39 @@ export async function deleteFavoriteHandler(c: Context<AppEnv>) {
     const message = e instanceof Error ? e.message : String(e)
     console.error('[Favorites] ❌ Failed to delete favorite:', message)
     return c.json({ error: 'Failed to delete favorite' }, 500)
+  }
+}
+
+/**
+ * GET /favorites/check/:entityType/:entityId - 检查是否已收藏
+ */
+export async function checkFavoriteHandler(c: Context<AppEnv>) {
+  const db = c.get('db')
+  const user = c.get('user')
+
+  if (!user) {
+    throw new HTTPException(401, { message: 'Authentication required' })
+  }
+
+  const entityType = c.req.param('entityType') as 'actor' | 'publisher' | 'movie' | 'comic'
+  const entityId = c.req.param('entityId')!
+
+  try {
+    const isFavorited = await checkFavorite({
+      db,
+      userId: user.id,
+      entityType,
+      entityId,
+    })
+
+    return c.json({
+      success: true,
+      data: { isFavorited },
+    })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error('[Favorites] ❌ Failed to check favorite:', message)
+    return c.json({ error: 'Failed to check favorite' }, 500)
   }
 }
