@@ -26,12 +26,45 @@ async function main() {
   console.log('🔍 SeesaaWiki 解析器诊断工具')
   console.log(`📄 Wiki URL: ${wikiUrl}\n`)
 
-  // 查找 Chrome 路径
-  const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH
-    || '/usr/bin/google-chrome-stable'
-    || '/usr/bin/google-chrome'
-    || '/usr/bin/chromium-browser'
-    || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+  // 查找 Chrome 路径（支持 Windows 和 Linux）
+  let chromePath = process.env.PUPPETEER_EXECUTABLE_PATH
+
+  if (!chromePath) {
+    // Windows 常见路径
+    const windowsPaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+    ]
+
+    // Linux 常见路径
+    const linuxPaths = [
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+    ]
+
+    const paths = process.platform === 'win32' ? windowsPaths : linuxPaths
+
+    for (const path of paths) {
+      try {
+        const fs = await import('node:fs')
+        if (fs.existsSync(path)) {
+          chromePath = path
+          break
+        }
+      }
+      catch {
+        // 忽略错误
+      }
+    }
+  }
+
+  if (!chromePath) {
+    console.error('❌ 找不到 Chrome 浏览器')
+    console.error('请设置环境变量 PUPPETEER_EXECUTABLE_PATH 或安装 Chrome')
+    process.exit(1)
+  }
 
   console.log(`🚀 启动浏览器: ${chromePath}`)
 
