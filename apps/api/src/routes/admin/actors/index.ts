@@ -1081,13 +1081,14 @@ adminActors.post(
         }
         else {
           // 创建新记录
-          const slug = actorData.name.toLowerCase().replace(/\s+/g, '-')
+          // 优先使用 sourceId 作为 slug（URL 友好），否则生成简单 slug
+          const slug = actorData.sourceId || actorData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
           const newActor = {
             id: crypto.randomUUID(),
             name: actorData.name,
             slug,
             source: 'javbus',
-            sourceId: slug,
+            sourceId: actorData.sourceId || slug,
             sourceUrl: actorData.sourceUrl,
             movieCount: 0,
             hasDetailsCrawled: false,

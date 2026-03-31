@@ -1,501 +1,277 @@
-# Crawler Package
+# 名字映射表更新流程
 
-优化的爬虫包，采用工程化架构设计。
+**日期**: 2026-03-31  
+**目的**: 定期维护女优和厂商的 JavBus ↔ SeesaaWiki 名字映射表
 
-## 📁 目录结构
+## 为什么需要定期更新
 
-```
-src/
-├── constants/          # 常量定义
-│   └── index.ts       # 浏览器参数、超时配置、镜像站点等
-├── core/              # 核心类
-│   └── optimized-crawler.ts  # 优化的爬虫基类
-├── crawlers/          # 爬虫实现
-│   └── javbus.ts      # JavBus 爬虫
-├── lib/               # 基础库
-│   ├── base-crawler.ts
-│   ├── image-processor.ts
-│   ├── queue-manager.ts
-│   ├── search.ts
-│   └── strategy.ts
-├── strategies/        # 爬虫策略（旧版）
-├── types/             # 类型定义
-│   └── config.ts      # 配置类型
-├── utils/             # 工具类
-│   ├── api-client.ts  # API 客户端
-│   ├── browser.ts     # 浏览器管理
-│   └── progress.ts    # 进度监控
-└── index.ts           # 包入口
-```
+1. **新女优入行**: 每周都有新女优出道，需要建立映射
+2. **名字变化**: 女优可能改名或添加别名
+3. **数据源更新**: SeesaaWiki 可能添加新的词条
+4. **映射质量**: 修正错误映射，提高匹配准确率
 
-## 🚀 使用方法
+## 更新频率建议
 
-### 本地运行
+| 映射表类型 | 建议频率 | 预计耗时 | 数据量 |
+|-----------|---------|---------|--------|
+| 女优映射表 | **每周** | 1-2小时 | 15000-20000条 |
+| 厂商映射表 | **每月** | 10-15分钟 | 126条 |
 
-#### 电影爬虫
-```bash
-# 测试 10 部影片
-MAX_MOVIES=10 pnpm run test:optimized
+## 更新流程
 
-# 完整测试
-pnpm run test:optimized
-```
+### 1. 运行女优索引爬虫
 
-#### 女优爬虫
-```bash
-# 本地测试（最多 5 个女优）
-MAX_ACTORS=5 pnpm crawl:actor
-
-# 正常运行（默认 100 个）
-pnpm crawl:actor
-
-# 恢复模式（重试失败任务）
-RECOVERY_MODE=true pnpm crawl:actor
-```
-
-#### 厂商爬虫
-```bash
-# 本地测试（最多 5 个厂商）
-MAX_PUBLISHERS=5 pnpm crawl:publisher
-
-# 正常运行（默认 100 个）
-pnpm crawl:publisher
-
-# 恢复模式
-RECOVERY_MODE=true pnpm crawl:publisher
-```
-
-### GitHub Actions 触发
-
-#### 女优爬虫
-- **定时任务**: 每天 00:00 UTC 自动运行
-- **手动触发**: Actions → Daily Actor Crawl → Run workflow
-  - `max_actors`: 最大爬取数量（默认 150）
-  - `recovery_mode`: 是否启用恢复模式（默认 false）
-
-#### 厂商爬虫
-- **定时任务**: 每天 08:00 UTC 自动运行
-- **手动触发**: Actions → Daily Publisher Crawl → Run workflow
-  - `max_publishers`: 最大爬取数量（默认 100）
-  - `recovery_mode`: 是否启用恢复模式（默认 false）
-
-### 环境变量
-
-#### R2 配置
-```bash
-R2_ACCOUNT_ID=xxx
-R2_ACCESS_KEY_ID=xxx
-R2_SECRET_ACCESS_KEY=xxx
-R2_BUCKET_NAME=xxx
-R2_PUBLIC_DOMAIN=xxx
-```
-
-#### API 配置
-```bash
-API_URL=http://localhost:3000
-CRAWLER_SECRET=xxx
-```
-
-#### 代理池配置（可选）
-
-代理池提供了更强的反检测能力和 IP 轮换机制，适用于高频爬取场景：
+**脚本**: `packages/crawler/scripts/run-actor-index-crawler.ts`
 
 ```bash
-# 代理服务器列表（逗号分隔）
-PROXY_POOL=proxy1.com:8080,proxy2.com:8080,proxy3.com:8080
+# 进入爬虫目录
+cd packages/crawler
 
-# 代理认证（如需要）
-PROXY_USERNAME=user
-PROXY_PASSWORD=pass
-
-# 代理协议（默认: http）
-PROXY_PROTOCOL=http  # 可选: http | https | socks5
-
-# 轮换策略（默认: on-failure）
-PROXY_ROTATION_STRATEGY=on-failure  # 可选: round-robin | on-failure | least-latency
-
-# 健康检查配置
-PROXY_HEALTH_CHECK_INTERVAL=300000   # 健康检查间隔（毫秒，默认: 5分钟）
-PROXY_HEALTH_CHECK_TIMEOUT=10000     # 健康检查超时（毫秒，默认: 10秒）
-PROXY_MAX_CONSECUTIVE_FAILURES=3     # 最大连续失败次数（默认: 3）
-PROXY_TEST_URL=https://www.google.com  # 健康检查测试 URL
+# 运行索引爬虫（爬取所有五十音行）
+pnpm tsx scripts/run-actor-index-crawler.ts
 ```
 
-**轮换策略说明**:
-- `round-robin`: 轮询所有健康代理，平衡负载
-- `on-failure`: 使用首选代理直到失败才切换，减少切换开销
-- `least-latency`: 自动选择延迟最低的代理，优化性能
+**输出文件**:
+- `.actor-name-map.json`: 女优名字映射表（JavBus → SeesaaWiki）
+- `.actor-alias-index.json`: 女优别名反向索引
+- `.unmapped-actors.json`: 未匹配女优清单
 
-**健康检查机制**:
-- 定期测试所有代理的可用性
-- 连续失败达到阈值后自动标记为不健康
-- 成功后重置失败计数并更新延迟统计
-- 实时监控代理池状态
+**预期结果**:
+- 总计女优：15000-20000个
+- 映射成功率：85-95%
+- 未匹配女优：500-1500个
 
-**使用建议**:
-- 本地开发：使用 `on-failure` 策略 + 较长健康检查间隔（10分钟）
-- 生产环境：使用 `least-latency` 策略 + 较短健康检查间隔（3分钟）
-- 高频爬取：使用 `round-robin` 策略平衡代理负载
+### 2. 运行厂商索引爬虫
 
-#### 爬虫配置（旧版，JavBus 使用）
-```bash
-MAX_MOVIES=50              # **必需**：最大爬取影片数（无默认值，必须显式设置）
-MAX_PAGES=5                # 最大爬取页数（默认: 5）
-USE_RANDOM_MIRROR=true     # 使用随机镜像（默认: false）
-```
-
-> **重要**：`MAX_MOVIES` 环境变量现在是必需的，如果未设置将导致脚本错误退出。这是为了防止配置错误导致的意外行为。
-
-#### 增量爬取功能（2026-03-19 新增）
-
-爬虫现在支持智能增量爬取，通过批量状态查询跳过已存在内容，显著提升爬取效率：
-
-- **批量状态查询**：在爬取前调用 `/api/admin/movies/batch-status` 或 `/api/admin/comics/batch-status` 批量查询已存在内容
-- **自动过滤**：跳过已存在的影片/漫画，仅爬取新内容
-- **增量统计**：实时显示已存在数量、新增数量、增量命中率
-- **容错处理**：批量查询失败时自动回退到全量爬取模式
-
-**增量统计示例输出**：
-```
-📈 爬虫统计:
-  运行时间: 180s
-  发现影片: 100
-  已存在: 60 (60.0%)
-  新增: 40 (40.0%)
-  处理中: 40
-  成功: 38
-  失败: 2
-  处理速度: 12.67 部/分钟
-```
-
-#### 并发配置（旧版，JavBus 使用）
-```bash
-LIST_CONCURRENCY=1
-DETAIL_CONCURRENCY=2
-IMAGE_CONCURRENCY=3
-API_CONCURRENCY=2
-
-# 延迟配置（毫秒）
-LIST_DELAY=8000
-DETAIL_DELAY=5000
-IMAGE_DELAY=2000
-API_DELAY=1000
-```
-
-#### 女优/厂商爬虫配置
+**脚本**: `packages/crawler/scripts/run-publisher-index-crawler.ts`
 
 ```bash
-# 并发控制
-ACTOR_CONCURRENCY=2              # 女优并发数 (默认: 2)
-ACTOR_DELAY=8000                 # 女优请求延迟（毫秒，默认: 8000）
-PUBLISHER_CONCURRENCY=2          # 厂商并发数 (默认: 2)
-PUBLISHER_DELAY=8000             # 厂商请求延迟（毫秒，默认: 8000）
+# 进入爬虫目录
+cd packages/crawler
 
-# 数量限制
-MAX_ACTORS=150                   # 女优最大爬取数（默认: 100）
-MAX_PUBLISHERS=100               # 厂商最大爬取数（默认: 100）
-
-# 恢复模式
-RECOVERY_MODE=false              # 是否恢复失败任务（默认: false）
+# 运行厂商索引爬虫（从首页提取）
+pnpm tsx scripts/run-publisher-index-crawler.ts
 ```
 
-**工作流程**:
-1. **数据来源**: 女优/厂商从电影爬虫中自动收集（batch-sync）
-2. **增量爬取**: 自动跳过已爬取且头像/logo已在 R2 的记录
-3. **头像补全**: 已爬取但图片是外链的会自动补全到 R2
-4. **优先级排序**: 按作品数量、失败次数、最后尝试时间排序
-5. **失败恢复**: 失败任务保存到 `.actor-failed-tasks.json` / `.publisher-failed-tasks.json`
+**输出文件**:
+- `.publisher-name-map.json`: 厂商名字映射表
+- `.unmapped-publishers.json`: 未匹配厂商清单
 
-#### 漫画爬虫配置（新版，Comic Crawler 使用）
+**预期结果**:
+- 总计厂商：126个
+- 映射成功率：10-20%（SeesaaWiki 厂商页面较少）
+- 未匹配厂商：100-110个
 
-爬虫会自动检测运行环境（本地 vs CI），并使用相应的默认值。你可以通过环境变量覆盖任何配置：
+### 3. 验证映射表质量
 
+**检查项**:
 ```bash
-# 并发控制
-CRAWLER_MANGA_CONCURRENCY=2          # 漫画级并发数 (默认: 2)
-CRAWLER_CHAPTER_CONCURRENCY=2        # 章节级并发数 (默认: 2)
-CRAWLER_IMAGE_BATCH=10               # 图片批量上传数 (默认: 10)
+# 查看映射表数量
+wc -l .actor-name-map.json
+wc -l .publisher-name-map.json
 
-# 数量限制
-CRAWLER_MAX_MANGAS=15                # 每次运行最多处理漫画数 (默认: 15)
-CRAWLER_MAX_CHAPTERS_NEW=5           # 新漫画最多处理章节数 (默认: 5)
-CRAWLER_MAX_CHAPTERS_UPDATE=20       # 更新漫画最多处理章节数 (默认: 20)
-
-# 软超时（分钟）
-CRAWLER_TIMEOUT_MINUTES=300          # 运行软超时时间 (默认: 300)
-
-# 反检测配置（2026-03-13 新增）
-CRAWLER_BASE_DELAY=8000              # 基础延迟（毫秒，默认: 8000）
-CRAWLER_MAX_RETRIES=3                # 最大重试次数 (默认: 3)
-CRAWLER_ENABLE_SESSION=true          # 启用会话管理 (默认: true)
+# 检查未匹配清单（高优先级女优）
+cat .unmapped-actors.json | jq '.[] | select(.movieCount > 50)'
 ```
 
-**配置说明**:
+**质量指标**:
+- ✅ 映射覆盖率 > 85%
+- ✅ 重复映射 = 0
+- ✅ 高优先级女优（作品数 > 50）映射率 > 95%
 
-- **多级并发**: 爬虫同时在漫画、章节、图片三个层级并发处理
-  - 默认: 2 × 2 × 10 = 40 并发度
-  - 可通过环境变量调整以平衡速度和稳定性
+### 4. 人工审核和补充（可选）
 
-- **数量限制**: 控制每次运行的处理量，避免超时和资源耗尽
-  - 新漫画: 限制章节数，避免一次性爬取过多
-  - 更新漫画: 连载作品可处理更多新章节
+对于高优先级女优（作品数 > 50）的未匹配记录，可以人工查找并补充：
 
-- **增量策略**: 自动跳过已完成且非连载的漫画，优先处理：
-  1. 连载中有更新的漫画（最高优先级）
-  2. 部分完成的漫画
-  3. 新发现的漫画
-  4. 已完结的漫画（最低优先级）
+**步骤**:
+1. 从 `.unmapped-actors.json` 中筛选高优先级女优
+2. 在 SeesaaWiki 手动搜索正确名字
+3. 添加到 `.actor-name-map.json`
+4. 重新运行女优详情爬虫
 
-- **软超时**: 接近 GitHub Actions 的 6 小时硬超时前优雅退出，避免数据丢失
-
-- **反检测机制** (2026-03-13 新增):
-  - **智能延迟**: 基础延迟 + 随机化 + 自适应调整
-  - **请求头伪装**: 轮换真实浏览器请求头
-  - **Cookie 管理**: 维护会话 Cookie，模拟真实用户
-  - **错误重试**: 针对不同错误类型的智能重试策略
-  - **成功率监控**: 自动降速机制，成功率 < 70% 时增加延迟
-  - **失败恢复**: 自动记录失败任务，支持恢复重试
-
-## 🏗️ 架构特点
-
-### 1. 模块化设计
-- **核心类**：OptimizedCrawler 提供基础功能
-- **工具类**：BrowserManager、ApiClient、ProgressMonitor 独立封装
-- **配置管理**：统一的类型定义和默认配置
-
-### 2. 关注点分离
-- **浏览器管理**：BrowserManager 负责浏览器生命周期
-- **API 通信**：ApiClient 负责 API 交互
-- **进度监控**：ProgressMonitor 负责统计和显示
-- **队列管理**：QueueManager 负责并发控制
-
-### 3. 类型安全
-- 完整的 TypeScript 类型定义
-- 配置类型检查
-- 接口约束
-
-### 4. 可扩展性
-- 继承 OptimizedCrawler 实现新爬虫
-- 工具类可独立使用
-- 常量集中管理
-
-## 📊 性能优化
-
-### JavBus 爬虫（旧版）
-- **四阶段流水线**：列表页 → 详情页 → 图片 → API
-- **智能延迟**：自动计算请求间隔
-- **指数退避**：失败重试策略
-- **并发控制**：不同阶段独立配置
-
-### Comic 爬虫（新版 - 2026-03-11 优化）
-
-#### 优化前性能
-- **单章节处理**: ~14 分钟
-- **单漫画处理**: ~42 分钟 (6 章)
-- **总体吞吐**: ~2 漫画/小时
-- **处理方式**: 串行处理（图片、章节、漫画）
-
-#### 优化后性能
-
-| 环境 | 并发配置 (M/C/I) | 单章节 | 单漫画 (6章) | 总体吞吐 | 提速倍数 |
-|------|-----------------|--------|-------------|---------|---------|
-| **CI** | 5/2/10 | ~1 分钟 | ~3 分钟 | ~20 漫画/小时 | **14x** |
-| **本地** | 1/1/5 | ~3 分钟 | ~18 分钟 | ~3 漫画/小时 | **2.3x** |
-
-**核心优化**:
-1. **多级并发架构**：使用 `p-map` 实现漫画、章节、图片三级并发
-2. **增量爬取**：数据库驱动的状态管理，智能跳过已完成内容
-3. **优先级队列**：连载更新 > 部分完成 > 新漫画 > 已完结
-4. **批量 API 查询**：减少数据库往返次数
-5. **软超时机制**：优雅处理 GitHub Actions 时间限制
-
-详见: `openspec/changes/crawler-incremental-optimization/`
-
-## 🛡️ 反检测与错误恢复
-
-### 反检测机制
-
-爬虫集成了完整的反检测基础设施，有效降低被识别为机器人的风险：
-
-#### 1. Cookie 和会话管理
-```typescript
-// 自动建立和维护会话
-const session = new CrawlerSession(baseUrl)
-await session.initialize(page) // 访问首页获取 Cookie
-await session.applyCookies(page) // 后续请求应用 Cookie
-```
-
-#### 2. 请求头伪装
-- 轮换多套真实浏览器请求头
-- 包含完整的 `Accept`、`Accept-Language`、`Sec-Fetch-*` 等字段
-- 错误时自动更换请求头
-
-#### 3. 智能延迟策略
-```typescript
-// 三层延迟机制
-delay = baseDelay + random(0, randomDelay)
-
-// 错误后增加延迟
-if (error) {
-  delay *= errorBackoffMultiplier
-}
-
-// 成功率低时自动降速
-if (successRate < '70%') {
-  delay *= autoSlowdownMultiplier
+**示例**（手动添加映射）:
+```json
+{
+  "javbusName": "桜井彩",
+  "wikiName": "さくらい あや",
+  "wikiUrl": "https://seesaawiki.jp/w/sougouwiki/d/...",
+  "lastUpdated": 1711843200
 }
 ```
 
-#### 4. 错误分类与处理
+### 5. 触发详情爬虫
 
-| 错误类型 | 处理策略 | 说明 |
-|---------|---------|------|
-| ERR_ABORTED | 增加延迟 + 轮换请求头 + 重试 | 连接被主动中止 |
-| TIMEOUT | 增加超时时间 + 重试 | 请求超时 |
-| CONNECTION_REFUSED | 长时间退避（60秒）| 可能 IP 被封 |
-| HTTP_ERROR | 跳过不重试 | 资源不存在 |
-
-#### 5. 成功率监控
-- 滑动窗口记录最近 20 次请求
-- 实时计算成功率
-- 成功率 < 70% 时触发自动降速
-
-### 失败任务恢复
-
-爬虫支持失败任务的自动记录和恢复重试：
-
-#### 自动记录
-```bash
-# 正常运行，失败任务会自动保存
-pnpm --filter @starye/crawler crawl:manga
-
-# 失败任务保存在
-# - 漫画爬虫: ./.crawler-failed-tasks.json
-# - 电影爬虫: ./.javbus-failed-tasks.json
-```
-
-#### 恢复重试
-```typescript
-// 漫画爬虫恢复模式
-const crawler = new ComicCrawler(
-  config,
-  strategy,
-  startUrl,
-  { recoveryMode: true }
-)
-await crawler.run()
-
-// 电影爬虫恢复模式
-const crawler = new JavBusCrawler({
-  ...config,
-  recoveryMode: true
-})
-await crawler.run()
-```
-
-详见: [失败任务恢复文档](./RECOVERY.md)
-
-### 防重复机制
-
-#### 漫画爬虫
-- ✅ 批量查询漫画状态
-- ✅ 跳过已存在的章节
-- ✅ 优先级排序（连载中 > 部分完成 > 新漫画 > 已完成）
-
-#### 电影爬虫
-- ✅ 批量查询影片状态
-- ✅ 跳过已存在的影片
-
-### 配置示例
-
-#### 漫画爬虫（保守配置）
-```bash
-CRAWLER_BASE_DELAY=8000         # 8秒基础延迟
-CRAWLER_MAX_RETRIES=3           # 最多重试3次
-CRAWLER_ENABLE_SESSION=true     # 启用会话管理
-CRAWLER_MANGA_CONCURRENCY=2     # 2个漫画并发
-```
-
-#### 电影爬虫（稳定配置）
-```bash
-CRAWLER_BASE_DELAY=6000         # 6秒基础延迟
-CRAWLER_MAX_RETRIES=2           # 最多重试2次
-DETAIL_CONCURRENCY=2            # 2个详情页并发
-```
-
-### 故障排查
-
-#### 问题：频繁出现 ERR_ABORTED 错误
-**解决方案**：
-1. 增加基础延迟：`CRAWLER_BASE_DELAY=10000`（10秒）
-2. 增加重试次数：`CRAWLER_MAX_RETRIES=5`
-3. 降低并发度：`CRAWLER_MANGA_CONCURRENCY=1`
-4. 检查成功率统计，确保 > 90%
-
-#### 问题：连接被拒绝（CONNECTION_REFUSED）
-**解决方案**：
-1. 可能 IP 被临时封禁，等待 1-5 分钟后重试
-2. 使用恢复模式重试失败任务
-3. 考虑降低爬取频率或更换网络
-
-#### 问题：超时错误频繁
-**解决方案**：
-1. 网络环境不佳，增加超时时间（代码中自动处理）
-2. 检查目标网站是否可访问
-3. 降低并发度减少网络压力
-
-详见: `openspec/changes/fix-crawler-abort-errors/`
-
-## 🧪 测试
+映射表更新后，触发详情爬虫以拉取新映射的女优/厂商详情：
 
 ```bash
-# 运行单元测试
-pnpm test:unit
+# 触发女优详情爬虫（GitHub Actions）
+gh workflow run daily-actor-crawl.yml
 
-# 类型检查
-pnpm type-check
-
-# 代码检查
-pnpm lint
+# 触发厂商详情爬虫（GitHub Actions）
+gh workflow run daily-publisher-crawl.yml
 ```
 
-## 📝 开发指南
+## 自动化建议
 
-### 创建新爬虫
+### GitHub Actions 定时任务
 
-```typescript
-import type { MovieInfo } from '../lib/strategy'
-import { OptimizedCrawler } from '../core/optimized-crawler'
+创建 `.github/workflows/weekly-index-crawl.yml`:
 
-export class MyCrawler extends OptimizedCrawler {
-  protected async getMovieInfo(url: string, page: Page): Promise<MovieInfo | null> {
-    // 实现爬取逻辑
-  }
+```yaml
+name: Weekly Index Crawl
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # 每周日 02:00 UTC
+  workflow_dispatch:
 
-  async run(): Promise<void> {
-    await this.init()
-    // 实现运行逻辑
-    await this.cleanup()
-  }
-}
+jobs:
+  crawl-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 3小时
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+      
+      - run: pnpm install
+      
+      - name: 运行女优索引爬虫
+        run: pnpm --filter @starye/crawler tsx scripts/run-actor-index-crawler.ts
+        
+      - name: 运行厂商索引爬虫
+        run: pnpm --filter @starye/crawler tsx scripts/run-publisher-index-crawler.ts
+        
+      - name: 提交映射表更新
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add packages/crawler/.actor-name-map.json
+          git add packages/crawler/.publisher-name-map.json
+          git add packages/crawler/.unmapped-*.json
+          git commit -m "chore: 更新名字映射表 $(date +%Y-%m-%d)" || echo "No changes"
+          git push
 ```
 
-### 使用工具类
+## 监控和质量检查
 
-```typescript
-import { ApiClient, BrowserManager, ProgressMonitor } from '@starye/crawler'
+### 映射质量指标
 
-// 浏览器管理
-const browser = new BrowserManager({ headless: true })
-await browser.launch()
-const page = await browser.createPage()
+定期检查以下指标（建议每月）：
 
-// API 客户端
-const api = new ApiClient({ url: 'http://localhost:3000', token: 'xxx' })
-await api.syncMovie(movieData)
+```bash
+# 女优映射覆盖率
+total_actors=$(wrangler d1 execute starye-db --command "SELECT COUNT(*) FROM actor" | grep -oP '\d+')
+mapped_actors=$(cat .actor-name-map.json | jq 'length')
+echo "映射覆盖率: $(bc <<< "scale=2; $mapped_actors / $total_actors * 100")%"
 
-// 进度监控
-const progress = new ProgressMonitor(100, true)
-progress.init()
-progress.incrementMoviesSuccess()
+# 未匹配高优先级女优
+cat .unmapped-actors.json | jq '[.[] | select(.movieCount > 50)] | length'
 ```
+
+### 数据完整度趋势
+
+对比切换前后的数据完整度：
+
+| 指标 | 切换前（JavBus） | 切换后（SeesaaWiki） | 提升 |
+|------|----------------|-------------------|------|
+| 女优头像 | 60% | 90%+ | +30% |
+| 女优别名 | 0% | 70%+ | +70% |
+| 女优 SNS | 0% | 40%+ | +40% |
+| 厂商 Logo | 30% | 35% | +5% |
+
+## R2 映射文件自动上传
+
+为了让 Dashboard 的名字映射管理功能完全可用，映射文件可以自动上传到 R2。
+
+### 启用方法
+
+在 `packages/crawler/.env` 中添加：
+
+```bash
+UPLOAD_MAPPINGS_TO_R2=true
+```
+
+### 上传的文件
+
+- `mappings/actor-name-map.json` - 女优名字映射表
+- `mappings/publisher-name-map.json` - 厂商名字映射表
+- `mappings/unmapped-actors.json` - 未匹配女优清单
+- `mappings/unmapped-publishers.json` - 未匹配厂商清单
+- `mappings/series-to-publisher-map.json` - 系列→厂商映射
+- `mappings/backups/*.json` - 历史版本备份（自动创建）
+
+### 工作流程
+
+1. 爬虫运行结束时自动保存本地文件
+2. 如果启用 R2 上传，自动上传到 R2 并创建备份
+3. Dashboard API 从 R2 读取数据
+4. 用户通过 Dashboard 在线查看和管理映射
+
+### 验证上传
+
+```bash
+# 快速验证 R2 配置
+cd packages/crawler
+pnpm tsx scripts/verify-r2-upload.ts
+
+# 运行爬虫测试
+MAX_ACTORS=10 UPLOAD_MAPPINGS_TO_R2=true pnpm crawl:actor
+# 日志应显示 "✅ 映射文件已上传到 R2"
+```
+
+### Dashboard 集成
+
+启用 R2 上传后，Dashboard 可以：
+- 查看未匹配清单（按优先级排序）
+- 手动添加映射（实时生效）
+- 查看映射质量报告（覆盖率、冲突数）
+- 查询版本历史（回溯数据变化）
+
+**访问路径**:
+- 名字映射管理：`/name-mapping-management`
+- 映射质量报告：`/mapping-quality-report`
+
+### 相关文档
+
+- [R2 映射存储快速部署指南](../../docs/r2-mapping-quick-deploy-guide.md) - ⭐ 推荐从这里开始
+- [R2 映射存储配置指南](../../docs/r2-mapping-storage-setup-guide.md)
+- [R2 存储实施报告](../../docs/r2-mapping-storage-implementation-report.md)
+- [环境变量配置说明](../../docs/r2-mapping-env-vars-guide.md)
+- [Dashboard 映射管理功能](../../docs/dashboard-name-mapping-features-guide.md)
+
+## 常见问题
+
+### Q: 映射表文件过大怎么办？
+
+A: 15000+ 条映射的 JSON 文件约 2-3MB，Git 可以正常处理。如确实过大，可以：
+- 使用 Git LFS 管理映射表文件
+- 或将映射表存储到数据库（新增 `name_mappings` 表）
+
+### Q: 如何处理重复映射？
+
+A: 映射表使用 `Map` 结构，同一个 JavBus 名字只会有一个映射。如需更新映射，直接修改 JSON 文件即可。
+
+### Q: 未匹配清单会越来越大吗？
+
+A: 是的。建议定期清理长期未匹配的低优先级女优（作品数 < 10）。
+
+### Q: 索引爬虫失败了怎么办？
+
+A: 索引爬虫有失败恢复机制：
+```bash
+# 查看失败任务
+cat .index-crawl-log-*.json
+
+# 恢复模式重试（未实现，需手动重跑）
+pnpm tsx scripts/run-actor-index-crawler.ts
+```
+
+## 相关文档
+
+- [SeesaaWiki 爬虫策略](./src/strategies/seesaawiki/README.md)
+- [名字映射器设计](./src/lib/name-mapper.ts)
+- [系列厂商区分报告](../../docs/series-publisher-separation-report-2026-03-31.md)
+- [本地测试报告](../../docs/local-test-report-2026-03-31.md)

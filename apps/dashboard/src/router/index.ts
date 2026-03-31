@@ -9,7 +9,9 @@ import Crawlers from '@/views/Crawlers.vue'
 import Favorites from '@/views/Favorites.vue'
 import Home from '@/views/Home.vue'
 import Login from '@/views/Login.vue'
+import MappingQualityReport from '@/views/MappingQualityReport.vue'
 import Movies from '@/views/Movies.vue'
+import NameMappingManagement from '@/views/NameMappingManagement.vue'
 import PostEditor from '@/views/PostEditor.vue'
 import Posts from '@/views/Posts.vue'
 import PublisherDetail from '@/views/PublisherDetail.vue'
@@ -52,6 +54,16 @@ const routes = [
         path: 'crawlers',
         component: Crawlers,
         meta: { requiredRoles: ['admin', 'super_admin', 'comic_admin', 'movie_admin'] },
+      },
+      {
+        path: 'name-mapping-management',
+        component: NameMappingManagement,
+        meta: { requiredRoles: ['admin', 'super_admin', 'movie_admin'] },
+      },
+      {
+        path: 'mapping-quality-report',
+        component: MappingQualityReport,
+        meta: { requiredRoles: ['admin', 'super_admin', 'movie_admin'] },
       },
       {
         path: 'actors',

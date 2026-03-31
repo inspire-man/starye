@@ -87,3 +87,9 @@ examples*
 
 # Index Crawl Log
 .index-crawl-log*
+
+.publisher*
+.actor*
+
+# Series to Publisher Mapping
+.series-to-publisher-map.json

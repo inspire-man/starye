@@ -746,13 +746,14 @@ adminPublishers.post(
         }
         else {
           // 创建新记录
-          const slug = publisherData.name.toLowerCase().replace(/\s+/g, '-')
+          // 优先使用 sourceId 作为 slug（URL 友好），否则生成简单 slug
+          const slug = publisherData.sourceId || publisherData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
           const newPublisher = {
             id: crypto.randomUUID(),
             name: publisherData.name,
             slug,
             source: 'javbus',
-            sourceId: slug,
+            sourceId: publisherData.sourceId || slug,
             sourceUrl: publisherData.sourceUrl,
             movieCount: 0,
             hasDetailsCrawled: false,

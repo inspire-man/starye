@@ -40,6 +40,8 @@ export interface NameMapperConfig {
   publisherMapFile?: string
   unmappedActorsFile?: string
   unmappedPublishersFile?: string
+  uploadToR2?: boolean // 是否上传到 R2
+  r2Config?: import('./image-processor').R2Config // R2 配置
 }
 
 export class NameMapper {
@@ -54,9 +56,18 @@ export class NameMapper {
   private unmappedActors = new Map<string, UnmappedRecord>()
   private unmappedPublishers = new Map<string, UnmappedRecord>()
 
-  private config: Required<NameMapperConfig>
+  private config: {
+    actorMapFile: string
+    publisherMapFile: string
+    unmappedActorsFile: string
+    unmappedPublishersFile: string
+    uploadToR2: boolean
+    r2Config?: import('./image-processor').R2Config
+  }
+
   private seesaaWikiStrategy: SeesaaWikiStrategy
   private isDirty = false // 映射表是否需要保存
+  private mappingFileManager?: import('./mapping-file-manager').MappingFileManager
 
   constructor(
     seesaaWikiStrategy: SeesaaWikiStrategy,
@@ -69,6 +80,8 @@ export class NameMapper {
       publisherMapFile: config.publisherMapFile ?? resolve(process.cwd(), '.seesaawiki-publisher-map.json'),
       unmappedActorsFile: config.unmappedActorsFile ?? resolve(process.cwd(), '.seesaawiki-unmapped-actors.json'),
       unmappedPublishersFile: config.unmappedPublishersFile ?? resolve(process.cwd(), '.seesaawiki-unmapped-publishers.json'),
+      uploadToR2: config.uploadToR2 ?? false,
+      r2Config: config.r2Config,
     }
 
     // 加载映射表
@@ -174,7 +187,38 @@ export class NameMapper {
       }
 
       this.isDirty = false
-      console.warn('[NameMapper] ✅ 映射表已保存')
+      console.warn('[NameMapper] ✅ 映射表已保存到本地文件')
+
+      // 上传到 R2（如果配置）
+      if (this.config.uploadToR2 && this.config.r2Config) {
+        // 延迟初始化 MappingFileManager
+        if (!this.mappingFileManager) {
+          const { MappingFileManager } = await import('./mapping-file-manager.js')
+          this.mappingFileManager = new MappingFileManager(this.config.r2Config)
+        }
+
+        console.warn('[NameMapper] 📤 上传映射文件到 R2...')
+
+        // 将映射表转换为对象格式（兼容旧格式）
+        const actorMapObj: Record<string, any> = {}
+        for (const [key, value] of this.actorMap) {
+          actorMapObj[key] = value
+        }
+
+        const publisherMapObj: Record<string, any> = {}
+        for (const [key, value] of this.publisherMap) {
+          publisherMapObj[key] = value
+        }
+
+        await this.mappingFileManager.uploadAllMappings({
+          actorNameMap: actorMapObj,
+          publisherNameMap: publisherMapObj,
+          unmappedActors,
+          unmappedPublishers,
+        })
+
+        console.warn('[NameMapper] ✅ 映射文件已上传到 R2')
+      }
     }
     catch (error) {
       console.error('[NameMapper] ❌ 保存映射表失败', error)
@@ -348,7 +392,13 @@ export class NameMapper {
     // 阶段 1: 查询本地缓存
     if (this.actorMap.has(javbusName)) {
       console.warn(`[NameMapper] ✅ 缓存命中: ${javbusName}`)
-      return this.actorMap.get(javbusName)!
+      const cached = this.actorMap.get(javbusName)!
+      // 重新构建URL（确保使用正确的EUC-JP编码）
+      const correctedUrl = this.seesaaWikiStrategy.buildActorUrl(cached.wikiName)
+      return {
+        ...cached,
+        wikiUrl: correctedUrl,
+      }
     }
     attempts.push('cache')
 
@@ -360,7 +410,12 @@ export class NameMapper {
       await page.goto(wikiUrl, { waitUntil: 'networkidle2', timeout: 15000 })
 
       const title = await page.title()
-      if (!title.includes('404') && !title.includes('Not Found')) {
+      const bodyText = await page.evaluate(() => document.body?.textContent || '')
+
+      if (!title.includes('404')
+        && !title.includes('Not Found')
+        && !bodyText.includes('ページが見つかりませんでした')
+        && !bodyText.includes('お探しのページは見つかりませんでした')) {
         // 精确匹配成功
         console.warn(`[NameMapper] ✅ 精确匹配成功: ${javbusName}`)
         this.addActorMapping(javbusName, javbusName, wikiUrl)
@@ -426,7 +481,13 @@ export class NameMapper {
     // 阶段 1: 查询本地缓存
     if (this.publisherMap.has(javbusName)) {
       console.warn(`[NameMapper] ✅ 缓存命中: ${javbusName}`)
-      return this.publisherMap.get(javbusName)!
+      const cached = this.publisherMap.get(javbusName)!
+      // 重新构建URL（确保使用正确的EUC-JP编码）
+      const correctedUrl = this.seesaaWikiStrategy.buildPublisherUrl(cached.wikiName)
+      return {
+        ...cached,
+        wikiUrl: correctedUrl,
+      }
     }
     attempts.push('cache')
 
@@ -438,7 +499,12 @@ export class NameMapper {
       await page.goto(wikiUrl, { waitUntil: 'networkidle2', timeout: 15000 })
 
       const title = await page.title()
-      if (!title.includes('404') && !title.includes('Not Found')) {
+      const bodyText = await page.evaluate(() => document.body?.textContent || '')
+
+      if (!title.includes('404')
+        && !title.includes('Not Found')
+        && !bodyText.includes('ページが見つかりませんでした')
+        && !bodyText.includes('お探しのページは見つかりませんでした')) {
         // 精确匹配成功
         console.warn(`[NameMapper] ✅ 精确匹配成功: ${javbusName}`)
         const mapping: NameMapping = {

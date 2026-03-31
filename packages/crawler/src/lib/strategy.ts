@@ -77,6 +77,10 @@ export interface MovieInfo extends Partial<Omit<NewMovie, 'releaseDate' | 'actor
   // 新增：厂商详情页 URL（任务 3.6）
   publisherUrl?: string
 
+  // 新增：区分系列和厂商（2026-03-31）
+  seriesUrl?: string // 發行商（系列）的 URL
+  studioUrl?: string // 製作商（真實廠商）的 URL
+
   players: Omit<NewPlayer, 'id' | 'movieId' | 'createdAt' | 'updatedAt'>[]
 }
 

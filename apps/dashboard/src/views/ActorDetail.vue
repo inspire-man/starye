@@ -292,6 +292,35 @@ onMounted(() => {
               <span class="info-value">{{ formatDateTime(actor.createdAt) }}</span>
             </div>
 
+            <!-- 社交媒体链接 -->
+            <div v-if="actor.twitter" class="info-item">
+              <span class="info-label">Twitter：</span>
+              <a :href="actor.twitter" target="_blank" rel="noopener noreferrer" class="info-link">
+                {{ actor.twitter }}
+              </a>
+            </div>
+
+            <div v-if="actor.instagram" class="info-item">
+              <span class="info-label">Instagram：</span>
+              <a :href="actor.instagram" target="_blank" rel="noopener noreferrer" class="info-link">
+                {{ actor.instagram }}
+              </a>
+            </div>
+
+            <div v-if="actor.blog" class="info-item">
+              <span class="info-label">博客：</span>
+              <a :href="actor.blog" target="_blank" rel="noopener noreferrer" class="info-link">
+                {{ actor.blog }}
+              </a>
+            </div>
+
+            <div v-if="actor.wikiUrl" class="info-item">
+              <span class="info-label">SeesaaWiki：</span>
+              <a :href="actor.wikiUrl" target="_blank" rel="noopener noreferrer" class="info-link">
+                查看 Wiki 页面 →
+              </a>
+            </div>
+
             <div v-if="actor.bio" class="info-item full-width">
               <span class="info-label">简介：</span>
               <p class="info-value bio">
@@ -605,6 +634,19 @@ onMounted(() => {
 .info-value.bio {
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.info-link {
+  font-size: 14px;
+  color: #3b82f6;
+  text-decoration: none;
+  transition: color 0.2s;
+  word-break: break-all;
+}
+
+.info-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
 }
 
 .alias-input-group {

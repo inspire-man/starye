@@ -446,6 +446,7 @@ export const BatchSyncActorsSchema = v.object({
       v.object({
         name: v.pipe(v.string(), v.trim(), v.minLength(1)),
         sourceUrl: v.pipe(v.string(), v.url()),
+        sourceId: v.optional(v.pipe(v.string(), v.trim())), // URL 中的 ID，用作 slug
       }),
     ),
     v.minLength(1),
@@ -464,6 +465,7 @@ export const BatchSyncPublishersSchema = v.object({
       v.object({
         name: v.pipe(v.string(), v.trim(), v.minLength(1)),
         sourceUrl: v.pipe(v.string(), v.url()),
+        sourceId: v.optional(v.pipe(v.string(), v.trim())), // URL 中的 ID，用作 slug
       }),
     ),
     v.minLength(1),

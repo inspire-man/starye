@@ -1,3 +1,4 @@
+/* eslint-disable node/prefer-global/process */
 /* eslint-disable no-console */
 /**
  * JavBus 爬虫 - 重构版
@@ -32,8 +33,11 @@ export class JavBusCrawler extends OptimizedCrawler {
   private failedTasksFile = './.javbus-failed-tasks.json'
 
   // 收集女优和厂商信息（用于批量同步）
-  private collectedActorDetails: Map<string, { name: string, sourceUrl: string }> = new Map()
-  private collectedPublisherUrls: Map<string, { name: string, sourceUrl: string }> = new Map()
+  private collectedActorDetails: Map<string, { name: string, sourceUrl: string, sourceId?: string }> = new Map()
+  private collectedPublisherUrls: Map<string, { name: string, sourceUrl: string, sourceId?: string }> = new Map()
+
+  // 系列名到厂商名的映射（用于建立映射表）
+  private seriesPublisherMap?: Map<string, string>
 
   constructor(config: JavBusCrawlerConfig) {
     super(config)
@@ -166,21 +170,41 @@ export class JavBusCrawler extends OptimizedCrawler {
       if (movieInfo.actorDetails && Array.isArray(movieInfo.actorDetails)) {
         for (const actor of movieInfo.actorDetails) {
           if (actor.name && actor.url) {
+            // 从 URL 提取 sourceId (如 https://www.javbus.com/star/14fx -> 14fx)
+            const sourceId = actor.url.split('/').pop() || actor.name
             // 使用 name 作为 key 去重
             this.collectedActorDetails.set(actor.name, {
               name: actor.name,
               sourceUrl: actor.url,
+              sourceId,
             })
           }
         }
       }
 
-      // 收集厂商信息
-      if (movieInfo.publisherUrl && movieInfo.publisher) {
-        this.collectedPublisherUrls.set(movieInfo.publisher, {
-          name: movieInfo.publisher,
-          sourceUrl: movieInfo.publisherUrl,
-        })
+      // 收集厂商信息（使用製作商而非發行商）
+      if (movieInfo.publisher) {
+        // 優先使用製作商URL（studioUrl），其次是發行商URL（seriesUrl）
+        const publisherUrl = movieInfo.studioUrl || movieInfo.publisherUrl
+
+        if (publisherUrl) {
+          // 从 URL 提取 sourceId (如 https://www.javbus.com/studio/6m8 -> 6m8)
+          const sourceId = publisherUrl.split('/').pop() || movieInfo.publisher
+          this.collectedPublisherUrls.set(movieInfo.publisher, {
+            name: movieInfo.publisher,
+            sourceUrl: publisherUrl,
+            sourceId,
+          })
+        }
+      }
+
+      // 收集系列到厂商的映射（如果系列和厂商不同）
+      if (movieInfo.series && movieInfo.publisher && movieInfo.series !== movieInfo.publisher) {
+        // 記錄系列名對應的廠商名（用於後續創建映射表）
+        if (!this.seriesPublisherMap) {
+          this.seriesPublisherMap = new Map()
+        }
+        this.seriesPublisherMap.set(movieInfo.series, movieInfo.publisher)
       }
     }
 
@@ -229,9 +253,16 @@ export class JavBusCrawler extends OptimizedCrawler {
           const releaseDate = dateText ? new Date(dateText).getTime() / 1000 : 0
           const durationText = infoMap['長度:']
           const duration = Number.parseInt(durationText) || 0
-          const publisher = infoMap['發行商:']
-          const series = infoMap['系列:']
-          const studio = infoMap['製作商:']
+
+          // 区分系列和厂商
+          const seriesName = infoMap['發行商:'] // 實際上是系列/品牌名
+          const systemSeries = infoMap['系列:'] // 系統定義的系列
+          const studioName = infoMap['製作商:'] // 真實的公司名
+
+          // 使用系列名（發行商）優先，其次是系列字段
+          const finalSeries = seriesName || systemSeries
+          // 使用製作商作為真實廠商，如果沒有則降級使用發行商
+          const finalPublisher = studioName || seriesName
 
           const genres: string[] = []
           const genreEls = document.querySelectorAll('.genre label a')
@@ -257,14 +288,25 @@ export class JavBusCrawler extends OptimizedCrawler {
             }
           }
 
-          // 解析厂商详情页 URL（任务 3.6）
-          let publisherUrl = ''
+          // 解析厂商详情页 URL（區分系列和真實廠商）
+          let seriesUrl = '' // 發行商（系列）的 URL
+          let studioUrl = '' // 製作商（真實廠商）的 URL
+
           const publisherEl = Array.from(document.querySelectorAll('.info p'))
             .find(el => el.textContent?.includes('發行商:'))
           if (publisherEl) {
             const publisherLink = publisherEl.querySelector('a') as HTMLAnchorElement
             if (publisherLink) {
-              publisherUrl = publisherLink.href || ''
+              seriesUrl = publisherLink.href || ''
+            }
+          }
+
+          const studioEl = Array.from(document.querySelectorAll('.info p'))
+            .find(el => el.textContent?.includes('製作商:'))
+          if (studioEl) {
+            const studioLink = studioEl.querySelector('a') as HTMLAnchorElement
+            if (studioLink) {
+              studioUrl = studioLink.href || ''
             }
           }
 
@@ -280,9 +322,11 @@ export class JavBusCrawler extends OptimizedCrawler {
             actors,
             actorDetails, // 新增：女优详情页 URL 列表
             genres,
-            series,
-            publisher: publisher || studio,
-            publisherUrl, // 新增：厂商详情页 URL
+            series: finalSeries, // 系列名
+            publisher: finalPublisher, // 真實廠商名
+            publisherUrl: studioUrl || seriesUrl, // 優先使用製作商URL
+            seriesUrl, // 系列URL（發行商）
+            studioUrl, // 製作商URL
             isR18: true,
             players: [],
           }
@@ -558,11 +602,57 @@ export class JavBusCrawler extends OptimizedCrawler {
           console.warn('  ⚠️  厂商同步失败（非阻塞错误）')
         }
       }
+
+      // 保存系列到厂商的映射表
+      if (this.seriesPublisherMap && this.seriesPublisherMap.size > 0) {
+        await this.saveSeriesPublisherMap()
+      }
     }
     catch (error) {
       // 同步失败不应影响爬虫主流程
       console.error('❌ 女优/厂商同步失败:', error)
       console.log('ℹ️  此错误不影响影片数据')
+    }
+  }
+
+  /**
+   * 保存系列到厂商的映射表
+   */
+  private async saveSeriesPublisherMap(): Promise<void> {
+    try {
+      const fs = await import('node:fs/promises')
+      const path = await import('node:path')
+
+      const mapFile = path.join(process.cwd(), '.series-to-publisher-map.json')
+
+      // 读取现有映射表（如果存在）
+      let existingMap = new Map<string, string>()
+      try {
+        const content = await fs.readFile(mapFile, 'utf-8')
+        const data = JSON.parse(content) as Array<{ series: string, publisher: string }>
+        existingMap = new Map(data.map(item => [item.series, item.publisher]))
+      }
+      catch {
+        // 文件不存在，使用空映射
+      }
+
+      // 合并新映射
+      for (const [series, publisher] of this.seriesPublisherMap!) {
+        existingMap.set(series, publisher)
+      }
+
+      // 转换为数组并排序
+      const mappings = Array.from(existingMap.entries())
+        .map(([series, publisher]) => ({ series, publisher }))
+        .sort((a, b) => a.series.localeCompare(b.series))
+
+      // 写入文件
+      await fs.writeFile(mapFile, JSON.stringify(mappings, null, 2), 'utf-8')
+
+      console.log(`\n📋 系列映射表已保存: ${mappings.length} 条映射`)
+    }
+    catch (error) {
+      console.warn('⚠️  保存系列映射表失败（非阻塞）:', error)
     }
   }
 }

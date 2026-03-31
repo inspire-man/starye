@@ -1,3 +1,4 @@
+/* eslint-disable node/prefer-global/process */
 /* eslint-disable no-console */
 /**
  * 女优详情爬虫
@@ -87,8 +88,11 @@ export class ActorCrawler {
     this.imageProcessor = new ImageProcessor(config.r2Config)
     this.failedTasks = new FailedTaskRecorder()
 
-    // 初始化名字映射器
-    this.nameMapper = new NameMapper(this.seesaaWikiStrategy)
+    // 初始化名字映射器（支持 R2 上传）
+    this.nameMapper = new NameMapper(this.seesaaWikiStrategy, {
+      uploadToR2: process.env.UPLOAD_MAPPINGS_TO_R2 === 'true',
+      r2Config: config.r2Config,
+    })
 
     this.maxActors = config.maxActors || 150
     this.concurrency = config.concurrency || 2

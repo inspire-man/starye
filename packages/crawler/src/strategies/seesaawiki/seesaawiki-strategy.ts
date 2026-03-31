@@ -112,7 +112,12 @@ export class SeesaaWikiStrategy {
 
       // 检查页面是否存在
       const title = await page.title()
-      if (title.includes('404') || title.includes('Not Found')) {
+      const bodyText = await page.evaluate(() => document.body?.textContent || '')
+
+      if (title.includes('404')
+        || title.includes('Not Found')
+        || bodyText.includes('ページが見つかりませんでした')
+        || bodyText.includes('お探しのページは見つかりませんでした')) {
         throw new Error('Page not found (404)')
       }
 
@@ -144,7 +149,12 @@ export class SeesaaWikiStrategy {
 
       // 检查页面是否存在
       const title = await page.title()
-      if (title.includes('404') || title.includes('Not Found')) {
+      const bodyText = await page.evaluate(() => document.body?.textContent || '')
+
+      if (title.includes('404')
+        || title.includes('Not Found')
+        || bodyText.includes('ページが見つかりませんでした')
+        || bodyText.includes('お探しのページは見つかりませんでした')) {
         throw new Error('Page not found (404)')
       }
 
@@ -326,8 +336,8 @@ export class SeesaaWikiStrategy {
    * 构建女优详情页 URL（用于精确匹配）
    */
   buildActorUrl(actorName: string): string {
-    // URL 编码女优名
-    const encoded = encodeURIComponent(actorName)
+    // 使用 EUC-JP 编码（SeesaaWiki 要求）
+    const encoded = encodeEucJpUrl(actorName)
     return `${this.baseUrl}/d/${encoded}`
   }
 
@@ -336,7 +346,8 @@ export class SeesaaWikiStrategy {
    * 注：厂商页面通常以 "名字 wiki" 结尾
    */
   buildPublisherUrl(publisherName: string): string {
-    const encoded = encodeURIComponent(`${publisherName} wiki`)
+    // 使用 EUC-JP 编码（SeesaaWiki 要求）
+    const encoded = encodeEucJpUrl(`${publisherName} wiki`)
     return `${this.baseUrl}/d/${encoded}`
   }
 }

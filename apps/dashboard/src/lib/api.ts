@@ -69,6 +69,7 @@ export interface Movie {
   publishers?: (string | { id: string, name: string })[] | null
   publisherNames?: string[] | null
   genres?: string[] | null
+  series?: string | null
   publisher?: string | null
   isR18: boolean
   metadataLocked?: boolean
@@ -119,6 +120,10 @@ export interface Actor {
   isActive?: boolean | null
   crawlFailureCount?: number
   aliases?: string[] | null
+  twitter?: string | null
+  instagram?: string | null
+  blog?: string | null
+  wikiUrl?: string | null
   createdAt?: number | null
   updatedAt?: number | null
 }
@@ -136,6 +141,11 @@ export interface Publisher {
   foundedYear?: number | null
   description?: string | null
   crawlFailureCount?: number
+  twitter?: string | null
+  instagram?: string | null
+  wikiUrl?: string | null
+  parentPublisher?: string | null
+  brandSeries?: string[] | null
   createdAt?: number | null
   updatedAt?: number | null
 }

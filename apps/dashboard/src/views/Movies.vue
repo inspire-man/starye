@@ -272,6 +272,7 @@ async function handleUpdate() {
       sortOrder: editingMovie.value.sortOrder,
       actors: editingMovie.value.actors,
       genres: editingMovie.value.genres,
+      series: editingMovie.value.series,
       publisher: editingMovie.value.publisher,
       releaseDate: editingMovie.value.releaseDate,
       duration: editingMovie.value.duration,
@@ -326,6 +327,7 @@ const tableColumns = [
   { key: 'code', label: '番号', width: '120px' },
   { key: 'title', label: '标题', minWidth: '200px', sortable: true },
   { key: 'actors', label: '女优', width: '200px' },
+  { key: 'series', label: '系列', width: '150px' },
   { key: 'publisher', label: '厂商', width: '150px' },
   { key: 'releaseDate', label: '发布日期', width: '120px', sortable: true },
   { key: 'isR18', label: 'R18', width: '60px' },
@@ -505,8 +507,13 @@ const tableColumns = [
               </div>
 
               <div class="form-row">
+                <label>系列</label>
+                <input v-model="editingMovie.series" type="text" placeholder="如：SODSTAR, ROCKET">
+              </div>
+
+              <div class="form-row">
                 <label>厂商</label>
-                <input v-model="editingMovie.publisher" type="text">
+                <input v-model="editingMovie.publisher" type="text" placeholder="如：SODクリエイト">
               </div>
 
               <div class="form-row">

@@ -60,8 +60,8 @@ export class ApiClient {
 
   async syncMovie(movieData: unknown): Promise<any> {
     return this.sync('/api/movies/sync', {
-      type: 'movie',
-      data: movieData,
+      movies: [movieData],
+      mode: 'upsert',
     })
   }
 

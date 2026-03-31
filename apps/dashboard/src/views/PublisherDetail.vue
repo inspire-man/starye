@@ -26,6 +26,7 @@ const publisherId = computed(() => route.params.id as string)
 const publisher = ref<Publisher | null>(null)
 const loading = ref(true)
 const error = ref('')
+const parentPublisherSlug = ref<string | null>(null)
 
 // 编辑模式
 const isEditing = ref(false)
@@ -52,6 +53,19 @@ async function loadPublisher() {
         country: publisher.value.country || '',
       }
     }
+
+    // 查找母公司 slug
+    if (publisher.value?.parentPublisher) {
+      try {
+        const parentResponse = await fetchApi<{ data: Publisher[] }>(`/admin/publishers?search=${encodeURIComponent(publisher.value.parentPublisher)}`)
+        if (parentResponse.data && parentResponse.data.length > 0) {
+          parentPublisherSlug.value = parentResponse.data[0].slug
+        }
+      }
+      catch (e) {
+        console.error('Failed to find parent publisher:', e)
+      }
+    }
   }
   catch (e: any) {
     error.value = e.message || '加载失败'
@@ -59,6 +73,12 @@ async function loadPublisher() {
   }
   finally {
     loading.value = false
+  }
+}
+
+function goToParentPublisher() {
+  if (parentPublisherSlug.value) {
+    router.push(`/publishers/${parentPublisherSlug.value}`)
   }
 }
 
@@ -240,9 +260,53 @@ onMounted(() => {
 
             <div v-if="publisher.website" class="info-item full-width">
               <span class="info-label">官网：</span>
-              <a :href="publisher.website" target="_blank" class="info-link">
+              <a :href="publisher.website" target="_blank" rel="noopener noreferrer" class="info-link">
                 {{ publisher.website }}
               </a>
+            </div>
+
+            <!-- 社交媒体链接 -->
+            <div v-if="publisher.twitter" class="info-item">
+              <span class="info-label">Twitter：</span>
+              <a :href="publisher.twitter" target="_blank" rel="noopener noreferrer" class="info-link">
+                {{ publisher.twitter }}
+              </a>
+            </div>
+
+            <div v-if="publisher.instagram" class="info-item">
+              <span class="info-label">Instagram：</span>
+              <a :href="publisher.instagram" target="_blank" rel="noopener noreferrer" class="info-link">
+                {{ publisher.instagram }}
+              </a>
+            </div>
+
+            <div v-if="publisher.wikiUrl" class="info-item">
+              <span class="info-label">SeesaaWiki：</span>
+              <a :href="publisher.wikiUrl" target="_blank" rel="noopener noreferrer" class="info-link">
+                查看 Wiki 页面 →
+              </a>
+            </div>
+
+            <!-- 公司关系 -->
+            <div v-if="publisher.parentPublisher" class="info-item">
+              <span class="info-label">母公司：</span>
+              <button
+                v-if="parentPublisherSlug"
+                class="parent-link"
+                @click="goToParentPublisher"
+              >
+                {{ publisher.parentPublisher }} →
+              </button>
+              <span v-else class="info-value">{{ publisher.parentPublisher }}</span>
+            </div>
+
+            <div v-if="publisher.brandSeries && publisher.brandSeries.length > 0" class="info-item full-width">
+              <span class="info-label">旗下品牌系列：</span>
+              <div class="brand-list">
+                <span v-for="brand in publisher.brandSeries" :key="brand" class="brand-tag">
+                  {{ brand }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -466,9 +530,44 @@ onMounted(() => {
   font-size: 14px;
   color: #3b82f6;
   text-decoration: none;
+  word-break: break-all;
+  transition: color 0.2s;
 }
 
 .info-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.brand-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.brand-tag {
+  padding: 4px 12px;
+  background: #e0e7ff;
+  color: #4338ca;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.parent-link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s;
+  text-align: left;
+}
+
+.parent-link:hover {
+  color: #2563eb;
   text-decoration: underline;
 }
 

@@ -99,6 +99,16 @@ const menuItems = computed(() => [
         label: '爬虫列表',
         show: canAccessComics.value || canAccessMovies.value,
       },
+      {
+        path: '/name-mapping-management',
+        label: '名字映射管理',
+        show: canAccessMovies.value,
+      },
+      {
+        path: '/mapping-quality-report',
+        label: '映射质量报告',
+        show: canAccessMovies.value,
+      },
     ],
   },
   {
@@ -224,13 +234,13 @@ async function handleLogout() {
               :title="sidebarCollapsed ? item.label : ''"
               @click="toggleMenu(item.key)"
             >
-              <span class="text-lg flex-shrink-0">
+              <span class="text-lg shrink-0">
                 {{ getIcon(item.icon) }}
               </span>
               <span v-if="!sidebarCollapsed" class="flex-1 text-left">{{ item.label }}</span>
               <svg
                 v-if="!sidebarCollapsed"
-                class="w-4 h-4 transition-transform flex-shrink-0"
+                class="w-4 h-4 transition-transform shrink-0"
                 :class="{ 'rotate-90': expandedMenus.has(item.key) }"
                 viewBox="0 0 24 24"
                 fill="none"
@@ -272,7 +282,7 @@ async function handleLogout() {
             :exact-active-class="item.path === '/' ? 'bg-muted text-primary' : ''"
             :title="sidebarCollapsed ? item.label : ''"
           >
-            <span class="text-lg flex-shrink-0">
+            <span class="text-lg shrink-0">
               {{ getIcon(item.icon) }}
             </span>
             <span v-if="!sidebarCollapsed">{{ item.label }}</span>
@@ -287,7 +297,7 @@ async function handleLogout() {
           :title="sidebarCollapsed ? (locale === 'zh' ? 'English' : '简体中文') : ''"
           @click="toggleLocale"
         >
-          <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
           <span v-if="!sidebarCollapsed">{{ locale === 'zh' ? 'English' : '简体中文' }}</span>
         </button>
         <button
@@ -296,7 +306,7 @@ async function handleLogout() {
           :title="sidebarCollapsed ? t('dashboard.sign_out') : ''"
           @click="handleLogout"
         >
-          <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
           <span v-if="!sidebarCollapsed">{{ t('dashboard.sign_out') }}</span>
         </button>
       </div>

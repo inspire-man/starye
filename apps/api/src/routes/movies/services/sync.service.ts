@@ -24,7 +24,8 @@ export interface SyncMovieDataOptions {
     description?: string
     genres?: string[]
     actors?: string[]
-    publisher?: string
+    series?: string // 系列名（通常来自"發行商"字段）
+    publisher?: string // 真实厂商名（来自"製作商"字段）
     isR18?: boolean
   }>
   mode?: 'upsert' | 'insert' | 'update'
@@ -52,7 +53,7 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
 
   for (const movieData of movieDataList) {
     try {
-      const { code, title, slug, coverImage, releaseDate, duration, description, genres, actors: actorNames, publisher, isR18 } = movieData
+      const { code, title, slug, coverImage, releaseDate, duration, description, genres, actors: actorNames, series, publisher, isR18 } = movieData
 
       // 检查电影是否已存在
       const existingMovie = await db.query.movies.findFirst({
@@ -76,12 +77,19 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
         title,
         slug: slug || code.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         coverImage: coverImage || null,
-        releaseDate: releaseDate ? (typeof releaseDate === 'string' ? new Date(releaseDate) : releaseDate) : null,
+        releaseDate: releaseDate
+          ? (typeof releaseDate === 'number'
+              ? new Date(releaseDate * 1000) // Unix timestamp (秒) -> Date
+              : typeof releaseDate === 'string'
+                ? new Date(releaseDate)
+                : releaseDate)
+          : null,
         duration: duration || null,
         description: description || null,
         genres: genres ? JSON.stringify(genres) : null,
         actors: actorNames ? JSON.stringify(actorNames) : null,
-        publisher: publisher || null,
+        series: series || null, // 系列名
+        publisher: publisher || null, // 真实厂商名
         isR18: isR18 || false,
         updatedAt: new Date(),
       }

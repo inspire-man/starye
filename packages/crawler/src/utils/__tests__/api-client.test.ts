@@ -115,8 +115,8 @@ describe('apiClient', () => {
             'x-service-token': 'test-token',
           },
           body: JSON.stringify({
-            type: 'movie',
-            data: movieData,
+            movies: [movieData],
+            mode: 'upsert',
           }),
         }),
       )
