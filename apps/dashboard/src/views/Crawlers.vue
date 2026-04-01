@@ -1,11 +1,13 @@
-<!-- eslint-disable no-alert -->
 <script setup lang="ts">
 /**
  * 爬虫监控页面
  */
 
 import { onMounted, onUnmounted, ref } from 'vue'
+import SkeletonCard from '@/components/SkeletonCard.vue'
+import { handleError } from '@/composables/useErrorHandler'
 import { useResourceGuard } from '@/composables/useResourceGuard'
+import { info, success } from '@/composables/useToast'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 
@@ -23,7 +25,7 @@ async function loadStats() {
     stats.value = await api.admin.getCrawlerStats()
   }
   catch (e) {
-    console.error(e)
+    handleError(e, '加载爬虫统计失败')
   }
 }
 
@@ -32,7 +34,7 @@ async function loadFailedTasks() {
     failedTasks.value = await api.admin.getFailedTasks()
   }
   catch (e) {
-    console.error(e)
+    handleError(e, '加载失败任务失败')
   }
 }
 
@@ -63,25 +65,26 @@ onUnmounted(() => {
 async function handleRecoverCrawler(type: 'comic' | 'movie') {
   try {
     const response = await api.admin.recoverCrawler(type)
-    alert(JSON.stringify(response, null, 2))
+    success(`恢复 ${type === 'comic' ? '漫画' : '电影'} 爬虫成功`)
+    info(JSON.stringify(response, null, 2), { duration: 8000 })
   }
   catch (e) {
-    console.error(e)
-    alert(`触发失败: ${String(e)}`)
+    handleError(e, `触发 ${type === 'comic' ? '漫画' : '电影'} 爬虫恢复失败`)
   }
 }
 
 async function handleClearFailed(type: 'comic' | 'movie') {
+  // eslint-disable-next-line no-alert
   if (!confirm(`确认清空 ${type === 'comic' ? '漫画' : '电影'} 的失败任务记录？`))
     return
 
   try {
     await api.admin.clearFailedTasks(type)
     await loadFailedTasks()
+    success(`已清空 ${type === 'comic' ? '漫画' : '电影'} 失败任务记录`)
   }
   catch (e) {
-    console.error(e)
-    alert(`清空失败: ${String(e)}`)
+    handleError(e, `清空 ${type === 'comic' ? '漫画' : '电影'} 失败任务失败`)
   }
 }
 </script>
@@ -101,9 +104,9 @@ async function handleClearFailed(type: 'comic' | 'movie') {
       </div>
     </div>
 
-    <div v-if="loading && !stats.comics && !stats.movies" class="loading-state">
-      <div class="spinner" />
-      <p>加载中...</p>
+    <div v-if="loading && !stats.comics && !stats.movies" class="stats-grid">
+      <SkeletonCard variant="stat" />
+      <SkeletonCard variant="stat" />
     </div>
 
     <div v-else class="stats-grid">

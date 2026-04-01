@@ -3,6 +3,9 @@ import type { Post } from '@starye/db/schema'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import SkeletonTable from '@/components/SkeletonTable.vue'
+import { handleError } from '@/composables/useErrorHandler'
+import { success } from '@/composables/useToast'
 
 // API 返回的 Post 类型（包含 author 关系）
 interface PostWithAuthor extends Pick<Post, 'id' | 'title' | 'slug' | 'published' | 'createdAt' | 'updatedAt'> {
@@ -16,8 +19,6 @@ const router = useRouter()
 const { t } = useI18n()
 const posts = ref<PostWithAuthor[]>([])
 const loading = ref(false)
-const error = ref('')
-const deleteError = ref('')
 const deleteConfirmId = ref<string | null>(null)
 
 async function fetchPosts() {
@@ -36,8 +37,7 @@ async function fetchPosts() {
     posts.value = result.data || []
   }
   catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Failed to fetch posts'
-    error.value = message
+    handleError(e, '加载文章列表失败')
   }
   finally {
     loading.value = false
@@ -60,12 +60,10 @@ async function createPost() {
 
 function requestDelete(id: string) {
   deleteConfirmId.value = id
-  deleteError.value = ''
 }
 
 function cancelDelete() {
   deleteConfirmId.value = null
-  deleteError.value = ''
 }
 
 async function confirmDelete() {
@@ -86,10 +84,10 @@ async function confirmDelete() {
     }
 
     posts.value = posts.value.filter(p => p.id !== id)
+    success('文章已删除')
   }
   catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Failed to delete post'
-    deleteError.value = message
+    handleError(e, '删除文章失败')
   }
 }
 
@@ -117,19 +115,7 @@ onMounted(() => {
       </button>
     </div>
 
-    <div v-if="loading" class="py-10 text-center">
-      {{ t('dashboard.saving') }}
-    </div>
-    <div v-else-if="error" class="rounded-md border border-destructive bg-destructive/10 p-4 text-destructive">
-      {{ error }}
-    </div>
-
-    <div v-if="deleteError" class="rounded-md border border-destructive bg-destructive/10 p-4 text-destructive">
-      {{ deleteError }}
-      <button class="ml-2 text-sm underline" @click="deleteError = ''">
-        {{ t('dashboard.dismiss') || 'Dismiss' }}
-      </button>
-    </div>
+    <SkeletonTable v-if="loading" :rows="10" :columns="5" />
 
     <div v-if="deleteConfirmId" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div class="rounded-md border bg-card p-6 shadow-lg max-w-md w-full mx-4">
@@ -156,7 +142,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-else-if="!error" class="rounded-md border bg-card">
+    <div v-else class="rounded-md border bg-card">
       <div class="relative w-full overflow-auto">
         <table class="w-full caption-bottom text-sm">
           <thead class="[&_tr]:border-b">

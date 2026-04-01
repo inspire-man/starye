@@ -174,9 +174,9 @@
 
 ### 6.3 Crawlers.vue
 
-- [ ] 6.3.1 集成 Toast（替换 alert）
-- [ ] 6.3.2 集成 SkeletonTable
-- [ ] 6.3.3 集成错误处理
+- [x] 6.3.1 集成 Toast（替换 alert）
+- [x] 6.3.2 集成 SkeletonTable
+- [x] 6.3.3 集成错误处理
 
 ### 6.4 Comics.vue
 

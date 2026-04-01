@@ -184,3 +184,88 @@ git push --force origin main
 ```
 
 **注意**：仅在紧急情况下使用 force push。
+
+---
+
+## 问题 2: Tailwind CSS v4 兼容性
+
+### 错误时间
+2026-04-01 22:35 (UTC+8)
+
+### 错误信息
+```
+Error: Cannot apply unknown utility class `skeleton-base`. 
+Are you using CSS modules or similar and missing `@reference`?
+```
+
+### 问题分析
+
+**根本原因**：
+- `skeleton.css` 中定义了自定义 utility classes（如 `.skeleton-text`、`.skeleton-title`）
+- 这些类使用 `@apply skeleton-base` 来引用自定义的 `.skeleton-base` 类
+- Tailwind CSS v4 不支持在 `@apply` 中引用自定义的 CSS 类
+
+**错误位置**：
+```css
+/* skeleton.css:45-67 */
+.skeleton-text {
+  @apply skeleton-base h-4 rounded;
+}
+.skeleton-title {
+  @apply skeleton-base h-6 rounded;
+}
+/* ... 更多 utility classes */
+```
+
+### 修复方案
+
+**方法**：移除使用 `@apply` 的 utility classes
+
+**修改前**：
+```css
+.skeleton-base { /* ... */ }
+.skeleton-text { @apply skeleton-base h-4 rounded; }
+.skeleton-title { @apply skeleton-base h-6 rounded; }
+/* ... */
+```
+
+**修改后**：
+```css
+.skeleton-base { /* ... */ }
+/* 移除所有使用 @apply 的 utility classes */
+```
+
+**理由**：
+1. 这些 utility classes 在代码中并未使用
+2. 所有骨架屏组件直接使用 `.skeleton-base` + Tailwind utilities
+3. 移除后无功能影响
+
+### 验证步骤
+
+```bash
+cd apps/dashboard
+npm run build  # ✅ 成功
+```
+
+### Git 提交
+
+**Commit 4: CSS 兼容性修复**
+- **Hash**: `bac9056`
+- **文件**: 1 file changed, 24 deletions(-)
+- **内容**: 移除 skeleton.css 中的 @apply utility classes
+
+### 影响
+- ✅ 无功能影响
+- ✅ 构建成功
+- ✅ 所有骨架屏组件正常工作
+
+### 经验教训
+1. Tailwind CSS v4 对 `@apply` 有更严格的限制
+2. 应避免在 `@apply` 中引用自定义类
+3. 优先使用 Tailwind 原生 utilities 或纯 CSS 类
+4. 未使用的 utility classes 应及时清理
+
+### 部署状态
+- ✅ 代码已提交并推送到 `origin/main`
+- ⏳ Cloudflare Pages 自动部署中（预计 2-3 分钟）
+- ⏳ 等待生产环境验证
