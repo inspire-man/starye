@@ -295,7 +295,7 @@ onMounted(() => {
             :options="tabOptions"
             placeholder="选择页面"
             size="default"
-            @change="if (activeTab === 'my-ratings' && myRatings.length === 0) loadMyRatings()"
+            @change="activeTab === 'my-ratings' && myRatings.length === 0 && loadMyRatings()"
           />
         </div>
 
