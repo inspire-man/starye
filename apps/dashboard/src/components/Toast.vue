@@ -1,12 +1,42 @@
 <script setup lang="ts">
+/**
+ * Toast 通知组件
+ *
+ * @component
+ * @description
+ * 用于显示临时性的消息通知，支持四种类型：success、error、warning、info。
+ * 可选支持进度条显示（用于长时间操作）。
+ *
+ * @example
+ * ```vue
+ * <template>
+ *   <Toast
+ *     :toast="{ id: '1', type: 'success', message: '操作成功' }"
+ *     @close="handleClose"
+ *   />
+ * </template>
+ * ```
+ *
+ * @example 带进度的 Toast
+ * ```vue
+ * <template>
+ *   <Toast
+ *     :toast="{ id: '2', type: 'info', message: '处理中...', progress: 50 }"
+ *     @close="handleClose"
+ *   />
+ * </template>
+ * ```
+ */
 import type { Toast } from '../composables/useToast'
 import { computed } from 'vue'
 
 const props = defineProps<{
+  /** Toast 数据，包含类型、消息和可选的进度 */
   toast: Toast & { progress?: number }
 }>()
 
 const emit = defineEmits<{
+  /** 关闭事件，传递 Toast ID */
   close: [id: string]
 }>()
 

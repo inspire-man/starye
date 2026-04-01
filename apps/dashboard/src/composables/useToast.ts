@@ -1,6 +1,51 @@
 /**
  * Toast 通知系统
- * 提供全局统一的成功/错误/警告/信息提示
+ *
+ * @module useToast
+ * @description
+ * 提供全局统一的成功/错误/警告/信息提示，支持自动消失、手动关闭和进度显示。
+ *
+ * @example 基础用法
+ * ```ts
+ * import { useToast } from '@/composables/useToast'
+ *
+ * const { success, error, warning, info } = useToast()
+ *
+ * // 显示成功消息
+ * success('保存成功')
+ *
+ * // 显示错误消息
+ * error('保存失败，请重试')
+ *
+ * // 显示警告消息
+ * warning('此操作不可撤销')
+ *
+ * // 显示信息消息
+ * info('系统维护通知')
+ * ```
+ *
+ * @example 自定义选项
+ * ```ts
+ * const { showToast } = useToast()
+ *
+ * // 自定义持续时间和关闭按钮
+ * showToast('自定义消息', 'info', { duration: 5000, closable: false })
+ * ```
+ *
+ * @example 进度 Toast（用于长时间操作）
+ * ```ts
+ * const { showProgress, updateProgress, hideProgress } = useToast()
+ *
+ * // 显示进度 Toast
+ * const id = showProgress('正在上传文件...', 0)
+ *
+ * // 更新进度
+ * updateProgress(id, 50)
+ * updateProgress(id, 100)
+ *
+ * // 完成后隐藏
+ * hideProgress(id)
+ * ```
  */
 
 import { ref } from 'vue'
@@ -8,19 +53,27 @@ import { ref } from 'vue'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
 export interface Toast {
+  /** 唯一标识符 */
   id: string
+  /** Toast 类型 */
   type: ToastType
+  /** 显示的消息内容 */
   message: string
+  /** 持续时间（毫秒），0 表示不自动关闭 */
   duration?: number
+  /** 是否显示关闭按钮 */
   closable?: boolean
 }
 
 export interface ProgressToast extends Toast {
+  /** 进度百分比（0-100） */
   progress: number
 }
 
 export interface ToastOptions {
+  /** 持续时间（毫秒），0 表示不自动关闭 */
   duration?: number
+  /** 是否显示关闭按钮 */
   closable?: boolean
 }
 

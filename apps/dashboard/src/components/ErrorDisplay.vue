@@ -1,10 +1,58 @@
 <script setup lang="ts">
+/**
+ * 错误显示组件
+ *
+ * @component
+ * @description
+ * 用于显示友好的错误信息，支持三种展示模式：
+ * - inline: 行内模式，适用于表单字段下方
+ * - banner: 横幅模式，适用于页面顶部提示
+ * - modal: 模态框模式，适用于阻断性错误
+ *
+ * @example 行内错误（表单验证）
+ * ```vue
+ * <template>
+ *   <ErrorDisplay
+ *     :error="fieldError"
+ *     mode="inline"
+ *     :show-actions="false"
+ *   />
+ * </template>
+ * ```
+ *
+ * @example 横幅错误（页面级提示）
+ * ```vue
+ * <template>
+ *   <ErrorDisplay
+ *     :error="pageError"
+ *     mode="banner"
+ *     @retry="handleRetry"
+ *     @close="clearError"
+ *   />
+ * </template>
+ * ```
+ *
+ * @example 模态框错误（阻断性错误）
+ * ```vue
+ * <template>
+ *   <ErrorDisplay
+ *     :error="criticalError"
+ *     mode="modal"
+ *     @retry="handleRetry"
+ *     @contact-support="openSupportDialog"
+ *   />
+ * </template>
+ * ```
+ */
 import type { ParsedError } from '../composables/useErrorHandler'
 import { computed } from 'vue'
 
 interface Props {
+  /** 解析后的错误对象，null 表示无错误 */
   error: ParsedError | null
+  /** 显示模式，默认 'inline' */
   mode?: 'inline' | 'banner' | 'modal'
+  /** 是否显示操作按钮，默认 true */
   showActions?: boolean
 }
 
@@ -14,8 +62,11 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
+  /** 重试操作 */
   retry: []
+  /** 关闭错误提示 */
   close: []
+  /** 联系技术支持 */
   contactSupport: []
 }>()
 

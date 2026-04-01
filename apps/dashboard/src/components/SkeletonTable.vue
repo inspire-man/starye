@@ -1,10 +1,46 @@
 <script setup lang="ts">
+/**
+ * 表格骨架屏组件
+ *
+ * @component
+ * @description
+ * 用于在表格数据加载时显示占位骨架，提供平滑的加载过渡效果。
+ * 支持自定义行数、列数、列宽和复选框列。
+ *
+ * @example 基础用法
+ * ```vue
+ * <template>
+ *   <SkeletonTable
+ *     v-if="loading"
+ *     :rows="10"
+ *     :columns="5"
+ *   />
+ * </template>
+ * ```
+ *
+ * @example 自定义列宽
+ * ```vue
+ * <template>
+ *   <SkeletonTable
+ *     v-if="loading"
+ *     :rows="20"
+ *     :columns="7"
+ *     :widths="['50px', '120px', '200px', 'auto', '150px', '100px', '180px']"
+ *     :selectable="true"
+ *   />
+ * </template>
+ * ```
+ */
 import { computed } from 'vue'
 
 interface Props {
+  /** 显示的行数，默认 5 */
   rows?: number
+  /** 显示的列数，默认 4 */
   columns?: number
+  /** 自定义列宽数组，默认均分 */
   widths?: string[]
+  /** 是否显示复选框列，默认 false */
   selectable?: boolean
 }
 

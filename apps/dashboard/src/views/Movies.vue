@@ -33,7 +33,7 @@ import { formatDateTime } from '@/lib/date-utils'
 
 useSession()
 
-const { success } = useToast()
+const { success, warning, showProgress, updateProgress, hideProgress } = useToast()
 const { handleError } = useErrorHandler()
 
 const movies = ref<Movie[]>([])
@@ -149,7 +149,7 @@ const confirmDialogData = ref<{
   operation: '',
 })
 
-async function loadMovies() {
+async function loadMovies(retryCount = 0) {
   loading.value = true
   try {
     const params = {
@@ -164,9 +164,21 @@ async function loadMovies() {
     movies.value = response.data
     setMeta(response.meta)
     total.value = response.meta.total
+    error.value = '' // 清空错误
   }
   catch (e: unknown) {
+    const isNetworkError = e instanceof TypeError || (e as Error).message?.includes('fetch')
+
+    // 网络错误且未达到最大重试次数，自动重试
+    if (isNetworkError && retryCount < 2) {
+      const delay = (retryCount + 1) * 1000 // 1s, 2s
+      setTimeout(loadMovies, delay, retryCount + 1)
+      return
+    }
+
+    // 其他错误或重试失败，显示错误
     error.value = String(e)
+    handleError(e, '加载电影列表失败')
   }
   finally {
     loading.value = false
@@ -315,15 +327,67 @@ function handleBatchOperation(operationId: string) {
 }
 
 async function executeBatchOperation() {
-  try {
-    const { operation, payload } = confirmDialogData.value
-    await api.admin.bulkOperationMovies(selectedIds.value, operation, payload)
-    success(`成功对 ${selectedCount.value} 部电影执行了操作`)
-    clearSelection()
-    await loadMovies()
+  const { operation, payload } = confirmDialogData.value
+  const ids = [...selectedIds.value]
+  const total = ids.length
+
+  // 特殊处理批量删除，显示进度
+  if (operation === 'delete') {
+    const progressId = showProgress('正在删除电影...')
+    let successCount = 0
+    let failedCount = 0
+    const failedItems: string[] = []
+
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        const movieId = ids[i]
+        try {
+          await api.admin.deleteMovie(movieId)
+          successCount++
+        }
+        catch (e: unknown) {
+          failedCount++
+          failedItems.push(movieId)
+          console.error(`删除电影 ${movieId} 失败:`, e)
+        }
+
+        // 更新进度
+        const progress = Math.round(((i + 1) / total) * 100)
+        updateProgress(progressId, progress)
+      }
+
+      hideProgress(progressId)
+
+      // 显示汇总结果
+      if (failedCount === 0) {
+        success(`成功删除 ${successCount} 部电影`)
+      }
+      else if (successCount === 0) {
+        handleError(new Error('批量删除全部失败'), `删除失败: ${failedCount} 部电影`)
+      }
+      else {
+        warning(`完成删除: 成功 ${successCount} 部，失败 ${failedCount} 部`)
+      }
+
+      clearSelection()
+      await loadMovies()
+    }
+    catch (e: unknown) {
+      hideProgress(progressId)
+      handleError(e, '批量删除失败')
+    }
   }
-  catch (e: unknown) {
-    handleError(e, '批量操作失败')
+  else {
+    // 其他批量操作使用原有逻辑
+    try {
+      await api.admin.bulkOperationMovies(selectedIds.value, operation, payload)
+      success(`成功对 ${selectedCount.value} 部电影执行了操作`)
+      clearSelection()
+      await loadMovies()
+    }
+    catch (e: unknown) {
+      handleError(e, '批量操作失败')
+    }
   }
 }
 

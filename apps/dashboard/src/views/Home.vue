@@ -2,13 +2,14 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import ErrorDisplay from '@/components/ErrorDisplay.vue'
 import SkeletonCard from '@/components/SkeletonCard.vue'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { api } from '@/lib/api'
 
 const { t } = useI18n()
 const router = useRouter()
-const { handleError } = useErrorHandler()
+const { handleError, parseError } = useErrorHandler()
 
 interface Stats {
   comics: number
@@ -37,22 +38,35 @@ const stats = ref<Stats>({
 })
 
 const loading = ref(true)
+const error = ref<Error | null>(null)
 
-onMounted(async () => {
+async function loadStats() {
+  loading.value = true
+  error.value = null
+
   try {
     const res = await api.admin.getStats()
     stats.value = res
   }
   catch (e) {
+    error.value = e as Error
     handleError(e, '加载统计数据失败')
   }
   finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  loadStats()
 })
 
 function navigateTo(path: string) {
   router.push(path)
+}
+
+function handleRetry() {
+  loadStats()
 }
 </script>
 
@@ -66,6 +80,14 @@ function navigateTo(path: string) {
         {{ t('dashboard.welcome_back') }}. {{ t('dashboard.system_operational') }}
       </p>
     </div>
+
+    <!-- 错误提示 -->
+    <ErrorDisplay
+      v-if="error && !loading"
+      :error="parseError(error)"
+      mode="banner"
+      :actions="[{ label: '重试', variant: 'primary', onClick: handleRetry }]"
+    />
 
     <!-- 内容统计 -->
     <div>
