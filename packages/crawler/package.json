@@ -26,8 +26,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1019.0",
-    "@aws-sdk/lib-storage": "^3.1019.0",
+    "@aws-sdk/client-s3": "^3.1021.0",
+    "@aws-sdk/lib-storage": "^3.1021.0",
     "@orama/orama": "^3.1.18",
     "@starye/db": "workspace:*",
     "cacheable-lookup": "^7.0.0",
