@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { success } from '@/composables/useToast'
 import { getAdminToken, setAdminToken } from '@/lib/api'
 
 const { t } = useI18n()
 const token = ref(getAdminToken())
-const saved = ref(false)
 
 function save() {
   setAdminToken(token.value)
-  saved.value = true
-  setTimeout(() => (saved.value = false), 2000)
+  success('配置已保存')
 }
 </script>
 
@@ -42,7 +41,7 @@ function save() {
         class="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
         @click="save"
       >
-        {{ saved ? t('dashboard.saved') : t('dashboard.save_config') }}
+        {{ t('dashboard.save_config') }}
       </button>
     </div>
   </div>

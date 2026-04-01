@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SkeletonTable from '@/components/SkeletonTable.vue'
+import { handleError } from '@/composables/useErrorHandler'
+import { success } from '@/composables/useToast'
 import { api } from '@/lib/api'
 
 const { t } = useI18n()
@@ -17,7 +20,6 @@ interface User {
 
 const users = ref<User[]>([])
 const loading = ref(true)
-const error = ref('')
 
 // Dialog State
 const editingUser = ref<User | null>(null)
@@ -30,8 +32,7 @@ async function loadUsers() {
     users.value = await api.admin.getUsers()
   }
   catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    error.value = message
+    handleError(e, '加载用户列表失败')
   }
   finally {
     loading.value = false
@@ -64,10 +65,10 @@ async function saveUser() {
     // Refresh
     await loadUsers()
     closeEdit()
+    success('用户信息更新成功')
   }
   catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    console.error(`Failed to save: ${message}`)
+    handleError(e, '保存用户信息失败')
   }
   finally {
     saving.value = false
@@ -88,13 +89,7 @@ onMounted(loadUsers)
       </button>
     </div>
 
-    <div v-if="loading" class="space-y-2">
-      <div v-for="i in 5" :key="i" class="h-12 bg-muted rounded-lg animate-pulse" />
-    </div>
-
-    <div v-else-if="error" class="p-4 bg-red-50 text-red-600 rounded-lg">
-      {{ error }}
-    </div>
+    <SkeletonTable v-if="loading" :rows="10" :columns="5" />
 
     <div v-else class="bg-card border rounded-xl overflow-hidden shadow-sm">
       <table class="w-full text-sm text-left">

@@ -1,23 +1,22 @@
-<!-- eslint-disable no-alert -->
 <script setup lang="ts">
 import type { User } from 'better-auth'
 import { onMounted, ref } from 'vue'
+import SkeletonTable from '@/components/SkeletonTable.vue'
+import { handleError } from '@/composables/useErrorHandler'
+import { success, warning } from '@/composables/useToast'
 import { api } from '@/lib/api'
 
 const users = ref<User[]>([])
 const allUsers = ref<User[]>([])
 const loading = ref(true)
-const error = ref('')
 
 // Add to whitelist dialog
 const showAddDialog = ref(false)
 const addForm = ref({ email: '' })
 const adding = ref(false)
-const addError = ref('')
 
 async function loadWhitelist() {
   loading.value = true
-  error.value = ''
   try {
     const response = await api.admin.getR18Whitelist()
     if (response.success) {
@@ -25,8 +24,7 @@ async function loadWhitelist() {
     }
   }
   catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    error.value = message
+    handleError(e, '加载 R18 白名单失败')
   }
   finally {
     loading.value = false
@@ -38,38 +36,35 @@ async function loadAllUsers() {
     allUsers.value = await api.admin.getUsers()
   }
   catch (e) {
-    console.error('Failed to load all users:', e)
+    handleError(e, '加载用户列表失败')
   }
 }
 
 function openAddDialog() {
   showAddDialog.value = true
   addForm.value.email = ''
-  addError.value = ''
 }
 
 function closeAddDialog() {
   showAddDialog.value = false
   addForm.value.email = ''
-  addError.value = ''
 }
 
 async function addUser() {
   if (!addForm.value.email) {
-    addError.value = '请输入用户邮箱'
+    warning('请输入用户邮箱')
     return
   }
 
   adding.value = true
-  addError.value = ''
   try {
     await api.admin.addToR18Whitelist(undefined, addForm.value.email)
     await loadWhitelist()
     closeAddDialog()
+    success('已添加到 R18 白名单')
   }
   catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    addError.value = message
+    handleError(e, '添加到 R18 白名单失败')
   }
   finally {
     adding.value = false
@@ -77,6 +72,7 @@ async function addUser() {
 }
 
 async function removeUser(userId: string, userName: string) {
+  // eslint-disable-next-line no-alert
   if (!confirm(`确定要移除 "${userName}" 的 R18 访问权限吗？`)) {
     return
   }
@@ -84,10 +80,10 @@ async function removeUser(userId: string, userName: string) {
   try {
     await api.admin.removeFromR18Whitelist(userId)
     await loadWhitelist()
+    success(`已移除 ${userName} 的 R18 访问权限`)
   }
   catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    alert(`移除失败: ${message}`)
+    handleError(e, '移除 R18 白名单失败')
   }
 }
 
@@ -121,13 +117,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="space-y-2">
-      <div v-for="i in 5" :key="i" class="h-16 bg-muted rounded-lg animate-pulse" />
-    </div>
-
-    <div v-else-if="error" class="p-4 bg-red-50 text-red-600 rounded-lg">
-      {{ error }}
-    </div>
+    <SkeletonTable v-if="loading" :rows="10" :columns="4" />
 
     <div v-else-if="users.length === 0" class="p-12 text-center text-muted-foreground">
       <div class="text-4xl mb-4">
@@ -210,10 +200,6 @@ onMounted(() => {
             <p class="text-xs text-muted-foreground">
               输入要授予 R18 访问权限的用户邮箱地址
             </p>
-          </div>
-
-          <div v-if="addError" class="p-3 bg-red-50 text-red-600 rounded-lg text-sm">
-            {{ addError }}
           </div>
 
           <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">

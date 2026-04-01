@@ -192,17 +192,17 @@
 
 ### 6.6 PublisherDetail.vue
 
-- [ ] 6.6.1 集成 Toast（替换 alert）
-- [ ] 6.6.2 集成 SkeletonForm
-- [ ] 6.6.3 集成错误处理
+- [x] 6.6.1 集成 Toast（替换 alert）
+- [x] 6.6.2 集成 SkeletonForm
+- [x] 6.6.3 集成错误处理
 
 ### 6.7 其他页面
 
-- [ ] 6.7.1 Users.vue - Toast + Skeleton + 错误处理
-- [ ] 6.7.2 AuditLogs.vue - Toast + Skeleton + 错误处理
-- [ ] 6.7.3 R18Whitelist.vue - Toast + Skeleton + 错误处理
-- [ ] 6.7.4 Crawlers.vue - Toast + Skeleton + 错误处理
-- [ ] 6.7.5 Settings.vue - Toast + 错误处理
+- [x] 6.7.1 Users.vue - Toast + Skeleton + 错误处理
+- [x] 6.7.2 AuditLogs.vue - Toast + Skeleton + 错误处理
+- [x] 6.7.3 R18Whitelist.vue - Toast + Skeleton + 错误处理
+- [x] 6.7.4 Crawlers.vue - Toast + Skeleton + 错误处理
+- [x] 6.7.5 Settings.vue - Toast + 错误处理
 
 ## 7. 测试
 

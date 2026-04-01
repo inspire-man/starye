@@ -13,6 +13,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import FavoriteButton from '@/components/FavoriteButton.vue'
+import SkeletonForm from '@/components/SkeletonForm.vue'
+import { handleError } from '@/composables/useErrorHandler'
+import { success } from '@/composables/useToast'
 import { fetchApi } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 import { formatDateTime } from '@/lib/date-utils'
@@ -25,7 +28,6 @@ const router = useRouter()
 const publisherId = computed(() => route.params.id as string)
 const publisher = ref<Publisher | null>(null)
 const loading = ref(true)
-const error = ref('')
 const parentPublisherSlug = ref<string | null>(null)
 
 // 编辑模式
@@ -39,7 +41,6 @@ const updateLoading = ref(false)
 
 async function loadPublisher() {
   loading.value = true
-  error.value = ''
 
   try {
     const response = await fetchApi<{ data: Publisher }>(`/admin/publishers/${publisherId.value}`)
@@ -63,13 +64,12 @@ async function loadPublisher() {
         }
       }
       catch (e) {
-        console.error('Failed to find parent publisher:', e)
+        handleError(e, '查找母公司信息失败')
       }
     }
   }
   catch (e: any) {
-    error.value = e.message || '加载失败'
-    console.error('Failed to load publisher:', e)
+    handleError(e, '加载厂商信息失败')
   }
   finally {
     loading.value = false
@@ -92,10 +92,10 @@ async function saveBasicInfo() {
     })
     await loadPublisher()
     isEditing.value = false
+    success('厂商信息更新成功')
   }
   catch (e: any) {
-    error.value = e.message || '更新失败'
-    console.error('Failed to update publisher:', e)
+    handleError(e, '更新厂商信息失败')
   }
   finally {
     updateLoading.value = false
@@ -142,13 +142,8 @@ onMounted(() => {
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="loading">
-      加载中...
-    </div>
-
-    <!-- 错误提示 -->
-    <div v-else-if="error" class="error">
-      {{ error }}
+    <div v-if="loading">
+      <SkeletonForm :fields="6" :with-textarea="true" :with-buttons="true" />
     </div>
 
     <!-- 详情内容 -->

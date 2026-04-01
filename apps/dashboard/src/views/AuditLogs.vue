@@ -3,14 +3,15 @@ import type { AuditLog } from '@/lib/api'
 import { onMounted, ref } from 'vue'
 import DataTable from '@/components/DataTable.vue'
 import FilterPanel from '@/components/FilterPanel.vue'
+import { handleError } from '@/composables/useErrorHandler'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
+import { success } from '@/composables/useToast'
 import { api } from '@/lib/api'
 
 const logs = ref<AuditLog[]>([])
 const loading = ref(false)
-const error = ref<string | null>(null)
 
 const isDetailModalOpen = ref(false)
 const selectedLog = ref<AuditLog | null>(null)
@@ -79,7 +80,6 @@ const filterFields = [
 
 async function loadLogs() {
   loading.value = true
-  error.value = null
   try {
     const params: any = {
       page: currentPage.value,
@@ -104,7 +104,7 @@ async function loadLogs() {
     setMeta({ total: response.meta.total, totalPages: response.meta.totalPages })
   }
   catch (e: any) {
-    error.value = e.message || '加载失败'
+    handleError(e, '加载审计日志失败')
   }
   finally {
     loading.value = false
@@ -150,9 +150,10 @@ async function handleExport(format: 'json' | 'csv') {
     a.click()
     window.URL.revokeObjectURL(url)
     document.body.removeChild(a)
+    success(`审计日志已导出为 ${format.toUpperCase()} 格式`)
   }
   catch (e) {
-    console.error('Export failed:', e)
+    handleError(e, '导出审计日志失败')
   }
 }
 
@@ -189,10 +190,6 @@ onMounted(loadLogs)
 
     <div class="filter-info">
       共 {{ totalItems }} 条记录
-    </div>
-
-    <div v-if="error" class="error-message">
-      {{ error }}
     </div>
 
     <DataTable
