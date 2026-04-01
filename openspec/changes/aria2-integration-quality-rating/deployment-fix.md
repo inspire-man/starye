@@ -7,6 +7,72 @@
 - Cloudflare Workers (API)
 - Cloudflare Pages (前端)
 
+## 修复历史
+
+### 第二轮修复 (Commit: 5f113fd)
+
+**错误**：全局作用域使用定时器
+```
+Uncaught Error: Disallowed operation called within global scope. 
+Asynchronous I/O (ex: fetch() or connect()), setting a timeout, and generating random values are not allowed within global scope.
+  at null.<anonymous> (file:///...apps/api/src/utils/cache.ts:22:28) in MemoryCache
+  at null.<anonymous> (file:///...apps/api/src/utils/cache.ts:111:25)
+```
+
+**原因**：
+- `MemoryCache` 构造函数中使用了 `setInterval` 创建定时清理任务
+- 在全局作用域 `export const apiCache = new MemoryCache()` 实例化，触发定时器创建
+- Cloudflare Workers 不允许在全局作用域使用 `setInterval`、`setTimeout` 等异步操作
+
+**修复方案**：惰性清理策略
+```typescript
+// 修改前
+class MemoryCache {
+  private cleanupInterval: any
+  
+  constructor() {
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup()
+    }, 60 * 1000)
+  }
+  
+  destroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval)
+    }
+  }
+}
+
+// 修改后
+class MemoryCache {
+  private lastCleanup = Date.now()
+  private cleanupThreshold = 60 * 1000 // 每分钟触发一次清理
+  
+  get<T>(key: string): T | null {
+    // 惰性清理：定期触发清理操作
+    const now = Date.now()
+    if (now - this.lastCleanup > this.cleanupThreshold) {
+      this.cleanup()
+      this.lastCleanup = now
+    }
+    // ... 其余逻辑
+  }
+  
+  destroy() {
+    this.clear()
+  }
+}
+```
+
+**优点**：
+- 不依赖定时器，避免全局作用域异步操作
+- 在实际访问缓存时才清理，更高效
+- 符合 Cloudflare Workers 的执行模型（请求驱动）
+
+---
+
+### 第一轮修复 (Commit: 1eb85ce)
+
 ## 错误详情
 
 ### 1. Cloudflare Workers 部署失败
@@ -273,6 +339,10 @@ git push origin main
 
 ## 修改文件列表
 
+### 第二轮修复
+1. `apps/api/src/utils/cache.ts` - 移除 setInterval，改为惰性清理
+
+### 第一轮修复
 1. `apps/api/src/utils/featureFlags.ts` - 修复 process.env 使用
 2. `apps/api/src/utils/cache.ts` - 删除未使用函数
 3. `apps/movie-app/src/utils/aria2PerfTest.ts` - 参数命名修复
@@ -282,6 +352,16 @@ git push origin main
 
 ## 提交记录
 
+### 第二轮修复
+**Commit**: `5f113fd`
+**Message**: fix: 移除 cache.ts 中的 setInterval，改为惰性清理策略
+
+修改统计：
+- 2 files changed
+- 304 insertions(+)
+- 12 deletions(-)
+
+### 第一轮修复
 **Commit**: `1eb85ce`
 **Message**: fix: 修复 Cloudflare Workers 部署错误
 
