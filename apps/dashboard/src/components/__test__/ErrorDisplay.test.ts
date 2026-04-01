@@ -2,6 +2,7 @@
  * ErrorDisplay.vue 组件测试
  */
 
+import type { DOMWrapper } from '@vue/test-utils'
 import type { ParsedError } from '@/composables/useErrorHandler'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -106,7 +107,7 @@ describe('errorDisplay.vue', () => {
         },
       })
 
-      const retryButton = wrapper.findAll('button').find(btn => btn.text().includes('重试'))
+      const retryButton = wrapper.findAll('button').find((btn: DOMWrapper<Element>) => btn.text().includes('重试'))
       await retryButton?.trigger('click')
 
       expect(wrapper.emitted('retry')).toBeTruthy()
@@ -120,7 +121,7 @@ describe('errorDisplay.vue', () => {
         },
       })
 
-      const closeButton = wrapper.findAll('button').find(btn => btn.text().includes('关闭'))
+      const closeButton = wrapper.findAll('button').find((btn: DOMWrapper<Element>) => btn.text().includes('关闭'))
       await closeButton?.trigger('click')
 
       expect(wrapper.emitted('close')).toBeTruthy()

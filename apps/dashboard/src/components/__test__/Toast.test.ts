@@ -2,12 +2,12 @@
  * Toast.vue 组件测试
  */
 
+import type { ProgressToast, Toast as ToastType } from '@/composables/useToast'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import type { ProgressToast, Toast as ToastType } from '@/composables/useToast'
 import Toast from '../Toast.vue'
 
-describe('Toast.vue', () => {
+describe('toast.vue', () => {
   describe('渲染', () => {
     it('应该渲染 success 类型的 Toast', () => {
       const toast: ToastType = {
@@ -125,7 +125,7 @@ describe('Toast.vue', () => {
     })
   })
 
-  describe('Progress Toast', () => {
+  describe('progress Toast', () => {
     it('应该显示进度条', () => {
       const toast: ProgressToast = {
         id: '1',
