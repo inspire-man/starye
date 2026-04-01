@@ -40,28 +40,3 @@
     }
   }
 }
-
-/* 快捷 utility classes */
-.skeleton-text {
-  @apply skeleton-base h-4 rounded;
-}
-
-.skeleton-title {
-  @apply skeleton-base h-6 rounded;
-}
-
-.skeleton-avatar {
-  @apply skeleton-base rounded-full;
-}
-
-.skeleton-button {
-  @apply skeleton-base h-10 rounded;
-}
-
-.skeleton-input {
-  @apply skeleton-base h-10 rounded;
-}
-
-.skeleton-image {
-  @apply skeleton-base rounded-lg;
-}
