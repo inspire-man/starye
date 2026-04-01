@@ -3,10 +3,10 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { getErrorAction, getErrorMessage, handleError, parseError } from './useErrorHandler'
+import { getErrorAction, getErrorMessage, handleError, parseError } from '../useErrorHandler'
 
 // Mock useToast
-vi.mock('./useToast', () => ({
+vi.mock('../useToast', () => ({
   error: vi.fn(),
 }))
 
@@ -112,7 +112,7 @@ describe('useErrorHandler', () => {
 
   describe('getErrorMessage', () => {
     it('应该为网络错误返回友好消息', () => {
-      const parsed = { type: 'network' as const, message: 'Failed to fetch' }
+      const parsed = { type: 'network' as const, message: 'Failed to fetch', originalError: new Error('Failed to fetch') }
       const mockT = (key: string) => key === 'errors.network' ? '网络连接失败' : key
 
       const message = getErrorMessage(parsed, mockT)
@@ -121,7 +121,7 @@ describe('useErrorHandler', () => {
     })
 
     it('应该为权限错误返回友好消息', () => {
-      const parsed = { type: 'permission' as const, message: '403 Forbidden' }
+      const parsed = { type: 'permission' as const, message: '403 Forbidden', originalError: new Error('403 Forbidden') }
       const mockT = (key: string) => key === 'errors.permission' ? '权限不足' : key
 
       const message = getErrorMessage(parsed, mockT)
@@ -130,7 +130,7 @@ describe('useErrorHandler', () => {
     })
 
     it('应该为验证错误返回友好消息', () => {
-      const parsed = { type: 'validation' as const, message: 'Invalid input' }
+      const parsed = { type: 'validation' as const, message: 'Invalid input', originalError: new Error('Invalid input') }
       const mockT = (key: string) => key === 'errors.validation' ? '输入数据不合法' : key
 
       const message = getErrorMessage(parsed, mockT)
@@ -139,7 +139,7 @@ describe('useErrorHandler', () => {
     })
 
     it('应该为服务器错误返回友好消息', () => {
-      const parsed = { type: 'server' as const, message: '500 Error' }
+      const parsed = { type: 'server' as const, message: '500 Error', originalError: new Error('500 Internal Server Error') }
       const mockT = (key: string) => key === 'errors.server' ? '服务器错误' : key
 
       const message = getErrorMessage(parsed, mockT)
@@ -148,7 +148,7 @@ describe('useErrorHandler', () => {
     })
 
     it('应该为未知错误返回原始消息', () => {
-      const parsed = { type: 'unknown' as const, message: 'Something weird' }
+      const parsed = { type: 'unknown' as const, message: 'Something weird', originalError: new Error('Something weird') }
       const mockT = (key: string) => key
 
       const message = getErrorMessage(parsed, mockT)
@@ -159,7 +159,7 @@ describe('useErrorHandler', () => {
 
   describe('getErrorAction', () => {
     it('应该为网络错误返回重试建议', () => {
-      const parsed = { type: 'network' as const, message: 'Network error' }
+      const parsed = { type: 'network' as const, message: 'Network error', originalError: new Error('Network error') }
       const mockT = (key: string) => key === 'errors.actions.retry' ? '请重试' : key
 
       const action = getErrorAction(parsed, mockT)
@@ -168,7 +168,7 @@ describe('useErrorHandler', () => {
     })
 
     it('应该为权限错误返回登录建议', () => {
-      const parsed = { type: 'permission' as const, message: '403' }
+      const parsed = { type: 'permission' as const, message: '403', originalError: new Error('403 Forbidden') }
       const mockT = (key: string) => key === 'errors.actions.login' ? '请重新登录' : key
 
       const action = getErrorAction(parsed, mockT)
@@ -177,7 +177,7 @@ describe('useErrorHandler', () => {
     })
 
     it('应该为验证错误返回检查输入建议', () => {
-      const parsed = { type: 'validation' as const, message: 'Invalid' }
+      const parsed = { type: 'validation' as const, message: 'Invalid', originalError: new Error('Invalid input') }
       const mockT = (key: string) => key === 'errors.actions.check' ? '检查输入' : key
 
       const action = getErrorAction(parsed, mockT)
@@ -186,7 +186,7 @@ describe('useErrorHandler', () => {
     })
 
     it('应该为服务器错误返回联系支持建议', () => {
-      const parsed = { type: 'server' as const, message: '500' }
+      const parsed = { type: 'server' as const, message: '500', originalError: new Error('500 Internal Server Error') }
       const mockT = (key: string) => key === 'errors.actions.contact' ? '联系支持' : key
 
       const action = getErrorAction(parsed, mockT)
@@ -197,7 +197,7 @@ describe('useErrorHandler', () => {
 
   describe('handleError', () => {
     it('应该调用 Toast 显示错误', async () => {
-      const { error: showErrorToast } = await import('./useToast')
+      const { error: showErrorToast } = await import('../useToast')
 
       handleError(new Error('Test error'), '操作失败')
 

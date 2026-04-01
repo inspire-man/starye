@@ -4,7 +4,7 @@
 
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import SkeletonTable from './SkeletonTable.vue'
+import SkeletonTable from '../SkeletonTable.vue'
 
 describe('SkeletonTable.vue', () => {
   describe('Props 配置', () => {

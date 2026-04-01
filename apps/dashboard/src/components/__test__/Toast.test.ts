@@ -5,7 +5,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import type { ProgressToast, Toast as ToastType } from '@/composables/useToast'
-import Toast from './Toast.vue'
+import Toast from '../Toast.vue'
 
 describe('Toast.vue', () => {
   describe('渲染', () => {

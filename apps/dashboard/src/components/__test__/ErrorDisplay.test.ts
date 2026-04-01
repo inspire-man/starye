@@ -5,7 +5,7 @@
 import type { ParsedError } from '@/composables/useErrorHandler'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import ErrorDisplay from './ErrorDisplay.vue'
+import ErrorDisplay from '../ErrorDisplay.vue'
 
 describe('errorDisplay.vue', () => {
   const mockError: ParsedError = {

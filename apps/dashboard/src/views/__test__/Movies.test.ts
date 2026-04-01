@@ -4,7 +4,7 @@
 
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import Movies from './Movies.vue'
+import Movies from '../Movies.vue'
 
 // Mock dependencies
 vi.mock('@/lib/api', () => ({
@@ -28,6 +28,13 @@ vi.mock('vue-i18n', () => ({
 }))
 
 vi.mock('@/composables/useToast', () => ({
+  useToast: vi.fn(() => ({
+    success: vi.fn(),
+    error: vi.fn(),
+    showProgress: vi.fn(() => 'progress-id'),
+    updateProgress: vi.fn(),
+    hideProgress: vi.fn(),
+  })),
   success: vi.fn(),
   error: vi.fn(),
   showProgress: vi.fn(() => 'progress-id'),
@@ -36,6 +43,9 @@ vi.mock('@/composables/useToast', () => ({
 }))
 
 vi.mock('@/composables/useErrorHandler', () => ({
+  useErrorHandler: vi.fn(() => ({
+    handleError: vi.fn(),
+  })),
   handleError: vi.fn(),
 }))
 
@@ -61,10 +71,10 @@ describe('movies.vue 集成测试', () => {
     it('加载成功后应该显示数据', async () => {
       const { api } = await import('@/lib/api')
       const mockMovies = [
-        { id: '1', title: 'Movie 1', slug: 'movie-1' },
-        { id: '2', title: 'Movie 2', slug: 'movie-2' },
+        { id: '1', title: 'Movie 1', slug: 'movie-1', code: '1234567890', isR18: false },
+        { id: '2', title: 'Movie 2', slug: 'movie-2', code: '1234567890', isR18: false },
       ]
-      vi.mocked(api.admin.getMovies).mockResolvedValue(mockMovies)
+      vi.mocked(api.admin.getMovies).mockResolvedValue({ data: mockMovies, meta: { total: 2, page: 1, limit: 10, totalPages: 1 } })
 
       const wrapper = mount(Movies)
       await flushPromises()

@@ -4,7 +4,7 @@
 
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import SkeletonCard from './SkeletonCard.vue'
+import SkeletonCard from '../SkeletonCard.vue'
 
 describe('SkeletonCard.vue', () => {
   describe('变体渲染', () => {

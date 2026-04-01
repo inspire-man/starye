@@ -3,8 +3,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProgressToast } from './useToast'
-import { hideProgress, hideToast, showProgress, showToast, success, updateProgress, useToast, error as showError, info, warning } from './useToast'
+import type { ProgressToast } from '../useToast'
+import { hideProgress, hideToast, showProgress, showToast, success, updateProgress, useToast, error as showError, info, warning } from '../useToast'
 
 describe('useToast', () => {
   const toast = useToast()
