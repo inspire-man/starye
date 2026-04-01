@@ -387,8 +387,11 @@
 
 ### 8.2 API 文档 ✅ 已完成
 
-- [x] 更新 API 文档（`docs/api/favorites.md`）
+- [x] 更新前端 API 文档（`apps/movie-app/docs/api/favorites.md`）
+- [x] 更新后端 OpenAPI 规范（`apps/api/src/routes/favorites/index.ts`）
+- [x] 更新后端 API 文档（`apps/api/docs/API_DOCUMENTATION.md`）
 - [x] 添加请求/响应示例（包含完整的 cURL 和 Axios 示例）
+- [x] 添加 OpenAPI 示例和详细描述
 - [x] 添加错误码说明（包含所有错误场景和处理建议）
 
 ### 8.3 迁移指南 ✅ 已跳过（无需迁移）

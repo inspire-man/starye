@@ -1,4 +1,4 @@
-# API 文档 - Aria2 集成与评分系统
+# API 文档 - Aria2 集成、评分系统与收藏夹
 
 > Starye API 新增端点文档
 
@@ -8,6 +8,7 @@
 
 - [概述](#概述)
 - [认证](#认证)
+- [收藏夹 API](#收藏夹-api)
 - [评分 API](#评分-api)
 - [Aria2 配置 API](#aria2-配置-api)
 - [Aria2 代理 API](#aria2-代理-api)
@@ -59,6 +60,225 @@ GET /api/auth/get-session
     "expiresAt": "2026-04-30T00:00:00.000Z"
   }
 }
+```
+
+---
+
+## 收藏夹 API
+
+### 概述
+
+收藏夹功能允许用户收藏电影、女优、厂商和漫画等实体。所有收藏夹 API 均需要用户认证。
+
+**支持的实体类型**：
+- `movie` - 电影
+- `actor` - 女优
+- `publisher` - 厂商
+- `comic` - 漫画
+
+### 1. 获取收藏列表
+
+获取当前用户的收藏列表，支持分页和类型筛选。
+
+```http
+GET /api/favorites?page=1&limit=24&entityType=movie
+```
+
+**查询参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| page | number | ❌ | 1 | 页码 |
+| limit | number | ❌ | 20 | 每页数量（最大 100） |
+| entityType | string | ❌ | - | 筛选实体类型 |
+
+**响应 (200 OK)**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "data": [
+      {
+        "id": "fav_abc123",
+        "userId": "user_xyz789",
+        "entityType": "movie",
+        "entityId": "movie_001",
+        "createdAt": 1711872000000
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 24,
+      "total": 42,
+      "totalPages": 2
+    }
+  },
+  "message": "成功返回收藏列表"
+}
+```
+
+**需要认证**：✅
+
+---
+
+### 2. 添加收藏
+
+将指定实体添加到收藏列表。如果已存在，返回现有收藏 ID（幂等操作）。
+
+```http
+POST /api/favorites
+Content-Type: application/json
+```
+
+**请求体**：
+
+```json
+{
+  "entityType": "movie",
+  "entityId": "movie_abc123"
+}
+```
+
+**参数说明**：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| entityType | string | ✅ | 实体类型 (movie/actor/publisher/comic) |
+| entityId | string | ✅ | 实体 ID |
+
+**响应 (200 OK) - 新添加**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "fav_new123",
+    "alreadyExists": false
+  },
+  "message": "成功添加收藏"
+}
+```
+
+**响应 (200 OK) - 已存在**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "fav_existing456",
+    "alreadyExists": true
+  },
+  "message": "成功添加收藏"
+}
+```
+
+**需要认证**：✅
+
+---
+
+### 3. 删除收藏
+
+从收藏列表中移除指定项。
+
+```http
+DELETE /api/favorites/:id
+```
+
+**路径参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| id | string | 收藏 ID |
+
+**响应 (200 OK)**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "success": true
+  },
+  "message": "成功删除收藏"
+}
+```
+
+**错误响应 (404)**：
+
+```json
+{
+  "success": false,
+  "error": "Favorite not found"
+}
+```
+
+**需要认证**：✅
+
+---
+
+### 4. 检查收藏状态
+
+检查指定实体是否已被当前用户收藏。
+
+```http
+GET /api/favorites/check/:entityType/:entityId
+```
+
+**路径参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| entityType | string | 实体类型 (movie/actor/publisher/comic) |
+| entityId | string | 实体 ID |
+
+**响应 (200 OK) - 已收藏**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "isFavorited": true
+  },
+  "message": "成功返回收藏状态"
+}
+```
+
+**响应 (200 OK) - 未收藏**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "isFavorited": false
+  },
+  "message": "成功返回收藏状态"
+}
+```
+
+**需要认证**：✅
+
+---
+
+### 收藏夹 cURL 示例
+
+```bash
+# 获取收藏列表
+curl "https://api.example.com/api/favorites?page=1&limit=24&entityType=movie" \
+  -H "Cookie: better-auth.session_token=YOUR_SESSION"
+
+# 添加收藏
+curl -X POST "https://api.example.com/api/favorites" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: better-auth.session_token=YOUR_SESSION" \
+  -d '{"entityType":"movie","entityId":"movie_abc123"}'
+
+# 删除收藏
+curl -X DELETE "https://api.example.com/api/favorites/fav_abc123" \
+  -H "Cookie: better-auth.session_token=YOUR_SESSION"
+
+# 检查收藏状态
+curl "https://api.example.com/api/favorites/check/movie/movie_abc123" \
+  -H "Cookie: better-auth.session_token=YOUR_SESSION"
 ```
 
 ---
@@ -666,6 +886,17 @@ curl -X POST https://api.example.com/api/aria2/rpc \
 
 ## 变更日志
 
+### v1.3.0 (2026-03-31)
+
+**新增**:
+- ✅ 收藏夹 API（4 个端点）
+- ✅ 完整的 OpenAPI 文档与示例
+- ✅ 实体类型支持（movie/actor/publisher/comic）
+
+**优化**:
+- 增强 API 文档说明
+- 添加更多请求/响应示例
+
 ### v1.2.0 (2026-03-30)
 
 **新增**:
@@ -693,5 +924,5 @@ curl -X POST https://api.example.com/api/aria2/rpc \
 
 ---
 
-**最后更新**: 2026-03-30
-**文档版本**: v1.2.0
+**最后更新**: 2026-03-31
+**文档版本**: v1.3.0
