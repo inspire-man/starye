@@ -208,44 +208,44 @@
 
 ### 7.1 Toast 系统测试
 
-- [ ] 7.1.1 创建 `useToast.test.ts` 单元测试
-- [ ] 7.1.2 测试 showToast 方法（创建 Toast）
-- [ ] 7.1.3 测试 hideToast 方法（关闭 Toast）
-- [ ] 7.1.4 测试自动消失（setTimeout）
-- [ ] 7.1.5 测试队列限制（最多 5 个）
-- [ ] 7.1.6 测试 Progress Toast（更新进度）
+- [x] 7.1.1 创建 `useToast.test.ts` 单元测试
+- [x] 7.1.2 测试 showToast 方法（创建 Toast）
+- [x] 7.1.3 测试 hideToast 方法（关闭 Toast）
+- [x] 7.1.4 测试自动消失（setTimeout）
+- [x] 7.1.5 测试队列限制（最多 5 个）
+- [x] 7.1.6 测试 Progress Toast（更新进度）
 
 ### 7.2 Toast 组件测试
 
-- [ ] 7.2.1 创建 `Toast.vue` 组件测试
-- [ ] 7.2.2 测试四种类型渲染
-- [ ] 7.2.3 测试关闭按钮点击
-- [ ] 7.2.4 测试动画效果
-- [ ] 7.2.5 测试响应式布局
+- [x] 7.2.1 创建 `Toast.vue` 组件测试
+- [x] 7.2.2 测试四种类型渲染
+- [x] 7.2.3 测试关闭按钮点击
+- [x] 7.2.4 测试动画效果
+- [x] 7.2.5 测试响应式布局
 
 ### 7.3 骨架屏测试
 
-- [ ] 7.3.1 创建 `SkeletonTable.vue` 组件测试
-- [ ] 7.3.2 测试 props 配置（rows, columns, widths）
-- [ ] 7.3.3 测试闪烁动画
-- [ ] 7.3.4 创建 `SkeletonCard.vue` 组件测试
-- [ ] 7.3.5 测试三种变体（stat/content/image）
+- [x] 7.3.1 创建 `SkeletonTable.vue` 组件测试
+- [x] 7.3.2 测试 props 配置（rows, columns, widths）
+- [x] 7.3.3 测试闪烁动画
+- [x] 7.3.4 创建 `SkeletonCard.vue` 组件测试
+- [x] 7.3.5 测试三种变体（stat/content/image）
 
 ### 7.4 错误处理测试
 
-- [ ] 7.4.1 创建 `useErrorHandler.test.ts` 单元测试
-- [ ] 7.4.2 测试 parseError 方法（各种错误类型）
-- [ ] 7.4.3 测试 getErrorMessage 方法（消息映射）
-- [ ] 7.4.4 测试 handleError 方法（集成 Toast）
-- [ ] 7.4.5 创建 `ErrorDisplay.vue` 组件测试
-- [ ] 7.4.6 测试三种展示模式（inline/banner/modal）
+- [x] 7.4.1 创建 `useErrorHandler.test.ts` 单元测试
+- [x] 7.4.2 测试 parseError 方法（各种错误类型）
+- [x] 7.4.3 测试 getErrorMessage 方法（消息映射）
+- [x] 7.4.4 测试 handleError 方法（集成 Toast）
+- [x] 7.4.5 创建 `ErrorDisplay.vue` 组件测试
+- [x] 7.4.6 测试三种展示模式（inline/banner/modal）
 
 ### 7.5 集成测试
 
-- [ ] 7.5.1 测试 Movies.vue 的完整流程（Toast + Skeleton + 错误）
-- [ ] 7.5.2 测试批量操作的进度反馈
-- [ ] 7.5.3 测试网络错误场景（断网重试）
-- [ ] 7.5.4 测试权限错误场景（403 提示）
+- [x] 7.5.1 测试 Movies.vue 的完整流程（Toast + Skeleton + 错误）
+- [x] 7.5.2 测试批量操作的进度反馈
+- [x] 7.5.3 测试网络错误场景（断网重试）
+- [x] 7.5.4 测试权限错误场景（403 提示）
 
 ## 8. 国际化
 

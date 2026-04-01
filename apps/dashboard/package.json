@@ -10,7 +10,10 @@
     "deploy": "wrangler pages deploy dist",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
   },
   "dependencies": {
     "@starye/db": "workspace:*",
@@ -31,11 +34,16 @@
     "@starye/api-types": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "@vitejs/plugin-vue": "^6.0.5",
+    "@vitest/ui": "^3.0.0",
+    "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.9.1",
     "autoprefixer": "^10.4.27",
+    "happy-dom": "^20.8.9",
+    "jsdom": "^26.0.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
     "vite": "^8.0.3",
+    "vitest": "^3.0.0",
     "vue-tsc": "^3.2.6"
   }
 }
