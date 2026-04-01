@@ -18,7 +18,58 @@ vi.mock('@/lib/api', () => ({
 }))
 
 vi.mock('@/lib/auth-client', () => ({
-  useSession: vi.fn(),
+  useSession: vi.fn(() => ({ data: { user: { id: '1' } } })),
+}))
+
+vi.mock('vue-router', () => ({
+  useRoute: vi.fn(() => ({
+    query: {},
+    params: {},
+  })),
+  useRouter: vi.fn(() => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+  })),
+}))
+
+vi.mock('@/composables/useFilters', () => ({
+  useFilters: vi.fn(() => ({
+    filters: { value: {} },
+    updateFilter: vi.fn(),
+    clearFilters: vi.fn(),
+  })),
+}))
+
+vi.mock('@/composables/usePagination', () => ({
+  usePagination: vi.fn(() => ({
+    page: { value: 1 },
+    pageSize: { value: 20 },
+    total: { value: 0 },
+    totalPages: { value: 0 },
+    goToPage: vi.fn(),
+  })),
+}))
+
+vi.mock('@/composables/useSorting', () => ({
+  useSorting: vi.fn(() => ({
+    sortBy: { value: 'createdAt' },
+    sortOrder: { value: 'desc' },
+    updateSort: vi.fn(),
+  })),
+}))
+
+vi.mock('@/composables/useBatchSelect', () => ({
+  useBatchSelect: vi.fn(() => ({
+    selected: { value: [] },
+    isAllSelected: { value: false },
+    toggleSelect: vi.fn(),
+    toggleSelectAll: vi.fn(),
+    clearSelection: vi.fn(),
+  })),
+}))
+
+vi.mock('@/lib/date-utils', () => ({
+  formatDateTime: vi.fn((date: string) => date),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -89,7 +140,7 @@ describe('movies.vue 集成测试', () => {
 
       vi.mocked(api.admin.getMovies).mockRejectedValue(new Error('Network error'))
 
-      const wrapper = mount(Movies)
+      mount(Movies)
       await flushPromises()
 
       expect(handleError).toHaveBeenCalledWith(
@@ -102,12 +153,10 @@ describe('movies.vue 集成测试', () => {
   describe('toast 集成', () => {
     it('保存成功应该显示 success Toast', async () => {
       const { api } = await import('@/lib/api')
-      const { success } = await import('@/composables/useToast')
 
-      vi.mocked(api.admin.getMovies).mockResolvedValue([])
-      vi.mocked(api.admin.saveMovie).mockResolvedValue({ success: true })
+      vi.mocked(api.admin.getMovies).mockResolvedValue({ data: [], meta: { total: 0, page: 1, limit: 10, totalPages: 1 } })
 
-      const wrapper = mount(Movies)
+      mount(Movies)
       await flushPromises()
 
       // 模拟保存操作（需要打开编辑对话框并提交）
@@ -119,13 +168,12 @@ describe('movies.vue 集成测试', () => {
 
     it('删除成功应该显示 success Toast', async () => {
       const { api } = await import('@/lib/api')
-      const { success } = await import('@/composables/useToast')
 
-      const mockMovies = [{ id: '1', title: 'Movie 1', slug: 'movie-1' }]
-      vi.mocked(api.admin.getMovies).mockResolvedValue(mockMovies)
+      const mockMovies = [{ id: '1', title: 'Movie 1', slug: 'movie-1', code: '1234567890', isR18: false }]
+      vi.mocked(api.admin.getMovies).mockResolvedValue({ data: mockMovies, meta: { total: 1, page: 1, limit: 10, totalPages: 1 } })
       vi.mocked(api.admin.deleteMovie).mockResolvedValue({ success: true })
 
-      const wrapper = mount(Movies)
+      mount(Movies)
       await flushPromises()
 
       // 模拟删除操作
@@ -201,8 +249,6 @@ describe('movies.vue 集成测试', () => {
 
   describe('批量操作进度反馈', () => {
     it('批量删除应该显示 Progress Toast', async () => {
-      const { showProgress, updateProgress, hideProgress } = await import('@/composables/useToast')
-
       // 模拟批量删除流程
       // 注：实际实现中 Movies.vue 可能还没有批量删除功能
       // 这里是测试规范，实际测试需要等待功能实现

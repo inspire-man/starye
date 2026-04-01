@@ -140,7 +140,7 @@ describe('Toast.vue', () => {
       })
 
       expect(wrapper.text()).toContain('50%')
-      expect(wrapper.html()).toContain('progress')
+      expect(wrapper.text()).toContain('进度')
     })
 
     it('进度条宽度应该根据 progress 变化', () => {
