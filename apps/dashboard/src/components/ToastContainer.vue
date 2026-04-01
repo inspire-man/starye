@@ -8,8 +8,9 @@ const { toasts, hideToast } = useToast()
 // 键盘事件：Escape 关闭最新的 Toast
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && toasts.value.length > 0) {
-    const lastToast = toasts.value.at(-1)
-    if (lastToast.closable) {
+    // eslint-disable-next-line e18e/prefer-array-at
+    const lastToast = toasts.value[toasts.value.length - 1]
+    if (lastToast?.closable) {
       hideToast(lastToast.id)
     }
   }
