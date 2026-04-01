@@ -69,7 +69,7 @@ describe('errorDisplay.vue', () => {
     it('网络错误应该显示重试按钮', () => {
       const wrapper = mount(ErrorDisplay, {
         props: {
-          error: { type: 'network', message: '网络错误' },
+          error: { type: 'network', message: '网络错误', originalError: new Error('Network error') },
           mode: 'banner',
         },
       })
@@ -80,7 +80,7 @@ describe('errorDisplay.vue', () => {
     it('权限错误应该显示返回登录按钮', () => {
       const wrapper = mount(ErrorDisplay, {
         props: {
-          error: { type: 'permission', message: '权限不足' },
+          error: { type: 'permission', message: '权限不足', originalError: new Error('Permission denied') },
           mode: 'modal',
         },
       })
@@ -91,7 +91,7 @@ describe('errorDisplay.vue', () => {
     it('服务器错误应该显示联系支持按钮', () => {
       const wrapper = mount(ErrorDisplay, {
         props: {
-          error: { type: 'server', message: '服务器错误' },
+          error: { type: 'server', message: '服务器错误', originalError: new Error('Server error') },
           mode: 'modal',
         },
       })
@@ -102,7 +102,7 @@ describe('errorDisplay.vue', () => {
     it('点击重试按钮应该触发 retry 事件', async () => {
       const wrapper = mount(ErrorDisplay, {
         props: {
-          error: { type: 'network', message: '网络错误' },
+          error: { type: 'network', message: '网络错误', originalError: new Error('Network error') },
           mode: 'banner',
         },
       })
@@ -145,7 +145,7 @@ describe('errorDisplay.vue', () => {
     it('应该显示错误消息', () => {
       const wrapper = mount(ErrorDisplay, {
         props: {
-          error: { type: 'network', message: '自定义错误消息' },
+          error: { type: 'network', message: '自定义错误消息', originalError: new Error('Custom error') },
           mode: 'banner',
         },
       })
