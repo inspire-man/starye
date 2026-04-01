@@ -93,3 +93,9 @@ examples*
 
 # Series to Publisher Mapping
 .series-to-publisher-map.json
+
+test-*.txt
+
+test-results*
+
+playwright-report/

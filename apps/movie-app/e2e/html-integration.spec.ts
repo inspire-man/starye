@@ -1,6 +1,5 @@
 /* eslint-disable no-console */
 import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
 /**
  * 基于 HTML 页面的集成测试
  * 无需启动任何服务，直接测试 HTML 页面
