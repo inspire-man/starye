@@ -15,6 +15,9 @@ import { useRoute, useRouter } from 'vue-router'
 import ActorRelationGraph from '@/components/ActorRelationGraph.vue'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import FavoriteButton from '@/components/FavoriteButton.vue'
+import SkeletonForm from '@/components/SkeletonForm.vue'
+import { handleError } from '@/composables/useErrorHandler'
+import { success, warning } from '@/composables/useToast'
 import { fetchApi } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 import { formatDateTime } from '@/lib/date-utils'
@@ -27,13 +30,11 @@ const router = useRouter()
 const actorId = computed(() => route.params.id as string)
 const actor = ref<Actor | null>(null)
 const loading = ref(true)
-const error = ref('')
 
 // 别名管理
 const aliases = ref<string[]>([])
 const newAlias = ref('')
 const aliasLoading = ref(false)
-const aliasError = ref('')
 
 // 编辑模式
 const isEditing = ref(false)
@@ -46,7 +47,6 @@ const updateLoading = ref(false)
 
 async function loadActor() {
   loading.value = true
-  error.value = ''
 
   try {
     const response = await fetchApi<{ data: Actor }>(`/admin/actors/${actorId.value}`)
@@ -63,8 +63,7 @@ async function loadActor() {
     }
   }
   catch (e: any) {
-    error.value = e.message || '加载失败'
-    console.error('Failed to load actor:', e)
+    handleError(e, '加载女优信息失败')
   }
   finally {
     loading.value = false
@@ -73,12 +72,11 @@ async function loadActor() {
 
 async function addAlias() {
   if (!newAlias.value.trim()) {
-    aliasError.value = '别名不能为空'
+    warning('别名不能为空')
     return
   }
 
   aliasLoading.value = true
-  aliasError.value = ''
 
   try {
     const response = await fetchApi<{ success: boolean, aliases: string[] }>(`/admin/actors/${actorId.value}/aliases`, {
@@ -88,10 +86,10 @@ async function addAlias() {
 
     aliases.value = response.aliases || []
     newAlias.value = ''
+    success('别名添加成功')
   }
   catch (e: any) {
-    aliasError.value = e.message || '添加失败'
-    console.error('Failed to add alias:', e)
+    handleError(e, '添加别名失败')
   }
   finally {
     aliasLoading.value = false
@@ -109,10 +107,10 @@ async function removeAlias(alias: string) {
       method: 'DELETE',
     })
     aliases.value = response.aliases || []
+    success('别名删除成功')
   }
   catch (e: any) {
-    aliasError.value = e.message || '删除失败'
-    console.error('Failed to remove alias:', e)
+    handleError(e, '删除别名失败')
   }
 }
 
@@ -126,10 +124,10 @@ async function saveBasicInfo() {
     })
     await loadActor()
     isEditing.value = false
+    success('女优信息更新成功')
   }
   catch (e: any) {
-    error.value = e.message || '更新失败'
-    console.error('Failed to update actor:', e)
+    handleError(e, '更新女优信息失败')
   }
   finally {
     updateLoading.value = false
@@ -176,13 +174,8 @@ onMounted(() => {
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="loading">
-      加载中...
-    </div>
-
-    <!-- 错误提示 -->
-    <div v-else-if="error" class="error">
-      {{ error }}
+    <div v-if="loading">
+      <SkeletonForm :fields="8" :with-textarea="true" :with-buttons="true" />
     </div>
 
     <!-- 详情内容 -->
@@ -355,11 +348,6 @@ onMounted(() => {
             >
               {{ aliasLoading ? '添加中...' : '添加' }}
             </button>
-          </div>
-
-          <!-- 错误提示 -->
-          <div v-if="aliasError" class="error-message">
-            {{ aliasError }}
           </div>
 
           <!-- 别名列表 -->

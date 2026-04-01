@@ -186,9 +186,9 @@
 
 ### 6.5 ActorDetail.vue
 
-- [ ] 6.5.1 集成 Toast（替换 alert）
-- [ ] 6.5.2 集成 SkeletonForm
-- [ ] 6.5.3 集成错误处理
+- [x] 6.5.1 集成 Toast（替换 alert）
+- [x] 6.5.2 集成 SkeletonForm
+- [x] 6.5.3 集成错误处理
 
 ### 6.6 PublisherDetail.vue
 
