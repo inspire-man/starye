@@ -1,4 +1,3 @@
-<!-- eslint-disable no-alert -->
 <script setup lang="ts">
 /**
  * 电影管理页面
@@ -20,16 +19,22 @@ import FilterPanel from '@/components/FilterPanel.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
 import Pagination from '@/components/Pagination.vue'
 import PublisherSelector from '@/components/PublisherSelector.vue'
+import SkeletonTable from '@/components/SkeletonTable.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useBatchSelect } from '@/composables/useBatchSelect'
+import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
+import { useToast } from '@/composables/useToast'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 import { formatDateTime } from '@/lib/date-utils'
 
 useSession()
+
+const { success } = useToast()
+const { handleError } = useErrorHandler()
 
 const movies = ref<Movie[]>([])
 const loading = ref(true)
@@ -236,7 +241,7 @@ async function openEditModal(movie: Movie) {
     }
   }
   catch (e) {
-    console.error('Failed to load movie details:', e)
+    handleError(e, '加载电影详情失败')
     // 失败时回退到使用列表数据
     selectedActors.value = []
     selectedPublishers.value = []
@@ -250,7 +255,7 @@ async function loadPlayers(movieId: string) {
     players.value = response.players
   }
   catch (e) {
-    console.error(e)
+    handleError(e, '加载播放源失败')
   }
   finally {
     playersLoading.value = false
@@ -282,12 +287,12 @@ async function handleUpdate() {
     await api.admin.updateMovieActors(editingMovie.value.id, selectedActors.value)
     await api.admin.updateMoviePublishers(editingMovie.value.id, selectedPublishers.value)
 
+    success('电影信息更新成功')
     isEditModalOpen.value = false
     await loadMovies()
   }
   catch (e: unknown) {
-    console.error(e)
-    alert(`更新失败: ${String(e)}`)
+    handleError(e, '更新电影失败')
   }
   finally {
     updateLoading.value = false
@@ -313,12 +318,12 @@ async function executeBatchOperation() {
   try {
     const { operation, payload } = confirmDialogData.value
     await api.admin.bulkOperationMovies(selectedIds.value, operation, payload)
+    success(`成功对 ${selectedCount.value} 部电影执行了操作`)
     clearSelection()
     await loadMovies()
   }
   catch (e: unknown) {
-    console.error(e)
-    alert(`批量操作失败: ${String(e)}`)
+    handleError(e, '批量操作失败')
   }
 }
 
@@ -384,7 +389,15 @@ const tableColumns = [
       />
     </div>
 
+    <SkeletonTable
+      v-if="loading && movies.length === 0"
+      :rows="20"
+      :columns="7"
+      :selectable="true"
+    />
+
     <DataTable
+      v-else
       :data="movies"
       :columns="tableColumns"
       :loading="loading"

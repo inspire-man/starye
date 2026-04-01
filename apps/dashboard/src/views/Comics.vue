@@ -3,13 +3,19 @@ import type { Chapter, Comic } from '@/lib/api'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Pagination from '@/components/Pagination.vue'
+import SkeletonCard from '@/components/SkeletonCard.vue'
+import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
+import { useToast } from '@/composables/useToast'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 
 const { t } = useI18n()
 useSession()
+
+const { success } = useToast()
+const { handleError } = useErrorHandler()
 
 const comics = ref<Comic[]>([])
 const loading = ref(true)
@@ -53,7 +59,7 @@ async function handleUpload(event: Event) {
     editingComic.value.coverImage = presignRes.publicUrl
   }
   catch (e: unknown) {
-    console.error(e)
+    handleError(e, '上传封面失败')
   }
   finally {
     uploadLoading.value = false
@@ -133,7 +139,7 @@ async function loadChapters(comicId: string) {
     chapters.value = await api.admin.getChapters(comicId)
   }
   catch (e) {
-    console.error(e)
+    handleError(e, '加载章节列表失败')
   }
   finally {
     chaptersLoading.value = false
@@ -165,11 +171,12 @@ async function handleUpdate() {
         : (typeof editingComic.value.genres === 'string' ? (editingComic.value.genres as string).split(',').map(s => s.trim()).filter(Boolean) : []),
     })
 
+    success('漫画信息更新成功')
     isEditModalOpen.value = false
     await loadComics()
   }
   catch (e: unknown) {
-    console.error(e)
+    handleError(e, '更新漫画失败')
   }
   finally {
     updateLoading.value = false
@@ -184,8 +191,8 @@ async function toggleR18Shortcut(comic: Comic) {
       comic.isR18 = newValue
     }
   }
-  catch {
-    console.error('Quick update failed')
+  catch (e) {
+    handleError(e, '快速更新失败')
   }
 }
 </script>
@@ -250,9 +257,9 @@ async function toggleR18Shortcut(comic: Comic) {
       >
     </div>
 
-    <!-- Loading / Error States (Same as before) -->
-    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-      <div v-for="i in 6" :key="i" class="h-40 bg-neutral-200 dark:bg-neutral-800 animate-pulse rounded-2xl" />
+    <!-- Loading / Error States -->
+    <div v-if="loading && comics.length === 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <SkeletonCard v-for="i in 6" :key="i" variant="image" />
     </div>
 
     <div

@@ -7,11 +7,17 @@ import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import DataTable from '@/components/DataTable.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
 import Pagination from '@/components/Pagination.vue'
+import SkeletonTable from '@/components/SkeletonTable.vue'
+import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useFilters } from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
+import { useToast } from '@/composables/useToast'
 import { api } from '@/lib/api'
 import { formatDateTime } from '@/lib/date-utils'
+
+const { success } = useToast()
+const { handleError } = useErrorHandler()
 
 const actors = ref<Actor[]>([])
 const loading = ref(false)
@@ -135,7 +141,7 @@ async function loadStats() {
     }
   }
   catch (e) {
-    console.error('Failed to load stats:', e)
+    handleError(e, '加载统计数据失败')
   }
   finally {
     loadingStats.value = false
@@ -154,7 +160,7 @@ async function loadNationalities() {
     }
   }
   catch (e) {
-    console.error('Failed to load nationalities:', e)
+    handleError(e, '加载国籍列表失败')
   }
   finally {
     loadingNationalities.value = false
@@ -209,7 +215,7 @@ async function loadRelatedMovies(actorId: string) {
     relatedMovies.value = response.movies || []
   }
   catch (e) {
-    console.error('Failed to load related movies:', e)
+    handleError(e, '加载相关电影失败')
   }
   finally {
     loadingMovies.value = false
@@ -225,11 +231,12 @@ async function handleUpdate() {
       name: editingActor.value.name,
       avatar: editingActor.value.avatar,
     })
+    success('女优信息更新成功')
     isEditModalOpen.value = false
     await loadActors()
   }
   catch (e) {
-    console.error('Update failed:', e)
+    handleError(e, '更新女优信息失败')
   }
 }
 
@@ -246,11 +253,12 @@ async function handleMerge() {
   mergingActors.value = true
   try {
     await api.admin.mergeActors(mergeSourceId.value, mergeTargetId.value)
+    success('女优合并成功')
     isMergeDialogOpen.value = false
     await loadActors()
   }
   catch (e) {
-    console.error('Merge failed:', e)
+    handleError(e, '合并女优失败')
   }
   finally {
     mergingActors.value = false
@@ -292,12 +300,12 @@ async function handleBatchRecrawl() {
     const ids = Array.from(selectedActors.value)
     await api.admin.batchRecrawlActors(ids)
 
+    success(`成功标记 ${ids.length} 位女优重新爬取`)
     selectedActors.value.clear()
     await loadActors()
   }
   catch (e) {
-    console.error('Batch recrawl failed:', e)
-    alert('批量操作失败，请重试')
+    handleError(e, '批量操作失败')
   }
   finally {
     isBatchOperating.value = false
@@ -436,7 +444,15 @@ onMounted(() => {
       {{ error }}
     </div>
 
+    <SkeletonTable
+      v-if="loading && actors.length === 0"
+      :rows="20"
+      :columns="8"
+      :selectable="true"
+    />
+
     <DataTable
+      v-else
       :data="filteredActors"
       :columns="tableColumns"
       :loading="loading"

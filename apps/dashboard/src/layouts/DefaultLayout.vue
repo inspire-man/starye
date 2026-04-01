@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import ToastContainer from '@/components/ToastContainer.vue'
 import { useResourceGuard } from '@/composables/useResourceGuard'
 import { signOut, useSession } from '@/lib/auth-client'
 
@@ -389,5 +390,8 @@ async function handleLogout() {
 
       <RouterView />
     </main>
+
+    <!-- Toast 通知容器 -->
+    <ToastContainer />
   </div>
 </template>

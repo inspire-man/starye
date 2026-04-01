@@ -1,0 +1,67 @@
+/**
+ * 骨架屏样式
+ * 提供统一的 shimmer 动画和基础样式
+ */
+
+/* 基础骨架屏 class */
+.skeleton-base {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted-foreground) / 0.1) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Shimmer 动画关键帧 */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* 支持 prefers-reduced-motion：降级为 pulse 动画 */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-base {
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+/* 快捷 utility classes */
+.skeleton-text {
+  @apply skeleton-base h-4 rounded;
+}
+
+.skeleton-title {
+  @apply skeleton-base h-6 rounded;
+}
+
+.skeleton-avatar {
+  @apply skeleton-base rounded-full;
+}
+
+.skeleton-button {
+  @apply skeleton-base h-10 rounded;
+}
+
+.skeleton-input {
+  @apply skeleton-base h-10 rounded;
+}
+
+.skeleton-image {
+  @apply skeleton-base rounded-lg;
+}

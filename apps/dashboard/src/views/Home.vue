@@ -2,10 +2,13 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import SkeletonCard from '@/components/SkeletonCard.vue'
+import { useErrorHandler } from '@/composables/useErrorHandler'
 import { api } from '@/lib/api'
 
 const { t } = useI18n()
 const router = useRouter()
+const { handleError } = useErrorHandler()
 
 interface Stats {
   comics: number
@@ -41,7 +44,7 @@ onMounted(async () => {
     stats.value = res
   }
   catch (e) {
-    console.error(e)
+    handleError(e, '加载统计数据失败')
   }
   finally {
     loading.value = false
@@ -69,7 +72,10 @@ function navigateTo(path: string) {
       <h2 class="text-lg font-semibold mb-3">
         内容统计
       </h2>
-      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div v-if="loading" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <SkeletonCard v-for="i in 4" :key="i" variant="stat" />
+      </div>
+      <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <!-- 漫画 -->
         <div
           class="p-6 border rounded-xl bg-card shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-primary"
