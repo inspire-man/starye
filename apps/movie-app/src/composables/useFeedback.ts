@@ -18,7 +18,7 @@ export interface FeedbackItem {
   url: string
 }
 
-const { toast } = useToast()
+const { success, error } = useToast()
 
 /**
  * 使用反馈收集
@@ -54,10 +54,7 @@ export function useFeedback() {
         throw new Error('提交失败')
       }
 
-      toast({
-        title: '反馈已提交',
-        description: '感谢您的宝贵意见！',
-      })
+      success('反馈已提交')
 
       return true
     }
@@ -65,11 +62,7 @@ export function useFeedback() {
       // 保存到本地存储
       saveFeedbackLocally(feedback)
 
-      toast({
-        title: '提交失败',
-        description: '反馈已保存到本地，稍后会自动重试',
-        variant: 'destructive',
-      })
+      error('反馈已保存到本地，稍后会自动重试')
 
       return false
     }

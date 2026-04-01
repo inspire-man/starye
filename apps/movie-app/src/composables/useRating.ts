@@ -120,13 +120,11 @@ export function useRating() {
     }
 
     isLoading.value = true
-
+    const payload: SubmitRatingPayload = {
+      playerId,
+      score,
+    }
     try {
-      const payload: SubmitRatingPayload = {
-        playerId,
-        score,
-      }
-
       const response = await fetch(`${API_BASE_URL}/ratings`, {
         method: 'POST',
         headers: {
