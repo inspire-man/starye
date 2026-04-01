@@ -1,4 +1,4 @@
-import type { Database } from '../../../types'
+import type { Database } from '@starye/db'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getDecryptedAria2Config,

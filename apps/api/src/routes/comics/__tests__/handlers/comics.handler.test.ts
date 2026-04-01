@@ -5,6 +5,7 @@
 import type { AppEnv } from '../../../../types'
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
+import { createMockComic, createMockDb } from '../../../../test/helpers'
 import { getComicDetail, getComicList } from '../../handlers/comics.handler'
 import * as authService from '../../services/auth.service'
 import * as comicService from '../../services/comic.service'
@@ -16,10 +17,10 @@ describe('comics Handlers', () => {
         data: [],
         meta: { total: 0, page: 1, limit: 20, totalPages: 0 },
       })
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -48,10 +49,10 @@ describe('comics Handlers', () => {
         data: [],
         meta: { total: 0, page: 1, limit: 20, totalPages: 0 },
       })
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -78,16 +79,16 @@ describe('comics Handlers', () => {
 
   describe('getComicDetail', () => {
     it('应该返回漫画详情', async () => {
-      const mockComic = {
+      const mockComic = createMockComic({
         id: '1',
         title: 'Test Comic',
         slug: 'test-comic',
-      }
-      const mockGetComic = vi.spyOn(comicService, 'getComicBySlug').mockResolvedValue(mockComic as any)
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      })
+      const mockGetComic = vi.spyOn(comicService, 'getComicBySlug').mockResolvedValue(mockComic)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -106,10 +107,10 @@ describe('comics Handlers', () => {
 
     it('应该在漫画不存在时返回 404', async () => {
       const mockGetComic = vi.spyOn(comicService, 'getComicBySlug').mockResolvedValue(null)
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()

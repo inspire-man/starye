@@ -192,3 +192,24 @@ export const CacheTTL = {
    */
   USER_RATINGS: 2 * 60 * 1000,
 }
+
+/**
+ * 主动失效 Cloudflare Cache API 中的缓存
+ *
+ * @param patterns - 缓存键模式列表（完整的 URL）
+ */
+export async function invalidateCloudflareCache(patterns: string[]): Promise<void> {
+  const cacheApi = caches.default
+
+  for (const pattern of patterns) {
+    try {
+      const cacheUrl = new URL(pattern)
+      cacheUrl.protocol = 'https:'
+      const cacheRequest = new Request(cacheUrl.toString())
+      await cacheApi.delete(cacheRequest)
+    }
+    catch (error) {
+      console.error(`Failed to invalidate Cloudflare cache for ${pattern}:`, error)
+    }
+  }
+}

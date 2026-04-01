@@ -2,11 +2,19 @@ import type { AppEnv } from './types'
 import { Scalar } from '@scalar/hono-api-reference'
 import { Hono } from 'hono'
 import { openAPIRouteHandler } from 'hono-openapi'
+import { compress } from 'hono/compress'
+import { etag } from 'hono/etag'
+import { logger } from 'hono/logger'
+import { requestId } from 'hono/request-id'
+import { secureHeaders } from 'hono/secure-headers'
+import { timeout } from 'hono/timeout'
+import { timing } from 'hono/timing'
+import { authMiddleware } from './middleware/auth'
 import { corsMiddleware } from './middleware/cors'
 import { databaseMiddleware } from './middleware/database'
 import { errorHandler } from './middleware/error-handler'
 import { actorsRoutes } from './routes/actors'
-import { adminMainRoutes } from './routes/admin/main'
+import adminMainRoutes from './routes/admin/main'
 import aria2Routes from './routes/aria2'
 import { authRoutes } from './routes/auth'
 import { comicsRoutes } from './routes/comics'
@@ -26,9 +34,17 @@ import { uploadRoutes } from './routes/upload'
 
 const app = new Hono<AppEnv>()
 
-// Global Middlewares
-app.use('*', corsMiddleware())
-app.use('*', databaseMiddleware())
+// Global Middlewares - Production-grade stack
+app.use('*', requestId()) // 1️⃣ 请求追踪
+app.use('*', logger()) // 2️⃣ 结构化日志
+app.use('*', timing()) // 3️⃣ 性能指标
+app.use('*', secureHeaders()) // 4️⃣ 安全头部
+app.use('*', compress()) // 5️⃣ 响应压缩
+app.use('*', timeout(30000)) // 6️⃣ 超时控制 (30s)
+app.use('*', corsMiddleware()) // 7️⃣ CORS 策略
+app.use('*', databaseMiddleware()) // 8️⃣ 数据库连接
+app.use('*', authMiddleware()) // 9️⃣ 认证会话
+app.use('*', etag()) // 🔟 ETag 缓存
 
 // Global Error Handler
 app.onError(errorHandler)

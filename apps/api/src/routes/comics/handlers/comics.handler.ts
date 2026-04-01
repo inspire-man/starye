@@ -9,7 +9,8 @@ import { getComicBySlug, getComics } from '../services/comic.service'
  */
 export async function getComicList(c: Context<AppEnv>) {
   const db = c.get('db')
-  const isAdult = await checkUserAdultStatus(c)
+  const user = c.get('user')
+  const isAdult = checkUserAdultStatus(user)
 
   const page = Number(c.req.query('page')) || 1
   const limit = Number(c.req.query('limit')) || 20
@@ -36,7 +37,8 @@ export async function getComicList(c: Context<AppEnv>) {
 export async function getComicDetail(c: Context<AppEnv>) {
   const db = c.get('db')
   const slug = c.req.param('slug')!
-  const isAdult = await checkUserAdultStatus(c)
+  const user = c.get('user')
+  const isAdult = checkUserAdultStatus(user)
 
   const comic = await getComicBySlug({ db, slug, isAdult })
 

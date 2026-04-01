@@ -39,7 +39,7 @@ describe('comics Service', () => {
         select: vi.fn().mockReturnValue({
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              then: vi.fn().mockImplementation((callback: any) => callback([{ value: 100 }])),
+              then: vi.fn().mockImplementation((callback: (result: { value: number }[]) => unknown) => callback([{ value: 100 }])),
             }),
           }),
         }),
@@ -70,7 +70,7 @@ describe('comics Service', () => {
         select: vi.fn().mockReturnValue({
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              then: vi.fn().mockImplementation((callback: any) => callback([{ value: 0 }])),
+              then: vi.fn().mockImplementation((callback: (result: { value: number }[]) => unknown) => callback([{ value: 0 }])),
             }),
           }),
         }),

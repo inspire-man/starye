@@ -5,6 +5,7 @@
 import type { AppEnv } from '../../../../types'
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
+import { createMockDb, createMockPublisher } from '../../../../test/helpers'
 import { getPublisherDetail, getPublisherList } from '../../handlers/publishers.handler'
 import * as authService from '../../services/auth.service'
 import * as publisherService from '../../services/publisher.service'
@@ -18,7 +19,7 @@ describe('publishers Handlers', () => {
       })
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -48,7 +49,7 @@ describe('publishers Handlers', () => {
       })
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -75,7 +76,7 @@ describe('publishers Handlers', () => {
       const mockGetPublishers = vi.spyOn(publisherService, 'getPublishers').mockRejectedValue(new Error('DB Error'))
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -95,17 +96,17 @@ describe('publishers Handlers', () => {
 
   describe('getPublisherDetail', () => {
     it('应该返回出版商详情', async () => {
-      const mockPublisher = {
+      const mockPublisher = createMockPublisher({
         id: '1',
         name: 'Test Publisher',
         slug: 'test-publisher',
         relatedMovies: [],
-      }
-      const mockGetPublisher = vi.spyOn(publisherService, 'getPublisherBySlug').mockResolvedValue(mockPublisher as any)
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      })
+      const mockGetPublisher = vi.spyOn(publisherService, 'getPublisherBySlug').mockResolvedValue(mockPublisher)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -128,10 +129,10 @@ describe('publishers Handlers', () => {
 
     it('应该在出版商不存在时返回 404', async () => {
       const mockGetPublisher = vi.spyOn(publisherService, 'getPublisherBySlug').mockResolvedValue(null)
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -147,10 +148,10 @@ describe('publishers Handlers', () => {
     })
 
     it('应该验证 R18 权限', async () => {
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(false)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(false)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()

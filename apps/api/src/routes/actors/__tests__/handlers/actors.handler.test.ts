@@ -5,6 +5,7 @@
 import type { AppEnv } from '../../../../types'
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
+import { createMockActor, createMockDb } from '../../../../test/helpers'
 import { getActorDetail, getActorList } from '../../handlers/actors.handler'
 import * as actorService from '../../services/actor.service'
 import * as authService from '../../services/auth.service'
@@ -18,7 +19,7 @@ describe('actors Handlers', () => {
       })
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -49,7 +50,7 @@ describe('actors Handlers', () => {
       })
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -77,7 +78,7 @@ describe('actors Handlers', () => {
       const mockGetActors = vi.spyOn(actorService, 'getActors').mockRejectedValue(new Error('DB Error'))
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -97,17 +98,17 @@ describe('actors Handlers', () => {
 
   describe('getActorDetail', () => {
     it('应该返回演员详情', async () => {
-      const mockActor = {
+      const mockActor = createMockActor({
         id: '1',
         name: 'Test Actor',
         slug: 'test-actor',
         relatedMovies: [],
-      }
-      const mockGetActor = vi.spyOn(actorService, 'getActorBySlug').mockResolvedValue(mockActor as any)
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      })
+      const mockGetActor = vi.spyOn(actorService, 'getActorBySlug').mockResolvedValue(mockActor)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -130,10 +131,10 @@ describe('actors Handlers', () => {
 
     it('应该在演员不存在时返回 404', async () => {
       const mockGetActor = vi.spyOn(actorService, 'getActorBySlug').mockResolvedValue(null)
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -149,10 +150,10 @@ describe('actors Handlers', () => {
     })
 
     it('应该验证 R18 权限', async () => {
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(false)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(false)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()

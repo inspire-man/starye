@@ -1,6 +1,7 @@
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
+import { detailCache, listCache } from '../../middleware/cache'
 import { ActorDetailSchema, ActorRelationsDataSchema, ActorsListDataSchema, GetActorParamSchema, GetActorRelationsParamSchema, GetActorRelationsQuerySchema, GetActorsQuerySchema } from '../../schemas/actor'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../schemas/responses'
 import { getActorDetail, getActorList, getActorRelationsHandler } from './handlers/actors.handler'
@@ -36,6 +37,7 @@ export const actorsRoutes = new Hono<AppEnv>()
       },
     }),
     validator('query', GetActorsQuerySchema),
+    listCache(),
     getActorList,
   )
   .get(
@@ -111,5 +113,6 @@ export const actorsRoutes = new Hono<AppEnv>()
       },
     }),
     validator('param', GetActorParamSchema),
+    detailCache(),
     getActorDetail,
   )

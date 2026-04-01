@@ -7,11 +7,9 @@ import { checkRatingRateLimit, getPlayerRating, getTopRatedPlayers, getUserRatin
 // 提交评分
 export async function submitPlayerRating(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
+  const user = c.get('user')
 
-  // 验证登录
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
-  if (!session?.user) {
+  if (!user) {
     throw new HTTPException(401, { message: '请先登录' })
   }
 
@@ -29,7 +27,7 @@ export async function submitPlayerRating(c: Context<AppEnv>) {
   // 检查频率限制
   const canRate = await checkRatingRateLimit({
     db,
-    userId: session.user.id,
+    userId: user.id,
     windowMinutes: 1,
     maxRatings: 10,
   })
@@ -42,12 +40,12 @@ export async function submitPlayerRating(c: Context<AppEnv>) {
     const result = await submitRating({
       db,
       playerId,
-      userId: session.user.id,
+      userId: user.id,
       score,
     })
 
     // 使相关缓存失效
-    InvalidateCache.onRatingUpdate(playerId, undefined, session.user.id)
+    InvalidateCache.onRatingUpdate(playerId, undefined, user.id)
 
     return c.json({
       code: 0,
@@ -66,7 +64,6 @@ export async function submitPlayerRating(c: Context<AppEnv>) {
 // 获取播放源评分（带缓存）
 export async function getPlayerRatingStats(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
   const playerId = c.req.param('playerId')
 
   if (!playerId) {
@@ -74,8 +71,8 @@ export async function getPlayerRatingStats(c: Context<AppEnv>) {
   }
 
   // 获取当前用户 ID（如已登录）
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
-  const userId = session?.user?.id
+  const user = c.get('user')
+  const userId = user?.id
 
   // 尝试从缓存获取
   const cacheKey = CacheKeys.playerRating(playerId)
@@ -107,11 +104,9 @@ export async function getPlayerRatingStats(c: Context<AppEnv>) {
 // 获取用户评分历史
 export async function getUserRatings(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
+  const user = c.get('user')
 
-  // 验证登录
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
-  if (!session?.user) {
+  if (!user) {
     throw new HTTPException(401, { message: '请先登录' })
   }
 
@@ -119,7 +114,7 @@ export async function getUserRatings(c: Context<AppEnv>) {
 
   const history = await getUserRatingHistory({
     db,
-    userId: session.user.id,
+    userId: user.id,
     limit,
   })
 

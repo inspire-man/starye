@@ -41,9 +41,10 @@ export async function getPublisherList(c: Context<AppEnv>) {
 export async function getPublisherDetail(c: Context<AppEnv>) {
   const db = c.get('db')
   const slug = c.req.param('slug')!
+  const user = c.get('user')
 
   // R18 权限校验
-  const isAdult = await checkUserAdultStatus(c)
+  const isAdult = checkUserAdultStatus(user)
   if (!isAdult) {
     return c.json({ error: 'Adult verification required' }, 403)
   }

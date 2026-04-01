@@ -3,6 +3,7 @@
  */
 
 import type { Database } from '@starye/db'
+import type { MockedFunction } from 'vitest'
 import { describe, expect, it, vi } from 'vitest'
 import { getActorBySlug, getActors } from '../../services/actor.service'
 
@@ -41,7 +42,7 @@ describe('actors Service', () => {
         select: vi.fn().mockReturnValue({
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              then: vi.fn().mockImplementation((callback: any) => callback([{ value: 50 }])),
+              then: vi.fn().mockImplementation((callback: (result: { value: number }[]) => unknown) => callback([{ value: 50 }])),
             }),
           }),
         }),
@@ -83,8 +84,9 @@ describe('actors Service', () => {
       })
 
       expect(mockDb.query.actors.findMany).toHaveBeenCalled()
-      const callArgs = (mockDb.query.actors.findMany as any).mock.calls[0][0]
-      expect(callArgs.where).toBeDefined()
+      const callArgs = (mockDb.query.actors.findMany as MockedFunction<typeof mockDb.query.actors.findMany>).mock.calls[0]?.[0]
+      expect(callArgs).toBeDefined()
+      expect(callArgs?.where).toBeDefined()
     })
 
     it('应该支持按活跃状态筛选', async () => {
@@ -133,8 +135,9 @@ describe('actors Service', () => {
       })
 
       expect(mockDb.query.actors.findMany).toHaveBeenCalled()
-      const callArgs = (mockDb.query.actors.findMany as any).mock.calls[0][0]
-      expect(callArgs.orderBy).toBeDefined()
+      const callArgs = (mockDb.query.actors.findMany as MockedFunction<typeof mockDb.query.actors.findMany>).mock.calls[0]?.[0]
+      expect(callArgs).toBeDefined()
+      expect(callArgs?.orderBy).toBeDefined()
     })
   })
 

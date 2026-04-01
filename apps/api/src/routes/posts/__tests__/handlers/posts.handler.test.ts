@@ -1,10 +1,10 @@
 /**
  * Posts Handlers 测试
  */
-
 import type { AppEnv } from '../../../../types'
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
+import { createMockAuth, createMockDb, createMockPost, createMockUser } from '../../../../test/helpers'
 import { createPostHandler, deletePostHandler, getPostDetailById, getPostDetailBySlug, getPostList, updatePostHandler } from '../../handlers/posts.handler'
 import * as postService from '../../services/post.service'
 
@@ -17,7 +17,7 @@ describe('posts Handlers', () => {
       })
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
@@ -41,17 +41,17 @@ describe('posts Handlers', () => {
 
   describe('getPostDetailBySlug', () => {
     it('应该返回文章详情', async () => {
-      const mockPost = {
+      const mockPost = createMockPost({
         id: '1',
         title: 'Test Post',
         slug: 'test-post',
         published: true,
-      }
-      const mockGetPost = vi.spyOn(postService, 'getPostBySlug').mockResolvedValue(mockPost as any)
+      }) as any
+      const mockGetPost = vi.spyOn(postService, 'getPostBySlug').mockResolvedValue(mockPost)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = { api: {} } as any
+      const mockDb = createMockDb()
+      const mockAuth = createMockAuth(null)
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         c.set('auth', mockAuth)
@@ -70,11 +70,11 @@ describe('posts Handlers', () => {
     })
 
     it('应该在文章不存在时返回 404', async () => {
-      vi.spyOn(postService, 'getPostBySlug').mockResolvedValue(null as any)
+      vi.spyOn(postService, 'getPostBySlug').mockResolvedValue(undefined)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = { api: {} } as any
+      const mockDb = createMockDb()
+      const mockAuth = createMockAuth(null)
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         c.set('auth', mockAuth)
@@ -91,19 +91,19 @@ describe('posts Handlers', () => {
 
   describe('getPostDetailById', () => {
     it('应该返回文章详情', async () => {
-      const mockPost = {
+      const mockPost = createMockPost({
         id: '1',
         title: 'Test Post',
-      }
-      const mockGetPost = vi.spyOn(postService, 'getPostById').mockResolvedValue(mockPost as any)
+      })
+      const mockGetPost = vi.spyOn(postService, 'getPostById').mockResolvedValue(mockPost)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = { api: {} } as any
+      const mockDb = createMockDb()
+      const mockAuth = createMockAuth(null)
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         c.set('auth', mockAuth)
-        c.set('user', { id: 'admin' } as any)
+        c.set('user', createMockUser({ id: 'admin', role: 'admin' }))
         await next()
       })
       app.get('/posts/admin/:id', getPostDetailById)
@@ -119,15 +119,15 @@ describe('posts Handlers', () => {
 
   describe('createPostHandler', () => {
     it('应该创建新文章', async () => {
-      const mockPost = {
+      const mockPost = createMockPost({
         id: '1',
         title: 'New Post',
         slug: 'new-post',
-      }
-      const mockCreatePost = vi.spyOn(postService, 'createPost').mockResolvedValue(mockPost as any)
+      })
+      const mockCreatePost = vi.spyOn(postService, 'createPost').mockResolvedValue(mockPost)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
+      const mockDb = createMockDb()
       const mockAuth = {
         api: {
           getSession: vi.fn().mockResolvedValue({
@@ -138,7 +138,7 @@ describe('posts Handlers', () => {
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         c.set('auth', mockAuth)
-        c.set('user', { id: 'admin' } as any)
+        c.set('user', createMockUser({ id: 'admin', role: 'admin' }))
         await next()
       })
       app.post('/posts', createPostHandler)
@@ -162,20 +162,20 @@ describe('posts Handlers', () => {
 
   describe('updatePostHandler', () => {
     it('应该更新文章', async () => {
-      const mockPost = {
+      const mockPost = createMockPost({
         id: '1',
         title: 'Updated Post',
-      }
-      const mockGetPost = vi.spyOn(postService, 'getPostById').mockResolvedValue(mockPost as any)
-      const mockUpdatePost = vi.spyOn(postService, 'updatePost').mockResolvedValue(mockPost as any)
+      })
+      const mockGetPost = vi.spyOn(postService, 'getPostById').mockResolvedValue(mockPost)
+      const mockUpdatePost = vi.spyOn(postService, 'updatePost').mockResolvedValue(mockPost)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = { api: {} } as any
+      const mockDb = createMockDb()
+      const mockAuth = createMockAuth(null)
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         c.set('auth', mockAuth)
-        c.set('user', { id: 'admin' } as any)
+        c.set('user', createMockUser({ id: 'admin', role: 'admin' }))
         await next()
       })
       app.patch('/posts/:id', updatePostHandler)
@@ -198,20 +198,20 @@ describe('posts Handlers', () => {
 
   describe('deletePostHandler', () => {
     it('应该删除文章', async () => {
-      const mockPost = {
+      const mockPost = createMockPost({
         id: '1',
         title: 'Test Post',
-      }
-      const mockGetPost = vi.spyOn(postService, 'getPostById').mockResolvedValue(mockPost as any)
+      })
+      const mockGetPost = vi.spyOn(postService, 'getPostById').mockResolvedValue(mockPost)
       const mockDeletePost = vi.spyOn(postService, 'deletePost').mockResolvedValue(undefined)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = { api: {} } as any
+      const mockDb = createMockDb()
+      const mockAuth = createMockAuth(null)
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         c.set('auth', mockAuth)
-        c.set('user', { id: 'admin' } as any)
+        c.set('user', createMockUser({ id: 'admin', role: 'admin' }))
         await next()
       })
       app.delete('/posts/:id', deletePostHandler)

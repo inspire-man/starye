@@ -1,6 +1,7 @@
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
+import { detailCache, listCache } from '../../middleware/cache'
 import { GetPublisherParamSchema, GetPublishersQuerySchema, PublisherDetailSchema, PublishersListDataSchema } from '../../schemas/publisher'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../schemas/responses'
 import { getPublisherDetail, getPublisherList } from './handlers/publishers.handler'
@@ -36,6 +37,7 @@ export const publishersRoutes = new Hono<AppEnv>()
       },
     }),
     validator('query', GetPublishersQuerySchema),
+    listCache(),
     getPublisherList,
   )
   .get(
@@ -73,5 +75,6 @@ export const publishersRoutes = new Hono<AppEnv>()
       },
     }),
     validator('param', GetPublisherParamSchema),
+    detailCache(),
     getPublisherDetail,
   )

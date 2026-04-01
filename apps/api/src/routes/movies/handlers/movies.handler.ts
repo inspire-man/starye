@@ -6,12 +6,8 @@ import { getHotMovies, getMovieByIdentifier, getMovies } from '../services/movie
 
 export async function getMovieList(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
-
-  const isAdult = await checkUserAdultStatus({
-    auth,
-    headers: c.req.raw.headers,
-  })
+  const user = c.get('user')
+  const isAdult = checkUserAdultStatus(user)
 
   const page = Number(c.req.query('page')) || 1
   const pageSize = Number(c.req.query('limit')) || 24
@@ -36,17 +32,11 @@ export async function getMovieList(c: Context<AppEnv>) {
 
 export async function getMovieDetail(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
+  const user = c.get('user')
   const identifier = c.req.param('identifier')!
 
-  const isAdult = await checkUserAdultStatus({
-    auth,
-    headers: c.req.raw.headers,
-  })
-
-  // 获取当前用户 ID（用于查询用户评分）
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
-  const userId = session?.user?.id
+  const isAdult = checkUserAdultStatus(user)
+  const userId = user?.id
 
   const movie = await getMovieByIdentifier({
     db,
@@ -64,12 +54,8 @@ export async function getMovieDetail(c: Context<AppEnv>) {
 
 export async function getHotMoviesList(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
-
-  const isAdult = await checkUserAdultStatus({
-    auth,
-    headers: c.req.raw.headers,
-  })
+  const user = c.get('user')
+  const isAdult = checkUserAdultStatus(user)
 
   const limit = Number(c.req.query('limit')) || 12
 

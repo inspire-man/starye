@@ -1,6 +1,7 @@
 import type { AppEnv } from '../../../../types'
 import { Hono } from 'hono'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMockAuth, createMockDb, createMockMovie, createMockUser } from '../../../../test/helpers'
 import { getHotMoviesList, getMovieDetail, getMovieList } from '../../handlers/movies.handler'
 import * as authService from '../../services/auth.service'
 import * as movieService from '../../services/movie.service'
@@ -16,15 +17,15 @@ describe('movies handlers', () => {
         data: [],
         meta: { total: 0, page: 1, limit: 24, totalPages: 0 },
       })
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = {} as any
+      const mockDb = createMockDb()
+      const mockUser = createMockUser({ isAdult: true, role: 'user' })
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
-        c.set('auth', mockAuth)
+        c.set('user', mockUser)
         await next()
       })
       app.get('/movies', getMovieList)
@@ -51,15 +52,13 @@ describe('movies handlers', () => {
         data: [],
         meta: { total: 0, page: 1, limit: 24, totalPages: 0 },
       })
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(false)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(false)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = {} as any
+      const mockDb = createMockDb()
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
-        c.set('auth', mockAuth)
         await next()
       })
       app.get('/movies', getMovieList)
@@ -83,17 +82,13 @@ describe('movies handlers', () => {
 
   describe('getMovieDetail', () => {
     it('应该返回电影详情', async () => {
-      const mockMovie = { id: '1', title: 'Test Movie', isR18: false }
-      const mockGetMovie = vi.spyOn(movieService, 'getMovieByIdentifier').mockResolvedValue(mockMovie as any)
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      const mockMovie = createMockMovie({ id: '1', title: 'Test Movie', isR18: false })
+      const mockGetMovie = vi.spyOn(movieService, 'getMovieByIdentifier').mockResolvedValue(mockMovie)
+      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = {
-        api: {
-          getSession: vi.fn().mockResolvedValue(null),
-        },
-      } as any
+      const mockDb = createMockDb()
+      const mockAuth = createMockAuth(null)
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
@@ -107,7 +102,11 @@ describe('movies handlers', () => {
 
       expect(res.status).toBe(200)
       const json: any = await res.json()
-      expect(json.data).toEqual(mockMovie)
+      expect(json.data).toMatchObject({
+        id: mockMovie.id,
+        title: mockMovie.title,
+        isR18: mockMovie.isR18,
+      })
       expect(_mockCheckAdult).toHaveBeenCalled()
       expect(mockGetMovie).toHaveBeenCalledWith({
         db: mockDb,
@@ -119,19 +118,15 @@ describe('movies handlers', () => {
 
     it('应该在电影不存在时返回 404', async () => {
       vi.spyOn(movieService, 'getMovieByIdentifier').mockResolvedValue(null)
-      vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = {
-        api: {
-          getSession: vi.fn().mockResolvedValue(null),
-        },
-      } as any
+      const mockDb = createMockDb()
+      const mockUser = createMockUser({ isAdult: true })
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
-        c.set('auth', mockAuth)
+        c.set('user', mockUser)
         await next()
       })
       app.get('/movies/:identifier', getMovieDetail)
@@ -143,20 +138,14 @@ describe('movies handlers', () => {
     })
 
     it('应该正确传递 isAdult 参数到 service', async () => {
-      const mockGetMovie = vi.spyOn(movieService, 'getMovieByIdentifier').mockResolvedValue({ id: '1' } as any)
-      vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(false)
+      const mockGetMovie = vi.spyOn(movieService, 'getMovieByIdentifier').mockResolvedValue(createMockMovie({ id: '1' }))
+      vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(false)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = {
-        api: {
-          getSession: vi.fn().mockResolvedValue(null),
-        },
-      } as any
+      const mockDb = createMockDb()
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
-        c.set('auth', mockAuth)
         await next()
       })
       app.get('/movies/:identifier', getMovieDetail)
@@ -175,13 +164,13 @@ describe('movies handlers', () => {
 
   describe('getHotMoviesList', () => {
     it('应该返回热门电影列表', async () => {
-      const mockMovies = [{ id: '1', title: 'Hot Movie' }]
-      const mockGetHot = vi.spyOn(movieService, 'getHotMovies').mockResolvedValue(mockMovies as any)
-      vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(true)
+      const mockMovies = [createMockMovie({ id: '1', title: 'Hot Movie' })]
+      const mockGetHot = vi.spyOn(movieService, 'getHotMovies').mockResolvedValue(mockMovies)
+      vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = {} as any
+      const mockDb = createMockDb()
+      const mockAuth = createMockAuth(null)
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
@@ -195,7 +184,11 @@ describe('movies handlers', () => {
 
       expect(res.status).toBe(200)
       const json: any = await res.json()
-      expect(json.data).toEqual(mockMovies)
+      expect(json?.data).toHaveLength(mockMovies.length)
+      expect(json?.data[0]).toMatchObject({
+        id: mockMovies[0].id,
+        title: mockMovies[0].title,
+      })
       expect(mockGetHot).toHaveBeenCalledWith({
         db: mockDb,
         isAdult: true,
@@ -205,11 +198,11 @@ describe('movies handlers', () => {
 
     it('应该使用默认 limit=12', async () => {
       const mockGetHot = vi.spyOn(movieService, 'getHotMovies').mockResolvedValue([])
-      vi.spyOn(authService, 'checkUserAdultStatus').mockResolvedValue(false)
+      vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(false)
 
       const app = new Hono<AppEnv>()
-      const mockDb = {} as any
-      const mockAuth = {} as any
+      const mockDb = createMockDb()
+      const mockAuth = createMockAuth(null)
 
       app.use('*', async (c, next) => {
         c.set('db', mockDb)

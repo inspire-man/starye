@@ -6,12 +6,8 @@ import { checkUserAdultStatus } from '../services/auth.service'
 
 export async function getActorsList(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
-
-  const isAdult = await checkUserAdultStatus({
-    auth,
-    headers: c.req.raw.headers,
-  })
+  const user = c.get('user')
+  const isAdult = checkUserAdultStatus(user)
 
   if (!isAdult) {
     throw new HTTPException(403, { message: 'Adult verification required' })
@@ -31,13 +27,9 @@ export async function getActorsList(c: Context<AppEnv>) {
 
 export async function getActorDetail(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
   const slug = c.req.param('slug')!
-
-  const isAdult = await checkUserAdultStatus({
-    auth,
-    headers: c.req.raw.headers,
-  })
+  const user = c.get('user')
+  const isAdult = checkUserAdultStatus(user)
 
   if (!isAdult) {
     throw new HTTPException(403, { message: 'Adult verification required' })

@@ -6,6 +6,7 @@ export interface Variables {
   db: Database
   auth: Auth
   user?: SessionUser
+  requestId: string
 }
 
 export interface AppEnv { Bindings: Env, Variables: Variables }

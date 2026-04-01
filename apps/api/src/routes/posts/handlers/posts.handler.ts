@@ -9,11 +9,12 @@ import { createPost, deletePost, getPostById, getPostBySlug, getPosts, updatePos
  */
 export async function getPostList(c: Context<AppEnv>) {
   const db = c.get('db')
+  const user = c.get('user')
   const page = Number(c.req.query('page')) || 1
   const limit = Number(c.req.query('limit')) || 10
   const isDraft = c.req.query('draft') === 'true'
 
-  const canSeeDrafts = isDraft && await checkIsAdmin(c)
+  const canSeeDrafts = isDraft && checkIsAdmin(user)
 
   const result = await getPosts({
     db,
@@ -40,7 +41,8 @@ export async function getPostDetailBySlug(c: Context<AppEnv>) {
 
   // 非管理员不能访问草稿
   if (!post.published) {
-    const isAdmin = await checkIsAdmin(c)
+    const user = c.get('user')
+    const isAdmin = checkIsAdmin(user)
     if (!isAdmin) {
       throw new HTTPException(403, { message: 'This post is not published' })
     }
@@ -70,11 +72,10 @@ export async function getPostDetailById(c: Context<AppEnv>) {
  */
 export async function createPostHandler(c: Context<AppEnv>) {
   const db = c.get('db')
-  const auth = c.get('auth')
+  const user = c.get('user')
   const data = await c.req.json()
 
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
-  if (!session?.user?.id) {
+  if (!user?.id) {
     throw new HTTPException(401, { message: 'Unauthorized' })
   }
 
@@ -82,7 +83,7 @@ export async function createPostHandler(c: Context<AppEnv>) {
     db,
     data: {
       ...data,
-      authorId: session.user.id,
+      authorId: user.id,
     },
   })
 

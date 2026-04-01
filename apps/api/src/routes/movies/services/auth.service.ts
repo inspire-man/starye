@@ -1,14 +1,5 @@
-import type { Auth } from '../../../lib/auth'
 import type { SessionUser } from '../../../types'
 
-export interface CheckUserAdultStatusOptions {
-  auth: Auth
-  headers: Headers
-}
-
-export async function checkUserAdultStatus(options: CheckUserAdultStatusOptions): Promise<boolean> {
-  const { auth, headers } = options
-  const session = await auth.api.getSession({ headers })
-  const user = session?.user as SessionUser | undefined
+export function checkUserAdultStatus(user?: SessionUser): boolean {
   return user?.isAdult === true
 }

@@ -1,6 +1,12 @@
+import type { Database } from '@starye/db'
+import type { Auth } from '../lib/auth'
+import type { SessionUser } from '../types'
 import { vi } from 'vitest'
 
-export function createMockDb() {
+/**
+ * 创建类型安全的 Mock Database
+ */
+export function createMockDb(): Database {
   const mockSelect = vi.fn().mockReturnThis()
   const mockFrom = vi.fn().mockReturnThis()
   const mockWhere = vi.fn().mockReturnThis()
@@ -53,41 +59,182 @@ export function createMockDb() {
         findMany: vi.fn(),
       },
     },
-  } as any
+  } as unknown as Database
 }
 
-export function createMockContext(overrides: Record<string, any> = {}) {
-  const mockReq = {
-    query: vi.fn(() => ({})),
-    param: vi.fn(),
-    json: vi.fn(),
-    raw: {
-      headers: new Headers(),
-    },
-  }
-
-  const mockGet = vi.fn((key: string) => {
-    if (key in overrides) {
-      return overrides[key]
-    }
-    if (key === 'db') {
-      return createMockDb()
-    }
-    if (key === 'auth') {
-      return {
-        api: {
-          getSession: vi.fn().mockResolvedValue(null),
-        },
-      }
-    }
-    return undefined
-  })
-
+/**
+ * 创建类型安全的 Mock Auth
+ */
+export function createMockAuth(sessionData?: { user?: SessionUser } | null): Auth {
   return {
-    get: mockGet,
-    req: mockReq,
-    json: vi.fn(data => ({ data })),
-    text: vi.fn(text => ({ text })),
-    notFound: vi.fn(() => ({ status: 404 })),
-  } as any
+    api: {
+      getSession: vi.fn().mockResolvedValue(sessionData ?? null),
+    },
+  } as unknown as Auth
+}
+
+/**
+ * 创建测试用的 Mock User
+ */
+export function createMockUser(overrides?: Partial<SessionUser>): SessionUser {
+  return {
+    id: 'test-user-id',
+    email: 'test@example.com',
+    emailVerified: true,
+    name: 'Test User',
+    image: null,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    role: 'user',
+    isAdult: false,
+    isR18Verified: false,
+    ...overrides,
+  }
+}
+
+/**
+ * Post 完整类型定义
+ */
+export interface MockPost {
+  id: string
+  createdAt: Date | null
+  updatedAt: Date | null
+  title: string
+  slug: string
+  content: string | null
+  excerpt: string | null
+  coverImage: string | null
+  published: boolean | null
+  authorId: string | null
+}
+
+/**
+ * 创建测试用的 Mock Post
+ */
+export function createMockPost(overrides?: Partial<MockPost>): MockPost {
+  return {
+    id: 'test-post-id',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    title: 'Test Post',
+    slug: 'test-post',
+    content: 'Test content',
+    excerpt: 'Test excerpt',
+    coverImage: null,
+    published: true,
+    authorId: 'test-author-id',
+    ...overrides,
+  }
+}
+
+/**
+ * 创建测试用的 Mock Actor (完整版本用于 getActorDetail)
+ */
+export function createMockActor(overrides?: Record<string, any>): any {
+  return {
+    id: 'test-actor-id',
+    name: 'Test Actor',
+    slug: 'test-actor',
+    source: 'javdb',
+    cover: null,
+    avatar: null,
+    nationality: null,
+    birthday: null,
+    height: null,
+    cup: null,
+    bust: null,
+    waist: null,
+    hips: null,
+    bloodType: null,
+    hobby: null,
+    description: null,
+    movieCount: 0,
+    isActive: true,
+    hasDetailsCrawled: false,
+    lastCrawledAt: null,
+    lastModifiedAt: null,
+    lastCrawlAttempt: null,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    relatedMovies: [],
+    ...overrides,
+  }
+}
+
+/**
+ * 创建测试用的 Mock Comic
+ */
+export function createMockComic(overrides?: Record<string, any>): any {
+  return {
+    id: 'test-comic-id',
+    title: 'Test Comic',
+    slug: 'test-comic',
+    status: null,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    coverImage: null,
+    author: null,
+    description: null,
+    isR18: false,
+    rating: null,
+    views: 0,
+    favorites: 0,
+    lastChapterTitle: null,
+    lastChapterUpdatedAt: null,
+    tags: [],
+    categories: [],
+    publisherSlug: null,
+    sourceUrl: null,
+    chapters: [],
+    ...overrides,
+  }
+}
+
+/**
+ * 创建测试用的 Mock Movie (详细版本)
+ */
+export function createMockMovie(overrides?: Record<string, any>): any {
+  return {
+    id: 'test-movie-id',
+    title: 'Test Movie',
+    slug: 'test-movie',
+    code: 'TEST-001',
+    coverImage: null,
+    releaseDate: new Date('2024-01-01'),
+    duration: null,
+    rating: null,
+    description: null,
+    isR18: false,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    actors: [],
+    publishers: [],
+    relatedMovies: [],
+    ...overrides,
+  }
+}
+
+/**
+ * 创建测试用的 Mock Publisher
+ */
+export function createMockPublisher(overrides?: Record<string, any>): any {
+  return {
+    id: 'test-publisher-id',
+    name: 'Test Publisher',
+    slug: 'test-publisher',
+    source: 'javdb',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    avatar: null,
+    description: null,
+    website: null,
+    movieCount: 0,
+    isActive: true,
+    hasDetailsCrawled: false,
+    lastCrawledAt: null,
+    lastModifiedAt: null,
+    lastCrawlAttempt: null,
+    relatedMovies: [],
+    ...overrides,
+  }
 }

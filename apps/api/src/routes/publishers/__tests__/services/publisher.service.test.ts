@@ -3,6 +3,7 @@
  */
 
 import type { Database } from '@starye/db'
+import type { MockedFunction } from 'vitest'
 import { describe, expect, it, vi } from 'vitest'
 import { getPublisherBySlug, getPublishers } from '../../services/publisher.service'
 
@@ -39,7 +40,7 @@ describe('publishers Service', () => {
         select: vi.fn().mockReturnValue({
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              then: vi.fn().mockImplementation((callback: any) => callback([{ value: 30 }])),
+              then: vi.fn().mockImplementation((callback: (result: { value: number }[]) => unknown) => callback([{ value: 30 }])),
             }),
           }),
         }),
@@ -81,8 +82,9 @@ describe('publishers Service', () => {
       })
 
       expect(mockDb.query.publishers.findMany).toHaveBeenCalled()
-      const callArgs = (mockDb.query.publishers.findMany as any).mock.calls[0][0]
-      expect(callArgs.where).toBeDefined()
+      const callArgs = (mockDb.query.publishers.findMany as MockedFunction<typeof mockDb.query.publishers.findMany>).mock.calls[0]?.[0]
+      expect(callArgs).toBeDefined()
+      expect(callArgs?.where).toBeDefined()
     })
 
     it('应该支持不同的排序方式', async () => {
@@ -107,8 +109,9 @@ describe('publishers Service', () => {
       })
 
       expect(mockDb.query.publishers.findMany).toHaveBeenCalled()
-      const callArgs = (mockDb.query.publishers.findMany as any).mock.calls[0][0]
-      expect(callArgs.orderBy).toBeDefined()
+      const callArgs = (mockDb.query.publishers.findMany as MockedFunction<typeof mockDb.query.publishers.findMany>).mock.calls[0]?.[0]
+      expect(callArgs).toBeDefined()
+      expect(callArgs?.orderBy).toBeDefined()
     })
   })
 
