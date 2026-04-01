@@ -12,17 +12,14 @@ interface CacheEntry<T = any> {
 
 /**
  * 内存缓存存储
+ *
+ * 注意：Cloudflare Workers 不支持在全局作用域使用 setInterval
+ * 改为惰性清理策略（在访问时清理过期缓存）
  */
 class MemoryCache {
   private cache = new Map<string, CacheEntry>()
-  private cleanupInterval: any
-
-  constructor() {
-    // 每分钟清理过期缓存
-    this.cleanupInterval = setInterval(() => {
-      this.cleanup()
-    }, 60 * 1000)
-  }
+  private lastCleanup = Date.now()
+  private cleanupThreshold = 60 * 1000 // 每分钟触发一次清理
 
   /**
    * 设置缓存
@@ -39,6 +36,13 @@ class MemoryCache {
    * 获取缓存
    */
   get<T>(key: string): T | null {
+    // 惰性清理：定期触发清理操作
+    const now = Date.now()
+    if (now - this.lastCleanup > this.cleanupThreshold) {
+      this.cleanup()
+      this.lastCleanup = now
+    }
+
     const entry = this.cache.get(key)
 
     if (!entry) {
@@ -46,7 +50,7 @@ class MemoryCache {
     }
 
     // 检查是否过期
-    if (Date.now() - entry.timestamp > entry.ttl) {
+    if (now - entry.timestamp > entry.ttl) {
       this.cache.delete(key)
       return null
     }
@@ -100,9 +104,6 @@ class MemoryCache {
    * 销毁缓存
    */
   destroy(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval)
-    }
     this.clear()
   }
 }
