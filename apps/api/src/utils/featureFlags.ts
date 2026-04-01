@@ -42,21 +42,27 @@ const defaultFlags: Record<string, FeatureFlag> = {
 
 /**
  * 从环境变量加载 Feature Flags
+ *
+ * 注意：Cloudflare Workers 环境中没有 process.env
+ * 环境变量应通过 wrangler.toml 的 [vars] 配置或 Cloudflare Dashboard 设置
  */
-function loadFlagsFromEnv(): Record<string, FeatureFlag> {
+function loadFlagsFromEnv(env?: Record<string, string>): Record<string, FeatureFlag> {
   const flags = { ...defaultFlags }
 
+  // 如果没有提供环境变量，直接返回默认配置（所有功能启用）
+  if (!env) {
+    return flags
+  }
+
   // 从环境变量读取配置（格式：FEATURE_FLAG_<NAME>=true|false）
-  // eslint-disable-next-line node/prefer-global/process
-  for (const key of Object.keys(process.env || {})) {
+  for (const key of Object.keys(env)) {
     if (key.startsWith('FEATURE_FLAG_')) {
       const flagName = key
         .replace('FEATURE_FLAG_', '')
         .toLowerCase()
         .replace(/_/g, '-')
 
-      // eslint-disable-next-line node/prefer-global/process
-      const value = process.env[key]
+      const value = env[key]
 
       if (flags[flagName]) {
         flags[flagName].enabled = value === 'true'
@@ -67,7 +73,7 @@ function loadFlagsFromEnv(): Record<string, FeatureFlag> {
   return flags
 }
 
-// 全局 flags 实例
+// 全局 flags 实例（默认全部启用）
 let currentFlags = loadFlagsFromEnv()
 
 /**
@@ -142,8 +148,8 @@ export function getAllFeatureFlags(): Record<string, FeatureFlag> {
 /**
  * 重新加载 Feature Flags
  */
-export function reloadFeatureFlags() {
-  currentFlags = loadFlagsFromEnv()
+export function reloadFeatureFlags(env?: Record<string, string>) {
+  currentFlags = loadFlagsFromEnv(env)
 }
 
 /**

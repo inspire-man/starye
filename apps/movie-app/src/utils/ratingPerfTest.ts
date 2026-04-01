@@ -5,9 +5,9 @@
  */
 
 /* eslint-disable no-console */
-/* eslint-disable unused-imports/no-unused-vars */
 
 import type { Player } from '../types'
+import { extractFileSize } from './playbackSources'
 import { calculateAutoScore } from './ratingAlgorithm'
 
 interface PerfTestResult {
@@ -30,7 +30,11 @@ export async function testAutoRatingPerformance(
     const player = players[Math.floor(Math.random() * players.length)]
     const start = performance.now()
 
-    calculateAutoScore(player)
+    calculateAutoScore(
+      player.quality || '',
+      extractFileSize(player.sourceName),
+      player.sourceName || null,
+    )
 
     const end = performance.now()
     times.push(end - start)
@@ -77,7 +81,11 @@ export async function testBatchRatingCalculation(
   const start = performance.now()
 
   // 批量计算所有播放源的自动评分
-  const scores = players.map(player => calculateAutoScore(player))
+  void players.map(player => calculateAutoScore(
+    player.quality || '',
+    extractFileSize(player.sourceName),
+    player.sourceName || null,
+  ))
 
   const end = performance.now()
   const time = end - start
@@ -157,6 +165,8 @@ export async function runBrowserPerfTest(): Promise<void> {
     type: ['磁力链接', '网盘', '直链'][Math.floor(Math.random() * 3)],
     name: `播放源 ${i + 1}`,
     url: `http://example.com/${i}`,
+    sourceName: `播放源 ${i + 1} ${['4K', '1080P', '720P', '480P'][Math.floor(Math.random() * 4)]} ${(Math.random() * 10 + 1).toFixed(2)}GB`,
+    sourceUrl: `http://example.com/${i}`,
     quality: ['4K', '1080P', '720P', '480P'][Math.floor(Math.random() * 4)],
     size: `${(Math.random() * 10 + 1).toFixed(2)}GB`,
     uploadAt: new Date().toISOString(),

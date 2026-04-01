@@ -32,8 +32,6 @@ export async function submitFeedback(c: Context<AppEnv>) {
 
   try {
     // 记录反馈到日志或数据库
-    // 简化处理：输出到服务器日志
-
     // 可选：保存到 D1 数据库的 feedback 表
     // const db = c.get('db')
     // await db.insert(feedback).values({

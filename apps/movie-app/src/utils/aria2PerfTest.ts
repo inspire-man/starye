@@ -221,7 +221,7 @@ export function generateAria2PerfReport(testResults: {
 /**
  * 测试 WebSocket 重连性能
  */
-export async function testWebSocketReconnect(config: Aria2Config): Promise<{
+export async function testWebSocketReconnect(_config: Aria2Config): Promise<{
   reconnectTime: number
   success: boolean
 }> {

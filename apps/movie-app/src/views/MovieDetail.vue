@@ -509,12 +509,12 @@ onMounted(() => {
                 <span
                   v-if="getPlayerRating(player).warningTag"
                   class="px-2 py-0.5 text-xs font-semibold rounded-full"
-                  :class="getPlayerRating(player).warningTag.includes('💀')
+                  :class="getPlayerRating(player).warningTag?.includes('💀')
                     ? 'bg-red-500/20 text-red-300 border border-red-500/50'
                     : 'bg-orange-500/20 text-orange-300 border border-orange-500/50'"
                   :title="getPlayerRating(player).warningTag"
                 >
-                  {{ getPlayerRating(player).warningTag.includes('💀') ? '💀 低质' : '⚠️ 注意' }}
+                  {{ getPlayerRating(player).warningTag?.includes('💀') ? '💀 低质' : '⚠️ 注意' }}
                 </span>
               </div>
               <div class="text-xs text-gray-400 truncate mb-2">

@@ -4,8 +4,6 @@
  * 为评分查询和聚合数据提供缓存支持
  */
 
-import type { Context } from 'hono'
-
 interface CacheEntry<T = any> {
   data: T
   timestamp: number
@@ -140,26 +138,6 @@ export const CacheKeys = {
    * Aria2 配置
    */
   aria2Config: (userId: string) => `aria2:config:${userId}`,
-}
-
-/**
- * 缓存装饰器（用于 Hono 路由）
- */
-export function withCache<T>(
-  keyGenerator: (c: Context) => string,
-  _ttl: number = 60 * 1000,
-) {
-  return async (c: Context, next: () => Promise<void>): Promise<Response | void> => {
-    const key = keyGenerator(c)
-    const cached = apiCache.get<T>(key)
-
-    if (cached) {
-      return c.json(cached)
-    }
-
-    // 继续执行路由处理
-    await next()
-  }
 }
 
 /**

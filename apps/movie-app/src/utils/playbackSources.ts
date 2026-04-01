@@ -14,9 +14,9 @@ export type SortMethod = 'default' | 'rating' | 'quality' | 'latest'
 export function calculateCombinedScore(source: Player): number {
   // 计算自动评分（0-100）
   const autoScore = calculateAutoScore(
-    source.quality,
+    source.quality || '',
     extractFileSize(source.sourceName),
-    source.sourceName,
+    source.sourceName || null,
   )
 
   // 如果没有用户评分，返回自动评分
@@ -40,7 +40,7 @@ export function calculateCombinedScore(source: Player): number {
 /**
  * 从播放源名称中提取文件大小（GB）
  */
-function extractFileSize(sourceName: string): number | undefined {
+export function extractFileSize(sourceName: string): number | undefined {
   const sizeMatch = sourceName.match(/(\d+(?:\.\d+)?)\s*GB/i)
   return sizeMatch ? Number.parseFloat(sizeMatch[1]) : undefined
 }
