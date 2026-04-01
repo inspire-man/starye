@@ -8,10 +8,12 @@ import { progressApi } from '../api'
 import Aria2Settings from '../components/Aria2Settings.vue'
 import DownloadTaskPanel from '../components/DownloadTaskPanel.vue'
 import Select from '../components/Select.vue'
+import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useMobileDetect } from '../composables/useMobileDetect'
 import { useRating } from '../composables/useRating'
 import { useUserStore } from '../stores/user'
+import { formatFileSize } from '../utils/aria2Client'
 
 const userStore = useUserStore()
 const { isMobile } = useMobileDetect()
@@ -19,12 +21,27 @@ const loadingHistory = ref(false)
 const watchingHistory = ref<WatchingProgress[]>([])
 
 // 下载列表管理
-const { getDownloadList, removeFromDownloadList, updateDownloadStatus, stats, removeMultiple } = useDownloadList()
+const {
+  getDownloadList,
+  removeFromDownloadList,
+  updateDownloadStatus,
+  stats,
+  removeMultiple,
+  syncWithAria2,
+  importFromAria2,
+  getItemsWithAria2,
+  removeWithAria2,
+} = useDownloadList()
 
 // 评分管理
 const { getUserRatingHistory } = useRating()
 const myRatings = ref<any[]>([])
 const loadingRatings = ref(false)
+
+// Aria2 管理
+const aria2 = useAria2()
+const syncingAria2 = ref(false)
+const importingAria2 = ref(false)
 
 // Tab 状态
 type TabType = 'history' | 'downloads' | 'aria2-settings' | 'aria2-tasks' | 'my-ratings'
@@ -199,6 +216,119 @@ function changeStatus(movieId: string, status: DownloadStatus) {
   if (success) {
     showToast('状态已更新')
   }
+}
+
+// 同步 Aria2 任务
+async function syncAria2Tasks() {
+  if (!aria2.isConnected.value) {
+    showToast('Aria2 未连接', 'error')
+    return
+  }
+
+  const itemsWithAria2 = getItemsWithAria2()
+  if (itemsWithAria2.length === 0) {
+    showToast('没有需要同步的任务', 'error')
+    return
+  }
+
+  syncingAria2.value = true
+  try {
+    await syncWithAria2(aria2.getTaskStatus)
+    showToast(`已同步 ${itemsWithAria2.length} 个任务`)
+  }
+  catch (error) {
+    console.error('同步失败', error)
+    showToast('同步失败', 'error')
+  }
+  finally {
+    syncingAria2.value = false
+  }
+}
+
+// 从 Aria2 导入任务
+async function importAria2Tasks() {
+  if (!aria2.isConnected.value) {
+    showToast('Aria2 未连接', 'error')
+    return
+  }
+
+  importingAria2.value = true
+  try {
+    const [activeTasks, waitingTasks, stoppedTasks] = await Promise.all([
+      aria2.getActiveTasks(),
+      aria2.getWaitingTasks(),
+      aria2.getStoppedTasks(0, 50),
+    ])
+
+    const allTasks = [...activeTasks, ...waitingTasks, ...stoppedTasks]
+    const count = await importFromAria2(allTasks)
+
+    if (count > 0) {
+      showToast(`已导入 ${count} 个任务`)
+    }
+    else {
+      showToast('没有新任务需要导入')
+    }
+  }
+  catch (error) {
+    console.error('导入失败', error)
+    showToast('导入失败', 'error')
+  }
+  finally {
+    importingAria2.value = false
+  }
+}
+
+// 删除下载项（包含 Aria2 任务）
+async function removeItemWithAria2(movieId: string) {
+  if (confirm('确定要从下载列表中移除该影片吗？')) {
+    try {
+      const success = await removeWithAria2(movieId, aria2.removeTask)
+      if (success) {
+        showToast('已移除')
+        selectedItems.value.delete(movieId)
+      }
+    }
+    catch (error) {
+      console.error('移除失败', error)
+      showToast('移除失败', 'error')
+    }
+  }
+}
+
+// 暂停/恢复 Aria2 任务
+async function toggleAria2Task(item: any) {
+  if (!item.aria2Gid)
+    return
+
+  try {
+    if (item.aria2Status === 'active') {
+      await aria2.pauseTask(item.aria2Gid)
+    }
+    else if (item.aria2Status === 'paused') {
+      await aria2.unpauseTask(item.aria2Gid)
+    }
+
+    // 同步状态
+    await syncAria2Tasks()
+  }
+  catch (error) {
+    console.error('操作失败', error)
+    showToast('操作失败', 'error')
+  }
+}
+
+// 获取 Aria2 状态图标和文本
+function getAria2StatusDisplay(status?: string) {
+  const statusMap = {
+    active: { icon: '⬇️', text: '下载中', color: 'text-blue-400' },
+    waiting: { icon: '⏸', text: '等待中', color: 'text-yellow-400' },
+    paused: { icon: '⏸', text: '已暂停', color: 'text-gray-400' },
+    error: { icon: '❌', text: '错误', color: 'text-red-400' },
+    complete: { icon: '✅', text: '已完成', color: 'text-green-400' },
+    removed: { icon: '🗑', text: '已删除', color: 'text-gray-500' },
+  }
+  return statusMap[status as keyof typeof statusMap] || { icon: '❓', text: '未知', color: 'text-gray-400' }
 }
 
 // 获取状态标签样式
@@ -405,13 +535,32 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="flex gap-2">
+            <div class="flex gap-2 flex-wrap">
               <Select
                 v-model="downloadFilter"
                 :options="downloadFilterOptions"
                 placeholder="筛选状态"
                 size="small"
               />
+
+              <!-- Aria2 操作按钮 -->
+              <button
+                v-if="aria2.isConnected.value && getItemsWithAria2().length > 0"
+                :disabled="syncingAria2"
+                class="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                @click="syncAria2Tasks"
+              >
+                {{ syncingAria2 ? '同步中...' : '🔄 同步 Aria2' }}
+              </button>
+
+              <button
+                v-if="aria2.isConnected.value"
+                :disabled="importingAria2"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                @click="importAria2Tasks"
+              >
+                {{ importingAria2 ? '导入中...' : '📤 从 Aria2 导入' }}
+              </button>
 
               <button
                 v-if="selectedItems.size > 0"
@@ -503,6 +652,40 @@ onMounted(() => {
                     添加于 {{ formatDate(item.addedAt) }}
                   </p>
 
+                  <!-- Aria2 状态显示 -->
+                  <div v-if="item.aria2Gid" class="mt-2 space-y-2">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-medium" :class="[getAria2StatusDisplay(item.aria2Status).color]">
+                        {{ getAria2StatusDisplay(item.aria2Status).icon }} {{ getAria2StatusDisplay(item.aria2Status).text }}
+                      </span>
+                      <span v-if="item.downloadProgress !== undefined" class="text-xs text-gray-400">
+                        {{ item.downloadProgress }}%
+                      </span>
+                    </div>
+
+                    <!-- 进度条 -->
+                    <div v-if="item.aria2Status === 'active' || item.aria2Status === 'paused'" class="w-full bg-gray-600 rounded-full h-2">
+                      <div
+                        class="h-2 rounded-full transition-all"
+                        :class="item.aria2Status === 'active' ? 'bg-blue-500' : 'bg-gray-500'"
+                        :style="{ width: `${item.downloadProgress || 0}%` }"
+                      />
+                    </div>
+
+                    <!-- 速度和 ETA -->
+                    <div v-if="item.aria2Status === 'active'" class="flex gap-4 text-xs text-gray-400">
+                      <span v-if="item.downloadSpeed">
+                        ↓ {{ formatFileSize(item.downloadSpeed) }}/s
+                      </span>
+                      <span v-if="item.uploadSpeed">
+                        ↑ {{ formatFileSize(item.uploadSpeed) }}/s
+                      </span>
+                      <span v-if="item.eta">
+                        剩余: {{ item.eta }}
+                      </span>
+                    </div>
+                  </div>
+
                   <!-- 磁链信息 -->
                   <div v-if="item.magnetLink" class="mt-2">
                     <p class="text-xs text-gray-400 truncate">
@@ -513,8 +696,30 @@ onMounted(() => {
 
                 <!-- 操作按钮 -->
                 <div class="flex flex-col gap-2 shrink-0">
+                  <!-- Aria2 控制按钮 -->
+                  <button
+                    v-if="item.aria2Gid && (item.aria2Status === 'active' || item.aria2Status === 'paused')"
+                    class="px-3 py-1.5 text-white text-xs rounded-lg transition-colors"
+                    :class="item.aria2Status === 'active'
+                      ? 'bg-yellow-600 hover:bg-yellow-700'
+                      : 'bg-green-600 hover:bg-green-700'"
+                    @click="toggleAria2Task(item)"
+                  >
+                    {{ item.aria2Status === 'active' ? '⏸ 暂停' : '▶ 恢复' }}
+                  </button>
+
+                  <!-- 打开任务详情按钮 -->
+                  <button
+                    v-if="item.aria2Gid"
+                    class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors"
+                    @click="activeTab = 'aria2-tasks'"
+                  >
+                    📊 任务详情
+                  </button>
+
                   <!-- 状态选择 -->
                   <select
+                    v-if="!item.aria2Gid"
                     :value="item.status"
                     class="px-3 py-1.5 text-xs rounded-lg transition-colors"
                     :class="getStatusBadgeClass(item.status)"
@@ -534,7 +739,7 @@ onMounted(() => {
                   <!-- 移除按钮 -->
                   <button
                     class="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 text-white text-xs rounded-lg transition-colors"
-                    @click="removeItem(item.movieId)"
+                    @click="item.aria2Gid ? removeItemWithAria2(item.movieId) : removeItem(item.movieId)"
                   >
                     移除
                   </button>

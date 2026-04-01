@@ -35,6 +35,9 @@ const { isConnected: aria2Connected, addMagnetTask } = useAria2()
 // 调试模式（从 localStorage 读取，可以在控制台执行 localStorage.setItem('debugMode', 'true') 开启）
 const debugMode = ref(localStorage.getItem('debugMode') === 'true')
 
+// 排序方式
+const sortMethod = ref<import('../utils/playbackSources').SortMethod>('default')
+
 // 二维码弹窗
 const qrcodeModal = ref({ show: false, content: '', title: '' })
 
@@ -60,7 +63,7 @@ const sortedPlayers = computed(() => {
   if (!movie.value?.players || movie.value.players.length === 0) {
     return []
   }
-  return sortPlaybackSources(movie.value.players)
+  return sortPlaybackSources(movie.value.players, sortMethod.value)
 })
 
 const magnetLinks = computed(() => {
@@ -416,9 +419,29 @@ onMounted(() => {
     <!-- 播放源区块 -->
     <div v-if="sortedPlayers.length > 0" class="bg-gray-800 rounded-lg shadow-lg p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold text-white">
-          播放源
-        </h2>
+        <div class="flex items-center gap-4">
+          <h2 class="text-xl font-bold text-white">
+            播放源
+          </h2>
+          <!-- 排序选择器 -->
+          <select
+            v-model="sortMethod"
+            class="px-3 py-1.5 bg-gray-700 text-white text-sm rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
+          >
+            <option value="default">
+              默认排序
+            </option>
+            <option value="rating">
+              按评分
+            </option>
+            <option value="quality">
+              按画质
+            </option>
+            <option value="latest">
+              按最新
+            </option>
+          </select>
+        </div>
         <div class="flex gap-2 flex-wrap">
           <button
             v-if="magnetLinks.length > 0"
@@ -471,12 +494,27 @@ onMounted(() => {
                 >
                   {{ player.quality }}
                 </span>
+                <!-- 推荐标签 -->
                 <span
                   v-if="getPlayerRating(player).recommendationTag"
-                  class="text-xs"
+                  class="px-2 py-0.5 text-xs font-semibold rounded-full"
+                  :class="getPlayerRating(player).recommendationTag === '🏆 强烈推荐'
+                    ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/50'
+                    : 'bg-green-500/20 text-green-300 border border-green-500/50'"
                   :title="getPlayerRating(player).recommendationTag"
                 >
-                  {{ getPlayerRating(player).recommendationTag === '🏆 强烈推荐' ? '🏆' : '👍' }}
+                  {{ getPlayerRating(player).recommendationTag === '🏆 强烈推荐' ? '🏆 强推' : '👍 推荐' }}
+                </span>
+                <!-- 警告标签 -->
+                <span
+                  v-if="getPlayerRating(player).warningTag"
+                  class="px-2 py-0.5 text-xs font-semibold rounded-full"
+                  :class="getPlayerRating(player).warningTag.includes('💀')
+                    ? 'bg-red-500/20 text-red-300 border border-red-500/50'
+                    : 'bg-orange-500/20 text-orange-300 border border-orange-500/50'"
+                  :title="getPlayerRating(player).warningTag"
+                >
+                  {{ getPlayerRating(player).warningTag.includes('💀') ? '💀 低质' : '⚠️ 注意' }}
                 </span>
               </div>
               <div class="text-xs text-gray-400 truncate mb-2">

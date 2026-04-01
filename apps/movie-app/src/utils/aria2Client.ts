@@ -68,10 +68,22 @@ export interface Aria2ClientConfig {
   timeout?: number
 }
 
+// 请求队列项
+interface QueuedRequest {
+  resolve: (value: any) => void
+  reject: (error: any) => void
+  method: string
+  params: unknown[]
+}
+
 // Aria2 客户端类
 export class Aria2Client {
   private config: Aria2ClientConfig
   private requestId = 0
+  private requestQueue: QueuedRequest[] = []
+  private activeRequests = 0
+  private maxConcurrent = 5 // 最大并发请求数
+  private processing = false
 
   constructor(config: Aria2ClientConfig) {
     this.config = {
@@ -81,20 +93,53 @@ export class Aria2Client {
   }
 
   /**
-   * 发送 JSON-RPC 请求
+   * 处理请求队列
    */
-  private async request<T>(method: string, params: unknown[] = []): Promise<T> {
-    const requestBody: Aria2RpcRequest = {
-      jsonrpc: '2.0',
-      method,
-      id: ++this.requestId,
-      params: this.config.secret ? [`token:${this.config.secret}`, ...params] : params,
+  private async processQueue(): Promise<void> {
+    if (this.processing || this.requestQueue.length === 0) {
+      return
     }
 
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
+    this.processing = true
 
+    while (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrent) {
+      const queuedRequest = this.requestQueue.shift()
+      if (!queuedRequest) {
+        break
+      }
+
+      this.activeRequests++
+
+      // 异步执行请求
+      this.executeRequest(queuedRequest)
+        .then(result => queuedRequest.resolve(result))
+        .catch(error => queuedRequest.reject(error))
+        .finally(() => {
+          this.activeRequests--
+          this.processQueue() // 继续处理队列
+        })
+    }
+
+    this.processing = false
+  }
+
+  /**
+   * 执行单个请求
+   */
+  private async executeRequest(queuedRequest: QueuedRequest): Promise<any> {
+    const requestBody: Aria2RpcRequest = {
+      jsonrpc: '2.0',
+      method: queuedRequest.method,
+      id: ++this.requestId,
+      params: this.config.secret
+        ? [`token:${this.config.secret}`, ...queuedRequest.params]
+        : queuedRequest.params,
+    }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
+
+    try {
       const response = await fetch(this.config.rpcUrl, {
         method: 'POST',
         headers: {
@@ -110,15 +155,17 @@ export class Aria2Client {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
-      const data: Aria2RpcResponse<T> = await response.json()
+      const data: Aria2RpcResponse = await response.json()
 
       if (data.error) {
         throw new Error(`Aria2 错误 ${data.error.code}: ${data.error.message}`)
       }
 
-      return data.result as T
+      return data.result
     }
     catch (error) {
+      clearTimeout(timeoutId)
+
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new Error(`请求超时（${this.config.timeout}ms）`)
@@ -127,6 +174,23 @@ export class Aria2Client {
       }
       throw new Error('未知错误')
     }
+  }
+
+  /**
+   * 发送 JSON-RPC 请求（使用队列管理）
+   */
+  private async request<T>(method: string, params: unknown[] = []): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.requestQueue.push({
+        resolve,
+        reject,
+        method,
+        params,
+      })
+
+      // 触发队列处理
+      this.processQueue()
+    })
   }
 
   /**

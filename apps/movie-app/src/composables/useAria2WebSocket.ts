@@ -13,6 +13,13 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 // 任务进度更新回调
 type ProgressCallback = (status: Aria2TaskStatus) => void
 
+// 状态变更事件回调
+type StateChangeCallback = (event: {
+  gid: string
+  eventType: 'start' | 'pause' | 'stop' | 'complete' | 'error'
+  status?: Aria2TaskStatus
+}) => void
+
 // 事件类型
 interface Aria2Event {
   method: string
@@ -26,12 +33,44 @@ const wsConnection = ref<WebSocket | null>(null)
 const connectionState = ref<ConnectionState>('disconnected')
 const reconnectAttempts = ref(0)
 const taskListeners = new Map<string, Set<ProgressCallback>>()
+const stateChangeListeners = new Set<StateChangeCallback>()
 let heartbeatInterval: number | null = null
 let reconnectTimeout: number | null = null
 
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAY = 3000 // 3 秒
 const HEARTBEAT_INTERVAL = 30000 // 30 秒
+
+// 通知偏好设置
+const NOTIFICATION_SETTINGS_KEY = 'aria2-notification-settings'
+const notificationSettings = ref({
+  enabled: true, // 是否启用通知
+  showToast: true, // 显示 Toast 通知
+  showBrowser: false, // 显示浏览器通知（需用户授权）
+})
+
+// 加载通知设置
+function loadNotificationSettings() {
+  try {
+    const stored = localStorage.getItem(NOTIFICATION_SETTINGS_KEY)
+    if (stored) {
+      notificationSettings.value = { ...notificationSettings.value, ...JSON.parse(stored) }
+    }
+  }
+  catch (error) {
+    console.warn('加载通知设置失败', error)
+  }
+}
+
+// 保存通知设置
+function saveNotificationSettings() {
+  try {
+    localStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(notificationSettings.value))
+  }
+  catch (error) {
+    console.warn('保存通知设置失败', error)
+  }
+}
 
 export function useAria2WebSocket() {
   const toast = useToast()
@@ -167,20 +206,74 @@ export function useAria2WebSocket() {
 
     // 获取该 gid 的监听器
     const listeners = taskListeners.get(gid)
-    if (!listeners || listeners.size === 0)
-      return
 
-    // 根据事件类型触发回调
+    // 确定事件类型
+    let eventType: 'start' | 'pause' | 'stop' | 'complete' | 'error' | null = null
+    let notificationMessage = ''
+
     switch (event.method) {
       case 'aria2.onDownloadStart':
+        eventType = 'start'
+        notificationMessage = '下载已开始'
+        break
       case 'aria2.onDownloadPause':
+        eventType = 'pause'
+        notificationMessage = '下载已暂停'
+        break
       case 'aria2.onDownloadStop':
+        eventType = 'stop'
+        notificationMessage = '下载已停止'
+        break
       case 'aria2.onDownloadComplete':
+        eventType = 'complete'
+        notificationMessage = '下载已完成'
+        break
       case 'aria2.onDownloadError':
-        // 需要查询完整状态再通知
-        fetchAndNotify(gid, listeners)
+        eventType = 'error'
+        notificationMessage = '下载出错'
         break
     }
+
+    if (!eventType)
+      return
+
+    // 触发状态变更监听器
+    notifyStateChange(gid, eventType)
+
+    // 显示通知
+    if (notificationSettings.value.enabled) {
+      if (notificationSettings.value.showToast) {
+        const type = eventType === 'error' ? 'error' : 'success'
+        toast[type](notificationMessage)
+      }
+
+      if (notificationSettings.value.showBrowser && 'Notification' in window && Notification.permission === 'granted') {
+        const notification = new Notification('Aria2 下载通知', {
+          body: notificationMessage,
+          icon: '/favicon.ico',
+        })
+        void notification
+      }
+    }
+
+    // 如果有进度监听器，需要查询完整状态再通知
+    if (listeners && listeners.size > 0) {
+      fetchAndNotify(gid, listeners)
+    }
+  }
+
+  /**
+   * 通知状态变更监听器
+   */
+  function notifyStateChange(gid: string, eventType: 'start' | 'pause' | 'stop' | 'complete' | 'error') {
+    stateChangeListeners.forEach((callback) => {
+      try {
+        callback({ gid, eventType })
+      }
+      catch (error) {
+        console.error('执行状态变更回调失败', error)
+      }
+    })
   }
 
   /**
@@ -260,6 +353,50 @@ export function useAria2WebSocket() {
     taskListeners.clear()
   }
 
+  /**
+   * 监听任务状态变更
+   */
+  function onStateChange(callback: StateChangeCallback) {
+    stateChangeListeners.add(callback)
+
+    // 返回取消监听函数
+    return () => {
+      stateChangeListeners.delete(callback)
+    }
+  }
+
+  /**
+   * 请求浏览器通知权限
+   */
+  async function requestNotificationPermission(): Promise<boolean> {
+    if (!('Notification' in window)) {
+      console.warn('浏览器不支持通知')
+      return false
+    }
+
+    if (Notification.permission === 'granted') {
+      return true
+    }
+
+    if (Notification.permission === 'denied') {
+      return false
+    }
+
+    const permission = await Notification.requestPermission()
+    return permission === 'granted'
+  }
+
+  /**
+   * 更新通知设置
+   */
+  function updateNotificationSettings(settings: Partial<typeof notificationSettings.value>) {
+    notificationSettings.value = { ...notificationSettings.value, ...settings }
+    saveNotificationSettings()
+  }
+
+  // 初始化时加载设置
+  loadNotificationSettings()
+
   // 组件卸载时清理
   onBeforeUnmount(() => {
     disconnect()
@@ -270,6 +407,7 @@ export function useAria2WebSocket() {
     // 状态
     connectionState,
     isConnected: connectionState,
+    notificationSettings,
 
     // 方法
     connect,
@@ -278,5 +416,8 @@ export function useAria2WebSocket() {
     watchTasks,
     unwatchTask,
     clearAllWatchers,
+    onStateChange,
+    requestNotificationPermission,
+    updateNotificationSettings,
   }
 }

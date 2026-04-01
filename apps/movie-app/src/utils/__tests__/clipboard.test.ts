@@ -4,7 +4,7 @@ import { copyMagnetLinks, copyToClipboard } from '../clipboard'
 describe('clipboard', () => {
   // Mock Clipboard API
   const mockWriteText = vi.fn()
-  const originalClipboard = global.navigator.clipboard
+  const originalClipboard = globalThis.navigator.clipboard
   const originalExecCommand = document.execCommand
 
   beforeEach(() => {
@@ -12,7 +12,7 @@ describe('clipboard', () => {
     mockWriteText.mockReset()
 
     // Mock Clipboard API
-    Object.defineProperty(global.navigator, 'clipboard', {
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
       value: {
         writeText: mockWriteText,
       },
@@ -33,7 +33,7 @@ describe('clipboard', () => {
 
   afterEach(() => {
     // 恢复原始对象
-    Object.defineProperty(global.navigator, 'clipboard', {
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
       value: originalClipboard,
       configurable: true,
     })
@@ -61,7 +61,7 @@ describe('clipboard', () => {
 
     it('当 Clipboard API 不可用时应该使用 fallback', async () => {
       // 移除 Clipboard API
-      Object.defineProperty(global.navigator, 'clipboard', {
+      Object.defineProperty(globalThis.navigator, 'clipboard', {
         value: undefined,
         configurable: true,
       })

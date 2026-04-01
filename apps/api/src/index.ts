@@ -11,7 +11,10 @@ import aria2Routes from './routes/aria2'
 import { authRoutes } from './routes/auth'
 import { comicsRoutes } from './routes/comics'
 import { favoritesRoutes } from './routes/favorites'
+import featureFlagsRouter from './routes/feature-flags'
+import feedbackRouter from './routes/feedback'
 import { healthRoutes } from './routes/health'
+import monitoringRouter from './routes/monitoring'
 import { moviesRoutes } from './routes/movies'
 import { postsRoutes } from './routes/posts'
 import { publicComicsRoutes } from './routes/public/comics'
@@ -42,6 +45,9 @@ const routes = app
   .route('/api/favorites', favoritesRoutes)
   .route('/api/ratings', ratingsRoutes)
   .route('/api/aria2', aria2Routes)
+  .route('/api/feedback', feedbackRouter)
+  .route('/api/feature-flags', featureFlagsRouter)
+  .route('/api/monitoring', monitoringRouter)
   .route('/api/admin', adminMainRoutes)
   .route('/api/auth', authRoutes)
   .route('/api/upload', uploadRoutes)

@@ -351,6 +351,7 @@ onUnmounted(() => {
           <div class="progress-bar">
             <div
               class="progress-fill"
+              :class="`progress-${task.status}`"
               :style="{ width: `${getProgress(task)}%` }"
             />
           </div>
@@ -663,8 +664,26 @@ onUnmounted(() => {
 
 .progress-fill {
   height: 100%;
+  transition: width 0.3s, background 0.3s;
+}
+
+/* 进度条颜色：下载中=蓝色，已暂停=灰色 */
+.progress-fill.progress-active {
   background: linear-gradient(90deg, #1976d2, #2196f3);
-  transition: width 0.3s;
+  animation: shimmer 2s infinite;
+}
+
+.progress-fill.progress-paused {
+  background: #757575;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .progress-stats {

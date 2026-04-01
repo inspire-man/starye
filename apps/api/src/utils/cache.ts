@@ -1,0 +1,215 @@
+/**
+ * API 缓存工具
+ *
+ * 为评分查询和聚合数据提供缓存支持
+ */
+
+import type { Context } from 'hono'
+
+interface CacheEntry<T = any> {
+  data: T
+  timestamp: number
+  ttl: number
+}
+
+/**
+ * 内存缓存存储
+ */
+class MemoryCache {
+  private cache = new Map<string, CacheEntry>()
+  private cleanupInterval: any
+
+  constructor() {
+    // 每分钟清理过期缓存
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup()
+    }, 60 * 1000)
+  }
+
+  /**
+   * 设置缓存
+   */
+  set<T>(key: string, data: T, ttl: number = 60 * 1000): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      ttl,
+    })
+  }
+
+  /**
+   * 获取缓存
+   */
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key)
+
+    if (!entry) {
+      return null
+    }
+
+    // 检查是否过期
+    if (Date.now() - entry.timestamp > entry.ttl) {
+      this.cache.delete(key)
+      return null
+    }
+
+    return entry.data as T
+  }
+
+  /**
+   * 删除缓存
+   */
+  delete(key: string): void {
+    this.cache.delete(key)
+  }
+
+  /**
+   * 清除所有缓存
+   */
+  clear(): void {
+    this.cache.clear()
+  }
+
+  /**
+   * 清理过期缓存
+   */
+  private cleanup(): void {
+    const now = Date.now()
+    const keysToDelete: string[] = []
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (now - entry.timestamp > entry.ttl) {
+        keysToDelete.push(key)
+      }
+    }
+
+    for (const key of keysToDelete) {
+      this.cache.delete(key)
+    }
+  }
+
+  /**
+   * 获取缓存统计
+   */
+  getStats(): { size: number, keys: string[] } {
+    return {
+      size: this.cache.size,
+      keys: Array.from(this.cache.keys()),
+    }
+  }
+
+  /**
+   * 销毁缓存
+   */
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval)
+    }
+    this.clear()
+  }
+}
+
+// 全局缓存实例
+export const apiCache = new MemoryCache()
+
+/**
+ * 缓存键生成器
+ */
+export const CacheKeys = {
+  /**
+   * 播放源评分
+   */
+  playerRating: (playerId: string) => `rating:player:${playerId}`,
+
+  /**
+   * 播放源列表评分（批量）
+   */
+  playerRatings: (playerIds: string[]) => `rating:players:${playerIds.sort().join(',')}`,
+
+  /**
+   * 电影的所有播放源评分
+   */
+  moviePlayerRatings: (movieId: string) => `rating:movie:${movieId}`,
+
+  /**
+   * 用户的所有评分
+   */
+  userRatings: (userId: string) => `rating:user:${userId}`,
+
+  /**
+   * Aria2 配置
+   */
+  aria2Config: (userId: string) => `aria2:config:${userId}`,
+}
+
+/**
+ * 缓存装饰器（用于 Hono 路由）
+ */
+export function withCache<T>(
+  keyGenerator: (c: Context) => string,
+  _ttl: number = 60 * 1000,
+) {
+  return async (c: Context, next: () => Promise<void>): Promise<Response | void> => {
+    const key = keyGenerator(c)
+    const cached = apiCache.get<T>(key)
+
+    if (cached) {
+      return c.json(cached)
+    }
+
+    // 继续执行路由处理
+    await next()
+  }
+}
+
+/**
+ * 使缓存失效
+ */
+export const InvalidateCache = {
+  /**
+   * 播放源评分更新后
+   */
+  onRatingUpdate: (playerId: string, movieId?: string, userId?: string) => {
+    apiCache.delete(CacheKeys.playerRating(playerId))
+
+    if (movieId) {
+      apiCache.delete(CacheKeys.moviePlayerRatings(movieId))
+    }
+
+    if (userId) {
+      apiCache.delete(CacheKeys.userRatings(userId))
+    }
+  },
+
+  /**
+   * Aria2 配置更新后
+   */
+  onAria2ConfigUpdate: (userId: string) => {
+    apiCache.delete(CacheKeys.aria2Config(userId))
+  },
+}
+
+/**
+ * 缓存配置
+ */
+export const CacheTTL = {
+  /**
+   * 播放源评分（5 分钟）
+   */
+  PLAYER_RATING: 5 * 60 * 1000,
+
+  /**
+   * 电影播放源列表（3 分钟）
+   */
+  MOVIE_PLAYERS: 3 * 60 * 1000,
+
+  /**
+   * Aria2 配置（10 分钟）
+   */
+  ARIA2_CONFIG: 10 * 60 * 1000,
+
+  /**
+   * 用户评分列表（2 分钟）
+   */
+  USER_RATINGS: 2 * 60 * 1000,
+}

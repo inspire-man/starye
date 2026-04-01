@@ -3,7 +3,12 @@
  */
 
 import type { Player } from '../types'
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import {
+  cachePendingAction,
+  getPendingActions,
+  retryPendingActions,
+} from '../utils/errorHandler'
 import {
   calculateAutoScore,
   calculateCompositeScore,
@@ -106,7 +111,7 @@ export function useRating() {
   }
 
   /**
-   * 提交用户评分
+   * 提交用户评分（支持本地缓存和重试）
    */
   async function submitRating(playerId: string, score: number): Promise<boolean> {
     if (score < 1 || score > 5) {
@@ -148,7 +153,17 @@ export function useRating() {
       }
     }
     catch (error) {
-      if (error instanceof Error) {
+      // 网络错误时保存到本地，稍后重试
+      if (error instanceof Error && error.message.includes('Failed to fetch')) {
+        const actionId = cachePendingAction('rating', payload)
+        if (actionId) {
+          toast.error('网络错误，评分已保存到本地，将在网络恢复后自动提交')
+        }
+        else {
+          toast.error('提交失败，请稍后重试')
+        }
+      }
+      else if (error instanceof Error) {
         toast.error(error.message)
       }
       return false
@@ -157,6 +172,49 @@ export function useRating() {
       isLoading.value = false
     }
   }
+
+  /**
+   * 重试所有待处理的评分
+   */
+  async function retryPendingRatings(): Promise<void> {
+    const pendingActions = getPendingActions().filter(a => a.type === 'rating')
+
+    if (pendingActions.length === 0) {
+      return
+    }
+
+    const result = await retryPendingActions(async (action) => {
+      try {
+        const { playerId, score } = action.data
+        const response = await fetch(`${API_BASE_URL}/ratings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ playerId, score }),
+        })
+
+        const result = await response.json()
+        return response.ok && result.code === 0
+      }
+      catch {
+        return false
+      }
+    })
+
+    if (result.success > 0) {
+      toast.success(`已提交 ${result.success} 个待处理评分`)
+    }
+  }
+
+  // 初始化时尝试重试待处理的评分
+  onMounted(() => {
+    const pendingCount = getPendingActions().filter(a => a.type === 'rating').length
+    if (pendingCount > 0) {
+      retryPendingRatings()
+    }
+  })
 
   /**
    * 获取播放源的评分统计
@@ -293,6 +351,7 @@ export function useRating() {
 
     // 评分提交
     submitRating,
+    retryPendingRatings,
 
     // 评分查询
     getPlayerRatingStats,

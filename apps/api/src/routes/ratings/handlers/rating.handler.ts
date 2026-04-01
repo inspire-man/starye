@@ -1,6 +1,7 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { HTTPException } from 'hono/http-exception'
+import { apiCache, CacheKeys, CacheTTL, InvalidateCache } from '../../../utils/cache'
 import { checkRatingRateLimit, getPlayerRating, getTopRatedPlayers, getUserRatingHistory, submitRating } from '../services/rating.service'
 
 // 提交评分
@@ -45,6 +46,9 @@ export async function submitPlayerRating(c: Context<AppEnv>) {
       score,
     })
 
+    // 使相关缓存失效
+    InvalidateCache.onRatingUpdate(playerId, undefined, session.user.id)
+
     return c.json({
       code: 0,
       message: '评分成功',
@@ -59,7 +63,7 @@ export async function submitPlayerRating(c: Context<AppEnv>) {
   }
 }
 
-// 获取播放源评分
+// 获取播放源评分（带缓存）
 export async function getPlayerRatingStats(c: Context<AppEnv>) {
   const db = c.get('db')
   const auth = c.get('auth')
@@ -73,11 +77,26 @@ export async function getPlayerRatingStats(c: Context<AppEnv>) {
   const session = await auth.api.getSession({ headers: c.req.raw.headers })
   const userId = session?.user?.id
 
+  // 尝试从缓存获取
+  const cacheKey = CacheKeys.playerRating(playerId)
+  const cached = apiCache.get(cacheKey)
+
+  if (cached) {
+    return c.json({
+      code: 0,
+      data: cached,
+    })
+  }
+
+  // 从数据库查询
   const stats = await getPlayerRating({
     db,
     playerId,
     userId,
   })
+
+  // 写入缓存
+  apiCache.set(cacheKey, stats, CacheTTL.PLAYER_RATING)
 
   return c.json({
     code: 0,

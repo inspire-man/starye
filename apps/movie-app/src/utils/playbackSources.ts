@@ -1,25 +1,104 @@
 import type { Player } from '../types'
+import { calculateAutoScore } from './ratingAlgorithm'
+
+/**
+ * 排序方式
+ */
+export type SortMethod = 'default' | 'rating' | 'quality' | 'latest'
+
+/**
+ * 计算综合评分
+ * 评分人数 < 10：自动评分 40% + 用户评分 60%
+ * 评分人数 ≥ 10：自动评分 20% + 用户评分 80%
+ */
+export function calculateCombinedScore(source: Player): number {
+  // 计算自动评分（0-100）
+  const autoScore = calculateAutoScore(
+    source.quality,
+    extractFileSize(source.sourceName),
+    source.sourceName,
+  )
+
+  // 如果没有用户评分，返回自动评分
+  if (!source.averageRating || !source.ratingCount) {
+    return autoScore
+  }
+
+  // 用户评分转换为 0-100 分制
+  const userScore = (source.averageRating / 5) * 100
+
+  // 根据评分人数调整权重
+  const ratingCount = source.ratingCount
+  if (ratingCount < 10) {
+    return autoScore * 0.4 + userScore * 0.6
+  }
+  else {
+    return autoScore * 0.2 + userScore * 0.8
+  }
+}
+
+/**
+ * 从播放源名称中提取文件大小（GB）
+ */
+function extractFileSize(sourceName: string): number | undefined {
+  const sizeMatch = sourceName.match(/(\d+(?:\.\d+)?)\s*GB/i)
+  return sizeMatch ? Number.parseFloat(sizeMatch[1]) : undefined
+}
 
 /**
  * 播放源排序函数
- * 优先级：类型（磁力 > 在线） > 画质（4K > 1080P > 720P） > 创建时间
+ * 支持多种排序方式：默认、评分、画质、最新
  */
-export function sortPlaybackSources(sources: Player[]): Player[] {
+export function sortPlaybackSources(sources: Player[], sortMethod: SortMethod = 'default'): Player[] {
   const typeWeight: Record<string, number> = {
-    'magnet': 3,
-    'online': 2,
-    'other': 1,
+    magnet: 3,
+    online: 2,
+    other: 1,
   }
 
   const qualityWeight: Record<string, number> = {
     '4K': 4,
     '1080P': 3,
-    'HD': 3,
     '720P': 2,
+    'HD': 3,
     'SD': 1,
   }
 
   return [...sources].sort((a, b) => {
+    // 按综合评分排序
+    if (sortMethod === 'rating') {
+      const scoreA = calculateCombinedScore(a)
+      const scoreB = calculateCombinedScore(b)
+
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA
+      }
+
+      // 同分时按画质排序
+      const qualityA = qualityWeight[a.quality || ''] || 0
+      const qualityB = qualityWeight[b.quality || ''] || 0
+      return qualityB - qualityA
+    }
+
+    // 按画质排序
+    if (sortMethod === 'quality') {
+      const qualityA = qualityWeight[a.quality || ''] || 0
+      const qualityB = qualityWeight[b.quality || ''] || 0
+
+      if (qualityA !== qualityB) {
+        return qualityB - qualityA
+      }
+
+      // 同画质按评分排序
+      return calculateCombinedScore(b) - calculateCombinedScore(a)
+    }
+
+    // 按最新排序（sortOrder 越小越新）
+    if (sortMethod === 'latest') {
+      return a.sortOrder - b.sortOrder
+    }
+
+    // 默认排序：类型 > 画质 > 评分
     // 1. 按类型排序（磁力链接优先）
     const typeA = a.sourceUrl?.startsWith('magnet:') || a.sourceName.includes('磁力') ? 'magnet' : 'online'
     const typeB = b.sourceUrl?.startsWith('magnet:') || b.sourceName.includes('磁力') ? 'magnet' : 'online'
@@ -39,7 +118,15 @@ export function sortPlaybackSources(sources: Player[]): Player[] {
       return qualityB - qualityA
     }
 
-    // 3. 按sortOrder排序（数据库中的顺序）
+    // 3. 按综合评分排序
+    const scoreA = calculateCombinedScore(a)
+    const scoreB = calculateCombinedScore(b)
+
+    if (scoreA !== scoreB) {
+      return scoreB - scoreA
+    }
+
+    // 4. 按sortOrder排序（数据库中的顺序）
     return a.sortOrder - b.sortOrder
   })
 }

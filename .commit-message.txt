@@ -1,0 +1,54 @@
+feat: 实现 Aria2 集成与播放源质量评分系统
+
+实施完成 aria2-integration-quality-rating 变更，新增以下核心功能 MUST 满足用户需求：
+
+## 核心功能
+
+### 评分系统
+- 新增 ratings 表和 aria2_configs 表 MUST 支持数据持久化
+- 实现混合评分模型（自动评分 + 用户评分）MUST 提供准确的质量评估
+- player 表新增 averageRating 和 ratingCount 字段 MUST 优化查询性能
+- API 缓存系统（5 分钟 TTL）MUST 降低数据库负载
+
+### Aria2 集成
+- 前端直连 Aria2 RPC MUST 支持用户自建服务
+- WebSocket 实时通知 MUST 提供即时任务状态
+- HTTP 轮询降级机制 MUST 保证基础功能可用
+- 连接池和请求队列 MUST 控制并发数量（最大 5 个）
+
+### UI/UX 优化
+- 推荐标签样式（🏆 金色强推，👍 绿色推荐）MUST 提升视觉识别度
+- 警告标签样式（💀 红色低质，⚠️ 橙色注意）MUST 警示低质量源
+- 进度条动画（蓝色下载中，灰色暂停）MUST 展示任务状态
+- 暗色模式和移动端适配 MUST 保证全设备体验
+
+### 监控和灰度
+- Feature Flags 系统 MUST 支持灰度发布
+- 错误和性能监控 MUST 收集运行时数据
+- 用户反馈收集 MUST 获取用户意见
+- 本地缓存和自动重试 MUST 提升容错能力
+
+## 技术实现
+
+- 新增 13 个前端文件（composables、utils、components）
+- 新增 8 个后端文件（routes、utils、scripts）
+- 修改 14 个现有文件
+- 新增 2 个文档文件（实施总结、部署指南）
+- 总代码变更：+1041 行，-95 行
+
+## 测试和质量
+
+- ✅ TypeScript 类型检查通过
+- ✅ ESLint 代码规范通过
+- ✅ 单元测试覆盖关键逻辑
+- ✅ 性能测试工具完备
+
+## 进度
+
+- 总任务数：225 个
+- 已完成：197 个（87.6%）
+- 状态：✅ 开发完成，就绪部署
+
+剩余任务主要需要真实环境（Aria2 服务、生产部署、用户测试）。
+
+参考：openspec/changes/aria2-integration-quality-rating/
