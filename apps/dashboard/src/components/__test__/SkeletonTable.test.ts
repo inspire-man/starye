@@ -6,8 +6,8 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import SkeletonTable from '../SkeletonTable.vue'
 
-describe('SkeletonTable.vue', () => {
-  describe('Props 配置', () => {
+describe('skeletonTable.vue', () => {
+  describe('props 配置', () => {
     it('应该渲染指定数量的行', () => {
       const wrapper = mount(SkeletonTable, {
         props: {

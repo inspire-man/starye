@@ -2,9 +2,9 @@
  * useToast composable 单元测试
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProgressToast } from '../useToast'
-import { hideProgress, hideToast, showProgress, showToast, success, updateProgress, useToast, error as showError, info, warning } from '../useToast'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { hideProgress, hideToast, info, error as showError, showProgress, showToast, success, updateProgress, useToast, warning } from '../useToast'
 
 describe('useToast', () => {
   const toast = useToast()
@@ -137,7 +137,7 @@ describe('useToast', () => {
     })
   })
 
-  describe('Progress Toast', () => {
+  describe('progress Toast', () => {
     it('showProgress 应该创建 progress toast', () => {
       const id = showProgress('上传中...')
 

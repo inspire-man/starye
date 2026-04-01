@@ -6,7 +6,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import SkeletonCard from '../SkeletonCard.vue'
 
-describe('SkeletonCard.vue', () => {
+describe('skeletonCard.vue', () => {
   describe('变体渲染', () => {
     it('应该渲染 stat 变体', () => {
       const wrapper = mount(SkeletonCard, {
