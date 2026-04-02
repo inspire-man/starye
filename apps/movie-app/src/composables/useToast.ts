@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-interface ToastState {
+export interface ToastState {
   show: boolean
   message: string
   type: 'success' | 'error' | 'info'
@@ -25,5 +25,17 @@ export function useToast() {
     toast.value.show = false
   }
 
-  return { toast, showToast, hideToast }
+  function success(message: string, duration?: number) {
+    showToast(message, 'success', duration)
+  }
+
+  function error(message: string, duration?: number) {
+    showToast(message, 'error', duration)
+  }
+
+  function info(message: string, duration?: number) {
+    showToast(message, 'info', duration)
+  }
+
+  return { toast, showToast, hideToast, success, error, info }
 }
