@@ -39,7 +39,9 @@ app.use('*', requestId()) // 1️⃣ 请求追踪
 app.use('*', logger()) // 2️⃣ 结构化日志
 app.use('*', timing()) // 3️⃣ 性能指标
 app.use('*', secureHeaders()) // 4️⃣ 安全头部
-app.use('*', compress()) // 5️⃣ 响应压缩
+app.use('*', compress({
+  threshold: 1024, // 仅压缩大于 1KB 的响应
+})) // 5️⃣ 响应压缩
 app.use('*', timeout(30000)) // 6️⃣ 超时控制 (30s)
 app.use('*', corsMiddleware()) // 7️⃣ CORS 策略
 app.use('*', databaseMiddleware()) // 8️⃣ 数据库连接
