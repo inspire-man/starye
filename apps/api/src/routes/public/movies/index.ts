@@ -1,7 +1,7 @@
 import type { SQL } from 'drizzle-orm'
 import type { AppEnv } from '../../../types'
-import { movies, players } from '@starye/db/schema'
-import { and, count, desc, eq, like, or } from 'drizzle-orm'
+import { actors, movieActors, moviePublishers, movies, players, publishers } from '@starye/db/schema'
+import { and, count, desc, eq, getTableColumns, inArray, like, ne, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MoviesListDataSchema } from '../../../schemas/movie'
@@ -46,30 +46,40 @@ publicMovies.get(
     const offset = (page - 1) * limit
 
     try {
-    // 构建查询条件
       const conditions: SQL[] = []
 
-      // R18 内容过滤
       if (!user?.isR18Verified) {
         conditions.push(eq(movies.isR18, false))
       }
 
-      // 演员筛选
+      // 演员筛选 — 通过 movie_actors 关联表 EXISTS 子查询
       if (actor) {
-        conditions.push(like(movies.actors, `%${actor}%`))
+        conditions.push(
+          sql`EXISTS (
+            SELECT 1 FROM ${movieActors}
+            INNER JOIN ${actors} ON ${movieActors.actorId} = ${actors.id}
+            WHERE ${movieActors.movieId} = ${movies.id}
+            AND (${actors.slug} = ${actor} OR ${actors.name} LIKE ${`%${actor}%`})
+          )`,
+        )
       }
 
-      // 厂商筛选
+      // 厂商筛选 — 通过 movie_publishers 关联表 EXISTS 子查询
       if (publisher) {
-        conditions.push(like(movies.publisher, `%${publisher}%`))
+        conditions.push(
+          sql`EXISTS (
+            SELECT 1 FROM ${moviePublishers}
+            INNER JOIN ${publishers} ON ${moviePublishers.publisherId} = ${publishers.id}
+            WHERE ${moviePublishers.movieId} = ${movies.id}
+            AND (${publishers.slug} = ${publisher} OR ${publishers.name} LIKE ${`%${publisher}%`})
+          )`,
+        )
       }
 
-      // 标签筛选
       if (genre) {
         conditions.push(like(movies.genres, `%${genre}%`))
       }
 
-      // 搜索（番号或标题）
       if (search) {
         const searchCondition = or(
           like(movies.code, `%${search}%`),
@@ -80,7 +90,6 @@ publicMovies.get(
         }
       }
 
-      // 排序字段映射
       const sortField = {
         releaseDate: movies.releaseDate,
         createdAt: movies.createdAt,
@@ -88,19 +97,20 @@ publicMovies.get(
         title: movies.title,
       }[sortBy]
 
-      // 查询数据
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
       const [data, totalResult] = await Promise.all([
         db
           .select()
           .from(movies)
-          .where(conditions.length > 0 ? and(...conditions) : undefined)
+          .where(whereClause)
           .orderBy(sortOrder === 'desc' ? desc(sortField) : sortField)
           .limit(limit)
           .offset(offset),
         db
           .select({ value: count() })
           .from(movies)
-          .where(conditions.length > 0 ? and(...conditions) : undefined)
+          .where(whereClause)
           .then(res => res[0].value),
       ])
 
@@ -175,71 +185,130 @@ publicMovies.get(
     const { code } = c.req.param()
 
     try {
-    // 查询影片
+      // 通过关联表查询影片详情（含演员和厂商）
       const movie = await db.query.movies.findFirst({
         where: eq(movies.code, code),
+        with: {
+          movieActors: {
+            with: { actor: true },
+            orderBy: (ma, { asc }) => [asc(ma.sortOrder)],
+          },
+          moviePublishers: {
+            with: { publisher: true },
+            orderBy: (mp, { asc }) => [asc(mp.sortOrder)],
+          },
+        },
       })
 
       if (!movie) {
         return c.json({ success: false, error: '影片不存在' }, 404)
       }
 
-      // R18 权限验证
       if (movie.isR18 && !user?.isR18Verified) {
         return c.json({ success: false, error: '需要 R18 访问权限' }, 403)
       }
 
-      // 查询播放源列表
       const playerList = await db.query.players.findMany({
         where: eq(players.movieId, movie.id),
         orderBy: (players, { asc }) => [asc(players.sortOrder)],
       })
 
-      // 查询相关影片（同演员或同系列）
-      let relatedMovies: typeof movie[] = []
+      // 结构化演员和厂商数据
+      const movieActorsList = movie.movieActors.map(ma => ({
+        id: ma.actor.id,
+        name: ma.actor.name,
+        slug: ma.actor.slug,
+        avatar: ma.actor.avatar,
+      }))
+
+      const moviePublishersList = movie.moviePublishers.map(mp => ({
+        id: mp.publisher.id,
+        name: mp.publisher.name,
+        slug: mp.publisher.slug,
+        logo: mp.publisher.logo,
+      }))
+
+      // 基于关联表查询相关影片（共同演员 + 同系列）
+      let relatedMovies: (typeof movies.$inferSelect)[] = []
 
       try {
-        // 构建相关影片查询条件
-        const relatedConditions: SQL[] = []
+        const actorIds = movie.movieActors.map(ma => ma.actorId)
+        const relatedFromActors: (typeof movies.$inferSelect & { shared_actors: number })[] = []
+        const relatedFromSeries: (typeof movies.$inferSelect)[] = []
 
-        // R18 过滤
-        if (movie.isR18 && !user?.isR18Verified) {
-          relatedConditions.push(eq(movies.isR18, false))
-        }
+        // 共同演员推荐：查找与当前影片共享演员最多的其他影片
+        if (actorIds.length > 0) {
+          const movieCols = getTableColumns(movies)
+          const sharedCountExpr = sql<number>`count(distinct ${movieActors.actorId})`
 
-        // 同演员或同系列（至少有一个条件）
-        const similarityConditions: SQL[] = []
-        if (movie.actors && Array.isArray(movie.actors) && movie.actors.length > 0) {
-          similarityConditions.push(like(movies.actors, `%${movie.actors[0]}%`))
-        }
-        if (movie.series) {
-          similarityConditions.push(eq(movies.series, movie.series))
-        }
-
-        // 只有在有相似性条件时才查询
-        if (similarityConditions.length > 0) {
-          const similarityOr = or(...similarityConditions)
-          if (similarityOr) {
-            relatedConditions.push(similarityOr)
+          const actorConditions: SQL[] = [
+            inArray(movieActors.actorId, actorIds),
+            ne(movies.id, movie.id),
+          ]
+          if (!user?.isR18Verified) {
+            actorConditions.push(eq(movies.isR18, false))
           }
 
-          relatedMovies = await db
+          const sharedResult = await db
+            .select({
+              ...movieCols,
+              shared_actors: sharedCountExpr.as('shared_actors'),
+            })
+            .from(movies)
+            .innerJoin(movieActors, eq(movieActors.movieId, movies.id))
+            .where(and(...actorConditions))
+            .groupBy(movies.id)
+            .orderBy(desc(sharedCountExpr))
+            .limit(8)
+
+          relatedFromActors.push(...sharedResult)
+        }
+
+        // 同系列推荐
+        if (movie.series) {
+          const seriesConditions: SQL[] = [
+            eq(movies.series, movie.series),
+            ne(movies.id, movie.id),
+          ]
+          if (!user?.isR18Verified) {
+            seriesConditions.push(eq(movies.isR18, false))
+          }
+
+          const seriesResult = await db
             .select()
             .from(movies)
-            .where(relatedConditions.length > 0 ? and(...relatedConditions) : undefined)
-            .limit(10)
+            .where(and(...seriesConditions))
+            .limit(6)
+
+          relatedFromSeries.push(...seriesResult)
         }
+
+        // 合并去重（共同演员优先）
+        const seenIds = new Set<string>()
+        const merged: (typeof movies.$inferSelect)[] = []
+        for (const m of [...relatedFromActors, ...relatedFromSeries]) {
+          if (!seenIds.has(m.id)) {
+            seenIds.add(m.id)
+            merged.push(m)
+          }
+        }
+        relatedMovies = merged.slice(0, 6)
       }
       catch (error) {
         console.error('[PublicMovies] Failed to fetch related movies:', error)
       }
 
+      // 构建兼容响应：保留原有字段，附加结构化关联数据
+      const { movieActors: _ma, moviePublishers: _mp, ...movieData } = movie
+
       return c.json({
         success: true,
         data: {
-          ...movie,
+          ...movieData,
           players: playerList,
-          relatedMovies: relatedMovies.filter(m => m.id !== movie.id).slice(0, 6),
+          relatedMovies,
+          actorDetails: movieActorsList,
+          publisherDetails: moviePublishersList,
         },
       })
     }
