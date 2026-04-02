@@ -37,7 +37,10 @@ async function main() {
     try {
       // Set a high limit to fetch all comics (assuming < 10000 for now)
       // Ideally this should support pagination traversal
-      const headers: HeadersInit = {}
+      const headers: HeadersInit = {
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'application/json',
+      }
       if (SERVICE_TOKEN) {
         headers['x-service-token'] = SERVICE_TOKEN
         console.log('🔑 Using service token for authentication')
@@ -56,7 +59,15 @@ async function main() {
     }
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch comics: ${response.statusText}`)
+      const errorText = await response.text()
+      throw new Error(`Failed to fetch comics: ${response.statusText} - ${errorText}`)
+    }
+
+    // 检查响应类型
+    const contentType = response.headers.get('content-type')
+    if (!contentType?.includes('application/json')) {
+      const responseText = await response.text()
+      throw new Error(`Expected JSON response, got ${contentType}. Response: ${responseText.substring(0, 200)}`)
     }
 
     // API returns { data: Comic[], meta: ... }
