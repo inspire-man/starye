@@ -53,8 +53,6 @@ export function createAuth(env: Env, request: Request) {
     : undefined
 
   const trustedOrigins = getAllowedOrigins(env)
-  // eslint-disable-next-line no-console
-  console.log(`[Auth Debug] baseURL=${baseURL}, isHttps=${isHttps}, cookieDomain=${cookieDomain}, origin=${origin}, forwardedHost=${forwardedHost}`)
 
   return betterAuth({
     database: drizzleAdapter(db, {
