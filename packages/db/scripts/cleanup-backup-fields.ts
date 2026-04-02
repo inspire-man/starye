@@ -9,27 +9,48 @@
  * 4. 验证清理结果
  *
  * 使用方法：
- *   pnpm --filter=@starye/db tsx scripts/cleanup-backup-fields.ts --preview  # 仅预览
- *   pnpm --filter=@starye/db tsx scripts/cleanup-backup-fields.ts --execute  # 执行清理
+ *   DATABASE_URL=<url> pnpm --filter=@starye/db cleanup:preview
+ *   DATABASE_URL=<url> pnpm --filter=@starye/db cleanup:execute
+ *
+ * 环境变量：
+ *   DATABASE_URL        - 数据库连接 URL（必须）
+ *   DATABASE_AUTH_TOKEN  - 数据库认证 token（远程连接时需要）
  */
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import Database from 'better-sqlite3'
+import { createClient } from '@libsql/client'
 import { count, isNotNull } from 'drizzle-orm'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { drizzle } from 'drizzle-orm/libsql'
 import { movieActors, moviePublishers, movies } from '../src/schema'
 
-const sqlite = new Database('./apps/api/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/da28a82533a29de0fcf6bc0cfb706404ceb98a33e52401fb0c54e323290d58b7.sqlite')
-const db = drizzle(sqlite, { schema: { movies, movieActors, moviePublishers } })
+const databaseUrl = process.env.DATABASE_URL
+const authToken = process.env.DATABASE_AUTH_TOKEN
 
-// 日志记录
+if (!databaseUrl) {
+  console.error('❌ 错误：缺少 DATABASE_URL 环境变量')
+  console.error('使用方法：')
+  console.error('  DATABASE_URL=<url> pnpm --filter=@starye/db cleanup:preview')
+  console.error('  DATABASE_URL=<url> pnpm --filter=@starye/db cleanup:execute')
+  console.error('')
+  console.error('本地开发（使用 wrangler 本地数据库）：')
+  console.error('  DATABASE_URL=file:../apps/api/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/<hash>.sqlite')
+  process.exit(1)
+}
+
+const client = createClient({
+  url: databaseUrl,
+  authToken,
+})
+const db = drizzle(client, { schema: { movies, movieActors, moviePublishers } })
+
 const logFile = path.join(process.cwd(), `cleanup-${new Date().toISOString().split('T')[0]}.log`)
 let logContent = ''
 
 function log(message: string) {
   const timestamp = new Date().toISOString()
   const logMessage = `[${timestamp}] ${message}`
+
   console.log(message)
   logContent += `${logMessage}\n`
 }
@@ -37,6 +58,7 @@ function log(message: string) {
 function saveLog() {
   try {
     fs.writeFileSync(logFile, logContent, 'utf-8')
+
     console.log(`\n📝 日志已保存: ${logFile}`)
   }
   catch (e) {
@@ -63,7 +85,6 @@ async function checkDataIntegrity(): Promise<CleanupReport> {
 
   const warnings: string[] = []
 
-  // 统计电影总数
   const moviesTotal = await db
     .select({ value: count() })
     .from(movies)
@@ -71,7 +92,6 @@ async function checkDataIntegrity(): Promise<CleanupReport> {
 
   log(`   电影总数: ${moviesTotal}`)
 
-  // 统计有 actors 字段的电影数量
   const moviesWithActorsField = await db
     .select({ value: count() })
     .from(movies)
@@ -80,7 +100,6 @@ async function checkDataIntegrity(): Promise<CleanupReport> {
 
   log(`   有 actors 字段的电影: ${moviesWithActorsField}`)
 
-  // 统计有 publisher 字段的电影数量
   const moviesWithPublisherField = await db
     .select({ value: count() })
     .from(movies)
@@ -89,7 +108,6 @@ async function checkDataIntegrity(): Promise<CleanupReport> {
 
   log(`   有 publisher 字段的电影: ${moviesWithPublisherField}`)
 
-  // 统计关联表记录数
   const movieActorsCount = await db
     .select({ value: count() })
     .from(movieActors)
@@ -104,7 +122,6 @@ async function checkDataIntegrity(): Promise<CleanupReport> {
 
   log(`   movie_publishers 关联记录: ${moviePublishersCount}`)
 
-  // 安全性检查
   log('\n📊 数据完整性评估:')
 
   if (movieActorsCount === 0 && moviesWithActorsField > 0) {
@@ -143,13 +160,11 @@ async function checkDataIntegrity(): Promise<CleanupReport> {
 async function generatePreview(report: CleanupReport): Promise<void> {
   log('\n📋 步骤 2/4: 生成清理预览报告...\n')
 
-  // 计算 3 个月前的时间戳
   const threeMonthsAgo = new Date()
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - report.bufferMonths)
 
   log(`   清理策略: 保留最近 ${report.bufferMonths} 个月的备份数据（${threeMonthsAgo.toISOString().split('T')[0]} 之后）\n`)
 
-  // 统计将被清理的记录数（3 个月前创建的）
   const moviesToCleanActors = await db
     .select({ value: count() })
     .from(movies)
@@ -185,23 +200,21 @@ async function executeCleanup(): Promise<{ cleaned: number }> {
   log('\n🗑️  步骤 3/4: 执行清理...\n')
 
   try {
-    // 清理 actors 字段
     const result1 = await db
       .update(movies)
       .set({ actors: null })
       .where(isNotNull(movies.actors))
 
-    log(`   ✅ 清理 movies.actors: ${result1.changes} 条记录`)
+    log(`   ✅ 清理 movies.actors: ${result1.rowsAffected} 条记录`)
 
-    // 清理 publisher 字段
     const result2 = await db
       .update(movies)
       .set({ publisher: null })
       .where(isNotNull(movies.publisher))
 
-    log(`   ✅ 清理 movies.publisher: ${result2.changes} 条记录`)
+    log(`   ✅ 清理 movies.publisher: ${result2.rowsAffected} 条记录`)
 
-    const totalCleaned = result1.changes + result2.changes
+    const totalCleaned = (result1.rowsAffected ?? 0) + (result2.rowsAffected ?? 0)
 
     return { cleaned: totalCleaned }
   }
@@ -217,7 +230,6 @@ async function executeCleanup(): Promise<{ cleaned: number }> {
 async function verifyCleanup(beforeReport: CleanupReport): Promise<void> {
   log('\n✓ 步骤 4/4: 验证清理结果...\n')
 
-  // 重新统计
   const afterActors = await db
     .select({ value: count() })
     .from(movies)
@@ -234,7 +246,6 @@ async function verifyCleanup(beforeReport: CleanupReport): Promise<void> {
   log(`   - movies.actors: ${beforeReport.moviesWithActorsField} → ${afterActors}`)
   log(`   - movies.publisher: ${beforeReport.moviesWithPublisherField} → ${afterPublisher}`)
 
-  // 验证关联表未受影响
   const movieActorsCount = await db
     .select({ value: count() })
     .from(movieActors)
@@ -265,16 +276,22 @@ async function main() {
   const mode = args[0] || '--preview'
 
   log('╔══════════════════════════════════════╗')
-  log('║   电影备份字段清理工具 v1.0        ║')
+  log('║   电影备份字段清理工具 v2.0        ║')
   log('╚══════════════════════════════════════╝\n')
 
   if (mode === '--help' || mode === '-h') {
     console.log('使用方法:')
+
     console.log('  --preview   仅预览清理影响（默认）')
+
     console.log('  --execute   执行清理操作')
+
     console.log('  --help      显示此帮助信息\n')
     process.exit(0)
   }
+
+  log(`📡 数据库: ${databaseUrl!.substring(0, 30)}...`)
+  log(`🔧 模式: ${mode}\n`)
 
   try {
     const report = await checkDataIntegrity()
@@ -289,7 +306,7 @@ async function main() {
       }
 
       log('\n⚠️  即将执行清理操作，此操作不可逆！')
-      log('   按 Ctrl+C 取消，或等待 5 秒后自动继续...')
+      log('   等待 5 秒后自动继续...')
 
       await new Promise(resolve => setTimeout(resolve, 5000))
 
@@ -302,7 +319,7 @@ async function main() {
     }
     else {
       log('\n💡 预览模式，未执行实际清理')
-      log('   使用 --execute 参数执行清理: pnpm --filter=@starye/db tsx scripts/cleanup-backup-fields.ts --execute')
+      log('   使用 --execute 参数执行清理')
     }
 
     log('\n✅ 脚本执行完成')
@@ -312,9 +329,6 @@ async function main() {
     log(`\n❌ 脚本执行失败: ${e}`)
     saveLog()
     process.exit(1)
-  }
-  finally {
-    sqlite.close()
   }
 }
 
