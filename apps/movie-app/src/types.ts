@@ -217,10 +217,17 @@ export interface ApiResponse<T = any> {
   error?: string
 }
 
+export interface FavoriteEntity {
+  name: string
+  cover: string | null
+  slug: string
+}
+
 export interface Favorite {
   id: string
   userId: string
   entityType: 'actor' | 'publisher' | 'movie' | 'comic'
   entityId: string
   createdAt: number
+  entity?: FavoriteEntity | null
 }

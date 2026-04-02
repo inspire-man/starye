@@ -1,4 +1,3 @@
-<!-- eslint-disable no-alert -->
 <script setup lang="ts">
 import type { SelectOption } from '../components/Select.vue'
 import { computed, onMounted, ref } from 'vue'
@@ -6,8 +5,10 @@ import { RouterLink } from 'vue-router'
 import Select from '../components/Select.vue'
 import { useFavorites } from '../composables/useFavorites'
 import { useMobileDetect } from '../composables/useMobileDetect'
+import { useToast } from '../composables/useToast'
 
 const { isMobile } = useMobileDetect()
+const { showToast } = useToast()
 
 // 筛选器
 const selectedType = ref<'all' | 'movie' | 'actor' | 'publisher' | 'comic'>('all')
@@ -46,20 +47,45 @@ const entityTypeLabels: Record<string, { label: string, icon: string, color: str
   comic: { label: '漫画', icon: '📚', color: 'green' },
 }
 
+// 构建实体跳转链接
+function getEntityLink(favorite: { entityType: string, entity?: { slug: string } | null }) {
+  const slug = favorite.entity?.slug || ''
+  switch (favorite.entityType) {
+    case 'movie': return `/movie/${slug}`
+    case 'actor': return `/actors/${slug}`
+    case 'publisher': return `/publishers/${slug}`
+    case 'comic': return `/comic/${slug}`
+    default: return '/'
+  }
+}
+
 // 删除确认
 const deletingId = ref<string | null>(null)
 
-async function handleDelete(favoriteId: string) {
-  if (!confirm('确定要取消收藏吗？')) {
-    return
-  }
+// 确认删除弹窗
+const confirmModal = ref({ show: false, favoriteId: '' })
+
+function requestDelete(favoriteId: string) {
+  confirmModal.value = { show: true, favoriteId }
+}
+
+function cancelDelete() {
+  confirmModal.value = { show: false, favoriteId: '' }
+}
+
+async function confirmDeleteAction() {
+  const favoriteId = confirmModal.value.favoriteId
+  confirmModal.value = { show: false, favoriteId: '' }
 
   deletingId.value = favoriteId
   const result = await removeFavorite(favoriteId)
   deletingId.value = null
 
-  if (!result.success) {
-    alert(result.error || '删除失败')
+  if (result.success) {
+    showToast('已取消收藏')
+  }
+  else {
+    showToast(result.error || '删除失败', 'error')
   }
 }
 
@@ -165,17 +191,36 @@ onMounted(() => {
         class="favorite-card"
       >
         <div class="flex items-center gap-4">
-          <!-- 类型标签 -->
-          <div
-            class="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
-            :class="{
-              'bg-blue-500/10 border border-blue-500/30': favorite.entityType === 'movie',
-              'bg-pink-500/10 border border-pink-500/30': favorite.entityType === 'actor',
-              'bg-purple-500/10 border border-purple-500/30': favorite.entityType === 'publisher',
-              'bg-green-500/10 border border-green-500/30': favorite.entityType === 'comic',
-            }"
+          <!-- 封面/头像 -->
+          <RouterLink
+            v-if="favorite.entity"
+            :to="getEntityLink(favorite)"
+            class="flex-shrink-0"
           >
-            {{ entityTypeLabels[favorite.entityType]?.icon || '📌' }}
+            <img
+              v-if="favorite.entity.cover"
+              :src="favorite.entity.cover"
+              :alt="favorite.entity.name"
+              class="w-16 h-20 object-cover rounded-lg"
+            >
+            <div
+              v-else
+              class="w-16 h-20 rounded-lg flex items-center justify-center text-2xl"
+              :class="{
+                'bg-blue-500/10 border border-blue-500/30': favorite.entityType === 'movie',
+                'bg-pink-500/10 border border-pink-500/30': favorite.entityType === 'actor',
+                'bg-purple-500/10 border border-purple-500/30': favorite.entityType === 'publisher',
+                'bg-green-500/10 border border-green-500/30': favorite.entityType === 'comic',
+              }"
+            >
+              {{ entityTypeLabels[favorite.entityType]?.icon || '📌' }}
+            </div>
+          </RouterLink>
+          <div
+            v-else
+            class="flex-shrink-0 w-16 h-20 rounded-lg flex items-center justify-center text-2xl bg-gray-700/50 border border-gray-600/30"
+          >
+            🚫
           </div>
 
           <!-- 内容区 -->
@@ -193,8 +238,15 @@ onMounted(() => {
                 {{ entityTypeLabels[favorite.entityType]?.label || favorite.entityType }}
               </span>
             </div>
-            <div class="text-white font-medium">
-              ID: {{ favorite.entityId }}
+            <RouterLink
+              v-if="favorite.entity"
+              :to="getEntityLink(favorite)"
+              class="text-white font-medium hover:text-primary-400 transition-colors block truncate"
+            >
+              {{ favorite.entity.name }}
+            </RouterLink>
+            <div v-else class="text-gray-500 font-medium">
+              内容已删除
             </div>
             <div class="text-sm text-gray-400">
               收藏于 {{ new Date(favorite.createdAt * 1000).toLocaleDateString('zh-CN') }}
@@ -205,7 +257,7 @@ onMounted(() => {
           <button
             class="flex-shrink-0 px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-md transition-colors disabled:opacity-50"
             :disabled="deletingId === favorite.id"
-            @click="handleDelete(favorite.id)"
+            @click="requestDelete(favorite.id)"
           >
             <span v-if="deletingId === favorite.id">⟳</span>
             <span v-else>🗑️</span>
@@ -231,6 +283,30 @@ onMounted(() => {
         已加载全部 {{ total }} 项收藏
       </div>
     </div>
+
+    <!-- 确认删除弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="confirmModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="cancelDelete">
+          <div class="bg-gray-800 border border-gray-600 rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
+            <p class="text-white text-lg font-medium mb-2">
+              确认取消收藏？
+            </p>
+            <p class="text-gray-400 text-sm mb-6">
+              取消后可随时重新收藏。
+            </p>
+            <div class="flex gap-3 justify-end">
+              <button class="px-4 py-2 text-sm rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors" @click="cancelDelete">
+                取消
+              </button>
+              <button class="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors" @click="confirmDeleteAction">
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 

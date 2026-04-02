@@ -9,6 +9,7 @@ import MobileDrawer from './components/MobileDrawer.vue'
 import { useDownloadList } from './composables/useDownloadList'
 import { useDrawer } from './composables/useDrawer'
 import { useMobileDetect } from './composables/useMobileDetect'
+import { useToast } from './composables/useToast'
 import { useUserStore } from './stores/user'
 
 const userStore = useUserStore()
@@ -16,6 +17,7 @@ const router = useRouter()
 const { isMobile } = useMobileDetect()
 const { isOpen: drawerOpen, open: openDrawer, close: closeDrawer } = useDrawer()
 const { stats: downloadStats } = useDownloadList()
+const { toast } = useToast()
 
 // 搜索模式状态
 const isSearchMode = ref(false)
@@ -149,6 +151,23 @@ onMounted(() => {
         <DrawerFooter />
       </template>
     </MobileDrawer>
+
+    <!-- 全局 Toast -->
+    <Teleport to="body">
+      <Transition name="toast">
+        <div
+          v-if="toast.show"
+          class="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-xl shadow-2xl text-sm font-medium backdrop-blur-sm"
+          :class="{
+            'bg-green-600/90 text-white': toast.type === 'success',
+            'bg-red-600/90 text-white': toast.type === 'error',
+            'bg-blue-600/90 text-white': toast.type === 'info',
+          }"
+        >
+          {{ toast.message }}
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -216,5 +235,28 @@ onMounted(() => {
 .menu-item.router-link-active {
   background: rgba(59, 130, 246, 0.1);
   color: rgb(96, 165, 250);
+}
+</style>
+
+<style>
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -20px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

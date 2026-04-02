@@ -120,7 +120,7 @@ export async function checkFavoriteHandler(c: Context<AppEnv>) {
   const entityId = c.req.param('entityId')!
 
   try {
-    const isFavorited = await checkFavorite({
+    const result = await checkFavorite({
       db,
       userId: user.id,
       entityType,
@@ -129,7 +129,7 @@ export async function checkFavoriteHandler(c: Context<AppEnv>) {
 
     return c.json({
       success: true,
-      data: { isFavorited },
+      data: result,
     })
   }
   catch (e: unknown) {

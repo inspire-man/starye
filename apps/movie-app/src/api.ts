@@ -13,6 +13,7 @@ export const movieApi = {
     actor?: string
     publisher?: string
     genre?: string
+    series?: string
     search?: string
     sortBy?: string
     sortOrder?: 'asc' | 'desc'
@@ -166,13 +167,16 @@ export const favoritesApi = {
     return data
   },
 
-  async checkFavorite(entityType: 'actor' | 'publisher' | 'movie' | 'comic', entityId: string): Promise<boolean> {
+  async checkFavorite(entityType: 'actor' | 'publisher' | 'movie' | 'comic', entityId: string): Promise<{ isFavorited: boolean, favoriteId: string | null }> {
     try {
       const { data } = await api.get(`/favorites/check/${entityType}/${entityId}`)
-      return data.isFavorited || false
+      return {
+        isFavorited: data.data?.isFavorited || false,
+        favoriteId: data.data?.favoriteId || null,
+      }
     }
     catch {
-      return false
+      return { isFavorited: false, favoriteId: null }
     }
   },
 }

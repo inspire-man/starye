@@ -22,8 +22,9 @@ const movie = ref<MovieDetail | null>(null)
 const { isInDownloadList, addToDownloadList } = useDownloadList()
 
 // 收藏管理
-const { addFavorite, checkIsFavorited } = useFavorites()
+const { addFavorite, removeFavorite, checkIsFavorited } = useFavorites()
 const isFavorited = ref(false)
+const currentFavoriteId = ref<string | null>(null)
 const favoritingLoading = ref(false)
 
 // 评分管理
@@ -222,7 +223,9 @@ async function checkFavoriteStatus() {
     return
 
   try {
-    isFavorited.value = await checkIsFavorited('movie', movie.value.id)
+    const result = await checkIsFavorited('movie', movie.value.id)
+    isFavorited.value = result.isFavorited
+    currentFavoriteId.value = result.favoriteId
   }
   catch (e) {
     console.error('[MovieDetail] 检查收藏状态失败:', e)
@@ -237,18 +240,24 @@ async function toggleFavorite() {
   favoritingLoading.value = true
 
   try {
-    if (isFavorited.value) {
-      // 取消收藏 - 需要先找到 favoriteId
-      // 注意：这里简化处理，实际应该从收藏列表中获取 favoriteId
-      // 或者在检查收藏状态时同时保存 favoriteId
-      showToast('取消收藏功能开发中', 'error')
+    if (isFavorited.value && currentFavoriteId.value) {
+      const result = await removeFavorite(currentFavoriteId.value)
+      if (result.success) {
+        isFavorited.value = false
+        currentFavoriteId.value = null
+        showToast('已取消收藏')
+      }
+      else {
+        showToast(result.error || '取消收藏失败', 'error')
+      }
     }
     else {
-      // 添加收藏
       const result = await addFavorite('movie', movie.value.id)
       if (result.success) {
         isFavorited.value = true
         showToast(result.alreadyExists ? '已在收藏夹中' : '已添加到收藏夹')
+        // 重新获取 favoriteId
+        await checkFavoriteStatus()
       }
       else {
         showToast(result.error || '收藏失败', 'error')
@@ -372,13 +381,14 @@ onMounted(() => {
             <div v-if="movie.genres && movie.genres.length > 0" class="flex items-start text-sm">
               <span class="text-gray-300 w-24 shrink-0 font-medium">标签：</span>
               <div class="flex flex-wrap gap-2">
-                <span
+                <RouterLink
                   v-for="genre in movie.genres"
                   :key="genre"
-                  class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-2 py-1 rounded text-xs"
+                  :to="{ path: '/', query: { genre } }"
+                  class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-2 py-1 rounded text-xs hover:bg-purple-500/30 transition-colors cursor-pointer"
                 >
                   {{ genre }}
-                </span>
+                </RouterLink>
               </div>
             </div>
 

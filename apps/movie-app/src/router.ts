@@ -1,5 +1,5 @@
-/* eslint-disable no-alert */
 import { createRouter, createWebHistory } from 'vue-router'
+import { useToast } from './composables/useToast'
 import { useUserStore } from './stores/user'
 
 const router = createRouter({
@@ -34,6 +34,11 @@ const router = createRouter({
       path: '/publishers/:slug',
       name: 'publisher-detail',
       component: () => import('./views/PublisherDetail.vue'),
+    },
+    {
+      path: '/series/:name',
+      name: 'series',
+      component: () => import('./views/Series.vue'),
     },
     {
       path: '/movie/:code',
@@ -78,8 +83,8 @@ router.beforeEach(async (to, _from, next) => {
     }
 
     if (!userStore.user) {
-      // 未登录，提示并停留在当前页面
-      alert('请先登录以访问个人中心')
+      const { showToast } = useToast()
+      showToast('请先登录以访问该页面', 'error')
       next(false)
       return
     }

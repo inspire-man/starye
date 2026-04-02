@@ -87,14 +87,14 @@ export function useFavorites(options: UseFavoritesOptions = {}) {
     }
   }
 
-  // 检查是否已收藏
-  async function checkIsFavorited(type: 'actor' | 'publisher' | 'movie' | 'comic', id: string): Promise<boolean> {
+  // 检查是否已收藏，同时返回 favoriteId
+  async function checkIsFavorited(type: 'actor' | 'publisher' | 'movie' | 'comic', id: string): Promise<{ isFavorited: boolean, favoriteId: string | null }> {
     try {
       return await favoritesApi.checkFavorite(type, id)
     }
     catch (e) {
       console.error('[useFavorites] 检查收藏状态失败:', e)
-      return false
+      return { isFavorited: false, favoriteId: null }
     }
   }
 

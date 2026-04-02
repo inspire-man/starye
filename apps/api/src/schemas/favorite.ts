@@ -12,6 +12,18 @@ export const EntityTypeSchema = v.pipe(
 export type EntityType = v.InferOutput<typeof EntityTypeSchema>
 
 /**
+ * 关联实体信息 Schema
+ */
+export const EntityInfoSchema = v.pipe(
+  v.object({
+    name: v.pipe(v.string(), v.description('实体名称')),
+    cover: v.nullable(v.pipe(v.string(), v.description('封面/头像 URL'))),
+    slug: v.pipe(v.string(), v.description('URL slug 或唯一标识')),
+  }),
+  v.metadata({ ref: 'EntityInfo' }),
+)
+
+/**
  * 收藏项 Schema
  */
 export const FavoriteItemSchema = v.pipe(
@@ -21,6 +33,7 @@ export const FavoriteItemSchema = v.pipe(
     entityType: EntityTypeSchema,
     entityId: v.pipe(v.string(), v.description('实体 ID')),
     createdAt: TimestampSchema,
+    entity: v.nullable(EntityInfoSchema),
   }),
   v.metadata({ ref: 'FavoriteItem' }),
 )

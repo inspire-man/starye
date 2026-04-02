@@ -1,47 +1,29 @@
-/* eslint-disable no-console */
-/**
- * Toast 通知 Composable
- * 简化实现，可后续集成第三方 Toast 库
- */
+import { ref } from 'vue'
+
+interface ToastState {
+  show: boolean
+  message: string
+  type: 'success' | 'error' | 'info'
+}
+
+const toast = ref<ToastState>({ show: false, message: '', type: 'success' })
+let timer: ReturnType<typeof setTimeout> | null = null
 
 export function useToast() {
-  /**
-   * 显示成功消息
-   */
-  function success(message: string) {
-    // 简化实现：使用原生 alert
-    // 后续可替换为更优雅的 Toast 组件
-    console.log('[✓ 成功]', message)
-    // 可以在这里集成第三方库，如 Vue Toastification
+  function showToast(message: string, type: ToastState['type'] = 'success', duration = 3000) {
+    if (timer)
+      clearTimeout(timer)
+    toast.value = { show: true, message, type }
+    timer = setTimeout(() => {
+      toast.value.show = false
+    }, duration)
   }
 
-  /**
-   * 显示错误消息
-   */
-  function error(message: string) {
-    console.error('[✗ 错误]', message)
-    // 简化实现：使用原生 alert
-    // alert(`错误: ${message}`)
+  function hideToast() {
+    if (timer)
+      clearTimeout(timer)
+    toast.value.show = false
   }
 
-  /**
-   * 显示警告消息
-   */
-  function warning(message: string) {
-    console.warn('[⚠ 警告]', message)
-  }
-
-  /**
-   * 显示信息消息
-   */
-  function info(message: string) {
-    console.info('[ℹ 提示]', message)
-  }
-
-  return {
-    success,
-    error,
-    warning,
-    info,
-  }
+  return { toast, showToast, hideToast }
 }

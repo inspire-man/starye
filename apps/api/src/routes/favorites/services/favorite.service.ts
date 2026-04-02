@@ -1,7 +1,13 @@
 import type { Database } from '@starye/db'
 import type { SQL } from 'drizzle-orm'
-import { userFavorites } from '@starye/db/schema'
-import { and, count, desc, eq } from 'drizzle-orm'
+import { actors, comics, movies, publishers, userFavorites } from '@starye/db/schema'
+import { and, count, desc, eq, inArray } from 'drizzle-orm'
+
+export interface EntityInfo {
+  name: string
+  cover: string | null
+  slug: string
+}
 
 export interface GetFavoritesOptions {
   db: Database
@@ -18,6 +24,7 @@ export interface GetFavoritesResult {
     entityType: string
     entityId: string
     createdAt: number
+    entity: EntityInfo | null
   }>
   meta: {
     total: number
@@ -25,6 +32,74 @@ export interface GetFavoritesResult {
     limit: number
     totalPages: number
   }
+}
+
+// 按 entityType 分组批量查询关联实体信息
+async function batchFetchEntities(
+  db: Database,
+  items: Array<{ entityType: string, entityId: string }>,
+): Promise<Map<string, EntityInfo>> {
+  const entityMap = new Map<string, EntityInfo>()
+  const grouped: Record<string, string[]> = {}
+
+  for (const item of items) {
+    if (!grouped[item.entityType])
+      grouped[item.entityType] = []
+    grouped[item.entityType].push(item.entityId)
+  }
+
+  const queries: Promise<void>[] = []
+
+  if (grouped.movie?.length) {
+    queries.push(
+      db.select({ id: movies.id, title: movies.title, coverImage: movies.coverImage, code: movies.code })
+        .from(movies)
+        .where(inArray(movies.id, grouped.movie))
+        .then((rows) => {
+          for (const r of rows)
+            entityMap.set(`movie:${r.id}`, { name: r.title, cover: r.coverImage, slug: r.code })
+        }),
+    )
+  }
+
+  if (grouped.actor?.length) {
+    queries.push(
+      db.select({ id: actors.id, name: actors.name, avatar: actors.avatar, slug: actors.slug })
+        .from(actors)
+        .where(inArray(actors.id, grouped.actor))
+        .then((rows) => {
+          for (const r of rows)
+            entityMap.set(`actor:${r.id}`, { name: r.name, cover: r.avatar, slug: r.slug })
+        }),
+    )
+  }
+
+  if (grouped.publisher?.length) {
+    queries.push(
+      db.select({ id: publishers.id, name: publishers.name, logo: publishers.logo, slug: publishers.slug })
+        .from(publishers)
+        .where(inArray(publishers.id, grouped.publisher))
+        .then((rows) => {
+          for (const r of rows)
+            entityMap.set(`publisher:${r.id}`, { name: r.name, cover: r.logo, slug: r.slug })
+        }),
+    )
+  }
+
+  if (grouped.comic?.length) {
+    queries.push(
+      db.select({ id: comics.id, title: comics.title, coverImage: comics.coverImage, slug: comics.slug })
+        .from(comics)
+        .where(inArray(comics.id, grouped.comic))
+        .then((rows) => {
+          for (const r of rows)
+            entityMap.set(`comic:${r.id}`, { name: r.title, cover: r.coverImage, slug: r.slug })
+        }),
+    )
+  }
+
+  await Promise.all(queries)
+  return entityMap
 }
 
 export async function getFavorites(options: GetFavoritesOptions): Promise<GetFavoritesResult> {
@@ -36,7 +111,6 @@ export async function getFavorites(options: GetFavoritesOptions): Promise<GetFav
     entityType,
   } = options
 
-  // 构建查询条件
   const conditions: SQL[] = [eq(userFavorites.userId, userId)]
 
   if (entityType) {
@@ -59,6 +133,12 @@ export async function getFavorites(options: GetFavoritesOptions): Promise<GetFav
       .then(res => res[0]?.value || 0),
   ])
 
+  // 批量查询关联实体信息
+  const entityMap = await batchFetchEntities(
+    db,
+    results.map(r => ({ entityType: r.entityType, entityId: r.entityId })),
+  )
+
   return {
     data: results.map(r => ({
       id: r.id,
@@ -66,6 +146,7 @@ export async function getFavorites(options: GetFavoritesOptions): Promise<GetFav
       entityType: r.entityType,
       entityId: r.entityId,
       createdAt: r.createdAt ? Math.floor(r.createdAt.getTime() / 1000) : 0,
+      entity: entityMap.get(`${r.entityType}:${r.entityId}`) || null,
     })),
     meta: {
       total: totalResult,
@@ -147,7 +228,7 @@ export interface CheckFavoriteOptions {
   entityId: string
 }
 
-export async function checkFavorite(options: CheckFavoriteOptions): Promise<boolean> {
+export async function checkFavorite(options: CheckFavoriteOptions): Promise<{ isFavorited: boolean, favoriteId: string | null }> {
   const { db, userId, entityType, entityId } = options
 
   const favorite = await db.query.userFavorites.findFirst({
@@ -158,5 +239,8 @@ export async function checkFavorite(options: CheckFavoriteOptions): Promise<bool
     ),
   })
 
-  return !!favorite
+  return {
+    isFavorited: !!favorite,
+    favoriteId: favorite?.id ?? null,
+  }
 }

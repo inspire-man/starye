@@ -42,7 +42,7 @@ publicMovies.get(
     const user = c.get('user')
     const params = c.req.valid('query')
 
-    const { page, limit, actor, publisher, genre, search, sortBy, sortOrder } = params
+    const { page, limit, actor, publisher, genre, series, search, sortBy, sortOrder } = params
     const offset = (page - 1) * limit
 
     try {
@@ -78,6 +78,10 @@ publicMovies.get(
 
       if (genre) {
         conditions.push(like(movies.genres, `%${genre}%`))
+      }
+
+      if (series) {
+        conditions.push(eq(movies.series, series))
       }
 
       if (search) {

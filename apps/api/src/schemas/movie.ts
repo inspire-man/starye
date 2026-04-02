@@ -126,6 +126,15 @@ export const GetMoviesQuerySchema = v.object({
       v.description('类型筛选'),
     ),
   ),
+  series: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.examples(['示例系列']),
+      v.description('系列名称筛选'),
+    ),
+  ),
   search: OptionalKeywordSchema,
   sortBy: v.optional(
     v.pipe(

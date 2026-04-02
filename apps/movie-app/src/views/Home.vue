@@ -2,10 +2,13 @@
 import type { SelectOption } from '../components/Select.vue'
 import type { Movie } from '../types'
 import { onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { movieApi } from '../api'
 import Select from '../components/Select.vue'
 import { useUserStore } from '../stores/user'
+
+const route = useRoute()
+const router = useRouter()
 
 const userStore = useUserStore()
 const loading = ref(true)
@@ -16,6 +19,8 @@ const pagination = reactive({
   total: 0,
   totalPages: 0,
 })
+
+const activeGenre = ref('')
 
 const filters = reactive({
   search: '',
@@ -37,6 +42,7 @@ async function fetchMovies() {
       page: pagination.page,
       limit: pagination.limit,
       search: filters.search || undefined,
+      genre: activeGenre.value || undefined,
       sortBy: filters.sortBy,
       sortOrder: filters.sortOrder,
     })
@@ -70,7 +76,28 @@ watch(() => filters.sortBy, () => {
   fetchMovies()
 })
 
+function clearGenreFilter() {
+  activeGenre.value = ''
+  router.replace({ query: {} })
+  pagination.page = 1
+  fetchMovies()
+}
+
+// 监听 route.query.genre 变化
+watch(() => route.query.genre, (val) => {
+  const genre = typeof val === 'string' ? val : ''
+  if (genre !== activeGenre.value) {
+    activeGenre.value = genre
+    pagination.page = 1
+    fetchMovies()
+  }
+})
+
 onMounted(() => {
+  const genre = route.query.genre
+  if (typeof genre === 'string' && genre) {
+    activeGenre.value = genre
+  }
   fetchMovies()
 })
 </script>
@@ -92,9 +119,22 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Genre 筛选标签提示 -->
+    <div v-if="activeGenre" class="flex items-center gap-2 mb-4 bg-purple-600/10 border border-purple-500/30 rounded-lg px-4 py-2">
+      <span class="text-purple-300 text-sm">
+        当前筛选标签：<strong>{{ activeGenre }}</strong>
+      </span>
+      <button
+        class="ml-auto text-purple-400 hover:text-white text-sm transition-colors"
+        @click="clearGenreFilter"
+      >
+        清除筛选
+      </button>
+    </div>
+
     <div class="mb-6">
       <h1 class="text-3xl font-bold text-white mb-4">
-        热门影片
+        {{ activeGenre ? `标签：${activeGenre}` : '热门影片' }}
       </h1>
 
       <div class="flex flex-wrap gap-4 mb-6">
