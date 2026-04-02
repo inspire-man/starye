@@ -87,7 +87,9 @@ async function testApiRead() {
     // 测试未匹配女优清单
     const unmappedResponse = await fetch(`${API_BASE}/api/admin/crawlers/unmapped-actors`, {
       headers: {
-        Authorization: `Bearer ${CRAWLER_SECRET}`,
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Authorization': `Bearer ${CRAWLER_SECRET}`,
       },
     })
 
@@ -107,7 +109,9 @@ async function testApiRead() {
     // 测试映射质量
     const qualityResponse = await fetch(`${API_BASE}/api/admin/crawlers/mapping-quality`, {
       headers: {
-        Authorization: `Bearer ${CRAWLER_SECRET}`,
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Authorization': `Bearer ${CRAWLER_SECRET}`,
       },
     })
 
@@ -141,6 +145,8 @@ async function testAddMapping() {
     const response = await fetch(`${API_BASE}/api/admin/crawlers/add-mapping`, {
       method: 'POST',
       headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
         'Authorization': `Bearer ${CRAWLER_SECRET}`,
         'Content-Type': 'application/json',
       },
@@ -182,7 +188,9 @@ async function testVersionHistory() {
   try {
     const response = await fetch(`${API_BASE}/api/admin/crawlers/mapping-versions?type=actor`, {
       headers: {
-        Authorization: `Bearer ${CRAWLER_SECRET}`,
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Authorization': `Bearer ${CRAWLER_SECRET}`,
       },
     })
 

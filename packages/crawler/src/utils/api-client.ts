@@ -7,16 +7,26 @@ import type { ApiConfig } from '../types/config'
 export class ApiClient {
   constructor(private config: ApiConfig) {}
 
+  /**
+   * 构建通用请求头
+   * 包含 Accept-Encoding 以支持压缩响应
+   */
+  private buildHeaders(additionalHeaders: Record<string, string> = {}): HeadersInit {
+    return {
+      'Accept': 'application/json',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'x-service-token': this.config.token,
+      ...additionalHeaders,
+    }
+  }
+
   async sync(endpoint: string, data: unknown): Promise<any> {
     const url = `${this.config.url}${endpoint}`
 
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-service-token': this.config.token,
-        },
+        headers: this.buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data),
         signal: AbortSignal.timeout(this.config.timeout || 60000), // 增加超时到 60 秒
       })
@@ -88,9 +98,7 @@ export class ApiClient {
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'x-service-token': this.config.token,
-        },
+        headers: this.buildHeaders(),
         signal: AbortSignal.timeout(this.config.timeout || 60000),
       })
 
@@ -116,9 +124,7 @@ export class ApiClient {
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'x-service-token': this.config.token,
-        },
+        headers: this.buildHeaders(),
         signal: AbortSignal.timeout(this.config.timeout || 60000),
       })
 
@@ -149,9 +155,7 @@ export class ApiClient {
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'x-service-token': this.config.token,
-        },
+        headers: this.buildHeaders(),
         signal: AbortSignal.timeout(this.config.timeout || 60000),
       })
 
@@ -184,9 +188,7 @@ export class ApiClient {
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'x-service-token': this.config.token,
-        },
+        headers: this.buildHeaders(),
         signal: AbortSignal.timeout(this.config.timeout || 60000),
       })
 
@@ -217,9 +219,7 @@ export class ApiClient {
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'x-service-token': this.config.token,
-        },
+        headers: this.buildHeaders(),
         signal: AbortSignal.timeout(this.config.timeout || 60000),
       })
 

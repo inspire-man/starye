@@ -17,6 +17,8 @@ async function verifyDataIntegrity() {
     console.log('1️⃣ 验证女优数据...')
     const actorsResponse = await fetch(`${API_URL}/api/admin/actors?limit=50`, {
       headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
         'x-service-token': API_TOKEN,
       },
     })
@@ -71,6 +73,8 @@ async function verifyDataIntegrity() {
     console.log('\n2️⃣ 验证厂商数据...')
     const publishersResponse = await fetch(`${API_URL}/api/admin/publishers?limit=50`, {
       headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
         'x-service-token': API_TOKEN,
       },
     })
@@ -125,6 +129,8 @@ async function verifyDataIntegrity() {
     console.log('\n3️⃣ 验证影片数据...')
     const moviesResponse = await fetch(`${API_URL}/api/admin/movies?limit=50`, {
       headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
         'x-service-token': API_TOKEN,
       },
     })

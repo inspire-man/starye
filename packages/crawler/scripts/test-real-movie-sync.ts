@@ -51,6 +51,8 @@ async function testRealMovieSync() {
       console.log('\n🔍 验证数据库...')
       const verifyResponse = await fetch(`${API_URL}/api/admin/movies?limit=5`, {
         headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate, br',
           'x-service-token': API_TOKEN,
         },
       })

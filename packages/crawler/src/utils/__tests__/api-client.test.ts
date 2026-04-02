@@ -41,6 +41,8 @@ describe('apiClient', () => {
         expect.objectContaining({
           method: 'GET',
           headers: {
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip, deflate, br',
             'x-service-token': 'test-token',
           },
         }),
@@ -111,6 +113,8 @@ describe('apiClient', () => {
         expect.objectContaining({
           method: 'POST',
           headers: {
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Content-Type': 'application/json',
             'x-service-token': 'test-token',
           },
