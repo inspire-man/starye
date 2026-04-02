@@ -24,4 +24,4 @@
 
 - [x] 5.1 本地启动 API（`pnpm dev`），使用浏览器或 curl 测试以下场景：无筛选列表、按演员筛选、按厂商筛选、按标签筛选、影片详情、相关影片推荐。完成标准：所有场景返回 200 且数据合理
 - [x] 5.2 类型检查通过（`pnpm --filter=@apps/api typecheck`）。完成标准：无 TypeScript 编译错误
-- [ ] 5.3 部署验证：推送后确认 Cloudflare Workers 部署成功且线上接口可用。完成标准：线上 `/public/movies` 和 `/public/movies/:code` 正常响应
+- [x] 5.3 部署验证：推送后确认 Cloudflare Workers 部署成功且线上接口可用。完成标准：线上 `/public/movies` 和 `/public/movies/:code` 正常响应
