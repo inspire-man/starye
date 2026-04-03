@@ -18,8 +18,8 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 
-// wangEditor 实例引用
-const editorRef = shallowRef<IDomEditor | null>(null)
+// wangEditor 实例引用（shallowRef 初始值用 undefined，与官方 Vue3 示例一致）
+const editorRef = shallowRef<IDomEditor | undefined>()
 
 const form = ref({
   title: '',
