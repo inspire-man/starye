@@ -84,8 +84,8 @@
 
 ## 13. 生产部署
 
-- [ ] 13.1 运行 `pnpm --filter api exec wrangler d1 migrations apply starye-db --remote` 应用远端 D1 migration
-- [ ] 13.2 部署 API Worker（`pnpm --filter api deploy`）
-- [ ] 13.3 部署 Blog（Cloudflare Pages，触发 CI 或手动 `pnpm --filter blog build`）
-- [ ] 13.4 部署 Dashboard（Cloudflare Pages）
-- [ ] 13.5 访问生产 Blog 验证：系列页、文章详情 TOC、wangEditor 发布的文章渲染正确
+- [x] 13.1 运行 `pnpm --filter api exec wrangler d1 migrations apply starye-db --remote` 应用远端 D1 migration
+- [x] 13.2 部署 API Worker（`pnpm --filter api deploy`）
+- [x] 13.3 部署 Blog（Cloudflare Pages，触发 CI 或手动 `pnpm --filter blog build`）
+- [x] 13.4 部署 Dashboard（Cloudflare Pages）
+- [x] 13.5 访问生产 Blog 验证：系列页、文章详情 TOC、wangEditor 发布的文章渲染正确
