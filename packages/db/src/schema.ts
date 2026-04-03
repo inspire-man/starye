@@ -64,11 +64,17 @@ export const posts = sqliteTable('post', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(),
-  content: text('content'), // Markdown 格式
+  content: text('content'), // HTML 或 Markdown 格式，由 contentFormat 决定
   excerpt: text('excerpt'),
   coverImage: text('cover_image'),
   published: integer('published', { mode: 'boolean' }).default(false),
   authorId: text('author_id').references(() => user.id),
+  // 内容格式：'html'（wangEditor 输出）或 'markdown'（存量数据兼容）
+  contentFormat: text('content_format').default('html'),
+  // 系列相关字段
+  tags: text('tags', { mode: 'json' }).$type<string[]>(),
+  series: text('series'), // 系列 slug，如 ts-fullstack-ai-chronicle
+  seriesOrder: integer('series_order'), // 系列内排序序号（从 1 开始）
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 })

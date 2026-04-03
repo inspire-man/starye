@@ -42,6 +42,10 @@ export function createMockDb(): Database {
     all: vi.fn(),
     run: vi.fn(),
     query: {
+      posts: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
+      },
       movies: {
         findFirst: vi.fn(),
         findMany: vi.fn(),
@@ -93,7 +97,7 @@ export function createMockUser(overrides?: Partial<SessionUser>): SessionUser {
 }
 
 /**
- * Post 完整类型定义
+ * Post 完整类型定义（含 blog-enhance 新增字段）
  */
 export interface MockPost {
   id: string
@@ -106,6 +110,10 @@ export interface MockPost {
   coverImage: string | null
   published: boolean | null
   authorId: string | null
+  contentFormat: string | null
+  tags: string[] | null
+  series: string | null
+  seriesOrder: number | null
 }
 
 /**
@@ -123,6 +131,10 @@ export function createMockPost(overrides?: Partial<MockPost>): MockPost {
     coverImage: null,
     published: true,
     authorId: 'test-author-id',
+    contentFormat: 'html',
+    tags: null,
+    series: null,
+    seriesOrder: null,
     ...overrides,
   }
 }

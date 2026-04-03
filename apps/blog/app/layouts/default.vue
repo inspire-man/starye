@@ -33,8 +33,11 @@ function getLoginUrl() {
           </NuxtLink>
         </h1>
         <div class="flex gap-4 items-center">
-          <NuxtLink to="/" class="hover:underline">
-            Home
+          <NuxtLink to="/" class="hover:underline text-sm">
+            首页
+          </NuxtLink>
+          <NuxtLink to="/series/ts-fullstack-ai-chronicle" class="hover:underline text-sm">
+            TypeScript 全栈 AI 实录
           </NuxtLink>
 
           <div v-if="user" class="flex items-center gap-2">

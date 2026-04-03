@@ -10,13 +10,16 @@
     "postinstall": "nuxt prepare",
     "deploy": "pnpm build && wrangler pages deploy dist --project-name blog-pages",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@starye/api-types": "workspace:*",
     "@starye/locales": "workspace:*",
     "@starye/ui": "workspace:*",
     "@types/markdown-it": "^14.1.2",
     "better-auth": "^1.5.6",
+    "hono": "^4.12.9",
     "markdown-it": "^14.1.1",
     "nuxt": "^4.4.2",
     "vue": "^3.5.31",
@@ -24,6 +27,7 @@
   },
   "devDependencies": {
     "@nuxtjs/i18n": "^10.2.4",
+    "@playwright/test": "^1.52.0",
     "@tailwindcss/vite": "^4.2.2",
     "tailwindcss": "^4.2.2"
   }
