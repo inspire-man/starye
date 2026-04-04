@@ -135,11 +135,11 @@ export function useRating() {
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json() as any
         throw new Error(error.message || '提交评分失败')
       }
 
-      const result = await response.json()
+      const result = await response.json() as any
 
       if (result.code === 0) {
         toast.success('评分已提交')
@@ -193,7 +193,7 @@ export function useRating() {
           body: JSON.stringify({ playerId, score }),
         })
 
-        const result = await response.json()
+        const result = await response.json() as any
         return response.ok && result.code === 0
       }
       catch {
@@ -227,7 +227,7 @@ export function useRating() {
         throw new Error('获取评分统计失败')
       }
 
-      const result = await response.json()
+      const result = await response.json() as any
 
       if (result.code === 0) {
         return result.data
@@ -260,7 +260,7 @@ export function useRating() {
         throw new Error('获取评分历史失败')
       }
 
-      const result = await response.json()
+      const result = await response.json() as any
 
       if (result.code === 0) {
         return result.data || []
@@ -286,7 +286,7 @@ export function useRating() {
         throw new Error('获取全局统计失败')
       }
 
-      const result = await response.json()
+      const result = await response.json() as any
 
       if (result.code === 0) {
         return result.data

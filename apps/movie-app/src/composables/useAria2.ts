@@ -61,7 +61,7 @@ export function useAria2() {
       })
 
       if (response.ok) {
-        const result = await response.json()
+        const result = await response.json() as any
         if (result.code === 0 && result.data) {
           config.value = {
             rpcUrl: result.data.rpcUrl,
@@ -139,7 +139,7 @@ export function useAria2() {
           throw new Error('连接失败')
         }
 
-        const result = await response.json()
+        const result = await response.json() as any
         if (result.code === 0 && result.data.result) {
           version.value = result.data.result
           isConnected.value = true
@@ -196,7 +196,7 @@ export function useAria2() {
         throw new Error(`请求失败: ${response.status}`)
       }
 
-      const result = await response.json()
+      const result = await response.json() as any
       if (result.code !== 0) {
         throw new Error(result.message || '请求失败')
       }

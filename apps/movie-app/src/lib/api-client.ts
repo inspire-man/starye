@@ -1,10 +1,9 @@
 /**
- * Movie App API 客户端 - 基于 Hono RPC
+ * Movie App API 客户端 - 原生 fetch
  *
- * 使用 hc<AppType>() 替代 axios，获得原生 fetch 的类型安全调用
+ * 使用原生 fetch 进行 API 调用，避免引入 Hono RPC 的源码类型链
  */
 
-import type { AppType } from '@starye/api-types'
 import type {
   Actor,
   ActorDetail,
@@ -17,12 +16,8 @@ import type {
   PublisherDetail,
   WatchingProgress,
 } from '../types'
-import { hc } from 'hono/client'
 
-/** Hono RPC 客户端 */
-const client = hc<AppType>('/')
-
-/** 通用 JSON fetch，处理非 RPC 路由（auth、favorites 等） */
+/** 通用 JSON fetch，统一处理凭据和错误 */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     credentials: 'include',
@@ -33,7 +28,20 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const err = await res.json().catch(() => ({ message: 'Unknown error' })) as { message?: string }
     throw new Error(err.message || `Request failed: ${res.status}`)
   }
-  return res.json()
+  return res.json() as Promise<T>
+}
+
+/** 将参数对象构建为 query string */
+function buildQuery(params?: Record<string, string | number | boolean | undefined | null>): string {
+  if (!params)
+    return ''
+  const q = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '')
+      q.set(k, String(v))
+  })
+  const str = q.toString()
+  return str ? `?${str}` : ''
 }
 
 // ─── Movie API ─────────────────────────────────────────────────────────────
@@ -50,15 +58,7 @@ export const movieApi = {
     sortBy?: string
     sortOrder?: 'asc' | 'desc'
   }): Promise<PaginatedResponse<Movie>> {
-    const query: Record<string, string> = {}
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '')
-          query[k] = String(v)
-      })
-    }
-    const res = await client.api.public.movies.$get({ query } as any)
-    const data = await res.json() as any
+    const data = await apiFetch<any>(`/public/movies${buildQuery(params)}`)
     return {
       success: true,
       data: data.data,
@@ -67,8 +67,7 @@ export const movieApi = {
   },
 
   async getMovieDetail(code: string): Promise<ApiResponse<MovieDetail>> {
-    const res = await client.api.public.movies[':identifier'].$get({ param: { identifier: code } } as any)
-    const data = await res.json() as any
+    const data = await apiFetch<any>(`/public/movies/${encodeURIComponent(code)}`)
     return { success: true, data: data.data }
   },
 }
@@ -84,15 +83,7 @@ export const actorApi = {
     isActive?: boolean
     hasDetails?: boolean
   }): Promise<PaginatedResponse<Actor>> {
-    const query: Record<string, string> = {}
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '')
-          query[k] = String(v)
-      })
-    }
-    const res = await client.api.actors.$get({ query } as any)
-    const data = await res.json() as any
+    const data = await apiFetch<any>(`/actors${buildQuery(params)}`)
     return {
       success: true,
       data: data.data,
@@ -101,8 +92,7 @@ export const actorApi = {
   },
 
   async getActorDetail(slug: string): Promise<ApiResponse<ActorDetail>> {
-    const res = await client.api.actors[':slug'].$get({ param: { slug } } as any)
-    const data = await res.json() as any
+    const data = await apiFetch<any>(`/actors/${encodeURIComponent(slug)}`)
     return { success: true, data }
   },
 
@@ -125,15 +115,7 @@ export const actorApi = {
       }>
     }>
   }>> {
-    const query: Record<string, string> = {}
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined)
-          query[k] = String(v)
-      })
-    }
-    const res = await client.api.actors[':slug'].relations.$get({ param: { slug: actorId }, query } as any)
-    const data = await res.json() as any
+    const data = await apiFetch<any>(`/actors/${encodeURIComponent(actorId)}/relations${buildQuery(params)}`)
     return { success: true, data: data.data }
   },
 }
@@ -148,15 +130,7 @@ export const publisherApi = {
     country?: string
     hasDetails?: boolean
   }): Promise<PaginatedResponse<Publisher>> {
-    const query: Record<string, string> = {}
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '')
-          query[k] = String(v)
-      })
-    }
-    const res = await client.api.publishers.$get({ query } as any)
-    const data = await res.json() as any
+    const data = await apiFetch<any>(`/publishers${buildQuery(params)}`)
     return {
       success: true,
       data: data.data,
@@ -165,8 +139,7 @@ export const publisherApi = {
   },
 
   async getPublisherDetail(slug: string): Promise<ApiResponse<PublisherDetail>> {
-    const res = await client.api.publishers[':slug'].$get({ param: { slug } } as any)
-    const data = await res.json() as any
+    const data = await apiFetch<any>(`/publishers/${encodeURIComponent(slug)}`)
     return { success: true, data }
   },
 }
@@ -226,15 +199,7 @@ export const favoritesApi = {
     limit?: number
     entityType?: 'actor' | 'publisher' | 'movie' | 'comic'
   }): Promise<PaginatedResponse<Favorite>> {
-    const query: Record<string, string> = {}
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined)
-          query[k] = String(v)
-      })
-    }
-    const res = await client.api.favorites.$get({ query } as any)
-    const data = await res.json() as any
+    const data = await apiFetch<any>(`/favorites${buildQuery(params)}`)
     return {
       success: true,
       data: data.data,

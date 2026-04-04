@@ -202,7 +202,7 @@ function resetFilters() {
         <Pagination
           :current-page="pagination.page"
           :total-pages="pagination.totalPages"
-          :total-items="pagination.total"
+          :total="pagination.total"
           :page-size="pagination.limit"
           @page-change="changePage"
         />

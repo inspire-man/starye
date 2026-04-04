@@ -74,7 +74,7 @@ export function useFeatureFlags() {
   async function refreshFlags() {
     try {
       const response = await fetch('/api/feature-flags')
-      const data = await response.json()
+      const data = await response.json() as any
 
       if (data.code === 0 && data.data) {
         // 更新本地 flags

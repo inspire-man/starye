@@ -1,17 +1,12 @@
 /**
- * Comic App API 客户端 - 基于 Hono RPC
+ * Comic App API 客户端 - 原生 fetch
  *
- * 使用 hc<AppType>() 替代 axios，获得原生 fetch 的类型安全调用
+ * 使用原生 fetch 进行 API 调用，避免引入 Hono RPC 的源码类型链
  */
 
-import type { AppType } from '@starye/api-types'
 import type { ApiResponse, Chapter, ChapterDetail, Comic, PaginatedResponse, ReadingProgress } from '../types'
-import { hc } from 'hono/client'
 
-/** Hono RPC 客户端 */
-const client = hc<AppType>('/')
-
-/** 通用 JSON fetch，处理非 RPC 路由（auth、progress 等） */
+/** 通用 JSON fetch，统一处理凭据和错误 */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     credentials: 'include',
@@ -22,7 +17,20 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const err = await res.json().catch(() => ({ message: 'Unknown error' })) as { message?: string }
     throw new Error(err.message || `Request failed: ${res.status}`)
   }
-  return res.json()
+  return res.json() as Promise<T>
+}
+
+/** 将参数对象构建为 query string */
+function buildQuery(params?: Record<string, string | number | boolean | undefined | null>): string {
+  if (!params)
+    return ''
+  const q = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '')
+      q.set(k, String(v))
+  })
+  const str = q.toString()
+  return str ? `?${str}` : ''
 }
 
 // ─── Comic API ─────────────────────────────────────────────────────────────
@@ -37,27 +45,15 @@ export const comicApi = {
     sortBy?: string
     sortOrder?: 'asc' | 'desc'
   }): Promise<PaginatedResponse<Comic>> {
-    const query: Record<string, string> = {}
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '')
-          query[k] = String(v)
-      })
-    }
-    const res = await client.api.public.comics.$get({ query } as any)
-    return res.json() as any
+    return apiFetch(`/public/comics${buildQuery(params)}`)
   },
 
   async getComicDetail(slug: string): Promise<ApiResponse<Comic & { chapters: Chapter[] }>> {
-    const res = await client.api.public.comics[':slug'].$get({ param: { slug } } as any)
-    return res.json() as any
+    return apiFetch(`/public/comics/${encodeURIComponent(slug)}`)
   },
 
   async getChapterDetail(slug: string, chapterId: string): Promise<ApiResponse<ChapterDetail>> {
-    const res = await client.api.public.comics[':slug'].chapters[':chapterId'].$get({
-      param: { slug, chapterId },
-    } as any)
-    return res.json() as any
+    return apiFetch(`/public/comics/${encodeURIComponent(slug)}/chapters/${encodeURIComponent(chapterId)}`)
   },
 }
 
