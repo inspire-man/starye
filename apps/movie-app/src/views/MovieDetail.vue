@@ -8,7 +8,8 @@ import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useFavorites } from '../composables/useFavorites'
 import { useRating } from '../composables/useRating'
-import { movieApi } from '../lib/api-client'
+import { movieApi, ratingApi } from '../lib/api-client'
+import { useUserStore } from '../stores/user'
 import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
 import { getQualityBadgeClass, getSourceTypeIcon, sortPlaybackSources } from '../utils/playbackSources'
@@ -17,6 +18,9 @@ const route = useRoute()
 const loading = ref(true)
 const error = ref('')
 const movie = ref<MovieDetail | null>(null)
+
+// 用户状态
+const userStore = useUserStore()
 
 // 下载列表管理
 const { isInDownloadList, addToDownloadList } = useDownloadList()
@@ -28,7 +32,7 @@ const currentFavoriteId = ref<string | null>(null)
 const favoritingLoading = ref(false)
 
 // 评分管理
-const { getPlayerRating, submitRating } = useRating()
+const { getPlayerRating } = useRating()
 
 // Aria2 管理
 const { isConnected: aria2Connected, addMagnetTask } = useAria2()
@@ -43,7 +47,13 @@ const sortMethod = ref<import('../utils/playbackSources').SortMethod>('default')
 const qrcodeModal = ref({ show: false, content: '', title: '' })
 
 // 评分弹窗
-const ratingModal = ref({ show: false, player: null as Player | null })
+const ratingModal = ref({ show: false, player: null as Player | null, submitting: false })
+
+// 上报确认弹窗
+const reportModal = ref({ show: false, player: null as Player | null, submitting: false })
+
+// 本地已上报的 player id 集合（当前会话内防重复）
+const reportedPlayerIds = ref<Set<string>>(new Set())
 
 // Toast 提示
 const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
@@ -186,30 +196,90 @@ function closeQRCode() {
   qrcodeModal.value.show = false
 }
 
-// 显示评分弹窗
+// 显示评分弹窗（需要登录）
 function showRatingModal(player: Player) {
-  ratingModal.value = {
-    show: true,
-    player,
+  if (!userStore.user) {
+    showToast('请先登录后评分', 'error')
+    return
   }
+  ratingModal.value = { show: true, player, submitting: false }
 }
 
 // 关闭评分弹窗
 function closeRatingModal() {
   ratingModal.value.show = false
   ratingModal.value.player = null
+  ratingModal.value.submitting = false
 }
 
-// 提交评分
+// 提交评分（乐观更新本地 player 状态）
 async function handleSubmitRating(score: number) {
-  if (!ratingModal.value.player)
+  const player = ratingModal.value.player
+  if (!player || ratingModal.value.submitting)
     return
 
-  const success = await submitRating(ratingModal.value.player.id, score)
-  if (success) {
-    // 刷新影片详情以更新评分
-    await fetchMovieDetail()
+  ratingModal.value.submitting = true
+  try {
+    const result = await ratingApi.submitPlayerRating(player.id, score)
+    // 乐观更新：直接修改本地 players 列表中该条目的评分数据
+    if (movie.value?.players) {
+      const target = movie.value.players.find(p => p.id === player.id)
+      if (target) {
+        target.averageRating = result.averageRating
+        target.ratingCount = result.ratingCount
+        target.userScore = score
+      }
+    }
+    showToast('评分已提交')
     closeRatingModal()
+  }
+  catch (err: any) {
+    showToast(err.message || '评分提交失败', 'error')
+  }
+  finally {
+    ratingModal.value.submitting = false
+  }
+}
+
+// 显示上报确认弹窗（需要登录）
+function showReportModal(player: Player) {
+  if (!userStore.user) {
+    showToast('请先登录后再上报', 'error')
+    return
+  }
+  if (reportedPlayerIds.value.has(player.id)) {
+    showToast('您已上报过此播放源', 'error')
+    return
+  }
+  reportModal.value = { show: true, player, submitting: false }
+}
+
+// 关闭上报弹窗
+function closeReportModal() {
+  reportModal.value.show = false
+  reportModal.value.player = null
+  reportModal.value.submitting = false
+}
+
+// 确认上报
+async function handleConfirmReport() {
+  const player = reportModal.value.player
+  if (!player || reportModal.value.submitting)
+    return
+
+  reportModal.value.submitting = true
+  try {
+    await ratingApi.reportPlayer(player.id)
+    // 本地标记已上报
+    reportedPlayerIds.value.add(player.id)
+    showToast('上报成功，感谢你的反馈')
+    closeReportModal()
+  }
+  catch (err: any) {
+    showToast(err.message || '上报失败，请稍后再试', 'error')
+  }
+  finally {
+    reportModal.value.submitting = false
   }
 }
 
@@ -636,6 +706,16 @@ onMounted(() => {
               >
                 ⭐ 评分
               </button>
+              <button
+                :disabled="reportedPlayerIds.has(player.id)"
+                class="px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap"
+                :class="reportedPlayerIds.has(player.id)
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-red-700 hover:bg-red-800 text-white'"
+                @click="showReportModal(player)"
+              >
+                {{ reportedPlayerIds.has(player.id) ? '✓ 已上报' : '🚩 上报' }}
+              </button>
             </div>
           </div>
         </div>
@@ -742,18 +822,60 @@ onMounted(() => {
             <div class="flex justify-center">
               <RatingStars
                 :model-value="ratingModal.player.userScore || 0"
-                :interactive="true"
+                :interactive="!ratingModal.submitting"
                 size="large"
                 @change="handleSubmitRating"
               />
             </div>
+            <p v-if="ratingModal.submitting" class="text-center text-gray-400 text-xs mt-3">
+              提交中...
+            </p>
           </div>
 
           <div v-if="ratingModal.player.averageRating" class="text-center text-sm text-gray-400">
             <p>
-              当前平均评分: {{ ratingModal.player.averageRating.toFixed(1) }} 分
+              当前平均评分: {{ (ratingModal.player.averageRating / 20).toFixed(1) }} 星
               ({{ ratingModal.player.ratingCount }} 人评价)
             </p>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 上报确认 Modal -->
+    <Transition name="modal">
+      <div
+        v-if="reportModal.show && reportModal.player"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        @click.self="closeReportModal"
+      >
+        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-sm w-full p-6 relative">
+          <h3 class="text-lg font-bold text-white mb-3">
+            🚩 上报播放源失效
+          </h3>
+          <p class="text-gray-300 text-sm mb-1">
+            {{ reportModal.player.sourceName }}
+            <span v-if="reportModal.player.quality" class="text-gray-400">
+              [{{ reportModal.player.quality }}]
+            </span>
+          </p>
+          <p class="text-gray-400 text-sm mb-6">
+            确认上报此播放源为失效？上报数量超过阈值后将自动标记为待审核。
+          </p>
+          <div class="flex gap-3 justify-end">
+            <button
+              class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+              @click="closeReportModal"
+            >
+              取消
+            </button>
+            <button
+              :disabled="reportModal.submitting"
+              class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-900 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+              @click="handleConfirmReport"
+            >
+              {{ reportModal.submitting ? '上报中...' : '确认上报' }}
+            </button>
           </div>
         </div>
       </div>

@@ -191,11 +191,14 @@ export const players = sqliteTable('player', {
   sortOrder: integer('sort_order').notNull(), // 排序
   averageRating: integer('average_rating', { mode: 'number' }), // 平均评分（0-100）
   ratingCount: integer('rating_count').default(0), // 评分人数
+  reportCount: integer('report_count').default(0), // 失效上报次数
+  isActive: integer('is_active', { mode: 'boolean' }).default(true), // 是否有效（超过上报阈值后自动置 false）
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-}, table => ({
-  ratingIdx: index('idx_player_rating').on(table.averageRating),
-}))
+}, table => [
+  index('idx_player_rating').on(table.averageRating),
+  index('idx_player_active').on(table.isActive),
+])
 
 export type Player = InferSelectModel<typeof players>
 export type NewPlayer = InferInsertModel<typeof players>
@@ -386,11 +389,11 @@ export const userFavorites = sqliteTable('user_favorites', {
   entityType: text('entity_type', { enum: ['actor', 'publisher', 'movie', 'comic'] }).notNull(),
   entityId: text('entity_id').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
-}, table => ({
-  userEntityIdx: uniqueIndex('idx_user_favorites_user_entity').on(table.userId, table.entityType, table.entityId),
-  entityTypeIdx: index('idx_user_favorites_entity_type').on(table.entityType),
-  entityIdIdx: index('idx_user_favorites_entity_id').on(table.entityId),
-}))
+}, table => [
+  uniqueIndex('idx_user_favorites_user_entity').on(table.userId, table.entityType, table.entityId),
+  index('idx_user_favorites_entity_type').on(table.entityType),
+  index('idx_user_favorites_entity_id').on(table.entityId),
+])
 
 export type UserFavorite = InferSelectModel<typeof userFavorites>
 export type NewUserFavorite = InferInsertModel<typeof userFavorites>
@@ -403,12 +406,12 @@ export const ratings = sqliteTable('ratings', {
   score: integer('score').notNull().$type<1 | 2 | 3 | 4 | 5>(), // 1-5 星
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
-}, table => ({
-  playerUserIdx: uniqueIndex('idx_ratings_player_user').on(table.playerId, table.userId),
-  playerIdx: index('idx_ratings_player').on(table.playerId),
-  userIdx: index('idx_ratings_user').on(table.userId),
-  createdAtIdx: index('idx_ratings_created_at').on(table.createdAt),
-}))
+}, table => [
+  uniqueIndex('idx_ratings_player_user').on(table.playerId, table.userId),
+  index('idx_ratings_player').on(table.playerId),
+  index('idx_ratings_user').on(table.userId),
+  index('idx_ratings_created_at').on(table.createdAt),
+])
 
 export type Rating = InferSelectModel<typeof ratings>
 export type NewRating = InferInsertModel<typeof ratings>

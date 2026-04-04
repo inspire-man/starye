@@ -94,9 +94,12 @@ export interface Player {
   sortOrder: number
   magnetLink?: string
   // 评分相关字段
-  averageRating?: number // 平均用户评分 (1-5)
+  averageRating?: number // 平均用户评分（DB 存储 0-100 整数）
   ratingCount?: number // 评分人数
   userScore?: number // 当前用户的评分 (1-5)
+  // 上报相关字段
+  reportCount?: number // 失效上报次数
+  isActive?: boolean // 是否有效（超过阈值后为 false）
 }
 
 export interface MovieDetail extends Movie {

@@ -262,6 +262,30 @@ export const authApi = {
   },
 }
 
+// ─── Ratings API ───────────────────────────────────────────────────────────
+
+export const ratingApi = {
+  /**
+   * 提交播放源评分（1-5 星），返回更新后的聚合数据
+   */
+  async submitPlayerRating(playerId: string, score: number): Promise<{ averageRating: number, ratingCount: number }> {
+    const data = await apiFetch<{ code: number, data: { averageRating: number, ratingCount: number } }>('/ratings', {
+      method: 'POST',
+      body: JSON.stringify({ playerId, score }),
+    })
+    return data.data
+  },
+
+  /**
+   * 上报播放源失效
+   */
+  async reportPlayer(playerId: string): Promise<{ reportCount: number, isActive: boolean }> {
+    return apiFetch<{ success: boolean, reportCount: number, isActive: boolean }>(`/movies/players/${playerId}/report`, {
+      method: 'POST',
+    })
+  },
+}
+
 // ─── Favorites API ─────────────────────────────────────────────────────────
 
 export const favoritesApi = {

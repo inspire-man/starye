@@ -162,6 +162,13 @@
       "when": 1775180842254,
       "tag": "0022_groovy_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1775287176408,
+      "tag": "0023_solid_bushwacker",
+      "breakpoints": true
     }
   ]
 }

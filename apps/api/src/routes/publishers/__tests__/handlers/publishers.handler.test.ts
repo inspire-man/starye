@@ -122,6 +122,7 @@ describe('publishers Handlers', () => {
       expect(mockGetPublisher).toHaveBeenCalledWith({
         db: mockDb,
         slug: 'test-publisher',
+        isR18Verified: false,
       })
 
       mockGetPublisher.mockRestore()
@@ -147,23 +148,30 @@ describe('publishers Handlers', () => {
       mockGetPublisher.mockRestore()
     })
 
-    it('应该验证 R18 权限', async () => {
-      const _mockCheckAdult = vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(false)
+    it('未 R18 认证时应将 isR18Verified=false 传递给 service（内容过滤由 service 处理）', async () => {
+      const mockPublisher = createMockPublisher({ id: '2', name: 'Publisher 2', slug: 'publisher-2' })
+      const mockGetPublisher = vi.spyOn(publisherService, 'getPublisherBySlug').mockResolvedValue(mockPublisher)
 
       const app = new Hono<AppEnv>()
       const mockDb = createMockDb()
+      // 不设置 user，模拟未登录/未认证状态
       app.use('*', async (c, next) => {
         c.set('db', mockDb)
         await next()
       })
       app.get('/publishers/:slug', getPublisherDetail)
 
-      const req = new Request('http://localhost/publishers/test-publisher')
+      const req = new Request('http://localhost/publishers/publisher-2')
       const res = await app.fetch(req)
 
-      expect(res.status).toBe(403)
-      const json: any = await res.json()
-      expect(json.error).toBe('Adult verification required')
+      expect(res.status).toBe(200)
+      expect(mockGetPublisher).toHaveBeenCalledWith({
+        db: mockDb,
+        slug: 'publisher-2',
+        isR18Verified: false,
+      })
+
+      mockGetPublisher.mockRestore()
     })
   })
 })

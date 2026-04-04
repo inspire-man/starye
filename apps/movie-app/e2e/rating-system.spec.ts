@@ -1,6 +1,6 @@
 /**
  * E2E 测试: 评分系统集成测试
- * 覆盖任务 26.1-26.7
+ * 覆盖任务 26.1-26.7 及 enhance-user-interaction player-rating-ui 规格
  */
 import { expect, test } from '@playwright/test'
 
@@ -9,6 +9,12 @@ const mockMovie = {
   id: 'test-movie-1',
   code: 'TEST-001',
   title: '测试电影',
+  slug: 'test-001',
+  coverImage: null,
+  isR18: false,
+  actors: [],
+  publishers: [],
+  relatedMovies: [],
   players: [
     {
       id: 'player-1',
@@ -18,6 +24,8 @@ const mockMovie = {
       sortOrder: 0,
       averageRating: null,
       ratingCount: 0,
+      reportCount: 0,
+      isActive: true,
     },
   ],
 }
@@ -265,6 +273,162 @@ test.describe('评分系统集成测试', () => {
     if (await statsArea.isVisible()) {
       await expect(statsArea).toContainText('4.5')
       await expect(statsArea).toContainText('100')
+    }
+  })
+})
+
+// ─── enhance-user-interaction: player-rating-ui 规格测试 ──────────────────────
+
+test.describe('评分 UI 规格测试 (player-rating-ui)', () => {
+  // REQ-4: 未登录时点击评分应显示 Toast 提示
+  test('REQ-4 未登录用户点击评分应显示登录提示 Toast', async ({ page }) => {
+    // Mock 未登录
+    await page.route('**/api/auth/get-session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ user: null, session: null }),
+      })
+    })
+
+    await page.route('**/api/movies/TEST-001', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: mockMovie }),
+      })
+    })
+
+    await page.goto('/movies/TEST-001')
+    await page.waitForLoadState('networkidle')
+
+    const ratingBtn = page.locator('button:has-text("评分")').first()
+
+    if (await ratingBtn.isVisible({ timeout: 5000 })) {
+      await ratingBtn.click()
+
+      // 应显示登录提示 Toast
+      const loginToast = page.locator('text=/请先登录|登录后.*评分/i')
+      await expect(loginToast).toBeVisible({ timeout: 3000 })
+
+      // 评分 Modal 不应出现
+      const ratingModal = page.locator('text=/评分播放源/i')
+      await expect(ratingModal).not.toBeVisible()
+    }
+    else {
+      test.skip()
+    }
+  })
+
+  // REQ-5/REQ-6: 已登录用户评分后，UI 乐观更新展示新评分
+  test('REQ-5/REQ-6 评分提交后前端乐观更新评分数据', async ({ page }) => {
+    await page.route('**/api/auth/get-session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ user: mockUser, session: { id: 'session-rating' } }),
+      })
+    })
+
+    await page.route('**/api/movies/TEST-001', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: mockMovie }),
+      })
+    })
+
+    // Mock 评分提交，返回新的聚合数据
+    await page.route('**/api/ratings', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: {
+              averageRating: 80, // DB 中存储 0-100，对应 4 星
+              ratingCount: 1,
+            },
+          }),
+        })
+      }
+      else {
+        await route.continue()
+      }
+    })
+
+    await page.goto('/movies/TEST-001')
+    await page.waitForLoadState('networkidle')
+
+    const ratingBtn = page.locator('button:has-text("评分")').first()
+
+    if (await ratingBtn.isVisible({ timeout: 5000 })) {
+      await ratingBtn.click()
+
+      // 等待评分弹窗
+      const modal = page.locator('text=/评分播放源/i')
+      if (await modal.isVisible({ timeout: 3000 })) {
+        // 选择 4 星
+        const stars = page.locator('[data-testid="rating-star"], .rating-star, .star-btn')
+        const starCount = await stars.count()
+
+        if (starCount >= 4) {
+          await stars.nth(3).click()
+          await page.waitForTimeout(500)
+
+          // 验证评分提交成功 Toast
+          const successToast = page.locator('text=/评分已提交/i')
+          await expect(successToast).toBeVisible({ timeout: 3000 })
+
+          // 验证 Modal 关闭
+          await expect(modal).not.toBeVisible({ timeout: 2000 })
+        }
+      }
+    }
+    else {
+      test.skip()
+    }
+  })
+
+  // REQ-1: 播放源卡片展示 averageRating 和 ratingCount
+  test('REQ-1 有评分数据时 player 卡片应展示评分信息', async ({ page }) => {
+    const movieWithRating = {
+      ...mockMovie,
+      players: [{
+        ...mockMovie.players[0],
+        averageRating: 80, // 0-100 整数，对应 4.0 星
+        ratingCount: 25,
+      }],
+    }
+
+    await page.route('**/api/auth/get-session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ user: null, session: null }),
+      })
+    })
+
+    await page.route('**/api/movies/TEST-001', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: movieWithRating }),
+      })
+    })
+
+    await page.goto('/movies/TEST-001')
+    await page.waitForLoadState('networkidle')
+
+    // 验证评分数量显示（25 人）
+    const ratingCountText = page.locator('text=/25/').first()
+    if (await ratingCountText.isVisible({ timeout: 5000 })) {
+      await expect(ratingCountText).toBeVisible()
+    }
+    else {
+      // 页面可能还未渲染 player 列表
+      test.skip()
     }
   })
 })

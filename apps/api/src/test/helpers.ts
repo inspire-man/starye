@@ -62,6 +62,10 @@ export function createMockDb(): Database {
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      players: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
+      },
     },
   } as unknown as Database
 }

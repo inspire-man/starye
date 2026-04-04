@@ -228,6 +228,8 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
           sortOrder: true,
           averageRating: true,
           ratingCount: true,
+          reportCount: true,
+          isActive: true,
         },
         orderBy: (players, { asc }) => [asc(players.sortOrder)],
       },
@@ -359,7 +361,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     userScores = new Map(userRatings.map(r => [r.playerId, r.score]))
   }
 
-  // 构建 players 数据（包含评分信息）
+  // 构建 players 数据（包含评分和上报信息）
   const playersWithRatings = movie.players?.map(player => ({
     id: player.id,
     sourceName: player.sourceName,
@@ -369,6 +371,8 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     averageRating: player.averageRating || undefined,
     ratingCount: player.ratingCount || undefined,
     userScore: userScores?.get(player.id),
+    reportCount: player.reportCount || undefined,
+    isActive: player.isActive ?? true,
   }))
 
   if (movie.isR18 && !isAdult) {
