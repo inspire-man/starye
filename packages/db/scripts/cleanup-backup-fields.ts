@@ -3,9 +3,9 @@
  * 清理电影表备份字段脚本
  *
  * 功能：
- * 1. 验证关联表数据完整性（movie_actors, movie_publishers）
+ * 1. 验证关联表数据完整性（movie_actor, movie_publisher）
  * 2. 生成清理预览报告
- * 3. 清理 movies.actors 和 movies.publisher 字段（可选，需确认）
+ * 3. 清理 movie.actors 和 movie.publisher 字段（可选，需确认）
  * 4. 验证清理结果
  *
  * 使用方法：
@@ -113,23 +113,23 @@ async function checkDataIntegrity(): Promise<CleanupReport> {
     .from(movieActors)
     .then(res => res[0]?.value || 0)
 
-  log(`   movie_actors 关联记录: ${movieActorsCount}`)
+  log(`   movie_actor 关联记录: ${movieActorsCount}`)
 
   const moviePublishersCount = await db
     .select({ value: count() })
     .from(moviePublishers)
     .then(res => res[0]?.value || 0)
 
-  log(`   movie_publishers 关联记录: ${moviePublishersCount}`)
+  log(`   movie_publisher 关联记录: ${moviePublishersCount}`)
 
   log('\n📊 数据完整性评估:')
 
   if (movieActorsCount === 0 && moviesWithActorsField > 0) {
-    warnings.push('⚠️  关联表 movie_actors 为空，但 movies.actors 字段有数据，数据可能未迁移！')
+    warnings.push('⚠️  关联表 movie_actor 为空，但 movie.actors 字段有数据，数据可能未迁移！')
   }
 
   if (moviePublishersCount === 0 && moviesWithPublisherField > 0) {
-    warnings.push('⚠️  关联表 movie_publishers 为空，但 movies.publisher 字段有数据，数据可能未迁移！')
+    warnings.push('⚠️  关联表 movie_publisher 为空，但 movie.publisher 字段有数据，数据可能未迁移！')
   }
 
   const safeToClean = warnings.length === 0 && movieActorsCount > 0
@@ -257,8 +257,8 @@ async function verifyCleanup(beforeReport: CleanupReport): Promise<void> {
     .then(res => res[0]?.value || 0)
 
   log('\n   关联表完整性:')
-  log(`   - movie_actors: ${movieActorsCount} (不变: ${movieActorsCount === beforeReport.movieActorsCount ? '✅' : '❌'})`)
-  log(`   - movie_publishers: ${moviePublishersCount} (不变: ${moviePublishersCount === beforeReport.moviePublishersCount ? '✅' : '❌'})`)
+  log(`   - movie_actor: ${movieActorsCount} (不变: ${movieActorsCount === beforeReport.movieActorsCount ? '✅' : '❌'})`)
+  log(`   - movie_publisher: ${moviePublishersCount} (不变: ${moviePublishersCount === beforeReport.moviePublishersCount ? '✅' : '❌'})`)
 
   if (afterActors === 0 && afterPublisher === 0) {
     log('\n   🎉 清理成功完成！')

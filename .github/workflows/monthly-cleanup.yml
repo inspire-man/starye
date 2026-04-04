@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -33,7 +33,7 @@ jobs:
           version: 10.33.0
 
       - name: Setup Node
-        uses: actions/setup-node@v6.3.0
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'pnpm'
@@ -53,46 +53,58 @@ jobs:
           echo "🔍 步骤 1: 检查数据完整性..."
           echo ""
 
-          MOVIES_TOTAL=$(npx wrangler d1 execute $D1_DB_NAME --remote --command "SELECT count(*) as c FROM movies;" --json | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(data[0].results[0].c);
-          ")
+          # 从 wrangler --json 输出中提取数值的通用函数
+          # wrangler D1 JSON 格式: [{"results":[{"c":123}],"success":true,"meta":{...}}]
+          parse_count() {
+            node --input-type=module <<'JSEOF'
+              import { createInterface } from 'readline';
+              const lines = [];
+              const rl = createInterface({ input: process.stdin });
+              rl.on('line', l => lines.push(l));
+              rl.on('close', () => {
+                const raw = lines.join('\n');
+                // 提取第一个完整 JSON 数组（跳过 wrangler 输出的非 JSON 行）
+                const match = raw.match(/(\[[\s\S]*\])/);
+                if (!match) { console.log('0'); process.exit(0); }
+                try {
+                  const data = JSON.parse(match[1]);
+                  const row = data?.[0]?.results?.[0];
+                  console.log(String(row?.c ?? row?.count ?? 0));
+                } catch { console.log('0'); }
+              });
+JSEOF
+          }
+
+          MOVIES_TOTAL=$(npx wrangler d1 execute $D1_DB_NAME --remote \
+            --command "SELECT count(*) as c FROM movie;" --json 2>&1 | parse_count)
           echo "   电影总数: $MOVIES_TOTAL"
 
-          WITH_ACTORS=$(npx wrangler d1 execute $D1_DB_NAME --remote --command "SELECT count(*) as c FROM movies WHERE actors IS NOT NULL;" --json | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(data[0].results[0].c);
-          ")
+          WITH_ACTORS=$(npx wrangler d1 execute $D1_DB_NAME --remote \
+            --command "SELECT count(*) as c FROM movie WHERE actors IS NOT NULL;" --json 2>&1 | parse_count)
           echo "   有 actors 字段的电影: $WITH_ACTORS"
 
-          WITH_PUBLISHER=$(npx wrangler d1 execute $D1_DB_NAME --remote --command "SELECT count(*) as c FROM movies WHERE publisher IS NOT NULL;" --json | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(data[0].results[0].c);
-          ")
+          WITH_PUBLISHER=$(npx wrangler d1 execute $D1_DB_NAME --remote \
+            --command "SELECT count(*) as c FROM movie WHERE publisher IS NOT NULL;" --json 2>&1 | parse_count)
           echo "   有 publisher 字段的电影: $WITH_PUBLISHER"
 
-          ACTOR_RELATIONS=$(npx wrangler d1 execute $D1_DB_NAME --remote --command "SELECT count(*) as c FROM movie_actors;" --json | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(data[0].results[0].c);
-          ")
-          echo "   movie_actors 关联记录: $ACTOR_RELATIONS"
+          ACTOR_RELATIONS=$(npx wrangler d1 execute $D1_DB_NAME --remote \
+            --command "SELECT count(*) as c FROM movie_actor;" --json 2>&1 | parse_count)
+          echo "   movie_actor 关联记录: $ACTOR_RELATIONS"
 
-          PUBLISHER_RELATIONS=$(npx wrangler d1 execute $D1_DB_NAME --remote --command "SELECT count(*) as c FROM movie_publishers;" --json | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(data[0].results[0].c);
-          ")
-          echo "   movie_publishers 关联记录: $PUBLISHER_RELATIONS"
+          PUBLISHER_RELATIONS=$(npx wrangler d1 execute $D1_DB_NAME --remote \
+            --command "SELECT count(*) as c FROM movie_publisher;" --json 2>&1 | parse_count)
+          echo "   movie_publisher 关联记录: $PUBLISHER_RELATIONS"
 
           echo ""
           echo "📊 数据完整性评估:"
 
           SAFE=true
           if [ "$ACTOR_RELATIONS" = "0" ] && [ "$WITH_ACTORS" != "0" ]; then
-            echo "   ⚠️  关联表 movie_actors 为空，但 movies.actors 字段有数据！"
+            echo "   ⚠️  关联表 movie_actor 为空，但 movie.actors 字段有数据！"
             SAFE=false
           fi
           if [ "$PUBLISHER_RELATIONS" = "0" ] && [ "$WITH_PUBLISHER" != "0" ]; then
-            echo "   ⚠️  关联表 movie_publishers 为空，但 movies.publisher 字段有数据！"
+            echo "   ⚠️  关联表 movie_publisher 为空，但 movie.publisher 字段有数据！"
             SAFE=false
           fi
 
@@ -105,8 +117,8 @@ jobs:
           echo ""
           echo "📋 步骤 2: 清理预览"
           echo "   将清理的字段:"
-          echo "   - movies.actors: $WITH_ACTORS 条记录"
-          echo "   - movies.publisher: $WITH_PUBLISHER 条记录"
+          echo "   - movie.actors: $WITH_ACTORS 条记录"
+          echo "   - movie.publisher: $WITH_PUBLISHER 条记录"
 
           if [ "$WITH_ACTORS" = "0" ] && [ "$WITH_PUBLISHER" = "0" ]; then
             echo "   ℹ️  没有需要清理的数据"
@@ -127,33 +139,50 @@ jobs:
           echo ""
 
           if [ "$WITH_ACTORS" != "0" ]; then
-            echo "   清理 movies.actors 字段..."
-            npx wrangler d1 execute $D1_DB_NAME --remote --command "UPDATE movies SET actors = NULL WHERE actors IS NOT NULL;"
-            echo "   ✅ movies.actors 清理完成"
+            echo "   清理 movie.actors 字段..."
+            npx wrangler d1 execute $D1_DB_NAME --remote \
+              --command "UPDATE movie SET actors = NULL WHERE actors IS NOT NULL;"
+            echo "   ✅ movie.actors 清理完成"
           fi
 
           if [ "$WITH_PUBLISHER" != "0" ]; then
-            echo "   清理 movies.publisher 字段..."
-            npx wrangler d1 execute $D1_DB_NAME --remote --command "UPDATE movies SET publisher = NULL WHERE publisher IS NOT NULL;"
-            echo "   ✅ movies.publisher 清理完成"
+            echo "   清理 movie.publisher 字段..."
+            npx wrangler d1 execute $D1_DB_NAME --remote \
+              --command "UPDATE movie SET publisher = NULL WHERE publisher IS NOT NULL;"
+            echo "   ✅ movie.publisher 清理完成"
           fi
 
           echo ""
           echo "✓ 步骤 4: 验证清理结果..."
 
-          AFTER_ACTORS=$(npx wrangler d1 execute $D1_DB_NAME --remote --command "SELECT count(*) as c FROM movies WHERE actors IS NOT NULL;" --json | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(data[0].results[0].c);
-          ")
+          parse_count() {
+            node --input-type=module <<'JSEOF'
+              import { createInterface } from 'readline';
+              const lines = [];
+              const rl = createInterface({ input: process.stdin });
+              rl.on('line', l => lines.push(l));
+              rl.on('close', () => {
+                const raw = lines.join('\n');
+                const match = raw.match(/(\[[\s\S]*\])/);
+                if (!match) { console.log('0'); process.exit(0); }
+                try {
+                  const data = JSON.parse(match[1]);
+                  const row = data?.[0]?.results?.[0];
+                  console.log(String(row?.c ?? row?.count ?? 0));
+                } catch { console.log('0'); }
+              });
+JSEOF
+          }
 
-          AFTER_PUBLISHER=$(npx wrangler d1 execute $D1_DB_NAME --remote --command "SELECT count(*) as c FROM movies WHERE publisher IS NOT NULL;" --json | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(data[0].results[0].c);
-          ")
+          AFTER_ACTORS=$(npx wrangler d1 execute $D1_DB_NAME --remote \
+            --command "SELECT count(*) as c FROM movie WHERE actors IS NOT NULL;" --json 2>&1 | parse_count)
+
+          AFTER_PUBLISHER=$(npx wrangler d1 execute $D1_DB_NAME --remote \
+            --command "SELECT count(*) as c FROM movie WHERE publisher IS NOT NULL;" --json 2>&1 | parse_count)
 
           echo "   清理前后对比:"
-          echo "   - movies.actors: $WITH_ACTORS → $AFTER_ACTORS"
-          echo "   - movies.publisher: $WITH_PUBLISHER → $AFTER_PUBLISHER"
+          echo "   - movie.actors: $WITH_ACTORS → $AFTER_ACTORS"
+          echo "   - movie.publisher: $WITH_PUBLISHER → $AFTER_PUBLISHER"
 
           if [ "$AFTER_ACTORS" = "0" ] && [ "$AFTER_PUBLISHER" = "0" ]; then
             echo "   🎉 清理成功完成！"
