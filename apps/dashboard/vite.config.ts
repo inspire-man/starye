@@ -12,6 +12,7 @@ export default defineConfig(() => ({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    dedupe: ['vue', 'vue-router'],
   },
   // 统一使用 /dashboard/ 基础路径（本地和生产）
   // Gateway 会剥离此前缀后转发到 Pages（部署在根路径）
