@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { PageNumberSchema, SlugSchema, TimestampSchema } from './common'
+import { EntitySlugSchema, PageNumberSchema, SlugSchema, TimestampSchema } from './common'
 
 /**
  * 演员条目 Schema
@@ -115,7 +115,7 @@ export type GetActorsQuery = v.InferOutput<typeof GetActorsQuerySchema>
  * 获取演员详情的 Param Schema
  */
 export const GetActorParamSchema = v.object({
-  slug: SlugSchema,
+  slug: EntitySlugSchema,
 })
 
 /**

@@ -47,6 +47,21 @@ export const SlugSchema = v.pipe(
 export type Slug = v.InferOutput<typeof SlugSchema>
 
 /**
+ * EntitySlugSchema
+ * 宽松的实体标识符，支持日文/中文名称（演员）以及含点号的厂商名等实际存储格式
+ */
+export const EntitySlugSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(200),
+  v.description('实体标识符（支持 Unicode 字符及点号）'),
+  v.metadata({ ref: 'EntitySlug' }),
+)
+
+export type EntitySlug = v.InferOutput<typeof EntitySlugSchema>
+
+/**
  * ISO 时间戳 Schema
  */
 export const TimestampSchema = v.pipe(

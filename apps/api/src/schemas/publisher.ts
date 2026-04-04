@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import { PageNumberSchema, SlugSchema, TimestampSchema } from './common'
+import { EntitySlugSchema, PageNumberSchema, SlugSchema, TimestampSchema } from './common'
 
 /**
  * 出版商条目 Schema
@@ -81,7 +81,7 @@ export type GetPublishersQuery = v.InferOutput<typeof GetPublishersQuerySchema>
  * 获取出版商详情的 Param Schema
  */
 export const GetPublisherParamSchema = v.object({
-  slug: SlugSchema,
+  slug: EntitySlugSchema,
 })
 
 /**
