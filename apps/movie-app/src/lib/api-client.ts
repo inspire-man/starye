@@ -18,6 +18,7 @@ import type {
   PaginatedResponse,
   Publisher,
   PublisherDetail,
+  SeriesDetail,
   WatchingProgress,
 } from '../types'
 import { hc } from 'hono/client'
@@ -86,6 +87,17 @@ export const movieApi = {
       throw new Error(data.error)
     }
     return { success: true, data: data.data as unknown as MovieDetail }
+  },
+}
+
+// ─── Series API ────────────────────────────────────────────────────────────
+
+export const seriesApi = {
+  /**
+   * 获取系列详情（统计 + 厂商 + 相关系列）
+   */
+  async getSeriesDetail(name: string): Promise<SeriesDetail> {
+    return apiFetch<SeriesDetail>(`/series/${encodeURIComponent(name)}`)
   },
 }
 

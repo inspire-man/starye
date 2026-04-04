@@ -236,3 +236,13 @@ export interface Favorite {
   createdAt: number
   entity?: FavoriteEntity | null
 }
+
+export interface SeriesDetail {
+  name: string
+  movieCount: number
+  totalDuration: number
+  minYear: number | null
+  maxYear: number | null
+  publisher: { name: string, slug: string | null } | null
+  relatedSeries: string[]
+}

@@ -1,19 +1,37 @@
 <script setup lang="ts">
-import type { Movie } from '../types'
+import type { Movie, SeriesDetail } from '../types'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { movieApi } from '../lib/api-client'
+import { movieApi, seriesApi } from '../lib/api-client'
 
 const route = useRoute()
 const loading = ref(true)
 const movies = ref<Movie[]>([])
 const seriesName = ref('')
+const seriesDetail = ref<SeriesDetail | null>(null)
 const pagination = reactive({
   page: 1,
   limit: 20,
   total: 0,
   totalPages: 0,
 })
+
+/** 格式化总时长：分钟 → "约 X 小时" */
+function formatDuration(minutes: number): string {
+  if (!minutes || minutes <= 0)
+    return null as unknown as string
+  const hours = Math.round(minutes / 60)
+  return hours > 0 ? `约 ${hours} 小时` : `${minutes} 分钟`
+}
+
+/** 格式化年份区间 */
+function formatYearRange(minYear: number | null, maxYear: number | null): string {
+  if (!minYear && !maxYear)
+    return ''
+  if (minYear === maxYear)
+    return `${minYear} 年`
+  return `${minYear ?? '?'} - ${maxYear ?? '?'} 年`
+}
 
 async function fetchSeriesMovies() {
   const name = route.params.name as string
@@ -24,19 +42,29 @@ async function fetchSeriesMovies() {
   loading.value = true
 
   try {
-    const response = await movieApi.getMovies({
-      page: pagination.page,
-      limit: pagination.limit,
-      series: seriesName.value,
-    })
+    // 并行发出两个请求，不增加加载时间
+    const [moviesResponse, detailResponse] = await Promise.allSettled([
+      movieApi.getMovies({
+        page: pagination.page,
+        limit: pagination.limit,
+        series: seriesName.value,
+        sortBy: 'releaseDate',
+        sortOrder: 'desc',
+      }),
+      seriesApi.getSeriesDetail(seriesName.value),
+    ])
 
-    if (response.success) {
-      movies.value = response.data
-      Object.assign(pagination, response.pagination)
+    if (moviesResponse.status === 'fulfilled' && moviesResponse.value.success) {
+      movies.value = moviesResponse.value.data
+      Object.assign(pagination, moviesResponse.value.pagination)
+    }
+
+    if (detailResponse.status === 'fulfilled') {
+      seriesDetail.value = detailResponse.value
     }
   }
   catch (error) {
-    console.error('Failed to fetch series movies:', error)
+    console.error('Failed to fetch series data:', error)
   }
   finally {
     loading.value = false
@@ -52,6 +80,7 @@ function changePage(page: number) {
 watch(() => route.params.name, (newVal, oldVal) => {
   if (newVal && newVal !== oldVal) {
     pagination.page = 1
+    seriesDetail.value = null
     fetchSeriesMovies()
   }
 })
@@ -73,6 +102,44 @@ onMounted(() => {
       <p v-if="!loading" class="text-gray-400 text-sm mt-1">
         共 {{ pagination.total }} 部影片
       </p>
+    </div>
+
+    <!-- 系列概览卡片 -->
+    <div
+      v-if="seriesDetail"
+      class="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6 flex flex-wrap gap-x-6 gap-y-2 items-center"
+    >
+      <!-- 厂商链接 -->
+      <div v-if="seriesDetail.publisher" class="flex items-center gap-1.5 text-sm">
+        <span class="text-gray-400">厂商：</span>
+        <RouterLink
+          v-if="seriesDetail.publisher.slug"
+          :to="`/publisher/${seriesDetail.publisher.slug}`"
+          class="text-primary-400 hover:text-primary-300 font-medium transition-colors"
+        >
+          {{ seriesDetail.publisher.name }} →
+        </RouterLink>
+        <span v-else class="text-gray-300">{{ seriesDetail.publisher.name }}</span>
+      </div>
+
+      <!-- 影片数 -->
+      <div class="flex items-center gap-1 text-sm">
+        <span class="text-gray-400">共</span>
+        <span class="text-white font-semibold">{{ seriesDetail.movieCount }}</span>
+        <span class="text-gray-400">部</span>
+      </div>
+
+      <!-- 总时长 -->
+      <div v-if="formatDuration(seriesDetail.totalDuration)" class="flex items-center gap-1 text-sm">
+        <span class="text-gray-400">总时长</span>
+        <span class="text-white font-semibold">{{ formatDuration(seriesDetail.totalDuration) }}</span>
+      </div>
+
+      <!-- 年份区间 -->
+      <div v-if="formatYearRange(seriesDetail.minYear, seriesDetail.maxYear)" class="flex items-center gap-1 text-sm">
+        <span class="text-gray-400">发行</span>
+        <span class="text-white font-semibold">{{ formatYearRange(seriesDetail.minYear, seriesDetail.maxYear) }}</span>
+      </div>
     </div>
 
     <!-- 加载中 -->
@@ -134,6 +201,26 @@ onMounted(() => {
       >
         {{ p }}
       </button>
+    </div>
+
+    <!-- 同厂商其他系列（relatedSeries 非空时才显示） -->
+    <div
+      v-if="seriesDetail && seriesDetail.relatedSeries.length > 0"
+      class="mt-10 border-t border-gray-700 pt-6"
+    >
+      <h2 class="text-gray-300 text-sm font-semibold mb-3">
+        同厂商其他系列
+      </h2>
+      <div class="flex flex-wrap gap-2">
+        <RouterLink
+          v-for="related in seriesDetail.relatedSeries"
+          :key="related"
+          :to="`/series/${encodeURIComponent(related)}`"
+          class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-sm rounded-full transition-colors"
+        >
+          {{ related }}
+        </RouterLink>
+      </div>
     </div>
   </div>
 </template>

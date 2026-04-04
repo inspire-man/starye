@@ -27,6 +27,7 @@ import { postsRoutes } from './routes/posts'
 import { publicComicsRoutes } from './routes/public/comics'
 import { publicMoviesRoutes } from './routes/public/movies'
 import { publicProgressRoutes } from './routes/public/progress'
+import { publicSeriesRoutes } from './routes/public/series'
 import { publishersRoutes } from './routes/publishers'
 import ratingsRoutes from './routes/ratings'
 import { uploadRoutes } from './routes/upload'
@@ -71,6 +72,7 @@ const routes = app
   .route('/api/public/comics', publicComicsRoutes)
   .route('/api/public/movies', publicMoviesRoutes)
   .route('/api/public/progress', publicProgressRoutes)
+  .route('/api/series', publicSeriesRoutes)
   // OpenAPI 文档
   .get(
     '/api/openapi.json',
