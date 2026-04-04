@@ -33,7 +33,7 @@
   - 状态: 正常
 
 - ✅ **pnpm 安装检查**
-  - 版本: 10.32.1
+  - 版本: 10
   - 状态: 正常
 
 #### 2. 单元测试
@@ -269,7 +269,7 @@ pnpm --filter movie-app run build --mode=production
 
 - **操作系统**: Windows 11
 - **Node.js**: v24.0.1
-- **pnpm**: 10.32.1
+- **pnpm**: 10
 - **浏览器**: 需要 Chrome 120+ 或 Firefox 120+
 - **Aria2**: 1.37.0 (可选)
 

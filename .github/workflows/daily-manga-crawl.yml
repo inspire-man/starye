@@ -27,7 +27,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.32.1
+          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v6.3.0
@@ -52,39 +52,39 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           # Puppeteer Cache
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
-          
+
           # ==========================================
           # 爬虫配置 - 充分利用 6 小时时间
           # ==========================================
-          
+
           # 并发控制 (总并发度 = manga × chapter × imageBatch = 2×2×10 = 40)
           CRAWLER_MANGA_CONCURRENCY: 2        # 漫画级并发 (默认: 2)
           CRAWLER_CHAPTER_CONCURRENCY: 2      # 章节级并发 (默认: 2)
           CRAWLER_IMAGE_BATCH: 10             # 图片批量上传 (默认: 10)
-          
+
           # 限流控制
           CRAWLER_MAX_MANGAS: 60              # 每次最多处理 60 个漫画
           CRAWLER_MAX_CHAPTERS_NEW: 5         # 新漫画限制 5 章
           CRAWLER_MAX_CHAPTERS_UPDATE: 20     # 更新漫画限制 20 章
           CRAWLER_TIMEOUT_MINUTES: 350        # 软超时 350 分钟（留 10 分钟缓冲）
-          
+
           # ==========================================
           # 反检测配置 (2026-03-13 新增)
           # ==========================================
           # 降低被识别为机器人的风险，提升成功率
-          
+
           CRAWLER_BASE_DELAY: 8000            # 基础延迟 8 秒（保守配置）
           CRAWLER_MAX_RETRIES: 3              # 最大重试 3 次
           CRAWLER_ENABLE_SESSION: true        # 启用会话管理（Cookie）
-          
+
           # 回滚开关 (如遇问题可启用 Legacy 模式)
           # USE_LEGACY_MODE: true             # 使用旧版简单重试逻辑（关闭反检测）
-          
+
           # 说明：
           # - 基础延迟: 每个请求间隔时间，防止请求过快
           # - 最大重试: ERR_ABORTED 等错误的重试次数
           # - 会话管理: 维护 Cookie，模拟真实用户
-          # 
+          #
           # 如遇到频繁错误，可临时增加延迟：
           #   CRAWLER_BASE_DELAY: 10000  (10秒)
           #   CRAWLER_MAX_RETRIES: 5
