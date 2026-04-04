@@ -1,7 +1,6 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { HTTPException } from 'hono/http-exception'
-import { checkUserAdultStatus } from '../services/auth.service'
 import { getPublisherBySlug, getPublishers } from '../services/publisher.service'
 
 /**
@@ -43,14 +42,8 @@ export async function getPublisherDetail(c: Context<AppEnv>) {
   const slug = c.req.param('slug')!
   const user = c.get('user')
 
-  // R18 权限校验
-  const isAdult = checkUserAdultStatus(user)
-  if (!isAdult) {
-    return c.json({ error: 'Adult verification required' }, 403)
-  }
-
   try {
-    const publisher = await getPublisherBySlug({ db, slug })
+    const publisher = await getPublisherBySlug({ db, slug, isR18Verified: !!user?.isR18Verified })
 
     if (!publisher) {
       throw new HTTPException(404, { message: 'Publisher not found' })

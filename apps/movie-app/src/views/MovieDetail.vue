@@ -3,12 +3,12 @@ import type { MovieDetail, Player } from '../types'
 import QrcodeVue from 'qrcode.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { movieApi } from '../lib/api-client'
 import RatingStars from '../components/RatingStars.vue'
 import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useFavorites } from '../composables/useFavorites'
 import { useRating } from '../composables/useRating'
+import { movieApi } from '../lib/api-client'
 import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
 import { getQualityBadgeClass, getSourceTypeIcon, sortPlaybackSources } from '../utils/playbackSources'
@@ -58,6 +58,48 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString('zh-CN')
 }
+
+/**
+ * 归一化 genres 字段：兼容 string（JSON 或逗号分隔）和 string[] 两种格式，
+ * 并清理爬虫遗留的 * 包裹符号
+ */
+const genreList = computed<string[]>(() => {
+  const raw = movie.value?.genres
+  if (!raw)
+    return []
+  let arr: string[]
+  if (Array.isArray(raw)) {
+    arr = raw as string[]
+  }
+  else {
+    try {
+      const parsed = JSON.parse(raw as unknown as string)
+      arr = Array.isArray(parsed) ? parsed : [String(raw)]
+    }
+    catch {
+      arr = (raw as unknown as string).split(',')
+    }
+  }
+  return arr.map(g => g.replace(/^\*+|\*+$/g, '').trim()).filter(Boolean)
+})
+
+/**
+ * 演员列表：优先使用结构化对象数组（来自关联表），
+ * 若为字符串数组（旧 JSON 字段）则降级展示
+ */
+const actorList = computed(() => {
+  const raw = movie.value?.actors
+  if (!raw || !Array.isArray(raw) || raw.length === 0)
+    return []
+  return raw
+})
+
+/**
+ * 制作商列表：结构化对象数组（来自关联表）
+ */
+const publisherList = computed(() => {
+  return movie.value?.publishers ?? []
+})
 
 // 播放源相关逻辑
 const sortedPlayers = computed(() => {
@@ -357,32 +399,28 @@ onMounted(() => {
 
             <div class="flex items-start text-sm">
               <span class="text-gray-300 w-24 shrink-0 font-medium">演员：</span>
-              <div v-if="movie.actors && movie.actors.length > 0" class="flex flex-wrap gap-2">
+              <div v-if="actorList.length > 0" class="flex flex-wrap gap-2">
                 <RouterLink
-                  v-for="(actor, index) in movie.actors"
+                  v-for="(actor, index) in actorList"
                   :key="typeof actor === 'object' ? (actor.id || actor.slug || `actor-${index}`) : `actor-str-${index}`"
                   :to="typeof actor === 'object' && actor.slug ? `/actors/${actor.slug}` : '#'"
-                  class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200" :class="[
-                    typeof actor === 'object' && actor.slug
-                      ? 'bg-primary-600 hover:bg-primary-500 text-white cursor-pointer'
-                      : 'bg-gray-600 text-gray-300 cursor-not-allowed',
-                  ]"
+                  class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200"
+                  :class="typeof actor === 'object' && actor.slug
+                    ? 'bg-primary-600 hover:bg-primary-500 text-white cursor-pointer'
+                    : 'bg-gray-600 text-gray-300 cursor-not-allowed'"
                   @click.prevent="typeof actor !== 'object' || !actor.slug ? null : undefined"
                 >
                   {{ typeof actor === 'object' ? actor.name : actor }}
-                  <span v-if="typeof actor !== 'object' || !actor.slug" class="ml-1 text-[10px] opacity-70">
-                    (未同步)
-                  </span>
                 </RouterLink>
               </div>
               <span v-else class="text-gray-400 text-xs">暂无数据</span>
             </div>
 
-            <div v-if="movie.genres && movie.genres.length > 0" class="flex items-start text-sm">
+            <div v-if="genreList.length > 0" class="flex items-start text-sm">
               <span class="text-gray-300 w-24 shrink-0 font-medium">标签：</span>
               <div class="flex flex-wrap gap-2">
                 <RouterLink
-                  v-for="genre in movie.genres"
+                  v-for="genre in genreList"
                   :key="genre"
                   :to="{ path: '/', query: { genre } }"
                   class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-2 py-1 rounded text-xs hover:bg-purple-500/30 transition-colors cursor-pointer"
@@ -394,22 +432,14 @@ onMounted(() => {
 
             <div class="flex items-start text-sm">
               <span class="text-gray-300 w-24 shrink-0 font-medium">制作商：</span>
-              <div v-if="movie.publishers && movie.publishers.length > 0" class="flex flex-wrap gap-2">
+              <div v-if="publisherList.length > 0" class="flex flex-wrap gap-2">
                 <RouterLink
-                  v-for="(publisher, index) in movie.publishers"
-                  :key="typeof publisher === 'object' ? (publisher.id || publisher.slug || `publisher-${index}`) : `publisher-str-${index}`"
-                  :to="typeof publisher === 'object' && publisher.slug ? `/publishers/${publisher.slug}` : '#'"
-                  class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200" :class="[
-                    typeof publisher === 'object' && publisher.slug
-                      ? 'bg-green-600 hover:bg-green-500 text-white cursor-pointer'
-                      : 'bg-gray-600 text-gray-300 cursor-not-allowed',
-                  ]"
-                  @click.prevent="typeof publisher !== 'object' || !publisher.slug ? null : undefined"
+                  v-for="publisher in publisherList"
+                  :key="publisher.id || publisher.slug"
+                  :to="publisher.slug ? `/publishers/${publisher.slug}` : '#'"
+                  class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200 bg-green-700 hover:bg-green-600 text-white cursor-pointer"
                 >
-                  {{ typeof publisher === 'object' ? publisher.name : publisher }}
-                  <span v-if="typeof publisher !== 'object' || !publisher.slug" class="ml-1 text-[10px] opacity-70">
-                    (未同步)
-                  </span>
+                  {{ publisher.name }}
                 </RouterLink>
               </div>
               <span v-else class="text-gray-400 text-xs">暂无数据</span>

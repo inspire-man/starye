@@ -104,10 +104,11 @@ export async function getPublishers(options: GetPublishersOptions): Promise<GetP
 export interface GetPublisherBySlugOptions {
   db: Database
   slug: string
+  isR18Verified?: boolean
 }
 
 export async function getPublisherBySlug(options: GetPublisherBySlugOptions) {
-  const { db, slug } = options
+  const { db, slug, isR18Verified = false } = options
 
   // 查找厂商
   const publisher = await db.query.publishers.findFirst({
@@ -118,7 +119,12 @@ export async function getPublisherBySlug(options: GetPublisherBySlugOptions) {
     return null
   }
 
-  // 查询关联电影（通过 movie_publishers 表）
+  // 查询关联电影（通过 movie_publishers 表），非 R18 用户过滤 R18 内容
+  const movieConditions: SQL[] = [eq(moviePublishers.publisherId, publisher.id)]
+  if (!isR18Verified) {
+    movieConditions.push(eq(movies.isR18, false))
+  }
+
   const relatedMoviesData = await db
     .select({
       id: movies.id,
@@ -132,7 +138,7 @@ export async function getPublisherBySlug(options: GetPublisherBySlugOptions) {
     })
     .from(moviePublishers)
     .innerJoin(movies, eq(moviePublishers.movieId, movies.id))
-    .where(eq(moviePublishers.publisherId, publisher.id))
+    .where(and(...movieConditions))
     .orderBy(desc(movies.releaseDate))
     .limit(100)
 

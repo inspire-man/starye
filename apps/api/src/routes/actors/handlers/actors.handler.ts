@@ -2,7 +2,6 @@ import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { HTTPException } from 'hono/http-exception'
 import { getActorBySlug, getActorRelations, getActors } from '../services/actor.service'
-import { checkUserAdultStatus } from '../services/auth.service'
 
 /**
  * GET /actors - 获取女优列表
@@ -45,14 +44,8 @@ export async function getActorDetail(c: Context<AppEnv>) {
   const slug = c.req.param('slug')!
   const user = c.get('user')
 
-  // R18 权限校验
-  const isAdult = checkUserAdultStatus(user)
-  if (!isAdult) {
-    return c.json({ error: 'Adult verification required' }, 403)
-  }
-
   try {
-    const actor = await getActorBySlug({ db, slug })
+    const actor = await getActorBySlug({ db, slug, isR18Verified: !!user?.isR18Verified })
 
     if (!actor) {
       throw new HTTPException(404, { message: 'Actor not found' })
@@ -76,15 +69,8 @@ export async function getActorDetail(c: Context<AppEnv>) {
 export async function getActorRelationsHandler(c: Context<AppEnv>) {
   const db = c.get('db')
   const actorId = c.req.param('id')!
-  const user = c.get('user')
   const minCollaborations = Number(c.req.query('minCollaborations')) || 3
   const limit = Number(c.req.query('limit')) || 20
-
-  // R18 权限校验
-  const isAdult = checkUserAdultStatus(user)
-  if (!isAdult) {
-    return c.json({ error: 'Adult verification required' }, 403)
-  }
 
   try {
     const relations = await getActorRelations({

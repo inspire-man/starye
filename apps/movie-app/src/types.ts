@@ -100,6 +100,8 @@ export interface Player {
 }
 
 export interface MovieDetail extends Movie {
+  actors: ActorSummary[]
+  publishers: PublisherSummary[]
   players: Player[]
   relatedMovies: Movie[]
 }

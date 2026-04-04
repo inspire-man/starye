@@ -10,7 +10,7 @@ import type { InferInsertModel, SQL } from 'drizzle-orm'
 import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
 import { movies, players } from '@starye/db/schema'
-import { and, count, desc, eq, gte, like, lte, or } from 'drizzle-orm'
+import { and, count, desc, eq, gt, gte, like, lte, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
@@ -165,6 +165,15 @@ function buildMovieFilters(filter: MovieFilter) {
     if (searchCondition) {
       conditions.push(searchCondition)
     }
+  }
+
+  if (filter.hasPlayers === 'false') {
+    // 无播放源：totalPlayers = 0 或 null
+    conditions.push(eq(movies.totalPlayers, 0))
+  }
+  else if (filter.hasPlayers === 'true') {
+    // 有播放源：totalPlayers > 0
+    conditions.push(gt(movies.totalPlayers, 0))
   }
 
   return conditions.length > 0 ? and(...conditions) : undefined

@@ -15,6 +15,7 @@
     "crawl:actor": "tsx scripts/run-actor.ts",
     "crawl:publisher": "tsx scripts/run-publisher.ts",
     "crawl:seesaawiki:index": "tsx src/scripts/crawl-seesaawiki-index.ts",
+    "crawl:enrich-players": "tsx src/scripts/enrich-players.ts",
     "test:seesaawiki": "tsx scripts/test-seesaawiki-integration.ts",
     "diagnose:seesaawiki": "tsx scripts/diagnose-seesaawiki-parser.ts",
     "test": "vitest",

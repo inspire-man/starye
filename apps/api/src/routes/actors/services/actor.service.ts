@@ -111,10 +111,11 @@ export async function getActors(options: GetActorsOptions): Promise<GetActorsRes
 export interface GetActorBySlugOptions {
   db: Database
   slug: string
+  isR18Verified?: boolean
 }
 
 export async function getActorBySlug(options: GetActorBySlugOptions) {
-  const { db, slug } = options
+  const { db, slug, isR18Verified = false } = options
 
   // 查找女优
   const actor = await db.query.actors.findFirst({
@@ -125,7 +126,12 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
     return null
   }
 
-  // 查询关联电影（通过 movie_actors 表）
+  // 查询关联电影（通过 movie_actors 表），非 R18 用户过滤 R18 内容
+  const movieConditions: SQL[] = [eq(movieActors.actorId, actor.id)]
+  if (!isR18Verified) {
+    movieConditions.push(eq(movies.isR18, false))
+  }
+
   const relatedMoviesData = await db
     .select({
       id: movies.id,
@@ -139,7 +145,7 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
     })
     .from(movieActors)
     .innerJoin(movies, eq(movieActors.movieId, movies.id))
-    .where(eq(movieActors.actorId, actor.id))
+    .where(and(...movieConditions))
     .orderBy(desc(movies.releaseDate))
     .limit(100)
 

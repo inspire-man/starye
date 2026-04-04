@@ -2,8 +2,8 @@
 import type { ActorDetail } from '../types'
 import { onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { actorApi } from '../lib/api-client'
 import ActorRelations from '../components/ActorRelations.vue'
+import { actorApi } from '../lib/api-client'
 
 const route = useRoute()
 const loading = ref(true)
@@ -144,7 +144,7 @@ onMounted(() => {
             <RouterLink
               v-for="movie in actor.relatedMovies"
               :key="movie.id"
-              :to="`/movies/${movie.slug}`"
+              :to="`/movie/${movie.code}`"
               class="movie-card"
             >
               <div class="movie-cover">

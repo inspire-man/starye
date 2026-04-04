@@ -303,17 +303,17 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
           console.error('[PublicMovies] Failed to fetch related movies:', error)
         }
 
-        // 构建兼容响应：保留原有字段，附加结构化关联数据
+        // 构建响应：用关联表的结构化数据覆盖老的 JSON 文本字段
         const { movieActors: _ma, moviePublishers: _mp, ...movieData } = movie
 
         return c.json({
           success: true,
           data: {
             ...movieData,
+            actors: movieActorsList,
+            publishers: moviePublishersList,
             players: playerList,
             relatedMovies,
-            actorDetails: movieActorsList,
-            publisherDetails: moviePublishersList,
           },
         })
       }

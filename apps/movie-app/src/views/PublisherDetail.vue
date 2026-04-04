@@ -120,7 +120,7 @@ onMounted(() => {
             <RouterLink
               v-for="movie in publisher.relatedMovies"
               :key="movie.id"
-              :to="`/movies/${movie.slug}`"
+              :to="`/movie/${movie.code}`"
               class="movie-card"
             >
               <div class="movie-cover">
