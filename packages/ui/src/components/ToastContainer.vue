@@ -5,11 +5,9 @@ import Toast from './Toast.vue'
 
 const { toasts, hideToast } = useToast()
 
-// 键盘事件：Escape 关闭最新的 Toast
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && toasts.value.length > 0) {
-    // eslint-disable-next-line e18e/prefer-array-at
-    const lastToast = toasts.value[toasts.value.length - 1]
+    const lastToast = toasts.value.at(-1)
     if (lastToast?.closable) {
       hideToast(lastToast.id)
     }
@@ -28,7 +26,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div
-      class="fixed top-4 right-4 z-50 space-y-2"
+      class="fixed right-4 top-4 z-50 space-y-2"
       aria-live="polite"
       aria-atomic="false"
     >

@@ -2,9 +2,9 @@
  * SkeletonTable.vue 组件测试
  */
 
+import { SkeletonTable } from '@starye/ui'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import SkeletonTable from '../SkeletonTable.vue'
 
 describe('skeletonTable.vue', () => {
   describe('props 配置', () => {
@@ -68,7 +68,7 @@ describe('skeletonTable.vue', () => {
   })
 
   describe('闪烁动画', () => {
-    it('应该包含 skeleton-base 类', () => {
+    it('应该包含 skeleton-shimmer 类', () => {
       const wrapper = mount(SkeletonTable, {
         props: {
           rows: 1,
@@ -76,7 +76,7 @@ describe('skeletonTable.vue', () => {
         },
       })
 
-      const skeletonElements = wrapper.findAll('.skeleton-base')
+      const skeletonElements = wrapper.findAll('.skeleton-shimmer')
       expect(skeletonElements.length).toBeGreaterThan(0)
     })
   })

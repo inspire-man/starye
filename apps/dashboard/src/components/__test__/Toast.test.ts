@@ -2,10 +2,10 @@
  * Toast.vue 组件测试
  */
 
-import type { ProgressToast, Toast as ToastType } from '@/composables/useToast'
+import type { ProgressToast, ToastData as ToastType } from '@starye/ui'
+import { Toast } from '@starye/ui'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import Toast from '../Toast.vue'
 
 describe('toast.vue', () => {
   describe('渲染', () => {

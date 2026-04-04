@@ -1,17 +1,11 @@
 <script setup lang="ts">
 import type { Movie, Publisher } from '@/lib/api'
+import { ConfirmDialog, DataTable, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
 import { computed, onMounted, ref, watch } from 'vue'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
-import DataTable from '@/components/DataTable.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
-import Pagination from '@/components/Pagination.vue'
-import SkeletonTable from '@/components/SkeletonTable.vue'
 import { useErrorHandler } from '@/composables/useErrorHandler'
-import { useFilters } from '@/composables/useFilters'
-import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
-import { useToast } from '@/composables/useToast'
 import { api } from '@/lib/api'
 import { formatDateTime } from '@/lib/date-utils'
 

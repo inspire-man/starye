@@ -1,15 +1,4 @@
 <script setup lang="ts" generic="T extends { id: string }">
-/**
- * 通用数据表格组件
- *
- * 功能：
- * - 多选支持
- * - 排序
- * - 分页
- * - 加载状态
- * - 空状态
- */
-
 import { computed } from 'vue'
 
 export interface Column<T> {
@@ -73,21 +62,23 @@ function getCellValue(item: T, column: Column<T>): string {
 </script>
 
 <template>
-  <div class="data-table">
-    <div v-if="loading" class="loading-state">
-      <div class="spinner" />
-      <p>加载中...</p>
+  <div class="w-full">
+    <div v-if="loading" class="flex flex-col items-center justify-center p-12 text-muted-foreground">
+      <div class="h-8 w-8 animate-spin rounded-full border-[3px] border-muted border-t-primary" />
+      <p class="mt-3">
+        加载中...
+      </p>
     </div>
 
-    <div v-else-if="data.length === 0" class="empty-state">
+    <div v-else-if="data.length === 0" class="flex flex-col items-center justify-center p-12 text-muted-foreground">
       <p>{{ emptyMessage }}</p>
     </div>
 
-    <div v-else class="table-container">
-      <table>
-        <thead>
+    <div v-else class="overflow-x-auto">
+      <table class="w-full min-w-[800px] overflow-hidden rounded-lg bg-background">
+        <thead class="bg-muted/50">
           <tr>
-            <th v-if="selectable" class="checkbox-cell">
+            <th v-if="selectable" class="w-10 border-b border-border p-3 text-center">
               <input
                 type="checkbox"
                 :checked="allSelected"
@@ -98,11 +89,12 @@ function getCellValue(item: T, column: Column<T>): string {
               v-for="column in columns"
               :key="column.key"
               :style="{ width: column.width, minWidth: column.minWidth }"
-              :class="{ sortable: column.sortable }"
+              class="border-b border-border px-4 py-3 text-left text-sm font-semibold text-foreground"
+              :class="{ 'cursor-pointer select-none hover:bg-muted': column.sortable }"
               @click="column.sortable && handleSort(column.key)"
             >
               {{ column.label }}
-              <span v-if="column.sortable" class="sort-icon">↕</span>
+              <span v-if="column.sortable" class="ml-1 opacity-50">↕</span>
             </th>
           </tr>
         </thead>
@@ -110,9 +102,10 @@ function getCellValue(item: T, column: Column<T>): string {
           <tr
             v-for="item in data"
             :key="item.id"
+            class="cursor-pointer transition-colors hover:bg-muted/50"
             @click="handleRowClick(item)"
           >
-            <td v-if="selectable" class="checkbox-cell" @click.stop>
+            <td v-if="selectable" class="w-10 border-b border-border p-3 text-center" @click.stop>
               <input
                 type="checkbox"
                 :checked="selectedIds.has(item.id)"
@@ -123,6 +116,7 @@ function getCellValue(item: T, column: Column<T>): string {
               v-for="column in columns"
               :key="column.key"
               :style="{ width: column.width, minWidth: column.minWidth }"
+              class="border-b border-border px-4 py-3 text-sm"
             >
               <slot :name="`cell-${column.key}`" :item="item" :value="getCellValue(item, column)">
                 {{ getCellValue(item, column) }}
@@ -134,92 +128,3 @@ function getCellValue(item: T, column: Column<T>): string {
     </div>
   </div>
 </template>
-
-<style scoped>
-.data-table {
-  width: 100%;
-}
-
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  color: #6b7280;
-}
-
-.spinner {
-  width: 2rem;
-  height: 2rem;
-  border: 3px solid #e5e7eb;
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.table-container {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  min-width: 800px;
-  border-collapse: collapse;
-  background: white;
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-thead {
-  background: #f9fafb;
-}
-
-th {
-  padding: 0.75rem 1rem;
-  text-align: left;
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: #374151;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-
-th.sortable:hover {
-  background: #f3f4f6;
-}
-
-.sort-icon {
-  margin-left: 0.25rem;
-  opacity: 0.5;
-}
-
-.checkbox-cell {
-  width: 40px;
-  text-align: center;
-}
-
-td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
-  font-size: 0.875rem;
-}
-
-tr {
-  cursor: pointer;
-  transition: background-color 0.15s;
-}
-
-tbody tr:hover {
-  background: #f9fafb;
-}
-</style>

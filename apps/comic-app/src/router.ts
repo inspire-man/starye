@@ -1,4 +1,4 @@
-/* eslint-disable no-alert */
+import { warning } from '@starye/ui'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from './stores/user'
 
@@ -31,6 +31,12 @@ const router = createRouter({
       component: () => import('./views/Profile.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/favorites',
+      name: 'favorites',
+      component: () => import('./views/Favorites.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 
@@ -52,8 +58,7 @@ router.beforeEach(async (to, _from, next) => {
     }
 
     if (!userStore.user) {
-      // 未登录，提示并停留在当前页面
-      alert('请先登录以访问个人中心')
+      warning('请先登录以访问个人中心')
       next(false)
       return
     }

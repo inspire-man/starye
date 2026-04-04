@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ReadingProgress } from '../types'
 import { onMounted, ref } from 'vue'
-import { progressApi } from '../api'
+import { progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 
 const userStore = useUserStore()

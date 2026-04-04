@@ -2,7 +2,7 @@
 import type { ActorDetail } from '../types'
 import { onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { actorApi } from '../api'
+import { actorApi } from '../lib/api-client'
 import ActorRelations from '../components/ActorRelations.vue'
 
 const route = useRoute()

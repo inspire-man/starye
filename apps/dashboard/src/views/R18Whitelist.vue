@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import type { User } from 'better-auth'
+import { SkeletonTable, success, warning } from '@starye/ui'
 import { onMounted, ref } from 'vue'
-import SkeletonTable from '@/components/SkeletonTable.vue'
 import { handleError } from '@/composables/useErrorHandler'
-import { success, warning } from '@/composables/useToast'
 import { api } from '@/lib/api'
 
 const users = ref<User[]>([])

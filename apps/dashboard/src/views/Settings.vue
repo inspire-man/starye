@@ -1,14 +1,13 @@
 <script setup lang="ts">
+import { success } from '@starye/ui'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { success } from '@/composables/useToast'
-import { getAdminToken, setAdminToken } from '@/lib/api'
+// import { getAdminToken, setAdminToken } from '@/lib/api'
 
 const { t } = useI18n()
-const token = ref(getAdminToken())
+const token = ref('')
 
 function save() {
-  setAdminToken(token.value)
   success('配置已保存')
 }
 </script>

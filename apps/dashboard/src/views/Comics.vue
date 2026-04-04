@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '@/lib/api'
+import { Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Pagination from '@/components/Pagination.vue'
-import SkeletonCard from '@/components/SkeletonCard.vue'
 import { useErrorHandler } from '@/composables/useErrorHandler'
-import { useFilters } from '@/composables/useFilters'
-import { usePagination } from '@/composables/usePagination'
-import { useToast } from '@/composables/useToast'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 

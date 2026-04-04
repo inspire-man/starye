@@ -33,10 +33,19 @@ function getLoginUrl() {
           </NuxtLink>
         </h1>
         <div class="flex gap-4 items-center">
-          <NuxtLink to="/" class="hover:underline text-sm">
+          <NuxtLink to="/" class="hover:text-primary transition-colors text-sm">
             首页
           </NuxtLink>
-          <NuxtLink to="/series/ts-fullstack-ai-chronicle" class="hover:underline text-sm">
+          <NuxtLink to="/archive" class="hover:text-primary transition-colors text-sm">
+            归档
+          </NuxtLink>
+          <NuxtLink to="/search" class="hover:text-primary transition-colors text-sm flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7 7 0 1 0 4.65 4.65a7 7 0 0 0 12 12Z" />
+            </svg>
+            搜索
+          </NuxtLink>
+          <NuxtLink to="/series/ts-fullstack-ai-chronicle" class="hover:text-primary transition-colors text-sm">
             TypeScript 全栈 AI 实录
           </NuxtLink>
 

@@ -2,7 +2,7 @@
 import type { SelectOption } from '../components/Select.vue'
 import type { Actor } from '../types'
 import { onMounted, reactive, ref } from 'vue'
-import { actorApi } from '../api'
+import { actorApi } from '../lib/api-client'
 import Select from '../components/Select.vue'
 
 const loading = ref(true)

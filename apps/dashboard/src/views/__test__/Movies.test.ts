@@ -32,20 +32,16 @@ vi.mock('vue-router', () => ({
   })),
 }))
 
-vi.mock('@/composables/useFilters', async () => {
-  const { ref } = await import('vue')
+vi.mock('@starye/ui', async (importOriginal) => {
+  const { ref, computed } = await import('vue')
+  const actual = await importOriginal<typeof import('@starye/ui')>()
   return {
+    ...actual,
     useFilters: vi.fn(() => ({
       filters: ref({}),
       applyFilters: vi.fn(),
       resetFilters: vi.fn(),
     })),
-  }
-})
-
-vi.mock('@/composables/usePagination', async () => {
-  const { ref, computed } = await import('vue')
-  return {
     usePagination: vi.fn(() => ({
       currentPage: computed(() => 1),
       limit: computed(() => 20),
@@ -57,6 +53,20 @@ vi.mock('@/composables/usePagination', async () => {
       prevPage: vi.fn(),
       setMeta: vi.fn(),
     })),
+    useToast: vi.fn(() => ({
+      success: vi.fn(),
+      error: vi.fn(),
+      showProgress: vi.fn(() => 'progress-id'),
+      updateProgress: vi.fn(),
+      hideProgress: vi.fn(),
+    })),
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+    showProgress: vi.fn(() => 'progress-id'),
+    updateProgress: vi.fn(),
+    hideProgress: vi.fn(),
   }
 })
 
@@ -97,21 +107,6 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (key: string) => key,
   }),
-}))
-
-vi.mock('@/composables/useToast', () => ({
-  useToast: vi.fn(() => ({
-    success: vi.fn(),
-    error: vi.fn(),
-    showProgress: vi.fn(() => 'progress-id'),
-    updateProgress: vi.fn(),
-    hideProgress: vi.fn(),
-  })),
-  success: vi.fn(),
-  error: vi.fn(),
-  showProgress: vi.fn(() => 'progress-id'),
-  updateProgress: vi.fn(),
-  hideProgress: vi.fn(),
 }))
 
 vi.mock('@/composables/useErrorHandler', () => ({

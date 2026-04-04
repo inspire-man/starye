@@ -2,11 +2,11 @@
  * ErrorDisplay.vue 组件测试
  */
 
+import type { ParsedError } from '@starye/ui'
 import type { DOMWrapper } from '@vue/test-utils'
-import type { ParsedError } from '@/composables/useErrorHandler'
+import { ErrorDisplay } from '@starye/ui'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import ErrorDisplay from '../ErrorDisplay.vue'
 
 describe('errorDisplay.vue', () => {
   const mockError: ParsedError = {

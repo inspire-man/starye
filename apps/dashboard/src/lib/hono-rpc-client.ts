@@ -9,26 +9,26 @@ import type { AppType } from '@starye/api-types'
 import { hc } from 'hono/client'
 
 /**
+ * 携带 Cookie 凭证的 fetch 封装，通过 Hono RPC 客户端统一配置。
+ * 所有 Dashboard API 调用均使用此 fetch 以保证 Better Auth Cookie 会话正常传递。
+ */
+export const credentialFetch: typeof fetch = (input, init) =>
+  fetch(input as RequestInfo, { ...init, credentials: 'include' })
+
+/**
  * 创建 Hono RPC Client
  *
- * 根据 Hono 文档，通过链式调用端点（chaining）注册路由后，
- * AppType 应该能够正确推导出所有路由的类型信息
- *
- * 使用方式:
- * ```typescript
- * const client = createApiClient('/api')
- *
- * // 访问 movies 路由
- * const res = await client.api.movies.$get({
- *   query: { page: 1, limit: 24 }
- * })
- * ```
+ * baseUrl 使用 '/' 使路径与 AppType 中的路由定义（如 /api/admin/movies）完全匹配，
+ * 通过 Gateway 代理到 API Worker。
+ * credentials: 'include' 确保 Better Auth 的 Cookie 会话正常传递。
  */
-export function createApiClient(baseUrl: string = '/api') {
-  return hc<AppType>(baseUrl)
+export function createApiClient(baseUrl: string = '/') {
+  return hc<AppType>(baseUrl, {
+    fetch: credentialFetch,
+  })
 }
 
-// 默认客户端实例
+// 默认客户端实例（用于 Dashboard 中所有 admin API 调用）
 export const apiClient = createApiClient()
 
 /**

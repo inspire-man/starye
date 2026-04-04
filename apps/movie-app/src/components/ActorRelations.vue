@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { actorApi } from '../api'
+import { actorApi } from '../lib/api-client'
 
 interface Props {
   actorId: string

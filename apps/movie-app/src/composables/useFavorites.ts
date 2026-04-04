@@ -1,6 +1,6 @@
 import type { Favorite } from '../types'
 import { computed, ref } from 'vue'
-import { favoritesApi } from '../api'
+import { favoritesApi } from '../lib/api-client'
 
 interface UseFavoritesOptions {
   entityType?: 'actor' | 'publisher' | 'movie' | 'comic'

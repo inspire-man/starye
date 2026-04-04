@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import type { AuditLog } from '@/lib/api'
+import { DataTable, FilterPanel, success, useFilters, usePagination } from '@starye/ui'
 import { onMounted, ref } from 'vue'
-import DataTable from '@/components/DataTable.vue'
-import FilterPanel from '@/components/FilterPanel.vue'
 import { handleError } from '@/composables/useErrorHandler'
-import { useFilters } from '@/composables/useFilters'
-import { usePagination } from '@/composables/usePagination'
 import { useSorting } from '@/composables/useSorting'
-import { success } from '@/composables/useToast'
 import { api } from '@/lib/api'
 
 const logs = ref<AuditLog[]>([])

@@ -2,7 +2,7 @@
 import type { PublisherDetail } from '../types'
 import { onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { publisherApi } from '../api'
+import { publisherApi } from '../lib/api-client'
 
 const route = useRoute()
 const loading = ref(true)

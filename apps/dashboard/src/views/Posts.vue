@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { Post } from '@starye/db/schema'
+import { SkeletonTable, success } from '@starye/ui'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import SkeletonTable from '@/components/SkeletonTable.vue'
 import { handleError } from '@/composables/useErrorHandler'
-import { success } from '@/composables/useToast'
 
 // API 返回的 Post 类型（包含 author 关系）
 interface PostWithAuthor extends Pick<Post, 'id' | 'title' | 'slug' | 'published' | 'createdAt' | 'updatedAt'> {

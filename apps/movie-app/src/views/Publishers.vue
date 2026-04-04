@@ -2,7 +2,7 @@
 import type { SelectOption } from '../components/Select.vue'
 import type { Publisher } from '../types'
 import { onMounted, reactive, ref } from 'vue'
-import { publisherApi } from '../api'
+import { publisherApi } from '../lib/api-client'
 import Select from '../components/Select.vue'
 
 const loading = ref(true)

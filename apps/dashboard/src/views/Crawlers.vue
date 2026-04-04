@@ -3,11 +3,10 @@
  * 爬虫监控页面
  */
 
+import { info, SkeletonCard, success } from '@starye/ui'
 import { onMounted, onUnmounted, ref } from 'vue'
-import SkeletonCard from '@/components/SkeletonCard.vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { useResourceGuard } from '@/composables/useResourceGuard'
-import { info, success } from '@/composables/useToast'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 

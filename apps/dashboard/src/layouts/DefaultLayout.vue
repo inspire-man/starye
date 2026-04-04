@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { ToastContainer } from '@starye/ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import ToastContainer from '@/components/ToastContainer.vue'
 import { useResourceGuard } from '@/composables/useResourceGuard'
 import { signOut, useSession } from '@/lib/auth-client'
 

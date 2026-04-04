@@ -22,16 +22,19 @@ const totalPages = ref(1)
 const loadingMore = ref(false)
 
 // 获取首屏文章（响应式：series/tag 变化时重置）
-const { data, pending, error, refresh } = await useFetch<ApiResponse<Post[]>>('/api/posts', {
-  baseURL: config.public.apiUrl,
-  query: computed(() => ({
-    limit: 9,
-    page: 1,
-    ...(activeSeries.value ? { series: activeSeries.value } : {}),
-    ...(activeTag.value ? { tag: activeTag.value } : {}),
-  })),
-  watch: [activeSeries, activeTag],
-})
+const { data, pending, error, refresh } = await useAsyncData<ApiResponse<Post[]>>(
+  'posts-list',
+  () => $fetch('/api/posts', {
+    baseURL: config.public.apiUrl,
+    query: {
+      limit: 9,
+      page: 1,
+      ...(activeSeries.value ? { series: activeSeries.value } : {}),
+      ...(activeTag.value ? { tag: activeTag.value } : {}),
+    },
+  }),
+  { watch: [activeSeries, activeTag] },
+)
 
 // 当过滤条件变化时重置分页和列表
 watch([activeSeries, activeTag], () => {
@@ -80,11 +83,14 @@ async function loadMore() {
 }
 
 // 提取所有系列列表（从已加载文章中聚合，不额外请求）
-const { data: allForFilter } = await useFetch<ApiResponse<Post[]>>('/api/posts', {
-  baseURL: config.public.apiUrl,
-  query: { limit: 100 },
-  lazy: true,
-})
+const { data: allForFilter } = await useAsyncData<ApiResponse<Post[]>>(
+  'posts-all-filter',
+  () => $fetch('/api/posts', {
+    baseURL: config.public.apiUrl,
+    query: { limit: 100 },
+  }),
+  { lazy: true },
+)
 
 const seriesList = computed(() => {
   const all = allForFilter.value?.data || []

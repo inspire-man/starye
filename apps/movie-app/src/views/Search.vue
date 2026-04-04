@@ -3,7 +3,7 @@ import type { SelectOption } from '../components/Select.vue'
 import type { Movie } from '../types'
 import { reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { movieApi } from '../api'
+import { movieApi } from '../lib/api-client'
 import Select from '../components/Select.vue'
 
 const searched = ref(false)

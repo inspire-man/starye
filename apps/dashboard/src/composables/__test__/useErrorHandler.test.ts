@@ -5,8 +5,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getErrorAction, getErrorMessage, handleError, parseError } from '../useErrorHandler'
 
-// Mock useToast
-vi.mock('../useToast', () => ({
+// Mock useToast from @starye/ui
+vi.mock('@starye/ui', () => ({
   error: vi.fn(),
 }))
 
@@ -202,7 +202,7 @@ describe('useErrorHandler', () => {
 
   describe('handleError', () => {
     it('应该调用 Toast 显示错误', async () => {
-      const { error: showErrorToast } = await import('../useToast')
+      const { error: showErrorToast } = await import('@starye/ui')
 
       handleError(new Error('Test error'), '操作失败')
 

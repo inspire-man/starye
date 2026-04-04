@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Player from 'xgplayer'
-import { movieApi, progressApi } from '../api'
+import { movieApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { comicApi, progressApi } from '../api'
+import { comicApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()

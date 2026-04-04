@@ -1,34 +1,37 @@
 <script setup lang="ts">
 import type { AdjacentPosts, ApiResponse, Post } from '~/types'
-import MarkdownIt from 'markdown-it'
 
 const route = useRoute()
 const config = useRuntimeConfig()
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true,
-})
+const md = useMarkdown()
 
 const slug = route.params.slug as string
 
-const { data, pending, error } = await useFetch<ApiResponse<Post>>(`/api/posts/${slug}`, {
-  baseURL: config.public.apiUrl,
-})
+const { data, pending, error } = await useAsyncData<ApiResponse<Post>>(
+  `post-${slug}`,
+  () => $fetch(`/api/posts/${slug}`, {
+    baseURL: config.public.apiUrl,
+  }),
+)
 
 const post = computed(() => data.value?.data)
 
 // 根据 contentFormat 决定渲染方式
-// 'html' 或默认新格式（wangEditor 输出）直接 v-html
-// 'markdown' 或 null（存量数据）经 markdown-it 处理
-const renderedContent = computed(() => {
-  if (!post.value?.content)
-    return ''
+// 'html' 或默认新格式（wangEditor 输出）经 Shiki 处理代码块后 v-html
+// 'markdown' 或 null（存量数据）经 markdown-it + Shiki 处理
+const renderedContent = ref('')
+watchEffect(async () => {
+  if (!post.value?.content) {
+    renderedContent.value = ''
+    return
+  }
   const fmt = post.value.contentFormat
   if (!fmt || fmt === 'markdown') {
-    return md.render(post.value.content)
+    renderedContent.value = md.render(post.value.content)
   }
-  return post.value.content
+  else {
+    renderedContent.value = await highlightHtmlContent(post.value.content)
+  }
 })
 
 // 客户端计算字数与阅读时间
@@ -46,12 +49,77 @@ const { data: adjacentData } = await useFetch<ApiResponse<AdjacentPosts>>(`/api/
 })
 const adjacent = computed(() => adjacentData.value?.data)
 
-useHead({
-  title: computed(() => post.value?.title ? `${post.value.title} - Starye Blog` : 'Loading...'),
-  meta: [
-    { name: 'description', content: computed(() => post.value?.excerpt || '') },
-  ],
+// ── SEO meta (Task 3.7) ──
+useSeoMeta({
+  title: computed(() => post.value?.title ? `${post.value.title} - Starye Blog` : 'Starye Blog'),
+  description: computed(() => post.value?.excerpt || ''),
+  ogTitle: computed(() => post.value?.title || ''),
+  ogDescription: computed(() => post.value?.excerpt || ''),
+  ogImage: computed(() => post.value?.coverImage || ''),
+  ogType: 'article',
+  twitterCard: 'summary_large_image',
+  twitterTitle: computed(() => post.value?.title || ''),
+  twitterDescription: computed(() => post.value?.excerpt || ''),
+  twitterImage: computed(() => post.value?.coverImage || ''),
 })
+
+// ── 阅读进度条 (Task 3.6) ──
+const readProgress = ref(0)
+const articleRef = ref<HTMLElement | null>(null)
+
+function updateProgress() {
+  if (!articleRef.value)
+    return
+  const { top, height } = articleRef.value.getBoundingClientRect()
+  const windowHeight = window.innerHeight
+  const scrolled = Math.max(0, -top)
+  const total = Math.max(1, height - windowHeight)
+  readProgress.value = Math.min(100, Math.round((scrolled / total) * 100))
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', updateProgress, { passive: true })
+  updateProgress()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', updateProgress)
+})
+
+// ── 代码块复制按钮 (Task 3.2) ──
+const articleContentRef = ref<HTMLElement | null>(null)
+const copiedMap = reactive<Record<string, boolean>>({})
+
+function addCopyButtons() {
+  if (!articleContentRef.value)
+    return
+  const preBlocks = articleContentRef.value.querySelectorAll('pre')
+  preBlocks.forEach((pre, i) => {
+    if (pre.querySelector('.copy-btn'))
+      return
+    pre.style.position = 'relative'
+    const btn = document.createElement('button')
+    btn.className = 'copy-btn'
+    btn.setAttribute('aria-label', '复制代码')
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`
+    btn.addEventListener('click', async () => {
+      const code = pre.querySelector('code')?.innerText || pre.innerText
+      await navigator.clipboard.writeText(code)
+      copiedMap[`${i}`] = true
+      btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`
+      setTimeout(() => {
+        copiedMap[`${i}`] = false
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`
+      }, 2000)
+    })
+    pre.appendChild(btn)
+  })
+}
+
+watch(renderedContent, () => {
+  nextTick(addCopyButtons)
+})
+onMounted(() => nextTick(addCopyButtons))
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString('zh-CN', {
@@ -75,7 +143,13 @@ function scrollToHeading(id: string) {
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-8">
+  <!-- 阅读进度条 -->
+  <div
+    class="fixed top-0 left-0 z-50 h-0.5 bg-primary transition-all duration-100"
+    :style="{ width: `${readProgress}%` }"
+  />
+
+  <div ref="articleRef" class="container mx-auto px-4 py-8">
     <!-- 加载中 -->
     <div v-if="pending" class="max-w-3xl mx-auto space-y-4 animate-pulse">
       <div class="h-12 bg-muted rounded w-3/4" />
@@ -152,7 +226,7 @@ function scrollToHeading(id: string) {
           </header>
 
           <!-- 正文 -->
-          <div class="prose prose-lg dark:prose-invert max-w-none" v-html="renderedContent" />
+          <div ref="articleContentRef" class="prose prose-lg dark:prose-invert max-w-none" v-html="renderedContent" />
 
           <hr class="my-12 border-border">
 
@@ -240,11 +314,21 @@ function scrollToHeading(id: string) {
   margin-right: auto;
 }
 
-/* wangEditor 输出的代码块样式补丁 */
-.prose pre {
+/* Shiki 高亮代码块容器样式 */
+.prose .shiki {
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  padding: 1rem;
+  font-size: 0.875em;
+  line-height: 1.7;
+}
+
+/* wangEditor 输出的代码块样式补丁（未经 Shiki 处理的降级样式） */
+.prose pre:not(.shiki) {
   background-color: hsl(var(--muted));
   border-radius: 0.5rem;
   overflow-x: auto;
+  padding: 1rem;
 }
 
 .prose code:not(pre code) {
@@ -252,5 +336,37 @@ function scrollToHeading(id: string) {
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
+}
+
+/* 代码块复制按钮 */
+.prose pre {
+  position: relative;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.prose pre:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.9);
 }
 </style>

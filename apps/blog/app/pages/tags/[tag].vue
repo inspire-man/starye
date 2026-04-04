@@ -6,10 +6,13 @@ const config = useRuntimeConfig()
 const route = useRoute()
 const tagName = route.params.tag as string
 
-const { data, pending, error } = await useFetch<ApiResponse<Post[]>>('/api/posts', {
-  baseURL: config.public.apiUrl,
-  query: { tag: tagName, limit: 50 },
-})
+const { data, pending, error } = await useAsyncData<ApiResponse<Post[]>>(
+  `tag-${tagName}`,
+  () => $fetch('/api/posts', {
+    baseURL: config.public.apiUrl,
+    query: { tag: tagName, limit: 50 },
+  }),
+)
 
 const posts = computed(() => data.value?.data || [])
 const total = computed(() => data.value?.meta?.total ?? 0)

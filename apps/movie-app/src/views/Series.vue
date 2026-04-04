@@ -2,7 +2,7 @@
 import type { Movie } from '../types'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { movieApi } from '../api'
+import { movieApi } from '../lib/api-client'
 
 const route = useRoute()
 const loading = ref(true)

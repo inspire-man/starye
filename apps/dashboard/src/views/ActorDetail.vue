@@ -10,6 +10,7 @@
  */
 
 import type { Actor } from '@/lib/api'
+import { success, warning } from '@starye/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ActorRelationGraph from '@/components/ActorRelationGraph.vue'
@@ -17,7 +18,6 @@ import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import FavoriteButton from '@/components/FavoriteButton.vue'
 import SkeletonForm from '@/components/SkeletonForm.vue'
 import { handleError } from '@/composables/useErrorHandler'
-import { success, warning } from '@/composables/useToast'
 import { fetchApi } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 import { formatDateTime } from '@/lib/date-utils'

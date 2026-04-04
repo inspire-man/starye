@@ -5,10 +5,13 @@ const config = useRuntimeConfig()
 const route = useRoute()
 const seriesName = route.params.name as string
 
-const { data, pending, error } = await useFetch<ApiResponse<Post[]>>('/api/posts', {
-  baseURL: config.public.apiUrl,
-  query: { series: seriesName, limit: 50 },
-})
+const { data, pending, error } = await useAsyncData<ApiResponse<Post[]>>(
+  `series-${seriesName}`,
+  () => $fetch('/api/posts', {
+    baseURL: config.public.apiUrl,
+    query: { series: seriesName, limit: 50 },
+  }),
+)
 
 const posts = computed(() => data.value?.data || [])
 const total = computed(() => data.value?.meta?.total ?? 0)

@@ -1,9 +1,8 @@
 <script setup lang="ts">
+import { ErrorDisplay, SkeletonCard } from '@starye/ui'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import ErrorDisplay from '@/components/ErrorDisplay.vue'
-import SkeletonCard from '@/components/SkeletonCard.vue'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { api } from '@/lib/api'
 

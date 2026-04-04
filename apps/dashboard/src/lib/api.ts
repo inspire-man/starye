@@ -1,25 +1,15 @@
 import type { User } from 'better-auth'
+import { credentialFetch } from './hono-rpc-client'
 
-// 使用相对路径，通过 Gateway 转发到 API
+// API_BASE 用于 upload 等特殊场景
 export const API_BASE = '/api'
 
-const TOKEN_KEY = 'starye_admin_token'
-export const getAdminToken = () => localStorage.getItem(TOKEN_KEY) || ''
-export const setAdminToken = (token: string) => localStorage.setItem(TOKEN_KEY, token)
-
-export async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+/** 通用 JSON fetch — 使用 credentialFetch 确保携带 Cookie 凭证 */
+export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`
-  const token = getAdminToken()
-
-  const res = await fetch(url, {
-    credentials: 'include', // Important for Better Auth Cookies
+  const res = await credentialFetch(url, {
+    headers: { 'Content-Type': 'application/json' },
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      // Send token if present (for backward compatibility or script access)
-      ...(token ? { 'x-service-token': token } : {}),
-      ...options?.headers,
-    },
   })
 
   if (!res.ok) {
@@ -29,6 +19,11 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
 
   return res.json()
 }
+
+/** fetchApi 向后兼容别名（与 apiFetch 等效） */
+export const fetchApi = apiFetch
+
+// ─── 公用类型 ────────────────────────────────────────────────────────────────
 
 export interface Comic {
   id?: string
@@ -80,14 +75,8 @@ export interface Movie {
   crawledPlayers?: number
   createdAt?: string
   updatedAt?: string
-  movieActors?: Array<{
-    sortOrder: number
-    actor?: { id: string, name: string }
-  }>
-  moviePublishers?: Array<{
-    sortOrder: number
-    publisher?: { id: string, name: string }
-  }>
+  movieActors?: Array<{ sortOrder: number, actor?: { id: string, name: string } }>
+  moviePublishers?: Array<{ sortOrder: number, publisher?: { id: string, name: string } }>
 }
 
 export interface Player {
@@ -183,14 +172,16 @@ export interface Paginated<T> {
   }
 }
 
+// ─── API 对象 ─────────────────────────────────────────────────────────────────
+
 export const api = {
   API_BASE,
   // Public API (filtered)
-  getComics: () => fetchApi<Paginated<Comic>>('/comics?limit=50'),
+  getComics: () => apiFetch<Paginated<Comic>>('/comics?limit=50'),
 
   // Admin API (full access)
   admin: {
-    getStats: () => fetchApi<{
+    getStats: () => apiFetch<{
       comics: number
       movies: number
       actors: number
@@ -202,242 +193,313 @@ export const api = {
 
     getComics: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<Comic>>(`/admin/comics${query ? `?${query}` : ''}`)
+      return apiFetch<Paginated<Comic>>(`/admin/comics${query ? `?${query}` : ''}`)
     },
 
-    getUsers: () => fetchApi<any[]>('/admin/users'),
+    getUsers: () => apiFetch<any[]>('/admin/users'),
 
     updateUserRole: (email: string, role: string) =>
-      fetchApi(`/admin/users/${email}/role`, {
+      apiFetch(`/admin/users/${email}/role`, {
         method: 'PATCH',
         body: JSON.stringify({ role }),
       }),
 
     updateUserStatus: (email: string, isAdult: boolean) =>
-      fetchApi(`/admin/users/${email}/status`, {
+      apiFetch(`/admin/users/${email}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ isAdult }),
       }),
 
     updateComic: (id: string, data: Partial<Comic>) =>
-      fetchApi(`/admin/comics/${id}`, {
+      apiFetch(`/admin/comics/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
 
-    getChapters: (comicId: string) => fetchApi<Chapter[]>(`/admin/comics/${comicId}/chapters`),
-    getChapter: (id: string) => fetchApi<Chapter>(`/admin/chapters/${id}`),
-    deleteChapter: (id: string) => fetchApi(`/admin/chapters/${id}`, { method: 'DELETE' }),
+    getChapters: (comicId: string) => apiFetch<Chapter[]>(`/admin/comics/${comicId}/chapters`),
+    getChapter: (id: string) => apiFetch<Chapter>(`/admin/chapters/${id}`),
+    deleteChapter: (id: string) => apiFetch(`/admin/chapters/${id}`, { method: 'DELETE' }),
 
     bulkOperationComics: (ids: string[], operation: string, payload?: any) =>
-      fetchApi('/admin/comics/bulk-operation', {
+      apiFetch('/admin/comics/bulk-operation', {
         method: 'POST',
         body: JSON.stringify({ ids, operation, payload }),
       }),
 
     bulkDeleteChapters: (comicId: string, chapterIds: string[]) =>
-      fetchApi(`/admin/comics/${comicId}/chapters/bulk-delete`, {
+      apiFetch(`/admin/comics/${comicId}/chapters/bulk-delete`, {
         method: 'POST',
         body: JSON.stringify({ chapterIds }),
       }),
 
     getMovies: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<Movie>>(`/admin/movies${query ? `?${query}` : ''}`)
+      return apiFetch<Paginated<Movie>>(`/admin/movies${query ? `?${query}` : ''}`)
     },
 
-    getMovie: (id: string) => fetchApi<Movie>(`/admin/movies/${id}`),
+    getMovie: (id: string) => apiFetch<Movie>(`/admin/movies/${id}`),
 
     updateMovie: (id: string, data: Partial<Movie>) =>
-      fetchApi(`/admin/movies/${id}`, {
+      apiFetch(`/admin/movies/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
 
     deleteMovie: (id: string) =>
-      fetchApi(`/admin/movies/${id}`, { method: 'DELETE' }),
+      apiFetch(`/admin/movies/${id}`, { method: 'DELETE' }),
 
     bulkOperationMovies: (ids: string[], operation: string, payload?: any) =>
-      fetchApi('/admin/movies/bulk-operation', {
+      apiFetch('/admin/movies/bulk-operation', {
         method: 'POST',
         body: JSON.stringify({ ids, operation, payload }),
       }),
 
     getPlayers: (movieId: string) =>
-      fetchApi<{ movieId: string, players: Player[], total: number }>(`/admin/movies/${movieId}/players`),
+      apiFetch<{ movieId: string, players: Player[], total: number }>(`/admin/movies/${movieId}/players`),
 
     addPlayer: (movieId: string, data: { sourceName: string, sourceUrl: string, quality?: string }) =>
-      fetchApi(`/admin/movies/${movieId}/players`, {
+      apiFetch(`/admin/movies/${movieId}/players`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     updatePlayer: (playerId: string, data: Partial<Player>) =>
-      fetchApi(`/admin/movies/players/${playerId}`, {
+      apiFetch(`/admin/movies/players/${playerId}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
 
     deletePlayer: (playerId: string) =>
-      fetchApi(`/admin/movies/players/${playerId}`, { method: 'DELETE' }),
+      apiFetch(`/admin/movies/players/${playerId}`, { method: 'DELETE' }),
 
     batchImportPlayers: (movieId: string, players: Array<{ sourceName: string, sourceUrl: string, quality?: string }>) =>
-      fetchApi(`/admin/movies/${movieId}/players/batch-import`, {
+      apiFetch(`/admin/movies/${movieId}/players/batch-import`, {
         method: 'POST',
         body: JSON.stringify({ players }),
       }),
 
     getActors: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<Actor>>(`/admin/actors${query ? `?${query}` : ''}`)
+      return apiFetch<Paginated<Actor>>(`/admin/actors${query ? `?${query}` : ''}`)
     },
 
-    getActor: (id: string) => fetchApi<Actor & { relatedMovies: Movie[] }>(`/admin/actors/${id}`),
+    getActor: (id: string) => apiFetch<Actor & { relatedMovies: Movie[] }>(`/admin/actors/${id}`),
 
-    getActorDetail: (id: string) => fetchApi<{ actor: Actor, movies: Movie[] }>(`/admin/actors/${id}`),
+    getActorDetail: (id: string) => apiFetch<{ actor: Actor, movies: Movie[] }>(`/admin/actors/${id}`),
 
     updateActor: (id: string, data: Partial<Actor>) =>
-      fetchApi(`/admin/actors/${id}`, {
+      apiFetch(`/admin/actors/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
 
     mergeActors: (sourceId: string, targetId: string) =>
-      fetchApi('/admin/actors/merge', {
+      apiFetch('/admin/actors/merge', {
         method: 'POST',
         body: JSON.stringify({ sourceId, targetId }),
       }),
 
     createActor: (data: { name: string }) =>
-      fetchApi<{ id: string, name: string }>('/admin/actors', {
+      apiFetch<{ id: string, name: string }>('/admin/actors', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     batchRecrawlActors: (ids: string[]) =>
-      fetchApi<{ success: boolean, total: number, marked: number, message: string }>('/admin/actors/batch-recrawl', {
+      apiFetch<{ success: boolean, total: number, marked: number, message: string }>('/admin/actors/batch-recrawl', {
         method: 'POST',
         body: JSON.stringify({ ids }),
       }),
 
     updateMovieActors: (movieId: string, actors: { id: string, name: string, sortOrder: number }[]) =>
-      fetchApi(`/admin/movies/${movieId}/actors`, {
+      apiFetch(`/admin/movies/${movieId}/actors`, {
         method: 'PUT',
         body: JSON.stringify({ actors }),
       }),
 
     getPublishers: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<Publisher>>(`/admin/publishers${query ? `?${query}` : ''}`)
+      return apiFetch<Paginated<Publisher>>(`/admin/publishers${query ? `?${query}` : ''}`)
     },
 
-    getPublisher: (id: string) => fetchApi<Publisher & { relatedMovies: Movie[] }>(`/admin/publishers/${id}`),
+    getPublisher: (id: string) => apiFetch<Publisher & { relatedMovies: Movie[] }>(`/admin/publishers/${id}`),
 
-    getPublisherDetail: (id: string) => fetchApi<{ publisher: Publisher, movies: Movie[] }>(`/admin/publishers/${id}`),
+    getPublisherDetail: (id: string) => apiFetch<{ publisher: Publisher, movies: Movie[] }>(`/admin/publishers/${id}`),
 
     updatePublisher: (id: string, data: Partial<Publisher>) =>
-      fetchApi(`/admin/publishers/${id}`, {
+      apiFetch(`/admin/publishers/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
 
     mergePublishers: (sourceId: string, targetId: string) =>
-      fetchApi('/admin/publishers/merge', {
+      apiFetch('/admin/publishers/merge', {
         method: 'POST',
         body: JSON.stringify({ sourceId, targetId }),
       }),
 
     createPublisher: (data: { name: string }) =>
-      fetchApi<{ id: string, name: string }>('/admin/publishers', {
+      apiFetch<{ id: string, name: string }>('/admin/publishers', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     updateMoviePublishers: (movieId: string, publishers: { id: string, name: string, sortOrder: number }[]) =>
-      fetchApi(`/admin/movies/${movieId}/publishers`, {
+      apiFetch(`/admin/movies/${movieId}/publishers`, {
         method: 'PUT',
         body: JSON.stringify({ publishers }),
       }),
 
     getCrawlerStats: () =>
-      fetchApi<any>('/admin/crawlers/stats'),
+      apiFetch<any>('/admin/crawlers/stats'),
 
     getFailedTasks: () =>
-      fetchApi<any>('/admin/crawlers/failed-tasks'),
+      apiFetch<any>('/admin/crawlers/failed-tasks'),
 
     recoverCrawler: (type: 'comic' | 'movie') =>
-      fetchApi('/admin/crawlers/recover', {
+      apiFetch('/admin/crawlers/recover', {
         method: 'POST',
         body: JSON.stringify({ type }),
       }),
 
     clearFailedTasks: (type: 'comic' | 'movie') =>
-      fetchApi('/admin/crawlers/clear-failed', {
+      apiFetch('/admin/crawlers/clear-failed', {
         method: 'POST',
         body: JSON.stringify({ type }),
       }),
 
     getAuditLogs: (params?: Record<string, any>) => {
       const query = new URLSearchParams(params).toString()
-      return fetchApi<Paginated<AuditLog>>(`/admin/audit-logs${query ? `?${query}` : ''}`)
+      return apiFetch<Paginated<AuditLog>>(`/admin/audit-logs${query ? `?${query}` : ''}`)
     },
 
     exportAuditLogs: async (format: 'json' | 'csv', params?: Record<string, any>): Promise<Blob> => {
       const query = new URLSearchParams({ ...params, format }).toString()
-      const response = await fetch(`${API_BASE}/admin/audit-logs/export?${query}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      })
+      const response = await credentialFetch(`${API_BASE}/admin/audit-logs/export?${query}`)
       if (!response.ok) {
         throw new Error(`Failed to export audit logs: ${response.statusText}`)
       }
-      return await response.blob()
+      return response.blob()
     },
 
     // R18 白名单管理
     getR18Whitelist: () =>
-      fetchApi<{ success: boolean, data: User[] }>('/admin/r18-whitelist'),
+      apiFetch<{ success: boolean, data: User[] }>('/admin/r18-whitelist'),
 
     addToR18Whitelist: (userId?: string, email?: string) =>
-      fetchApi('/admin/r18-whitelist', {
+      apiFetch('/admin/r18-whitelist', {
         method: 'POST',
         body: JSON.stringify({ userId, email }),
       }),
 
     removeFromR18Whitelist: (userId: string) =>
-      fetchApi(`/admin/r18-whitelist/${userId}`, {
+      apiFetch(`/admin/r18-whitelist/${userId}`, {
         method: 'DELETE',
+      }),
+
+    // 名称映射管理
+    getNameMappings: (params?: Record<string, any>) => {
+      const query = new URLSearchParams(params).toString()
+      return apiFetch<any>(`/admin/name-mappings${query ? `?${query}` : ''}`)
+    },
+
+    createNameMapping: (data: any) =>
+      apiFetch('/admin/name-mappings', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    updateNameMapping: (id: string, data: any) =>
+      apiFetch(`/admin/name-mappings/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+
+    deleteNameMapping: (id: string) =>
+      apiFetch(`/admin/name-mappings/${id}`, { method: 'DELETE' }),
+
+    bulkDeleteNameMappings: (ids: string[]) =>
+      apiFetch('/admin/name-mappings/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+
+    getMappingQualityReport: () =>
+      apiFetch<any>('/admin/name-mappings/quality-report'),
+
+    // 收藏管理
+    getFavorites: (params?: Record<string, any>) => {
+      const query = new URLSearchParams(params).toString()
+      return apiFetch<any>(`/favorites${query ? `?${query}` : ''}`)
+    },
+
+    checkFavorite: (entityType: string, entityId: string) =>
+      apiFetch<any>(`/favorites/check/${entityType}/${entityId}`),
+
+    addFavorite: (entityType: string, entityId: string) =>
+      apiFetch('/favorites', {
+        method: 'POST',
+        body: JSON.stringify({ entityType, entityId }),
+      }),
+
+    deleteFavorite: (favoriteId: string) =>
+      apiFetch(`/favorites/${favoriteId}`, { method: 'DELETE' }),
+
+    // 评分管理
+    getRatings: (params?: Record<string, any>) => {
+      const query = new URLSearchParams(params).toString()
+      return apiFetch<any>(`/ratings${query ? `?${query}` : ''}`)
+    },
+
+    // 同步管理
+    triggerSync: (type: string, params?: any) =>
+      apiFetch('/admin/sync', {
+        method: 'POST',
+        body: JSON.stringify({ type, ...params }),
+      }),
+
+    // 用户管理附加
+    saveComic: (id: string, data: Partial<Comic>) =>
+      apiFetch(`/admin/comics/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+
+    deleteComic: (id: string) =>
+      apiFetch(`/admin/comics/${id}`, { method: 'DELETE' }),
+
+    bulkDeleteMovies: (ids: string[]) =>
+      apiFetch('/admin/movies/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+
+    bulkDeleteActors: (ids: string[]) =>
+      apiFetch('/admin/actors/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+
+    bulkDeletePublishers: (ids: string[]) =>
+      apiFetch('/admin/publishers/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
       }),
   },
 
   upload: {
     presign: (filename: string, contentType: string) =>
-      fetchApi<{ uploadUrl: string, publicUrl: string }>('/upload/presign', {
+      apiFetch<{ uploadUrl: string, publicUrl: string }>('/upload/presign', {
         method: 'POST',
         body: JSON.stringify({ filename, contentType }),
       }),
 
-    /**
-     * 直接上传图片到服务器
-     * @param file - 要上传的图片文件
-     * @returns 上传结果，包含图片 URL 和元数据
-     */
     uploadImage: async (file: File): Promise<UploadResponse> => {
       const formData = new FormData()
       formData.append('file', file)
 
-      const token = getAdminToken()
-      const url = `${API_BASE}/upload`
-
-      const res = await fetch(url, {
+      const res = await credentialFetch(`${API_BASE}/upload`, {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          ...(token ? { 'x-service-token': token } : {}),
-        },
         body: formData,
       })
 

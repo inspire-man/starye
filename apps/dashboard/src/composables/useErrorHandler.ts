@@ -56,8 +56,8 @@
  * ```
  */
 
+import { error as showErrorToast } from '@starye/ui'
 import { useI18n } from 'vue-i18n'
-import { error as showErrorToast } from './useToast'
 
 export type ErrorType = 'network' | 'permission' | 'validation' | 'server' | 'unknown'
 

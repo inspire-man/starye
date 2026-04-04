@@ -1,9 +1,8 @@
 <script setup lang="ts">
+import { SkeletonTable, success } from '@starye/ui'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import SkeletonTable from '@/components/SkeletonTable.vue'
 import { handleError } from '@/composables/useErrorHandler'
-import { success } from '@/composables/useToast'
 import { api } from '@/lib/api'
 
 const { t } = useI18n()

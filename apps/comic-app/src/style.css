@@ -1,1 +1,7 @@
-@import "tailwindcss";
+@import "@starye/ui/globals.css";
+
+/* Comic App 品牌色覆盖：橙色 (orange) */
+:root {
+  --primary: 25 95% 53%;
+  --primary-foreground: 0 0% 100%;
+}

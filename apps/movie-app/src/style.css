@@ -1,1 +1,7 @@
-@import "tailwindcss";
+@import "@starye/ui/globals.css";
+
+/* Movie App 品牌色覆盖：天蓝 (sky) */
+:root {
+  --primary: 199 89% 48%;
+  --primary-foreground: 0 0% 100%;
+}

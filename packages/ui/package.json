@@ -28,7 +28,8 @@
     "radix-vue": "^1.9.17",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "vue-router": "^4.5.1"
   },
   "devDependencies": {
     "typescript": "^6.0.2",

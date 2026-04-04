@@ -8,11 +8,9 @@
  * - 分页展示
  */
 
+import { Pagination, useFilters, usePagination } from '@starye/ui'
 import { onMounted, ref, watch } from 'vue'
 import FavoriteButton from '@/components/FavoriteButton.vue'
-import Pagination from '@/components/Pagination.vue'
-import { useFilters } from '@/composables/useFilters'
-import { usePagination } from '@/composables/usePagination'
 import { fetchApi } from '@/lib/api'
 import { formatDateTime } from '@/lib/date-utils'
 
