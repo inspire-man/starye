@@ -1,195 +1,231 @@
 <script setup lang="ts">
-import type { SelectOption } from '../components/Select.vue'
-import type { Movie } from '../types'
-import { reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import Select from '../components/Select.vue'
-import { movieApi } from '../lib/api-client'
+import type { SearchResult } from '../lib/api-client'
+import { ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { searchApi } from '../lib/api-client'
 
+const route = useRoute()
+const router = useRouter()
+
+const keyword = ref((route.query.q as string) || '')
+const loading = ref(false)
 const searched = ref(false)
-const movies = ref<Movie[]>([])
-const pagination = reactive({
-  page: 1,
-  limit: 20,
-  total: 0,
-  totalPages: 0,
+const searchResult = ref<SearchResult | null>(null)
+
+// URL 与关键词双向绑定
+watch(keyword, (val) => {
+  router.replace({ query: val ? { q: val } : {} })
 })
 
-const filters = reactive({
-  search: '',
-  actor: '',
-  publisher: '',
-  sortBy: 'releaseDate' as 'title' | 'createdAt' | 'updatedAt' | 'releaseDate',
-  sortOrder: 'desc' as 'asc' | 'desc',
+// 从 URL 初始化后立即搜索
+if (keyword.value) {
+  doSearch()
+}
+
+// 监听路由 query 变化（如浏览器前进/后退）
+watch(() => route.query.q, (val) => {
+  const q = (val as string) || ''
+  if (q !== keyword.value) {
+    keyword.value = q
+    if (q)
+      doSearch()
+  }
 })
 
-// 排序选项配置
-const sortOptions: SelectOption<string>[] = [
-  { label: '发行日期', value: 'releaseDate', icon: '📅' },
-  { label: '最近更新', value: 'updatedAt', icon: '🔄' },
-  { label: '最新上架', value: 'createdAt', icon: '✨' },
-]
-
-async function search() {
+async function doSearch() {
+  const q = keyword.value.trim()
+  if (!q)
+    return
+  loading.value = true
   searched.value = true
-  pagination.page = 1
-  await fetchMovies()
-}
-
-async function fetchMovies() {
   try {
-    const response = await movieApi.getMovies({
-      page: pagination.page,
-      limit: pagination.limit,
-      search: filters.search || undefined,
-      actor: filters.actor || undefined,
-      publisher: filters.publisher || undefined,
-      sortBy: filters.sortBy,
-      sortOrder: filters.sortOrder,
-    })
-
-    if (response.success) {
-      movies.value = response.data
-      Object.assign(pagination, response.pagination)
-    }
+    searchResult.value = await searchApi.search(q, { limit: 10 })
   }
-  catch (error) {
-    console.error('Failed to search movies:', error)
+  catch (err) {
+    console.error('搜索失败:', err)
+    searchResult.value = null
+  }
+  finally {
+    loading.value = false
   }
 }
 
-function changePage(page: number) {
-  pagination.page = page
-  fetchMovies()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter')
+    doSearch()
 }
 
-function resetFilters() {
-  filters.search = ''
-  filters.actor = ''
-  filters.publisher = ''
-  filters.sortBy = 'releaseDate'
-  searched.value = false
-  movies.value = []
+function hasResults() {
+  const r = searchResult.value?.results
+  return r && (
+    (r.movies && r.movies.length > 0)
+    || (r.actors && r.actors.length > 0)
+    || (r.publishers && r.publishers.length > 0)
+  )
 }
 </script>
 
 <template>
-  <div>
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold text-white mb-4">
-        搜索影片
-      </h1>
+  <div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-white mb-6">
+      搜索
+    </h1>
 
-      <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-        <div class="space-y-4">
-          <input
-            v-model="filters.search"
-            type="text"
-            placeholder="输入番号或标题..."
-            class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            @keyup.enter="search"
-          >
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            <input
-              v-model="filters.actor"
-              type="text"
-              placeholder="演员"
-              class="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-            >
-
-            <input
-              v-model="filters.publisher"
-              type="text"
-              placeholder="制作商"
-              class="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-            >
-
-            <Select
-              v-model="filters.sortBy"
-              :options="sortOptions"
-              placeholder="选择排序"
-              size="default"
-            />
-
-            <button
-              class="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-all shadow-md hover:shadow-lg"
-              @click="search"
-            >
-              搜索
-            </button>
-
-            <button
-              class="border border-gray-700 hover:bg-gray-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-all"
-              @click="resetFilters"
-            >
-              重置
-            </button>
-          </div>
-        </div>
-      </div>
+    <!-- 搜索框 -->
+    <div class="bg-gray-800 rounded-lg p-4 mb-8 flex gap-3">
+      <input
+        v-model="keyword"
+        type="text"
+        placeholder="输入番号、影片标题、演员名或厂商名..."
+        class="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-base"
+        @keydown="handleKeydown"
+      >
+      <button
+        class="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-md font-medium transition-colors"
+        :disabled="loading"
+        @click="doSearch"
+      >
+        <span v-if="loading">搜索中...</span>
+        <span v-else>搜索</span>
+      </button>
     </div>
 
-    <div v-if="searched && movies.length === 0" class="text-center py-12">
-      <p class="text-gray-400">
-        未找到相关影片
+    <!-- 加载中 -->
+    <div v-if="loading" class="text-center py-16 text-gray-400">
+      <div class="inline-block w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mb-3" />
+      <p>正在搜索...</p>
+    </div>
+
+    <!-- 无结果 -->
+    <div v-else-if="searched && !hasResults()" class="text-center py-16">
+      <p class="text-gray-400 text-lg">
+        未找到与「<span class="text-white">{{ searchResult?.q }}</span>」相关的内容
+      </p>
+      <p class="text-gray-500 text-sm mt-2">
+        请尝试更换关键词，或检查番号格式（如 ABP-001）
       </p>
     </div>
 
-    <div v-else-if="movies.length > 0">
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <RouterLink
-          v-for="movie in movies"
-          :key="movie.id"
-          :to="`/movie/${movie.code}`"
-          class="group cursor-pointer"
-        >
-          <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
-            <div class="aspect-3/4 bg-gray-800">
+    <!-- 搜索结果 -->
+    <div v-else-if="searchResult && hasResults()" class="space-y-10">
+      <!-- 影片结果 -->
+      <section v-if="searchResult.results.movies?.length">
+        <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+          <span>🎬</span>
+          <span>影片</span>
+          <span class="text-sm font-normal text-gray-400">（{{ searchResult.results.movies.length }} 条）</span>
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <RouterLink
+            v-for="movie in searchResult.results.movies"
+            :key="movie.id"
+            :to="`/movie/${movie.code}`"
+            class="group"
+          >
+            <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
+              <div class="aspect-3/4 bg-gray-800">
+                <img
+                  v-if="movie.coverImage"
+                  :src="movie.coverImage"
+                  :alt="movie.title"
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                >
+                <div v-else class="w-full h-full flex items-center justify-center text-gray-600 text-4xl">
+                  🎬
+                </div>
+              </div>
+              <div
+                v-if="movie.isR18"
+                class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded"
+              >
+                R18
+              </div>
+            </div>
+            <p class="mt-2 text-sm font-medium text-primary-400">
+              {{ movie.code }}
+            </p>
+            <p class="text-sm text-gray-300 line-clamp-2 group-hover:text-white transition">
+              {{ movie.title }}
+            </p>
+          </RouterLink>
+        </div>
+      </section>
+
+      <!-- 演员结果 -->
+      <section v-if="searchResult.results.actors?.length">
+        <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+          <span>👤</span>
+          <span>演员</span>
+          <span class="text-sm font-normal text-gray-400">（{{ searchResult.results.actors.length }} 条）</span>
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <RouterLink
+            v-for="actor in searchResult.results.actors"
+            :key="actor.id"
+            :to="`/actors/${actor.slug}`"
+            class="group flex flex-col items-center text-center p-4 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors"
+          >
+            <div class="w-16 h-16 rounded-full overflow-hidden bg-gray-700 mb-2 shrink-0">
               <img
-                v-if="movie.coverImage"
-                :src="movie.coverImage"
-                :alt="movie.title"
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                v-if="actor.avatar"
+                :src="actor.avatar"
+                :alt="actor.name"
+                class="w-full h-full object-cover"
                 loading="lazy"
               >
+              <div v-else class="w-full h-full flex items-center justify-center text-2xl text-gray-500">
+                👤
+              </div>
             </div>
-            <div
-              v-if="movie.isR18"
-              class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded"
-            >
-              R18
-            </div>
-          </div>
-          <h3 class="mt-2 font-medium text-white line-clamp-2 group-hover:text-primary-400 transition">
-            {{ movie.title }}
-          </h3>
-          <p class="text-sm text-gray-400 line-clamp-1">
-            {{ movie.code }}
-          </p>
-        </RouterLink>
-      </div>
+            <p class="text-sm font-medium text-white group-hover:text-primary-400 transition-colors line-clamp-2">
+              {{ actor.name }}
+            </p>
+          </RouterLink>
+        </div>
+      </section>
 
-      <div v-if="pagination.totalPages > 1" class="mt-8 flex justify-center gap-2">
-        <button
-          :disabled="pagination.page <= 1"
-          class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          @click="changePage(pagination.page - 1)"
-        >
-          上一页
-        </button>
-        <span class="px-4 py-2 text-gray-300">
-          {{ pagination.page }} / {{ pagination.totalPages }}
-        </span>
-        <button
-          :disabled="pagination.page >= pagination.totalPages"
-          class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          @click="changePage(pagination.page + 1)"
-        >
-          下一页
-        </button>
-      </div>
+      <!-- 厂商结果 -->
+      <section v-if="searchResult.results.publishers?.length">
+        <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+          <span>🏢</span>
+          <span>厂商</span>
+          <span class="text-sm font-normal text-gray-400">（{{ searchResult.results.publishers.length }} 条）</span>
+        </h2>
+        <div class="flex flex-wrap gap-3">
+          <RouterLink
+            v-for="pub in searchResult.results.publishers"
+            :key="pub.id"
+            :to="`/publishers/${pub.slug}`"
+            class="flex items-center gap-3 px-4 py-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            <div class="w-8 h-8 rounded bg-gray-700 flex items-center justify-center overflow-hidden shrink-0">
+              <img
+                v-if="pub.logo"
+                :src="pub.logo"
+                :alt="pub.name"
+                class="w-full h-full object-contain"
+                loading="lazy"
+              >
+              <span v-else class="text-lg">🏢</span>
+            </div>
+            <span class="text-white font-medium">{{ pub.name }}</span>
+          </RouterLink>
+        </div>
+      </section>
+    </div>
+
+    <!-- 初始未搜索状态 -->
+    <div v-else-if="!searched" class="text-center py-20 text-gray-500">
+      <p class="text-5xl mb-4">
+        🔍
+      </p>
+      <p class="text-lg">
+        输入关键词开始搜索
+      </p>
+      <p class="text-sm mt-2">
+        支持番号精确匹配（如 ABP-001）、影片标题、演员名、厂商名
+      </p>
     </div>
   </div>
 </template>

@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useMobileDetect } from '../composables/useMobileDetect'
 import { useUserStore } from '../stores/user'
+import SearchBar from './SearchBar.vue'
 
 // Emits 定义
 const emit = defineEmits<{
   openDrawer: []
   openSearch: []
 }>()
+
+const router = useRouter()
+
 const userStore = useUserStore()
 const { isMobile } = useMobileDetect()
 
@@ -17,6 +21,7 @@ function handleMenuClick() {
 
 function handleSearchClick() {
   emit('openSearch')
+  router.push('/search')
 }
 </script>
 
@@ -53,14 +58,16 @@ function handleSearchClick() {
             <RouterLink to="/publishers" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
               厂商
             </RouterLink>
-            <RouterLink to="/search" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-              搜索
-            </RouterLink>
           </nav>
         </div>
 
         <!-- 右侧：搜索 + 用户信息 -->
         <div class="flex items-center space-x-2 md:space-x-4">
+          <!-- 桌面端搜索框 -->
+          <div class="hidden md:block w-64">
+            <SearchBar />
+          </div>
+
           <!-- 移动端搜索按钮 -->
           <button
             v-if="isMobile"

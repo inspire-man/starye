@@ -298,6 +298,31 @@ export const ratingApi = {
   },
 }
 
+// ─── Search API ─────────────────────────────────────────────────────────────
+
+export interface SearchResult {
+  q: string
+  results: {
+    movies?: Array<{ id: string, code: string, title: string, slug: string, coverImage: string | null, isR18: boolean }>
+    actors?: Array<{ id: string, name: string, slug: string, avatar: string | null }>
+    publishers?: Array<{ id: string, name: string, slug: string, logo: string | null }>
+  }
+}
+
+export const searchApi = {
+  async search(q: string, options?: { types?: string, limit?: number }): Promise<SearchResult> {
+    const params = new URLSearchParams({ q })
+    if (options?.types)
+      params.set('types', options.types)
+    if (options?.limit)
+      params.set('limit', String(options.limit))
+    const res = await fetch(`/api/search?${params.toString()}`)
+    if (!res.ok)
+      throw new Error('Search failed')
+    return res.json() as Promise<SearchResult>
+  },
+}
+
 // ─── Favorites API ─────────────────────────────────────────────────────────
 
 export const favoritesApi = {
