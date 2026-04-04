@@ -48,6 +48,38 @@ export interface SyncMovieDataResult {
 }
 
 /**
+ * 将镜像站图片 URL 规范化为主站 www.javbus.com
+ * sync 层兜底：即使爬虫侧遗漏处理，入库前也会清洗
+ */
+const JAVBUS_MIRROR_HOSTS = [
+  'www.dmmbus.cyou',
+  'dmmbus.cyou',
+  'www.busdmm.bond',
+  'busdmm.bond',
+  'www.cdnbus.cyou',
+  'cdnbus.cyou',
+  'www.javsee.cyou',
+  'javsee.cyou',
+]
+
+function normalizeImageUrl(url: string | null | undefined): string | null {
+  if (!url)
+    return null
+  try {
+    const parsed = new URL(url)
+    if (JAVBUS_MIRROR_HOSTS.includes(parsed.hostname)) {
+      parsed.hostname = 'www.javbus.com'
+      parsed.protocol = 'https:'
+      return parsed.toString()
+    }
+    return url
+  }
+  catch {
+    return null // 非合法 URL 直接丢弃
+  }
+}
+
+/**
  * 幂等写入演员关联：upsert actor 记录 + movie_actor 关联表
  * 对存量数据安全：已有记录直接跳过插入冲突
  */
@@ -154,12 +186,12 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
         continue
       }
 
-      // 准备数据
+      // 准备数据（coverImage 清洗镜像站域名，兜底防御）
       const moviePayload: Partial<Movie> = {
         code,
         title,
         slug: slug || code.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        coverImage: coverImage || null,
+        coverImage: normalizeImageUrl(coverImage),
         releaseDate: releaseDate
           ? (typeof releaseDate === 'number'
               ? new Date(releaseDate * 1000) // Unix timestamp (秒) -> Date

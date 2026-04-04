@@ -60,6 +60,38 @@ export class JavBusStrategy implements MovieCrawlStrategy {
   }
 
   /**
+   * 将镜像站域名规范化为主站 www.javbus.com
+   * 防止爬取镜像站时将镜像域名的图片 URL 存入数据库
+   */
+  private _normalizeImageUrl(url: string | undefined | null): string | undefined {
+    if (!url)
+      return undefined
+    const MIRROR_HOSTS = [
+      'www.dmmbus.cyou',
+      'dmmbus.cyou',
+      'www.busdmm.bond',
+      'busdmm.bond',
+      'www.cdnbus.cyou',
+      'cdnbus.cyou',
+      'www.javsee.cyou',
+      'javsee.cyou',
+    ]
+    try {
+      const parsed = new URL(url)
+      if (MIRROR_HOSTS.includes(parsed.hostname)) {
+        parsed.hostname = 'www.javbus.com'
+        parsed.protocol = 'https:'
+        return parsed.toString()
+      }
+    }
+    catch {
+      // 非合法 URL，返回 undefined 而不是存入无效值
+      return undefined
+    }
+    return url
+  }
+
+  /**
    * 切换到下一个镜像站点
    */
   private _switchMirror() {
@@ -112,7 +144,7 @@ export class JavBusStrategy implements MovieCrawlStrategy {
       console.warn('[JavBus] Timeout waiting for content (h3). May be blocked or slow.')
     }
 
-    return page.evaluate((pageUrl) => {
+    const movieInfo = await page.evaluate((pageUrl) => {
       try {
         const titleEl = document.querySelector('h3')
         if (!titleEl) {
@@ -213,6 +245,13 @@ export class JavBusStrategy implements MovieCrawlStrategy {
         }
       }
     }, url)
+
+    // 规范化图片 URL：将镜像站域名替换为 www.javbus.com
+    if (movieInfo.coverImage) {
+      movieInfo.coverImage = this._normalizeImageUrl(movieInfo.coverImage) ?? ''
+    }
+
+    return movieInfo
   }
 
   private async _preparePage(page: Page, url: string) {
@@ -477,8 +516,9 @@ export class JavBusStrategy implements MovieCrawlStrategy {
         source: 'javbus',
         sourceId,
         sourceUrl: url,
-        avatar: actorInfo.avatar || undefined,
-        cover: actorInfo.cover || undefined,
+        // 规范化头像/封面 URL，避免镜像站域名入库
+        avatar: this._normalizeImageUrl(actorInfo.avatar),
+        cover: this._normalizeImageUrl(actorInfo.cover),
         bio: actorInfo.bio || undefined,
         birthDate: actorInfo.birthDate ? new Date(actorInfo.birthDate) : undefined,
         height: actorInfo.height ? Number.parseInt(actorInfo.height) : undefined,
@@ -572,7 +612,8 @@ export class JavBusStrategy implements MovieCrawlStrategy {
         source: 'javbus',
         sourceId,
         sourceUrl: url,
-        logo: publisherInfo.logo || undefined,
+        // 规范化 logo URL，避免镜像站域名入库
+        logo: this._normalizeImageUrl(publisherInfo.logo),
         website: publisherInfo.website || undefined,
         description: publisherInfo.description || undefined,
         foundedYear: publisherInfo.foundedYear ? Number.parseInt(publisherInfo.foundedYear) : undefined,

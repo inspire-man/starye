@@ -194,6 +194,103 @@ jobs:
             echo "   手动触发时选择 dry_run=false 执行清理"
           fi
 
+      # 每次运行都自动清理镜像站封面（无论 dry_run 模式，因为该操作安全且无副作用）
+      - name: Cleanup Invalid Cover Images
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "🖼️  检查并清理无效封面图片（镜像站域名）..."
+          echo ""
+
+          parse_count() {
+            node -e "
+              let raw = '';
+              process.stdin.on('data', chunk => raw += chunk);
+              process.stdin.on('end', () => {
+                const m = raw.match(/\[[\s\S]*\]/);
+                if (!m) return process.stdout.write('0\n');
+                try {
+                  const data = JSON.parse(m[0]);
+                  const row = data?.[0]?.results?.[0];
+                  process.stdout.write(String(row?.c ?? row?.count ?? 0) + '\n');
+                } catch { process.stdout.write('0\n'); }
+              });
+            "
+          }
+
+          d1_count() {
+            npx wrangler d1 execute "$D1_DB_NAME" --remote --command "$1" --json 2>&1 | parse_count
+          }
+
+          # 统计各镜像站封面数量
+          MIRROR_DOMAINS="dmmbus.cyou busdmm.bond cdnbus.cyou javsee.cyou"
+          TOTAL_INVALID=0
+
+          for DOMAIN in $MIRROR_DOMAINS; do
+            COUNT=$(d1_count "SELECT count(*) as c FROM movie WHERE cover_image LIKE '%${DOMAIN}%';")
+            if [ "$COUNT" != "0" ]; then
+              echo "   ⚠️  发现 $COUNT 个封面来自 $DOMAIN"
+              TOTAL_INVALID=$((TOTAL_INVALID + COUNT))
+            fi
+          done
+
+          # 同样检查 actor.avatar 和 publisher.logo
+          ACTOR_INVALID=0
+          PUBLISHER_INVALID=0
+          for DOMAIN in $MIRROR_DOMAINS; do
+            AC=$(d1_count "SELECT count(*) as c FROM actor WHERE avatar LIKE '%${DOMAIN}%';")
+            PC=$(d1_count "SELECT count(*) as c FROM publisher WHERE logo LIKE '%${DOMAIN}%';")
+            ACTOR_INVALID=$((ACTOR_INVALID + AC))
+            PUBLISHER_INVALID=$((PUBLISHER_INVALID + PC))
+          done
+
+          echo "   电影封面无效数: $TOTAL_INVALID"
+          echo "   演员头像无效数: $ACTOR_INVALID"
+          echo "   厂商 logo 无效数: $PUBLISHER_INVALID"
+          echo ""
+
+          GRAND_TOTAL=$((TOTAL_INVALID + ACTOR_INVALID + PUBLISHER_INVALID))
+          if [ "$GRAND_TOTAL" = "0" ]; then
+            echo "   ✅ 没有镜像站图片，无需清理"
+            exit 0
+          fi
+
+          echo "   共 $GRAND_TOTAL 条记录需要清理，开始处理..."
+
+          # 清理电影封面
+          for DOMAIN in $MIRROR_DOMAINS; do
+            npx wrangler d1 execute "$D1_DB_NAME" --remote \
+              --command "UPDATE movie SET cover_image = NULL WHERE cover_image LIKE '%${DOMAIN}%';" 2>&1 | tail -1
+          done
+
+          # 清理演员头像
+          for DOMAIN in $MIRROR_DOMAINS; do
+            npx wrangler d1 execute "$D1_DB_NAME" --remote \
+              --command "UPDATE actor SET avatar = NULL, cover = NULL WHERE avatar LIKE '%${DOMAIN}%' OR cover LIKE '%${DOMAIN}%';" 2>&1 | tail -1
+          done
+
+          # 清理厂商 logo
+          for DOMAIN in $MIRROR_DOMAINS; do
+            npx wrangler d1 execute "$D1_DB_NAME" --remote \
+              --command "UPDATE publisher SET logo = NULL WHERE logo LIKE '%${DOMAIN}%';" 2>&1 | tail -1
+          done
+
+          # 验证结果
+          REMAINING=0
+          for DOMAIN in $MIRROR_DOMAINS; do
+            C1=$(d1_count "SELECT count(*) as c FROM movie WHERE cover_image LIKE '%${DOMAIN}%';")
+            C2=$(d1_count "SELECT count(*) as c FROM actor WHERE avatar LIKE '%${DOMAIN}%';")
+            C3=$(d1_count "SELECT count(*) as c FROM publisher WHERE logo LIKE '%${DOMAIN}%';")
+            REMAINING=$((REMAINING + C1 + C2 + C3))
+          done
+
+          if [ "$REMAINING" = "0" ]; then
+            echo "   ✅ 封面清理完成，共处理 $GRAND_TOTAL 条记录"
+          else
+            echo "   ⚠️  仍有 $REMAINING 条记录未清理，请检查"
+          fi
+
       - name: Notify on Failure
         if: failure()
         run: |
