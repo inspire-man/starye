@@ -3,7 +3,7 @@
  * 爬虫监控页面
  */
 
-import { info, SkeletonCard, success } from '@starye/ui'
+import { ConfirmDialog, info, SkeletonCard, success } from '@starye/ui'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { useResourceGuard } from '@/composables/useResourceGuard'
@@ -72,11 +72,17 @@ async function handleRecoverCrawler(type: 'comic' | 'movie') {
   }
 }
 
-async function handleClearFailed(type: 'comic' | 'movie') {
-  // eslint-disable-next-line no-alert
-  if (!confirm(`确认清空 ${type === 'comic' ? '漫画' : '电影'} 的失败任务记录？`))
-    return
+// ConfirmDialog 状态（清空失败任务）
+const clearConfirmOpen = ref(false)
+const clearConfirmType = ref<'comic' | 'movie'>('comic')
 
+function handleClearFailed(type: 'comic' | 'movie') {
+  clearConfirmType.value = type
+  clearConfirmOpen.value = true
+}
+
+async function executeClearFailed() {
+  const type = clearConfirmType.value
   try {
     await api.admin.clearFailedTasks(type)
     await loadFailedTasks()
@@ -222,6 +228,15 @@ async function handleClearFailed(type: 'comic' | 'movie') {
       </div>
     </div>
   </div>
+
+  <!-- 清空失败任务确认对话框 -->
+  <ConfirmDialog
+    v-model:open="clearConfirmOpen"
+    title="确认清空失败任务"
+    :message="`确认清空 ${clearConfirmType === 'comic' ? '漫画' : '电影'} 的所有失败任务记录？此操作不可撤销。`"
+    variant="danger"
+    @confirm="executeClearFailed"
+  />
 </template>
 
 <style scoped>

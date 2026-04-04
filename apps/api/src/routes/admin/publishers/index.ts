@@ -8,7 +8,7 @@
 
 import type { AppEnv } from '../../../types'
 import { movies, publishers } from '@starye/db/schema'
-import { and, count, desc, eq, gt, inArray, isNotNull, isNull, like, lt } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, like, lt } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, validator } from 'hono-openapi'
 import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache'
@@ -131,10 +131,19 @@ adminPublishers.get(
   }),
   validator('query', GetAdminPublishersQuerySchema),
   async (c) => {
-    const { page, limit, search, onlyPending, crawlStatus, country } = c.req.valid('query')
+    const { page, limit, search, onlyPending, crawlStatus, country, sortBy, sortOrder } = c.req.valid('query')
     const db = c.get('db')
     const cache = new CacheManager(c.env.CACHE)
     const offset = (page - 1) * limit
+
+    // 排序字段白名单，默认按作品数降序
+    const sortColumn
+      = sortBy === 'name'
+        ? publishers.name
+        : sortBy === 'createdAt'
+          ? publishers.createdAt
+          : publishers.movieCount
+    const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn)
 
     try {
       // 构建筛选器对象用于缓存键
@@ -143,6 +152,8 @@ adminPublishers.get(
         crawlStatus: crawlStatus || '',
         country: country || '',
         onlyPending: onlyPending || '',
+        sortBy: sortBy || 'movieCount',
+        sortOrder: sortOrder || 'desc',
       }
 
       const cacheKey = CacheKeys.publisherList(page, limit, filters)
@@ -206,7 +217,7 @@ adminPublishers.get(
           const [results, totalResult] = await Promise.all([
             db.query.publishers.findMany({
               where: whereClause,
-              orderBy: desc(publishers.movieCount),
+              orderBy: orderByClause,
               limit,
               offset,
             }),

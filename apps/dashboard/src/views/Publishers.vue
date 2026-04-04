@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Movie, Publisher } from '@/lib/api'
-import { ConfirmDialog, DataTable, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
+import { ConfirmDialog, DataTable, FilterPanel, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
@@ -40,7 +40,7 @@ const mergingPublishers = ref(false)
 const countries = ref<string[]>([])
 const loadingCountries = ref(false)
 
-const { filters, applyFilters } = useFilters({
+const { filters, applyFilters, resetFilters } = useFilters({
   search: '',
   crawlStatus: '', // 爬取状态筛选：'' | 'complete' | 'pending' | 'failed' | 'no-link'
   country: '', // 国家筛选
@@ -74,6 +74,11 @@ watch(pageSize, () => {
   loadPublishers()
 })
 
+// 监听排序变化
+watch([sortField, sortOrder], () => {
+  loadPublishers()
+})
+
 function toggleSort(field: string) {
   const newOrder = sortField.value === field && sortOrder.value === 'asc' ? 'desc' : 'asc'
   updateSort(field, newOrder)
@@ -88,34 +93,7 @@ const tableColumns = [
   { key: 'createdAt', label: '创建时间', sortable: true, width: '180px' },
 ]
 
-const filteredPublishers = computed(() => {
-  let result = publishers.value
-
-  if (filters.value.search) {
-    const searchLower = filters.value.search.toLowerCase()
-    result = result.filter(p =>
-      p.name.toLowerCase().includes(searchLower),
-    )
-  }
-
-  result.sort((a, b) => {
-    let aVal: any = a[sortField.value as keyof Publisher]
-    let bVal: any = b[sortField.value as keyof Publisher]
-
-    if (sortField.value === 'createdAt') {
-      aVal = new Date(aVal || 0).getTime()
-      bVal = new Date(bVal || 0).getTime()
-    }
-
-    if (aVal < bVal)
-      return sortOrder.value === 'asc' ? -1 : 1
-    if (aVal > bVal)
-      return sortOrder.value === 'asc' ? 1 : -1
-    return 0
-  })
-
-  return result
-})
+// 服务端排序，直接使用 publishers.value
 
 async function loadStats() {
   loadingStats.value = true
@@ -161,19 +139,17 @@ async function loadPublishers() {
     const params: any = {
       page: currentPage.value,
       limit: pageSize.value,
+      sortBy: sortField.value,
+      sortOrder: sortOrder.value,
     }
-    if (filters.value.search) {
+    if (filters.value.search)
       params.search = filters.value.search
-    }
-    if (filters.value.crawlStatus) {
+    if (filters.value.crawlStatus)
       params.crawlStatus = filters.value.crawlStatus
-    }
-    if (filters.value.country) {
+    if (filters.value.country)
       params.country = filters.value.country
-    }
-    if (filters.value.hasDetails) {
+    if (filters.value.hasDetails)
       params.hasDetails = filters.value.hasDetails === 'true'
-    }
 
     const response = await api.admin.getPublishers(params)
     publishers.value = response.data
@@ -252,6 +228,37 @@ async function handleMerge() {
   }
 }
 
+// FilterPanel 字段配置（country options 动态生成）
+const filterFields = computed(() => [
+  { key: 'search', label: '搜索', type: 'text' as const, placeholder: '搜索厂商名称' },
+  {
+    key: 'crawlStatus',
+    label: '爬取状态',
+    type: 'select' as const,
+    options: [
+      { value: 'complete', label: '✅ 已完成' },
+      { value: 'pending', label: '⚠️ 待爬取' },
+      { value: 'failed', label: '❌ 爬取失败' },
+      { value: 'no-link', label: '🔗 无链接' },
+    ],
+  },
+  {
+    key: 'country',
+    label: '国家',
+    type: 'select' as const,
+    options: countries.value.map(c => ({ value: c, label: c })),
+  },
+  {
+    key: 'hasDetails',
+    label: '详情状态',
+    type: 'select' as const,
+    options: [
+      { value: 'true', label: '✅ 有详情' },
+      { value: 'false', label: '📝 无详情' },
+    ],
+  },
+])
+
 onMounted(() => {
   loadStats()
   loadCountries()
@@ -305,63 +312,13 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="filter-bar">
-      <input
-        v-model="filters.search"
-        type="text"
-        placeholder="搜索厂商名称..."
-        class="search-input"
-      >
-      <select
-        v-model="filters.crawlStatus"
-        class="filter-select"
-      >
-        <option value="">
-          全部状态
-        </option>
-        <option value="complete">
-          ✅ 已完成
-        </option>
-        <option value="pending">
-          ⚠️ 待爬取
-        </option>
-        <option value="failed">
-          ❌ 爬取失败
-        </option>
-        <option value="no-link">
-          🔗 无链接
-        </option>
-      </select>
-      <select
-        v-model="filters.country"
-        class="filter-select"
-        :disabled="loadingCountries"
-      >
-        <option value="">
-          全部国家
-        </option>
-        <option v-for="c in countries" :key="c" :value="c">
-          {{ c }}
-        </option>
-      </select>
-      <select
-        v-model="filters.hasDetails"
-        class="filter-select"
-      >
-        <option value="">
-          全部详情
-        </option>
-        <option value="true">
-          ✅ 有详情
-        </option>
-        <option value="false">
-          📝 无详情
-        </option>
-      </select>
-      <div class="filter-info">
-        共 {{ totalItems }} 个厂商
-      </div>
-    </div>
+    <!-- FilterPanel -->
+    <FilterPanel
+      v-model="filters"
+      :fields="filterFields"
+      @apply="applyFilters"
+      @reset="resetFilters"
+    />
 
     <div v-if="error" class="error-message">
       {{ error }}
@@ -375,7 +332,7 @@ onMounted(() => {
 
     <DataTable
       v-else
-      :data="filteredPublishers"
+      :data="publishers"
       :columns="tableColumns"
       :loading="loading"
       :sort-field="sortField"

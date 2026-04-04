@@ -1,7 +1,6 @@
-<!-- eslint-disable no-alert -->
 <script setup lang="ts">
 import type { Actor, Movie } from '@/lib/api'
-import { ConfirmDialog, DataTable, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
+import { ConfirmDialog, DataTable, FilterPanel, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
@@ -40,12 +39,13 @@ const mergingActors = ref(false)
 // 批量操作相关
 const selectedActors = ref<Set<string>>(new Set())
 const isBatchOperating = ref(false)
+const isRecrawlConfirmOpen = ref(false)
 
 // 国籍选项列表
 const nationalities = ref<string[]>([])
 const loadingNationalities = ref(false)
 
-const { filters, applyFilters } = useFilters({
+const { filters, applyFilters, resetFilters } = useFilters({
   search: '',
   crawlStatus: '', // 爬取状态筛选：'' | 'complete' | 'pending' | 'failed' | 'no-link'
   nationality: '', // 国籍筛选
@@ -79,6 +79,11 @@ watch(pageSize, () => {
   loadActors()
 })
 
+// 监听排序变化
+watch([sortField, sortOrder], () => {
+  loadActors()
+})
+
 function toggleSort(field: string) {
   const newOrder = sortField.value === field && sortOrder.value === 'asc' ? 'desc' : 'asc'
   updateSort(field, newOrder)
@@ -95,34 +100,7 @@ const tableColumns = [
   { key: 'actions', label: '操作', sortable: false, width: '100px' },
 ]
 
-const filteredActors = computed(() => {
-  let result = actors.value
-
-  if (filters.value.search) {
-    const searchLower = filters.value.search.toLowerCase()
-    result = result.filter(a =>
-      a.name.toLowerCase().includes(searchLower),
-    )
-  }
-
-  result.sort((a, b) => {
-    let aVal: any = a[sortField.value as keyof Actor]
-    let bVal: any = b[sortField.value as keyof Actor]
-
-    if (sortField.value === 'createdAt') {
-      aVal = new Date(aVal || 0).getTime()
-      bVal = new Date(bVal || 0).getTime()
-    }
-
-    if (aVal < bVal)
-      return sortOrder.value === 'asc' ? -1 : 1
-    if (aVal > bVal)
-      return sortOrder.value === 'asc' ? 1 : -1
-    return 0
-  })
-
-  return result
-})
+// 服务端排序，直接使用 actors.value（不再做客户端排序）
 
 async function loadStats() {
   loadingStats.value = true
@@ -168,19 +146,17 @@ async function loadActors() {
     const params: any = {
       page: currentPage.value,
       limit: pageSize.value,
+      sortBy: sortField.value,
+      sortOrder: sortOrder.value,
     }
-    if (filters.value.search) {
+    if (filters.value.search)
       params.search = filters.value.search
-    }
-    if (filters.value.crawlStatus) {
+    if (filters.value.crawlStatus)
       params.crawlStatus = filters.value.crawlStatus
-    }
-    if (filters.value.nationality) {
+    if (filters.value.nationality)
       params.nationality = filters.value.nationality
-    }
-    if (filters.value.hasDetails) {
+    if (filters.value.hasDetails)
       params.hasDetails = filters.value.hasDetails === 'true'
-    }
 
     const response = await api.admin.getActors(params)
     actors.value = response.data
@@ -270,30 +246,28 @@ function toggleActorSelection(actorId: string) {
 }
 
 function toggleSelectAll() {
-  if (selectedActors.value.size === filteredActors.value.length) {
+  if (selectedActors.value.size === actors.value.length) {
     selectedActors.value.clear()
   }
   else {
     selectedActors.value.clear()
-    filteredActors.value.forEach(actor => selectedActors.value.add(actor.id))
+    actors.value.forEach(actor => selectedActors.value.add(actor.id))
   }
 }
 
 const hasSelection = computed(() => selectedActors.value.size > 0)
 
-async function handleBatchRecrawl() {
+function handleBatchRecrawl() {
   if (selectedActors.value.size === 0)
     return
+  isRecrawlConfirmOpen.value = true
+}
 
-  if (!confirm(`确定要标记 ${selectedActors.value.size} 个演员为"待重新爬取"吗？下次爬虫运行时会尝试补全详情。`))
-    return
-
+async function executeRecrawl() {
   isBatchOperating.value = true
   try {
-    // 批量调用 API 将选中的演员标记为需要重新爬取
     const ids = Array.from(selectedActors.value)
     await api.admin.batchRecrawlActors(ids)
-
     success(`成功标记 ${ids.length} 位女优重新爬取`)
     selectedActors.value.clear()
     await loadActors()
@@ -305,6 +279,37 @@ async function handleBatchRecrawl() {
     isBatchOperating.value = false
   }
 }
+
+// FilterPanel 字段配置（nationality options 动态生成）
+const filterFields = computed(() => [
+  { key: 'search', label: '搜索', type: 'text' as const, placeholder: '搜索演员名称或别名' },
+  {
+    key: 'crawlStatus',
+    label: '爬取状态',
+    type: 'select' as const,
+    options: [
+      { value: 'complete', label: '✅ 已完成' },
+      { value: 'pending', label: '⚠️ 待爬取' },
+      { value: 'failed', label: '❌ 爬取失败' },
+      { value: 'no-link', label: '🔗 无链接' },
+    ],
+  },
+  {
+    key: 'nationality',
+    label: '国籍',
+    type: 'select' as const,
+    options: nationalities.value.map(n => ({ value: n, label: n })),
+  },
+  {
+    key: 'hasDetails',
+    label: '详情状态',
+    type: 'select' as const,
+    options: [
+      { value: 'true', label: '✅ 有详情' },
+      { value: 'false', label: '📝 无详情' },
+    ],
+  },
+])
 
 onMounted(() => {
   loadStats()
@@ -359,63 +364,13 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="filter-bar">
-      <input
-        v-model="filters.search"
-        type="text"
-        placeholder="搜索演员名称..."
-        class="search-input"
-      >
-      <select
-        v-model="filters.crawlStatus"
-        class="filter-select"
-      >
-        <option value="">
-          全部状态
-        </option>
-        <option value="complete">
-          ✅ 已完成
-        </option>
-        <option value="pending">
-          ⚠️ 待爬取
-        </option>
-        <option value="failed">
-          ❌ 爬取失败
-        </option>
-        <option value="no-link">
-          🔗 无链接
-        </option>
-      </select>
-      <select
-        v-model="filters.nationality"
-        class="filter-select"
-        :disabled="loadingNationalities"
-      >
-        <option value="">
-          全部国籍
-        </option>
-        <option v-for="nat in nationalities" :key="nat" :value="nat">
-          {{ nat }}
-        </option>
-      </select>
-      <select
-        v-model="filters.hasDetails"
-        class="filter-select"
-      >
-        <option value="">
-          全部详情
-        </option>
-        <option value="true">
-          ✅ 有详情
-        </option>
-        <option value="false">
-          📝 无详情
-        </option>
-      </select>
-      <div class="filter-info">
-        共 {{ totalItems }} 个演员
-      </div>
-    </div>
+    <!-- FilterPanel -->
+    <FilterPanel
+      v-model="filters"
+      :fields="filterFields"
+      @apply="applyFilters"
+      @reset="resetFilters"
+    />
 
     <div v-if="hasSelection" class="batch-actions">
       <span class="batch-info">已选择 {{ selectedActors.size }} 个演员</span>
@@ -427,7 +382,7 @@ onMounted(() => {
         {{ isBatchOperating ? '处理中...' : '重新爬取详情' }}
       </button>
       <button class="btn-secondary" @click="toggleSelectAll">
-        {{ selectedActors.size === filteredActors.length ? '取消全选' : '全选当前页' }}
+        {{ selectedActors.size === actors.length ? '取消全选' : '全选当前页' }}
       </button>
       <button class="btn-secondary" @click="selectedActors.clear()">
         取消选择
@@ -447,7 +402,7 @@ onMounted(() => {
 
     <DataTable
       v-else
-      :data="filteredActors"
+      :data="actors"
       :columns="tableColumns"
       :loading="loading"
       :sort-field="sortField"
@@ -578,6 +533,14 @@ onMounted(() => {
         </div>
       </div>
     </Teleport>
+
+    <!-- 批量重爬确认对话框 -->
+    <ConfirmDialog
+      v-model:open="isRecrawlConfirmOpen"
+      title="确认批量重爬"
+      :message="`确定要将 ${selectedActors.size} 位演员标记为【待重新爬取】吗？下次爬虫运行时会尝试补全详情。`"
+      @confirm="executeRecrawl"
+    />
 
     <ConfirmDialog
       :open="isMergeDialogOpen"

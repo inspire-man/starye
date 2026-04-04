@@ -11,6 +11,8 @@ export const GetAdminActorsQuerySchema = v.object({
   onlyPending: v.optional(v.picklist(['true', 'false'])),
   crawlStatus: v.optional(v.picklist(['complete', 'pending', 'failed', 'no-link'])),
   nationality: v.optional(v.pipe(v.string(), v.trim())),
+  sortBy: v.optional(v.picklist(['movieCount', 'name', 'createdAt'])),
+  sortOrder: v.optional(v.picklist(['asc', 'desc'])),
 })
 
 /**
@@ -134,6 +136,8 @@ export const GetAdminPublishersQuerySchema = v.object({
   onlyPending: v.optional(v.picklist(['true', 'false'])),
   crawlStatus: v.optional(v.picklist(['complete', 'pending', 'no-link', 'failed'])),
   country: v.optional(v.pipe(v.string(), v.trim())),
+  sortBy: v.optional(v.picklist(['movieCount', 'name', 'createdAt'])),
+  sortOrder: v.optional(v.picklist(['asc', 'desc'])),
 })
 
 /**

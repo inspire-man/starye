@@ -1,10 +1,15 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { comics } from '@starye/db/schema'
-import { count, eq } from 'drizzle-orm'
+import { and, asc, count, desc, eq, like, or } from 'drizzle-orm'
+
+/** 漫画列表排序字段白名单 */
+const COMIC_SORT_FIELDS = ['updatedAt', 'createdAt', 'title', 'sortOrder'] as const
+type ComicSortField = typeof COMIC_SORT_FIELDS[number]
 
 /**
  * 获取漫画列表（管理员视图）
+ * 支持分页、搜索、筛选（isR18/status/region/crawlStatus）、服务端排序
  */
 export async function getComicList(c: Context<AppEnv>) {
   const db = c.get('db')
@@ -12,13 +17,67 @@ export async function getComicList(c: Context<AppEnv>) {
   const limit = Number(c.req.query('limit')) || 20
   const offset = (page - 1) * limit
 
+  // 筛选参数
+  const search = c.req.query('search')
+  const isR18Param = c.req.query('isR18')
+  const status = c.req.query('status') as 'serializing' | 'completed' | undefined
+  const region = c.req.query('region')
+  const crawlStatus = c.req.query('crawlStatus') as 'pending' | 'partial' | 'complete' | undefined
+
+  // 排序参数（白名单校验，防止 SQL 注入）
+  const sortByParam = c.req.query('sortBy') || 'updatedAt'
+  const sortBy: ComicSortField = COMIC_SORT_FIELDS.includes(sortByParam as ComicSortField)
+    ? (sortByParam as ComicSortField)
+    : 'updatedAt'
+  const sortOrderParam = c.req.query('sortOrder')
+  const sortOrder: 'asc' | 'desc' = sortOrderParam === 'asc' ? 'asc' : 'desc'
+
+  // 构建 WHERE 条件
+  const conditions = []
+
+  if (search) {
+    const searchCond = or(
+      like(comics.title, `%${search}%`),
+      like(comics.author, `%${search}%`),
+    )
+    if (searchCond)
+      conditions.push(searchCond)
+  }
+
+  if (isR18Param === 'true') {
+    conditions.push(eq(comics.isR18, true))
+  }
+  else if (isR18Param === 'false') {
+    conditions.push(eq(comics.isR18, false))
+  }
+
+  if (status === 'serializing' || status === 'completed') {
+    conditions.push(eq(comics.status, status))
+  }
+
+  if (region) {
+    conditions.push(like(comics.region, `%${region}%`))
+  }
+
+  if (crawlStatus === 'pending' || crawlStatus === 'partial' || crawlStatus === 'complete') {
+    conditions.push(eq(comics.crawlStatus, crawlStatus))
+  }
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+
+  // 构建 ORDER BY
+  const sortColumn = {
+    updatedAt: comics.updatedAt,
+    createdAt: comics.createdAt,
+    title: comics.title,
+    sortOrder: comics.sortOrder,
+  }[sortBy] ?? comics.updatedAt
+
+  const orderBy = sortOrder === 'desc' ? desc(sortColumn) : asc(sortColumn)
+
   const [results, totalResult] = await Promise.all([
-    db.query.comics.findMany({
-      orderBy: (comics, { desc }) => [desc(comics.updatedAt)],
-      limit,
-      offset,
-    }),
-    db.select({ value: count() }).from(comics).then(res => res[0].value),
+    db.select().from(comics).where(where).orderBy(orderBy).limit(limit).offset(offset),
+    db.select({ value: count() }).from(comics).where(where).then(res => res[0].value),
   ])
 
   return c.json({

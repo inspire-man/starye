@@ -159,10 +159,19 @@ adminActors.get(
   }),
   validator('query', GetAdminActorsQuerySchema),
   async (c) => {
-    const { page, limit, search, onlyPending, crawlStatus, nationality } = c.req.valid('query')
+    const { page, limit, search, onlyPending, crawlStatus, nationality, sortBy, sortOrder } = c.req.valid('query')
     const db = c.get('db')
     const cache = new CacheManager(c.env.CACHE)
     const offset = (page - 1) * limit
+
+    // 排序字段白名单，默认按作品数降序
+    const sortColumn
+      = sortBy === 'name'
+        ? actors.name
+        : sortBy === 'createdAt'
+          ? actors.createdAt
+          : actors.movieCount
+    const orderByClause = sortOrder === 'asc' ? sortColumn : desc(sortColumn)
 
     try {
       // 构建筛选器对象用于缓存键
@@ -171,6 +180,8 @@ adminActors.get(
         crawlStatus: crawlStatus || '',
         nationality: nationality || '',
         onlyPending: onlyPending || '',
+        sortBy: sortBy || 'movieCount',
+        sortOrder: sortOrder || 'desc',
       }
 
       const cacheKey = CacheKeys.actorList(page, limit, filters)
@@ -239,7 +250,7 @@ adminActors.get(
             // 获取更多结果以支持别名搜索
             const allResults = await db.query.actors.findMany({
               where: whereClause,
-              orderBy: desc(actors.movieCount),
+              orderBy: orderByClause,
             })
 
             // 在内存中筛选：匹配名称或别名
@@ -263,7 +274,7 @@ adminActors.get(
             const [queryResults, countResult] = await Promise.all([
               db.query.actors.findMany({
                 where: whereClause,
-                orderBy: desc(actors.movieCount),
+                orderBy: orderByClause,
                 limit,
                 offset,
               }),

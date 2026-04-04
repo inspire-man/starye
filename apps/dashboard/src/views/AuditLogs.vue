@@ -272,7 +272,37 @@ onMounted(loadLogs)
               </div>
               <div v-if="selectedLog.changes" class="detail-item full-width">
                 <label>变更详情</label>
-                <pre class="changes-json">{{ JSON.stringify(selectedLog.changes, null, 2) }}</pre>
+                <!-- diff 视图：当 changes 包含 before/after 时显示字段对比 -->
+                <template v-if="selectedLog.changes && typeof selectedLog.changes === 'object' && 'before' in selectedLog.changes && 'after' in selectedLog.changes">
+                  <table class="diff-table">
+                    <thead>
+                      <tr>
+                        <th>字段</th>
+                        <th>修改前</th>
+                        <th>修改后</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="key in Object.keys((selectedLog.changes as any).after || {})"
+                        :key="key"
+                        :class="JSON.stringify((selectedLog.changes as any).before?.[key]) !== JSON.stringify((selectedLog.changes as any).after?.[key]) ? 'changed-row' : ''"
+                      >
+                        <td class="field-name">
+                          {{ key }}
+                        </td>
+                        <td class="before-value">
+                          {{ (selectedLog.changes as any).before?.[key] !== undefined ? JSON.stringify((selectedLog.changes as any).before[key]) : '-' }}
+                        </td>
+                        <td class="after-value">
+                          {{ JSON.stringify((selectedLog.changes as any).after[key]) }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </template>
+                <!-- 降级：非 before/after 结构时展示原始 JSON -->
+                <pre v-else class="changes-json">{{ JSON.stringify(selectedLog.changes, null, 2) }}</pre>
               </div>
             </div>
           </div>
@@ -458,6 +488,56 @@ onMounted(loadLogs)
   font-size: 0.75rem;
   overflow-x: auto;
   max-height: 400px;
+}
+
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  font-family: monospace;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.diff-table th {
+  background: #f3f4f6;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.diff-table td {
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+  word-break: break-all;
+  max-width: 280px;
+}
+
+.diff-table .field-name {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.diff-table .changed-row {
+  background: #fffbeb;
+}
+
+.diff-table .changed-row .before-value {
+  color: #dc2626;
+  background: #fee2e2;
+  border-radius: 2px;
+  padding: 0.1rem 0.3rem;
+}
+
+.diff-table .changed-row .after-value {
+  color: #16a34a;
+  background: #dcfce7;
+  border-radius: 2px;
+  padding: 0.1rem 0.3rem;
 }
 
 .modal-footer {

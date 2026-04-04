@@ -1,43 +1,191 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '@/lib/api'
-import { Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
+import { ConfirmDialog, FilterPanel, Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BatchOperationMenu from '@/components/BatchOperationMenu.vue'
+import { useBatchSelect } from '@/composables/useBatchSelect'
 import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useSorting } from '@/composables/useSorting'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 
 const { t } = useI18n()
 useSession()
 
-const { success } = useToast()
+const { success, warning, showProgress, updateProgress, hideProgress } = useToast()
 const { handleError } = useErrorHandler()
 
 const comics = ref<Comic[]>([])
 const loading = ref(true)
 const error = ref('')
 
-// 分页和筛选
-const { currentPage, totalPages, total, setMeta, goToPage } = usePagination(18)
-const { filters } = useFilters({
+// 分页（URL 状态同步）
+const { currentPage, limit, totalPages, total, setMeta, goToPage, updatePageSize } = usePagination(18)
+
+// 筛选（URL 状态同步）
+const { filters, applyFilters, resetFilters } = useFilters({
   search: '',
-  isR18: 'all',
+  isR18: '',
   status: '',
   region: '',
+  crawlStatus: '',
 })
 
-const pageSize = ref(18)
+// 排序
+const { sortBy, sortOrder, updateSort } = useSorting('updatedAt', 'desc')
 
-// Modal state
+// 筛选面板字段配置
+const filterFields = [
+  {
+    key: 'search',
+    label: '搜索',
+    type: 'text' as const,
+    placeholder: '标题或作者',
+  },
+  {
+    key: 'isR18',
+    label: 'R18',
+    type: 'select' as const,
+    options: [
+      { value: '', label: '全部' },
+      { value: 'true', label: '是' },
+      { value: 'false', label: '否' },
+    ],
+  },
+  {
+    key: 'status',
+    label: '连载状态',
+    type: 'select' as const,
+    options: [
+      { value: '', label: '全部' },
+      { value: 'serializing', label: '连载中' },
+      { value: 'completed', label: '已完结' },
+    ],
+  },
+  {
+    key: 'region',
+    label: '地区',
+    type: 'text' as const,
+    placeholder: '地区',
+  },
+  {
+    key: 'crawlStatus',
+    label: '爬取状态',
+    type: 'select' as const,
+    options: [
+      { value: '', label: '全部' },
+      { value: 'pending', label: '等待中' },
+      { value: 'partial', label: '部分完成' },
+      { value: 'complete', label: '已完成' },
+    ],
+  },
+]
+
+// 批量操作
+const { selected, toggleItem, clearSelection, selectedCount, selectedIds } = useBatchSelect(comics as any)
+
+const batchOperations = [
+  { id: 'update_r18', label: '设为 R18', variant: 'default' as const },
+  { id: 'lock_metadata', label: '锁定元数据', variant: 'default' as const },
+  { id: 'unlock_metadata', label: '解锁元数据', variant: 'default' as const },
+  { id: 'delete', label: '批量删除', variant: 'danger' as const },
+]
+
+const confirmDialogOpen = ref(false)
+const confirmDialogData = ref<{
+  title: string
+  message: string
+  operation: string
+}>({
+  title: '',
+  message: '',
+  operation: '',
+})
+
+// 编辑 Modal
 const isEditModalOpen = ref(false)
 const editingComic = ref<Comic | null>(null)
 const updateLoading = ref(false)
 const uploadLoading = ref(false)
-
-// Chapter Management State
 const activeTab = ref<'metadata' | 'chapters'>('metadata')
+
+// 章节管理
 const chapters = ref<Chapter[]>([])
 const chaptersLoading = ref(false)
+const selectedChapterIds = ref<Set<string>>(new Set())
+const chapterBatchDeleteOpen = ref(false)
+
+// ─── 数据加载 ───────────────────────────────────────────────────────────────
+
+async function loadComics() {
+  loading.value = true
+  try {
+    const params = {
+      page: currentPage.value,
+      limit: limit.value,
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value,
+      ...filters.value,
+    }
+
+    const response = await api.admin.getComics(params)
+    comics.value = response.data
+    setMeta(response.meta)
+    error.value = ''
+  }
+  catch (e: unknown) {
+    error.value = String(e)
+    handleError(e, '加载漫画列表失败')
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+// 监听页码 / 每页数量变化
+watch(currentPage, () => loadComics(), { immediate: true })
+watch(limit, () => loadComics())
+
+// 监听排序变化
+watch([sortBy, sortOrder], () => loadComics())
+
+// 监听筛选条件变化（URL 已含 page=1，直接加载即可）
+watch(
+  [
+    () => filters.value.search,
+    () => filters.value.isR18,
+    () => filters.value.status,
+    () => filters.value.region,
+    () => filters.value.crawlStatus,
+  ],
+  () => loadComics(),
+)
+
+// ─── 编辑 Modal ──────────────────────────────────────────────────────────────
+
+function openEditModal(comic: Comic) {
+  editingComic.value = { ...comic }
+  isEditModalOpen.value = true
+  activeTab.value = 'metadata'
+  selectedChapterIds.value.clear()
+  if (comic.id) {
+    loadChapters(comic.id)
+  }
+}
+
+async function loadChapters(comicId: string) {
+  chaptersLoading.value = true
+  try {
+    chapters.value = await api.admin.getChapters(comicId)
+  }
+  catch (e) {
+    handleError(e, '加载章节列表失败')
+  }
+  finally {
+    chaptersLoading.value = false
+  }
+}
 
 async function handleUpload(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
@@ -62,92 +210,6 @@ async function handleUpload(event: Event) {
   }
 }
 
-async function loadComics() {
-  loading.value = true
-  try {
-    const params: Record<string, any> = {
-      page: currentPage.value,
-      limit: pageSize.value,
-    }
-
-    if (filters.value.search) {
-      params.search = filters.value.search
-    }
-    if (filters.value.isR18 && filters.value.isR18 !== 'all') {
-      params.isR18 = filters.value.isR18
-    }
-    if (filters.value.status) {
-      params.status = filters.value.status
-    }
-    if (filters.value.region) {
-      params.region = filters.value.region
-    }
-
-    const response = await api.admin.getComics(params)
-    comics.value = response.data
-    setMeta({ total: response.meta.total, totalPages: response.meta.totalPages })
-  }
-  catch (e: unknown) {
-    error.value = String(e)
-  }
-  finally {
-    loading.value = false
-  }
-}
-
-// 监听 currentPage 变化时加载数据
-watch(currentPage, () => {
-  loadComics()
-}, { immediate: true })
-
-// 监听实际的筛选条件变化（不包括 page）
-watch(
-  [
-    () => filters.value.search,
-    () => filters.value.isR18,
-    () => filters.value.status,
-    () => filters.value.region,
-  ],
-  () => {
-    // 筛选条件变化时重置到第一页
-    if (currentPage.value !== 1) {
-      goToPage(1)
-    }
-    // 如果已经在第一页，手动触发加载（因为 currentPage 不会变化）
-    else {
-      loadComics()
-    }
-  },
-)
-
-function openEditModal(comic: Comic) {
-  editingComic.value = { ...comic }
-  isEditModalOpen.value = true
-  activeTab.value = 'metadata'
-  if (comic.id) {
-    loadChapters(comic.id)
-  }
-}
-
-async function loadChapters(comicId: string) {
-  chaptersLoading.value = true
-  try {
-    chapters.value = await api.admin.getChapters(comicId)
-  }
-  catch (e) {
-    handleError(e, '加载章节列表失败')
-  }
-  finally {
-    chaptersLoading.value = false
-  }
-}
-
-async function deleteChapter(id: string) {
-  await api.admin.deleteChapter(id)
-  // Remove from local list
-  chapters.value = chapters.value.filter(c => c.id !== id)
-}
-
 async function handleUpdate() {
   if (!editingComic.value?.id)
     return
@@ -159,7 +221,7 @@ async function handleUpdate() {
       author: editingComic.value.author,
       description: editingComic.value.description,
       isR18: editingComic.value.isR18,
-      metadataLocked: editingComic.value.metadataLocked, // New Field
+      metadataLocked: editingComic.value.metadataLocked,
       status: editingComic.value.status as any,
       region: editingComic.value.region,
       genres: Array.isArray(editingComic.value.genres)
@@ -191,10 +253,132 @@ async function toggleR18Shortcut(comic: Comic) {
     handleError(e, '快速更新失败')
   }
 }
+
+// ─── 章节批量删除 ────────────────────────────────────────────────────────────
+
+function toggleChapter(chapterId: string) {
+  if (selectedChapterIds.value.has(chapterId)) {
+    selectedChapterIds.value.delete(chapterId)
+  }
+  else {
+    selectedChapterIds.value.add(chapterId)
+  }
+  selectedChapterIds.value = new Set(selectedChapterIds.value)
+}
+
+function toggleAllChapters() {
+  if (selectedChapterIds.value.size === chapters.value.length) {
+    selectedChapterIds.value.clear()
+  }
+  else {
+    chapters.value.forEach(c => selectedChapterIds.value.add(c.id))
+  }
+  selectedChapterIds.value = new Set(selectedChapterIds.value)
+}
+
+async function deleteSingleChapter(chapterId: string) {
+  try {
+    await api.admin.deleteChapter(chapterId)
+    chapters.value = chapters.value.filter(c => c.id !== chapterId)
+    success('章节已删除')
+  }
+  catch (e) {
+    handleError(e, '删除章节失败')
+  }
+}
+
+async function executeChapterBatchDelete() {
+  if (!editingComic.value?.id || selectedChapterIds.value.size === 0)
+    return
+
+  try {
+    const chapterIds = [...selectedChapterIds.value]
+    await api.admin.bulkDeleteChapters(editingComic.value.id, chapterIds)
+    chapters.value = chapters.value.filter(c => !selectedChapterIds.value.has(c.id))
+    selectedChapterIds.value.clear()
+    success(`已删除 ${chapterIds.length} 个章节`)
+  }
+  catch (e) {
+    handleError(e, '批量删除章节失败')
+  }
+  finally {
+    chapterBatchDeleteOpen.value = false
+  }
+}
+
+// ─── 漫画批量操作 ────────────────────────────────────────────────────────────
+
+function handleBatchOperation(operationId: string) {
+  confirmDialogData.value = {
+    title: '确认批量操作',
+    message: `即将对 ${selectedCount.value} 部漫画执行操作`,
+    operation: operationId,
+  }
+
+  if (operationId === 'delete') {
+    confirmDialogData.value.title = '⚠️ 确认批量删除'
+    confirmDialogData.value.message = `此操作将删除 ${selectedCount.value} 部漫画，不可撤销`
+  }
+
+  confirmDialogOpen.value = true
+}
+
+async function executeBatchOperation() {
+  const { operation } = confirmDialogData.value
+  const ids = [...selectedIds.value]
+  const total = ids.length
+
+  if (operation === 'delete') {
+    const progressId = showProgress('正在删除漫画...')
+    let successCount = 0
+    let failedCount = 0
+
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        try {
+          await api.admin.deleteComic(ids[i])
+          successCount++
+        }
+        catch {
+          failedCount++
+        }
+        updateProgress(progressId, Math.round(((i + 1) / total) * 100))
+      }
+
+      hideProgress(progressId)
+
+      if (failedCount === 0) {
+        success(`成功删除 ${successCount} 部漫画`)
+      }
+      else {
+        warning(`完成删除: 成功 ${successCount} 部，失败 ${failedCount} 部`)
+      }
+
+      clearSelection()
+      await loadComics()
+    }
+    catch (e) {
+      hideProgress(progressId)
+      handleError(e, '批量删除失败')
+    }
+  }
+  else {
+    try {
+      await api.admin.bulkOperationComics(selectedIds.value, operation)
+      success(`成功对 ${selectedCount.value} 部漫画执行了操作`)
+      clearSelection()
+      await loadComics()
+    }
+    catch (e) {
+      handleError(e, '批量操作失败')
+    }
+  }
+}
 </script>
 
 <template>
   <div class="space-y-6 relative">
+    <!-- 页面标题 -->
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
@@ -215,42 +399,63 @@ async function toggleR18Shortcut(comic: Comic) {
       </button>
     </div>
 
-    <!-- 筛选器 -->
-    <div class="filter-bar">
-      <input
-        v-model="filters.search"
-        type="text"
-        placeholder="搜索漫画标题或作者..."
-        class="filter-input"
+    <!-- FilterPanel -->
+    <FilterPanel
+      v-model="filters"
+      :fields="filterFields"
+      @apply="applyFilters"
+      @reset="resetFilters"
+    />
+
+    <!-- 工具栏：排序 + 批量操作 -->
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 text-sm">
+        <label class="text-neutral-500">排序:</label>
+        <select
+          :value="sortBy"
+          class="px-3 py-1.5 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-900"
+          @change="updateSort(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="updatedAt">
+            更新时间
+          </option>
+          <option value="createdAt">
+            创建时间
+          </option>
+          <option value="title">
+            标题
+          </option>
+          <option value="sortOrder">
+            人工排序
+          </option>
+        </select>
+        <select
+          :value="sortOrder"
+          class="px-3 py-1.5 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-900"
+          @change="updateSort(sortBy, ($event.target as HTMLSelectElement).value as 'asc' | 'desc')"
+        >
+          <option value="desc">
+            降序
+          </option>
+          <option value="asc">
+            升序
+          </option>
+        </select>
+      </div>
+
+      <BatchOperationMenu
+        :operations="batchOperations"
+        :selected-count="selectedCount"
+        @execute="handleBatchOperation"
+      />
+
+      <button
+        v-if="selectedCount > 0"
+        class="text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+        @click="clearSelection"
       >
-      <select v-model="filters.isR18" class="filter-select">
-        <option value="all">
-          全部类型
-        </option>
-        <option value="true">
-          R18
-        </option>
-        <option value="false">
-          一般
-        </option>
-      </select>
-      <select v-model="filters.status" class="filter-select">
-        <option value="">
-          全部状态
-        </option>
-        <option value="serializing">
-          连载中
-        </option>
-        <option value="completed">
-          已完结
-        </option>
-      </select>
-      <input
-        v-model="filters.region"
-        type="text"
-        placeholder="地区..."
-        class="filter-input-sm"
-      >
+        取消选择
+      </button>
     </div>
 
     <!-- Loading / Error States -->
@@ -276,9 +481,25 @@ async function toggleR18Shortcut(comic: Comic) {
     <!-- Comic Grid -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       <div
-        v-for="comic in comics" :key="comic.slug"
-        class="group bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden flex shadow-sm hover:shadow-md transition-all"
+        v-for="comic in comics"
+        :key="comic.slug"
+        class="group relative bg-white dark:bg-neutral-900 border rounded-2xl overflow-hidden flex shadow-sm hover:shadow-md transition-all"
+        :class="comic.id && selected.has(comic.id) ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-neutral-200 dark:border-neutral-800'"
       >
+        <!-- 批量选择复选框 -->
+        <div
+          class="absolute top-2 left-2 z-10"
+          @click.stop="comic.id && toggleItem(comic.id)"
+        >
+          <input
+            type="checkbox"
+            :checked="!!(comic.id && selected.has(comic.id))"
+            class="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+            @click.stop
+            @change="comic.id && toggleItem(comic.id)"
+          >
+        </div>
+
         <!-- Cover Preview -->
         <div class="w-28 shrink-0 bg-neutral-100 dark:bg-neutral-800 relative">
           <img v-if="comic.coverImage" :src="comic.coverImage" class="w-full h-full object-cover">
@@ -335,18 +556,18 @@ async function toggleR18Shortcut(comic: Comic) {
       </div>
     </div>
 
-    <!-- 增强的分页器 -->
+    <!-- 分页 -->
     <Pagination
       v-if="totalPages > 1"
       :current-page="currentPage"
       :total-pages="totalPages"
       :total="total"
-      :page-size="pageSize"
+      :page-size="limit"
       :page-sizes="[10, 18, 30, 50]"
       layout="total, sizes, prev, pager, next, jumper"
       :background="true"
       @update:current-page="goToPage"
-      @update:page-size="(size) => { pageSize = size; goToPage(1) }"
+      @update:page-size="updatePageSize"
     />
 
     <!-- Edit Modal -->
@@ -414,10 +635,9 @@ async function toggleR18Shortcut(comic: Comic) {
               >
             </div>
 
-            <!-- Existing Fields -->
+            <!-- Cover Image -->
             <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.cover_image')
-              }}</label>
+              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.cover_image') }}</label>
               <div class="flex items-center gap-4">
                 <div
                   class="w-16 h-24 bg-neutral-100 dark:bg-neutral-800 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 relative group"
@@ -425,14 +645,8 @@ async function toggleR18Shortcut(comic: Comic) {
                   <img v-if="editingComic.coverImage" :src="editingComic.coverImage" class="w-full h-full object-cover">
                   <div v-if="uploadLoading" class="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
-                      <circle
-                        class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
-                        fill="none"
-                      />
-                      <path
-                        class="opacity-75" fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
                   </div>
                 </div>
@@ -457,36 +671,35 @@ async function toggleR18Shortcut(comic: Comic) {
               </div>
             </div>
 
+            <!-- Title -->
             <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.comic_title')
-              }}</label>
+              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.comic_title') }}</label>
               <input
                 v-model="editingComic.title"
                 class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none"
               >
             </div>
 
+            <!-- Author -->
             <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.author')
-              }}</label>
+              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.author') }}</label>
               <input
                 v-model="editingComic.author"
                 class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none"
               >
             </div>
 
+            <!-- Region + Status -->
             <div class="grid grid-cols-2 gap-4">
               <div class="space-y-2">
-                <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.region')
-                }}</label>
+                <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.region') }}</label>
                 <input
                   v-model="editingComic.region"
                   class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm"
                 >
               </div>
               <div class="space-y-2">
-                <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.status')
-                }}</label>
+                <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.status') }}</label>
                 <select
                   v-model="editingComic.status"
                   class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm appearance-none"
@@ -501,9 +714,9 @@ async function toggleR18Shortcut(comic: Comic) {
               </div>
             </div>
 
+            <!-- Genres -->
             <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.genres')
-              }}</label>
+              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.genres') }}</label>
               <input
                 :value="Array.isArray(editingComic.genres) ? editingComic.genres.join(', ') : editingComic.genres"
                 class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm"
@@ -511,15 +724,16 @@ async function toggleR18Shortcut(comic: Comic) {
               >
             </div>
 
+            <!-- Description -->
             <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.description')
-              }}</label>
+              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.description') }}</label>
               <textarea
                 v-model="editingComic.description" rows="3"
                 class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm resize-none"
               />
             </div>
 
+            <!-- R18 Toggle -->
             <div
               class="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-2xl border border-neutral-100 dark:border-neutral-800"
             >
@@ -538,50 +752,81 @@ async function toggleR18Shortcut(comic: Comic) {
           <!-- Chapters Tab -->
           <div v-else class="space-y-4">
             <div v-if="chaptersLoading" class="text-center py-8 text-neutral-500">
-              Loading chapters...
+              加载章节中...
             </div>
             <div v-else-if="chapters.length === 0" class="text-center py-8 text-neutral-500">
-              No chapters found.
+              暂无章节数据
             </div>
-            <div v-else class="border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">
-              <table class="w-full text-sm text-left">
-                <thead class="bg-neutral-50 dark:bg-neutral-800 text-xs uppercase text-neutral-500 font-bold">
-                  <tr>
-                    <th class="px-4 py-3">
-                      #
-                    </th>
-                    <th class="px-4 py-3">
-                      Title
-                    </th>
-                    <th class="px-4 py-3 text-right">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
-                  <tr
-                    v-for="chapter in chapters" :key="chapter.id"
-                    class="hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+            <div v-else>
+              <!-- 全选 + 批量删除按钮 -->
+              <div class="flex items-center justify-between mb-3">
+                <label class="flex items-center gap-2 text-xs text-neutral-500 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    :checked="selectedChapterIds.size === chapters.length && chapters.length > 0"
+                    class="w-4 h-4 accent-blue-600"
+                    @change="toggleAllChapters"
                   >
-                    <td class="px-4 py-3 text-neutral-500">
-                      {{ chapter.sortOrder }}
-                    </td>
-                    <td class="px-4 py-3 font-medium">
-                      {{ chapter.title }}
-                      <span v-if="chapter.slug" class="ml-2 text-[10px] text-neutral-400 font-mono">{{ chapter.slug
-                      }}</span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                      <button
-                        class="text-red-600 hover:text-red-700 font-bold text-xs"
-                        @click="deleteChapter(chapter.id)"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                  全选（{{ selectedChapterIds.size }}/{{ chapters.length }}）
+                </label>
+                <button
+                  v-if="selectedChapterIds.size > 0"
+                  class="text-xs font-bold px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  @click="chapterBatchDeleteOpen = true"
+                >
+                  批量删除 {{ selectedChapterIds.size }} 个章节
+                </button>
+              </div>
+
+              <div class="border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">
+                <table class="w-full text-sm text-left">
+                  <thead class="bg-neutral-50 dark:bg-neutral-800 text-xs uppercase text-neutral-500 font-bold">
+                    <tr>
+                      <th class="px-3 py-3 w-10" />
+                      <th class="px-4 py-3">
+                        #
+                      </th>
+                      <th class="px-4 py-3">
+                        标题
+                      </th>
+                      <th class="px-4 py-3 text-right">
+                        操作
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
+                    <tr
+                      v-for="chapter in chapters" :key="chapter.id"
+                      class="hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                      :class="{ 'bg-blue-50 dark:bg-blue-900/10': selectedChapterIds.has(chapter.id) }"
+                    >
+                      <td class="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          :checked="selectedChapterIds.has(chapter.id)"
+                          class="w-4 h-4 accent-blue-600 cursor-pointer"
+                          @change="toggleChapter(chapter.id)"
+                        >
+                      </td>
+                      <td class="px-4 py-3 text-neutral-500">
+                        {{ chapter.sortOrder }}
+                      </td>
+                      <td class="px-4 py-3 font-medium">
+                        {{ chapter.title }}
+                        <span v-if="chapter.slug" class="ml-2 text-[10px] text-neutral-400 font-mono">{{ chapter.slug }}</span>
+                      </td>
+                      <td class="px-4 py-3 text-right">
+                        <button
+                          class="text-red-600 hover:text-red-700 font-bold text-xs"
+                          @click="deleteSingleChapter(chapter.id)"
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -597,6 +842,7 @@ async function toggleR18Shortcut(comic: Comic) {
             {{ t('dashboard.cancel') }}
           </button>
           <button
+            v-if="activeTab === 'metadata'"
             :disabled="updateLoading"
             class="flex-1 px-4 py-3 bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white rounded-xl font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-all"
             @click="handleUpdate"
@@ -606,40 +852,21 @@ async function toggleR18Shortcut(comic: Comic) {
         </div>
       </div>
     </div>
+
+    <!-- 漫画批量操作确认对话框 -->
+    <ConfirmDialog
+      v-model:open="confirmDialogOpen"
+      :title="confirmDialogData.title"
+      :message="confirmDialogData.message"
+      @confirm="executeBatchOperation"
+    />
+
+    <!-- 章节批量删除确认对话框 -->
+    <ConfirmDialog
+      v-model:open="chapterBatchDeleteOpen"
+      title="确认批量删除章节"
+      :message="`确认删除选中的 ${selectedChapterIds.size} 个章节？此操作不可撤销。`"
+      @confirm="executeChapterBatchDelete"
+    />
   </div>
 </template>
-
-<style scoped>
-.filter-bar {
-  display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.filter-input {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.filter-input-sm {
-  width: 150px;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.filter-select {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  background: white;
-}
-</style>
