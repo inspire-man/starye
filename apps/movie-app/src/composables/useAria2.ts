@@ -7,6 +7,13 @@ import { computed, ref } from 'vue'
 import { createAria2Client } from '../utils/aria2Client'
 import { useToast } from './useToast'
 
+/** 后端通用响应结构（code 非 0 表示错误） */
+interface BackendResult<T = unknown> {
+  code: number
+  data?: T
+  message?: string
+}
+
 // Aria2 配置
 export interface Aria2Config {
   rpcUrl: string
@@ -61,7 +68,7 @@ export function useAria2() {
       })
 
       if (response.ok) {
-        const result = await response.json() as any
+        const result = await response.json() as BackendResult<{ rpcUrl: string, useProxy: boolean }>
         if (result.code === 0 && result.data) {
           config.value = {
             rpcUrl: result.data.rpcUrl,
@@ -139,8 +146,8 @@ export function useAria2() {
           throw new Error('连接失败')
         }
 
-        const result = await response.json() as any
-        if (result.code === 0 && result.data.result) {
+        const result = await response.json() as BackendResult<{ result: Aria2Version }>
+        if (result.code === 0 && result.data?.result) {
           version.value = result.data.result
           isConnected.value = true
           toast.success(`已连接到 Aria2 ${version.value?.version ?? 'unknown'}`)
@@ -196,12 +203,12 @@ export function useAria2() {
         throw new Error(`请求失败: ${response.status}`)
       }
 
-      const result = await response.json() as any
+      const result = await response.json() as BackendResult<{ result: T }>
       if (result.code !== 0) {
         throw new Error(result.message || '请求失败')
       }
 
-      return result.data.result
+      return result.data!.result
     }
     else {
       // 直连模式

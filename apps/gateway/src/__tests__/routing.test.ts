@@ -266,7 +266,7 @@ describe('代理头部设置', () => {
 
 // ─── fetch 失败处理 ──────────────────────────────────────────────────────────
 
-describe('Gateway 错误处理', () => {
+describe('gateway 错误处理', () => {
   it('当目标服务不可达时应返回 502', async () => {
     vi.stubGlobal('fetch', async () => {
       throw new Error('Connection refused')

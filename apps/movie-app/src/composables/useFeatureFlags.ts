@@ -6,6 +6,13 @@
 
 import { computed, ref } from 'vue'
 
+/** 后端通用响应结构（code 非 0 表示错误） */
+interface BackendResult<T = unknown> {
+  code: number
+  data?: T
+  message?: string
+}
+
 export interface FeatureFlag {
   name: string
   enabled: boolean
@@ -74,7 +81,7 @@ export function useFeatureFlags() {
   async function refreshFlags() {
     try {
       const response = await fetch('/api/feature-flags')
-      const data = await response.json() as any
+      const data = await response.json() as BackendResult<Record<string, FeatureFlag>>
 
       if (data.code === 0 && data.data) {
         // 更新本地 flags

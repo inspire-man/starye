@@ -35,6 +35,9 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Build API Type Declarations
+        run: pnpm exec tsc -b packages/api-types
+
       - name: Build Comic App
         env:
           VITE_API_URL: https://starye.org

@@ -31,6 +31,13 @@ export interface PlayerRating {
   warningTag?: string // 警告标签
 }
 
+/** 后端通用响应结构（code 非 0 表示错误） */
+interface BackendResult<T = unknown> {
+  code: number
+  data?: T
+  message?: string
+}
+
 // 评分请求负载
 interface SubmitRatingPayload {
   playerId: string
@@ -135,11 +142,11 @@ export function useRating() {
       })
 
       if (!response.ok) {
-        const error = await response.json() as any
+        const error = await response.json() as BackendResult
         throw new Error(error.message || '提交评分失败')
       }
 
-      const result = await response.json() as any
+      const result = await response.json() as BackendResult
 
       if (result.code === 0) {
         toast.success('评分已提交')
@@ -193,7 +200,7 @@ export function useRating() {
           body: JSON.stringify({ playerId, score }),
         })
 
-        const result = await response.json() as any
+        const result = await response.json() as BackendResult
         return response.ok && result.code === 0
       }
       catch {
@@ -227,10 +234,10 @@ export function useRating() {
         throw new Error('获取评分统计失败')
       }
 
-      const result = await response.json() as any
+      const result = await response.json() as BackendResult<RatingStats>
 
       if (result.code === 0) {
-        return result.data
+        return result.data ?? null
       }
     }
     catch (error) {
@@ -260,7 +267,14 @@ export function useRating() {
         throw new Error('获取评分历史失败')
       }
 
-      const result = await response.json() as any
+      const result = await response.json() as BackendResult<Array<{
+        playerId: string
+        movieCode?: string
+        movieTitle?: string
+        score: number
+        createdAt: string
+        updatedAt: string
+      }>>
 
       if (result.code === 0) {
         return result.data || []
@@ -286,10 +300,10 @@ export function useRating() {
         throw new Error('获取全局统计失败')
       }
 
-      const result = await response.json() as any
+      const result = await response.json() as BackendResult<GlobalRatingStats>
 
       if (result.code === 0) {
-        return result.data
+        return result.data ?? null
       }
     }
     catch (error) {

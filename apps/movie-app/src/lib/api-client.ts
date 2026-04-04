@@ -1,9 +1,13 @@
 /**
- * Movie App API 客户端 - 原生 fetch
+ * Movie App API 客户端 - Hono RPC
  *
- * 使用原生 fetch 进行 API 调用，避免引入 Hono RPC 的源码类型链
+ * 使用 hc<AppType>() 获得类型安全的 API 调用：
+ * - URL 路径名 / 路径参数名 / query 参数名均在编译期校验
+ * - 局部类型转换 (as unknown as LocalType) 仅在 api-client 边界使用，
+ *   不向视图层透传 any
  */
 
+import type { AppType } from '@starye/api-types'
 import type {
   Actor,
   ActorDetail,
@@ -16,8 +20,12 @@ import type {
   PublisherDetail,
   WatchingProgress,
 } from '../types'
+import { hc } from 'hono/client'
 
-/** 通用 JSON fetch，统一处理凭据和错误 */
+/** Hono RPC 客户端 */
+const client = hc<AppType>('/')
+
+/** 非 RPC 路由（mutation、auth、progress）使用原生 fetch */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     credentials: 'include',
@@ -31,19 +39,6 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-/** 将参数对象构建为 query string */
-function buildQuery(params?: Record<string, string | number | boolean | undefined | null>): string {
-  if (!params)
-    return ''
-  const q = new URLSearchParams()
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '')
-      q.set(k, String(v))
-  })
-  const str = q.toString()
-  return str ? `?${str}` : ''
-}
-
 // ─── Movie API ─────────────────────────────────────────────────────────────
 
 export const movieApi = {
@@ -55,20 +50,42 @@ export const movieApi = {
     genre?: string
     series?: string
     search?: string
-    sortBy?: string
+    sortBy?: 'title' | 'createdAt' | 'updatedAt' | 'releaseDate'
     sortOrder?: 'asc' | 'desc'
   }): Promise<PaginatedResponse<Movie>> {
-    const data = await apiFetch<any>(`/public/movies${buildQuery(params)}`)
+    const res = await client.api.public.movies.$get({
+      query: {
+        page: params?.page?.toString(),
+        limit: params?.limit?.toString(),
+        actor: params?.actor,
+        publisher: params?.publisher,
+        genre: params?.genre,
+        series: params?.series,
+        search: params?.search,
+        sortBy: params?.sortBy,
+        sortOrder: params?.sortOrder,
+      },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error('Failed to fetch movies')
+    }
     return {
       success: true,
-      data: data.data,
-      pagination: data.meta,
+      data: data.data as unknown as Movie[],
+      pagination: data.pagination,
     }
   },
 
   async getMovieDetail(code: string): Promise<ApiResponse<MovieDetail>> {
-    const data = await apiFetch<any>(`/public/movies/${encodeURIComponent(code)}`)
-    return { success: true, data: data.data }
+    const res = await client.api.public.movies[':code'].$get({
+      param: { code },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error(data.error)
+    }
+    return { success: true, data: data.data as unknown as MovieDetail }
   },
 }
 
@@ -83,17 +100,36 @@ export const actorApi = {
     isActive?: boolean
     hasDetails?: boolean
   }): Promise<PaginatedResponse<Actor>> {
-    const data = await apiFetch<any>(`/actors${buildQuery(params)}`)
+    const res = await client.api.actors.$get({
+      query: {
+        page: params?.page?.toString(),
+        limit: params?.limit?.toString(),
+        sort: params?.sort,
+        nationality: params?.nationality,
+        isActive: params?.isActive?.toString(),
+        hasDetails: params?.hasDetails?.toString(),
+      },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error('Failed to fetch actors')
+    }
     return {
       success: true,
-      data: data.data,
+      data: data.data as unknown as Actor[],
       pagination: data.meta,
     }
   },
 
   async getActorDetail(slug: string): Promise<ApiResponse<ActorDetail>> {
-    const data = await apiFetch<any>(`/actors/${encodeURIComponent(slug)}`)
-    return { success: true, data }
+    const res = await client.api.actors[':slug'].$get({
+      param: { slug },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error(data.error)
+    }
+    return { success: true, data: data as unknown as ActorDetail }
   },
 
   async getActorRelations(actorId: string, params?: {
@@ -115,8 +151,18 @@ export const actorApi = {
       }>
     }>
   }>> {
-    const data = await apiFetch<any>(`/actors/${encodeURIComponent(actorId)}/relations${buildQuery(params)}`)
-    return { success: true, data: data.data }
+    const res = await client.api.actors[':id'].relations.$get({
+      param: { id: actorId },
+      query: {
+        minCollaborations: params?.minCollaborations?.toString(),
+        limit: params?.limit?.toString(),
+      },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error(data.error)
+    }
+    return { success: true, data: data.data as unknown as typeof data.data & { relations: Array<{ sharedMovies: Array<{ movieId: string, movieCode: string, movieTitle: string }> }> } }
   },
 }
 
@@ -130,17 +176,35 @@ export const publisherApi = {
     country?: string
     hasDetails?: boolean
   }): Promise<PaginatedResponse<Publisher>> {
-    const data = await apiFetch<any>(`/publishers${buildQuery(params)}`)
+    const res = await client.api.publishers.$get({
+      query: {
+        page: params?.page?.toString(),
+        limit: params?.limit?.toString(),
+        sort: params?.sort,
+        country: params?.country,
+        hasDetails: params?.hasDetails?.toString(),
+      },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error('Failed to fetch publishers')
+    }
     return {
       success: true,
-      data: data.data,
+      data: data.data as unknown as Publisher[],
       pagination: data.meta,
     }
   },
 
   async getPublisherDetail(slug: string): Promise<ApiResponse<PublisherDetail>> {
-    const data = await apiFetch<any>(`/publishers/${encodeURIComponent(slug)}`)
-    return { success: true, data }
+    const res = await client.api.publishers[':slug'].$get({
+      param: { slug },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error(data.error)
+    }
+    return { success: true, data: data as unknown as PublisherDetail }
   },
 }
 
@@ -194,15 +258,19 @@ export const authApi = {
 // ─── Favorites API ─────────────────────────────────────────────────────────
 
 export const favoritesApi = {
-  async getFavorites(params?: {
+  async getFavorites(_params?: {
     page?: number
     limit?: number
     entityType?: 'actor' | 'publisher' | 'movie' | 'comic'
   }): Promise<PaginatedResponse<Favorite>> {
-    const data = await apiFetch<any>(`/favorites${buildQuery(params)}`)
+    const res = await client.api.favorites.$get()
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error('Failed to fetch favorites')
+    }
     return {
       success: true,
-      data: data.data,
+      data: data.data as unknown as Favorite[],
       pagination: data.meta,
     }
   },

@@ -1,14 +1,6 @@
 <script setup lang="ts" generic="T extends { id: string }">
+import type { Column } from '../types/datatable'
 import { computed } from 'vue'
-
-export interface Column<T> {
-  key: string
-  label: string
-  sortable?: boolean
-  render?: (item: T) => string
-  width?: string
-  minWidth?: string
-}
 
 interface Props {
   data: T[]

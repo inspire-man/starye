@@ -1,12 +1,20 @@
 /**
- * Comic App API 客户端 - 原生 fetch
+ * Comic App API 客户端 - Hono RPC
  *
- * 使用原生 fetch 进行 API 调用，避免引入 Hono RPC 的源码类型链
+ * 使用 hc<AppType>() 获得类型安全的 API 调用：
+ * - URL 路径名 / 路径参数名 / query 参数名均在编译期校验
+ * - 局部类型转换 (as unknown as LocalType) 仅在 api-client 边界使用，
+ *   不向视图层透传 any
  */
 
+import type { AppType } from '@starye/api-types'
 import type { ApiResponse, Chapter, ChapterDetail, Comic, PaginatedResponse, ReadingProgress } from '../types'
+import { hc } from 'hono/client'
 
-/** 通用 JSON fetch，统一处理凭据和错误 */
+/** Hono RPC 客户端 */
+const client = hc<AppType>('/')
+
+/** 非 RPC 路由（mutation、auth、progress）使用原生 fetch */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     credentials: 'include',
@@ -20,19 +28,6 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-/** 将参数对象构建为 query string */
-function buildQuery(params?: Record<string, string | number | boolean | undefined | null>): string {
-  if (!params)
-    return ''
-  const q = new URLSearchParams()
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '')
-      q.set(k, String(v))
-  })
-  const str = q.toString()
-  return str ? `?${str}` : ''
-}
-
 // ─── Comic API ─────────────────────────────────────────────────────────────
 
 export const comicApi = {
@@ -40,20 +35,54 @@ export const comicApi = {
     page?: number
     limit?: number
     category?: string
-    status?: string
+    status?: 'serializing' | 'completed'
     search?: string
-    sortBy?: string
+    sortBy?: 'title' | 'createdAt' | 'updatedAt'
     sortOrder?: 'asc' | 'desc'
   }): Promise<PaginatedResponse<Comic>> {
-    return apiFetch(`/public/comics${buildQuery(params)}`)
+    const res = await client.api.public.comics.$get({
+      query: {
+        page: params?.page?.toString(),
+        limit: params?.limit?.toString(),
+        category: params?.category,
+        status: params?.status,
+        search: params?.search,
+        sortBy: params?.sortBy,
+        sortOrder: params?.sortOrder,
+      },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error('Failed to fetch comics')
+    }
+    const inner = data.data
+    return {
+      success: true,
+      data: inner.data as unknown as Comic[],
+      pagination: inner.pagination,
+    }
   },
 
   async getComicDetail(slug: string): Promise<ApiResponse<Comic & { chapters: Chapter[] }>> {
-    return apiFetch(`/public/comics/${encodeURIComponent(slug)}`)
+    const res = await client.api.public.comics[':slug'].$get({
+      param: { slug },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error(data.error)
+    }
+    return { success: true, data: data.data as unknown as Comic & { chapters: Chapter[] } }
   },
 
   async getChapterDetail(slug: string, chapterId: string): Promise<ApiResponse<ChapterDetail>> {
-    return apiFetch(`/public/comics/${encodeURIComponent(slug)}/chapters/${encodeURIComponent(chapterId)}`)
+    const res = await client.api.public.comics[':slug'].chapters[':chapterId'].$get({
+      param: { slug, chapterId },
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error(data.error)
+    }
+    return { success: true, data: data.data as unknown as ChapterDetail }
   },
 }
 
