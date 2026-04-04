@@ -1,2 +1,1 @@
-/// <reference types="@cloudflare/workers-types" />
-export type { AppType } from '../../../apps/api/src/index'
+export type { AppType } from '../../../apps/api/dist/src/index'

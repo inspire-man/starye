@@ -3,8 +3,8 @@ import type { SelectOption } from '../components/Select.vue'
 import type { Movie } from '../types'
 import { reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { movieApi } from '../lib/api-client'
 import Select from '../components/Select.vue'
+import { movieApi } from '../lib/api-client'
 
 const searched = ref(false)
 const movies = ref<Movie[]>([])
@@ -19,7 +19,7 @@ const filters = reactive({
   search: '',
   actor: '',
   publisher: '',
-  sortBy: 'releaseDate',
+  sortBy: 'releaseDate' as 'title' | 'createdAt' | 'updatedAt' | 'releaseDate',
   sortOrder: 'desc' as 'asc' | 'desc',
 })
 

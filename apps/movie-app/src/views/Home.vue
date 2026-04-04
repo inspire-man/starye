@@ -3,8 +3,8 @@ import type { SelectOption } from '../components/Select.vue'
 import type { Movie } from '../types'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { movieApi } from '../lib/api-client'
 import Select from '../components/Select.vue'
+import { movieApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()
@@ -24,7 +24,7 @@ const activeGenre = ref('')
 
 const filters = reactive({
   search: '',
-  sortBy: 'releaseDate',
+  sortBy: 'releaseDate' as 'title' | 'createdAt' | 'updatedAt' | 'releaseDate',
   sortOrder: 'desc' as 'asc' | 'desc',
 })
 

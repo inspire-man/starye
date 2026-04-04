@@ -17,8 +17,8 @@ const pagination = reactive({
 
 const filters = reactive({
   search: '',
-  status: '',
-  sortBy: 'updatedAt',
+  status: '' as 'serializing' | 'completed' | '',
+  sortBy: 'updatedAt' as 'title' | 'createdAt' | 'updatedAt',
   sortOrder: 'desc' as 'asc' | 'desc',
 })
 

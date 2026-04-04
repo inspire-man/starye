@@ -4,11 +4,11 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { favoritesApi } from '../../api'
+import { favoritesApi } from '../../lib/api-client'
 import { useFavorites } from '../useFavorites'
 
 // Mock favoritesApi
-vi.mock('../../api', () => ({
+vi.mock('../../lib/api-client', () => ({
   favoritesApi: {
     checkFavorite: vi.fn(),
     getFavorites: vi.fn(),

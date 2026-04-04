@@ -111,7 +111,7 @@ export const actorApi = {
       },
     })
     const data = await res.json()
-    if (!data.success) {
+    if ('error' in data) {
       throw new Error('Failed to fetch actors')
     }
     return {
@@ -126,13 +126,13 @@ export const actorApi = {
       param: { slug },
     })
     const data = await res.json()
-    if (!data.success) {
+    if ('error' in data) {
       throw new Error(data.error)
     }
     return { success: true, data: data as unknown as ActorDetail }
   },
 
-  async getActorRelations(actorId: string, params?: {
+  async getActorRelations(actorId: string, _params?: {
     minCollaborations?: number
     limit?: number
   }): Promise<ApiResponse<{
@@ -153,16 +153,23 @@ export const actorApi = {
   }>> {
     const res = await client.api.actors[':id'].relations.$get({
       param: { id: actorId },
-      query: {
-        minCollaborations: params?.minCollaborations?.toString(),
-        limit: params?.limit?.toString(),
-      },
     })
     const data = await res.json()
-    if (!data.success) {
+    if ('error' in data) {
       throw new Error(data.error)
     }
-    return { success: true, data: data.data as unknown as typeof data.data & { relations: Array<{ sharedMovies: Array<{ movieId: string, movieCode: string, movieTitle: string }> }> } }
+    return { success: true, data: data.data as unknown as {
+      actorId: string
+      actorName: string
+      relations: Array<{
+        partnerId: string
+        partnerName: string
+        partnerSlug: string
+        partnerAvatar?: string
+        collaborationCount: number
+        sharedMovies: Array<{ movieId: string, movieCode: string, movieTitle: string }>
+      }>
+    } }
   },
 }
 
@@ -186,7 +193,7 @@ export const publisherApi = {
       },
     })
     const data = await res.json()
-    if (!data.success) {
+    if ('error' in data) {
       throw new Error('Failed to fetch publishers')
     }
     return {
@@ -201,7 +208,7 @@ export const publisherApi = {
       param: { slug },
     })
     const data = await res.json()
-    if (!data.success) {
+    if ('error' in data) {
       throw new Error(data.error)
     }
     return { success: true, data: data as unknown as PublisherDetail }
@@ -265,7 +272,7 @@ export const favoritesApi = {
   }): Promise<PaginatedResponse<Favorite>> {
     const res = await client.api.favorites.$get()
     const data = await res.json()
-    if (!data.success) {
+    if ('error' in data) {
       throw new Error('Failed to fetch favorites')
     }
     return {
