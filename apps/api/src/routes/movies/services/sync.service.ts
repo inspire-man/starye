@@ -1,12 +1,10 @@
 import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
-import { movies as moviesTable, players as playersTable } from '@starye/db/schema'
-import { eq } from 'drizzle-orm'
+import { actors as actorsTable, movieActors as movieActorsTable, movies as moviesTable, players as playersTable } from '@starye/db/schema'
+import { count, eq } from 'drizzle-orm'
 
 // 使用 Drizzle 推导的基础类型
 type Movie = InferSelectModel<typeof moviesTable>
-
-// ... existing interfaces and functions ...
 
 export interface PlayerInput {
   sourceName: string
@@ -47,6 +45,83 @@ export interface SyncMovieDataResult {
     code: string
     error: string
   }>
+}
+
+/**
+ * 幂等写入演员关联：upsert actor 记录 + movie_actor 关联表
+ * 对存量数据安全：已有记录直接跳过插入冲突
+ */
+async function syncActors(
+  db: Database,
+  movieId: string,
+  actorNames: string[],
+  isR18: boolean,
+): Promise<void> {
+  for (let i = 0; i < actorNames.length; i++) {
+    const name = actorNames[i]?.trim()
+    if (!name)
+      continue
+
+    try {
+      // 1. 查找已有演员（按 slug = name 匹配，日文/中文名作为 slug）
+      let actor = await db.query.actors.findFirst({
+        where: eq(actorsTable.slug, name),
+        columns: { id: true, movieCount: true },
+      })
+
+      // 2. 不存在则插入（slug = name，onConflictDoNothing 防止并发重复）
+      if (!actor) {
+        const actorId = crypto.randomUUID()
+        await db.insert(actorsTable).values({
+          id: actorId,
+          name,
+          slug: name,
+          movieCount: 0,
+          isR18,
+          source: 'javbus',
+          sourceId: '',
+          hasDetailsCrawled: false,
+          createdAt: new Date(),
+        }).onConflictDoNothing()
+
+        // 再次查询（防止并发插入后找不到）
+        actor = await db.query.actors.findFirst({
+          where: eq(actorsTable.slug, name),
+          columns: { id: true, movieCount: true },
+        })
+      }
+
+      if (!actor)
+        continue
+
+      // 3. 写入 movie_actor 关联（幂等：已存在则跳过）
+      await db.insert(movieActorsTable).values({
+        id: crypto.randomUUID(),
+        movieId,
+        actorId: actor.id,
+        sortOrder: i,
+        createdAt: new Date(),
+      }).onConflictDoNothing()
+
+      // 4. 更新演员的作品数（从关联表重新统计，保证准确）
+      const countResult = await db
+        .select({ value: count() })
+        .from(movieActorsTable)
+        .where(eq(movieActorsTable.actorId, actor.id))
+      const newCount = countResult[0]?.value ?? 0
+      if (newCount !== actor.movieCount) {
+        await db.update(actorsTable)
+          .set({ movieCount: newCount })
+          .where(eq(actorsTable.id, actor.id))
+      }
+    }
+    catch (actorError) {
+      console.warn(
+        `[SyncService] ⚠️ 演员关联写入失败 (${name}):`,
+        actorError instanceof Error ? actorError.message : String(actorError),
+      )
+    }
+  }
 }
 
 export async function syncMovieData(options: SyncMovieDataOptions): Promise<SyncMovieDataResult> {
@@ -120,6 +195,16 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
           createdAt: new Date(),
         } as any)
         result.success++
+      }
+
+      // 写入演员关联（独立 try-catch，失败不影响影片元数据）
+      if (actorNames && actorNames.length > 0) {
+        try {
+          await syncActors(db, movieId, actorNames, isR18 ?? false)
+        }
+        catch (actorErr) {
+          console.warn(`[SyncService] ⚠️ 演员批量同步失败 (${code}):`, actorErr instanceof Error ? actorErr.message : String(actorErr))
+        }
       }
 
       // 写入播放源（独立 try-catch，失败不影响影片元数据）

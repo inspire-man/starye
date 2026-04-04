@@ -1,7 +1,7 @@
 import type { Database } from '@starye/db'
 import type { SQL } from 'drizzle-orm'
 import { actors, movieActors, movies } from '@starye/db/schema'
-import { and, count, desc, eq } from 'drizzle-orm'
+import { and, count, desc, eq, like } from 'drizzle-orm'
 
 interface ActorListItem {
   id: string
@@ -126,13 +126,13 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
     return null
   }
 
-  // 查询关联电影（通过 movie_actors 表），非 R18 用户过滤 R18 内容
+  // 优先从 movie_actor 关联表查询（新数据）
   const movieConditions: SQL[] = [eq(movieActors.actorId, actor.id)]
   if (!isR18Verified) {
     movieConditions.push(eq(movies.isR18, false))
   }
 
-  const relatedMoviesData = await db
+  const joinMovies = await db
     .select({
       id: movies.id,
       code: movies.code,
@@ -148,6 +148,32 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
     .where(and(...movieConditions))
     .orderBy(desc(movies.releaseDate))
     .limit(100)
+
+  // fallback：若关联表为空，从 movies.actors JSON 字段 LIKE 查询（兼容存量数据）
+  let relatedMoviesData = joinMovies
+  if (joinMovies.length === 0) {
+    const likeConditions: SQL[] = [like(movies.actors, `%${actor.name}%`)]
+    if (!isR18Verified) {
+      likeConditions.push(eq(movies.isR18, false))
+    }
+
+    const likeMovies = await db
+      .select({
+        id: movies.id,
+        code: movies.code,
+        title: movies.title,
+        slug: movies.slug,
+        coverImage: movies.coverImage,
+        releaseDate: movies.releaseDate,
+        duration: movies.duration,
+      })
+      .from(movies)
+      .where(and(...likeConditions))
+      .orderBy(desc(movies.releaseDate))
+      .limit(100)
+
+    relatedMoviesData = likeMovies.map(m => ({ ...m, sortOrder: 0 }))
+  }
 
   return {
     ...actor,
