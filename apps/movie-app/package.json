@@ -19,17 +19,17 @@
   "dependencies": {
     "@starye/api-types": "workspace:*",
     "@starye/ui": "workspace:*",
-    "hono": "^4.12.9",
+    "hono": "^4.12.10",
     "pinia": "^3.0.4",
-    "qrcode.vue": "^3.8.0",
-    "vue": "^3.5.31",
+    "qrcode.vue": "^3.8.1",
+    "vue": "^3.5.32",
     "vue-router": "^5.0.4",
     "xgplayer": "^3.0.24"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.0",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.2",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.5.2",
     "@vitejs/plugin-vue": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.2",
     "@vitest/ui": "^4.1.2",

@@ -11,14 +11,14 @@
   "dependencies": {
     "@starye/api-types": "workspace:*",
     "@starye/ui": "workspace:*",
-    "hono": "^4.12.9",
+    "hono": "^4.12.10",
     "pinia": "^3.0.4",
-    "vue": "^3.5.31",
+    "vue": "^3.5.32",
     "vue-router": "^5.0.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.5.2",
     "@vitejs/plugin-vue": "^6.0.5",
     "@vue/tsconfig": "^0.9.1",
     "autoprefixer": "^10.4.27",
