@@ -26,7 +26,7 @@ export const fetchApi = apiFetch
 // ─── 公用类型 ────────────────────────────────────────────────────────────────
 
 export interface Comic {
-  id?: string
+  id: string
   title: string
   slug: string
   coverImage: string | null
