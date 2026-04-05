@@ -251,7 +251,103 @@ export class JavBusStrategy implements MovieCrawlStrategy {
       movieInfo.coverImage = this._normalizeImageUrl(movieInfo.coverImage) ?? ''
     }
 
+    // 抓取磁力链接：JavBus 通过 AJAX 端点加载磁链
+    try {
+      const magnetPlayers = await this._fetchMagnets(page)
+      if (magnetPlayers.length > 0) {
+        movieInfo.players = magnetPlayers
+        console.log(`[JavBus] 🧲 找到 ${magnetPlayers.length} 个磁力链接: ${movieInfo.code}`)
+      }
+    }
+    catch (e: any) {
+      console.warn(`[JavBus] ⚠️ 磁链抓取失败 (${movieInfo.code}): ${e.message}`)
+    }
+
     return movieInfo
+  }
+
+  /**
+   * 从 JavBus 详情页通过 AJAX 接口获取磁力链接
+   * JavBus 在页面 JS 中内嵌 gid/uc/img 变量，
+   * 通过 /ajax/uncledatoolsbyajax.php 端点返回磁链 HTML 片段
+   */
+  private async _fetchMagnets(page: Page): Promise<MovieInfo['players']> {
+    const ajaxParams = await page.evaluate(() => {
+      const scripts = document.querySelectorAll('script')
+      let gid = ''
+      let uc = '0'
+      let img = ''
+
+      for (const script of scripts) {
+        const text = script.textContent || ''
+        const gidMatch = text.match(/var\s+gid\s*=\s*(\d+)/)
+        const ucMatch = text.match(/var\s+uc\s*=\s*(\d+)/)
+        const imgMatch = text.match(/var\s+img\s*=\s*'([^']*)'/)
+        if (gidMatch)
+          gid = gidMatch[1]
+        if (ucMatch)
+          uc = ucMatch[1]
+        if (imgMatch)
+          img = imgMatch[1]
+      }
+
+      return { gid, uc, img, origin: window.location.origin }
+    })
+
+    if (!ajaxParams.gid) {
+      return []
+    }
+
+    const ajaxUrl = `${ajaxParams.origin}/ajax/uncledatoolsbyajax.php?gid=${ajaxParams.gid}&lang=zh&img=${ajaxParams.img}&uc=${ajaxParams.uc}&floor=${Date.now()}`
+
+    const magnets = await page.evaluate(async (fetchUrl: string) => {
+      const resp = await fetch(fetchUrl, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      })
+      if (!resp.ok)
+        return []
+
+      const html = await resp.text()
+      const parser = new DOMParser()
+      // AJAX 返回的是 <tr> 片段，需包裹 <table> 才能正确解析
+      const doc = parser.parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html')
+      const rows = doc.querySelectorAll('tr')
+
+      const seen = new Set<string>()
+      const results: Array<{ sourceName: string, sourceUrl: string, quality: string, sortOrder: number }> = []
+      let sortIdx = 0
+
+      rows.forEach((row) => {
+        const magnetLink = row.querySelector('a[href^="magnet:"]') as HTMLAnchorElement | null
+        if (!magnetLink)
+          return
+
+        const magnetUrl = magnetLink.href.split('&')[0]
+        if (seen.has(magnetUrl))
+          return
+        seen.add(magnetUrl)
+
+        const tds = row.querySelectorAll('td')
+        const nameEl = tds[0]?.querySelector('a')
+        const name = nameEl?.textContent?.trim() || ''
+        const sizeEl = tds[1]
+        const size = sizeEl?.textContent?.trim() || ''
+
+        const hasSubtitle = row.querySelector('.is-warning') !== null
+        const label = hasSubtitle ? `磁力(字幕) - ${name}` : `磁力 - ${name}`
+
+        results.push({
+          sourceName: label.substring(0, 100),
+          sourceUrl: magnetUrl,
+          quality: size,
+          sortOrder: sortIdx++,
+        })
+      })
+
+      return results
+    }, ajaxUrl)
+
+    return magnets || []
   }
 
   private async _preparePage(page: Page, url: string) {

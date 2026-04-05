@@ -2,8 +2,12 @@
 import type { SelectOption } from '../components/Select.vue'
 import type { Actor } from '../types'
 import { onMounted, reactive, ref } from 'vue'
-import { actorApi } from '../lib/api-client'
+import { useRoute, useRouter } from 'vue-router'
 import Select from '../components/Select.vue'
+import { actorApi } from '../lib/api-client'
+
+const route = useRoute()
+const router = useRouter()
 
 const loading = ref(true)
 const actors = ref<Actor[]>([])
@@ -40,6 +44,28 @@ const detailsOptions: SelectOption<boolean | undefined>[] = [
   { label: '待补全', value: false, icon: '⏳' },
 ]
 
+// 将布尔类型的 query 字符串解析回 boolean | undefined
+function parseBool(val: string | string[] | undefined): boolean | undefined {
+  if (val === 'true')
+    return true
+  if (val === 'false')
+    return false
+  return undefined
+}
+
+// 将当前状态同步到 URL query
+function syncUrl() {
+  router.replace({
+    query: {
+      ...(pagination.page > 1 && { page: String(pagination.page) }),
+      ...(filters.sort !== 'name' && { sort: filters.sort }),
+      ...(filters.nationality && { nationality: filters.nationality }),
+      ...(filters.isActive !== undefined && { isActive: String(filters.isActive) }),
+      ...(filters.hasDetails !== undefined && { hasDetails: String(filters.hasDetails) }),
+    },
+  })
+}
+
 async function fetchActors() {
   loading.value = true
   try {
@@ -67,16 +93,24 @@ async function fetchActors() {
 
 function changePage(page: number) {
   pagination.page = page
+  syncUrl()
   fetchActors()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function applyFilters() {
   pagination.page = 1
+  syncUrl()
   fetchActors()
 }
 
 onMounted(() => {
+  // 从 URL query 恢复状态
+  pagination.page = Number(route.query.page) || 1
+  filters.sort = (route.query.sort as typeof filters.sort) || 'name'
+  filters.nationality = (route.query.nationality as string) || ''
+  filters.isActive = parseBool(route.query.isActive as string)
+  filters.hasDetails = parseBool(route.query.hasDetails as string)
   fetchActors()
 })
 </script>

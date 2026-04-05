@@ -9,6 +9,7 @@ import { adminCrawlersRoutes } from '../crawlers'
 import { adminMoviesRoutes } from '../movies'
 import { adminPublishersRoutes } from '../publishers'
 import { adminR18WhitelistRoutes } from '../r18-whitelist'
+import { adminSettingsRoutes } from '../settings'
 import { adminStatsRoutes } from '../stats'
 import { adminSyncRoutes } from '../sync'
 import { adminUsersRoutes } from '../users'
@@ -28,5 +29,6 @@ admin.route('/comics', adminComicsRoutes)
 admin.route('/chapters', adminChaptersRoutes)
 admin.route('/sync', adminSyncRoutes)
 admin.route('/stats', adminStatsRoutes)
+admin.route('/settings', adminSettingsRoutes)
 
 export default admin

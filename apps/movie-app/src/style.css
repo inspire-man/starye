@@ -1,7 +1,41 @@
 @import "@starye/ui/globals.css";
 
-/* Movie App 品牌色覆盖：天蓝 (sky) */
+/**
+ * Movie App 主题：永久深色
+ * 直接在 :root 覆盖 CSS 变量，无需依赖 .dark class。
+ * 所有 @starye/ui 组件自动读取这些变量并呈现深色风格。
+ */
 :root {
+  /* 品牌色：天蓝 (sky-500) */
   --primary: 199 89% 48%;
   --primary-foreground: 0 0% 100%;
+
+  /* 背景色：gray-900 (#111827) */
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+
+  /* 卡片/弹层：gray-800 (#1f2937) */
+  --card: 215 28% 17%;
+  --card-foreground: 210 40% 98%;
+  --popover: 215 28% 17%;
+  --popover-foreground: 210 40% 98%;
+
+  /* 次要/静音色：gray-800 */
+  --secondary: 215 28% 17%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 215 28% 17%;
+  --muted-foreground: 213 16% 65%;
+
+  /* 强调色 */
+  --accent: 215 28% 22%;
+  --accent-foreground: 210 40% 98%;
+
+  /* 边框：gray-700 (#374151) */
+  --border: 217 19% 27%;
+  --input: 217 19% 27%;
+  --ring: 199 89% 48%;
+
+  /* 危险色 */
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 210 40% 98%;
 }

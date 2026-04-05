@@ -1,6 +1,6 @@
 import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
-import { actors as actorsTable, movieActors as movieActorsTable, movies as moviesTable, players as playersTable } from '@starye/db/schema'
+import { actors as actorsTable, movieActors as movieActorsTable, moviePublishers as moviePublishersTable, movies as moviesTable, players as playersTable, publishers as publishersTable } from '@starye/db/schema'
 import { count, eq } from 'drizzle-orm'
 
 // 使用 Drizzle 推导的基础类型
@@ -156,6 +156,79 @@ async function syncActors(
   }
 }
 
+/**
+ * 幂等写入厂商关联：upsert publisher 记录 + movie_publisher 关联表
+ * 对存量数据安全：已有记录直接跳过插入冲突
+ */
+async function syncPublisher(
+  db: Database,
+  movieId: string,
+  publisherName: string,
+  isR18: boolean,
+): Promise<void> {
+  const name = publisherName.trim()
+  if (!name)
+    return
+
+  try {
+    // 1. 查找已有厂商（按 slug = name 匹配）
+    let publisher = await db.query.publishers.findFirst({
+      where: eq(publishersTable.slug, name),
+      columns: { id: true, movieCount: true },
+    })
+
+    // 2. 不存在则插入
+    if (!publisher) {
+      const publisherId = crypto.randomUUID()
+      await db.insert(publishersTable).values({
+        id: publisherId,
+        name,
+        slug: name,
+        movieCount: 0,
+        isR18,
+        source: 'javbus',
+        sourceId: '',
+        hasDetailsCrawled: false,
+        createdAt: new Date(),
+      } as any).onConflictDoNothing()
+
+      publisher = await db.query.publishers.findFirst({
+        where: eq(publishersTable.slug, name),
+        columns: { id: true, movieCount: true },
+      })
+    }
+
+    if (!publisher)
+      return
+
+    // 3. 写入 movie_publisher 关联（幂等）
+    await db.insert(moviePublishersTable).values({
+      id: crypto.randomUUID(),
+      movieId,
+      publisherId: publisher.id,
+      createdAt: new Date(),
+    } as any).onConflictDoNothing()
+
+    // 4. 更新厂商的作品数
+    const countResult = await db
+      .select({ value: count() })
+      .from(moviePublishersTable)
+      .where(eq(moviePublishersTable.publisherId, publisher.id))
+    const newCount = countResult[0]?.value ?? 0
+    if (newCount !== publisher.movieCount) {
+      await db.update(publishersTable)
+        .set({ movieCount: newCount })
+        .where(eq(publishersTable.id, publisher.id))
+    }
+  }
+  catch (publisherError) {
+    console.warn(
+      `[SyncService] ⚠️ 厂商关联写入失败 (${name}):`,
+      publisherError instanceof Error ? publisherError.message : String(publisherError),
+    )
+  }
+}
+
 export async function syncMovieData(options: SyncMovieDataOptions): Promise<SyncMovieDataResult> {
   const { db, movies: movieDataList, mode = 'upsert' } = options
 
@@ -187,25 +260,30 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
       }
 
       // 准备数据（coverImage 清洗镜像站域名，兜底防御）
+      // 可选字段：仅当调用方显式传入时才更新，避免部分同步覆盖已有数据
       const moviePayload: Partial<Movie> = {
         code,
-        title,
-        slug: slug || code.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        coverImage: normalizeImageUrl(coverImage),
-        releaseDate: releaseDate
-          ? (typeof releaseDate === 'number'
-              ? new Date(releaseDate * 1000) // Unix timestamp (秒) -> Date
-              : typeof releaseDate === 'string'
-                ? new Date(releaseDate)
-                : releaseDate)
-          : null,
-        duration: duration || null,
-        description: description || null,
-        genres: genres ? JSON.stringify(genres) : null,
-        actors: actorNames ? JSON.stringify(actorNames) : null,
-        series: series || null, // 系列名
-        publisher: publisher || null, // 真实厂商名
-        isR18: isR18 || false,
+        ...(title !== undefined && { title }),
+        ...(slug !== undefined
+          ? { slug }
+          : (!existingMovie && { slug: code.toLowerCase().replace(/[^a-z0-9]+/g, '-') })),
+        ...(coverImage !== undefined && { coverImage: normalizeImageUrl(coverImage) }),
+        ...(releaseDate !== undefined && {
+          releaseDate: releaseDate
+            ? (typeof releaseDate === 'number'
+                ? new Date(releaseDate * 1000)
+                : typeof releaseDate === 'string'
+                  ? new Date(releaseDate)
+                  : releaseDate)
+            : null,
+        }),
+        ...(duration !== undefined && { duration: duration || null }),
+        ...(description !== undefined && { description: description || null }),
+        ...(genres !== undefined && { genres: JSON.stringify(genres) }),
+        ...(actorNames !== undefined && { actors: JSON.stringify(actorNames) }),
+        ...(series !== undefined && { series: series || null }),
+        ...(publisher !== undefined && { publisher: publisher || null }),
+        ...(isR18 !== undefined && { isR18 }),
         updatedAt: new Date(),
       }
 
@@ -236,6 +314,16 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
         }
         catch (actorErr) {
           console.warn(`[SyncService] ⚠️ 演员批量同步失败 (${code}):`, actorErr instanceof Error ? actorErr.message : String(actorErr))
+        }
+      }
+
+      // 写入厂商关联（独立 try-catch，失败不影响影片元数据）
+      if (publisher) {
+        try {
+          await syncPublisher(db, movieId, publisher, isR18 ?? false)
+        }
+        catch (publisherErr) {
+          console.warn(`[SyncService] ⚠️ 厂商关联写入失败 (${code}):`, publisherErr instanceof Error ? publisherErr.message : String(publisherErr))
         }
       }
 

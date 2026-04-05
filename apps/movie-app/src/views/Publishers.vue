@@ -2,9 +2,12 @@
 import type { SelectOption } from '../components/Select.vue'
 import type { Publisher } from '../types'
 import { onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Select from '../components/Select.vue'
 import { publisherApi } from '../lib/api-client'
+
+const route = useRoute()
+const router = useRouter()
 
 const loading = ref(true)
 const publishers = ref<Publisher[]>([])
@@ -22,6 +25,16 @@ const sortOptions: SelectOption<string>[] = [
   { label: '名称', value: 'name', icon: '🔤' },
   { label: '最新', value: 'createdAt', icon: '📅' },
 ]
+
+// 将当前状态同步到 URL query
+function syncUrl() {
+  router.replace({
+    query: {
+      ...(pagination.page > 1 && { page: String(pagination.page) }),
+      ...(sort.value !== 'movieCount' && { sort: sort.value }),
+    },
+  })
+}
 
 async function fetchPublishers() {
   loading.value = true
@@ -47,16 +60,21 @@ async function fetchPublishers() {
 
 function changePage(page: number) {
   pagination.page = page
+  syncUrl()
   fetchPublishers()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function onSortChange() {
   pagination.page = 1
+  syncUrl()
   fetchPublishers()
 }
 
 onMounted(() => {
+  // 从 URL query 恢复状态
+  pagination.page = Number(route.query.page) || 1
+  sort.value = (route.query.sort as typeof sort.value) || 'movieCount'
   fetchPublishers()
 })
 </script>

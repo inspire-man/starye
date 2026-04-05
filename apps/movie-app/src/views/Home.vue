@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SelectOption } from '../components/Select.vue'
 import type { Movie } from '../types'
+import { Pagination } from '@starye/ui'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Select from '../components/Select.vue'
@@ -35,6 +36,18 @@ const sortOptions: SelectOption<string>[] = [
   { label: '最新上架', value: 'createdAt', icon: '✨' },
 ]
 
+// 将当前状态同步到 URL query，用 replace 避免污染浏览器历史
+function syncUrl() {
+  router.replace({
+    query: {
+      ...(pagination.page > 1 && { page: String(pagination.page) }),
+      ...(filters.sortBy !== 'releaseDate' && { sortBy: filters.sortBy }),
+      ...(filters.search && { search: filters.search }),
+      ...(activeGenre.value && { genre: activeGenre.value }),
+    },
+  })
+}
+
 async function fetchMovies() {
   loading.value = true
   try {
@@ -62,28 +75,31 @@ async function fetchMovies() {
 
 function changePage(page: number) {
   pagination.page = page
+  syncUrl()
   fetchMovies()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function searchMovies() {
   pagination.page = 1
+  syncUrl()
   fetchMovies()
 }
 
 watch(() => filters.sortBy, () => {
   pagination.page = 1
+  syncUrl()
   fetchMovies()
 })
 
 function clearGenreFilter() {
   activeGenre.value = ''
-  router.replace({ query: {} })
   pagination.page = 1
+  syncUrl()
   fetchMovies()
 }
 
-// 监听 route.query.genre 变化
+// 监听外部（如标签页点击）触发的 genre query 变化
 watch(() => route.query.genre, (val) => {
   const genre = typeof val === 'string' ? val : ''
   if (genre !== activeGenre.value) {
@@ -94,10 +110,11 @@ watch(() => route.query.genre, (val) => {
 })
 
 onMounted(() => {
-  const genre = route.query.genre
-  if (typeof genre === 'string' && genre) {
-    activeGenre.value = genre
-  }
+  // 从 URL query 恢复状态
+  pagination.page = Number(route.query.page) || 1
+  filters.sortBy = (route.query.sortBy as typeof filters.sortBy) || 'releaseDate'
+  filters.search = (route.query.search as string) || ''
+  activeGenre.value = (route.query.genre as string) || ''
   fetchMovies()
 })
 </script>
@@ -137,27 +154,34 @@ onMounted(() => {
         {{ activeGenre ? `标签：${activeGenre}` : '热门影片' }}
       </h1>
 
-      <div class="flex flex-wrap gap-4 mb-6">
+      <div class="flex items-center gap-3 mb-6">
         <input
           v-model="filters.search"
           type="text"
           placeholder="搜索番号或标题..."
-          class="flex-1 min-w-[200px] px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          class="flex-1 min-w-[180px] max-w-xs px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
           @keyup.enter="searchMovies"
         >
-
         <Select
           v-model="filters.sortBy"
+          class="flex-1 max-w-xs"
           :options="sortOptions"
-          placeholder="选择排序方式"
+          placeholder="排序"
           size="default"
         />
+        <button
+          v-if="filters.search"
+          class="w-100px cursor-pointer px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+          @click="filters.search = ''; searchMovies()"
+        >
+          清除
+        </button>
       </div>
     </div>
 
     <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
       <div v-for="i in 10" :key="i" class="animate-pulse">
-        <div class="bg-gray-800 aspect-[3/4] rounded-lg mb-2" />
+        <div class="bg-gray-800 aspect-3/4 rounded-lg mb-2" />
         <div class="bg-gray-800 h-4 rounded mb-1" />
         <div class="bg-gray-800 h-3 rounded w-2/3" />
       </div>
@@ -203,25 +227,16 @@ onMounted(() => {
         </RouterLink>
       </div>
 
-      <div v-if="pagination.totalPages > 1" class="mt-8 flex justify-center gap-2">
-        <button
-          :disabled="pagination.page <= 1"
-          class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          @click="changePage(pagination.page - 1)"
-        >
-          上一页
-        </button>
-        <span class="px-4 py-2 text-gray-300">
-          {{ pagination.page }} / {{ pagination.totalPages }}
-        </span>
-        <button
-          :disabled="pagination.page >= pagination.totalPages"
-          class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          @click="changePage(pagination.page + 1)"
-        >
-          下一页
-        </button>
-      </div>
+      <Pagination
+        v-if="pagination.totalPages > 1"
+        :current-page="pagination.page"
+        :total-pages="pagination.totalPages"
+        :total="pagination.total"
+        :page-size="pagination.limit"
+        layout="total, prev, pager, next, jumper"
+        class="mt-8 pb-8"
+        @update:current-page="changePage"
+      />
     </div>
   </div>
 </template>

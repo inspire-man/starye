@@ -582,3 +582,13 @@ export const userFavoritesRelations = relations(userFavorites, ({ one }) => ({
     references: [user.id],
   }),
 }))
+
+// --- 系统配置 ---
+export const systemSettings = sqliteTable('system_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
+})
+
+export type SystemSetting = InferSelectModel<typeof systemSettings>
+export type NewSystemSetting = InferInsertModel<typeof systemSettings>

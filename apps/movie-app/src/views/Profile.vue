@@ -4,14 +4,15 @@ import type { SelectOption } from '../components/Select.vue'
 import type { DownloadStatus, WatchingProgress } from '../types'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { progressApi } from '../lib/api-client'
 import Aria2Settings from '../components/Aria2Settings.vue'
 import DownloadTaskPanel from '../components/DownloadTaskPanel.vue'
 import Select from '../components/Select.vue'
+import TorrServerSettings from '../components/TorrServerSettings.vue'
 import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useMobileDetect } from '../composables/useMobileDetect'
 import { useRating } from '../composables/useRating'
+import { progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 import { formatFileSize } from '../utils/aria2Client'
 
@@ -44,7 +45,7 @@ const syncingAria2 = ref(false)
 const importingAria2 = ref(false)
 
 // Tab 状态
-type TabType = 'history' | 'downloads' | 'aria2-settings' | 'aria2-tasks' | 'my-ratings'
+type TabType = 'history' | 'downloads' | 'aria2-settings' | 'aria2-tasks' | 'torrserver-settings' | 'my-ratings'
 const activeTab = ref<TabType>('history')
 
 // Tab 选项配置
@@ -53,6 +54,7 @@ const tabOptions: SelectOption<TabType>[] = [
   { label: '📥 我的下载', value: 'downloads' },
   { label: '⚙️ Aria2 设置', value: 'aria2-settings' },
   { label: '⬇️ 下载任务', value: 'aria2-tasks' },
+  { label: '🎬 TorrServer', value: 'torrserver-settings' },
   { label: '⭐ 我的评分', value: 'my-ratings' },
 ]
 
@@ -475,6 +477,15 @@ onMounted(() => {
           </button>
           <button
             class="flex-1 min-w-[120px] px-4 py-4 text-center font-medium transition-colors text-sm"
+            :class="activeTab === 'torrserver-settings'
+              ? 'text-primary-400 border-b-2 border-primary-400'
+              : 'text-gray-400 hover:text-gray-300'"
+            @click="activeTab = 'torrserver-settings'"
+          >
+            🎬 TorrServer
+          </button>
+          <button
+            class="flex-1 min-w-[120px] px-4 py-4 text-center font-medium transition-colors text-sm"
             :class="activeTab === 'my-ratings'
               ? 'text-primary-400 border-b-2 border-primary-400'
               : 'text-gray-400 hover:text-gray-300'"
@@ -757,6 +768,11 @@ onMounted(() => {
         <!-- Aria2 下载任务 Tab -->
         <div v-show="activeTab === 'aria2-tasks'" class="p-6">
           <DownloadTaskPanel />
+        </div>
+
+        <!-- TorrServer 设置 Tab -->
+        <div v-show="activeTab === 'torrserver-settings'" class="p-6">
+          <TorrServerSettings />
         </div>
 
         <!-- 我的评分 Tab -->

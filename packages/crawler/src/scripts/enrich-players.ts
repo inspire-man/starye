@@ -15,6 +15,7 @@ import process from 'node:process'
 import { JavDBStrategy } from '../strategies/javdb'
 import { ApiClient } from '../utils/api-client'
 import { BrowserManager } from '../utils/browser'
+import 'dotenv/config'
 
 // ---- 解析命令行参数 ----
 function parseArgs(): { limit: number, dryRun: boolean } {
@@ -51,7 +52,7 @@ async function main() {
   const { limit, dryRun } = parseArgs()
 
   const apiUrl = process.env.API_URL || 'http://localhost:8787'
-  const apiToken = process.env.SERVICE_TOKEN || ''
+  const apiToken = process.env.SERVICE_TOKEN || process.env.CRAWLER_SECRET || ''
 
   console.log('='.repeat(60))
   console.log('🎬 播放源补充脚本 (JavDB)')

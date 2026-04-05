@@ -458,6 +458,16 @@ export const api = {
         body: JSON.stringify({ type, ...params }),
       }),
 
+    // 系统设置
+    getSettings: () =>
+      apiFetch<{ success: boolean, data: Array<{ key: string, value: string, updatedAt: number | null }> }>('/admin/settings'),
+
+    updateSettings: (settings: Array<{ key: string, value: string }>) =>
+      apiFetch('/admin/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ settings }),
+      }),
+
     // 用户管理附加
     saveComic: (id: string, data: Partial<Comic>) =>
       apiFetch(`/admin/comics/${id}`, {

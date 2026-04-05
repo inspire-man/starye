@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import type { MovieDetail, Player } from '../types'
+import type { TorrentFile } from '../utils/torrServerClient'
 import QrcodeVue from 'qrcode.vue'
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import RatingStars from '../components/RatingStars.vue'
 import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useFavorites } from '../composables/useFavorites'
 import { useRating } from '../composables/useRating'
+import { useTorrServer } from '../composables/useTorrServer'
 import { movieApi, ratingApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
 import { getQualityBadgeClass, getSourceTypeIcon, sortPlaybackSources } from '../utils/playbackSources'
+import { formatTorrentFileSize } from '../utils/torrServerClient'
 
 const route = useRoute()
+const router = useRouter()
 const loading = ref(true)
 const error = ref('')
 const movie = ref<MovieDetail | null>(null)
@@ -36,6 +40,15 @@ const { getPlayerRating } = useRating()
 
 // Aria2 管理
 const { isConnected: aria2Connected, addMagnetTask } = useAria2()
+
+// TorrServer 管理
+const { isConnected: torrServerConnected, streamMagnet, buildStreamForFile } = useTorrServer()
+const torrServerLoading = ref(false)
+const fileSelectionModal = ref<{ show: boolean, files: TorrentFile[], magnetUrl: string }>({
+  show: false,
+  files: [],
+  magnetUrl: '',
+})
 
 // 调试模式（从 localStorage 读取，可以在控制台执行 localStorage.setItem('debugMode', 'true') 开启）
 const debugMode = ref(localStorage.getItem('debugMode') === 'true')
@@ -302,6 +315,62 @@ async function addToAria2(player: Player) {
   catch (error: any) {
     showToast(error.message || '添加失败', 'error')
   }
+}
+
+// TorrServer 在线播放
+async function playViaTorrServer(player: Player) {
+  if (!torrServerConnected.value) {
+    showToast('请先在个人中心配置 TorrServer 连接', 'error')
+    return
+  }
+
+  if (!isMagnetLink(player.sourceUrl)) {
+    showToast('只支持磁力链接的在线播放', 'error')
+    return
+  }
+
+  torrServerLoading.value = true
+  try {
+    const result = await streamMagnet(player.sourceUrl)
+
+    if ('needsSelection' in result) {
+      fileSelectionModal.value = {
+        show: true,
+        files: result.files,
+        magnetUrl: result.magnetUrl,
+      }
+      return
+    }
+
+    const streamResult = result
+    router.push({
+      name: 'player',
+      params: { code: movie.value!.code },
+      query: { streamUrl: streamResult.streamUrl },
+    })
+  }
+  catch (error: any) {
+    showToast(error.message || 'TorrServer 播放失败', 'error')
+  }
+  finally {
+    torrServerLoading.value = false
+  }
+}
+
+// 文件选择后播放
+function selectFileAndPlay(file: TorrentFile) {
+  const result = buildStreamForFile(fileSelectionModal.value.magnetUrl, file)
+  fileSelectionModal.value.show = false
+
+  router.push({
+    name: 'player',
+    params: { code: movie.value!.code },
+    query: { streamUrl: result.streamUrl },
+  })
+}
+
+function closeFileSelection() {
+  fileSelectionModal.value.show = false
 }
 
 async function fetchMovieDetail() {
@@ -677,6 +746,14 @@ onMounted(() => {
               >
                 ⬇️ Aria2
               </button>
+              <button
+                v-if="isMagnetLink(player.sourceUrl) && torrServerConnected"
+                :disabled="torrServerLoading"
+                class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs rounded transition-colors whitespace-nowrap"
+                @click="playViaTorrServer(player)"
+              >
+                {{ torrServerLoading ? '⏳ 加载中' : '▶ 在线播放' }}
+              </button>
               <a
                 v-if="isMagnetLink(player.sourceUrl)"
                 :href="player.sourceUrl"
@@ -875,6 +952,49 @@ onMounted(() => {
               @click="handleConfirmReport"
             >
               {{ reportModal.submitting ? '上报中...' : '确认上报' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 文件选择 Modal (TorrServer) -->
+    <Transition name="modal">
+      <div
+        v-if="fileSelectionModal.show"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        @click.self="closeFileSelection"
+      >
+        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+          <button
+            class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            @click="closeFileSelection"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <h3 class="text-lg font-bold text-white mb-4">
+            选择播放文件
+          </h3>
+          <p class="text-gray-400 text-sm mb-4">
+            该种子包含多个视频文件，请选择要播放的文件：
+          </p>
+
+          <div class="space-y-2 max-h-80 overflow-y-auto">
+            <button
+              v-for="file in fileSelectionModal.files"
+              :key="file.id"
+              class="w-full text-left px-4 py-3 bg-gray-700/50 hover:bg-gray-700 rounded-lg transition-colors"
+              @click="selectFileAndPlay(file)"
+            >
+              <p class="text-white text-sm font-medium truncate">
+                {{ file.path.split('/').pop() || file.path }}
+              </p>
+              <p class="text-gray-400 text-xs mt-1">
+                {{ formatTorrentFileSize(file.length) }}
+              </p>
             </button>
           </div>
         </div>

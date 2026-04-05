@@ -24,10 +24,11 @@ export interface JavBusCrawlerConfig extends OptimizedCrawlerConfig {
   startUrl?: string
   useRandomMirror?: boolean
   recoveryMode?: boolean
+  startPage?: number
 }
 
 export class JavBusCrawler extends OptimizedCrawler {
-  private currentPage = 1
+  private currentPage: number
   private currentMirror: string
   private failedTasks: FailedTaskRecorder
   private failedTasksFile = './.javbus-failed-tasks.json'
@@ -51,6 +52,7 @@ export class JavBusCrawler extends OptimizedCrawler {
       this.currentMirror = config.startUrl || JAVBUS_MIRRORS[0]
     }
 
+    this.currentPage = config.startPage || 1
     this.failedTasks = new FailedTaskRecorder()
   }
 
@@ -226,7 +228,7 @@ export class JavBusCrawler extends OptimizedCrawler {
         return null
       }
 
-      return page.evaluate((pageUrl) => {
+      const movieInfo = await page.evaluate((pageUrl) => {
         try {
           const titleEl = document.querySelector('h3')
           if (!titleEl)
@@ -335,12 +337,116 @@ export class JavBusCrawler extends OptimizedCrawler {
           return null
         }
       }, url)
+
+      // 抓取磁力链接（在同一个已打开的详情页上执行 AJAX 请求）
+      if (movieInfo) {
+        try {
+          const magnetPlayers: any = await this._fetchJavBusMagnets(page, url)
+          if (magnetPlayers.length > 0) {
+            movieInfo.players = magnetPlayers
+            console.log(`[JavBusCrawler] 🧲 找到 ${magnetPlayers.length} 个磁力链接: ${movieInfo.code}`)
+          }
+          else {
+            console.log(`[JavBusCrawler] ℹ️ 暂无磁力链接: ${movieInfo.code}`)
+          }
+        }
+        catch (e: any) {
+          console.warn(`[JavBusCrawler] ⚠️ 磁链抓取失败 (${movieInfo?.code}): ${e.message}`)
+        }
+      }
+
+      return movieInfo
     }
     catch (error) {
       // 记录失败任务
       this.failedTasks.record(url, error as Error, 1)
       throw error
     }
+  }
+
+  /**
+   * 从当前已打开的 JavBus 详情页获取磁力链接
+   * 通过页面 JS 中内嵌的 gid/uc/img 变量调用 AJAX 端点
+   */
+  private async _fetchJavBusMagnets(page: Page, pageUrl: string): Promise<MovieInfo['players']> {
+    const origin = new URL(pageUrl).origin
+
+    const ajaxParams = await page.evaluate(() => {
+      const scripts = document.querySelectorAll('script')
+      let gid = ''
+      let uc = '0'
+      let img = ''
+
+      for (const script of scripts) {
+        const text = script.textContent || ''
+        const gidMatch = text.match(/var\s+gid\s*=\s*(\d+)/)
+        const ucMatch = text.match(/var\s+uc\s*=\s*(\d+)/)
+        const imgMatch = text.match(/var\s+img\s*=\s*'([^']*)'/)
+        if (gidMatch)
+          gid = gidMatch[1]
+        if (ucMatch)
+          uc = ucMatch[1]
+        if (imgMatch)
+          img = imgMatch[1]
+      }
+
+      return { gid, uc, img }
+    })
+
+    if (!ajaxParams.gid) {
+      return []
+    }
+
+    const ajaxUrl = `${origin}/ajax/uncledatoolsbyajax.php?gid=${ajaxParams.gid}&lang=zh&img=${ajaxParams.img}&uc=${ajaxParams.uc}&floor=${Date.now()}`
+
+    const magnets = await page.evaluate(async (fetchUrl: string) => {
+      const resp = await fetch(fetchUrl, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      })
+      if (!resp.ok)
+        return []
+
+      const html = await resp.text()
+      const parser = new DOMParser()
+      // AJAX 返回的是 <tr> 片段，需包裹 <table> 才能正确解析
+      const doc = parser.parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html')
+      const rows = doc.querySelectorAll('tr')
+
+      const seen = new Set<string>()
+      const results: Array<{ sourceName: string, sourceUrl: string, quality: string, sortOrder: number }> = []
+      let sortIdx = 0
+
+      rows.forEach((row) => {
+        const magnetLink = row.querySelector('a[href^="magnet:"]') as HTMLAnchorElement | null
+        if (!magnetLink)
+          return
+
+        const magnetUrl = magnetLink.href.split('&')[0]
+        if (seen.has(magnetUrl))
+          return
+        seen.add(magnetUrl)
+
+        const tds = row.querySelectorAll('td')
+        const nameEl = tds[0]?.querySelector('a')
+        const name = nameEl?.textContent?.trim() || ''
+        const sizeEl = tds[1]
+        const size = sizeEl?.textContent?.trim() || ''
+
+        const hasSubtitle = row.querySelector('.is-warning') !== null
+        const label = hasSubtitle ? `磁力(字幕) - ${name}` : `磁力 - ${name}`
+
+        results.push({
+          sourceName: label.substring(0, 100),
+          sourceUrl: magnetUrl,
+          quality: size,
+          sortOrder: sortIdx++,
+        })
+      })
+
+      return results
+    }, ajaxUrl)
+
+    return magnets || []
   }
 
   /**
@@ -363,12 +469,18 @@ export class JavBusCrawler extends OptimizedCrawler {
     // 启用增量模式进度跟踪
     this.progressMonitor.enableIncrementalMode()
 
+    // 计算最大页码：startPage + maxPages - 1
+    const startPage = (this.config as JavBusCrawlerConfig).startPage || 1
+    const endPage = this.config.limits.maxPages
+      ? startPage + this.config.limits.maxPages - 1
+      : Number.POSITIVE_INFINITY
+
     try {
       // 主循环：爬取列表页
       while (true) {
         // 检查是否达到限制
-        if (this.config.limits.maxPages && this.currentPage > this.config.limits.maxPages) {
-          console.log(`✅ 达到最大页数限制: ${this.config.limits.maxPages}`)
+        if (this.currentPage > endPage) {
+          console.log(`✅ 达到最大页数限制: ${this.config.limits.maxPages} 页 (第${startPage}-${endPage}页)`)
           break
         }
 
@@ -378,7 +490,7 @@ export class JavBusCrawler extends OptimizedCrawler {
           break
         }
 
-        const listUrl = this.currentPage === 1
+        const listUrl = this.currentPage <= 1
           ? this.currentMirror
           : `${this.currentMirror}/page/${this.currentPage}`
 
