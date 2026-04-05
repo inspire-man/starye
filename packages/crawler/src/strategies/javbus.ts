@@ -228,7 +228,7 @@ export class JavBusStrategy implements MovieCrawlStrategy {
           publisher: publisher || studio,
           publisherUrl, // 新增：厂商详情页 URL
           isR18: true,
-          players: [],
+          players: [] as Array<{ sourceName: string, sourceUrl: string, quality?: string | null, sortOrder: number }>,
         }
       }
       catch (e: any) {
@@ -241,7 +241,7 @@ export class JavBusStrategy implements MovieCrawlStrategy {
           isR18: false,
           actors: [],
           genres: [],
-          players: [],
+          players: [] as Array<{ sourceName: string, sourceUrl: string, quality?: string | null, sortOrder: number }>,
         }
       }
     }, url)
