@@ -485,14 +485,19 @@ onMounted(() => {
   <div v-else-if="movie" class="space-y-6">
     <div class="bg-gray-800 rounded-lg shadow-lg p-6">
       <div class="flex flex-col md:flex-row gap-6">
-        <div class="shrink-0">
+        <!-- 封面：完整展示横版原图（400:267） -->
+        <div class="shrink-0 w-full md:w-auto">
           <img
             v-if="movie.coverImage"
             :src="movie.coverImage"
             :alt="movie.title"
-            class="w-48 h-64 object-cover rounded-lg shadow-md"
+            class="w-full md:w-80 h-auto rounded-lg shadow-md object-cover"
           >
-          <div v-else class="w-48 h-64 bg-gray-700 rounded-lg flex items-center justify-center">
+          <div
+            v-else
+            class="w-full md:w-80 bg-gray-700 rounded-lg flex items-center justify-center"
+            style="aspect-ratio: 400/267"
+          >
             <span class="text-gray-500">暂无封面</span>
           </div>
         </div>
@@ -1018,7 +1023,7 @@ onMounted(() => {
                 v-if="related.coverImage"
                 :src="related.coverImage"
                 :alt="related.title"
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
               >
             </div>

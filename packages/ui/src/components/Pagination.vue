@@ -103,7 +103,7 @@ const jumperValue = computed({
     <!-- Sizes -->
     <select
       v-if="layoutItems.includes('sizes')"
-      class="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:border-primary focus:border-primary focus:outline-none"
+      class="cursor-pointer rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:border-primary focus:border-primary focus:outline-none"
       :value="pageSize"
       @change="handleSizeChange(Number(($event.target as HTMLSelectElement).value))"
     >
@@ -139,7 +139,7 @@ const jumperValue = computed({
             : (background
               ? 'bg-muted text-foreground hover:text-primary'
               : 'border border-border bg-background text-foreground hover:text-primary'),
-          { 'cursor-default': page === '...' },
+          page === '...' ? 'cursor-default' : 'cursor-pointer',
         ]"
         :disabled="page === '...'"
         @click="typeof page === 'number' && handlePageChange(page)"

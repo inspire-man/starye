@@ -790,10 +790,12 @@ onMounted(() => {
 }
 
 .movie-cover {
-  width: 40px;
-  height: 60px;
+  width: 60px;
+  height: 40px;
   object-fit: cover;
+  object-position: right center;
   border-radius: 0.25rem;
+  flex-shrink: 0;
 }
 
 .form-actions {

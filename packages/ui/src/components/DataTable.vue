@@ -73,6 +73,7 @@ function getCellValue(item: T, column: Column<T>): string {
             <th v-if="selectable" class="w-10 border-b border-border p-3 text-center">
               <input
                 type="checkbox"
+                class="cursor-pointer"
                 :checked="allSelected"
                 @change="handleSelectAll"
               >
@@ -100,6 +101,7 @@ function getCellValue(item: T, column: Column<T>): string {
             <td v-if="selectable" class="w-10 border-b border-border p-3 text-center" @click.stop>
               <input
                 type="checkbox"
+                class="cursor-pointer"
                 :checked="selectedIds.has(item.id)"
                 @change="handleSelect(item.id)"
               >

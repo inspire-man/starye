@@ -106,13 +106,13 @@ const canConfirm = computed(() => {
         <!-- Footer -->
         <div class="flex justify-end gap-3 border-t border-border p-6">
           <button
-            class="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            class="cursor-pointer rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             @click="handleCancel"
           >
             {{ cancelText }}
           </button>
           <button
-            class="rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+            class="cursor-pointer rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
             :class="variant === 'danger' ? 'bg-destructive hover:bg-destructive/90' : 'bg-primary hover:bg-primary/90'"
             :disabled="!canConfirm"
             @click="handleConfirm"

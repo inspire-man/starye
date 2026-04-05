@@ -124,7 +124,7 @@ onMounted(() => {
     <!-- R18 Status Banner (if logged in and not verified) -->
     <div v-if="userStore.user && !userStore.user.isR18Verified" class="bg-amber-900/20 border border-amber-700 rounded-lg px-4 py-3 mb-6">
       <div class="flex items-center gap-3">
-        <span class="text-2xl flex-shrink-0">🔒</span>
+        <span class="text-2xl shrink-0">🔒</span>
         <div class="text-sm flex-1">
           <p class="font-medium text-amber-300">
             部分 R18 内容已隐藏
@@ -202,12 +202,12 @@ onMounted(() => {
           class="group cursor-pointer"
         >
           <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
-            <div class="aspect-[3/4] bg-gray-800">
+            <div class="aspect-3/4 bg-gray-800">
               <img
                 v-if="movie.coverImage"
                 :src="movie.coverImage"
                 :alt="movie.title"
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
               >
             </div>

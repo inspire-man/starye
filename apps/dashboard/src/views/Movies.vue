@@ -385,7 +385,7 @@ async function executeBatchOperation() {
 }
 
 const tableColumns = [
-  { key: 'coverImage', label: '封面', width: '100px', sortable: false },
+  { key: 'coverImage', label: '封面', width: '200px', sortable: false },
   { key: 'code', label: '番号', width: '120px' },
   { key: 'title', label: '标题', minWidth: '200px', sortable: true },
   { key: 'actors', label: '女优', width: '200px' },
@@ -466,13 +466,17 @@ const tableColumns = [
       @row-click="openEditModal"
     >
       <template #cell-coverImage="{ item }">
-        <img
-          v-if="item.coverImage"
-          :src="item.coverImage"
-          :alt="item.title"
-          class="movie-cover-thumb"
-        >
-        <span v-else class="no-cover">无</span>
+        <div class="movie-cover-cell">
+          <img
+            v-if="item.coverImage"
+            :src="item.coverImage"
+            :alt="item.title"
+            class="movie-cover-thumb"
+          >
+          <div v-else class="no-cover">
+            无封面
+          </div>
+        </div>
       </template>
 
       <template #cell-actors="{ item }">
@@ -946,15 +950,32 @@ const tableColumns = [
   background: #f9fafb;
 }
 
+/* 封面单元格容器：固定横版比例（400:267 ≈ 3:2），展示右侧内容 */
+.movie-cover-cell {
+  width: 168px;
+  height: 112px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #1f2937;
+  flex-shrink: 0;
+}
+
 .movie-cover-thumb {
-  width: 60px;
-  height: 80px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+  object-position: right center;
+  border-radius: 6px;
+  display: block;
 }
 
 .no-cover {
-  color: #9ca3af;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
   font-size: 0.75rem;
 }
 

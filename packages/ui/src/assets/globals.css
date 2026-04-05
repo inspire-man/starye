@@ -134,4 +134,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* 所有可交互元素统一显示手型指针 */
+  button:not(:disabled),
+  select,
+  input[type="checkbox"],
+  input[type="radio"],
+  label[for] {
+    cursor: pointer;
+  }
 }

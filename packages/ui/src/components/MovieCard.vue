@@ -31,7 +31,7 @@ function formatDate(date?: Date | null) {
         :src="cover"
         :alt="title"
         loading="lazy"
-        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+        class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-500"
       >
 
       <!-- Placeholder / R18 Mask -->

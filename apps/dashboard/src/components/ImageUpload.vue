@@ -124,8 +124,9 @@ function handleDragLeave() {
 
 .preview-container {
   position: relative;
-  width: 200px;
-  height: 280px;
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 400 / 267;
   border-radius: 0.5rem;
   overflow: hidden;
   border: 1px solid #e5e7eb;
@@ -134,7 +135,8 @@ function handleDragLeave() {
 .preview-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #f3f4f6;
 }
 
 .loading-overlay {

@@ -128,7 +128,7 @@ function hasResults() {
                   v-if="movie.coverImage"
                   :src="movie.coverImage"
                   :alt="movie.title"
-                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 >
                 <div v-else class="w-full h-full flex items-center justify-center text-gray-600 text-4xl">

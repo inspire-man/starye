@@ -119,7 +119,7 @@ onMounted(() => {
 
     <!-- 筛选器 -->
     <div class="mb-6 flex items-center gap-4">
-      <div class="flex-shrink-0">
+      <div class="shrink-0">
         <label class="text-sm text-gray-400 mb-2 block">类型筛选</label>
         <Select
           :model-value="selectedType"
@@ -195,13 +195,14 @@ onMounted(() => {
           <RouterLink
             v-if="favorite.entity"
             :to="getEntityLink(favorite)"
-            class="flex-shrink-0"
+            class="shrink-0"
           >
             <img
               v-if="favorite.entity.cover"
               :src="favorite.entity.cover"
               :alt="favorite.entity.name"
               class="w-16 h-20 object-cover rounded-lg"
+              :class="favorite.entityType === 'movie' ? 'object-right' : 'object-center'"
             >
             <div
               v-else
@@ -218,7 +219,7 @@ onMounted(() => {
           </RouterLink>
           <div
             v-else
-            class="flex-shrink-0 w-16 h-20 rounded-lg flex items-center justify-center text-2xl bg-gray-700/50 border border-gray-600/30"
+            class="shrink-0 w-16 h-20 rounded-lg flex items-center justify-center text-2xl bg-gray-700/50 border border-gray-600/30"
           >
             🚫
           </div>
@@ -255,7 +256,7 @@ onMounted(() => {
 
           <!-- 操作按钮 -->
           <button
-            class="flex-shrink-0 px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-md transition-colors disabled:opacity-50"
+            class="shrink-0 px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-md transition-colors disabled:opacity-50"
             :disabled="deletingId === favorite.id"
             @click="requestDelete(favorite.id)"
           >
