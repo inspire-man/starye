@@ -64,6 +64,7 @@ async function main() {
     // 镜像配置
     useRandomMirror: process.env.USE_RANDOM_MIRROR === 'true',
     startUrl: process.env.START_URL,
+    startPage: Number.parseInt(process.env.START_PAGE || '1'),
   }
 
   console.log('🚀 启动优化爬虫测试')
