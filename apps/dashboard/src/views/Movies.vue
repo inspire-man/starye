@@ -49,6 +49,7 @@ const { filters, applyFilters, resetFilters } = useFilters({
   isR18: '',
   crawlStatus: '',
   metadataLocked: '',
+  hasPlayers: '',
   actor: '',
   publisher: '',
   genre: '',
@@ -120,6 +121,15 @@ const filterFields = [
     label: '搜索',
     type: 'text' as const,
     placeholder: '标题或番号',
+  },
+  {
+    key: 'hasPlayers',
+    label: '播放源',
+    type: 'select' as const,
+    options: [
+      { value: 'true', label: '有播放源' },
+      { value: 'false', label: '无播放源' },
+    ],
   },
 ]
 
@@ -195,10 +205,9 @@ watch(
     () => filters.value.isR18,
     () => filters.value.crawlStatus,
     () => filters.value.metadataLocked,
+    () => filters.value.hasPlayers,
   ],
   () => {
-    // 筛选条件变化时不需要重置页码，因为 usePagination 的 currentPage 是 computed
-    // 直接加载即可
     loadMovies()
   },
 )
@@ -385,17 +394,18 @@ async function executeBatchOperation() {
 }
 
 const tableColumns = [
-  { key: 'coverImage', label: '封面', width: '200px', sortable: false },
-  { key: 'code', label: '番号', width: '120px' },
+  { key: 'coverImage', label: '封面', width: '130px', minWidth: '130px', sortable: false },
+  { key: 'code', label: '番号', width: '120px', minWidth: '100px' },
   { key: 'title', label: '标题', minWidth: '200px', sortable: true },
-  { key: 'actors', label: '女优', width: '200px' },
-  { key: 'series', label: '系列', width: '150px' },
-  { key: 'publisher', label: '厂商', width: '150px' },
-  { key: 'releaseDate', label: '发布日期', width: '120px', sortable: true },
-  { key: 'isR18', label: 'R18', width: '60px' },
-  { key: 'metadataLocked', label: '锁定', width: '60px' },
-  { key: 'crawlStatus', label: '状态', width: '120px' },
-  { key: 'createdAt', label: '创建时间', width: '180px', sortable: true },
+  { key: 'actors', label: '女优', width: '160px', minWidth: '120px' },
+  { key: 'series', label: '系列', width: '120px', minWidth: '100px' },
+  { key: 'publisher', label: '厂商', width: '120px', minWidth: '100px' },
+  { key: 'releaseDate', label: '发布日期', width: '110px', minWidth: '100px', sortable: true },
+  { key: 'isR18', label: 'R18', width: '60px', minWidth: '60px' },
+  { key: 'metadataLocked', label: '锁定', width: '60px', minWidth: '60px' },
+  { key: 'crawlStatus', label: '状态', width: '100px', minWidth: '90px' },
+  { key: 'createdAt', label: '创建时间', width: '160px', minWidth: '140px', sortable: true },
+  { key: 'actions', label: '操作', width: '100px', minWidth: '80px', sortable: false },
 ]
 </script>
 
@@ -460,6 +470,7 @@ const tableColumns = [
       :loading="loading"
       :selectable="true"
       :selected-ids="selected"
+      min-width="1300px"
       empty-message="暂无电影数据"
       @toggle-select="toggleItem"
       @toggle-select-all="toggleAll"
@@ -515,6 +526,23 @@ const tableColumns = [
 
       <template #cell-createdAt="{ item }">
         {{ formatDateTime(item.createdAt) }}
+      </template>
+
+      <template #cell-actions="{ item }">
+        <div class="action-btns" @click.stop>
+          <a
+            :href="`/movie/${item.code}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="action-btn-view"
+            title="在客户端查看"
+          >
+            <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            查看
+          </a>
+        </div>
       </template>
     </DataTable>
 
@@ -950,10 +978,12 @@ const tableColumns = [
   background: #f9fafb;
 }
 
-/* 封面单元格容器：固定横版比例（400:267 ≈ 3:2），展示右侧内容 */
+/* 封面单元格：200:267 比例，展示横版封面右半侧
+   原图 400×267，容器 100×134（200:267 缩小 0.5x）
+   object-cover + object-right → 正好显示右半侧 200px */
 .movie-cover-cell {
-  width: 168px;
-  height: 112px;
+  width: 100px;
+  height: 134px;
   overflow: hidden;
   border-radius: 6px;
   background: #1f2937;
@@ -1021,5 +1051,36 @@ const tableColumns = [
 .badge-locked,
 .badge-unlocked {
   font-size: 1rem;
+}
+
+.action-btns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.action-btn-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s;
+  cursor: pointer;
+}
+
+.action-btn-view:hover {
+  background: #dbeafe;
+}
+
+.action-icon {
+  width: 12px;
+  height: 12px;
 }
 </style>

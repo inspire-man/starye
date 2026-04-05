@@ -9,6 +9,8 @@ interface Props {
   selectable?: boolean
   selectedIds?: Set<string>
   emptyMessage?: string
+  /** 表格最小宽度，默认 800px */
+  minWidth?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -16,6 +18,7 @@ const props = withDefaults(defineProps<Props>(), {
   selectable: false,
   selectedIds: () => new Set(),
   emptyMessage: '暂无数据',
+  minWidth: '800px',
 })
 
 const emit = defineEmits<{
@@ -67,7 +70,7 @@ function getCellValue(item: T, column: Column<T>): string {
     </div>
 
     <div v-else class="overflow-x-auto">
-      <table class="w-full min-w-[800px] overflow-hidden rounded-lg bg-background">
+      <table class="w-full overflow-hidden rounded-lg bg-background" :style="{ minWidth }">
         <thead class="bg-muted/50">
           <tr>
             <th v-if="selectable" class="w-10 border-b border-border p-3 text-center">

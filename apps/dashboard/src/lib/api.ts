@@ -35,6 +35,8 @@ export interface Comic {
   isR18?: boolean
   metadataLocked?: boolean
   status?: 'serializing' | 'completed'
+  crawlStatus?: 'pending' | 'partial' | 'complete'
+  chapterCount?: number | null
   region?: string | null
   genres?: string[] | null
   createdAt?: string

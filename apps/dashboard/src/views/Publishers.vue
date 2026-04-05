@@ -91,6 +91,7 @@ const tableColumns = [
   { key: 'crawlStatus', label: '爬取状态', sortable: false, width: '120px' },
   { key: 'country', label: '国家', sortable: false, width: '80px' },
   { key: 'createdAt', label: '创建时间', sortable: true, width: '180px' },
+  { key: 'actions', label: '操作', sortable: false, width: '80px', minWidth: '70px' },
 ]
 
 // 服务端排序，直接使用 publishers.value
@@ -364,6 +365,21 @@ onMounted(() => {
       </template>
       <template #cell-createdAt="{ item }">
         {{ formatDateTime(item.createdAt) }}
+      </template>
+      <template #cell-actions="{ item }">
+        <div style="display:flex;gap:4px;align-items:center" @click.stop>
+          <a
+            v-if="item.slug"
+            :href="`/publishers/${item.slug}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="action-link"
+            style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;"
+            title="在客户端查看"
+          >
+            客户端
+          </a>
+        </div>
       </template>
     </DataTable>
 
@@ -774,5 +790,24 @@ onMounted(() => {
     max-width: 100%;
     padding: 0 1rem;
   }
+}
+
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.action-link:hover {
+  background: #e5e7eb;
 }
 </style>

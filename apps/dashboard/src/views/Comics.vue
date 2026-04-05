@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '@/lib/api'
-import { ConfirmDialog, FilterPanel, Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
+import { ConfirmDialog, DataTable, FilterPanel, Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BatchOperationMenu from '@/components/BatchOperationMenu.vue'
@@ -109,6 +109,23 @@ const editingComic = ref<Comic | null>(null)
 const updateLoading = ref(false)
 const uploadLoading = ref(false)
 const activeTab = ref<'metadata' | 'chapters'>('metadata')
+
+// 视图模式：card（卡片）| table（表格）
+const viewMode = ref<'card' | 'table'>('card')
+
+// 漫画表格列定义
+const comicTableColumns = [
+  { key: 'coverImage', label: '封面', width: '90px', minWidth: '90px', sortable: false },
+  { key: 'title', label: '标题', minWidth: '160px', sortable: true },
+  { key: 'author', label: '作者', width: '120px', minWidth: '100px' },
+  { key: 'region', label: '地区', width: '80px', minWidth: '70px' },
+  { key: 'isR18', label: 'R18', width: '60px', minWidth: '60px' },
+  { key: 'status', label: '状态', width: '90px', minWidth: '80px' },
+  { key: 'crawlStatus', label: '爬取', width: '90px', minWidth: '80px' },
+  { key: 'chapterCount', label: '章节', width: '70px', minWidth: '60px' },
+  { key: 'updatedAt', label: '更新时间', width: '160px', minWidth: '140px', sortable: true },
+  { key: 'actions', label: '操作', width: '80px', minWidth: '70px', sortable: false },
+]
 
 // 章节管理
 const chapters = ref<Chapter[]>([])
@@ -456,6 +473,34 @@ async function executeBatchOperation() {
       >
         取消选择
       </button>
+
+      <!-- 视图切换 -->
+      <div class="ml-auto flex items-center gap-1 rounded-lg border border-neutral-200 dark:border-neutral-700 p-1">
+        <button
+          class="view-toggle-btn"
+          :class="viewMode === 'card' ? 'view-toggle-active' : ''"
+          title="卡片视图"
+          @click="viewMode = 'card'"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+        </button>
+        <button
+          class="view-toggle-btn"
+          :class="viewMode === 'table' ? 'view-toggle-active' : ''"
+          title="表格视图"
+          @click="viewMode = 'table'"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 10h18M3 14h18M10 3v18" />
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Loading / Error States -->
@@ -478,7 +523,72 @@ async function executeBatchOperation() {
       </button>
     </div>
 
-    <!-- Comic Grid -->
+    <!-- 表格视图 -->
+    <DataTable
+      v-else-if="viewMode === 'table'"
+      :data="comics"
+      :columns="comicTableColumns"
+      :loading="loading"
+      :selectable="true"
+      :selected-ids="selected"
+      min-width="900px"
+      empty-message="暂无漫画数据"
+      @toggle-select="(id) => toggleItem(id)"
+      @toggle-select-all="() => {}"
+      @row-click="(item) => openEditModal(item as Comic)"
+    >
+      <template #cell-coverImage="{ item }">
+        <div class="comic-cover-cell">
+          <img v-if="(item as Comic).coverImage" :src="(item as Comic).coverImage!" class="comic-cover-thumb" :alt="(item as Comic).title">
+          <div v-else class="comic-cover-placeholder">
+            <svg class="h-5 w-5 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </div>
+        </div>
+      </template>
+      <template #cell-isR18="{ item }">
+        <span class="comic-badge" :class="(item as Comic).isR18 ? 'badge-r18' : 'badge-safe'">
+          {{ (item as Comic).isR18 ? 'R18' : '一般' }}
+        </span>
+      </template>
+      <template #cell-status="{ item }">
+        <span class="comic-badge badge-status">
+          {{ (item as Comic).status === 'serializing' ? '连载中' : (item as Comic).status === 'completed' ? '已完结' : '-' }}
+        </span>
+      </template>
+      <template #cell-crawlStatus="{ item }">
+        <span class="comic-badge" :class="(item as any).crawlStatus === 'complete' ? 'badge-complete' : 'badge-pending'">
+          {{ (item as any).crawlStatus === 'complete' ? '完成' : (item as any).crawlStatus === 'pending' ? '等待' : '部分' }}
+        </span>
+      </template>
+      <template #cell-updatedAt="{ item }">
+        {{ (item as any).updatedAt ? new Date((item as any).updatedAt).toLocaleDateString('zh-CN') : '-' }}
+      </template>
+      <template #cell-chapterCount="{ item }">
+        {{ (item as any).chapterCount ?? '-' }}
+      </template>
+      <template #cell-actions="{ item }">
+        <div style="display:flex;gap:4px;align-items:center" @click.stop>
+          <a
+            :href="`/comic/${(item as Comic).slug}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="action-btn-link"
+            title="在客户端查看"
+          >
+            <svg style="width:12px;height:12px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            查看
+          </a>
+        </div>
+      </template>
+    </DataTable>
+
+    <!-- Comic Grid（卡片视图） -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       <div
         v-for="comic in comics"
@@ -870,3 +980,87 @@ async function executeBatchOperation() {
     />
   </div>
 </template>
+
+<style scoped>
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem;
+  border-radius: 0.375rem;
+  color: #6b7280;
+  transition: all 0.15s;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.view-toggle-btn:hover {
+  color: #111827;
+  background: #f3f4f6;
+}
+
+.view-toggle-active {
+  background: white;
+  color: #1d4ed8;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+/* 漫画表格缩略图 */
+.comic-cover-cell {
+  width: 56px;
+  height: 75px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #f3f4f6;
+  flex-shrink: 0;
+}
+
+.comic-cover-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.comic-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+}
+
+.comic-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-r18 { background: #fee2e2; color: #dc2626; }
+.badge-safe { background: #f3f4f6; color: #6b7280; }
+.badge-status { background: #eff6ff; color: #2563eb; }
+.badge-complete { background: #d1fae5; color: #065f46; }
+.badge-pending { background: #fef3c7; color: #92400e; }
+
+.action-btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.action-btn-link:hover {
+  background: #dbeafe;
+}
+</style>

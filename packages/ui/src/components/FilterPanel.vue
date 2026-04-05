@@ -18,7 +18,7 @@ const emit = defineEmits<{
 /** 移动端折叠状态 */
 const isExpanded = ref(false)
 
-/** 已激活的筛选项数量（有非空值的字段） */
+/** 已激活的筛选项数量 */
 const activeCount = computed(() => {
   return props.fields.filter((f) => {
     if (f.type === 'dateRange') {
@@ -46,34 +46,23 @@ function handleReset() {
 </script>
 
 <template>
-  <div class="mb-6 rounded-lg bg-background shadow-sm ring-1 ring-border">
-    <!-- 移动端折叠头部（md 以上隐藏） -->
+  <div class="filter-panel">
+    <!-- 移动端折叠头部 -->
     <button
       type="button"
-      class="flex w-full items-center justify-between px-4 py-3 md:hidden"
+      class="filter-mobile-toggle"
       @click="isExpanded = !isExpanded"
     >
-      <div class="flex items-center gap-2">
-        <svg
-          class="h-4 w-4 text-muted-foreground"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
-        >
+      <div class="filter-mobile-title">
+        <svg class="filter-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
         </svg>
-        <span class="text-sm font-medium text-foreground">筛选</span>
-        <span
-          v-if="activeCount > 0"
-          class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
-        >
-          {{ activeCount }}
-        </span>
+        <span>筛选</span>
+        <span v-if="activeCount > 0" class="filter-badge">{{ activeCount }}</span>
       </div>
       <svg
-        class="h-4 w-4 text-muted-foreground transition-transform duration-200"
-        :class="isExpanded ? 'rotate-180' : ''"
+        class="filter-chevron"
+        :class="isExpanded ? 'rotated' : ''"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -83,37 +72,33 @@ function handleReset() {
       </svg>
     </button>
 
-    <!-- 筛选内容区：移动端折叠控制，桌面端始终展开 -->
-    <div
-      class="p-4 md:p-6"
-      :class="isExpanded ? 'block' : 'hidden md:block'"
-    >
-      <!-- 筛选字段网格：移动端 1 列，桌面端固定 3 列 -->
-      <div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+    <!-- 筛选内容区 -->
+    <div class="filter-body" :class="{ expanded: isExpanded }">
+      <div class="filter-grid">
         <div
           v-for="field in fields"
           :key="field.key"
-          class="flex flex-col gap-1.5"
+          class="filter-field"
           :class="{
-            'md:col-span-2': field.colSpan === 2,
-            'md:col-span-3': field.colSpan === 3,
+            'col-span-2': field.colSpan === 2,
+            'col-span-3': field.colSpan === 3,
           }"
         >
-          <label class="text-sm font-medium text-foreground">{{ field.label }}</label>
+          <label class="filter-label">{{ field.label }}</label>
 
           <input
             v-if="field.type === 'text'"
             type="text"
             :value="modelValue[field.key] || ''"
             :placeholder="field.placeholder"
-            class="rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+            class="filter-input"
             @input="updateField(field.key, ($event.target as HTMLInputElement).value)"
           >
 
           <select
             v-else-if="field.type === 'select'"
             :value="modelValue[field.key] || ''"
-            class="rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+            class="filter-input"
             @change="updateField(field.key, ($event.target as HTMLSelectElement).value)"
           >
             <option value="">
@@ -128,11 +113,11 @@ function handleReset() {
             </option>
           </select>
 
-          <div v-else-if="field.type === 'checkbox'" class="flex flex-wrap gap-3">
+          <div v-else-if="field.type === 'checkbox'" class="filter-checkboxes">
             <label
               v-for="opt in field.options"
               :key="opt.value"
-              class="flex cursor-pointer select-none items-center gap-2 text-sm"
+              class="filter-checkbox-label"
             >
               <input
                 type="checkbox"
@@ -150,44 +135,237 @@ function handleReset() {
             </label>
           </div>
 
-          <!-- dateRange 字段占 2 列（在 md 网格中用 col-span-2） -->
-          <div
-            v-else-if="field.type === 'dateRange'"
-            class="flex items-center gap-2"
-          >
+          <div v-else-if="field.type === 'dateRange'" class="filter-date-range">
             <input
               type="date"
               :value="modelValue[`${field.key}From`] || ''"
-              class="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+              class="filter-input"
               @input="updateField(`${field.key}From`, ($event.target as HTMLInputElement).value)"
             >
-            <span class="shrink-0 text-sm text-muted-foreground">至</span>
+            <span class="filter-date-sep">至</span>
             <input
               type="date"
               :value="modelValue[`${field.key}To`] || ''"
-              class="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+              class="filter-input"
               @input="updateField(`${field.key}To`, ($event.target as HTMLInputElement).value)"
             >
           </div>
         </div>
       </div>
 
-      <div class="flex justify-end gap-3 border-t border-border pt-4">
-        <button
-          type="button"
-          class="cursor-pointer rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-          @click="handleReset"
-        >
+      <div class="filter-actions">
+        <button type="button" class="filter-btn-reset" @click="handleReset">
           重置
         </button>
-        <button
-          type="button"
-          class="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          @click="handleApply"
-        >
+        <button type="button" class="filter-btn-apply" @click="handleApply">
           应用筛选
         </button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.filter-panel {
+  margin-bottom: 1.5rem;
+  border-radius: 0.5rem;
+  background-color: hsl(var(--background));
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  outline: 1px solid hsl(var(--border));
+}
+
+/* 移动端折叠按钮：默认显示，桌面端隐藏 */
+.filter-mobile-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+.filter-mobile-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-icon {
+  width: 1rem;
+  height: 1rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.filter-mobile-title span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.filter-badge {
+  display: inline-flex;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background-color: hsl(var(--primary));
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--primary-foreground));
+}
+
+.filter-chevron {
+  width: 1rem;
+  height: 1rem;
+  color: hsl(var(--muted-foreground));
+  transition: transform 0.2s;
+}
+
+.filter-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+/* 内容区：移动端默认收起，展开时显示 */
+.filter-body {
+  display: none;
+  padding: 1rem;
+}
+
+.filter-body.expanded {
+  display: block;
+}
+
+/* 筛选网格：移动端 1 列 */
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.filter-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.filter-input {
+  border-radius: 0.375rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--background));
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.1);
+}
+
+.filter-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.filter-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-date-range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-date-range .filter-input {
+  flex: 1;
+}
+
+.filter-date-sep {
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 1rem;
+}
+
+.filter-btn-reset {
+  border-radius: 0.375rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--background));
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.filter-btn-reset:hover {
+  background-color: hsl(var(--muted));
+}
+
+.filter-btn-apply {
+  border-radius: 0.375rem;
+  background-color: hsl(var(--primary));
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--primary-foreground));
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.filter-btn-apply:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+/* 桌面端（≥768px）：切换为始终展开的 3 列布局 */
+@media (min-width: 768px) {
+  .filter-mobile-toggle {
+    display: none;
+  }
+
+  .filter-body {
+    display: block;
+    padding: 1.5rem;
+  }
+
+  .filter-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .col-span-2 {
+    grid-column: span 2;
+  }
+
+  .col-span-3 {
+    grid-column: span 3;
+  }
+}
+</style>

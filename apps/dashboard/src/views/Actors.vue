@@ -443,9 +443,22 @@ onMounted(() => {
         {{ formatDateTime(item.createdAt) }}
       </template>
       <template #cell-actions="{ item }">
-        <router-link :to="`/actors/${item.id}`" class="action-link" @click.stop>
-          查看详情
-        </router-link>
+        <div style="display:flex;gap:4px;align-items:center" @click.stop>
+          <router-link :to="`/actors/${item.id}`" class="action-link">
+            详情
+          </router-link>
+          <a
+            v-if="item.slug"
+            :href="`/actors/${item.slug}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="action-link"
+            style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;"
+            title="在客户端查看"
+          >
+            客户端
+          </a>
+        </div>
       </template>
     </DataTable>
 
