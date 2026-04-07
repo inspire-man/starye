@@ -170,6 +170,7 @@ export const movies = sqliteTable('movie', {
   // 管理字段
   metadataLocked: integer('metadata_locked', { mode: 'boolean' }).default(false).notNull(), // 锁定元数据，防止爬虫覆盖
   sortOrder: integer('sort_order').default(0), // 人工排序/权重 (越大越靠前)
+  viewCount: integer('view_count').default(0).notNull(), // 累计观看次数（用于热门排序）
   // 爬取状态字段
   crawlStatus: text('crawl_status', { enum: ['pending', 'partial', 'complete'] }).default('complete'), // pending: 未爬取, partial: 部分完成, complete: 完全完成
   lastCrawledAt: integer('last_crawled_at', { mode: 'timestamp' }), // 最后爬取时间

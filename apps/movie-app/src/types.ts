@@ -118,6 +118,24 @@ export interface WatchingProgress {
   updatedAt: Date
 }
 
+/** 观看历史条目（含影片详情，来自 GET /progress/watching 无参数时） */
+export interface WatchingHistoryItem {
+  id: string
+  movieCode: string
+  title: string
+  coverImage: string | null
+  isR18: boolean
+  progress: number
+  duration: number | null
+  updatedAt: string
+}
+
+/** Genre 聚合条目 */
+export interface GenreItem {
+  genre: string
+  count: number
+}
+
 export interface ApiResponse<T> {
   success: boolean
   data?: T

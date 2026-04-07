@@ -183,6 +183,11 @@ function goToDetail() {
 
 onMounted(() => {
   fetchMovieAndPlay()
+  // 上报观看（fire-and-forget），用于热门排序 viewCount 统计
+  const code = route.params.code as string
+  if (code) {
+    movieApi.trackView(code)
+  }
 })
 
 onUnmounted(() => {

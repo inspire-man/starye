@@ -94,22 +94,51 @@ export const GetWatchingProgressQuerySchema = v.object({
       v.description('影片番号（查询单个影片进度）'),
     ),
   ),
+  limit: v.optional(
+    v.pipe(
+      v.string(),
+      v.transform(Number),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(50),
+      v.description('返回条数（无 movieCode 时生效，默认 20，上限 50）'),
+    ),
+  ),
 })
 
 export type GetWatchingProgressQuery = v.InferOutput<typeof GetWatchingProgressQuerySchema>
 
 /**
- * 观看进度条目 Schema
+ * 观看进度条目 Schema（单条，原始字段）
  */
 export const WatchingProgressItemSchema = v.pipe(
   v.object({
     id: v.string(),
     movieCode: v.string(),
-    currentTime: v.pipe(v.number(), v.minValue(0)),
-    duration: v.pipe(v.number(), v.minValue(0)),
+    progress: v.pipe(v.number(), v.minValue(0)),
+    duration: v.nullable(v.pipe(v.number(), v.minValue(0))),
     updatedAt: TimestampSchema,
   }),
   v.metadata({ ref: 'WatchingProgressItem' }),
 )
 
 export type WatchingProgressItem = v.InferOutput<typeof WatchingProgressItemSchema>
+
+/**
+ * 观看历史条目 Schema（含影片详情，JOIN 查询结果）
+ */
+export const WatchingHistoryItemSchema = v.pipe(
+  v.object({
+    id: v.string(),
+    movieCode: v.string(),
+    title: v.string(),
+    coverImage: v.nullable(v.string()),
+    isR18: v.boolean(),
+    progress: v.pipe(v.number(), v.minValue(0)),
+    duration: v.nullable(v.pipe(v.number(), v.minValue(0))),
+    updatedAt: TimestampSchema,
+  }),
+  v.metadata({ ref: 'WatchingHistoryItem' }),
+)
+
+export type WatchingHistoryItem = v.InferOutput<typeof WatchingHistoryItemSchema>

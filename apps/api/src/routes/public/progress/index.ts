@@ -5,7 +5,7 @@ import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
 import * as v from 'valibot'
-import { GetReadingProgressQuerySchema, GetWatchingProgressQuerySchema, ReadingProgressItemSchema, SaveReadingProgressSchema, SaveWatchingProgressSchema, WatchingProgressItemSchema } from '../../../schemas/progress'
+import { GetReadingProgressQuerySchema, GetWatchingProgressQuerySchema, ReadingProgressItemSchema, SaveReadingProgressSchema, SaveWatchingProgressSchema, WatchingHistoryItemSchema, WatchingProgressItemSchema } from '../../../schemas/progress'
 import { ErrorResponseSchema, MessageResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
 
 const publicProgress = new Hono<AppEnv>()
@@ -359,12 +359,12 @@ publicProgress.post(
   },
 )
 
-// 查询观看进度
+// 查询观看进度 / 历史列表
 publicProgress.get(
   '/watching',
   describeRoute({
     summary: '查询观看进度',
-    description: '根据影片番号查询用户的观看进度',
+    description: '传入 movieCode 时查询单条进度；不传时返回含影片详情的历史列表（按最近观看倒序）',
     tags: ['Progress'],
     operationId: 'getWatchingProgress',
     security: [{ cookieAuth: [] }],
@@ -377,7 +377,8 @@ publicProgress.get(
               SuccessResponseSchema(
                 v.union([
                   WatchingProgressItemSchema,
-                  v.array(WatchingProgressItemSchema),
+                  v.null(),
+                  v.array(WatchingHistoryItemSchema),
                 ]),
                 '成功返回观看进度',
               ),
@@ -407,11 +408,11 @@ publicProgress.get(
   async (c) => {
     const db = c.get('db')
     const user = c.get('user')!
-    const { movieCode } = c.req.valid('query')
+    const { movieCode, limit } = c.req.valid('query')
 
     try {
       if (movieCode) {
-      // 查询单个影片进度
+        // 查询单个影片进度（向后兼容，返回原始字段）
         const progress = await db
           .select()
           .from(watchingProgress)
@@ -425,21 +426,32 @@ publicProgress.get(
 
         return c.json({
           success: true,
-          data: progress || null,
+          data: progress ?? null,
         })
       }
 
-      // 返回所有观看进度（按时间倒序）
-      const allProgress = await db
-        .select()
+      // 历史列表：JOIN movies 返回含影片详情的记录
+      const effectiveLimit = Math.min(limit ?? 20, 50)
+      const history = await db
+        .select({
+          id: watchingProgress.id,
+          movieCode: watchingProgress.movieCode,
+          progress: watchingProgress.progress,
+          duration: watchingProgress.duration,
+          updatedAt: watchingProgress.updatedAt,
+          title: movies.title,
+          coverImage: movies.coverImage,
+          isR18: movies.isR18,
+        })
         .from(watchingProgress)
+        .innerJoin(movies, eq(watchingProgress.movieCode, movies.code))
         .where(eq(watchingProgress.userId, user.id))
         .orderBy(desc(watchingProgress.updatedAt))
-        .limit(50)
+        .limit(effectiveLimit)
 
       return c.json({
         success: true,
-        data: allProgress,
+        data: history,
       })
     }
     catch (error) {

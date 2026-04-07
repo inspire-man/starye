@@ -1,3 +1,4 @@
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 /**
  * 演员关联同步集成测试
  * 使用内存 SQLite 数据库，测试完整的 syncMovieData → getActorBySlug 数据流
@@ -31,6 +32,7 @@ CREATE TABLE IF NOT EXISTS movie (
   is_r18 INTEGER NOT NULL DEFAULT 1,
   metadata_locked INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER DEFAULT 0,
+  view_count INTEGER NOT NULL DEFAULT 0,
   crawl_status TEXT DEFAULT 'complete',
   last_crawled_at INTEGER,
   total_players INTEGER DEFAULT 0,
@@ -102,7 +104,7 @@ CREATE TABLE IF NOT EXISTS player (
 );
 `
 
-let db: ReturnType<typeof drizzle>
+let db: LibSQLDatabase<typeof schema>
 
 beforeAll(async () => {
   const client = createClient({ url: ':memory:' })
@@ -112,7 +114,7 @@ beforeAll(async () => {
     await client.execute(stmt)
   }
 
-  db = drizzle(client, { schema }) as any
+  db = drizzle(client, { schema })
 })
 
 afterAll(() => {

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { SelectOption } from '../components/Select.vue'
-import type { Movie } from '../types'
+import type { GenreItem, Movie, WatchingHistoryItem } from '../types'
 import { Pagination } from '@starye/ui'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Select from '../components/Select.vue'
-import { movieApi } from '../lib/api-client'
+import { genreApi, movieApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()
@@ -28,6 +28,12 @@ const filters = reactive({
   sortBy: 'releaseDate' as 'title' | 'createdAt' | 'updatedAt' | 'releaseDate',
   sortOrder: 'desc' as 'asc' | 'desc',
 })
+
+// Genre 标签数据
+const genres = ref<GenreItem[]>([])
+
+// 继续观看列表（已登录用户，进度 < 90% 的最近 5 部）
+const continueWatchingList = ref<WatchingHistoryItem[]>([])
 
 // 排序选项配置
 const sortOptions: SelectOption<string>[] = [
@@ -73,6 +79,47 @@ async function fetchMovies() {
   }
 }
 
+async function fetchGenres() {
+  try {
+    const response = await genreApi.getGenres()
+    if (response.success && response.data) {
+      genres.value = response.data
+    }
+  }
+  catch {
+    // genres 加载失败不影响主列表，静默忽略
+  }
+}
+
+async function fetchContinueWatching() {
+  // 未登录时不请求
+  if (!userStore.user) {
+    return
+  }
+  try {
+    const response = await progressApi.getWatchingHistory(10)
+    if (response.success && response.data) {
+      // 过滤已看完（≥90%）的影片，取前 5 条
+      continueWatchingList.value = response.data
+        .filter(item => item.progress > 0 && item.duration && item.progress / item.duration < 0.9)
+        .slice(0, 5)
+    }
+  }
+  catch {
+    // 进度加载失败不影响主列表，静默忽略
+  }
+}
+
+function setGenre(genre: string) {
+  if (activeGenre.value === genre) {
+    return
+  }
+  activeGenre.value = genre
+  pagination.page = 1
+  syncUrl()
+  fetchMovies()
+}
+
 function changePage(page: number) {
   pagination.page = page
   syncUrl()
@@ -109,13 +156,24 @@ watch(() => route.query.genre, (val) => {
   }
 })
 
+function progressPercent(item: WatchingHistoryItem): number {
+  if (!item.duration || item.duration === 0) {
+    return 0
+  }
+  return Math.min(Math.round((item.progress / item.duration) * 100), 95)
+}
+
 onMounted(() => {
   // 从 URL query 恢复状态
   pagination.page = Number(route.query.page) || 1
   filters.sortBy = (route.query.sortBy as typeof filters.sortBy) || 'releaseDate'
   filters.search = (route.query.search as string) || ''
   activeGenre.value = (route.query.genre as string) || ''
+
+  // 并行加载：主列表 + genres + 继续观看（互不依赖）
   fetchMovies()
+  fetchGenres()
+  fetchContinueWatching()
 })
 </script>
 
@@ -136,6 +194,49 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- 继续观看板块（仅登录用户，且有未完成记录时显示） -->
+    <section v-if="continueWatchingList.length > 0" class="continue-watching">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold text-white">
+          继续观看
+        </h2>
+        <RouterLink to="/history" class="text-xs text-gray-400 hover:text-primary-400 transition-colors">
+          查看全部历史 →
+        </RouterLink>
+      </div>
+      <div class="continue-list">
+        <RouterLink
+          v-for="item in continueWatchingList"
+          :key="item.id"
+          :to="`/movie/${item.movieCode}/play`"
+          class="continue-card"
+        >
+          <div class="continue-cover">
+            <img
+              v-if="item.coverImage && !item.isR18"
+              :src="item.coverImage"
+              :alt="item.title"
+              loading="lazy"
+            >
+            <div v-else class="cover-placeholder">
+              <span>{{ item.isR18 ? 'R18' : '?' }}</span>
+            </div>
+          </div>
+          <div class="continue-info">
+            <p class="continue-title">
+              {{ item.title }}
+            </p>
+            <div class="progress-track">
+              <div class="progress-fill" :style="{ width: `${progressPercent(item)}%` }" />
+            </div>
+            <p class="progress-label">
+              {{ progressPercent(item) }}%
+            </p>
+          </div>
+        </RouterLink>
+      </div>
+    </section>
+
     <!-- Genre 筛选标签提示 -->
     <div v-if="activeGenre" class="flex items-center gap-2 mb-4 bg-purple-600/10 border border-purple-500/30 rounded-lg px-4 py-2">
       <span class="text-purple-300 text-sm">
@@ -154,7 +255,7 @@ onMounted(() => {
         {{ activeGenre ? `标签：${activeGenre}` : '热门影片' }}
       </h1>
 
-      <div class="flex items-center gap-3 mb-6">
+      <div class="flex items-center gap-3 mb-4">
         <input
           v-model="filters.search"
           type="text"
@@ -175,6 +276,27 @@ onMounted(() => {
           @click="filters.search = ''; searchMovies()"
         >
           清除
+        </button>
+      </div>
+
+      <!-- Genre 标签栏 -->
+      <div v-if="genres.length > 0" class="genre-bar">
+        <button
+          class="genre-tag"
+          :class="{ active: activeGenre === '' }"
+          @click="setGenre('')"
+        >
+          全部
+        </button>
+        <button
+          v-for="item in genres"
+          :key="item.genre"
+          class="genre-tag"
+          :class="{ active: activeGenre === item.genre }"
+          @click="setGenre(item.genre)"
+        >
+          {{ item.genre }}
+          <span class="genre-count">{{ item.count }}</span>
         </button>
       </div>
     </div>
@@ -240,3 +362,139 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ── 继续观看 ─────────────────────────────────────────────── */
+.continue-watching {
+  margin-bottom: 2rem;
+}
+
+.continue-list {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0.25rem;
+}
+
+.continue-list::-webkit-scrollbar {
+  display: none;
+}
+
+.continue-card {
+  flex: 0 0 140px;
+  text-decoration: none;
+  transition: transform 0.2s;
+}
+
+.continue-card:hover {
+  transform: translateY(-2px);
+}
+
+.continue-cover {
+  width: 140px;
+  height: 100px;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #1f2937;
+  position: relative;
+}
+
+.continue-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.continue-info {
+  padding: 0.375rem 0 0;
+}
+
+.continue-title {
+  font-size: 0.75rem;
+  color: #e5e7eb;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-bottom: 0.375rem;
+}
+
+.progress-track {
+  height: 3px;
+  background: #374151;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #7c3aed;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.progress-label {
+  font-size: 0.625rem;
+  color: #9ca3af;
+}
+
+/* ── Genre 标签栏 ─────────────────────────────────────────── */
+.genre-bar {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.genre-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.genre-tag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid #374151;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.genre-tag:hover {
+  border-color: #7c3aed;
+  color: #e5e7eb;
+}
+
+.genre-tag.active {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #fff;
+}
+
+.genre-count {
+  font-size: 0.6875rem;
+  opacity: 0.65;
+}
+</style>

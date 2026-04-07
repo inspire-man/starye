@@ -4,6 +4,7 @@ import { actors, movieActors, moviePublishers, movies, players, publishers } fro
 import { and, count, desc, eq, getTableColumns, inArray, like, ne, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
+import * as v from 'valibot'
 import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MoviesListDataSchema } from '../../../schemas/movie'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
 
@@ -137,6 +138,70 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
           success: false,
           error: '查询影片列表失败',
         }, 500)
+      }
+    },
+  )
+  // 获取 Genre 列表（必须在 /:code 之前，避免 "genres" 被解析为 movie code）
+  .get(
+    '/genres',
+    describeRoute({
+      summary: '获取 Genre 列表',
+      description: '聚合所有影片的题材/标签列表，按作品数量降序排列',
+      tags: ['Movies'],
+      operationId: 'getGenresList',
+      responses: {
+        200: {
+          description: '成功返回 Genre 列表',
+          content: {
+            'application/json': {
+              schema: resolver(
+                SuccessResponseSchema(
+                  v.array(v.object({ genre: v.string(), count: v.number() })),
+                  '成功返回 Genre 列表',
+                ),
+              ),
+            },
+          },
+        },
+        500: {
+          description: '服务器内部错误',
+          content: {
+            'application/json': {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      const db = c.get('db')
+      const user = c.get('user')
+
+      try {
+        // 使用 SQLite json_each 聚合 genres 数组字段，R18 认证决定可见范围
+        const r18Filter = !user?.isR18Verified
+          ? sql`AND m.is_r18 = 0`
+          : sql``
+
+        const results = await db.all<{ genre: string, count: number }>(
+          sql`
+            SELECT j.value AS genre, COUNT(*) AS count
+            FROM movie m, json_each(m.genres) j
+            WHERE m.genres IS NOT NULL
+              AND m.genres != '[]'
+              AND j.value != ''
+              ${r18Filter}
+            GROUP BY j.value
+            ORDER BY count DESC
+            LIMIT 100
+          `,
+        )
+
+        return c.json({ success: true, data: results })
+      }
+      catch (error) {
+        console.error('[PublicMovies] Failed to fetch genres:', error)
+        return c.json({ success: false, error: '查询 Genre 列表失败' }, 500)
       }
     },
   )
@@ -324,5 +389,42 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
           error: '查询影片详情失败',
         }, 500)
       }
+    },
+  )
+  // 上报影片观看（埋点，匿名可用，fire-and-forget 设计）
+  .post(
+    '/:code/view',
+    describeRoute({
+      summary: '上报影片观看',
+      description: '进入播放页时调用，自增 viewCount 用于热门排序。无需登录，影片不存在时静默成功。',
+      tags: ['Movies'],
+      operationId: 'trackMovieView',
+      responses: {
+        200: {
+          description: '上报成功',
+          content: {
+            'application/json': {
+              schema: resolver(SuccessResponseSchema(v.null(), '上报成功')),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      const db = c.get('db')
+      const { code } = c.req.param()
+
+      try {
+        // 原子自增，影片不存在时 UPDATE 影响 0 行，静默成功
+        await db
+          .update(movies)
+          .set({ viewCount: sql`${movies.viewCount} + 1` })
+          .where(eq(movies.code, code))
+      }
+      catch (error) {
+        console.error(`[PublicMovies] Failed to track view for movie ${code}:`, error)
+      }
+
+      return c.json({ success: true, data: null })
     },
   )

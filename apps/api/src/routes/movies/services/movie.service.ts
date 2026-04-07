@@ -456,7 +456,7 @@ export async function getHotMovies(options: GetHotMoviesOptions): Promise<MovieL
         },
       },
     },
-    orderBy: (movies, { desc }) => [desc(movies.sortOrder), desc(movies.createdAt)],
+    orderBy: (movies, { desc }) => [desc(movies.sortOrder), desc(movies.viewCount), desc(movies.createdAt)],
     limit,
   })
 

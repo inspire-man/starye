@@ -13,12 +13,14 @@ import type {
   ActorDetail,
   ApiResponse,
   Favorite,
+  GenreItem,
   Movie,
   MovieDetail,
   PaginatedResponse,
   Publisher,
   PublisherDetail,
   SeriesDetail,
+  WatchingHistoryItem,
   WatchingProgress,
 } from '../types'
 import { hc } from 'hono/client'
@@ -87,6 +89,14 @@ export const movieApi = {
       throw new Error(data.error)
     }
     return { success: true, data: data.data as unknown as MovieDetail }
+  },
+
+  /** 上报影片观看（fire-and-forget，失败静默忽略） */
+  trackView(movieCode: string): void {
+    apiFetch(`/public/movies/${encodeURIComponent(movieCode)}/view`, { method: 'POST' })
+      .catch(() => {
+        // 埋点失败静默，不影响播放体验
+      })
   },
 }
 
@@ -233,13 +243,26 @@ export const progressApi = {
   async saveWatchingProgress(movieCode: string, progress: number, duration?: number): Promise<ApiResponse<void>> {
     return apiFetch('/public/progress/watching', {
       method: 'POST',
-      body: JSON.stringify({ movieCode, progress, duration }),
+      body: JSON.stringify({ movieCode, currentTime: progress, duration }),
     })
   },
 
-  async getWatchingProgress(movieCode?: string): Promise<ApiResponse<WatchingProgress | WatchingProgress[]>> {
+  async getWatchingProgress(movieCode?: string): Promise<ApiResponse<WatchingProgress | null>> {
     const query = movieCode ? `?movieCode=${encodeURIComponent(movieCode)}` : ''
     return apiFetch(`/public/progress/watching${query}`)
+  },
+
+  /** 获取观看历史列表（含影片详情），用于历史页和继续观看板块 */
+  async getWatchingHistory(limit = 20): Promise<ApiResponse<WatchingHistoryItem[]>> {
+    return apiFetch(`/public/progress/watching?limit=${Math.min(limit, 50)}`)
+  },
+}
+
+// ─── Genre API ─────────────────────────────────────────────────────────────
+
+export const genreApi = {
+  async getGenres(): Promise<ApiResponse<GenreItem[]>> {
+    return apiFetch('/public/movies/genres')
   },
 }
 
