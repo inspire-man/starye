@@ -1,7 +1,7 @@
 import type { SQL } from 'drizzle-orm'
 import type { AppEnv } from '../../../types'
 import { actors, movieActors, moviePublishers, movies, players, publishers } from '@starye/db/schema'
-import { and, count, desc, eq, getTableColumns, inArray, like, ne, or, sql } from 'drizzle-orm'
+import { and, count, desc, eq, getTableColumns, inArray, like, ne, notInArray, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import * as v from 'valibot'
@@ -334,7 +334,7 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
             relatedFromActors.push(...sharedResult)
           }
 
-          // 同系列推荐
+          // 同系列推荐（limit 提升至 8，确保系列导航有足够数据推导位置）
           if (movie.series) {
             const seriesConditions: SQL[] = [
               eq(movies.series, movie.series),
@@ -348,7 +348,7 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
               .select()
               .from(movies)
               .where(and(...seriesConditions))
-              .limit(6)
+              .limit(8)
 
             relatedFromSeries.push(...seriesResult)
           }
@@ -362,6 +362,48 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
               merged.push(m)
             }
           }
+
+          // genre fallback：当演员+系列结果 < 4 时，用同 genre 热门影片补足至 6 条
+          if (merged.length < 4) {
+            const rawGenres = movie.genres as string[] | null
+            const firstGenre = Array.isArray(rawGenres)
+              ? rawGenres.find(g => g && g.trim() !== '')
+              : null
+
+            if (firstGenre) {
+              const existingIds = [movie.id, ...merged.map(m => m.id)]
+              const genreConditions: SQL[] = [
+                sql`EXISTS (
+                  SELECT 1 FROM json_each(${movies.genres})
+                  WHERE json_each.value = ${firstGenre}
+                )`,
+                notInArray(movies.id, existingIds),
+              ]
+              if (!user?.isR18Verified) {
+                genreConditions.push(eq(movies.isR18, false))
+              }
+
+              try {
+                const genreResult = await db
+                  .select()
+                  .from(movies)
+                  .where(and(...genreConditions))
+                  .orderBy(desc(movies.viewCount))
+                  .limit(6 - merged.length)
+
+                for (const m of genreResult) {
+                  if (!seenIds.has(m.id)) {
+                    seenIds.add(m.id)
+                    merged.push(m)
+                  }
+                }
+              }
+              catch {
+                // genre fallback 失败时静默忽略，返回现有结果
+              }
+            }
+          }
+
           relatedMovies = merged.slice(0, 6)
         }
         catch (error) {

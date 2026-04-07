@@ -124,6 +124,52 @@ const publisherList = computed(() => {
   return movie.value?.publishers ?? []
 })
 
+/**
+ * 系列导航：从 relatedMovies 中提取同系列影片，按 releaseDate ASC 排序，计算当前位置
+ */
+const seriesNavigation = computed(() => {
+  const m = movie.value
+  if (!m?.series)
+    return null
+
+  // 同系列影片（来自 relatedMovies），加上当前影片自身，合并排序
+  const sameSeriesFromRelated = (m.relatedMovies ?? []).filter(
+    r => r.series === m.series,
+  )
+  const allInSeries = [
+    { id: m.id, code: m.code, title: m.title, releaseDate: m.releaseDate },
+    ...sameSeriesFromRelated.map(r => ({
+      id: r.id,
+      code: r.code,
+      title: r.title,
+      releaseDate: r.releaseDate,
+    })),
+  ]
+
+  // 按 releaseDate ASC 排序，无 releaseDate 则按 code ASC 兜底
+  allInSeries.sort((a, b) => {
+    if (a.releaseDate && b.releaseDate)
+      return a.releaseDate - b.releaseDate
+    if (a.releaseDate)
+      return -1
+    if (b.releaseDate)
+      return 1
+    return a.code.localeCompare(b.code)
+  })
+
+  const idx = allInSeries.findIndex(item => item.id === m.id)
+  if (idx === -1)
+    return null
+
+  return {
+    series: m.series,
+    total: allInSeries.length,
+    position: idx + 1,
+    prev: idx > 0 ? allInSeries[idx - 1] : null,
+    next: idx < allInSeries.length - 1 ? allInSeries[idx + 1] : null,
+  }
+})
+
 // 播放源相关逻辑
 const sortedPlayers = computed(() => {
   if (!movie.value?.players || movie.value.players.length === 0) {
@@ -1005,6 +1051,40 @@ onMounted(() => {
         </div>
       </div>
     </Transition>
+
+    <!-- 系列导航 -->
+    <div v-if="seriesNavigation" class="bg-gray-800 rounded-lg shadow-lg p-4">
+      <div class="flex items-center justify-between gap-4">
+        <RouterLink
+          v-if="seriesNavigation.prev"
+          :to="`/movie/${seriesNavigation.prev.code}`"
+          class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-white transition min-w-0 max-w-[38%]"
+        >
+          <span class="shrink-0">←</span>
+          <span class="truncate text-gray-300">{{ seriesNavigation.prev.title }}</span>
+        </RouterLink>
+        <span v-else class="w-[38%]" />
+
+        <div class="text-center shrink-0">
+          <div class="text-xs text-gray-400 mb-0.5">
+            {{ seriesNavigation.series }}
+          </div>
+          <div class="text-sm font-semibold text-white">
+            第 {{ seriesNavigation.position }} 部 / 共 {{ seriesNavigation.total }} 部
+          </div>
+        </div>
+
+        <RouterLink
+          v-if="seriesNavigation.next"
+          :to="`/movie/${seriesNavigation.next.code}`"
+          class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-white transition min-w-0 max-w-[38%] justify-end"
+        >
+          <span class="truncate text-gray-300">{{ seriesNavigation.next.title }}</span>
+          <span class="shrink-0">→</span>
+        </RouterLink>
+        <span v-else class="w-[38%]" />
+      </div>
+    </div>
 
     <div v-if="movie.relatedMovies && movie.relatedMovies.length > 0" class="bg-gray-800 rounded-lg shadow-lg p-6">
       <h2 class="text-xl font-bold text-white mb-4">

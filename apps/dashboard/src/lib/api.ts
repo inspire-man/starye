@@ -81,6 +81,25 @@ export interface Movie {
   moviePublishers?: Array<{ sortOrder: number, publisher?: { id: string, name: string } }>
 }
 
+export interface HotMovieItem {
+  id: string
+  code: string
+  title: string
+  coverImage: string | null
+  viewCount: number
+  isR18: boolean
+}
+
+export interface GenreDistributionItem {
+  genre: string
+  count: number
+}
+
+export interface MovieAnalytics {
+  hotMovies: HotMovieItem[]
+  genreDistribution: GenreDistributionItem[]
+}
+
 export interface Player {
   id: string
   movieId: string
@@ -351,6 +370,9 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ publishers }),
       }),
+
+    getMovieAnalytics: () =>
+      apiFetch<MovieAnalytics>('/admin/movies/analytics'),
 
     getCrawlerStats: () =>
       apiFetch<any>('/admin/crawlers/stats'),

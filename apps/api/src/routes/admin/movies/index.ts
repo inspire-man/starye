@@ -10,10 +10,11 @@ import type { InferInsertModel, SQL } from 'drizzle-orm'
 import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
 import { movies, players } from '@starye/db/schema'
-import { and, count, desc, eq, gt, gte, like, lte, or } from 'drizzle-orm'
+import { and, count, desc, eq, gt, gte, like, lte, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { describeRoute, validator } from 'hono-openapi'
+import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
+import * as v from 'valibot'
 import { captureResourceState, computeChanges, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
 import { serviceAuth } from '../../../middleware/service-auth'
@@ -283,6 +284,94 @@ adminMovies.get(
       const message = e instanceof Error ? e.message : String(e)
       console.error('[Admin/Movies] ❌ Failed to query movies:', message)
       return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
+
+// 分析数据响应 Schema
+const HotMovieItemSchema = v.object({
+  id: v.string(),
+  code: v.string(),
+  title: v.string(),
+  coverImage: v.nullable(v.string()),
+  viewCount: v.number(),
+  isR18: v.boolean(),
+})
+
+const GenreDistributionItemSchema = v.object({
+  genre: v.string(),
+  count: v.number(),
+})
+
+const MovieAnalyticsResponseSchema = v.object({
+  hotMovies: v.array(HotMovieItemSchema),
+  genreDistribution: v.array(GenreDistributionItemSchema),
+})
+
+interface GenreRow { genre: string, count: number }
+
+/**
+ * GET /analytics - 内容洞察：热门排行 + Genre 分布
+ * 权限：admin 或 movie_admin（由 requireResource('movie') 中间件保证）
+ * 注意：此路由必须在 GET /:id 之前注册，避免被参数路由截获
+ */
+adminMovies.get(
+  '/analytics',
+  describeRoute({
+    summary: '内容洞察',
+    description: '返回热门影片 Top 10 和 Genre 分布（含 R18），供管理端展示',
+    tags: ['Admin'],
+    operationId: 'getMovieAnalytics',
+    responses: {
+      200: {
+        description: '分析数据',
+        content: {
+          'application/json': {
+            schema: resolver(MovieAnalyticsResponseSchema),
+          },
+        },
+      },
+    },
+  }),
+  async (c) => {
+    const db = c.get('db')
+
+    try {
+      const [hotMovies, genreRows] = await Promise.all([
+        // 热门影片：按 viewCount DESC，再按 createdAt DESC 兜底，取前 10 条
+        db
+          .select({
+            id: movies.id,
+            code: movies.code,
+            title: movies.title,
+            coverImage: movies.coverImage,
+            viewCount: movies.viewCount,
+            isR18: movies.isR18,
+          })
+          .from(movies)
+          .orderBy(desc(movies.viewCount), desc(movies.createdAt))
+          .limit(10),
+
+        // Genre 分布：json_each 展开 genres 数组，聚合计数，含 R18 全量，过滤空值
+        db.all<GenreRow>(sql`
+          SELECT json_each.value AS genre, COUNT(*) AS count
+          FROM movie, json_each(movie.genres)
+          WHERE json_each.value != ''
+          GROUP BY json_each.value
+          ORDER BY count DESC
+          LIMIT 50
+        `),
+      ])
+
+      return c.json({
+        hotMovies,
+        genreDistribution: genreRows,
+      })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[Admin/Movies] ❌ Analytics query failed:', message)
+      return c.json({ error: message }, 500)
     }
   },
 )

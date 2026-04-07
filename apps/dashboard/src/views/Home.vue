@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { MovieAnalytics } from '@/lib/api'
 import { ErrorDisplay, SkeletonCard } from '@starye/ui'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -39,6 +40,16 @@ const stats = ref<Stats>({
 const loading = ref(true)
 const error = ref<Error | null>(null)
 
+const analytics = ref<MovieAnalytics | null>(null)
+const analyticsLoading = ref(true)
+const analyticsError = ref<Error | null>(null)
+
+// 前 20 个 genre（API 已按 count DESC 排序）
+const topGenres = computed(() => analytics.value?.genreDistribution.slice(0, 20) ?? [])
+
+// 以总影片数为分母计算 genre 占比
+const totalMovies = computed(() => stats.value.movies || 1)
+
 async function loadStats() {
   loading.value = true
   error.value = null
@@ -56,8 +67,24 @@ async function loadStats() {
   }
 }
 
+async function loadAnalytics() {
+  analyticsLoading.value = true
+  analyticsError.value = null
+
+  try {
+    analytics.value = await api.admin.getMovieAnalytics()
+  }
+  catch (e) {
+    analyticsError.value = e as Error
+  }
+  finally {
+    analyticsLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadStats()
+  loadAnalytics()
 })
 
 function navigateTo(path: string) {
@@ -249,6 +276,104 @@ function handleRetry() {
           <p class="text-xs text-muted-foreground mt-2">
             点击查看待爬取列表
           </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 内容洞察 -->
+    <div>
+      <h2 class="text-lg font-semibold mb-3">
+        内容洞察
+      </h2>
+
+      <!-- 加载骨架屏 -->
+      <div v-if="analyticsLoading" class="grid gap-4 md:grid-cols-2">
+        <SkeletonCard v-for="i in 2" :key="i" variant="stat" />
+      </div>
+
+      <!-- 加载失败提示 -->
+      <div
+        v-else-if="analyticsError"
+        class="p-4 border rounded-xl bg-card text-sm text-muted-foreground"
+      >
+        内容洞察数据加载失败，请刷新重试
+      </div>
+
+      <!-- 无观看数据空状态 -->
+      <div
+        v-else-if="!analytics || analytics.hotMovies.length === 0"
+        class="p-8 border rounded-xl bg-card text-center text-muted-foreground"
+      >
+        暂无观看数据
+      </div>
+
+      <!-- 洞察列表 -->
+      <div v-else class="grid gap-4 md:grid-cols-2">
+        <!-- 热门影片 Top 10 -->
+        <div class="border rounded-xl bg-card shadow-sm p-5">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-lg">🔥</span>
+            <h3 class="font-semibold text-sm">
+              热门影片 Top 10
+            </h3>
+          </div>
+          <ol class="space-y-2">
+            <li
+              v-for="(movie, index) in analytics.hotMovies"
+              :key="movie.id"
+              class="flex items-center gap-3 group cursor-pointer"
+              @click="navigateTo('/movies')"
+            >
+              <!-- 序号 -->
+              <span
+                class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                :class="index < 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
+              >
+                {{ index + 1 }}
+              </span>
+              <!-- 标题 -->
+              <span class="flex-1 text-sm truncate group-hover:text-primary transition-colors">
+                {{ movie.title }}
+              </span>
+              <!-- 播放量 -->
+              <span class="text-xs text-muted-foreground flex-shrink-0">
+                {{ movie.viewCount.toLocaleString() }} 次
+              </span>
+            </li>
+          </ol>
+        </div>
+
+        <!-- Genre 分布 -->
+        <div class="border rounded-xl bg-card shadow-sm p-5">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-lg">📊</span>
+            <h3 class="font-semibold text-sm">
+              Genre 分布（前 20）
+            </h3>
+          </div>
+          <ul class="space-y-2">
+            <li
+              v-for="item in topGenres"
+              :key="item.genre"
+              class="flex items-center gap-2"
+            >
+              <!-- Genre 名 -->
+              <span class="w-20 text-xs text-right flex-shrink-0 truncate">
+                {{ item.genre }}
+              </span>
+              <!-- 进度条 -->
+              <div class="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                <div
+                  class="h-full bg-primary rounded-full transition-all"
+                  :style="{ width: `${Math.min((item.count / totalMovies) * 100, 100).toFixed(1)}%` }"
+                />
+              </div>
+              <!-- 数量 -->
+              <span class="w-10 text-xs text-muted-foreground text-right flex-shrink-0">
+                {{ item.count }}
+              </span>
+            </li>
+          </ul>
         </div>
       </div>
     </div>

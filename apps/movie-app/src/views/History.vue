@@ -9,12 +9,37 @@ const historyItems = ref<WatchingHistoryItem[]>([])
 const currentPage = ref(1)
 const PAGE_SIZE = 10
 
-const totalPages = computed(() => Math.ceil(historyItems.value.length / PAGE_SIZE))
+/** 观看状态 tab：all / watching / watched */
+type StatusFilter = 'all' | 'watching' | 'watched'
+const statusFilter = ref<StatusFilter>('all')
+
+/** 判断是否已看完：progress/duration ≥ 0.9，duration 为 null 时 progress ≥ 3600 秒 */
+function isWatched(item: WatchingHistoryItem): boolean {
+  if (item.duration && item.duration > 0) {
+    return item.progress / item.duration >= 0.9
+  }
+  return item.progress >= 3600
+}
+
+const filteredItems = computed(() => {
+  if (statusFilter.value === 'watched')
+    return historyItems.value.filter(item => isWatched(item))
+  if (statusFilter.value === 'watching')
+    return historyItems.value.filter(item => !isWatched(item))
+  return historyItems.value
+})
+
+const totalPages = computed(() => Math.ceil(filteredItems.value.length / PAGE_SIZE))
 
 const pagedItems = computed(() => {
   const start = (currentPage.value - 1) * PAGE_SIZE
-  return historyItems.value.slice(start, start + PAGE_SIZE)
+  return filteredItems.value.slice(start, start + PAGE_SIZE)
 })
+
+function setStatusFilter(val: StatusFilter) {
+  statusFilter.value = val
+  currentPage.value = 1
+}
 
 function progressPercent(item: WatchingHistoryItem): number {
   if (!item.duration || item.duration === 0) {
@@ -112,7 +137,39 @@ onMounted(loadHistory)
 
     <!-- 历史列表 -->
     <div v-else>
-      <div class="history-list">
+      <!-- 状态筛选 tab -->
+      <div class="status-tabs">
+        <button
+          class="tab-btn" :class="[statusFilter === 'all' && 'tab-active']"
+          @click="setStatusFilter('all')"
+        >
+          全部 <span class="tab-count">{{ historyItems.length }}</span>
+        </button>
+        <button
+          class="tab-btn" :class="[statusFilter === 'watching' && 'tab-active']"
+          @click="setStatusFilter('watching')"
+        >
+          在看 <span class="tab-count">{{ historyItems.filter(i => !isWatched(i)).length }}</span>
+        </button>
+        <button
+          class="tab-btn" :class="[statusFilter === 'watched' && 'tab-active']"
+          @click="setStatusFilter('watched')"
+        >
+          已看完 <span class="tab-count">{{ historyItems.filter(i => isWatched(i)).length }}</span>
+        </button>
+      </div>
+
+      <!-- 筛选后空状态 -->
+      <div v-if="filteredItems.length === 0" class="empty-state">
+        <p class="empty-icon">
+          📺
+        </p>
+        <p class="empty-text">
+          {{ statusFilter === 'watched' ? '还没有看完的影片' : '没有进行中的影片' }}
+        </p>
+      </div>
+
+      <div v-else class="history-list">
         <div
           v-for="item in pagedItems"
           :key="item.id"
@@ -146,19 +203,24 @@ onMounted(loadHistory)
               {{ item.movieCode }}
             </p>
 
-            <!-- 进度条 -->
+            <!-- 进度 / 已看完徽标 -->
             <div class="progress-section">
-              <div class="progress-track">
-                <div
-                  class="progress-fill"
-                  :style="{ width: `${progressPercent(item)}%` }"
-                />
-              </div>
-              <span class="progress-text">
-                {{ formatTime(item.progress) }}
-                <span v-if="item.duration"> / {{ formatTime(item.duration) }}</span>
-                <span class="progress-pct">{{ progressPercent(item) }}%</span>
-              </span>
+              <template v-if="isWatched(item)">
+                <span class="watched-badge">✓ 已看完</span>
+              </template>
+              <template v-else>
+                <div class="progress-track">
+                  <div
+                    class="progress-fill"
+                    :style="{ width: `${progressPercent(item)}%` }"
+                  />
+                </div>
+                <span class="progress-text">
+                  {{ formatTime(item.progress) }}
+                  <span v-if="item.duration"> / {{ formatTime(item.duration) }}</span>
+                  <span class="progress-pct">{{ progressPercent(item) }}%</span>
+                </span>
+              </template>
             </div>
 
             <p class="item-meta">
@@ -488,5 +550,55 @@ onMounted(loadHistory)
 .page-info {
   font-size: 0.875rem;
   color: #9ca3af;
+}
+
+/* ── 状态筛选 tab ─────────────────────────────────────────── */
+.status-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #1f2937;
+  padding-bottom: 0.75rem;
+}
+
+.tab-btn {
+  padding: 0.375rem 0.875rem;
+  border: 1px solid #374151;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  border-color: #7c3aed;
+  color: #e5e7eb;
+}
+
+.tab-active {
+  border-color: #7c3aed !important;
+  background: #7c3aed;
+  color: #fff !important;
+}
+
+.tab-count {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  margin-left: 0.25rem;
+}
+
+/* ── 已看完徽标 ───────────────────────────────────────────── */
+.watched-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
 }
 </style>
