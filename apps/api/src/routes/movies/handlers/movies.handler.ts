@@ -13,8 +13,10 @@ export async function getMovieList(c: Context<AppEnv>) {
   const pageSize = Number(c.req.query('limit')) || 24
   const genre = c.req.query('genre')
   const actor = c.req.query('actor')
-  const publisherId = c.req.query('publisherId')
+  const publisher = c.req.query('publisher')
   const searchKeyword = c.req.query('search')
+  const sortBy = c.req.query('sortBy') as 'releaseDate' | 'createdAt' | 'updatedAt' | 'title' | undefined
+  const sortOrder = c.req.query('sortOrder') as 'asc' | 'desc' | undefined
 
   const result = await getMovies({
     db,
@@ -23,8 +25,10 @@ export async function getMovieList(c: Context<AppEnv>) {
     pageSize,
     genre,
     actor,
-    publisherId,
+    publisher,
     searchKeyword,
+    sortBy,
+    sortOrder,
   })
 
   return c.json(result)

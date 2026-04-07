@@ -1,7 +1,7 @@
 import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
 import { movies as moviesTable } from '@starye/db/schema'
-import { count, eq } from 'drizzle-orm'
+import { count, desc, eq } from 'drizzle-orm'
 import { FilterBuilder } from '../../../services/query-builder'
 
 // 使用 Drizzle 推导的基础类型
@@ -70,8 +70,10 @@ export interface GetMoviesOptions {
   pageSize?: number
   genre?: string
   actor?: string
-  publisherId?: string
+  publisher?: string
   searchKeyword?: string
+  sortBy?: 'releaseDate' | 'createdAt' | 'updatedAt' | 'title'
+  sortOrder?: 'asc' | 'desc'
 }
 
 export interface GetMoviesResult {
@@ -84,6 +86,17 @@ export interface GetMoviesResult {
   }
 }
 
+function buildMovieOrderBy(sortBy?: string, sortOrder?: string) {
+  const column = {
+    releaseDate: moviesTable.releaseDate,
+    createdAt: moviesTable.createdAt,
+    updatedAt: moviesTable.updatedAt,
+    title: moviesTable.title,
+  }[sortBy ?? ''] ?? moviesTable.createdAt
+
+  return sortOrder === 'asc' ? column : desc(column)
+}
+
 export async function getMovies(options: GetMoviesOptions): Promise<GetMoviesResult> {
   const {
     db,
@@ -92,14 +105,16 @@ export async function getMovies(options: GetMoviesOptions): Promise<GetMoviesRes
     pageSize = 24,
     genre,
     actor,
-    publisherId,
+    publisher,
     searchKeyword,
+    sortBy,
+    sortOrder,
   } = options
 
   const whereClause = new FilterBuilder()
     .jsonContains(moviesTable.genres, genre)
     .jsonContains(moviesTable.actors, actor)
-    .eq(moviesTable.id, publisherId)
+    .like(moviesTable.publisher, publisher)
     .like(moviesTable.title, searchKeyword)
     .build()
 
@@ -141,7 +156,7 @@ export async function getMovies(options: GetMoviesOptions): Promise<GetMoviesRes
         },
       },
     },
-    orderBy: (movies, { desc }) => [desc(movies.createdAt)],
+    orderBy: buildMovieOrderBy(sortBy, sortOrder),
     limit: pageSize,
     offset: (page - 1) * pageSize,
   })
@@ -441,7 +456,7 @@ export async function getHotMovies(options: GetHotMoviesOptions): Promise<MovieL
         },
       },
     },
-    orderBy: (movies, { desc }) => [desc(movies.createdAt)],
+    orderBy: (movies, { desc }) => [desc(movies.sortOrder), desc(movies.createdAt)],
     limit,
   })
 

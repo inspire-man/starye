@@ -43,6 +43,14 @@ TBD - created by archiving change enhance-admin-dashboard. Update Purpose after 
 - **WHEN** admin edits player name and saves
 - **THEN** system updates player record
 
+#### Scenario: Inline edit - only one row active
+- **WHEN** admin clicks 「编辑」on a second row while another row is already in edit mode
+- **THEN** the first row exits edit mode (discarding unsaved changes) and the new row enters edit mode
+
+#### Scenario: Cancel inline edit
+- **WHEN** admin clicks 「取消」in edit mode
+- **THEN** the row reverts to its original values with no API call made
+
 ### Requirement: Admin SHALL delete player
 
 管理员 **SHALL** 能够删除播放源。
@@ -54,6 +62,10 @@ TBD - created by archiving change enhance-admin-dashboard. Update Purpose after 
 #### Scenario: Confirm player deletion
 - **WHEN** admin confirms
 - **THEN** system deletes player, decrements `totalPlayers`, and shows success message
+
+#### Scenario: Delete button disabled during deletion
+- **WHEN** delete request is in progress
+- **THEN** confirm button is disabled to prevent duplicate requests
 
 #### Scenario: Delete last player
 - **WHEN** admin deletes the last player of a movie

@@ -45,6 +45,20 @@ const activeTab = ref<'metadata' | 'players'>('metadata')
 const players = ref<Player[]>([])
 const playersLoading = ref(false)
 
+// 添加播放源
+const showAddForm = ref(false)
+const newPlayerData = ref({ sourceName: '', sourceUrl: '', quality: '' })
+const addPlayerLoading = ref(false)
+
+// inline 编辑播放源
+const editingPlayerId = ref<string | null>(null)
+const editingPlayerData = ref<Partial<Player>>({})
+const savePlayerLoading = ref(false)
+
+// 删除播放源
+const deletingPlayerId = ref<string | null>(null)
+const deletePlayerLoading = ref(false)
+
 const { filters, applyFilters, resetFilters } = useFilters({
   isR18: '',
   crawlStatus: '',
@@ -276,6 +290,92 @@ async function loadPlayers(movieId: string) {
   }
 }
 
+async function handleAddPlayer() {
+  if (!editingMovie.value?.id || !newPlayerData.value.sourceName || !newPlayerData.value.sourceUrl)
+    return
+
+  addPlayerLoading.value = true
+  try {
+    await api.admin.addPlayer(editingMovie.value.id, {
+      sourceName: newPlayerData.value.sourceName,
+      sourceUrl: newPlayerData.value.sourceUrl,
+      quality: newPlayerData.value.quality || undefined,
+    })
+    success('播放源添加成功')
+    newPlayerData.value = { sourceName: '', sourceUrl: '', quality: '' }
+    showAddForm.value = false
+    await loadPlayers(editingMovie.value.id)
+  }
+  catch (e: unknown) {
+    const msg = e instanceof Error && e.message.includes('已存在') ? '该播放源已存在' : '添加播放源失败'
+    handleError(e, msg)
+  }
+  finally {
+    addPlayerLoading.value = false
+  }
+}
+
+function startEditPlayer(player: Player) {
+  editingPlayerId.value = player.id
+  editingPlayerData.value = {
+    sourceName: player.sourceName,
+    sourceUrl: player.sourceUrl,
+    quality: player.quality,
+  }
+}
+
+function cancelEditPlayer() {
+  editingPlayerId.value = null
+  editingPlayerData.value = {}
+}
+
+async function handleSavePlayer() {
+  if (!editingPlayerId.value)
+    return
+
+  savePlayerLoading.value = true
+  try {
+    await api.admin.updatePlayer(editingPlayerId.value, editingPlayerData.value)
+    const idx = players.value.findIndex(p => p.id === editingPlayerId.value)
+    if (idx !== -1) {
+      players.value[idx] = { ...players.value[idx], ...editingPlayerData.value }
+    }
+    cancelEditPlayer()
+  }
+  catch (e) {
+    handleError(e, '保存播放源失败')
+  }
+  finally {
+    savePlayerLoading.value = false
+  }
+}
+
+function startDeletePlayer(playerId: string) {
+  deletingPlayerId.value = playerId
+}
+
+function cancelDeletePlayer() {
+  deletingPlayerId.value = null
+}
+
+async function handleDeletePlayer() {
+  if (!deletingPlayerId.value)
+    return
+
+  deletePlayerLoading.value = true
+  try {
+    await api.admin.deletePlayer(deletingPlayerId.value)
+    players.value = players.value.filter(p => p.id !== deletingPlayerId.value)
+    cancelDeletePlayer()
+  }
+  catch (e) {
+    handleError(e, '删除播放源失败')
+  }
+  finally {
+    deletePlayerLoading.value = false
+  }
+}
+
 async function handleUpdate() {
   if (!editingMovie.value?.id)
     return
@@ -470,7 +570,6 @@ const tableColumns = [
       :loading="loading"
       :selectable="true"
       :selected-ids="selected"
-      min-width="1300px"
       empty-message="暂无电影数据"
       @toggle-select="toggleItem"
       @toggle-select-all="toggleAll"
@@ -652,26 +751,132 @@ const tableColumns = [
               加载中...
             </div>
             <div v-else class="players-list">
-              <div v-if="players.length === 0" class="empty-state">
+              <!-- 顶部工具栏 -->
+              <div class="players-toolbar">
+                <button class="btn-add-player" @click="showAddForm = !showAddForm">
+                  + 添加播放源
+                </button>
+              </div>
+
+              <!-- 内联新增表单 -->
+              <div v-if="showAddForm" class="player-item player-add-form">
+                <div class="player-inline-fields">
+                  <input
+                    v-model="newPlayerData.sourceName"
+                    type="text"
+                    placeholder="源名称（必填）"
+                    class="player-input"
+                  >
+                  <input
+                    v-model="newPlayerData.sourceUrl"
+                    type="text"
+                    placeholder="播放地址（必填）"
+                    class="player-input player-input-url"
+                  >
+                  <input
+                    v-model="newPlayerData.quality"
+                    type="text"
+                    placeholder="画质（如 HD）"
+                    class="player-input player-input-quality"
+                  >
+                </div>
+                <div class="player-actions">
+                  <button
+                    class="btn-player-save"
+                    :disabled="addPlayerLoading || !newPlayerData.sourceName || !newPlayerData.sourceUrl"
+                    @click="handleAddPlayer"
+                  >
+                    {{ addPlayerLoading ? '添加中...' : '确认' }}
+                  </button>
+                  <button class="btn-player-cancel" @click="showAddForm = false; newPlayerData = { sourceName: '', sourceUrl: '', quality: '' }">
+                    取消
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="players.length === 0 && !showAddForm" class="empty-state">
                 暂无播放源
               </div>
-              <div v-else>
-                <div
-                  v-for="player in players"
-                  :key="player.id"
-                  class="player-item"
-                >
+
+              <!-- 播放源列表 -->
+              <div
+                v-for="player in players"
+                :key="player.id"
+                class="player-item"
+              >
+                <!-- 编辑态 -->
+                <template v-if="editingPlayerId === player.id">
+                  <div class="player-inline-fields">
+                    <input
+                      v-model="editingPlayerData.sourceName"
+                      type="text"
+                      placeholder="源名称"
+                      class="player-input"
+                    >
+                    <input
+                      v-model="editingPlayerData.sourceUrl"
+                      type="text"
+                      placeholder="播放地址"
+                      class="player-input player-input-url"
+                    >
+                    <input
+                      v-model="editingPlayerData.quality"
+                      type="text"
+                      placeholder="画质"
+                      class="player-input player-input-quality"
+                    >
+                  </div>
+                  <div class="player-actions">
+                    <button
+                      class="btn-player-save"
+                      :disabled="savePlayerLoading"
+                      @click="handleSavePlayer"
+                    >
+                      {{ savePlayerLoading ? '保存中...' : '保存' }}
+                    </button>
+                    <button class="btn-player-cancel" @click="cancelEditPlayer">
+                      取消
+                    </button>
+                  </div>
+                </template>
+
+                <!-- 删除确认态 -->
+                <template v-else-if="deletingPlayerId === player.id">
+                  <div class="player-info">
+                    <strong>{{ player.sourceName }}</strong>
+                    <span class="player-url">{{ player.sourceUrl }}</span>
+                  </div>
+                  <div class="player-actions player-delete-confirm">
+                    <span class="delete-confirm-text">确认删除？</span>
+                    <button
+                      class="btn-player-delete-confirm"
+                      :disabled="deletePlayerLoading"
+                      @click="handleDeletePlayer"
+                    >
+                      {{ deletePlayerLoading ? '删除中...' : '确认' }}
+                    </button>
+                    <button class="btn-player-cancel" @click="cancelDeletePlayer">
+                      取消
+                    </button>
+                  </div>
+                </template>
+
+                <!-- 只读态 -->
+                <template v-else>
                   <div class="player-info">
                     <strong>{{ player.sourceName }}</strong>
                     <span class="player-url">{{ player.sourceUrl }}</span>
                     <span v-if="player.quality" class="quality-badge">{{ player.quality }}</span>
                   </div>
                   <div class="player-actions">
-                    <!-- <button class="btn-test" @click="() => { window?.open(player.sourceUrl as string, '_blank') ?? undefined }">
-                      测试
-                    </button> -->
+                    <button class="btn-player-edit" @click="startEditPlayer(player)">
+                      编辑
+                    </button>
+                    <button class="btn-player-delete" @click="startDeletePlayer(player.id)">
+                      删除
+                    </button>
                   </div>
-                </div>
+                </template>
               </div>
             </div>
           </div>
@@ -1082,5 +1287,157 @@ const tableColumns = [
 .action-icon {
   width: 12px;
   height: 12px;
+}
+
+/* Players Tab CRUD 样式 */
+.players-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.btn-add-player {
+  padding: 0.375rem 0.875rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-add-player:hover {
+  background: #2563eb;
+}
+
+.player-add-form {
+  border: 1px dashed #93c5fd;
+  background: #eff6ff;
+}
+
+.player-inline-fields {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.player-input {
+  padding: 0.375rem 0.625rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  min-width: 120px;
+  background: white;
+}
+
+.player-input-url {
+  flex: 1;
+  min-width: 200px;
+}
+
+.player-input-quality {
+  width: 80px;
+  min-width: 80px;
+}
+
+.btn-player-save {
+  padding: 0.375rem 0.75rem;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-player-save:hover:not(:disabled) {
+  background: #059669;
+}
+
+.btn-player-save:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+.btn-player-cancel {
+  padding: 0.375rem 0.75rem;
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-player-cancel:hover {
+  background: #f9fafb;
+}
+
+.btn-player-edit {
+  padding: 0.25rem 0.625rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-player-edit:hover {
+  background: #e5e7eb;
+}
+
+.btn-player-delete {
+  padding: 0.25rem 0.625rem;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-player-delete:hover {
+  background: #fecaca;
+}
+
+.btn-player-delete-confirm {
+  padding: 0.25rem 0.625rem;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-player-delete-confirm:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn-player-delete-confirm:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+.player-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.delete-confirm-text {
+  font-size: 0.8125rem;
+  color: #dc2626;
+  font-weight: 500;
+  white-space: nowrap;
 }
 </style>

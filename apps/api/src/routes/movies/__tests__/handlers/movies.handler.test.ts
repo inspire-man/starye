@@ -30,7 +30,7 @@ describe('movies handlers', () => {
       })
       app.get('/movies', getMovieList)
 
-      const req = new Request('http://localhost/movies?page=2&limit=10&genre=action&actor=test&publisherId=pub1&search=keyword')
+      const req = new Request('http://localhost/movies?page=2&limit=10&genre=action&actor=test&publisher=SOD&search=keyword&sortBy=releaseDate&sortOrder=desc')
       const res = await app.fetch(req)
 
       expect(res.status).toBe(200)
@@ -42,8 +42,10 @@ describe('movies handlers', () => {
         pageSize: 10,
         genre: 'action',
         actor: 'test',
-        publisherId: 'pub1',
+        publisher: 'SOD',
         searchKeyword: 'keyword',
+        sortBy: 'releaseDate',
+        sortOrder: 'desc',
       })
     })
 
@@ -74,8 +76,10 @@ describe('movies handlers', () => {
         pageSize: 24,
         genre: undefined,
         actor: undefined,
-        publisherId: undefined,
+        publisher: undefined,
         searchKeyword: undefined,
+        sortBy: undefined,
+        sortOrder: undefined,
       })
     })
   })
