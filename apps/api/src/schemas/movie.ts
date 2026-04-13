@@ -136,6 +136,34 @@ export const GetMoviesQuerySchema = v.object({
     ),
   ),
   search: OptionalKeywordSchema,
+  yearFrom: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^(20\d{2})$/, '年份格式错误，支持 2000-2099'),
+      v.description('年份起（范围 2000-2099）'),
+    ),
+  ),
+  yearTo: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^(20\d{2})$/, '年份格式错误，支持 2000-2099'),
+      v.description('年份止（范围 2000-2099）'),
+    ),
+  ),
+  durationMin: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^\d+$/, '必须为正整数'),
+      v.description('最短时长（分钟）'),
+    ),
+  ),
+  durationMax: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^\d+$/, '必须为正整数'),
+      v.description('最长时长（分钟）'),
+    ),
+  ),
   sortBy: v.optional(
     v.pipe(
       v.picklist(['releaseDate', 'createdAt', 'updatedAt', 'title']),

@@ -55,6 +55,10 @@ export const movieApi = {
     search?: string
     sortBy?: 'title' | 'createdAt' | 'updatedAt' | 'releaseDate'
     sortOrder?: 'asc' | 'desc'
+    yearFrom?: number
+    yearTo?: number
+    durationMin?: number
+    durationMax?: number
   }): Promise<PaginatedResponse<Movie>> {
     const res = await client.api.public.movies.$get({
       query: {
@@ -67,6 +71,10 @@ export const movieApi = {
         search: params?.search,
         sortBy: params?.sortBy,
         sortOrder: params?.sortOrder,
+        yearFrom: params?.yearFrom?.toString(),
+        yearTo: params?.yearTo?.toString(),
+        durationMin: params?.durationMin?.toString(),
+        durationMax: params?.durationMax?.toString(),
       },
     })
     const data = await res.json()
@@ -89,6 +97,10 @@ export const movieApi = {
       throw new Error(data.error)
     }
     return { success: true, data: data.data as unknown as MovieDetail }
+  },
+
+  async getRecommended(): Promise<{ success: boolean, data: Movie[], meta: { strategy: string } }> {
+    return apiFetch<{ success: boolean, data: Movie[], meta: { strategy: string } }>('/public/movies/recommended')
   },
 
   /** 上报影片观看（fire-and-forget，失败静默忽略） */

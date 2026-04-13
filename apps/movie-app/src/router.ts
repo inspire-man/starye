@@ -51,6 +51,11 @@ const router = createRouter({
       component: () => import('./views/Player.vue'),
     },
     {
+      path: '/new-releases',
+      name: 'new-releases',
+      component: () => import('./views/NewReleases.vue'),
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: () => import('./views/Profile.vue'),

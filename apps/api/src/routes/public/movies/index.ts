@@ -1,11 +1,11 @@
 import type { SQL } from 'drizzle-orm'
 import type { AppEnv } from '../../../types'
-import { actors, movieActors, moviePublishers, movies, players, publishers } from '@starye/db/schema'
-import { and, count, desc, eq, getTableColumns, inArray, like, ne, notInArray, or, sql } from 'drizzle-orm'
+import { actors, movieActors, moviePublishers, movies, players, publishers, watchingProgress } from '@starye/db/schema'
+import { and, count, desc, eq, getTableColumns, gte, inArray, like, lte, ne, notInArray, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import * as v from 'valibot'
-import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MoviesListDataSchema } from '../../../schemas/movie'
+import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MovieItemSchema, MoviesListDataSchema } from '../../../schemas/movie'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
 
 /**
@@ -45,7 +45,7 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
       const user = c.get('user')
       const params = c.req.valid('query')
 
-      const { page, limit, actor, publisher, genre, series, search, sortBy, sortOrder } = params
+      const { page, limit, actor, publisher, genre, series, search, sortBy, sortOrder, yearFrom, yearTo, durationMin, durationMax } = params
       const offset = (page - 1) * limit
 
       try {
@@ -95,6 +95,24 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
           if (searchCondition) {
             conditions.push(searchCondition)
           }
+        }
+
+        if (yearFrom) {
+          const fromDate = new Date(Number.parseInt(yearFrom), 0, 1)
+          conditions.push(gte(movies.releaseDate, fromDate))
+        }
+
+        if (yearTo) {
+          const toDate = new Date(Number.parseInt(yearTo), 11, 31, 23, 59, 59, 999)
+          conditions.push(lte(movies.releaseDate, toDate))
+        }
+
+        if (durationMin) {
+          conditions.push(gte(movies.duration, Number.parseInt(durationMin)))
+        }
+
+        if (durationMax) {
+          conditions.push(lte(movies.duration, Number.parseInt(durationMax)))
         }
 
         const sortField = {
@@ -202,6 +220,179 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
       catch (error) {
         console.error('[PublicMovies] Failed to fetch genres:', error)
         return c.json({ success: false, error: '查询 Genre 列表失败' }, 500)
+      }
+    },
+  )
+  // 获取个性化推荐
+  .get(
+    '/recommended',
+    describeRoute({
+      summary: '获取个性化推荐',
+      description: '已登录用户根据观看历史推荐，未登录用户返回热门影片',
+      tags: ['Movies'],
+      operationId: 'getRecommendedMovies',
+      responses: {
+        200: {
+          description: '成功返回推荐列表',
+          content: {
+            'application/json': {
+              schema: resolver(
+                SuccessResponseSchema(
+                  v.object({
+                    data: v.array(MovieItemSchema),
+                    meta: v.object({ strategy: v.string() }),
+                  }),
+                  '成功返回推荐列表',
+                ),
+              ),
+            },
+          },
+        },
+        500: {
+          description: '服务器内部错误',
+          content: {
+            'application/json': {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      const db = c.get('db')
+      const user = c.get('user')
+
+      try {
+        const fallBackToHot = async () => {
+          const conditions: SQL[] = []
+          if (!user?.isR18Verified) {
+            conditions.push(eq(movies.isR18, false))
+          }
+          const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+          const data = await db
+            .select()
+            .from(movies)
+            .where(whereClause)
+            .orderBy(desc(movies.viewCount))
+            .limit(12)
+          return c.json({ success: true, data, meta: { strategy: 'hot' } })
+        }
+
+        if (!user) {
+          return await fallBackToHot()
+        }
+
+        const history = await db
+          .select({ movieCode: watchingProgress.movieCode })
+          .from(watchingProgress)
+          .where(eq(watchingProgress.userId, user.id))
+          .orderBy(desc(watchingProgress.updatedAt))
+          .limit(30)
+
+        if (history.length === 0) {
+          return await fallBackToHot()
+        }
+
+        const watchedCodes = history.map(h => h.movieCode)
+
+        const recentMovies = await db.query.movies.findMany({
+          where: inArray(movies.code, watchedCodes),
+          with: {
+            movieActors: true,
+          },
+        })
+
+        const genreCounts = new Map<string, number>()
+        const actorCounts = new Map<string, number>()
+
+        for (const m of recentMovies) {
+          if (Array.isArray(m.genres)) {
+            for (const g of m.genres) {
+              if (g) {
+                genreCounts.set(g, (genreCounts.get(g) || 0) + 1)
+              }
+            }
+          }
+          const maList = m.movieActors
+          if (maList) {
+            for (const ma of maList) {
+              actorCounts.set(ma.actorId, (actorCounts.get(ma.actorId) || 0) + 1)
+            }
+          }
+        }
+
+        const topGenres = Array.from(genreCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(e => e[0])
+          .slice(0, 3)
+
+        const topActorIds = Array.from(actorCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(e => e[0])
+          .slice(0, 5)
+
+        const conditions: SQL[] = [notInArray(movies.code, watchedCodes)]
+        if (!user?.isR18Verified) {
+          conditions.push(eq(movies.isR18, false))
+        }
+
+        let recData: (typeof movies.$inferSelect)[] = []
+        if (topGenres.length > 0 || topActorIds.length > 0) {
+          const matchConditions: SQL[] = []
+
+          if (topGenres.length > 0) {
+            matchConditions.push(sql`EXISTS (
+              SELECT 1 FROM json_each(${movies.genres})
+              WHERE json_each.value IN ${topGenres}
+            )`)
+          }
+
+          if (topActorIds.length > 0) {
+            matchConditions.push(sql`EXISTS (
+              SELECT 1 FROM ${movieActors}
+              WHERE ${movieActors.movieId} = ${movies.id}
+              AND ${movieActors.actorId} IN ${topActorIds}
+            )`)
+          }
+
+          conditions.push(or(...matchConditions)!)
+
+          recData = await db
+            .select()
+            .from(movies)
+            .where(and(...conditions))
+            .orderBy(desc(movies.viewCount))
+            .limit(12)
+        }
+
+        let finalData = recData
+
+        if (finalData.length < 12) {
+          const currentIds = finalData.map(m => m.id)
+          const fillConditions: SQL[] = []
+          if (!user?.isR18Verified) {
+            fillConditions.push(eq(movies.isR18, false))
+          }
+          if (currentIds.length > 0) {
+            fillConditions.push(notInArray(movies.id, currentIds))
+          }
+          fillConditions.push(notInArray(movies.code, watchedCodes))
+
+          const fillData = await db
+            .select()
+            .from(movies)
+            .where(fillConditions.length > 0 ? and(...fillConditions) : undefined)
+            .orderBy(desc(movies.viewCount))
+            .limit(12 - finalData.length)
+
+          finalData = [...finalData, ...fillData]
+        }
+
+        return c.json({ success: true, data: finalData, meta: { strategy: 'personalized' } })
+      }
+      catch (error) {
+        console.error('[PublicMovies] Failed to fetch recommended:', error)
+        return c.json({ success: false, error: '查询推荐列表失败' }, 500)
       }
     },
   )

@@ -30,6 +30,11 @@ const bottomNavItems = computed<NavItem[]>(() => [
     label: '首页',
   },
   {
+    path: '/new-releases',
+    icon: '✨',
+    label: '新片',
+  },
+  {
     path: '/actors',
     icon: '👥',
     label: '女优',

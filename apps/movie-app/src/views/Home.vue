@@ -27,6 +27,9 @@ const filters = reactive({
   search: '',
   sortBy: 'releaseDate' as 'title' | 'createdAt' | 'updatedAt' | 'releaseDate',
   sortOrder: 'desc' as 'asc' | 'desc',
+  yearFrom: '' as number | '',
+  yearTo: '' as number | '',
+  duration: '' as '' | 'short' | 'medium' | 'long',
 })
 
 // Genre 标签数据
@@ -35,12 +38,24 @@ const genres = ref<GenreItem[]>([])
 // 继续观看列表（已登录用户，进度 < 90% 的最近 5 部）
 const continueWatchingList = ref<WatchingHistoryItem[]>([])
 
+// 猜你喜欢推荐列表
+const recommendedMovies = ref<Movie[]>([])
+const recommendedLoading = ref(false)
+
 // 排序选项配置
 const sortOptions: SelectOption<string>[] = [
   { label: '发行日期', value: 'releaseDate', icon: '📅' },
   { label: '最近更新', value: 'updatedAt', icon: '🔄' },
   { label: '最新上架', value: 'createdAt', icon: '✨' },
 ]
+
+// 时长选项配置
+const durationOptions = [
+  { value: '', label: '不限' },
+  { value: 'short', label: '短片 <60分' },
+  { value: 'medium', label: '中等 60-120分' },
+  { value: 'long', label: '长片 >120分' },
+] as const
 
 // 将当前状态同步到 URL query，用 replace 避免污染浏览器历史
 function syncUrl() {
@@ -50,12 +65,28 @@ function syncUrl() {
       ...(filters.sortBy !== 'releaseDate' && { sortBy: filters.sortBy }),
       ...(filters.search && { search: filters.search }),
       ...(activeGenre.value && { genre: activeGenre.value }),
+      ...(filters.yearFrom && { yearFrom: String(filters.yearFrom) }),
+      ...(filters.yearTo && { yearTo: String(filters.yearTo) }),
+      ...(filters.duration && { duration: filters.duration }),
     },
   })
 }
 
 async function fetchMovies() {
   loading.value = true
+  let durationMin: number | undefined
+  let durationMax: number | undefined
+  if (filters.duration === 'short') {
+    durationMax = 59
+  }
+  else if (filters.duration === 'medium') {
+    durationMin = 60
+    durationMax = 120
+  }
+  else if (filters.duration === 'long') {
+    durationMin = 121
+  }
+
   try {
     const response = await movieApi.getMovies({
       page: pagination.page,
@@ -64,6 +95,10 @@ async function fetchMovies() {
       genre: activeGenre.value || undefined,
       sortBy: filters.sortBy,
       sortOrder: filters.sortOrder,
+      yearFrom: filters.yearFrom || undefined,
+      yearTo: filters.yearTo || undefined,
+      durationMin,
+      durationMax,
     })
 
     if (response.success) {
@@ -107,6 +142,26 @@ async function fetchContinueWatching() {
   }
   catch {
     // 进度加载失败不影响主列表，静默忽略
+  }
+}
+
+async function fetchRecommended() {
+  if (!userStore.user) {
+    return
+  }
+  recommendedLoading.value = true
+  try {
+    const response = await movieApi.getRecommended()
+    if (response.success && response.data) {
+      // 推荐最多展示 12 部
+      recommendedMovies.value = response.data.slice(0, 12)
+    }
+  }
+  catch {
+    // 推荐加载失败不影响主列表，静默忽略
+  }
+  finally {
+    recommendedLoading.value = false
   }
 }
 
@@ -167,13 +222,17 @@ onMounted(() => {
   // 从 URL query 恢复状态
   pagination.page = Number(route.query.page) || 1
   filters.sortBy = (route.query.sortBy as typeof filters.sortBy) || 'releaseDate'
-  filters.search = (route.query.search as string) || ''
-  activeGenre.value = (route.query.genre as string) || ''
+  filters.search = (typeof route.query.search === 'string' ? route.query.search : '')
+  activeGenre.value = (typeof route.query.genre === 'string' ? route.query.genre : '')
+  filters.yearFrom = route.query.yearFrom && !Array.isArray(route.query.yearFrom) ? Number(route.query.yearFrom) : ''
+  filters.yearTo = route.query.yearTo && !Array.isArray(route.query.yearTo) ? Number(route.query.yearTo) : ''
+  filters.duration = (typeof route.query.duration === 'string' ? route.query.duration : '') as typeof filters.duration
 
   // 并行加载：主列表 + genres + 继续观看（互不依赖）
   fetchMovies()
   fetchGenres()
   fetchContinueWatching()
+  fetchRecommended()
 })
 </script>
 
@@ -231,6 +290,49 @@ onMounted(() => {
             </div>
             <p class="progress-label">
               {{ progressPercent(item) }}%
+            </p>
+          </div>
+        </RouterLink>
+      </div>
+    </section>
+
+    <!-- 猜你喜欢板块（仅登录用户显示） -->
+    <section v-if="userStore.user && (recommendedMovies.length > 0 || recommendedLoading)" class="continue-watching">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold text-white">
+          猜你喜欢
+        </h2>
+      </div>
+      <div v-if="recommendedLoading" class="continue-list">
+        <div v-for="i in 3" :key="i" class="continue-card animate-pulse">
+          <div class="continue-cover bg-gray-800" />
+          <div class="continue-info">
+            <div class="bg-gray-800 h-3 rounded w-3/4 mb-1" />
+            <div class="bg-gray-800 h-2 rounded w-1/2" />
+          </div>
+        </div>
+      </div>
+      <div v-else class="continue-list">
+        <RouterLink
+          v-for="movie in recommendedMovies"
+          :key="movie.id"
+          :to="`/movie/${movie.code}`"
+          class="continue-card"
+        >
+          <div class="continue-cover">
+            <img
+              v-if="movie.coverImage && !movie.isR18"
+              :src="movie.coverImage"
+              :alt="movie.title"
+              loading="lazy"
+            >
+            <div v-else class="cover-placeholder">
+              <span>{{ movie.isR18 ? 'R18' : '?' }}</span>
+            </div>
+          </div>
+          <div class="continue-info">
+            <p class="continue-title" :title="movie.title">
+              {{ movie.title }}
             </p>
           </div>
         </RouterLink>
@@ -298,6 +400,50 @@ onMounted(() => {
           {{ item.genre }}
           <span class="genre-count">{{ item.count }}</span>
         </button>
+      </div>
+
+      <!-- 高级筛选 -->
+      <div class="filter-panel mt-2 flex flex-wrap items-center gap-4 bg-gray-800/50 p-3 rounded-lg border border-gray-700/50">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-400">年份:</span>
+          <input
+            v-model.number="filters.yearFrom"
+            type="number"
+            min="2000"
+            :max="new Date().getFullYear()"
+            placeholder="2000"
+            class="w-20 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-white focus:ring-1 focus:ring-primary-500"
+            @change="pagination.page = 1; syncUrl(); fetchMovies()"
+          >
+          <span class="text-xs text-gray-500">-</span>
+          <input
+            v-model.number="filters.yearTo"
+            type="number"
+            min="2000"
+            :max="new Date().getFullYear()"
+            placeholder="2025"
+            class="w-20 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-white focus:ring-1 focus:ring-primary-500"
+            @change="pagination.page = 1; syncUrl(); fetchMovies()"
+          >
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-400">时长:</span>
+          <div class="flex rounded-md shadow-sm" role="group">
+            <button
+              v-for="opt in durationOptions"
+              :key="opt.value"
+              type="button"
+              class="px-3 py-1 text-xs font-medium border border-gray-700 hover:bg-gray-700 hover:text-white transition-colors"
+              :class="[
+                filters.duration === opt.value ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-900 text-gray-300',
+                opt.value === '' ? 'rounded-l-md font-normal' : opt.value === 'long' ? 'rounded-r-md font-normal' : 'font-normal',
+              ]"
+              @click="filters.duration = (filters.duration === opt.value && opt.value !== '') ? '' : opt.value; pagination.page = 1; syncUrl(); fetchMovies()"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
