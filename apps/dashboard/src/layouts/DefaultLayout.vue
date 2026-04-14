@@ -43,6 +43,7 @@ const iconMap: Record<string, string> = {
   'file-text': '📄',
   'shield': '🔞',
   'settings': '⚙️',
+  'tavern': '🎭',
 }
 
 function getIcon(iconName: string) {
@@ -198,6 +199,14 @@ const menuItems = computed(() => [
     ],
   },
   {
+    key: 'tavern',
+    label: '角色模拟 (Tavern)',
+    icon: 'tavern',
+    show: canAccessGlobal.value,
+    path: 'http://127.0.0.1:8000/',
+    isExternal: true,
+  },
+  {
     key: 'settings',
     label: '设置',
     icon: 'settings',
@@ -319,21 +328,25 @@ async function handleLogout() {
           </div>
 
           <!-- 无子菜单的项 -->
-          <RouterLink
+          <component
+            :is="item.isExternal ? 'a' : 'RouterLink'"
             v-else
-            :to="item.path!"
+            :to="!item.isExternal ? item.path : undefined"
+            :href="item.isExternal ? item.path : undefined"
+            :target="item.isExternal ? '_blank' : undefined"
+            rel="noopener noreferrer"
             class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
             :class="{ 'justify-center': sidebarCollapsed }"
             active-class=""
-            :exact-active-class="item.path === '/' ? 'bg-muted text-primary' : ''"
+            :exact-active-class="!item.isExternal && item.path === '/' ? 'bg-muted text-primary' : ''"
             :title="sidebarCollapsed ? item.label : ''"
-            @click="handleMenuItemClick"
+            @click="!item.isExternal ? handleMenuItemClick() : undefined"
           >
             <span class="text-lg shrink-0">
               {{ getIcon(item.icon) }}
             </span>
             <span v-if="!sidebarCollapsed">{{ item.label }}</span>
-          </RouterLink>
+          </component>
         </template>
       </nav>
 
