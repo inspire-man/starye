@@ -24,7 +24,7 @@ R2_SECRET_ACCESS_KEY=your_secret_access_key
 R2_BUCKET_NAME=your_bucket_name
 R2_PUBLIC_URL=https://your-cdn-domain.com
 ```
-
+ 
 ### 2. 爬虫自动上传
 
 当 `UPLOAD_MAPPINGS_TO_R2=true` 时，女优和厂商爬虫会在运行结束时自动将以下文件上传到 R2：

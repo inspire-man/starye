@@ -22,7 +22,7 @@ async function verifyDataIntegrity() {
   // 1. 验证女优的 movieCount
   console.log('[1/4] 验证女优 movieCount...')
   const actorsIntegrity = await db.execute(`
-    SELECT 
+    SELECT
       a.id,
       a.name,
       a.movieCount as stored_count,
@@ -46,7 +46,7 @@ async function verifyDataIntegrity() {
   // 2. 验证厂商的 movieCount
   console.log('\n[2/4] 验证厂商 movieCount...')
   const publishersIntegrity = await db.execute(`
-    SELECT 
+    SELECT
       p.id,
       p.name,
       p.movieCount as stored_count,
@@ -106,7 +106,7 @@ async function verifyDataIntegrity() {
   console.log('\n[4/4] 数据统计汇总...')
 
   const stats = await db.execute(`
-    SELECT 
+    SELECT
       (SELECT COUNT(*) FROM actors) as total_actors,
       (SELECT COUNT(*) FROM publishers) as total_publishers,
       (SELECT COUNT(*) FROM movies) as total_movies,

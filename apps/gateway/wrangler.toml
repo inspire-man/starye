@@ -14,6 +14,7 @@ DASHBOARD_ORIGIN = "https://starye-dashboard.pages.dev"
 BLOG_ORIGIN = "https://blog.starye.org"
 MOVIE_ORIGIN = "https://starye-movie.pages.dev"
 COMIC_ORIGIN = "https://starye-comic.pages.dev"
+TAVERN_ORIGIN = "https://starye-tavern.pages.dev"
 
 # Custom Domain Binding
 # This worker handles all traffic for the main domain

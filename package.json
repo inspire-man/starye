@@ -28,20 +28,20 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^8.0.0",
-    "@cloudflare/workers-types": "^4.20260404.1",
+    "@antfu/eslint-config": "^8.2.0",
+    "@cloudflare/workers-types": "^4.20260413.1",
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.5.2",
-    "@vitest/coverage-v8": "^4.1.2",
-    "better-sqlite3": "^12.8.0",
+    "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.4",
+    "better-sqlite3": "^12.9.0",
     "eslint": "^10.2.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
-    "turbo": "^2.9.3",
+    "turbo": "^2.9.6",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2",
-    "wrangler": "^4.80.0"
+    "vitest": "^4.1.4",
+    "wrangler": "^4.81.1"
   }
 }

@@ -14,7 +14,7 @@
     "build": "tsc -b"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260404.1",
+    "@cloudflare/workers-types": "^4.20260413.1",
     "api": "workspace:*"
   }
 }

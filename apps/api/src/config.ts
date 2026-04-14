@@ -7,11 +7,13 @@ export function getAllowedOrigins(env: Env): string[] {
     'http://starye.org',
     'http://starye.org:8080',
     'http://localhost:3003',
+    'http://localhost:3004',
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
     'http://127.0.0.1:3003',
+    'http://127.0.0.1:3004',
   ])
 
   if (env.WEB_URL) {

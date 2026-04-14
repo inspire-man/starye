@@ -34,8 +34,6 @@ export default defineNuxtConfig({
     ],
     optimizeDeps: {
       include: [
-        'clsx',
-        'tailwind-merge',
         'better-auth/vue',
       ],
       exclude: ['@starye/locales'],

@@ -21,6 +21,7 @@ export interface Env {
   GITHUB_CLIENT_SECRET: string
   WEB_URL?: string
   ADMIN_URL?: string
+  OPENROUTER_API_KEY?: string
   // R2 Configuration
   CLOUDFLARE_ACCOUNT_ID: string
   R2_ACCESS_KEY_ID: string

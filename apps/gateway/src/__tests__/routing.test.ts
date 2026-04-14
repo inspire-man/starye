@@ -14,6 +14,7 @@ interface Env {
   BLOG_ORIGIN?: string
   MOVIE_ORIGIN?: string
   COMIC_ORIGIN?: string
+  TAVERN_ORIGIN?: string
   AUTH_ORIGIN?: string
 }
 
@@ -117,6 +118,12 @@ describe('路径匹配规则', () => {
     expect(capturedRequest!.url).toContain('localhost:3000')
   })
 
+  it('/tavern/* 应路由到 Tavern App', async () => {
+    const req = makeRequest('http://localhost/tavern/')
+    await worker.fetch(req, {})
+    expect(capturedRequest!.url).toContain('localhost:3004')
+  })
+
   it('/auth/* 应路由到 Auth 服务', async () => {
     const req = makeRequest('http://localhost/auth/')
     await worker.fetch(req, {})
@@ -167,6 +174,13 @@ describe('单路径 301 重定向', () => {
     expect(resp.headers.get('location')).toBe('http://localhost/comic/')
   })
 
+  it('/tavern 应重定向到 /tavern/', async () => {
+    const req = makeRequest('http://localhost/tavern')
+    const resp = await worker.fetch(req, {})
+    expect(resp.status).toBe(301)
+    expect(resp.headers.get('location')).toBe('http://localhost/tavern/')
+  })
+
   it('/auth 应重定向到 /auth/', async () => {
     const req = makeRequest('http://localhost/auth')
     const resp = await worker.fetch(req, {})
@@ -182,6 +196,7 @@ describe('生产环境路径重写', () => {
     DASHBOARD_ORIGIN: 'https://dash.starye.com',
     MOVIE_ORIGIN: 'https://movie.starye.com',
     COMIC_ORIGIN: 'https://comic.starye.com',
+    TAVERN_ORIGIN: 'https://tavern.starye.com',
     AUTH_ORIGIN: 'https://auth.starye.com',
     BLOG_ORIGIN: 'https://blog.starye.com',
     API_ORIGIN: 'https://api.starye.com',
@@ -206,6 +221,13 @@ describe('生产环境路径重写', () => {
     await worker.fetch(req, prodEnv)
     expect(capturedRequest!.url).not.toContain('/comic/list')
     expect(capturedRequest!.url).toContain('/list')
+  })
+
+  it('生产环境 /tavern/* 应剥离 /tavern 前缀', async () => {
+    const req = makeRequest('https://starye.com/tavern/chat')
+    await worker.fetch(req, prodEnv)
+    expect(capturedRequest!.url).not.toContain('/tavern/chat')
+    expect(capturedRequest!.url).toContain('/chat')
   })
 
   it('生产环境 /api/* 不重写路径', async () => {

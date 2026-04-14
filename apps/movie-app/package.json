@@ -19,7 +19,7 @@
   "dependencies": {
     "@starye/api-types": "workspace:*",
     "@starye/ui": "workspace:*",
-    "hono": "^4.12.10",
+    "hono": "^4.12.12",
     "pinia": "^3.0.4",
     "qrcode.vue": "^3.8.1",
     "vue": "^3.5.32",
@@ -29,19 +29,19 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.2",
-    "@types/node": "^25.5.2",
-    "@vitejs/plugin-vue": "^6.0.5",
-    "@vitest/coverage-v8": "^4.1.2",
-    "@vitest/ui": "^4.1.2",
+    "@types/node": "^25.6.0",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vitest/coverage-v8": "^4.1.4",
+    "@vitest/ui": "^4.1.4",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.9.1",
     "autoprefixer": "^10.4.27",
     "happy-dom": "^20.8.9",
-    "postcss": "^8.5.8",
+    "postcss": "^8.5.9",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.2",
-    "vite": "^8.0.3",
-    "vitest": "^4.1.2",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4",
     "vue-tsc": "^3.2.6"
   }
 }
