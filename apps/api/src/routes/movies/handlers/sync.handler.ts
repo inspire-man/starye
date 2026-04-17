@@ -1,6 +1,7 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { HTTPException } from 'hono/http-exception'
+import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
 import { syncMovieData } from '../services/sync.service'
 
 export async function syncMovies(c: Context<AppEnv>) {
@@ -18,6 +19,8 @@ export async function syncMovies(c: Context<AppEnv>) {
     movies: body.movies,
     mode: body.mode || 'upsert',
   })
+
+  await clearGatewayCacheGroup(c.env.CACHE, 'movies')
 
   return c.json({
     message: 'Sync completed',

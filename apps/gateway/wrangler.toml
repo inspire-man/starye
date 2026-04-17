@@ -1,6 +1,7 @@
 name = "starye-gateway"
 main = "src/index.ts"
 compatibility_date = "2024-04-01"
+compatibility_flags = [ "nodejs_compat" ]
 
 [dev]
 port = 8080 # 本地统一入口端口
@@ -25,3 +26,9 @@ custom_domain = true
 [[routes]]
 pattern = "www.starye.org"
 custom_domain = true
+
+# KV Namespace for caching
+[[kv_namespaces]]
+binding = "CACHE"
+id = "f7f6a8c2bff84a1d89da528eab4eb559" # 共享 API 的 KV namespace
+preview_id = "f7f6a8c2bff84a1d89da528eab4eb559"

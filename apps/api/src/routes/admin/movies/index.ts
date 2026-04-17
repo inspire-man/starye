@@ -15,12 +15,18 @@ import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
 import * as v from 'valibot'
+import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
 import { captureResourceState, computeChanges, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
 import { serviceAuth } from '../../../middleware/service-auth'
 import { AddPlayerSchema, BatchImportPlayersSchema, BatchOperationMoviesSchema, MovieFilterSchema, UpdateMovieActorsSchema, UpdateMovieMetadataSchema, UpdateMoviePublishersSchema, UpdatePlayerSchema } from '../../../schemas/admin'
 
 const adminMovies = new Hono<AppEnv>()
+
+async function invalidateMovieGatewayCache(env: AppEnv['Bindings']): Promise<void> {
+  const deleted = await clearGatewayCacheGroup(env.CACHE, 'movies')
+  console.log('[Admin/Movies] Cleared gateway movie cache', { deleted })
+}
 
 // 批量查询电影状态 (用于爬虫增量爬取)
 // 使用 serviceAuth 认证，必须在 requireResource 中间件之前定义
@@ -499,6 +505,7 @@ adminMovies.patch(
       })
 
       console.log(`[Admin/Movies] ✓ Updated movie ${id}`)
+      await invalidateMovieGatewayCache(c.env)
       return c.json({ success: true })
     }
     catch (e: unknown) {
@@ -553,6 +560,7 @@ adminMovies.delete('/:id', async (c) => {
     })
 
     console.log(`[Admin/Movies] ✓ Deleted movie ${id} (${before.code})`)
+    await invalidateMovieGatewayCache(c.env)
     return c.json({ success: true })
   }
   catch (e: unknown) {
@@ -684,6 +692,7 @@ adminMovies.post(
       })
 
       console.log(`[Admin/Players] ✓ Added player to movie ${movieId}`)
+      await invalidateMovieGatewayCache(c.env)
       return c.json({ success: true, id: playerId })
     }
     catch (e: unknown) {
@@ -743,6 +752,7 @@ adminMovies.patch(
         .where(eq(players.id, playerId))
 
       console.log(`[Admin/Players] ✓ Updated player ${playerId}`)
+      await invalidateMovieGatewayCache(c.env)
       return c.json({ success: true })
     }
     catch (e: unknown) {
@@ -795,6 +805,7 @@ adminMovies.delete('/players/:id', async (c) => {
     })
 
     console.log(`[Admin/Players] ✓ Deleted player ${playerId}`)
+    await invalidateMovieGatewayCache(c.env)
     return c.json({ success: true })
   }
   catch (e: unknown) {
@@ -887,6 +898,7 @@ adminMovies.post(
 
       console.log(`[Admin/Players] ✓ Batch import complete: ${results.success.length} success, ${results.failed.length} failed, ${results.skipped.length} skipped`)
 
+      await invalidateMovieGatewayCache(c.env)
       return c.json(results)
     }
     catch (e: unknown) {
@@ -1005,6 +1017,7 @@ adminMovies.post(
 
       console.log(`[Admin/Movies] ✓ Bulk operation complete: ${results.success.length} success, ${results.failed.length} failed`)
 
+      await invalidateMovieGatewayCache(c.env)
       return c.json(results)
     }
     catch (e: unknown) {
@@ -1071,6 +1084,7 @@ adminMovies.put(
         changes: { actors: actorList.length },
       })
 
+      await invalidateMovieGatewayCache(c.env)
       return c.json({ success: true })
     }
     catch (e: unknown) {
@@ -1130,6 +1144,7 @@ adminMovies.put(
         changes: { publishers: publisherList.length },
       })
 
+      await invalidateMovieGatewayCache(c.env)
       return c.json({ success: true })
     }
     catch (e: unknown) {

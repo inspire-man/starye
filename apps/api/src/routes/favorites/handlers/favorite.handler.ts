@@ -1,6 +1,7 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { HTTPException } from 'hono/http-exception'
+import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
 import { addFavorite, checkFavorite, deleteFavorite, getFavorites } from '../services/favorite.service'
 
 /**
@@ -60,6 +61,8 @@ export async function addFavoriteHandler(c: Context<AppEnv>) {
       entityId: body.entityId,
     })
 
+    await clearGatewayCacheGroup(c.env.CACHE, 'favorites')
+
     return c.json(result)
   }
   catch (e: unknown) {
@@ -92,6 +95,8 @@ export async function deleteFavoriteHandler(c: Context<AppEnv>) {
     if (!result.success) {
       throw new HTTPException(404, { message: result.error || 'Not found' })
     }
+
+    await clearGatewayCacheGroup(c.env.CACHE, 'favorites')
 
     return c.json(result)
   }
