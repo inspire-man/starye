@@ -29,7 +29,13 @@
   3. 带 `Cookie` 或 `Authorization` 的请求默认绕过 gateway KV 缓存，且匿名用户永远不会读到上一个已登录用户的响应
   4. `/api/auth/*` 全路径不落 KV 缓存，`Set-Cookie` 头原样透传到浏览器（cookie domain 正确写为 `.starye.org`，SameSite=Lax，Secure=true）
   5. `better-auth` 升级到 `^1.6.10` 并通过登录 / 登出 / 刷新冒烟测试
-**Plans**: TBD
+**Plans**: 6 plans across 3 waves
+  - [ ] 01-01-PLAN.md — Wave 0 测试骨架（gateway D-11 四条 it.todo + blog/dashboard e2e skip + api signout todo）
+  - [ ] 01-02-PLAN.md — Gateway cache bypass 实现 + private scope 死代码清理（D-07/D-10/D-12..14）
+  - [ ] 01-03-PLAN.md — Nuxt blog + auth SSR session 通道（D-01..D-04）
+  - [ ] 01-04-PLAN.md — Better Auth 升级 1.6.2 → ^1.6.10（D-18，四 package.json 同 commit）
+  - [ ] 01-05-PLAN.md — AUTH-08 signout 单测实装（D-15）
+  - [ ] 01-06-PLAN.md — 集成冒烟 + D-19 六步 human checkpoint（phase gate）
 
 ### Phase 2: Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固
 **Goal**: 只有作者（`ADMIN_GITHUB_ID` 白名单）能进入 dashboard；匿名用户可以浏览公开目录但在触达收藏/进度/成人内容时被登录门控；搜索引擎不再索引后台/认证/API 路径；Scalar OpenAPI UI 在生产环境需要鉴权；`/api/auth/sign-in` 有速率限制。
@@ -85,7 +91,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Auth 全链路 + Gateway 缓存安全基线 | 0/0 | Not started | - |
+| 1. Auth 全链路 + Gateway 缓存安全基线 | 0/6 | Planned | - |
 | 2. Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固 | 0/0 | Not started | - |
 | 3. movie-app 播放稳定化（R2 直发 + 错误恢复） | 0/0 | Not started | - |
 | 4. 统一 Progress 表 + 漫画阅读/视频观看进度 | 0/0 | Not started | - |
