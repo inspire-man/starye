@@ -133,25 +133,62 @@ v1 稳定后考虑，不阻塞 v1 发布。
 
 ## Traceability
 
-留给 roadmapper 在 Phase 创建时填充。
+由 roadmapper 于 2026-05-11 填充，对应 `.planning/ROADMAP.md`。
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 — AUTH-08 | Phase 1 | Pending |
-| ACCESS-01 — ACCESS-03 | Phase 2 | Pending |
-| ACCESS-04 — ACCESS-07 | Phase 2 | Pending |
-| PUBSEC-01 — PUBSEC-05 | Phase 2 | Pending |
-| VIDEO-01 — VIDEO-06 | Phase 3 | Pending |
-| PROG-01 — PROG-08 | Phase 4 | Pending |
-| DEPLOY-01 — DEPLOY-06 | Phase 5 | Pending |
-| OBS-01 — OBS-05 | Phase 5 | Pending |
+| AUTH-01 | Phase 1 | Pending |
+| AUTH-02 | Phase 1 | Pending |
+| AUTH-03 | Phase 1 | Pending |
+| AUTH-04 | Phase 1 | Pending |
+| AUTH-05 | Phase 1 | Pending |
+| AUTH-06 | Phase 1 | Pending |
+| AUTH-07 | Phase 1 | Pending |
+| AUTH-08 | Phase 1 | Pending |
+| ACCESS-01 | Phase 2 | Pending |
+| ACCESS-02 | Phase 2 | Pending |
+| ACCESS-03 | Phase 2 | Pending |
+| ACCESS-04 | Phase 2 | Pending |
+| ACCESS-05 | Phase 2 | Pending |
+| ACCESS-06 | Phase 2 | Pending |
+| ACCESS-07 | Phase 2 | Pending |
+| PUBSEC-01 | Phase 2 | Pending |
+| PUBSEC-02 | Phase 2 | Pending |
+| PUBSEC-03 | Phase 2 | Pending |
+| PUBSEC-04 | Phase 2 | Pending |
+| PUBSEC-05 | Phase 2 | Pending |
+| VIDEO-01 | Phase 3 | Pending |
+| VIDEO-02 | Phase 3 | Pending |
+| VIDEO-03 | Phase 3 | Pending |
+| VIDEO-04 | Phase 3 | Pending |
+| VIDEO-05 | Phase 3 | Pending |
+| VIDEO-06 | Phase 3 | Pending |
+| PROG-01 | Phase 4 | Pending |
+| PROG-02 | Phase 4 | Pending |
+| PROG-03 | Phase 4 | Pending |
+| PROG-04 | Phase 4 | Pending |
+| PROG-05 | Phase 4 | Pending |
+| PROG-06 | Phase 4 | Pending |
+| PROG-07 | Phase 4 | Pending |
+| PROG-08 | Phase 4 | Pending |
+| DEPLOY-01 | Phase 5 | Pending |
+| DEPLOY-02 | Phase 5 | Pending |
+| DEPLOY-03 | Phase 5 | Pending |
+| DEPLOY-04 | Phase 5 | Pending |
+| DEPLOY-05 | Phase 5 | Pending |
+| DEPLOY-06 | Phase 5 | Pending |
+| OBS-01 | Phase 5 | Pending |
+| OBS-02 | Phase 5 | Pending |
+| OBS-03 | Phase 5 | Pending |
+| OBS-04 | Phase 5 | Pending |
+| OBS-05 | Phase 5 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 41 total（AUTH 8 + ACCESS 7 + PUBSEC 5 + VIDEO 6 + PROG 8 + DEPLOY 6 + OBS 5 — 由 roadmapper 最终校验）
-- Mapped to phases: 待 roadmapper 填充
-- Unmapped: 待 roadmapper 核验 ⚠️
+- v1 requirements: 45 total（AUTH 8 + ACCESS 7 + PUBSEC 5 + VIDEO 6 + PROG 8 + DEPLOY 6 + OBS 5 = 45；初稿头注记 41 系算术笔误，roadmapper 核验后修正为 45）
+- Mapped to phases: 45 / 45 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-11*
-*Last updated: 2026-05-11 after initial definition*
+*Last updated: 2026-05-11 traceability populated by roadmapper*
