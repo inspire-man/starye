@@ -28,11 +28,11 @@
     "@libsql/client": "^0.17.2",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",
-    "nanoid": "^5.1.7",
+    "nanoid": "^5.1.9",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260413.1",
+    "@cloudflare/workers-types": "^4.20260417.1",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.21.0"
   }

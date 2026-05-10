@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^8.2.0",
-    "@cloudflare/workers-types": "^4.20260413.1",
+    "@cloudflare/workers-types": "^4.20260417.1",
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@types/better-sqlite3": "^7.6.13",
