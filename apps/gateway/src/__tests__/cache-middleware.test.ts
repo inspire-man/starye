@@ -158,4 +158,20 @@ describe('gateway cache middleware', () => {
     expect(deleted).toBe(1)
     expect([...store.keys()]).toEqual(['gateway-cache:v2:favorites:private:abc:%2Fapi%2Ffavorites'])
   })
+
+  // ─── D-11 Nyquist 采样骨架（Plan 02 填断言）─────────────────────────────────
+  // 来源：.planning/phases/01-auth-gateway/01-VALIDATION.md L57-66 + 01-RESEARCH.md §Gateway Cache Bypass Implementation
+  // 激活方式：Plan 02 删除 `.todo` 并补全 async 实现体。保持 title 中 `D-11 #N` 前缀稳定以便追溯。
+
+  // D-11 #1: baseline regression — 无头 public group 仍走 MISS→HIT（Plan 02 实现后激活）
+  it.todo('d-11 #1: caches /api/movies on public group when no auth headers present (MISS then HIT)')
+
+  // D-11 #2: AUTH-07 — 带 session cookie → BYPASS + X-Cache-Reason
+  it.todo('d-11 #2: bypasses KV on /api/movies when request has Cookie header (BYPASS, X-Cache-Reason=auth-headers)')
+
+  // D-11 #3: AUTH-07 — 带 Authorization → BYPASS + X-Cache-Reason
+  it.todo('d-11 #3: bypasses KV on /api/movies when request has Authorization header (BYPASS, X-Cache-Reason=auth-headers)')
+
+  // D-11 #4: AUTH-06 — /api/auth/* 无论头都 BYPASS（NO_STORE_PREFIXES 独立命中）
+  it.todo('d-11 #4: bypasses /api/auth/get-session regardless of request headers')
 })
