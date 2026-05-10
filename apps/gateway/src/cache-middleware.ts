@@ -9,8 +9,9 @@
  * - Structured cache monitoring logs
  */
 
-type CacheScope = 'public' | 'private' | 'bypass'
-type CacheGroup = 'admin' | 'api' | 'auth' | 'favorites' | 'misc' | 'movies' | 'public-pages' | 'static-assets'
+type CacheScope = 'public' | 'bypass'
+type CacheGroup = 'admin' | 'api' | 'auth' | 'misc' | 'movies' | 'public-pages' | 'static-assets'
+type CacheBypassReason = 'auth-headers' | 'no-store-path' | 'set-cookie-response' | 'cache-bypass-option' | 'non-cacheable-group'
 
 interface CachePolicy {
   scope: CacheScope
@@ -19,6 +20,11 @@ interface CachePolicy {
   staleWhileRevalidate?: number
   cacheControl?: string
   shouldStore: boolean
+  /**
+   * D-10：BYPASS 原因，供 decorateResponse 注入 `X-Cache-Reason`。
+   * 仅在 BYPASS（shouldStore=false 且 scope='bypass'）时有意义。
+   */
+  bypassReason?: CacheBypassReason
 }
 
 export interface CacheOptions {
@@ -45,14 +51,13 @@ const CACHE_STATUS_HEADER = 'X-Cache-Status'
 const CACHE_GROUP_HEADER = 'X-Cache-Group'
 const CACHE_POLICY_HEADER = 'X-Cache-Policy'
 const CACHE_TTL_HEADER = 'X-Cache-TTL'
+const CACHE_REASON_HEADER = 'X-Cache-Reason'
 const MOVIE_LIST_PATHS = new Set(['/api/movies', '/api/public/movies'])
-const PRIVATE_CACHE_PREFIXES = ['/api/favorites', '/api/history']
 const NO_STORE_PREFIXES = ['/api/admin', '/api/auth', '/api/monitoring', '/api/upload', '/dashboard', '/auth']
 const STATIC_ASSET_PATTERN = /\.(?:avif|css|gif|ico|jpeg|jpg|js|json|map|mjs|mp4|png|svg|ttf|txt|webp|woff2?|xml)$/i
 
-function buildCacheControl(scope: Extract<CacheScope, 'public' | 'private'>, ttl: number, staleWhileRevalidate?: number): string {
-  const visibility = scope === 'private' ? 'private' : 'public'
-  const directives = [`${visibility}, max-age=${ttl}`]
+function buildCacheControl(scope: 'public', ttl: number, staleWhileRevalidate?: number): string {
+  const directives = [`${scope}, max-age=${ttl}`]
 
   if (staleWhileRevalidate) {
     directives.push(`stale-while-revalidate=${staleWhileRevalidate}`)
@@ -78,6 +83,8 @@ function isPublicDocumentPath(pathname: string): boolean {
   return lastSegment === '' || !lastSegment.includes('.') || lastSegment.endsWith('.html')
 }
 
+// D-14：hashValue 函数体保留（静态资源 URL 分片等后续用途），调用点已随 private scope 清理删除。
+// eslint-disable-next-line unused-imports/no-unused-vars -- reserved for future static-asset hashing
 function hashValue(value: string): string {
   let hash = 2166136261
 
@@ -89,6 +96,9 @@ function hashValue(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
+// D-12 后保留：mergeVaryHeader 函数体保留（未来静态资源 `Vary: Accept-Encoding` 可能复用），
+// decorateResponse 内的 `Vary: Cookie` 调用随 private scope 清理删除。
+// eslint-disable-next-line unused-imports/no-unused-vars -- reserved for future Vary header merging
 function mergeVaryHeader(headers: Headers, value: string): void {
   const current = headers.get('Vary')
   if (!current) {
@@ -125,6 +135,7 @@ function resolveBasePolicy(url: URL): CachePolicy {
       group: pathname.startsWith('/dashboard') ? 'admin' : 'auth',
       cacheControl: 'no-store',
       shouldStore: false,
+      bypassReason: 'no-store-path',
     }
   }
 
@@ -139,23 +150,13 @@ function resolveBasePolicy(url: URL): CachePolicy {
     }
   }
 
-  if (PRIVATE_CACHE_PREFIXES.some(prefix => pathname.startsWith(prefix))) {
-    return {
-      scope: 'private',
-      group: 'favorites',
-      ttl: 60,
-      staleWhileRevalidate: 30,
-      cacheControl: buildCacheControl('private', 60, 30),
-      shouldStore: true,
-    }
-  }
-
   if (pathname.startsWith('/api')) {
     return {
       scope: 'bypass',
       group: 'api',
       cacheControl: 'no-store',
       shouldStore: false,
+      bypassReason: 'non-cacheable-group',
     }
   }
 
@@ -173,6 +174,7 @@ function resolveBasePolicy(url: URL): CachePolicy {
     scope: 'bypass',
     group: 'misc',
     shouldStore: false,
+    bypassReason: 'non-cacheable-group',
   }
 }
 
@@ -180,17 +182,35 @@ export function resolveCachePolicy(request: Request, options?: CacheOptions): Ca
   const url = new URL(request.url)
   const basePolicy = resolveBasePolicy(url)
 
+  // D-07：带 Cookie 或 Authorization 的请求强制 bypass，覆盖路径 policy
+  const hasAuthHeaders = request.headers.has('cookie') || request.headers.has('authorization')
+
   const ttl = options?.ttl ?? basePolicy.ttl
-  const shouldStore = !options?.bypassCache && basePolicy.shouldStore
+  const shouldStore = !options?.bypassCache && !hasAuthHeaders && basePolicy.shouldStore
   const scope: CacheScope = shouldStore ? basePolicy.scope : 'bypass'
+
+  // 计算 bypassReason：auth-headers > options.bypassCache > basePolicy.bypassReason
+  let bypassReason: CacheBypassReason | undefined
+  if (!shouldStore) {
+    if (hasAuthHeaders) {
+      bypassReason = 'auth-headers'
+    }
+    else if (options?.bypassCache) {
+      bypassReason = 'cache-bypass-option'
+    }
+    else {
+      bypassReason = basePolicy.bypassReason
+    }
+  }
 
   return {
     ...basePolicy,
     scope,
     ttl,
     shouldStore,
-    cacheControl: ttl && (basePolicy.scope === 'public' || basePolicy.scope === 'private')
-      ? buildCacheControl(basePolicy.scope, ttl, basePolicy.staleWhileRevalidate)
+    bypassReason,
+    cacheControl: ttl && basePolicy.scope === 'public' && shouldStore
+      ? buildCacheControl('public', ttl, basePolicy.staleWhileRevalidate)
       : basePolicy.cacheControl,
   }
 }
@@ -205,14 +225,12 @@ function createCacheKey(url: URL, headers: Headers, policy: CachePolicy, options
     : `${url.pathname}${url.search}`
 
   const encodedKey = encodeURIComponent(rawKey)
-  const userScope = policy.scope === 'private'
-    ? `${hashValue(headers.get('cookie') || 'anonymous')}:`
-    : ''
 
-  return `${GATEWAY_CACHE_PREFIX}:${policy.group}:${policy.scope}:${userScope}${encodedKey}`
+  return `${GATEWAY_CACHE_PREFIX}:${policy.group}:${policy.scope}:${encodedKey}`
 }
 
 function shouldCacheResponse(response: Response): boolean {
+  // D-09 防线：即便 D-07 未来被改坏，带 Set-Cookie 的响应也绝不写入 KV。
   if (!response.ok || response.headers.has('set-cookie')) {
     return false
   }
@@ -355,8 +373,9 @@ function decorateResponse(
     headers.set('Cache-Control', policy.cacheControl)
   }
 
-  if (policy.scope === 'private') {
-    mergeVaryHeader(headers, 'Cookie')
+  // D-10：BYPASS 时注入 X-Cache-Reason 诊断头
+  if (cacheStatus === 'BYPASS' && policy.bypassReason) {
+    headers.set(CACHE_REASON_HEADER, policy.bypassReason)
   }
 
   if (ageSeconds !== undefined) {
@@ -413,8 +432,12 @@ export function createCachedProxy(
     }
 
     const cacheStatus: 'BYPASS' | 'MISS' = storable ? 'MISS' : 'BYPASS'
-    const decoratedResponse = decorateResponse(response, policy, cacheStatus)
-    logCacheEvent(request, decoratedResponse, policy, cacheStatus, startedAt)
+    // W3：Set-Cookie 响应被 D-09 拦截时，透传 bypassReason='set-cookie-response' 以便排障
+    const finalPolicy: CachePolicy = !storable && response.headers.has('set-cookie') && !policy.bypassReason
+      ? { ...policy, scope: 'bypass', shouldStore: false, bypassReason: 'set-cookie-response' }
+      : policy
+    const decoratedResponse = decorateResponse(response, finalPolicy, cacheStatus)
+    logCacheEvent(request, decoratedResponse, finalPolicy, cacheStatus, startedAt)
     return decoratedResponse
   }
 }

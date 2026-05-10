@@ -65,46 +65,6 @@ describe('gateway cache middleware', () => {
     expect(calls).toBe(1)
   })
 
-  it('isolates favorites cache per user cookie', async () => {
-    const { kv } = createMockKv()
-    let calls = 0
-
-    const cachedProxy = createCachedProxy(kv, async (request) => {
-      calls += 1
-      return Response.json({
-        calls,
-        cookie: request.headers.get('cookie'),
-      })
-    })
-
-    const firstUserRequest = new Request('https://starye.org/api/favorites?page=1', {
-      headers: {
-        cookie: 'session=user-a',
-      },
-    })
-    const secondUserRequest = new Request('https://starye.org/api/favorites?page=1', {
-      headers: {
-        cookie: 'session=user-b',
-      },
-    })
-
-    const firstMiss = await cachedProxy(firstUserRequest, 'https://api.starye.org')
-    expect(firstMiss.headers.get('X-Cache-Status')).toBe('MISS')
-    expect(firstMiss.headers.get('Cache-Control')).toContain('private')
-    expect(firstMiss.headers.get('Vary')).toContain('Cookie')
-
-    const secondMiss = await cachedProxy(secondUserRequest, 'https://api.starye.org')
-    expect(secondMiss.headers.get('X-Cache-Status')).toBe('MISS')
-
-    const firstHit = await cachedProxy(firstUserRequest, 'https://api.starye.org')
-    expect(firstHit.headers.get('X-Cache-Status')).toBe('HIT')
-    expect(await firstHit.json()).toEqual({
-      calls: 1,
-      cookie: 'session=user-a',
-    })
-    expect(calls).toBe(2)
-  })
-
   it('applies immutable cache headers to static assets without KV storage', async () => {
     const { kv } = createMockKv()
 
@@ -151,12 +111,13 @@ describe('gateway cache middleware', () => {
     const { kv, store } = createMockKv()
 
     store.set('gateway-cache:v2:movies:public:%2Fapi%2Fmovies', 'movie-cache')
-    store.set('gateway-cache:v2:favorites:private:abc:%2Fapi%2Ffavorites', 'favorite-cache')
+    store.set('gateway-cache:v2:movies:public:%2Fapi%2Fmovies%3Fpage%3D2', 'movie-cache-page-2')
+    store.set('gateway-cache:v2:public-pages:bypass:%2Fblog%2Findex.html', 'page-cache')
 
     const deleted = await invalidateCache(kv, 'gateway-cache:v2:movies:')
 
-    expect(deleted).toBe(1)
-    expect([...store.keys()]).toEqual(['gateway-cache:v2:favorites:private:abc:%2Fapi%2Ffavorites'])
+    expect(deleted).toBe(2)
+    expect([...store.keys()]).toEqual(['gateway-cache:v2:public-pages:bypass:%2Fblog%2Findex.html'])
   })
 
   // ─── D-11 Nyquist 采样骨架（Plan 02 填断言）─────────────────────────────────
@@ -165,15 +126,87 @@ describe('gateway cache middleware', () => {
   /* eslint-disable test/prefer-lowercase-title -- D-11 matrix identifier must remain uppercase for traceability */
 
   // D-11 #1: baseline regression — 无头 public group 仍走 MISS→HIT（Plan 02 实现后激活）
-  it.todo('D-11 #1: caches /api/movies on public group when no auth headers present (MISS then HIT)')
+  it('D-11 #1: caches /api/movies on public group when no auth headers present (MISS then HIT)', async () => {
+    const { kv } = createMockKv()
+    let calls = 0
+    const cachedProxy = createCachedProxy(kv, async () => {
+      calls += 1
+      return Response.json({ calls })
+    })
+    const request = new Request('https://starye.org/api/movies')
+
+    const miss = await cachedProxy(request, 'https://api.starye.org')
+    expect(miss.headers.get('X-Cache-Status')).toBe('MISS')
+    const hit = await cachedProxy(request, 'https://api.starye.org')
+    expect(hit.headers.get('X-Cache-Status')).toBe('HIT')
+    expect(calls).toBe(1)
+  })
 
   // D-11 #2: AUTH-07 — 带 session cookie → BYPASS + X-Cache-Reason
-  it.todo('D-11 #2: bypasses KV on /api/movies when request has Cookie header (BYPASS, X-Cache-Reason=auth-headers)')
+  it('D-11 #2: bypasses KV on /api/movies when request has Cookie header (BYPASS, X-Cache-Reason=auth-headers)', async () => {
+    const { kv } = createMockKv()
+    let calls = 0
+    const cachedProxy = createCachedProxy(kv, async () => {
+      calls += 1
+      return Response.json({ calls })
+    })
+    const request = new Request('https://starye.org/api/movies', {
+      headers: { cookie: 'starye.session_token=xxx' },
+    })
+
+    const r1 = await cachedProxy(request, 'https://api.starye.org')
+    expect(r1.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(r1.headers.get('X-Cache-Reason')).toBe('auth-headers')
+
+    const r2 = await cachedProxy(request, 'https://api.starye.org')
+    expect(r2.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(calls).toBe(2) // 不写 KV → 每次都穿透
+  })
 
   // D-11 #3: AUTH-07 — 带 Authorization → BYPASS + X-Cache-Reason
-  it.todo('D-11 #3: bypasses KV on /api/movies when request has Authorization header (BYPASS, X-Cache-Reason=auth-headers)')
+  it('D-11 #3: bypasses KV on /api/movies when request has Authorization header (BYPASS, X-Cache-Reason=auth-headers)', async () => {
+    const { kv } = createMockKv()
+    let calls = 0
+    const cachedProxy = createCachedProxy(kv, async () => {
+      calls += 1
+      return Response.json({ calls })
+    })
+    const request = new Request('https://starye.org/api/movies', {
+      headers: { authorization: 'Bearer xxx' },
+    })
+
+    const r1 = await cachedProxy(request, 'https://api.starye.org')
+    expect(r1.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(r1.headers.get('X-Cache-Reason')).toBe('auth-headers')
+
+    // 二次调用：确保不走 KV 缓存（calls 必须递增）
+    await cachedProxy(request, 'https://api.starye.org')
+    expect(calls).toBe(2)
+  })
 
   // D-11 #4: AUTH-06 — /api/auth/* 无论头都 BYPASS（NO_STORE_PREFIXES 独立命中）
-  it.todo('D-11 #4: bypasses /api/auth/get-session regardless of request headers')
+  it('D-11 #4: bypasses /api/auth/get-session regardless of request headers', async () => {
+    const { kv } = createMockKv()
+    const cachedProxy = createCachedProxy(kv, async () =>
+      Response.json({ session: null }))
+
+    // 无 cookie — NO_STORE_PREFIXES 命中
+    const noCookie = await cachedProxy(
+      new Request('https://starye.org/api/auth/get-session'),
+      'https://api.starye.org',
+    )
+    expect(noCookie.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(noCookie.headers.get('X-Cache-Reason')).toBe('no-store-path')
+
+    // 带 cookie — auth-headers 优先级高于 no-store-path
+    const withCookie = await cachedProxy(
+      new Request('https://starye.org/api/auth/get-session', {
+        headers: { cookie: 'starye.session_token=xxx' },
+      }),
+      'https://api.starye.org',
+    )
+    expect(withCookie.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(withCookie.headers.get('X-Cache-Reason')).toBe('auth-headers')
+  })
   /* eslint-enable test/prefer-lowercase-title */
 })

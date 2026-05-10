@@ -74,50 +74,7 @@ describe('gateway cache consistency e2e', () => {
     expect(await freshResponse.json()).toEqual({ version: 2 })
   })
 
-  it('clears all user-scoped favorites caches so the next request reflects the latest state', async () => {
-    const { kv } = createMockKv()
-    const counters = {
-      a: 0,
-      b: 0,
-    }
-
-    const cachedProxy = createCachedProxy(kv, async (request) => {
-      const cookie = request.headers.get('cookie') || ''
-      const user = cookie.includes('user-b') ? 'b' : 'a'
-      counters[user] += 1
-
-      return Response.json({
-        user,
-        version: counters[user],
-      })
-    })
-
-    const requestA = new Request('https://starye.org/api/favorites?page=1', {
-      headers: {
-        cookie: 'session=user-a',
-      },
-    })
-    const requestB = new Request('https://starye.org/api/favorites?page=1', {
-      headers: {
-        cookie: 'session=user-b',
-      },
-    })
-
-    await cachedProxy(requestA, 'https://api.starye.org')
-    await cachedProxy(requestB, 'https://api.starye.org')
-
-    const cachedA = await cachedProxy(requestA, 'https://api.starye.org')
-    const cachedB = await cachedProxy(requestB, 'https://api.starye.org')
-    expect(cachedA.headers.get('X-Cache-Status')).toBe('HIT')
-    expect(cachedB.headers.get('X-Cache-Status')).toBe('HIT')
-
-    await expect(clearGatewayCacheGroup(kv, 'favorites')).resolves.toBe(2)
-
-    const refreshedA = await cachedProxy(requestA, 'https://api.starye.org')
-    const refreshedB = await cachedProxy(requestB, 'https://api.starye.org')
-    expect(refreshedA.headers.get('X-Cache-Status')).toBe('MISS')
-    expect(refreshedB.headers.get('X-Cache-Status')).toBe('MISS')
-    expect(await refreshedA.json()).toEqual({ user: 'a', version: 2 })
-    expect(await refreshedB.json()).toEqual({ user: 'b', version: 2 })
-  })
+  // D-12：原 "clears all user-scoped favorites caches" 用例已删除。
+  // 原测试依赖 private scope + userScope hash 切片，D-07 之后带 cookie 请求一律 bypass，
+  // favorites scope 永远走不到；该测试的前提条件已被消除。
 })
