@@ -15,7 +15,7 @@
     "@starye/locales": "workspace:*",
     "@starye/ui": "workspace:*",
     "@vueuse/core": "^14.2.1",
-    "better-auth": "^1.6.2",
+    "better-auth": "^1.6.10",
     "lucide-vue-next": "^1.0.0",
     "nuxt": "^4.4.2",
     "vue": "^3.5.32",
