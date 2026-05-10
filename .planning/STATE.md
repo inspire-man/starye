@@ -1,3 +1,16 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: Pending
+last_updated: "2026-05-10T16:35:59.339Z"
+progress:
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
 # Project State: Starye — 个人内容中台
 
 **Last updated:** 2026-05-11
@@ -11,6 +24,7 @@
 **Current Milestone:** v1 — "部署可用、日常使用态"
 
 **Project Docs:**
+
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
 - `.planning/REQUIREMENTS.md` — 45 v1 requirements across 7 categories
 - `.planning/ROADMAP.md` — 5-phase roadmap, 100% v1 coverage
@@ -25,6 +39,7 @@
 **Progress:** `[          ] 0/5 phases complete`
 
 **Phase 1 Summary:**
+
 - Goal: 5 端统一会话 + gateway 缓存不泄漏
 - Requirements: AUTH-01..08 (8 items)
 - Success criteria: 5 observable outcomes (session 跨端持久、登出立即生效、带 Cookie 请求绕缓存、`/api/auth/*` 不落缓存、Better Auth 升至 1.6.10)
@@ -65,11 +80,13 @@ None.
 ## Session Continuity
 
 **Next recommended action:**
+
 ```
 /gsd-plan-phase 1
 ```
 
 **If interrupted, resume by:**
+
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/ROADMAP.md` Phase 1 section
 3. Check if any files under `.planning/phases/phase-1/` exist
