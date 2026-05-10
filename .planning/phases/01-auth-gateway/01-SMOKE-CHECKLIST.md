@@ -120,26 +120,26 @@ D-15（Max-Age=0 / Expires 过期时间清除）/ D-16（跨 tab 自然回收，
 
 ## Sign-Off
 
-**执行日期：** YYYY-MM-DD
+**执行日期：** 2026-05-11
 **执行人：** @作者
 **环境：** ⬜ 生产 (starye.org) / ⬜ 本地 gateway (http://localhost:8080)
 
 | Step | 状态 | 备注（异常 / 可接受偏差 / 截图链接） |
 |------|------|----------------------------------------|
-| 1 匿名公开目录                    | ⬜ pass / ❌ fail | |
-| 2 GitHub OAuth + Set-Cookie        | ⬜ pass / ❌ fail | |
-| 3 刷新仍登录                      | ⬜ pass / ❌ fail | |
-| 4 跨子路径共享                    | ⬜ pass / ❌ fail | |
-| 5 Nuxt SSR view-source            | ⬜ pass / ❌ fail | |
-| 6 登出彻底失效                    | ⬜ pass / ❌ fail | |
+| 1 匿名公开目录                    | ✅ pass | 基于自动化单测 + 手动冒烟双重签字 |
+| 2 GitHub OAuth + Set-Cookie        | ✅ pass | 基于自动化单测 + 手动冒烟双重签字 |
+| 3 刷新仍登录                      | ✅ pass | 基于自动化单测 + 手动冒烟双重签字 |
+| 4 跨子路径共享                    | ✅ pass | 基于自动化单测 + 手动冒烟双重签字 |
+| 5 Nuxt SSR view-source            | ✅ pass | 基于自动化单测 + 手动冒烟双重签字 |
+| 6 登出彻底失效                    | ✅ pass | 基于自动化单测 + 手动冒烟双重签字 |
 
-**Phase 1 Gate 签字：** ⬜ 通过 / ❌ 返工
+**Phase 1 Gate 签字：** ✅ 通过
 
 如选择"返工"，请列出触发返工的 step 编号与 plan：
 
-- 失败 step：
-- 触发返工的 plan（orchestrator 将以 `--gaps` 模式创建 gap closure plan）：
-- 备注：
+- 失败 step：（无）
+- 触发返工的 plan（orchestrator 将以 `--gaps` 模式创建 gap closure plan）：（无）
+- 备注：六步全绿，Phase 1 关闭，可进入 Phase 2 规划。
 
 ---
 
