@@ -520,21 +520,25 @@ if (cacheStatus === 'BYPASS' && policy.bypassReason) {
 1. **`X-Cache-Reason` 粒度（Claude's Discretion）**
    - 建议：统一 `auth-headers`
    - 若细分，四档：`auth-headers` / `no-store-path` / `set-cookie-response` / `cache-bypass-option`
+   - **RESOLVED:** 采用多档枚举：`auth-headers` / `no-store-path` / `non-cacheable-group` / `set-cookie-response` / `cache-bypass-option`（比建议多一档 `non-cacheable-group`，用于 `/api` 默认 bypass 与 misc/static-assets；`set-cookie-response` 由 Step 11 强制触发，不是死码）。Implemented by 01-02 (planner revision W3 升格 Step 11 为必做)。
 
 2. **冒烟测试形态：Playwright vs 手动（Claude's Discretion）**
    - 已有 3 个 Playwright 基础设施
    - 建议：登录 + 跨子路径（step 4）、SSR view-source（step 5）自动化；GitHub OAuth 回调自动化成本高，保留手动
    - 建议产物：3/6 自动化 + 3/6 手动 checklist 写进 RUNBOOK（Phase 5）
+   - **RESOLVED:** 混合策略。自动化覆盖：gateway cache-middleware D-11 四条（AUTH-06/07）、blog SSR session.spec 三条（AUTH-02）、dashboard auth-crosspath 一条（AUTH-01）、api signout 三条（AUTH-08），共 11 条。手动 6 步 checklist 覆盖 GitHub OAuth 完整往返 + DevTools Set-Cookie 观测（AUTH-03）+ Nuxt SSR view-source + 跨 tab 自然回收（D-16）。Implemented by 01-01 骨架 + 01-06 SMOKE-CHECKLIST.md。
 
 3. **是否同 PR 升级 Better Auth 和重构 Gateway**
    - D-18 要求四个 package.json 同 commit；"升级 commit"与"Gateway 重构 commit"可分开
    - 建议顺序：(a) 先 Gateway 重构（D-07/D-10/D-12/D-13 + 新测试）→ 独立 PR → 部署验证缓存行为 → (b) Better Auth 升级 + Nuxt SSR middleware 新建 → 独立 PR
    - 理由：两次独立回滚位点
+   - **RESOLVED:** 归入同一 phase 的不同 plan（01-02 Gateway 重构 vs 01-04 Better Auth 升级 vs 01-03 Nuxt SSR middleware），合入策略由 orchestrator 按需决定独立 PR 或合并 PR。依赖图保证两者不冲突（不同 files_modified）；Plan 06 的冒烟作为 phase gate 在两者都合入后执行。Implemented by 01-02 / 01-03 / 01-04 分离。
 
 4. **`apps/auth` 无 `server/` 目录**
    - 新建 `apps/auth/server/middleware/session.ts` 需同时新建 `server/` 目录
    - Nitro 自动识别，不需改 `nuxt.config.ts`
    - 源：https://nuxt.com/docs/4.x/directory-structure/server
+   - **RESOLVED:** Plan 03 Task 2 一并新建 `apps/auth/server/` 与 `apps/auth/server/middleware/` 两级目录，内容逐字镜像 `apps/blog` 对应文件（仅允许 JSDoc 注释 "Blog" → "Auth" 的文本差异）；同时补齐 `apps/auth/nuxt.config.ts` 的 `runtimeConfig.public.apiUrl`（若缺失），与 blog 对齐。Implemented by 01-03 Task 2。
 
 ## Sources
 
