@@ -7,6 +7,7 @@ import { HTTPException } from 'hono/http-exception'
  *
  * @param requiredRole Single role or array of roles allowed to access.
  *                     'admin' and 'super_admin' are always allowed.
+ *                     ADMIN_GITHUB_ID env var whitelist bypasses role check (D-04).
  */
 export function requireAuth(requiredRole?: string | string[]) {
   return createMiddleware<AppEnv>(async (c, next) => {
@@ -24,6 +25,16 @@ export function requireAuth(requiredRole?: string | string[]) {
     if (requiredRole) {
       const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]
 
+      // D-04：ADMIN_GITHUB_ID 白名单命中即视为 super_admin，覆盖 DB role
+      // 格式：单个 ID（"12345678"）或逗号分隔多个（"12345,67890"）
+      if (user.githubId) {
+        const adminIds = c.env.ADMIN_GITHUB_ID
+        if (adminIds && adminIds.split(',').map((s: string) => s.trim()).includes(String(user.githubId))) {
+          await next()
+          return
+        }
+      }
+
       // Super admin always passes
       if (user.role === 'super_admin' || user.role === 'admin') {
         await next()
@@ -38,3 +49,4 @@ export function requireAuth(requiredRole?: string | string[]) {
     await next()
   })
 }
+

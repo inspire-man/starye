@@ -12,6 +12,7 @@ import { authMiddleware } from './middleware/auth'
 import { corsMiddleware } from './middleware/cors'
 import { databaseMiddleware } from './middleware/database'
 import { errorHandler } from './middleware/error-handler'
+import { requireAuth } from './middleware/guard'
 import { actorsRoutes } from './routes/actors'
 import adminMainRoutes from './routes/admin/main'
 import aria2Routes from './routes/aria2'
@@ -80,6 +81,7 @@ const routes = app
   // OpenAPI 文档
   .get(
     '/api/openapi.json',
+    requireAuth(['admin', 'super_admin']),
     openAPIRouteHandler(app, {
       documentation: {
         openapi: '3.0.0',
@@ -169,6 +171,7 @@ Starye 是一个现代化的内容聚合平台，支持漫画、电影和演员�
   // Scalar UI 文档页面
   .get(
     '/api/docs',
+    requireAuth(['admin', 'super_admin']),
     Scalar({
       url: '/api/openapi.json',
       theme: 'moon',

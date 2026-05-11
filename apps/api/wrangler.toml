@@ -11,6 +11,9 @@ compatibility_flags = [ "nodejs_compat" ]
 WEB_URL = "https://starye.org"
 ADMIN_URL = "https://dashboard.starye.org"
 # R2_PUBLIC_URL = "https://cdn.starye.org" # 配置 R2 public bucket 的 CDN 域名
+# ADMIN_GITHUB_ID 通过 wrangler secret put 注入，不在此明文配置
+# 本地开发：在 apps/api/.dev.vars 中设置 ADMIN_GITHUB_ID=<your_github_id>
+# 格式：单个 ID（"12345678"）或逗号分隔多个（"12345,67890"）
 
 # D1 Database Binding
 [[d1_databases]]
