@@ -49,10 +49,10 @@
   5. 生产环境 `/api/docs` 需鉴权才能访问；`/api/auth/sign-in` 被 Cloudflare WAF 规则限制 10 req/min/IP
 **Plans**: 6 plans across 3 waves
   - [x] 02-01-PLAN.md — Wave 1 地基：Better Auth additionalFields 注入 githubId + SessionUser 类型扩展（ACCESS-02/03）
-  - [ ] 02-02-PLAN.md — Wave 2：API requireAuth 白名单短路 + /api/docs 鉴权保护（ACCESS-02/03/PUBSEC-04）
-  - [ ] 02-03-PLAN.md — Wave 2：Gateway dashboard-guard + /robots.txt + X-Robots-Tag（ACCESS-01/02/PUBSEC-01/02）
-  - [ ] 02-04-PLAN.md — Wave 2：adult-filter service + public routes 统一调用 + search bug 修复（ACCESS-04/06/07）
-  - [ ] 02-05-PLAN.md — Wave 2：useAuthGuard composable + 收藏按钮拦截 + login.vue next 参数（ACCESS-04/05）
+  - [x] 02-02-PLAN.md — Wave 2：API requireAuth 白名单短路 + /api/docs 鉴权保护（ACCESS-02/03/PUBSEC-04）
+  - [x] 02-03-PLAN.md — Wave 2：Gateway dashboard-guard + /robots.txt + X-Robots-Tag（ACCESS-01/02/PUBSEC-01/02）
+  - [x] 02-04-PLAN.md — Wave 2：adult-filter service + public routes 统一调用 + search bug 修复（ACCESS-04/06/07）
+  - [x] 02-05-PLAN.md — Wave 2：useAuthGuard composable + 收藏按钮拦截 + login.vue next 参数（ACCESS-04/05）
   - [ ] 02-06-PLAN.md — Wave 3：6 个 Pages _redirects 301 规则 + RUNBOOK WAF 段落（PUBSEC-03/05）
 
 ### Phase 3: movie-app 播放稳定化（R2 直发 + 错误恢复）
