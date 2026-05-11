@@ -48,7 +48,7 @@
   4. `curl https://starye.org/robots.txt` 返回 disallow `/dashboard /auth /api`；`/dashboard/*` 与 `/api/admin/*` 响应带 `X-Robots-Tag: noindex, nofollow`；`*.pages.dev` 直链 301 回 `starye.org/<app>/`
   5. 生产环境 `/api/docs` 需鉴权才能访问；`/api/auth/sign-in` 被 Cloudflare WAF 规则限制 10 req/min/IP
 **Plans**: 6 plans across 3 waves
-  - [ ] 02-01-PLAN.md — Wave 1 地基：Better Auth additionalFields 注入 githubId + SessionUser 类型扩展（ACCESS-02/03）
+  - [x] 02-01-PLAN.md — Wave 1 地基：Better Auth additionalFields 注入 githubId + SessionUser 类型扩展（ACCESS-02/03）
   - [ ] 02-02-PLAN.md — Wave 2：API requireAuth 白名单短路 + /api/docs 鉴权保护（ACCESS-02/03/PUBSEC-04）
   - [ ] 02-03-PLAN.md — Wave 2：Gateway dashboard-guard + /robots.txt + X-Robots-Tag（ACCESS-01/02/PUBSEC-01/02）
   - [ ] 02-04-PLAN.md — Wave 2：adult-filter service + public routes 统一调用 + search bug 修复（ACCESS-04/06/07）
