@@ -13,6 +13,8 @@ const isPending = computed(() => sessionData.value?.isPending || false)
 // 错误信息处理
 const error = computed(() => {
   const err = route.query.error as string
+  if (err === 'not_admin')
+    return '此账号没有管理员权限。' // D-05 新增
   if (err === 'insufficient_permissions')
     return '权限不足：需要管理员身份。'
   return err
@@ -20,9 +22,18 @@ const error = computed(() => {
 
 // 获取回跳地址
 const redirectPath = computed(() => {
-  const path = route.query.redirect as string || '/'
-  // 确保路径以 / 开头，或者是一个完整的 URL
-  return path.startsWith('http') ? path : (path.startsWith('/') ? path : `/${path}`)
+  // 同时支持 next（Phase 2 新增）和 redirect（向后兼容 dashboard router.beforeEach）
+  const raw = (route.query.next || route.query.redirect) as string || '/'
+  // 同源校验：防止 open redirect（D-14）
+  try {
+    const target = new URL(raw, window.location.origin)
+    if (target.origin !== window.location.origin)
+      return '/'
+  }
+  catch {
+    return '/'
+  }
+  return raw.startsWith('/') ? raw : `/${raw}`
 })
 
 // 核心逻辑：如果已经有 Session 且没有权限错误，则执行跳转
