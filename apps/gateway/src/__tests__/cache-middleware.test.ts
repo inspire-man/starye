@@ -157,6 +157,11 @@ describe('gateway cache middleware', () => {
     const r1 = await cachedProxy(request, 'https://api.starye.org')
     expect(r1.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(r1.headers.get('X-Cache-Reason')).toBe('auth-headers')
+    // CR-01：public 基线翻 bypass 时必须降级 Cache-Control，禁止泄漏 public 指令给共享缓存
+    expect(r1.headers.get('Cache-Control')).not.toContain('public')
+    expect(r1.headers.get('Cache-Control')).toContain('no-store')
+    // WR-02：BYPASS 响应不得下发 X-Cache-TTL，避免监控面板误报
+    expect(r1.headers.get('X-Cache-TTL')).toBeNull()
 
     const r2 = await cachedProxy(request, 'https://api.starye.org')
     expect(r2.headers.get('X-Cache-Status')).toBe('BYPASS')
@@ -178,6 +183,11 @@ describe('gateway cache middleware', () => {
     const r1 = await cachedProxy(request, 'https://api.starye.org')
     expect(r1.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(r1.headers.get('X-Cache-Reason')).toBe('auth-headers')
+    // CR-01：public 基线翻 bypass 时必须降级 Cache-Control，禁止泄漏 public 指令给共享缓存
+    expect(r1.headers.get('Cache-Control')).not.toContain('public')
+    expect(r1.headers.get('Cache-Control')).toContain('no-store')
+    // WR-02：BYPASS 响应不得下发 X-Cache-TTL，避免监控面板误报
+    expect(r1.headers.get('X-Cache-TTL')).toBeNull()
 
     // 二次调用：确保不走 KV 缓存（calls 必须递增）
     await cachedProxy(request, 'https://api.starye.org')
@@ -197,6 +207,8 @@ describe('gateway cache middleware', () => {
     )
     expect(noCookie.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(noCookie.headers.get('X-Cache-Reason')).toBe('no-store-path')
+    // CR-01/NO_STORE 基线：no-store 必须原样下发，不得含 public
+    expect(noCookie.headers.get('Cache-Control')).toBe('no-store')
 
     // 带 cookie — auth-headers 优先级高于 no-store-path
     const withCookie = await cachedProxy(
@@ -207,6 +219,27 @@ describe('gateway cache middleware', () => {
     )
     expect(withCookie.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(withCookie.headers.get('X-Cache-Reason')).toBe('auth-headers')
+    expect(withCookie.headers.get('Cache-Control')).not.toContain('public')
+  })
+
+  // D-11 #5: CR-02 — Set-Cookie 响应下发 private, no-store，不泄漏 public Cache-Control
+  it('D-11 #5: Set-Cookie 响应下发 private, no-store 不下发 public Cache-Control', async () => {
+    const { kv } = createMockKv()
+    const cachedProxy = createCachedProxy(kv, async () =>
+      new Response(JSON.stringify({ user: 'ok' }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'set-cookie': 'starye.session_token=xxx; Path=/; HttpOnly',
+        },
+      }))
+    const request = new Request('https://starye.org/api/movies')
+    const r = await cachedProxy(request, 'https://api.starye.org')
+    expect(r.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(r.headers.get('X-Cache-Reason')).toBe('set-cookie-response')
+    expect(r.headers.get('Cache-Control')).not.toContain('public')
+    expect(r.headers.get('Cache-Control')).toContain('no-store')
+    expect(r.headers.get('X-Cache-TTL')).toBeNull()
   })
   /* eslint-enable test/prefer-lowercase-title */
 })
