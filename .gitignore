@@ -99,3 +99,6 @@ test-*.txt
 test-results*
 
 playwright-report/
+
+# Claude Code worktrees (local only, never tracked)
+.claude/worktrees/*
