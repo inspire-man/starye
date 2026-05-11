@@ -167,6 +167,7 @@ function resolveBasePolicy(url: URL): CachePolicy {
       ttl: 3600,
       cacheControl: buildCacheControl('public', 3600, 300),
       shouldStore: false,
+      bypassReason: 'non-cacheable-group',
     }
   }
 
@@ -209,9 +210,12 @@ export function resolveCachePolicy(request: Request, options?: CacheOptions): Ca
     ttl,
     shouldStore,
     bypassReason,
+    // CR-01: public 基线翻 bypass 时必须降级 Cache-Control，否则共享缓存投毒
     cacheControl: ttl && basePolicy.scope === 'public' && shouldStore
       ? buildCacheControl('public', ttl, basePolicy.staleWhileRevalidate)
-      : basePolicy.cacheControl,
+      : (!shouldStore && basePolicy.scope === 'public'
+          ? 'private, no-store'
+          : basePolicy.cacheControl),
   }
 }
 
@@ -365,7 +369,7 @@ function decorateResponse(
   headers.set(CACHE_GROUP_HEADER, policy.group)
   headers.set(CACHE_POLICY_HEADER, policy.scope)
 
-  if (policy.ttl) {
+  if (policy.ttl && cacheStatus !== 'BYPASS') {
     headers.set(CACHE_TTL_HEADER, `${policy.ttl}`)
   }
 
@@ -432,9 +436,16 @@ export function createCachedProxy(
     }
 
     const cacheStatus: 'BYPASS' | 'MISS' = storable ? 'MISS' : 'BYPASS'
-    // W3：Set-Cookie 响应被 D-09 拦截时，透传 bypassReason='set-cookie-response' 以便排障
-    const finalPolicy: CachePolicy = !storable && response.headers.has('set-cookie') && !policy.bypassReason
-      ? { ...policy, scope: 'bypass', shouldStore: false, bypassReason: 'set-cookie-response' }
+    // CR-02：Set-Cookie 响应必须降级为 private, no-store，防止上游共享缓存投毒。
+    // bypassReason 保留原值（例如 auth-headers）优先，仅在缺省时补 'set-cookie-response'。
+    const finalPolicy: CachePolicy = !storable && response.headers.has('set-cookie')
+      ? {
+          ...policy,
+          scope: 'bypass' as const,
+          shouldStore: false,
+          cacheControl: 'private, no-store',
+          bypassReason: policy.bypassReason ?? 'set-cookie-response',
+        }
       : policy
     const decoratedResponse = decorateResponse(response, finalPolicy, cacheStatus)
     logCacheEvent(request, decoratedResponse, finalPolicy, cacheStatus, startedAt)
