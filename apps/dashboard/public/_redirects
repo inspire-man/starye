@@ -1,3 +1,6 @@
+# *.pages.dev 直链 301 回 starye.org（必须在 SPA fallback 之前）（D-16）
+https://starye-dashboard.pages.dev/* https://starye.org/dashboard/:splat 301!
+
 # SPA fallback for Vue Router
 # 重定向所有非静态文件请求到 index.html
 /* /index.html 200

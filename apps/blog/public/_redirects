@@ -1,2 +1,5 @@
+# *.pages.dev 直链 301 回 starye.org（必须在 SPA fallback 之前）（D-16）
+https://starye-blog.pages.dev/* https://starye.org/blog/:splat 301!
+
 /blog/* /blog/index.html 200
 

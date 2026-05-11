@@ -1,2 +1,5 @@
+# *.pages.dev 直链 301 回 starye.org（必须在 SPA fallback 之前）（D-16）
+https://starye-comic.pages.dev/* https://starye.org/comic/:splat 301!
+
 # SPA fallback - 所有非文件请求都返回 index.html
 /* /index.html 200
