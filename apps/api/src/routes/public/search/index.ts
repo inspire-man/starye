@@ -1,7 +1,8 @@
 import type { AppEnv } from '../../../types'
 import { actors, movies, publishers } from '@starye/db/schema'
-import { eq, like, or } from 'drizzle-orm'
+import { and, eq, like, or } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { buildAdultVisibilityCondition } from '../../../services/adult-filter'
 
 export const publicSearchRoutes = new Hono<AppEnv>()
   /**
@@ -29,9 +30,12 @@ export const publicSearchRoutes = new Hono<AppEnv>()
 
     try {
       if (typeList.includes('movie')) {
-        // R18 过滤：未验证用户只看非 R18 内容
-        const r18Filter = user?.isR18Verified ? undefined : eq(movies.isR18, false)
-        // 非 R18 用户：精确番号匹配 + 非R18条件，或模糊标题匹配 + 非R18条件
+        // R18 过滤：在 WHERE 层过滤，修复原应用层 filter bug（ACCESS-07）
+        const adultCond = buildAdultVisibilityCondition(user, movies)
+        const searchCond = or(
+          eq(movies.code, keyword),
+          like(movies.title, `%${keyword}%`),
+        )
         results.movies = await db
           .select({
             id: movies.id,
@@ -42,25 +46,8 @@ export const publicSearchRoutes = new Hono<AppEnv>()
             isR18: movies.isR18,
           })
           .from(movies)
-          .where(
-            r18Filter
-              ? or(
-                  // 精确番号匹配
-                  eq(movies.code, keyword),
-                  // 标题模糊搜索（仅非 R18）
-                  like(movies.title, `%${keyword}%`),
-                )
-              : or(
-                  eq(movies.code, keyword),
-                  like(movies.title, `%${keyword}%`),
-                ),
-          )
+          .where(adultCond ? and(adultCond, searchCond) : searchCond)
           .limit(limitNum) as typeof results.movies
-
-        // 若有 R18 过滤则在应用层过滤
-        if (r18Filter && results.movies) {
-          results.movies = results.movies.filter(m => !m.isR18)
-        }
       }
 
       if (typeList.includes('actor')) {

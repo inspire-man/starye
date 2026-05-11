@@ -6,6 +6,7 @@ import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { ChapterDetailSchema, ComicDetailSchema, ComicsListDataSchema, GetChapterParamSchema, GetComicParamSchema, GetComicsQuerySchema } from '../../../schemas/comic'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
+import { buildAdultVisibilityCondition } from '../../../services/adult-filter'
 
 /**
  * 公开漫画路由 — 使用方法链以支持 Hono RPC 类型推导
@@ -54,9 +55,9 @@ export const publicComicsRoutes = new Hono<AppEnv>()
         const conditions: SQL[] = []
 
         // R18 内容过滤
-        if (!user?.isR18Verified) {
-          conditions.push(eq(comics.isR18, false))
-        }
+        const adultCond = buildAdultVisibilityCondition(user, comics)
+        if (adultCond)
+          conditions.push(adultCond)
 
         // 分类筛选
         if (category) {

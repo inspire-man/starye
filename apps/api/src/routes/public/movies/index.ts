@@ -7,6 +7,7 @@ import { describeRoute, resolver, validator } from 'hono-openapi'
 import * as v from 'valibot'
 import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MovieItemSchema, MoviesListDataSchema } from '../../../schemas/movie'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
+import { buildAdultVisibilityCondition } from '../../../services/adult-filter'
 
 /**
  * 公开影片路由 — 使用方法链以支持 Hono RPC 类型推导
@@ -51,9 +52,9 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
       try {
         const conditions: SQL[] = []
 
-        if (!user?.isR18Verified) {
-          conditions.push(eq(movies.isR18, false))
-        }
+        const adultCond = buildAdultVisibilityCondition(user, movies)
+        if (adultCond)
+          conditions.push(adultCond)
 
         // 演员筛选 — 通过 movie_actors 关联表 EXISTS 子查询
         if (actor) {
@@ -265,9 +266,9 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
       try {
         const fallBackToHot = async () => {
           const conditions: SQL[] = []
-          if (!user?.isR18Verified) {
-            conditions.push(eq(movies.isR18, false))
-          }
+          const adultCondHot = buildAdultVisibilityCondition(user, movies)
+          if (adultCondHot)
+            conditions.push(adultCondHot)
           const whereClause = conditions.length > 0 ? and(...conditions) : undefined
           const data = await db
             .select()
@@ -332,9 +333,9 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
           .slice(0, 5)
 
         const conditions: SQL[] = [notInArray(movies.code, watchedCodes)]
-        if (!user?.isR18Verified) {
-          conditions.push(eq(movies.isR18, false))
-        }
+        const adultCondRec = buildAdultVisibilityCondition(user, movies)
+        if (adultCondRec)
+          conditions.push(adultCondRec)
 
         let recData: (typeof movies.$inferSelect)[] = []
         if (topGenres.length > 0 || topActorIds.length > 0) {
@@ -370,9 +371,9 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
         if (finalData.length < 12) {
           const currentIds = finalData.map(m => m.id)
           const fillConditions: SQL[] = []
-          if (!user?.isR18Verified) {
-            fillConditions.push(eq(movies.isR18, false))
-          }
+          const adultCondFill = buildAdultVisibilityCondition(user, movies)
+          if (adultCondFill)
+            fillConditions.push(adultCondFill)
           if (currentIds.length > 0) {
             fillConditions.push(notInArray(movies.id, currentIds))
           }
@@ -506,9 +507,9 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
               inArray(movieActors.actorId, actorIds),
               ne(movies.id, movie.id),
             ]
-            if (!user?.isR18Verified) {
-              actorConditions.push(eq(movies.isR18, false))
-            }
+            const adultCondActor = buildAdultVisibilityCondition(user, movies)
+            if (adultCondActor)
+              actorConditions.push(adultCondActor)
 
             const sharedResult = await db
               .select({
@@ -531,9 +532,9 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
               eq(movies.series, movie.series),
               ne(movies.id, movie.id),
             ]
-            if (!user?.isR18Verified) {
-              seriesConditions.push(eq(movies.isR18, false))
-            }
+            const adultCondSeries = buildAdultVisibilityCondition(user, movies)
+            if (adultCondSeries)
+              seriesConditions.push(adultCondSeries)
 
             const seriesResult = await db
               .select()
@@ -570,9 +571,9 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
                 )`,
                 notInArray(movies.id, existingIds),
               ]
-              if (!user?.isR18Verified) {
-                genreConditions.push(eq(movies.isR18, false))
-              }
+              const adultCondGenre = buildAdultVisibilityCondition(user, movies)
+              if (adultCondGenre)
+                genreConditions.push(adultCondGenre)
 
               try {
                 const genreResult = await db
