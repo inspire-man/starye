@@ -47,7 +47,13 @@
   3. 匿名用户通过 API 的 list / search / recommend 响应中不包含 `is_adult=true` 记录（服务端过滤，非 UI 隐藏）；爬虫入库时已根据源站标签写入 `is_adult`
   4. `curl https://starye.org/robots.txt` 返回 disallow `/dashboard /auth /api`；`/dashboard/*` 与 `/api/admin/*` 响应带 `X-Robots-Tag: noindex, nofollow`；`*.pages.dev` 直链 301 回 `starye.org/<app>/`
   5. 生产环境 `/api/docs` 需鉴权才能访问；`/api/auth/sign-in` 被 Cloudflare WAF 规则限制 10 req/min/IP
-**Plans**: TBD
+**Plans**: 6 plans across 3 waves
+  - [ ] 02-01-PLAN.md — Wave 1 地基：Better Auth additionalFields 注入 githubId + SessionUser 类型扩展（ACCESS-02/03）
+  - [ ] 02-02-PLAN.md — Wave 2：API requireAuth 白名单短路 + /api/docs 鉴权保护（ACCESS-02/03/PUBSEC-04）
+  - [ ] 02-03-PLAN.md — Wave 2：Gateway dashboard-guard + /robots.txt + X-Robots-Tag（ACCESS-01/02/PUBSEC-01/02）
+  - [ ] 02-04-PLAN.md — Wave 2：adult-filter service + public routes 统一调用 + search bug 修复（ACCESS-04/06/07）
+  - [ ] 02-05-PLAN.md — Wave 2：useAuthGuard composable + 收藏按钮拦截 + login.vue next 参数（ACCESS-04/05）
+  - [ ] 02-06-PLAN.md — Wave 3：6 个 Pages _redirects 301 规则 + RUNBOOK WAF 段落（PUBSEC-03/05）
 
 ### Phase 3: movie-app 播放稳定化（R2 直发 + 错误恢复）
 **Goal**: 视频从 `cdn.starye.org` 直接由 R2 + Cloudflare CDN 发出，浏览器拿到原生 Range + Accept-Ranges，Safari/Android 拖进度条不黑屏；`<video>` 异常时用户看到可见错误态 + 重试按钮而非卡死；R18 内容通过短期签名 URL 播放且过期前自动续签不打断观看。
@@ -92,7 +98,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Auth 全链路 + Gateway 缓存安全基线 | 0/6 | Planned | - |
-| 2. Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固 | 0/0 | Not started | - |
+| 2. Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固 | 0/6 | Planned | - |
 | 3. movie-app 播放稳定化（R2 直发 + 错误恢复） | 0/0 | Not started | - |
 | 4. 统一 Progress 表 + 漫画阅读/视频观看进度 | 0/0 | Not started | - |
 | 5. 部署基础盘 + 可观测骨架 + Migration 安全 | 0/0 | Not started | - |
