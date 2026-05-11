@@ -53,7 +53,7 @@
   - [x] 02-03-PLAN.md — Wave 2：Gateway dashboard-guard + /robots.txt + X-Robots-Tag（ACCESS-01/02/PUBSEC-01/02）
   - [x] 02-04-PLAN.md — Wave 2：adult-filter service + public routes 统一调用 + search bug 修复（ACCESS-04/06/07）
   - [x] 02-05-PLAN.md — Wave 2：useAuthGuard composable + 收藏按钮拦截 + login.vue next 参数（ACCESS-04/05）
-  - [ ] 02-06-PLAN.md — Wave 3：6 个 Pages _redirects 301 规则 + RUNBOOK WAF 段落（PUBSEC-03/05）
+  - [x] 02-06-PLAN.md — Wave 3：6 个 Pages _redirects 301 规则 + RUNBOOK WAF 段落（PUBSEC-03/05）
 
 ### Phase 3: movie-app 播放稳定化（R2 直发 + 错误恢复）
 **Goal**: 视频从 `cdn.starye.org` 直接由 R2 + Cloudflare CDN 发出，浏览器拿到原生 Range + Accept-Ranges，Safari/Android 拖进度条不黑屏；`<video>` 异常时用户看到可见错误态 + 重试按钮而非卡死；R18 内容通过短期签名 URL 播放且过期前自动续签不打断观看。
