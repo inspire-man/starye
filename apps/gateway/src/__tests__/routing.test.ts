@@ -101,8 +101,17 @@ describe('路径匹配规则', () => {
   })
 
   it('/dashboard/* 应路由到 Dashboard 服务', async () => {
-    const req = makeRequest('http://localhost/dashboard/')
-    await worker.fetch(req, {})
+    // 需要携带有效 session cookie，并模拟 session API 返回管理员身份
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }))
+      .mockImplementation(async (req: Request) => {
+        capturedRequest = req instanceof Request ? req : new Request(req)
+        return mockFetchResponse
+      }))
+    const req = makeRequest('http://localhost/dashboard/', {
+      headers: { cookie: 'starye.session_token=routing-test-token' },
+    })
+    await worker.fetch(req, { ADMIN_GITHUB_ID: '12345' })
     expect(capturedRequest!.url).toContain('localhost:5173')
   })
 
@@ -203,8 +212,17 @@ describe('生产环境路径重写', () => {
   }
 
   it('生产环境 /dashboard/* 应剥离 /dashboard 前缀', async () => {
-    const req = makeRequest('https://starye.com/dashboard/movies')
-    await worker.fetch(req, prodEnv)
+    // 需要携带有效 session cookie，并模拟 session API 返回管理员身份
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }))
+      .mockImplementation(async (req: Request) => {
+        capturedRequest = req instanceof Request ? req : new Request(req)
+        return mockFetchResponse
+      }))
+    const req = makeRequest('https://starye.com/dashboard/movies', {
+      headers: { cookie: 'starye.session_token=prod-test-token' },
+    })
+    await worker.fetch(req, { ...prodEnv, ADMIN_GITHUB_ID: '12345' })
     expect(capturedRequest!.url).not.toContain('/dashboard/movies')
     expect(capturedRequest!.url).toContain('/movies')
   })
@@ -237,8 +255,17 @@ describe('生产环境路径重写', () => {
   })
 
   it('本地环境 /dashboard/* 不剥离前缀', async () => {
-    const req = makeRequest('http://localhost/dashboard/movies')
-    await worker.fetch(req, {})
+    // 需要携带有效 session cookie，并模拟 session API 返回管理员身份
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }))
+      .mockImplementation(async (req: Request) => {
+        capturedRequest = req instanceof Request ? req : new Request(req)
+        return mockFetchResponse
+      }))
+    const req = makeRequest('http://localhost/dashboard/movies', {
+      headers: { cookie: 'starye.session_token=local-test-token' },
+    })
+    await worker.fetch(req, { ADMIN_GITHUB_ID: '12345' })
     expect(capturedRequest!.url).toContain('/dashboard/movies')
   })
 })
