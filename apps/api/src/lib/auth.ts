@@ -22,12 +22,26 @@ export interface Env {
   WEB_URL?: string
   ADMIN_URL?: string
   OPENROUTER_API_KEY?: string
+  ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单
   // R2 Configuration
   CLOUDFLARE_ACCOUNT_ID: string
   R2_ACCESS_KEY_ID: string
   R2_SECRET_ACCESS_KEY: string
   R2_BUCKET_NAME: string
   R2_PUBLIC_URL: string
+}
+
+/**
+ * 将 GitHub ID 注入 session user 对象。
+ * 提取为纯函数以便单元测试。
+ * @param userId - Better Auth user.id
+ * @param githubAccount - account 表查询结果（providerId='github' 的记录）
+ */
+export function injectGithubIdIntoSession(
+  userId: string,
+  githubAccount: { accountId: string } | undefined,
+): string | null {
+  return githubAccount?.accountId ?? null
 }
 
 // 解耦 Context，只依赖 Env 和 Request
@@ -70,16 +84,25 @@ export function createAuth(env: Env, request: Request) {
         role: { type: 'string' },
         isAdult: { type: 'boolean' },
         isR18Verified: { type: 'boolean' },
+        githubId: { type: 'string' },
       },
     },
     callbacks: {
       session: async ({ session, user }: { session: schema.Session, user: schema.User }) => {
+        // 从 account 表查询 GitHub ID（providerId='github' 的 accountId）
+        const githubAccount = await db.query.account.findFirst({
+          where: (a, { and, eq }) => and(
+            eq(a.userId, user.id),
+            eq(a.providerId, 'github'),
+          ),
+        })
         return {
           session,
           user: {
             ...user,
             isAdult: !!user.isAdult,
             isR18Verified: !!user.isR18Verified,
+            githubId: injectGithubIdIntoSession(user.id, githubAccount ?? undefined),
           },
         }
       },

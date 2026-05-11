@@ -23,6 +23,7 @@ export interface SessionUser {
   role: string
   isAdult: boolean
   isR18Verified: boolean
+  githubId?: string | null
 }
 
 // 爬虫相关的验证 schemas 已迁移到 schemas/crawler.ts
