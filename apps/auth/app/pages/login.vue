@@ -21,19 +21,25 @@ const error = computed(() => {
 })
 
 // 获取回跳地址
+// 安全说明（CR-01 修复 / D-14）：
+//   之前在这里做同源校验，然后在 watchEffect 里对 redirectPath 再次 decodeURIComponent，
+//   造成"先校验后再解码"的顺序错位。例如 `%252F%252Fevil.com` 可以先通过同源校验、
+//   再被第二次解码成 `///evil.com`，被浏览器折叠跳转到 evil.com。
+//   因此本 computed 不再返回"裸路径"，改为返回一个已经经过最终同源校验的
+//   same-origin 相对路径（pathname + search + hash）。下游直接使用，不再解码。
 const redirectPath = computed(() => {
   // 同时支持 next（Phase 2 新增）和 redirect（向后兼容 dashboard router.beforeEach）
   const raw = (route.query.next || route.query.redirect) as string || '/'
-  // 同源校验：防止 open redirect（D-14）
   try {
     const target = new URL(raw, window.location.origin)
     if (target.origin !== window.location.origin)
       return '/'
+    // 只取相对部分，彻底切断回跳到外部域名的可能
+    return target.pathname + target.search + target.hash || '/'
   }
   catch {
     return '/'
   }
-  return raw.startsWith('/') ? raw : `/${raw}`
 })
 
 // 核心逻辑：如果已经有 Session 且没有权限错误，则执行跳转
@@ -46,7 +52,8 @@ watchEffect(() => {
   }
 
   if (session.value && !isPending.value && redirectPath.value !== '/auth/login') {
-    const target = decodeURIComponent(redirectPath.value)
+    // CR-01 修复：redirectPath 已经过最终同源校验，为 same-origin 相对路径，不再解码
+    const target = redirectPath.value
 
     // 避免重定向到自己
     if (target === window.location.pathname || target === '/auth/login') {
@@ -65,15 +72,17 @@ watchEffect(() => {
 
     // 延迟跳转，避免 watchEffect 多次触发
     redirectTimer = setTimeout(() => {
-      // 使用 window.location.href 确保跨应用跳转（Nuxt 路由可能无法跨域）
-      if (target.startsWith('http')) {
-        window.location.href = target
-      }
-      else {
-        // 如果是相对路径，跳转到网关域下的对应应用
-        window.location.href = target
-      }
+      // target 已经是 same-origin 相对路径，直接跳转
+      window.location.href = target
     }, 100)
+  }
+})
+
+// WR-03 修复：组件销毁时清理定时器，避免异步跳转在路由切换后仍发生
+onUnmounted(() => {
+  if (redirectTimer) {
+    clearTimeout(redirectTimer)
+    redirectTimer = null
   }
 })
 
