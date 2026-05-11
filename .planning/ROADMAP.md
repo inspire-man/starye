@@ -35,7 +35,7 @@
   - [x] 01-03-PLAN.md — Nuxt blog + auth SSR session 通道（D-01..D-04）
   - [x] 01-04-PLAN.md — Better Auth 升级 1.6.2 → ^1.6.10（D-18，四 package.json 同 commit）
   - [x] 01-05-PLAN.md — AUTH-08 signout 单测实装（D-15）
-  - [ ] 01-06-PLAN.md — 集成冒烟 + D-19 六步 human checkpoint（phase gate）
+  - [x] 01-06-PLAN.md — 集成冒烟 + D-19 六步 human checkpoint（phase gate）
 
 ### Phase 2: Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固
 **Goal**: 只有作者（`ADMIN_GITHUB_ID` 白名单）能进入 dashboard；匿名用户可以浏览公开目录但在触达收藏/进度/成人内容时被登录门控；搜索引擎不再索引后台/认证/API 路径；Scalar OpenAPI UI 在生产环境需要鉴权；`/api/auth/sign-in` 有速率限制。

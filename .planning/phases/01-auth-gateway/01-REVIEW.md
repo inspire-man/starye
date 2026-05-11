@@ -1,5 +1,5 @@
 ---
-status: issues_found
+status: resolved
 phase: 01-auth-gateway
 depth: standard
 files_reviewed: 14
@@ -8,6 +8,11 @@ findings:
   warning: 8
   info: 0
   total: 10
+resolved_in_phase: 4  # CR-01, CR-02, WR-01, WR-02
+deferred_to_phase_2: 6  # WR-03, WR-04, WR-05, WR-06, WR-07, WR-08
+fix_commits:
+  - e7fce45 fix(01-review): close CR-01/CR-02/WR-01/WR-02 cache-control bypass holes
+  - 9a4dd1c test(01-review): assert Cache-Control + X-Cache-TTL on bypass paths
 date: 2026-05-11
 ---
 
