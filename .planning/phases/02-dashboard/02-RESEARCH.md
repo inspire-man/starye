@@ -568,22 +568,25 @@ async function toggleFavorite() {
 
 **如果此表为空：** 所有声明均已验证或引用 — 无需用户确认。（本表有 5 条假设，需要在实现前确认 A1、A2、A5）
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Better Auth get-session 返回的 user 对象是否包含 githubId？**
    - What we know: `SessionUser` 类型没有 `githubId`；GitHub ID 存在 `account.accountId`（`providerId='github'`）；Better Auth 支持 `additionalFields` 扩展 session user
    - What's unclear: `/api/auth/get-session` 的实际响应 JSON 结构，是否已经包含 `githubId` 或需要通过 `additionalFields` 注入
    - Recommendation: 实现前在本地运行 `curl http://localhost:8080/api/auth/get-session -H "Cookie: ..."` 验证响应结构。如果没有 `githubId`，在 `apps/api/src/lib/auth.ts` 的 `additionalFields` 中添加 `githubId: { type: 'string' }` 并在 `session` callback 中从 `account` 表查询注入。
+   - **RESOLVED:** 通过 PATTERNS.md 确认：`SessionUser` 类型不含 `githubId`，GitHub ID 存储在 `account.accountId`（`providerId='github'`）。方案选 A：在 `additionalFields` 中添加 `githubId: { type: 'string' }`，在 `callbacks.session` 中通过 `db.query.account.findFirst` 查询并注入。Plan 01 已实现此方案。
 
 2. **`buildAdultVisibilityCondition` 是否应该对 admin 角色也返回 undefined（允许看全部）？**
    - What we know: `checkUserAdultStatus`（`apps/api/src/routes/actors/services/auth.service.ts:8`）判断 `user.isAdult || user.isR18Verified || user.role === 'admin'`；D-07 只说 `isR18Verified===true` 返回 undefined
    - What's unclear: 作者的账号是否会有 `isR18Verified=true`？如果没有，admin 在 public 路由也看不到 R18 内容
    - Recommendation: `buildAdultVisibilityCondition` 应与 `checkUserAdultStatus` 语义对齐，加入 `user.role === 'admin' || user.role === 'super_admin'` 的判断，或者确保 ADMIN_GITHUB_ID 白名单用户在登录时自动设置 `isR18Verified=true`。
+   - **RESOLVED:** 通过 PATTERNS.md 确认：`buildAdultVisibilityCondition` 实现时加入 `user.role === 'admin' || user.role === 'super_admin'` 短路，与 `checkUserAdultStatus` 语义对齐。Plan 04 已按此实现。
 
 3. **`apps/auth` 的 Nuxt 4 静态文件目录是 `public/` 还是其他？**
    - What we know: `apps/auth` 是 Nuxt 4 应用；其他 Vue SPA 的 `_redirects` 在 `public/`；Nuxt 4 默认静态目录是 `public/`
    - What's unclear: Nuxt 4 + Cloudflare Pages 部署时 `public/_redirects` 是否会被正确识别
    - Recommendation: 查看 `apps/auth/nuxt.config.ts` 确认 `nitro.publicAssets` 配置；参考 Cloudflare Pages Nuxt 部署文档确认 `_redirects` 位置。
+   - **RESOLVED:** 通过 PATTERNS.md Pitfall 6 确认：Nuxt 4 的 `public/` 目录内容会被复制到 `.output/public/`，Cloudflare Pages 会正确识别 `public/_redirects`。Plan 06 在 `apps/auth/public/_redirects` 新建文件（而非 `static/`）。
 
 ## Environment Availability
 

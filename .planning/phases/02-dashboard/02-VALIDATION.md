@@ -66,6 +66,7 @@ created: 2026-05-11
 |----------|-------------|------------|-------------------|
 | *.pages.dev 返回 301 | PUBSEC-05 | 跨域 DNS 配置，无法在单元测试中模拟 | 浏览器访问 `https://starye-movie.pages.dev/` 确认 301 到 `https://starye.org/movie/` |
 | WAF 限速生效 | PUBSEC-03 | Cloudflare Dashboard 手配，无 API | Cloudflare Dashboard → Security → WAF → Rate Limiting Rules 确认规则存在 |
+| _redirects 跨域 301 规则存在 | PUBSEC-05 | 静态文件内容断言，grep 验证已足够 | `grep -l "301!" apps/movie-app/public/_redirects apps/comic-app/public/_redirects apps/dashboard/public/_redirects apps/auth/public/_redirects apps/blog/public/_redirects` 期望列出全部 5 个文件；`head -3 apps/movie-app/public/_redirects` 确认 301 规则在 SPA fallback 之前 |
 
 ---
 
