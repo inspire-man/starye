@@ -1,7 +1,8 @@
+import type { Comic } from '../types'
 import { error as showError, success as showSuccess } from '@starye/ui'
 import { ref } from 'vue'
 import { favoritesApi } from '../lib/api-client'
-import type { Comic } from '../types'
+import { useAuthGuard } from './useAuthGuard'
 
 export interface FavoriteItem {
   comicId: string
@@ -58,6 +59,9 @@ export function useFavorites() {
   }
 
   async function toggleFavorite(comicId: string, comicTitle?: string) {
+    const { requireLogin } = useAuthGuard()
+    if (!requireLogin())
+      return // 未登录 → 跳转登录页，early return
     if (favoriteIds.value.has(comicId)) {
       await removeFavorite(comicId, comicTitle)
     }

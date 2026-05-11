@@ -6,6 +6,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import RatingStars from '../components/RatingStars.vue'
 import { useAria2 } from '../composables/useAria2'
+import { useAuthGuard } from '../composables/useAuthGuard'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useFavorites } from '../composables/useFavorites'
 import { useRating } from '../composables/useRating'
@@ -461,6 +462,9 @@ async function checkFavoriteStatus() {
 
 // 切换收藏
 async function toggleFavorite() {
+  const { requireLogin } = useAuthGuard()
+  if (!requireLogin())
+    return // 未登录 → 跳转登录页，early return
   if (!movie.value || favoritingLoading.value)
     return
 
