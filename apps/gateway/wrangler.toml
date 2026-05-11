@@ -17,6 +17,10 @@ MOVIE_ORIGIN = "https://starye-movie.pages.dev"
 COMIC_ORIGIN = "https://starye-comic.pages.dev"
 TAVERN_ORIGIN = "https://starye-tavern.pages.dev"
 
+# ADMIN_GITHUB_ID 通过 wrangler secret put 注入，不在此明文配置
+# 本地开发：在 apps/gateway/.dev.vars 中设置 ADMIN_GITHUB_ID=<your_github_id>
+# 格式：单个 ID（"12345678"）或逗号分隔多个（"12345,67890"）
+
 # Custom Domain Binding
 # This worker handles all traffic for the main domain
 [[routes]]

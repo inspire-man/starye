@@ -7,6 +7,7 @@
  */
 
 import { createCachedProxy } from './cache-middleware'
+import { checkDashboardAuth } from './dashboard-guard'
 
 interface Env {
   API_ORIGIN?: string
@@ -17,6 +18,7 @@ interface Env {
   TAVERN_ORIGIN?: string
   AUTH_ORIGIN?: string
   CACHE?: KVNamespace
+  ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单（D-03）
 }
 
 export default {
@@ -36,16 +38,32 @@ export default {
     // Wrangler dev 环境检测：如果有 .dev.vars 配置，说明在本地
       || !!(env.API_ORIGIN && env.API_ORIGIN.includes('127.0.0.1'))
 
+    // 0. robots.txt（D-15：在所有 proxy 分支之前 match，避免被 blog fallback 捕获）
+    if (path === '/robots.txt') {
+      return new Response(
+        'User-agent: *\nDisallow: /dashboard\nDisallow: /auth\nDisallow: /api\n',
+        { headers: { 'Content-Type': 'text/plain; charset=utf-8' } },
+      )
+    }
+
     // 1. API Service (使用缓存)
     if (path.startsWith('/api')) {
       const target = isLocal ? 'http://127.0.0.1:8787' : (env.API_ORIGIN || 'http://127.0.0.1:8787')
       return cachedProxy(request, target, undefined, { executionCtx: ctx })
     }
 
-    // 2. Dashboard (不缓存)
+    // 2. Dashboard (不缓存，前置鉴权)
     if (path.startsWith('/dashboard')) {
       if (path === '/dashboard') {
         return Response.redirect(`${url.origin}/dashboard/`, 301)
+      }
+
+      // D-01：Gateway 前置鉴权，在 cachedProxy 之前执行
+      const authResult = await checkDashboardAuth(request, env)
+      if (!authResult.allowed) {
+        const next = encodeURIComponent(url.pathname + url.search)
+        const errorParam = authResult.reason === 'not_admin' ? '&error=not_admin' : ''
+        return Response.redirect(`${url.origin}/auth/login?next=${next}${errorParam}`, 302)
       }
 
       const target = isLocal ? 'http://localhost:5173' : (env.DASHBOARD_ORIGIN || 'http://localhost:5173')
@@ -137,8 +155,12 @@ async function proxy(request: Request, targetOrigin: string, pathRewrite?: (path
 
   try {
     const response = await fetch(newRequest)
-    // Create a new response to allow modifying headers (like CORS or Cookies)
-    return new Response(response.body, response)
+    // D-15：对 /dashboard/* 和 /api/admin/* 注入 X-Robots-Tag
+    const mutableHeaders = new Headers(response.headers)
+    if (url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/api/admin')) {
+      mutableHeaders.set('X-Robots-Tag', 'noindex, nofollow')
+    }
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers: mutableHeaders })
   }
   catch (e) {
     return new Response(`Gateway Error: Failed to connect to ${targetOrigin}\n${e}`, { status: 502 })
