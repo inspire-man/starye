@@ -23,6 +23,9 @@
 - ✓ 爬虫抓取：crawler 每日三次（UTC 00/08/16）定时抓取入库 — existing
 - ✓ 身份认证：Better Auth + GitHub OAuth 可登录（尚未全量接入访问控制） — existing
 - ✓ 数据层：D1 + R2 + KV + Drizzle ORM 已搭建 — existing
+- ✓ dashboard 访问控制：Gateway 前置拦截 + API `requireAuth` 短路，仅 `ADMIN_GITHUB_ID` 白名单可进入 — Validated in Phase 2
+- ✓ 前台登录门控：收藏按钮 + 成人内容 R18 过滤（WHERE 层）接入 `useAuthGuard` + `buildAdultVisibilityCondition` — Validated in Phase 2
+- ✓ 公网暴露面加固：`/robots.txt` + `X-Robots-Tag` + `*.pages.dev` 301! + `/api/docs` 鉴权；WAF 限速（PUBSEC-03）配置步骤写入 RUNBOOK，需部署时手配 — Validated in Phase 2
 
 ### Active
 
@@ -30,8 +33,6 @@
 
 - [ ] movie-app 播放页稳定性：消除"偶尔出错"，确保播放链路可靠
 - [ ] comic-app 阅读进度：记录并恢复用户阅读位置（登录用户）
-- [ ] dashboard 访问控制：强制登录 + 仅作者账号可进入
-- [ ] 前台登录门控：收藏 / 观看进度 / 成人内容等敏感功能要求登录
 - [ ] 认证全链路打通：gateway + api + 各前端统一读写同一会话
 - [ ] 部署基础盘：确保所有子应用在 Cloudflare 生产环境下可一键部署、可回滚
 - [ ] 基础可观测：关键错误可见（至少是 API / gateway / 播放失败）
@@ -107,4 +108,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-10 after initialization*
+*Last updated: 2026-05-11 after Phase 2 completion*
