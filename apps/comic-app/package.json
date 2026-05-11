@@ -13,7 +13,7 @@
   "dependencies": {
     "@starye/api-types": "workspace:*",
     "@starye/ui": "workspace:*",
-    "hono": "^4.12.12",
+    "hono": "^4.12.14",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
     "vue-router": "^5.0.4"
@@ -25,9 +25,9 @@
     "@vitest/coverage-v8": "^4.1.4",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.9.1",
-    "autoprefixer": "^10.4.27",
+    "autoprefixer": "^10.5.0",
     "happy-dom": "^20.8.9",
-    "postcss": "^8.5.9",
+    "postcss": "^8.5.10",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.2",
     "vite": "^8.0.8",
