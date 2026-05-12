@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-last_updated: "2026-05-12T09:59:37.000Z"
+status: executing
+last_updated: "2026-05-12T17:27:06.862Z"
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 16
-  completed_plans: 10
-  percent: 63
+  completed_phases: 3
+  total_plans: 20
+  completed_plans: 16
+  percent: 80
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-05-12
+**Last updated:** 2026-05-13
 **Mode:** yolo
 **Granularity:** standard
 
@@ -34,12 +34,12 @@ progress:
 
 ## Current Position
 
-Phase: 03 (movie-app-r2) — COMPLETE
-Plan: 04 of 04 complete, security review complete
-**Phase:** 3
-**Plan:** `03-01` / `03-02` / `03-03` / `03-04` complete
-**Status:** Human playback UAT complete; security review complete
-**Progress:** `[======    ] 3/5 phases complete`
+Phase: 4 (统一 Progress 表 + 漫画阅读/视频观看进度) — PLANNED
+Plan: 4 of 4 defined
+**Phase:** 4
+**Plan:** 04-01..04-04 created
+**Status:** Ready to execute
+**Progress:** [========  ] 4/5 phases planned-ready
 
 **Phase 1 Summary:**
 
@@ -50,7 +50,7 @@ Plan: 04 of 04 complete, security review complete
 ## Performance Metrics
 
 **Phases completed:** 3 / 5
-**Plans completed:** 10
+**Plans completed:** 16
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -68,7 +68,7 @@ Plan: 04 of 04 complete, security review complete
 
 - [ ] P1 kick-off: audit `apps/gateway/src/cache-middleware.ts` 现状（`/api/auth/*` bypass / `Set-Cookie` bypass / private scope cache key 构造）
 - [x] P3 kick-off: 确认 `xgplayer` error 事件结构，并据此选择保守的同源重试实现路径
-- [ ] P4 kick-off: 定下视频进度粒度（倾向 int seconds，与 Jellyfin 对齐）
+- [x] P4 kick-off: 定下视频进度粒度（统一按 int seconds / int page 持久化；movie 完成阈值 90%，小于 30s 不记）
 - [ ] P2 decision: 成人内容 `is_adult` ingest-time（爬虫自动）vs 手动（dashboard UI） —— 本轮需求已锁定爬虫自动（ACCESS-06），待 P2 实际落地时核验源站标签覆盖率
 
 ### Active Blockers
@@ -80,6 +80,7 @@ Plan: 04 of 04 complete, security review complete
 - Git log 显示近期进展：`fdd6a4e` gateway cache invalidation + monitoring、`0121cc9` dashboard SillyTavern 入口、`4cefbe6` movie-app advance search / recommendation / new release
 - `.planning/codebase/CONCERNS.md` 标注的问题区将在对应 phase 被收口：SQL injection 风险点（P2/P4 涉及写入路径时审）、deprecated serviceAuth（P2 审）、缓存复杂度（P1 审）、localStorage 凭据（P1 审）、migration 测试缺失（P5 处理）
 - Phase 3 已完成文档收敛、Player 统一错误卡片 / waiting 超时 / 同源重试、MovieDetail 离线按钮反馈、5/5 人工播放 UAT，以及安全审查；本轮补上了 `streamUrl` 直达播放的授权/来源校验，`pnpm --filter @starye/movie-app exec vue-tsc --noEmit` 与 `pnpm --filter @starye/movie-app test --run` 已通过
+- Phase 4 已完成 discuss/context/planning：统一 `progress` 表、movie/comic 完成语义、`streamUrl` 纳入统一进度、匿名 progress 入口改 `next` 登录跳转、旧表同 phase 删除；计划拆为 04-01（schema+API）、04-02（movie）、04-03（comic）、04-04（gate+UAT）
 
 ## Session Continuity
 
@@ -92,13 +93,13 @@ $gsd-progress
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
-2. Read `.planning/ROADMAP.md` Phase 3 section
-3. Read `.planning/phases/03-movie-app-r2/03-HUMAN-UAT.md`、`.planning/phases/03-movie-app-r2/03-04-SUMMARY.md` and `.planning/phases/03-movie-app-r2/03-SECURITY.md`
-4. 如需复核，验证入口统一走 `http://localhost:8080/movie/`
-5. 执行 `$gsd-progress` 决定是否自然推进到 Phase 4
+2. Read `.planning/ROADMAP.md` Phase 4 section
+3. Read `.planning/phases/04-progress/04-CONTEXT.md`、`04-RESEARCH.md`、`04-PATTERNS.md` 与 `04-01..04-04-PLAN.md`
+4. 先执行 04-01（schema + API 基线），再并行推进 04-02 / 04-03，最后 04-04
+5. 执行 `$gsd-progress` 或 `$gsd-execute-phase 4`
 
-**Worktree:** `D:\my-workspace\starye\.claude\worktrees\naughty-bell-ec288e`
-**Branch:** `claude/naughty-bell-ec288e`
+**Worktree:** `D:\my-workspace\starye`
+**Branch:** `main`
 
 ---
 *State initialized: 2026-05-11 after roadmap creation*

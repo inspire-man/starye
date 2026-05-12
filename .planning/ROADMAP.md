@@ -82,7 +82,11 @@
   3. 视频每 10 秒 + 暂停 / seek / `pagehide` 时进度被写入 D1；漫画翻页 500ms debounce + `pagehide` 强制 flush
   4. `GET /api/progress?contentType=movie` 按 `updatedAt` 倒序返回最近观看列表（支撑 v2 的"继续观看"横幅）
   5. 读到章节最后一页后 `progress.completed=true`，下次查询该章节时标识为已完成
-**Plans**: TBD
+**Plans**: 4 plans across 3 waves
+  - [ ] 04-01-PLAN.md — Wave 1：统一 `progress` 表 + API/schema/test 基线（PROG-01/02/03）
+  - [ ] 04-02-PLAN.md — Wave 2：movie 端恢复/保存/完成/历史消费收口（PROG-04/05）
+  - [ ] 04-03-PLAN.md — Wave 2：comic 端恢复/保存/完成/阅读历史收口（PROG-06/07/08）
+  - [ ] 04-04-PLAN.md — Wave 3：进度门控统一 + migration/human UAT 回归（PROG-04..08 phase gate）
 **UI hint**: yes
 
 ### Phase 5: 部署基础盘 + 可观测骨架 + Migration 安全
@@ -104,7 +108,7 @@
 | 1. Auth 全链路 + Gateway 缓存安全基线 | 6/6 | Complete | 2026-05-11 |
 | 2. Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固 | 6/6 | Complete | 2026-05-12 |
 | 3. movie-app 播放稳定化（现有路径错误恢复） | 4/4 | Complete | 2026-05-12 |
-| 4. 统一 Progress 表 + 漫画阅读/视频观看进度 | 0/0 | Not started | - |
+| 4. 统一 Progress 表 + 漫画阅读/视频观看进度 | 0/4 | Planned | 2026-05-13 |
 | 5. 部署基础盘 + 可观测骨架 + Migration 安全 | 0/0 | Not started | - |
 
 ## Coverage Validation
