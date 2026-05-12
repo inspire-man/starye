@@ -3,7 +3,7 @@ status: complete
 phase: 03-movie-app-r2
 source: [03-VALIDATION.md]
 started: 2026-05-12
-updated: 2026-05-12T17:06:00+08:00
+updated: 2026-05-12T17:59:37+08:00
 ---
 
 ## Current Test
@@ -30,7 +30,7 @@ result: pass
 
 ### 5. R18 detail 防御未回退
 expected: 对未验证 R18 的账号，直接访问一部 R18 影片详情或播放页仍返回 403 / 无法进入；已验证账号保持原有可见性，不因为 Phase 3 的播放层改动额外被拦。
-result: [passed] 2026-05-12 — 访问 `http://localhost:8080/movie/movie/REBD-1024` 时浏览器页面进入“加载影片详情失败”；同时本地 API `GET /api/public/movies/REBD-1024` 返回 `需要 R18 访问权限`，说明未认证拦截仍生效。
+result: [passed] 2026-05-12 — 访问 `http://localhost:8080/movie/movie/REBD-1024` 时浏览器页面进入“加载影片详情失败”；本地 API `GET /api/public/movies/REBD-1024` 返回 `需要 R18 访问权限`。本轮安全修复后，未认证用户即使直接打开 `/movie/REBD-1024/play?streamUrl=...` 也会先被详情授权拦下，不再继续初始化播放器。
 
 ## Summary
 

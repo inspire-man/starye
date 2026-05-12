@@ -7,6 +7,11 @@ import { useAria2 } from '../composables/useAria2'
 import { movieApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 import { isMagnetLink } from '../utils/magnetLink'
+import {
+  isTrustedTorrServerStreamUrl,
+  resolveTrustedTorrServerOrigins,
+  UNTRUSTED_STREAM_URL_MESSAGE,
+} from '../utils/playerSecurity'
 
 type ErrorKind = 'torrserver' | 'xgplayer' | 'network' | 'source-invalid' | 'unknown'
 
@@ -34,6 +39,7 @@ let player: Player | null = null
 let saveProgressTimer: number | null = null
 let waitingTimeout: number | null = null
 let lastRetryAt = 0
+let lastTrackedMovieCode = ''
 
 const playerLoading = ref(false)
 const playerLoadingMessage = ref('')
@@ -254,22 +260,27 @@ async function fetchMovieAndPlay() {
     // TorrServer 模式：直接使用 streamUrl 播放
     const streamUrl = route.query.streamUrl as string | undefined
     if (streamUrl) {
-      sourceUrl = streamUrl
+      const response = await movieApi.getMovieDetail(code)
 
-      // 仍然获取影片标题与磁链用于显示和补救动作
-      try {
-        const response = await movieApi.getMovieDetail(code)
-        if (response.success && response.data) {
-          movieTitle.value = response.data.title
-          movieData.value = response.data
-          const magnetPlayer = response.data.players?.find(p => p.sourceUrl.startsWith('magnet:'))
-          if (magnetPlayer) {
-            currentMagnetUrl.value = magnetPlayer.sourceUrl
-          }
-        }
+      if (!response.success || !response.data) {
+        error.value = response.error || '加载失败'
+        loading.value = false
+        return
       }
-      catch {
-        movieTitle.value = code
+
+      const trustedOrigins = await resolveTrustedTorrServerOrigins()
+      if (!isTrustedTorrServerStreamUrl(streamUrl, trustedOrigins)) {
+        error.value = UNTRUSTED_STREAM_URL_MESSAGE
+        loading.value = false
+        return
+      }
+
+      sourceUrl = streamUrl
+      movieTitle.value = response.data.title
+      movieData.value = response.data
+      const magnetPlayer = response.data.players?.find(p => p.sourceUrl.startsWith('magnet:'))
+      if (magnetPlayer) {
+        currentMagnetUrl.value = magnetPlayer.sourceUrl
       }
     }
     else {
@@ -312,13 +323,14 @@ async function fetchMovieAndPlay() {
       }
     }
 
+    trackCurrentMovieViewOnce(code)
     loading.value = false
     await nextTick()
     initPlayer(sourceUrl, startTime)
   }
   catch (err: any) {
     destroyPlayerInstance()
-    error.value = err.response?.data?.error || '加载影片失败'
+    error.value = err instanceof Error ? err.message : (err.response?.data?.error || '加载影片失败')
     loading.value = false
   }
 }
@@ -414,6 +426,15 @@ function trackCurrentMovieView(code: string) {
   }
 }
 
+function trackCurrentMovieViewOnce(code: string) {
+  if (!code || lastTrackedMovieCode === code) {
+    return
+  }
+
+  trackCurrentMovieView(code)
+  lastTrackedMovieCode = code
+}
+
 async function retryCurrentSource() {
   if (!currentSourceUrl.value) {
     showPlayerError('source-invalid', '当前没有可重试的播放源，请返回详情页切换源。', false)
@@ -432,9 +453,6 @@ async function retryCurrentSource() {
 
 onMounted(() => {
   fetchMovieAndPlay()
-  // 上报观看（fire-and-forget），用于热门排序 viewCount 统计
-  const code = route.params.code as string
-  trackCurrentMovieView(code)
 })
 
 watch(
@@ -445,10 +463,6 @@ watch(
     }
 
     fetchMovieAndPlay()
-
-    if (typeof newCode === 'string' && newCode !== oldCode) {
-      trackCurrentMovieView(newCode)
-    }
   },
 )
 

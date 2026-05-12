@@ -101,9 +101,9 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Auth 全链路 + Gateway 缓存安全基线 | 0/6 | Planned | - |
-| 2. Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固 | 0/6 | Planned | - |
-| 3. movie-app 播放稳定化（现有路径错误恢复） | 3/4 | In Progress | - |
+| 1. Auth 全链路 + Gateway 缓存安全基线 | 6/6 | Complete | 2026-05-11 |
+| 2. Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固 | 6/6 | Complete | 2026-05-12 |
+| 3. movie-app 播放稳定化（现有路径错误恢复） | 4/4 | Complete | 2026-05-12 |
 | 4. 统一 Progress 表 + 漫画阅读/视频观看进度 | 0/0 | Not started | - |
 | 5. 部署基础盘 + 可观测骨架 + Migration 安全 | 0/0 | Not started | - |
 
