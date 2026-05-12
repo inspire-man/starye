@@ -89,6 +89,7 @@
 | Hono + hono-openapi 生成 API 文档 | 类型安全 + 自动生成 Scalar UI | ✓ Good |
 | "审核"流程延后到 v1 之后 | 语义未明确，先不做 | — Pending |
 | Monorepo 用 Turborepo + pnpm workspace | 多应用共享 packages/ui、packages/db | ✓ Good |
+| R2 不做视频宿主，漫画详情图片逐步迁出 R2 | 存储 + 出站成本相对价值不划算；单用户内容中台优先使用现有 magnet / TorrServer / 外链路径，后续图片也逐步回到更轻的直链方案 | — New |
 
 ## Evolution
 
@@ -108,4 +109,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-11 after Phase 2 completion*
+*Last updated: 2026-05-12 after Phase 3 context gathering*

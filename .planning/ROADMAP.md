@@ -3,7 +3,7 @@
 **Created:** 2026-05-11
 **Granularity:** standard
 **Total phases:** 5
-**v1 coverage:** 45/45 requirements mapped
+**v1 coverage:** 41/41 requirements mapped
 
 ## Core Value Reminder
 
@@ -13,7 +13,7 @@
 
 - [ ] **Phase 1: Auth 全链路 + Gateway 缓存安全基线** — 打通 5 端统一会话，堵上 gateway 缓存按用户隔离的漏洞
 - [ ] **Phase 2: Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固** — 闭合"谁能看到什么"：dashboard 白名单、成人内容服务端过滤、robots/限流/文档鉴权
-- [ ] **Phase 3: movie-app 播放稳定化（R2 直发 + 错误恢复）** — 视频从 `cdn.starye.org` 直出 MP4，原生 Range + 可见错误态 + R18 签名
+- [ ] **Phase 3: movie-app 播放稳定化（现有路径错误恢复）** — 现有 magnet / TorrServer / 外链路径下，播放异常时能看到统一错误卡片、同源重试和离线按钮反馈
 - [ ] **Phase 4: 统一 Progress 表 + 漫画阅读/视频观看进度** — `progress` 表支撑"打开即恢复"
 - [ ] **Phase 5: 部署基础盘 + 可观测骨架 + Migration 安全** — deploy/rollback workflow、D1 迁移前备份、Sentry 双端接入、RUNBOOK
 
@@ -55,17 +55,21 @@
   - [x] 02-05-PLAN.md — Wave 2：useAuthGuard composable + 收藏按钮拦截 + login.vue next 参数（ACCESS-04/05）
   - [x] 02-06-PLAN.md — Wave 3：6 个 Pages _redirects 301 规则 + RUNBOOK WAF 段落（PUBSEC-03/05）
 
-### Phase 3: movie-app 播放稳定化（R2 直发 + 错误恢复）
-**Goal**: 视频从 `cdn.starye.org` 直接由 R2 + Cloudflare CDN 发出，浏览器拿到原生 Range + Accept-Ranges，Safari/Android 拖进度条不黑屏；`<video>` 异常时用户看到可见错误态 + 重试按钮而非卡死；R18 内容通过短期签名 URL 播放且过期前自动续签不打断观看。
-**Depends on**: Phase 1 (R18 sign endpoint 需要识别用户身份)
-**Requirements**: VIDEO-01, VIDEO-02, VIDEO-03, VIDEO-04, VIDEO-05, VIDEO-06
+### Phase 3: movie-app 播放稳定化（现有路径错误恢复）
+**Goal**: 在现有 magnet / TorrServer / 外链播放路径下，`<video>` 异常时用户能看到统一错误卡片与重试动作；Aria2 / TorrServer 离线时相关按钮保持可见，但以 disabled + 提示表达当前不可用。
+**Depends on**: Phase 2 (R18 可见性与 detail 防御已由成人内容过滤闭合，Phase 3 只处理播放反馈)
+**Requirements**: VIDEO-04, VIDEO-05
 **Success Criteria** (what must be TRUE):
-  1. 打开任一视频详情页，DevTools Network 显示视频 URL 指向 `cdn.starye.org`，首个请求返回 206 Partial Content + `Accept-Ranges: bytes`
-  2. 拖动进度条至视频任意位置均可正常 seek 并继续播放，Safari 与 Android Chrome 不再出现黑屏
-  3. 播放异常（codec 失配 / 网络中断 / 403 签名过期）时用户看到明确错误文案 + "重试"按钮；点击可恢复播放
-  4. R18 内容播放 URL 为签名短链（≤1h 过期），过期前自动静默续签，观看不中断
-  5. 同一视频二次访问命中 Cloudflare 边缘缓存（响应头 `Cache-Control: public, max-age=86400` 生效，CF-Cache-Status: HIT）
-**Plans**: TBD
+  1. 标准播放源与 TorrServer 流播放在异常时都显示统一错误卡片，不再出现无反馈黑屏
+  2. `waiting` 长时间无进展会转为明确错误态；用户点击“重试”只重试当前源，并尽量回到上次播放位置
+  3. 如果重试后短时间内再次失败，错误文案会升级为“多次失败，请返回详情页切换源”一类的明确提示
+  4. MovieDetail / Player 上的 Aria2 按钮在离线时仍可见，但为 `disabled`，并带“aria2 未连接，请先在设置中配置”一类提示
+  5. TorrServer 相关按钮同样采用离线禁用反馈；R18 访问控制继续完全由 Phase 2 的服务端过滤与 detail handler 防御承担
+**Plans**: 4 plans across 4 waves
+  - [x] 03-01-PLAN.md — Wave 0：文档收敛，承接旧的 VIDEO-01..06 并正式把 VIDEO-01/02/03/06 从 v1 Active 移出
+  - [x] 03-02-PLAN.md — Wave 1：Player 统一错误卡片 + waiting 超时 + 同源重试（VIDEO-04/05）
+  - [x] 03-03-PLAN.md — Wave 2：MovieDetail / Player 离线按钮 disabled + title 提示（VIDEO-05）
+  - [x] 03-04-PLAN.md — Wave 3：轻量自动化回归 + human playback UAT（phase gate）
 **UI hint**: yes
 
 ### Phase 4: 统一 Progress 表 + 漫画阅读/视频观看进度
@@ -99,20 +103,20 @@
 |-------|----------------|--------|-----------|
 | 1. Auth 全链路 + Gateway 缓存安全基线 | 0/6 | Planned | - |
 | 2. Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固 | 0/6 | Planned | - |
-| 3. movie-app 播放稳定化（R2 直发 + 错误恢复） | 0/0 | Not started | - |
+| 3. movie-app 播放稳定化（现有路径错误恢复） | 3/4 | In Progress | - |
 | 4. 统一 Progress 表 + 漫画阅读/视频观看进度 | 0/0 | Not started | - |
 | 5. 部署基础盘 + 可观测骨架 + Migration 安全 | 0/0 | Not started | - |
 
 ## Coverage Validation
 
-**v1 requirements mapped:** 45/45 ✓
+**v1 requirements mapped:** 41/41 ✓
 
 | Category | REQ-IDs | Phase |
 |----------|---------|-------|
 | AUTH (8) | AUTH-01..08 | Phase 1 |
 | ACCESS (7) | ACCESS-01..07 | Phase 2 |
 | PUBSEC (5) | PUBSEC-01..05 | Phase 2 |
-| VIDEO (6) | VIDEO-01..06 | Phase 3 |
+| VIDEO (2) | VIDEO-04..05 | Phase 3 |
 | PROG (8) | PROG-01..08 | Phase 4 |
 | DEPLOY (6) | DEPLOY-01..06 | Phase 5 |
 | OBS (5) | OBS-01..05 | Phase 5 |
@@ -122,8 +126,8 @@
 
 ## Coverage Notes
 
-**Discrepancy found and resolved:**
-REQUIREMENTS.md Coverage block claimed "v1 requirements: 41 total" but actual sum by category is 45 (AUTH 8 + ACCESS 7 + PUBSEC 5 + VIDEO 6 + PROG 8 + DEPLOY 6 + OBS 5 = 45). All 45 are genuine v1 items with REQ-IDs. Traceability section updated to reflect 45 mapped.
+**Scope narrowed and synchronized:**
+Phase 3 已在 discuss/context 阶段收窄为“播放错误恢复 + 同源重试 + 离线按钮反馈”；`VIDEO-01/02/03/06` 不再作为 v1 Active 需求，`REQUIREMENTS.md` 与本 ROADMAP 已同步改为 41 个真实 v1 需求。
 
 **v2 requirements explicitly excluded from roadmap (will not block v1 ship):**
 CONT-01..03 (continue watching/reading banner UI), GATE-01..02 (advanced gating), UX-01..02 (reading/playback prefs), DISC-01..02 (discovery/search), CRAW-01..04 (crawler reliability), OPS-01..02 (staging/Sentry tuning). These stay in REQUIREMENTS.md v2 section until v1 is validated in production.
@@ -134,13 +138,13 @@ CONT-01..03 (continue watching/reading banner UI), GATE-01..02 (advanced gating)
 
 **Why Access + PubSec together (P2):** Dashboard 门控、robots/limiter、成人内容过滤、docs 鉴权、`*.pages.dev` 301 —— 单独每项都是小事，合起来是 v1 最大的运营风险面。共享 "谁能看到什么" 的审计视角，一次讲清楚。
 
-**Why Video before Progress (P3 before P4):** 两者正交可并行。把播放稳定化排前，是因为 "CONCERNS.md 已指出偶尔出错" 属于作者每日高频触发的痛点；P4 需要 P1 的 userId 但与 P3 无直接依赖，实际排期可按需并行。
+**Why Video before Progress (P3 before P4):** 两者正交可并行。把播放稳定化排前，是因为 "CONCERNS.md 已指出偶尔出错" 属于作者每日高频触发的痛点；本 phase 不再做 R2 直发或签名链，只聚焦现有播放路径的错误可见化与恢复，能更快把日常体验拉回可用线。
 
 **Why Deploy + Obs last (P5):** Sentry 在 P3/P4 上线后才有稳定的错误形状可以聚合，过早接入只看到海量噪音。Deploy/rollback 流水线是 brownfield 增量，不会让前面阶段的调试体验明显变差。
 
 **Research Flag (to investigate before starting):**
 - P1 开工前必须先读 `apps/gateway/src/cache-middleware.ts` 现状：是否已跳过 `/api/auth/*`、是否对 `Set-Cookie` 响应 bypass、private scope 当前如何构造 key —— 避免 "以为已经做了、其实没做"
-- P3 开工前确认 `xgplayer` 的 `error` 事件结构 + `wrangler r2 bucket cors put` 语法 + R2 custom domain 与 zone-level Cache Rules 的交互
+- P3 开工前确认 `xgplayer` 的 `error` / `waiting` 事件结构，并据此落地保守的同源重试路径
 
 ---
 *Roadmap created: 2026-05-11*

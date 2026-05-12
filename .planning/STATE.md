@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-last_updated: "2026-05-11T08:06:03.204Z"
+status: in_progress
+last_updated: "2026-05-12T06:38:23.503Z"
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 12
-  completed_plans: 6
-  percent: 40
+  total_plans: 16
+  completed_plans: 9
+  percent: 56
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-05-11
+**Last updated:** 2026-05-12
 **Mode:** yolo
 **Granularity:** standard
 
@@ -27,19 +27,19 @@ progress:
 **Project Docs:**
 
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
-- `.planning/REQUIREMENTS.md` — 45 v1 requirements across 7 categories
+- `.planning/REQUIREMENTS.md` — 已收敛到真实的 41 项 v1 Active 范围；VIDEO-01/02/03/06 已移出 active
 - `.planning/ROADMAP.md` — 5-phase roadmap, 100% v1 coverage
 - `.planning/research/SUMMARY.md` — Research findings driving phase structure
 - `.planning/codebase/ARCHITECTURE.md` — Brownfield system overview
 
 ## Current Position
 
-Phase: 02 (dashboard) — EXECUTING
-Plan: 1 of 6
+Phase: 03 (movie-app-r2) — IN PROGRESS
+Plan: 04 of 04 pending human UAT
 **Phase:** 3
-**Plan:** Not started
-**Status:** Ready to plan
-**Progress:** `[          ] 0/5 phases complete`
+**Plan:** `03-01` / `03-02` / `03-03` complete; `03-04` waiting on human verification
+**Status:** Waiting for human playback UAT
+**Progress:** `[====      ] 2/5 phases complete`
 
 **Phase 1 Summary:**
 
@@ -50,7 +50,7 @@ Plan: 1 of 6
 ## Performance Metrics
 
 **Phases completed:** 0 / 5
-**Plans completed:** 0
+**Plans completed:** 3
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -67,34 +67,35 @@ Plan: 1 of 6
 ### Open Todos (carried across phases)
 
 - [ ] P1 kick-off: audit `apps/gateway/src/cache-middleware.ts` 现状（`/api/auth/*` bypass / `Set-Cookie` bypass / private scope cache key 构造）
-- [ ] P3 kick-off: 确认 `xgplayer` error 事件结构 + R2 custom domain 与 Cache Rules 交互
+- [x] P3 kick-off: 确认 `xgplayer` error 事件结构，并据此选择保守的同源重试实现路径
 - [ ] P4 kick-off: 定下视频进度粒度（倾向 int seconds，与 Jellyfin 对齐）
 - [ ] P2 decision: 成人内容 `is_adult` ingest-time（爬虫自动）vs 手动（dashboard UI） —— 本轮需求已锁定爬虫自动（ACCESS-06），待 P2 实际落地时核验源站标签覆盖率
 
 ### Active Blockers
 
-None.
+- [ ] Phase 3 `03-04` human gate pending：需要按 `.planning/phases/03-movie-app-r2/03-HUMAN-UAT.md` 完成真实播放验收
 
 ### Recent Context (Brownfield注释)
 
 - Git log 显示近期进展：`fdd6a4e` gateway cache invalidation + monitoring、`0121cc9` dashboard SillyTavern 入口、`4cefbe6` movie-app advance search / recommendation / new release
 - `.planning/codebase/CONCERNS.md` 标注的问题区将在对应 phase 被收口：SQL injection 风险点（P2/P4 涉及写入路径时审）、deprecated serviceAuth（P2 审）、缓存复杂度（P1 审）、localStorage 凭据（P1 审）、migration 测试缺失（P5 处理）
+- Phase 3 已完成文档收敛、Player 统一错误卡片 / waiting 超时 / 同源重试、MovieDetail 离线按钮反馈；`pnpm --filter @starye/movie-app exec vue-tsc --noEmit` 与 `pnpm --filter @starye/movie-app test --run` 已通过
 
 ## Session Continuity
 
 **Next recommended action:**
 
 ```
-/gsd-plan-phase 1
+phase 3 uat pass
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
-2. Read `.planning/ROADMAP.md` Phase 1 section
-3. Check if any files under `.planning/phases/phase-1/` exist
-4. If no plan yet → `/gsd-plan-phase 1`
-5. If plan exists → `/gsd-execute-plan <plan-id>`
+2. Read `.planning/ROADMAP.md` Phase 3 section
+3. Read `.planning/phases/03-movie-app-r2/03-HUMAN-UAT.md`
+4. 验证入口统一走 `http://localhost:8080/movie/`
+5. 回到当前线程回复 `phase 3 uat pass` 或 `step N fail: <描述>`
 
 **Worktree:** `D:\my-workspace\starye\.claude\worktrees\naughty-bell-ec288e`
 **Branch:** `claude/naughty-bell-ec288e`

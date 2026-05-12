@@ -1,11 +1,24 @@
 <script setup lang="ts">
 import type { MovieDetail } from '../types'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Player from 'xgplayer'
 import { useAria2 } from '../composables/useAria2'
 import { movieApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
+import { isMagnetLink } from '../utils/magnetLink'
+
+type ErrorKind = 'torrserver' | 'xgplayer' | 'network' | 'source-invalid' | 'unknown'
+
+interface PlayerErrorState {
+  visible: boolean
+  kind: ErrorKind
+  message: string
+  recoverable: boolean
+}
+
+const BUFFERING_TIMEOUT_MS = 10000
+const RETRY_FAILURE_WINDOW_MS = 3000
 
 const route = useRoute()
 const router = useRouter()
@@ -19,6 +32,17 @@ const movieCode = ref('')
 const movieData = ref<MovieDetail | null>(null)
 let player: Player | null = null
 let saveProgressTimer: number | null = null
+let waitingTimeout: number | null = null
+let lastRetryAt = 0
+
+const playerLoading = ref(false)
+const playerLoadingMessage = ref('')
+const errorState = ref<PlayerErrorState>(createDefaultErrorState())
+const currentSourceUrl = ref('')
+const currentMagnetUrl = ref('')
+
+const isTorrServerMode = computed(() => !!route.query.streamUrl)
+const hasAria2Fallback = computed(() => Boolean(currentMagnetUrl.value) && aria2Connected.value)
 
 /**
  * 系列导航：从 relatedMovies 中提取同系列影片，按 releaseDate ASC 排序，计算当前位置
@@ -64,30 +88,180 @@ const seriesNavigation = computed(() => {
   }
 })
 
-// TorrServer 流播放状态
-const isTorrServerMode = computed(() => !!route.query.streamUrl)
-const torrServerBuffering = ref(false)
-const torrServerError = ref('')
-const currentMagnetUrl = ref('')
+function createDefaultErrorState(): PlayerErrorState {
+  return {
+    visible: false,
+    kind: 'unknown',
+    message: '',
+    recoverable: true,
+  }
+}
+
+function clearWaitingTimeout() {
+  if (waitingTimeout) {
+    clearTimeout(waitingTimeout)
+    waitingTimeout = null
+  }
+}
+
+function clearSaveProgressTimer() {
+  if (saveProgressTimer) {
+    clearTimeout(saveProgressTimer)
+    saveProgressTimer = null
+  }
+}
+
+function resetPlayerContainer() {
+  const container = document.getElementById('player-container')
+  if (container) {
+    container.innerHTML = ''
+  }
+}
+
+function destroyPlayerInstance() {
+  clearWaitingTimeout()
+
+  if (player) {
+    player.destroy()
+    player = null
+  }
+
+  resetPlayerContainer()
+}
+
+function resetPlayerFeedback() {
+  clearWaitingTimeout()
+  playerLoading.value = false
+  playerLoadingMessage.value = ''
+  errorState.value = createDefaultErrorState()
+}
+
+function getLoadingMessage() {
+  return isTorrServerMode.value
+    ? 'TorrServer 正在加载视频数据，请稍候'
+    : '正在缓冲当前播放源...'
+}
+
+function startPlayerLoading(message = getLoadingMessage()) {
+  playerLoading.value = true
+  playerLoadingMessage.value = message
+}
+
+function stopPlayerLoading() {
+  clearWaitingTimeout()
+  playerLoading.value = false
+  playerLoadingMessage.value = ''
+}
+
+function clearRecoverableError() {
+  if (errorState.value.visible) {
+    errorState.value = createDefaultErrorState()
+  }
+}
+
+function markPlaybackRecovered() {
+  stopPlayerLoading()
+  clearRecoverableError()
+  lastRetryAt = 0
+}
+
+function getEscalatedRetryMessage() {
+  return '多次失败，请返回详情页切换源后再试。'
+}
+
+function showPlayerError(kind: ErrorKind, message: string, recoverable = true) {
+  stopPlayerLoading()
+  const finalMessage = lastRetryAt > 0 && Date.now() - lastRetryAt <= RETRY_FAILURE_WINDOW_MS
+    ? getEscalatedRetryMessage()
+    : message
+
+  errorState.value = {
+    visible: true,
+    kind,
+    message: finalMessage,
+    recoverable,
+  }
+}
+
+function getWaitingTimeoutMessage() {
+  return isTorrServerMode.value
+    ? 'TorrServer 缓冲超时，请重试；如果仍失败，请返回详情页改用其他方式。'
+    : '当前播放源缓冲超时，请重试；如果仍失败，请返回详情页切换其他播放源。'
+}
+
+function scheduleWaitingTimeout() {
+  clearWaitingTimeout()
+  startPlayerLoading(getLoadingMessage())
+  waitingTimeout = window.setTimeout(() => {
+    showPlayerError(
+      isTorrServerMode.value ? 'torrserver' : 'network',
+      getWaitingTimeoutMessage(),
+    )
+  }, BUFFERING_TIMEOUT_MS)
+}
+
+function getPlaybackErrorState(): PlayerErrorState {
+  if (!currentSourceUrl.value) {
+    return {
+      visible: true,
+      kind: 'source-invalid',
+      message: '当前没有可重试的播放源，请返回详情页切换源。',
+      recoverable: false,
+    }
+  }
+
+  if (isMagnetLink(currentSourceUrl.value)) {
+    return {
+      visible: true,
+      kind: 'source-invalid',
+      message: '当前源不是浏览器可直接播放的视频地址，请返回详情页使用 TorrServer 或添加到 Aria2。',
+      recoverable: false,
+    }
+  }
+
+  if (isTorrServerMode.value) {
+    return {
+      visible: true,
+      kind: 'torrserver',
+      message: 'TorrServer 流播放失败。请重试；如果仍失败，请返回详情页改用其他方式。',
+      recoverable: true,
+    }
+  }
+
+  return {
+    visible: true,
+    kind: 'xgplayer',
+    message: '当前播放源加载失败，请重试；如果仍失败，请返回详情页切换其他播放源。',
+    recoverable: true,
+  }
+}
 
 async function fetchMovieAndPlay() {
   loading.value = true
   error.value = ''
+  movieData.value = null
+  currentMagnetUrl.value = ''
+  currentSourceUrl.value = ''
+  destroyPlayerInstance()
+  resetPlayerFeedback()
 
   try {
     const code = route.params.code as string
     movieCode.value = code
+    let sourceUrl = ''
+    let startTime = 0
 
     // TorrServer 模式：直接使用 streamUrl 播放
     const streamUrl = route.query.streamUrl as string | undefined
     if (streamUrl) {
-      torrServerBuffering.value = true
-      // 仍然获取影片标题用于显示
+      sourceUrl = streamUrl
+
+      // 仍然获取影片标题与磁链用于显示和补救动作
       try {
         const response = await movieApi.getMovieDetail(code)
         if (response.success && response.data) {
           movieTitle.value = response.data.title
-          // 保存磁链用于降级到 Aria2
+          movieData.value = response.data
           const magnetPlayer = response.data.players?.find(p => p.sourceUrl.startsWith('magnet:'))
           if (magnetPlayer) {
             currentMagnetUrl.value = magnetPlayer.sourceUrl
@@ -97,57 +271,63 @@ async function fetchMovieAndPlay() {
       catch {
         movieTitle.value = code
       }
-
-      initPlayer(streamUrl, 0)
-      loading.value = false
-      return
     }
+    else {
+      // 标准模式：从 API 获取播放源
+      const response = await movieApi.getMovieDetail(code)
 
-    // 标准模式：从 API 获取播放源
-    const response = await movieApi.getMovieDetail(code)
+      if (!response.success || !response.data) {
+        error.value = response.error || '加载失败'
+        loading.value = false
+        return
+      }
 
-    if (!response.success || !response.data) {
-      error.value = response.error || '加载失败'
-      return
-    }
+      const movie = response.data
+      movieTitle.value = movie.title
+      movieData.value = movie
+      currentMagnetUrl.value = movie.players.find(p => isMagnetLink(p.sourceUrl))?.sourceUrl || ''
 
-    const movie = response.data
-    movieTitle.value = movie.title
-    movieData.value = movie
+      const playerId = route.query.player as string | undefined
+      let selectedPlayer = movie.players[0]
 
-    const playerId = route.query.player as string | undefined
-    let selectedPlayer = movie.players[0]
+      if (playerId) {
+        const found = movie.players.find(p => p.id === playerId)
+        if (found)
+          selectedPlayer = found
+      }
 
-    if (playerId) {
-      const found = movie.players.find(p => p.id === playerId)
-      if (found)
-        selectedPlayer = found
-    }
+      if (!selectedPlayer) {
+        error.value = '未找到播放源'
+        loading.value = false
+        return
+      }
 
-    if (!selectedPlayer) {
-      error.value = '未找到播放源'
-      return
-    }
+      sourceUrl = selectedPlayer.sourceUrl
 
-    let startTime = 0
-    if (userStore.user) {
-      const progressResponse = await progressApi.getWatchingProgress(code)
-      if (progressResponse.success && progressResponse.data && !Array.isArray(progressResponse.data)) {
-        startTime = progressResponse.data.progress
+      if (userStore.user) {
+        const progressResponse = await progressApi.getWatchingProgress(code)
+        if (progressResponse.success && progressResponse.data && !Array.isArray(progressResponse.data)) {
+          startTime = progressResponse.data.progress
+        }
       }
     }
 
-    initPlayer(selectedPlayer.sourceUrl, startTime)
+    loading.value = false
+    await nextTick()
+    initPlayer(sourceUrl, startTime)
   }
   catch (err: any) {
+    destroyPlayerInstance()
     error.value = err.response?.data?.error || '加载影片失败'
-  }
-  finally {
     loading.value = false
   }
 }
 
 function initPlayer(url: string, startTime: number) {
+  currentSourceUrl.value = url
+  resetPlayerFeedback()
+  scheduleWaitingTimeout()
+
   player = new Player({
     id: 'player-container',
     url,
@@ -162,25 +342,27 @@ function initPlayer(url: string, startTime: number) {
     startTime,
   })
 
-  // TorrServer 模式：监听 canplay 隐藏缓冲层
-  if (isTorrServerMode.value) {
-    player.on('canplay', () => {
-      torrServerBuffering.value = false
-    })
+  player.on('canplay', () => {
+    markPlaybackRecovered()
+  })
 
-    player.on('error', () => {
-      torrServerBuffering.value = false
-      torrServerError.value = '视频播放失败。可能是浏览器不支持该视频格式（如 MKV/HEVC），建议使用 Aria2 下载后本地播放。'
-    })
+  player.on('playing', () => {
+    markPlaybackRecovered()
+  })
 
-    player.on('waiting', () => {
-      torrServerBuffering.value = true
-    })
+  player.on('waiting', () => {
+    scheduleWaitingTimeout()
+  })
 
-    player.on('playing', () => {
-      torrServerBuffering.value = false
-    })
-  }
+  player.on('ended', () => {
+    stopPlayerLoading()
+    lastRetryAt = 0
+  })
+
+  player.on('error', () => {
+    const nextError = getPlaybackErrorState()
+    showPlayerError(nextError.kind, nextError.message, nextError.recoverable)
+  })
 
   // 标准模式：进度保存
   player.on('timeupdate', () => {
@@ -191,9 +373,7 @@ function initPlayer(url: string, startTime: number) {
 }
 
 function debounceSaveProgress(progress: number, duration: number) {
-  if (saveProgressTimer) {
-    clearTimeout(saveProgressTimer)
-  }
+  clearSaveProgressTimer()
 
   saveProgressTimer = window.setTimeout(async () => {
     try {
@@ -208,7 +388,7 @@ function debounceSaveProgress(progress: number, duration: number) {
 // 降级到 Aria2 下载
 async function fallbackToAria2() {
   if (!currentMagnetUrl.value) {
-    goBack()
+    goToDetail()
     return
   }
 
@@ -228,22 +408,53 @@ function goToDetail() {
   router.push(`/movie/${movieCode.value}`)
 }
 
+function trackCurrentMovieView(code: string) {
+  if (code) {
+    movieApi.trackView(code)
+  }
+}
+
+async function retryCurrentSource() {
+  if (!currentSourceUrl.value) {
+    showPlayerError('source-invalid', '当前没有可重试的播放源，请返回详情页切换源。', false)
+    return
+  }
+
+  const lastTime = player ? Math.max(0, Number(player.currentTime) || 0) : 0
+  lastRetryAt = Date.now()
+  destroyPlayerInstance()
+  resetPlayerFeedback()
+  startPlayerLoading('正在重新加载当前播放源...')
+
+  await nextTick()
+  initPlayer(currentSourceUrl.value, lastTime)
+}
+
 onMounted(() => {
   fetchMovieAndPlay()
   // 上报观看（fire-and-forget），用于热门排序 viewCount 统计
   const code = route.params.code as string
-  if (code) {
-    movieApi.trackView(code)
-  }
+  trackCurrentMovieView(code)
 })
 
+watch(
+  () => [route.params.code, route.query.player, route.query.streamUrl],
+  ([newCode, newPlayer, newStreamUrl], [oldCode, oldPlayer, oldStreamUrl]) => {
+    if (newCode === oldCode && newPlayer === oldPlayer && newStreamUrl === oldStreamUrl) {
+      return
+    }
+
+    fetchMovieAndPlay()
+
+    if (typeof newCode === 'string' && newCode !== oldCode) {
+      trackCurrentMovieView(newCode)
+    }
+  },
+)
+
 onUnmounted(() => {
-  if (player) {
-    player.destroy()
-  }
-  if (saveProgressTimer) {
-    clearTimeout(saveProgressTimer)
-  }
+  destroyPlayerInstance()
+  clearSaveProgressTimer()
 })
 </script>
 
@@ -298,44 +509,57 @@ onUnmounted(() => {
     >
       <div id="player-container" class="w-full max-w-5xl" />
 
-      <!-- TorrServer 缓冲 overlay -->
+      <!-- 统一 loading overlay -->
       <Transition name="fade">
         <div
-          v-if="isTorrServerMode && torrServerBuffering && !torrServerError"
+          v-if="playerLoading && !errorState.visible"
           class="absolute inset-0 flex items-center justify-center bg-black/60 z-20"
         >
           <div class="text-center">
             <div class="inline-block w-10 h-10 border-3 border-teal-400 border-t-transparent rounded-full animate-spin mb-4" />
             <p class="text-white text-lg">
-              正在缓冲...
+              {{ playerLoadingMessage || '正在缓冲...' }}
             </p>
             <p class="text-gray-400 text-sm mt-2">
-              TorrServer 正在加载视频数据，请稍候
+              {{ isTorrServerMode ? '如果长时间无响应，系统会自动提示你重试当前源。' : '如果长时间无响应，系统会自动转为可见错误提示。' }}
             </p>
           </div>
         </div>
       </Transition>
 
-      <!-- TorrServer 错误降级 -->
+      <!-- 统一错误卡片 -->
       <Transition name="fade">
         <div
-          v-if="isTorrServerMode && torrServerError"
+          v-if="errorState.visible"
           class="absolute inset-0 flex items-center justify-center bg-black/80 z-20"
         >
-          <div class="text-center max-w-md px-6">
-            <p class="text-red-400 text-lg mb-4">
-              {{ torrServerError }}
+          <div class="text-center max-w-lg px-6">
+            <p class="text-red-400 text-lg mb-3">
+              {{ errorState.message }}
             </p>
-            <div class="flex gap-3 justify-center">
+            <p class="text-gray-400 text-sm mb-6">
+              {{ errorState.recoverable ? '可以先重试当前源；如果反复失败，请返回详情页手动切换播放源。' : '当前问题无法通过浏览器内重试恢复，建议返回详情页改用其他方式。' }}
+            </p>
+            <div class="flex flex-wrap gap-3 justify-center">
               <button
-                v-if="aria2Connected && currentMagnetUrl"
+                v-if="errorState.recoverable"
+                class="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
+                title="重试当前播放源"
+                @click="retryCurrentSource"
+              >
+                重试当前源
+              </button>
+              <button
+                v-if="hasAria2Fallback"
                 class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors"
+                title="将当前影片磁链添加到 Aria2"
                 @click="fallbackToAria2"
               >
                 ⬇ 添加到 Aria2
               </button>
               <button
                 class="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                title="返回影片详情页后手动切换播放源"
                 @click="goToDetail"
               >
                 返回详情页

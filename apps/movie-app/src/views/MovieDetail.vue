@@ -79,6 +79,28 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
   }, 3000)
 }
 
+function getAria2ButtonTitle(player: Player) {
+  if (!isMagnetLink(player.sourceUrl)) {
+    return '只支持磁力链接添加到 Aria2'
+  }
+
+  return aria2Connected.value
+    ? '添加到 Aria2'
+    : 'aria2 未连接，请先在设置中配置'
+}
+
+function getTorrServerButtonTitle(player: Player) {
+  if (!isMagnetLink(player.sourceUrl)) {
+    return '只支持磁力链接的在线播放'
+  }
+
+  if (!torrServerConnected.value) {
+    return 'TorrServer 未连接，请先在设置中配置'
+  }
+
+  return torrServerLoading.value ? 'TorrServer 正在准备当前播放流' : '通过 TorrServer 在线播放'
+}
+
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString('zh-CN')
 }
@@ -795,16 +817,21 @@ onMounted(() => {
                 📋 复制
               </button>
               <button
-                v-if="isMagnetLink(player.sourceUrl) && aria2Connected"
-                class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                v-if="isMagnetLink(player.sourceUrl)"
+                :disabled="!aria2Connected"
+                :title="getAria2ButtonTitle(player)"
+                class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
+                :class="aria2Connected ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-600'"
                 @click="addToAria2(player)"
               >
                 ⬇️ Aria2
               </button>
               <button
-                v-if="isMagnetLink(player.sourceUrl) && torrServerConnected"
-                :disabled="torrServerLoading"
-                class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs rounded transition-colors whitespace-nowrap"
+                v-if="isMagnetLink(player.sourceUrl)"
+                :disabled="!torrServerConnected || torrServerLoading"
+                :title="getTorrServerButtonTitle(player)"
+                class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
+                :class="torrServerConnected && !torrServerLoading ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-600'"
                 @click="playViaTorrServer(player)"
               >
                 {{ torrServerLoading ? '⏳ 加载中' : '▶ 在线播放' }}
