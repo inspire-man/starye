@@ -1,8 +1,8 @@
 ---
 phase: 3
 slug: movie-app-r2
-status: partial
-nyquist_compliant: false
+status: complete
+nyquist_compliant: true
 wave_0_complete: true
 created: 2026-05-12
 ---
@@ -37,7 +37,7 @@ created: 2026-05-12
 | V-03-02A | 03-02 | 1 | VIDEO-04, VIDEO-05 | Player 所有主要错误路径都显示统一错误卡片，不黑屏卡死 | human + targeted unit | `pnpm --filter @starye/movie-app test --run` | ✅ | ✅ automated pass, human pending |
 | V-03-02B | 03-02 | 1 | VIDEO-04 | 重试行为只重试同源，不自动切源、不做 codec swap | unit / manual | `pnpm --filter @starye/movie-app exec vue-tsc --noEmit` | ✅ | ✅ automated pass, human pending |
 | V-03-03 | 03-03 | 2 | VIDEO-05 | Aria2 / TorrServer 离线时按钮可见、disabled、title 提示明确 | unit / DOM | `pnpm --filter @starye/movie-app test --run` | ✅ | ✅ automated pass, human pending |
-| V-03-04 | 03-04 | 3 | VIDEO-04, VIDEO-05 | 真实播放、错误、重试、离线反馈已人工确认 | human | 见 `03-HUMAN-UAT.md` | ✅ | ◐ partial (2 passed / 3 pending) |
+| V-03-04 | 03-04 | 3 | VIDEO-04, VIDEO-05 | 真实播放、错误、重试、离线反馈已人工确认 | human | 见 `03-HUMAN-UAT.md` | ✅ | ✅ passed |
 
 ## Wave 0 Requirements
 
@@ -56,8 +56,8 @@ created: 2026-05-12
 ## Validation Sign-Off
 
 - [x] 所有 plan 都有 automated verify 或明确的人工 gate
-- [ ] Player 行为的关键成功条件被 human UAT 全量覆盖（当前已完成离线按钮与 R18 防御）
+- [x] Player 行为的关键成功条件被 human UAT 全量覆盖
 - [x] 文档收敛已完成，不再存在已废弃的 VIDEO-01/02/03/06 v1 active 断言
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** automated checks passed; human playback UAT partially completed on main, remaining items need suitable playback samples
+**Approval:** automated checks passed; `03-HUMAN-UAT.md` 5/5 scenarios passed on 2026-05-12

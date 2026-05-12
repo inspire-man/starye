@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-05-12T06:38:23.503Z"
+last_updated: "2026-05-12T09:06:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
@@ -35,10 +35,10 @@ progress:
 ## Current Position
 
 Phase: 03 (movie-app-r2) — IN PROGRESS
-Plan: 04 of 04 pending human UAT
+Plan: 04 of 04 complete, security review pending
 **Phase:** 3
-**Plan:** `03-01` / `03-02` / `03-03` complete; `03-04` waiting on human verification
-**Status:** Waiting for human playback UAT
+**Plan:** `03-01` / `03-02` / `03-03` / `03-04` complete
+**Status:** Human playback UAT complete; ready for security review
 **Progress:** `[====      ] 2/5 phases complete`
 
 **Phase 1 Summary:**
@@ -73,29 +73,29 @@ Plan: 04 of 04 pending human UAT
 
 ### Active Blockers
 
-- [ ] Phase 3 `03-04` human gate pending：需要按 `.planning/phases/03-movie-app-r2/03-HUMAN-UAT.md` 完成真实播放验收
+- [ ] Phase 3 security review pending：`$gsd-secure-phase 3` 尚未执行，按当前 verify-work 门禁不应直接推进到下一 phase
 
 ### Recent Context (Brownfield注释)
 
 - Git log 显示近期进展：`fdd6a4e` gateway cache invalidation + monitoring、`0121cc9` dashboard SillyTavern 入口、`4cefbe6` movie-app advance search / recommendation / new release
 - `.planning/codebase/CONCERNS.md` 标注的问题区将在对应 phase 被收口：SQL injection 风险点（P2/P4 涉及写入路径时审）、deprecated serviceAuth（P2 审）、缓存复杂度（P1 审）、localStorage 凭据（P1 审）、migration 测试缺失（P5 处理）
-- Phase 3 已完成文档收敛、Player 统一错误卡片 / waiting 超时 / 同源重试、MovieDetail 离线按钮反馈；`pnpm --filter @starye/movie-app exec vue-tsc --noEmit` 与 `pnpm --filter @starye/movie-app test --run` 已通过
+- Phase 3 已完成文档收敛、Player 统一错误卡片 / waiting 超时 / 同源重试、MovieDetail 离线按钮反馈，以及 5/5 人工播放 UAT；`pnpm --filter @starye/movie-app exec vue-tsc --noEmit` 与 `pnpm --filter @starye/movie-app test --run` 已通过
 
 ## Session Continuity
 
 **Next recommended action:**
 
 ```
-phase 3 uat pass
+$gsd-secure-phase 3
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/ROADMAP.md` Phase 3 section
-3. Read `.planning/phases/03-movie-app-r2/03-HUMAN-UAT.md`
-4. 验证入口统一走 `http://localhost:8080/movie/`
-5. 回到当前线程回复 `phase 3 uat pass` 或 `step N fail: <描述>`
+3. Read `.planning/phases/03-movie-app-r2/03-HUMAN-UAT.md` and `.planning/phases/03-movie-app-r2/03-04-SUMMARY.md`
+4. 如需复核，验证入口统一走 `http://localhost:8080/movie/`
+5. 执行 `$gsd-secure-phase 3`
 
 **Worktree:** `D:\my-workspace\starye\.claude\worktrees\naughty-bell-ec288e`
 **Branch:** `claude/naughty-bell-ec288e`
