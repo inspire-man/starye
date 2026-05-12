@@ -2,10 +2,6 @@
   "permissions": {
     "allow": [
       "Bash(ls:*)",
-      "Bash(openspec new:*)",
-      "Bash(openspec status:*)",
-      "Bash(openspec instructions:*)",
-      "Bash(openspec list:*)",
       "Bash(find apps:*)"
     ]
   }
