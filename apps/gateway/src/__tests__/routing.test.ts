@@ -86,6 +86,25 @@ describe('环境检测', () => {
 // ─── 路径匹配规则 ────────────────────────────────────────────────────────────
 
 describe('路径匹配规则', () => {
+  it('未登录访问 /dashboard/* 应重定向到 /auth/login?next=<encoded_path>', async () => {
+    const req = makeRequest('http://localhost/dashboard/movies')
+    const resp = await worker.fetch(req, {})
+    expect(resp.status).toBe(302)
+    expect(resp.headers.get('location')).toBe('http://localhost/auth/login?next=%2Fdashboard%2Fmovies')
+  })
+
+  it('非白名单访问 /dashboard/* 应重定向到 /auth/login?next=...&error=not_admin', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ user: { githubId: '99999' } }), { status: 200 }),
+    ))
+    const req = makeRequest('http://localhost/dashboard/movies', {
+      headers: { cookie: 'starye.session_token=non-admin-token' },
+    })
+    const resp = await worker.fetch(req, { ADMIN_GITHUB_ID: '12345' })
+    expect(resp.status).toBe(302)
+    expect(resp.headers.get('location')).toBe('http://localhost/auth/login?next=%2Fdashboard%2Fmovies&error=not_admin')
+  })
+
   it('/api/* 应路由到 API 服务', async () => {
     const req = makeRequest('http://localhost/api/movies')
     await worker.fetch(req, {})
@@ -162,6 +181,17 @@ describe('路径匹配规则', () => {
 // ─── 单路径重定向 ────────────────────────────────────────────────────────────
 
 describe('单路径 301 重定向', () => {
+  it('/robots.txt 应返回统一 disallow 规则', async () => {
+    const req = makeRequest('http://localhost/robots.txt')
+    const resp = await worker.fetch(req, {})
+    expect(resp.status).toBe(200)
+    expect(resp.headers.get('content-type')).toContain('text/plain')
+    const text = await resp.text()
+    expect(text).toContain('Disallow: /dashboard')
+    expect(text).toContain('Disallow: /auth')
+    expect(text).toContain('Disallow: /api')
+  })
+
   it('/dashboard 应重定向到 /dashboard/', async () => {
     const req = makeRequest('http://localhost/dashboard')
     const resp = await worker.fetch(req, {})
@@ -273,6 +303,28 @@ describe('生产环境路径重写', () => {
 // ─── 代理头部 ────────────────────────────────────────────────────────────────
 
 describe('代理头部设置', () => {
+  it('/api/admin/* 响应应注入 X-Robots-Tag: noindex, nofollow', async () => {
+    const req = makeRequest('http://localhost/api/admin/stats')
+    const resp = await worker.fetch(req, {})
+    expect(resp.headers.get('X-Robots-Tag')).toBe('noindex, nofollow')
+  })
+
+  it('/dashboard/* 响应应注入 X-Robots-Tag: noindex, nofollow', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }))
+      .mockImplementation(async (req: Request) => {
+        capturedRequest = req instanceof Request ? req : new Request(req)
+        return new Response('Dashboard OK', { status: 200 })
+      }))
+
+    const req = makeRequest('http://localhost/dashboard/', {
+      headers: { cookie: 'starye.session_token=robots-tag-token' },
+    })
+    const resp = await worker.fetch(req, { ADMIN_GITHUB_ID: '12345' })
+    expect(resp.status).toBe(200)
+    expect(resp.headers.get('X-Robots-Tag')).toBe('noindex, nofollow')
+  })
+
   it('应设置 X-Forwarded-Host 为原始 host', async () => {
     const req = makeRequest('http://localhost:8080/api/health')
     await worker.fetch(req, {})
