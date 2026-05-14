@@ -70,6 +70,7 @@ created: 2026-05-14
 |------------|---------------|--------|------|--------|
 | 2026-05-14 | 15 | 14 | 1 | Codex (`$gsd-secure-phase 2`) |
 | 2026-05-14 | 15 | 15 | 0 | Codex (`$gsd-secure-phase 2`, accepted remaining open threat) |
+| 2026-05-14 | 15 | 15 | 0 | Codex (`$gsd-secure-phase 2`, re-audit no changes) |
 
 ---
 
