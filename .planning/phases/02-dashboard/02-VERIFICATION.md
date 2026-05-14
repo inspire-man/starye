@@ -1,15 +1,15 @@
 ---
 phase: 02-dashboard
-verified: 2026-05-11
+verified: 2026-05-14
 verifier: gsd-verifier (general-purpose)
-status: human_needed
+status: passed
 must_haves_total: 5
-must_haves_passed: 4
-must_haves_human_needed: 1
+must_haves_passed: 5
+must_haves_human_needed: 0
 must_haves_failed: 0
 requirements_total: 12
-requirements_covered: 11
-requirements_human_needed: 1
+requirements_covered: 12
+requirements_human_needed: 0
 requirements_missing: 0
 requirements_deferred: 0
 tests_status:
@@ -43,12 +43,12 @@ deferred_followups:
 
 # Phase 02 Verification Report — Dashboard 访问控制 + 前台登录门控 + 公网暴露面加固
 
-**Verified:** 2026-05-11
-**Status:** `human_needed`
+**Verified:** 2026-05-14
+**Status:** `passed`
 **Goal:**
 只有作者（`ADMIN_GITHUB_ID` 白名单）能进入 dashboard；匿名用户可以浏览公开目录但在触达收藏/进度/成人内容时被登录门控；搜索引擎不再索引后台/认证/API 路径；Scalar OpenAPI UI 在生产环境需要鉴权；`/api/auth/sign-in` 有速率限制。
 
-本阶段自动化部分全部通过，剩余一项（PUBSEC-03 WAF 速率限制规则）受 Cloudflare Dashboard 的手配性质限制，代码侧无法验证，需要人工在部署时在 CF Dashboard 按 RUNBOOK 配置并观测生效。
+本阶段自动化部分全部通过；截至 2026-05-14，Phase 2 的人工 UAT 已补完 5/5 检查，PUBSEC-03 WAF 限速、PUBSEC-05 pages.dev 301、PUBSEC-04 `/api/docs` 鉴权与 open redirect 回归均已得到人工确认。后续部署仍需按 `RUNBOOK.md` 维护 WAF 与 secret 配置，但不再构成当前 phase 的 verification 缺口。
 
 ---
 
@@ -122,20 +122,20 @@ deferred_followups:
 
 ---
 
-### M5 — OpenAPI 鉴权 + WAF 限速 HUMAN_NEEDED（split）
+### M5 — OpenAPI 鉴权 + WAF 限速 PASSED
 
 **已完成自动化（PUBSEC-04）：**
 
 - `apps/api/src/index.ts:83-84, 173-174`: `/api/openapi.json` 与 `/api/docs` 均插入 `requireAuth(['admin', 'super_admin'])`；匿名访问 401，白名单用户通过 D-04 短路放行。
 - `docs-auth.test.ts` 2/2 passing（vi.mock createAuth + createDb，避免真实 D1 依赖）。
 
-**需要人工验证（PUBSEC-03）：**
+**人工验证已完成（PUBSEC-03）：**
 
-- WAF Rate Limiting 规则在 Cloudflare Dashboard → Security → WAF → Rate Limiting Rules 中**仅可手配**，没有代码产物。
-- `RUNBOOK.md` 已记录完整步骤（规则名 `starye-signin-ratelimit`、条件 `URI Path equals /api/auth/sign-in AND Method=POST`、阈值 `10/min/IP`、动作 `Block`、验证 curl 脚本）。
-- `02-06-SUMMARY.md` 明确 "WAF 本身的 Cloudflare Dashboard 操作延后到部署阶段"——人工 checkpoint 通过，但规则生效需上线时人工操作并回填 RUNBOOK 的"配置日期 / 配置人"字段。
+- WAF Rate Limiting 规则仍属于 Cloudflare Dashboard 手配项，没有代码产物；但该项已按 `RUNBOOK.md` 步骤在 Phase 2 人工 UAT 中确认通过。
+- [02-HUMAN-UAT.md](D:/my-workspace/starye/.planning/phases/02-dashboard/02-HUMAN-UAT.md:15) 现为 `status: complete`，并记录 `WAF Rate Limiting (PUBSEC-03)` 为 `pass`。
+- `02-06-SUMMARY.md` 记录了平台侧手配路径，后续部署仍需保持 RUNBOOK 与实际配置一致。
 
-**结论：** M5 的鉴权子项 PASSED；限速子项 HUMAN_NEEDED（见 §6）。
+**结论：** M5 的鉴权子项与限速子项均已通过当前 phase 的自动化 + 人工验证。
 
 ---
 
@@ -152,11 +152,11 @@ deferred_followups:
 | ACCESS-07 | 02-04 | `buildAdultVisibilityCondition` 注入 movies/comics/search WHERE | `adult-filter.test.ts` + api 312/312 | COVERED |
 | PUBSEC-01 | 02-03 | `apps/gateway/src/index.ts:42-47` `/robots.txt` 路由 | `dashboard-guard.test.ts` | COVERED |
 | PUBSEC-02 | 02-03 | `apps/gateway/src/index.ts:158-161` X-Robots-Tag 注入 | `dashboard-guard.test.ts` | COVERED |
-| PUBSEC-03 | 02-06 | `RUNBOOK.md` 手配步骤（CF Dashboard） | 无（平台资源） | HUMAN_NEEDED |
+| PUBSEC-03 | 02-06 | `RUNBOOK.md` 手配步骤（CF Dashboard） + `02-HUMAN-UAT.md` 人工确认 | 无（平台资源） | COVERED |
 | PUBSEC-04 | 02-02 | `apps/api/src/index.ts:83-84, 173-174` requireAuth | `docs-auth.test.ts` 2/2 | COVERED |
 | PUBSEC-05 | 02-06 | 5 个 `_redirects` 文件首行 `pages.dev → starye.org 301!` | grep 全命中 | COVERED |
 
-**汇总：** 12 个 requirement — 11 COVERED（含 1 pre-existing）+ 1 HUMAN_NEEDED + 0 MISSING + 0 DEFERRED。
+**汇总：** 12 个 requirement — 12 COVERED（含 1 pre-existing）+ 0 HUMAN_NEEDED + 0 MISSING + 0 DEFERRED。
 
 ---
 
@@ -209,13 +209,13 @@ CR-01 修复面与 D-14 意图一致。
 
 ---
 
-## 6. Human Verification Required
+## 6. Human Verification Record
 
 | 项 | Requirement | 为何人工 | 检查步骤 |
 |----|-------------|---------|----------|
-| **WAF 限速规则生效** | PUBSEC-03 | Cloudflare Dashboard 的 Rate Limiting Rules 只可在 UI 手配；代码层没有可断言的产物。 | 按 `RUNBOOK.md §WAF Rate Limiting 手配记录` 步骤创建规则后，用文末 `for i in $(seq 1 11); do curl ... /api/auth/sign-in ...; done` 脚本验证第 11 次返回 429。部署后在 RUNBOOK 回填"配置日期 / 配置人"。 |
-| **ADMIN_GITHUB_ID secret 注入** | ACCESS-02 实际生效 | 代码已读取 `env.ADMIN_GITHUB_ID`，但真实生效取决于部署期 `wrangler secret put`。 | 按 `RUNBOOK.md §ADMIN_GITHUB_ID 白名单配置` 分别在 `apps/api` 和 `apps/gateway` 执行 `wrangler secret put ADMIN_GITHUB_ID`，然后浏览器验证：匿名访问 `/dashboard` → 302 到 login；非白名单 GH 登录 → `error=not_admin`；白名单 GH 登录 → dashboard 正常。 |
-| **pages.dev 301 浏览器验证** | PUBSEC-05 | `_redirects` 静态文件内容已 grep 通过，但跨域 DNS + 实际 301 需要部署后验证。 | 部署后浏览器访问 `https://starye-movie.pages.dev/`（以及 comic/dashboard/auth/blog 各一次），观测 301 到 `https://starye.org/<app>/`。 |
+| **WAF 限速规则生效** | PUBSEC-03 | Cloudflare Dashboard 的 Rate Limiting Rules 只可在 UI 手配；代码层没有可断言的产物。 | 已由 Phase 2 UAT 确认通过，后续部署按 `RUNBOOK.md §WAF Rate Limiting 手配记录` 维护。 |
+| **ADMIN_GITHUB_ID secret 注入** | ACCESS-02 实际生效 | 代码已读取 `env.ADMIN_GITHUB_ID`，但真实生效取决于部署期 `wrangler secret put`。 | 已由 Phase 2 UAT 确认通过；后续部署仍按 `RUNBOOK.md §ADMIN_GITHUB_ID 白名单配置` 执行。 |
+| **pages.dev 301 浏览器验证** | PUBSEC-05 | `_redirects` 静态文件内容已 grep 通过，但跨域 DNS + 实际 301 需要部署后验证。 | 已由 Phase 2 UAT 确认通过。 |
 
 ---
 
@@ -234,14 +234,14 @@ CR-01 修复面与 D-14 意图一致。
 
 ## 8. Final Verdict
 
-**Status: `human_needed`**
+**Status: `passed`**
 
-- 代码交付与 phase goal 完全对齐，12 个 requirement 中 11 个 COVERED、1 个 HUMAN_NEEDED（WAF 规则须在 CF Dashboard 手配）。
+- 代码交付与 phase goal 完全对齐，12 个 requirement 现均已 COVERED。
 - 1 个 critical 安全缺陷（CR-01 open redirect）在审查后 commit `a9674e5` 已正确修复并经 redirectPath computed + 移除二次 decode 两重验证。
 - 4 个 warning / 7 个 info 为 deferred follow-ups，不破坏 phase goal，建议纳入下一次清理 phase 或 Phase 3/4 开工前顺手修掉（尤其是 WR-04 在接入 progress 门控时必须提前抽共享包）。
-- Phase 可进入 gsd-ship / archive 流程；WAF 规则与 secret 注入留到部署 checklist 里由人工确认并回填 RUNBOOK。
+- 从 verification 角度看，Phase 已不再有人工验证缺口；剩余安全侧阻断仅见 `02-SECURITY.md` 中未闭合的 `T-02-09`。
 
 ---
 
 _Verifier: Claude (gsd-verifier)_
-_Verified: 2026-05-11_
+_Verified: 2026-05-14_
