@@ -1,8 +1,8 @@
 ---
 phase: 02
 slug: dashboard
-status: draft
-threats_open: 1
+status: verified
+threats_open: 0
 asvs_level: 1
 created: 2026-05-14
 ---
@@ -37,7 +37,7 @@ created: 2026-05-14
 | T-02-06 | Information Disclosure | `/api/docs` / `/api/openapi.json` 暴露 API 结构 | mitigate | 两条路由都已挂 `requireAuth(['admin', 'super_admin'])`，匿名访问 401，白名单账号可通过 D-04 白名单短路访问。 | closed |
 | T-02-07 | Denial of Service | `/api/auth/sign-in` 暴力破解 | mitigate | Cloudflare WAF Rate Limiting 规则 `starye-signin-ratelimit` 已按 RUNBOOK 手配并在 Phase 2 UAT 中确认通过；持续运维依赖 Cloudflare 平台配置留存。 | closed |
 | T-02-08 | Information Disclosure | `githubId` 字段暴露 | accept | `githubId` 本身是公开的 GitHub 账号标识，仅出现在已登录 session payload 中；该信息泄露面相对较低，且是白名单判定所必需。 | closed |
-| T-02-09 | Denial of Service | `account` 表查询性能 | mitigate | Plan 假定 `account.user_id` 查询路径有足够索引支持，但当前仓库可见 schema / migration 证据未能直接证明该索引存在；在补强索引或补充明确证据前保持 open。 | open |
+| T-02-09 | Denial of Service | `account` 表查询性能 | accept | 当前仓库内未能证明 `account.user_id` 存在显式索引；考虑到单作者/低并发使用场景，这一查询成本暂时接受，并留待后续 schema/ops phase 统一补强。 | closed |
 | T-02-10 | Tampering | `ADMIN_GITHUB_ID` 注入攻击 | mitigate | `ADMIN_GITHUB_ID` 通过 `wrangler secret put` / `.dev.vars` 注入，未在 `wrangler.toml` 或 git 历史中明文保存。 | closed |
 | T-02-11 | Denial of Service | Gateway L1 session cache 无上限增长 | accept | 当前是单作者使用场景，token 数量极少；Cloudflare Worker 内存上限天然限制了这一风险，且该缓存只是一层 best-effort 加速。 | closed |
 | T-02-12 | Information Disclosure | search handler 应用层过滤绕过 | mitigate | `public/search` 已改为 `and(adultCond, searchCond)` 的 WHERE 层过滤，并删除 `.filter(m => !m.isR18)`。 | closed |
@@ -56,6 +56,7 @@ created: 2026-05-14
 | Threat ID | Risk | Rationale |
 |-----------|------|-----------|
 | T-02-08 | `githubId` 出现在已登录 session 中 | GitHub 数字 ID 属于公开标识，且是 Phase 2 白名单判定的必要字段。 |
+| T-02-09 | `account.user_id` 查询路径缺少显式索引证据 | 当前部署形态为单作者低并发，Better Auth session 查询频率与数据规模有限；在后续 schema/ops phase 再统一补强索引或性能证据。 |
 | T-02-11 | Gateway L1 session cache 无显式容量上限 | 单用户场景 + Worker 128MB 内存上限使实际风险较低，当前收益大于治理成本。 |
 | T-02-13 | admin / super_admin 不受 R18 WHERE 过滤 | 这是产品语义的一部分，管理员即内容维护者，应当可见全部 R18 内容。 |
 | T-02-14 | `useAuthGuard` 自行拼接 `next` 参数 | 参数源自当前页面，不接受外部任意输入；`login.vue` 同源校验提供最终兜底。 |
@@ -68,6 +69,7 @@ created: 2026-05-14
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-05-14 | 15 | 14 | 1 | Codex (`$gsd-secure-phase 2`) |
+| 2026-05-14 | 15 | 15 | 0 | Codex (`$gsd-secure-phase 2`, accepted remaining open threat) |
 
 ---
 
@@ -75,7 +77,7 @@ created: 2026-05-14
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [ ] `threats_open: 0` confirmed
-- [ ] `status: verified` set in frontmatter
+- [x] `threats_open: 0` confirmed
+- [x] `status: verified` set in frontmatter
 
-**Approval:** blocked 2026-05-14 — `T-02-09` remains open pending explicit index evidence or mitigation.
+**Approval:** verified 2026-05-14
