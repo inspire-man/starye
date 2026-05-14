@@ -1,7 +1,7 @@
 import type { Page } from 'puppeteer-core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { JavDBStrategy } from '../javdb'
 import { JavBusStrategy } from '../javbus'
+import { JavDBStrategy } from '../javdb'
 
 function createMockPage(): Page {
   return {
@@ -27,7 +27,7 @@ describe('crawler source tagging -> isR18', () => {
     document.body.innerHTML = ''
   })
 
-  it('JavBusStrategy 应将详情页内容标记为 isR18=true', async () => {
+  it('javBusStrategy 应将详情页内容标记为 isR18=true', async () => {
     document.title = 'ABP-123 Test Movie'
     document.body.innerHTML = `
       <h3>ABP-123 Test Movie</h3>
@@ -61,7 +61,7 @@ describe('crawler source tagging -> isR18', () => {
     expect(info.publisher).toBe('S1')
   })
 
-  it('JavDBStrategy 应将详情页内容标记为 isR18=true', async () => {
+  it('javDBStrategy 应将详情页内容标记为 isR18=true', async () => {
     document.title = 'JavDB Movie'
     document.body.innerHTML = `
       <h2 class="title">
