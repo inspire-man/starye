@@ -1,1 +1,18 @@
-pnpm lint-staged
+has_lint_files=0
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
+
+IFS='
+'
+for file in $staged_files; do
+  case "$file" in
+    *.js|*.ts|*.vue|*.json)
+      has_lint_files=1
+      break
+      ;;
+  esac
+done
+unset IFS
+
+if [ "$has_lint_files" = "1" ]; then
+  pnpm lint-staged
+fi
