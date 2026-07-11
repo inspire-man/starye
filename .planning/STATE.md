@@ -4,15 +4,15 @@ milestone: v1.1
 milestone_name: 存储成本控制与代码/文件整理
 current_phase: 6
 current_phase_name: Storage Policy Audit
-status: roadmap_ready
-stopped_at: Phase 6 context gathered
-last_updated: "2026-07-11T09:07:38.664Z"
-last_activity: 2026-07-11
-last_activity_desc: Milestone v1.1 requirements and roadmap created
+status: ready_to_execute
+stopped_at: Phase 6 planned
+last_updated: "2026-07-12T03:54:33+08:00"
+last_activity: 2026-07-12
+last_activity_desc: Phase 6 plans created, validated, and ready for execution
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -39,16 +39,16 @@ progress:
 
 ## Current Position
 
-Phase: 6 next (Storage Policy Audit)
-Plan: —
-Status: Roadmap ready; Phase 6 not started
-Last activity: 2026-07-11 — Milestone v1.1 requirements and roadmap created
+Phase: 6 current (Storage Policy Audit)
+Plan: 3 plans ready (`06-01` / `06-02` / `06-03`)
+Status: Ready to execute; planning passed after validation/doc sync
+Last activity: 2026-07-12 — Phase 6 plans created, checked, and synced
 
 ## Performance Metrics
 
 **Phases completed:** 0 / 5
 **Plans completed:** 0
-**Plans in flight:** 0
+**Plans in flight:** 3
 **Phase repair invocations used:** 0 / per-phase budget 2
 
 ## Accumulated Context
@@ -84,23 +84,23 @@ Last activity: 2026-07-11 — Milestone v1.1 requirements and roadmap created
 
 ## Session Continuity
 
-**Last session:** 2026-07-11T09:07:38.632Z
-**Stopped at:** Phase 6 context gathered
-**Resume file:** .planning/phases/06-storage-policy-audit/06-CONTEXT.md
+**Last session:** 2026-07-12T03:54:33+08:00
+**Stopped at:** Phase 6 planned
+**Resume file:** .planning/phases/06-storage-policy-audit/06-01-PLAN.md
 
 **Next recommended action:**
 
 ```
-$gsd-discuss-phase 6
+$gsd-execute-phase 6
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
-2. Read `.planning/MILESTONES.md`
-3. Read `.planning/REQUIREMENTS.md`
-4. Read `.planning/ROADMAP.md`
-5. Continue with `$gsd-discuss-phase 6`
+2. Read `.planning/ROADMAP.md`
+3. Read `.planning/phases/06-storage-policy-audit/06-VALIDATION.md`
+4. Read `.planning/phases/06-storage-policy-audit/06-01-PLAN.md`
+5. Continue with `$gsd-execute-phase 6`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -110,4 +110,4 @@ $gsd-discuss-phase 6
 
 ## Operator Next Steps
 
-- Start Phase 6 with /gsd-discuss-phase 6
+- Execute Phase 6 with /gsd-execute-phase 6

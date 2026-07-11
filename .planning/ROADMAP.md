@@ -30,11 +30,17 @@ v1.1 is in planning. The milestone protects the project from Cloudflare storage 
 **Plans:** 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 06-01-PLAN.md — 固化 canonical storage policy、prefix 分类与 source-vs-R2 术语契约。
 - [ ] 06-02-PLAN.md — 盘点 live repo 的 R2 write entries、历史文档声明和 forbidden-risk baselines。
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 06-03-PLAN.md — 构建只读 R2 审计脚本、Markdown/JSON/CSV 报告契约和 no-delete 验证工单。
 
 **Success criteria:**
+
 1. A storage policy doc records allowed R2 purposes, forbidden prefixes, external URL semantics, and why Worker image proxying is not default.
 2. Current code paths that upload to R2 are listed with owner modules, including API upload, crawler image processing, mapping files, covers, avatars, logos, and scripts.
 3. A dry-run R2 audit plan can identify forbidden chapter/image prefixes and DB references before deletion.
@@ -47,6 +53,7 @@ Plans:
 **Requirements:** COMIC-01, COMIC-02, COMIC-03, COMIC-04, COMIC-05
 
 **Success criteria:**
+
 1. Comic crawler chapter processing preserves normalized source image URLs and no longer calls R2 image processing for chapter pages.
 2. Comic cover handling remains possible through an explicit allowed path, separate from chapter page handling.
 3. Public comic chapter API returns external image URLs without rewriting them to R2/CDN assumptions.
@@ -60,6 +67,7 @@ Plans:
 **Requirements:** COST-01, COST-02, COST-03, COST-04, COST-05
 
 **Success criteria:**
+
 1. `/api/upload` requires a `purpose` and rejects disallowed purposes such as comic chapter page uploads.
 2. Crawler image processing uses the same allowed-purpose policy and has tests for rejected chapter page uploads.
 3. R2 object lifecycle guidance covers temporary, debug, import-staging, and mapping backup prefixes with concrete retention windows.
@@ -73,6 +81,7 @@ Plans:
 **Requirements:** DOC-01, DOC-02, DOC-03, DOC-04
 
 **Success criteria:**
+
 1. AGENTS.md becomes a concise operational index with links to detailed docs rather than a long duplicated project manual.
 2. Detailed repository guidance is grouped into stable docs or `.planning` files with clear ownership and update triggers.
 3. v1.0 phase evidence is preserved in milestone archives or intentionally cleared according to GSD workflow, with no loss of verification evidence.
@@ -85,6 +94,7 @@ Plans:
 **Requirements:** CODE-01, CODE-02, CODE-03, CODE-04
 
 **Success criteria:**
+
 1. Allowed R2 purposes and key generation are centralized or clearly shared between API and crawler code.
 2. Code names and call sites distinguish necessary stored assets from preserved external image URLs.
 3. Tests cover allowed uploads, rejected chapter page uploads, comic API external URLs, and Reader failure behavior.
@@ -104,16 +114,17 @@ Plans:
 
 ## Next
 
-Start Phase 6 with:
+Execute Phase 6 with:
 
 ```text
-$gsd-discuss-phase 6
+$gsd-execute-phase 6
 ```
 
 Also available:
 
 ```text
-$gsd-plan-phase 6
+$gsd-plan-phase 6 --research
+$gsd-review --phase 6 --all
 ```
 
 ---
