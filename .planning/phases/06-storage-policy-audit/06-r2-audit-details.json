@@ -1,0 +1,248 @@
+{
+  "metadata": {
+    "generatedAt": "REPLACE_WITH_LIVE_DRY_RUN_TIMESTAMP",
+    "source": "phase-06-report-contract-template",
+    "runtimeInventoryAvailable": false,
+    "noDeleteConfirmed": true,
+    "notes": [
+      "This file is a contract template for Phase 6 dry-run output.",
+      "Real count, size, timestamp, and db_reference_hits values must be replaced by a credentialed read-only audit run.",
+      "comics/<slug> and comics/<slug>/<chapter> must stay as separate rows."
+    ]
+  },
+  "data": [
+    {
+      "prefix": "images/",
+      "source_kind": "runtime_prefix_group",
+      "writer": "Generic API upload route",
+      "caller_or_schedule": "POST /api/upload; dashboard direct uploads",
+      "object_count": 0,
+      "rough_size_bytes": 0,
+      "sample_keys": [
+        "images/2026-07-12-example.png"
+      ],
+      "oldest_last_modified": null,
+      "newest_last_modified": null,
+      "db_reference_hits": null,
+      "referenced_tables_fields": [
+        "media.key",
+        "media.url",
+        "post.cover_image",
+        "comic.cover_image",
+        "movie.cover_image",
+        "actor.avatar",
+        "actor.cover",
+        "publisher.logo",
+        "user.image",
+        "page.image_url"
+      ],
+      "docs_references": [
+        ".planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md",
+        ".planning/phases/06-storage-policy-audit/06-R2-WRITE-INVENTORY.md"
+      ],
+      "delete_risk": "high",
+      "cost_risk": "high",
+      "combined_recommendation": "Inventory first, then classify or migrate before any cleanup.",
+      "evidence_sources": [
+        "apps/api/src/routes/upload/index.ts",
+        "packages/db/src/schema.ts"
+      ],
+      "notes": [
+        "Template row only; live values pending credentialed dry-run.",
+        "Phase 6 must never treat missing DB credentials as zero references."
+      ]
+    },
+    {
+      "prefix": "mappings/",
+      "source_kind": "runtime_prefix_group",
+      "writer": "MappingFileManager; admin crawler API; verification scripts",
+      "caller_or_schedule": "daily actor crawl; daily publisher crawl; POST /api/admin/crawlers/add-mapping; verify-r2-upload.ts",
+      "object_count": 0,
+      "rough_size_bytes": 0,
+      "sample_keys": [
+        "mappings/actor-name-map.json"
+      ],
+      "oldest_last_modified": null,
+      "newest_last_modified": null,
+      "db_reference_hits": null,
+      "referenced_tables_fields": [],
+      "docs_references": [
+        ".planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md",
+        ".planning/phases/06-storage-policy-audit/06-R2-WRITE-INVENTORY.md",
+        ".planning/phases/06-storage-policy-audit/06-RISK-BASELINES.md"
+      ],
+      "delete_risk": "medium",
+      "cost_risk": "medium",
+      "combined_recommendation": "Keep for active mapping workflows and audit backup growth separately.",
+      "evidence_sources": [
+        "packages/crawler/src/lib/mapping-file-manager.ts",
+        "apps/api/src/routes/admin/crawlers/index.ts",
+        "packages/crawler/scripts/verify-r2-upload.ts"
+      ],
+      "notes": [
+        "Template row only; live values pending credentialed dry-run."
+      ]
+    },
+    {
+      "prefix": "mappings/backups/",
+      "source_kind": "runtime_prefix_group",
+      "writer": "MappingFileManager; admin crawler API; verification scripts",
+      "caller_or_schedule": "daily actor crawl; daily publisher crawl; POST /api/admin/crawlers/add-mapping; verify-r2-upload.ts",
+      "object_count": 0,
+      "rough_size_bytes": 0,
+      "sample_keys": [
+        "mappings/backups/actor-name-map-1720000000000.json"
+      ],
+      "oldest_last_modified": null,
+      "newest_last_modified": null,
+      "db_reference_hits": null,
+      "referenced_tables_fields": [],
+      "docs_references": [
+        ".planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md",
+        ".planning/phases/06-storage-policy-audit/06-R2-WRITE-INVENTORY.md",
+        ".planning/phases/06-storage-policy-audit/06-RISK-BASELINES.md"
+      ],
+      "delete_risk": "low",
+      "cost_risk": "high",
+      "combined_recommendation": "Treat as restricted backups with explicit growth controls.",
+      "evidence_sources": [
+        "packages/crawler/src/lib/mapping-file-manager.ts",
+        "apps/api/src/routes/admin/crawlers/index.ts",
+        "packages/crawler/scripts/verify-r2-upload.ts"
+      ],
+      "notes": [
+        "Template row only; live values pending credentialed dry-run."
+      ]
+    },
+    {
+      "prefix": "comics/<slug>",
+      "source_kind": "runtime_prefix_group",
+      "writer": "comic-crawler cover processing",
+      "caller_or_schedule": "daily-manga-crawl workflow via ImageProcessor cover uploads",
+      "object_count": 0,
+      "rough_size_bytes": 0,
+      "sample_keys": [
+        "comics/demo-slug/cover-original.webp"
+      ],
+      "oldest_last_modified": null,
+      "newest_last_modified": null,
+      "db_reference_hits": null,
+      "referenced_tables_fields": [
+        "media.key",
+        "media.url",
+        "comic.cover_image"
+      ],
+      "docs_references": [
+        ".planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md",
+        ".planning/phases/06-storage-policy-audit/06-R2-WRITE-INVENTORY.md"
+      ],
+      "delete_risk": "high",
+      "cost_risk": "medium",
+      "combined_recommendation": "Keep distinct from chapter-body mirrors and verify cover references first.",
+      "evidence_sources": [
+        "packages/crawler/src/crawlers/comic-crawler.ts",
+        "packages/crawler/src/lib/image-processor.ts",
+        "packages/db/src/schema.ts"
+      ],
+      "notes": [
+        "Template row only; live values pending credentialed dry-run.",
+        "This row must never be collapsed into comics/<slug>/<chapter>."
+      ]
+    },
+    {
+      "prefix": "comics/<slug>/<chapter>",
+      "source_kind": "runtime_prefix_group",
+      "writer": "comic-crawler chapter page processing",
+      "caller_or_schedule": "daily-manga-crawl workflow via ImageProcessor chapter uploads",
+      "object_count": 0,
+      "rough_size_bytes": 0,
+      "sample_keys": [
+        "comics/demo-slug/chapter-1/001-original.webp"
+      ],
+      "oldest_last_modified": null,
+      "newest_last_modified": null,
+      "db_reference_hits": null,
+      "referenced_tables_fields": [
+        "media.key",
+        "media.url",
+        "page.image_url"
+      ],
+      "docs_references": [
+        ".planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md",
+        ".planning/phases/06-storage-policy-audit/06-R2-WRITE-INVENTORY.md",
+        ".planning/phases/06-storage-policy-audit/06-RISK-BASELINES.md"
+      ],
+      "delete_risk": "critical",
+      "cost_risk": "critical",
+      "combined_recommendation": "Forbidden-risk baseline: do not delete until reader/API callers migrate away from R2 URLs.",
+      "evidence_sources": [
+        "packages/crawler/src/crawlers/comic-crawler.ts",
+        "apps/api/src/routes/admin/sync/handlers.ts",
+        "apps/api/src/routes/public/comics/index.ts",
+        "packages/db/src/schema.ts"
+      ],
+      "notes": [
+        "Template row only; live values pending credentialed dry-run.",
+        "This row must remain separate from comics/<slug>."
+      ]
+    },
+    {
+      "prefix": "system/",
+      "source_kind": "runtime_prefix_group",
+      "writer": "Search index build script",
+      "caller_or_schedule": "daily-manga-crawl workflow; build-search.ts",
+      "object_count": 0,
+      "rough_size_bytes": 0,
+      "sample_keys": [
+        "system/search-index.json"
+      ],
+      "oldest_last_modified": null,
+      "newest_last_modified": null,
+      "db_reference_hits": null,
+      "referenced_tables_fields": [],
+      "docs_references": [
+        ".planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md",
+        ".planning/phases/06-storage-policy-audit/06-R2-WRITE-INVENTORY.md"
+      ],
+      "delete_risk": "high",
+      "cost_risk": "medium",
+      "combined_recommendation": "Classify operational ownership before cleanup.",
+      "evidence_sources": [
+        "packages/crawler/scripts/build-search.ts",
+        ".planning/phases/06-storage-policy-audit/06-RESEARCH.md"
+      ],
+      "notes": [
+        "Template row only; live values pending credentialed dry-run."
+      ]
+    },
+    {
+      "prefix": "ops/d1-backups/",
+      "source_kind": "runtime_prefix_group",
+      "writer": "deploy-migrations backup step",
+      "caller_or_schedule": "manual migration workflow",
+      "object_count": 0,
+      "rough_size_bytes": 0,
+      "sample_keys": [
+        "ops/d1-backups/starye-db-12345-1.sql"
+      ],
+      "oldest_last_modified": null,
+      "newest_last_modified": null,
+      "db_reference_hits": null,
+      "referenced_tables_fields": [],
+      "docs_references": [
+        ".planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md",
+        ".planning/phases/06-storage-policy-audit/06-R2-WRITE-INVENTORY.md"
+      ],
+      "delete_risk": "critical",
+      "cost_risk": "medium",
+      "combined_recommendation": "Treat as operations backups with restore/retention review before cleanup.",
+      "evidence_sources": [
+        ".github/workflows/deploy-migrations.yml",
+        ".planning/phases/06-storage-policy-audit/06-RESEARCH.md"
+      ],
+      "notes": [
+        "Template row only; live values pending credentialed dry-run."
+      ]
+    }
+  ]
+}
