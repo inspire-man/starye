@@ -13,7 +13,7 @@ v1.1 is in planning. The milestone protects the project from Cloudflare storage 
 
 | Phase | Name | Goal | Requirements |
 |-------|------|------|--------------|
-| 6 | 1/3 | In Progress|  |
+| 6 | 2/3 | In Progress|  |
 | 7 | Comic External Image Flow | Stop comic chapter body images from entering R2 and make crawler/API/Reader work with source image URLs. | COMIC-01, COMIC-02, COMIC-03, COMIC-04, COMIC-05 |
 | 8 | Cost Guardrails | Enforce approved R2 purposes and add audit/lifecycle/budget operations that prevent surprise Cloudflare charges. | COST-01, COST-02, COST-03, COST-04, COST-05 |
 | 9 | Documentation Restructure | Shrink AGENTS.md and organize historical/current docs so future work starts from the right source of truth. | DOC-01, DOC-02, DOC-03, DOC-04 |
@@ -27,13 +27,13 @@ v1.1 is in planning. The milestone protects the project from Cloudflare storage 
 
 **Requirements:** STOR-01, STOR-02, STOR-03, STOR-04
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 06-01-PLAN.md — 固化 canonical storage policy、prefix 分类与 source-vs-R2 术语契约。
-- [ ] 06-02-PLAN.md — 盘点 live repo 的 R2 write entries、历史文档声明和 forbidden-risk baselines。
+- [x] 06-02-PLAN.md — 盘点 live repo 的 R2 write entries、历史文档声明和 forbidden-risk baselines。
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
