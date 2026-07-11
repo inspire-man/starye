@@ -27,6 +27,13 @@ v1.1 is in planning. The milestone protects the project from Cloudflare storage 
 
 **Requirements:** STOR-01, STOR-02, STOR-03, STOR-04
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — 固化 canonical storage policy、prefix 分类与 source-vs-R2 术语契约。
+- [ ] 06-02-PLAN.md — 盘点 live repo 的 R2 write entries、历史文档声明和 forbidden-risk baselines。
+- [ ] 06-03-PLAN.md — 构建只读 R2 审计脚本、Markdown/JSON/CSV 报告契约和 no-delete 验证工单。
+
 **Success criteria:**
 1. A storage policy doc records allowed R2 purposes, forbidden prefixes, external URL semantics, and why Worker image proxying is not default.
 2. Current code paths that upload to R2 are listed with owner modules, including API upload, crawler image processing, mapping files, covers, avatars, logos, and scripts.
