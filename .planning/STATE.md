@@ -5,16 +5,16 @@ milestone_name: 存储成本控制与代码/文件整理
 current_phase: 6
 current_phase_name: Storage Policy Audit
 status: executing
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-07-11T20:52:40.975Z"
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-07-12T05:25:52+08:00"
 last_activity: 2026-07-12
-last_activity_desc: Completed 06-01 storage policy and summary
+last_activity_desc: Phase 6 complete with read-only audit toolkit, report contracts, and no-delete verification work order
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 20
 ---
 
 # Project State: Starye — 个人内容中台
@@ -39,16 +39,16 @@ progress:
 
 ## Current Position
 
-Phase: 6 current (Storage Policy Audit)
-Plan: 06-01 complete; next plans: 06-02 / 06-03
-Status: In progress — 06-01 complete, ready for 06-02
-Last activity: 2026-07-12 — Completed 06-01 storage policy and summary
+Phase: 6 complete (Storage Policy Audit)
+Plan: 06-01 / 06-02 / 06-03 complete
+Status: Complete — ready to begin Phase 7 discussion
+Last activity: 2026-07-12 — Phase 6 complete with read-only audit toolkit, report contracts, and no-delete verification work order
 
 ## Performance Metrics
 
-**Phases completed:** 0 / 5
-**Plans completed:** 1
-**Plans in flight:** 2
+**Phases completed:** 1 / 5
+**Plans completed:** 3
+**Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
 ## Accumulated Context
@@ -64,6 +64,7 @@ Last activity: 2026-07-12 — Completed 06-01 storage policy and summary
 | v1.1 forbids default Worker/Pages Function image proxying | Proxying chapter images shifts cost from R2 storage to Workers requests/CPU | 2026-07-11 milestone creation |
 | Phase 06 P01 | 6 min | 2 tasks | 2 files |
 | Phase 06 P02 | 4 min | 2 tasks | 2 files |
+| Phase 06 P03 | 15 min | 3 tasks | 7 files |
 
 ### Open Todos (carried across phases)
 
@@ -86,23 +87,23 @@ Last activity: 2026-07-12 — Completed 06-01 storage policy and summary
 
 ## Session Continuity
 
-**Last session:** 2026-07-11T20:52:40.958Z
-**Stopped at:** Completed 06-02-PLAN.md
+**Last session:** 2026-07-11T21:30:26.609Z
+**Stopped at:** Completed 06-03-PLAN.md
 **Resume file:** None
 
 **Next recommended action:**
 
-```
-$gsd-execute-phase 6
+```text
+$gsd-discuss-phase 7
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/ROADMAP.md`
-3. Read `.planning/phases/06-storage-policy-audit/06-VALIDATION.md`
-4. Read `.planning/phases/06-storage-policy-audit/06-01-PLAN.md`
-5. Continue with `$gsd-execute-phase 6`
+3. Read `.planning/phases/06-storage-policy-audit/06-03-SUMMARY.md`
+4. Read `.planning/phases/06-storage-policy-audit/06-VERIFICATION.md`
+5. Continue with `$gsd-discuss-phase 7`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -112,10 +113,15 @@ $gsd-execute-phase 6
 
 ## Operator Next Steps
 
-- Execute Phase 6 with /gsd-execute-phase 6
+- Discuss Phase 7 with /gsd-discuss-phase 7
 
 ## Decisions
 
 - [Phase 06]: R2 policy is frozen into standard allowed, restricted allowed, short-term allowed, historical risk, and forbidden classes. — Locked by 06-01 storage policy
 - [Phase 06]: system/ and ops/d1-backups/ remain discovered unlisted prefixes until a later operations classification phase. — Locked by 06-01 storage policy
 - [Phase 06]: sourceImageUrl or externalImageUrl identify source URLs, while r2Key plus r2Url identify R2-backed assets; historical image_url and images: string[] names remain but their semantics are locked. — Locked by 06-01 storage policy
+- [Phase 06]: runtime inventory evidence and historical-doc baselines stay in separate artifacts so later cleanup phases do not treat stale docs as live storage truth. — Locked by 06-02 evidence split
+- [Phase 06]: audit tooling for this milestone remains read-only; any future delete/lifecycle action still requires a fresh credentialed dry-run plus separate verification. — Locked by 06-03 verification work order
+- [Phase 06]: Audit script stays read-only and uses AWS S3-compatible list operations for inventory. — Locked by 06-03 storage audit implementation
+- [Phase 06]: Dry-run report artifacts ship as contract templates until a credentialed live run overwrites counts and timestamps. — Locked by 06-03 report contract delivery
+- [Phase 06]: comics/<slug> and comics/<slug>/<chapter> remain separate audit rows to protect cover assets from chapter-body cleanup decisions. — Locked by 06-03 prefix separation requirement

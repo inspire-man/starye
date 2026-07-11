@@ -13,7 +13,7 @@ v1.1 is in planning. The milestone protects the project from Cloudflare storage 
 
 | Phase | Name | Goal | Requirements |
 |-------|------|------|--------------|
-| 6 | 2/3 | In Progress|  |
+| 6 | 3/3 | Complete   | 2026-07-12 |
 | 7 | Comic External Image Flow | Stop comic chapter body images from entering R2 and make crawler/API/Reader work with source image URLs. | COMIC-01, COMIC-02, COMIC-03, COMIC-04, COMIC-05 |
 | 8 | Cost Guardrails | Enforce approved R2 purposes and add audit/lifecycle/budget operations that prevent surprise Cloudflare charges. | COST-01, COST-02, COST-03, COST-04, COST-05 |
 | 9 | Documentation Restructure | Shrink AGENTS.md and organize historical/current docs so future work starts from the right source of truth. | DOC-01, DOC-02, DOC-03, DOC-04 |
@@ -27,7 +27,7 @@ v1.1 is in planning. The milestone protects the project from Cloudflare storage 
 
 **Requirements:** STOR-01, STOR-02, STOR-03, STOR-04
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -37,7 +37,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-03-PLAN.md — 构建只读 R2 审计脚本、Markdown/JSON/CSV 报告契约和 no-delete 验证工单。
+- [x] 06-03-PLAN.md — 构建只读 R2 审计脚本、Markdown/JSON/CSV 报告契约和 no-delete 验证工单。
 
 **Success criteria:**
 
@@ -114,10 +114,10 @@ Plans:
 
 ## Next
 
-Execute Phase 6 with:
+Continue to Phase 7 with:
 
 ```text
-$gsd-execute-phase 6
+$gsd-discuss-phase 7
 ```
 
 Also available:
