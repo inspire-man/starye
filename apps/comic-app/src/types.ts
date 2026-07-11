@@ -27,10 +27,17 @@ export interface ChapterDetail extends Chapter {
 
 export interface ReadingProgress {
   id: string
-  userId: string
+  contentType: 'comic'
+  contentId: string
   chapterId: string
+  comicSlug?: string
+  comicTitle?: string
+  chapterTitle?: string
+  position: number
   page: number
-  updatedAt: Date
+  duration: null
+  completed: boolean
+  updatedAt: string
 }
 
 export interface ApiResponse<T> {

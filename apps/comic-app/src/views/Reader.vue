@@ -18,6 +18,9 @@ const scrollContainer = ref<HTMLElement>()
 
 const loadedImages = new Set<number>()
 let saveProgressTimer: number | null = null
+const chapterContentId = ref('')
+const lastSavedPage = ref(0)
+const wasCompleted = ref(false)
 
 async function fetchChapter() {
   loading.value = true
@@ -30,6 +33,7 @@ async function fetchChapter() {
     const response = await comicApi.getChapterDetail(slug, chapterId)
 
     if (response.success && response.data) {
+      chapterContentId.value = response.data.id
       images.value = response.data.images
       chapterTitle.value = response.data.title
       totalPages.value = response.data.images.length
@@ -54,10 +58,15 @@ async function loadProgress(chapterId: string) {
   try {
     const response = await progressApi.getReadingProgress(chapterId)
     if (response.success && response.data && !Array.isArray(response.data)) {
-      const page = response.data.page
+      wasCompleted.value = response.data.completed
+      const page = response.data.completed ? 1 : response.data.page
+      currentPage.value = page
       setTimeout(() => {
         scrollToPage(page)
       }, 100)
+      if (response.data.completed) {
+        clearCompletedIfRestarting(page)
+      }
     }
   }
   catch (error) {
@@ -98,24 +107,55 @@ function handleScroll() {
   currentPage.value = visiblePage
 
   if (userStore.user) {
-    debounceSaveProgress(visiblePage)
+    debounceSaveProgress(visiblePage, visiblePage >= totalPages.value)
   }
 }
 
-function debounceSaveProgress(page: number) {
+async function persistProgress(page: number, completed: boolean) {
+  if (!chapterContentId.value) {
+    return
+  }
+  await progressApi.saveReadingProgress(chapterContentId.value, page, completed)
+  lastSavedPage.value = page
+  wasCompleted.value = completed
+}
+
+function debounceSaveProgress(page: number, completed: boolean) {
   if (saveProgressTimer) {
     clearTimeout(saveProgressTimer)
   }
 
   saveProgressTimer = window.setTimeout(async () => {
     try {
-      const chapterId = `${route.params.slug}-${route.params.chapterId}`
-      await progressApi.saveReadingProgress(chapterId, page)
+      await persistProgress(page, completed)
     }
     catch (error) {
       console.error('Failed to save progress:', error)
     }
-  }, 1000)
+  }, 500)
+}
+
+function clearCompletedIfRestarting(page: number) {
+  if (!wasCompleted.value || page !== 1 || !userStore.user || !chapterContentId.value) {
+    return
+  }
+
+  saveProgressTimer = window.setTimeout(async () => {
+    try {
+      await persistProgress(1, false)
+    }
+    catch (error) {
+      console.error('Failed to reset completed reading progress:', error)
+    }
+  }, 0)
+}
+
+function handlePageHide() {
+  if (!userStore.user || !chapterContentId.value) {
+    return
+  }
+
+  void persistProgress(currentPage.value, currentPage.value >= totalPages.value)
 }
 
 function goBack() {
@@ -123,10 +163,13 @@ function goBack() {
 }
 
 onMounted(() => {
+  window.addEventListener('pagehide', handlePageHide)
   fetchChapter()
 })
 
 onUnmounted(() => {
+  window.removeEventListener('pagehide', handlePageHide)
+  handlePageHide()
   if (saveProgressTimer) {
     clearTimeout(saveProgressTimer)
   }

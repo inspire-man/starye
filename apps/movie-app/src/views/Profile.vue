@@ -1,7 +1,7 @@
 <!-- eslint-disable no-alert -->
 <script setup lang="ts">
 import type { SelectOption } from '../components/Select.vue'
-import type { DownloadStatus, WatchingProgress } from '../types'
+import type { DownloadStatus, WatchingHistoryItem } from '../types'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import Aria2Settings from '../components/Aria2Settings.vue'
@@ -19,7 +19,7 @@ import { formatFileSize } from '../utils/aria2Client'
 const userStore = useUserStore()
 const { isMobile } = useMobileDetect()
 const loadingHistory = ref(false)
-const watchingHistory = ref<WatchingProgress[]>([])
+const watchingHistory = ref<WatchingHistoryItem[]>([])
 
 // 下载列表管理
 const {
@@ -349,8 +349,8 @@ async function fetchWatchingHistory() {
 
   loadingHistory.value = true
   try {
-    const response = await progressApi.getWatchingProgress()
-    if (response.success && Array.isArray(response.data)) {
+    const response = await progressApi.getWatchingHistory(50)
+    if (response.success && response.data) {
       watchingHistory.value = response.data
     }
   }
@@ -513,11 +513,15 @@ onMounted(() => {
             >
               <div class="flex-1">
                 <p class="text-white font-medium">
-                  {{ item.movieCode }}
+                  {{ item.title }}
                 </p>
                 <p class="text-sm text-gray-400">
+                  {{ item.movieCode }}
+                  <span class="mx-1">·</span>
                   观看至 {{ formatTime(item.progress) }}
                   <span v-if="item.duration"> / {{ formatTime(item.duration) }}</span>
+                  <span class="mx-1">·</span>
+                  {{ item.completed ? '已完成' : '未完成' }}
                 </p>
               </div>
               <p class="text-xs text-gray-500">

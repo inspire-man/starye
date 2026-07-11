@@ -10,7 +10,57 @@ on:
   workflow_dispatch:
 
 jobs:
+  destructive-migration-gate:
+    runs-on: ubuntu-latest
+    name: Detect Destructive SQL
+    outputs:
+      requires_ack: ${{ steps.scan.outputs.requires_ack }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan migration SQL for destructive statements
+        id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            FILES=$(find packages/db/drizzle -maxdepth 1 -name '*.sql' -print)
+          else
+            FILES=$(git diff --name-only "$BASE_SHA" "${{ github.sha }}" -- packages/db/drizzle/*.sql || true)
+          fi
+
+          if [ -z "$FILES" ]; then
+            echo "requires_ack=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if grep -EIn "(DROP[[:space:]]+COLUMN|DROP[[:space:]]+TABLE|ALTER[[:space:]]+TABLE.+DROP)" $FILES; then
+            echo "requires_ack=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "requires_ack=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  reviewer-ack:
+    needs: destructive-migration-gate
+    if: ${{ needs.destructive-migration-gate.outputs.requires_ack == 'true' }}
+    runs-on: ubuntu-latest
+    name: Reviewer Ack Gate
+    environment: production-migration-review
+    steps:
+      - name: Reviewer Ack Recorded
+        run: |
+          echo "Destructive migration detected."
+          echo "This job uses the protected environment 'production-migration-review' as reviewer ack gate."
+
   migrate:
+    needs:
+      - destructive-migration-gate
+      - reviewer-ack
+    if: ${{ always() && needs.destructive-migration-gate.result == 'success' && (needs.reviewer-ack.result == 'success' || needs.reviewer-ack.result == 'skipped') }}
     runs-on: ubuntu-latest
     name: Apply D1 Migrations
     steps:
@@ -37,6 +87,42 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 execute starye-db --remote --file=../../scripts/fix-missing-tables.sql
+
+      - name: Export Remote D1 Backup
+        working-directory: ./apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          mkdir -p ../../artifacts/d1-backups
+          BACKUP_FILE="../../artifacts/d1-backups/starye-db-${{ github.run_id }}-${{ github.run_attempt }}.sql"
+          echo "BACKUP_FILE=$BACKUP_FILE" >> "$GITHUB_ENV"
+          echo "BACKUP_OBJECT_KEY=ops/d1-backups/starye-db-${{ github.run_id }}-${{ github.run_attempt }}.sql" >> "$GITHUB_ENV"
+          npx wrangler d1 export starye-db --remote --output="$BACKUP_FILE"
+
+      - name: Upload D1 Backup to R2
+        working-directory: ./apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          if [ -z "${R2_BUCKET_NAME:-}" ]; then
+            echo "R2_BUCKET_NAME secret is required for DEPLOY-03 backup upload." >&2
+            exit 1
+          fi
+
+          npx wrangler r2 object put "${R2_BUCKET_NAME}/${BACKUP_OBJECT_KEY}" \
+            --file="$BACKUP_FILE" \
+            --remote
+
+      - name: Upload D1 Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/d1-backups/*.sql
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Apply Migrations
         working-directory: ./apps/api

@@ -1,5 +1,7 @@
+import type { CloudflareOptions } from '@sentry/cloudflare'
 import type { AppEnv } from './types'
 import { Scalar } from '@scalar/hono-api-reference'
+import * as Sentry from '@sentry/cloudflare'
 import { Hono } from 'hono'
 import { openAPIRouteHandler } from 'hono-openapi'
 import { etag } from 'hono/etag'
@@ -34,6 +36,33 @@ import { publicSettingsRoutes } from './routes/public/settings'
 import { publishersRoutes } from './routes/publishers'
 import ratingsRoutes from './routes/ratings'
 import { uploadRoutes } from './routes/upload'
+
+const SENTRY_NOISE_PATTERNS = [
+  'aborterror',
+  'networkerror',
+  'failed to fetch',
+  'request timed out',
+  'network request failed',
+  'the operation was aborted',
+  'the user aborted a request',
+]
+
+type SentryBeforeSend = NonNullable<CloudflareOptions['beforeSend']>
+type SentryErrorEvent = Parameters<SentryBeforeSend>[0]
+type SentryErrorHint = Parameters<SentryBeforeSend>[1]
+
+function shouldDropSentryNoise(event: SentryErrorEvent, hint: SentryErrorHint): boolean {
+  const exceptionText = [
+    hint.originalException instanceof Error ? hint.originalException.name : '',
+    hint.originalException instanceof Error ? hint.originalException.message : '',
+    event.message ?? '',
+    ...(event.exception?.values?.flatMap((value: { type?: string, value?: string }) => [value.type ?? '', value.value ?? '']) ?? []),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return SENTRY_NOISE_PATTERNS.some(pattern => exceptionText.includes(pattern))
+}
 
 const app = new Hono<AppEnv>()
 
@@ -198,6 +227,25 @@ Starye 是一个现代化的内容聚合平台，支持漫画、电影和演员�
     }),
   )
 
-export default routes
 // Export the routes type for RPC, not the app type
 export type AppType = typeof routes
+
+export default Sentry.withSentry(
+  (env: AppEnv['Bindings']) => ({
+    dsn: env.SENTRY_DSN,
+    enabled: Boolean(env.SENTRY_DSN),
+    release: env.SENTRY_RELEASE,
+    tracesSampleRate: 0.1,
+    sendDefaultPii: false,
+    integrations: [
+      Sentry.honoIntegration(),
+    ],
+    beforeSend(event: SentryErrorEvent, hint: SentryErrorHint) {
+      if (shouldDropSentryNoise(event, hint)) {
+        return null
+      }
+      return event
+    },
+  }),
+  routes,
+)

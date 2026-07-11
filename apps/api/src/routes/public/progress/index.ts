@@ -1,16 +1,29 @@
 import type { AppEnv } from '../../../types'
-import { chapters, movies, readingProgress, watchingProgress } from '@starye/db/schema'
-import { and, desc, eq } from 'drizzle-orm'
+import { chapters, comics, movies, progress } from '@starye/db/schema'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
 import * as v from 'valibot'
-import { GetReadingProgressQuerySchema, GetWatchingProgressQuerySchema, ReadingProgressItemSchema, SaveReadingProgressSchema, SaveWatchingProgressSchema, WatchingHistoryItemSchema, WatchingProgressItemSchema } from '../../../schemas/progress'
+import {
+  GetReadingProgressQuerySchema,
+  GetWatchingProgressQuerySchema,
+  ReadingProgressItemSchema,
+  SaveReadingProgressSchema,
+  SaveWatchingProgressSchema,
+  WatchingHistoryItemSchema,
+  WatchingProgressItemSchema,
+} from '../../../schemas/progress'
 import { ErrorResponseSchema, MessageResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
 
 const publicProgress = new Hono<AppEnv>()
+type ProgressRow = typeof progress.$inferSelect
+interface ComicChapterMeta {
+  comicSlug?: string
+  comicTitle?: string
+  chapterTitle?: string
+}
 
-// 所有进度接口都需要登录
 publicProgress.use('*', async (c, next) => {
   const user = c.get('user')
   if (!user) {
@@ -19,9 +32,37 @@ publicProgress.use('*', async (c, next) => {
   await next()
 })
 
-// === 阅读进度 ===
+function toReadingProgressItem(entry: ProgressRow, chapterMeta?: ComicChapterMeta) {
+  return {
+    id: entry.id,
+    contentType: 'comic' as const,
+    contentId: entry.contentId,
+    chapterId: entry.contentId,
+    comicSlug: chapterMeta?.comicSlug,
+    comicTitle: chapterMeta?.comicTitle,
+    chapterTitle: chapterMeta?.chapterTitle,
+    position: entry.position,
+    page: entry.position,
+    duration: null,
+    completed: entry.completed,
+    updatedAt: entry.updatedAt.toISOString(),
+  }
+}
 
-// 保存阅读进度
+function toWatchingProgressItem(entry: ProgressRow) {
+  return {
+    id: entry.id,
+    contentType: 'movie' as const,
+    contentId: entry.contentId,
+    movieCode: entry.contentId,
+    position: entry.position,
+    progress: entry.position,
+    duration: entry.duration ?? null,
+    completed: entry.completed,
+    updatedAt: entry.updatedAt.toISOString(),
+  }
+}
+
 publicProgress.post(
   '/reading',
   describeRoute({
@@ -33,35 +74,19 @@ publicProgress.post(
     responses: {
       200: {
         description: '保存成功',
-        content: {
-          'application/json': {
-            schema: resolver(MessageResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(MessageResponseSchema) } },
       },
       401: {
         description: '需要登录',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
       404: {
         description: '章节不存在',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
       500: {
         description: '服务器内部错误',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
     },
   }),
@@ -69,10 +94,9 @@ publicProgress.post(
   async (c) => {
     const db = c.get('db')
     const user = c.get('user')!
-    const { chapterId, page } = c.req.valid('json')
+    const { chapterId, page, completed } = c.req.valid('json')
 
     try {
-    // 验证章节是否存在
       const chapter = await db.query.chapters.findFirst({
         where: eq(chapters.id, chapterId),
       })
@@ -81,38 +105,29 @@ publicProgress.post(
         return c.json({ success: false, error: '章节不存在' }, 404)
       }
 
-      // Upsert 进度记录
-      const existingProgress = await db
-        .select()
-        .from(readingProgress)
-        .where(
-          and(
-            eq(readingProgress.userId, user.id),
-            eq(readingProgress.chapterId, chapterId),
-          ),
-        )
-        .get()
-
-      if (existingProgress) {
-        await db
-          .update(readingProgress)
-          .set({
-            page,
-            updatedAt: new Date(),
-          })
-          .where(eq(readingProgress.id, existingProgress.id))
-      }
-      else {
-        await db.insert(readingProgress).values({
+      await db
+        .insert(progress)
+        .values({
           id: nanoid(),
           userId: user.id,
-          chapterId,
-          page,
+          contentType: 'comic',
+          contentId: chapterId,
+          position: page,
+          duration: null,
+          completed,
           updatedAt: new Date(),
         })
-      }
+        .onConflictDoUpdate({
+          target: [progress.userId, progress.contentType, progress.contentId],
+          set: {
+            position: page,
+            duration: null,
+            completed,
+            updatedAt: new Date(),
+          },
+        })
 
-      return c.json({ success: true })
+      return c.json({ success: true, message: '阅读进度已保存' })
     }
     catch (error) {
       console.error(`[PublicProgress] Failed to save reading progress for chapter ${chapterId}:`, error)
@@ -124,7 +139,6 @@ publicProgress.post(
   },
 )
 
-// 查询阅读进度
 publicProgress.get(
   '/reading',
   describeRoute({
@@ -142,6 +156,7 @@ publicProgress.get(
               SuccessResponseSchema(
                 v.union([
                   ReadingProgressItemSchema,
+                  v.null(),
                   v.array(ReadingProgressItemSchema),
                 ]),
                 '成功返回阅读进度',
@@ -152,27 +167,11 @@ publicProgress.get(
       },
       401: {
         description: '需要登录',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
-      },
-      404: {
-        description: '未找到进度记录',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
       500: {
         description: '服务器内部错误',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
     },
   }),
@@ -184,62 +183,114 @@ publicProgress.get(
 
     try {
       if (chapterId) {
-      // 查询单个章节进度
-        const progress = await db
+        const chapter = await db.query.chapters.findFirst({
+          where: eq(chapters.id, chapterId),
+          with: {
+            comic: true,
+          },
+        })
+
+        if (!chapter) {
+          return c.json({ success: true, data: null })
+        }
+
+        const entry = await db
           .select()
-          .from(readingProgress)
-          .where(
-            and(
-              eq(readingProgress.userId, user.id),
-              eq(readingProgress.chapterId, chapterId),
-            ),
-          )
+          .from(progress)
+          .where(and(
+            eq(progress.userId, user.id),
+            eq(progress.contentType, 'comic'),
+            eq(progress.contentId, chapterId),
+          ))
           .get()
 
         return c.json({
           success: true,
-          data: progress || null,
+          data: entry
+            ? toReadingProgressItem(entry, {
+                comicSlug: chapter.comic.slug,
+                comicTitle: chapter.comic.title,
+                chapterTitle: chapter.title,
+              })
+            : null,
         })
       }
 
       if (comicSlug) {
-      // 查询该漫画所有章节的进度
-        const chapterList = await db
-          .select({ id: chapters.id })
-          .from(chapters)
-          .where(eq(chapters.comicId, comicSlug))
+        const comic = await db.query.comics.findFirst({
+          where: eq(comics.slug, comicSlug),
+        })
 
-        const chapterIds = chapterList.map(ch => ch.id)
-
-        if (chapterIds.length === 0) {
+        if (!comic) {
           return c.json({ success: true, data: [] })
         }
 
-        // 查询所有该用户的进度，然后过滤
-        const allProgress = await db
-          .select()
-          .from(readingProgress)
-          .where(eq(readingProgress.userId, user.id))
+        const chapterList = await db.query.chapters.findMany({
+          where: eq(chapters.comicId, comic.id),
+        })
 
-        const filtered = allProgress.filter(p => chapterIds.includes(p.chapterId))
+        if (chapterList.length === 0) {
+          return c.json({ success: true, data: [] })
+        }
+
+        const chapterIds = chapterList.map(chapter => chapter.id)
+        const chapterMeta = new Map<string, ComicChapterMeta>(chapterList.map(chapter => [
+          chapter.id,
+          {
+            comicSlug: comic.slug,
+            comicTitle: comic.title,
+            chapterTitle: chapter.title,
+          },
+        ]))
+
+        const entries = await db
+          .select()
+          .from(progress)
+          .where(and(
+            eq(progress.userId, user.id),
+            eq(progress.contentType, 'comic'),
+            inArray(progress.contentId, chapterIds),
+          ))
+          .orderBy(desc(progress.updatedAt))
 
         return c.json({
           success: true,
-          data: filtered,
+          data: entries.map((entry: ProgressRow) => toReadingProgressItem(entry, chapterMeta.get(entry.contentId))),
         })
       }
 
-      // 返回所有阅读进度（按时间倒序）
-      const allProgress = await db
+      const entries = await db
         .select()
-        .from(readingProgress)
-        .where(eq(readingProgress.userId, user.id))
-        .orderBy(desc(readingProgress.updatedAt))
+        .from(progress)
+        .where(and(
+          eq(progress.userId, user.id),
+          eq(progress.contentType, 'comic'),
+        ))
+        .orderBy(desc(progress.updatedAt))
         .limit(50)
+
+      const chapterIds = entries.map(entry => entry.contentId)
+      const chapterList = chapterIds.length > 0
+        ? await db.query.chapters.findMany({
+            where: inArray(chapters.id, chapterIds),
+            with: {
+              comic: true,
+            },
+          })
+        : []
+
+      const chapterMeta = new Map<string, ComicChapterMeta>(chapterList.map(chapter => [
+        chapter.id,
+        {
+          comicSlug: chapter.comic.slug,
+          comicTitle: chapter.comic.title,
+          chapterTitle: chapter.title,
+        },
+      ]))
 
       return c.json({
         success: true,
-        data: allProgress,
+        data: entries.map((entry: ProgressRow) => toReadingProgressItem(entry, chapterMeta.get(entry.contentId))),
       })
     }
     catch (error) {
@@ -252,9 +303,6 @@ publicProgress.get(
   },
 )
 
-// === 观看进度 ===
-
-// 保存观看进度
 publicProgress.post(
   '/watching',
   describeRoute({
@@ -266,35 +314,19 @@ publicProgress.post(
     responses: {
       200: {
         description: '保存成功',
-        content: {
-          'application/json': {
-            schema: resolver(MessageResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(MessageResponseSchema) } },
       },
       401: {
         description: '需要登录',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
       404: {
         description: '影片不存在',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
       500: {
         description: '服务器内部错误',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
     },
   }),
@@ -302,10 +334,9 @@ publicProgress.post(
   async (c) => {
     const db = c.get('db')
     const user = c.get('user')!
-    const { movieCode, currentTime, duration } = c.req.valid('json')
+    const { movieCode, currentTime, duration, completed } = c.req.valid('json')
 
     try {
-    // 验证影片是否存在
       const movie = await db.query.movies.findFirst({
         where: eq(movies.code, movieCode),
       })
@@ -314,38 +345,27 @@ publicProgress.post(
         return c.json({ success: false, error: '影片不存在' }, 404)
       }
 
-      // Upsert 进度记录
-      const existingProgress = await db
-        .select()
-        .from(watchingProgress)
-        .where(
-          and(
-            eq(watchingProgress.userId, user.id),
-            eq(watchingProgress.movieCode, movieCode),
-          ),
-        )
-        .get()
-
-      if (existingProgress) {
-        await db
-          .update(watchingProgress)
-          .set({
-            progress: currentTime,
-            duration: duration || existingProgress.duration,
-            updatedAt: new Date(),
-          })
-          .where(eq(watchingProgress.id, existingProgress.id))
-      }
-      else {
-        await db.insert(watchingProgress).values({
+      await db
+        .insert(progress)
+        .values({
           id: nanoid(),
           userId: user.id,
-          movieCode,
-          progress: currentTime,
-          duration: duration || null,
+          contentType: 'movie',
+          contentId: movieCode,
+          position: currentTime,
+          duration: duration ?? null,
+          completed,
           updatedAt: new Date(),
         })
-      }
+        .onConflictDoUpdate({
+          target: [progress.userId, progress.contentType, progress.contentId],
+          set: {
+            position: currentTime,
+            duration: duration ?? null,
+            completed,
+            updatedAt: new Date(),
+          },
+        })
 
       return c.json({ success: true, message: '观看进度已保存' })
     }
@@ -359,7 +379,6 @@ publicProgress.post(
   },
 )
 
-// 查询观看进度 / 历史列表
 publicProgress.get(
   '/watching',
   describeRoute({
@@ -388,19 +407,11 @@ publicProgress.get(
       },
       401: {
         description: '需要登录',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
       500: {
         description: '服务器内部错误',
-        content: {
-          'application/json': {
-            schema: resolver(ErrorResponseSchema),
-          },
-        },
+        content: { 'application/json': { schema: resolver(ErrorResponseSchema) } },
       },
     },
   }),
@@ -412,46 +423,60 @@ publicProgress.get(
 
     try {
       if (movieCode) {
-        // 查询单个影片进度（向后兼容，返回原始字段）
-        const progress = await db
+        const entry = await db
           .select()
-          .from(watchingProgress)
-          .where(
-            and(
-              eq(watchingProgress.userId, user.id),
-              eq(watchingProgress.movieCode, movieCode),
-            ),
-          )
+          .from(progress)
+          .where(and(
+            eq(progress.userId, user.id),
+            eq(progress.contentType, 'movie'),
+            eq(progress.contentId, movieCode),
+          ))
           .get()
 
         return c.json({
           success: true,
-          data: progress ?? null,
+          data: entry ? toWatchingProgressItem(entry) : null,
         })
       }
 
-      // 历史列表：JOIN movies 返回含影片详情的记录
       const effectiveLimit = Math.min(limit ?? 20, 50)
       const history = await db
         .select({
-          id: watchingProgress.id,
-          movieCode: watchingProgress.movieCode,
-          progress: watchingProgress.progress,
-          duration: watchingProgress.duration,
-          updatedAt: watchingProgress.updatedAt,
+          id: progress.id,
+          contentId: progress.contentId,
+          position: progress.position,
+          duration: progress.duration,
+          completed: progress.completed,
+          updatedAt: progress.updatedAt,
           title: movies.title,
           coverImage: movies.coverImage,
           isR18: movies.isR18,
         })
-        .from(watchingProgress)
-        .innerJoin(movies, eq(watchingProgress.movieCode, movies.code))
-        .where(eq(watchingProgress.userId, user.id))
-        .orderBy(desc(watchingProgress.updatedAt))
+        .from(progress)
+        .innerJoin(movies, eq(progress.contentId, movies.code))
+        .where(and(
+          eq(progress.userId, user.id),
+          eq(progress.contentType, 'movie'),
+        ))
+        .orderBy(desc(progress.updatedAt))
         .limit(effectiveLimit)
 
       return c.json({
         success: true,
-        data: history,
+        data: history.map(item => ({
+          id: item.id,
+          contentType: 'movie' as const,
+          contentId: item.contentId,
+          movieCode: item.contentId,
+          title: item.title,
+          coverImage: item.coverImage,
+          isR18: item.isR18,
+          position: item.position,
+          progress: item.position,
+          duration: item.duration ?? null,
+          completed: item.completed,
+          updatedAt: item.updatedAt.toISOString(),
+        })),
       })
     }
     catch (error) {

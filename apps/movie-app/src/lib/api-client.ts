@@ -252,10 +252,10 @@ export const publisherApi = {
 // ─── Progress API ──────────────────────────────────────────────────────────
 
 export const progressApi = {
-  async saveWatchingProgress(movieCode: string, progress: number, duration?: number): Promise<ApiResponse<void>> {
+  async saveWatchingProgress(movieCode: string, progress: number, duration?: number | null, completed = false): Promise<ApiResponse<void>> {
     return apiFetch('/public/progress/watching', {
       method: 'POST',
-      body: JSON.stringify({ movieCode, currentTime: progress, duration }),
+      body: JSON.stringify({ movieCode, currentTime: progress, duration, completed }),
     })
   },
 

@@ -20,6 +20,7 @@
     "playwright:install": "playwright install chromium --with-deps"
   },
   "dependencies": {
+    "@sentry/vue": "^10.53.1",
     "@starye/db": "workspace:*",
     "@starye/locales": "workspace:*",
     "@starye/ui": "workspace:*",

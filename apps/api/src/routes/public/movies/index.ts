@@ -1,6 +1,6 @@
 import type { SQL } from 'drizzle-orm'
 import type { AppEnv } from '../../../types'
-import { actors, movieActors, moviePublishers, movies, players, publishers, watchingProgress } from '@starye/db/schema'
+import { actors, movieActors, moviePublishers, movies, players, progress, publishers } from '@starye/db/schema'
 import { and, count, desc, eq, getTableColumns, gte, inArray, like, lte, ne, notInArray, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
@@ -284,10 +284,13 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
         }
 
         const history = await db
-          .select({ movieCode: watchingProgress.movieCode })
-          .from(watchingProgress)
-          .where(eq(watchingProgress.userId, user.id))
-          .orderBy(desc(watchingProgress.updatedAt))
+          .select({ movieCode: progress.contentId })
+          .from(progress)
+          .where(and(
+            eq(progress.userId, user.id),
+            eq(progress.contentType, 'movie'),
+          ))
+          .orderBy(desc(progress.updatedAt))
           .limit(30)
 
         if (history.length === 0) {

@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { Github, Loader2 } from 'lucide-vue-next'
-import { signIn, useSession } from '~/lib/auth-client'
+import { Github } from 'lucide-vue-next'
+import { useSession } from '~/lib/auth-client'
 
 const route = useRoute()
 const sessionData = useSession()
-const loading = ref(false)
+const seededSession = useState<{ user?: unknown, session?: unknown } | null>('session', () => null)
+const requestOrigin = import.meta.server ? useRequestURL().origin : window.location.origin
 
 // 安全访问 session 数据
-const session = computed(() => sessionData.value?.data || null)
+const session = computed(() => sessionData.value?.data || seededSession.value || null)
 const isPending = computed(() => sessionData.value?.isPending || false)
 
 // 错误信息处理
@@ -31,8 +32,8 @@ const redirectPath = computed(() => {
   // 同时支持 next（Phase 2 新增）和 redirect（向后兼容 dashboard router.beforeEach）
   const raw = (route.query.next || route.query.redirect) as string || '/'
   try {
-    const target = new URL(raw, window.location.origin)
-    if (target.origin !== window.location.origin)
+    const target = new URL(raw, requestOrigin)
+    if (target.origin !== requestOrigin)
       return '/'
     // 只取相对部分，彻底切断回跳到外部域名的可能
     return target.pathname + target.search + target.hash || '/'
@@ -41,6 +42,15 @@ const redirectPath = computed(() => {
     return '/'
   }
 })
+
+const loginHref = computed(() => `/auth/start/github?next=${encodeURIComponent(redirectPath.value)}`)
+
+if (import.meta.server && !error.value && seededSession.value?.user && redirectPath.value !== '/auth/login') {
+  await navigateTo(redirectPath.value, {
+    redirectCode: 302,
+    replace: true,
+  })
+}
 
 // 核心逻辑：如果已经有 Session 且没有权限错误，则执行跳转
 // 添加防抖，避免频繁触发
@@ -85,28 +95,6 @@ onUnmounted(() => {
     redirectTimer = null
   }
 })
-
-async function handleGitHubLogin() {
-  loading.value = true
-
-  // 构建绝对路径的 Callback URL
-  // 当 GitHub 鉴权完成后，会重定向回这个 URL
-  // 这里我们让它回到当前登录页,由登录页的逻辑判断 Session 并跳转（或者 Better Auth 自动处理）
-  // 更好的方式是：如果 redirectPath 是绝对路径，直接用它；如果是相对路径，拼接 Origin
-
-  // NOTE: Better Auth 的 callbackURL 是指 OAuth Provider 回调后前端要访问的地址。
-  // 通常我们设置为当前页，或者一个专门的处理页。
-  // 为了简单，我们设置为当前页，带上相同的查询参数
-  const callbackURL = window.location.href
-
-  // eslint-disable-next-line no-console
-  console.log('[Login] Initiating GitHub login, callbackURL:', callbackURL)
-
-  await signIn.social({
-    provider: 'github',
-    callbackURL,
-  })
-}
 </script>
 
 <template>
@@ -129,15 +117,13 @@ async function handleGitHubLogin() {
     </div>
 
     <div class="py-4">
-      <button
-        :disabled="loading"
+      <a
+        :href="loginHref"
         class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-primary text-primary-foreground hover:bg-primary/90 rounded-2xl font-bold transition-all disabled:opacity-50 shadow-lg"
-        @click="handleGitHubLogin"
       >
-        <Loader2 v-if="loading" class="animate-spin h-5 w-5" />
-        <Github v-else class="w-6 h-6" />
+        <Github class="w-6 h-6" />
         Login with GitHub
-      </button>
+      </a>
     </div>
 
     <p class="text-[10px] text-muted-foreground uppercase tracking-widest">

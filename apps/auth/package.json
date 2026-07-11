@@ -12,6 +12,7 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@sentry/nuxt": "^10.53.1",
     "@starye/locales": "workspace:*",
     "@starye/ui": "workspace:*",
     "@vueuse/core": "^14.2.1",

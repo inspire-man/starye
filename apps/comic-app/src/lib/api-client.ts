@@ -89,10 +89,10 @@ export const comicApi = {
 // ─── Progress API ──────────────────────────────────────────────────────────
 
 export const progressApi = {
-  async saveReadingProgress(chapterId: string, page: number): Promise<ApiResponse<void>> {
+  async saveReadingProgress(chapterId: string, page: number, completed = false): Promise<ApiResponse<void>> {
     return apiFetch('/public/progress/reading', {
       method: 'POST',
-      body: JSON.stringify({ chapterId, page }),
+      body: JSON.stringify({ chapterId, page, completed }),
     })
   },
 

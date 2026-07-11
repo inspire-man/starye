@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useToast } from './composables/useToast'
+import { useAuthGuard } from './composables/useAuthGuard'
 import { useUserStore } from './stores/user'
 
 const router = createRouter({
@@ -94,8 +94,8 @@ router.beforeEach(async (to, _from, next) => {
     }
 
     if (!userStore.user) {
-      const { showToast } = useToast()
-      showToast('请先登录以访问该页面', 'error')
+      const { requireLogin } = useAuthGuard()
+      requireLogin(`/movie${to.fullPath}`)
       next(false)
       return
     }

@@ -1,3 +1,4 @@
+import { env } from 'node:process'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
@@ -16,6 +17,10 @@ export default defineNuxtConfig({
     },
   },
 
+  modules: [
+    '@sentry/nuxt/module',
+  ],
+
   // Tailwind v4 integration via Vite plugin
   vite: {
     plugins: [
@@ -32,9 +37,14 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      // eslint-disable-next-line node/prefer-global/process
-      apiUrl: process.env.NUXT_PUBLIC_API_URL || process.env.VITE_API_URL || 'http://localhost:8080',
+      apiUrl: env.NUXT_PUBLIC_API_URL || env.VITE_API_URL || 'http://localhost:8080',
+      sentryDsn: env.NUXT_PUBLIC_SENTRY_DSN || env.SENTRY_DSN || '',
     },
+  },
+
+  sentry: {
+    enabled: true,
+    autoInjectServerSentry: 'top-level-import',
   },
 
   // Deployment configuration

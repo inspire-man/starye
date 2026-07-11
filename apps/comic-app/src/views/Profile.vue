@@ -103,10 +103,14 @@ onMounted(() => {
           >
             <div class="flex-1">
               <p class="text-gray-900 font-medium">
-                章节 ID: {{ item.chapterId }}
+                {{ item.comicTitle || '未知漫画' }}
               </p>
               <p class="text-sm text-gray-500">
+                {{ item.chapterTitle || item.chapterId }}
+                <span class="mx-1">·</span>
                 阅读至第 {{ item.page }} 页
+                <span class="mx-1">·</span>
+                {{ item.completed ? '已读完' : '未读完' }}
               </p>
             </div>
             <p class="text-xs text-gray-400">

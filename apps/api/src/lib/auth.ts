@@ -23,6 +23,8 @@ export interface Env {
   ADMIN_URL?: string
   OPENROUTER_API_KEY?: string
   ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单
+  SENTRY_DSN?: string
+  SENTRY_RELEASE?: string
   // R2 Configuration
   CLOUDFLARE_ACCOUNT_ID: string
   R2_ACCESS_KEY_ID: string

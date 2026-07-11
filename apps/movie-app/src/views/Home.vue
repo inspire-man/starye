@@ -5,11 +5,13 @@ import { Pagination } from '@starye/ui'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Select from '../components/Select.vue'
+import { useAuthGuard } from '../composables/useAuthGuard'
 import { genreApi, movieApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()
 const router = useRouter()
+const { requireLogin } = useAuthGuard()
 
 const userStore = useUserStore()
 const loading = ref(true)
@@ -35,7 +37,7 @@ const filters = reactive({
 // Genre 标签数据
 const genres = ref<GenreItem[]>([])
 
-// 继续观看列表（已登录用户，进度 < 90% 的最近 5 部）
+// 继续观看列表（已登录用户，仅展示未完成记录）
 const continueWatchingList = ref<WatchingHistoryItem[]>([])
 
 // 猜你喜欢推荐列表
@@ -134,9 +136,8 @@ async function fetchContinueWatching() {
   try {
     const response = await progressApi.getWatchingHistory(10)
     if (response.success && response.data) {
-      // 过滤已看完（≥90%）的影片，取前 5 条
       continueWatchingList.value = response.data
-        .filter(item => item.progress > 0 && item.duration && item.progress / item.duration < 0.9)
+        .filter(item => item.progress > 0 && !item.completed)
         .slice(0, 5)
     }
   }
@@ -218,6 +219,13 @@ function progressPercent(item: WatchingHistoryItem): number {
   return Math.min(Math.round((item.progress / item.duration) * 100), 95)
 }
 
+function goToHistory() {
+  if (!requireLogin('/movie/history')) {
+    return
+  }
+  router.push('/history')
+}
+
 onMounted(() => {
   // 从 URL query 恢复状态
   pagination.page = Number(route.query.page) || 1
@@ -259,9 +267,9 @@ onMounted(() => {
         <h2 class="text-lg font-semibold text-white">
           继续观看
         </h2>
-        <RouterLink to="/history" class="text-xs text-gray-400 hover:text-primary-400 transition-colors">
+        <button class="text-xs text-gray-400 hover:text-primary-400 transition-colors" @click="goToHistory">
           查看全部历史 →
-        </RouterLink>
+        </button>
       </div>
       <div class="continue-list">
         <RouterLink

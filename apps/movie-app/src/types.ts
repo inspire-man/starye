@@ -111,22 +111,29 @@ export interface MovieDetail extends Movie {
 
 export interface WatchingProgress {
   id: string
-  userId: string
+  contentType: 'movie'
+  contentId: string
   movieCode: string
+  position: number
   progress: number
-  duration?: number
-  updatedAt: Date
+  duration: number | null
+  completed: boolean
+  updatedAt: string
 }
 
 /** 观看历史条目（含影片详情，来自 GET /progress/watching 无参数时） */
 export interface WatchingHistoryItem {
   id: string
+  contentType: 'movie'
+  contentId: string
   movieCode: string
   title: string
   coverImage: string | null
   isR18: boolean
+  position: number
   progress: number
   duration: number | null
+  completed: boolean
   updatedAt: string
 }
 

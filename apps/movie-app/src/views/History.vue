@@ -13,12 +13,8 @@ const PAGE_SIZE = 10
 type StatusFilter = 'all' | 'watching' | 'watched'
 const statusFilter = ref<StatusFilter>('all')
 
-/** 判断是否已看完：progress/duration ≥ 0.9，duration 为 null 时 progress ≥ 3600 秒 */
 function isWatched(item: WatchingHistoryItem): boolean {
-  if (item.duration && item.duration > 0) {
-    return item.progress / item.duration >= 0.9
-  }
-  return item.progress >= 3600
+  return item.completed
 }
 
 const filteredItems = computed(() => {

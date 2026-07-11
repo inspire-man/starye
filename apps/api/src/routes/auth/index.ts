@@ -9,6 +9,39 @@ import { describeRoute } from 'hono-openapi'
 /**
  * Auth 路由 - 使用链式调用以支持 RPC 类型推导
  */
+async function resolveSession(c: Parameters<Parameters<Hono<AppEnv>['get']>[1]>[0]) {
+  const authInstance = c.get('auth')
+  const db = c.get('db')
+  const cookies = c.req.header('cookie')
+  console.log('[Auth Debug] Cookies:', cookies)
+
+  try {
+    const session = await authInstance.api.getSession({ headers: c.req.raw.headers })
+    console.log('[Auth Debug] Session result:', session ? 'found' : 'null')
+    if (session) {
+      const githubAccount = await db.query.account.findFirst({
+        where: (account, { and, eq: eqOp }) => and(
+          eqOp(account.userId, session.user.id),
+          eqOp(account.providerId, 'github'),
+        ),
+      })
+
+      return c.json({
+        user: {
+          ...session.user,
+          githubId: githubAccount?.accountId ?? null,
+        },
+        session: session.session,
+      })
+    }
+    return c.json(null)
+  }
+  catch (error) {
+    console.error('[Auth] Session error:', error)
+    return c.json(null)
+  }
+}
+
 const auth = new Hono<AppEnv>()
   .get(
     '/session',
@@ -23,27 +56,22 @@ const auth = new Hono<AppEnv>()
         },
       },
     }),
-    async (c) => {
-      const authInstance = c.get('auth')
-      const cookies = c.req.header('cookie')
-      console.log('[Auth Debug] Cookies:', cookies)
-
-      try {
-        const session = await authInstance.api.getSession({ headers: c.req.raw.headers })
-        console.log('[Auth Debug] Session result:', session ? 'found' : 'null')
-        if (session) {
-          return c.json({
-            user: session.user,
-            session: session.session,
-          })
-        }
-        return c.json(null)
-      }
-      catch (error) {
-        console.error('[Auth] Session error:', error)
-        return c.json(null)
-      }
-    },
+    resolveSession,
+  )
+  .get(
+    '/get-session',
+    describeRoute({
+      summary: '获取当前会话信息（兼容 Better Auth 客户端）',
+      description: '兼容 `/api/auth/get-session` 调用，返回注入 githubId 后的 session 结果。',
+      tags: ['Auth'],
+      operationId: 'getSessionCompat',
+      responses: {
+        200: {
+          description: '会话信息或 null',
+        },
+      },
+    }),
+    resolveSession,
   )
   .post(
     '/verify-age',

@@ -1,0 +1,91 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Target app to rollback'
+        required: true
+        type: choice
+        options:
+          - api
+          - gateway
+          - auth
+          - blog
+          - dashboard
+          - movie
+          - comic
+      version_id:
+        description: 'Worker version id to rollback to'
+        required: true
+        type: string
+
+jobs:
+  rollback-worker:
+    if: ${{ inputs.app == 'api' || inputs.app == 'gateway' }}
+    runs-on: ubuntu-latest
+    name: Rollback Worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6.3.0
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Install Dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Announce Rollback Target
+        run: |
+          echo "app=${{ inputs.app }}"
+          echo "version_id=${{ inputs.version_id }}"
+
+      - name: Rollback API Worker
+        if: ${{ inputs.app == 'api' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler rollback "${{ inputs.version_id }}" \
+            --name starye-api \
+            --message "GitHub Actions rollback for api" \
+            --yes \
+            --cwd apps/api
+
+      - name: Rollback Gateway Worker
+        if: ${{ inputs.app == 'gateway' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler rollback "${{ inputs.version_id }}" \
+            --name starye-gateway \
+            --message "GitHub Actions rollback for gateway" \
+            --yes \
+            --cwd apps/gateway
+
+      - name: Report Success
+        run: |
+          echo "rollback_status=success"
+          echo "app=${{ inputs.app }}"
+          echo "version_id=${{ inputs.version_id }}"
+
+  rollback-pages-manual:
+    if: ${{ inputs.app != 'api' && inputs.app != 'gateway' }}
+    runs-on: ubuntu-latest
+    name: Pages Rollback Requires Manual Runbook
+    steps:
+      - name: Fail Closed For Pages Rollback
+        run: |
+          echo "app=${{ inputs.app }}"
+          echo "version_id=${{ inputs.version_id }}"
+          echo "Pages rollback is not automated in this workflow."
+          echo "Follow RUNBOOK.md manual rollback steps for app=${{ inputs.app }}."
+          exit 1

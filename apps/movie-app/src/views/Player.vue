@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { MovieDetail } from '../types'
+import * as Sentry from '@sentry/vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Player from 'xgplayer'
@@ -24,6 +25,9 @@ interface PlayerErrorState {
 
 const BUFFERING_TIMEOUT_MS = 10000
 const RETRY_FAILURE_WINDOW_MS = 3000
+const PROGRESS_SAVE_INTERVAL_SECONDS = 10
+const PROGRESS_MIN_SAVE_SECONDS = 30
+const MOVIE_COMPLETED_THRESHOLD = 0.9
 
 const route = useRoute()
 const router = useRouter()
@@ -40,15 +44,19 @@ let saveProgressTimer: number | null = null
 let waitingTimeout: number | null = null
 let lastRetryAt = 0
 let lastTrackedMovieCode = ''
+let lastSavedProgressSecond = -1
 
 const playerLoading = ref(false)
 const playerLoadingMessage = ref('')
 const errorState = ref<PlayerErrorState>(createDefaultErrorState())
 const currentSourceUrl = ref('')
 const currentMagnetUrl = ref('')
+const savedCompleted = ref(false)
+const loadedProgressDuration = ref<number | null>(null)
 
 const isTorrServerMode = computed(() => !!route.query.streamUrl)
 const hasAria2Fallback = computed(() => Boolean(currentMagnetUrl.value) && aria2Connected.value)
+const sentryEnabled = Boolean(import.meta.env.VITE_SENTRY_DSN)
 
 /**
  * 系列导航：从 relatedMovies 中提取同系列影片，按 releaseDate ASC 排序，计算当前位置
@@ -117,6 +125,13 @@ function clearSaveProgressTimer() {
   }
 }
 
+function resetProgressState() {
+  clearSaveProgressTimer()
+  lastSavedProgressSecond = -1
+  savedCompleted.value = false
+  loadedProgressDuration.value = null
+}
+
 function resetPlayerContainer() {
   const container = document.getElementById('player-container')
   if (container) {
@@ -181,12 +196,38 @@ function showPlayerError(kind: ErrorKind, message: string, recoverable = true) {
     ? getEscalatedRetryMessage()
     : message
 
+  reportVideoFailure(kind, finalMessage, recoverable)
+
   errorState.value = {
     visible: true,
     kind,
     message: finalMessage,
     recoverable,
   }
+}
+
+function reportVideoFailure(kind: ErrorKind, message: string, recoverable: boolean) {
+  if (!sentryEnabled) {
+    return
+  }
+
+  Sentry.withScope((scope) => {
+    scope.setLevel('warning')
+    scope.setTag('app', 'movie-app')
+    scope.setTag('surface', 'player')
+    scope.setTag('error.kind', kind)
+    scope.setTag('playback.mode', isTorrServerMode.value ? 'torrserver' : 'standard')
+    scope.setContext('video_failure', {
+      movieCode: movieCode.value || null,
+      movieTitle: movieTitle.value || null,
+      streamUrl: isTorrServerMode.value ? currentSourceUrl.value || null : null,
+      sourceUrl: currentSourceUrl.value || null,
+      recoverable,
+      userAgent: navigator.userAgent,
+      route: route.fullPath,
+    })
+    Sentry.captureMessage(`video failure: ${kind} - ${message}`)
+  })
 }
 
 function getWaitingTimeoutMessage() {
@@ -249,6 +290,7 @@ async function fetchMovieAndPlay() {
   currentMagnetUrl.value = ''
   currentSourceUrl.value = ''
   destroyPlayerInstance()
+  resetProgressState()
   resetPlayerFeedback()
 
   try {
@@ -281,6 +323,17 @@ async function fetchMovieAndPlay() {
       const magnetPlayer = response.data.players?.find(p => p.sourceUrl.startsWith('magnet:'))
       if (magnetPlayer) {
         currentMagnetUrl.value = magnetPlayer.sourceUrl
+      }
+
+      if (userStore.user) {
+        const progressResponse = await progressApi.getWatchingProgress(code)
+        if (progressResponse.success && progressResponse.data && !Array.isArray(progressResponse.data)) {
+          savedCompleted.value = progressResponse.data.completed
+          loadedProgressDuration.value = progressResponse.data.duration
+          if (!progressResponse.data.completed && progressResponse.data.progress >= PROGRESS_MIN_SAVE_SECONDS) {
+            startTime = progressResponse.data.progress
+          }
+        }
       }
     }
     else {
@@ -318,7 +371,11 @@ async function fetchMovieAndPlay() {
       if (userStore.user) {
         const progressResponse = await progressApi.getWatchingProgress(code)
         if (progressResponse.success && progressResponse.data && !Array.isArray(progressResponse.data)) {
-          startTime = progressResponse.data.progress
+          savedCompleted.value = progressResponse.data.completed
+          loadedProgressDuration.value = progressResponse.data.duration
+          if (!progressResponse.data.completed && progressResponse.data.progress >= PROGRESS_MIN_SAVE_SECONDS) {
+            startTime = progressResponse.data.progress
+          }
         }
       }
     }
@@ -354,6 +411,10 @@ function initPlayer(url: string, startTime: number) {
     startTime,
   })
 
+  if (startTime === 0) {
+    scheduleRestartProgressReset()
+  }
+
   player.on('canplay', () => {
     markPlaybackRecovered()
   })
@@ -369,6 +430,7 @@ function initPlayer(url: string, startTime: number) {
   player.on('ended', () => {
     stopPlayerLoading()
     lastRetryAt = 0
+    void flushProgress('ended')
   })
 
   player.on('error', () => {
@@ -376,25 +438,97 @@ function initPlayer(url: string, startTime: number) {
     showPlayerError(nextError.kind, nextError.message, nextError.recoverable)
   })
 
-  // 标准模式：进度保存
   player.on('timeupdate', () => {
-    if (userStore.user && player && !isTorrServerMode.value) {
-      debounceSaveProgress(player.currentTime, player.duration)
+    if (!userStore.user || !player) {
+      return
     }
+
+    const currentSecond = Math.floor(Number(player.currentTime) || 0)
+    if (currentSecond < PROGRESS_MIN_SAVE_SECONDS) {
+      return
+    }
+
+    if (currentSecond - lastSavedProgressSecond >= PROGRESS_SAVE_INTERVAL_SECONDS) {
+      lastSavedProgressSecond = currentSecond
+      void flushProgress('checkpoint')
+    }
+  })
+
+  player.on('pause', () => {
+    void flushProgress('pause')
+  })
+
+  player.on('seeked', () => {
+    void flushProgress('seeked')
   })
 }
 
-function debounceSaveProgress(progress: number, duration: number) {
+function isCompletedProgress(progress: number, duration: number | null | undefined): boolean {
+  if (!duration || duration <= 0) {
+    return false
+  }
+  return progress / duration >= MOVIE_COMPLETED_THRESHOLD
+}
+
+function shouldPersistProgress(progress: number): boolean {
+  return progress >= PROGRESS_MIN_SAVE_SECONDS
+}
+
+async function persistProgress(progress: number, duration: number | null, completed: boolean) {
+  if (!movieCode.value) {
+    return
+  }
+  await progressApi.saveWatchingProgress(
+    movieCode.value,
+    Math.floor(progress),
+    duration != null ? Math.floor(duration) : null,
+    completed,
+  )
+}
+
+async function flushProgress(reason: 'checkpoint' | 'pause' | 'seeked' | 'pagehide' | 'ended') {
+  if (!userStore.user || !player) {
+    return
+  }
+
+  const currentProgress = Math.max(0, Math.floor(Number(player.currentTime) || 0))
+  const currentDuration = Number(player.duration) > 0
+    ? Math.floor(Number(player.duration))
+    : loadedProgressDuration.value
+
+  const completed = reason === 'ended' || isCompletedProgress(currentProgress, currentDuration)
+
+  if (!completed && !shouldPersistProgress(currentProgress)) {
+    return
+  }
+
+  try {
+    await persistProgress(currentProgress, currentDuration, completed)
+    savedCompleted.value = completed
+    loadedProgressDuration.value = currentDuration ?? null
+  }
+  catch (error) {
+    console.error('Failed to save progress:', error)
+  }
+}
+
+function scheduleRestartProgressReset() {
+  if (!savedCompleted.value || !userStore.user) {
+    return
+  }
+
   clearSaveProgressTimer()
 
   saveProgressTimer = window.setTimeout(async () => {
     try {
-      await progressApi.saveWatchingProgress(movieCode.value, Math.floor(progress), Math.floor(duration))
+      await persistProgress(0, loadedProgressDuration.value, false)
+      savedCompleted.value = false
+      lastSavedProgressSecond = -1
     }
     catch (error) {
       console.error('Failed to save progress:', error)
     }
-  }, 2000)
+  }, 0)
 }
 
 // 降级到 Aria2 下载
@@ -451,7 +585,12 @@ async function retryCurrentSource() {
   initPlayer(currentSourceUrl.value, lastTime)
 }
 
+function handlePageHide() {
+  void flushProgress('pagehide')
+}
+
 onMounted(() => {
+  window.addEventListener('pagehide', handlePageHide)
   fetchMovieAndPlay()
 })
 
@@ -467,6 +606,8 @@ watch(
 )
 
 onUnmounted(() => {
+  window.removeEventListener('pagehide', handlePageHide)
+  void flushProgress('pagehide')
   destroyPlayerInstance()
   clearSaveProgressTimer()
 })

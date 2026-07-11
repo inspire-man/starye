@@ -111,12 +111,16 @@ describe('progressApi', () => {
       const mockHistory = [
         {
           id: 'p1',
+          contentType: 'movie',
+          contentId: 'TEST-001',
           movieCode: 'TEST-001',
           title: '测试影片',
           coverImage: null,
           isR18: false,
+          position: 600,
           progress: 600,
           duration: 5400,
+          completed: false,
           updatedAt: '2026-04-01T00:00:00.000Z',
         },
       ]
@@ -127,8 +131,11 @@ describe('progressApi', () => {
       expect(result.success).toBe(true)
       expect(result.data?.[0]).toMatchObject({
         movieCode: 'TEST-001',
+        contentType: 'movie',
+        contentId: 'TEST-001',
         title: '测试影片',
         progress: 600,
+        completed: false,
       })
     })
   })

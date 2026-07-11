@@ -14,6 +14,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@sentry/nuxt": "^10.53.1",
     "@shikijs/markdown-it": "^4.0.2",
     "@starye/api-types": "workspace:*",
     "@starye/locales": "workspace:*",

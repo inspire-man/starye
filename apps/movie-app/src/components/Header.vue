@@ -58,6 +58,9 @@ function handleSearchClick() {
             <RouterLink to="/publishers" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
               厂商
             </RouterLink>
+            <RouterLink to="/profile" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+              我的
+            </RouterLink>
           </nav>
         </div>
 

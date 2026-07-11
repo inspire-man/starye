@@ -7,7 +7,57 @@ on:
     branches: [main]
 
 jobs:
+  migration-destructive-scan:
+    runs-on: ubuntu-latest
+    outputs:
+      requires_ack: ${{ steps.scan.outputs.requires_ack }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect destructive migration SQL
+        id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="origin/${{ github.base_ref }}"
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            FILES=$(git diff --name-only "$BASE_REF" "${{ github.sha }}" -- packages/db/drizzle/*.sql || true)
+          else
+            BASE_SHA="${{ github.event.before }}"
+            FILES=$(git diff --name-only "$BASE_SHA" "${{ github.sha }}" -- packages/db/drizzle/*.sql || true)
+          fi
+
+          if [ -z "$FILES" ]; then
+            echo "requires_ack=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if grep -EIn "(DROP[[:space:]]+COLUMN|DROP[[:space:]]+TABLE|ALTER[[:space:]]+TABLE.+DROP)" $FILES; then
+            echo "requires_ack=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "requires_ack=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  migration-reviewer-ack:
+    needs: migration-destructive-scan
+    if: ${{ needs.migration-destructive-scan.outputs.requires_ack == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production-migration-review
+    steps:
+      - name: Reviewer Ack Recorded
+        run: |
+          echo "Destructive migration detected in PR diff."
+          echo "Protected environment approval is the explicit reviewer ack path."
+
   test:
+    needs:
+      - migration-destructive-scan
+      - migration-reviewer-ack
+    if: ${{ always() && needs.migration-destructive-scan.result == 'success' && (needs.migration-reviewer-ack.result == 'success' || needs.migration-reviewer-ack.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

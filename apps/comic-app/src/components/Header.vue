@@ -41,6 +41,13 @@ const mobileMenuOpen = ref(false)
             >
               收藏
             </RouterLink>
+            <RouterLink
+              to="/profile"
+              class="px-3 py-1.5 rounded-md text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-muted transition-colors"
+              active-class="text-foreground bg-muted"
+            >
+              我的
+            </RouterLink>
           </nav>
         </div>
 
@@ -127,7 +134,7 @@ const mobileMenuOpen = ref(false)
         <RouterLink v-if="userStore.user" to="/favorites" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition-colors" active-class="bg-muted text-foreground">
           我的收藏
         </RouterLink>
-        <RouterLink v-if="userStore.user" to="/profile" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition-colors" active-class="bg-muted text-foreground">
+        <RouterLink to="/profile" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition-colors" active-class="bg-muted text-foreground">
           个人中心
         </RouterLink>
         <button

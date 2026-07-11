@@ -350,38 +350,23 @@ export type AuditLog = InferSelectModel<typeof auditLogs>
 export type NewAuditLog = InferInsertModel<typeof auditLogs>
 
 // --- 用户进度 ---
-export const readingProgress = sqliteTable('reading_progress', {
+export const progress = sqliteTable('progress', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
-  chapterId: text('chapter_id').notNull().references(() => chapters.id, { onDelete: 'cascade' }),
-  page: integer('page').notNull(), // 当前阅读页码
+  contentType: text('content_type', { enum: ['movie', 'comic'] }).notNull(),
+  contentId: text('content_id').notNull(),
+  position: integer('position').notNull(), // 统一进度位置：movie=秒，comic=页码
+  duration: integer('duration'), // movie 总时长（秒）；comic 固定为 null
+  completed: integer('completed', { mode: 'boolean' }).default(false).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
-})
+}, table => [
+  uniqueIndex('idx_progress_user_content').on(table.userId, table.contentType, table.contentId),
+  index('idx_progress_user_updated_at').on(table.userId, table.updatedAt),
+  index('idx_progress_content_lookup').on(table.contentType, table.contentId),
+])
 
-// 阅读进度表索引
-export const readingProgressIndexes = {
-  userChapterIdx: uniqueIndex('idx_reading_progress_user_chapter').on(readingProgress.userId, readingProgress.chapterId),
-}
-
-export type ReadingProgress = InferSelectModel<typeof readingProgress>
-export type NewReadingProgress = InferInsertModel<typeof readingProgress>
-
-export const watchingProgress = sqliteTable('watching_progress', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
-  movieCode: text('movie_code').notNull().references(() => movies.code, { onDelete: 'cascade' }),
-  progress: integer('progress').notNull(), // 播放进度（秒）
-  duration: integer('duration'), // 总时长（秒）
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
-})
-
-// 观看进度表索引
-export const watchingProgressIndexes = {
-  userMovieIdx: uniqueIndex('idx_watching_progress_user_movie').on(watchingProgress.userId, watchingProgress.movieCode),
-}
-
-export type WatchingProgress = InferSelectModel<typeof watchingProgress>
-export type NewWatchingProgress = InferInsertModel<typeof watchingProgress>
+export type Progress = InferSelectModel<typeof progress>
+export type NewProgress = InferInsertModel<typeof progress>
 
 // --- 用户收藏 ---
 export const userFavorites = sqliteTable('user_favorites', {
@@ -457,8 +442,7 @@ export const userRelations = relations(user, ({ many }) => ({
   posts: many(posts),
   sessions: many(session),
   accounts: many(account),
-  readingProgress: many(readingProgress),
-  watchingProgress: many(watchingProgress),
+  progress: many(progress),
   favorites: many(userFavorites),
   ratings: many(ratings),
   aria2Config: many(aria2Configs),
@@ -555,25 +539,10 @@ export const auditLogRelations = relations(auditLogs, ({ one }) => ({
   }),
 }))
 
-export const readingProgressRelations = relations(readingProgress, ({ one }) => ({
+export const progressRelations = relations(progress, ({ one }) => ({
   user: one(user, {
-    fields: [readingProgress.userId],
+    fields: [progress.userId],
     references: [user.id],
-  }),
-  chapter: one(chapters, {
-    fields: [readingProgress.chapterId],
-    references: [chapters.id],
-  }),
-}))
-
-export const watchingProgressRelations = relations(watchingProgress, ({ one }) => ({
-  user: one(user, {
-    fields: [watchingProgress.userId],
-    references: [user.id],
-  }),
-  movie: one(movies, {
-    fields: [watchingProgress.movieCode],
-    references: [movies.code],
   }),
 }))
 

@@ -6,6 +6,8 @@
  * In production: Uses environment variable origins.
  */
 
+import type { CloudflareOptions } from '@sentry/cloudflare'
+import * as Sentry from '@sentry/cloudflare'
 import { createCachedProxy } from './cache-middleware'
 import { checkDashboardAuth } from './dashboard-guard'
 
@@ -19,9 +21,38 @@ interface Env {
   AUTH_ORIGIN?: string
   CACHE?: KVNamespace
   ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单（D-03）
+  SENTRY_DSN?: string
+  SENTRY_RELEASE?: string
 }
 
-export default {
+const SENTRY_NOISE_PATTERNS = [
+  'aborterror',
+  'networkerror',
+  'failed to fetch',
+  'request timed out',
+  'network request failed',
+  'the operation was aborted',
+  'the user aborted a request',
+]
+
+type SentryBeforeSend = NonNullable<CloudflareOptions['beforeSend']>
+type SentryErrorEvent = Parameters<SentryBeforeSend>[0]
+type SentryErrorHint = Parameters<SentryBeforeSend>[1]
+
+function shouldDropSentryNoise(event: SentryErrorEvent, hint: SentryErrorHint): boolean {
+  const exceptionText = [
+    hint.originalException instanceof Error ? hint.originalException.name : '',
+    hint.originalException instanceof Error ? hint.originalException.message : '',
+    event.message ?? '',
+    ...(event.exception?.values?.flatMap((value: { type?: string, value?: string }) => [value.type ?? '', value.value ?? '']) ?? []),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return SENTRY_NOISE_PATTERNS.some(pattern => exceptionText.includes(pattern))
+}
+
+const gatewayHandler = {
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     const path = url.pathname
@@ -163,6 +194,35 @@ async function proxy(request: Request, targetOrigin: string, pathRewrite?: (path
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers: mutableHeaders })
   }
   catch (e) {
+    Sentry.captureException(e, {
+      tags: {
+        subsystem: 'gateway-proxy',
+      },
+      extra: {
+        path: url.pathname,
+        targetOrigin,
+      },
+    })
     return new Response(`Gateway Error: Failed to connect to ${targetOrigin}\n${e}`, { status: 502 })
   }
 }
+
+export default Sentry.withSentry(
+  (env: Env) => ({
+    dsn: env.SENTRY_DSN,
+    enabled: Boolean(env.SENTRY_DSN),
+    release: env.SENTRY_RELEASE,
+    tracesSampleRate: 0.1,
+    sendDefaultPii: false,
+    integrations: [
+      Sentry.honoIntegration(),
+    ],
+    beforeSend(event: SentryErrorEvent, hint: SentryErrorHint) {
+      if (shouldDropSentryNoise(event, hint)) {
+        return null
+      }
+      return event
+    },
+  }),
+  gatewayHandler,
+)

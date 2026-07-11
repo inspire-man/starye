@@ -1,5 +1,5 @@
-import { warning } from '@starye/ui'
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthGuard } from './composables/useAuthGuard'
 import { useUserStore } from './stores/user'
 
 const router = createRouter({
@@ -58,7 +58,8 @@ router.beforeEach(async (to, _from, next) => {
     }
 
     if (!userStore.user) {
-      warning('请先登录以访问个人中心')
+      const { requireLogin } = useAuthGuard()
+      requireLogin(`/comic${to.fullPath}`)
       next(false)
       return
     }
