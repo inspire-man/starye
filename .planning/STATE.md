@@ -2,9 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 05
-status: completed
-last_updated: "2026-07-11T05:27:33.068Z"
+current_phase: 0
+status: Awaiting next milestone
+last_updated: "2026-07-11T06:26:11.563Z"
+last_activity: 2026-07-11
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -23,30 +25,22 @@ progress:
 
 **Core Value:** 部署在公网、能稳定日常使用的个人内容中台 —— "能用、不崩" 优先于 "功能全"。
 
-**Current Milestone:** v1 — "部署可用、日常使用态"
+**Current Milestone:** v1.0 — archived. Next milestone not defined yet.
 
 **Project Docs:**
 
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
-- `.planning/REQUIREMENTS.md` — 已收敛到真实的 41 项 v1 Active 范围；VIDEO-01/02/03/06 已移出 active
-- `.planning/ROADMAP.md` — 5-phase roadmap, 100% v1 coverage
+- `.planning/milestones/v1.0-REQUIREMENTS.md` — v1.0 archived requirements; active requirements will be recreated by `$gsd-new-milestone`
+- `.planning/ROADMAP.md` — archived v1.0 roadmap summary; next milestone pending definition
 - `.planning/research/SUMMARY.md` — Research findings driving phase structure
 - `.planning/codebase/ARCHITECTURE.md` — Brownfield system overview
 
 ## Current Position
 
-Phase: 5 (migration) — VERIFIED
-Plan: 4 of 4 defined
-**Phase:** 05
-**Plan:** 05-01..05-04 implemented and verified
-**Status:** Milestone complete
-**Progress:** [==========] 5/5 phases verified
-
-**Phase 1 Summary:**
-
-- Goal: 5 端统一会话 + gateway 缓存不泄漏
-- Requirements: AUTH-01..08 (8 items)
-- Success criteria: 5 observable outcomes (session 跨端持久、登出立即生效、带 Cookie 请求绕缓存、`/api/auth/*` 不落缓存、Better Auth 升至 1.6.10)
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-11 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -74,7 +68,7 @@ Plan: 4 of 4 defined
 
 ### Active Blockers
 
-- [ ] GSD 路由历史遗留：Phase 2 的 `02-HUMAN-UAT.md` / `02-VERIFICATION.md` 仍是 open 状态，后续若继续走统一门禁可能需要补齐
+- [ ] None for milestone closeout. Remaining v1.0 items are accepted archive metadata debt, recorded in `.planning/MILESTONES.md`.
 
 ### Recent Context (Brownfield注释)
 
@@ -89,19 +83,22 @@ Plan: 4 of 4 defined
 **Next recommended action:**
 
 ```
-$gsd-verify-work 2
+$gsd-new-milestone
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
-2. Read `.planning/ROADMAP.md` Phase 5 section
-3. Read `.planning/phases/05-migration/05-CONTEXT.md`、`05-RESEARCH.md`、`05-PATTERNS.md` 与 `05-01..05-04-PLAN.md`
-4. 阅读 `02-VERIFICATION.md` 与 `02-HUMAN-UAT.md`
-5. 执行 `$gsd-verify-work 2`
+2. Read `.planning/MILESTONES.md`
+3. Read `.planning/milestones/v1.0-MILESTONE-AUDIT.md`
+4. Start the next milestone with `$gsd-new-milestone`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
 
 ---
 *State initialized: 2026-05-11 after roadmap creation*
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

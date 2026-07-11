@@ -26,16 +26,16 @@
 - ✓ dashboard 访问控制：Gateway 前置拦截 + API `requireAuth` 短路，仅 `ADMIN_GITHUB_ID` 白名单可进入 — Validated in Phase 2
 - ✓ 前台登录门控：收藏按钮 + 成人内容 R18 过滤（WHERE 层）接入 `useAuthGuard` + `buildAdultVisibilityCondition` — Validated in Phase 2
 - ✓ 公网暴露面加固：`/robots.txt` + `X-Robots-Tag` + `*.pages.dev` 301! + `/api/docs` 鉴权；WAF 限速（PUBSEC-03）配置步骤写入 RUNBOOK，需部署时手配 — Validated in Phase 2
+- ✓ 统一认证与会话基线：五端 session 互通、Nuxt SSR 读 session、Better Auth 1.6.10、Gateway auth/cache 安全边界、服务端登出失效 — v1.0
+- ✓ 播放稳定化：movie-app 播放错误卡片、waiting 超时、同源重试、离线按钮反馈、R18 防线不回退 — v1.0
+- ✓ 统一进度：`progress` 表支撑 movie/comic 的恢复、保存、完成态、pagehide flush 与历史消费面 — v1.0
+- ✓ 部署与运维基础盘：deploy/rollback workflows、D1 backup-before-apply、destructive migration reviewer gate、Sentry、RUNBOOK — v1.0
 
 ### Active
 
-<!-- v1 的目标：让"部署可用、日常使用"这件事真正成立。 -->
+<!-- v1.0 已归档。下一 milestone 通过 $gsd-new-milestone 重新定义 Active requirements。 -->
 
-- [ ] movie-app 播放页稳定性：消除"偶尔出错"，确保播放链路可靠
-- [ ] comic-app 阅读进度：记录并恢复用户阅读位置（登录用户）
-- [ ] 认证全链路打通：gateway + api + 各前端统一读写同一会话
-- [ ] 部署基础盘：确保所有子应用在 Cloudflare 生产环境下可一键部署、可回滚
-- [ ] 基础可观测：关键错误可见（至少是 API / gateway / 播放失败）
+- [ ] 定义 v1.1 目标与范围（候选：crawler reliability、staging/preview、Sentry noise tuning、继续观看/继续阅读首页体验）
 
 ### Out of Scope
 
@@ -66,6 +66,13 @@
 - `0121cc9` dashboard 加 SillyTavern 入口
 - `4cefbe6` movie-app advance search + personalized recommendation + new release
 
+**当前状态（2026-07-11）**：
+
+- v1.0 "部署可用、日常使用态" 已完成并归档到 `.planning/milestones/`
+- 5/5 phases verified，24/24 plans complete，最终 audit 无 unsatisfied requirements
+- 活动 `REQUIREMENTS.md` 已归档，下一 milestone 需要重新定义 requirements
+- 已接受的归档债：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 summary anchors 与 traceability metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
+
 **已知风险区**：见 [`.planning/codebase/CONCERNS.md`](.planning/codebase/CONCERNS.md) —— v1 Active 需求会优先覆盖里面影响"日常使用"的问题。
 
 ## Constraints
@@ -90,6 +97,7 @@
 | "审核"流程延后到 v1 之后 | 语义未明确，先不做 | — Pending |
 | Monorepo 用 Turborepo + pnpm workspace | 多应用共享 packages/ui、packages/db | ✓ Good |
 | R2 不做视频宿主，漫画详情图片逐步迁出 R2 | 存储 + 出站成本相对价值不划算；单用户内容中台优先使用现有 magnet / TorrServer / 外链路径，后续图片也逐步回到更轻的直链方案 | — New |
+| v1.0 归档接受 metadata tech debt | final audit 无 unsatisfied runtime requirements；剩余为 summary/traceability/security-artifact 归档债 | ✓ Accepted |
 
 ## Evolution
 
@@ -109,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-12 after Phase 3 context gathering*
+*Last updated: 2026-07-11 after v1.0 milestone completion*
