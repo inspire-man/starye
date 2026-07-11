@@ -1,18 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v1.1
+milestone_name: 存储成本控制与代码/文件整理
 current_phase: 0
-status: Awaiting next milestone
-last_updated: "2026-07-11T06:26:11.563Z"
+status: planning
+last_updated: "2026-07-11T08:01:34.674Z"
 last_activity: 2026-07-11
-last_activity_desc: Milestone v1.0 completed and archived
 progress:
   total_phases: 5
-  completed_phases: 5
-  total_plans: 24
-  completed_plans: 24
-  percent: 100
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State: Starye — 个人内容中台
@@ -25,27 +24,27 @@ progress:
 
 **Core Value:** 部署在公网、能稳定日常使用的个人内容中台 —— "能用、不崩" 优先于 "功能全"。
 
-**Current Milestone:** v1.0 — archived. Next milestone not defined yet.
+**Current Milestone:** v1.1 — 存储成本控制与代码/文件整理。
 
 **Project Docs:**
 
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
-- `.planning/milestones/v1.0-REQUIREMENTS.md` — v1.0 archived requirements; active requirements will be recreated by `$gsd-new-milestone`
-- `.planning/ROADMAP.md` — archived v1.0 roadmap summary; next milestone pending definition
-- `.planning/research/SUMMARY.md` — Research findings driving phase structure
+- `.planning/REQUIREMENTS.md` — v1.1 active requirements for storage cost control and cleanup
+- `.planning/ROADMAP.md` — v1.1 phases 6-10
+- `.planning/research/SUMMARY.md` — v1.1 Cloudflare cost and storage strategy findings
 - `.planning/codebase/ARCHITECTURE.md` — Brownfield system overview
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-11 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-11 — Milestone v1.1 started
 
 ## Performance Metrics
 
-**Phases completed:** 5 / 5
-**Plans completed:** 24
+**Phases completed:** 0 / 5
+**Plans completed:** 0
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -58,6 +57,8 @@ Last activity: 2026-07-11 — Milestone v1.0 completed and archived
 | 5-phase structure accepted as proposed by research | Dependency chain (P1 session → P2 gating → P4 progress) + risk ordering (top pitfalls knocked out early) | 2026-05-11 roadmap creation |
 | v1 total count corrected 41 → 45 | Actual sum across categories is 45, REQUIREMENTS.md header had arithmetic typo | 2026-05-11 roadmap creation |
 | Phase 6 (crawler reliability) deferred to v2 | Not blocking "能用" — 现有内容库短期不新抓也能看 | 2026-05-11 roadmap creation |
+| v1.1 keeps comic chapter body images as source URLs | Cloudflare free-tier cost control matters more than owning every chapter image; R2 is reserved for necessary assets | 2026-07-11 milestone creation |
+| v1.1 forbids default Worker/Pages Function image proxying | Proxying chapter images shifts cost from R2 storage to Workers requests/CPU | 2026-07-11 milestone creation |
 
 ### Open Todos (carried across phases)
 
@@ -83,15 +84,16 @@ Last activity: 2026-07-11 — Milestone v1.0 completed and archived
 **Next recommended action:**
 
 ```
-$gsd-new-milestone
+$gsd-discuss-phase 6
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/MILESTONES.md`
-3. Read `.planning/milestones/v1.0-MILESTONE-AUDIT.md`
-4. Start the next milestone with `$gsd-new-milestone`
+3. Read `.planning/REQUIREMENTS.md`
+4. Read `.planning/ROADMAP.md`
+5. Continue with `$gsd-discuss-phase 6`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -101,4 +103,4 @@ $gsd-new-milestone
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 6 with /gsd-discuss-phase 6

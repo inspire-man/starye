@@ -8,6 +8,18 @@
 
 **"部署在公网、能稳定日常使用的个人内容中台"** —— 所有子应用在同一域名下协同工作，能长期保持可访问、可阅读、可观看。其他一切（特性完整度、多用户、正式审核流）都可以退让，但"能用、不崩"必须守住。
 
+## Current Milestone: v1.1 存储成本控制与代码/文件整理
+
+**Goal:** 把 Starye 的文件存储策略调整到免费额度优先、可审计、可回退：漫画章节正文图片只保存源站外链，R2 仅保留封面、头像、logo、fallback、手动上传等必要资产，同时瘦身文档入口和整理存储相关代码。
+
+**Target features:**
+- 明确 Cloudflare 免费额度边界和 R2 使用策略，避免因章节正文图、Worker 图片代理或无限备份产生扣费。
+- 漫画章节页链路改为源站图片 URL 存储与直连展示，Crawler/API/Reader 均不默认上传或代理正文图。
+- R2 上传入口改成 purpose allowlist，只允许 cover/poster/avatar/logo/fallback/manual/temp 等必要资产。
+- 增加 R2 prefix 审计、生命周期清理、预算提醒和运行手册，能快速发现并处理高成本对象。
+- 将 AGENTS.md 精简为入口索引，把历史阶段文档归档/清理，保留当前开发真正需要读的文件。
+- 围绕存储、爬虫、comic 阅读链路做小步代码整理和测试补强，不做跨产品大重写。
+
 ## Requirements
 
 ### Validated
@@ -33,9 +45,11 @@
 
 ### Active
 
-<!-- v1.0 已归档。下一 milestone 通过 $gsd-new-milestone 重新定义 Active requirements。 -->
-
-- [ ] 定义 v1.1 目标与范围（候选：crawler reliability、staging/preview、Sentry noise tuning、继续观看/继续阅读首页体验）
+- [ ] v1.1 存储成本控制：R2 只用于必要资产，章节正文图不进入 Cloudflare 存储或 Worker 代理。
+- [ ] v1.1 漫画章节外链化：crawler 保存源站图片 URL，API 与 Reader 保持可读、可失败提示、可验证。
+- [ ] v1.1 成本护栏：预算提醒、R2 prefix 审计、生命周期清理和运行手册可执行。
+- [ ] v1.1 文档/入口瘦身：AGENTS.md、RUNBOOK、.planning 文档边界清楚，历史 phase 文件按 GSD 规则清理或归档。
+- [ ] v1.1 存储相关代码整理：上传目的、R2 key、图片处理和 crawler 脚本策略统一，测试覆盖关键防线。
 
 ### Out of Scope
 
@@ -47,6 +61,8 @@
 - 移动端原生应用 — 浏览器访问已够用，不做 iOS/Android 原生
 - 实时协作 / 评论 / 点赞 — 单用户场景不需要
 - 支付 / 会员体系 — 自用，无商业化
+- Worker/Pages Function 代理漫画正文图 — 会把阅读流量转成 Cloudflare 请求/CPU 成本，默认禁止；仅允许短期诊断开关且必须有上限
+- Cloudflare Images / Stream / Cache Reserve / Argo 等付费 add-on — v1.1 不启用，除非单独完成成本评估
 
 ## Context
 
@@ -72,6 +88,7 @@
 - 5/5 phases verified，24/24 plans complete，最终 audit 无 unsatisfied requirements
 - 活动 `REQUIREMENTS.md` 已归档，下一 milestone 需要重新定义 requirements
 - 已接受的归档债：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 summary anchors 与 traceability metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
+- v1.1 研究确认：R2 免费层适合少量必要资产，不适合漫画章节正文图；D1 存 URL 成本低；Worker/Pages Function 不应作为图片代理默认路径
 
 **已知风险区**：见 [`.planning/codebase/CONCERNS.md`](.planning/codebase/CONCERNS.md) —— v1 Active 需求会优先覆盖里面影响"日常使用"的问题。
 
@@ -79,6 +96,8 @@
 
 - **技术栈**：沿用现有 Turborepo + Cloudflare Workers/Pages + Hono + Vue 3/Nuxt 4 + D1/R2/KV + Drizzle + Better Auth — 已有大量代码投入，不重写
 - **预算**：维持在 Cloudflare 免费额度内（或接近免费） — 自用项目不愿承担月费
+- **R2 使用**：R2 只允许必要资产和临时诊断文件；章节正文图、批量漫画页、长期 debug dump 默认禁止
+- **外链风险**：漫画正文图使用源站 URL 会带来失效、防盗链和加载速度风险，需要 Reader 失败状态与可重抓策略兜底
 - **单用户**：作者一人使用，不做多租户隔离、配额、计费
 - **包管理**：pnpm 10.33.0（lockfile 已锁，workspace 配置已定）
 - **分支策略**：主干 `main`，功能在分支（worktree）开发后合入
@@ -98,6 +117,9 @@
 | Monorepo 用 Turborepo + pnpm workspace | 多应用共享 packages/ui、packages/db | ✓ Good |
 | R2 不做视频宿主，漫画详情图片逐步迁出 R2 | 存储 + 出站成本相对价值不划算；单用户内容中台优先使用现有 magnet / TorrServer / 外链路径，后续图片也逐步回到更轻的直链方案 | — New |
 | v1.0 归档接受 metadata tech debt | final audit 无 unsatisfied runtime requirements；剩余为 summary/traceability/security-artifact 归档债 | ✓ Accepted |
+| 漫画章节正文图只保存源站 URL | Cloudflare 免费额度优先，章节正文图体量最大且可重新抓取；R2 只保留封面等必要资产 | — New |
+| R2 上传改为 purpose allowlist | 通用 `images/` 上传路径无法表达成本边界，必须从 API 与 crawler 双侧阻止正文图误入 R2 | — New |
+| AGENTS.md 只保留入口级规则 | 当前文件过长，容易埋没真正必须执行的 repo 边界；细节迁入 RUNBOOK/.planning 或专题文档 | — New |
 
 ## Evolution
 
@@ -117,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-11 after v1.0 milestone completion*
+*Last updated: 2026-07-11 after v1.1 milestone start*
