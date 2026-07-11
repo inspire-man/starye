@@ -7,9 +7,9 @@
 
 ### Storage Policy
 
-- [ ] **STOR-01**: Owner can read a documented storage policy that states which assets may use R2 and which assets must remain external URLs.
+- [x] **STOR-01**: Owner can read a documented storage policy that states which assets may use R2 and which assets must remain external URLs.
 - [ ] **STOR-02**: System rejects or flags any attempt to store comic chapter body images in R2 by default.
-- [ ] **STOR-03**: Owner can distinguish R2-backed URLs from external source URLs in crawler/API/storage documentation and code naming.
+- [x] **STOR-03**: Owner can distinguish R2-backed URLs from external source URLs in crawler/API/storage documentation and code naming.
 - [ ] **STOR-04**: Existing R2 prefixes can be audited before deletion, including object count, rough size, and DB reference risk.
 
 ### Comic External Images
@@ -74,9 +74,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STOR-01 | Phase 6 | Pending |
+| STOR-01 | Phase 6 | Complete |
 | STOR-02 | Phase 6 | Pending |
-| STOR-03 | Phase 6 | Pending |
+| STOR-03 | Phase 6 | Complete |
 | STOR-04 | Phase 6 | Pending |
 | COMIC-01 | Phase 7 | Pending |
 | COMIC-02 | Phase 7 | Pending |
@@ -98,6 +98,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CODE-04 | Phase 10 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 22 total
 - Mapped to phases: 22
 - Unmapped: 0

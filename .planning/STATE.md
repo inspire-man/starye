@@ -4,22 +4,22 @@ milestone: v1.1
 milestone_name: 存储成本控制与代码/文件整理
 current_phase: 6
 current_phase_name: Storage Policy Audit
-status: ready_to_execute
-stopped_at: Phase 6 planned
-last_updated: "2026-07-12T03:54:33+08:00"
+status: executing
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-07-11T20:38:17.660Z"
 last_activity: 2026-07-12
-last_activity_desc: Phase 6 plans created, validated, and ready for execution
+last_activity_desc: Completed 06-01 storage policy and summary
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 33
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-07-11
+**Last updated:** 2026-07-12
 **Mode:** yolo
 **Granularity:** standard
 
@@ -40,15 +40,15 @@ progress:
 ## Current Position
 
 Phase: 6 current (Storage Policy Audit)
-Plan: 3 plans ready (`06-01` / `06-02` / `06-03`)
-Status: Ready to execute; planning passed after validation/doc sync
-Last activity: 2026-07-12 — Phase 6 plans created, checked, and synced
+Plan: 06-01 complete; next plans: 06-02 / 06-03
+Status: In progress — 06-01 complete, ready for 06-02
+Last activity: 2026-07-12 — Completed 06-01 storage policy and summary
 
 ## Performance Metrics
 
 **Phases completed:** 0 / 5
-**Plans completed:** 0
-**Plans in flight:** 3
+**Plans completed:** 1
+**Plans in flight:** 2
 **Phase repair invocations used:** 0 / per-phase budget 2
 
 ## Accumulated Context
@@ -62,6 +62,7 @@ Last activity: 2026-07-12 — Phase 6 plans created, checked, and synced
 | Phase 6 (crawler reliability) deferred to v2 | Not blocking "能用" — 现有内容库短期不新抓也能看 | 2026-05-11 roadmap creation |
 | v1.1 keeps comic chapter body images as source URLs | Cloudflare free-tier cost control matters more than owning every chapter image; R2 is reserved for necessary assets | 2026-07-11 milestone creation |
 | v1.1 forbids default Worker/Pages Function image proxying | Proxying chapter images shifts cost from R2 storage to Workers requests/CPU | 2026-07-11 milestone creation |
+| Phase 06 P01 | 6 min | 2 tasks | 2 files |
 
 ### Open Todos (carried across phases)
 
@@ -84,9 +85,9 @@ Last activity: 2026-07-12 — Phase 6 plans created, checked, and synced
 
 ## Session Continuity
 
-**Last session:** 2026-07-12T03:54:33+08:00
-**Stopped at:** Phase 6 planned
-**Resume file:** .planning/phases/06-storage-policy-audit/06-01-PLAN.md
+**Last session:** 2026-07-11T20:35:27.621Z
+**Stopped at:** Completed 06-01-PLAN.md
+**Resume file:** None
 
 **Next recommended action:**
 
@@ -111,3 +112,9 @@ $gsd-execute-phase 6
 ## Operator Next Steps
 
 - Execute Phase 6 with /gsd-execute-phase 6
+
+## Decisions
+
+- [Phase 06]: R2 policy is frozen into standard allowed, restricted allowed, short-term allowed, historical risk, and forbidden classes. — Locked by 06-01 storage policy
+- [Phase 06]: system/ and ops/d1-backups/ remain discovered unlisted prefixes until a later operations classification phase. — Locked by 06-01 storage policy
+- [Phase 06]: sourceImageUrl or externalImageUrl identify source URLs, while r2Key plus r2Url identify R2-backed assets; historical image_url and images: string[] names remain but their semantics are locked. — Locked by 06-01 storage policy
