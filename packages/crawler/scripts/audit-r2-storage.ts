@@ -1,5 +1,3 @@
-#!/usr/bin/env node --import tsx
-
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
