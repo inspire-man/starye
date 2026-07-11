@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 存储成本控制与代码/文件整理
 current_phase: 0
-status: planning
+status: roadmap_ready
 last_updated: "2026-07-11T08:01:34.674Z"
 last_activity: 2026-07-11
 progress:
@@ -36,10 +36,10 @@ progress:
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 6 next (Storage Policy Audit)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-11 — Milestone v1.1 started
+Status: Roadmap ready; Phase 6 not started
+Last activity: 2026-07-11 — Milestone v1.1 requirements and roadmap created
 
 ## Performance Metrics
 
