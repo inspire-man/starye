@@ -1,77 +1,152 @@
-# Project Research Summary: v1.1 存储成本控制与代码/文件整理
+# Project Research Summary
 
-**Researched:** 2026-07-11
-**Scope:** Cloudflare 免费额度、R2/D1/Workers/Pages 成本边界、漫画章节图片外链化、文档与代码整理策略。
+**Project:** Starye — 个人内容中台
+**Domain:** Cloudflare account/domain switching and local-to-production content pipeline verification
+**Researched:** 2026-07-13
+**Confidence:** HIGH
+
+## Executive Summary
+
+v1.2 should be treated as a deployment-target and verification milestone, not a feature expansion milestone. The main problem is that Starye currently has one implicit production target (`starye.org` plus one Cloudflare account/resource set) spread across Wrangler files, GitHub workflows, CORS/auth config, gateway origins, crawler secrets, tests and RUNBOOK. Switching Cloudflare account/domain safely requires one explicit target model and fail-closed validation before deployment, migration, crawler or smoke commands run.
+
+Official Cloudflare guidance supports two different switching mechanisms that must not be confused: Wrangler authentication profiles are useful for local operators working across multiple accounts, while CI/CD uses `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Therefore v1.2 should separate local profile ergonomics from GitHub Actions target selection and secret inventory. The acceptance path should remain Gateway-first: local verification through `http://localhost:8080/...`, production verification through the selected canonical domain, not direct app ports or `*.pages.dev` URLs.
+
+The highest-risk part is the data chain. A deploy can succeed while crawler auth, D1 migration, R2 backup, dashboard management or front-end viewing still point at the wrong target. The milestone should therefore end with a minimal, deterministic full-chain smoke: targeted crawl or fixture -> API write -> D1/admin validation -> front-end viewing through canonical gateway -> verification artifact.
 
 ## Key Findings
 
-### Cloudflare Cost Facts
+### Recommended Stack
 
-- R2 Standard 免费层适合少量必要资产：10 GB-month/月、1M Class A/月、10M Class B/月，超出后会按存储和操作量计费。章节正文图体量大，不适合作为默认存储目标。
-- R2 Infrequent Access 没有免费层，且有读取费、更高操作费和 30 天最短计费；不适合热门封面或漫画阅读正文图。
-- D1 免费层对 URL 元数据很友好：5GB 总存储、每日 rows read/write 免费额度；存章节图片 URL 比存对象更符合当前预算约束。
-- Workers 免费层有每日请求、CPU 和 subrequest 限制；图片代理会把阅读行为变成 Workers 请求/CPU 成本，默认不应启用。
-- Pages 静态资源请求本身成本低，但 Pages Functions 仍计入 Workers；前端展示应直接使用 `img src`，避免走 Function 中转。
+Use the existing stack and harden its configuration boundaries rather than introducing a new platform.
 
-## Recommended Storage Policy
+**Core technologies:**
+- Wrangler `^4.90.0`: deployment, env/config/profile selection, D1/R2/KV commands.
+- Cloudflare Workers: API and gateway runtime with target-specific bindings/routes.
+- Cloudflare Pages: dashboard/movie/comic/blog/auth front-end hosting with target-specific public API/origin values.
+- D1/R2/KV: existing data/cache/storage layer; all identifiers must become target-specific.
+- GitHub Actions: CI/CD, migration, crawler, rollback and evidence collection.
+- Vitest/Playwright/smoke scripts: automated local and production evidence.
 
-### R2 Allowlist
+### Expected Features
 
-R2 仅允许以下用途：
+**Must have (table stakes):**
+- Deployment target profile with account, domain, Workers, Pages, D1, R2, KV, URL and required-secret metadata.
+- Wrangler/API/gateway/dashboard config selection by target.
+- GitHub Actions target selection for deploy, migration, crawl and rollback workflows.
+- Domain-aware API CORS, auth URL, gateway origins and front-end public API config.
+- Local Gateway-first full-chain smoke.
+- Production full-chain smoke with crawler -> D1 -> admin -> viewing evidence.
+- Tests and RUNBOOK updates for repeatability.
 
-- `covers/`：漫画/电影封面和必要预览图
-- `avatars/`：演员头像、用户头像等必要头像
-- `logos/`：publisher logo
-- `fallback/`：阅读失败或占位用的小体积兜底图
-- `manual-assets/`：后台手动上传的文章/内容资产
-- `mappings/`：小体积 crawler mapping 文件，必须限制备份数量或生命周期
-- `tmp/` / `crawler-debug/` / `import-staging/`：短期诊断或导入暂存，必须配置生命周期删除
+**Should have (differentiators):**
+- Fail-closed preflight that prevents mixed account/resource/domain deploys.
+- Evidence bundle or verification artifact per target.
+- One-command smoke wrappers for local and production checks.
 
-禁止以下用途：
+**Defer (v2+):**
+- Full Cloudflare IaC provisioning.
+- Automated DNS/project/resource creation.
+- Multi-target scheduled crawler matrix.
+- Blue/green account migration.
 
-- 漫画章节正文图
-- 批量 comic page/image mirror
-- Worker/Pages Function 图片代理缓存
-- 长期 debug dump、未限量 mapping backups
+### Architecture Approach
 
-### Comic Chapter Images
+Introduce a small target-profile layer that projects non-secret target identity into Wrangler config, GitHub workflow inputs/environments, app public URLs, CORS/auth config and smoke scripts. Keep secrets in Wrangler/GitHub/.dev.vars only. Preserve app-specific deploy/rollback workflow boundaries, but make each workflow target-aware. Accept only Gateway/canonical-domain smoke as release evidence.
 
-- `pages.image_url` 保持存储源站图片 URL；字段语义应明确为源图片地址或外链地址，不代表 R2 object。
-- `packages/crawler/src/crawlers/comic-crawler.ts` 不应对章节正文图调用 `ImageProcessor.process()`；只应规范化、校验并保存源站 URL。
-- `apps/api/src/routes/public/comics/index.ts` 继续返回 `images: string[]`，但需要允许外链 URL 并可扩展图片来源元数据。
-- `apps/comic-app/src/views/Reader.vue` 继续直连展示，但需要错误占位、失败页统计和可回退提示，避免用户看到纯黑/空白阅读页。
+**Major components:**
+1. Target profile manifest — owns account/domain/resource identity without secrets.
+2. Config/preflight resolver — validates target completeness and renders/selects config.
+3. CI target selection — maps target to GitHub environment/secrets.
+4. Runtime config adoption — API/gateway/dashboard/pages consume target values.
+5. Smoke/evidence harness — local and production chain verification.
 
-### Upload Guardrails
+### Critical Pitfalls
 
-- `/api/upload` 应要求 `purpose` 枚举，并据此生成 key prefix；不能继续使用泛化 `images/`。
-- Crawler 图片处理也需要同一套 purpose 策略，允许封面/头像/logo，拒绝 `comic_chapter_page`。
-- 测试必须覆盖：章节正文图上传被拒绝、封面上传允许、mapping backup 不无限增长。
+1. **Mixed account/resource/domain target** — avoid with target manifest and preflight validation.
+2. **Wrangler profiles mistaken for CI auth** — local profiles are separate from GitHub token/account secrets.
+3. **Domain switch breaks auth/CORS/gateway** — parameterize domains and test through gateway.
+4. **Deploy succeeds but data chain fails** — require crawler/D1/admin/viewing smoke.
+5. **Full crawler as gate** — use a deterministic small target, not full scheduled volume.
+6. **Tests hard-code old domain** — move domain assumptions into fixtures/profile factories.
 
 ## Implications for Roadmap
 
-1. 先做盘点和策略落地，避免在不了解现有对象/prefix 的情况下删除。
-2. 再改 crawler 与 API 上传入口，切断新章节图进入 R2 的路径。
-3. 接着补 Reader 失败状态和数据校验，接受外链风险但让风险可见。
-4. 最后整理文档和代码入口，把 AGENTS.md 变短，把细节迁到 RUNBOOK 或专题文档。
+Based on research, suggested phase structure:
 
-## Watch Outs
+### Phase 11: Deployment Target Profile Foundation
+**Rationale:** Everything else depends on one authoritative target model and fail-closed validation.
+**Delivers:** Target manifest/schema, inventory of current `starye.org` resources, local Wrangler profile guidance, preflight checks.
+**Addresses:** Profile, account/domain/resource identity, secret requirements.
+**Avoids:** Mixed account/resource/domain pitfall.
 
-- 源站图片可能失效、防盗链或变更路径；v1.1 目标是省钱与可控，不承诺外链永远稳定。
-- 不要用 Worker 代理作为默认兜底；这会把省下来的 R2 存储成本转成 Workers 请求/CPU 成本。
-- 删除旧 R2 对象前必须先做 prefix 清单和 DB 引用审计；误删后只能依赖源站重新抓取。
-- `mappings/backups/` 如无生命周期规则，会以小文件形式长期增长并消耗 Class A 操作。
-- AGENTS.md 瘦身不能删掉必须执行的 repo 规则；应保留“中文协作、Gateway 访问、GitNexus impact/detect_changes、测试命令、GSD 入口”，详细说明迁入文档。
+### Phase 12: Cloudflare Config and CI Target Switching
+**Rationale:** After the target is explicit, API/gateway/dashboard/CI workflows can consume it.
+**Delivers:** Target-aware Wrangler config or generated env/config, GitHub environment/input strategy, deploy/migration/crawler workflow selection, domain-aware CORS/gateway/front-end config.
+**Uses:** Wrangler env/config/profile, GitHub Actions secrets/environments.
+**Implements:** Config projection layer and CI target selection.
+
+### Phase 13: Local-to-Production Data Chain Smoke
+**Rationale:** User's stated success is not deployment alone; it is crawl -> ingest -> manage -> view.
+**Delivers:** Local Gateway-first smoke, production canonical-domain smoke, targeted crawler/fixture flow, D1/admin/front-end evidence.
+**Addresses:** End-to-end data chain and "looks deployed but not usable" risk.
+
+### Phase 14: Test Coverage and Operations Hardening
+**Rationale:** The milestone asks to complete tests; after the flow exists, harden regression coverage and runbook ownership.
+**Delivers:** Parameterized tests, smoke wrappers, RUNBOOK updates, verification checklist, old-domain literal audit, evidence artifact format.
+**Addresses:** Tests locking in old domain, non-repeatable release proof.
+
+### Phase Ordering Rationale
+
+- Target identity must come before runtime config changes; otherwise each file invents its own target language.
+- CI/deploy switching must come before production smoke; otherwise smoke can only prove the current singleton target.
+- Data-chain smoke should come after deploy switching so it proves the selected target.
+- Test/runbook hardening should close the milestone after real paths exist and can be documented accurately.
+
+### Research Flags
+
+Phases likely needing deeper research during planning:
+- **Phase 11:** Confirm exact current Cloudflare resource inventory and what can be validated without live credentials.
+- **Phase 12:** Decide whether to use Wrangler env blocks, generated config files, or both; verify Pages workflows/project configuration.
+- **Phase 13:** Pick a deterministic crawler target/fixture that is useful but cheap and non-flaky.
+
+Phases with standard patterns:
+- **Phase 14:** Mostly repo-local test/runbook work once phase 11-13 contracts are fixed.
+
+## Confidence Assessment
+
+| Area | Confidence | Notes |
+|------|------------|-------|
+| Stack | HIGH | Official Cloudflare docs and current repo dependencies align on Wrangler/Workers/Pages/D1/R2/KV/GitHub Actions. |
+| Features | HIGH | User goal maps directly to identifiable repo surfaces and official deployment primitives. |
+| Architecture | HIGH | Target manifest + config projection is a standard fail-closed pattern for multi-target deployment. |
+| Pitfalls | HIGH | Most risks are visible in current repo hard-coded domains/resources and Cloudflare auth semantics. |
+
+**Overall confidence:** HIGH
+
+### Gaps to Address
+
+- **Live Cloudflare inventory:** Research could not verify the user's actual accounts/zones/resource IDs. Phase 11 should inventory from current config and any live credentials the operator chooses to provide.
+- **Pages configuration source:** Only dashboard has a tracked Wrangler config; other Pages apps likely rely on workflows/Cloudflare project settings. Phase 12 must inspect each deploy workflow.
+- **Crawler smoke target:** Needs a user/repo-approved low-cost target URL or fixture during phase planning.
+- **Secrets strategy:** GitHub environment names and secret naming convention need a concrete decision before workflow edits.
 
 ## Sources
 
-- Cloudflare R2 Pricing: https://developers.cloudflare.com/r2/pricing/
-- Cloudflare R2 Storage Classes: https://developers.cloudflare.com/r2/buckets/storage-classes/
-- Cloudflare R2 Object Lifecycles: https://developers.cloudflare.com/r2/buckets/object-lifecycles/
-- Cloudflare D1 Pricing: https://developers.cloudflare.com/d1/platform/pricing/
-- Cloudflare Workers Pricing: https://developers.cloudflare.com/workers/platform/pricing/
-- Cloudflare Pages Functions Pricing: https://developers.cloudflare.com/pages/functions/pricing/
-- Cloudflare Pages Limits: https://developers.cloudflare.com/pages/platform/limits/
-- Cloudflare Budget Alerts: https://developers.cloudflare.com/billing/manage/budget-alerts/
+### Primary (HIGH confidence)
+- Context7 `/llmstxt/developers_cloudflare_workers_llms-full_txt` — Wrangler config, env bindings, routes/custom domains, CI deploy commands.
+- Context7 `/cloudflare/workers-sdk` — Wrangler E2E helper, Miniflare persisted D1/KV/R2, secrets config behavior.
+- Cloudflare Docs: <https://developers.cloudflare.com/workers/wrangler/profiles/> — authentication profiles, resolution order, local-vs-CI boundary, account selection.
+- Cloudflare Docs: <https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/> — GitHub Actions authentication with API token/account ID.
+- Cloudflare Docs: <https://developers.cloudflare.com/d1/wrangler-commands/> — D1 local/remote, migrations, export, time travel.
+
+### Repository Evidence (HIGH confidence)
+- `apps/api/wrangler.toml` — current D1/R2/KV/routes/domain values.
+- `apps/gateway/wrangler.toml` — current gateway routes/origins/domain values.
+- `apps/dashboard/wrangler.toml` — current public API URL.
+- `.github/workflows/deploy-*.yml`, `.github/workflows/deploy-migrations.yml`, `.github/workflows/daily-manga-crawl.yml` — current CI deploy/migration/crawler environment.
+- `apps/api/src/config.ts`, `apps/gateway/src/index.ts` — domain/CORS/gateway behavior.
+- `RUNBOOK.md` — canonical operations owner for deployment, rollback, D1/R2 and accidental upload handling.
 
 ---
-*Research updated: 2026-07-11 for milestone v1.1*
+*Research completed: 2026-07-13*
+*Ready for roadmap: yes*
