@@ -15,7 +15,10 @@ import type { AppEnv } from '../../types'
 import { media } from '@starye/db/schema'
 import { Hono } from 'hono'
 import { nanoid } from 'nanoid'
-import { isManualUploadPurpose, manualUploadPrefixMap } from '../../../../../packages/api-types/src/storage-purpose-policy'
+import {
+  buildManualUploadObjectKey,
+  isManualUploadPurpose,
+} from '../../../../../packages/api-types/src/storage-purpose-policy'
 import { serviceAuth } from '../../middleware/service-auth'
 
 const upload = new Hono<AppEnv>()
@@ -48,15 +51,6 @@ export function parseUploadPurpose(value: unknown): { purpose?: ManualUploadPurp
   }
 
   return { purpose: value }
-}
-
-export function buildUploadObjectKey(
-  purpose: ManualUploadPurpose,
-  ext: string,
-  timestamp = Date.now(),
-  uniqueId = nanoid(),
-): string {
-  return `${manualUploadPrefixMap[purpose]}${timestamp}-${uniqueId}${ext}`
 }
 
 /**
@@ -108,7 +102,12 @@ upload.post(
         }, 400)
       }
 
-      const key = buildUploadObjectKey(purposeResult.purpose, ext)
+      const key = buildManualUploadObjectKey(
+        purposeResult.purpose,
+        ext,
+        Date.now(),
+        nanoid(),
+      )
 
       // 获取 R2 绑定
       const bucket = c.env.BUCKET

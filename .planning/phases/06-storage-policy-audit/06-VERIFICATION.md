@@ -1,4 +1,42 @@
-# Phase 06 Plan 03 Verification
+---
+phase: 06-storage-policy-audit
+verified: 2026-07-13
+verifier: Codex (targeted vitest + CLI help + crawler typecheck + destructive API scan)
+status: passed
+must_haves_total: 4
+must_haves_passed: 4
+must_haves_human_needed: 0
+must_haves_failed: 0
+requirements_total: 4
+requirements_covered: 4
+requirements_human_needed: 0
+requirements_missing: 0
+requirements_deferred: 0
+artifact_scan_open_items: 0
+tests_status:
+  crawler_tests: "12/12 passed"
+  crawler_typecheck: passed
+  cli_help: passed
+  destructive_api_scan: passed
+environment_notes:
+  - id: ENV-06-01
+    summary: "Credentialed dry-run and strict-env failure-path checks remain documented in this report, but were not re-run in the 2026-07-13 milestone closeout turn because they require Cloudflare credentials or temporary env mutation."
+---
+
+# Phase 06 Verification Report - Storage Policy Audit
+
+**Verified:** 2026-07-13
+**Status:** `passed`
+
+**Goal:**
+在不触碰 delete/apply 类远端动作的前提下，锁定 v1.1 的 storage policy、runtime write inventory、dry-run report contract 与 no-delete 验证边界，确保后续 cleanup phase 只能建立在明确证据之上。
+
+本次 closeout turn 重新确认了 4 类证据：
+
+- `06-01/02/03-SUMMARY.md`、`06-STORAGE-POLICY.md`、`06-R2-WRITE-INVENTORY.md`、`06-RISK-BASELINES.md`、`06-R2-AUDIT-DRY-RUN.md` 全部存在
+- 当前回合重新执行的 targeted crawler checks 全部通过：`vitest`、CLI `--help`、`tsc --noEmit`
+- `audit-r2-storage.ts` 仍未引入 destructive storage API
+- `audit-open` 在 milestone close 前返回 clean，说明没有遗留 open artifact 阻塞 closeout
 
 ## Purpose
 
@@ -38,6 +76,15 @@ pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts --help
 $bad = Select-String -Path 'packages/crawler/scripts/audit-r2-storage.ts' -Pattern 'DeleteObjectCommand|PutBucketLifecycleConfigurationCommand|\.delete\('
 if ($bad) { Write-Error 'destructive storage API found'; exit 1 }
 ```
+
+## Requirements Coverage
+
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| STOR-01 | covered | `06-STORAGE-POLICY.md` 固化了 allowed / restricted / short-term / forbidden 资产边界，以及 external source URL 与 R2-managed asset 的语义区分。 |
+| STOR-02 | covered | `06-RISK-BASELINES.md` 和 `06-03-SUMMARY.md` 把 comic chapter body image uploads 固定为 forbidden-risk baseline；`audit-r2-storage.ts` 与 destructive API scan 保持 audit-only / no-delete 边界。 |
+| STOR-03 | covered | `06-STORAGE-POLICY.md`、`06-R2-WRITE-INVENTORY.md`、`06-RISK-BASELINES.md` 一起区分 external/source URL、managed R2 key/url、historical doc claims 与 runtime truth。 |
+| STOR-04 | covered | `packages/crawler/scripts/audit-r2-storage.ts`、`packages/crawler/test/audit-r2-storage.test.ts`、`06-R2-AUDIT-DRY-RUN.md`、JSON/CSV report contracts 共同证明删除前可做 read-only inventory、count/size 与 DB reference risk 审计。 |
 
 ## Dry-Run Command
 

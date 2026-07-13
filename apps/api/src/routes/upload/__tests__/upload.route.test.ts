@@ -3,6 +3,12 @@ import { Hono } from 'hono'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { uploadRoutes } from '../index'
 
+vi.mock('nanoid', () => ({
+  nanoid: () => 'fixed-upload-id',
+}))
+
+const FIXED_TIMESTAMP = 1720828800000
+
 function createDb() {
   const values = vi.fn().mockResolvedValue(undefined)
   const insert = vi.fn(() => ({ values }))
@@ -67,6 +73,7 @@ describe('uploadRoutes purpose contract', () => {
   let env: AppEnv['Bindings']
 
   beforeEach(() => {
+    vi.spyOn(Date, 'now').mockReturnValue(FIXED_TIMESTAMP)
     bucket = createBucket()
     dbState = createDb()
     app = createApp(dbState.db)
@@ -112,7 +119,7 @@ describe('uploadRoutes purpose contract', () => {
 
     expect(res.status).toBe(200)
     const json: any = await res.json()
-    expect(json.key).toMatch(/^covers\/manual\/\d+-[\w-]+\.png$/)
+    expect(json.key).toBe(`covers/manual/${FIXED_TIMESTAMP}-fixed-upload-id.png`)
     expect(json.url).toBe(`https://cdn.example.com/${json.key}`)
     expect(bucket.put).toHaveBeenCalledTimes(1)
     expect(bucket.put.mock.calls[0][0]).toBe(json.key)
@@ -124,7 +131,7 @@ describe('uploadRoutes purpose contract', () => {
 
     expect(res.status).toBe(200)
     const json: any = await res.json()
-    expect(json.key).toMatch(/^manual-assets\/blog-inline\/\d+-[\w-]+\.webp$/)
+    expect(json.key).toBe(`manual-assets/blog-inline/${FIXED_TIMESTAMP}-fixed-upload-id.webp`)
     expect(json.url).toBe(`https://cdn.example.com/${json.key}`)
     expect(bucket.put).toHaveBeenCalledTimes(1)
   })

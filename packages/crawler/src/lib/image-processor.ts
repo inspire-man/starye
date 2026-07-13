@@ -1,4 +1,7 @@
-import type { CrawlerImagePurpose } from '../../../api-types/src/storage-purpose-policy'
+import {
+  resolveCrawlerManagedAssetPrefix,
+  type CrawlerImagePurpose,
+} from '../../../api-types/src/storage-purpose-policy'
 import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { S3Client } from '@aws-sdk/client-s3'
@@ -38,43 +41,20 @@ export interface CrawlerImageTargetInput {
   refererUrl?: string
 }
 
-function normalizeCrawlerNamespace(keyNamespace: string): string {
-  return keyNamespace.trim().replace(/^\/+/, '').replace(/\/+$/, '')
-}
-
 export function assertAllowedCrawlerImageTarget(target: CrawlerImageTargetInput): void {
-  const keyNamespace = normalizeCrawlerNamespace(target.keyNamespace)
-
   if (target.purpose === 'comic_chapter_page') {
     throw new Error('comic_chapter_page uploads are forbidden; chapter pages must stay on source URLs')
   }
 
-  switch (target.purpose) {
-    case 'cover':
-      if (/^movies\/[^/]+$/.test(keyNamespace) || /^comics\/[^/]+$/.test(keyNamespace)) {
-        return
-      }
-      throw new Error(`Unsupported cover namespace: ${keyNamespace}. Allowed namespaces: movies/<code>, comics/<slug>`)
-    case 'avatar':
-      if (/^actors\/[^/]+$/.test(keyNamespace)) {
-        return
-      }
-      throw new Error(`Unsupported avatar namespace: ${keyNamespace}. Allowed namespace: actors/<id>`)
-    case 'logo':
-      if (/^publishers\/[^/]+$/.test(keyNamespace)) {
-        return
-      }
-      throw new Error(`Unsupported logo namespace: ${keyNamespace}. Allowed namespace: publishers/<id>`)
-  }
+  resolveCrawlerManagedAssetPrefix(target.purpose, target.keyNamespace)
 }
 
 export function buildApprovedCrawlerPrefix(target: CrawlerImageTargetInput): string {
-  const keyNamespace = normalizeCrawlerNamespace(target.keyNamespace)
-  assertAllowedCrawlerImageTarget({
-    ...target,
-    keyNamespace,
-  })
-  return keyNamespace
+  if (target.purpose === 'comic_chapter_page') {
+    throw new Error('comic_chapter_page uploads are forbidden; chapter pages must stay on source URLs')
+  }
+
+  return resolveCrawlerManagedAssetPrefix(target.purpose, target.keyNamespace)
 }
 
 export class ImageProcessor {
@@ -139,7 +119,7 @@ export class ImageProcessor {
    * @param target Purpose-aware upload target
    */
   async process(target: CrawlerImageTargetInput): Promise<ProcessedImage[]> {
-    const keyPrefix = buildApprovedCrawlerPrefix(target)
+    const managedAssetPrefix = buildApprovedCrawlerPrefix(target)
 
     // 1. Download to buffer first to release the source server connection ASAP
     // 设置 Referer：优先使用传入的 refererUrl，否则使用 origin + '/' (避免防盗链)
@@ -171,9 +151,9 @@ export class ImageProcessor {
 
     // Define variants
     const tasks = [
-      this.uploadVariant(pipeline, keyPrefix, target.filename, 'thumb', { width: 300, quality: 80 }),
-      this.uploadVariant(pipeline, keyPrefix, target.filename, 'preview', { width: 800, quality: 85 }),
-      this.uploadVariant(pipeline, keyPrefix, target.filename, 'original', { quality: 90 }),
+      this.uploadVariant(pipeline, managedAssetPrefix, target.filename, 'thumb', { width: 300, quality: 80 }),
+      this.uploadVariant(pipeline, managedAssetPrefix, target.filename, 'preview', { width: 800, quality: 85 }),
+      this.uploadVariant(pipeline, managedAssetPrefix, target.filename, 'original', { quality: 90 }),
     ]
 
     try {

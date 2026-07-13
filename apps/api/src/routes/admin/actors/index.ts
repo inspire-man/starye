@@ -7,6 +7,7 @@
  */
 
 import type { AppEnv } from '../../../types'
+import { classifyStorageUrlKind } from '../../../../../../packages/api-types/src/storage-purpose-policy'
 import { actors, movieActors, movies } from '@starye/db/schema'
 import { and, count, desc, eq, gt, inArray, isNotNull, isNull, like, lt } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -30,6 +31,14 @@ import {
 const adminActors = new Hono<AppEnv>()
 
 adminActors.use('/*', requireResource('movie'))
+
+function needsActorAvatarUpdate(
+  avatar: string | null | undefined,
+  publicBaseUrl?: string | null,
+): boolean {
+  const avatarKind = classifyStorageUrlKind(avatar, publicBaseUrl)
+  return avatarKind === 'missing' || avatarKind === 'invalid'
+}
 
 /**
  * GET /api/admin/actors/nationalities
@@ -418,10 +427,10 @@ adminActors.get(
     try {
       // 筛选条件：
       // 1. 未爬取详情的女优（hasDetailsCrawled=false）
-      // 2. 已爬取但头像是外链的女优（头像不以 R2_PUBLIC_URL 开头）
+      // 2. 已爬取但仍缺头像或头像 URL 无效的 SeesaaWiki 女优
       // 3. 有 sourceUrl
       // 4. 失败次数 < 3
-      const r2PublicUrl = c.env.R2_PUBLIC_URL || ''
+      const r2PublicUrl = c.env.R2_PUBLIC_URL
 
       const allActors = await db.query.actors.findMany({
         where: and(
@@ -446,7 +455,7 @@ adminActors.get(
       // 过滤逻辑：
       // 1. 未爬取的女优
       // 2. 数据源不是SeesaaWiki的女优（需要从SeesaaWiki重新爬取）
-      // 3. 已爬取但头像是外链的女优（需要补全头像）
+      // 3. 已从SeesaaWiki爬取，但仍缺头像或头像 URL 无效（需要补全头像）
       const results = allActors.filter((actor) => {
         // 未爬取的直接包含
         if (!actor.hasDetailsCrawled) {
@@ -456,17 +465,14 @@ adminActors.get(
         if (actor.source !== 'seesaawiki') {
           return true
         }
-        // 已从SeesaaWiki爬取，但头像是外链（需要补全）
-        if (actor.avatar && !actor.avatar.startsWith(r2PublicUrl)) {
-          return true
-        }
-        return false
+
+        return needsActorAvatarUpdate(actor.avatar, r2PublicUrl)
       }).slice(0, limit) // 取前 limit 个
 
       // 统计各类数量
       const highPriorityCount = results.filter(a => a.movieCount >= 10).length
       const needsSeesaaWikiRecrawl = results.filter(a => a.hasDetailsCrawled && a.source !== 'seesaawiki').length
-      const needsAvatarUpdate = results.filter(a => a.hasDetailsCrawled && a.source === 'seesaawiki' && a.avatar && !a.avatar.startsWith(r2PublicUrl)).length
+      const needsAvatarUpdate = results.filter(a => a.hasDetailsCrawled && a.source === 'seesaawiki' && needsActorAvatarUpdate(a.avatar, r2PublicUrl)).length
 
       console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority, ${needsSeesaaWikiRecrawl} need SeesaaWiki recrawl, ${needsAvatarUpdate} need avatar update)`)
 
@@ -479,7 +485,9 @@ adminActors.get(
           crawlFailureCount: a.crawlFailureCount,
           lastCrawlAttempt: a.lastCrawlAttempt,
           hasDetailsCrawled: a.hasDetailsCrawled,
-          needsAvatarUpdate: a.hasDetailsCrawled && a.avatar ? !a.avatar.startsWith(r2PublicUrl) : false,
+          needsAvatarUpdate: a.hasDetailsCrawled && a.source === 'seesaawiki'
+            ? needsActorAvatarUpdate(a.avatar, r2PublicUrl)
+            : false,
           source: a.source, // 添加 source 字段
         })),
         total: results.length,

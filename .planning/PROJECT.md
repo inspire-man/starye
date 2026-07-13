@@ -8,17 +8,44 @@
 
 **"部署在公网、能稳定日常使用的个人内容中台"** —— 所有子应用在同一域名下协同工作，能长期保持可访问、可阅读、可观看。其他一切（特性完整度、多用户、正式审核流）都可以退让，但"能用、不崩"必须守住。
 
-## Current Milestone: v1.1 存储成本控制与代码/文件整理
+## Current State
+
+**Latest shipped milestone:** v1.1 存储成本控制与代码/文件整理（2026-07-13）
+
+**Archive evidence:**
+
+- `.planning/milestones/v1.1-MILESTONE-AUDIT.md` — milestone audit passed
+- `.planning/milestones/v1.1-ROADMAP.md` — full v1.1 phase roadmap archive
+- `.planning/milestones/v1.1-REQUIREMENTS.md` — archived v1.1 requirements snapshot
+
+**Repository posture after v1.1:**
+
+- 漫画章节正文图默认保持 external/source URL，不再把“进 R2”当成业务正确性的隐含条件。
+- R2 使用已收口到必要资产与短期诊断用途，upload/crawler/admin/script 共用同一套 policy-aware storage semantics。
+- root docs、RUNBOOK、`.planning` 和 `docs/archive/` 的 owner 边界已固定，后续里程碑应继续沿 canonical owner 更新。
+- 当前没有已定义的 active milestone；下一轮 scope 需要通过 `$gsd-new-milestone` 重新建立。
+
+## Next Milestone Goals
+
+- 在 external image reliability（`REL-01..03`）和 storage/billing operations automation（`OPS-01..02`）之间确定下一轮主线，而不是默认继续扩大 v1.1 scope。
+- 保持 Cloudflare free-tier-first、source-vs-managed asset distinction、以及 root doc ownership 这三条 v1.1 已验证的长期约束。
+- 只有在下一里程碑正式立项时，才重新生成 `.planning/REQUIREMENTS.md` 并定义新的 Active requirements。
+
+<details>
+<summary>Archived Milestone Focus - v1.1 存储成本控制与代码/文件整理</summary>
 
 **Goal:** 把 Starye 的文件存储策略调整到免费额度优先、可审计、可回退：漫画章节正文图片只保存源站外链，R2 仅保留封面、头像、logo、fallback、手动上传等必要资产，同时瘦身文档入口和整理存储相关代码。
 
-**Target features:**
+**Delivered capabilities:**
+
 - 明确 Cloudflare 免费额度边界和 R2 使用策略，避免因章节正文图、Worker 图片代理或无限备份产生扣费。
 - 漫画章节页链路改为源站图片 URL 存储与直连展示，Crawler/API/Reader 均不默认上传或代理正文图。
 - R2 上传入口改成 purpose allowlist，只允许 cover/poster/avatar/logo/fallback/manual/temp 等必要资产。
 - 增加 R2 prefix 审计、生命周期清理、预算提醒和运行手册，能快速发现并处理高成本对象。
 - 将 AGENTS.md 精简为入口索引，把历史阶段文档归档/清理，保留当前开发真正需要读的文件。
 - 围绕存储、爬虫、comic 阅读链路做小步代码整理和测试补强，不做跨产品大重写。
+
+</details>
 
 ## Requirements
 
@@ -42,14 +69,16 @@
 - ✓ 播放稳定化：movie-app 播放错误卡片、waiting 超时、同源重试、离线按钮反馈、R18 防线不回退 — v1.0
 - ✓ 统一进度：`progress` 表支撑 movie/comic 的恢复、保存、完成态、pagehide flush 与历史消费面 — v1.0
 - ✓ 部署与运维基础盘：deploy/rollback workflows、D1 backup-before-apply、destructive migration reviewer gate、Sentry、RUNBOOK — v1.0
+- ✓ v1.1 存储成本控制：R2 只用于必要资产，章节正文图不进入 Cloudflare 存储或 Worker 代理。 — v1.1
+- ✓ v1.1 漫画章节外链化：crawler 保存源站图片 URL，API 与 Reader 保持可读、可失败提示、可验证。 — v1.1
+- ✓ v1.1 成本护栏：预算提醒、R2 prefix 审计、生命周期清理和运行手册可执行。 — v1.1
+- ✓ v1.1 文档/入口瘦身：AGENTS.md、RUNBOOK、`.planning` 文档边界清楚，历史 phase 文件按 GSD 规则清理或归档。 — v1.1
+- ✓ v1.1 存储相关代码整理：上传目的、R2 key、图片处理和 crawler 脚本策略统一，测试覆盖关键防线。 — v1.1
 
 ### Active
 
-- [ ] v1.1 存储成本控制：R2 只用于必要资产，章节正文图不进入 Cloudflare 存储或 Worker 代理。
-- [ ] v1.1 漫画章节外链化：crawler 保存源站图片 URL，API 与 Reader 保持可读、可失败提示、可验证。
-- [ ] v1.1 成本护栏：预算提醒、R2 prefix 审计、生命周期清理和运行手册可执行。
-- ✓ v1.1 文档/入口瘦身：AGENTS.md、RUNBOOK、.planning 文档边界清楚，历史 phase 文件按 GSD 规则清理或归档。 — Validated in Phase 9
-- [ ] v1.1 存储相关代码整理：上传目的、R2 key、图片处理和 crawler 脚本策略统一，测试覆盖关键防线。
+- [ ] 下一 milestone 尚未定义；启动时通过 `$gsd-new-milestone` 重新定义 Active requirements。
+- [ ] 候选方向：`REL-01..03`（external image reliability）或 `OPS-01..02`（billing / cleanup automation），待下一里程碑正式立项。
 
 ### Out of Scope
 
@@ -82,13 +111,13 @@
 - `0121cc9` dashboard 加 SillyTavern 入口
 - `4cefbe6` movie-app advance search + personalized recommendation + new release
 
-**当前状态（2026-07-11）**：
+**当前状态（2026-07-13）**：
 
-- v1.0 "部署可用、日常使用态" 已完成并归档到 `.planning/milestones/`
-- 5/5 phases verified，24/24 plans complete，最终 audit 无 unsatisfied requirements
-- 活动 `REQUIREMENTS.md` 已归档，下一 milestone 需要重新定义 requirements
-- 已接受的归档债：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 summary anchors 与 traceability metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
-- v1.1 研究确认：R2 免费层适合少量必要资产，不适合漫画章节正文图；D1 存 URL 成本低；Worker/Pages Function 不应作为图片代理默认路径
+- v1.0 与 v1.1 都已完成并归档到 `.planning/milestones/`
+- v1.1 已通过 milestone audit：5/5 phases complete，15/15 plans complete，22/22 v1 requirements satisfied
+- 当前没有 active milestone；下一步是 `$gsd-new-milestone`
+- 已接受的历史归档债仍主要来自 v1.0：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
+- v1.1 已把 R2 必要资产边界、external/source image semantics、shared storage helper、policy-aware admin/script behavior 和 canonical doc ownership 一并收口
 
 **已知风险区**：见 [`.planning/codebase/CONCERNS.md`](.planning/codebase/CONCERNS.md) —— v1 Active 需求会优先覆盖里面影响"日常使用"的问题。
 
@@ -115,11 +144,13 @@
 | Hono + hono-openapi 生成 API 文档 | 类型安全 + 自动生成 Scalar UI | ✓ Good |
 | "审核"流程延后到 v1 之后 | 语义未明确，先不做 | — Pending |
 | Monorepo 用 Turborepo + pnpm workspace | 多应用共享 packages/ui、packages/db | ✓ Good |
-| R2 不做视频宿主，漫画详情图片逐步迁出 R2 | 存储 + 出站成本相对价值不划算；单用户内容中台优先使用现有 magnet / TorrServer / 外链路径，后续图片也逐步回到更轻的直链方案 | — New |
+| R2 不做视频宿主，漫画详情图片逐步迁出 R2 | 存储 + 出站成本相对价值不划算；单用户内容中台优先使用现有 magnet / TorrServer / 外链路径，后续图片也逐步回到更轻的直链方案 | ✓ Good |
 | v1.0 归档接受 metadata tech debt | final audit 无 unsatisfied runtime requirements；剩余为 summary/traceability/security-artifact 归档债 | ✓ Accepted |
-| 漫画章节正文图只保存源站 URL | Cloudflare 免费额度优先，章节正文图体量最大且可重新抓取；R2 只保留封面等必要资产 | — New |
-| R2 上传改为 purpose allowlist | 通用 `images/` 上传路径无法表达成本边界，必须从 API 与 crawler 双侧阻止正文图误入 R2 | — New |
-| AGENTS.md 只保留入口级规则 | 当前文件过长，容易埋没真正必须执行的 repo 边界；细节迁入 RUNBOOK/.planning 或专题文档 | — New |
+| 漫画章节正文图只保存源站 URL | Cloudflare 免费额度优先，章节正文图体量最大且可重新抓取；R2 只保留封面等必要资产 | ✓ Validated in Phase 7 |
+| shared storage semantics 保持为 `@starye/api-types` 纯 helper 层 | 需要 API 和 crawler 共用一套 contract，但不引入跨 Worker/Node 的 shared runtime service | ✓ Validated in Phase 10 |
+| 合法 external image URL 是允许的终态，不再以 “是否 R2” 代替业务正确性判断 | Phase 7 已把正文图外链化，Phase 10 继续把 admin heuristics 与 legacy scripts 拉回 policy-aware 语义 | ✓ Validated in Phase 10 |
+| R2 上传改为 purpose allowlist | 通用 `images/` 上传路径无法表达成本边界，必须从 API 与 crawler 双侧阻止正文图误入 R2 | ✓ Validated in Phase 8 |
+| AGENTS.md 只保留入口级规则 | 当前文件过长，容易埋没真正必须执行的 repo 边界；细节迁入 RUNBOOK/.planning 或专题文档 | ✓ Validated in Phase 9 |
 | 文档 owner 固定为 README / AGENTS / RUNBOOK / `.planning` / `docs` / `docs/archive` / `openspec` | 避免 root docs 和旧存储文档继续漂移成多份 source of truth | ✓ Validated in Phase 9 |
 
 ## Evolution
@@ -140,4 +171,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-13 after Phase 9 closeout*
+*Last updated: 2026-07-13 after v1.1 milestone closeout*

@@ -95,9 +95,9 @@ async function main() {
 
     await page.close()
 
-    // 步骤 2: 测试图片上传 (如果 R2 配置齐全)
+    // 步骤 2: 测试必要资产路径 (如果 R2 配置齐全)
     if (r2Config.accountId && r2Config.accessKeyId && r2Config.secretAccessKey) {
-      console.log('\n【步骤 2: 测试图片上传】')
+      console.log('\n【步骤 2: 测试必要资产上传路径】')
       try {
         const keyPrefix = `movies/${movieInfo.code}`
         const results = await imageProcessor.process(
@@ -109,12 +109,12 @@ async function main() {
           },
         )
 
-        console.log('✅ 图片上传成功:')
+        console.log('✅ 图片处理成功（managed asset 路径）:')
         results.forEach((r) => {
           console.log(`  ${r.variant}: ${r.url}`)
         })
 
-        // 更新 coverImage 为 R2 URL
+        // 若拿到 managed preview URL，则用它模拟必要资产终态
         const previewImage = results.find(r => r.variant === 'preview')
         if (previewImage) {
           movieInfo.coverImage = previewImage.url
@@ -126,8 +126,8 @@ async function main() {
       }
     }
     else {
-      console.log('\n【步骤 2: 跳过图片上传】')
-      console.log('⚠️  R2 配置不完整，跳过图片上传测试')
+      console.log('\n【步骤 2: 跳过必要资产上传路径】')
+      console.log('⚠️  R2 配置不完整，保留原始 coverImage 作为合法 external 终态')
     }
 
     // 步骤 3: 测试 API 同步
@@ -152,7 +152,7 @@ async function main() {
     console.log(`  1. 访问 API: http://localhost:3000/api/movies?search=${movieInfo.code}`)
     console.log(`  2. 检查 actors 字段是否有对象数组（不是 string[]）`)
     console.log(`  3. 检查 publishers 字段是否有对象数组`)
-    console.log(`  4. 检查 coverImage 是否是 R2 URL`)
+    console.log(`  4. 检查 coverImage 是否符合当前 storage policy（managed URL 或合法 external URL）`)
 
     console.log(`\n${'='.repeat(80)}`)
     console.log('✅ 测试完成')

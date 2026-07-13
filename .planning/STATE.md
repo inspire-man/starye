@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 存储成本控制与代码/文件整理
 current_phase: 10
-current_phase_name: Storage Code Cleanup
-status: planned
-stopped_at: Phase 10 context gathered
-last_updated: "2026-07-13T09:43:06.439Z"
+status: Awaiting next milestone
+stopped_at: Milestone v1.1 archived
+last_updated: "2026-07-13T14:43:53.966Z"
 last_activity: 2026-07-13
-last_activity_desc: Phase 9 completed with root doc owner map, docs/archive split, and RUNBOOK/STRUCTURE ownership sync
+last_activity_desc: Milestone v1.1 completed and archived
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
-  percent: 80
+  completed_phases: 5
+  total_plans: 15
+  completed_plans: 15
+  percent: 100
+current_phase_name: Storage Code Cleanup
 ---
 
 # Project State: Starye — 个人内容中台
@@ -27,27 +27,27 @@ progress:
 
 **Core Value:** 部署在公网、能稳定日常使用的个人内容中台 —— "能用、不崩" 优先于 "功能全"。
 
-**Current Milestone:** v1.1 — 存储成本控制与代码/文件整理。
+**Current Milestone:** v1.1 已归档；等待下一 milestone 定义。
 
 **Project Docs:**
 
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
-- `.planning/REQUIREMENTS.md` — v1.1 active requirements for storage cost control and cleanup
-- `.planning/ROADMAP.md` — v1.1 phases 6-10
+- `.planning/ROADMAP.md` — archived milestones overview and next-milestone handoff
+- `.planning/MILESTONES.md` — shipped milestone summaries and archive links
 - `.planning/research/SUMMARY.md` — v1.1 Cloudflare cost and storage strategy findings
 - `.planning/codebase/ARCHITECTURE.md` — Brownfield system overview
 
 ## Current Position
 
-Phase: 10 pending discussion (Storage Code Cleanup)
-Plan: no Phase 10 plan yet
-Status: Phase 9 complete — ready to discuss Phase 10
-Last activity: 2026-07-13 — Phase 9 completed with root doc owner map, docs/archive split, and RUNBOOK/STRUCTURE ownership sync
+Phase: Milestone v1.1 archived
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-13 — Milestone v1.1 completed and archived
 
 ## Performance Metrics
 
-**Phases completed:** 4 / 5
-**Plans completed:** 12
+**Phases completed:** 5 / 5
+**Plans completed:** 15
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -78,7 +78,7 @@ Last activity: 2026-07-13 — Phase 9 completed with root doc owner map, docs/ar
 
 ### Active Blockers
 
-- [ ] None for milestone closeout. Remaining v1.0 items are accepted archive metadata debt, recorded in `.planning/MILESTONES.md`.
+- [ ] None. Remaining v1.0 items are accepted archive metadata debt, recorded in `.planning/MILESTONES.md`.
 
 ### Recent Context (Brownfield注释)
 
@@ -89,25 +89,26 @@ Last activity: 2026-07-13 — Phase 9 completed with root doc owner map, docs/ar
 - Phase 5 已完成实现落盘，并通过 `05-UAT.md` / `05-HUMAN-UAT.md`（10/10 pass）、`05-SECURITY.md`（`threats_open: 0`）与 `05-VERIFICATION.md`（`status: passed`）收口
 - Phase 8 已完成 manual upload purpose contract、crawler purpose/namespace guard、`audit-r2-storage` hard-failure/cleanup-blocked contract 和 RUNBOOK R2 成本护栏章节；targeted API/dashboard/crawler/audit checks 全部通过
 - Phase 9 已完成 root docs 收缩、`docs/documentation-ownership.md`、`docs/archive/`、`09-01..03-SUMMARY.md` 与 `09-VERIFICATION.md`，文档 owner 和 evidence/archive 边界已收口
+- Phase 10 已完成 shared storage helper 收口、upload/crawler/admin adoption、legacy script policy-aware 文案修正，以及 `10-VERIFICATION.md` 记录的全部 targeted regressions / typechecks
 
 ## Session Continuity
 
-**Last session:** 2026-07-13T09:43:06.376Z
-**Stopped at:** Phase 10 context gathered
-**Resume file:** .planning/phases/10-storage-code-cleanup/10-CONTEXT.md
+**Last session:** 2026-07-13T14:43:53.966Z
+**Stopped at:** Milestone v1.1 archived
+**Resume file:** .planning/MILESTONES.md
 
 **Next recommended action:**
 
 ```text
-$gsd-discuss-phase 10
+$gsd-new-milestone
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
-2. Read `.planning/ROADMAP.md`
-3. Read `.planning/PROJECT.md`
-4. Continue with `$gsd-discuss-phase 10`
+2. Read `.planning/PROJECT.md`
+3. Read `.planning/ROADMAP.md`
+4. Continue with `$gsd-new-milestone`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -117,7 +118,7 @@ $gsd-discuss-phase 10
 
 ## Operator Next Steps
 
-- Discuss Phase 10 with /gsd-discuss-phase 10
+- Start the next milestone with /gsd-new-milestone
 
 ## Decisions
 

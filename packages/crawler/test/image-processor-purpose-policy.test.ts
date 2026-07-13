@@ -39,6 +39,15 @@ describe('image processor purpose policy', () => {
     })).toBe('publishers/publisher-123')
   })
 
+  it('标准化前后斜杠后再做 namespace 校验', () => {
+    expect(buildApprovedCrawlerPrefix({
+      imageUrl: 'https://img.example.com/avatar.jpg',
+      purpose: 'avatar',
+      keyNamespace: '/actors/actor-123/',
+      filename: 'avatar',
+    })).toBe('actors/actor-123')
+  })
+
   it('拒绝 chapter-like cover namespace', () => {
     expect(() => assertAllowedCrawlerImageTarget({
       imageUrl: 'https://img.example.com/page-1.jpg',

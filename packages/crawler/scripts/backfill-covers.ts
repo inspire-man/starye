@@ -1,8 +1,8 @@
 /**
  * 封面图恢复脚本
  * 为 coverImage 为 null 的影片从 JavBus 重新获取封面图，
- * 通过 ImageProcessor 上传至 R2，存入 CDN URL（与正常爬虫流程一致）。
- * 若未配置 R2，则回退存储 JavBus 原始 URL。
+ * 在需要 managed asset 时通过 ImageProcessor 上传至 R2。
+ * 若当前不走 managed 路径，则保留 JavBus 原始 URL 作为合法 external 终态。
  */
 
 import process from 'node:process'
@@ -18,7 +18,7 @@ const JAVBUS_HOSTS = [
   'https://www.busdmm.bond',
 ]
 
-// 尝试初始化 R2 上传器，配置不完整则返回 null（回退到直接存 JavBus URL）
+// 尝试初始化 R2 上传器；若当前不走 managed 路径，则保留源站 URL
 function createImageProcessor(): ImageProcessor | null {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.R2_ACCOUNT_ID || ''
   const accessKeyId = process.env.R2_ACCESS_KEY_ID || ''
@@ -27,7 +27,7 @@ function createImageProcessor(): ImageProcessor | null {
   const publicUrl = process.env.R2_PUBLIC_URL || ''
 
   if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !publicUrl) {
-    console.warn('⚠️  R2 配置不完整，将直接存储 JavBus 原始 URL（非 CDN URL）')
+    console.warn('⚠️  R2 配置不完整，将保留 JavBus 原始 URL（policy-compatible external）')
     return null
   }
 
@@ -35,7 +35,7 @@ function createImageProcessor(): ImageProcessor | null {
     return new ImageProcessor({ accountId, accessKeyId, secretAccessKey, bucketName, publicUrl })
   }
   catch (e: any) {
-    console.warn(`⚠️  R2 初始化失败: ${e.message}，将直接存储 JavBus URL`)
+    console.warn(`⚠️  R2 初始化失败: ${e.message}，将保留 JavBus 原始 URL`)
     return null
   }
 }
@@ -101,7 +101,7 @@ async function getJavBusCoverUrl(code: string): Promise<string | null> {
   return null
 }
 
-// 上传到 R2，返回 CDN preview URL；失败则返回原始 JavBus URL 作为降级
+// 上传到 R2，返回 managed preview URL；失败则回退到合法 external URL
 async function uploadToR2(imageProcessor: ImageProcessor, code: string, javbusUrl: string): Promise<string> {
   try {
     const results = await imageProcessor.process(
@@ -117,7 +117,7 @@ async function uploadToR2(imageProcessor: ImageProcessor, code: string, javbusUr
     return preview?.url ?? javbusUrl
   }
   catch (e: any) {
-    console.warn(`    ⚠️ R2 上传失败 (${code}): ${e.message}，回退存储原始 URL`)
+    console.warn(`    ⚠️ R2 上传失败 (${code}): ${e.message}，回退保留原始 URL`)
     return javbusUrl
   }
 }
@@ -157,10 +157,11 @@ async function main() {
 
   const imageProcessor = createImageProcessor()
   const useR2 = imageProcessor !== null
+  const managedPublicBaseUrl = process.env.R2_PUBLIC_URL?.trim()
 
   console.log('🖼️  开始恢复影片封面图')
   console.log(`📡 API: ${API_URL}`)
-  console.log(`☁️  上传模式: ${useR2 ? 'R2 CDN（标准流程）' : 'JavBus 原始 URL（降级）'}`)
+  console.log(`☁️  上传模式: ${useR2 ? 'managed asset 优先，失败回退 external URL' : '保留 JavBus 原始 URL（合法 external）'}`)
   console.log()
 
   const DELAY = Number.parseInt(process.env.COVER_DELAY || '2000')
@@ -205,15 +206,15 @@ async function main() {
           continue
         }
 
-        // 有 R2 配置则上传，否则直接用 JavBus URL
+        // 有 R2 配置则优先走 managed asset；否则直接保留 JavBus URL
         const finalUrl = useR2
           ? await uploadToR2(imageProcessor!, movie.code, javbusUrl)
           : javbusUrl
 
         const ok = await syncCoverImage(movie.code, finalUrl)
         if (ok) {
-          const isR2 = finalUrl.includes(process.env.R2_PUBLIC_URL || 'cdn.starye.org')
-          console.log(`✅ ${isR2 ? '[CDN]' : '[JavBus]'} ${finalUrl.substring(0, 70)}`)
+          const isManagedAsset = managedPublicBaseUrl ? finalUrl.startsWith(managedPublicBaseUrl) : false
+          console.log(`✅ ${isManagedAsset ? '[managed]' : '[external]'} ${finalUrl.substring(0, 70)}`)
           totalRestored++
         }
         else {

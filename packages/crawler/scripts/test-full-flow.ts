@@ -138,7 +138,7 @@ async function main() {
       console.log('\n请验证:')
       console.log('  1. 访问 http://localhost:8787/api/movies')
       console.log('  2. 检查最新的 3 部影片')
-      console.log('  3. 验证 coverImage 是 R2 URL（https://cdn.starye.org/...）')
+      console.log('  3. 验证 coverImage 符合当前 storage policy（managed URL 或合法 external URL）')
       console.log('  4. 验证 actors 和 publishers 是对象数组')
     }
     else {
