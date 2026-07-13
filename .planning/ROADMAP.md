@@ -3,11 +3,11 @@
 ## Milestones
 
 - ✅ **v1.0 部署可用、日常使用态** - Phases 1-5 shipped 2026-07-11. Archive: [v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
-- 🔄 **v1.1 存储成本控制与代码/文件整理** - Phases 6-10 planned 2026-07-11.
+- 🔄 **v1.1 存储成本控制与代码/文件整理** - Phase 6-9 complete; Phase 10 pending.
 
 ## Current Status
 
-v1.1 is executing. Phase 6 and Phase 7 are complete, and Phase 8 is now planned in 3 executable plans across 2 waves. The milestone protects the project from Cloudflare storage charges by moving comic chapter body images to external source URLs, limiting R2 to necessary assets, adding cost guardrails, and cleaning up documentation/code entrypoints.
+v1.1 is executing. Phase 6, Phase 7, Phase 8, and Phase 9 are complete. The remaining work is Phase 10 storage helper cleanup, which now starts from a cleaned-up documentation and ownership baseline.
 
 ## Phase Plan
 
@@ -15,7 +15,7 @@ v1.1 is executing. Phase 6 and Phase 7 are complete, and Phase 8 is now planned 
 |-------|------|------|--------------|
 | 6 | Storage Policy Audit | Complete 2026-07-12. Read-only audit toolkit, report contracts, and no-delete verification artifacts landed. | STOR-01, STOR-02, STOR-03, STOR-04 |
 | 7 | Comic External Image Flow | Complete 2026-07-13. External image ingestion, public/admin API contract, and Reader failure UX shipped. | COMIC-01, COMIC-02, COMIC-03, COMIC-04, COMIC-05 |
-| 8 | Cost Guardrails | Enforce approved R2 purposes and add audit/lifecycle/budget operations that prevent surprise Cloudflare charges. | COST-01, COST-02, COST-03, COST-04, COST-05 |
+| 8 | Cost Guardrails | Complete 2026-07-13. Approved R2 purposes, crawler upload guardrails, and owner-facing audit/budget operations landed. | COST-01, COST-02, COST-03, COST-04, COST-05 |
 | 9 | Documentation Restructure | Shrink AGENTS.md and organize historical/current docs so future work starts from the right source of truth. | DOC-01, DOC-02, DOC-03, DOC-04 |
 | 10 | Storage Code Cleanup | Consolidate storage helpers/tests and remove legacy assumptions that images should always become R2 URLs. | CODE-01, CODE-02, CODE-03, CODE-04 |
 
@@ -104,6 +104,21 @@ Plans:
 
 **Requirements:** DOC-01, DOC-02, DOC-03, DOC-04
 
+**Plans:** 3/3 plans complete
+
+Plans:
+**Wave 1**
+
+- [x] 09-01-PLAN.md — 新建 canonical doc owner 地图，并把 `AGENTS.md` / `README.md` 收缩成真正入口文档。
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 09-02-PLAN.md — 把 `CLAUDE.md` 压薄成适配层，并建立 `docs/archive/` 迁出历史 / superseded 文档。
+
+**Wave 3** *(blocked on Wave 1 and Wave 2 completion)*
+
+- [x] 09-03-PLAN.md — 强化 `RUNBOOK.md` 作为长期 storage-policy owner，并更新 `STRUCTURE.md` 与 archive/reference 完整性说明。
+
 **Success criteria:**
 
 1. AGENTS.md becomes a concise operational index with links to detailed docs rather than a long duplicated project manual.
@@ -138,11 +153,11 @@ Plans:
 
 ## Next
 
-Continue to Phase 8 with:
+Continue to Phase 10 discussion with:
 
 ```text
-$gsd-execute-phase 8
+$gsd-discuss-phase 10
 ```
 
 ---
-*Last updated: 2026-07-13 after Phase 8 planning*
+*Last updated: 2026-07-13 after Phase 9 closeout*

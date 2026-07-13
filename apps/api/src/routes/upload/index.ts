@@ -10,10 +10,12 @@
  * - 记录元数据到数据库
  */
 
+import type { ManualUploadPurpose } from '../../../../../packages/api-types/src/storage-purpose-policy'
 import type { AppEnv } from '../../types'
 import { media } from '@starye/db/schema'
 import { Hono } from 'hono'
 import { nanoid } from 'nanoid'
+import { isManualUploadPurpose, manualUploadPrefixMap } from '../../../../../packages/api-types/src/storage-purpose-policy'
 import { serviceAuth } from '../../middleware/service-auth'
 
 const upload = new Hono<AppEnv>()
@@ -32,6 +34,31 @@ const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
 // 最大文件大小：10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
+export function parseUploadPurpose(value: unknown): { purpose?: ManualUploadPurpose, error?: string } {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return { error: 'Upload purpose is required' }
+  }
+
+  if (value === 'comic_chapter_page') {
+    return { error: 'comic_chapter_page uploads are forbidden; chapter pages must stay on source URLs' }
+  }
+
+  if (!isManualUploadPurpose(value)) {
+    return { error: `Unsupported upload purpose: ${value}` }
+  }
+
+  return { purpose: value }
+}
+
+export function buildUploadObjectKey(
+  purpose: ManualUploadPurpose,
+  ext: string,
+  timestamp = Date.now(),
+  uniqueId = nanoid(),
+): string {
+  return `${manualUploadPrefixMap[purpose]}${timestamp}-${uniqueId}${ext}`
+}
+
 /**
  * POST /upload
  * 直接上传图片到 R2
@@ -46,10 +73,15 @@ upload.post(
       // 解析 multipart/form-data
       const body = await c.req.parseBody()
       const file = body.file
+      const purposeResult = parseUploadPurpose(body.purpose)
 
       // 验证文件是否存在
       if (!file || !(file instanceof File)) {
         return c.json({ error: 'No file uploaded' }, 400)
+      }
+
+      if (!purposeResult.purpose) {
+        return c.json({ error: purposeResult.error ?? 'Upload purpose is required' }, 400)
       }
 
       // 验证文件大小
@@ -76,10 +108,7 @@ upload.post(
         }, 400)
       }
 
-      // 生成唯一 key：images/<timestamp>-<nanoid>.<ext>
-      const timestamp = Date.now()
-      const uniqueId = nanoid()
-      const key = `images/${timestamp}-${uniqueId}${ext}`
+      const key = buildUploadObjectKey(purposeResult.purpose, ext)
 
       // 获取 R2 绑定
       const bucket = c.env.BUCKET

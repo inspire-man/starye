@@ -1,3 +1,6 @@
+> Status: superseded
+> Replaced by: [`RUNBOOK.md`](../../RUNBOOK.md)
+
 # R2 映射存储部署验证清单
 
 **日期**: 2026-03-31  

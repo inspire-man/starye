@@ -371,9 +371,12 @@ export class ActorCrawler {
         try {
           console.log(`   📤 上传头像到 R2...`)
           const avatarImages = await this.imageProcessor.process(
-            details.avatar,
-            `actors/${actor.id}`,
-            'avatar',
+            {
+              imageUrl: details.avatar,
+              purpose: 'avatar',
+              keyNamespace: `actors/${actor.id}`,
+              filename: 'avatar',
+            },
           )
           const preview = avatarImages.find(i => i.variant === 'preview')
           if (preview) {
@@ -428,9 +431,12 @@ export class ActorCrawler {
       // 上传头像到 R2
       console.log(`   📤 上传头像到 R2...`)
       const avatarImages = await this.imageProcessor.process(
-        details.avatar,
-        `actors/${actor.id}`,
-        'avatar',
+        {
+          imageUrl: details.avatar,
+          purpose: 'avatar',
+          keyNamespace: `actors/${actor.id}`,
+          filename: 'avatar',
+        },
       )
       const preview = avatarImages.find(i => i.variant === 'preview')
 
@@ -473,9 +479,12 @@ export class ActorCrawler {
       // 上传头像到 R2
       console.log(`   📤 上传头像到 R2...`)
       const avatarImages = await this.imageProcessor.process(
-        details.avatar,
-        `actors/${actor.id}`,
-        'avatar',
+        {
+          imageUrl: details.avatar,
+          purpose: 'avatar',
+          keyNamespace: `actors/${actor.id}`,
+          filename: 'avatar',
+        },
       )
       const preview = avatarImages.find(i => i.variant === 'preview')
 

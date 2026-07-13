@@ -1,3 +1,4 @@
+import type { CrawlerImagePurpose } from '../../../api-types/src/storage-purpose-policy'
 import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { S3Client } from '@aws-sdk/client-s3'
@@ -27,6 +28,53 @@ export interface ProcessedImage {
   width?: number
   height?: number
   size: number
+}
+
+export interface CrawlerImageTargetInput {
+  imageUrl: string
+  purpose: CrawlerImagePurpose | 'comic_chapter_page'
+  keyNamespace: string
+  filename: string
+  refererUrl?: string
+}
+
+function normalizeCrawlerNamespace(keyNamespace: string): string {
+  return keyNamespace.trim().replace(/^\/+/, '').replace(/\/+$/, '')
+}
+
+export function assertAllowedCrawlerImageTarget(target: CrawlerImageTargetInput): void {
+  const keyNamespace = normalizeCrawlerNamespace(target.keyNamespace)
+
+  if (target.purpose === 'comic_chapter_page') {
+    throw new Error('comic_chapter_page uploads are forbidden; chapter pages must stay on source URLs')
+  }
+
+  switch (target.purpose) {
+    case 'cover':
+      if (/^movies\/[^/]+$/.test(keyNamespace) || /^comics\/[^/]+$/.test(keyNamespace)) {
+        return
+      }
+      throw new Error(`Unsupported cover namespace: ${keyNamespace}. Allowed namespaces: movies/<code>, comics/<slug>`)
+    case 'avatar':
+      if (/^actors\/[^/]+$/.test(keyNamespace)) {
+        return
+      }
+      throw new Error(`Unsupported avatar namespace: ${keyNamespace}. Allowed namespace: actors/<id>`)
+    case 'logo':
+      if (/^publishers\/[^/]+$/.test(keyNamespace)) {
+        return
+      }
+      throw new Error(`Unsupported logo namespace: ${keyNamespace}. Allowed namespace: publishers/<id>`)
+  }
+}
+
+export function buildApprovedCrawlerPrefix(target: CrawlerImageTargetInput): string {
+  const keyNamespace = normalizeCrawlerNamespace(target.keyNamespace)
+  assertAllowedCrawlerImageTarget({
+    ...target,
+    keyNamespace,
+  })
+  return keyNamespace
 }
 
 export class ImageProcessor {
@@ -88,25 +136,24 @@ export class ImageProcessor {
 
   /**
    * Process an image URL: download, resize/convert, and upload to R2
-   * @param imageUrl Source URL
-   * @param keyPrefix Prefix for R2 keys (e.g. "comics/one-piece/ch1")
-   * @param filename Base filename without extension (e.g. "001")
-   * @param refererUrl Optional referer URL for anti-hotlinking protection (defaults to origin + '/')
+   * @param target Purpose-aware upload target
    */
-  async process(imageUrl: string, keyPrefix: string, filename: string, refererUrl?: string): Promise<ProcessedImage[]> {
+  async process(target: CrawlerImageTargetInput): Promise<ProcessedImage[]> {
+    const keyPrefix = buildApprovedCrawlerPrefix(target)
+
     // 1. Download to buffer first to release the source server connection ASAP
     // 设置 Referer：优先使用传入的 refererUrl，否则使用 origin + '/' (避免防盗链)
-    const parsedUrl = new URL(imageUrl)
+    const parsedUrl = new URL(target.imageUrl)
     const defaultReferer = `${parsedUrl.origin}/`
 
-    const imageBuffer = await got(imageUrl, {
+    const imageBuffer = await got(target.imageUrl, {
       agent: {
         http: this.httpAgent,
         https: this.httpsAgent,
       },
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'Referer': refererUrl || defaultReferer,
+        'Referer': target.refererUrl || defaultReferer,
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
       },
@@ -124,16 +171,16 @@ export class ImageProcessor {
 
     // Define variants
     const tasks = [
-      this.uploadVariant(pipeline, keyPrefix, filename, 'thumb', { width: 300, quality: 80 }),
-      this.uploadVariant(pipeline, keyPrefix, filename, 'preview', { width: 800, quality: 85 }),
-      this.uploadVariant(pipeline, keyPrefix, filename, 'original', { quality: 90 }),
+      this.uploadVariant(pipeline, keyPrefix, target.filename, 'thumb', { width: 300, quality: 80 }),
+      this.uploadVariant(pipeline, keyPrefix, target.filename, 'preview', { width: 800, quality: 85 }),
+      this.uploadVariant(pipeline, keyPrefix, target.filename, 'original', { quality: 90 }),
     ]
 
     try {
       return await Promise.all(tasks)
     }
     catch (error) {
-      console.error(`Failed to process image ${imageUrl}:`, error)
+      console.error(`Failed to process image ${target.imageUrl}:`, error)
       throw error
     }
   }

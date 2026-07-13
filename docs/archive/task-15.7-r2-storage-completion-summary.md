@@ -1,3 +1,6 @@
+> Status: historical
+> Replaced by: [`RUNBOOK.md`](../../RUNBOOK.md), [`.planning/milestones/`](../../.planning/milestones/)
+
 # 任务 15.7 实施总结：R2 映射存储完善
 
 **完成日期**: 2026-03-31  
@@ -266,19 +269,19 @@ pnpm tsx scripts/test-r2-mapping-storage.ts
 
 ### 优化计划
 
-详见 [R2 存储实施报告](../../docs/r2-mapping-storage-implementation-report.md) 中的"已知限制和后续优化"章节。
+详见 [R2 存储实施报告](./r2-mapping-storage-implementation-report.md) 中的"已知限制和后续优化"章节。
 
 ## 部署指南
 
 ### 快速开始
 
-**推荐**: 按照 [R2 映射存储快速部署指南](../../docs/r2-mapping-quick-deploy-guide.md) 操作（15-20 分钟）
+**推荐**: 按照 [R2 映射存储快速部署指南](./r2-mapping-quick-deploy-guide.md) 操作（15-20 分钟）
 
 ### 详细配置
 
 如需深入了解技术细节，参考：
-- [R2 映射存储配置指南](../../docs/r2-mapping-storage-setup-guide.md)
-- [环境变量配置说明](../../docs/r2-mapping-env-vars-guide.md)
+- [R2 映射存储配置指南](./r2-mapping-storage-setup-guide.md)
+- [环境变量配置说明](./r2-mapping-env-vars-guide.md)
 
 ## 后续任务
 

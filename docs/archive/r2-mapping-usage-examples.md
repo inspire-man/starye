@@ -1,3 +1,6 @@
+> Status: superseded
+> Replaced by: [`RUNBOOK.md`](../../RUNBOOK.md)
+
 # R2 映射存储使用示例
 
 **场景**: 运维人员配置和使用 R2 映射存储功能

@@ -329,9 +329,12 @@ export class PublisherCrawler {
         try {
           console.log(`   📤 上传 logo 到 R2...`)
           const logoImages = await this.imageProcessor.process(
-            details.logo,
-            `publishers/${publisher.id}`,
-            'logo',
+            {
+              imageUrl: details.logo,
+              purpose: 'logo',
+              keyNamespace: `publishers/${publisher.id}`,
+              filename: 'logo',
+            },
           )
           const preview = logoImages.find(i => i.variant === 'preview')
           if (preview) {
@@ -386,9 +389,12 @@ export class PublisherCrawler {
       // 上传 logo 到 R2
       console.log(`   📤 上传 logo 到 R2...`)
       const logoImages = await this.imageProcessor.process(
-        details.logo,
-        `publishers/${publisher.id}`,
-        'logo',
+        {
+          imageUrl: details.logo,
+          purpose: 'logo',
+          keyNamespace: `publishers/${publisher.id}`,
+          filename: 'logo',
+        },
       )
       const preview = logoImages.find(i => i.variant === 'preview')
 
@@ -431,9 +437,12 @@ export class PublisherCrawler {
       // 上传 logo 到 R2
       console.log(`   📤 上传 logo 到 R2...`)
       const logoImages = await this.imageProcessor.process(
-        details.logo,
-        `publishers/${publisher.id}`,
-        'logo',
+        {
+          imageUrl: details.logo,
+          purpose: 'logo',
+          keyNamespace: `publishers/${publisher.id}`,
+          filename: 'logo',
+        },
       )
       const preview = logoImages.find(i => i.variant === 'preview')
 

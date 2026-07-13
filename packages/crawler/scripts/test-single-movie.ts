@@ -101,9 +101,12 @@ async function main() {
       try {
         const keyPrefix = `movies/${movieInfo.code}`
         const results = await imageProcessor.process(
-          movieInfo.coverImage!,
-          keyPrefix,
-          'cover',
+          {
+            imageUrl: movieInfo.coverImage!,
+            purpose: 'cover',
+            keyNamespace: keyPrefix,
+            filename: 'cover',
+          },
         )
 
         console.log('✅ 图片上传成功:')

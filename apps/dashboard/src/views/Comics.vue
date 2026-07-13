@@ -211,13 +211,8 @@ async function handleUpload(event: Event) {
 
   uploadLoading.value = true
   try {
-    const presignRes = await api.upload.presign(file.name, file.type)
-    await fetch(presignRes.uploadUrl, {
-      method: 'PUT',
-      body: file,
-      headers: { 'Content-Type': file.type },
-    })
-    editingComic.value.coverImage = presignRes.publicUrl
+    const uploadResult = await api.upload.uploadImage(file, 'cover')
+    editingComic.value.coverImage = uploadResult.url
   }
   catch (e: unknown) {
     handleError(e, '上传封面失败')

@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 存储成本控制与代码/文件整理
-current_phase: 8
-current_phase_name: Cost Guardrails
+current_phase: 10
+current_phase_name: Storage Code Cleanup
 status: planned
-stopped_at: Phase 8 planned
-last_updated: "2026-07-13T03:36:48.5187777Z"
+stopped_at: Phase 9 complete; next phase needs discussion
+last_updated: "2026-07-13T15:41:32.5942088+08:00"
 last_activity: 2026-07-13
-last_activity_desc: Phase 8 planned with manual upload purpose guardrails, crawler upload policy enforcement, and audit/runbook cost operations
+last_activity_desc: Phase 9 completed with root doc owner map, docs/archive split, and RUNBOOK/STRUCTURE ownership sync
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 9
-  completed_plans: 6
-  percent: 40
+  completed_phases: 4
+  total_plans: 12
+  completed_plans: 12
+  percent: 80
 ---
 
 # Project State: Starye — 个人内容中台
@@ -39,15 +39,15 @@ progress:
 
 ## Current Position
 
-Phase: 8 planned (Cost Guardrails)
-Plan: 08-01 / 08-02 / 08-03 planned
-Status: Planned — ready to execute Phase 8
-Last activity: 2026-07-13 — Phase 8 planned with manual upload purpose guardrails, crawler upload policy enforcement, and audit/runbook cost operations
+Phase: 10 pending discussion (Storage Code Cleanup)
+Plan: no Phase 10 plan yet
+Status: Phase 9 complete — ready to discuss Phase 10
+Last activity: 2026-07-13 — Phase 9 completed with root doc owner map, docs/archive split, and RUNBOOK/STRUCTURE ownership sync
 
 ## Performance Metrics
 
-**Phases completed:** 2 / 5
-**Plans completed:** 6
+**Phases completed:** 4 / 5
+**Plans completed:** 12
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -73,6 +73,8 @@ Last activity: 2026-07-13 — Phase 8 planned with manual upload purpose guardra
 - [x] P4 kick-off: 定下视频进度粒度（统一按 int seconds / int page 持久化；movie 完成阈值 90%，小于 30s 不记）
 - [ ] P2 decision: 成人内容 `is_adult` ingest-time（爬虫自动）vs 手动（dashboard UI） —— 本轮需求已锁定爬虫自动（ACCESS-06），待 P2 实际落地时核验源站标签覆盖率
 - [x] P8 kick-off: 已拆成 08-01 / 08-02 / 08-03 plans，锁定 API upload、crawler purpose guard、audit/runbook 三条执行线
+- [x] P9 kick-off: 已拆成 09-01 / 09-02 / 09-03 plans，锁定 root entry docs、archive split、RUNBOOK owner 三条执行线
+- [x] P9 closeout: root docs 收缩、`docs/archive/` 建立、RUNBOOK/STRUCTURE owner 边界与 verification 已全部落盘
 
 ### Active Blockers
 
@@ -85,26 +87,27 @@ Last activity: 2026-07-13 — Phase 8 planned with manual upload purpose guardra
 - Phase 3 已完成文档收敛、Player 统一错误卡片 / waiting 超时 / 同源重试、MovieDetail 离线按钮反馈、5/5 人工播放 UAT，以及安全审查；本轮补上了 `streamUrl` 直达播放的授权/来源校验，`pnpm --filter @starye/movie-app exec vue-tsc --noEmit` 与 `pnpm --filter @starye/movie-app test --run` 已通过
 - Phase 4 已完成代码实现、12/12 human UAT 与 `04-SECURITY.md`，本轮已把 ROADMAP 状态同步为 complete
 - Phase 5 已完成实现落盘，并通过 `05-UAT.md` / `05-HUMAN-UAT.md`（10/10 pass）、`05-SECURITY.md`（`threats_open: 0`）与 `05-VERIFICATION.md`（`status: passed`）收口
+- Phase 8 已完成 manual upload purpose contract、crawler purpose/namespace guard、`audit-r2-storage` hard-failure/cleanup-blocked contract 和 RUNBOOK R2 成本护栏章节；targeted API/dashboard/crawler/audit checks 全部通过
+- Phase 9 已完成 root docs 收缩、`docs/documentation-ownership.md`、`docs/archive/`、`09-01..03-SUMMARY.md` 与 `09-VERIFICATION.md`，文档 owner 和 evidence/archive 边界已收口
 
 ## Session Continuity
 
-**Last session:** 2026-07-13T02:43:08.654Z
-**Stopped at:** Phase 8 planned
-**Resume file:** .planning/phases/08-cost-guardrails/08-01-PLAN.md
+**Last session:** 2026-07-13T15:41:32.5942088+08:00
+**Stopped at:** Phase 9 complete; Phase 10 not yet discussed
+**Resume file:** .planning/ROADMAP.md
 
 **Next recommended action:**
 
 ```text
-$gsd-execute-phase 8
+$gsd-discuss-phase 10
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/ROADMAP.md`
-3. Read `.planning/phases/08-cost-guardrails/08-RESEARCH.md`
-4. Read `.planning/phases/08-cost-guardrails/08-01-PLAN.md`
-5. Continue with `$gsd-execute-phase 8`
+3. Read `.planning/PROJECT.md`
+4. Continue with `$gsd-discuss-phase 10`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -114,7 +117,7 @@ $gsd-execute-phase 8
 
 ## Operator Next Steps
 
-- Execute Phase 8 with /gsd-execute-phase 8
+- Discuss Phase 10 with /gsd-discuss-phase 10
 
 ## Decisions
 
@@ -133,3 +136,7 @@ $gsd-execute-phase 8
 - [Phase 08]: Manual uploads use a small purpose vocabulary (`cover`, `avatar`, `logo`, `blog_inline`, `manual_asset`, `fallback`, `temp`) and internal prefixes remain non-uploadable. — Locked by 08-01 plan contract
 - [Phase 08]: Crawler and legacy scripts must declare `cover` / `avatar` / `logo` explicitly, and chapter-page targets are rejected at the upload boundary. — Locked by 08-02 plan contract
 - [Phase 08]: Cost audit hard-fails on forbidden/growth prefixes or incomplete DB reference evidence, and Budget Alerts stay `$1/$3` notify-only. — Locked by 08-03 operations contract
+- [Phase 09]: Root doc ownership is fixed as `README.md` for human entry, `AGENTS.md` for agent rules, `RUNBOOK.md` for operations, `.planning/*` for active execution truth, `docs/` for stable topic docs, and `openspec/` for spec history. — Locked by Phase 9 planning
+- [Phase 09]: `AGENTS.md` remains the only canonical agent doc, while `CLAUDE.md` must shrink to a thin compatibility adapter. — Locked by 09-02 plan
+- [Phase 09]: Historical or superseded live docs move to `docs/archive/`, while v1.0 evidence remains under `.planning/milestones/...`. — Locked by 09-02 / 09-03 plans
+- [Phase 09]: Long-term storage policy, cleanup, rollback, and accidental-upload ownership belongs to `RUNBOOK.md`; Phase 6/8 docs remain historical snapshots or verification evidence. — Locked by 09-03 plan

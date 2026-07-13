@@ -56,9 +56,12 @@ export class ComicCrawler extends BaseCrawler {
     }
 
     const coverImages = await this.imageProcessor.process(
-      coverUrl,
-      `comics/${comicSlug}`,
-      'cover',
+      {
+        imageUrl: coverUrl,
+        purpose: 'cover',
+        keyNamespace: `comics/${comicSlug}`,
+        filename: 'cover',
+      },
     )
     const preview = coverImages.find(i => i.variant === 'preview')
 

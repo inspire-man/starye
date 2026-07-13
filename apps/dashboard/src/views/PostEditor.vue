@@ -6,6 +6,7 @@ import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { handleError } from '@/composables/useErrorHandler'
+import { api } from '@/lib/api'
 import { authClient } from '@/lib/auth-client'
 
 import '@wangeditor/editor/dist/css/style.css'
@@ -69,19 +70,7 @@ const editorConfig: Partial<IEditorConfig> = {
       // 自定义上传逻辑，对接 /api/upload
       async customUpload(file: File, insertFn: (url: string, alt: string, href: string) => void) {
         try {
-          const formData = new FormData()
-          formData.append('file', file)
-          const res = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-            credentials: 'include',
-          })
-          if (!res.ok)
-            throw new Error(`上传失败：${res.status}`)
-          const data = await res.json() as { url?: string, data?: { url: string } }
-          const url = data.url || data.data?.url || ''
-          if (!url)
-            throw new Error('上传响应中无 URL')
+          const { url } = await api.upload.uploadImage(file, 'blog_inline')
           insertFn(url, file.name, '')
         }
         catch (e) {

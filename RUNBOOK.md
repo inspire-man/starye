@@ -2,6 +2,12 @@
 
 单一正式运维手册。覆盖 Cloudflare Workers / Pages / D1 / GitHub Actions 的生产部署、回滚、迁移安全、可观测性和常见故障处理。
 
+## Documentation Ownership
+
+- `RUNBOOK.md` 是长期有效的运维与 storage-policy canonical owner。
+- 当前 phase 执行中的新规则先落在 `.planning/*`；只有在规则稳定后才回写这里。
+- [`06-STORAGE-POLICY.md`](.planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md) 与 [`08-VERIFICATION.md`](.planning/phases/08-cost-guardrails/08-VERIFICATION.md) 保留为历史快照 / 验证证据，不反向覆盖本手册。
+
 ---
 
 ## 1. 运维入口总览
@@ -320,9 +326,78 @@ Worker `beforeSend` 第一轮过滤目标：
 
 ---
 
-## 7. 常见故障处理
+## 7. R2 成本护栏
 
-### 7.1 API / Gateway 故障
+### 7.1 Lifecycle Guidance
+
+| Prefix | Retention / Count Guardrail | Audit Meaning | Notes |
+|--------|------------------------------|---------------|-------|
+| `tmp/` | 3 天 | 超龄对象 = hard failure | 短期临时对象，不能无限滞留。 |
+| `crawler-debug/` | 3 天 | 超龄对象 = hard failure | 仅用于短期诊断输出，不能变成长期证据桶。 |
+| `import-staging/` | 7 天 | 超龄对象 = hard failure | 导入暂存前缀，必须有明确清理窗口。 |
+| `mappings/backups/` | 14 天 + 每类最近 20 份 | 超龄对象或超量 series = hard failure | 以 `actor-name-map-*` / `publisher-name-map-*` / `series-to-publisher-map-*` 等 series 粒度审计。 |
+| `system/` | audit-only | 不参与短期生命周期 hard failure | 记录运行时 inventory，不自动套用短期清理规则。 |
+| `ops/d1-backups/` | audit-only | 不参与短期生命周期 hard failure | 用于 D1 SQL 备份留痕，不在本阶段自动判定过期。 |
+
+### 7.2 Repeatable Audit Procedure
+
+以下动作前必须先跑一次 R2 成本审计：`storage policy change`、cleanup、migration、bulk import。
+
+```bash
+pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts --dry-run --strict-env --md-out .planning/phases/08-cost-guardrails/08-r2-audit.md --json-out .planning/phases/08-cost-guardrails/08-r2-audit.json --csv-out .planning/phases/08-cost-guardrails/08-r2-audit.csv
+```
+
+将以下结果视为 stop condition，不得继续 cleanup / lifecycle 变更：
+
+- `guardrail_status=hard_failure`
+- `cleanup_blocked=true`
+- `db_reference_status=missing_credentials`
+- `db_reference_status=partial`
+- `db_reference_status=missing_query_context`
+
+当前 hard failure 条件包括：
+
+- `images/` 仍有对象
+- `comics/<slug>/<chapter>` 仍有对象
+- `tmp/`、`crawler-debug/`、`import-staging/` 存在超龄对象
+- `mappings/backups/` 存在超过 14 天的备份
+- `mappings/backups/` 任一 series 超过最近 20 份
+
+### 7.3 Cloudflare Budget Alerts
+
+配置位置：Cloudflare Billing → Budget Alerts。
+
+至少创建两条阈值：
+
+- `$1` warning
+- `$3` escalation
+
+`Budget Alerts` 是 `notify only`; they do not stop billing automatically。不要把告警误当成自动成本封顶或自动停写保护。
+
+### 7.4 Accidental Upload Remediation
+
+如果 audit 发现新的 forbidden prefix 或 generic writer（例如新的 `images/` 写入），按以下顺序处理：
+
+1. 先冻结对应 writer / route / script，阻止继续写入。
+2. 保留当次 Markdown / JSON / CSV audit artifacts，作为 cleanup 前的证据快照。
+3. 复核 `guardrail_findings`、`cleanup_blocked_reason` 与 `db_reference_status`，确认是 runtime drift 还是历史遗留。
+4. 进入后续 cleanup / migration 评估；没有完整证据前不要直接删除对象。
+
+`accidental upload` 的第一响应目标是止血和保留证据，而不是立刻删对象。
+
+### 7.5 Storage Policy Ownership Note
+
+- 长期有效的 storage policy、cleanup procedure、rollback note、accidental upload remediation 都以本手册为准。
+- phase 级文档只保留历史语境：
+  - [`06-STORAGE-POLICY.md`](.planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md) 是 policy snapshot
+  - [`08-VERIFICATION.md`](.planning/phases/08-cost-guardrails/08-VERIFICATION.md) 是 verification evidence
+- 后续若规则变化，先在当前 phase 的 `.planning` 工件中锁定，再在 closeout 时回写本手册。
+
+---
+
+## 8. 常见故障处理
+
+### 8.1 API / Gateway 故障
 
 现象：
 - `https://starye.org/api/health` 不通
@@ -335,7 +410,7 @@ Worker `beforeSend` 第一轮过滤目标：
 3. 检查 Cloudflare logs / traces
 4. 再决定是否 forward-fix
 
-### 7.2 Pages 单应用白屏
+### 8.2 Pages 单应用白屏
 
 现象：
 - 只有某一前端白屏，其他 app 正常
@@ -346,7 +421,7 @@ Worker `beforeSend` 第一轮过滤目标：
 2. 在 Pages deployment history 回退上一条稳定 deployment
 3. 确认 gateway 路由未改坏
 
-### 7.3 D1 Migration 失败
+### 8.3 D1 Migration 失败
 
 现象：
 - migration workflow 失败
@@ -359,7 +434,7 @@ Worker `beforeSend` 第一轮过滤目标：
 3. 判断是否需要 D1 restore / time-travel
 4. 用 forward-fix migration 修补
 
-### 7.4 Sentry 没事件
+### 8.4 Sentry 没事件
 
 检查顺序：
 
@@ -368,7 +443,7 @@ Worker `beforeSend` 第一轮过滤目标：
 3. `beforeSend` 是否把事件过滤掉
 4. 浏览器 devtools / worker logs 是否确实触发错误
 
-### 7.5 WAF / 登录受阻
+### 8.5 WAF / 登录受阻
 
 先看：
 
@@ -378,7 +453,7 @@ Worker `beforeSend` 第一轮过滤目标：
 
 ---
 
-## 8. WAF Rate Limiting 手配记录
+## 9. WAF Rate Limiting 手配记录
 
 **需求：** PUBSEC-03 — `/api/auth/sign-in` 限制 10 req/min/IP
 
@@ -425,7 +500,7 @@ done
 
 ---
 
-## 9. ADMIN_GITHUB_ID 白名单配置
+## 10. ADMIN_GITHUB_ID 白名单配置
 
 **需求：** D-03, D-04 — 使用 GitHub 数字 ID 作为硬编码白名单，覆盖 DB 中的 `user.role`，用于个人自用场景。
 

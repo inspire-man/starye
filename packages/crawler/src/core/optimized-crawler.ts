@@ -123,11 +123,13 @@ export abstract class OptimizedCrawler {
     await this.queueManager.addImageTask(async () => {
       try {
         const keyPrefix = `movies/${movieInfo.code}`
-        const filename = 'cover'
         const results = await this.imageProcessor.process(
-          movieInfo.coverImage!,
-          keyPrefix,
-          filename,
+          {
+            imageUrl: movieInfo.coverImage!,
+            purpose: 'cover',
+            keyNamespace: keyPrefix,
+            filename: 'cover',
+          },
         )
 
         const previewImage = results.find((r: ProcessedImage) => r.variant === 'preview')

@@ -105,10 +105,13 @@ async function getJavBusCoverUrl(code: string): Promise<string | null> {
 async function uploadToR2(imageProcessor: ImageProcessor, code: string, javbusUrl: string): Promise<string> {
   try {
     const results = await imageProcessor.process(
-      javbusUrl,
-      `movies/${code}`,
-      'cover',
-      'https://www.javbus.com/',
+      {
+        imageUrl: javbusUrl,
+        purpose: 'cover',
+        keyNamespace: `movies/${code}`,
+        filename: 'cover',
+        refererUrl: 'https://www.javbus.com/',
+      },
     )
     const preview = results.find(r => r.variant === 'preview')
     return preview?.url ?? javbusUrl

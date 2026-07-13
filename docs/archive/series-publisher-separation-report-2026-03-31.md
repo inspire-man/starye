@@ -1,3 +1,6 @@
+> Status: historical
+> Replaced by: [`docs/documentation-ownership.md`](../documentation-ownership.md)
+
 # 系列与厂商区分实施报告
 
 **日期**: 2026-03-31

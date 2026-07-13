@@ -1,3 +1,4 @@
+import type { ManualUploadPurpose } from '@starye/api-types'
 import type { User } from 'better-auth'
 import { credentialFetch } from './hono-rpc-client'
 
@@ -522,15 +523,10 @@ export const api = {
   },
 
   upload: {
-    presign: (filename: string, contentType: string) =>
-      apiFetch<{ uploadUrl: string, publicUrl: string }>('/upload/presign', {
-        method: 'POST',
-        body: JSON.stringify({ filename, contentType }),
-      }),
-
-    uploadImage: async (file: File): Promise<UploadResponse> => {
+    uploadImage: async (file: File, purpose: ManualUploadPurpose): Promise<UploadResponse> => {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('purpose', purpose)
 
       const res = await credentialFetch(`${API_BASE}/upload`, {
         method: 'POST',

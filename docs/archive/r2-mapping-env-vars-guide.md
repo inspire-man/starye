@@ -1,3 +1,6 @@
+> Status: superseded
+> Replaced by: [`RUNBOOK.md`](../../RUNBOOK.md)
+
 # R2 映射存储环境变量配置
 
 **目的**: 启用映射文件自动上传到 R2，让 Dashboard 映射管理功能完全可用

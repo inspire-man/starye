@@ -28,7 +28,7 @@ vi.mock('@/lib/api', () => ({
       deleteChapter: vi.fn(),
     },
     upload: {
-      presign: vi.fn(),
+      uploadImage: vi.fn(),
     },
   },
 }))
@@ -177,6 +177,8 @@ describe('comics.vue 集成测试', () => {
   let mockBulkOperationComics: ReturnType<typeof vi.fn>
   let mockDeleteComic: ReturnType<typeof vi.fn>
   let mockBulkDeleteChapters: ReturnType<typeof vi.fn>
+  let mockGetChapters: ReturnType<typeof vi.fn>
+  let mockUploadImage: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
     const { api } = await import('@/lib/api')
@@ -184,11 +186,21 @@ describe('comics.vue 集成测试', () => {
     mockBulkOperationComics = vi.mocked(api.admin.bulkOperationComics)
     mockDeleteComic = vi.mocked(api.admin.deleteComic)
     mockBulkDeleteChapters = vi.mocked(api.admin.bulkDeleteChapters)
+    mockGetChapters = vi.mocked(api.admin.getChapters)
+    mockUploadImage = vi.mocked(api.upload.uploadImage)
 
     mockGetComics.mockResolvedValue(emptyResponse)
     mockBulkOperationComics.mockResolvedValue({ success: [], failed: [] })
     mockDeleteComic.mockResolvedValue({ success: true })
     mockBulkDeleteChapters.mockResolvedValue({ success: true })
+    mockGetChapters.mockResolvedValue([])
+    mockUploadImage.mockResolvedValue({
+      id: 'media-1',
+      url: 'https://cdn.example.com/covers/manual/cover-preview.webp',
+      key: 'covers/manual/123-cover.png',
+      size: 1024,
+      mimeType: 'image/png',
+    })
     vi.clearAllMocks()
   })
 
@@ -369,6 +381,37 @@ describe('comics.vue 集成测试', () => {
       await api.admin.bulkDeleteChapters('c1', ['ch1', 'ch2'])
 
       expect(mockBulkDeleteChapters).toHaveBeenCalledWith('c1', ['ch1', 'ch2'])
+    })
+  })
+
+  describe('封面上传 contract', () => {
+    it('漫画封面上传应走 uploadImage(file, \'cover\') 并回写返回 URL', async () => {
+      mockGetComics.mockResolvedValue(comicsResponse)
+
+      const wrapper = mount(Comics)
+      await flushPromises()
+
+      const editButton = wrapper.findAll('button').find(button => button.text() === 'dashboard.edit_details')
+      expect(editButton).toBeDefined()
+
+      await editButton!.trigger('click')
+      await flushPromises()
+
+      const fileInput = wrapper.find('input[type="file"]')
+      const file = new File(['cover'], 'cover.png', { type: 'image/png' })
+
+      Object.defineProperty(fileInput.element, 'files', {
+        value: [file],
+        configurable: true,
+      })
+
+      await fileInput.trigger('change')
+      await flushPromises()
+
+      expect(mockUploadImage).toHaveBeenCalledWith(file, 'cover')
+
+      const coverUrlInput = wrapper.find('input[placeholder="https://..."]')
+      expect((coverUrlInput.element as HTMLInputElement).value).toBe('https://cdn.example.com/covers/manual/cover-preview.webp')
     })
   })
 })

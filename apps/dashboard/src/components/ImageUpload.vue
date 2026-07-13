@@ -9,17 +9,20 @@
  * - 加载状态和错误提示
  */
 
+import type { ManualUploadPurpose } from '@starye/api-types'
 import { ref } from 'vue'
 import { api } from '@/lib/api'
 
 interface Props {
   modelValue?: string | null
   accept?: string
+  purpose?: ManualUploadPurpose
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   modelValue: '',
   accept: 'image/*',
+  purpose: 'manual_asset',
 })
 
 const emit = defineEmits<{
@@ -35,7 +38,7 @@ async function handleUpload(file: File) {
   uploadError.value = ''
 
   try {
-    const response = await api.upload.uploadImage(file)
+    const response = await api.upload.uploadImage(file, props.purpose)
     emit('update:modelValue', response.url)
   }
   catch (error) {
@@ -75,10 +78,10 @@ function handleDragLeave() {
 <template>
   <div class="image-upload">
     <div
-      v-if="modelValue"
+      v-if="props.modelValue"
       class="preview-container"
     >
-      <img :src="modelValue" alt="Preview" class="preview-image">
+      <img :src="props.modelValue" alt="Preview" class="preview-image">
       <div v-if="uploading" class="loading-overlay">
         <div class="spinner" />
         <p class="loading-text">
@@ -96,7 +99,7 @@ function handleDragLeave() {
     >
       <input
         type="file"
-        :accept="accept"
+        :accept="props.accept"
         :disabled="uploading"
         class="file-input"
         @change="handleFileSelect"

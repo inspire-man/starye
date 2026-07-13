@@ -1,5 +1,6 @@
 import type { CrawlStrategy } from '../../lib/strategy'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildApprovedCrawlerPrefix } from '../../lib/image-processor'
 import { ComicCrawler } from '../comic-crawler'
 
 const baseConfig = {
@@ -121,9 +122,12 @@ describe('comicCrawler chapter flow', () => {
 
     expect(processImage).toHaveBeenCalledTimes(1)
     expect(processImage).toHaveBeenCalledWith(
-      'https://source.example.com/covers/cover.jpg',
-      'comics/comic-1',
-      'cover',
+      {
+        imageUrl: 'https://source.example.com/covers/cover.jpg',
+        purpose: 'cover',
+        keyNamespace: 'comics/comic-1',
+        filename: 'cover',
+      },
     )
 
     const mangaSyncCall = syncToApi.mock.calls.find(
@@ -138,5 +142,14 @@ describe('comicCrawler chapter flow', () => {
       'https://img.example.com/page-1.jpg?token=1',
       'https://img.example.com/page-2.jpg?token=2',
     ])
+  })
+
+  it('即便未来有人误传 chapter-level namespace，也会在上传边界被拒绝', () => {
+    expect(() => buildApprovedCrawlerPrefix({
+      imageUrl: 'https://img.example.com/page-1.jpg',
+      purpose: 'cover',
+      keyNamespace: 'comics/comic-1/chapter-1',
+      filename: '001',
+    })).toThrow('Unsupported cover namespace: comics/comic-1/chapter-1. Allowed namespaces: movies/<code>, comics/<slug>')
   })
 })

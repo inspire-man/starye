@@ -1,3 +1,6 @@
+> Status: superseded
+> Replaced by: [`RUNBOOK.md`](../../RUNBOOK.md)
+
 # R2 映射存储快速部署指南
 
 **创建日期**: 2026-03-31  

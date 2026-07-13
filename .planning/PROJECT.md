@@ -48,7 +48,7 @@
 - [ ] v1.1 存储成本控制：R2 只用于必要资产，章节正文图不进入 Cloudflare 存储或 Worker 代理。
 - [ ] v1.1 漫画章节外链化：crawler 保存源站图片 URL，API 与 Reader 保持可读、可失败提示、可验证。
 - [ ] v1.1 成本护栏：预算提醒、R2 prefix 审计、生命周期清理和运行手册可执行。
-- [ ] v1.1 文档/入口瘦身：AGENTS.md、RUNBOOK、.planning 文档边界清楚，历史 phase 文件按 GSD 规则清理或归档。
+- ✓ v1.1 文档/入口瘦身：AGENTS.md、RUNBOOK、.planning 文档边界清楚，历史 phase 文件按 GSD 规则清理或归档。 — Validated in Phase 9
 - [ ] v1.1 存储相关代码整理：上传目的、R2 key、图片处理和 crawler 脚本策略统一，测试覆盖关键防线。
 
 ### Out of Scope
@@ -120,6 +120,7 @@
 | 漫画章节正文图只保存源站 URL | Cloudflare 免费额度优先，章节正文图体量最大且可重新抓取；R2 只保留封面等必要资产 | — New |
 | R2 上传改为 purpose allowlist | 通用 `images/` 上传路径无法表达成本边界，必须从 API 与 crawler 双侧阻止正文图误入 R2 | — New |
 | AGENTS.md 只保留入口级规则 | 当前文件过长，容易埋没真正必须执行的 repo 边界；细节迁入 RUNBOOK/.planning 或专题文档 | — New |
+| 文档 owner 固定为 README / AGENTS / RUNBOOK / `.planning` / `docs` / `docs/archive` / `openspec` | 避免 root docs 和旧存储文档继续漂移成多份 source of truth | ✓ Validated in Phase 9 |
 
 ## Evolution
 
@@ -139,4 +140,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-11 after v1.1 milestone start*
+*Last updated: 2026-07-13 after Phase 9 closeout*

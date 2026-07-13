@@ -21,14 +21,15 @@ starye-monorepo/
 │   ├── db/                     # Drizzle ORM + migrations
 │   ├── locales/                # i18n resources
 │   └── ui/                     # Shared Vue components
-├── docs/                       # External library cheatsheets
+├── docs/                       # Live topic docs + library snapshots
+│   └── archive/                # Historical / superseded docs moved out of live entrypoints
 ├── openspec/                   # Spec-driven change proposals
 ├── scripts/                    # PowerShell/Node utility scripts
 ├── test/                       # Cross-app E2E tests
 ├── .github/workflows/          # CI/CD + crawler schedules
 ├── .agents/                    # Agent skills and workflows
 ├── AGENTS.md                   # Agent guidance (main)
-├── CLAUDLE.md, GEMINI.md       # Agent-specific duplicates
+├── CLAUDE.md, GEMINI.md        # Agent-specific adapters / duplicates
 ├── README.md, DEVLOG.md        # Project docs
 ├── package.json                # Root workspace manifest
 ├── pnpm-workspace.yaml         # pnpm workspace config
@@ -104,9 +105,14 @@ starye-monorepo/
 - Key files: `packages/locales/src/index.ts`
 
 **docs/:**
-- Purpose: External library documentation snapshots and project reports
-- Contains: Cheatsheets for hono, drizzle, nuxt, vue, workers-ai, etc.
-- Key files: `docs/hono/`, `docs/drizzle/`, `docs/vue/`
+- Purpose: Live topic docs and external library snapshots that still have stable reference value
+- Contains: Cheatsheets for hono, drizzle, nuxt, vue, workers-ai, plus stable project topic docs
+- Key files: `docs/documentation-ownership.md`, `docs/hono/`, `docs/drizzle/`, `docs/vue/`
+
+**docs/archive/:**
+- Purpose: Historical / superseded docs removed from live doc entrypoints
+- Contains: One-off reports, old deploy/setup guides, completion summaries, legacy storage docs
+- Key files: `docs/archive/README.md`, `docs/archive/*.md`
 
 **openspec/:**
 - Purpose: Spec-driven change management workflow
@@ -289,6 +295,12 @@ starye-monorepo/
 - Generated: Yes
 - Committed: No
 
+## Documentation Boundary Notes
+
+- `docs/` 是 live docs；historical / superseded 文档应迁到 `docs/archive/`。
+- `.planning/` 是当前 milestone / phase 真相；`.planning/milestones/` 继续承接 v1.0 evidence chain。
+- archive docs 不得重新充当 live owner；需要当前规则时先看 `README.md`、`AGENTS.md`、`RUNBOOK.md` 或 `.planning/*`。
+
 ---
 
-*Structure analysis: 2026-05-10*
+*Structure analysis: 2026-05-10; updated 2026-07-13 for Phase 09 docs/archive ownership split*

@@ -22,18 +22,18 @@
 
 ### Cost Guardrails
 
-- [ ] **COST-01**: `/api/upload` requires an explicit asset purpose and only allows approved R2 purposes such as cover, poster, avatar, logo, fallback, manual, or temp.
-- [ ] **COST-02**: Crawler image processing uses the same approved-purpose policy and refuses `comic_chapter_page` uploads.
-- [ ] **COST-03**: R2 lifecycle guidance exists for tmp/debug/import-staging/mapping backup prefixes, including recommended retention windows.
-- [ ] **COST-04**: Owner has a repeatable R2 cost audit command or runbook section that checks forbidden prefixes and high-growth prefixes.
-- [ ] **COST-05**: RUNBOOK documents Cloudflare Budget Alerts with low-cost thresholds and states that alerts notify only; they do not stop billing automatically.
+- [x] **COST-01**: `/api/upload` requires an explicit asset purpose and only allows approved R2 purposes such as cover, poster, avatar, logo, fallback, manual, or temp.
+- [x] **COST-02**: Crawler image processing uses the same approved-purpose policy and refuses `comic_chapter_page` uploads.
+- [x] **COST-03**: R2 lifecycle guidance exists for tmp/debug/import-staging/mapping backup prefixes, including recommended retention windows.
+- [x] **COST-04**: Owner has a repeatable R2 cost audit command or runbook section that checks forbidden prefixes and high-growth prefixes.
+- [x] **COST-05**: RUNBOOK documents Cloudflare Budget Alerts with low-cost thresholds and states that alerts notify only; they do not stop billing automatically.
 
 ### Documentation Cleanup
 
-- [ ] **DOC-01**: AGENTS.md is reduced to a short operational entrypoint with links to detailed docs instead of duplicating the whole project manual.
-- [ ] **DOC-02**: Detailed repo guidance is grouped into stable docs or planning files with clear ownership, so future agents know where to read.
-- [ ] **DOC-03**: Historical phase files are either archived under milestone evidence or cleared according to GSD workflow, without losing v1.0 verification evidence.
-- [ ] **DOC-04**: RUNBOOK includes the storage policy, R2 cleanup procedure, and rollback notes for accidental storage-policy regressions.
+- [x] **DOC-01**: AGENTS.md is reduced to a short operational entrypoint with links to detailed docs instead of duplicating the whole project manual.
+- [x] **DOC-02**: Detailed repo guidance is grouped into stable docs or planning files with clear ownership, so future agents know where to read.
+- [x] **DOC-03**: Historical phase files are either archived under milestone evidence or cleared according to GSD workflow, without losing v1.0 verification evidence.
+- [x] **DOC-04**: RUNBOOK includes the storage policy, R2 cleanup procedure, and rollback notes for accidental storage-policy regressions.
 
 ### Code Organization
 
@@ -83,15 +83,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMIC-03 | Phase 7 | Complete |
 | COMIC-04 | Phase 7 | Complete |
 | COMIC-05 | Phase 7 | Complete |
-| COST-01 | Phase 8 | Pending |
-| COST-02 | Phase 8 | Pending |
-| COST-03 | Phase 8 | Pending |
-| COST-04 | Phase 8 | Pending |
-| COST-05 | Phase 8 | Pending |
-| DOC-01 | Phase 9 | Pending |
-| DOC-02 | Phase 9 | Pending |
-| DOC-03 | Phase 9 | Pending |
-| DOC-04 | Phase 9 | Pending |
+| COST-01 | Phase 8 | Complete |
+| COST-02 | Phase 8 | Complete |
+| COST-03 | Phase 8 | Complete |
+| COST-04 | Phase 8 | Complete |
+| COST-05 | Phase 8 | Complete |
+| DOC-01 | Phase 9 | Complete |
+| DOC-02 | Phase 9 | Complete |
+| DOC-03 | Phase 9 | Complete |
+| DOC-04 | Phase 9 | Complete |
 | CODE-01 | Phase 10 | Pending |
 | CODE-02 | Phase 10 | Pending |
 | CODE-03 | Phase 10 | Pending |
@@ -105,4 +105,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-07-11*
-*Last updated: 2026-07-13 after Phase 7 closeout*
+*Last updated: 2026-07-13 after Phase 9 closeout*

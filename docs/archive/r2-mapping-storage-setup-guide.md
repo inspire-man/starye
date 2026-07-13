@@ -1,3 +1,6 @@
+> Status: superseded
+> Replaced by: [`RUNBOOK.md`](../../RUNBOOK.md)
+
 # R2 映射文件存储配置指南
 
 **创建日期**: 2026-03-31
@@ -331,9 +334,9 @@ R2 存储桶应配置为：
 
 ## 相关文档
 
-- [Dashboard 名字映射功能使用指南](./dashboard-name-mapping-features-guide.md)
-- [名字映射表维护指南](./name-mapping-maintenance-guide.md)
-- [未匹配女优审核流程](./actor-mapping-audit-process.md)
+- [Dashboard 名字映射功能使用指南](../dashboard-name-mapping-features-guide.md)
+- [名字映射表维护指南](../name-mapping-maintenance-guide.md)
+- [未匹配女优审核流程](../actor-mapping-audit-process.md)
 
 ## 技术实现
 

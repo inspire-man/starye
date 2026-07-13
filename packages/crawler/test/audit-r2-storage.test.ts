@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyObjectKey,
+  cleanupBlockedReason,
   materializeRowsFromObjects,
   parseArgs,
   REPORT_FIELD_ORDER,
@@ -109,6 +110,57 @@ describe('audit-r2-storage', () => {
     expect(rowMap['ops/d1-backups/'].object_count).toBe(1)
   })
 
+  it('应把超龄 short-term prefix 标记为 hard failure', () => {
+    const rows = materializeRowsFromObjects([
+      {
+        Key: 'tmp/manual/stale-object.webp',
+        Size: 128,
+        LastModified: new Date('2026-07-08T00:00:00.000Z'),
+      },
+    ], ['tmp/'], 2, new Date('2026-07-13T00:00:00.000Z'))
+
+    expect(rows[0].guardrail_status).toBe('hard_failure')
+    expect(rows[0].guardrail_findings).toContain('1 object(s) exceed the 3-day retention window')
+    expect(rows[0].cleanup_blocked).toBe(true)
+  })
+
+  it('应对超龄且超过 recent-20 的 mapping backups 报 hard failure', () => {
+    const rows = materializeRowsFromObjects(
+      Array.from({ length: 21 }, (_, index) => ({
+        Key: `mappings/backups/actor-name-map-${index + 1}.json`,
+        Size: 64,
+        LastModified: new Date('2026-06-20T00:00:00.000Z'),
+      })),
+      ['mappings/backups/'],
+      2,
+      new Date('2026-07-13T00:00:00.000Z'),
+    )
+
+    expect(rows[0].guardrail_status).toBe('hard_failure')
+    expect(rows[0].guardrail_findings.join(' | ')).toContain('14-day retention window')
+    expect(rows[0].guardrail_findings.join(' | ')).toContain('recent-20 cap')
+  })
+
+  it('system 和 ops/d1-backups 保持 audit-only，不误报 hard failure', () => {
+    const rows = materializeRowsFromObjects([
+      {
+        Key: 'system/search-index.json',
+        Size: 1024,
+        LastModified: new Date('2026-06-01T00:00:00.000Z'),
+      },
+      {
+        Key: 'ops/d1-backups/starye-db-1.sql',
+        Size: 2048,
+        LastModified: new Date('2026-05-01T00:00:00.000Z'),
+      },
+    ], ['system/', 'ops/d1-backups/'], 2, new Date('2026-07-13T00:00:00.000Z'))
+
+    expect(rows[0].guardrail_status).toBe('audit_only')
+    expect(rows[0].guardrail_findings).toEqual([])
+    expect(rows[1].guardrail_status).toBe('audit_only')
+    expect(rows[1].guardrail_findings).toEqual([])
+  })
+
   it('应在无 D1 凭据时 fail closed，并保留缺失原因而不是伪造 0 hits', () => {
     expect(() => resolveAuditEnvironment({
       CLOUDFLARE_ACCOUNT_ID: 'account-id',
@@ -132,11 +184,29 @@ describe('audit-r2-storage', () => {
     expect(resolveIncludedGroups(['images/', 'system/'])).toEqual(['images/', 'system/'])
   })
 
+  it('partial 或 missing_query_context 的 D1 证据会阻断 cleanup recommendation', () => {
+    const [coverRow] = materializeRowsFromObjects([], ['covers/'], 1, new Date('2026-07-13T00:00:00.000Z'))
+
+    expect(cleanupBlockedReason({
+      ...coverRow,
+      db_reference_status: 'partial',
+    })).toBe('D1 reference verification is partial; complete query context before cleanup or lifecycle changes.')
+
+    expect(cleanupBlockedReason({
+      ...coverRow,
+      db_reference_status: 'missing_query_context',
+    })).toBe('D1 reference verification is missing query context; cleanup or lifecycle changes must fail closed.')
+  })
+
   it('应导出约定的报告字段顺序', () => {
     expect(REPORT_FIELD_ORDER).toContain('delete_risk')
     expect(REPORT_FIELD_ORDER).toContain('cost_risk')
     expect(REPORT_FIELD_ORDER).toContain('combined_recommendation')
     expect(REPORT_FIELD_ORDER).toContain('db_reference_hits')
     expect(REPORT_FIELD_ORDER).toContain('db_reference_status')
+    expect(REPORT_FIELD_ORDER).toContain('guardrail_status')
+    expect(REPORT_FIELD_ORDER).toContain('guardrail_findings')
+    expect(REPORT_FIELD_ORDER).toContain('cleanup_blocked')
+    expect(REPORT_FIELD_ORDER).toContain('cleanup_blocked_reason')
   })
 })

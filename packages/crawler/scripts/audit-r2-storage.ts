@@ -17,6 +17,7 @@ export type PolicyClass
 
 export type RiskLevel = 'none' | 'low' | 'medium' | 'high' | 'critical'
 export type DbReferenceStatus = 'checked' | 'partial' | 'missing_credentials' | 'missing_query_context' | 'not_applicable'
+export type GuardrailStatus = 'pass' | 'hard_failure' | 'audit_only'
 
 export interface AuditOptions {
   dryRun: boolean
@@ -59,6 +60,10 @@ export interface AuditRow {
   db_reference_status: DbReferenceStatus
   db_reference_hits: number | null
   referenced_tables_fields: string[]
+  guardrail_status: GuardrailStatus
+  guardrail_findings: string[]
+  cleanup_blocked: boolean
+  cleanup_blocked_reason: string | null
   docs_references: string[]
   delete_risk: RiskLevel
   cost_risk: RiskLevel
@@ -75,6 +80,9 @@ interface AuditMetadata {
   scanRoots: string[]
   includedPrefixes: string[]
   dbChecksAttempted: boolean
+  guardrailStatus: Exclude<GuardrailStatus, 'audit_only'>
+  hardFailureRowCount: number
+  cleanupBlocked: boolean
   noDeleteConfirmed: true
   notes: string[]
 }
@@ -114,6 +122,17 @@ interface D1QueryEnvelope {
     success?: boolean
     results?: Array<Record<string, unknown>>
   }>
+}
+
+interface GuardrailPolicy {
+  retentionDays?: number
+  maxSeriesEntries?: number
+  auditOnly?: boolean
+}
+
+interface GuardrailEvaluation {
+  status: GuardrailStatus
+  findings: string[]
 }
 
 const DEFAULT_SAMPLE_LIMIT = 5
@@ -417,6 +436,28 @@ const GROUP_CONFIGS: Record<(typeof GROUP_ORDER)[number], GroupConfig> = {
   },
 }
 
+export const guardrailPolicies: Partial<Record<(typeof GROUP_ORDER)[number], GuardrailPolicy>> = {
+  'tmp/': {
+    retentionDays: 3,
+  },
+  'crawler-debug/': {
+    retentionDays: 3,
+  },
+  'import-staging/': {
+    retentionDays: 7,
+  },
+  'mappings/backups/': {
+    retentionDays: 14,
+    maxSeriesEntries: 20,
+  },
+  'system/': {
+    auditOnly: true,
+  },
+  'ops/d1-backups/': {
+    auditOnly: true,
+  },
+}
+
 export const REPORT_FIELD_ORDER = [
   'prefix',
   'source_kind',
@@ -431,6 +472,10 @@ export const REPORT_FIELD_ORDER = [
   'db_reference_status',
   'db_reference_hits',
   'referenced_tables_fields',
+  'guardrail_status',
+  'guardrail_findings',
+  'cleanup_blocked',
+  'cleanup_blocked_reason',
   'docs_references',
   'delete_risk',
   'cost_risk',
@@ -762,6 +807,10 @@ export function createEmptyAuditRows(includedPrefixes: string[]): Record<string,
         db_reference_status: 'missing_credentials',
         db_reference_hits: null,
         referenced_tables_fields: [],
+        guardrail_status: guardrailPolicies[prefix as keyof typeof guardrailPolicies]?.auditOnly ? 'audit_only' : 'pass',
+        guardrail_findings: [],
+        cleanup_blocked: false,
+        cleanup_blocked_reason: null,
         docs_references: [...config.docsReferences],
         delete_risk: config.baseDeleteRisk,
         cost_risk: config.baseCostRisk,
@@ -778,8 +827,10 @@ export function materializeRowsFromObjects(
   objects: ListedObjectLike[],
   includedPrefixes: string[],
   sampleLimit: number,
+  now: Date = new Date(),
 ): AuditRow[] {
   const rowMap = createEmptyAuditRows(includedPrefixes)
+  const objectsByPrefix = Object.fromEntries(includedPrefixes.map(prefix => [prefix, [] as ListedObjectLike[]])) as Record<string, ListedObjectLike[]>
 
   for (const object of objects) {
     const key = object.Key ?? ''
@@ -789,6 +840,7 @@ export function materializeRowsFromObjects(
     }
 
     const row = rowMap[classified]
+    objectsByPrefix[classified].push(object)
     row.object_count += 1
     row.rough_size_bytes += object.Size ?? 0
 
@@ -807,11 +859,109 @@ export function materializeRowsFromObjects(
     }
   }
 
-  return includedPrefixes.map(prefix => rowMap[prefix]).map(assessAuditRow)
+  return includedPrefixes.map(prefix => assessAuditRow(rowMap[prefix], objectsByPrefix[prefix], now))
 }
 
-function assessAuditRow(row: AuditRow): AuditRow {
-  const assessed = { ...row, sample_keys: [...row.sample_keys], referenced_tables_fields: [...row.referenced_tables_fields], notes: [...row.notes] }
+function deriveMappingBackupSeriesKey(key: string): string {
+  const filename = key.replace(/^mappings\/backups\//, '').replace(/\.[^.]+$/, '')
+  return filename.replace(/-\d+$/, '')
+}
+
+function countExpiredObjects(objects: ListedObjectLike[], retentionDays: number, now: Date): number {
+  const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000
+  return objects.filter((object) => {
+    if (!object.LastModified) {
+      return false
+    }
+    return now.getTime() - object.LastModified.getTime() > maxAgeMs
+  }).length
+}
+
+export function evaluateGuardrailBreaches(
+  row: AuditRow,
+  objects: ListedObjectLike[],
+  now: Date = new Date(),
+): GuardrailEvaluation {
+  const policy = guardrailPolicies[row.prefix as keyof typeof guardrailPolicies]
+  const findings: string[] = []
+
+  if (policy?.auditOnly) {
+    return {
+      status: 'audit_only',
+      findings,
+    }
+  }
+
+  if (policy?.retentionDays !== undefined) {
+    const expiredCount = countExpiredObjects(objects, policy.retentionDays, now)
+    if (expiredCount > 0) {
+      findings.push(`${expiredCount} object(s) exceed the ${policy.retentionDays}-day retention window`)
+    }
+  }
+
+  if (row.prefix === 'mappings/backups/' && policy?.maxSeriesEntries !== undefined) {
+    const maxSeriesEntries = policy.maxSeriesEntries
+    const seriesCounts = new Map<string, number>()
+    for (const object of objects) {
+      const key = object.Key
+      if (!key) {
+        continue
+      }
+      const seriesKey = deriveMappingBackupSeriesKey(key)
+      seriesCounts.set(seriesKey, (seriesCounts.get(seriesKey) ?? 0) + 1)
+    }
+
+    const overRetainedSeries = [...seriesCounts.entries()].filter(([, count]) => count > maxSeriesEntries)
+    if (overRetainedSeries.length > 0) {
+      const sample = overRetainedSeries.slice(0, 3).map(([series, count]) => `${series}=${count}`).join(', ')
+      findings.push(`${overRetainedSeries.length} mapping backup series exceed the recent-${maxSeriesEntries} cap (${sample})`)
+    }
+  }
+
+  if (row.prefix === 'images/' && row.object_count > 0) {
+    findings.push(`forbidden generic images/ objects remain (${row.object_count} object(s))`)
+  }
+
+  if (row.prefix === 'comics/<slug>/<chapter>' && row.object_count > 0) {
+    findings.push(`forbidden comic chapter-page objects remain (${row.object_count} object(s))`)
+  }
+
+  return {
+    status: findings.length > 0 ? 'hard_failure' : 'pass',
+    findings,
+  }
+}
+
+export function cleanupBlockedReason(row: Pick<AuditRow, 'prefix' | 'guardrail_status' | 'guardrail_findings' | 'db_reference_status'>): string | null {
+  if (row.guardrail_status === 'hard_failure') {
+    return `Guardrail hard failure: ${row.guardrail_findings.join('; ')}`
+  }
+
+  switch (row.db_reference_status) {
+    case 'missing_credentials':
+      return 'D1 reference verification is missing required credentials.'
+    case 'partial':
+      return 'D1 reference verification is partial; complete query context before cleanup or lifecycle changes.'
+    case 'missing_query_context':
+      return 'D1 reference verification is missing query context; cleanup or lifecycle changes must fail closed.'
+    default:
+      return null
+  }
+}
+
+function refreshDerivedRowState(row: AuditRow): AuditRow {
+  row.cleanup_blocked_reason = cleanupBlockedReason(row)
+  row.cleanup_blocked = row.cleanup_blocked_reason !== null
+  row.combined_recommendation = buildRecommendation(row)
+  return row
+}
+
+function assessAuditRow(row: AuditRow, objects: ListedObjectLike[], now: Date): AuditRow {
+  const assessed = { ...row, sample_keys: [...row.sample_keys], referenced_tables_fields: [...row.referenced_tables_fields], guardrail_findings: [...row.guardrail_findings], notes: [...row.notes] }
+  const guardrailEvaluation = evaluateGuardrailBreaches(assessed, objects, now)
+
+  assessed.guardrail_status = guardrailEvaluation.status
+  assessed.guardrail_findings = guardrailEvaluation.findings
 
   if (assessed.object_count === 0) {
     assessed.notes.push('No objects were observed for this prefix during the current inventory run.')
@@ -824,18 +974,19 @@ function assessAuditRow(row: AuditRow): AuditRow {
   if (assessed.object_count >= 10000 || assessed.rough_size_bytes >= 5 * 1024 * 1024 * 1024) {
     assessed.cost_risk = 'critical'
   }
-  if (assessed.prefix === 'mappings/backups/' && assessed.object_count >= 50) {
-    assessed.cost_risk = escalateRisk(assessed.cost_risk, 'high')
-  }
-  if (assessed.prefix === 'images/' && assessed.object_count > 0) {
-    assessed.cost_risk = escalateRisk(assessed.cost_risk, 'high')
-  }
-  if (assessed.prefix === 'comics/<slug>/<chapter>' && assessed.object_count > 0) {
-    assessed.cost_risk = 'critical'
+
+  if (assessed.guardrail_status === 'hard_failure') {
+    if (assessed.prefix === 'comics/<slug>/<chapter>') {
+      assessed.cost_risk = 'critical'
+      assessed.delete_risk = 'critical'
+    }
+    else {
+      assessed.cost_risk = escalateRisk(assessed.cost_risk, 'high')
+      assessed.delete_risk = escalateRisk(assessed.delete_risk, 'high')
+    }
   }
 
-  assessed.combined_recommendation = buildRecommendation(assessed)
-  return assessed
+  return refreshDerivedRowState(assessed)
 }
 
 function lowerRisk(risk: RiskLevel): RiskLevel {
@@ -859,6 +1010,14 @@ function escalateRisk(current: RiskLevel, target: RiskLevel): RiskLevel {
 }
 
 function buildRecommendation(row: AuditRow): string {
+  if (row.guardrail_status === 'hard_failure') {
+    return `Cleanup blocked for ${row.prefix}: ${row.guardrail_findings.join('; ')}`
+  }
+
+  if (row.guardrail_status === 'audit_only') {
+    return `${row.prefix} is tracked as audit-only inventory. Keep recording evidence, but do not apply short-term lifecycle rules automatically.`
+  }
+
   if (row.object_count === 0) {
     return `No objects observed for ${row.prefix}; keep the prefix in the contract but do not infer safety for future writes.`
   }
@@ -941,7 +1100,7 @@ async function hydrateDbReferences(
       row.delete_risk = escalateRisk(row.delete_risk, 'medium')
     }
 
-    row.combined_recommendation = buildRecommendation(row)
+    refreshDerivedRowState(row)
   }
 }
 
@@ -951,21 +1110,21 @@ async function resolveDbReferencesForRow(
 ): Promise<DbReferenceResult> {
   const config = GROUP_CONFIGS[row.prefix as keyof typeof GROUP_CONFIGS]
 
-  if (!environment.d1DatabaseId || !environment.d1Token) {
-    return {
-      status: 'missing_credentials',
-      hits: null,
-      referencedFields: [],
-      notes: ['D1 reference check skipped because CLOUDFLARE_DATABASE_ID or CLOUDFLARE_D1_TOKEN is missing.'],
-    }
-  }
-
   if (config.dbPlan === 'not_applicable') {
     return {
       status: 'not_applicable',
       hits: null,
       referencedFields: [],
       notes: ['No explicit D1 table/field map is defined for this operational or runtime-only prefix.'],
+    }
+  }
+
+  if (!environment.d1DatabaseId || !environment.d1Token) {
+    return {
+      status: 'missing_credentials',
+      hits: null,
+      referencedFields: [],
+      notes: ['D1 reference check skipped because CLOUDFLARE_DATABASE_ID or CLOUDFLARE_D1_TOKEN is missing.'],
     }
   }
 
@@ -1132,6 +1291,8 @@ function createMetadata(
   scanRoots: string[],
 ): AuditMetadata {
   const missingDbChecks = rows.some(row => row.db_reference_status === 'missing_credentials' || row.db_reference_status === 'missing_query_context' || row.db_reference_status === 'partial')
+  const hardFailureRowCount = rows.filter(row => row.guardrail_status === 'hard_failure').length
+  const cleanupBlocked = rows.some(row => row.cleanup_blocked)
   return {
     generatedAt: new Date().toISOString(),
     dryRun: options.dryRun,
@@ -1140,9 +1301,15 @@ function createMetadata(
     scanRoots,
     includedPrefixes: rows.map(row => row.prefix),
     dbChecksAttempted: rows.some(row => row.db_reference_status === 'checked' || row.db_reference_status === 'partial' || row.db_reference_status === 'not_applicable'),
+    guardrailStatus: hardFailureRowCount > 0 ? 'hard_failure' : 'pass',
+    hardFailureRowCount,
+    cleanupBlocked,
     noDeleteConfirmed: true,
     notes: [
       'Phase 6 audit script is read-only by design: it lists R2 objects, optionally queries D1, and writes local reports only.',
+      hardFailureRowCount > 0
+        ? `${hardFailureRowCount} prefix row(s) currently violate Phase 8 cost guardrails.`
+        : 'No guardrail hard failures were detected in the current inventory snapshot.',
       missingDbChecks
         ? 'Some DB reference checks are incomplete. Review row-level db_reference_status before using the report for cleanup planning.'
         : 'DB reference checks completed for all queryable prefixes.',
@@ -1155,7 +1322,9 @@ function renderMarkdownReport(metadata: AuditMetadata, rows: AuditRow[]): string
   const totalBytes = rows.reduce((sum, row) => sum + row.rough_size_bytes, 0)
   const docsDeclaredEntries = Array.from(new Set(rows.flatMap(row => row.docs_references)))
   const followUpRows = rows.filter(row =>
-    row.delete_risk === 'high'
+    row.guardrail_status === 'hard_failure'
+    || row.cleanup_blocked
+    || row.delete_risk === 'high'
     || row.delete_risk === 'critical'
     || row.cost_risk === 'high'
     || row.cost_risk === 'critical'
@@ -1165,9 +1334,9 @@ function renderMarkdownReport(metadata: AuditMetadata, rows: AuditRow[]): string
   )
 
   const prefixTable = [
-    '| Prefix | Policy Class | Object Count | Rough Size Bytes | DB Reference Status | DB Reference Hits | Delete Risk | Cost Risk | Combined Recommendation |',
-    '| --- | --- | ---: | ---: | --- | ---: | --- | --- | --- |',
-    ...rows.map(row => `| ${row.prefix} | ${row.policy_class} | ${row.object_count} | ${row.rough_size_bytes} | ${row.db_reference_status} | ${row.db_reference_hits ?? 'n/a'} | ${row.delete_risk} | ${row.cost_risk} | ${escapeMarkdownPipes(row.combined_recommendation)} |`),
+    '| Prefix | Policy Class | Object Count | Rough Size Bytes | Guardrail Status | Cleanup Blocked | DB Reference Status | DB Reference Hits | Delete Risk | Cost Risk | Combined Recommendation |',
+    '| --- | --- | ---: | ---: | --- | --- | --- | ---: | --- | --- | --- |',
+    ...rows.map(row => `| ${row.prefix} | ${row.policy_class} | ${row.object_count} | ${row.rough_size_bytes} | ${row.guardrail_status} | ${row.cleanup_blocked ? 'yes' : 'no'} | ${row.db_reference_status} | ${row.db_reference_hits ?? 'n/a'} | ${row.delete_risk} | ${row.cost_risk} | ${escapeMarkdownPipes(row.combined_recommendation)} |`),
   ].join('\n')
 
   const runtimeWritePaths = rows
@@ -1176,13 +1345,13 @@ function renderMarkdownReport(metadata: AuditMetadata, rows: AuditRow[]): string
     .join('\n') || '- None recorded.'
 
   const dbReferenceChecks = [
-    '| Prefix | Status | Hits | Referenced Tables/Fields | Notes |',
-    '| --- | --- | ---: | --- | --- |',
-    ...rows.map(row => `| ${row.prefix} | ${row.db_reference_status} | ${row.db_reference_hits ?? 'n/a'} | ${escapeMarkdownPipes(row.referenced_tables_fields.join(', ') || 'n/a')} | ${escapeMarkdownPipes(row.notes.join(' '))} |`),
+    '| Prefix | Status | Hits | Cleanup Blocked Reason | Referenced Tables/Fields | Notes |',
+    '| --- | --- | ---: | --- | --- | --- |',
+    ...rows.map(row => `| ${row.prefix} | ${row.db_reference_status} | ${row.db_reference_hits ?? 'n/a'} | ${escapeMarkdownPipes(row.cleanup_blocked_reason ?? 'n/a')} | ${escapeMarkdownPipes(row.referenced_tables_fields.join(', ') || 'n/a')} | ${escapeMarkdownPipes(row.notes.join(' '))} |`),
   ].join('\n')
 
   const followUpCandidates = followUpRows.length > 0
-    ? followUpRows.map(row => `- \`${row.prefix}\`: delete_risk=${row.delete_risk}, cost_risk=${row.cost_risk}, db_reference_status=${row.db_reference_status}`).join('\n')
+    ? followUpRows.map(row => `- \`${row.prefix}\`: guardrail_status=${row.guardrail_status}, cleanup_blocked=${row.cleanup_blocked}, delete_risk=${row.delete_risk}, cost_risk=${row.cost_risk}, db_reference_status=${row.db_reference_status}`).join('\n')
     : '- None.'
 
   return [
@@ -1197,6 +1366,9 @@ function renderMarkdownReport(metadata: AuditMetadata, rows: AuditRow[]): string
     `- Total prefix groups: ${rows.length}`,
     `- Total observed objects: ${totalObjects}`,
     `- Total rough size bytes: ${totalBytes}`,
+    `- Guardrail status: ${metadata.guardrailStatus}`,
+    `- Hard-failure rows: ${metadata.hardFailureRowCount}`,
+    `- Cleanup blocked: ${metadata.cleanupBlocked ? 'yes' : 'no'}`,
     '',
     '## Prefix Matrix',
     '',
@@ -1284,14 +1456,16 @@ Options:
 }
 
 function printSummary(metadata: AuditMetadata, rows: AuditRow[]): void {
-  const highRiskRows = rows.filter(row => row.delete_risk === 'high' || row.delete_risk === 'critical' || row.cost_risk === 'high' || row.cost_risk === 'critical')
+  const highRiskRows = rows.filter(row => row.delete_risk === 'high' || row.delete_risk === 'critical' || row.cost_risk === 'high' || row.cost_risk === 'critical' || row.guardrail_status === 'hard_failure')
   console.log('R2 storage audit completed.')
   console.log(`Bucket: ${metadata.bucketName}`)
   console.log(`Scan roots: ${metadata.scanRoots.join(', ')}`)
   console.log(`Included prefixes: ${metadata.includedPrefixes.join(', ')}`)
+  console.log(`Guardrail status: ${metadata.guardrailStatus}`)
+  console.log(`Cleanup blocked: ${metadata.cleanupBlocked ? 'yes' : 'no'}`)
   console.log(`High-risk rows: ${highRiskRows.length}`)
   for (const row of highRiskRows) {
-    console.log(`- ${row.prefix}: delete_risk=${row.delete_risk}, cost_risk=${row.cost_risk}, db_reference_status=${row.db_reference_status}, db_reference_hits=${row.db_reference_hits ?? 'n/a'}`)
+    console.log(`- ${row.prefix}: guardrail_status=${row.guardrail_status}, cleanup_blocked=${row.cleanup_blocked}, delete_risk=${row.delete_risk}, cost_risk=${row.cost_risk}, db_reference_status=${row.db_reference_status}, db_reference_hits=${row.db_reference_hits ?? 'n/a'}`)
   }
 }
 
