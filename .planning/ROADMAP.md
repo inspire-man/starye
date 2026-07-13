@@ -7,7 +7,7 @@
 
 ## Current Status
 
-v1.1 is executing. Phase 6 and Phase 7 are complete; Phase 8 is the next active discussion target. The milestone protects the project from Cloudflare storage charges by moving comic chapter body images to external source URLs, limiting R2 to necessary assets, adding cost guardrails, and cleaning up documentation/code entrypoints.
+v1.1 is executing. Phase 6 and Phase 7 are complete, and Phase 8 is now planned in 3 executable plans across 2 waves. The milestone protects the project from Cloudflare storage charges by moving comic chapter body images to external source URLs, limiting R2 to necessary assets, adding cost guardrails, and cleaning up documentation/code entrypoints.
 
 ## Phase Plan
 
@@ -78,6 +78,18 @@ Plans:
 
 **Requirements:** COST-01, COST-02, COST-03, COST-04, COST-05
 
+**Plans:** 3/3 plans complete
+
+Plans:
+**Wave 1**
+
+- [x] 08-01-PLAN.md — `/api/upload` purpose allowlist、manual upload prefix contract、dashboard consumers 与 presign 侧门收口。
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 08-02-PLAN.md — crawler/script purpose guard、chapter-page reject regression 与 legacy cover scripts 对齐。
+- [x] 08-03-PLAN.md — `audit-r2-storage` 生命周期/数量硬失败规则、RUNBOOK 成本审计与 Budget Alerts 运维合同。
+
 **Success criteria:**
 
 1. `/api/upload` requires a `purpose` and rejects disallowed purposes such as comic chapter page uploads.
@@ -129,8 +141,8 @@ Plans:
 Continue to Phase 8 with:
 
 ```text
-$gsd-discuss-phase 8
+$gsd-execute-phase 8
 ```
 
 ---
-*Last updated: 2026-07-13 after Phase 7 closeout*
+*Last updated: 2026-07-13 after Phase 8 planning*
