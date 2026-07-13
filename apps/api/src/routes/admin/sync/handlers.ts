@@ -191,12 +191,18 @@ export async function syncChapterData(c: Context<AppEnv>, payload: any) {
   const { data } = payload
   const db = c.get('db')
   const chapterId = `${data.comicSlug}-${data.chapterSlug}`
+  const incomingCount = data.images.length
 
   // console.log(`[Sync] 📥 Received chapter pages: ${chapterId} (${data.images.length} pages)`)
 
   try {
     const chapter = await db.query.chapters.findFirst({
       where: eq(chapters.id, chapterId),
+      with: {
+        pages: {
+          orderBy: (page, { asc }) => [asc(page.pageNumber)],
+        },
+      },
     })
 
     if (!chapter) {
@@ -204,34 +210,78 @@ export async function syncChapterData(c: Context<AppEnv>, payload: any) {
       return c.json({ success: false, error: 'Chapter not found. Please sync manga info first.' }, 404)
     }
 
-    // 1.1 更新元数据 (Source Count)
-    await db.update(chapters)
-      .set({ sourcePageCount: data.images.length, updatedAt: new Date() })
-      .where(eq(chapters.id, chapterId))
+    const existingPageCount = chapter.pages.length
+    const baseline = Math.max(existingPageCount, chapter.sourcePageCount ?? 0)
+    const existingPagesSnapshot = chapter.pages.map(page => ({
+      id: page.id,
+      chapterId,
+      pageNumber: page.pageNumber,
+      imageUrl: page.imageUrl,
+      width: page.width ?? 0,
+      height: page.height ?? 0,
+    }))
 
-    // 2. 删除现有页面
+    if (incomingCount === 0) {
+      return c.json({
+        success: false,
+        error: 'Incoming chapter page set is empty; refusing to overwrite existing pages.',
+        chapterId,
+        existingPageCount,
+        baseline,
+      }, 409)
+    }
+
+    if (incomingCount < baseline) {
+      return c.json({
+        success: false,
+        error: 'Incoming chapter page set regressed below current baseline; refusing to overwrite existing pages.',
+        chapterId,
+        incomingCount,
+        existingPageCount,
+        baseline,
+      }, 409)
+    }
+
+    const pageValues = data.images.map((url: string, index: number) => ({
+      id: `${chapterId}-${index + 1}`,
+      chapterId,
+      pageNumber: index + 1,
+      imageUrl: url,
+      width: data.width || 0,
+      height: data.height || 0,
+    }))
+
+    const chunkSize = 10
+
+    // 1. 删除现有页面
     await db.delete(pages).where(eq(pages.chapterId, chapterId))
 
-    // 3. 插入新页面
-    if (data.images.length > 0) {
-      const pageValues = data.images.map((url: string, index: number) => ({
-        id: `${chapterId}-${index + 1}`,
-        chapterId,
-        pageNumber: index + 1,
-        imageUrl: url,
-        width: data.width || 0,
-        height: data.height || 0,
-      }))
-
-      const chunkSize = 10
+    try {
+      // 2. 插入新页面
       for (let i = 0; i < pageValues.length; i += chunkSize) {
         const chunk = pageValues.slice(i, i + chunkSize)
         await db.insert(pages).values(chunk)
       }
+
+      // 3. 仅在整组替换成功后更新元数据
+      await db.update(chapters)
+        .set({ sourcePageCount: incomingCount, updatedAt: new Date() })
+        .where(eq(chapters.id, chapterId))
+    }
+    catch (replacementError) {
+      // Best-effort rollback to preserve prior readable state when replacement fails mid-flight.
+      if (existingPagesSnapshot.length > 0) {
+        await db.delete(pages).where(eq(pages.chapterId, chapterId))
+        for (let i = 0; i < existingPagesSnapshot.length; i += chunkSize) {
+          const originalChunk = existingPagesSnapshot.slice(i, i + chunkSize)
+          await db.insert(pages).values(originalChunk)
+        }
+      }
+      throw replacementError
     }
 
     // console.log(`[Sync] ✅ Synced ${data.images.length} pages for ${chapterId}`)
-    return c.json({ success: true, count: data.images.length })
+    return c.json({ success: true, count: incomingCount })
   }
   catch (e: unknown) {
     console.error(`[Sync] ❌ Failed to sync pages for ${chapterId}:`, e)

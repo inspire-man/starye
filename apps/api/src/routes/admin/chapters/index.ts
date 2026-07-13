@@ -3,21 +3,12 @@ import { Hono } from 'hono'
 import { describeRoute, validator } from 'hono-openapi'
 import { serviceAuth } from '../../../middleware/service-auth'
 import { BatchDeleteChaptersSchema, GetChapterInfoQuerySchema } from '../../../schemas/admin'
-import { bulkDeleteChapters, checkChapterStatus, deleteChapter, getChapterDetail, getComicChapters, getExistingChapters } from './handlers'
+import { bulkDeleteChapters, checkChapterStatus, deleteChapter, getChapterDetail, getChapterIntegrity, getComicChapters, getExistingChapters } from './handlers'
 
 export const adminChaptersRoutes = new Hono<AppEnv>()
 
 // 获取漫画章节列表
 adminChaptersRoutes.get('/comics/:id/chapters', serviceAuth(['admin', 'comic_admin']), getComicChapters)
-
-// 获取章节详情（含图片）
-adminChaptersRoutes.get('/:id', serviceAuth(['admin', 'comic_admin']), getChapterDetail)
-
-// 删除章节
-adminChaptersRoutes.delete('/:id', serviceAuth(['admin', 'comic_admin']), deleteChapter)
-
-// 获取漫画已存在的章节列表（用于爬虫去重）
-adminChaptersRoutes.get('/comics/:slug/existing-chapters', serviceAuth(['admin', 'comic_admin']), getExistingChapters)
 
 // 检查章节状态
 adminChaptersRoutes.get(
@@ -36,6 +27,18 @@ adminChaptersRoutes.get(
   validator('query', GetChapterInfoQuerySchema),
   checkChapterStatus,
 )
+
+// 显式外链完整性探测（只读）
+adminChaptersRoutes.get('/:id/integrity', serviceAuth(['admin', 'comic_admin']), getChapterIntegrity)
+
+// 获取章节详情（含图片）
+adminChaptersRoutes.get('/:id', serviceAuth(['admin', 'comic_admin']), getChapterDetail)
+
+// 删除章节
+adminChaptersRoutes.delete('/:id', serviceAuth(['admin', 'comic_admin']), deleteChapter)
+
+// 获取漫画已存在的章节列表（用于爬虫去重）
+adminChaptersRoutes.get('/comics/:slug/existing-chapters', serviceAuth(['admin', 'comic_admin']), getExistingChapters)
 
 // 批量删除章节
 adminChaptersRoutes.post(

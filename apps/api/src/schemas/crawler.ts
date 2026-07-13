@@ -45,7 +45,7 @@ export const ChapterContentSchema = v.object({
   title: v.pipe(v.string(), v.description('章节标题')),
   images: v.pipe(
     v.array(v.pipe(v.string(), v.url())),
-    v.description('图片 URL 数组（已上传）'),
+    v.description('图片 URL 数组（源站外链）'),
   ),
   width: v.optional(v.pipe(v.number(), v.description('图片宽度'))),
   height: v.optional(v.pipe(v.number(), v.description('图片高度'))),

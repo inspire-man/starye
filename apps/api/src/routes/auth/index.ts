@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+import type { Context } from 'hono'
 import type { AppEnv } from '../../types'
 // Note: schema export might be 'user' not 'users'
 import { user } from '@starye/db/schema'
@@ -9,7 +10,7 @@ import { describeRoute } from 'hono-openapi'
 /**
  * Auth 路由 - 使用链式调用以支持 RPC 类型推导
  */
-async function resolveSession(c: Parameters<Parameters<Hono<AppEnv>['get']>[1]>[0]) {
+async function resolveSession(c: Context<AppEnv>) {
   const authInstance = c.get('auth')
   const db = c.get('db')
   const cookies = c.req.header('cookie')

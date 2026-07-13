@@ -14,11 +14,11 @@
 
 ### Comic External Images
 
-- [ ] **COMIC-01**: Crawler saves comic chapter page images as normalized source image URLs instead of uploading them to R2.
-- [ ] **COMIC-02**: Crawler still allows necessary comic covers to use R2 when explicitly configured, while chapter body pages remain external.
-- [ ] **COMIC-03**: API returns chapter image URLs without assuming they are same-origin or R2-backed assets.
-- [ ] **COMIC-04**: Reader displays externally hosted chapter images with lazy loading, visible per-image failure feedback, and a usable chapter-level error state.
-- [ ] **COMIC-05**: Admin/chapter integrity checks can report external image failures without replacing them with R2 mirrors.
+- [x] **COMIC-01**: Crawler saves comic chapter page images as normalized source image URLs instead of uploading them to R2.
+- [x] **COMIC-02**: Crawler still allows necessary comic covers to use R2 when explicitly configured, while chapter body pages remain external.
+- [x] **COMIC-03**: API returns chapter image URLs without assuming they are same-origin or R2-backed assets.
+- [x] **COMIC-04**: Reader displays externally hosted chapter images with lazy loading, visible per-image failure feedback, and a usable chapter-level error state.
+- [x] **COMIC-05**: Admin/chapter integrity checks can report external image failures without replacing them with R2 mirrors.
 
 ### Cost Guardrails
 
@@ -78,11 +78,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STOR-02 | Phase 6 | Complete |
 | STOR-03 | Phase 6 | Complete |
 | STOR-04 | Phase 6 | Complete |
-| COMIC-01 | Phase 7 | Pending |
-| COMIC-02 | Phase 7 | Pending |
-| COMIC-03 | Phase 7 | Pending |
-| COMIC-04 | Phase 7 | Pending |
-| COMIC-05 | Phase 7 | Pending |
+| COMIC-01 | Phase 7 | Complete |
+| COMIC-02 | Phase 7 | Complete |
+| COMIC-03 | Phase 7 | Complete |
+| COMIC-04 | Phase 7 | Complete |
+| COMIC-05 | Phase 7 | Complete |
 | COST-01 | Phase 8 | Pending |
 | COST-02 | Phase 8 | Pending |
 | COST-03 | Phase 8 | Pending |
@@ -105,4 +105,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-07-11*
-*Last updated: 2026-07-11 after v1.1 roadmap creation*
+*Last updated: 2026-07-13 after Phase 7 closeout*

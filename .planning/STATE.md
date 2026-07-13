@@ -2,24 +2,24 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 存储成本控制与代码/文件整理
-current_phase: 6
-current_phase_name: Storage Policy Audit
-status: executing
-stopped_at: Phase 7 context gathered
-last_updated: "2026-07-12T16:47:55.838Z"
-last_activity: 2026-07-12
-last_activity_desc: Phase 6 complete with read-only audit toolkit, report contracts, and no-delete verification work order
+current_phase: 7
+current_phase_name: Comic External Image Flow
+status: complete
+stopped_at: Phase 8 ready to discuss
+last_updated: "2026-07-13T02:44:33.5079356+08:00"
+last_activity: 2026-07-13
+last_activity_desc: Phase 7 complete with external chapter image ingestion, public/admin API contract, and Reader failure UX
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 20
+  completed_phases: 2
+  total_plans: 6
+  completed_plans: 6
+  percent: 40
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-07-12
+**Last updated:** 2026-07-13
 **Mode:** yolo
 **Granularity:** standard
 
@@ -39,15 +39,15 @@ progress:
 
 ## Current Position
 
-Phase: 6 complete (Storage Policy Audit)
-Plan: 06-01 / 06-02 / 06-03 complete
-Status: Complete — ready to begin Phase 7 discussion
-Last activity: 2026-07-12 — Phase 6 complete with read-only audit toolkit, report contracts, and no-delete verification work order
+Phase: 7 complete (Comic External Image Flow)
+Plan: 07-01 / 07-02 / 07-03 complete
+Status: Complete — ready to begin Phase 8 discussion
+Last activity: 2026-07-13 — Phase 7 complete with external chapter image ingestion, public/admin API contract, and Reader failure UX
 
 ## Performance Metrics
 
-**Phases completed:** 1 / 5
-**Plans completed:** 3
+**Phases completed:** 2 / 5
+**Plans completed:** 6
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -72,6 +72,7 @@ Last activity: 2026-07-12 — Phase 6 complete with read-only audit toolkit, rep
 - [x] P3 kick-off: 确认 `xgplayer` error 事件结构，并据此选择保守的同源重试实现路径
 - [x] P4 kick-off: 定下视频进度粒度（统一按 int seconds / int page 持久化；movie 完成阈值 90%，小于 30s 不记）
 - [ ] P2 decision: 成人内容 `is_adult` ingest-time（爬虫自动）vs 手动（dashboard UI） —— 本轮需求已锁定爬虫自动（ACCESS-06），待 P2 实际落地时核验源站标签覆盖率
+- [ ] P8 kick-off: 统一 API upload 与 crawler 的 allowed R2 purpose guard，并把 `comic_chapter_page` 彻底列入拒绝清单
 
 ### Active Blockers
 
@@ -87,23 +88,23 @@ Last activity: 2026-07-12 — Phase 6 complete with read-only audit toolkit, rep
 
 ## Session Continuity
 
-**Last session:** 2026-07-12T16:47:55.825Z
-**Stopped at:** Phase 7 context gathered
-**Resume file:** .planning/phases/07-comic-external-image-flow/07-CONTEXT.md
+**Last session:** 2026-07-13T02:44:33.5079356+08:00
+**Stopped at:** Phase 8 ready to discuss
+**Resume file:** .planning/phases/07-comic-external-image-flow/07-VERIFICATION.md
 
 **Next recommended action:**
 
 ```text
-$gsd-discuss-phase 7
+$gsd-discuss-phase 8
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/ROADMAP.md`
-3. Read `.planning/phases/06-storage-policy-audit/06-03-SUMMARY.md`
-4. Read `.planning/phases/06-storage-policy-audit/06-VERIFICATION.md`
-5. Continue with `$gsd-discuss-phase 7`
+3. Read `.planning/phases/07-comic-external-image-flow/07-03-SUMMARY.md`
+4. Read `.planning/phases/07-comic-external-image-flow/07-VERIFICATION.md`
+5. Continue with `$gsd-discuss-phase 8`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -113,7 +114,7 @@ $gsd-discuss-phase 7
 
 ## Operator Next Steps
 
-- Discuss Phase 7 with /gsd-discuss-phase 7
+- Discuss Phase 8 with /gsd-discuss-phase 8
 
 ## Decisions
 
@@ -125,3 +126,7 @@ $gsd-discuss-phase 7
 - [Phase 06]: Audit script stays read-only and uses AWS S3-compatible list operations for inventory. — Locked by 06-03 storage audit implementation
 - [Phase 06]: Dry-run report artifacts ship as contract templates until a credentialed live run overwrites counts and timestamps. — Locked by 06-03 report contract delivery
 - [Phase 06]: comics/<slug> and comics/<slug>/<chapter> remain separate audit rows to protect cover assets from chapter-body cleanup decisions. — Locked by 06-03 prefix separation requirement
+- [Phase 07]: Comic chapter body images remain source/external URLs end-to-end; they never enter `ImageProcessor.process()` or default R2 upload paths. — Locked by 07-01 crawler boundary
+- [Phase 07]: Comic covers keep a separate explicit opt-in upload path via `UPLOAD_COMIC_COVERS_TO_R2`; default behavior preserves source cover URLs. — Locked by 07-01 cover gate
+- [Phase 07]: Public chapter API returns `pages.imageUrl` in page order without host rewrite, while `/check` stays cheap/local and `/:id/integrity` is the explicit read-only probe. — Locked by 07-02 API contract split
+- [Phase 07]: Reader may only persist `completed=true` when at least one page loaded successfully and the reader reached the final page. — Locked by 07-03 progress safety rule

@@ -8,6 +8,38 @@ import { DEFAULT_MANGA_ANTI_DETECTION } from '../config/crawl.config'
 import { CrawlerSession, DelayStrategy, ErrorClassifier, SuccessRateMonitor } from '../lib/anti-detection'
 import { parseChapterContent, parseMangaInfo, parseMangaList } from './site-92hm-parser'
 
+function normalizeHttpUrl(rawUrl: string, baseUrl: string): string | null {
+  const trimmedUrl = rawUrl.trim()
+  if (!trimmedUrl)
+    return null
+
+  try {
+    const normalized = new URL(trimmedUrl, baseUrl)
+
+    if (normalized.protocol !== 'http:' && normalized.protocol !== 'https:') {
+      return null
+    }
+
+    return normalized.toString()
+  }
+  catch {
+    return null
+  }
+}
+
+export function normalizeChapterImages(baseUrl: string, images: string[]): string[] {
+  const deduped = new Set<string>()
+
+  for (const imageUrl of images) {
+    const normalized = normalizeHttpUrl(imageUrl, baseUrl)
+    if (normalized) {
+      deduped.add(normalized)
+    }
+  }
+
+  return [...deduped]
+}
+
 export class Site92Hm implements CrawlStrategy {
   name = '92hm'
   baseUrl = 'https://www.92hm.life'
@@ -267,14 +299,12 @@ export class Site92Hm implements CrawlStrategy {
       const normalizeUrl = (relativeUrl?: string) => {
         if (!relativeUrl)
           return undefined
-        if (relativeUrl.startsWith('http'))
-          return relativeUrl
-        return `${this.baseUrl}${relativeUrl.startsWith('/') ? '' : '/'}${relativeUrl}`
+        return normalizeHttpUrl(relativeUrl, this.baseUrl) ?? undefined
       }
 
       return {
         title: data.title,
-        images: data.images,
+        images: normalizeChapterImages(this.baseUrl, data.images),
         prev: normalizeUrl(data.prev),
         next: normalizeUrl(data.next),
         comicSlug: comicSlug || '',

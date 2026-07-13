@@ -7,14 +7,14 @@
 
 ## Current Status
 
-v1.1 is in planning. The milestone protects the project from Cloudflare storage charges by moving comic chapter body images to external source URLs, limiting R2 to necessary assets, adding cost guardrails, and cleaning up documentation/code entrypoints.
+v1.1 is executing. Phase 6 and Phase 7 are complete; Phase 8 is the next active discussion target. The milestone protects the project from Cloudflare storage charges by moving comic chapter body images to external source URLs, limiting R2 to necessary assets, adding cost guardrails, and cleaning up documentation/code entrypoints.
 
 ## Phase Plan
 
 | Phase | Name | Goal | Requirements |
 |-------|------|------|--------------|
-| 6 | 3/3 | Complete   | 2026-07-12 |
-| 7 | Comic External Image Flow | Stop comic chapter body images from entering R2 and make crawler/API/Reader work with source image URLs. | COMIC-01, COMIC-02, COMIC-03, COMIC-04, COMIC-05 |
+| 6 | Storage Policy Audit | Complete 2026-07-12. Read-only audit toolkit, report contracts, and no-delete verification artifacts landed. | STOR-01, STOR-02, STOR-03, STOR-04 |
+| 7 | Comic External Image Flow | Complete 2026-07-13. External image ingestion, public/admin API contract, and Reader failure UX shipped. | COMIC-01, COMIC-02, COMIC-03, COMIC-04, COMIC-05 |
 | 8 | Cost Guardrails | Enforce approved R2 purposes and add audit/lifecycle/budget operations that prevent surprise Cloudflare charges. | COST-01, COST-02, COST-03, COST-04, COST-05 |
 | 9 | Documentation Restructure | Shrink AGENTS.md and organize historical/current docs so future work starts from the right source of truth. | DOC-01, DOC-02, DOC-03, DOC-04 |
 | 10 | Storage Code Cleanup | Consolidate storage helpers/tests and remove legacy assumptions that images should always become R2 URLs. | CODE-01, CODE-02, CODE-03, CODE-04 |
@@ -51,6 +51,18 @@ Plans:
 **Goal:** Stop comic chapter body images from entering R2 and make crawler/API/Reader work with source image URLs.
 
 **Requirements:** COMIC-01, COMIC-02, COMIC-03, COMIC-04, COMIC-05
+
+**Plans:** 3/3 plans complete
+
+Plans:
+**Wave 1**
+
+- [x] 07-01-PLAN.md — crawler 正文图 external/source URL 标准化、封面 opt-in 上传与 sync overwrite guard。
+
+**Wave 2**
+
+- [x] 07-02-PLAN.md — public chapter route contract 锁定、admin 只读 integrity probe 与 SSRF guard。
+- [x] 07-03-PLAN.md — Reader 逐页状态、失败 UX、completed 保护与组件测试。
 
 **Success criteria:**
 
@@ -114,18 +126,11 @@ Plans:
 
 ## Next
 
-Continue to Phase 7 with:
+Continue to Phase 8 with:
 
 ```text
-$gsd-discuss-phase 7
-```
-
-Also available:
-
-```text
-$gsd-plan-phase 6 --research
-$gsd-review --phase 6 --all
+$gsd-discuss-phase 8
 ```
 
 ---
-*Roadmap created: 2026-07-11 for milestone v1.1*
+*Last updated: 2026-07-13 after Phase 7 closeout*

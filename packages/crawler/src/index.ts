@@ -31,6 +31,13 @@ export { ApiClient } from './utils/api-client'
 export { BrowserManager } from './utils/browser'
 export { ProgressMonitor } from './utils/progress'
 
+export function getComicCrawlerOptions(env: NodeJS.ProcessEnv = process.env) {
+  return {
+    recoveryMode: env.RECOVERY_MODE === 'true',
+    uploadCoversToR2: env.UPLOAD_COMIC_COVERS_TO_R2 === 'true',
+  }
+}
+
 // CLI Runner Logic
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2)
@@ -63,7 +70,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     // Strategy Selector
     if (url.includes('92hm')) {
       const strategy = new Site92Hm()
-      const crawler = new ComicCrawler(config, strategy, url)
+      const crawler = new ComicCrawler(config, strategy, url, getComicCrawlerOptions())
       await crawler.run()
     }
     else {

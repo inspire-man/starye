@@ -43,10 +43,26 @@ export class ComicCrawler extends BaseCrawler {
     private startUrl: string,
     private options: {
       recoveryMode?: boolean
+      uploadCoversToR2?: boolean
     } = {},
   ) {
     super(config)
     this.failedTasks = new FailedTaskRecorder()
+  }
+
+  private async storeComicCoverIfEnabled(coverUrl: string, comicSlug: string): Promise<string> {
+    if (!this.options.uploadCoversToR2) {
+      return coverUrl
+    }
+
+    const coverImages = await this.imageProcessor.process(
+      coverUrl,
+      `comics/${comicSlug}`,
+      'cover',
+    )
+    const preview = coverImages.find(i => i.variant === 'preview')
+
+    return preview?.url || coverUrl
   }
 
   async run() {
@@ -359,18 +375,10 @@ export class ComicCrawler extends BaseCrawler {
     const totalChapters = info.chapters.length
 
     try {
-      // 1. Download Cover
+      // 1. Download Cover (explicit opt-in only)
       if (info.cover) {
         try {
-          const coverImages = await this.imageProcessor.process(
-            info.cover,
-            `comics/${info.slug}`,
-            'cover',
-          )
-          const preview = coverImages.find(i => i.variant === 'preview')
-          if (preview) {
-            info.cover = preview.url
-          }
+          info.cover = await this.storeComicCoverIfEnabled(info.cover, info.slug)
         }
         catch (e) {
           console.warn(`⚠️ Failed to download cover for ${info.title}:`, e)
@@ -453,57 +461,23 @@ export class ComicCrawler extends BaseCrawler {
         console.log(`  📖 [${processedCount}/${chaptersToProcess.length}] ${chapter.title}`)
         try {
           const content = await this.strategy.getChapterContent(chapter.url, page)
-
-          // 批量并发上传图片
-          const imageUrls: string[] = []
           const totalImages = content.images.length
-          const batchSize = CRAWL_CONFIG.concurrency.imageBatch
-
-          console.log(`  📦 处理 ${totalImages} 张图片，批量大小: ${batchSize}`)
-
-          // 分批处理
-          for (let batchIndex = 0; batchIndex < totalImages; batchIndex += batchSize) {
-            const batch = content.images.slice(batchIndex, batchIndex + batchSize)
-            const batchNum = Math.floor(batchIndex / batchSize) + 1
-            const totalBatches = Math.ceil(totalImages / batchSize)
-
-            console.log(`  🔄 批次 ${batchNum}/${totalBatches}: 处理 ${batch.length} 张图片`)
-
-            // 并发处理批次内的图片
-            const batchResults = await Promise.all(
-              batch.map(async (rawUrl, batchLocalIndex) => {
-                const globalIndex = batchIndex + batchLocalIndex
-                try {
-                  const processed = await this.imageProcessor.process(
-                    rawUrl,
-                    `comics/${info.slug}/${chapter.slug}`,
-                    String(globalIndex + 1).padStart(3, '0'),
-                  )
-
-                  const targetVariant = processed.find(p => p.variant === 'original') || processed[0]
-                  return targetVariant?.url || 'https://placehold.co/800x1200?text=Image+Load+Failed'
-                }
-                catch (e) {
-                  console.warn(`  ⚠️ 图片 ${globalIndex + 1} 处理失败:`, e)
-                  return 'https://placehold.co/800x1200?text=Image+Load+Failed'
-                }
-              }),
-            )
-
-            imageUrls.push(...batchResults)
-            console.log(`  ✅ 批次 ${batchNum}/${totalBatches} 完成，已处理 ${imageUrls.length}/${totalImages} 张图片`)
-          }
+          console.log(`  🖼️  章节返回 ${totalImages} 张标准化外链图片`)
 
           // Sync Chapter Pages
-          await this.syncToApi('/api/admin/sync', {
+          const syncResult = await this.syncToApi('/api/admin/sync', {
             type: 'chapter',
             data: {
               title: content.title,
               comicSlug: info.slug,
               chapterSlug: chapter.slug,
-              images: imageUrls,
+              images: content.images,
             },
           })
+
+          if (!syncResult || (typeof syncResult === 'object' && 'success' in syncResult && !syncResult.success)) {
+            throw new Error(`Chapter sync rejected for ${info.slug}/${chapter.slug}`)
+          }
 
           crawledChapters++
           this.stats.processedChapters++

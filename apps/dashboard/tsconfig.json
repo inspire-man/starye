@@ -28,8 +28,7 @@
     "skipLibCheck": true
   },
   "references": [
-    { "path": "./tsconfig.node.json" },
-    { "path": "../api" }
+    { "path": "./tsconfig.node.json" }
   ],
   "include": [
     "src/**/*.ts",
