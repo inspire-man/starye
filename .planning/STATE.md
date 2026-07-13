@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: 存储成本控制与代码/文件整理
-current_phase: 10
-status: Awaiting next milestone
-stopped_at: Milestone v1.1 archived
-last_updated: "2026-07-13T14:43:53.966Z"
+milestone: v1.2
+milestone_name: Cloudflare 账户/域名切换与全链路发布验证
+status: planning
+last_updated: "2026-07-13T15:10:28.352Z"
 last_activity: 2026-07-13
-last_activity_desc: Milestone v1.1 completed and archived
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 15
-  completed_plans: 15
-  percent: 100
-current_phase_name: Storage Code Cleanup
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State: Starye — 个人内容中台
@@ -27,7 +23,7 @@ current_phase_name: Storage Code Cleanup
 
 **Core Value:** 部署在公网、能稳定日常使用的个人内容中台 —— "能用、不崩" 优先于 "功能全"。
 
-**Current Milestone:** v1.1 已归档；等待下一 milestone 定义。
+**Current Milestone:** v1.2 Cloudflare 账户/域名切换与全链路发布验证。
 
 **Project Docs:**
 
@@ -39,15 +35,15 @@ current_phase_name: Storage Code Cleanup
 
 ## Current Position
 
-Phase: Milestone v1.1 archived
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-13 — Milestone v1.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-13 — Milestone v1.2 started
 
 ## Performance Metrics
 
-**Phases completed:** 5 / 5
-**Plans completed:** 15
+**Phases completed:** 0 / 0 (roadmap not created yet)
+**Plans completed:** 0
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -93,14 +89,14 @@ Last activity: 2026-07-13 — Milestone v1.1 completed and archived
 
 ## Session Continuity
 
-**Last session:** 2026-07-13T14:43:53.966Z
-**Stopped at:** Milestone v1.1 archived
-**Resume file:** .planning/MILESTONES.md
+**Last session:** 2026-07-13T15:10:28.352Z
+**Stopped at:** Milestone v1.2 defining requirements
+**Resume file:** .planning/PROJECT.md
 
 **Next recommended action:**
 
 ```text
-$gsd-new-milestone
+continue `$gsd-new-milestone` requirements and roadmap creation
 ```
 
 **If interrupted, resume by:**
@@ -108,7 +104,7 @@ $gsd-new-milestone
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md`
 3. Read `.planning/ROADMAP.md`
-4. Continue with `$gsd-new-milestone`
+4. Continue with `$gsd-new-milestone` requirements and roadmap creation
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -118,7 +114,7 @@ $gsd-new-milestone
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Continue v1.2 requirements and roadmap creation through /gsd-new-milestone
 
 ## Decisions
 

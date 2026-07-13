@@ -8,6 +8,18 @@
 
 **"部署在公网、能稳定日常使用的个人内容中台"** —— 所有子应用在同一域名下协同工作，能长期保持可访问、可阅读、可观看。其他一切（特性完整度、多用户、正式审核流）都可以退让，但"能用、不崩"必须守住。
 
+## Current Milestone: v1.2 Cloudflare 账户/域名切换与全链路发布验证
+
+**Goal:** 让 Starye 可以面向不同 Cloudflare 账户与域名完成可重复部署，并用真实端到端链路证明本地环境、生产部署、爬取、入库、管理、查看都能跑通。
+
+**Target features:**
+
+- Cloudflare 账户与域名切换：配置、密钥、Pages/Workers/D1/R2/KV 绑定、域名路由不再写死单一账户。
+- 本地到生产部署闭环：从本地验证到生产部署、迁移/回滚、网关访问路径按规范走通。
+- 数据全链路：爬虫抓取 → 入库 → 后台管理/校验 → 前台查看，覆盖 comic/movie/blog/dashboard/API/gateway 的关键路径。
+- 测试完善：补齐部署、爬虫、入库、管理、查看链路的自动化测试、smoke/UAT 和必要 runbook 验证。
+- 约束继承：Cloudflare free-tier-first、R2 只存必要资产、正文图外链语义、文档 owner 边界继续保留。
+
 ## Current State
 
 **Latest shipped milestone:** v1.1 存储成本控制与代码/文件整理（2026-07-13）
@@ -23,13 +35,13 @@
 - 漫画章节正文图默认保持 external/source URL，不再把“进 R2”当成业务正确性的隐含条件。
 - R2 使用已收口到必要资产与短期诊断用途，upload/crawler/admin/script 共用同一套 policy-aware storage semantics。
 - root docs、RUNBOOK、`.planning` 和 `docs/archive/` 的 owner 边界已固定，后续里程碑应继续沿 canonical owner 更新。
-- 当前没有已定义的 active milestone；下一轮 scope 需要通过 `$gsd-new-milestone` 重新建立。
+- v1.2 已启动，当前主线是 Cloudflare 账户/域名切换与本地到生产的数据链路闭环验证。
 
-## Next Milestone Goals
+## Current Milestone Notes
 
-- 在 external image reliability（`REL-01..03`）和 storage/billing operations automation（`OPS-01..02`）之间确定下一轮主线，而不是默认继续扩大 v1.1 scope。
+- 本轮主线是账户/域名切换与全链路生产验证，不默认延续 v1.1 的 `REL-*` / `OPS-*` 候选方向；相关可靠性或 ops 工作只有在服务该链路时才纳入。
 - 保持 Cloudflare free-tier-first、source-vs-managed asset distinction、以及 root doc ownership 这三条 v1.1 已验证的长期约束。
-- 只有在下一里程碑正式立项时，才重新生成 `.planning/REQUIREMENTS.md` 并定义新的 Active requirements。
+- 新 `.planning/REQUIREMENTS.md` 将围绕 Cloudflare profile/deployment/data pipeline/admin viewing/test coverage 生成。
 
 <details>
 <summary>Archived Milestone Focus - v1.1 存储成本控制与代码/文件整理</summary>
@@ -77,8 +89,10 @@
 
 ### Active
 
-- [ ] 下一 milestone 尚未定义；启动时通过 `$gsd-new-milestone` 重新定义 Active requirements。
-- [ ] 候选方向：`REL-01..03`（external image reliability）或 `OPS-01..02`（billing / cleanup automation），待下一里程碑正式立项。
+- [ ] v1.2 Cloudflare 账户/域名切换：不同账户、域名、资源绑定和 secrets 可以被清楚区分并安全切换。
+- [ ] v1.2 本地到生产部署闭环：本地验证、生产部署、迁移/回滚和 gateway canonical URL 均有可执行路径和验证证据。
+- [ ] v1.2 数据全链路：爬虫抓取、D1 入库、dashboard 管理/校验、前台查看形成可重复 smoke/UAT。
+- [ ] v1.2 测试完善：关键链路有自动化测试、部署 smoke、人工 UAT 和 runbook 验证入口。
 
 ### Out of Scope
 
@@ -115,7 +129,7 @@
 
 - v1.0 与 v1.1 都已完成并归档到 `.planning/milestones/`
 - v1.1 已通过 milestone audit：5/5 phases complete，15/15 plans complete，22/22 v1 requirements satisfied
-- 当前没有 active milestone；下一步是 `$gsd-new-milestone`
+- 当前 active milestone 是 v1.2 Cloudflare 账户/域名切换与全链路发布验证；下一步是定义 `.planning/REQUIREMENTS.md` 和 phased roadmap
 - 已接受的历史归档债仍主要来自 v1.0：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
 - v1.1 已把 R2 必要资产边界、external/source image semantics、shared storage helper、policy-aware admin/script behavior 和 canonical doc ownership 一并收口
 
@@ -152,6 +166,7 @@
 | R2 上传改为 purpose allowlist | 通用 `images/` 上传路径无法表达成本边界，必须从 API 与 crawler 双侧阻止正文图误入 R2 | ✓ Validated in Phase 8 |
 | AGENTS.md 只保留入口级规则 | 当前文件过长，容易埋没真正必须执行的 repo 边界；细节迁入 RUNBOOK/.planning 或专题文档 | ✓ Validated in Phase 9 |
 | 文档 owner 固定为 README / AGENTS / RUNBOOK / `.planning` / `docs` / `docs/archive` / `openspec` | 避免 root docs 和旧存储文档继续漂移成多份 source of truth | ✓ Validated in Phase 9 |
+| v1.2 以 Cloudflare 账户/域名切换与真实全链路验证为主线 | 需要证明部署与数据链路可迁移、可复现、可验收，而不是继续扩大存储/文档整理 scope | — Pending |
 
 ## Evolution
 
@@ -171,4 +186,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-13 after v1.1 milestone closeout*
+*Last updated: 2026-07-13 after v1.2 milestone kickoff*
