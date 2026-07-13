@@ -5,8 +5,8 @@ milestone_name: 存储成本控制与代码/文件整理
 current_phase: 7
 current_phase_name: Comic External Image Flow
 status: complete
-stopped_at: Phase 8 ready to discuss
-last_updated: "2026-07-13T02:44:33.5079356+08:00"
+stopped_at: Phase 8 context gathered
+last_updated: "2026-07-13T02:43:08.769Z"
 last_activity: 2026-07-13
 last_activity_desc: Phase 7 complete with external chapter image ingestion, public/admin API contract, and Reader failure UX
 progress:
@@ -88,9 +88,9 @@ Last activity: 2026-07-13 — Phase 7 complete with external chapter image inges
 
 ## Session Continuity
 
-**Last session:** 2026-07-13T02:44:33.5079356+08:00
-**Stopped at:** Phase 8 ready to discuss
-**Resume file:** .planning/phases/07-comic-external-image-flow/07-VERIFICATION.md
+**Last session:** 2026-07-13T02:43:08.654Z
+**Stopped at:** Phase 8 context gathered
+**Resume file:** .planning/phases/08-cost-guardrails/08-CONTEXT.md
 
 **Next recommended action:**
 
