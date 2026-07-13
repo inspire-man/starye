@@ -2,15 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
-status: planning
-last_updated: "2026-07-13T15:10:28.352Z"
+current_phase: 11
+status: ready_for_discussion
+stopped_at: Phase 11 discussion ready
+last_updated: "2026-07-13T15:47:28.326Z"
 last_activity: 2026-07-13
+last_activity_desc: Milestone v1.2 roadmap created
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
+current_phase_name: Deployment Target Foundation
 ---
 
 # Project State: Starye — 个人内容中台
@@ -28,21 +32,22 @@ progress:
 **Project Docs:**
 
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
-- `.planning/ROADMAP.md` — archived milestones overview and next-milestone handoff
+- `.planning/ROADMAP.md` — active v1.2 phase roadmap and requirement mapping
+- `.planning/REQUIREMENTS.md` — active v1.2 checkable requirements and traceability
 - `.planning/MILESTONES.md` — shipped milestone summaries and archive links
-- `.planning/research/SUMMARY.md` — v1.1 Cloudflare cost and storage strategy findings
+- `.planning/research/SUMMARY.md` — v1.2 Cloudflare account/domain switching research
 - `.planning/codebase/ARCHITECTURE.md` — Brownfield system overview
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 11 - Deployment Target Foundation
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-13 — Milestone v1.2 started
+Status: Ready for phase discussion
+Last activity: 2026-07-13 — Milestone v1.2 roadmap created
 
 ## Performance Metrics
 
-**Phases completed:** 0 / 0 (roadmap not created yet)
+**Phases completed:** 0 / 4
 **Plans completed:** 0
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
@@ -89,14 +94,14 @@ Last activity: 2026-07-13 — Milestone v1.2 started
 
 ## Session Continuity
 
-**Last session:** 2026-07-13T15:10:28.352Z
-**Stopped at:** Milestone v1.2 defining requirements
-**Resume file:** .planning/PROJECT.md
+**Last session:** 2026-07-13T15:47:28.326Z
+**Stopped at:** Phase 11 discussion ready
+**Resume file:** .planning/ROADMAP.md
 
 **Next recommended action:**
 
 ```text
-continue `$gsd-new-milestone` requirements and roadmap creation
+$gsd-discuss-phase 11
 ```
 
 **If interrupted, resume by:**
@@ -104,7 +109,7 @@ continue `$gsd-new-milestone` requirements and roadmap creation
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md`
 3. Read `.planning/ROADMAP.md`
-4. Continue with `$gsd-new-milestone` requirements and roadmap creation
+4. Continue with `$gsd-discuss-phase 11`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -114,7 +119,7 @@ continue `$gsd-new-milestone` requirements and roadmap creation
 
 ## Operator Next Steps
 
-- Continue v1.2 requirements and roadmap creation through /gsd-new-milestone
+- Start Phase 11 discussion with /gsd-discuss-phase 11
 
 ## Decisions
 

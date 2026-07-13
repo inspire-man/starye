@@ -79,42 +79,42 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROF-01 | TBD | Pending |
-| PROF-02 | TBD | Pending |
-| PROF-03 | TBD | Pending |
-| PROF-04 | TBD | Pending |
-| ENV-01 | TBD | Pending |
-| ENV-02 | TBD | Pending |
-| ENV-03 | TBD | Pending |
-| ENV-04 | TBD | Pending |
-| ENV-05 | TBD | Pending |
-| ENV-06 | TBD | Pending |
-| DEPL-01 | TBD | Pending |
-| DEPL-02 | TBD | Pending |
-| DEPL-03 | TBD | Pending |
-| DEPL-04 | TBD | Pending |
-| DEPL-05 | TBD | Pending |
-| DEPL-06 | TBD | Pending |
-| DATA-01 | TBD | Pending |
-| DATA-02 | TBD | Pending |
-| DATA-03 | TBD | Pending |
-| DATA-04 | TBD | Pending |
-| DATA-05 | TBD | Pending |
-| DATA-06 | TBD | Pending |
-| DATA-07 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
-| TEST-05 | TBD | Pending |
-| TEST-06 | TBD | Pending |
-| TEST-07 | TBD | Pending |
+| PROF-01 | Phase 11 | Pending |
+| PROF-02 | Phase 11 | Pending |
+| PROF-03 | Phase 11 | Pending |
+| PROF-04 | Phase 11 | Pending |
+| ENV-01 | Phase 11 | Pending |
+| ENV-02 | Phase 11 | Pending |
+| ENV-03 | Phase 12 | Pending |
+| ENV-04 | Phase 12 | Pending |
+| ENV-05 | Phase 12 | Pending |
+| ENV-06 | Phase 12 | Pending |
+| DEPL-01 | Phase 12 | Pending |
+| DEPL-02 | Phase 12 | Pending |
+| DEPL-03 | Phase 12 | Pending |
+| DEPL-04 | Phase 12 | Pending |
+| DEPL-05 | Phase 12 | Pending |
+| DEPL-06 | Phase 12 | Pending |
+| DATA-01 | Phase 13 | Pending |
+| DATA-02 | Phase 13 | Pending |
+| DATA-03 | Phase 13 | Pending |
+| DATA-04 | Phase 13 | Pending |
+| DATA-05 | Phase 13 | Pending |
+| DATA-06 | Phase 13 | Pending |
+| DATA-07 | Phase 13 | Pending |
+| TEST-01 | Phase 14 | Pending |
+| TEST-02 | Phase 11 | Pending |
+| TEST-03 | Phase 12 | Pending |
+| TEST-04 | Phase 12 | Pending |
+| TEST-05 | Phase 13 | Pending |
+| TEST-06 | Phase 14 | Pending |
+| TEST-07 | Phase 14 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 30 total
-- Mapped to phases: 0
-- Unmapped: 30 (pending roadmap)
+- Mapped to phases: 30
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-13*
-*Last updated: 2026-07-13 after initial v1.2 definition*
+*Last updated: 2026-07-13 after roadmap creation*
