@@ -90,6 +90,7 @@ describe('targetProfile schema', () => {
     expect(parsed.workers.api.name).toBe('starye-api')
     expect(parsed.workers.gateway.name).toBe('starye-gateway')
     expect(parsed.pages.dashboard.project).toBe('starye-dashboard')
+    expect(parsed.pages.blog.project).toBe('blog-pages')
     expect(parsed.local.wranglerProfile).toBe('starye-org')
     expect(parsed.ci.githubEnvironment).toBe('starye-org')
   })

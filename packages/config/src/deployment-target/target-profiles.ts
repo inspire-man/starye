@@ -61,7 +61,7 @@ export const trackedTargetProfiles = [
         canonicalUrl: 'https://starye-auth.pages.dev',
       },
       blog: {
-        project: 'starye-blog',
+        project: 'blog-pages',
         canonicalUrl: 'https://blog.starye.org',
       },
       movie: {
