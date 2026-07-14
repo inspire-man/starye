@@ -1,5 +1,7 @@
+import type { WranglerCommandExecutor } from './live-checks'
 import type { ProjectionValidationIssue } from './projection-plan'
 import type { TargetResolution } from './target-resolver'
+import { runLiveResourceChecks } from './live-checks'
 import {
   resolveTargetProfile,
   TargetResolutionError,
@@ -43,6 +45,11 @@ export type PreflightIssueCode
     | 'local-wrangler-profile-mismatch'
     | 'local-api-token-shadowing'
     | 'ci-environment-mismatch'
+    | 'missing-remote-credentials'
+    | 'remote-account-id-mismatch'
+    | 'missing-live-resource-check'
+    | 'remote-resource-check-failed'
+    | 'remote-resource-missing'
 
 export interface PreflightIssue {
   code: PreflightIssueCode
@@ -58,6 +65,8 @@ export interface PreflightOptions {
   ciEnvironment?: string
   projectionIssues?: readonly ProjectionValidationIssue[]
   environment?: Readonly<Record<string, string | undefined>>
+  live?: boolean
+  liveCheckExecutor?: WranglerCommandExecutor
 }
 
 export interface TargetPreflightResult {
@@ -90,6 +99,10 @@ function isPreflightScope(value: string): value is PreflightScope {
 
 function isPreflightCommand(value: string): value is PreflightCommand {
   return (preflightCommandValues as readonly string[]).includes(value)
+}
+
+function isRemoteLiveCheckCommand(command: PreflightCommand): command is RemoteLiveCheckCommand {
+  return (remoteLiveCheckCommandValues as readonly string[]).includes(command)
 }
 
 function addIssue(issues: PreflightIssue[], code: PreflightIssueCode, message: string): void {
@@ -204,6 +217,56 @@ function validateIdentityBoundary(
   }
 }
 
+function validateRemoteLiveCheck(
+  resolution: TargetResolution | undefined,
+  input: { scope?: PreflightScope, command?: PreflightCommand },
+  options: PreflightOptions,
+  issues: PreflightIssue[],
+): void {
+  if (!resolution || !input.scope || !input.command || input.scope === 'local' || !isRemoteLiveCheckCommand(input.command)) {
+    return
+  }
+
+  const environment = options.environment ?? {}
+  const requiredCredentialKeys = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'] as const
+  const missingCredentialKeys = requiredCredentialKeys.filter(key => !normalizedText(environment[key]))
+
+  if (missingCredentialKeys.length > 0) {
+    addIssue(
+      issues,
+      'missing-remote-credentials',
+      `Remote scope requires credential keys: ${missingCredentialKeys.join(', ')}.`,
+    )
+    return
+  }
+
+  if (normalizedText(environment.CLOUDFLARE_ACCOUNT_ID) !== resolution.profile.account.id) {
+    addIssue(
+      issues,
+      'remote-account-id-mismatch',
+      'Remote CLOUDFLARE_ACCOUNT_ID does not match the selected target profile.',
+    )
+    return
+  }
+
+  if (!options.live || !options.liveCheckExecutor) {
+    addIssue(
+      issues,
+      'missing-live-resource-check',
+      'Remote high-risk commands require --live and a read-only resource check executor.',
+    )
+    return
+  }
+
+  if (issues.length > 0) {
+    return
+  }
+
+  for (const issue of runLiveResourceChecks(resolution, options.liveCheckExecutor)) {
+    addIssue(issues, issue.code, issue.message)
+  }
+}
+
 export function runTargetPreflight(options: PreflightOptions): TargetPreflightResult {
   const issues: PreflightIssue[] = []
   const target = resolveSelectedTarget(options.target, issues)
@@ -211,6 +274,7 @@ export function runTargetPreflight(options: PreflightOptions): TargetPreflightRe
 
   validateProjection(options.projectionIssues, issues)
   validateIdentityBoundary(target, input.scope, options, issues)
+  validateRemoteLiveCheck(target, input, options, issues)
 
   return {
     ...(target ? { target } : {}),

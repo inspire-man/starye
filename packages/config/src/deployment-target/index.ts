@@ -1,4 +1,5 @@
 export * from './env-file-block'
+export * from './live-checks'
 export * from './preflight'
 export * from './projection-plan'
 export * from './target-profile.schema'

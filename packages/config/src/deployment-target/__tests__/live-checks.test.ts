@@ -78,6 +78,21 @@ describe('live resource checks', () => {
     },
   )
 
+  it('blocks a remote credential bundle whose account id does not match the selected target', () => {
+    const result = runTargetPreflight(createRemoteOptions({
+      environment: {
+        CLOUDFLARE_API_TOKEN: 'test-token',
+        CLOUDFLARE_ACCOUNT_ID: 'different-account-id',
+      },
+    }))
+
+    expect(result.ok).toBe(false)
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'remote-account-id-mismatch',
+      blocking: true,
+    }))
+  })
+
   it('blocks a KV response that does not contain the tracked namespace id', () => {
     const result = runTargetPreflight(createRemoteOptions({
       liveCheckExecutor: {
