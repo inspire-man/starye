@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 11
-status: ready_to_execute
-stopped_at: Phase 11 planned and verified
-last_updated: "2026-07-14T16:11:23.4742351+08:00"
+current_phase_name: deployment-target-foundation
+status: executing
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-07-14T09:47:16.709Z"
 last_activity: 2026-07-14
-last_activity_desc: Phase 11 planned and verified
+last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
-  percent: 0
-current_phase_name: Deployment Target Foundation
+  completed_plans: 1
+  percent: 33
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,10 +40,10 @@ current_phase_name: Deployment Target Foundation
 
 ## Current Position
 
-Phase: 11 - Deployment Target Foundation
-Plan: 3 plans ready
-Status: Ready to execute
-Last activity: 2026-07-14 — Phase 11 planned and verified
+Phase: 11 (deployment-target-foundation) — EXECUTING
+Plan: 2 of 3
+Status: Executing Phase 11
+Last activity: 2026-07-14 — Phase 11 execution started
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Last activity: 2026-07-14 — Phase 11 planned and verified
 | Phase 06 P01 | 6 min | 2 tasks | 2 files |
 | Phase 06 P02 | 4 min | 2 tasks | 2 files |
 | Phase 06 P03 | 15 min | 3 tasks | 7 files |
+| Phase 11 P01 | 42min | 3 tasks | 11 files |
 
 ### Open Todos (carried across phases)
 
@@ -94,9 +95,9 @@ Last activity: 2026-07-14 — Phase 11 planned and verified
 
 ## Session Continuity
 
-**Last session:** 2026-07-14T02:15:49.427Z
-**Stopped at:** Phase 11 planned and verified
-**Resume file:** .planning/phases/11-deployment-target-foundation/11-01-PLAN.md
+**Last session:** 2026-07-14T09:47:16.696Z
+**Stopped at:** Completed 11-01-PLAN.md
+**Resume file:** None
 
 **Next recommended action:**
 
@@ -142,3 +143,5 @@ $gsd-execute-phase 11
 - [Phase 09]: `AGENTS.md` remains the only canonical agent doc, while `CLAUDE.md` must shrink to a thin compatibility adapter. — Locked by 09-02 plan
 - [Phase 09]: Historical or superseded live docs move to `docs/archive/`, while v1.0 evidence remains under `.planning/milestones/...`. — Locked by 09-02 / 09-03 plans
 - [Phase 09]: Long-term storage policy, cleanup, rollback, and accidental-upload ownership belongs to `RUNBOOK.md`; Phase 6/8 docs remain historical snapshots or verification evidence. — Locked by 09-03 plan
+- [Phase 11]: Target profiles are complete non-secret identities; starye-org maps local Wrangler and CI identity explicitly.
+- [Phase 11]: Selected target IDs are explicit-only: whitespace is normalized, while defaults and legacy aliases fail closed.
