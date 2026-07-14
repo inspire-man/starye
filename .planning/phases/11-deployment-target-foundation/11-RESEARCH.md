@@ -513,22 +513,19 @@ export function assertProjectionMatches(
 | A3 | Half-switched env usually happens because profile validation and projection validation are separated manually. | Common Pitfalls | If wrong, mitigation still holds because D-10 requires both checks. |
 | A4 | Projection overwriting user secrets is a realistic risk. | Common Pitfalls | If wrong, marker-aware preservation remains required by D-08. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **What are the final profile IDs and GitHub environment names?**
-   - What we know: D-15 requires each profile to map to one GitHub environment or equivalent secret bundle. [VERIFIED: .planning/phases/11-deployment-target-foundation/11-CONTEXT.md]
-   - What's unclear: The exact environment names are not present in current workflow files. [VERIFIED: .github/workflows]
-   - Recommendation: Use `starye-org` for the current target fixture unless user supplies a different naming convention. [ASSUMED]
+1. **Profile IDs and GitHub environment names**
+   - Resolution: Phase 11 uses `starye-org` as the tracked current-target fixture id and as the concrete GitHub environment / secret bundle name for CI metadata. [VERIFIED: .planning/phases/11-deployment-target-foundation/11-CONTEXT.md] [ASSUMED]
+   - Planning consequence: `TargetProfile.local.wranglerProfile` and `TargetProfile.ci.githubEnvironment` must both be testable concrete fields for the `starye-org` fixture; plans must not leave D-14/D-15 as abstract metadata. [VERIFIED: .planning/phases/11-deployment-target-foundation/11-CONTEXT.md]
 
-2. **Should `apps/api/wrangler.toml` gain `account_id` in Phase 11 or Phase 12?**
-   - What we know: Wrangler docs recommend pairing profiles with `account_id` as a failsafe, and D-12 requires live checks for remote commands. [CITED: https://developers.cloudflare.com/workers/wrangler/profiles/]
-   - What's unclear: Phase 11 boundary says do not change deploy/runtime behavior, so editing Wrangler config consumption may belong to Phase 12. [VERIFIED: .planning/phases/11-deployment-target-foundation/11-CONTEXT.md]
-   - Recommendation: Phase 11 profile should include account ID and preflight should validate it; config mutation can be planned only if framed as validation metadata, otherwise defer to Phase 12. [VERIFIED: .planning/ROADMAP.md]
+2. **`apps/api/wrangler.toml` `account_id` timing**
+   - Resolution: Phase 11 profiles include account identity metadata and preflight validation rules, but do not mutate Worker/Pages Wrangler config consumption. That deploy/runtime consumption belongs to Phase 12 unless a change is strictly a non-runtime validation fixture. [VERIFIED: .planning/ROADMAP.md]
+   - Planning consequence: Do not add `account_id` to `apps/api/wrangler.toml` in Phase 11 as deploy behavior; validate selected-target metadata through `@starye/config` and CLI preflight instead. [VERIFIED: .planning/phases/11-deployment-target-foundation/11-CONTEXT.md]
 
-3. **Should `dotenv` be promoted to `@starye/config` dependency?**
-   - What we know: `dotenv` exists in the crawler package and npm registry check returned version/source metadata. [VERIFIED: packages/crawler/package.json] [VERIFIED: npm registry]
-   - What's unclear: Package-legitimacy seam timed out and no `OK` verdict was obtained. [VERIFIED: tool output]
-   - Recommendation: Avoid adding new dependencies in Phase 11 if possible; if `dotenv` is added to `@starye/config`, add a human verification checkpoint first. [VERIFIED: tool output]
+3. **`dotenv` dependency movement**
+   - Resolution: Phase 11 avoids new dependency installation and should not promote `dotenv` into `@starye/config` unless a human explicitly approves a package-boundary change later. [VERIFIED: packages/crawler/package.json] [VERIFIED: tool output]
+   - Planning consequence: Use existing TypeScript/Node parsing utilities or small tested parser logic for target-managed env blocks; if executor discovers dependency movement is unavoidable, it must stop for a checkpoint instead of adding the dependency silently. [VERIFIED: tool output]
 
 ## Environment Availability
 

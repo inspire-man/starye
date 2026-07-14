@@ -27,7 +27,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** PROF-01, PROF-02, PROF-03, PROF-04, ENV-01, ENV-02, TEST-02
 
-**Plans:** Not planned yet.
+**Plans:** 3 plans in 3 waves.
+
+- **Wave 1:** `11-01-PLAN.md` — Target profile schema, current `starye-org` profile, resolver, and package test setup.
+- **Wave 2** *(blocked on Wave 1 completion)*: `11-02-PLAN.md` — Marker-aware local env projection for API/gateway/root/crawler env files.
+- **Wave 3** *(blocked on Wave 2 completion)*: `11-03-PLAN.md` — Fail-closed preflight CLI, local Wrangler vs CI identity boundary, and live-check wrappers.
 
 **Success criteria:**
 
@@ -91,17 +95,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Start Phase 11 with:
+Execute Phase 11 with:
 
 ```text
-$gsd-discuss-phase 11
-```
-
-Or skip discussion and plan directly:
-
-```text
-$gsd-plan-phase 11
+$gsd-execute-phase 11
 ```
 
 ---
-*Last updated: 2026-07-13 after v1.2 roadmap creation*
+*Last updated: 2026-07-14 after Phase 11 planning*
