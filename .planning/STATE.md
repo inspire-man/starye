@@ -5,16 +5,16 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 11
 current_phase_name: deployment-target-foundation
 status: executing
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-07-14T10:37:20.574Z"
+stopped_at: Completed 11-03-PLAN.md; Phase 11 ready for verification
+last_updated: "2026-07-14T14:11:22.000Z"
 last_activity: 2026-07-14
-last_activity_desc: Completed 11-02 local env projection plan
+last_activity_desc: Completed 11-03 fail-closed target preflight CLI plan
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 2
-  percent: 67
+  completed_plans: 3
+  percent: 100
 ---
 
 # Project State: Starye — 个人内容中台
@@ -42,14 +42,14 @@ progress:
 
 Phase: 11 (deployment-target-foundation) — EXECUTING
 Plan: 3 of 3
-Status: Executing Phase 11
-Last activity: 2026-07-14 — Completed 11-02 local env projection plan
+Status: Phase 11 ready for verification
+Last activity: 2026-07-14 — Completed 11-03 fail-closed target preflight CLI plan
 
 ## Performance Metrics
 
 **Phases completed:** 0 / 4
-**Plans completed:** 2
-**Plans in flight:** 1
+**Plans completed:** 3
+**Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
 ## Accumulated Context
@@ -94,17 +94,18 @@ Last activity: 2026-07-14 — Completed 11-02 local env projection plan
 - Phase 9 已完成 root docs 收缩、`docs/documentation-ownership.md`、`docs/archive/`、`09-01..03-SUMMARY.md` 与 `09-VERIFICATION.md`，文档 owner 和 evidence/archive 边界已收口
 - Phase 10 已完成 shared storage helper 收口、upload/crawler/admin adoption、legacy script policy-aware 文案修正，以及 `10-VERIFICATION.md` 记录的全部 targeted regressions / typechecks
 - Phase 11 Plan 02 已完成四个既有 local env consumer 的显式 target projection、marker-aware managed block 更新和 preservation tests；未直接写入任何 local env 文件或 runtime consumer
+- Phase 11 Plan 03 已完成 fail-closed target preflight、local Wrangler/CI identity boundary、argv-only D1/R2/KV read checks 与 import-safe `target-profile` CLI；未改 Worker/Pages/GitHub workflow consumer，也未执行带凭据的远程命令
 
 ## Session Continuity
 
-**Last session:** 2026-07-14T10:37:20.574Z
-**Stopped at:** Completed 11-02-PLAN.md
+**Last session:** 2026-07-14T14:11:22.000Z
+**Stopped at:** Completed 11-03-PLAN.md; Phase 11 ready for verification
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-$gsd-execute-phase 11
+$gsd-verify-work 11
 ```
 
 **If interrupted, resume by:**
@@ -112,7 +113,7 @@ $gsd-execute-phase 11
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md`
 3. Read `.planning/ROADMAP.md`
-4. Continue with `$gsd-execute-phase 11`
+4. Continue with `$gsd-verify-work 11`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -122,7 +123,7 @@ $gsd-execute-phase 11
 
 ## Operator Next Steps
 
-- Execute Phase 11 with /gsd-execute-phase 11
+- Verify Phase 11 with /gsd-verify-work 11
 
 ## Decisions
 
@@ -149,3 +150,5 @@ $gsd-execute-phase 11
 - [Phase 11]: Selected target IDs are explicit-only: whitespace is normalized, while defaults and legacy aliases fail closed.
 - [Phase 11]: Local env projection covers exactly API, gateway, root, and crawler final consumer files; browser public API URLs use the Gateway canonical local entry.
 - [Phase 11]: Marker-aware updates own only named target-managed keys; user-managed secret values are never projected or removed.
+- [Phase 11]: Local preflight requires the explicit starye-org Wrangler profile and rejects CLOUDFLARE_API_TOKEN shadowing; CI/remote preflight requires the mapped starye-org environment.
+- [Phase 11]: Remote high-risk commands require credential key names plus injected argv-only D1/R2/KV read checks; the Phase 11 CLI never owns deploy or workflow mutation.
