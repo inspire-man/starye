@@ -18,6 +18,11 @@ export interface EnvFileBlockUpdate {
   removedStaleKeys: readonly TargetManagedEnvKey[]
 }
 
+interface TargetManagedBlockBounds {
+  start: number
+  end: number
+}
+
 function readAssignmentKey(line: string): string | undefined {
   const separatorIndex = line.indexOf('=')
 
@@ -31,6 +36,47 @@ function readAssignmentKey(line: string): string | undefined {
 
 function lineEndingFor(content: string): '\n' | '\r\n' {
   return content.includes('\r\n') ? '\r\n' : '\n'
+}
+
+function findTargetManagedBlockBounds(
+  file: LocalEnvTargetFile,
+  content: string,
+): TargetManagedBlockBounds | undefined {
+  const starts: number[] = []
+  const ends: number[] = []
+  let offset = 0
+
+  while (offset < content.length) {
+    const nextNewline = content.indexOf('\n', offset)
+    const lineEnd = nextNewline < 0 ? content.length : nextNewline
+    const line = content.slice(offset, lineEnd).replace(/\r$/, '')
+
+    if (line === targetManagedBlockStart) {
+      starts.push(offset)
+    }
+    else if (line === targetManagedBlockEnd) {
+      ends.push(offset)
+    }
+
+    if (nextNewline < 0) {
+      break
+    }
+
+    offset = nextNewline + 1
+  }
+
+  if (starts.length === 0 && ends.length === 0) {
+    return undefined
+  }
+
+  if (starts.length !== 1 || ends.length !== 1 || ends[0] < starts[0]) {
+    throw new Error(`Malformed target-managed env block in ${file}.`)
+  }
+
+  const endLineBreak = content.indexOf('\n', ends[0])
+  const end = endLineBreak < 0 ? content.length : endLineBreak
+
+  return { start: starts[0], end }
 }
 
 function createUpdate(
@@ -104,18 +150,11 @@ export function applyTargetManagedEnvBlock(
   content: string,
   entries: TargetManagedEnvEntries,
 ): EnvFileBlockUpdate {
-  const startIndex = content.indexOf(targetManagedBlockStart)
-  const endIndex = content.indexOf(targetManagedBlockEnd)
-  const hasStartMarker = startIndex >= 0
-  const hasEndMarker = endIndex >= 0
-
-  if (hasStartMarker !== hasEndMarker || (hasStartMarker && endIndex < startIndex)) {
-    throw new Error(`Malformed target-managed env block in ${file}.`)
-  }
+  const managedBlockBounds = findTargetManagedBlockBounds(file, content)
 
   const block = serializeTargetManagedBlock(entries, lineEndingFor(content))
 
-  if (!hasStartMarker) {
+  if (!managedBlockBounds) {
     const staleKeyRemoval = removeStaleTargetManagedKeys(file, content)
     const separator = staleKeyRemoval.content.length === 0 || staleKeyRemoval.content.endsWith('\n')
       ? ''
@@ -125,8 +164,8 @@ export function applyTargetManagedEnvBlock(
     return createUpdate(content, updatedContent, false, staleKeyRemoval.removedStaleKeys)
   }
 
-  const beforeBlock = content.slice(0, startIndex)
-  const afterBlock = content.slice(endIndex + targetManagedBlockEnd.length)
+  const beforeBlock = content.slice(0, managedBlockBounds.start)
+  const afterBlock = content.slice(managedBlockBounds.end)
   const beforeCleanup = removeStaleTargetManagedKeys(file, beforeBlock)
   const afterCleanup = removeStaleTargetManagedKeys(file, afterBlock)
   const updatedContent = `${beforeCleanup.content}${block}${afterCleanup.content}`

@@ -73,4 +73,60 @@ describe('target-managed env block updater', () => {
     expect(update.content).not.toContain('BETTER_AUTH_SECRET=')
     expect(update.content).not.toContain('GITHUB_CLIENT_SECRET=')
   })
+
+  it('忽略注释、值和 secret 中的 marker 子串，并保留它们的原始字节', () => {
+    const existing = [
+      `# operator note ${targetManagedBlockStart}`,
+      `BETTER_AUTH_SECRET=secret-with-${targetManagedBlockEnd}`,
+      'UNRELATED_VALUE=keep-me',
+      '',
+    ].join('\r\n')
+
+    const update = applyTargetManagedEnvBlock('apps/api/.dev.vars', existing, targetEntries)
+
+    expect(update.hadManagedBlock).toBe(false)
+    expect(update.content).toContain(`# operator note ${targetManagedBlockStart}\r\n`)
+    expect(update.content).toContain(`BETTER_AUTH_SECRET=secret-with-${targetManagedBlockEnd}\r\n`)
+    expect(update.content).toContain('UNRELATED_VALUE=keep-me\r\n')
+  })
+
+  it.each([
+    [
+      'duplicate complete blocks',
+      [
+        targetManagedBlockStart,
+        'STARYE_TARGET_ID=old-target',
+        targetManagedBlockEnd,
+        'BETTER_AUTH_SECRET=keep-this-secret',
+        targetManagedBlockStart,
+        'STARYE_TARGET_ID=another-target',
+        targetManagedBlockEnd,
+      ].join('\n'),
+    ],
+    [
+      'nested start markers',
+      [
+        targetManagedBlockStart,
+        'BETTER_AUTH_SECRET=keep-this-secret',
+        targetManagedBlockStart,
+        targetManagedBlockEnd,
+      ].join('\n'),
+    ],
+    [
+      'duplicate end markers',
+      [
+        targetManagedBlockStart,
+        'BETTER_AUTH_SECRET=keep-this-secret',
+        targetManagedBlockEnd,
+        targetManagedBlockEnd,
+      ].join('\n'),
+    ],
+    ['end before start', `${targetManagedBlockEnd}\nBETTER_AUTH_SECRET=keep-this-secret\n${targetManagedBlockStart}`],
+    ['isolated start marker', `${targetManagedBlockStart}\nBETTER_AUTH_SECRET=keep-this-secret`],
+    ['isolated end marker', `BETTER_AUTH_SECRET=keep-this-secret\n${targetManagedBlockEnd}`],
+  ])('rejects %s before rewriting operator-managed content', (_name, existing) => {
+    expect(() => applyTargetManagedEnvBlock('apps/api/.dev.vars', existing, targetEntries))
+      .toThrow('Malformed target-managed env block')
+    expect(existing).toContain('BETTER_AUTH_SECRET=keep-this-secret')
+  })
 })
