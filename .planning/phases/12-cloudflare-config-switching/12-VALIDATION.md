@@ -38,6 +38,8 @@ created: 2026-07-15
 | 12-02-02 | 02 | 2 | ENV-04, TEST-03 | N/A | Vite/Nuxt adapters reject secret-shaped and unregistered public values. | unit/build | `pnpm --filter dashboard test --run && pnpm --filter starye-auth build && pnpm --filter blog build` | ✅ / expand | ⬜ pending |
 | 12-03-01 | 03 | 3 | DEPL-03, DEPL-04, DEPL-05, DEPL-06, TEST-04 | N/A | Workflow target -> Environment resolution, preflight/live-read order and resource argv are testable without credentials. | unit/static | `pnpm --filter @starye/config test --run src/deployment-target` | ✅ / expand | ⬜ pending |
 | 12-03-02 | 03 | 3 | DEPL-01..DEPL-06, TEST-04 | N/A | YAML consumes validated non-secret output; no Pages project creation fallback, no target-suffixed secret lookup, no unqualified remote mutation. | static contract | `pnpm --filter @starye/config test --run src/deployment-target` | ❌ add fixture assertions | ⬜ pending |
+| 12-04-01 | 04 | 4 | DEPL-04, DEPL-05, TEST-04 | N/A | DB direct migration/cleanup entry points require a prepared explicit target and cannot use ambient database identity. | unit/static | `pnpm --filter @starye/config test --run src/deployment-target` | ❌ add entrypoint fixtures | ⬜ pending |
+| 12-04-02 | 04 | 4 | DEPL-05, TEST-04 | N/A | Crawler diagnostics and direct executable source paths are registry-owned or fail closed; alias/import bypasses are rejected. | unit/static | `pnpm --filter @starye/config test --run src/deployment-target` | ❌ add TypeScript program fixtures | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -48,6 +50,7 @@ Existing `@starye/config` Vitest infrastructure and deployment-target fixture/mo
 - [ ] Add/extend fixture tests for Worker/Pages live resource checks, public allowlist and machine-readable CI/deploy projections.
 - [ ] Add focused API/gateway/Nuxt/Vite adapter tests for canonical URL, CORS/auth and no-secret public config behavior.
 - [ ] Add static workflow contract tests or fixture-backed helper tests for dispatch/push/schedule target resolution and mutation ordering.
+- [ ] Add DB and crawler direct-entry fixtures plus TypeScript symbol/import-graph audit fixtures for alias and unclassified-executable bypasses.
 
 ## Manual-Only Verifications
 
@@ -57,7 +60,7 @@ Existing `@starye/config` Vitest infrastructure and deployment-target fixture/mo
 
 ## Validation Sign-Off
 
-- [x] All planned task groups have automated verification or Wave 0 dependencies.
+- [x] All planned task groups, including Wave 4 direct-entry closure, have automated verification or Wave 0 dependencies.
 - [x] Sampling continuity: no plan wave depends on an untested configuration change.
 - [x] Wave 0 uses existing Vitest infrastructure and lists the missing focused assertions.
 - [x] No watch-mode flags are accepted in verification commands.
