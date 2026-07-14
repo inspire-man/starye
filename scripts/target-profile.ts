@@ -2,6 +2,7 @@ import type {
   LocalEnvTargetFile,
   PreflightCommand,
   PreflightScope,
+  ProjectionValidationIssue,
   WranglerCommandExecutor,
 } from '../packages/config/src/deployment-target/index.ts'
 import { spawnSync } from 'node:child_process'
@@ -11,6 +12,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
   applyTargetManagedEnvBlock,
+  assertTargetManagedEnvBlockIsWellFormed,
   buildLocalEnvProjectionPlan,
   resolveTargetProfile,
   runTargetPreflight,
@@ -134,7 +136,9 @@ export function formatTargetProfileHelp(): string {
   return `Target profile commands:
   target-profile validate --target <id>
   target-profile project-local --target <id> --check|--write [--env-root <path>]
-  target-profile preflight --target <id> --scope <local|ci|remote> --command <command> [--live]
+  target-profile preflight --target <id> --scope <local|ci|remote> --command <command> [--env-root <path>] [--live]
+
+Preflight reads exactly the four local consumer files below --env-root, or the repository root when omitted.
 
 Phase 11 identity boundary:
   local Wrangler profile: starye-org
@@ -224,10 +228,42 @@ function createWranglerExecutor(): WranglerCommandExecutor {
   }
 }
 
-function runPreflight(options: TargetProfileCliOptions): void {
+async function collectPreflightProjectionIssues(
+  target: string,
+  envRoot: string,
+): Promise<ProjectionValidationIssue[]> {
+  const plan = buildLocalEnvProjectionPlan(resolveTargetProfile(target))
+  const contents: Partial<Record<LocalEnvTargetFile, string>> = {}
+  const issues: ProjectionValidationIssue[] = []
+
+  for (const entry of plan.entries) {
+    const filePath = path.join(envRoot, entry.file)
+
+    try {
+      const content = await readFile(filePath, 'utf8')
+      assertTargetManagedEnvBlockIsWellFormed(entry.file, content)
+      contents[entry.file] = content
+    }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        issues.push({ kind: 'missing-projection-file', file: entry.file })
+      }
+      else {
+        issues.push({ kind: 'malformed-target-managed-block', file: entry.file })
+      }
+    }
+  }
+
+  return [...issues, ...validateProjectedEnv(plan, contents)]
+}
+
+async function runPreflight(options: TargetProfileCliOptions): Promise<void> {
   if (!options.scope || !options.command) {
     throw new Error('preflight requires --scope and --command.')
   }
+
+  const root = path.resolve(options.envRoot ?? process.cwd())
+  const projectionIssues = await collectPreflightProjectionIssues(options.target ?? '', root)
 
   const result = runTargetPreflight({
     target: options.target ?? '',
@@ -235,6 +271,7 @@ function runPreflight(options: TargetProfileCliOptions): void {
     command: options.command,
     ...(options.wranglerProfile ? { wranglerProfile: options.wranglerProfile } : {}),
     ...(options.ciEnvironment ? { ciEnvironment: options.ciEnvironment } : {}),
+    projectionIssues,
     environment: process.env,
     live: options.live,
     ...(options.live ? { liveCheckExecutor: createWranglerExecutor() } : {}),
@@ -264,7 +301,7 @@ export async function runTargetProfileCli(options: TargetProfileCliOptions): Pro
       await runProjectLocal(options)
       return
     case 'preflight':
-      runPreflight(options)
+      await runPreflight(options)
   }
 }
 

@@ -99,6 +99,14 @@ export type ProjectionValidationIssue
     file: LocalEnvTargetFile
     key: UserManagedSecretKey
   }
+  | {
+    kind: 'missing-projection-file'
+    file: LocalEnvTargetFile
+  }
+  | {
+    kind: 'malformed-target-managed-block'
+    file: LocalEnvTargetFile
+  }
 
 type ProjectedEnvContents = Readonly<Partial<Record<LocalEnvTargetFile, string>>>
 

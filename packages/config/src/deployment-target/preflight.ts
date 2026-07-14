@@ -114,7 +114,15 @@ function describeProjectionIssue(issue: ProjectionValidationIssue): string {
     return `Projected target value mismatch at ${issue.file}: ${issue.key}.`
   }
 
-  return `Required user-managed secret key is missing at ${issue.file}: ${issue.key}.`
+  if (issue.kind === 'missing-user-managed-secret') {
+    return `Required user-managed secret key is missing at ${issue.file}: ${issue.key}.`
+  }
+
+  if (issue.kind === 'missing-projection-file') {
+    return `Projected env file is missing: ${issue.file}.`
+  }
+
+  return `Target-managed env markers are malformed at ${issue.file}.`
 }
 
 function resolveSelectedTarget(target: unknown, issues: PreflightIssue[]): TargetResolution | undefined {

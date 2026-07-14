@@ -79,6 +79,13 @@ function findTargetManagedBlockBounds(
   return { start: starts[0], end }
 }
 
+export function assertTargetManagedEnvBlockIsWellFormed(
+  file: LocalEnvTargetFile,
+  content: string,
+): void {
+  findTargetManagedBlockBounds(file, content)
+}
+
 function createUpdate(
   original: string,
   content: string,
