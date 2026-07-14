@@ -5,8 +5,8 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 12
 current_phase_name: Cloudflare Config Switching
 status: executing
-stopped_at: Phase 12 context gathered
-last_updated: "2026-07-14T17:25:42.758Z"
+stopped_at: Phase 12 UI-SPEC approved
+last_updated: "2026-07-14T17:51:04.487Z"
 last_activity: 2026-07-14
 last_activity_desc: Phase 11 complete, transitioned to Phase 12
 progress:
@@ -98,9 +98,9 @@ Last activity: 2026-07-14 — Phase 11 complete, transitioned to Phase 12
 
 ## Session Continuity
 
-**Last session:** 2026-07-14T17:25:42.710Z
-**Stopped at:** Phase 12 context gathered
-**Resume file:** .planning/phases/12-cloudflare-config-switching/12-CONTEXT.md
+**Last session:** 2026-07-14T17:51:04.475Z
+**Stopped at:** Phase 12 UI-SPEC approved
+**Resume file:** .planning/phases/12-cloudflare-config-switching/12-UI-SPEC.md
 
 **Next recommended action:**
 
