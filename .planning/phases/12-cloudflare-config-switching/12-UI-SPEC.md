@@ -1,7 +1,8 @@
 ---
 phase: 12
 slug: cloudflare-config-switching
-status: draft
+status: approved
+reviewed_at: 2026-07-15
 shadcn_initialized: false
 preset: none
 created: 2026-07-15
