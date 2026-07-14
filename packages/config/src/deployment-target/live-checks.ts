@@ -44,6 +44,22 @@ export function buildLiveResourceChecks(resolution: TargetResolution): readonly 
   ]
 }
 
+function resourceIdentity(resolution: TargetResolution, resource: LiveResourceKind): string {
+  if (resource === 'd1') {
+    return resolution.profile.resources.d1.name
+  }
+
+  if (resource === 'r2') {
+    return resolution.profile.resources.r2.name
+  }
+
+  return resolution.profile.resources.kv.id
+}
+
+function describeCheck(resolution: TargetResolution, check: LiveResourceCheck): string {
+  return `Target ${resolution.id}: read-only ${check.resource} resource check for ${resourceIdentity(resolution, check.resource)}`
+}
+
 export function runLiveResourceChecks(
   resolution: TargetResolution,
   executor: WranglerCommandExecutor,
@@ -59,7 +75,7 @@ export function runLiveResourceChecks(
     catch {
       issues.push({
         code: 'remote-resource-check-failed',
-        message: `Read-only ${check.resource} resource check could not run.`,
+        message: `${describeCheck(resolution, check)} could not run.`,
       })
       continue
     }
@@ -67,7 +83,7 @@ export function runLiveResourceChecks(
     if (result.exitCode !== 0) {
       issues.push({
         code: 'remote-resource-check-failed',
-        message: `Read-only ${check.resource} resource check failed.`,
+        message: `${describeCheck(resolution, check)} failed.`,
       })
       continue
     }
@@ -75,7 +91,7 @@ export function runLiveResourceChecks(
     if (check.expectedOutput && !result.stdout?.includes(check.expectedOutput)) {
       issues.push({
         code: 'remote-resource-missing',
-        message: `Read-only ${check.resource} resource check did not find the selected target resource.`,
+        message: `${describeCheck(resolution, check)} did not find the selected target resource.`,
       })
     }
   }

@@ -1,6 +1,6 @@
 import type { PreflightOptions } from '../preflight'
 import { describe, expect, it, vi } from 'vitest'
-import { buildLiveResourceChecks } from '../live-checks'
+import { buildLiveResourceChecks, runLiveResourceChecks } from '../live-checks'
 import {
 
   runTargetPreflight,
@@ -105,5 +105,48 @@ describe('live resource checks', () => {
       code: 'remote-resource-missing',
       blocking: true,
     }))
+  })
+
+  it('identifies a thrown D1 check by selected target and resource without echoing executor data', () => {
+    const issues = runLiveResourceChecks(resolveTargetProfile('starye-org'), {
+      execute: () => {
+        throw new Error('CLOUDFLARE_API_TOKEN=token-must-not-appear')
+      },
+    })
+    const d1Issue = issues.find(issue => issue.code === 'remote-resource-check-failed')
+
+    expect(d1Issue?.message).toContain('starye-org')
+    expect(d1Issue?.message).toContain('starye-db')
+    expect(d1Issue?.message).not.toContain('CLOUDFLARE_API_TOKEN')
+    expect(d1Issue?.message).not.toContain('token-must-not-appear')
+  })
+
+  it('identifies a non-zero R2 check without echoing command output', () => {
+    const issues = runLiveResourceChecks(resolveTargetProfile('starye-org'), {
+      execute: argv => ({
+        exitCode: argv[0] === 'r2' ? 1 : 0,
+        stdout: 'executor-output-must-not-appear',
+      }),
+    })
+    const r2Issue = issues.find(issue => issue.code === 'remote-resource-check-failed')
+
+    expect(r2Issue?.message).toContain('starye-org')
+    expect(r2Issue?.message).toContain('starye-media')
+    expect(r2Issue?.message).not.toContain('executor-output-must-not-appear')
+  })
+
+  it('identifies a missing KV namespace without echoing token-like output', () => {
+    const issues = runLiveResourceChecks(resolveTargetProfile('starye-org'), {
+      execute: argv => ({
+        exitCode: 0,
+        stdout: argv[0] === 'kv' ? 'CLOUDFLARE_API_TOKEN=token-must-not-appear' : '',
+      }),
+    })
+    const kvIssue = issues.find(issue => issue.code === 'remote-resource-missing')
+
+    expect(kvIssue?.message).toContain('starye-org')
+    expect(kvIssue?.message).toContain('f7f6a8c2bff84a1d89da528eab4eb559')
+    expect(kvIssue?.message).not.toContain('CLOUDFLARE_API_TOKEN')
+    expect(kvIssue?.message).not.toContain('token-must-not-appear')
   })
 })
