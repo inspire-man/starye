@@ -1,13 +1,15 @@
 import type { PreflightOptions } from '../preflight'
 import { describe, expect, it } from 'vitest'
 import {
-  formatTargetProfileHelp,
-  parseTargetProfileCliArgs,
-} from '../../../../../scripts/target-profile.ts'
-import {
 
   runTargetPreflight,
 } from '../preflight'
+
+const targetProfileCliModule = new URL('../../../../../scripts/target-profile.ts', import.meta.url).href
+
+async function loadTargetProfileCli() {
+  return import(targetProfileCliModule)
+}
 
 function createOptions(overrides: Partial<PreflightOptions> = {}): PreflightOptions {
   return {
@@ -70,11 +72,15 @@ describe('runTargetPreflight', () => {
 })
 
 describe('target-profile CLI parser', () => {
-  it('rejects a command without an explicit target', () => {
+  it('rejects a command without an explicit target', async () => {
+    const { parseTargetProfileCliArgs } = await loadTargetProfileCli()
+
     expect(() => parseTargetProfileCliArgs(['validate'])).toThrow('Missing required --target')
   })
 
-  it('requires explicit remote scope, command, and CI environment', () => {
+  it('requires explicit remote scope, command, and CI environment', async () => {
+    const { parseTargetProfileCliArgs } = await loadTargetProfileCli()
+
     expect(parseTargetProfileCliArgs([
       'preflight',
       '--target',
@@ -96,7 +102,8 @@ describe('target-profile CLI parser', () => {
     })
   })
 
-  it('documents the separate local profile and CI credential boundary', () => {
+  it('documents the separate local profile and CI credential boundary', async () => {
+    const { formatTargetProfileHelp } = await loadTargetProfileCli()
     const help = formatTargetProfileHelp()
 
     expect(help).toContain('local Wrangler profile: starye-org')
