@@ -1,7 +1,4 @@
 import type { PreflightOptions } from '../preflight'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runTargetPreflight } from '../preflight'
 import { buildLocalEnvProjectionPlan } from '../projection-plan'
@@ -16,12 +13,27 @@ async function loadTargetProfileCli() {
 const fixtureSecret = 'fixture-secret-never-print'
 const fixtureRoots: string[] = []
 
+async function loadNodeTestRuntime() {
+  const fsModule = 'node:fs/promises'
+  const osModule = 'node:os'
+  const pathModule = 'node:path'
+  const [fs, os, path] = await Promise.all([
+    import(fsModule),
+    import(osModule),
+    import(pathModule),
+  ])
+
+  return { fs, os: os.default, path: path.default }
+}
+
 afterEach(async () => {
-  await Promise.all(fixtureRoots.splice(0).map(root => rm(root, { force: true, recursive: true })))
+  const { fs } = await loadNodeTestRuntime()
+  await Promise.all(fixtureRoots.splice(0).map(root => fs.rm(root, { force: true, recursive: true })))
 })
 
 async function createProjectionFixture(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'starye-target-profile-'))
+  const { fs, os, path } = await loadNodeTestRuntime()
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'starye-target-profile-'))
   fixtureRoots.push(root)
   const plan = buildLocalEnvProjectionPlan(resolveTargetProfile('starye-org'))
 
@@ -35,8 +47,8 @@ async function createProjectionFixture(): Promise<string> {
       '',
     ].join('\n')
 
-    await mkdir(path.dirname(filePath), { recursive: true })
-    await writeFile(filePath, content, 'utf8')
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(filePath, content, 'utf8')
   }))
 
   return root
@@ -165,22 +177,25 @@ describe('target-profile CLI parser', () => {
   })
 
   it.each([
-    ['missing projection file', async (root: string) => rm(path.join(root, '.env.local'))],
-    ['malformed marker', async (root: string) => writeFile(
-      path.join(root, 'apps/api/.dev.vars'),
-      `${await readFile(path.join(root, 'apps/api/.dev.vars'), 'utf8')}# >>> STARYE TARGET-MANAGED BLOCK >>>\n`,
-      'utf8',
-    )],
-    ['wrong target-managed value', async (root: string) => writeFile(
-      path.join(root, 'apps/api/.dev.vars'),
-      (await readFile(path.join(root, 'apps/api/.dev.vars'), 'utf8')).replace('STARYE_TARGET_ID=starye-org', 'STARYE_TARGET_ID=wrong-target'),
-      'utf8',
-    )],
-    ['missing user-managed secret', async (root: string) => writeFile(
-      path.join(root, 'packages/crawler/.env'),
-      (await readFile(path.join(root, 'packages/crawler/.env'), 'utf8')).replace(`CRAWLER_SECRET=${fixtureSecret}\n`, ''),
-      'utf8',
-    )],
+    ['missing projection file', async (root: string) => {
+      const { fs, path } = await loadNodeTestRuntime()
+      return fs.rm(path.join(root, '.env.local'))
+    }],
+    ['malformed marker', async (root: string) => {
+      const { fs, path } = await loadNodeTestRuntime()
+      const filePath = path.join(root, 'apps/api/.dev.vars')
+      return fs.writeFile(filePath, `${await fs.readFile(filePath, 'utf8')}# >>> STARYE TARGET-MANAGED BLOCK >>>\n`, 'utf8')
+    }],
+    ['wrong target-managed value', async (root: string) => {
+      const { fs, path } = await loadNodeTestRuntime()
+      const filePath = path.join(root, 'apps/api/.dev.vars')
+      return fs.writeFile(filePath, (await fs.readFile(filePath, 'utf8')).replace('STARYE_TARGET_ID=starye-org', 'STARYE_TARGET_ID=wrong-target'), 'utf8')
+    }],
+    ['missing user-managed secret', async (root: string) => {
+      const { fs, path } = await loadNodeTestRuntime()
+      const filePath = path.join(root, 'packages/crawler/.env')
+      return fs.writeFile(filePath, (await fs.readFile(filePath, 'utf8')).replace(`CRAWLER_SECRET=${fixtureSecret}\n`, ''), 'utf8')
+    }],
   ])('fails closed for %s without leaking operator values', async (_name, mutate) => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const root = await createProjectionFixture()
