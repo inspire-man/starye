@@ -14,7 +14,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 | Phase | Name | Goal | Requirements |
 |-------|------|------|--------------|
-| 11 | Deployment Target Foundation (3/3 plans executed; verification pending) | Define the account/domain/resource target model, local env normalization boundary, and fail-closed validation before any deploy path changes. | PROF-01, PROF-02, PROF-03, PROF-04, ENV-01, ENV-02, TEST-02 |
+| 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | Cloudflare Config Switching | Make Workers/Pages/GitHub workflows/domain-sensitive runtime config consume the selected target safely. | ENV-03, ENV-04, ENV-05, ENV-06, DEPL-01, DEPL-02, DEPL-03, DEPL-04, DEPL-05, DEPL-06, TEST-03, TEST-04 |
 | 13 | Full Chain Data Smoke | Prove local and production data flow from crawler/fixture through D1/API/admin to front-end viewing via Gateway/canonical domain. | DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05 |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
@@ -27,7 +27,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** PROF-01, PROF-02, PROF-03, PROF-04, ENV-01, ENV-02, TEST-02
 
-**Plans:** 3/3 plans executed; phase verification pending
+**Plans:** 4/4 plans complete
 
 - [x] 11-01-PLAN.md
 - [x] 11-02-PLAN.md

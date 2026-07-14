@@ -7,15 +7,15 @@
 
 ### Target Profiles
 
-- [ ] **PROF-01**: Operator can define a non-secret Cloudflare target profile with account, domain, Workers, Pages, D1, R2, KV, URLs, and required-secret metadata.
-- [ ] **PROF-02**: Operator can validate a target profile before deploy, migration, crawl, or smoke commands run.
-- [ ] **PROF-03**: Operator gets fail-closed errors when account, domain, resource IDs, bucket names, or required secrets are missing or inconsistent.
-- [ ] **PROF-04**: Operator can use Wrangler auth profiles for local account switching while CI remains token/account-secret based.
+- [x] **PROF-01**: Operator can define a non-secret Cloudflare target profile with account, domain, Workers, Pages, D1, R2, KV, URLs, and required-secret metadata.
+- [x] **PROF-02**: Operator can validate a target profile before deploy, migration, crawl, or smoke commands run.
+- [x] **PROF-03**: Operator gets fail-closed errors when account, domain, resource IDs, bucket names, or required secrets are missing or inconsistent.
+- [x] **PROF-04**: Operator can use Wrangler auth profiles for local account switching while CI remains token/account-secret based.
 
 ### Env Config
 
-- [ ] **ENV-01**: Operator can define local env values once and project them into Worker `.dev.vars`, Vite `.env`, Nuxt runtime config, and crawler env files.
-- [ ] **ENV-02**: Operator can validate local env completeness before starting the full local stack.
+- [x] **ENV-01**: Operator can define local env values once and project them into Worker `.dev.vars`, Vite `.env`, Nuxt runtime config, and crawler env files.
+- [x] **ENV-02**: Operator can validate local env completeness before starting the full local stack.
 - [ ] **ENV-03**: Front-end apps share a typed public config contract for API base, gateway base, app base paths, and selected target identity.
 - [ ] **ENV-04**: Front-end runtime config exposes only public values and blocks accidental exposure of secrets through `VITE_*` or `NUXT_PUBLIC_*`.
 - [ ] **ENV-05**: Gateway/API remain the service-discovery boundary for internal origins; browser apps call the canonical gateway/API instead of discovering individual services.
@@ -43,7 +43,7 @@
 ### Tests And Ops
 
 - [ ] **TEST-01**: Active source/tests no longer depend on unqualified `starye.org` literals except default-target fixtures.
-- [ ] **TEST-02**: Automated tests cover target profile validation and fail-closed mismatch cases.
+- [x] **TEST-02**: Automated tests cover target profile validation and fail-closed mismatch cases.
 - [ ] **TEST-03**: Automated tests cover domain-aware gateway/API/auth configuration.
 - [ ] **TEST-04**: Automated tests cover deploy, migration, and crawler workflow target resolution without real secrets.
 - [ ] **TEST-05**: Smoke scripts produce repeatable local and production verification output.
@@ -79,12 +79,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROF-01 | Phase 11 | Pending |
-| PROF-02 | Phase 11 | Pending |
-| PROF-03 | Phase 11 | Pending |
-| PROF-04 | Phase 11 | Pending |
-| ENV-01 | Phase 11 | Pending |
-| ENV-02 | Phase 11 | Pending |
+| PROF-01 | Phase 11 | Complete |
+| PROF-02 | Phase 11 | Complete |
+| PROF-03 | Phase 11 | Complete |
+| PROF-04 | Phase 11 | Complete |
+| ENV-01 | Phase 11 | Complete |
+| ENV-02 | Phase 11 | Complete |
 | ENV-03 | Phase 12 | Pending |
 | ENV-04 | Phase 12 | Pending |
 | ENV-05 | Phase 12 | Pending |
@@ -103,7 +103,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-06 | Phase 13 | Pending |
 | DATA-07 | Phase 13 | Pending |
 | TEST-01 | Phase 14 | Pending |
-| TEST-02 | Phase 11 | Pending |
+| TEST-02 | Phase 11 | Complete |
 | TEST-03 | Phase 12 | Pending |
 | TEST-04 | Phase 12 | Pending |
 | TEST-05 | Phase 13 | Pending |
@@ -111,6 +111,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-07 | Phase 14 | Pending |
 
 **Coverage:**
+
 - v1.2 requirements: 30 total
 - Mapped to phases: 30
 - Unmapped: 0
