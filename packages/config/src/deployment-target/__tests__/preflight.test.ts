@@ -1,6 +1,10 @@
 import type { PreflightOptions } from '../preflight'
 import { describe, expect, it } from 'vitest'
 import {
+  formatTargetProfileHelp,
+  parseTargetProfileCliArgs,
+} from '../../../../../scripts/target-profile.ts'
+import {
 
   runTargetPreflight,
 } from '../preflight'
@@ -62,5 +66,42 @@ describe('runTargetPreflight', () => {
       code: 'missing-selected-target',
       blocking: true,
     }))
+  })
+})
+
+describe('target-profile CLI parser', () => {
+  it('rejects a command without an explicit target', () => {
+    expect(() => parseTargetProfileCliArgs(['validate'])).toThrow('Missing required --target')
+  })
+
+  it('requires explicit remote scope, command, and CI environment', () => {
+    expect(parseTargetProfileCliArgs([
+      'preflight',
+      '--target',
+      'starye-org',
+      '--scope',
+      'remote',
+      '--command',
+      'deploy',
+      '--ci-environment',
+      'starye-org',
+      '--live',
+    ])).toMatchObject({
+      commandName: 'preflight',
+      target: 'starye-org',
+      scope: 'remote',
+      command: 'deploy',
+      ciEnvironment: 'starye-org',
+      live: true,
+    })
+  })
+
+  it('documents the separate local profile and CI credential boundary', () => {
+    const help = formatTargetProfileHelp()
+
+    expect(help).toContain('local Wrangler profile: starye-org')
+    expect(help).toContain('CI GitHub environment: starye-org')
+    expect(help).toContain('CLOUDFLARE_API_TOKEN')
+    expect(help).toContain('CLOUDFLARE_ACCOUNT_ID')
   })
 })
