@@ -25,10 +25,10 @@
 
 - [x] **DEPL-01**: Operator can deploy API, gateway, and dashboard using target-aware Wrangler config or env selection.
 - [x] **DEPL-02**: Gateway routes/origins, API CORS/auth URLs, and front-end API URLs switch according to the selected target domain.
-- [ ] **DEPL-03**: GitHub deploy workflows can select the correct Cloudflare account/domain secret set.
-- [ ] **DEPL-04**: D1 migration workflow exports backup, validates target bucket/account, and applies migrations against the selected target.
-- [ ] **DEPL-05**: Crawler workflows use target-specific `API_URL`, `CRAWLER_SECRET`, R2 bucket, and Cloudflare account credentials.
-- [ ] **DEPL-06**: Operator can rollback the selected API/gateway/Pages target using documented commands.
+- [x] **DEPL-03**: GitHub deploy workflows can select the correct Cloudflare account/domain secret set.
+- [x] **DEPL-04**: D1 migration workflow exports backup, validates target bucket/account, and applies migrations against the selected target.
+- [x] **DEPL-05**: Crawler workflows use target-specific `API_URL`, `CRAWLER_SECRET`, R2 bucket, and Cloudflare account credentials.
+- [x] **DEPL-06**: Operator can rollback the selected API/gateway/Pages target using documented commands.
 
 ### Data Chain Smoke
 
@@ -91,10 +91,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENV-06 | Phase 12 | Complete |
 | DEPL-01 | Phase 12 | Complete |
 | DEPL-02 | Phase 12 | Complete |
-| DEPL-03 | Phase 12 | Pending |
-| DEPL-04 | Phase 12 | Pending |
-| DEPL-05 | Phase 12 | Pending |
-| DEPL-06 | Phase 12 | Pending |
+| DEPL-03 | Phase 12 | Complete |
+| DEPL-04 | Phase 12 | Complete |
+| DEPL-05 | Phase 12 | Complete |
+| DEPL-06 | Phase 12 | Complete |
 | DATA-01 | Phase 13 | Pending |
 | DATA-02 | Phase 13 | Pending |
 | DATA-03 | Phase 13 | Pending |

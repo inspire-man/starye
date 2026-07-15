@@ -51,7 +51,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** ENV-03, ENV-04, ENV-05, ENV-06, DEPL-01, DEPL-02, DEPL-03, DEPL-04, DEPL-05, DEPL-06, TEST-03, TEST-04
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 **Wave 1**
 
 - [x] 12-01-PLAN.md
@@ -62,7 +62,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 12-03-PLAN.md
+- [x] 12-03-PLAN.md
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -114,11 +114,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Verify Phase 11 with:
+Execute Phase 12 Wave 4 with:
 
 ```text
-$gsd-verify-work 11
+$gsd-execute-phase 12 --wave 4
 ```
 
 ---
-*Last updated: 2026-07-14 after Phase 11 planning*
+*Last updated: 2026-07-15 after Phase 12 Plan 03 execution*

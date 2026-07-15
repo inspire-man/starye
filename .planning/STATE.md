@@ -5,21 +5,21 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 12
 current_phase_name: Cloudflare Config Switching
 status: executing
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-07-15T14:47:30.178Z"
+stopped_at: Completed 12-03-PLAN.md
+last_updated: "2026-07-15T15:13:53.170Z"
 last_activity: 2026-07-15
-last_activity_desc: Completed 12-02 selected-target API/Gateway and browser public runtime adoption
+last_activity_desc: Completed 12-03 selected-target GitHub deployment, migration, crawler, cleanup, and rollback workflow contracts
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
-  percent: 75
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-07-14
+**Last updated:** 2026-07-15
 **Mode:** yolo
 **Granularity:** standard
 
@@ -41,14 +41,14 @@ progress:
 ## Current Position
 
 Phase: 12 — Cloudflare Config Switching
-Plan: 12-03-PLAN.md
-Status: Ready for Wave 3
-Last activity: 2026-07-15 — Completed 12-02 selected-target API/Gateway and browser public runtime adoption
+Plan: 12-04-PLAN.md
+Status: Ready for Wave 4
+Last activity: 2026-07-15 — Completed 12-03 selected-target GitHub deployment, migration, crawler, cleanup, and rollback workflow contracts
 
 ## Performance Metrics
 
 **Phases completed:** 0 / 4
-**Plans completed:** 6
+**Plans completed:** 7
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -99,14 +99,14 @@ Last activity: 2026-07-15 — Completed 12-02 selected-target API/Gateway and br
 
 ## Session Continuity
 
-**Last session:** 2026-07-15T14:47:29.876Z
-**Stopped at:** Completed 12-02-PLAN.md
-**Resume file:** .planning/phases/12-cloudflare-config-switching/12-03-PLAN.md
+**Last session:** 2026-07-15T15:13:53.170Z
+**Stopped at:** Completed 12-03-PLAN.md
+**Resume file:** .planning/phases/12-cloudflare-config-switching/12-04-PLAN.md
 
 **Next recommended action:**
 
 ```text
-$gsd-execute-phase 12 --wave 3
+$gsd-execute-phase 12 --wave 4
 ```
 
 **If interrupted, resume by:**
@@ -114,7 +114,7 @@ $gsd-execute-phase 12 --wave 3
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md`
 3. Read `.planning/ROADMAP.md`
-4. Continue with `$gsd-execute-phase 12 --wave 3`
+4. Continue with `$gsd-execute-phase 12 --wave 4`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -124,7 +124,7 @@ $gsd-execute-phase 12 --wave 3
 
 ## Operator Next Steps
 
-- Execute Phase 12 Wave 3 with /gsd-execute-phase 12 --wave 3
+- Execute Phase 12 Wave 4 with /gsd-execute-phase 12 --wave 4
 
 ## Decisions
 
@@ -157,3 +157,4 @@ $gsd-execute-phase 12 --wave 3
 - [Phase 12]: CI/remote preparation is explicit-target only and does not read local operator files; local deployment has its own Wrangler-profile/read-only gate.
 - [Phase 12]: Direct remote mutation uses a closed registry, fresh child environment, and run-scoped prepared context rather than ambient target identity or caller argv.
 - [Phase 12]: Browser runtime values use a closed typed allowlist; Vite reads only generated selected-target dotenv through audited entry adapters.
+- [Phase 12]: GitHub mutation workflows resolve an explicit target to its mapped Environment, then use one CI preparation gate and closed generated outputs rather than inline remote identity. — Locked by 12-03 workflow contract
