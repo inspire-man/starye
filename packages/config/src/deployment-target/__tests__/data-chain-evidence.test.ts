@@ -1,15 +1,15 @@
+import { describe, expect, it } from 'vitest'
 import {
-  CHECKPOINT_EXIT_CODE,
-  LOCAL_GATEWAY_ORIGIN,
   appendBrowserObservation,
+  CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
   createPreIngestEvidence,
   createResolvedPendingEvidence,
+  LOCAL_GATEWAY_ORIGIN,
   renderDataChainEvidenceMarkdown,
   serializeDataChainEvidenceJson,
   validateDataChainEvidence,
 } from '../data-chain-evidence'
-import { describe, expect, it } from 'vitest'
 
 const tuple = {
   targetId: 'starye-org',
@@ -34,7 +34,7 @@ function pendingEvidence() {
   })
 }
 
-describe('Phase 13 deterministic evidence contract', () => {
+describe('phase 13 deterministic evidence contract', () => {
   it('derives one stable non-R18 fixture code from the explicit target and run', () => {
     const first = createDataChainCandidate({ targetId: 'starye-org', runId: 'run-a' })
     const second = createDataChainCandidate({ targetId: 'starye-org', runId: 'run-a' })
