@@ -38,7 +38,7 @@ export function parseTargetRemoteEntryArgs(argv: readonly string[]): TargetRemot
   return { target, entry }
 }
 
-export async function runTargetRemoteEntry(options: TargetRemoteEntryOptions): Promise<void> {
+export async function runTargetRemoteEntry(options: TargetRemoteEntryOptions) {
   const root = path.resolve(import.meta.dirname, '..')
   const prepared = await prepareTargetMutation({
     target: options.target,
@@ -56,11 +56,15 @@ export async function runTargetRemoteEntry(options: TargetRemoteEntryOptions): P
     },
   })
   try {
-    await runPreparedTargetMutation({
+    const result = await runPreparedTargetMutation({
       entry: options.entry,
       preparedContextPath: prepared.preparedContextPath,
-      execute: (command, args, environment) => spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment }).status ?? 1,
+      execute: (command, args, environment) => {
+        const child = spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment })
+        return { exitCode: child.status ?? 1, stdout: child.stdout ?? '' }
+      },
     })
+    return result
   }
   finally {
     await prepared.cleanup()
@@ -68,7 +72,11 @@ export async function runTargetRemoteEntry(options: TargetRemoteEntryOptions): P
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  void runTargetRemoteEntry(parseTargetRemoteEntryArgs(process.argv.slice(2))).catch((error) => {
+  void runTargetRemoteEntry(parseTargetRemoteEntryArgs(process.argv.slice(2))).then((result) => {
+    if (result.observation) {
+      console.log(JSON.stringify(result.observation))
+    }
+  }).catch((error) => {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = 1
   })

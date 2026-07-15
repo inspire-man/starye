@@ -15,6 +15,7 @@
     "crawl:backfill-publishers": "tsx ../../scripts/target-remote-entry.ts --entry crawler-backfill-publishers",
     "crawl:enrich-players-javbus": "tsx ../../scripts/target-remote-entry.ts --entry crawler-enrich-players-javbus",
     "audit:r2-storage": "tsx ../../scripts/target-remote-entry.ts --entry crawler-r2-storage-audit",
+    "smoke:fixture": "tsx ../../scripts/target-remote-entry.ts --entry crawler-smoke-fixture",
     "local:test-anti-detection": "tsx scripts/test-anti-detection.ts",
     "local:seesaawiki-index": "tsx src/scripts/crawl-seesaawiki-index.ts",
     "local:test-seesaawiki": "tsx scripts/test-seesaawiki-integration.ts",

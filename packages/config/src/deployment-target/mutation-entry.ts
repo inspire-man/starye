@@ -7,6 +7,7 @@ import type { TargetPagesSurface } from './target-profile.schema'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { createDataChainCandidate } from './data-chain-evidence'
 import { materializeTargetDeployConfig } from './deploy-config'
 import { runTargetPreflight } from './preflight'
 import { parseAuditedPublicRuntimeInput } from './public-runtime-input'
@@ -133,6 +134,7 @@ export interface TargetMutationPreparation {
   readonly gatewayConfigPath: string
   readonly preparedContextPath: string
   readonly runId: string
+  readonly smokeItemCode?: string
   readonly pages?: Readonly<{ surface: TargetPagesSurface, project: string, buildEnvPath: string }>
   readonly identity: Readonly<{ apiUrl: string, d1Name: string, r2Name: string, accountId: string }>
   cleanup: () => Promise<void>
@@ -189,6 +191,10 @@ function commandForPreflight(command: TargetMutationCommand): 'deploy' | 'pages-
   if (command.startsWith('crawler-'))
     return 'remote-crawl'
   return 'migrate'
+}
+
+function isSmokeMutationCommand(command: TargetMutationCommand): command is 'crawler-smoke-fixture' | 'd1-smoke-snapshot' {
+  return command === 'crawler-smoke-fixture' || command === 'd1-smoke-snapshot'
 }
 
 function assertNoAmbientTargetIdentity(environment: Readonly<Record<string, string | undefined>>): void {
@@ -265,6 +271,9 @@ export async function prepareTargetMutation(
     gatewayConfigPath: materialized.gatewayConfigPath,
     preparedContextPath,
     runId: request.runId,
+    ...(isSmokeMutationCommand(request.command)
+      ? { smokeItemCode: createDataChainCandidate({ targetId: resolution.id, runId: request.runId }).itemCode }
+      : {}),
     ...(materialized.pages ? { pages: { surface: materialized.pages.surface, project: materialized.pages.project, buildEnvPath: materialized.pages.buildEnvPath } } : {}),
     identity: {
       apiUrl: resolution.profile.urls.api,
