@@ -5,16 +5,16 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 12
 current_phase_name: Cloudflare Config Switching
 status: executing
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-07-15T03:11:14.070Z"
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-07-15T14:47:30.178Z"
 last_activity: 2026-07-15
-last_activity_desc: Completed Phase 12 Plan 01 deployment target projection and mutation gate
+last_activity_desc: Completed 12-02 selected-target API/Gateway and browser public runtime adoption
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
-  percent: 63
+  completed_plans: 6
+  percent: 75
 ---
 
 # Project State: Starye — 个人内容中台
@@ -41,14 +41,14 @@ progress:
 ## Current Position
 
 Phase: 12 — Cloudflare Config Switching
-Plan: 12-02-PLAN.md
-Status: In progress
-Last activity: 2026-07-15 — Completed 12-01 target projection, materialization, and mutation gate
+Plan: 12-03-PLAN.md
+Status: Ready for Wave 3
+Last activity: 2026-07-15 — Completed 12-02 selected-target API/Gateway and browser public runtime adoption
 
 ## Performance Metrics
 
 **Phases completed:** 0 / 4
-**Plans completed:** 5
+**Plans completed:** 6
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -68,6 +68,7 @@ Last activity: 2026-07-15 — Completed 12-01 target projection, materialization
 | Phase 06 P03 | 15 min | 3 tasks | 7 files |
 | Phase 11 P01 | 42min | 3 tasks | 11 files |
 | Phase 11 P02 | 20min | 2 tasks | 5 files |
+| Phase 12 P02 | 11h 16m | 3 tasks | 57 files |
 
 ### Open Todos (carried across phases)
 
@@ -98,14 +99,14 @@ Last activity: 2026-07-15 — Completed 12-01 target projection, materialization
 
 ## Session Continuity
 
-**Last session:** 2026-07-15T03:11:14.053Z
-**Stopped at:** Completed 12-01-PLAN.md
-**Resume file:** .planning/phases/12-cloudflare-config-switching/12-02-PLAN.md
+**Last session:** 2026-07-15T14:47:29.876Z
+**Stopped at:** Completed 12-02-PLAN.md
+**Resume file:** .planning/phases/12-cloudflare-config-switching/12-03-PLAN.md
 
 **Next recommended action:**
 
 ```text
-$gsd-execute-phase 12 --wave 2
+$gsd-execute-phase 12 --wave 3
 ```
 
 **If interrupted, resume by:**
@@ -113,7 +114,7 @@ $gsd-execute-phase 12 --wave 2
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md`
 3. Read `.planning/ROADMAP.md`
-4. Continue with `$gsd-execute-phase 12 --wave 2`
+4. Continue with `$gsd-execute-phase 12 --wave 3`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -123,7 +124,7 @@ $gsd-execute-phase 12 --wave 2
 
 ## Operator Next Steps
 
-- Execute Phase 12 Wave 2 with /gsd-execute-phase 12 --wave 2
+- Execute Phase 12 Wave 3 with /gsd-execute-phase 12 --wave 3
 
 ## Decisions
 
@@ -155,3 +156,4 @@ $gsd-execute-phase 12 --wave 2
 - [Phase 12]: Public browser values are a typed allowlist; Pages, Worker, account, and resource identity remain deploy-only projections.
 - [Phase 12]: CI/remote preparation is explicit-target only and does not read local operator files; local deployment has its own Wrangler-profile/read-only gate.
 - [Phase 12]: Direct remote mutation uses a closed registry, fresh child environment, and run-scoped prepared context rather than ambient target identity or caller argv.
+- [Phase 12]: Browser runtime values use a closed typed allowlist; Vite reads only generated selected-target dotenv through audited entry adapters.

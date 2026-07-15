@@ -19,7 +19,7 @@
 - [x] **ENV-03**: Front-end apps share a typed public config contract for API base, gateway base, app base paths, and selected target identity.
 - [x] **ENV-04**: Front-end runtime config exposes only public values and blocks accidental exposure of secrets through `VITE_*` or `NUXT_PUBLIC_*`.
 - [x] **ENV-05**: Gateway/API remain the service-discovery boundary for internal origins; browser apps call the canonical gateway/API instead of discovering individual services.
-- [ ] **ENV-06**: Local and production smoke tests verify that front-end config resolves to the selected target without source-code edits.
+- [x] **ENV-06**: Local and production smoke tests verify that front-end config resolves to the selected target without source-code edits.
 
 ### Cloudflare Deploy Config
 
@@ -44,7 +44,7 @@
 
 - [ ] **TEST-01**: Active source/tests no longer depend on unqualified `starye.org` literals except default-target fixtures.
 - [x] **TEST-02**: Automated tests cover target profile validation and fail-closed mismatch cases.
-- [ ] **TEST-03**: Automated tests cover domain-aware gateway/API/auth configuration.
+- [x] **TEST-03**: Automated tests cover domain-aware gateway/API/auth configuration.
 - [x] **TEST-04**: Automated tests cover deploy, migration, and crawler workflow target resolution without real secrets.
 - [ ] **TEST-05**: Smoke scripts produce repeatable local and production verification output.
 - [ ] **TEST-06**: RUNBOOK documents account/domain switching, required secrets, deploy, smoke, rollback, and recovery.
@@ -88,7 +88,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENV-03 | Phase 12 | Complete |
 | ENV-04 | Phase 12 | Complete |
 | ENV-05 | Phase 12 | Complete |
-| ENV-06 | Phase 12 | Pending |
+| ENV-06 | Phase 12 | Complete |
 | DEPL-01 | Phase 12 | Complete |
 | DEPL-02 | Phase 12 | Complete |
 | DEPL-03 | Phase 12 | Pending |
@@ -104,7 +104,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-07 | Phase 13 | Pending |
 | TEST-01 | Phase 14 | Pending |
 | TEST-02 | Phase 11 | Complete |
-| TEST-03 | Phase 12 | Pending |
+| TEST-03 | Phase 12 | Complete |
 | TEST-04 | Phase 12 | Complete |
 | TEST-05 | Phase 13 | Pending |
 | TEST-06 | Phase 14 | Pending |
