@@ -4,6 +4,7 @@
 
 import type { Player } from '../types'
 import { onMounted, ref } from 'vue'
+import { moviePublicRuntime } from '../config/public-runtime'
 import {
   cachePendingAction,
   getPendingActions,
@@ -15,7 +16,6 @@ import {
   generateRecommendationTag,
   generateWarningTag,
 } from '../utils/ratingAlgorithm'
-import { moviePublicRuntime } from '../config/public-runtime'
 import { useToast } from './useToast'
 
 const API_BASE_URL = moviePublicRuntime.apiBaseUrl
