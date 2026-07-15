@@ -4,6 +4,7 @@ import type {
   LocalEnvTargetFile,
   ProjectionValidationIssue,
   TargetPagesSurface,
+  WranglerCommandExecutor,
 } from '../packages/config/src/deployment-target/index.ts'
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -33,6 +34,7 @@ export interface TargetDeployOptions {
   readonly surface?: TargetPagesSurface
   readonly envRoot?: string
   readonly execute?: CommandExecutor
+  readonly liveCheckExecutor?: WranglerCommandExecutor
   readonly runId?: string
 }
 
@@ -54,6 +56,15 @@ function expectedSurface(app: DeployApp): TargetPagesSurface | undefined {
 
 function spawnCommand(command: string, args: readonly string[]): number {
   return spawnSync(command, args, { encoding: 'utf8', shell: false }).status ?? 1
+}
+
+function createLiveCheckExecutor(): WranglerCommandExecutor {
+  return {
+    execute(argv) {
+      const result = spawnSync('pnpm', ['exec', 'wrangler', ...argv], { encoding: 'utf8', shell: false })
+      return { exitCode: result.status ?? 1, stdout: result.stdout ?? '' }
+    },
+  }
 }
 
 async function collectLocalProjectionIssues(target: string, root: string): Promise<ProjectionValidationIssue[]> {
@@ -96,6 +107,9 @@ export async function runTargetDeploy(options: TargetDeployOptions): Promise<voi
     wranglerProfile: resolution.profile.local.wranglerProfile,
     projectionIssues,
     environment: process.env,
+    live: true,
+    liveCheckExecutor: options.liveCheckExecutor ?? createLiveCheckExecutor(),
+    ...(options.surface ? { pagesSurface: options.surface } : {}),
   })
   if (!preflight.ok) {
     throw new Error('Target preflight failed.')

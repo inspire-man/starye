@@ -1,7 +1,9 @@
 import type { WranglerCommandExecutor } from './live-checks'
 import type { ProjectionValidationIssue } from './projection-plan'
+import type { TargetPagesSurface } from './target-profile.schema'
 import type { TargetResolution } from './target-resolver'
 import { runLiveResourceChecks } from './live-checks'
+import { isTargetPagesSurface } from './target-projections'
 import {
   resolveTargetProfile,
   TargetResolutionError,
@@ -20,6 +22,8 @@ export const preflightCommandValues = [
   'rollback',
   'remote-crawl',
   'smoke',
+  'pages-deploy',
+  'pages-rollback',
 ] as const
 
 export type PreflightCommand = (typeof preflightCommandValues)[number]
@@ -30,6 +34,8 @@ export const remoteLiveCheckCommandValues = [
   'rollback',
   'remote-crawl',
   'smoke',
+  'pages-deploy',
+  'pages-rollback',
 ] as const
 
 export type RemoteLiveCheckCommand = (typeof remoteLiveCheckCommandValues)[number]
@@ -50,6 +56,7 @@ export type PreflightIssueCode
     | 'missing-live-resource-check'
     | 'remote-resource-check-failed'
     | 'remote-resource-missing'
+    | 'invalid-pages-surface'
 
 export interface PreflightIssue {
   code: PreflightIssueCode
@@ -67,6 +74,7 @@ export interface PreflightOptions {
   environment?: Readonly<Record<string, string | undefined>>
   live?: boolean
   liveCheckExecutor?: WranglerCommandExecutor
+  pagesSurface?: TargetPagesSurface
 }
 
 export interface TargetPreflightResult {
@@ -231,7 +239,27 @@ function validateRemoteLiveCheck(
   options: PreflightOptions,
   issues: PreflightIssue[],
 ): void {
-  if (!resolution || !input.scope || !input.command || input.scope === 'local' || !isRemoteLiveCheckCommand(input.command)) {
+  if (!resolution || !input.scope || !input.command || !isRemoteLiveCheckCommand(input.command)) {
+    return
+  }
+
+  const pagesSurface = options.pagesSurface
+  if ((input.command === 'pages-deploy' || input.command === 'pages-rollback') && !isTargetPagesSurface(pagesSurface)) {
+    addIssue(issues, 'invalid-pages-surface', 'Pages commands require a selected valid Pages surface.')
+    return
+  }
+
+  if (input.scope === 'local') {
+    if (!options.live || !options.liveCheckExecutor) {
+      addIssue(issues, 'missing-live-resource-check', 'Local deploy requires --live and a read-only resource check executor.')
+      return
+    }
+
+    if (issues.length === 0) {
+      for (const issue of runLiveResourceChecks(resolution, options.liveCheckExecutor, pagesSurface)) {
+        addIssue(issues, issue.code, issue.message)
+      }
+    }
     return
   }
 
@@ -270,7 +298,7 @@ function validateRemoteLiveCheck(
     return
   }
 
-  for (const issue of runLiveResourceChecks(resolution, options.liveCheckExecutor)) {
+  for (const issue of runLiveResourceChecks(resolution, options.liveCheckExecutor, pagesSurface)) {
     addIssue(issues, issue.code, issue.message)
   }
 }

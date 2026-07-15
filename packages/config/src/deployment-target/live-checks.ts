@@ -1,6 +1,7 @@
+import type { TargetPagesSurface } from './target-profile.schema'
 import type { TargetResolution } from './target-resolver'
 
-export type LiveResourceKind = 'd1' | 'r2' | 'kv'
+export type LiveResourceKind = 'd1' | 'r2' | 'kv' | 'api-worker' | 'gateway-worker' | 'pages'
 
 export interface WranglerCommandResult {
   exitCode: number
@@ -26,8 +27,11 @@ export interface LiveResourceCheckIssue {
   message: string
 }
 
-export function buildLiveResourceChecks(resolution: TargetResolution): readonly LiveResourceCheck[] {
-  return [
+export function buildLiveResourceChecks(
+  resolution: TargetResolution,
+  pagesSurface?: TargetPagesSurface,
+): readonly LiveResourceCheck[] {
+  const checks: LiveResourceCheck[] = [
     {
       resource: 'd1',
       argv: ['d1', 'info', resolution.profile.resources.d1.name],
@@ -41,7 +45,27 @@ export function buildLiveResourceChecks(resolution: TargetResolution): readonly 
       argv: ['kv', 'namespace', 'list'],
       expectedOutput: resolution.profile.resources.kv.id,
     },
+    {
+      resource: 'api-worker',
+      argv: ['deployments', 'list', '--name', resolution.profile.workers.api.name],
+      expectedOutput: resolution.profile.workers.api.name,
+    },
+    {
+      resource: 'gateway-worker',
+      argv: ['deployments', 'list', '--name', resolution.profile.workers.gateway.name],
+      expectedOutput: resolution.profile.workers.gateway.name,
+    },
   ]
+
+  if (pagesSurface) {
+    checks.push({
+      resource: 'pages',
+      argv: ['pages', 'project', 'list'],
+      expectedOutput: resolution.profile.pages[pagesSurface].project,
+    })
+  }
+
+  return checks
 }
 
 function resourceIdentity(resolution: TargetResolution, resource: LiveResourceKind): string {
@@ -53,20 +77,36 @@ function resourceIdentity(resolution: TargetResolution, resource: LiveResourceKi
     return resolution.profile.resources.r2.name
   }
 
-  return resolution.profile.resources.kv.id
+  if (resource === 'kv') {
+    return resolution.profile.resources.kv.id
+  }
+
+  if (resource === 'api-worker') {
+    return resolution.profile.workers.api.name
+  }
+
+  if (resource === 'gateway-worker') {
+    return resolution.profile.workers.gateway.name
+  }
+
+  return 'selected Pages project'
 }
 
 function describeCheck(resolution: TargetResolution, check: LiveResourceCheck): string {
-  return `Target ${resolution.id}: read-only ${check.resource} resource check for ${resourceIdentity(resolution, check.resource)}`
+  const identity = check.resource === 'pages'
+    ? check.expectedOutput ?? 'selected Pages project'
+    : resourceIdentity(resolution, check.resource)
+  return `Target ${resolution.id}: read-only ${check.resource} resource check for ${identity}`
 }
 
 export function runLiveResourceChecks(
   resolution: TargetResolution,
   executor: WranglerCommandExecutor,
+  pagesSurface?: TargetPagesSurface,
 ): LiveResourceCheckIssue[] {
   const issues: LiveResourceCheckIssue[] = []
 
-  for (const check of buildLiveResourceChecks(resolution)) {
+  for (const check of buildLiveResourceChecks(resolution, pagesSurface)) {
     let result: WranglerCommandResult
 
     try {

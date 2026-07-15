@@ -3,7 +3,9 @@ import type {
   PreflightCommand,
   PreflightScope,
   ProjectionValidationIssue,
+  TargetMutationCommand,
   TargetPagesSurface,
+  TargetRemoteEntry,
   WranglerCommandExecutor,
 } from '../packages/config/src/deployment-target/index.ts'
 import { spawnSync } from 'node:child_process'
@@ -17,12 +19,14 @@ import {
   buildLocalEnvProjectionPlan,
   isTargetPagesSurface,
   parsePagesBuildEnv,
+  prepareTargetMutation,
   resolveTargetProfile,
+  runPreparedTargetMutation,
   runTargetPreflight,
   validateProjectedEnv,
 } from '../packages/config/src/deployment-target/index.ts'
 
-const commandNames = ['validate', 'project-local', 'preflight', 'run-pages-build'] as const
+const commandNames = ['validate', 'project-local', 'preflight', 'run-pages-build', 'prepare-mutation', 'run-prepared-entry'] as const
 
 export type TargetProfileCliCommand = (typeof commandNames)[number]
 
@@ -39,6 +43,10 @@ export interface TargetProfileCliOptions {
   envRoot?: string
   pagesSurface?: TargetPagesSurface
   pagesBuildEnvPath?: string
+  mutationCommand?: TargetMutationCommand
+  githubOutput?: string
+  entry?: TargetRemoteEntry
+  preparedContextPath?: string
   help: boolean
 }
 
@@ -115,6 +123,7 @@ export function parseTargetProfileCliArgs(argv: readonly string[]): TargetProfil
         break
       case '--command':
         options.command = consumeValue() as PreflightCommand
+        options.mutationCommand = options.command as TargetMutationCommand
         break
       case '--wrangler-profile':
         options.wranglerProfile = consumeValue()
@@ -136,12 +145,21 @@ export function parseTargetProfileCliArgs(argv: readonly string[]): TargetProfil
       case '--pages-build-env-path':
         options.pagesBuildEnvPath = consumeValue()
         break
+      case '--github-output':
+        options.githubOutput = consumeValue()
+        break
+      case '--prepared-context':
+        options.preparedContextPath = consumeValue()
+        break
+      case '--entry':
+        options.entry = consumeValue() as TargetRemoteEntry
+        break
       default:
         throw new Error(`Unknown argument: ${flag}`)
     }
   }
 
-  if (!options.help && options.commandName !== 'run-pages-build' && !options.target?.trim()) {
+  if (!options.help && !['run-pages-build', 'run-prepared-entry'].includes(options.commandName) && !options.target?.trim()) {
     throw new Error('Missing required --target <id>.')
   }
 
@@ -154,6 +172,8 @@ export function formatTargetProfileHelp(): string {
   target-profile project-local --target <id> --check|--write [--env-root <path>]
   target-profile preflight --target <id> --scope <local|ci|remote> --command <command> [--env-root <path>] [--live]
   target-profile run-pages-build --surface <dashboard|auth|blog|movie|comic|tavern> --pages-build-env-path <generated-path>
+  target-profile prepare-mutation --target <id> --scope ci --command <closed-command> --ci-environment <name> --github-output <path> [--surface <surface>]
+  target-profile run-prepared-entry --entry <closed-entry> --prepared-context <generated-path>
 
 Preflight reads exactly the four local consumer files below --env-root, or the repository root when omitted.
 
@@ -214,6 +234,39 @@ export async function runPagesBuild(
   if (status !== 0) {
     throw new Error(`Pages build failed for ${surface}.`)
   }
+}
+
+async function runPrepareMutation(options: TargetProfileCliOptions): Promise<void> {
+  if (options.scope !== 'ci' || !options.mutationCommand || !options.ciEnvironment || !options.githubOutput) {
+    throw new Error('prepare-mutation requires CI scope, --command, --ci-environment, and --github-output.')
+  }
+  if ((options.mutationCommand === 'pages-deploy' || options.mutationCommand === 'pages-rollback') && !options.pagesSurface) {
+    throw new Error('Pages prepare-mutation requires --surface.')
+  }
+  const root = path.resolve(import.meta.dirname, '..')
+  await prepareTargetMutation({
+    target: options.target ?? '',
+    scope: 'ci',
+    command: options.mutationCommand,
+    ciEnvironment: options.ciEnvironment,
+    environment: process.env,
+    githubOutput: options.githubOutput,
+    runId: `ci-${process.pid}`,
+    appDirectories: { api: path.join(root, 'apps/api'), gateway: path.join(root, 'apps/gateway') },
+    runDirectory: path.join(root, '.target-runs'),
+    ...(options.pagesSurface ? { pagesSurface: options.pagesSurface } : {}),
+  }, { executeReadOnly: createWranglerExecutor().execute })
+}
+
+async function runPreparedEntry(options: TargetProfileCliOptions): Promise<void> {
+  if (!options.entry || !options.preparedContextPath) {
+    throw new Error('run-prepared-entry requires --entry and --prepared-context.')
+  }
+  await runPreparedTargetMutation({
+    entry: options.entry,
+    preparedContextPath: options.preparedContextPath,
+    execute: (command, args, environment) => spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment }).status ?? 1,
+  })
 }
 
 function printProfileValidation(target: string): void {
@@ -331,7 +384,9 @@ async function runPreflight(options: TargetProfileCliOptions): Promise<void> {
   }
 
   const root = path.resolve(options.envRoot ?? process.cwd())
-  const projectionIssues = await collectPreflightProjectionIssues(options.target ?? '', root)
+  const projectionIssues = options.scope === 'local'
+    ? await collectPreflightProjectionIssues(options.target ?? '', root)
+    : []
 
   const result = runTargetPreflight({
     target: options.target ?? '',
@@ -376,6 +431,12 @@ export async function runTargetProfileCli(options: TargetProfileCliOptions): Pro
         throw new Error('run-pages-build requires --surface and --pages-build-env-path.')
       }
       await runPagesBuild(options.pagesSurface, options.pagesBuildEnvPath)
+      return
+    case 'prepare-mutation':
+      await runPrepareMutation(options)
+      return
+    case 'run-prepared-entry':
+      await runPreparedEntry(options)
   }
 }
 

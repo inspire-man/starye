@@ -17,6 +17,19 @@ const targetDeployModule = new URL('../../../../../scripts/target-deploy.ts', im
 const targetProfileModule = new URL('../../../../../scripts/target-profile.ts', import.meta.url).href
 const roots: string[] = []
 
+const successfulLiveCheck = {
+  execute(argv: readonly string[]) {
+    return {
+      exitCode: 0,
+      stdout: argv[0] === 'kv'
+        ? 'f7f6a8c2bff84a1d89da528eab4eb559'
+        : argv[0] === 'pages'
+          ? 'blog-pages'
+          : argv.at(-1),
+    }
+  },
+}
+
 async function loadTargetDeploy() {
   return import(targetDeployModule)
 }
@@ -82,6 +95,7 @@ describe('target-deploy wrapper', () => {
       app: 'api',
       envRoot: await createProjectionRoot(),
       execute,
+      liveCheckExecutor: successfulLiveCheck,
       runId: 'worker-run',
     })
 
@@ -102,6 +116,7 @@ describe('target-deploy wrapper', () => {
       surface: 'blog',
       envRoot: await createProjectionRoot(),
       execute,
+      liveCheckExecutor: successfulLiveCheck,
       runId: 'blog-run',
     })
 

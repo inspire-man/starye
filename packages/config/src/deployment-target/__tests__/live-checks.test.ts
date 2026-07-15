@@ -23,7 +23,7 @@ function createRemoteOptions(overrides: Partial<PreflightOptions> = {}): Preflig
 }
 
 describe('live resource checks', () => {
-  it('builds argv-only D1, R2, and KV read checks for the resolved target', () => {
+  it('builds argv-only D1, R2, KV, and Worker read checks for the resolved target', () => {
     const checks = buildLiveResourceChecks(resolveTargetProfile('starye-org'))
 
     expect(checks).toEqual([
@@ -39,6 +39,14 @@ describe('live resource checks', () => {
         resource: 'kv',
         argv: ['kv', 'namespace', 'list'],
       }),
+      expect.objectContaining({
+        resource: 'api-worker',
+        argv: ['deployments', 'list', '--name', 'starye-api'],
+      }),
+      expect.objectContaining({
+        resource: 'gateway-worker',
+        argv: ['deployments', 'list', '--name', 'starye-gateway'],
+      }),
     ])
     expect(checks.every(check => Array.isArray(check.argv))).toBe(true)
     expect(checks.flatMap(check => check.argv).join(' ')).not.toContain('&&')
@@ -47,7 +55,7 @@ describe('live resource checks', () => {
   it('runs all read checks through an injected argv executor', () => {
     const execute = vi.fn((argv: readonly string[]) => ({
       exitCode: 0,
-      stdout: argv[0] === 'kv' ? 'f7f6a8c2bff84a1d89da528eab4eb559' : '',
+      stdout: argv[0] === 'kv' ? 'f7f6a8c2bff84a1d89da528eab4eb559' : argv.at(-1),
     }))
 
     const result = runTargetPreflight(createRemoteOptions({
@@ -59,7 +67,27 @@ describe('live resource checks', () => {
       ['d1', 'info', 'starye-db'],
       ['r2', 'bucket', 'info', 'starye-media'],
       ['kv', 'namespace', 'list'],
+      ['deployments', 'list', '--name', 'starye-api'],
+      ['deployments', 'list', '--name', 'starye-gateway'],
     ])
+  })
+
+  it('requires the exact selected Pages project without exposing other project output', () => {
+    const issues = runLiveResourceChecks(resolveTargetProfile('starye-org'), {
+      execute: argv => ({
+        exitCode: 0,
+        stdout: argv[0] === 'kv'
+          ? 'f7f6a8c2bff84a1d89da528eab4eb559'
+          : argv[0] === 'pages'
+            ? 'starye-blog'
+            : argv.at(-1),
+      }),
+    }, 'blog')
+    const pageIssue = issues.find(issue => issue.code === 'remote-resource-missing')
+
+    expect(pageIssue?.message).toContain('starye-org')
+    expect(pageIssue?.message).toContain('blog-pages')
+    expect(pageIssue?.message).not.toContain('starye-blog')
   })
 
   it.each(['deploy', 'migrate', 'rollback', 'remote-crawl', 'smoke'] as const)(

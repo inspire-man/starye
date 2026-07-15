@@ -1,6 +1,7 @@
 export * from './deploy-config'
 export * from './env-file-block'
 export * from './live-checks'
+export * from './mutation-entry'
 export * from './preflight'
 export * from './projection-plan'
 export * from './public-runtime-input'

@@ -176,6 +176,28 @@ describe('target-profile CLI parser', () => {
     await expect(runLocalPreflight(await createProjectionFixture())).resolves.toBeUndefined()
   })
 
+  it('does not read operator-owned projection files for CI preflight', async () => {
+    const { runTargetProfileCli } = await loadTargetProfileCli()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { fs, os, path } = await loadNodeTestRuntime()
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'starye-ci-empty-'))
+    fixtureRoots.push(root)
+
+    await expect(runTargetProfileCli({
+      commandName: 'preflight',
+      target: 'starye-org',
+      scope: 'ci',
+      command: 'deploy',
+      ciEnvironment: 'starye-org',
+      envRoot: root,
+      check: false,
+      write: false,
+      live: false,
+      help: false,
+    })).rejects.toThrow('Target preflight failed')
+    expect(error.mock.calls.flat().join('\n')).not.toContain('missing-projection-file')
+  })
+
   it.each([
     ['missing projection file', async (root: string) => {
       const { fs, path } = await loadNodeTestRuntime()

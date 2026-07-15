@@ -23,6 +23,7 @@
     "test:e2e": "vitest run test/e2e/flow.test.ts",
     "target-profile": "pnpm --filter @starye/crawler exec tsx ../../scripts/target-profile.ts",
     "target-deploy": "pnpm --filter @starye/crawler exec tsx ../../scripts/target-deploy.ts",
+    "target-remote-entry": "pnpm --filter @starye/crawler exec tsx ../../scripts/target-remote-entry.ts",
     "type-check": "turbo run type-check",
     "docs:sync": "pwsh -ExecutionPolicy Bypass -File ./scripts/sync-docs.ps1",
     "docs:meta": "node scripts/generate-meta.js",
