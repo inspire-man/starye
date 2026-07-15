@@ -6,6 +6,7 @@ import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useSorting } from '@/composables/useSorting'
+import { dashboardPublicRuntime } from '@/config/public-runtime'
 import { api } from '@/lib/api'
 import { formatDateTime } from '@/lib/date-utils'
 
@@ -99,7 +100,7 @@ const tableColumns = [
 async function loadStats() {
   loadingStats.value = true
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/publishers/stats`, {
+    const response = await fetch(`${dashboardPublicRuntime.apiBaseUrl}/api/admin/publishers/stats`, {
       credentials: 'include',
     })
     if (response.ok) {
@@ -117,7 +118,7 @@ async function loadStats() {
 async function loadCountries() {
   loadingCountries.value = true
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/publishers/countries`, {
+    const response = await fetch(`${dashboardPublicRuntime.apiBaseUrl}/api/admin/publishers/countries`, {
       credentials: 'include',
     })
     if (response.ok) {

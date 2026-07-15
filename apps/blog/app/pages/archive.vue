@@ -11,7 +11,7 @@ useSeoMeta({
 const { data, pending, error } = await useAsyncData<ApiResponse<Post[]>>(
   'archive-all',
   () => $fetch('/api/posts', {
-    baseURL: config.public.apiUrl,
+    baseURL: config.public.apiBaseUrl,
     query: { limit: 200 },
   }),
 )

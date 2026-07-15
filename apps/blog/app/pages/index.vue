@@ -25,7 +25,7 @@ const loadingMore = ref(false)
 const { data, pending, error, refresh } = await useAsyncData<ApiResponse<Post[]>>(
   'posts-list',
   () => $fetch('/api/posts', {
-    baseURL: config.public.apiUrl,
+    baseURL: config.public.apiBaseUrl,
     query: {
       limit: 9,
       page: 1,
@@ -69,7 +69,7 @@ async function loadMore() {
       params.set('tag', activeTag.value)
 
     const res = await $fetch<ApiResponse<Post[]>>(`/api/posts?${params}`, {
-      baseURL: config.public.apiUrl,
+      baseURL: config.public.apiBaseUrl,
     })
     allPosts.value = [...allPosts.value, ...(res.data || [])]
     totalPages.value = res.meta?.totalPages ?? 1
@@ -86,7 +86,7 @@ async function loadMore() {
 const { data: allForFilter } = await useAsyncData<ApiResponse<Post[]>>(
   'posts-all-filter',
   () => $fetch('/api/posts', {
-    baseURL: config.public.apiUrl,
+    baseURL: config.public.apiBaseUrl,
     query: { limit: 100 },
   }),
   { lazy: true },

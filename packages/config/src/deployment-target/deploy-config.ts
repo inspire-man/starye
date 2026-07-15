@@ -249,9 +249,8 @@ function assertExpectedAppPath(values: Readonly<Record<string, string>>, surface
   }
 }
 
-export async function parsePagesBuildEnv(pathname: string, surface: TargetPagesSurface): Promise<ParsedPagesBuildEnv> {
+export function parsePagesBuildEnvText(raw: string, surface: TargetPagesSurface): ParsedPagesBuildEnv {
   const allowed = new Set(allowedBuildKeys(surface))
-  const raw = await readFile(pathname, 'utf8')
   const values: Record<string, string> = {}
 
   for (const line of raw.split(/\r?\n/)) {
@@ -264,7 +263,12 @@ export async function parsePagesBuildEnv(pathname: string, surface: TargetPagesS
       throw new Error('Invalid Pages build env assignment.')
     }
 
-    const [, key, value] = match
+    const key = match[1]
+    const value = match[2]
+    if (key === undefined || value === undefined) {
+      throw new Error('Invalid Pages build env assignment.')
+    }
+
     if (!allowed.has(key) || credentialShape.test(key) || credentialShape.test(value) || unsafeShellValue.test(value) || values[key] !== undefined) {
       throw new Error('Unknown Pages build env key.')
     }
@@ -280,6 +284,10 @@ export async function parsePagesBuildEnv(pathname: string, surface: TargetPagesS
 
   assertExpectedAppPath(values, surface)
   return values as unknown as ParsedPagesBuildEnv
+}
+
+export async function parsePagesBuildEnv(pathname: string, surface: TargetPagesSurface): Promise<ParsedPagesBuildEnv> {
+  return parsePagesBuildEnvText(await readFile(pathname, 'utf8'), surface)
 }
 
 export async function materializeTargetDeployConfig(

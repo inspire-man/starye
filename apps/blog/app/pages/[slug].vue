@@ -10,7 +10,7 @@ const slug = route.params.slug as string
 const { data, pending, error } = await useAsyncData<ApiResponse<Post>>(
   `post-${slug}`,
   () => $fetch(`/api/posts/${slug}`, {
-    baseURL: config.public.apiUrl,
+    baseURL: config.public.apiBaseUrl,
   }),
 )
 
@@ -45,7 +45,7 @@ const readingTime = computed(() => Math.max(1, Math.ceil(wordCount.value / 400))
 
 // 上/下篇
 const { data: adjacentData } = await useFetch<ApiResponse<AdjacentPosts>>(`/api/posts/${slug}/adjacent`, {
-  baseURL: config.public.apiUrl,
+  baseURL: config.public.apiBaseUrl,
 })
 const adjacent = computed(() => adjacentData.value?.data)
 

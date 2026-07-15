@@ -4,7 +4,7 @@
  */
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
-  const apiUrl = config.public.apiUrl as string
+  const apiUrl = config.public.apiBaseUrl
   const siteUrl = 'https://starye.com/blog'
 
   let posts: Array<{

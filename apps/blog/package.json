@@ -17,6 +17,7 @@
     "@sentry/nuxt": "^10.53.1",
     "@shikijs/markdown-it": "^4.0.2",
     "@starye/api-types": "workspace:*",
+    "@starye/config": "workspace:*",
     "@starye/locales": "workspace:*",
     "@starye/ui": "workspace:*",
     "@types/markdown-it": "^14.1.2",
@@ -32,6 +33,7 @@
     "@nuxtjs/i18n": "^10.2.4",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.2",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.2",
+    "vue-tsc": "^3.2.6"
   }
 }

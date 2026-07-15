@@ -13,6 +13,7 @@
   "dependencies": {
     "@sentry/vue": "^10.53.1",
     "@starye/api-types": "workspace:*",
+    "@starye/config": "workspace:*",
     "@starye/ui": "workspace:*",
     "hono": "^4.12.14",
     "pinia": "^3.0.4",

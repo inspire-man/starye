@@ -1,5 +1,25 @@
-import { env } from 'node:process'
+import { readFileSync } from 'node:fs'
+import process from 'node:process'
+import {
+  buildNuxtPublicRuntimeEnv,
+  parseNuxtPublicRuntimeEnv,
+  parsePagesBuildEnvText,
+} from '@starye/config/deployment-target'
 import tailwindcss from '@tailwindcss/vite'
+
+const pagesBuildEnvPath = process.env.STARYE_PAGES_BUILD_ENV_PATH
+const isNuxtPrepare = process.argv.slice(2).includes('prepare')
+
+if (!pagesBuildEnvPath && !isNuxtPrepare) {
+  throw new Error('STARYE_PAGES_BUILD_ENV_PATH is required for the blog public runtime build.')
+}
+
+const publicRuntimeEnv = pagesBuildEnvPath
+  ? buildNuxtPublicRuntimeEnv(
+      parseNuxtPublicRuntimeEnv(parsePagesBuildEnvText(readFileSync(pagesBuildEnvPath, 'utf8'), 'blog'), 'blog'),
+      'blog',
+    )
+  : undefined
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -7,7 +27,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
 
   app: {
-    baseURL: '/blog/',
+    ...(publicRuntimeEnv ? { baseURL: publicRuntimeEnv.NUXT_PUBLIC_APP_BASE_PATH } : {}),
   },
 
   modules: [
@@ -49,12 +69,21 @@ export default defineNuxtConfig({
     transpile: ['@starye/ui'],
   },
 
-  runtimeConfig: {
-    public: {
-      apiUrl: env.NUXT_PUBLIC_API_URL || env.VITE_API_URL || 'http://localhost:8080',
-      sentryDsn: env.NUXT_PUBLIC_SENTRY_DSN || env.SENTRY_DSN || '',
-    },
-  },
+  ...(publicRuntimeEnv
+    ? {
+        runtimeConfig: {
+          public: {
+            targetId: publicRuntimeEnv.NUXT_PUBLIC_TARGET_ID,
+            gatewayBaseUrl: publicRuntimeEnv.NUXT_PUBLIC_GATEWAY_BASE_URL,
+            apiBaseUrl: publicRuntimeEnv.NUXT_PUBLIC_API_BASE_URL,
+            appBasePath: publicRuntimeEnv.NUXT_PUBLIC_APP_BASE_PATH,
+            sentryDsn: publicRuntimeEnv.NUXT_PUBLIC_SENTRY_DSN,
+            sentryRelease: publicRuntimeEnv.NUXT_PUBLIC_SENTRY_RELEASE,
+            buildMode: publicRuntimeEnv.NUXT_PUBLIC_BUILD_MODE,
+          },
+        },
+      }
+    : {}),
 
   sentry: {
     enabled: true,

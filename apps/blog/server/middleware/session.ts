@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig()
-  const apiUrl = config.public.apiUrl as string
+  const apiUrl = config.public.apiBaseUrl
 
   try {
     const session = await $fetch<SessionPayload | null>(

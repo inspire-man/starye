@@ -31,7 +31,7 @@ const { data, pending } = await useAsyncData<ApiResponse<Post[]>>(
     if (!q)
       return Promise.resolve({ data: [], meta: null } as any)
     return $fetch('/api/posts', {
-      baseURL: config.public.apiUrl,
+      baseURL: config.public.apiBaseUrl,
       query: { search: q, limit: 30 },
     })
   },

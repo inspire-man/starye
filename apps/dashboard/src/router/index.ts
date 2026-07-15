@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { dashboardPublicRuntime } from '@/config/public-runtime'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { authClient } from '@/lib/auth-client'
 import ActorDetail from '@/views/ActorDetail.vue'
@@ -123,7 +124,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(dashboardPublicRuntime.appBasePath),
   routes,
 })
 

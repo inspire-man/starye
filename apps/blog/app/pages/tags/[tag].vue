@@ -9,7 +9,7 @@ const tagName = route.params.tag as string
 const { data, pending, error } = await useAsyncData<ApiResponse<Post[]>>(
   `tag-${tagName}`,
   () => $fetch('/api/posts', {
-    baseURL: config.public.apiUrl,
+    baseURL: config.public.apiBaseUrl,
     query: { tag: tagName, limit: 50 },
   }),
 )

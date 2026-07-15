@@ -228,7 +228,11 @@ export async function runPagesBuild(
   execute: PagesBuildExecutor = spawnPagesBuild,
 ): Promise<void> {
   const parsed = await parsePagesBuildEnv(pagesBuildEnvPath, surface)
-  const environment: NodeJS.ProcessEnv = { ...pickRuntimeEnvironment(), ...parsed }
+  const environment: NodeJS.ProcessEnv = {
+    ...pickRuntimeEnvironment(),
+    ...parsed,
+    STARYE_PAGES_BUILD_ENV_PATH: pagesBuildEnvPath,
+  }
   const status = execute('pnpm', pagesBuildArgs(surface), environment)
 
   if (status !== 0) {

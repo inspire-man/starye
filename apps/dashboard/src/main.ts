@@ -2,13 +2,14 @@ import * as Sentry from '@sentry/vue'
 import { createApp } from 'vue'
 import App from './App.vue'
 import { handleError } from './composables/useErrorHandler'
+import { dashboardPublicRuntime } from './config/public-runtime'
 import i18n from './i18n'
 import router from './router'
 import './style.css'
 import './styles/skeleton.css'
 
 const app = createApp(App)
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN
+const { buildMode, sentryDsn, sentryRelease } = dashboardPublicRuntime
 
 // 全局 Vue 错误处理
 app.config.errorHandler = (err, instance, info) => {
@@ -51,7 +52,8 @@ if (sentryDsn) {
     app,
     dsn: sentryDsn,
     enabled: true,
-    environment: import.meta.env.MODE,
+    environment: buildMode,
+    release: sentryRelease,
     integrations: [
       Sentry.browserTracingIntegration({ router }),
     ],

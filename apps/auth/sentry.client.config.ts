@@ -5,7 +5,8 @@ const config = useRuntimeConfig()
 if (config.public.sentryDsn) {
   Sentry.init({
     dsn: config.public.sentryDsn,
-    environment: config.public.apiUrl.includes('localhost') ? 'development' : 'production',
+    environment: config.public.buildMode,
+    release: config.public.sentryRelease,
     tracesSampleRate: 0.1,
     sendDefaultPii: false,
   })

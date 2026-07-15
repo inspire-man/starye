@@ -7,6 +7,7 @@
 
 import type { AppType } from '@starye/api-types'
 import { hc } from 'hono/client'
+import { dashboardPublicRuntime } from '@/config/public-runtime'
 
 /**
  * 携带 Cookie 凭证的 fetch 封装，通过 Hono RPC 客户端统一配置。
@@ -22,7 +23,7 @@ export const credentialFetch: typeof fetch = (input, init) =>
  * 通过 Gateway 代理到 API Worker。
  * credentials: 'include' 确保 Better Auth 的 Cookie 会话正常传递。
  */
-export function createApiClient(baseUrl: string = '/') {
+export function createApiClient(baseUrl: string = dashboardPublicRuntime.gatewayBaseUrl) {
   return hc<AppType>(baseUrl, {
     fetch: credentialFetch,
   })

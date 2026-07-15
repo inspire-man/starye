@@ -24,5 +24,5 @@ import { hc } from 'hono/client'
 
 export function useApiClient() {
   const config = useRuntimeConfig()
-  return hc<AppType>(config.public.apiUrl as string)
+  return hc<AppType>(config.public.apiBaseUrl)
 }

@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   const next = normalizeRedirect((query.next || query.redirect) as string | undefined, origin)
 
   const config = useRuntimeConfig()
-  const apiUrl = config.public.apiUrl as string
+  const apiUrl = config.public.apiBaseUrl
   const callbackURL = `${origin}/auth/login?next=${encodeURIComponent(next)}`
 
   const result = await $fetch<{ url?: string }>(

@@ -4,6 +4,15 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    __STARYE_DASHBOARD_PUBLIC_RUNTIME__: JSON.stringify({
+      targetId: 'test',
+      gatewayBaseUrl: 'http://localhost:8080',
+      apiBaseUrl: 'http://localhost:8080',
+      appBasePath: '/dashboard/',
+      buildMode: 'test',
+    }),
+  },
   test: {
     environment: 'jsdom',
     globals: true,

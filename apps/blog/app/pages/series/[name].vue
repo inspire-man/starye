@@ -8,7 +8,7 @@ const seriesName = route.params.name as string
 const { data, pending, error } = await useAsyncData<ApiResponse<Post[]>>(
   `series-${seriesName}`,
   () => $fetch('/api/posts', {
-    baseURL: config.public.apiUrl,
+    baseURL: config.public.apiBaseUrl,
     query: { series: seriesName, limit: 50 },
   }),
 )

@@ -154,6 +154,7 @@ describe('run-pages-build', () => {
       VITE_API_BASE_URL: 'https://api.starye.org',
       VITE_APP_BASE_PATH: '/dashboard/',
       VITE_BUILD_MODE: 'test',
+      STARYE_PAGES_BUILD_ENV_PATH: materialized.pages!.buildEnvPath,
     })
     expect(environment).not.toHaveProperty('CLOUDFLARE_API_TOKEN')
     expect(environment).not.toHaveProperty('VITE_UNREGISTERED_SECRET')

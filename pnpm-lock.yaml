@@ -131,7 +131,10 @@ importers:
     dependencies:
       '@sentry/nuxt':
         specifier: ^10.53.1
-        version: 10.53.1(@cloudflare/workers-types@4.20260511.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(magicast@0.5.1)(nuxt@4.4.2(898afaf9353d2773820f325f0b41a696))(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(vue@3.5.32(typescript@6.0.2))
+        version: 10.53.1(@cloudflare/workers-types@4.20260511.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(magicast@0.5.2)(nuxt@4.4.2(c3bc5daa2a8ce166347cbf57563ca529))(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(vue@3.5.32(typescript@6.0.2))
+      '@starye/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@starye/locales':
         specifier: workspace:*
         version: link:../../packages/locales
@@ -143,26 +146,29 @@ importers:
         version: 14.2.1(vue@3.5.32(typescript@6.0.2))
       better-auth:
         specifier: ^1.6.10
-        version: 1.6.10(cb6cb62ac1a33fc41a31a24b065d5a5e)
+        version: 1.6.10(283979657f17c6c245c7c8b472aa1e3d)
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.32(typescript@6.0.2))
       nuxt:
         specifier: ^4.4.2
-        version: 4.4.2(898afaf9353d2773820f325f0b41a696)
+        version: 4.4.2(c3bc5daa2a8ce166347cbf57563ca529)
+      radix-vue:
+        specifier: ^1.9.17
+        version: 1.9.17(vue@3.5.32(typescript@6.0.2))
       vue:
         specifier: ^3.5.32
         version: 3.5.32(typescript@6.0.2)
       vue-router:
         specifier: ^5.0.4
-        version: 5.0.4(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
+        version: 5.0.4(@vue/compiler-sfc@3.5.32)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
     devDependencies:
       '@nuxtjs/i18n':
         specifier: ^10.2.4
-        version: 10.2.4(@vue/compiler-dom@3.5.32)(db0@0.3.4(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3))(eslint@10.2.0(jiti@2.6.1))(ioredis@5.10.0)(magicast@0.5.1)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2))
+        version: 10.2.4(@vue/compiler-dom@3.5.32)(db0@0.3.4(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3))(eslint@10.2.0(jiti@2.7.0))(ioredis@5.10.0)(magicast@0.5.2)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2))
       '@tailwindcss/vite':
         specifier: 4.2.2
-        version: 4.2.2(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.2.2(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
@@ -174,7 +180,7 @@ importers:
         version: 6.0.2
       vite:
         specifier: ^8.0.8
-        version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
       vue-tsc:
         specifier: ^3.2.6
         version: 3.2.6(typescript@6.0.2)
@@ -183,13 +189,16 @@ importers:
     dependencies:
       '@sentry/nuxt':
         specifier: ^10.53.1
-        version: 10.53.1(@cloudflare/workers-types@4.20260511.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(magicast@0.5.2)(nuxt@4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd))(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(vue@3.5.32(typescript@6.0.2))
+        version: 10.53.1(@cloudflare/workers-types@4.20260511.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(magicast@0.5.1)(nuxt@4.4.2(898afaf9353d2773820f325f0b41a696))(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(vue@3.5.32(typescript@6.0.2))
       '@shikijs/markdown-it':
         specifier: ^4.0.2
         version: 4.0.2
       '@starye/api-types':
         specifier: workspace:*
         version: link:../../packages/api-types
+      '@starye/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@starye/locales':
         specifier: workspace:*
         version: link:../../packages/locales
@@ -201,7 +210,7 @@ importers:
         version: 14.1.2
       better-auth:
         specifier: ^1.6.10
-        version: 1.6.10(283979657f17c6c245c7c8b472aa1e3d)
+        version: 1.6.10(cb6cb62ac1a33fc41a31a24b065d5a5e)
       hono:
         specifier: ^4.12.14
         version: 4.12.18
@@ -210,7 +219,7 @@ importers:
         version: 14.1.1
       nuxt:
         specifier: ^4.4.2
-        version: 4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd)
+        version: 4.4.2(898afaf9353d2773820f325f0b41a696)
       shiki:
         specifier: ^4.0.2
         version: 4.0.2
@@ -219,20 +228,23 @@ importers:
         version: 3.5.32(typescript@6.0.2)
       vue-router:
         specifier: ^5.0.4
-        version: 5.0.4(@vue/compiler-sfc@3.5.32)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
+        version: 5.0.4(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
     devDependencies:
       '@nuxtjs/i18n':
         specifier: ^10.2.4
-        version: 10.2.4(@vue/compiler-dom@3.5.32)(db0@0.3.4(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3))(eslint@10.2.0(jiti@2.7.0))(ioredis@5.10.0)(magicast@0.5.2)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2))
+        version: 10.2.4(@vue/compiler-dom@3.5.32)(db0@0.3.4(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3))(eslint@10.2.0(jiti@2.6.1))(ioredis@5.10.0)(magicast@0.5.1)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2))
       '@playwright/test':
         specifier: ^1.59.1
         version: 1.59.1
       '@tailwindcss/vite':
         specifier: ^4.2.2
-        version: 4.2.2(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.2.2(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       tailwindcss:
         specifier: ^4.2.2
         version: 4.2.2
+      vue-tsc:
+        specifier: ^3.2.6
+        version: 3.2.6(typescript@6.0.2)
 
   apps/comic-app:
     dependencies:
@@ -242,6 +254,9 @@ importers:
       '@starye/api-types':
         specifier: workspace:*
         version: link:../../packages/api-types
+      '@starye/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@starye/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -306,6 +321,9 @@ importers:
       '@sentry/vue':
         specifier: ^10.53.1
         version: 10.53.1(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
+      '@starye/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@starye/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -424,6 +442,9 @@ importers:
       '@starye/api-types':
         specifier: workspace:*
         version: link:../../packages/api-types
+      '@starye/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@starye/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -12402,11 +12423,11 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@nuxt/nitro-server@4.4.2(9e8b03810d6b5afb11c9975e7c9ef469)':
+  '@nuxt/nitro-server@4.4.2(1401d4f16ea83e3839ac3b8ea7956dd9)':
     dependencies:
       '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.0)
       '@nuxt/devalue': 2.0.2
-      '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      '@nuxt/kit': 4.4.2(magicast@0.5.2)
       '@unhead/vue': 2.1.12(vue@3.5.32(typescript@6.0.2))
       '@vue/shared': 3.5.30
       consola: 3.4.2
@@ -12420,8 +12441,8 @@ snapshots:
       impound: 1.1.5
       klona: 2.0.6
       mocked-exports: 0.1.1
-      nitropack: 2.13.1(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3)(rolldown@1.0.0-rc.15)
-      nuxt: 4.4.2(898afaf9353d2773820f325f0b41a696)
+      nitropack: 2.13.1(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3)(rolldown@1.0.0-rc.15)
+      nuxt: 4.4.2(c3bc5daa2a8ce166347cbf57563ca529)
       nypm: 0.6.5
       ohash: 2.0.11
       pathe: 2.0.3
@@ -12430,7 +12451,7 @@ snapshots:
       std-env: 4.0.0
       ufo: 1.6.3
       unctx: 2.5.0
-      unstorage: 1.17.4(db0@0.3.4(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3))(ioredis@5.10.0)
+      unstorage: 1.17.4(db0@0.3.4(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3))(ioredis@5.10.0)
       vue: 3.5.32(typescript@6.0.2)
       vue-bundle-renderer: 2.2.0
       vue-devtools-stub: 0.1.0
@@ -12470,11 +12491,11 @@ snapshots:
       - uploadthing
       - xml2js
 
-  '@nuxt/nitro-server@4.4.2(c40d7e20729ec530938d3a8ff96d7d79)':
+  '@nuxt/nitro-server@4.4.2(9e8b03810d6b5afb11c9975e7c9ef469)':
     dependencies:
       '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.0)
       '@nuxt/devalue': 2.0.2
-      '@nuxt/kit': 4.4.2(magicast@0.5.2)
+      '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@unhead/vue': 2.1.12(vue@3.5.32(typescript@6.0.2))
       '@vue/shared': 3.5.30
       consola: 3.4.2
@@ -12488,8 +12509,8 @@ snapshots:
       impound: 1.1.5
       klona: 2.0.6
       mocked-exports: 0.1.1
-      nitropack: 2.13.1(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3)(rolldown@1.0.0-rc.15)
-      nuxt: 4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd)
+      nitropack: 2.13.1(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3)(rolldown@1.0.0-rc.15)
+      nuxt: 4.4.2(898afaf9353d2773820f325f0b41a696)
       nypm: 0.6.5
       ohash: 2.0.11
       pathe: 2.0.3
@@ -12498,7 +12519,7 @@ snapshots:
       std-env: 4.0.0
       ufo: 1.6.3
       unctx: 2.5.0
-      unstorage: 1.17.4(db0@0.3.4(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3))(ioredis@5.10.0)
+      unstorage: 1.17.4(db0@0.3.4(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(better-sqlite3@12.9.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260511.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.2)(@opentelemetry/api@1.9.1)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2))(typescript@6.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.9.0)(kysely@0.28.17)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.9.0)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.2)))(mysql2@3.15.3))(ioredis@5.10.0)
       vue: 3.5.32(typescript@6.0.2)
       vue-bundle-renderer: 2.2.0
       vue-devtools-stub: 0.1.0
@@ -12625,7 +12646,7 @@ snapshots:
       - vue-tsc
       - yaml
 
-  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@25.6.0)(eslint@10.2.0(jiti@2.7.0))(lightningcss@1.32.0)(magicast@0.5.2)(meow@13.2.0)(nuxt@4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd))(optionator@0.9.4)(rolldown@1.0.0-rc.15)(rollup-plugin-visualizer@6.0.5(rolldown@1.0.0-rc.15)(rollup@4.55.1))(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2))(yaml@2.8.2)':
+  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@25.6.0)(eslint@10.2.0(jiti@2.7.0))(lightningcss@1.32.0)(magicast@0.5.2)(meow@13.2.0)(nuxt@4.4.2(c3bc5daa2a8ce166347cbf57563ca529))(optionator@0.9.4)(rolldown@1.0.0-rc.15)(rollup-plugin-visualizer@6.0.5(rolldown@1.0.0-rc.15)(rollup@4.55.1))(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@6.0.2)(vue-tsc@3.2.6(typescript@6.0.2))(vue@3.5.32(typescript@6.0.2))(yaml@2.8.2)':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.2)
       '@rollup/plugin-replace': 6.0.3(rollup@4.55.1)
@@ -12643,7 +12664,7 @@ snapshots:
       magic-string: 0.30.21
       mlly: 1.8.1
       mocked-exports: 0.1.1
-      nuxt: 4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd)
+      nuxt: 4.4.2(c3bc5daa2a8ce166347cbf57563ca529)
       nypm: 0.6.5
       pathe: 2.0.3
       pkg-types: 2.3.0
@@ -12654,7 +12675,7 @@ snapshots:
       unenv: 2.0.0-rc.24
       vite: 7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
       vite-node: 5.3.0(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-      vite-plugin-checker: 0.12.0(eslint@10.2.0(jiti@2.7.0))(meow@13.2.0)(optionator@0.9.4)(typescript@6.0.2)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      vite-plugin-checker: 0.12.0(eslint@10.2.0(jiti@2.7.0))(meow@13.2.0)(optionator@0.9.4)(typescript@6.0.2)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.6(typescript@6.0.2))
       vue: 3.5.32(typescript@6.0.2)
       vue-bundle-renderer: 2.2.0
     optionalDependencies:
@@ -13985,7 +14006,7 @@ snapshots:
       - supports-color
       - vue
 
-  '@sentry/nuxt@10.53.1(@cloudflare/workers-types@4.20260511.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(magicast@0.5.2)(nuxt@4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd))(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(vue@3.5.32(typescript@6.0.2))':
+  '@sentry/nuxt@10.53.1(@cloudflare/workers-types@4.20260511.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(magicast@0.5.2)(nuxt@4.4.2(c3bc5daa2a8ce166347cbf57563ca529))(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(rollup@4.55.1)(vue@3.5.32(typescript@6.0.2))':
     dependencies:
       '@nuxt/kit': 3.21.5(magicast@0.5.2)
       '@sentry/browser': 10.53.1
@@ -13997,7 +14018,7 @@ snapshots:
       '@sentry/vite-plugin': 5.3.0(rollup@4.55.1)
       '@sentry/vue': 10.53.1(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
       local-pkg: 1.1.2
-      nuxt: 4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd)
+      nuxt: 4.4.2(c3bc5daa2a8ce166347cbf57563ca529)
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
@@ -19076,19 +19097,19 @@ snapshots:
 
   nuxt-define@1.0.0: {}
 
-  nuxt@4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd):
+  nuxt@4.4.2(898afaf9353d2773820f325f0b41a696):
     dependencies:
-      '@dxup/nuxt': 0.4.0(magicast@0.5.2)(typescript@6.0.2)
-      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(magicast@0.5.2)
-      '@nuxt/devtools': 3.2.3(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.32(typescript@6.0.2))
-      '@nuxt/kit': 4.4.2(magicast@0.5.2)
-      '@nuxt/nitro-server': 4.4.2(c40d7e20729ec530938d3a8ff96d7d79)
+      '@dxup/nuxt': 0.4.0(magicast@0.5.1)(typescript@6.0.2)
+      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(magicast@0.5.1)
+      '@nuxt/devtools': 3.2.3(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.32(typescript@6.0.2))
+      '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      '@nuxt/nitro-server': 4.4.2(9e8b03810d6b5afb11c9975e7c9ef469)
       '@nuxt/schema': 4.4.2
-      '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.2))
-      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@25.6.0)(eslint@10.2.0(jiti@2.7.0))(lightningcss@1.32.0)(magicast@0.5.2)(meow@13.2.0)(nuxt@4.4.2(1a4915b83fa8e8a23b1c9453a0d741dd))(optionator@0.9.4)(rolldown@1.0.0-rc.15)(rollup-plugin-visualizer@6.0.5(rolldown@1.0.0-rc.15)(rollup@4.55.1))(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2))(yaml@2.8.2)
+      '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.1))
+      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@25.6.0)(eslint@10.2.0(jiti@2.6.1))(lightningcss@1.32.0)(magicast@0.5.1)(meow@13.2.0)(nuxt@4.4.2(898afaf9353d2773820f325f0b41a696))(optionator@0.9.4)(rolldown@1.0.0-rc.15)(rollup-plugin-visualizer@6.0.5(rolldown@1.0.0-rc.15)(rollup@4.55.1))(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@6.0.2)(vue-tsc@3.2.6(typescript@6.0.2))(vue@3.5.32(typescript@6.0.2))(yaml@2.8.2)
       '@unhead/vue': 2.1.12(vue@3.5.32(typescript@6.0.2))
       '@vue/shared': 3.5.30
-      c12: 3.3.3(magicast@0.5.2)
+      c12: 3.3.3(magicast@0.5.1)
       chokidar: 5.0.0
       compatx: 0.2.0
       consola: 3.4.2
@@ -19133,7 +19154,7 @@ snapshots:
       unrouting: 0.1.5
       untyped: 2.0.0
       vue: 3.5.32(typescript@6.0.2)
-      vue-router: 5.0.4(@vue/compiler-sfc@3.5.32)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
+      vue-router: 5.0.4(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
     optionalDependencies:
       '@parcel/watcher': 2.5.1
       '@types/node': 25.6.0
@@ -19205,19 +19226,19 @@ snapshots:
       - xml2js
       - yaml
 
-  nuxt@4.4.2(898afaf9353d2773820f325f0b41a696):
+  nuxt@4.4.2(c3bc5daa2a8ce166347cbf57563ca529):
     dependencies:
-      '@dxup/nuxt': 0.4.0(magicast@0.5.1)(typescript@6.0.2)
-      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(magicast@0.5.1)
-      '@nuxt/devtools': 3.2.3(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.32(typescript@6.0.2))
-      '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@nuxt/nitro-server': 4.4.2(9e8b03810d6b5afb11c9975e7c9ef469)
+      '@dxup/nuxt': 0.4.0(magicast@0.5.2)(typescript@6.0.2)
+      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(magicast@0.5.2)
+      '@nuxt/devtools': 3.2.3(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.32(typescript@6.0.2))
+      '@nuxt/kit': 4.4.2(magicast@0.5.2)
+      '@nuxt/nitro-server': 4.4.2(1401d4f16ea83e3839ac3b8ea7956dd9)
       '@nuxt/schema': 4.4.2
-      '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.1))
-      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@25.6.0)(eslint@10.2.0(jiti@2.6.1))(lightningcss@1.32.0)(magicast@0.5.1)(meow@13.2.0)(nuxt@4.4.2(898afaf9353d2773820f325f0b41a696))(optionator@0.9.4)(rolldown@1.0.0-rc.15)(rollup-plugin-visualizer@6.0.5(rolldown@1.0.0-rc.15)(rollup@4.55.1))(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@6.0.2)(vue-tsc@3.2.6(typescript@6.0.2))(vue@3.5.32(typescript@6.0.2))(yaml@2.8.2)
+      '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.2))
+      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@25.6.0)(eslint@10.2.0(jiti@2.7.0))(lightningcss@1.32.0)(magicast@0.5.2)(meow@13.2.0)(nuxt@4.4.2(c3bc5daa2a8ce166347cbf57563ca529))(optionator@0.9.4)(rolldown@1.0.0-rc.15)(rollup-plugin-visualizer@6.0.5(rolldown@1.0.0-rc.15)(rollup@4.55.1))(rollup@4.55.1)(terser@5.44.1)(tsx@4.21.0)(typescript@6.0.2)(vue-tsc@3.2.6(typescript@6.0.2))(vue@3.5.32(typescript@6.0.2))(yaml@2.8.2)
       '@unhead/vue': 2.1.12(vue@3.5.32(typescript@6.0.2))
       '@vue/shared': 3.5.30
-      c12: 3.3.3(magicast@0.5.1)
+      c12: 3.3.3(magicast@0.5.2)
       chokidar: 5.0.0
       compatx: 0.2.0
       consola: 3.4.2
@@ -19262,7 +19283,7 @@ snapshots:
       unrouting: 0.1.5
       untyped: 2.0.0
       vue: 3.5.32(typescript@6.0.2)
-      vue-router: 5.0.4(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
+      vue-router: 5.0.4(@vue/compiler-sfc@3.5.32)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
     optionalDependencies:
       '@parcel/watcher': 2.5.1
       '@types/node': 25.6.0
@@ -21223,7 +21244,7 @@ snapshots:
       typescript: 6.0.2
       vue-tsc: 3.2.6(typescript@6.0.2)
 
-  vite-plugin-checker@0.12.0(eslint@10.2.0(jiti@2.7.0))(meow@13.2.0)(optionator@0.9.4)(typescript@6.0.2)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)):
+  vite-plugin-checker@0.12.0(eslint@10.2.0(jiti@2.7.0))(meow@13.2.0)(optionator@0.9.4)(typescript@6.0.2)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.6(typescript@6.0.2)):
     dependencies:
       '@babel/code-frame': 7.29.0
       chokidar: 5.0.0
@@ -21239,6 +21260,7 @@ snapshots:
       meow: 13.2.0
       optionator: 0.9.4
       typescript: 6.0.2
+      vue-tsc: 3.2.6(typescript@6.0.2)
 
   vite-plugin-inspect@11.3.3(@nuxt/kit@4.4.2(magicast@0.5.1))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
