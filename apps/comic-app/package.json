@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --port 3000",
-    "build": "vue-tsc -b && vite build --configLoader runner",
+    "build": "vue-tsc -b && vite build --config vite.config.ts --configLoader runner",
     "preview": "vite preview --port 3000",
     "test": "vitest",
     "test:run": "vitest run"

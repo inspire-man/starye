@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import {
   buildVitePublicRuntimeEnv,
   parsePagesBuildEnvText,
@@ -19,6 +20,7 @@ const publicRuntimeEnv = buildVitePublicRuntimeEnv(
   parseVitePublicRuntimeEnv(parsePagesBuildEnvText(readFileSync(pagesBuildEnvPath, 'utf8'), 'dashboard'), 'dashboard'),
   'dashboard',
 )
+const appRoot = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig(() => ({
   plugins: [
@@ -27,7 +29,7 @@ export default defineConfig(() => ({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(appRoot, './src'),
     },
     dedupe: ['vue', 'vue-router'],
   },

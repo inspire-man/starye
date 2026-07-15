@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vue-tsc -b && vite build --configLoader runner",
+    "build": "vue-tsc -b && vite build --config vite.config.ts --configLoader runner",
     "preview": "vite preview",
     "deploy": "pnpm --workspace-root target-deploy -- --app dashboard --surface dashboard",
     "lint": "eslint .",
