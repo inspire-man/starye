@@ -9,7 +9,7 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "node --env-file=typecheck.env ./node_modules/nuxt/bin/nuxt.mjs typecheck"
   },
   "dependencies": {
     "@sentry/nuxt": "^10.53.1",

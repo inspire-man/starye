@@ -69,14 +69,23 @@ function findTargetManagedBlockBounds(
     return undefined
   }
 
-  if (starts.length !== 1 || ends.length !== 1 || ends[0] < starts[0]) {
+  const start = starts[0]
+  const endMarker = ends[0]
+
+  if (
+    starts.length !== 1
+    || ends.length !== 1
+    || start === undefined
+    || endMarker === undefined
+    || endMarker < start
+  ) {
     throw new Error(`Malformed target-managed env block in ${file}.`)
   }
 
-  const endLineBreak = content.indexOf('\n', ends[0])
+  const endLineBreak = content.indexOf('\n', endMarker)
   const end = endLineBreak < 0 ? content.length : endLineBreak
 
-  return { start: starts[0], end }
+  return { start, end }
 }
 
 export function assertTargetManagedEnvBlockIsWellFormed(
