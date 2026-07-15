@@ -13,6 +13,9 @@ import { parseAuditedPublicRuntimeInput } from './public-runtime-input'
 import { buildTargetProjections, isTargetPagesSurface } from './target-projections'
 import { resolveTargetProfile } from './target-resolver'
 
+export type TargetRemoteEntryFamily = 'db' | 'crawler' | 'maintenance'
+export type TargetRemoteEntryMode = 'mutation' | 'read-only' | 'diagnostic'
+
 export const targetRemoteEntryValues = [
   'd1-migrate',
   'd1-migrate-movies-metadata',
@@ -34,6 +37,69 @@ export const targetRemoteEntryValues = [
 ] as const
 
 export type TargetRemoteEntry = (typeof targetRemoteEntryValues)[number]
+
+export interface TargetRemoteEntryDefinition {
+  readonly id: TargetRemoteEntry
+  readonly family: TargetRemoteEntryFamily
+  readonly mode: TargetRemoteEntryMode
+  readonly childModule: 'packages/db/scripts/target-d1-mutation.ts' | 'packages/crawler/scripts/target-crawl-mutation.ts'
+  readonly childOperation: string
+  readonly allowedOptions: readonly string[]
+  readonly requiredSecretKeys: readonly string[]
+}
+
+function dbEntry(id: TargetRemoteEntry, childOperation: string, mode: TargetRemoteEntryMode = 'mutation'): TargetRemoteEntryDefinition {
+  return {
+    id,
+    family: 'db',
+    mode,
+    childModule: 'packages/db/scripts/target-d1-mutation.ts',
+    childOperation,
+    allowedOptions: [],
+    requiredSecretKeys: ['CLOUDFLARE_API_TOKEN'],
+  }
+}
+
+function crawlerEntry(id: TargetRemoteEntry, childOperation: string, mode: TargetRemoteEntryMode = 'mutation', allowedOptions: readonly string[] = []): TargetRemoteEntryDefinition {
+  return {
+    id,
+    family: 'crawler',
+    mode,
+    childModule: 'packages/crawler/scripts/target-crawl-mutation.ts',
+    childOperation,
+    allowedOptions,
+    requiredSecretKeys: ['CRAWLER_SECRET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'],
+  }
+}
+
+export const targetRemoteEntryDefinitions = [
+  dbEntry('d1-migrate', 'migrate'),
+  dbEntry('d1-migrate-movies-metadata', 'migrate-movies-metadata'),
+  dbEntry('d1-cleanup-backup-preview', 'cleanup-backup-preview', 'read-only'),
+  dbEntry('d1-cleanup-backup-execute', 'cleanup-backup-execute'),
+  dbEntry('d1-cleanup-invalid-covers', 'cleanup-invalid-covers'),
+  crawlerEntry('crawler-comic', 'comic', 'mutation', ['url', 'limit', 'dry-run']),
+  crawlerEntry('crawler-optimized', 'optimized', 'mutation', ['limit', 'dry-run']),
+  crawlerEntry('crawler-actor', 'actor', 'mutation', ['limit', 'dry-run']),
+  crawlerEntry('crawler-publisher', 'publisher', 'mutation', ['limit', 'dry-run']),
+  crawlerEntry('crawler-search-index', 'search-index'),
+  crawlerEntry('crawler-enrich-players', 'enrich-players', 'mutation', ['limit', 'dry-run']),
+  crawlerEntry('crawler-check-config', 'check-config', 'diagnostic'),
+  crawlerEntry('crawler-backfill-covers', 'backfill-covers', 'mutation', ['limit', 'dry-run']),
+  crawlerEntry('crawler-backfill-publishers', 'backfill-publishers', 'mutation', ['limit', 'dry-run']),
+  crawlerEntry('crawler-enrich-players-javbus', 'enrich-players-javbus', 'mutation', ['limit', 'dry-run']),
+  crawlerEntry('crawler-r2-storage-audit', 'r2-storage-audit', 'read-only', ['prefix', 'sample-limit', 'dry-run']),
+  {
+    id: 'monthly-cleanup',
+    family: 'maintenance',
+    mode: 'mutation',
+    childModule: 'packages/db/scripts/target-d1-mutation.ts',
+    childOperation: 'monthly-cleanup',
+    allowedOptions: [],
+    requiredSecretKeys: ['CLOUDFLARE_API_TOKEN'],
+  },
+] as const satisfies readonly TargetRemoteEntryDefinition[]
+
 export type TargetMutationScope = 'ci' | 'remote'
 export type TargetMutationCommand = 'worker-deploy' | 'pages-deploy' | 'pages-rollback' | TargetRemoteEntry
 
@@ -191,14 +257,16 @@ export async function prepareTargetMutation(
   return prepared
 }
 
-function fixedEntryCommand(entry: TargetRemoteEntry): readonly string[] | undefined {
-  if (entry === 'd1-migrate-movies-metadata')
-    return undefined
-  if (entry.startsWith('crawler-'))
-    return ['--filter', '@starye/crawler', 'run', entry]
-  if (entry === 'monthly-cleanup')
-    return ['run', 'monthly-cleanup']
-  return ['--filter', '@starye/db', 'run', entry]
+function resolveTargetRemoteEntryDefinition(entry: TargetRemoteEntry): TargetRemoteEntryDefinition {
+  const definition = targetRemoteEntryDefinitions.find(candidate => candidate.id === entry)
+  if (!definition) {
+    throw new Error('Unknown prepared target entry.')
+  }
+  return definition
+}
+
+function fixedEntryCommand(definition: TargetRemoteEntryDefinition): readonly string[] {
+  return ['exec', 'tsx', definition.childModule]
 }
 
 export async function runPreparedTargetMutation(request: PreparedMutationExecution): Promise<void> {
@@ -215,10 +283,8 @@ export async function runPreparedTargetMutation(request: PreparedMutationExecuti
   if (!prepared.targetId || !path.isAbsolute(prepared.apiConfigPath) || !path.isAbsolute(prepared.gatewayConfigPath)) {
     throw new Error('Prepared context is invalid or unavailable.')
   }
-  const args = fixedEntryCommand(request.entry)
-  if (!args) {
-    throw new Error(`Prepared entry ${request.entry} is reserved until its fixed child is delivered.`)
-  }
+  const definition = resolveTargetRemoteEntryDefinition(request.entry)
+  const args = fixedEntryCommand(definition)
   const environment: NodeJS.ProcessEnv = {
     PATH: process.env.PATH,
     NODE_OPTIONS: process.env.NODE_OPTIONS,
@@ -226,6 +292,9 @@ export async function runPreparedTargetMutation(request: PreparedMutationExecuti
     STARYE_PREPARED_CONTEXT_PATH: request.preparedContextPath,
     STARYE_API_CONFIG_PATH: prepared.apiConfigPath,
     STARYE_GATEWAY_CONFIG_PATH: prepared.gatewayConfigPath,
+    STARYE_PREPARED_ENTRY: definition.id,
+    STARYE_PREPARED_OPERATION: definition.childOperation,
+    STARYE_PREPARED_SECRET_KEYS: definition.requiredSecretKeys.join(','),
   }
   if (request.execute('pnpm', args, environment) !== 0) {
     throw new Error(`Prepared target entry failed: ${request.entry}.`)
