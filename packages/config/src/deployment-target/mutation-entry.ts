@@ -33,6 +33,8 @@ export const targetRemoteEntryValues = [
   'crawler-backfill-publishers',
   'crawler-enrich-players-javbus',
   'crawler-r2-storage-audit',
+  'crawler-smoke-fixture',
+  'd1-smoke-snapshot',
   'monthly-cleanup',
 ] as const
 
@@ -60,7 +62,13 @@ function dbEntry(id: TargetRemoteEntry, childOperation: string, mode: TargetRemo
   }
 }
 
-function crawlerEntry(id: TargetRemoteEntry, childOperation: string, mode: TargetRemoteEntryMode = 'mutation', allowedOptions: readonly string[] = []): TargetRemoteEntryDefinition {
+function crawlerEntry(
+  id: TargetRemoteEntry,
+  childOperation: string,
+  mode: TargetRemoteEntryMode = 'mutation',
+  allowedOptions: readonly string[] = [],
+  requiredSecretKeys: readonly string[] = ['CRAWLER_SECRET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'],
+): TargetRemoteEntryDefinition {
   return {
     id,
     family: 'crawler',
@@ -68,7 +76,7 @@ function crawlerEntry(id: TargetRemoteEntry, childOperation: string, mode: Targe
     childModule: 'packages/crawler/scripts/target-crawl-mutation.ts',
     childOperation,
     allowedOptions,
-    requiredSecretKeys: ['CRAWLER_SECRET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'],
+    requiredSecretKeys,
   }
 }
 
@@ -89,6 +97,8 @@ export const targetRemoteEntryDefinitions = [
   crawlerEntry('crawler-backfill-publishers', 'backfill-publishers', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-enrich-players-javbus', 'enrich-players-javbus', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-r2-storage-audit', 'r2-storage-audit', 'read-only', ['prefix', 'sample-limit', 'dry-run']),
+  crawlerEntry('crawler-smoke-fixture', 'smoke-fixture', 'mutation', [], ['CRAWLER_SECRET']),
+  dbEntry('d1-smoke-snapshot', 'smoke-snapshot', 'read-only'),
   {
     id: 'monthly-cleanup',
     family: 'maintenance',
@@ -136,7 +146,22 @@ export interface MutationPreparationDependencies {
 export interface PreparedMutationExecution {
   readonly entry: TargetRemoteEntry
   readonly preparedContextPath: string
-  readonly execute: (command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number
+  readonly authorizedEnvironment?: Readonly<Record<string, string | undefined>>
+  readonly execute: (command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number | PreparedChildExecutionResult
+}
+
+export interface PreparedChildExecutionResult {
+  readonly exitCode: number
+  readonly stdout?: string
+}
+
+export type PreparedSmokeChildObservation
+  = Readonly<{ operation: 'crawler-smoke-fixture', status: 'synced', itemCode: string }>
+    | Readonly<{ operation: 'd1-smoke-snapshot', status: 'found', itemCode: string, itemId: string }>
+    | Readonly<{ operation: 'd1-smoke-snapshot', status: 'not-found' | 'checkpoint', itemCode: string }>
+
+export interface PreparedMutationExecutionResult {
+  readonly observation?: PreparedSmokeChildObservation
 }
 
 const targetIdentityKeys = new Set([
@@ -152,13 +177,15 @@ function isTargetRemoteEntry(value: string): value is TargetRemoteEntry {
   return (targetRemoteEntryValues as readonly string[]).includes(value)
 }
 
-function commandForPreflight(command: TargetMutationCommand): 'deploy' | 'pages-deploy' | 'pages-rollback' | 'migrate' | 'remote-crawl' {
+function commandForPreflight(command: TargetMutationCommand): 'deploy' | 'pages-deploy' | 'pages-rollback' | 'migrate' | 'remote-crawl' | 'smoke' {
   if (command === 'worker-deploy')
     return 'deploy'
   if (command === 'pages-deploy')
     return 'pages-deploy'
   if (command === 'pages-rollback')
     return 'pages-rollback'
+  if (command === 'crawler-smoke-fixture' || command === 'd1-smoke-snapshot')
+    return 'smoke'
   if (command.startsWith('crawler-'))
     return 'remote-crawl'
   return 'migrate'
@@ -269,7 +296,118 @@ function fixedEntryCommand(definition: TargetRemoteEntryDefinition): readonly st
   return ['exec', 'tsx', definition.childModule]
 }
 
-export async function runPreparedTargetMutation(request: PreparedMutationExecution): Promise<void> {
+function isNonEmptyText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isPreparedContextPath(pathname: string, runId: string): boolean {
+  return path.basename(pathname) === `prepared-context.${runId}.json`
+}
+
+function isPreparedMutationPreparation(value: unknown, pathname: string): value is TargetMutationPreparation {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const prepared = value as Partial<TargetMutationPreparation>
+  return isNonEmptyText(prepared.targetId)
+    && isNonEmptyText(prepared.githubEnvironment)
+    && isNonEmptyText(prepared.runId)
+    && isNonEmptyText(prepared.preparedContextPath)
+    && path.resolve(prepared.preparedContextPath) === path.resolve(pathname)
+    && isPreparedContextPath(pathname, prepared.runId)
+    && isNonEmptyText(prepared.apiConfigPath)
+    && path.isAbsolute(prepared.apiConfigPath)
+    && isNonEmptyText(prepared.gatewayConfigPath)
+    && path.isAbsolute(prepared.gatewayConfigPath)
+    && !!prepared.identity
+    && isNonEmptyText(prepared.identity.accountId)
+    && isNonEmptyText(prepared.identity.apiUrl)
+    && isNonEmptyText(prepared.identity.d1Name)
+    && isNonEmptyText(prepared.identity.r2Name)
+}
+
+function isPreparedChildExecutionResult(value: number | PreparedChildExecutionResult): value is PreparedChildExecutionResult {
+  return typeof value !== 'number'
+}
+
+function isSmokeDefinition(definition: TargetRemoteEntryDefinition): boolean {
+  return definition.id === 'crawler-smoke-fixture' || definition.id === 'd1-smoke-snapshot'
+}
+
+function parsePreparedSmokeObservation(definition: TargetRemoteEntryDefinition, stdout: string | undefined): PreparedSmokeChildObservation {
+  if (!stdout) {
+    throw new Error('Prepared child observation is invalid.')
+  }
+
+  let value: unknown
+  try {
+    value = JSON.parse(stdout)
+  }
+  catch {
+    throw new Error('Prepared child observation is invalid.')
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Prepared child observation is invalid.')
+  }
+
+  const observation = value as Record<string, unknown>
+  const keys = Object.keys(observation).sort()
+  const hasOnlyKeys = (allowed: readonly string[]) => keys.length === allowed.length && keys.every((key, index) => key === allowed[index])
+  if (definition.id === 'crawler-smoke-fixture') {
+    if (!hasOnlyKeys(['itemCode', 'operation', 'status'])
+      || observation.operation !== 'crawler-smoke-fixture'
+      || observation.status !== 'synced'
+      || !isNonEmptyText(observation.itemCode)) {
+      throw new Error('Prepared child observation is invalid.')
+    }
+    return { operation: 'crawler-smoke-fixture', status: 'synced', itemCode: observation.itemCode }
+  }
+
+  if (definition.id === 'd1-smoke-snapshot') {
+    if (!isNonEmptyText(observation.itemCode) || observation.operation !== 'd1-smoke-snapshot') {
+      throw new Error('Prepared child observation is invalid.')
+    }
+    if (observation.status === 'found' && hasOnlyKeys(['itemCode', 'itemId', 'operation', 'status']) && isNonEmptyText(observation.itemId)) {
+      return { operation: 'd1-smoke-snapshot', status: 'found', itemCode: observation.itemCode, itemId: observation.itemId }
+    }
+    if ((observation.status === 'not-found' || observation.status === 'checkpoint') && hasOnlyKeys(['itemCode', 'operation', 'status'])) {
+      return { operation: 'd1-smoke-snapshot', status: observation.status, itemCode: observation.itemCode }
+    }
+  }
+
+  throw new Error('Prepared child observation is invalid.')
+}
+
+function buildPreparedChildEnvironment(
+  definition: TargetRemoteEntryDefinition,
+  prepared: TargetMutationPreparation,
+  preparedContextPath: string,
+  authorizedEnvironment: Readonly<Record<string, string | undefined>>,
+): NodeJS.ProcessEnv {
+  const forwardedSecrets: NodeJS.ProcessEnv = {}
+  for (const key of definition.requiredSecretKeys) {
+    const value = authorizedEnvironment[key]
+    if (!isNonEmptyText(value)) {
+      throw new Error('Prepared entry is missing a required credential key.')
+    }
+    forwardedSecrets[key] = value
+  }
+
+  return {
+    PATH: process.env.PATH,
+    CLOUDFLARE_ACCOUNT_ID: prepared.identity.accountId,
+    STARYE_PREPARED_CONTEXT_PATH: preparedContextPath,
+    STARYE_API_CONFIG_PATH: prepared.apiConfigPath,
+    STARYE_GATEWAY_CONFIG_PATH: prepared.gatewayConfigPath,
+    STARYE_PREPARED_ENTRY: definition.id,
+    STARYE_PREPARED_OPERATION: definition.childOperation,
+    STARYE_PREPARED_SECRET_KEYS: definition.requiredSecretKeys.join(','),
+    ...forwardedSecrets,
+  }
+}
+
+export async function runPreparedTargetMutation(request: PreparedMutationExecution): Promise<PreparedMutationExecutionResult> {
   if (!isTargetRemoteEntry(request.entry)) {
     throw new Error('Unknown prepared target entry.')
   }
@@ -280,23 +418,27 @@ export async function runPreparedTargetMutation(request: PreparedMutationExecuti
   catch {
     throw new Error('Prepared context is invalid or unavailable.')
   }
-  if (!prepared.targetId || !path.isAbsolute(prepared.apiConfigPath) || !path.isAbsolute(prepared.gatewayConfigPath)) {
+  if (!isPreparedMutationPreparation(prepared, request.preparedContextPath)) {
     throw new Error('Prepared context is invalid or unavailable.')
   }
   const definition = resolveTargetRemoteEntryDefinition(request.entry)
   const args = fixedEntryCommand(definition)
-  const environment: NodeJS.ProcessEnv = {
-    PATH: process.env.PATH,
-    NODE_OPTIONS: process.env.NODE_OPTIONS,
-    CLOUDFLARE_ACCOUNT_ID: prepared.identity.accountId,
-    STARYE_PREPARED_CONTEXT_PATH: request.preparedContextPath,
-    STARYE_API_CONFIG_PATH: prepared.apiConfigPath,
-    STARYE_GATEWAY_CONFIG_PATH: prepared.gatewayConfigPath,
-    STARYE_PREPARED_ENTRY: definition.id,
-    STARYE_PREPARED_OPERATION: definition.childOperation,
-    STARYE_PREPARED_SECRET_KEYS: definition.requiredSecretKeys.join(','),
-  }
-  if (request.execute('pnpm', args, environment) !== 0) {
+  const environment = buildPreparedChildEnvironment(
+    definition,
+    prepared,
+    request.preparedContextPath,
+    request.authorizedEnvironment ?? process.env,
+  )
+  const execution = request.execute('pnpm', args, environment)
+  const exitCode = isPreparedChildExecutionResult(execution) ? execution.exitCode : execution
+  if (exitCode !== 0) {
     throw new Error(`Prepared target entry failed: ${request.entry}.`)
   }
+  if (!isSmokeDefinition(definition)) {
+    return {}
+  }
+  if (!isPreparedChildExecutionResult(execution)) {
+    throw new Error('Prepared child observation is invalid.')
+  }
+  return { observation: parsePreparedSmokeObservation(definition, execution.stdout) }
 }
