@@ -1,38 +1,6 @@
-name = "starye-gateway"
 main = "src/index.ts"
 compatibility_date = "2024-04-01"
 compatibility_flags = [ "nodejs_compat" ]
 
 [dev]
 port = 8080 # 本地统一入口端口
-
-[vars]
-# 生产环境各模块的原始访问地址
-# 使用 Cloudflare Pages 默认域名
-API_ORIGIN = "https://api.starye.org"
-AUTH_ORIGIN = "https://starye-auth.pages.dev"
-DASHBOARD_ORIGIN = "https://starye-dashboard.pages.dev"
-BLOG_ORIGIN = "https://blog.starye.org"
-MOVIE_ORIGIN = "https://starye-movie.pages.dev"
-COMIC_ORIGIN = "https://starye-comic.pages.dev"
-TAVERN_ORIGIN = "https://starye-tavern.pages.dev"
-
-# ADMIN_GITHUB_ID 通过 wrangler secret put 注入，不在此明文配置
-# 本地开发：在 apps/gateway/.dev.vars 中设置 ADMIN_GITHUB_ID=<your_github_id>
-# 格式：单个 ID（"12345678"）或逗号分隔多个（"12345,67890"）
-
-# Custom Domain Binding
-# This worker handles all traffic for the main domain
-[[routes]]
-pattern = "starye.org"
-custom_domain = true
-
-[[routes]]
-pattern = "www.starye.org"
-custom_domain = true
-
-# KV Namespace for caching
-[[kv_namespaces]]
-binding = "CACHE"
-id = "f7f6a8c2bff84a1d89da528eab4eb559" # 共享 API 的 KV namespace
-preview_id = "f7f6a8c2bff84a1d89da528eab4eb559"

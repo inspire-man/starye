@@ -5,7 +5,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "dev": "wrangler dev --port 8787",
-    "deploy": "wrangler deploy",
+    "deploy": "pnpm --workspace-root target-deploy -- --app api",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",

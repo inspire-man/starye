@@ -67,6 +67,7 @@ export interface TargetDeployProjection {
     readonly api: TargetWorkerDeployProjection
     readonly gateway: TargetWorkerDeployProjection
   }>
+  readonly pages: readonly TargetPagesDeployProjection[]
 }
 
 export interface TargetWorkflowProjection {
@@ -213,6 +214,7 @@ export function buildTargetProjections(
     publicRuntime,
     deploy: {
       workers: { api, gateway },
+      pages: targetPagesSurfaceValues.map(surface => getPagesDeployProjection(resolution, surface)),
     },
     workflow: {
       targetId: resolution.id,

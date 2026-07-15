@@ -3,6 +3,7 @@ import type {
   PreflightCommand,
   PreflightScope,
   ProjectionValidationIssue,
+  TargetPagesSurface,
   WranglerCommandExecutor,
 } from '../packages/config/src/deployment-target/index.ts'
 import { spawnSync } from 'node:child_process'
@@ -14,12 +15,14 @@ import {
   applyTargetManagedEnvBlock,
   assertTargetManagedEnvBlockIsWellFormed,
   buildLocalEnvProjectionPlan,
+  isTargetPagesSurface,
+  parsePagesBuildEnv,
   resolveTargetProfile,
   runTargetPreflight,
   validateProjectedEnv,
 } from '../packages/config/src/deployment-target/index.ts'
 
-const commandNames = ['validate', 'project-local', 'preflight'] as const
+const commandNames = ['validate', 'project-local', 'preflight', 'run-pages-build'] as const
 
 export type TargetProfileCliCommand = (typeof commandNames)[number]
 
@@ -34,6 +37,8 @@ export interface TargetProfileCliOptions {
   wranglerProfile?: string
   ciEnvironment?: string
   envRoot?: string
+  pagesSurface?: TargetPagesSurface
+  pagesBuildEnvPath?: string
   help: boolean
 }
 
@@ -120,12 +125,23 @@ export function parseTargetProfileCliArgs(argv: readonly string[]): TargetProfil
       case '--env-root':
         options.envRoot = consumeValue()
         break
+      case '--surface': {
+        const surface = consumeValue()
+        if (!isTargetPagesSurface(surface)) {
+          throw new Error('Unknown Pages surface.')
+        }
+        options.pagesSurface = surface
+        break
+      }
+      case '--pages-build-env-path':
+        options.pagesBuildEnvPath = consumeValue()
+        break
       default:
         throw new Error(`Unknown argument: ${flag}`)
     }
   }
 
-  if (!options.help && !options.target?.trim()) {
+  if (!options.help && options.commandName !== 'run-pages-build' && !options.target?.trim()) {
     throw new Error('Missing required --target <id>.')
   }
 
@@ -137,6 +153,7 @@ export function formatTargetProfileHelp(): string {
   target-profile validate --target <id>
   target-profile project-local --target <id> --check|--write [--env-root <path>]
   target-profile preflight --target <id> --scope <local|ci|remote> --command <command> [--env-root <path>] [--live]
+  target-profile run-pages-build --surface <dashboard|auth|blog|movie|comic|tavern> --pages-build-env-path <generated-path>
 
 Preflight reads exactly the four local consumer files below --env-root, or the repository root when omitted.
 
@@ -146,6 +163,57 @@ Phase 11 identity boundary:
   CI secret bundle: starye-org
   remote credential keys: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
   Phase 11 does not change Worker, Pages, or GitHub workflow consumption.`
+}
+
+type PagesBuildExecutor = (command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number
+
+function pickRuntimeEnvironment(): NodeJS.ProcessEnv {
+  const names = process.platform === 'win32'
+    ? ['Path', 'SystemRoot', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'CI', 'NODE_OPTIONS', 'PNPM_HOME']
+    : ['PATH', 'HOME', 'TMPDIR', 'CI', 'NODE_OPTIONS', 'PNPM_HOME']
+  const selected: NodeJS.ProcessEnv = {}
+
+  for (const name of names) {
+    const value = process.env[name]
+    if (value !== undefined) {
+      selected[name] = value
+    }
+  }
+
+  return selected
+}
+
+function pagesBuildArgs(surface: TargetPagesSurface): readonly string[] {
+  switch (surface) {
+    case 'dashboard': return ['--filter', 'dashboard', 'build']
+    case 'auth': return ['--filter', 'starye-auth', 'build']
+    case 'blog': return ['--filter', 'blog', 'build']
+    case 'movie': return ['--filter', '@starye/movie-app', 'build']
+    case 'comic': return ['--filter', '@starye/comic-app', 'build']
+    case 'tavern': throw new Error('Tavern has no registered Pages build command.')
+  }
+}
+
+function spawnPagesBuild(command: string, args: readonly string[], environment: NodeJS.ProcessEnv): number {
+  return spawnSync(command, args, {
+    encoding: 'utf8',
+    env: environment,
+    shell: false,
+  }).status ?? 1
+}
+
+export async function runPagesBuild(
+  surface: TargetPagesSurface,
+  pagesBuildEnvPath: string,
+  execute: PagesBuildExecutor = spawnPagesBuild,
+): Promise<void> {
+  const parsed = await parsePagesBuildEnv(pagesBuildEnvPath, surface)
+  const environment: NodeJS.ProcessEnv = { ...pickRuntimeEnvironment(), ...parsed }
+  const status = execute('pnpm', pagesBuildArgs(surface), environment)
+
+  if (status !== 0) {
+    throw new Error(`Pages build failed for ${surface}.`)
+  }
 }
 
 function printProfileValidation(target: string): void {
@@ -302,6 +370,12 @@ export async function runTargetProfileCli(options: TargetProfileCliOptions): Pro
       return
     case 'preflight':
       await runPreflight(options)
+      return
+    case 'run-pages-build':
+      if (!options.pagesSurface || !options.pagesBuildEnvPath) {
+        throw new Error('run-pages-build requires --surface and --pages-build-env-path.')
+      }
+      await runPagesBuild(options.pagesSurface, options.pagesBuildEnvPath)
   }
 }
 

@@ -1,3 +1,4 @@
+export * from './deploy-config'
 export * from './env-file-block'
 export * from './live-checks'
 export * from './preflight'

@@ -8,7 +8,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "deploy": "pnpm build && wrangler pages deploy dist --project-name blog-pages",
+    "deploy": "pnpm --workspace-root target-deploy -- --app blog --surface blog",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test:e2e": "playwright test"
