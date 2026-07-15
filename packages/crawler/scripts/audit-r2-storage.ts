@@ -1,9 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
 import { ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3'
-import 'dotenv/config'
 
 export type PolicyClass
   = | 'standard_allowed'
@@ -1440,7 +1438,7 @@ async function writeLocalReport(targetPath: string, content: string): Promise<vo
   await writeFile(targetPath, content, 'utf8')
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   console.log(`Usage: pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts [options]
 
 Options:
@@ -1497,29 +1495,4 @@ export async function runAudit(options: AuditOptions, env: NodeJS.ProcessEnv = p
 
   printSummary(metadata, rows)
   return { metadata, rows }
-}
-
-async function main(): Promise<void> {
-  const options = parseArgs(process.argv.slice(2))
-  if (options.help) {
-    printHelp()
-    return
-  }
-
-  try {
-    await runAudit(options)
-  }
-  catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(`R2 storage audit failed: ${message}`)
-    process.exit(1)
-  }
-}
-
-const isDirectExecution = process.argv[1]
-  ? import.meta.url === pathToFileURL(process.argv[1]).href
-  : false
-
-if (isDirectExecution) {
-  void main()
 }
