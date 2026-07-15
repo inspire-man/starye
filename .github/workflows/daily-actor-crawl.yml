@@ -2,170 +2,69 @@ name: Daily Actor Crawl
 
 on:
   schedule:
-    # 每天 00:00 UTC 运行（电影爬虫之后）
     - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
+      target:
+        description: Selected tracked deployment target
+        required: true
+        type: string
       max_actors:
-        description: 'Maximum number of actors to crawl'
+        description: Optional actor count for a future targeted run
         required: false
         default: '150'
         type: string
-      recovery_mode:
-        description: 'Enable recovery mode (retry failed tasks)'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
 
 jobs:
-  crawl-actors:
+  resolve-target:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-
+    outputs:
+      target: ${{ steps.resolve.outputs.target }}
+      github_environment: ${{ steps.resolve.outputs.github_environment }}
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-
+      STARYE_TARGET_ID: starye-org
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-
-      - name: Setup Node
-        uses: actions/setup-node@v6.3.0
-        with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install Chrome Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libasound2t64 libatk1.0-0 libatk-bridge2.0-0 \
-            libcairo2 libcups2 libdbus-1-3 \
-            libexpat1 libfontconfig1 libgcc-s1 \
-            libgdk-pixbuf-2.0-0 libglib2.0-0 libgtk-3-0 \
-            libnspr4 libnss3 libpango-1.0-0 libpangocairo-1.0-0 \
-            libstdc++6 libx11-6 libx11-xcb1 libxcb1 \
-            libxcomposite1 libxcursor1 libxdamage1 libxext6 \
-            libxfixes3 libxi6 libxrandr2 libxrender1 \
-            libxss1 libxtst6 ca-certificates fonts-liberation \
-            libnss3 lsb-release xdg-utils wget \
-            libgbm1 libdrm2 libxshmfence1
-
-      - name: Install Chrome
-        run: |
-          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
-          rm google-chrome-stable_current_amd64.deb
-          google-chrome --version
-
-      - name: Install Dependencies
-        run: pnpm install
-
-      - name: Build Packages
-        run: pnpm build --filter=@starye/crawler...
-
-      - name: Health Check API
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: resolve
+        shell: bash
         env:
-          API_URL: ${{ secrets.API_URL }}
-          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+          INPUT_TARGET: ${{ inputs.target || '' }}
         run: |
-          echo "Checking API health at: $API_URL"
+          set -euo pipefail
+          target="${INPUT_TARGET:-$STARYE_TARGET_ID}"
+          test -n "$target"
+          output="$(pnpm target-profile validate --target "$target")"
+          github_environment="$(printf '%s\n' "$output" | sed -n 's/^CI GitHub environment: //p')"
+          test -n "$github_environment"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "github_environment=$github_environment" >> "$GITHUB_OUTPUT"
 
-          HEALTH_URL="${API_URL}/api/health"
-          echo "Testing: $HEALTH_URL"
-
-          if curl -f -s -m 10 "$HEALTH_URL" > /dev/null 2>&1; then
-            echo "✅ API is healthy and accessible"
-          else
-            echo "⚠️  Warning: API health check failed"
-            echo "API might be unavailable. Crawler will attempt to continue..."
-            echo "Note: Actor data will not be synced if API is down."
-            exit 1
-          fi
-
-      - name: Test API Authentication
-        env:
-          API_URL: ${{ secrets.API_URL }}
-          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
-        run: |
-          echo "Testing API authentication..."
-
-          if [ -z "$CRAWLER_SECRET" ]; then
-            echo "❌ ERROR: CRAWLER_SECRET is not configured in GitHub Secrets"
-            exit 1
-          fi
-
-          # 测试爬虫端口认证
-          TEST_URL="${API_URL}/api/admin/actors/pending?limit=1"
-          echo "Testing: $TEST_URL"
-
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "x-service-token: $CRAWLER_SECRET" "$TEST_URL")
-
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ API authentication successful (HTTP $HTTP_CODE)"
-          elif [ "$HTTP_CODE" = "401" ]; then
-            echo "❌ ERROR: Authentication failed (HTTP 401)"
-            echo "Possible causes:"
-            echo "  1. CRAWLER_SECRET in GitHub Secrets doesn't match API server's CRAWLER_SECRET"
-            echo "  2. API server is not running the latest code with serviceAuth middleware"
-            echo "  3. API server's CRAWLER_SECRET env var is not set correctly"
-            exit 1
-          else
-            echo "⚠️  Unexpected HTTP code: $HTTP_CODE"
-            exit 1
-          fi
-
-      - name: Run Actor Crawler
-        env:
-          # API 配置
-          API_URL: ${{ secrets.API_URL }}
-          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
-
-          # R2 配置
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-
-          # 代理配置（可选）
-          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
-          PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
-          PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
-
-          # 女优爬虫配置
-          MAX_ACTORS: ${{ github.event.inputs.max_actors || '150' }}
-          ACTOR_CONCURRENCY: '2'
-          ACTOR_DELAY: '8000'
-          RECOVERY_MODE: ${{ github.event.inputs.recovery_mode || 'false' }}
-
-          # 浏览器配置
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
-        run: |
-          export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)
-          echo "Found Chrome at: $PUPPETEER_EXECUTABLE_PATH"
-          echo "Starting actor crawler..."
-          echo "  MAX_ACTORS: $MAX_ACTORS"
-          echo "  ACTOR_CONCURRENCY: $ACTOR_CONCURRENCY"
-          echo "  ACTOR_DELAY: $ACTOR_DELAY"
-          echo "  RECOVERY_MODE: $RECOVERY_MODE"
-          pnpm --filter @starye/crawler run crawl:actor
-
-      - name: Upload Logs
+  crawl:
+    needs: resolve-target
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-target.outputs.github_environment }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: prepare
+        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command crawler-actor --github-output "$GITHUB_OUTPUT"
+      - name: Run selected actor entry
+        run: pnpm target-profile run-prepared-entry --entry crawler-actor --prepared-context "${{ steps.prepare.outputs.prepared_context_path }}"
+      - name: Remove generated target files
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: actor-crawler-logs-${{ github.run_number }}
-          path: |
-            packages/crawler/.actor-failed-tasks.json
-            packages/crawler/*.log
-          retention-days: 7
+        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"

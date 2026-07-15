@@ -2,124 +2,68 @@ name: Daily Manga Crawl
 
 on:
   schedule:
-    # 每天凌晨 2 点运行 (UTC+8 对应 UTC 18:00) - 漫画爬虫
     - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
+      target:
+        description: Selected tracked deployment target
+        required: true
+        type: string
       target_url:
-        description: 'Specific URL to crawl (Optional)'
+        description: Optional source URL for a future targeted run
         required: false
         type: string
 
 jobs:
-  crawl:
+  resolve-target:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-
+    outputs:
+      target: ${{ steps.resolve.outputs.target }}
+      github_environment: ${{ steps.resolve.outputs.github_environment }}
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-
+      STARYE_TARGET_ID: starye-org
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-
-      - name: Setup Node
-        uses: actions/setup-node@v6.3.0
-        with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install Dependencies
-        run: pnpm install
-
-      - name: Build Packages
-        run: pnpm build --filter=@starye/crawler...
-
-      - name: Run Crawler
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: resolve
+        shell: bash
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
-          API_URL: ${{ secrets.API_URL }}
-          # Puppeteer Cache
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
-
-          # ==========================================
-          # 爬虫配置 - 充分利用 6 小时时间
-          # ==========================================
-
-          # 并发控制 (总并发度 = manga × chapter × imageBatch = 2×2×10 = 40)
-          CRAWLER_MANGA_CONCURRENCY: 2        # 漫画级并发 (默认: 2)
-          CRAWLER_CHAPTER_CONCURRENCY: 2      # 章节级并发 (默认: 2)
-          CRAWLER_IMAGE_BATCH: 10             # 图片批量上传 (默认: 10)
-
-          # 限流控制
-          CRAWLER_MAX_MANGAS: 60              # 每次最多处理 60 个漫画
-          CRAWLER_MAX_CHAPTERS_NEW: 5         # 新漫画限制 5 章
-          CRAWLER_MAX_CHAPTERS_UPDATE: 20     # 更新漫画限制 20 章
-          CRAWLER_TIMEOUT_MINUTES: 350        # 软超时 350 分钟（留 10 分钟缓冲）
-
-          # ==========================================
-          # 反检测配置 (2026-03-13 新增)
-          # ==========================================
-          # 降低被识别为机器人的风险，提升成功率
-
-          CRAWLER_BASE_DELAY: 8000            # 基础延迟 8 秒（保守配置）
-          CRAWLER_MAX_RETRIES: 3              # 最大重试 3 次
-          CRAWLER_ENABLE_SESSION: true        # 启用会话管理（Cookie）
-
-          # 回滚开关 (如遇问题可启用 Legacy 模式)
-          # USE_LEGACY_MODE: true             # 使用旧版简单重试逻辑（关闭反检测）
-
-          # 说明：
-          # - 基础延迟: 每个请求间隔时间，防止请求过快
-          # - 最大重试: ERR_ABORTED 等错误的重试次数
-          # - 会话管理: 维护 Cookie，模拟真实用户
-          #
-          # 如遇到频繁错误，可临时增加延迟：
-          #   CRAWLER_BASE_DELAY: 10000  (10秒)
-          #   CRAWLER_MAX_RETRIES: 5
-          #
-          # 如遇到反检测导致的问题，可启用 Legacy 模式回滚：
-          #   USE_LEGACY_MODE: true
-          #
-          # 详见: packages/crawler/README.md - 反检测与错误恢复
+          INPUT_TARGET: ${{ inputs.target || '' }}
         run: |
-          # 动态查找 Chrome 路径
-          export PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable || which google-chrome || which chromium-browser)
-          echo "Found Chrome at: $PUPPETEER_EXECUTABLE_PATH"
+          set -euo pipefail
+          target="${INPUT_TARGET:-$STARYE_TARGET_ID}"
+          test -n "$target"
+          output="$(pnpm target-profile validate --target "$target")"
+          github_environment="$(printf '%s\n' "$output" | sed -n 's/^CI GitHub environment: //p')"
+          test -n "$github_environment"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "github_environment=$github_environment" >> "$GITHUB_OUTPUT"
 
-          # 如果有输入 URL 则使用，否则默认爬取首页（示例）
-          TARGET="${{ inputs.target_url }}"
-          if [ -z "$TARGET" ]; then
-            TARGET="https://www.92hm.life/booklist?end=0" # 默认目标: 最新更新列表
-          fi
-
-          echo "Starting crawl for: $TARGET"
-
-          # 使用 puppeteer-headful (xvfb) 或者直接使用 chrome-headless-shell
-          # 这里假设 base-crawler 配置了自动使用 headless
-          # Node.js 内存限制：增加到 6GB 以处理大量图片
-          NODE_OPTIONS="--max-old-space-size=6144" pnpm --filter @starye/crawler start "$TARGET"
-
-      - name: Build & Upload Search Index
-        if: success()
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-          API_URL: ${{ secrets.API_URL }}
-          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
-        run: |
-          echo "Building Orama Search Index..."
-          pnpm --filter @starye/crawler build:search
+  crawl:
+    needs: resolve-target
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-target.outputs.github_environment }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: prepare
+        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command crawler-comic --github-output "$GITHUB_OUTPUT"
+      - name: Run selected manga entry
+        run: pnpm target-profile run-prepared-entry --entry crawler-comic --prepared-context "${{ steps.prepare.outputs.prepared_context_path }}"
+      - name: Remove generated target files
+        if: always()
+        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"

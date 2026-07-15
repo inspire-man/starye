@@ -3,89 +3,101 @@ name: Rollback Deployment
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: Selected tracked deployment target
+        required: true
+        type: string
       app:
-        description: 'Target app to rollback'
+        description: Worker or Pages application category
         required: true
         type: choice
-        options:
-          - api
-          - gateway
-          - auth
-          - blog
-          - dashboard
-          - movie
-          - comic
+        options: [api, gateway, pages]
       version_id:
-        description: 'Worker version id to rollback to'
+        description: Worker version id; retained for Pages manual guidance
+        required: true
+        type: string
+      pages_surface:
+        description: Required typed Pages surface for a manual Pages rollback
         required: true
         type: string
 
 jobs:
+  resolve-target:
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.resolve.outputs.target }}
+      github_environment: ${{ steps.resolve.outputs.github_environment }}
+    env:
+      STARYE_TARGET_ID: starye-org
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: resolve
+        shell: bash
+        env:
+          INPUT_TARGET: ${{ inputs.target || '' }}
+        run: |
+          set -euo pipefail
+          target="${INPUT_TARGET:-$STARYE_TARGET_ID}"
+          test -n "$target"
+          output="$(pnpm target-profile validate --target "$target")"
+          github_environment="$(printf '%s\n' "$output" | sed -n 's/^CI GitHub environment: //p')"
+          test -n "$github_environment"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "github_environment=$github_environment" >> "$GITHUB_OUTPUT"
+
   rollback-worker:
     if: ${{ inputs.app == 'api' || inputs.app == 'gateway' }}
+    needs: resolve-target
     runs-on: ubuntu-latest
-    name: Rollback Worker
+    environment: ${{ needs.resolve-target.outputs.github_environment }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6.3.0
-        with:
-          node-version: 24
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-
-      - name: Install Dependencies
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Announce Rollback Target
-        run: |
-          echo "app=${{ inputs.app }}"
-          echo "version_id=${{ inputs.version_id }}"
-
-      - name: Rollback API Worker
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: prepare
+        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command worker-deploy --github-output "$GITHUB_OUTPUT"
+      - name: Rollback selected API Worker
         if: ${{ inputs.app == 'api' }}
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          pnpm exec wrangler rollback "${{ inputs.version_id }}" \
-            --name starye-api \
-            --message "GitHub Actions rollback for api" \
-            --yes \
-            --cwd apps/api
-
-      - name: Rollback Gateway Worker
+        run: pnpm exec wrangler rollback "${{ inputs.version_id }}" --config "${{ steps.prepare.outputs.api_config_path }}" --yes
+      - name: Rollback selected Gateway Worker
         if: ${{ inputs.app == 'gateway' }}
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          pnpm exec wrangler rollback "${{ inputs.version_id }}" \
-            --name starye-gateway \
-            --message "GitHub Actions rollback for gateway" \
-            --yes \
-            --cwd apps/gateway
-
-      - name: Report Success
-        run: |
-          echo "rollback_status=success"
-          echo "app=${{ inputs.app }}"
-          echo "version_id=${{ inputs.version_id }}"
+        run: pnpm exec wrangler rollback "${{ inputs.version_id }}" --config "${{ steps.prepare.outputs.gateway_config_path }}" --yes
+      - name: Remove generated target files
+        if: always()
+        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
 
   rollback-pages-manual:
-    if: ${{ inputs.app != 'api' && inputs.app != 'gateway' }}
+    if: ${{ inputs.app == 'pages' }}
+    needs: resolve-target
     runs-on: ubuntu-latest
-    name: Pages Rollback Requires Manual Runbook
+    environment: ${{ needs.resolve-target.outputs.github_environment }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Fail Closed For Pages Rollback
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: prepare
+        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command pages-rollback --surface "${{ inputs.pages_surface }}" --github-output "$GITHUB_OUTPUT"
+      - name: Fail closed with selected Pages project
         run: |
-          echo "app=${{ inputs.app }}"
-          echo "version_id=${{ inputs.version_id }}"
-          echo "Pages rollback is not automated in this workflow."
-          echo "Follow RUNBOOK.md manual rollback steps for app=${{ inputs.app }}."
+          echo "Pages rollback remains manual for ${{ steps.prepare.outputs.pages_project }}."
           exit 1
+      - name: Remove generated target files
+        if: always()
+        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.pages_build_env_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
