@@ -36,6 +36,7 @@
 - R2 使用已收口到必要资产与短期诊断用途，upload/crawler/admin/script 共用同一套 policy-aware storage semantics。
 - root docs、RUNBOOK、`.planning` 和 `docs/archive/` 的 owner 边界已固定，后续里程碑应继续沿 canonical owner 更新。
 - v1.2 已启动，当前主线是 Cloudflare 账户/域名切换与本地到生产的数据链路闭环验证。
+- Phase 12 已完成 selected-target runtime、workflow 与 direct-entry closure；Phase 13 负责在授权边界内补齐真实数据链路 smoke evidence。
 
 ## Current Milestone Notes
 
@@ -186,4 +187,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-13 after v1.2 milestone kickoff*
+*Last updated: 2026-07-15 after Phase 12 completion*
