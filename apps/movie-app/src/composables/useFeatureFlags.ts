@@ -5,6 +5,7 @@
  */
 
 import { computed, ref } from 'vue'
+import { moviePublicRuntime } from '../config/public-runtime'
 
 /** 后端通用响应结构（code 非 0 表示错误） */
 interface BackendResult<T = unknown> {
@@ -23,27 +24,27 @@ export interface FeatureFlag {
 const flags = ref<Record<string, FeatureFlag>>({
   'aria2-integration': {
     name: 'aria2-integration',
-    enabled: import.meta.env.VITE_FEATURE_ARIA2 !== 'false',
+    enabled: moviePublicRuntime.aria2Enabled,
     description: 'Aria2 下载管理',
   },
   'quality-rating': {
     name: 'quality-rating',
-    enabled: import.meta.env.VITE_FEATURE_RATING !== 'false',
+    enabled: moviePublicRuntime.ratingEnabled,
     description: '播放源质量评分',
   },
   'aria2-websocket': {
     name: 'aria2-websocket',
-    enabled: import.meta.env.VITE_FEATURE_ARIA2_WS !== 'false',
+    enabled: moviePublicRuntime.aria2WebsocketEnabled,
     description: 'Aria2 WebSocket 实时通知',
   },
   'rating-auto-score': {
     name: 'rating-auto-score',
-    enabled: import.meta.env.VITE_FEATURE_AUTO_SCORE !== 'false',
+    enabled: moviePublicRuntime.autoScoreEnabled,
     description: '自动评分算法',
   },
   'performance-monitoring': {
     name: 'performance-monitoring',
-    enabled: import.meta.env.VITE_FEATURE_PERF_MONITOR === 'true',
+    enabled: moviePublicRuntime.performanceMonitoringEnabled,
     description: '性能监控',
   },
 })
@@ -111,7 +112,7 @@ export function useFeatureFlags() {
 export const featureFlags = useFeatureFlags()
 
 // 开发环境暴露到全局（用于调试）
-if (import.meta.env.DEV) {
+if (moviePublicRuntime.buildMode === 'development') {
   // @ts-expect-error 开发环境全局暴露
   window.__featureFlags = featureFlags
 }

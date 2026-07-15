@@ -7,6 +7,8 @@
 /* eslint-disable no-console */
 /* eslint-disable unused-imports/no-unused-vars */
 
+import { moviePublicRuntime } from '../config/public-runtime'
+
 interface ErrorLog {
   timestamp: number
   message: string
@@ -57,7 +59,7 @@ export function logError(
   console.error('❌ 错误:', message, error, context)
 
   // 发送到服务器（可选）
-  if (import.meta.env.VITE_MONITORING_ENABLED === 'true') {
+  if (moviePublicRuntime.monitoringEnabled) {
     sendErrorToServer(errorLog)
   }
 }
@@ -92,7 +94,7 @@ export function logPerformance(
   }
 
   // 发送到服务器（可选）
-  if (import.meta.env.VITE_MONITORING_ENABLED === 'true') {
+  if (moviePublicRuntime.monitoringEnabled) {
     sendPerformanceToServer(perfLog)
   }
 }
@@ -259,7 +261,7 @@ export function generateMonitoringReport(): string {
 }
 
 // 开发环境全局暴露
-if (import.meta.env.DEV) {
+if (moviePublicRuntime.buildMode === 'development') {
   // @ts-expect-error 开发环境全局暴露
   window.__monitoring = {
     getErrorLogs,

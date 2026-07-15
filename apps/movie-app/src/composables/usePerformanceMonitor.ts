@@ -5,6 +5,7 @@
  */
 
 import { ref } from 'vue'
+import { moviePublicRuntime } from '../config/public-runtime'
 
 interface PerformanceMetric {
   operation: string
@@ -183,7 +184,7 @@ export function usePerformanceMonitor() {
 /**
  * 全局性能监控实例（可在开发工具中使用）
  */
-if (import.meta.env.DEV) {
+if (moviePublicRuntime.buildMode === 'development') {
   // @ts-expect-error 开发环境全局暴露
   window.__perfMonitor = usePerformanceMonitor()
 }

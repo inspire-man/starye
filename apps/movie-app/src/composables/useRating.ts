@@ -15,9 +15,10 @@ import {
   generateRecommendationTag,
   generateWarningTag,
 } from '../utils/ratingAlgorithm'
+import { moviePublicRuntime } from '../config/public-runtime'
 import { useToast } from './useToast'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+const API_BASE_URL = moviePublicRuntime.apiBaseUrl
 
 // 播放源评分数据
 export interface PlayerRating {

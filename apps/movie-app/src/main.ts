@@ -3,22 +3,23 @@ import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from './App.vue'
 import { enablePerformanceMonitoring } from './composables/usePerformanceMonitor'
+import { moviePublicRuntime } from './config/public-runtime'
 import router from './router'
 import { initGlobalErrorHandling } from './utils/monitoring'
 import './style.css'
 
 const app = createApp(App)
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN
 
 app.use(createPinia())
 app.use(router)
 
-if (sentryDsn) {
+if (moviePublicRuntime.sentryDsn) {
   Sentry.init({
     app,
-    dsn: sentryDsn,
+    dsn: moviePublicRuntime.sentryDsn,
     enabled: true,
-    environment: import.meta.env.MODE,
+    environment: moviePublicRuntime.buildMode,
+    release: moviePublicRuntime.sentryRelease,
     integrations: [
       Sentry.browserTracingIntegration({ router }),
     ],
@@ -31,7 +32,7 @@ if (sentryDsn) {
 initGlobalErrorHandling()
 
 // 开发环境启用性能监控
-if (import.meta.env.DEV || import.meta.env.VITE_FEATURE_PERF_MONITOR === 'true') {
+if (moviePublicRuntime.buildMode === 'development' || moviePublicRuntime.performanceMonitoringEnabled) {
   enablePerformanceMonitoring()
 }
 

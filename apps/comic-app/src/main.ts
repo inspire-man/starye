@@ -2,21 +2,22 @@ import * as Sentry from '@sentry/vue'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from './App.vue'
+import { comicPublicRuntime } from './config/public-runtime'
 import router from './router'
 import './style.css'
 
 const app = createApp(App)
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN
 
 app.use(createPinia())
 app.use(router)
 
-if (sentryDsn) {
+if (comicPublicRuntime.sentryDsn) {
   Sentry.init({
     app,
-    dsn: sentryDsn,
+    dsn: comicPublicRuntime.sentryDsn,
     enabled: true,
-    environment: import.meta.env.MODE,
+    environment: comicPublicRuntime.buildMode,
+    release: comicPublicRuntime.sentryRelease,
     integrations: [
       Sentry.browserTracingIntegration({ router }),
     ],

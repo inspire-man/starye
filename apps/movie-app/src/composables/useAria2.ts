@@ -4,6 +4,7 @@
 
 import type { Aria2TaskStatus, Aria2Version } from '../utils/aria2Client'
 import { computed, ref } from 'vue'
+import { moviePublicRuntime } from '../config/public-runtime'
 import { createAria2Client } from '../utils/aria2Client'
 import { useToast } from './useToast'
 
@@ -23,7 +24,7 @@ export interface Aria2Config {
 
 // 存储键
 const STORAGE_KEY = 'aria2-config'
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+const API_BASE_URL = moviePublicRuntime.apiBaseUrl
 
 // 全局状态（单例模式）
 const config = ref<Aria2Config | null>(null)

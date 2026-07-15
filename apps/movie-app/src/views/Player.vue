@@ -5,6 +5,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Player from 'xgplayer'
 import { useAria2 } from '../composables/useAria2'
+import { moviePublicRuntime } from '../config/public-runtime'
 import { movieApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 import { isMagnetLink } from '../utils/magnetLink'
@@ -56,7 +57,7 @@ const loadedProgressDuration = ref<number | null>(null)
 
 const isTorrServerMode = computed(() => !!route.query.streamUrl)
 const hasAria2Fallback = computed(() => Boolean(currentMagnetUrl.value) && aria2Connected.value)
-const sentryEnabled = Boolean(import.meta.env.VITE_SENTRY_DSN)
+const sentryEnabled = Boolean(moviePublicRuntime.sentryDsn)
 
 /**
  * 系列导航：从 relatedMovies 中提取同系列影片，按 releaseDate ASC 排序，计算当前位置

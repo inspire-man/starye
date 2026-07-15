@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthGuard } from './composables/useAuthGuard'
+import { comicPublicRuntime } from './config/public-runtime'
 import { useUserStore } from './stores/user'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(comicPublicRuntime.appBasePath),
   routes: [
     {
       path: '/',
