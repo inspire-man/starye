@@ -449,7 +449,13 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
   if (evidence.mode === 'local' && parsedObservations.some(row => row.surface === 'remote_preflight')) {
     issues.push('Local evidence cannot contain remote preflight observations.')
   }
-  if (evidence.mode === 'remote' && parsedObservations.some(row => isPreIngestSurface(row.surface) && row.surface !== 'remote_preflight')) {
+  const remoteLocalPrerequisiteCheckpoint = evidence.mode === 'remote'
+    && evidence.ingestState === 'pre_ingest'
+    && parsedObservations.length === 1
+    && parsedObservations[0]?.surface === 'local_projection'
+    && parsedObservations[0]?.status === 'checkpoint'
+    && parsedObservations[0]?.checkpoint === 'local_prerequisite_unmet'
+  if (evidence.mode === 'remote' && parsedObservations.some(row => isPreIngestSurface(row.surface) && row.surface !== 'remote_preflight' && !remoteLocalPrerequisiteCheckpoint)) {
     issues.push('Remote evidence cannot repeat local prerequisite observations.')
   }
 

@@ -3,6 +3,7 @@ import type {
   DataChainEvidence,
   DataChainMode,
   DataChainObservation,
+  PreparedSmokeChildObservation,
   ProjectionValidationIssue,
 } from '../packages/config/src/deployment-target/index'
 import { spawnSync } from 'node:child_process'
@@ -11,16 +12,20 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
+  assertRemoteEligibility,
   buildLocalEnvProjectionPlan,
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
   createPreIngestEvidence,
   createResolvedPendingEvidence,
   LOCAL_GATEWAY_ORIGIN,
+  prepareTargetMutation,
   renderDataChainEvidenceMarkdown,
   resolveTargetProfile,
+  runPreparedTargetMutation,
   runTargetPreflight,
   serializeDataChainEvidenceJson,
+  validateDataChainEvidenceForExitCode,
   validateProjectedEnv,
 } from '../packages/config/src/deployment-target/index'
 import { createDataChainFixture, runDataChainFixture } from '../packages/crawler/src/smoke/data-chain-fixture'
@@ -54,7 +59,14 @@ export interface GatewayAuthResponse {
 }
 
 export interface DataChainSmokeDependencies {
-  readonly resolveTarget?: (target: string) => { id: string, profile: { local: { wranglerProfile: string } } }
+  readonly resolveTarget?: (target: string) => {
+    id: string
+    profile: {
+      local?: { wranglerProfile: string }
+      ci?: { githubEnvironment: string }
+      urls?: { gateway: string }
+    }
+  }
   readonly collectProjectionIssues?: (target: string) => Promise<readonly ProjectionValidationIssue[]>
   readonly runPreflight?: (options: Parameters<typeof runTargetPreflight>[0]) => ReturnType<typeof runTargetPreflight>
   readonly inspectLocalD1?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<LocalD1Inspection>
@@ -63,6 +75,12 @@ export interface DataChainSmokeDependencies {
   readonly runFixture?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<{ itemCode: string }>
   readonly snapshot?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<{ status: 'found' | 'not-found' | 'checkpoint', itemCode: string, itemId?: string }>
   readonly fetchGatewayApi?: (input: { itemCode: string, itemId: string }) => Promise<{ status: number, itemCode?: string, itemId?: string, attempt?: number }>
+  readonly read?: (file: string) => Promise<string | undefined>
+  readonly environment?: Readonly<Record<string, string | undefined>>
+  readonly executeReadOnly?: (argv: readonly string[]) => { exitCode: number, stdout?: string }
+  readonly runPreparedFixture?: (input: { target: string, runId: string, executeReadOnly: (argv: readonly string[]) => { exitCode: number, stdout?: string } }) => Promise<Extract<PreparedSmokeChildObservation, { operation: 'crawler-smoke-fixture' }>>
+  readonly runPreparedSnapshot?: (input: { target: string, runId: string, executeReadOnly: (argv: readonly string[]) => { exitCode: number, stdout?: string } }) => Promise<Extract<PreparedSmokeChildObservation, { operation: 'd1-smoke-snapshot' }>>
+  readonly fetchCanonicalApi?: (input: { canonicalBase: string, path: string, itemCode: string, itemId: string }) => Promise<{ status: number, itemCode?: string, itemId?: string, attempt?: number }>
   readonly now?: () => string
   readonly write?: (file: string, contents: string) => Promise<void>
 }
@@ -318,7 +336,7 @@ async function preIngestCheckpoint(
     targetId: options.target,
     runId: options.runId,
     candidateItemCode,
-    mode: 'local',
+    mode: options.mode,
     timestamp: now(),
     observation,
   })
@@ -326,9 +344,270 @@ async function preIngestCheckpoint(
   return { exitCode: CHECKPOINT_EXIT_CODE, evidence }
 }
 
+async function readEvidenceDefault(file: string): Promise<string | undefined> {
+  try {
+    return await readFile(file, 'utf8')
+  }
+  catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return undefined
+    }
+    throw error
+  }
+}
+
+async function loadExactEvidencePair(
+  options: DataChainSmokeOptions,
+  mode: DataChainMode,
+  read: (file: string) => Promise<string | undefined>,
+): Promise<DataChainEvidence> {
+  const paths = evidencePaths({ ...options, mode })
+  const [json, markdown] = await Promise.all([read(paths.json), read(paths.markdown)])
+  if (!json || !markdown) {
+    throw new Error('Data-chain evidence pair is missing.')
+  }
+  let evidence: unknown
+  try {
+    evidence = JSON.parse(json)
+  }
+  catch {
+    throw new Error('Data-chain evidence JSON is malformed.')
+  }
+  validateDataChainEvidenceForExitCode(evidence)
+  const typed = evidence as DataChainEvidence
+  if (typed.mode !== mode || typed.targetId !== options.target || typed.runId !== options.runId) {
+    throw new Error('Data-chain evidence tuple does not match runner arguments.')
+  }
+  if (markdown !== renderDataChainEvidenceMarkdown(typed)) {
+    throw new Error('Data-chain evidence Markdown does not match JSON.')
+  }
+  return typed
+}
+
+function hasPassedSurface(evidence: DataChainEvidence, surface: DataChainObservation['surface']): boolean {
+  return evidence.observations.some(row => row.surface === surface && row.status === 'passed')
+}
+
+function assertRemoteLocalPrerequisite(
+  evidence: DataChainEvidence,
+  input: { targetId: string, runId: string, itemCode: string },
+): void {
+  if (evidence.itemCode !== input.itemCode || evidence.itemId === null) {
+    throw new Error('Remote execution requires the deterministic local evidence tuple.')
+  }
+  assertRemoteEligibility(evidence, {
+    targetId: input.targetId,
+    runId: input.runId,
+    itemCode: evidence.itemCode,
+    itemId: evidence.itemId,
+  })
+  const requiredSurfaces: readonly DataChainObservation['surface'][] = [
+    'local_projection',
+    'local_d1_readiness',
+    'service_readiness',
+    'gateway_auth',
+    'd1',
+    'api',
+    'dashboard',
+    'viewer',
+  ]
+  if (!requiredSurfaces.every(surface => hasPassedSurface(evidence, surface))) {
+    throw new Error('Remote execution requires every terminal local surface to pass.')
+  }
+}
+
+function executeRemoteReadOnlyDefault(argv: readonly string[]): { exitCode: number, stdout?: string } {
+  const result = spawnSync('pnpm', ['exec', 'wrangler', ...argv], {
+    cwd: path.resolve(import.meta.dirname, '..'),
+    encoding: 'utf8',
+    shell: false,
+    env: {
+      PATH: process.env.PATH,
+      CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN,
+      CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
+    },
+  })
+  return { exitCode: result.status ?? 1, stdout: result.stdout ?? '' }
+}
+
+async function runPreparedRemoteEntry(
+  input: {
+    target: string
+    runId: string
+    ciEnvironment: string
+    entry: 'crawler-smoke-fixture' | 'd1-smoke-snapshot'
+    executeReadOnly: (argv: readonly string[]) => { exitCode: number, stdout?: string }
+    environment: Readonly<Record<string, string | undefined>>
+  },
+): Promise<PreparedSmokeChildObservation> {
+  const root = path.resolve(import.meta.dirname, '..')
+  const prepared = await prepareTargetMutation({
+    target: input.target,
+    scope: 'remote',
+    command: input.entry,
+    ciEnvironment: input.ciEnvironment,
+    environment: input.environment,
+    runId: input.runId,
+    appDirectories: { api: path.join(root, 'apps/api'), gateway: path.join(root, 'apps/gateway') },
+    runDirectory: path.join(root, '.target-runs'),
+  }, {
+    executeReadOnly: input.executeReadOnly,
+  })
+  try {
+    const result = await runPreparedTargetMutation({
+      entry: input.entry,
+      preparedContextPath: prepared.preparedContextPath,
+      authorizedEnvironment: input.environment,
+      execute: (command, args, environment) => {
+        const child = spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment })
+        return { exitCode: child.status ?? 1, stdout: child.stdout ?? '' }
+      },
+    })
+    if (!result.observation) {
+      throw new Error('Prepared smoke entry did not return an observation.')
+    }
+    return result.observation
+  }
+  finally {
+    await prepared.cleanup()
+  }
+}
+
+async function fetchCanonicalApiDefault(input: { canonicalBase: string, path: string, itemCode: string, itemId: string }): Promise<{ status: number, itemCode?: string, itemId?: string, attempt?: number }> {
+  let endpoint: URL
+  try {
+    const canonical = new URL(input.canonicalBase)
+    endpoint = new URL(input.path, canonical)
+    if (canonical.protocol !== 'https:' || canonical.port || endpoint.origin !== canonical.origin || endpoint.port || endpoint.pathname !== input.path) {
+      return { status: 502, attempt: 1 }
+    }
+  }
+  catch {
+    return { status: 502, attempt: 1 }
+  }
+  try {
+    const response = await fetch(endpoint)
+    const body = await response.json().catch(() => undefined) as unknown
+    const data = isRecord(body) && isRecord(body.data) ? body.data : undefined
+    return {
+      status: response.status,
+      attempt: 1,
+      ...(isText(data?.code) ? { itemCode: data.code } : {}),
+      ...(isText(data?.id) ? { itemId: data.id } : {}),
+    }
+  }
+  catch {
+    return { status: 502, attempt: 1 }
+  }
+}
+
+async function runRemoteDataChainSmoke(options: DataChainSmokeOptions, dependencies: DataChainSmokeDependencies): Promise<DataChainSmokeResult> {
+  const now = dependencies.now ?? (() => new Date().toISOString())
+  const write = dependencies.write ?? writeDefault
+  const resolve = dependencies.resolveTarget ?? resolveTargetProfile
+  let resolution: ReturnType<typeof resolveTargetProfile>
+  try {
+    resolution = resolve(options.target) as ReturnType<typeof resolveTargetProfile>
+  }
+  catch {
+    const candidate = createDataChainCandidate({ targetId: options.target, runId: options.runId })
+    return preIngestCheckpoint(options, candidate.itemCode, { surface: 'local_projection', status: 'checkpoint', checkpoint: 'local_prerequisite_unmet' }, now, write)
+  }
+  const candidate = createDataChainCandidate({ targetId: resolution.id, runId: options.runId })
+  try {
+    const localEvidence = await loadExactEvidencePair({ ...options, target: resolution.id }, 'local', dependencies.read ?? readEvidenceDefault)
+    assertRemoteLocalPrerequisite(localEvidence, { targetId: resolution.id, runId: options.runId, itemCode: candidate.itemCode })
+  }
+  catch {
+    return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'local_projection', status: 'checkpoint', checkpoint: 'local_prerequisite_unmet' }, now, write)
+  }
+
+  const environment = dependencies.environment ?? process.env
+  if (!['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CRAWLER_SECRET'].every(key => isText(environment[key]))) {
+    return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
+  }
+  const executeReadOnly = dependencies.executeReadOnly ?? executeRemoteReadOnlyDefault
+  const preflight = dependencies.runPreflight ?? runTargetPreflight
+  const preflightResult = preflight({
+    target: resolution.id,
+    scope: 'remote',
+    command: 'smoke',
+    ciEnvironment: resolution.profile.ci.githubEnvironment,
+    environment,
+    live: true,
+    liveCheckExecutor: { execute: executeReadOnly },
+  })
+  if (!preflightResult.ok) {
+    return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
+  }
+
+  const runFixture = dependencies.runPreparedFixture ?? (input => runPreparedRemoteEntry({
+    ...input,
+    ciEnvironment: resolution.profile.ci.githubEnvironment,
+    entry: 'crawler-smoke-fixture',
+    environment,
+  }))
+  const runSnapshot = dependencies.runPreparedSnapshot ?? (input => runPreparedRemoteEntry({
+    ...input,
+    ciEnvironment: resolution.profile.ci.githubEnvironment,
+    entry: 'd1-smoke-snapshot',
+    environment,
+  }))
+  try {
+    const fixture = await runFixture({ target: resolution.id, runId: options.runId, executeReadOnly })
+    if (fixture.itemCode !== candidate.itemCode) {
+      throw new Error('Remote fixture tuple does not match the deterministic candidate.')
+    }
+  }
+  catch {
+    return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
+  }
+  let snapshot: Extract<PreparedSmokeChildObservation, { operation: 'd1-smoke-snapshot' }>
+  try {
+    snapshot = await runSnapshot({ target: resolution.id, runId: options.runId, executeReadOnly })
+  }
+  catch {
+    return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
+  }
+  if (snapshot.status !== 'found' || snapshot.itemCode !== candidate.itemCode) {
+    return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
+  }
+
+  const canonicalBase = resolution.profile.urls.gateway
+  const canonicalPath = `/api/public/movies/${candidate.itemCode}`
+  const fetchCanonicalApi = dependencies.fetchCanonicalApi ?? fetchCanonicalApiDefault
+  const api = await fetchCanonicalApi({ canonicalBase, path: canonicalPath, itemCode: candidate.itemCode, itemId: snapshot.itemId })
+  const apiPassed = api.status >= 200 && api.status < 300 && api.itemCode === candidate.itemCode && api.itemId === snapshot.itemId
+  const evidence = createResolvedPendingEvidence({
+    targetId: resolution.id,
+    runId: options.runId,
+    itemCode: candidate.itemCode,
+    itemId: snapshot.itemId,
+    mode: 'remote',
+    timestamp: now(),
+    aggregate: apiPassed ? 'pending' : 'checkpoint',
+    observations: [
+      { surface: 'remote_preflight', status: 'passed' },
+      { surface: 'd1', status: 'passed' },
+      {
+        surface: 'api',
+        status: apiPassed ? 'passed' : 'checkpoint',
+        ...(apiPassed ? {} : { checkpoint: 'canonical_api_unavailable' as const }),
+        path: canonicalPath,
+        ...(api.attempt ? { attempt: api.attempt } : {}),
+      },
+    ],
+  })
+  await writeEvidencePair({ ...options, target: resolution.id }, evidence, write)
+  return { exitCode: CHECKPOINT_EXIT_CODE, evidence }
+}
+
 export async function runDataChainSmoke(options: DataChainSmokeOptions, dependencies: DataChainSmokeDependencies = {}): Promise<DataChainSmokeResult> {
+  if (options.mode === 'remote') {
+    return runRemoteDataChainSmoke(options, dependencies)
+  }
   if (options.mode !== 'local') {
-    throw new Error('Remote data-chain execution belongs to Plan 13-04.')
+    throw new Error('Data-chain smoke mode is invalid.')
   }
   if (!isFixedEvidenceRoot(options.evidenceRoot) && dependencies.write === undefined) {
     throw new Error('Data-chain smoke evidence directory must be the fixed Phase 13 evidence root.')
@@ -343,13 +622,16 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
   const collectProjectionIssues = dependencies.collectProjectionIssues ?? collectProjectionIssuesDefault
   const preflight = dependencies.runPreflight ?? runTargetPreflight
 
-  let resolution: { id: string, profile: { local: { wranglerProfile: string } } }
+  let resolution: { id: string, profile: { local?: { wranglerProfile: string } } }
   let projectionIssues: readonly ProjectionValidationIssue[]
   try {
     resolution = resolve(options.target)
     projectionIssues = await collectProjectionIssues(options.target)
   }
   catch {
+    return preIngestCheckpoint(options, candidate.itemCode, { surface: 'local_projection', status: 'checkpoint', checkpoint: 'target_projection_unmet' }, now, write)
+  }
+  if (!resolution.profile.local) {
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'local_projection', status: 'checkpoint', checkpoint: 'target_projection_unmet' }, now, write)
   }
   const preflightResult = preflight({

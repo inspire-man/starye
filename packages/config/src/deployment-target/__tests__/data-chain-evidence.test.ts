@@ -240,7 +240,7 @@ describe('phase 13 deterministic evidence contract', () => {
     })).not.toEqual([])
   })
 
-  it('rejects local prerequisite rows and origins in remote evidence', () => {
+  it('allows only the remote local-prerequisite checkpoint and rejects other local rows or origins', () => {
     const remote = createResolvedPendingEvidence({
       ...tuple,
       mode: 'remote',
@@ -252,6 +252,17 @@ describe('phase 13 deterministic evidence contract', () => {
     })
 
     expect(validateDataChainEvidence(remote)).toEqual([])
+    expect(validateDataChainEvidence({
+      ...remote,
+      ingestState: 'pre_ingest',
+      aggregate: 'checkpoint',
+      itemId: null,
+      observations: [{
+        surface: 'local_projection',
+        status: 'checkpoint',
+        checkpoint: 'local_prerequisite_unmet',
+      }],
+    })).toEqual([])
     expect(validateDataChainEvidence({
       ...remote,
       observations: [{ surface: 'local_projection', status: 'passed' }],
