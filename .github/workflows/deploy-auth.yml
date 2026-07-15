@@ -2,53 +2,68 @@ name: Deploy Auth Service
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'apps/auth/**'
-      - 'packages/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
+    branches: [main]
+    paths: ['apps/auth/**', 'packages/**', 'package.json', 'pnpm-lock.yaml']
   workflow_dispatch:
+    inputs:
+      target:
+        description: Selected tracked deployment target
+        required: true
+        type: string
 
 jobs:
-  deploy:
+  resolve-target:
     runs-on: ubuntu-latest
-    name: Deploy Auth Service
+    outputs:
+      target: ${{ steps.resolve.outputs.target }}
+      github_environment: ${{ steps.resolve.outputs.github_environment }}
+    env:
+      STARYE_TARGET_ID: starye-org
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6.3.0
-        with:
-          node-version: 24
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-
-      - name: Install Dependencies
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Build Auth App (SSG)
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: resolve
+        shell: bash
         env:
-          VITE_API_URL: https://starye.org
-        run: pnpm --filter starye-auth generate
-
-      - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          INPUT_TARGET: ${{ inputs.target || '' }}
         run: |
-          # 尝试创建项目（如果不存在）
-          pnpm exec wrangler pages project create starye-auth --production-branch=main || true
-          # 部署到 Cloudflare Pages（使用英文 commit message 避免 UTF-8 编码问题）
-          COMMIT_MSG=$(git log -1 --format=%s | iconv -f UTF-8 -t ASCII//TRANSLIT//IGNORE || echo "Deploy Auth Service")
-          pnpm exec wrangler pages deploy apps/auth/dist \
-            --project-name=starye-auth \
-            --branch=main \
-            --commit-hash=${{ github.sha }} \
-            --commit-message="$COMMIT_MSG" \
-            --commit-dirty=true
+          set -euo pipefail
+          target="${INPUT_TARGET:-$STARYE_TARGET_ID}"
+          test -n "$target"
+          output="$(pnpm target-profile validate --target "$target")"
+          github_environment="$(printf '%s\n' "$output" | sed -n 's/^CI GitHub environment: //p')"
+          test -n "$github_environment"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "github_environment=$github_environment" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: resolve-target
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-target.outputs.github_environment }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: prepare
+        env:
+          STARYE_PUBLIC_SENTRY_DSN: ${{ vars.STARYE_PUBLIC_SENTRY_DSN }}
+          STARYE_PUBLIC_SENTRY_RELEASE: ${{ vars.STARYE_PUBLIC_SENTRY_RELEASE }}
+          STARYE_PUBLIC_BUILD_MODE: ${{ vars.STARYE_PUBLIC_BUILD_MODE }}
+        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command pages-deploy --surface auth --github-output "$GITHUB_OUTPUT"
+      - name: Build Auth Pages
+        run: pnpm target-profile run-pages-build --surface auth --pages-build-env-path "${{ steps.prepare.outputs.pages_build_env_path }}"
+      - name: Deploy Auth Pages
+        run: pnpm exec wrangler pages deploy apps/auth/dist --project-name "${{ steps.prepare.outputs.pages_project }}" --branch main --commit-hash "${{ github.sha }}"
+      - name: Remove generated target files
+        if: always()
+        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.pages_build_env_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
