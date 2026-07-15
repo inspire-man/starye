@@ -15,7 +15,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 | Phase | Name | Goal | Requirements |
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
-| 12 | 0/4 | Planned    |  |
+| 12 | 1/4 | In Progress|  |
 | 13 | Full Chain Data Smoke | Prove local and production data flow from crawler/fixture through D1/API/admin to front-end viewing via Gateway/canonical domain. | DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05 |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
 
@@ -51,10 +51,10 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** ENV-03, ENV-04, ENV-05, ENV-06, DEPL-01, DEPL-02, DEPL-03, DEPL-04, DEPL-05, DEPL-06, TEST-03, TEST-04
 
-**Plans:** 0/4 plans executed
+**Plans:** 1/4 plans executed
 **Wave 1**
 
-- [ ] 12-01-PLAN.md
+- [x] 12-01-PLAN.md
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

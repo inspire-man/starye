@@ -5,16 +5,16 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 12
 current_phase_name: Cloudflare Config Switching
 status: executing
-stopped_at: Phase 12 UI-SPEC approved
-last_updated: "2026-07-14T20:39:31.938Z"
-last_activity: 2026-07-14
-last_activity_desc: Phase 11 complete, transitioned to Phase 12
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-07-15T03:11:14.070Z"
+last_activity: 2026-07-15
+last_activity_desc: Completed Phase 12 Plan 01 deployment target projection and mutation gate
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
-  percent: 25
+  total_plans: 8
+  completed_plans: 5
+  percent: 63
 ---
 
 # Project State: Starye — 个人内容中台
@@ -41,14 +41,14 @@ progress:
 ## Current Position
 
 Phase: 12 — Cloudflare Config Switching
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-14 — Phase 11 complete, transitioned to Phase 12
+Plan: 12-02-PLAN.md
+Status: In progress
+Last activity: 2026-07-15 — Completed 12-01 target projection, materialization, and mutation gate
 
 ## Performance Metrics
 
 **Phases completed:** 0 / 4
-**Plans completed:** 3
+**Plans completed:** 5
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -98,14 +98,14 @@ Last activity: 2026-07-14 — Phase 11 complete, transitioned to Phase 12
 
 ## Session Continuity
 
-**Last session:** 2026-07-14T17:51:04.475Z
-**Stopped at:** Phase 12 UI-SPEC approved
-**Resume file:** .planning/phases/12-cloudflare-config-switching/12-UI-SPEC.md
+**Last session:** 2026-07-15T03:11:14.053Z
+**Stopped at:** Completed 12-01-PLAN.md
+**Resume file:** .planning/phases/12-cloudflare-config-switching/12-02-PLAN.md
 
 **Next recommended action:**
 
 ```text
-$gsd-verify-work 11
+$gsd-execute-phase 12 --wave 2
 ```
 
 **If interrupted, resume by:**
@@ -113,7 +113,7 @@ $gsd-verify-work 11
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md`
 3. Read `.planning/ROADMAP.md`
-4. Continue with `$gsd-verify-work 11`
+4. Continue with `$gsd-execute-phase 12 --wave 2`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -123,7 +123,7 @@ $gsd-verify-work 11
 
 ## Operator Next Steps
 
-- Verify Phase 11 with /gsd-verify-work 11
+- Execute Phase 12 Wave 2 with /gsd-execute-phase 12 --wave 2
 
 ## Decisions
 
@@ -152,3 +152,6 @@ $gsd-verify-work 11
 - [Phase 11]: Marker-aware updates own only named target-managed keys; user-managed secret values are never projected or removed.
 - [Phase 11]: Local preflight requires the explicit starye-org Wrangler profile and rejects CLOUDFLARE_API_TOKEN shadowing; CI/remote preflight requires the mapped starye-org environment.
 - [Phase 11]: Remote high-risk commands require credential key names plus injected argv-only D1/R2/KV read checks; the Phase 11 CLI never owns deploy or workflow mutation.
+- [Phase 12]: Public browser values are a typed allowlist; Pages, Worker, account, and resource identity remain deploy-only projections.
+- [Phase 12]: CI/remote preparation is explicit-target only and does not read local operator files; local deployment has its own Wrangler-profile/read-only gate.
+- [Phase 12]: Direct remote mutation uses a closed registry, fresh child environment, and run-scoped prepared context rather than ambient target identity or caller argv.

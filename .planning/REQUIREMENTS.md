@@ -16,15 +16,15 @@
 
 - [x] **ENV-01**: Operator can define local env values once and project them into Worker `.dev.vars`, Vite `.env`, Nuxt runtime config, and crawler env files.
 - [x] **ENV-02**: Operator can validate local env completeness before starting the full local stack.
-- [ ] **ENV-03**: Front-end apps share a typed public config contract for API base, gateway base, app base paths, and selected target identity.
-- [ ] **ENV-04**: Front-end runtime config exposes only public values and blocks accidental exposure of secrets through `VITE_*` or `NUXT_PUBLIC_*`.
-- [ ] **ENV-05**: Gateway/API remain the service-discovery boundary for internal origins; browser apps call the canonical gateway/API instead of discovering individual services.
+- [x] **ENV-03**: Front-end apps share a typed public config contract for API base, gateway base, app base paths, and selected target identity.
+- [x] **ENV-04**: Front-end runtime config exposes only public values and blocks accidental exposure of secrets through `VITE_*` or `NUXT_PUBLIC_*`.
+- [x] **ENV-05**: Gateway/API remain the service-discovery boundary for internal origins; browser apps call the canonical gateway/API instead of discovering individual services.
 - [ ] **ENV-06**: Local and production smoke tests verify that front-end config resolves to the selected target without source-code edits.
 
 ### Cloudflare Deploy Config
 
-- [ ] **DEPL-01**: Operator can deploy API, gateway, and dashboard using target-aware Wrangler config or env selection.
-- [ ] **DEPL-02**: Gateway routes/origins, API CORS/auth URLs, and front-end API URLs switch according to the selected target domain.
+- [x] **DEPL-01**: Operator can deploy API, gateway, and dashboard using target-aware Wrangler config or env selection.
+- [x] **DEPL-02**: Gateway routes/origins, API CORS/auth URLs, and front-end API URLs switch according to the selected target domain.
 - [ ] **DEPL-03**: GitHub deploy workflows can select the correct Cloudflare account/domain secret set.
 - [ ] **DEPL-04**: D1 migration workflow exports backup, validates target bucket/account, and applies migrations against the selected target.
 - [ ] **DEPL-05**: Crawler workflows use target-specific `API_URL`, `CRAWLER_SECRET`, R2 bucket, and Cloudflare account credentials.
@@ -45,7 +45,7 @@
 - [ ] **TEST-01**: Active source/tests no longer depend on unqualified `starye.org` literals except default-target fixtures.
 - [x] **TEST-02**: Automated tests cover target profile validation and fail-closed mismatch cases.
 - [ ] **TEST-03**: Automated tests cover domain-aware gateway/API/auth configuration.
-- [ ] **TEST-04**: Automated tests cover deploy, migration, and crawler workflow target resolution without real secrets.
+- [x] **TEST-04**: Automated tests cover deploy, migration, and crawler workflow target resolution without real secrets.
 - [ ] **TEST-05**: Smoke scripts produce repeatable local and production verification output.
 - [ ] **TEST-06**: RUNBOOK documents account/domain switching, required secrets, deploy, smoke, rollback, and recovery.
 - [ ] **TEST-07**: Final verification checklist maps every v1.2 requirement to command output or artifact evidence.
@@ -85,12 +85,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-04 | Phase 11 | Complete |
 | ENV-01 | Phase 11 | Complete |
 | ENV-02 | Phase 11 | Complete |
-| ENV-03 | Phase 12 | Pending |
-| ENV-04 | Phase 12 | Pending |
-| ENV-05 | Phase 12 | Pending |
+| ENV-03 | Phase 12 | Complete |
+| ENV-04 | Phase 12 | Complete |
+| ENV-05 | Phase 12 | Complete |
 | ENV-06 | Phase 12 | Pending |
-| DEPL-01 | Phase 12 | Pending |
-| DEPL-02 | Phase 12 | Pending |
+| DEPL-01 | Phase 12 | Complete |
+| DEPL-02 | Phase 12 | Complete |
 | DEPL-03 | Phase 12 | Pending |
 | DEPL-04 | Phase 12 | Pending |
 | DEPL-05 | Phase 12 | Pending |
@@ -105,7 +105,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-01 | Phase 14 | Pending |
 | TEST-02 | Phase 11 | Complete |
 | TEST-03 | Phase 12 | Pending |
-| TEST-04 | Phase 12 | Pending |
+| TEST-04 | Phase 12 | Complete |
 | TEST-05 | Phase 13 | Pending |
 | TEST-06 | Phase 14 | Pending |
 | TEST-07 | Phase 14 | Pending |
