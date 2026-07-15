@@ -25,7 +25,10 @@ export type DataChainObservationStatus = (typeof dataChainObservationStatusValue
 export const dataChainCheckpointValues = [
   'target_projection_unmet',
   'local_d1_unready',
+  'local_d1_readiness_unmet',
+  'fixture_seed_incomplete',
   'service_unavailable',
+  'local_prerequisite_unmet',
   'gateway_auth_unavailable',
   'target_preflight_unmet',
   'canonical_api_unavailable',
@@ -206,8 +209,17 @@ function codeSegment(value: string): string {
   return segment || 'target'
 }
 
-function expectedBrowserPath(surface: 'dashboard' | 'viewer', itemCode: string): string {
-  return surface === 'dashboard' ? '/dashboard/movies' : `/movie/${itemCode}`
+function expectedCanonicalPath(surface: 'gateway_auth' | 'api' | 'dashboard' | 'viewer', itemCode: string): string {
+  switch (surface) {
+    case 'gateway_auth': return '/auth/'
+    case 'api': return `/api/public/movies/${itemCode}`
+    case 'dashboard': return '/dashboard/movies'
+    case 'viewer': return `/movie/${itemCode}`
+  }
+}
+
+function isCanonicalRouteSurface(value: unknown): value is 'gateway_auth' | 'api' | 'dashboard' | 'viewer' {
+  return value === 'gateway_auth' || value === 'api' || value === 'dashboard' || value === 'viewer'
 }
 
 function requiredResolvedSurfaces(mode: DataChainMode): readonly DataChainSurface[] {
@@ -396,11 +408,12 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
       if (observation.origin !== undefined && evidence.mode !== 'local') {
         issues.push(`Observation ${index} remote evidence must not persist an origin.`)
       }
-      if (observation.surface !== 'dashboard' && observation.surface !== 'viewer' && (observation.path !== undefined || observation.origin !== undefined)) {
-        issues.push(`Observation ${index} only browser surfaces may contain a path or origin.`)
+      const canonicalSurface = isCanonicalRouteSurface(observation.surface) ? observation.surface : undefined
+      if (!canonicalSurface && (observation.path !== undefined || observation.origin !== undefined)) {
+        issues.push(`Observation ${index} only Gateway route surfaces may contain a path or origin.`)
       }
-      if ((observation.surface === 'dashboard' || observation.surface === 'viewer') && observation.path !== undefined && observation.path !== expectedBrowserPath(observation.surface, String(evidence.itemCode))) {
-        issues.push(`Observation ${index} browser path is not canonical.`)
+      if (canonicalSurface && observation.path !== undefined && observation.path !== expectedCanonicalPath(canonicalSurface, String(evidence.itemCode))) {
+        issues.push(`Observation ${index} Gateway route path is not canonical.`)
       }
 
       if (hasValue(dataChainSurfaceValues, observation.surface) && hasValue(dataChainObservationStatusValues, observation.status)) {
@@ -426,10 +439,10 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
   if (browserObservations[0]?.surface === 'dashboard' && browserObservations[1]?.surface === 'viewer' && browserObservations[0].status !== 'passed') {
     issues.push('Viewer observation cannot follow a non-success Dashboard observation.')
   }
-  if (browserObservations.some(row => row.surface === 'dashboard' && row.path !== undefined && row.path !== '/dashboard/movies')) {
+  if (browserObservations.some(row => row.surface === 'dashboard' && row.path !== undefined && row.path !== expectedCanonicalPath('dashboard', String(evidence.itemCode)))) {
     issues.push('Dashboard path is invalid.')
   }
-  if (browserObservations.some(row => row.surface === 'viewer' && row.path !== undefined && row.path !== `/movie/${evidence.itemCode}`)) {
+  if (browserObservations.some(row => row.surface === 'viewer' && row.path !== undefined && row.path !== expectedCanonicalPath('viewer', String(evidence.itemCode)))) {
     issues.push('Viewer path is invalid.')
   }
 
@@ -557,7 +570,7 @@ export function appendBrowserObservation(
   const observation: DataChainObservation = {
     surface: input.surface,
     status: input.status,
-    path: expectedBrowserPath(input.surface, existingEvidence.itemCode),
+    path: expectedCanonicalPath(input.surface, existingEvidence.itemCode),
     ...(existingEvidence.mode === 'local' ? { origin: LOCAL_GATEWAY_ORIGIN } : {}),
     ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
   }
