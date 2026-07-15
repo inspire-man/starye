@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   appendBrowserObservation,
+  assertRemoteEligibility,
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
   createPreIngestEvidence,
@@ -9,6 +10,7 @@ import {
   renderDataChainEvidenceMarkdown,
   serializeDataChainEvidenceJson,
   validateDataChainEvidence,
+  validateDataChainEvidenceForExitCode,
 } from '../data-chain-evidence'
 
 const tuple = {
@@ -135,6 +137,10 @@ describe('phase 13 deterministic evidence contract', () => {
       origin: LOCAL_GATEWAY_ORIGIN,
     })
 
+    if (afterDashboard.evidence.ingestState !== 'resolved_pending_observation') {
+      throw new Error('Dashboard append must retain pending evidence.')
+    }
+
     expect(() => appendBrowserObservation(afterDashboard.evidence, {
       ...tuple,
       surface: 'dashboard',
@@ -166,11 +172,38 @@ describe('phase 13 deterministic evidence contract', () => {
 
     expect(afterDashboardFailure.exitCode).toBe(CHECKPOINT_EXIT_CODE)
     expect(afterDashboardFailure.evidence.aggregate).toBe('checkpoint')
+
+    if (afterDashboardFailure.evidence.ingestState !== 'resolved_pending_observation') {
+      throw new Error('Browser checkpoint must retain pending evidence.')
+    }
+
     expect(() => appendBrowserObservation(afterDashboardFailure.evidence, {
       ...tuple,
       surface: 'viewer',
       status: 'passed',
     })).toThrow('non-success')
+    expect(validateDataChainEvidenceForExitCode(afterDashboardFailure.evidence)).toBe(0)
+  })
+
+  it('requires the exact terminal local tuple before a remote run can begin', () => {
+    const dashboard = appendBrowserObservation(pendingEvidence(), {
+      ...tuple,
+      surface: 'dashboard',
+      status: 'passed',
+    })
+    const local = appendBrowserObservation(dashboard.evidence, {
+      ...tuple,
+      surface: 'viewer',
+      status: 'passed',
+    }).evidence
+
+    expect(assertRemoteEligibility(local, tuple)).toMatchObject({
+      mode: 'local',
+      ingestState: 'resolved',
+      aggregate: 'passed',
+    })
+    expect(() => assertRemoteEligibility(pendingEvidence(), tuple)).toThrow('terminal passed')
+    expect(() => assertRemoteEligibility(local, { ...tuple, runId: 'other-run' })).toThrow('exact local evidence tuple')
   })
 
   it('rejects direct service ports, unsupported vocabulary, and tuple disagreement', () => {
@@ -182,7 +215,7 @@ describe('phase 13 deterministic evidence contract', () => {
         surface: 'dashboard',
         status: 'passed',
         path: '/dashboard/movies',
-        origin: 'http://localhost:3000',
+        origin: 'http://localhost:3001',
       }],
     })).not.toEqual([])
     expect(validateDataChainEvidence({
@@ -192,6 +225,33 @@ describe('phase 13 deterministic evidence contract', () => {
     expect(validateDataChainEvidence({
       ...pending,
       itemCode: '',
+    })).not.toEqual([])
+  })
+
+  it('rejects local prerequisite rows and origins in remote evidence', () => {
+    const remote = createResolvedPendingEvidence({
+      ...tuple,
+      mode: 'remote',
+      timestamp: '2026-07-16T00:00:00.000Z',
+      observations: [
+        { surface: 'remote_preflight', status: 'passed' },
+        { surface: 'd1', status: 'passed' },
+      ],
+    })
+
+    expect(validateDataChainEvidence(remote)).toEqual([])
+    expect(validateDataChainEvidence({
+      ...remote,
+      observations: [{ surface: 'local_projection', status: 'passed' }],
+    })).not.toEqual([])
+    expect(validateDataChainEvidence({
+      ...remote,
+      observations: [{
+        surface: 'dashboard',
+        status: 'passed',
+        path: '/dashboard/movies',
+        origin: LOCAL_GATEWAY_ORIGIN,
+      }],
     })).not.toEqual([])
   })
 
