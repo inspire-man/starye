@@ -224,6 +224,18 @@ describe('phase 13 deterministic evidence contract', () => {
     })).not.toEqual([])
     expect(validateDataChainEvidence({
       ...pending,
+      observations: [{ surface: 'api', status: 'unknown' }],
+    })).not.toEqual([])
+    expect(validateDataChainEvidence({
+      ...pending,
+      observations: [{
+        surface: 'api',
+        status: 'checkpoint',
+        checkpoint: 'unknown_checkpoint',
+      }],
+    })).not.toEqual([])
+    expect(validateDataChainEvidence({
+      ...pending,
       itemCode: '',
     })).not.toEqual([])
   })
@@ -268,5 +280,32 @@ describe('phase 13 deterministic evidence contract', () => {
       ...evidence,
       token: 'not-allowed',
     })).toThrow('Unexpected evidence key')
+    for (const unsafeField of ['secret', 'headers', 'preparedContext', 'outputRoot'] as const) {
+      expect(() => serializeDataChainEvidenceJson({
+        ...evidence,
+        [unsafeField]: unsafeField === 'headers' ? { authorization: 'value' } : 'value',
+      })).toThrow('Unexpected evidence key')
+    }
+  })
+
+  it('rejects duplicate viewer append after terminal resolution and retains prior rows', () => {
+    const beforeBrowser = pendingEvidence()
+    const dashboard = appendBrowserObservation(beforeBrowser, {
+      ...tuple,
+      surface: 'dashboard',
+      status: 'passed',
+    })
+    const viewer = appendBrowserObservation(dashboard.evidence, {
+      ...tuple,
+      surface: 'viewer',
+      status: 'passed',
+    })
+
+    expect(viewer.evidence.observations).toHaveLength(beforeBrowser.observations.length + 2)
+    expect(() => appendBrowserObservation(viewer.evidence as typeof dashboard.evidence, {
+      ...tuple,
+      surface: 'viewer',
+      status: 'passed',
+    })).toThrow('resolved_pending_observation')
   })
 })
