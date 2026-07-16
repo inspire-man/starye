@@ -69,6 +69,30 @@ describe('prepared D1 smoke snapshot', () => {
     ])
   })
 
+  it('reports the failed migration stage without exposing the API token', async () => {
+    const { contextPath, apiConfigPath, gatewayConfigPath } = await createPreparedContext()
+    const apiToken = 'cloudflare-token'
+    const executeMigration = vi.fn<(command: PreparedD1MigrationCommand) => { exitCode: number, stderr?: string }>(() => ({
+      exitCode: 1,
+      stderr: `Cloudflare rejected ${apiToken} for this request.`,
+    }))
+
+    const failure = runTargetD1Mutation({
+      STARYE_PREPARED_CONTEXT_PATH: contextPath,
+      STARYE_PREPARED_ENTRY: 'd1-migrate',
+      STARYE_PREPARED_OPERATION: 'migrate',
+      STARYE_PREPARED_SECRET_KEYS: 'CLOUDFLARE_API_TOKEN',
+      STARYE_API_CONFIG_PATH: apiConfigPath,
+      STARYE_GATEWAY_CONFIG_PATH: gatewayConfigPath,
+      CLOUDFLARE_ACCOUNT_ID: 'selected-account',
+      CLOUDFLARE_API_TOKEN: apiToken,
+    }, { executeMigration })
+
+    await expect(failure).rejects.toThrow('target-d1-mutation export failed. Cloudflare rejected [redacted] for this request.')
+    await expect(failure).rejects.not.toThrow(apiToken)
+    expect(executeMigration).toHaveBeenCalledOnce()
+  })
+
   it('uses the selected prepared D1 identity with a fixed parameterized read-only snapshot query', async () => {
     const { contextPath, apiConfigPath, gatewayConfigPath } = await createPreparedContext()
     const execute = vi.fn(() => ({

@@ -277,4 +277,36 @@ describe('target mutation preparation', () => {
       execute: leakedOutputExecute,
     })).rejects.not.toThrow(leakedValue)
   })
+
+  it('surfaces a bounded, redacted diagnostic when a prepared child fails', async () => {
+    const root = await createRoot()
+    const materialize = vi.fn(async () => ({
+      apiConfigPath: path.join(root, 'api', '.target-wrangler.failed-child.toml'),
+      gatewayConfigPath: path.join(root, 'gateway', '.target-wrangler.failed-child.toml'),
+      cleanup: async () => {},
+    }))
+    const prepared = await prepareTargetMutation({
+      target: 'starye-org',
+      scope: 'remote',
+      command: 'd1-smoke-snapshot',
+      ciEnvironment: 'starye-org',
+      environment: {
+        CLOUDFLARE_API_TOKEN: 'cloudflare-token',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
+      },
+      runId: 'failed-child',
+      appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
+      runDirectory: path.join(root, 'run'),
+    }, { executeReadOnly: readOnlyExecutor, materialize })
+
+    const failure = runPreparedTargetMutation({
+      entry: 'd1-smoke-snapshot',
+      preparedContextPath: prepared.preparedContextPath,
+      authorizedEnvironment: { CLOUDFLARE_API_TOKEN: 'cloudflare-token' },
+      execute: () => ({ exitCode: 1, stderr: 'Cloudflare rejected cloudflare-token for this request.' }),
+    })
+
+    await expect(failure).rejects.toThrow('Prepared target entry failed: d1-smoke-snapshot. Cloudflare rejected [redacted] for this request.')
+    await expect(failure).rejects.not.toThrow('cloudflare-token')
+  })
 })

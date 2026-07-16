@@ -155,6 +155,7 @@ export interface PreparedMutationExecution {
 export interface PreparedChildExecutionResult {
   readonly exitCode: number
   readonly stdout?: string
+  readonly stderr?: string
 }
 
 export type PreparedSmokeChildObservation
@@ -340,6 +341,26 @@ function isPreparedChildExecutionResult(value: number | PreparedChildExecutionRe
   return typeof value !== 'number'
 }
 
+function redactPreparedChildDiagnostic(
+  stderr: string | undefined,
+  secretKeys: readonly string[],
+  environment: NodeJS.ProcessEnv,
+): string | undefined {
+  if (!stderr?.trim()) {
+    return undefined
+  }
+
+  let diagnostic = stderr.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
+  for (const key of secretKeys) {
+    const value = environment[key]
+    if (value) {
+      diagnostic = diagnostic.replaceAll(value, '[redacted]')
+    }
+  }
+  const normalized = diagnostic.trim().slice(0, 2000)
+  return normalized || undefined
+}
+
 function isSmokeDefinition(definition: TargetRemoteEntryDefinition): boolean {
   return definition.id === 'crawler-smoke-fixture' || definition.id === 'd1-smoke-snapshot'
 }
@@ -441,7 +462,10 @@ export async function runPreparedTargetMutation(request: PreparedMutationExecuti
   const execution = request.execute('pnpm', args, environment)
   const exitCode = isPreparedChildExecutionResult(execution) ? execution.exitCode : execution
   if (exitCode !== 0) {
-    throw new Error(`Prepared target entry failed: ${request.entry}.`)
+    const diagnostic = isPreparedChildExecutionResult(execution)
+      ? redactPreparedChildDiagnostic(execution.stderr, definition.requiredSecretKeys, environment)
+      : undefined
+    throw new Error(`Prepared target entry failed: ${request.entry}.${diagnostic ? ` ${diagnostic}` : ''}`)
   }
   if (!isSmokeDefinition(definition)) {
     return {}

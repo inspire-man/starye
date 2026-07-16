@@ -269,7 +269,14 @@ async function runPreparedEntry(options: TargetProfileCliOptions): Promise<void>
   await runPreparedTargetMutation({
     entry: options.entry,
     preparedContextPath: options.preparedContextPath,
-    execute: (command, args, environment) => spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment }).status ?? 1,
+    execute: (command, args, environment) => {
+      const child = spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment })
+      return {
+        exitCode: child.status ?? 1,
+        stdout: child.stdout ?? '',
+        stderr: child.stderr ?? '',
+      }
+    },
   })
 }
 

@@ -43,7 +43,7 @@ export interface PreparedD1MigrationCommand {
 }
 
 export interface PreparedD1MigrationExecutor {
-  execute: (command: PreparedD1MigrationCommand) => { exitCode: number }
+  execute: (command: PreparedD1MigrationCommand) => { exitCode: number, stderr?: string }
 }
 
 export interface TargetD1MutationDependencies {
@@ -109,8 +109,17 @@ function defaultMigrationExecutor(environment: NodeJS.ProcessEnv): PreparedD1Mig
         CLOUDFLARE_API_TOKEN: environment.CLOUDFLARE_API_TOKEN,
       },
     })
-    return { exitCode: result.status ?? 1 }
+    return { exitCode: result.status ?? 1, stderr: result.stderr ?? '' }
   }
+}
+
+function migrationFailureMessage(kind: PreparedD1MigrationCommand['kind'], stderr: string | undefined, apiToken: string): string {
+  const diagnostic = stderr
+    ?.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
+    .replaceAll(apiToken, '[redacted]')
+    .trim()
+    .slice(0, 2000)
+  return `target-d1-mutation ${kind} failed.${diagnostic ? ` ${diagnostic}` : ''}`
 }
 
 function migrationBackup(context: PreparedDbContext): Pick<PreparedD1MigrationCommand, 'backupPath' | 'backupKey'> {
@@ -253,8 +262,9 @@ export async function runTargetD1Mutation(
     ]
     try {
       for (const command of commands) {
-        if (execute(command).exitCode !== 0) {
-          throw new Error(`target-d1-mutation ${command.kind} failed.`)
+        const result = execute(command)
+        if (result.exitCode !== 0) {
+          throw new Error(migrationFailureMessage(command.kind, result.stderr, environment.CLOUDFLARE_API_TOKEN))
         }
       }
     }
