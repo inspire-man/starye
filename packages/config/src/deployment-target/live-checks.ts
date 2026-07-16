@@ -30,6 +30,7 @@ export interface LiveResourceCheckIssue {
 export function buildLiveResourceChecks(
   resolution: TargetResolution,
   pagesSurface?: TargetPagesSurface,
+  includeWorkers = true,
 ): readonly LiveResourceCheck[] {
   const checks: LiveResourceCheck[] = [
     {
@@ -45,17 +46,22 @@ export function buildLiveResourceChecks(
       argv: ['kv', 'namespace', 'list'],
       expectedOutput: resolution.profile.resources.kv.id,
     },
-    {
-      resource: 'api-worker',
-      argv: ['deployments', 'list', '--name', resolution.profile.workers.api.name],
-      expectedOutput: resolution.profile.workers.api.name,
-    },
-    {
-      resource: 'gateway-worker',
-      argv: ['deployments', 'list', '--name', resolution.profile.workers.gateway.name],
-      expectedOutput: resolution.profile.workers.gateway.name,
-    },
   ]
+
+  if (includeWorkers) {
+    checks.push(
+      {
+        resource: 'api-worker',
+        argv: ['deployments', 'list', '--name', resolution.profile.workers.api.name],
+        expectedOutput: resolution.profile.workers.api.name,
+      },
+      {
+        resource: 'gateway-worker',
+        argv: ['deployments', 'list', '--name', resolution.profile.workers.gateway.name],
+        expectedOutput: resolution.profile.workers.gateway.name,
+      },
+    )
+  }
 
   if (pagesSurface) {
     checks.push({
@@ -103,10 +109,11 @@ export function runLiveResourceChecks(
   resolution: TargetResolution,
   executor: WranglerCommandExecutor,
   pagesSurface?: TargetPagesSurface,
+  includeWorkers = true,
 ): LiveResourceCheckIssue[] {
   const issues: LiveResourceCheckIssue[] = []
 
-  for (const check of buildLiveResourceChecks(resolution, pagesSurface)) {
+  for (const check of buildLiveResourceChecks(resolution, pagesSurface, includeWorkers)) {
     let result: WranglerCommandResult
 
     try {

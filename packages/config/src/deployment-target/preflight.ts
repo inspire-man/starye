@@ -298,7 +298,8 @@ function validateRemoteLiveCheck(
     return
   }
 
-  for (const issue of runLiveResourceChecks(resolution, options.liveCheckExecutor, pagesSurface)) {
+  const includeWorkers = input.command !== 'deploy' && input.command !== 'migrate'
+  for (const issue of runLiveResourceChecks(resolution, options.liveCheckExecutor, pagesSurface, includeWorkers)) {
     addIssue(issues, issue.code, issue.message)
   }
 }

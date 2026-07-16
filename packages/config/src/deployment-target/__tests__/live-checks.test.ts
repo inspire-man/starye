@@ -52,13 +52,14 @@ describe('live resource checks', () => {
     expect(checks.flatMap(check => check.argv).join(' ')).not.toContain('&&')
   })
 
-  it('runs all read checks through an injected argv executor', () => {
+  it('runs all read checks through an injected argv executor for dependent remote operations', () => {
     const execute = vi.fn((argv: readonly string[]) => ({
       exitCode: 0,
       stdout: argv[0] === 'kv' ? 'acf49df06ae0447b82a092cf238714d8' : argv.at(-1),
     }))
 
     const result = runTargetPreflight(createRemoteOptions({
+      command: 'remote-crawl',
       liveCheckExecutor: { execute },
     }))
 
@@ -69,6 +70,25 @@ describe('live resource checks', () => {
       ['kv', 'namespace', 'list'],
       ['deployments', 'list', '--name', 'starye-api'],
       ['deployments', 'list', '--name', 'starye-gateway'],
+    ])
+  })
+
+  it.each(['migrate', 'deploy'] as const)('allows the first %s to validate account resources before Workers exist', (command) => {
+    const execute = vi.fn((argv: readonly string[]) => ({
+      exitCode: argv[0] === 'deployments' ? 1 : 0,
+      stdout: argv[0] === 'kv' ? 'acf49df06ae0447b82a092cf238714d8' : argv.at(-1),
+    }))
+
+    const result = runTargetPreflight(createRemoteOptions({
+      command,
+      liveCheckExecutor: { execute },
+    }))
+
+    expect(result.ok).toBe(true)
+    expect(execute.mock.calls.map(([argv]) => argv)).toEqual([
+      ['d1', 'info', 'starye-db'],
+      ['r2', 'bucket', 'info', 'starye-media'],
+      ['kv', 'namespace', 'list'],
     ])
   })
 
