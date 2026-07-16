@@ -112,7 +112,7 @@ describe('requireAuth - ADMIN_GITHUB_ID 白名单短路（D-04）', () => {
     expect(res.status).toBe(403)
   })
 
-  it('ADMIN_GITHUB_ID 未配置时，白名单短路不生效', async () => {
+  it('admin_github_id 未配置时，白名单短路不生效', async () => {
     const { app, env } = makeApp(
       { id: '1', role: 'user', githubId: '12345678' },
       {} as any,

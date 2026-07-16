@@ -42,7 +42,7 @@ const mockEnv = {
   R2_PUBLIC_URL: 'http://localhost:9000',
 } as any
 
-describe('PUBSEC-04: /api/docs 鉴权保护', () => {
+describe('pubsec-04: /api/docs 鉴权保护', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })

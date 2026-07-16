@@ -49,4 +49,3 @@ export function requireAuth(requiredRole?: string | string[]) {
     await next()
   })
 }
-
