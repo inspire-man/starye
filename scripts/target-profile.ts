@@ -25,6 +25,7 @@ import {
   runTargetPreflight,
   validateProjectedEnv,
 } from '../packages/config/src/deployment-target/index.ts'
+import { packageManagerInvocation } from './package-manager-command.ts'
 
 const commandNames = ['validate', 'project-local', 'preflight', 'run-pages-build', 'prepare-mutation', 'run-prepared-entry'] as const
 
@@ -215,11 +216,26 @@ function pagesBuildArgs(surface: TargetPagesSurface): readonly string[] {
 }
 
 function spawnPagesBuild(command: string, args: readonly string[], environment: NodeJS.ProcessEnv): number {
-  return spawnSync(command, args, {
+  const invocation = command === 'pnpm'
+    ? packageManagerInvocation(args)
+    : { command, args }
+  const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf8',
     env: environment,
     shell: false,
-  }).status ?? 1
+  })
+
+  if (result.stdout) {
+    process.stdout.write(result.stdout)
+  }
+  if (result.stderr) {
+    process.stderr.write(result.stderr)
+  }
+  if (result.error) {
+    console.error(`Pages build command failed to start: ${result.error.message}`)
+  }
+
+  return result.status ?? 1
 }
 
 export async function runPagesBuild(
@@ -347,7 +363,8 @@ async function runProjectLocal(options: TargetProfileCliOptions): Promise<void> 
 function createWranglerExecutor(): WranglerCommandExecutor {
   return {
     execute(argv) {
-      const result = spawnSync('pnpm', ['exec', 'wrangler', ...argv], {
+      const invocation = packageManagerInvocation(['exec', 'wrangler', ...argv])
+      const result = spawnSync(invocation.command, invocation.args, {
         encoding: 'utf8',
         shell: false,
       })
