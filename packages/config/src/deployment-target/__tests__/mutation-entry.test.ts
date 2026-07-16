@@ -26,7 +26,7 @@ afterEach(async () => {
 function readOnlyExecutor(argv: readonly string[]) {
   return {
     exitCode: 0,
-    stdout: argv[0] === 'kv' ? 'f7f6a8c2bff84a1d89da528eab4eb559' : argv.at(-1) ?? '',
+    stdout: argv[0] === 'kv' ? 'acf49df06ae0447b82a092cf238714d8' : argv.at(-1) ?? '',
   }
 }
 
@@ -47,7 +47,7 @@ describe('target mutation preparation', () => {
       ciEnvironment: 'starye-org',
       environment: {
         CLOUDFLARE_API_TOKEN: 'fixture-token',
-        CLOUDFLARE_ACCOUNT_ID: '27c162f54c8f59fff74224775a59937e',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
       },
       githubOutput,
       runId: 'ci-run',
@@ -81,7 +81,7 @@ describe('target mutation preparation', () => {
       environment: {
         API_URL: 'https://attacker.example',
         CLOUDFLARE_API_TOKEN: 'fixture-token',
-        CLOUDFLARE_ACCOUNT_ID: '27c162f54c8f59fff74224775a59937e',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
       },
       runId: 'blocked-run',
       appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
@@ -101,7 +101,7 @@ describe('target mutation preparation', () => {
     {
       name: 'missing Cloudflare credential',
       environment: {
-        CLOUDFLARE_ACCOUNT_ID: '27c162f54c8f59fff74224775a59937e',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
         CRAWLER_SECRET: 'crawler-service-secret',
       },
       executeReadOnly: readOnlyExecutor,
@@ -119,7 +119,7 @@ describe('target mutation preparation', () => {
       name: 'failed read-only ownership check',
       environment: {
         CLOUDFLARE_API_TOKEN: 'cloudflare-token',
-        CLOUDFLARE_ACCOUNT_ID: '27c162f54c8f59fff74224775a59937e',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
         CRAWLER_SECRET: 'crawler-service-secret',
       },
       executeReadOnly: () => ({ exitCode: 1 }),
@@ -163,7 +163,7 @@ describe('target mutation preparation', () => {
       ciEnvironment: 'starye-org',
       environment: {
         CLOUDFLARE_API_TOKEN: 'cloudflare-token',
-        CLOUDFLARE_ACCOUNT_ID: '27c162f54c8f59fff74224775a59937e',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
         CRAWLER_SECRET: crawlerSecret,
       },
       runId: 'smoke-run',
@@ -237,7 +237,7 @@ describe('target mutation preparation', () => {
       ciEnvironment: 'starye-org',
       environment: {
         CLOUDFLARE_API_TOKEN: 'cloudflare-token',
-        CLOUDFLARE_ACCOUNT_ID: '27c162f54c8f59fff74224775a59937e',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
       },
       runId: 'd1-smoke',
       appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },

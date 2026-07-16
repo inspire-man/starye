@@ -22,7 +22,7 @@ const successfulLiveCheck = {
     return {
       exitCode: 0,
       stdout: argv[0] === 'kv'
-        ? 'f7f6a8c2bff84a1d89da528eab4eb559'
+        ? 'acf49df06ae0447b82a092cf238714d8'
         : argv[0] === 'pages'
           ? 'blog-pages'
           : argv.at(-1),

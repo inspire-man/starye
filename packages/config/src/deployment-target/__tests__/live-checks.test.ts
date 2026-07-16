@@ -15,7 +15,7 @@ function createRemoteOptions(overrides: Partial<PreflightOptions> = {}): Preflig
     ciEnvironment: 'starye-org',
     environment: {
       CLOUDFLARE_API_TOKEN: 'test-token',
-      CLOUDFLARE_ACCOUNT_ID: '27c162f54c8f59fff74224775a59937e',
+      CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
     },
     live: true,
     ...overrides,
@@ -55,7 +55,7 @@ describe('live resource checks', () => {
   it('runs all read checks through an injected argv executor', () => {
     const execute = vi.fn((argv: readonly string[]) => ({
       exitCode: 0,
-      stdout: argv[0] === 'kv' ? 'f7f6a8c2bff84a1d89da528eab4eb559' : argv.at(-1),
+      stdout: argv[0] === 'kv' ? 'acf49df06ae0447b82a092cf238714d8' : argv.at(-1),
     }))
 
     const result = runTargetPreflight(createRemoteOptions({
@@ -77,7 +77,7 @@ describe('live resource checks', () => {
       execute: argv => ({
         exitCode: 0,
         stdout: argv[0] === 'kv'
-          ? 'f7f6a8c2bff84a1d89da528eab4eb559'
+          ? 'acf49df06ae0447b82a092cf238714d8'
           : argv[0] === 'pages'
             ? 'starye-blog'
             : argv.at(-1),
@@ -173,7 +173,7 @@ describe('live resource checks', () => {
     const kvIssue = issues.find(issue => issue.code === 'remote-resource-missing')
 
     expect(kvIssue?.message).toContain('starye-org')
-    expect(kvIssue?.message).toContain('f7f6a8c2bff84a1d89da528eab4eb559')
+    expect(kvIssue?.message).toContain('acf49df06ae0447b82a092cf238714d8')
     expect(kvIssue?.message).not.toContain('CLOUDFLARE_API_TOKEN')
     expect(kvIssue?.message).not.toContain('token-must-not-appear')
   })

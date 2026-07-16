@@ -4,7 +4,7 @@ export const trackedTargetProfiles = [
   {
     id: 'starye-org',
     account: {
-      id: '27c162f54c8f59fff74224775a59937e',
+      id: 'd6e57b25da320fae1bd0079fb3c316d4',
       name: 'starye-org',
     },
     domain: {
@@ -82,7 +82,7 @@ export const trackedTargetProfiles = [
         kind: 'd1',
         binding: 'DB',
         name: 'starye-db',
-        id: '72b60b6c-806f-4795-a846-9b0d157b8225',
+        id: '23dd42f6-1845-4748-b61d-20d755938aaf',
       },
       r2: {
         kind: 'r2',
@@ -92,7 +92,7 @@ export const trackedTargetProfiles = [
       kv: {
         kind: 'kv',
         binding: 'CACHE',
-        id: 'f7f6a8c2bff84a1d89da528eab4eb559',
+        id: 'acf49df06ae0447b82a092cf238714d8',
       },
     },
     requiredSecrets: [
