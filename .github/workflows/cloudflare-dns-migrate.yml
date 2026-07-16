@@ -1,0 +1,36 @@
+name: Cloudflare DNS migration
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: starye-org
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Replace externally managed root and www records
+        shell: bash
+        run: |
+          set -euo pipefail
+          zone_id="$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/zones?name=starye.org&status=active" \
+            | jq -er '.result[0].id')"
+          record_ids="$(for hostname in starye.org www.starye.org; do
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              --header "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?name=${hostname}&per_page=100" \
+              | jq -er '.result[] | select(.type == "A" or .type == "AAAA" or .type == "CNAME") | .id'
+          done)"
+          test -n "${record_ids}"
+          printf '%s\n' "${record_ids}" | while read -r record_id; do
+            curl --fail-with-body --silent --show-error --request DELETE \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              --header "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${record_id}" \
+              | jq -e '.success == true' >/dev/null
+          done
