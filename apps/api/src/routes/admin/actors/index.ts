@@ -7,7 +7,7 @@
  */
 
 import type { AppEnv } from '../../../types'
-import { classifyStorageUrlKind } from '../../../../../../packages/api-types/src/storage-purpose-policy'
+import { classifyStorageUrlKind } from '@starye/config/storage-purpose-policy'
 import { actors, movieActors, movies } from '@starye/db/schema'
 import { and, count, desc, eq, gt, inArray, isNotNull, isNull, like, lt } from 'drizzle-orm'
 import { Hono } from 'hono'

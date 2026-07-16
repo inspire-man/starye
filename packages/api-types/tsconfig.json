@@ -9,6 +9,7 @@
     "skipLibCheck": true
   },
   "references": [
+    { "path": "../config" },
     { "path": "../../apps/api/tsconfig.build.json" }
   ],
   "include": ["src/**/*"]

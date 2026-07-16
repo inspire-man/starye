@@ -13,6 +13,9 @@
   "scripts": {
     "build": "tsc -b"
   },
+  "dependencies": {
+    "@starye/config": "workspace:*"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260417.1",
     "api": "workspace:*"

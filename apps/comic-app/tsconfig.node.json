@@ -18,7 +18,7 @@
     "noUnusedParameters": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
-    "erasableSyntaxOnly": true,
+    "erasableSyntaxOnly": false,
     "skipLibCheck": true,
     "noUncheckedSideEffectImports": true
   },

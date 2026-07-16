@@ -10,15 +10,15 @@
  * - 记录元数据到数据库
  */
 
-import type { ManualUploadPurpose } from '../../../../../packages/api-types/src/storage-purpose-policy'
+import type { ManualUploadPurpose } from '@starye/config/storage-purpose-policy'
 import type { AppEnv } from '../../types'
-import { media } from '@starye/db/schema'
-import { Hono } from 'hono'
-import { nanoid } from 'nanoid'
 import {
   buildManualUploadObjectKey,
   isManualUploadPurpose,
-} from '../../../../../packages/api-types/src/storage-purpose-policy'
+} from '@starye/config/storage-purpose-policy'
+import { media } from '@starye/db/schema'
+import { Hono } from 'hono'
+import { nanoid } from 'nanoid'
 import { serviceAuth } from '../../middleware/service-auth'
 
 const upload = new Hono<AppEnv>()

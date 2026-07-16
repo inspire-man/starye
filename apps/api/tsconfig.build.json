@@ -10,6 +10,7 @@
     "outDir": "dist"
   },
   "references": [
+    { "path": "../../packages/config" },
     { "path": "../../packages/db" }
   ],
   "include": ["src/**/*"],

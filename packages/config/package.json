@@ -12,6 +12,10 @@
       "types": "./dist/deployment-target/index.d.ts",
       "default": "./src/deployment-target/index.ts"
     },
+    "./storage-purpose-policy": {
+      "types": "./dist/storage-purpose-policy.d.ts",
+      "default": "./src/storage-purpose-policy.ts"
+    },
     "./vitest-base": "./vitest-base.ts"
   },
   "types": "./dist/index.d.ts",
