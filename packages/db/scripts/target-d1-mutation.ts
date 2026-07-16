@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
 import { spawnSync } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -15,6 +15,7 @@ interface PreparedDbContext {
   readonly gatewayConfigPath: string
   readonly identity: Readonly<{
     d1Name: string
+    r2Name: string
     accountId: string
   }>
 }
@@ -31,8 +32,30 @@ export interface PreparedD1SnapshotExecutor {
   execute: (command: PreparedD1SnapshotCommand) => { exitCode: number, stdout?: string }
 }
 
+export interface PreparedD1MigrationCommand {
+  readonly kind: 'export' | 'backup' | 'apply'
+  readonly accountId: string
+  readonly configPath: string
+  readonly d1Name: string
+  readonly r2Name: string
+  readonly backupPath: string
+  readonly backupKey: string
+}
+
+export interface PreparedD1MigrationExecutor {
+  execute: (command: PreparedD1MigrationCommand) => { exitCode: number }
+}
+
 export interface TargetD1MutationDependencies {
   readonly execute?: PreparedD1SnapshotExecutor['execute']
+  readonly executeMigration?: PreparedD1MigrationExecutor['execute']
+}
+
+function packageManagerInvocation(args: readonly string[]): { command: string, args: readonly string[] } {
+  return {
+    command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+    args,
+  }
 }
 
 export type D1SmokeSnapshotObservation
@@ -65,7 +88,44 @@ function isPreparedDbContext(value: unknown, contextPath: string): value is Prep
     && path.isAbsolute(context.gatewayConfigPath)
     && !!context.identity
     && typeof context.identity.d1Name === 'string'
+    && typeof context.identity.r2Name === 'string'
     && typeof context.identity.accountId === 'string'
+}
+
+function defaultMigrationExecutor(environment: NodeJS.ProcessEnv): PreparedD1MigrationExecutor['execute'] {
+  return (command) => {
+    const args = command.kind === 'export'
+      ? ['exec', 'wrangler', 'd1', 'export', command.d1Name, '--remote', '--config', command.configPath, '--output', command.backupPath]
+      : command.kind === 'backup'
+        ? ['exec', 'wrangler', 'r2', 'object', 'put', `${command.r2Name}/${command.backupKey}`, '--file', command.backupPath]
+        : ['exec', 'wrangler', 'd1', 'migrations', 'apply', command.d1Name, '--remote', '--config', command.configPath]
+    const invocation = packageManagerInvocation(args)
+    const result = spawnSync(invocation.command, invocation.args, {
+      encoding: 'utf8',
+      shell: false,
+      env: {
+        PATH: environment.PATH,
+        CLOUDFLARE_ACCOUNT_ID: command.accountId,
+        CLOUDFLARE_API_TOKEN: environment.CLOUDFLARE_API_TOKEN,
+      },
+    })
+    return { exitCode: result.status ?? 1 }
+  }
+}
+
+function migrationBackup(context: PreparedDbContext): Pick<PreparedD1MigrationCommand, 'backupPath' | 'backupKey'> {
+  if (!/^[\w-]+$/.test(context.runId)) {
+    throw new Error('target-d1-mutation rejected an invalid prepared context.')
+  }
+  const configDirectory = path.dirname(context.apiConfigPath)
+  const backupPath = path.resolve(configDirectory, `.target-d1-backup.${context.runId}.sql`)
+  if (path.dirname(backupPath) !== path.resolve(configDirectory)) {
+    throw new Error('target-d1-mutation rejected an invalid prepared context.')
+  }
+  return {
+    backupPath,
+    backupKey: `ops/d1-backups/${context.targetId}/${context.runId}.sql`,
+  }
 }
 
 async function readPreparedDbContext(environment: NodeJS.ProcessEnv = process.env): Promise<PreparedDbContext> {
@@ -101,7 +161,7 @@ function encodeSqlString(value: string): string {
 function defaultSnapshotExecutor(environment: NodeJS.ProcessEnv): PreparedD1SnapshotExecutor['execute'] {
   return (command) => {
     const query = command.sql.replace('?', encodeSqlString(command.params[0]))
-    const result = spawnSync('pnpm', [
+    const invocation = packageManagerInvocation([
       'exec',
       'wrangler',
       'd1',
@@ -113,7 +173,8 @@ function defaultSnapshotExecutor(environment: NodeJS.ProcessEnv): PreparedD1Snap
       '--command',
       query,
       '--json',
-    ], {
+    ])
+    const result = spawnSync(invocation.command, invocation.args, {
       encoding: 'utf8',
       shell: false,
       env: {
@@ -171,18 +232,40 @@ function parseSnapshotResult(stdout: string | undefined, itemCode: string): D1Sm
 export async function runTargetD1Mutation(
   environment: NodeJS.ProcessEnv = process.env,
   dependencies: TargetD1MutationDependencies = {},
-): Promise<D1SmokeSnapshotObservation> {
+): Promise<D1SmokeSnapshotObservation | undefined> {
   const context = await readPreparedDbContext(environment)
-  if (environment.STARYE_PREPARED_ENTRY !== 'd1-smoke-snapshot' || environment.STARYE_PREPARED_OPERATION !== 'smoke-snapshot') {
-    throw new Error('target-d1-mutation requires the registry-owned smoke operation.')
-  }
   if (environment.STARYE_PREPARED_SECRET_KEYS !== 'CLOUDFLARE_API_TOKEN' || !environment.CLOUDFLARE_API_TOKEN) {
-    throw new Error('target-d1-mutation rejected the declared smoke credential boundary.')
+    throw new Error('target-d1-mutation rejected the declared credential boundary.')
   }
   if (environment.CLOUDFLARE_ACCOUNT_ID !== context.identity.accountId
     || environment.STARYE_API_CONFIG_PATH !== context.apiConfigPath
     || environment.STARYE_GATEWAY_CONFIG_PATH !== context.gatewayConfigPath) {
     throw new Error('target-d1-mutation rejected an invalid prepared context.')
+  }
+
+  if (environment.STARYE_PREPARED_ENTRY === 'd1-migrate' && environment.STARYE_PREPARED_OPERATION === 'migrate') {
+    const backup = migrationBackup(context)
+    const execute = dependencies.executeMigration ?? defaultMigrationExecutor(environment)
+    const commands: PreparedD1MigrationCommand[] = [
+      { kind: 'export', accountId: context.identity.accountId, configPath: context.apiConfigPath, d1Name: context.identity.d1Name, r2Name: context.identity.r2Name, ...backup },
+      { kind: 'backup', accountId: context.identity.accountId, configPath: context.apiConfigPath, d1Name: context.identity.d1Name, r2Name: context.identity.r2Name, ...backup },
+      { kind: 'apply', accountId: context.identity.accountId, configPath: context.apiConfigPath, d1Name: context.identity.d1Name, r2Name: context.identity.r2Name, ...backup },
+    ]
+    try {
+      for (const command of commands) {
+        if (execute(command).exitCode !== 0) {
+          throw new Error(`target-d1-mutation ${command.kind} failed.`)
+        }
+      }
+    }
+    finally {
+      await rm(backup.backupPath, { force: true })
+    }
+    return undefined
+  }
+
+  if (environment.STARYE_PREPARED_ENTRY !== 'd1-smoke-snapshot' || environment.STARYE_PREPARED_OPERATION !== 'smoke-snapshot') {
+    throw new Error('target-d1-mutation requires a registry-owned operation.')
   }
 
   if (typeof context.smokeItemCode !== 'string' || !context.smokeItemCode.trim()) {
