@@ -2,15 +2,15 @@ import type { Ref } from 'vue'
 import type { ExtendedSession } from '~/types/auth'
 import { createAuthClient } from 'better-auth/vue'
 
-const { public: publicRuntime } = useRuntimeConfig()
+export function useAuthClient() {
+  const { public: publicRuntime } = useRuntimeConfig()
 
-const authClient = createAuthClient({
-  baseURL: `${publicRuntime.apiBaseUrl}/api/auth`,
-})
+  return createAuthClient({
+    baseURL: `${publicRuntime.apiBaseUrl}/api/auth`,
+  })
+}
 
-export const { signIn, signUp, signOut } = authClient
-
-export function useSession() {
+export function useSession(authClient = useAuthClient()) {
   const session = authClient.useSession()
 
   return session as Ref<{

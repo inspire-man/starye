@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { signOut, useSession } from '~/lib/auth-client'
+import { useAuthClient, useSession } from '~/lib/auth-client'
 
-const session = useSession()
+const authClient = useAuthClient()
+const session = useSession(authClient)
 const { t } = useI18n()
 const route = useRoute()
 const user = computed(() => session.value.data?.user)
 
 async function handleLogout() {
   try {
-    await signOut()
+    await authClient.signOut()
     // 登出成功后刷新页面或重定向
     window.location.href = '/blog/'
   }
