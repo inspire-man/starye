@@ -53,12 +53,10 @@ export function buildLiveResourceChecks(
       {
         resource: 'api-worker',
         argv: ['deployments', 'list', '--name', resolution.profile.workers.api.name],
-        expectedOutput: resolution.profile.workers.api.name,
       },
       {
         resource: 'gateway-worker',
         argv: ['deployments', 'list', '--name', resolution.profile.workers.gateway.name],
-        expectedOutput: resolution.profile.workers.gateway.name,
       },
     )
   }

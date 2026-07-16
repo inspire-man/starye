@@ -73,6 +73,17 @@ describe('live resource checks', () => {
     ])
   })
 
+  it('accepts successful Worker deployment checks when Wrangler omits the script name from output', () => {
+    const issues = runLiveResourceChecks(resolveTargetProfile('starye-org'), {
+      execute: argv => ({
+        exitCode: 0,
+        stdout: argv[0] === 'kv' ? 'acf49df06ae0447b82a092cf238714d8' : '',
+      }),
+    })
+
+    expect(issues).toEqual([])
+  })
+
   it.each(['migrate', 'deploy'] as const)('allows the first %s to validate account resources before Workers exist', (command) => {
     const execute = vi.fn((argv: readonly string[]) => ({
       exitCode: argv[0] === 'deployments' ? 1 : 0,
