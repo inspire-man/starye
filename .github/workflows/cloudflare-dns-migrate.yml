@@ -1,7 +1,9 @@
 name: Cloudflare DNS migration
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [codex/cloudflare-dns-migrate-20260717]
+    paths: ['.github/workflows/cloudflare-dns-migrate.yml']
 
 jobs:
   migrate:
