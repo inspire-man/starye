@@ -167,6 +167,8 @@ export interface PreparedMutationExecutionResult {
   readonly observation?: PreparedSmokeChildObservation
 }
 
+const repositoryRoot = path.resolve(import.meta.dirname, '../../../..')
+
 const targetIdentityKeys = new Set([
   'API_URL',
   'DATABASE_URL',
@@ -303,7 +305,7 @@ function resolveTargetRemoteEntryDefinition(entry: TargetRemoteEntry): TargetRem
 }
 
 function fixedEntryCommand(definition: TargetRemoteEntryDefinition): readonly string[] {
-  return ['exec', 'tsx', definition.childModule]
+  return ['exec', 'tsx', path.join(repositoryRoot, definition.childModule)]
 }
 
 function isNonEmptyText(value: unknown): value is string {
@@ -350,7 +352,7 @@ function redactPreparedChildDiagnostic(
     return undefined
   }
 
-  let diagnostic = stderr.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
+  let diagnostic = stderr
   for (const key of secretKeys) {
     const value = environment[key]
     if (value) {

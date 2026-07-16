@@ -208,6 +208,11 @@ describe('target mutation preparation', () => {
     ])
     expect(await (await import('node:fs/promises')).readFile(prepared.preparedContextPath, 'utf8')).not.toMatch(crawlerSecret)
     expect(execute).toHaveBeenCalledOnce()
+    expect(execute.mock.calls[0]?.[1]).toEqual([
+      'exec',
+      'tsx',
+      path.resolve(import.meta.dirname, '../../../../../packages/crawler/scripts/target-crawl-mutation.ts'),
+    ])
     expect(execute.mock.calls[0]?.[2]).toEqual(expect.objectContaining({
       CRAWLER_SECRET: crawlerSecret,
       STARYE_PREPARED_ENTRY: 'crawler-smoke-fixture',

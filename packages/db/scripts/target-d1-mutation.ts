@@ -115,8 +115,7 @@ function defaultMigrationExecutor(environment: NodeJS.ProcessEnv): PreparedD1Mig
 
 function migrationFailureMessage(kind: PreparedD1MigrationCommand['kind'], stderr: string | undefined, apiToken: string): string {
   const diagnostic = stderr
-    ?.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
-    .replaceAll(apiToken, '[redacted]')
+    ?.replaceAll(apiToken, '[redacted]')
     .trim()
     .slice(0, 2000)
   return `target-d1-mutation ${kind} failed.${diagnostic ? ` ${diagnostic}` : ''}`
