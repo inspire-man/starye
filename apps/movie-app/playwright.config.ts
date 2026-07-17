@@ -1,4 +1,3 @@
-/* eslint-disable node/prefer-global/process */
 import { defineConfig, devices } from '@playwright/test'
 
 /**
@@ -27,9 +26,6 @@ export default defineConfig({
 
   // 全局设置
   use: {
-    // 基础 URL
-    baseURL: 'http://localhost:3001',
-
     // 截图设置
     screenshot: 'only-on-failure',
 
@@ -57,14 +53,4 @@ export default defineConfig({
     },
   ],
 
-  // Web 服务器配置
-  // 自动启动开发服务器用于 E2E 测试
-  webServer: {
-    command: 'pnpm run dev',
-    url: 'http://localhost:3001',
-    timeout: 120000, // 增加超时以确保服务器启动
-    reuseExistingServer: !process.env.CI, // CI 环境不复用，本地开发复用
-    stdout: 'ignore', // 减少日志输出
-    stderr: 'pipe', // 仅显示错误
-  },
 })
