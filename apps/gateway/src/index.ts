@@ -134,8 +134,8 @@ const gatewayHandler = {
       if (path === '/tavern') {
         return Response.redirect(`${url.origin}/tavern/`, 301)
       }
-      const target = isLocal ? 'http://localhost:3004' : (env.TAVERN_ORIGIN || 'http://localhost:3004')
-      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/tavern/, '') || '/'
+      const target = env.TAVERN_ORIGIN || 'http://127.0.0.1:8000'
+      const pathRewrite = (p: string) => p.replace(/^\/tavern/, '') || '/'
       return cachedProxy(request, target, pathRewrite, { executionCtx: ctx })
     }
 

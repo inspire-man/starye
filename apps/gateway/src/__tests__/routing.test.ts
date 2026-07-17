@@ -149,7 +149,7 @@ describe('路径匹配规则', () => {
   it('/tavern/* 应路由到 Tavern App', async () => {
     const req = makeRequest('http://localhost/tavern/')
     await worker.fetch(req, {})
-    expect(capturedRequest!.url).toContain('localhost:3004')
+    expect(capturedRequest!.url).toBe('http://127.0.0.1:8000/')
   })
 
   it('/auth/* 应路由到 Auth 服务', async () => {
