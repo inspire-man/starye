@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/8 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -94,7 +94,23 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 13-04-PLAN.md
+- [x] 13-04-PLAN.md
+
+**Wave 4** *(gap closure; blocked on Wave 3 completion)*
+
+- [ ] 13-05-PLAN.md — Restore the canonical one-item fixture and evidence contract.
+
+**Wave 5** *(gap closure; blocked on Wave 4 completion)*
+
+- [ ] 13-06-PLAN.md — Enforce the one-item tuple through prepared D1 snapshots and local/remote runners.
+
+**Wave 6** *(gap closure; blocked on Wave 5 completion)*
+
+- [ ] 13-07-PLAN.md — Require runner/provider/browser provenance instead of self-attested pass rows.
+
+**Wave 7** *(gap closure; blocked on Wave 6 completion)*
+
+- [ ] 13-08-PLAN.md — Run authorized local and selected-target proof or retain an honest checkpoint.
 
 **Success criteria:**
 
