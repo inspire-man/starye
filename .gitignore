@@ -103,3 +103,13 @@ playwright-report/
 # Claude Code worktrees (local only, never tracked)
 .claude/worktrees/*
 .gitnexus
+
+# Local smoke and browser-run artifacts
+/.target-runs/
+/.playwright-cli/
+
+# Timestamped data-chain smoke snapshots
+/.planning/phases/*/evidence/*/local-*/
+
+# Locally generated Wrangler target configs
+/apps/*/.target-wrangler.local-dev-*.toml
