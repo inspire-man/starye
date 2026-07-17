@@ -250,6 +250,11 @@ export async function runPagesBuild(
     ...parsed,
     STARYE_PAGES_BUILD_ENV_PATH: pagesBuildEnvPath,
   }
+  const apiTypesStatus = execute('pnpm', ['--filter', '@starye/api-types', 'build'], environment)
+
+  if (apiTypesStatus !== 0) {
+    throw new Error(`Shared API types build failed for ${surface}.`)
+  }
   const status = execute('pnpm', pagesBuildArgs(surface), environment)
 
   if (status !== 0) {

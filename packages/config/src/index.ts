@@ -1,1 +1,1 @@
-export * from './deployment-target/index.ts'
+export * from './deployment-target/index'

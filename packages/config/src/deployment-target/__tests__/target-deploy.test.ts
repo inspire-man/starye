@@ -188,7 +188,14 @@ describe('run-pages-build', () => {
 
     await runPagesBuild('dashboard', materialized.pages!.buildEnvPath, execute)
 
-    const [command, argv, environment] = execute.mock.calls[0]
+    const [apiTypesCommand, apiTypesArgv, apiTypesEnvironment] = execute.mock.calls[0]
+    const [command, argv, environment] = execute.mock.calls[1]
+    expect(apiTypesCommand).toBe('pnpm')
+    expect(apiTypesArgv).toEqual(['--filter', '@starye/api-types', 'build'])
+    expect(apiTypesEnvironment).toMatchObject({
+      VITE_TARGET_ID: 'starye-org',
+      STARYE_PAGES_BUILD_ENV_PATH: materialized.pages!.buildEnvPath,
+    })
     expect(command).toBe('pnpm')
     expect(argv).toEqual(['--filter', 'dashboard', 'build'])
     expect(environment).toMatchObject({
@@ -201,6 +208,30 @@ describe('run-pages-build', () => {
     })
     expect(environment).not.toHaveProperty('CLOUDFLARE_API_TOKEN')
     expect(environment).not.toHaveProperty('VITE_UNREGISTERED_SECRET')
+    await materialized.cleanup()
+  })
+
+  it('stops before the Pages app build when shared API types cannot be generated', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'starye-pages-build-'))
+    roots.push(root)
+    const resolution = resolveTargetProfile('starye-org')
+    const materialized = await materializeTargetDeployConfig({
+      deploy: buildTargetProjections(resolution).deploy,
+      publicRuntimeInput: parseAuditedPublicRuntimeInput(resolution, { buildMode: 'test' }),
+      runId: 'pages-types-failure',
+      appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
+      runDirectory: path.join(root, 'run'),
+      pagesSurface: 'dashboard',
+    })
+    const { runPagesBuild } = await loadTargetProfile()
+    const execute = vi.fn<(command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number>((_command, args) =>
+      args[1] === '@starye/api-types' ? 1 : 0,
+    )
+
+    await expect(runPagesBuild('dashboard', materialized.pages!.buildEnvPath, execute))
+      .rejects
+      .toThrow('Shared API types build failed for dashboard.')
+    expect(execute).toHaveBeenCalledTimes(1)
     await materialized.cleanup()
   })
 })
