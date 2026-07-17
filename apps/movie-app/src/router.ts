@@ -42,14 +42,22 @@ const router = createRouter({
       component: () => import('./views/Series.vue'),
     },
     {
-      path: '/movie/:code',
+      path: '/:code',
       name: 'movie-detail',
       component: () => import('./views/MovieDetail.vue'),
     },
     {
-      path: '/movie/:code/play',
+      path: '/:code/play',
       name: 'player',
       component: () => import('./views/Player.vue'),
+    },
+    {
+      path: '/movie/:code',
+      redirect: to => ({ name: 'movie-detail', params: { code: to.params.code } }),
+    },
+    {
+      path: '/movie/:code/play',
+      redirect: to => ({ name: 'player', params: { code: to.params.code } }),
     },
     {
       path: '/new-releases',

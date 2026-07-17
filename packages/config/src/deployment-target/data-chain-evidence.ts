@@ -2,6 +2,8 @@
 
 export const CHECKPOINT_EXIT_CODE = 2
 export const LOCAL_GATEWAY_ORIGIN = 'http://localhost:8080'
+/** Phase 13's controlled ingest is intentionally fixed-size and never a corpus crawl. */
+export const DATA_CHAIN_FIXTURE_COUNT = 10 as const
 
 export const dataChainModeValues = ['local', 'remote'] as const
 export type DataChainMode = (typeof dataChainModeValues)[number]
@@ -44,6 +46,8 @@ export interface DataChainObservation {
   path?: string
   origin?: typeof LOCAL_GATEWAY_ORIGIN
   attempt?: number
+  /** Present only for a fully audited, successful D1 batch observation. */
+  itemCount?: typeof DATA_CHAIN_FIXTURE_COUNT
 }
 
 interface DataChainEvidenceBase {
@@ -178,7 +182,7 @@ const evidenceKeys = [
   'observations',
 ] as const
 
-const observationKeys = ['surface', 'status', 'checkpoint', 'path', 'origin', 'attempt'] as const
+const observationKeys = ['surface', 'status', 'checkpoint', 'path', 'origin', 'attempt', 'itemCount'] as const
 const browserInputKeys = ['targetId', 'runId', 'itemCode', 'itemId', 'surface', 'status', 'checkpoint'] as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -258,6 +262,7 @@ function cloneObservation(observation: DataChainObservation): DataChainObservati
     ...(observation.path ? { path: observation.path } : {}),
     ...(observation.origin ? { origin: observation.origin } : {}),
     ...(observation.attempt ? { attempt: observation.attempt } : {}),
+    ...(observation.itemCount ? { itemCount: observation.itemCount } : {}),
   }
 }
 
@@ -295,6 +300,15 @@ export function createDataChainCandidate(input: CreateDataChainCandidateInput): 
       }],
     },
   }
+}
+
+/** D-01: derive the complete bounded batch solely from the explicit primary identity. */
+export function createDataChainFixtureCodes(input: CreateDataChainCandidateInput): readonly string[] {
+  const primaryCode = createDataChainCandidate(input).itemCode
+  return [
+    primaryCode,
+    ...Array.from({ length: DATA_CHAIN_FIXTURE_COUNT - 1 }, (_, index) => `${primaryCode}-fixture-${index + 1}`),
+  ]
 }
 
 /** D-03: pre-ingest evidence is terminal only for an unmet prerequisite. */
@@ -399,6 +413,16 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
       if (observation.attempt !== undefined && (typeof observation.attempt !== 'number' || !Number.isInteger(observation.attempt) || observation.attempt < 1)) {
         issues.push(`Observation ${index} attempt must be a positive integer.`)
       }
+      if (observation.itemCount !== undefined && (
+        observation.surface !== 'd1'
+        || observation.status !== 'passed'
+        || observation.itemCount !== DATA_CHAIN_FIXTURE_COUNT
+      )) {
+        issues.push(`Observation ${index} itemCount is only allowed as the exact successful D1 batch count.`)
+      }
+      if (observation.surface === 'd1' && observation.status === 'passed' && observation.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
+        issues.push(`Observation ${index} passed D1 row requires itemCount ${DATA_CHAIN_FIXTURE_COUNT}.`)
+      }
       if (observation.path !== undefined && (typeof observation.path !== 'string' || !observation.path.startsWith('/') || observation.path.startsWith('//'))) {
         issues.push(`Observation ${index} path must be target-relative.`)
       }
@@ -424,6 +448,7 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
           ...(typeof observation.path === 'string' ? { path: observation.path } : {}),
           ...(observation.origin === LOCAL_GATEWAY_ORIGIN ? { origin: observation.origin } : {}),
           ...(typeof observation.attempt === 'number' ? { attempt: observation.attempt } : {}),
+          ...(observation.itemCount === DATA_CHAIN_FIXTURE_COUNT ? { itemCount: observation.itemCount } : {}),
         })
       }
     })
@@ -655,11 +680,12 @@ export function renderDataChainEvidenceMarkdown(evidence: unknown): string {
     `- State: ${evidence.ingestState}`,
     `- Aggregate: ${evidence.aggregate}`,
     '',
-    '| Surface | Status | Checkpoint | Path | Origin |',
-    '| --- | --- | --- | --- | --- |',
+    '| Surface | Status | Count | Checkpoint | Path | Origin |',
+    '| --- | --- | --- | --- | --- | --- |',
     ...evidence.observations.map(row => [
       row.surface,
       row.status,
+      row.itemCount ?? '',
       row.checkpoint ?? '',
       row.path ?? '',
       row.origin ?? '',

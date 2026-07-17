@@ -7,7 +7,7 @@ import type { TargetPagesSurface } from './target-profile.schema'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { createDataChainCandidate } from './data-chain-evidence'
+import { createDataChainCandidate, DATA_CHAIN_FIXTURE_COUNT } from './data-chain-evidence'
 import { materializeTargetDeployConfig } from './deploy-config'
 import { runTargetPreflight } from './preflight'
 import { parseAuditedPublicRuntimeInput } from './public-runtime-input'
@@ -159,8 +159,8 @@ export interface PreparedChildExecutionResult {
 }
 
 export type PreparedSmokeChildObservation
-  = Readonly<{ operation: 'crawler-smoke-fixture', status: 'synced', itemCode: string }>
-    | Readonly<{ operation: 'd1-smoke-snapshot', status: 'found', itemCode: string, itemId: string }>
+  = Readonly<{ operation: 'crawler-smoke-fixture', status: 'synced', itemCode: string, itemCount: typeof DATA_CHAIN_FIXTURE_COUNT }>
+    | Readonly<{ operation: 'd1-smoke-snapshot', status: 'found', itemCode: string, itemId: string, itemCount: typeof DATA_CHAIN_FIXTURE_COUNT }>
     | Readonly<{ operation: 'd1-smoke-snapshot', status: 'not-found' | 'checkpoint', itemCode: string }>
 
 export interface PreparedMutationExecutionResult {
@@ -387,21 +387,25 @@ function parsePreparedSmokeObservation(definition: TargetRemoteEntryDefinition, 
   const keys = Object.keys(observation).sort()
   const hasOnlyKeys = (allowed: readonly string[]) => keys.length === allowed.length && keys.every((key, index) => key === allowed[index])
   if (definition.id === 'crawler-smoke-fixture') {
-    if (!hasOnlyKeys(['itemCode', 'operation', 'status'])
+    if (!hasOnlyKeys(['itemCode', 'itemCount', 'operation', 'status'])
       || observation.operation !== 'crawler-smoke-fixture'
       || observation.status !== 'synced'
-      || !isNonEmptyText(observation.itemCode)) {
+      || !isNonEmptyText(observation.itemCode)
+      || observation.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
       throw new Error('Prepared child observation is invalid.')
     }
-    return { operation: 'crawler-smoke-fixture', status: 'synced', itemCode: observation.itemCode }
+    return { operation: 'crawler-smoke-fixture', status: 'synced', itemCode: observation.itemCode, itemCount: DATA_CHAIN_FIXTURE_COUNT }
   }
 
   if (definition.id === 'd1-smoke-snapshot') {
     if (!isNonEmptyText(observation.itemCode) || observation.operation !== 'd1-smoke-snapshot') {
       throw new Error('Prepared child observation is invalid.')
     }
-    if (observation.status === 'found' && hasOnlyKeys(['itemCode', 'itemId', 'operation', 'status']) && isNonEmptyText(observation.itemId)) {
-      return { operation: 'd1-smoke-snapshot', status: 'found', itemCode: observation.itemCode, itemId: observation.itemId }
+    if (observation.status === 'found'
+      && hasOnlyKeys(['itemCode', 'itemCount', 'itemId', 'operation', 'status'])
+      && isNonEmptyText(observation.itemId)
+      && observation.itemCount === DATA_CHAIN_FIXTURE_COUNT) {
+      return { operation: 'd1-smoke-snapshot', status: 'found', itemCode: observation.itemCode, itemId: observation.itemId, itemCount: DATA_CHAIN_FIXTURE_COUNT }
     }
     if ((observation.status === 'not-found' || observation.status === 'checkpoint') && hasOnlyKeys(['itemCode', 'operation', 'status'])) {
       return { operation: 'd1-smoke-snapshot', status: observation.status, itemCode: observation.itemCode }

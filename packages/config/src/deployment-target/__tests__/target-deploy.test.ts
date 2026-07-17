@@ -64,6 +64,14 @@ afterEach(async () => {
 })
 
 describe('target-deploy wrapper', () => {
+  it('uses the repository root when target-profile has no explicit local env root', async () => {
+    const { resolveLocalEnvRoot } = await loadTargetProfile()
+    const explicitRoot = path.join(tmpdir(), 'starye-explicit-env-root')
+
+    expect(resolveLocalEnvRoot()).toBe(path.resolve(import.meta.dirname, '../../../../../'))
+    expect(resolveLocalEnvRoot(explicitRoot)).toBe(path.resolve(explicitRoot))
+  })
+
   it('requires an explicit target and accepts no caller bypasses or arbitrary argv', async () => {
     const { parseTargetDeployArgs } = await loadTargetDeploy()
 
@@ -88,7 +96,7 @@ describe('target-deploy wrapper', () => {
 
   it('uses the selected Worker config as a separate argv token and cleans it up', async () => {
     const { runTargetDeploy } = await loadTargetDeploy()
-    const execute = vi.fn<(command: string, args: readonly string[]) => number>(() => 0)
+    const execute = vi.fn<(command: string, args: readonly string[], environment?: NodeJS.ProcessEnv) => number>(() => 0)
 
     await runTargetDeploy({
       target: 'starye-org',
@@ -104,6 +112,10 @@ describe('target-deploy wrapper', () => {
     expect(argv.slice(0, 6)).toEqual(['--filter', 'api', 'exec', 'wrangler', 'deploy', '--config'])
     expect(path.isAbsolute(argv[6])).toBe(true)
     expect(path.basename(argv[6])).toBe('.target-wrangler.worker-run.toml')
+    expect(execute.mock.calls[0]?.[2]).toMatchObject({
+      CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
+    })
+    expect(execute.mock.calls[0]?.[2]).not.toHaveProperty('CLOUDFLARE_API_TOKEN')
   })
 
   it('runs Pages through the fixed build/deploy argv and no caller project name', async () => {
@@ -123,6 +135,37 @@ describe('target-deploy wrapper', () => {
     expect(execute.mock.calls.map(([, argv]) => argv)).toEqual([
       ['target-profile', 'run-pages-build', '--surface', 'blog', '--pages-build-env-path', expect.stringContaining('pages-build-env.blog-run.blog.env')],
       ['--filter', 'blog', 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', 'blog-pages'],
+    ])
+  })
+
+  it('supports the selected Movie Pages surface through the same closed deploy path', async () => {
+    const { runTargetDeploy } = await loadTargetDeploy()
+    const execute = vi.fn<(command: string, args: readonly string[]) => number>(() => 0)
+
+    await runTargetDeploy({
+      target: 'starye-org',
+      app: 'movie',
+      surface: 'movie',
+      envRoot: await createProjectionRoot(),
+      execute,
+      liveCheckExecutor: {
+        execute(argv: readonly string[]) {
+          return {
+            exitCode: 0,
+            stdout: argv[0] === 'kv'
+              ? 'acf49df06ae0447b82a092cf238714d8'
+              : argv[0] === 'pages'
+                ? 'starye-movie'
+                : argv.at(-1),
+          }
+        },
+      },
+      runId: 'movie-run',
+    })
+
+    expect(execute.mock.calls.map(([, argv]) => argv)).toEqual([
+      ['target-profile', 'run-pages-build', '--surface', 'movie', '--pages-build-env-path', expect.stringContaining('pages-build-env.movie-run.movie.env')],
+      ['--filter', '@starye/movie-app', 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', 'starye-movie'],
     ])
   })
 })

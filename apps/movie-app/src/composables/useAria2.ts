@@ -5,6 +5,7 @@
 import type { Aria2TaskStatus, Aria2Version } from '../utils/aria2Client'
 import { computed, ref } from 'vue'
 import { moviePublicRuntime } from '../config/public-runtime'
+import { authApi } from '../lib/api-client'
 import { createAria2Client } from '../utils/aria2Client'
 import { useToast } from './useToast'
 
@@ -24,7 +25,7 @@ export interface Aria2Config {
 
 // 存储键
 const STORAGE_KEY = 'aria2-config'
-const API_BASE_URL = moviePublicRuntime.apiBaseUrl
+const API_BASE_URL = `${moviePublicRuntime.apiBaseUrl}/api`
 
 // 全局状态（单例模式）
 const config = ref<Aria2Config | null>(null)
@@ -63,7 +64,12 @@ export function useAria2() {
         config.value = JSON.parse(stored)
       }
 
-      // 2. 如果已登录，从后端同步
+      // 2. 仅在已登录时从受保护的后端配置同步
+      const session = await authApi.getSession()
+      if (!session?.user) {
+        return
+      }
+
       const response = await fetch(`${API_BASE_URL}/aria2/config`, {
         credentials: 'include',
       })
@@ -96,7 +102,13 @@ export function useAria2() {
       // 1. 保存到 localStorage
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig))
 
-      // 2. 如果已登录，同步到后端
+      // 2. 仅在已登录时同步到后端
+      const session = await authApi.getSession()
+      if (!session?.user) {
+        toast.success('配置已保存')
+        return
+      }
+
       const response = await fetch(`${API_BASE_URL}/aria2/config`, {
         method: 'PUT',
         headers: {

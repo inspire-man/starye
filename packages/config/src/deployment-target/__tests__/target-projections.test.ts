@@ -40,7 +40,6 @@ function resolveFixtureTarget() {
       blog: { project: 'alternate-blog', canonicalUrl: 'https://blog.alternate.example' },
       movie: { project: 'alternate-movie', canonicalUrl: 'https://movie.alternate.example' },
       comic: { project: 'alternate-comic', canonicalUrl: 'https://comic.alternate.example' },
-      tavern: { project: 'alternate-tavern', canonicalUrl: 'https://tavern.alternate.example' },
     },
   }
 
@@ -83,12 +82,15 @@ describe('target projections', () => {
       apiBaseUrl: 'https://api.alternate.example',
     })
     expect(alternate.deploy.workers.api.name).toBe('alternate-api')
+    expect(current.deploy.workers.gateway.vars.tavernOrigin).toBe('https://tavern.starye.org')
+    expect(current.deploy.pages.map(page => page.surface)).not.toContain('tavern')
     expect(alternate.workflow).toMatchObject({ targetId: 'alternate-org', githubEnvironment: 'alternate-org', runId: 'alternate-run' })
   })
 
   it('resolves only the selected Blog project and each closed Pages surface', () => {
     const resolution = resolveTargetProfile('starye-org')
     expect(getPagesDeployProjection(resolution, 'blog').project).toBe('blog-pages')
+    expect(targetPagesSurfaceValues).not.toContain('tavern')
 
     for (const surface of targetPagesSurfaceValues) {
       const projection = getPagesDeployProjection(resolution, surface)

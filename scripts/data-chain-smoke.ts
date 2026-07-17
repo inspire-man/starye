@@ -14,11 +14,16 @@ import { pathToFileURL } from 'node:url'
 import {
   assertRemoteEligibility,
   buildLocalEnvProjectionPlan,
+  buildTargetProjections,
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
+  createDataChainFixtureCodes,
   createPreIngestEvidence,
   createResolvedPendingEvidence,
+  DATA_CHAIN_FIXTURE_COUNT,
   LOCAL_GATEWAY_ORIGIN,
+  materializeTargetDeployConfig,
+  parseAuditedPublicRuntimeInput,
   prepareTargetMutation,
   renderDataChainEvidenceMarkdown,
   resolveTargetProfile,
@@ -30,6 +35,7 @@ import {
 } from '../packages/config/src/deployment-target/index'
 import { createDataChainFixture, runDataChainFixture } from '../packages/crawler/src/smoke/data-chain-fixture'
 import { ApiClient } from '../packages/crawler/src/utils/api-client'
+import { packageManagerInvocation } from './package-manager-command.ts'
 
 export const DATA_CHAIN_EVIDENCE_ROOT = path.resolve(import.meta.dirname, '../.planning/phases/13-full-chain-data-smoke/evidence')
 
@@ -72,8 +78,8 @@ export interface DataChainSmokeDependencies {
   readonly inspectLocalD1?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<LocalD1Inspection>
   readonly checkServices?: () => Promise<LocalCommandResult>
   readonly observeGatewayAuth?: () => Promise<GatewayAuthResponse>
-  readonly runFixture?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<{ itemCode: string }>
-  readonly snapshot?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<{ status: 'found' | 'not-found' | 'checkpoint', itemCode: string, itemId?: string }>
+  readonly runFixture?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<{ itemCode: string, itemCount: typeof DATA_CHAIN_FIXTURE_COUNT }>
+  readonly snapshot?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<{ status: 'found' | 'not-found' | 'checkpoint', itemCode: string, itemId?: string, itemCount?: typeof DATA_CHAIN_FIXTURE_COUNT }>
   readonly fetchGatewayApi?: (input: { itemCode: string, itemId: string }) => Promise<{ status: number, itemCode?: string, itemId?: string, attempt?: number }>
   readonly read?: (file: string) => Promise<string | undefined>
   readonly environment?: Readonly<Record<string, string | undefined>>
@@ -171,18 +177,21 @@ function d1Rows(stdout: string): readonly Record<string, unknown>[] | undefined 
   return undefined
 }
 
-function executeLocalD1(command: string): LocalCommandResult {
-  const result = spawnSync('pnpm', [
+function executeLocalD1(configPath: string, command: string): LocalCommandResult {
+  const invocation = packageManagerInvocation([
     'exec',
     'wrangler',
     'd1',
     'execute',
     'starye-db',
     '--local',
+    '--config',
+    configPath,
     '--command',
     command,
     '--json',
-  ], {
+  ])
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: path.resolve(import.meta.dirname, '../apps/api'),
     encoding: 'utf8',
     shell: false,
@@ -198,37 +207,62 @@ function includesColumns(rows: readonly Record<string, unknown>[], columns: read
   return columns.every(column => found.has(column))
 }
 
-async function inspectLocalD1Default(input: { itemCode: string }): Promise<LocalD1Inspection> {
-  const tables = executeLocalD1('SELECT name FROM sqlite_master WHERE type=\'table\' AND name IN (\'movie\', \'player\') ORDER BY name;')
-  const movieColumns = executeLocalD1('PRAGMA table_info(movie);')
-  const playerColumns = executeLocalD1('PRAGMA table_info(player);')
-  const movieIndexes = executeLocalD1('PRAGMA index_list(movie);')
-  const escapedCode = input.itemCode.replaceAll('\'', '\'\'')
-  const cardinality = executeLocalD1(`SELECT COUNT(DISTINCT movie.id) AS movieCount, COUNT(player.id) AS playerCount, MAX(movie.is_r18) AS isR18 FROM movie LEFT JOIN player ON player.movie_id = movie.id WHERE movie.code = '${escapedCode}';`)
-  const all = [tables, movieColumns, playerColumns, movieIndexes, cardinality]
-  if (all.some(result => result.exitCode !== 0)) {
+async function inspectLocalD1Default(input: { targetId: string, runId: string, itemCode: string }): Promise<LocalD1Inspection> {
+  const root = path.resolve(import.meta.dirname, '..')
+  let materialized: Awaited<ReturnType<typeof materializeTargetDeployConfig>>
+
+  try {
+    const resolution = resolveTargetProfile(input.targetId)
+    materialized = await materializeTargetDeployConfig({
+      deploy: buildTargetProjections(resolution).deploy,
+      publicRuntimeInput: parseAuditedPublicRuntimeInput(resolution, { buildMode: 'local' }),
+      runId: input.runId,
+      appDirectories: {
+        api: path.join(root, 'apps', 'api'),
+        gateway: path.join(root, 'apps', 'gateway'),
+      },
+      runDirectory: path.join(root, '.target-runs'),
+    })
+  }
+  catch {
     return { status: 'unready', checkpoint: 'local_d1_readiness_unmet' }
   }
-  const tableRows = d1Rows(tables.stdout)
-  const movieColumnRows = d1Rows(movieColumns.stdout)
-  const playerColumnRows = d1Rows(playerColumns.stdout)
-  const indexRows = d1Rows(movieIndexes.stdout)
-  const cardinalityRows = d1Rows(cardinality.stdout)
-  if (!tableRows || !movieColumnRows || !playerColumnRows || !indexRows || !cardinalityRows
-    || !['movie', 'player'].every(table => tableRows.some(row => row.name === table))
-    || !includesColumns(movieColumnRows, requiredMovieColumns)
-    || !includesColumns(playerColumnRows, requiredPlayerColumns)
-    || !indexRows.some(row => row.name === 'movie_code_unique')) {
-    return { status: 'unready', checkpoint: 'local_d1_readiness_unmet' }
+
+  try {
+    const tables = executeLocalD1(materialized.apiConfigPath, 'SELECT name FROM sqlite_master WHERE type=\'table\' AND name IN (\'movie\', \'player\') ORDER BY name;')
+    const movieColumns = executeLocalD1(materialized.apiConfigPath, 'PRAGMA table_info(movie);')
+    const playerColumns = executeLocalD1(materialized.apiConfigPath, 'PRAGMA table_info(player);')
+    const movieIndexes = executeLocalD1(materialized.apiConfigPath, 'PRAGMA index_list(movie);')
+    const escapedCode = input.itemCode.replaceAll('\'', '\'\'')
+    const cardinality = executeLocalD1(materialized.apiConfigPath, `SELECT COUNT(DISTINCT movie.id) AS movieCount, COUNT(player.id) AS playerCount, MAX(movie.is_r18) AS isR18 FROM movie LEFT JOIN player ON player.movie_id = movie.id WHERE movie.code = '${escapedCode}';`)
+    const all = [tables, movieColumns, playerColumns, movieIndexes, cardinality]
+    if (all.some(result => result.exitCode !== 0)) {
+      return { status: 'unready', checkpoint: 'local_d1_readiness_unmet' }
+    }
+    const tableRows = d1Rows(tables.stdout)
+    const movieColumnRows = d1Rows(movieColumns.stdout)
+    const playerColumnRows = d1Rows(playerColumns.stdout)
+    const indexRows = d1Rows(movieIndexes.stdout)
+    const cardinalityRows = d1Rows(cardinality.stdout)
+    if (!tableRows || !movieColumnRows || !playerColumnRows || !indexRows || !cardinalityRows
+      || !['movie', 'player'].every(table => tableRows.some(row => row.name === table))
+      || !includesColumns(movieColumnRows, requiredMovieColumns)
+      || !includesColumns(playerColumnRows, requiredPlayerColumns)
+      || !indexRows.some(row => row.name === 'movie_code_unique')) {
+      return { status: 'unready', checkpoint: 'local_d1_readiness_unmet' }
+    }
+    const row = cardinalityRows[0]
+    const movieCount = Number(row?.movieCount)
+    const playerCount = Number(row?.playerCount)
+    const isR18 = Number(row?.isR18 ?? 0)
+    if ((movieCount === 0 && playerCount === 0) || (movieCount === 1 && playerCount === 1 && isR18 === 0)) {
+      return { status: 'ready' }
+    }
+    return { status: 'unready', checkpoint: 'fixture_seed_incomplete' }
   }
-  const row = cardinalityRows[0]
-  const movieCount = Number(row?.movieCount)
-  const playerCount = Number(row?.playerCount)
-  const isR18 = Number(row?.isR18 ?? 0)
-  if ((movieCount === 0 && playerCount === 0) || (movieCount === 1 && playerCount === 1 && isR18 === 0)) {
-    return { status: 'ready' }
+  finally {
+    await materialized.cleanup()
   }
-  return { status: 'unready', checkpoint: 'fixture_seed_incomplete' }
 }
 
 async function collectProjectionIssuesDefault(target: string): Promise<readonly ProjectionValidationIssue[]> {
@@ -246,7 +280,8 @@ async function collectProjectionIssuesDefault(target: string): Promise<readonly 
 }
 
 async function checkServicesDefault(): Promise<LocalCommandResult> {
-  const result = spawnSync('pnpm', ['check:services'], { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', shell: false })
+  const invocation = packageManagerInvocation(['check:services'])
+  const result = spawnSync(invocation.command, invocation.args, { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', shell: false })
   return { exitCode: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
 }
 
@@ -272,7 +307,7 @@ function validGatewayAuth(response: GatewayAuthResponse): boolean {
 }
 
 async function runFixtureDefault(input: { targetId: string, runId: string, itemCode: string }): Promise<{ itemCode: string }> {
-  const secret = process.env.CRAWLER_SECRET
+  const secret = await readLocalCrawlerSecret()
   if (!secret) {
     throw new Error('Local crawler service secret is unavailable.')
   }
@@ -287,8 +322,86 @@ async function runFixtureDefault(input: { targetId: string, runId: string, itemC
   })
 }
 
-async function snapshotDefault(_input: { targetId: string, runId: string, itemCode: string }): Promise<{ status: 'found' | 'not-found' | 'checkpoint', itemCode: string, itemId?: string }> {
-  return { status: 'checkpoint', itemCode: _input.itemCode }
+async function readLocalCrawlerSecret(): Promise<string | undefined> {
+  if (process.env.CRAWLER_SECRET?.trim()) {
+    return process.env.CRAWLER_SECRET.trim()
+  }
+  try {
+    const contents = await readFile(path.resolve(import.meta.dirname, '../packages/crawler/.env'), 'utf8')
+    const value = contents.match(/^\s*(?:export\s+)?CRAWLER_SECRET\s*=\s*(.*?)\s*$/m)?.[1]
+    if (!value) {
+      return undefined
+    }
+    const trimmed = value.trim()
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith('\'') && trimmed.endsWith('\''))) {
+      return trimmed.slice(1, -1)
+    }
+    return trimmed
+  }
+  catch {
+    return undefined
+  }
+}
+
+async function snapshotDefault(input: { targetId: string, runId: string, itemCode: string }): Promise<{ status: 'found' | 'not-found' | 'checkpoint', itemCode: string, itemId?: string, itemCount?: typeof DATA_CHAIN_FIXTURE_COUNT }> {
+  const root = path.resolve(import.meta.dirname, '..')
+  let materialized: Awaited<ReturnType<typeof materializeTargetDeployConfig>>
+
+  try {
+    const resolution = resolveTargetProfile(input.targetId)
+    materialized = await materializeTargetDeployConfig({
+      deploy: buildTargetProjections(resolution).deploy,
+      publicRuntimeInput: parseAuditedPublicRuntimeInput(resolution, { buildMode: 'local' }),
+      runId: input.runId,
+      appDirectories: {
+        api: path.join(root, 'apps', 'api'),
+        gateway: path.join(root, 'apps', 'gateway'),
+      },
+      runDirectory: path.join(root, '.target-runs'),
+    })
+  }
+  catch {
+    return { status: 'checkpoint', itemCode: input.itemCode }
+  }
+
+  try {
+    const expectedCodes = createDataChainFixtureCodes(input)
+    const escapedCode = input.itemCode.replaceAll('\'', '\'\'')
+    const escapedSiblingPattern = `${input.itemCode}-fixture-%`.replaceAll('\'', '\'\'')
+    const result = executeLocalD1(materialized.apiConfigPath, [
+      'SELECT movie.id AS id, movie.code AS code, movie.is_r18 AS isR18, COUNT(player.id) AS playerCount',
+      'FROM movie',
+      'LEFT JOIN player ON player.movie_id = movie.id AND player.is_active = 1',
+      `WHERE movie.code = '${escapedCode}' OR movie.code LIKE '${escapedSiblingPattern}'`,
+      'GROUP BY movie.id, movie.code, movie.is_r18',
+      'ORDER BY movie.code',
+      `LIMIT ${DATA_CHAIN_FIXTURE_COUNT + 1}`,
+    ].join(' '))
+    const rows = result.exitCode === 0 ? d1Rows(result.stdout) : undefined
+    if (!rows) {
+      return { status: 'checkpoint', itemCode: input.itemCode }
+    }
+    if (rows.length === 0) {
+      return { status: 'not-found', itemCode: input.itemCode }
+    }
+    const expectedCodeSet = new Set(expectedCodes)
+    const returnedCodes = new Set(rows.map(row => typeof row.code === 'string' ? row.code : ''))
+    const primary = rows.find(row => row.code === input.itemCode)
+    if (rows.length !== DATA_CHAIN_FIXTURE_COUNT
+      || returnedCodes.size !== DATA_CHAIN_FIXTURE_COUNT
+      || returnedCodes.size !== expectedCodeSet.size
+      || [...expectedCodeSet].some(code => !returnedCodes.has(code))
+      || rows.some(row => Number(row.isR18) !== 0)
+      || rows.some(row => Number(row.playerCount) !== 1)
+      || !primary
+      || !isText(primary.id)) {
+      return { status: 'checkpoint', itemCode: input.itemCode }
+    }
+    return { status: 'found', itemCode: input.itemCode, itemId: primary.id, itemCount: DATA_CHAIN_FIXTURE_COUNT }
+  }
+  finally {
+    await materialized.cleanup()
+  }
 }
 
 async function fetchGatewayApiDefault(input: { itemCode: string, itemId: string }): Promise<{ status: number, itemCode?: string, itemId?: string, attempt?: number }> {
@@ -417,7 +530,8 @@ function assertRemoteLocalPrerequisite(
 }
 
 function executeRemoteReadOnlyDefault(argv: readonly string[]): { exitCode: number, stdout?: string } {
-  const result = spawnSync('pnpm', ['exec', 'wrangler', ...argv], {
+  const invocation = packageManagerInvocation(['exec', 'wrangler', ...argv])
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: path.resolve(import.meta.dirname, '..'),
     encoding: 'utf8',
     shell: false,
@@ -428,6 +542,24 @@ function executeRemoteReadOnlyDefault(argv: readonly string[]): { exitCode: numb
     },
   })
   return { exitCode: result.status ?? 1, stdout: result.stdout ?? '' }
+}
+
+export function executePreparedRemoteCommand(
+  command: string,
+  args: readonly string[],
+  environment: NodeJS.ProcessEnv,
+  workingDirectory = path.join(path.resolve(import.meta.dirname, '..'), 'packages/crawler'),
+): { exitCode: number, stdout: string, stderr: string } {
+  const invocation = command === 'pnpm'
+    ? packageManagerInvocation(args)
+    : { command, args }
+  const child = spawnSync(invocation.command, invocation.args, {
+    cwd: workingDirectory,
+    encoding: 'utf8',
+    shell: false,
+    env: environment,
+  })
+  return { exitCode: child.status ?? 1, stdout: child.stdout ?? '', stderr: child.stderr ?? '' }
 }
 
 async function runPreparedRemoteEntry(
@@ -458,10 +590,7 @@ async function runPreparedRemoteEntry(
       entry: input.entry,
       preparedContextPath: prepared.preparedContextPath,
       authorizedEnvironment: input.environment,
-      execute: (command, args, environment) => {
-        const child = spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment })
-        return { exitCode: child.status ?? 1, stdout: child.stdout ?? '' }
-      },
+      execute: executePreparedRemoteCommand,
     })
     if (!result.observation) {
       throw new Error('Prepared smoke entry did not return an observation.')
@@ -555,7 +684,7 @@ async function runRemoteDataChainSmoke(options: DataChainSmokeOptions, dependenc
   }))
   try {
     const fixture = await runFixture({ target: resolution.id, runId: options.runId, executeReadOnly })
-    if (fixture.itemCode !== candidate.itemCode) {
+    if (fixture.itemCode !== candidate.itemCode || fixture.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
       throw new Error('Remote fixture tuple does not match the deterministic candidate.')
     }
   }
@@ -569,7 +698,7 @@ async function runRemoteDataChainSmoke(options: DataChainSmokeOptions, dependenc
   catch {
     return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
   }
-  if (snapshot.status !== 'found' || snapshot.itemCode !== candidate.itemCode) {
+  if (snapshot.status !== 'found' || snapshot.itemCode !== candidate.itemCode || snapshot.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
     return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
   }
 
@@ -588,7 +717,7 @@ async function runRemoteDataChainSmoke(options: DataChainSmokeOptions, dependenc
     aggregate: apiPassed ? 'pending' : 'checkpoint',
     observations: [
       { surface: 'remote_preflight', status: 'passed' },
-      { surface: 'd1', status: 'passed' },
+      { surface: 'd1', status: 'passed', itemCount: DATA_CHAIN_FIXTURE_COUNT },
       {
         surface: 'api',
         status: apiPassed ? 'passed' : 'checkpoint',
@@ -680,7 +809,7 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
   const snapshot = dependencies.snapshot ?? snapshotDefault
   try {
     const fixture = await runFixture({ targetId: resolution.id, runId: options.runId, itemCode: candidate.itemCode })
-    if (fixture.itemCode !== candidate.itemCode) {
+    if (fixture.itemCode !== candidate.itemCode || fixture.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
       throw new Error('Fixture tuple does not match the deterministic candidate.')
     }
   }
@@ -688,7 +817,10 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'service_readiness', status: 'checkpoint', checkpoint: 'local_prerequisite_unmet' }, now, write)
   }
   const snapshotResult = await snapshot({ targetId: resolution.id, runId: options.runId, itemCode: candidate.itemCode })
-  if (snapshotResult.status !== 'found' || snapshotResult.itemCode !== candidate.itemCode || !isText(snapshotResult.itemId)) {
+  if (snapshotResult.status !== 'found'
+    || snapshotResult.itemCode !== candidate.itemCode
+    || snapshotResult.itemCount !== DATA_CHAIN_FIXTURE_COUNT
+    || !isText(snapshotResult.itemId)) {
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'local_d1_readiness', status: 'checkpoint', checkpoint: 'fixture_seed_incomplete' }, now, write)
   }
 
@@ -705,7 +837,7 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
     aggregate: apiPassed ? 'pending' : 'checkpoint',
     observations: [
       ...prerequisiteObservations,
-      { surface: 'd1', status: 'passed' },
+      { surface: 'd1', status: 'passed', itemCount: DATA_CHAIN_FIXTURE_COUNT },
       {
         surface: 'api',
         status: apiPassed ? 'passed' : 'checkpoint',

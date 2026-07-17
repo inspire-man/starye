@@ -159,6 +159,10 @@ describe('useRating', () => {
 
       const result = await submitRating('player-1', 4)
       expect(result).toBe(true)
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/ratings',
+        expect.objectContaining({ method: 'POST' }),
+      )
     })
   })
 

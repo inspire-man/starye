@@ -54,6 +54,12 @@ export default defineNuxtConfig({
     plugins: [
       tailwindcss(),
     ],
+    server: {
+      hmr: {
+        host: 'localhost',
+        clientPort: 3002,
+      },
+    },
     optimizeDeps: {
       include: [
         'better-auth/vue',

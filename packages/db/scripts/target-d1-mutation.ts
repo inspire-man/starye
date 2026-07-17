@@ -1,6 +1,7 @@
 /// <reference types="node" />
 
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -25,7 +26,7 @@ export interface PreparedD1SnapshotCommand {
   readonly configPath: string
   readonly d1Name: string
   readonly sql: string
-  readonly params: readonly [string]
+  readonly params: readonly string[]
 }
 
 export interface PreparedD1SnapshotExecutor {
@@ -43,7 +44,7 @@ export interface PreparedD1MigrationCommand {
 }
 
 export interface PreparedD1MigrationExecutor {
-  execute: (command: PreparedD1MigrationCommand) => { exitCode: number, stderr?: string }
+  execute: (command: PreparedD1MigrationCommand) => { exitCode: number, stdout?: string, stderr?: string }
 }
 
 export interface TargetD1MutationDependencies {
@@ -52,24 +53,61 @@ export interface TargetD1MutationDependencies {
 }
 
 function packageManagerInvocation(args: readonly string[]): { command: string, args: readonly string[] } {
-  return {
-    command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-    args,
+  if (process.platform !== 'win32') {
+    return { command: 'pnpm', args }
   }
+
+  const entry = path.join(path.dirname(process.execPath), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
+  if (!existsSync(entry)) {
+    throw new Error('Windows pnpm entrypoint is unavailable.')
+  }
+  return { command: process.execPath, args: [entry, ...args] }
+}
+
+function pickRuntimeEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const names = process.platform === 'win32'
+    ? ['PATH', 'Path', 'SystemRoot', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'NODE_OPTIONS', 'PNPM_HOME']
+    : ['PATH', 'HOME', 'TMPDIR', 'NODE_OPTIONS', 'PNPM_HOME']
+  const selected: NodeJS.ProcessEnv = {}
+
+  for (const name of names) {
+    const value = environment[name]
+    if (value !== undefined) {
+      selected[name] = value
+    }
+  }
+
+  return selected
+}
+
+function diagnosticOutput(result: { readonly stdout?: string, readonly stderr?: string }): string {
+  return [result.stderr, result.stdout]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join('\n')
 }
 
 export type D1SmokeSnapshotObservation
-  = Readonly<{ operation: 'd1-smoke-snapshot', status: 'found', itemCode: string, itemId: string }>
+  = Readonly<{ operation: 'd1-smoke-snapshot', status: 'found', itemCode: string, itemId: string, itemCount: 10 }>
     | Readonly<{ operation: 'd1-smoke-snapshot', status: 'not-found' | 'checkpoint', itemCode: string }>
 
+const DATA_CHAIN_FIXTURE_COUNT = 10
+
 const snapshotSql = [
-  'SELECT movie.id AS id, movie.code AS code, COUNT(player.id) AS playerCount',
+  'SELECT movie.id AS id, movie.code AS code, movie.is_r18 AS isR18, COUNT(player.id) AS playerCount',
   'FROM movie',
   'LEFT JOIN player ON player.movie_id = movie.id AND player.is_active = 1',
-  'WHERE movie.code = ?',
-  'GROUP BY movie.id, movie.code',
-  'LIMIT 1',
+  'WHERE movie.code = ? OR movie.code LIKE ?',
+  'GROUP BY movie.id, movie.code, movie.is_r18',
+  'ORDER BY movie.code',
+  `LIMIT ${DATA_CHAIN_FIXTURE_COUNT + 1}`,
 ].join(' ')
+
+function expectedFixtureCodes(primaryCode: string): readonly string[] {
+  return [
+    primaryCode,
+    ...Array.from({ length: DATA_CHAIN_FIXTURE_COUNT - 1 }, (_, index) => `${primaryCode}-fixture-${index + 1}`),
+  ]
+}
 
 function isPreparedDbContext(value: unknown, contextPath: string): value is PreparedDbContext {
   if (!value || typeof value !== 'object') {
@@ -104,12 +142,12 @@ function defaultMigrationExecutor(environment: NodeJS.ProcessEnv): PreparedD1Mig
       encoding: 'utf8',
       shell: false,
       env: {
-        PATH: environment.PATH,
+        ...pickRuntimeEnvironment(environment),
         CLOUDFLARE_ACCOUNT_ID: command.accountId,
         CLOUDFLARE_API_TOKEN: environment.CLOUDFLARE_API_TOKEN,
       },
     })
-    return { exitCode: result.status ?? 1, stderr: result.stderr ?? '' }
+    return { exitCode: result.status ?? 1, stderr: diagnosticOutput(result) }
   }
 }
 
@@ -168,7 +206,18 @@ function encodeSqlString(value: string): string {
 
 function defaultSnapshotExecutor(environment: NodeJS.ProcessEnv): PreparedD1SnapshotExecutor['execute'] {
   return (command) => {
-    const query = command.sql.replace('?', encodeSqlString(command.params[0]))
+    let parameterIndex = 0
+    const query = command.sql.replace(/\?/g, () => {
+      const value = command.params[parameterIndex]
+      parameterIndex += 1
+      if (value === undefined) {
+        throw new Error('target-d1-mutation rejected an invalid snapshot command.')
+      }
+      return encodeSqlString(value)
+    })
+    if (parameterIndex !== command.params.length) {
+      throw new Error('target-d1-mutation rejected an invalid snapshot command.')
+    }
     const invocation = packageManagerInvocation([
       'exec',
       'wrangler',
@@ -186,7 +235,7 @@ function defaultSnapshotExecutor(environment: NodeJS.ProcessEnv): PreparedD1Snap
       encoding: 'utf8',
       shell: false,
       env: {
-        PATH: environment.PATH,
+        ...pickRuntimeEnvironment(environment),
         CLOUDFLARE_ACCOUNT_ID: command.accountId,
         CLOUDFLARE_API_TOKEN: environment.CLOUDFLARE_API_TOKEN,
       },
@@ -221,16 +270,22 @@ function parseSnapshotResult(stdout: string | undefined, itemCode: string): D1Sm
     if (rows.length === 0) {
       return { operation: 'd1-smoke-snapshot', status: 'not-found', itemCode }
     }
-    const row = rows[0]
-    if (rows.length !== 1
-      || !row
-      || row.code !== itemCode
-      || typeof row.id !== 'string'
-      || !row.id.trim()
-      || Number(row.playerCount) !== 1) {
+    const expectedCodes = expectedFixtureCodes(itemCode)
+    const expectedCodeSet = new Set(expectedCodes)
+    const primary = rows.find(row => row.code === itemCode)
+    const returnedCodes = new Set(rows.map(row => typeof row.code === 'string' ? row.code : ''))
+    if (rows.length !== DATA_CHAIN_FIXTURE_COUNT
+      || returnedCodes.size !== DATA_CHAIN_FIXTURE_COUNT
+      || returnedCodes.size !== expectedCodeSet.size
+      || [...expectedCodeSet].some(code => !returnedCodes.has(code))
+      || rows.some(row => Number(row.isR18) !== 0)
+      || rows.some(row => Number(row.playerCount) !== 1)
+      || !primary
+      || typeof primary.id !== 'string'
+      || !primary.id.trim()) {
       return { operation: 'd1-smoke-snapshot', status: 'checkpoint', itemCode }
     }
-    return { operation: 'd1-smoke-snapshot', status: 'found', itemCode, itemId: row.id }
+    return { operation: 'd1-smoke-snapshot', status: 'found', itemCode, itemId: primary.id, itemCount: DATA_CHAIN_FIXTURE_COUNT }
   }
   catch {
     return { operation: 'd1-smoke-snapshot', status: 'checkpoint', itemCode }
@@ -263,7 +318,7 @@ export async function runTargetD1Mutation(
       for (const command of commands) {
         const result = execute(command)
         if (result.exitCode !== 0) {
-          throw new Error(migrationFailureMessage(command.kind, result.stderr, environment.CLOUDFLARE_API_TOKEN))
+          throw new Error(migrationFailureMessage(command.kind, diagnosticOutput(result), environment.CLOUDFLARE_API_TOKEN))
         }
       }
     }
@@ -287,7 +342,7 @@ export async function runTargetD1Mutation(
     configPath: context.apiConfigPath,
     d1Name: context.identity.d1Name,
     sql: snapshotSql,
-    params: [itemCode],
+    params: [itemCode, `${itemCode}-fixture-%`],
   })
   if (result.exitCode !== 0) {
     return { operation: 'd1-smoke-snapshot', status: 'checkpoint', itemCode }

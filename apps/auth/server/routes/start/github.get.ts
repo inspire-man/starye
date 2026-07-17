@@ -1,4 +1,4 @@
-import { createError, defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
+import { appendResponseHeader, createError, defineEventHandler, getQuery, sendRedirect } from 'h3'
 
 function normalizeRedirect(raw: string | undefined, origin: string): string {
   const candidate = raw || '/'
@@ -14,17 +14,26 @@ function normalizeRedirect(raw: string | undefined, origin: string): string {
   }
 }
 
+export function readSetCookieHeaders(headers: Headers): string[] {
+  const cookieHeaders = headers as Headers & { getSetCookie?: () => string[] }
+  const values = cookieHeaders.getSetCookie?.()
+  if (values) {
+    return values
+  }
+
+  const value = headers.get('set-cookie')
+  return value ? [value] : []
+}
+
 export default defineEventHandler(async (event) => {
-  const requestUrl = getRequestURL(event)
-  const origin = requestUrl.origin
+  const config = useRuntimeConfig()
+  const origin = config.public.gatewayBaseUrl
   const query = getQuery(event)
   const next = normalizeRedirect((query.next || query.redirect) as string | undefined, origin)
-
-  const config = useRuntimeConfig()
   const apiUrl = config.public.apiBaseUrl
   const callbackURL = `${origin}/auth/login?next=${encodeURIComponent(next)}`
 
-  const result = await $fetch<{ url?: string }>(
+  const response = await $fetch.raw<{ url?: string }>(
     '/api/auth/sign-in/social',
     {
       baseURL: apiUrl,
@@ -36,6 +45,12 @@ export default defineEventHandler(async (event) => {
       retry: false,
     },
   )
+
+  for (const setCookie of readSetCookieHeaders(response.headers)) {
+    appendResponseHeader(event, 'set-cookie', setCookie)
+  }
+
+  const result = response._data
 
   if (!result?.url) {
     throw createError({

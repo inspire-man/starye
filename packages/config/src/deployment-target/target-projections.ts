@@ -11,6 +11,17 @@ import {
 export { targetPagesSurfaceValues }
 type TargetPagesSurface = ProfileTargetPagesSurface
 
+export const targetAppSurfaceValues = [
+  'dashboard',
+  'auth',
+  'blog',
+  'movie',
+  'comic',
+  'tavern',
+] as const
+
+export type TargetAppSurface = (typeof targetAppSurfaceValues)[number]
+
 export const targetAppBasePaths = {
   dashboard: '/dashboard/',
   auth: '/auth/',
@@ -18,7 +29,7 @@ export const targetAppBasePaths = {
   movie: '/movie/',
   comic: '/comic/',
   tavern: '/tavern/',
-} as const satisfies Readonly<Record<TargetPagesSurface, `/${string}/`>>
+} as const satisfies Readonly<Record<TargetAppSurface, `/${string}/`>>
 
 export interface TargetPublicRuntimeConfig {
   readonly targetId: string
@@ -196,7 +207,7 @@ function buildWorkerDeployProjection(
       blogOrigin: profile.pages.blog.canonicalUrl,
       movieOrigin: profile.pages.movie.canonicalUrl,
       comicOrigin: profile.pages.comic.canonicalUrl,
-      tavernOrigin: profile.pages.tavern.canonicalUrl,
+      tavernOrigin: profile.urls.tavern,
     },
     resources: sharedResources,
   }

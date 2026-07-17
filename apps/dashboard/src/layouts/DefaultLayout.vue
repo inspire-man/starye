@@ -203,7 +203,7 @@ const menuItems = computed(() => [
     label: '角色模拟 (Tavern)',
     icon: 'tavern',
     show: canAccessGlobal.value,
-    path: 'http://127.0.0.1:8000/',
+    path: '/tavern/',
     isExternal: true,
   },
   {

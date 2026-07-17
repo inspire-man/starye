@@ -22,11 +22,13 @@ import {
   runTargetPreflight,
   validateProjectedEnv,
 } from '../packages/config/src/deployment-target/index.ts'
+import { packageManagerInvocation } from './package-manager-command.ts'
 
-const deployAppValues = ['api', 'gateway', 'dashboard', 'blog'] as const
+const deployAppValues = ['api', 'gateway', 'dashboard', 'auth', 'blog', 'movie', 'comic'] as const
+const repositoryRoot = path.resolve(import.meta.dirname, '..')
 
 type DeployApp = (typeof deployAppValues)[number]
-type CommandExecutor = (command: string, args: readonly string[]) => number
+type CommandExecutor = (command: string, args: readonly string[], environment?: NodeJS.ProcessEnv) => number
 
 export interface TargetDeployOptions {
   readonly target: string
@@ -43,7 +45,17 @@ function isDeployApp(value: string): value is DeployApp {
 }
 
 function packageFilter(app: DeployApp): string {
-  return app === 'api' ? 'api' : app === 'gateway' ? 'gateway' : app
+  if (app === 'api')
+    return 'api'
+  if (app === 'gateway')
+    return 'gateway'
+  if (app === 'auth')
+    return 'starye-auth'
+  if (app === 'movie')
+    return '@starye/movie-app'
+  if (app === 'comic')
+    return '@starye/comic-app'
+  return app
 }
 
 function isWorkerApp(app: DeployApp): app is 'api' | 'gateway' {
@@ -51,17 +63,49 @@ function isWorkerApp(app: DeployApp): app is 'api' | 'gateway' {
 }
 
 function expectedSurface(app: DeployApp): TargetPagesSurface | undefined {
-  return app === 'dashboard' ? 'dashboard' : app === 'blog' ? 'blog' : undefined
+  if (isWorkerApp(app))
+    return undefined
+  return app
 }
 
-function spawnCommand(command: string, args: readonly string[]): number {
-  return spawnSync(command, args, { encoding: 'utf8', shell: false }).status ?? 1
+function deploymentRuntimeEnvironment(accountId: string): NodeJS.ProcessEnv {
+  const names = process.platform === 'win32'
+    ? ['PATH', 'Path', 'SystemRoot', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'NODE_OPTIONS', 'PNPM_HOME']
+    : ['PATH', 'HOME', 'TMPDIR', 'NODE_OPTIONS', 'PNPM_HOME']
+  const environment: NodeJS.ProcessEnv = {}
+
+  for (const name of names) {
+    const value = process.env[name]
+    if (value !== undefined) {
+      environment[name] = value
+    }
+  }
+
+  return { ...environment, CLOUDFLARE_ACCOUNT_ID: accountId }
 }
 
-function createLiveCheckExecutor(): WranglerCommandExecutor {
+function spawnCommand(command: string, args: readonly string[], environment: NodeJS.ProcessEnv = process.env): number {
+  const invocation = command === 'pnpm'
+    ? packageManagerInvocation(args)
+    : { command, args }
+  const result = spawnSync(invocation.command, invocation.args, { encoding: 'utf8', shell: false, cwd: repositoryRoot, env: environment })
+  if (result.stdout) {
+    process.stdout.write(result.stdout)
+  }
+  if (result.stderr) {
+    process.stderr.write(result.stderr)
+  }
+  if (result.error) {
+    console.error(`Target deploy command failed to start: ${result.error.message}`)
+  }
+  return result.status ?? 1
+}
+
+function createLiveCheckExecutor(environment: NodeJS.ProcessEnv): WranglerCommandExecutor {
   return {
     execute(argv) {
-      const result = spawnSync('pnpm', ['exec', 'wrangler', ...argv], { encoding: 'utf8', shell: false })
+      const invocation = packageManagerInvocation(['exec', 'wrangler', ...argv])
+      const result = spawnSync(invocation.command, invocation.args, { encoding: 'utf8', shell: false, cwd: repositoryRoot, env: environment })
       return { exitCode: result.status ?? 1, stdout: result.stdout ?? '' }
     },
   }
@@ -99,32 +143,32 @@ export async function runTargetDeploy(options: TargetDeployOptions): Promise<voi
     throw new Error(expected ? `Deploy app ${options.app} requires --surface ${expected}.` : 'Worker deploy must not accept --surface.')
   }
 
-  const projectionIssues = await collectLocalProjectionIssues(options.target, path.resolve(options.envRoot ?? process.cwd()))
+  const deploymentEnvironment = deploymentRuntimeEnvironment(resolution.profile.account.id)
+  const projectionIssues = await collectLocalProjectionIssues(options.target, path.resolve(options.envRoot ?? repositoryRoot))
   const preflight = runTargetPreflight({
     target: options.target,
     scope: 'local',
     command: 'deploy',
     wranglerProfile: resolution.profile.local.wranglerProfile,
     projectionIssues,
-    environment: process.env,
+    environment: deploymentEnvironment,
     live: true,
-    liveCheckExecutor: options.liveCheckExecutor ?? createLiveCheckExecutor(),
+    liveCheckExecutor: options.liveCheckExecutor ?? createLiveCheckExecutor(deploymentEnvironment),
     ...(options.surface ? { pagesSurface: options.surface } : {}),
   })
   if (!preflight.ok) {
-    throw new Error('Target preflight failed.')
+    throw new Error(`Target preflight failed: ${preflight.issues.map(issue => `${issue.code}: ${issue.message}`).join(' ')}`)
   }
 
-  const root = path.resolve(import.meta.dirname, '..')
   const materialized = await materializeTargetDeployConfig({
     deploy: buildTargetProjections(resolution).deploy,
     publicRuntimeInput: parseAuditedPublicRuntimeInput(resolution, { buildMode: 'local' }),
     runId: options.runId ?? randomUUID(),
     appDirectories: {
-      api: path.join(root, 'apps', 'api'),
-      gateway: path.join(root, 'apps', 'gateway'),
+      api: path.join(repositoryRoot, 'apps', 'api'),
+      gateway: path.join(repositoryRoot, 'apps', 'gateway'),
     },
-    runDirectory: path.join(root, '.target-runs'),
+    runDirectory: path.join(repositoryRoot, '.target-runs'),
     ...(options.surface ? { pagesSurface: options.surface } : {}),
   })
   const execute = options.execute ?? spawnCommand
@@ -132,7 +176,7 @@ export async function runTargetDeploy(options: TargetDeployOptions): Promise<voi
   try {
     if (isWorkerApp(options.app)) {
       const configPath = options.app === 'api' ? materialized.apiConfigPath : materialized.gatewayConfigPath
-      if (execute('pnpm', ['--filter', packageFilter(options.app), 'exec', 'wrangler', 'deploy', '--config', configPath]) !== 0) {
+      if (execute('pnpm', ['--filter', packageFilter(options.app), 'exec', 'wrangler', 'deploy', '--config', configPath], deploymentEnvironment) !== 0) {
         throw new Error(`Worker deploy failed for ${options.app}.`)
       }
       return
@@ -141,10 +185,10 @@ export async function runTargetDeploy(options: TargetDeployOptions): Promise<voi
     if (!materialized.pages || !options.surface) {
       throw new Error('Selected Pages deploy configuration is missing.')
     }
-    if (execute('pnpm', ['target-profile', 'run-pages-build', '--surface', options.surface, '--pages-build-env-path', materialized.pages.buildEnvPath]) !== 0) {
+    if (execute('pnpm', ['target-profile', 'run-pages-build', '--surface', options.surface, '--pages-build-env-path', materialized.pages.buildEnvPath], deploymentEnvironment) !== 0) {
       throw new Error(`Pages build failed for ${options.app}.`)
     }
-    if (execute('pnpm', ['--filter', packageFilter(options.app), 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', materialized.pages.project]) !== 0) {
+    if (execute('pnpm', ['--filter', packageFilter(options.app), 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', materialized.pages.project], deploymentEnvironment) !== 0) {
       throw new Error(`Pages deploy failed for ${options.app}.`)
     }
   }

@@ -4,6 +4,7 @@ import {
   assertRemoteEligibility,
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
+  createDataChainFixtureCodes,
   createPreIngestEvidence,
   createResolvedPendingEvidence,
   LOCAL_GATEWAY_ORIGIN,
@@ -30,14 +31,14 @@ function pendingEvidence() {
       { surface: 'local_d1_readiness', status: 'passed' },
       { surface: 'service_readiness', status: 'passed' },
       { surface: 'gateway_auth', status: 'passed' },
-      { surface: 'd1', status: 'passed' },
+      { surface: 'd1', status: 'passed', itemCount: 10 },
       { surface: 'api', status: 'passed' },
     ],
   })
 }
 
 describe('phase 13 deterministic evidence contract', () => {
-  it('derives one stable non-R18 fixture code from the explicit target and run', () => {
+  it('derives one stable primary code and ten fixed non-R18 fixture codes from the explicit target and run', () => {
     const first = createDataChainCandidate({ targetId: 'starye-org', runId: 'run-a' })
     const second = createDataChainCandidate({ targetId: 'starye-org', runId: 'run-a' })
     const changedTarget = createDataChainCandidate({ targetId: 'other-target', runId: 'run-a' })
@@ -49,6 +50,10 @@ describe('phase 13 deterministic evidence contract', () => {
     expect(first.itemCode).not.toBe(changedRun.itemCode)
     expect(first.fixture.movies).toHaveLength(1)
     expect(first.fixture.movies[0]?.isAdult).toBe(false)
+    expect(createDataChainFixtureCodes({ targetId: 'starye-org', runId: 'run-a' })).toEqual([
+      first.itemCode,
+      ...Array.from({ length: 9 }, (_, index) => `${first.itemCode}-fixture-${index + 1}`),
+    ])
   })
 
   it('accepts only an incomplete prerequisite as a pre-ingest terminal record', () => {
@@ -247,7 +252,7 @@ describe('phase 13 deterministic evidence contract', () => {
       timestamp: '2026-07-16T00:00:00.000Z',
       observations: [
         { surface: 'remote_preflight', status: 'passed' },
-        { surface: 'd1', status: 'passed' },
+        { surface: 'd1', status: 'passed', itemCount: 10 },
       ],
     })
 
@@ -285,6 +290,7 @@ describe('phase 13 deterministic evidence contract', () => {
 
     expect(json).toContain(tuple.targetId)
     expect(markdown).toContain(tuple.itemCode)
+    expect(markdown).toContain('| d1 | passed | 10 |')
     expect(json).not.toMatch(/token|secret|cookie|authorization|header/i)
     expect(markdown).not.toContain('http://localhost:3000')
     expect(() => serializeDataChainEvidenceJson({
@@ -297,6 +303,19 @@ describe('phase 13 deterministic evidence contract', () => {
         [unsafeField]: unsafeField === 'headers' ? { authorization: 'value' } : 'value',
       })).toThrow('Unexpected evidence key')
     }
+  })
+
+  it('requires the exact fixed count on successful D1 rows and rejects it elsewhere', () => {
+    const pending = pendingEvidence()
+    const d1Index = pending.observations.findIndex(row => row.surface === 'd1')
+    expect(validateDataChainEvidence({
+      ...pending,
+      observations: pending.observations.map((row, index) => index === d1Index ? { ...row, itemCount: 9 } : row),
+    })).not.toEqual([])
+    expect(validateDataChainEvidence({
+      ...pending,
+      observations: pending.observations.map((row, index) => index === d1Index ? { surface: 'api', status: 'passed', itemCount: 10 } : row),
+    })).not.toEqual([])
   })
 
   it('rejects duplicate viewer append after terminal resolution and retains prior rows', () => {

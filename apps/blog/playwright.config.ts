@@ -33,12 +33,14 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: 'pnpm run dev',
-    url: 'http://localhost:3002/blog/',
-    timeout: 120000,
-    reuseExistingServer: !process.env.CI,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  webServer: process.env.STARYE_E2E_EXTERNAL_SERVER === '1'
+    ? undefined
+    : {
+        command: 'pnpm run dev',
+        url: 'http://localhost:3002/blog/',
+        timeout: 120000,
+        reuseExistingServer: !process.env.CI,
+        stdout: 'ignore',
+        stderr: 'pipe',
+      },
 })

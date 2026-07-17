@@ -49,6 +49,7 @@ if (import.meta.server && !error.value && seededSession.value?.user && redirectP
   await navigateTo(redirectPath.value, {
     redirectCode: 302,
     replace: true,
+    external: true,
   })
 }
 

@@ -10,6 +10,7 @@ import {
   runPreparedTargetMutation,
   targetRemoteEntryValues,
 } from '../packages/config/src/deployment-target/index.ts'
+import { packageManagerInvocation } from './package-manager-command.ts'
 
 export interface TargetRemoteEntryOptions {
   readonly target: string
@@ -51,7 +52,8 @@ export async function runTargetRemoteEntry(options: TargetRemoteEntryOptions) {
     runDirectory: path.join(root, '.target-runs'),
   }, {
     executeReadOnly: (argv) => {
-      const result = spawnSync('pnpm', ['exec', 'wrangler', ...argv], { encoding: 'utf8', shell: false })
+      const invocation = packageManagerInvocation(['exec', 'wrangler', ...argv])
+      const result = spawnSync(invocation.command, invocation.args, { encoding: 'utf8', shell: false })
       return { exitCode: result.status ?? 1, stdout: result.stdout ?? '' }
     },
   })
@@ -60,8 +62,11 @@ export async function runTargetRemoteEntry(options: TargetRemoteEntryOptions) {
       entry: options.entry,
       preparedContextPath: prepared.preparedContextPath,
       execute: (command, args, environment) => {
-        const child = spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment })
-        return { exitCode: child.status ?? 1, stdout: child.stdout ?? '' }
+        const invocation = command === 'pnpm'
+          ? packageManagerInvocation(args)
+          : { command, args }
+        const child = spawnSync(invocation.command, invocation.args, { encoding: 'utf8', shell: false, env: environment })
+        return { exitCode: child.status ?? 1, stdout: child.stdout ?? '', stderr: child.stderr ?? '' }
       },
     })
     return result

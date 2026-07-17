@@ -18,7 +18,7 @@ import {
 } from '../utils/ratingAlgorithm'
 import { useToast } from './useToast'
 
-const API_BASE_URL = moviePublicRuntime.apiBaseUrl
+const API_BASE_URL = `${moviePublicRuntime.apiBaseUrl}/api`
 
 // 播放源评分数据
 export interface PlayerRating {

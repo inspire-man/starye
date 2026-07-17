@@ -19,6 +19,12 @@ const baseOptions = {
 interface SmokeModule {
   parseDataChainSmokeArgs: (argv: readonly string[]) => unknown
   runDataChainSmoke: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
+  executePreparedRemoteCommand: (
+    command: string,
+    args: readonly string[],
+    environment: NodeJS.ProcessEnv,
+    root?: string,
+  ) => { exitCode: number, stdout: string, stderr: string }
 }
 
 interface VerifyModule {
@@ -54,7 +60,7 @@ function localPassedEvidence(runId = baseOptions.runId): DataChainEvidence {
       { surface: 'local_d1_readiness', status: 'passed' },
       { surface: 'service_readiness', status: 'passed' },
       { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: 'http://localhost:8080' },
-      { surface: 'd1', status: 'passed' },
+      { surface: 'd1', status: 'passed', itemCount: 10 },
       { surface: 'api', status: 'passed', path: `/api/public/movies/${itemCode}`, origin: 'http://localhost:8080' },
       { surface: 'dashboard', status: 'passed', path: '/dashboard/movies', origin: 'http://localhost:8080' },
       { surface: 'viewer', status: 'passed', path: `/movie/${itemCode}`, origin: 'http://localhost:8080' },
@@ -88,13 +94,24 @@ function remoteDependencies(files: Map<string, string>) {
     } as Record<string, string | undefined>,
     runPreflight: vi.fn((_input: unknown): { ok: boolean, issues: unknown[] } => ({ ok: true, issues: [] })),
     executeReadOnly: vi.fn(() => ({ exitCode: 0, stdout: '' })),
-    runPreparedFixture: vi.fn(async () => ({ operation: 'crawler-smoke-fixture' as const, status: 'synced' as const, itemCode: candidate.itemCode })),
-    runPreparedSnapshot: vi.fn(async () => ({ operation: 'd1-smoke-snapshot' as const, status: 'found' as const, itemCode: candidate.itemCode, itemId: 'remote-movie-42' })),
+    runPreparedFixture: vi.fn(async () => ({ operation: 'crawler-smoke-fixture' as const, status: 'synced' as const, itemCode: candidate.itemCode, itemCount: 10 as const })),
+    runPreparedSnapshot: vi.fn(async () => ({ operation: 'd1-smoke-snapshot' as const, status: 'found' as const, itemCode: candidate.itemCode, itemId: 'remote-movie-42', itemCount: 10 as const })),
     fetchCanonicalApi: vi.fn(async () => ({ status: 200, itemCode: candidate.itemCode, itemId: 'remote-movie-42' })),
   }
 }
 
 describe('phase 13 remote smoke runner', () => {
+  it('uses the platform-safe pnpm invocation from the crawler workspace for prepared children', async () => {
+    const { executePreparedRemoteCommand } = await loadSmoke()
+    const crawlerWorkspace = path.resolve(process.cwd(), '../crawler')
+    const result = executePreparedRemoteCommand('pnpm', ['exec', 'tsx', '-e', 'process.stdout.write(process.cwd())'], {
+      PATH: process.env.PATH,
+    }, crawlerWorkspace)
+
+    expect(result.exitCode).toBe(0)
+    expect(path.resolve(result.stdout.trim())).toBe(path.resolve(crawlerWorkspace))
+  }, 15_000)
+
   it('requires an explicit remote run id and never selects a latest local run', async () => {
     const { parseDataChainSmokeArgs, runDataChainSmoke } = await loadSmoke()
     expect(() => parseDataChainSmokeArgs(['--mode', 'remote', '--target', baseOptions.target])).toThrow('requires a validated --run-id')
@@ -241,6 +258,24 @@ describe('phase 13 remote smoke runner', () => {
     expect(result.evidence).toMatchObject({ ingestState: 'pre_ingest', itemId: null })
     expect(dependencies.runPreparedFixture).toHaveBeenCalledTimes(1)
     expect(dependencies.runPreparedSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('rejects a prepared batch count mismatch before D1 snapshot and API proof', async () => {
+    const { runDataChainSmoke } = await loadSmoke()
+    const files = new Map<string, string>()
+    putPair(files, localPassedEvidence())
+    const dependencies = remoteDependencies(files)
+    dependencies.runPreparedFixture.mockResolvedValue({
+      operation: 'crawler-smoke-fixture' as const,
+      status: 'synced' as const,
+      itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode,
+      itemCount: 9 as never,
+    })
+
+    const result = await runDataChainSmoke(baseOptions, dependencies)
+    expect(result.evidence).toMatchObject({ ingestState: 'pre_ingest', itemId: null })
+    expect(dependencies.runPreparedSnapshot).not.toHaveBeenCalled()
+    expect(dependencies.fetchCanonicalApi).not.toHaveBeenCalled()
   })
 
   it('preserves a schema-valid remote checkpoint through the shared wrapper', async () => {

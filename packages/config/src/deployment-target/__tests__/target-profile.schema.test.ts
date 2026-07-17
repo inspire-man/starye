@@ -17,12 +17,12 @@ describe('targetProfile schema', () => {
     expect(parsed.urls).toEqual({
       gateway: 'https://starye.org',
       api: 'https://api.starye.org',
-      dashboard: 'https://dashboard.starye.org',
-      auth: 'https://starye-auth.pages.dev',
+      dashboard: 'https://starye-dashboard-5fz.pages.dev',
+      auth: 'https://starye-auth-die.pages.dev',
       blog: 'https://blog.starye.org',
-      movie: 'https://starye-movie.pages.dev',
-      comic: 'https://starye-comic.pages.dev',
-      tavern: 'https://starye-tavern.pages.dev',
+      movie: 'https://starye-movie-60w.pages.dev',
+      comic: 'https://starye-comic-3jr.pages.dev',
+      tavern: 'https://tavern.starye.org',
     })
   })
 
@@ -91,6 +91,7 @@ describe('targetProfile schema', () => {
     expect(parsed.workers.gateway.name).toBe('starye-gateway')
     expect(parsed.pages.dashboard.project).toBe('starye-dashboard')
     expect(parsed.pages.blog.project).toBe('blog-pages')
+    expect(parsed.pages).not.toHaveProperty('tavern')
     expect(parsed.local.wranglerProfile).toBe('starye-org')
     expect(parsed.ci.githubEnvironment).toBe('starye-org')
   })

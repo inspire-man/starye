@@ -469,8 +469,11 @@ async function fetchMovieDetail() {
 
 // 检查收藏状态
 async function checkFavoriteStatus() {
-  if (!movie.value)
+  if (!movie.value || userStore.loading || !userStore.user) {
+    isFavorited.value = false
+    currentFavoriteId.value = null
     return
+  }
 
   try {
     const result = await checkIsFavorited('movie', movie.value.id)
@@ -481,6 +484,15 @@ async function checkFavoriteStatus() {
     console.error('[MovieDetail] 检查收藏状态失败:', e)
   }
 }
+
+watch(
+  () => userStore.loading,
+  (loading) => {
+    if (!loading && userStore.user && movie.value) {
+      void checkFavoriteStatus()
+    }
+  },
+)
 
 // 切换收藏
 async function toggleFavorite() {

@@ -32,6 +32,20 @@ describe('cache Middleware', () => {
   })
 
   describe('publicCache', () => {
+    it('在没有 Worker Cache API 的 Node 环境中保持功能响应可用', async () => {
+      delete (globalThis as { caches?: CacheStorage }).caches
+
+      app.get('/uncached', publicCache(), (c) => {
+        return c.json({ message: 'available without cache api' })
+      })
+
+      const res = await app.request('/uncached')
+
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ message: 'available without cache api' })
+      expect(res.headers.get('X-Cache')).toBeNull()
+    })
+
     it('应返回 Cache-Control 头', async () => {
       app.get('/test', publicCache(), (c) => {
         return c.json({ message: 'test' })

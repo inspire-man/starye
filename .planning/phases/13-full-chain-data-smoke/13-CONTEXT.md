@@ -27,7 +27,7 @@
 ## Implementation Decisions
 
 ### Smoke Item And Ingest Boundary
-- **D-01:** 使用单一 deterministic、namespaced 的 smoke fixture/item identity；identity 必须携带可审计的 namespace/target/run 语义，并在 local 与 production evidence 中记录最终 item ID/业务标识。不得依赖人工随机选择现有内容来证明链路。
+- **D-01:** 本轮 crawler 验收使用固定、闭合、deterministic 的 **10 条** non-R18 smoke fixture 集合；每条都携带可审计的 namespace/target/run 语义且只有一个 player。集合中的 primary item 仍是 local/production evidence 与 Dashboard→Viewer 的唯一 correlation tuple；其余 9 条仅作为 D1/API 入库数量审计的 supporting records。不得依赖人工随机选择现有内容，也不得扩大为真实完整 crawler corpus。
 - **D-02:** 写入只允许受限 crawler 或 fixture adapter；禁止用完整 crawler corpus 作为 release gate。planner 可根据当前受控 entry 和可用凭据选择 fixture 或 targeted crawler，但必须保持最小数据量、可重跑和明确 target。
 
 ### Local-First Execution Order

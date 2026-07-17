@@ -1,8 +1,8 @@
 # auth 根入口统一落到 /auth/login，避免 pages.dev 根访问落到空白根页
-https://starye-auth.pages.dev/ https://starye.org/auth/login 301!
+https://starye-auth-die.pages.dev/ https://starye.org/auth/login 301!
 
 # *.pages.dev 直链 301 回 starye.org（必须在 SPA fallback 之前）（D-16）
-https://starye-auth.pages.dev/* https://starye.org/auth/:splat 301!
+https://starye-auth-die.pages.dev/* https://starye.org/auth/:splat 301!
 
 # SPA fallback
 /* /index.html 200

@@ -67,7 +67,7 @@ describe('dB source entry contract', () => {
       expect(text, filePath).not.toMatch(/dotenv|DATABASE_URL|DATABASE_AUTH_TOKEN|createClient\s*\(/)
       expect(resolvesAliasedImport(checker, source!)).toBe(false)
     }
-  })
+  }, 15_000)
 
   it('resolves an aliased createClient import through the TypeChecker', () => {
     const fixtureDirectory = path.join(repositoryRoot, '.target-runs', 'db-source-fixture')

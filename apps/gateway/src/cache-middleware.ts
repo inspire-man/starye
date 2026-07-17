@@ -30,6 +30,7 @@ interface CachePolicy {
 export interface CacheOptions {
   ttl?: number // Override the policy TTL for cacheable requests
   bypassCache?: boolean // Force bypass KV storage while keeping route headers
+  preserveUpstreamCacheControl?: boolean // Leave development-server cache semantics intact
   cacheKey?: (url: string, headers: Headers, policy: CachePolicy) => string
   executionCtx?: ExecutionContext
 }
@@ -211,11 +212,13 @@ export function resolveCachePolicy(request: Request, options?: CacheOptions): Ca
     shouldStore,
     bypassReason,
     // CR-01: public 基线翻 bypass 时必须降级 Cache-Control，否则共享缓存投毒
-    cacheControl: ttl && basePolicy.scope === 'public' && shouldStore
-      ? buildCacheControl('public', ttl, basePolicy.staleWhileRevalidate)
-      : (!shouldStore && basePolicy.scope === 'public'
-          ? 'private, no-store'
-          : basePolicy.cacheControl),
+    cacheControl: options?.preserveUpstreamCacheControl
+      ? undefined
+      : (ttl && basePolicy.scope === 'public' && shouldStore
+          ? buildCacheControl('public', ttl, basePolicy.staleWhileRevalidate)
+          : (!shouldStore && basePolicy.scope === 'public'
+              ? 'private, no-store'
+              : basePolicy.cacheControl)),
   }
 }
 

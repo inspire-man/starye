@@ -56,6 +56,35 @@ describe('环境检测', () => {
     expect(capturedRequest!.url).toContain('127.0.0.1:8787')
   })
 
+  it('api.localhost 内部别名应使用本地服务和 canonical Gateway 转发头', async () => {
+    const req = makeRequest('https://api.localhost:8080/api/health')
+    await worker.fetch(req, {})
+    expect(capturedRequest!.url).toContain('127.0.0.1:8787')
+    expect(capturedRequest!.headers.get('X-Forwarded-Host')).toBe('localhost:8080')
+    expect(capturedRequest!.headers.get('X-Forwarded-Proto')).toBe('http')
+  })
+
+  it('api.localhost OAuth 回调应还原为 canonical Gateway Location', async () => {
+    mockFetchResponse = new Response(null, {
+      status: 302,
+      headers: {
+        location: 'https://api.localhost:8080/api/auth/callback/github?code=oauth-code',
+      },
+    })
+
+    const response = await worker.fetch(makeRequest('https://api.localhost:8080/auth/start/github'), {})
+
+    expect(response.headers.get('location')).toBe('http://localhost:8080/api/auth/callback/github?code=oauth-code')
+  })
+
+  it('本地代理目标应使用 canonical Gateway 转发头', async () => {
+    const req = makeRequest('https://starye.org/auth/start/github')
+    await worker.fetch(req, { API_ORIGIN: 'http://127.0.0.1:8787' })
+
+    expect(capturedRequest!.headers.get('X-Forwarded-Host')).toBe('localhost:8080')
+    expect(capturedRequest!.headers.get('X-Forwarded-Proto')).toBe('http')
+  })
+
   it('127.0.0.1 应被识别为本地环境', async () => {
     const req = makeRequest('http://127.0.0.1:8080/api/health')
     await worker.fetch(req, {})
@@ -175,6 +204,35 @@ describe('路径匹配规则', () => {
     const req = makeRequest('http://localhost/blog/')
     await worker.fetch(req, {})
     expect(capturedRequest!.url).toContain('127.0.0.1:3002')
+  })
+
+  it('本地 Nuxt 开发资源应保留上游 no-cache', async () => {
+    mockFetchResponse = new Response('export default {}', {
+      headers: {
+        'cache-control': 'no-cache',
+        'content-type': 'text/javascript',
+      },
+    })
+
+    const response = await worker.fetch(makeRequest('http://localhost:8080/blog/_nuxt/assets/css/main.css'), {})
+
+    expect(response.headers.get('Cache-Control')).toBe('no-cache')
+  })
+
+  it('本地上游配置应识别为 local 并保留 Nuxt 开发资源缓存头', async () => {
+    mockFetchResponse = new Response('export default {}', {
+      headers: {
+        'cache-control': 'no-cache',
+        'content-type': 'text/javascript',
+      },
+    })
+
+    const response = await worker.fetch(
+      makeRequest('https://starye.org/blog/_nuxt/assets/css/main.css'),
+      { API_ORIGIN: 'http://localhost:8787' },
+    )
+
+    expect(response.headers.get('Cache-Control')).toBe('no-cache')
   })
 })
 
@@ -297,6 +355,35 @@ describe('生产环境路径重写', () => {
     })
     await worker.fetch(req, { ADMIN_GITHUB_ID: '12345' })
     expect(capturedRequest!.url).toContain('/dashboard/movies')
+  })
+
+  it('本地 Dashboard 代理目标应保留前缀，即使请求 Host 不是 localhost', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }))
+      .mockImplementation(async (req: Request) => {
+        capturedRequest = req instanceof Request ? req : new Request(req)
+        return mockFetchResponse
+      }))
+    const req = makeRequest('https://starye.org/dashboard/movies', {
+      headers: { cookie: 'starye.session_token=local-dashboard-target-token' },
+    })
+
+    await worker.fetch(req, {
+      ADMIN_GITHUB_ID: '12345',
+      DASHBOARD_ORIGIN: 'http://localhost:5173',
+    })
+
+    expect(capturedRequest!.url).toBe('http://localhost:5173/dashboard/movies')
+  })
+
+  it('本地 Movie 代理目标应保留前缀，即使请求 Host 不是 localhost', async () => {
+    const req = makeRequest('https://starye.org/movie/ABP-123')
+
+    await worker.fetch(req, {
+      MOVIE_ORIGIN: 'http://localhost:3001',
+    })
+
+    expect(capturedRequest!.url).toBe('http://localhost:3001/movie/ABP-123')
   })
 })
 

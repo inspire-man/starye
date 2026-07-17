@@ -49,7 +49,7 @@ export interface NuxtPublicRuntimeEnv {
   readonly NUXT_PUBLIC_BUILD_MODE: string
 }
 
-type VitePagesSurface = Extract<TargetPagesSurface, 'dashboard' | 'movie' | 'comic' | 'tavern'>
+type VitePagesSurface = Extract<TargetPagesSurface, 'dashboard' | 'movie' | 'comic'>
 type NuxtPagesSurface = Extract<TargetPagesSurface, 'auth' | 'blog'>
 type GeneratedPublicRuntimeEnv = object
 
@@ -306,7 +306,7 @@ export function parseAuditedPublicRuntimeInput(
   }
 }
 
-function baseViteEnv(input: AuditedPublicRuntimeInput, surface: TargetPagesSurface): VitePublicRuntimeEnv {
+function baseViteEnv(input: AuditedPublicRuntimeInput, surface: VitePagesSurface): VitePublicRuntimeEnv {
   const { publicRuntime, overlay } = input
   return {
     VITE_TARGET_ID: publicRuntime.targetId,
@@ -321,7 +321,7 @@ function baseViteEnv(input: AuditedPublicRuntimeInput, surface: TargetPagesSurfa
 
 export function buildVitePublicRuntimeEnv(
   input: AuditedPublicRuntimeInput,
-  surface: Extract<TargetPagesSurface, 'dashboard' | 'movie' | 'comic' | 'tavern'>,
+  surface: VitePagesSurface,
 ): VitePublicRuntimeEnv {
   assertPublicRuntimeConfig(input)
   const base = baseViteEnv(input, surface)

@@ -39,6 +39,12 @@ function createCacheMiddleware(options: CacheOptions): MiddlewareHandler<AppEnv>
       return next()
     }
 
+    // Cache API is Worker-specific; functional responses must remain available in Node test runners.
+    const cache = globalThis.caches?.default
+    if (!cache) {
+      return next()
+    }
+
     // 生成缓存键
     const cacheKey = options.cacheKey
       ? options.cacheKey(url.toString())
@@ -53,7 +59,6 @@ function createCacheMiddleware(options: CacheOptions): MiddlewareHandler<AppEnv>
     })
 
     // 尝试从缓存获取
-    const cache = caches.default
     let response = await cache.match(cacheRequest)
 
     if (response) {
@@ -175,6 +180,11 @@ export function userCache(): MiddlewareHandler<AppEnv> {
       return next()
     }
 
+    const cache = globalThis.caches?.default
+    if (!cache) {
+      return next()
+    }
+
     // 为每个用户生成独立缓存键（基于 Cookie）
     const cookie = req.headers.get('Cookie') || 'anonymous'
     const cacheKey = `user:${cookie}:${url.toString()}`
@@ -188,7 +198,6 @@ export function userCache(): MiddlewareHandler<AppEnv> {
     })
 
     // 尝试从缓存获取
-    const cache = caches.default
     let response = await cache.match(cacheRequest)
 
     if (response) {
@@ -252,7 +261,10 @@ export function userCache(): MiddlewareHandler<AppEnv> {
  * 主动失效缓存
  */
 export async function invalidateCache(patterns: string[]) {
-  const cache = caches.default
+  const cache = globalThis.caches?.default
+  if (!cache) {
+    return
+  }
 
   for (const pattern of patterns) {
     try {

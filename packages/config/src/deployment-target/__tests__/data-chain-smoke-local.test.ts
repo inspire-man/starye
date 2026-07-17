@@ -60,8 +60,8 @@ function successDependencies() {
     inspectLocalD1: async (): Promise<{ status: 'ready' | 'unready', checkpoint?: string }> => ({ status: 'ready' }),
     checkServices: async () => ({ exitCode: 0, stdout: '[OK] all services', stderr: '' }),
     observeGatewayAuth: async () => ({ status: 302, location: 'http://localhost:8080/auth/login' }),
-    runFixture: vi.fn(async () => ({ itemCode: candidate.itemCode })),
-    snapshot: vi.fn(async () => ({ status: 'found' as const, itemCode: candidate.itemCode, itemId: 'movie-42' })),
+    runFixture: vi.fn(async () => ({ itemCode: candidate.itemCode, itemCount: 10 as const })),
+    snapshot: vi.fn(async () => ({ status: 'found' as const, itemCode: candidate.itemCode, itemId: 'movie-42', itemCount: 10 as const })),
     fetchGatewayApi: vi.fn(async (): Promise<{ status: number, itemCode?: string, itemId?: string }> => ({ status: 200, itemCode: candidate.itemCode, itemId: 'movie-42' })),
     write: async () => {},
   }
@@ -163,6 +163,32 @@ describe('phase 13 local smoke runner', () => {
     }))
   })
 
+  it('turns a fixture or D1 count mismatch into checkpoint evidence before API proof', async () => {
+    const { runDataChainSmoke } = await loadSmoke()
+    const fixtureMismatch = successDependencies()
+    fixtureMismatch.runFixture = vi.fn(async () => ({
+      itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode,
+      itemCount: 9 as never,
+    }))
+
+    const fixtureResult = await runDataChainSmoke(baseOptions, fixtureMismatch)
+    expect(fixtureResult.evidence.observations[0]).toMatchObject({ surface: 'service_readiness', checkpoint: 'local_prerequisite_unmet' })
+    expect(fixtureMismatch.snapshot).not.toHaveBeenCalled()
+    expect(fixtureMismatch.fetchGatewayApi).not.toHaveBeenCalled()
+
+    const d1Mismatch = successDependencies()
+    d1Mismatch.snapshot = vi.fn(async () => ({
+      status: 'found' as const,
+      itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode,
+      itemId: 'movie-42',
+      itemCount: 9 as never,
+    }))
+
+    const d1Result = await runDataChainSmoke(baseOptions, d1Mismatch)
+    expect(d1Result.evidence.observations[0]).toMatchObject({ surface: 'local_d1_readiness', checkpoint: 'fixture_seed_incomplete' })
+    expect(d1Mismatch.fetchGatewayApi).not.toHaveBeenCalled()
+  })
+
   it('strictly separates observer append and validate forms', async () => {
     const { parseDataChainSurfaceObservationArgs } = await loadObservation()
     expect(() => parseDataChainSurfaceObservationArgs(['--validate', '--target', 'starye-org', '--run-id', 'run', '--item-code', 'code', '--item-id', 'id', '--mode', 'local'])).toThrow('does not accept')
@@ -184,7 +210,7 @@ describe('phase 13 local smoke runner', () => {
         { surface: 'local_d1_readiness', status: 'passed' },
         { surface: 'service_readiness', status: 'passed' },
         { surface: 'gateway_auth', status: 'passed' },
-        { surface: 'd1', status: 'passed' },
+        { surface: 'd1', status: 'passed', itemCount: 10 },
         { surface: 'api', status: 'passed' },
       ],
     })

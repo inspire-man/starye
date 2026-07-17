@@ -87,6 +87,13 @@ async function mockClientSession(page: any, session: any) {
 }
 
 test.describe('AUTH-02: Nuxt blog SSR session hydrate', () => {
+  test('匿名 Blog SSR 可正常渲染', async ({ page }) => {
+    const response = await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    expect(response?.status()).toBe(200)
+    await expect(page.getByRole('link', { name: 'Login' })).toBeVisible()
+  })
+
   test('D-01: SSR HTML 预取 session 后 useState 含用户标记', async ({ page, context }) => {
     // SSR 预取 cookie 才会触发 middleware；设一份 starye_session 占位
     await context.addCookies([

@@ -28,6 +28,7 @@ import {
 import { packageManagerInvocation } from './package-manager-command.ts'
 
 const commandNames = ['validate', 'project-local', 'preflight', 'run-pages-build', 'prepare-mutation', 'run-prepared-entry'] as const
+const repositoryRoot = path.resolve(import.meta.dirname, '..')
 
 export type TargetProfileCliCommand = (typeof commandNames)[number]
 
@@ -172,7 +173,7 @@ export function formatTargetProfileHelp(): string {
   target-profile validate --target <id>
   target-profile project-local --target <id> --check|--write [--env-root <path>]
   target-profile preflight --target <id> --scope <local|ci|remote> --command <command> [--env-root <path>] [--live]
-  target-profile run-pages-build --surface <dashboard|auth|blog|movie|comic|tavern> --pages-build-env-path <generated-path>
+  target-profile run-pages-build --surface <dashboard|auth|blog|movie|comic> --pages-build-env-path <generated-path>
   target-profile prepare-mutation --target <id> --scope ci --command <closed-command> --ci-environment <name> --github-output <path> [--surface <surface>]
   target-profile run-prepared-entry --entry <closed-entry> --prepared-context <generated-path>
 
@@ -318,6 +319,10 @@ async function readEnvFile(filePath: string): Promise<string> {
   }
 }
 
+export function resolveLocalEnvRoot(envRoot?: string): string {
+  return path.resolve(envRoot ?? repositoryRoot)
+}
+
 async function runProjectLocal(options: TargetProfileCliOptions): Promise<void> {
   if (options.check === options.write) {
     throw new Error('project-local requires exactly one of --check or --write.')
@@ -325,7 +330,7 @@ async function runProjectLocal(options: TargetProfileCliOptions): Promise<void> 
 
   const resolution = resolveTargetProfile(options.target)
   const plan = buildLocalEnvProjectionPlan(resolution)
-  const root = path.resolve(options.envRoot ?? process.cwd())
+  const root = resolveLocalEnvRoot(options.envRoot)
   const contents: Partial<Record<LocalEnvTargetFile, string>> = {}
 
   for (const entry of plan.entries) {
@@ -360,13 +365,15 @@ async function runProjectLocal(options: TargetProfileCliOptions): Promise<void> 
   }
 }
 
-function createWranglerExecutor(): WranglerCommandExecutor {
+function createWranglerExecutor(environment: NodeJS.ProcessEnv = process.env): WranglerCommandExecutor {
   return {
     execute(argv) {
       const invocation = packageManagerInvocation(['exec', 'wrangler', ...argv])
       const result = spawnSync(invocation.command, invocation.args, {
         encoding: 'utf8',
         shell: false,
+        cwd: repositoryRoot,
+        env: environment,
       })
 
       return {
@@ -411,10 +418,13 @@ async function runPreflight(options: TargetProfileCliOptions): Promise<void> {
     throw new Error('preflight requires --scope and --command.')
   }
 
-  const root = path.resolve(options.envRoot ?? process.cwd())
+  const root = resolveLocalEnvRoot(options.envRoot)
   const projectionIssues = options.scope === 'local'
     ? await collectPreflightProjectionIssues(options.target ?? '', root)
     : []
+  const localEnvironment = options.scope === 'local'
+    ? { ...pickRuntimeEnvironment(), CLOUDFLARE_ACCOUNT_ID: resolveTargetProfile(options.target ?? '').profile.account.id }
+    : process.env
 
   const result = runTargetPreflight({
     target: options.target ?? '',
@@ -423,9 +433,9 @@ async function runPreflight(options: TargetProfileCliOptions): Promise<void> {
     ...(options.wranglerProfile ? { wranglerProfile: options.wranglerProfile } : {}),
     ...(options.ciEnvironment ? { ciEnvironment: options.ciEnvironment } : {}),
     projectionIssues,
-    environment: process.env,
+    environment: localEnvironment,
     live: options.live,
-    ...(options.live ? { liveCheckExecutor: createWranglerExecutor() } : {}),
+    ...(options.live ? { liveCheckExecutor: createWranglerExecutor(localEnvironment) } : {}),
   })
 
   if (!result.ok) {

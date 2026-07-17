@@ -46,6 +46,12 @@ export default defineNuxtConfig({
     plugins: [
       tailwindcss(),
     ],
+    server: {
+      hmr: {
+        host: 'localhost',
+        clientPort: 3003,
+      },
+    },
   },
 
   // Global CSS

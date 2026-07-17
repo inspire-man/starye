@@ -176,6 +176,7 @@ describe('target mutation preparation', () => {
         operation: 'crawler-smoke-fixture',
         status: 'synced',
         itemCode: 'phase13-smoke-starye-org-smoke-run',
+        itemCount: 10,
       }),
     }))
 
@@ -224,6 +225,7 @@ describe('target mutation preparation', () => {
         operation: 'crawler-smoke-fixture',
         status: 'synced',
         itemCode: 'phase13-smoke-starye-org-smoke-run',
+        itemCount: 10,
       },
     })
   })

@@ -85,6 +85,26 @@ describe('gateway cache middleware', () => {
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable')
   })
 
+  it('preserves upstream cache headers for explicit local development proxying', async () => {
+    const { kv } = createMockKv()
+    const cachedProxy = createCachedProxy(kv, async () =>
+      new Response('export default {}', {
+        headers: {
+          'cache-control': 'no-cache',
+          'content-type': 'text/javascript',
+        },
+      }))
+
+    const response = await cachedProxy(
+      new Request('http://localhost:8080/blog/_nuxt/assets/css/main.css'),
+      'http://localhost:3002',
+      undefined,
+      { bypassCache: true, preserveUpstreamCacheControl: true },
+    )
+
+    expect(response.headers.get('Cache-Control')).toBe('no-cache')
+  })
+
   it('marks dashboard routes as no-store', async () => {
     const { kv } = createMockKv()
 

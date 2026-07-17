@@ -32,6 +32,7 @@ class BetterSqliteD1Adapter {
         is_r18 INTEGER DEFAULT 1 NOT NULL,
         metadata_locked INTEGER DEFAULT 0 NOT NULL,
         sort_order INTEGER DEFAULT 0,
+        view_count INTEGER DEFAULT 0 NOT NULL,
         crawl_status TEXT DEFAULT 'complete',
         last_crawled_at INTEGER,
         total_players INTEGER DEFAULT 0,
@@ -47,6 +48,10 @@ class BetterSqliteD1Adapter {
         source_url TEXT NOT NULL,
         quality TEXT,
         sort_order INTEGER NOT NULL,
+        average_rating INTEGER,
+        rating_count INTEGER DEFAULT 0,
+        report_count INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
         created_at INTEGER DEFAULT (strftime('%s', 'now')),
         updated_at INTEGER DEFAULT (strftime('%s', 'now')),
         FOREIGN KEY (movie_id) REFERENCES movie(id) ON DELETE CASCADE

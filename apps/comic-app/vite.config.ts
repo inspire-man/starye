@@ -25,6 +25,12 @@ export default defineConfig(() => ({
     tailwindcss(),
   ],
   base: publicRuntimeEnv.VITE_APP_BASE_PATH,
+  server: {
+    hmr: {
+      host: 'localhost',
+      clientPort: 3000,
+    },
+  },
   define: {
     __STARYE_COMIC_PUBLIC_RUNTIME__: JSON.stringify({
       targetId: publicRuntimeEnv.VITE_TARGET_ID,

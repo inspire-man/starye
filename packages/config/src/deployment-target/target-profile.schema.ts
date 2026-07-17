@@ -25,7 +25,6 @@ export const targetPagesSurfaceValues = [
   'blog',
   'movie',
   'comic',
-  'tavern',
 ] as const
 
 export type TargetPagesSurface = (typeof targetPagesSurfaceValues)[number]
@@ -153,7 +152,6 @@ const targetProfileObjectSchema = v.strictObject({
     blog: targetPageSchema,
     movie: targetPageSchema,
     comic: targetPageSchema,
-    tavern: targetPageSchema,
   }),
   resources: v.strictObject({
     d1: d1ResourceSchema,

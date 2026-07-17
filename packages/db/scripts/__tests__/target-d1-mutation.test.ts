@@ -93,11 +93,40 @@ describe('prepared D1 smoke snapshot', () => {
     expect(executeMigration).toHaveBeenCalledOnce()
   })
 
+  it('redacts a failed migration diagnostic written to stdout', async () => {
+    const { contextPath, apiConfigPath, gatewayConfigPath } = await createPreparedContext()
+    const apiToken = 'cloudflare-token'
+    const executeMigration = vi.fn<(command: PreparedD1MigrationCommand) => { exitCode: number, stdout?: string }>(() => ({
+      exitCode: 1,
+      stdout: `Cloudflare rejected ${apiToken} for this request.`,
+    }))
+
+    const failure = runTargetD1Mutation({
+      STARYE_PREPARED_CONTEXT_PATH: contextPath,
+      STARYE_PREPARED_ENTRY: 'd1-migrate',
+      STARYE_PREPARED_OPERATION: 'migrate',
+      STARYE_PREPARED_SECRET_KEYS: 'CLOUDFLARE_API_TOKEN',
+      STARYE_API_CONFIG_PATH: apiConfigPath,
+      STARYE_GATEWAY_CONFIG_PATH: gatewayConfigPath,
+      CLOUDFLARE_ACCOUNT_ID: 'selected-account',
+      CLOUDFLARE_API_TOKEN: apiToken,
+    }, { executeMigration })
+
+    await expect(failure).rejects.toThrow('target-d1-mutation export failed. Cloudflare rejected [redacted] for this request.')
+    await expect(failure).rejects.not.toThrow(apiToken)
+    expect(executeMigration).toHaveBeenCalledOnce()
+  })
+
   it('uses the selected prepared D1 identity with a fixed parameterized read-only snapshot query', async () => {
     const { contextPath, apiConfigPath, gatewayConfigPath } = await createPreparedContext()
+    const itemCode = 'p13-smoke-starye-org-98bb7ab3'
+    const rows = [
+      itemCode,
+      ...Array.from({ length: 9 }, (_, index) => `${itemCode}-fixture-${index + 1}`),
+    ].map((code, index) => ({ id: `movie-${index + 1}`, code, isR18: 0, playerCount: 1 }))
     const execute = vi.fn(() => ({
       exitCode: 0,
-      stdout: JSON.stringify([{ results: [{ id: 'movie-1', code: 'p13-smoke-starye-org-98bb7ab3', playerCount: 1 }] }]),
+      stdout: JSON.stringify([{ results: rows }]),
     }))
 
     const result = await runTargetD1Mutation({
@@ -115,14 +144,44 @@ describe('prepared D1 smoke snapshot', () => {
       accountId: 'selected-account',
       configPath: apiConfigPath,
       d1Name: 'starye-d1',
-      sql: expect.stringContaining('WHERE movie.code = ?'),
-      params: ['p13-smoke-starye-org-98bb7ab3'],
+      sql: expect.stringContaining('WHERE movie.code = ? OR movie.code LIKE ?'),
+      params: [itemCode, `${itemCode}-fixture-%`],
     }))
     expect(result).toEqual({
       operation: 'd1-smoke-snapshot',
       status: 'found',
-      itemCode: 'p13-smoke-starye-org-98bb7ab3',
+      itemCode,
       itemId: 'movie-1',
+      itemCount: 10,
+    })
+  })
+
+  it('does not resolve a D1 tuple when the prepared batch is incomplete', async () => {
+    const { contextPath, apiConfigPath, gatewayConfigPath } = await createPreparedContext()
+    const itemCode = 'p13-smoke-starye-org-98bb7ab3'
+    const execute = vi.fn(() => ({
+      exitCode: 0,
+      stdout: JSON.stringify([{ results: Array.from({ length: 9 }, (_, index) => ({
+        id: `movie-${index + 1}`,
+        code: index === 0 ? itemCode : `${itemCode}-fixture-${index}`,
+        isR18: 0,
+        playerCount: 1,
+      })) }]),
+    }))
+
+    await expect(runTargetD1Mutation({
+      STARYE_PREPARED_CONTEXT_PATH: contextPath,
+      STARYE_PREPARED_ENTRY: 'd1-smoke-snapshot',
+      STARYE_PREPARED_OPERATION: 'smoke-snapshot',
+      STARYE_PREPARED_SECRET_KEYS: 'CLOUDFLARE_API_TOKEN',
+      STARYE_API_CONFIG_PATH: apiConfigPath,
+      STARYE_GATEWAY_CONFIG_PATH: gatewayConfigPath,
+      CLOUDFLARE_ACCOUNT_ID: 'selected-account',
+      CLOUDFLARE_API_TOKEN: 'cloudflare-token',
+    }, { execute })).resolves.toEqual({
+      operation: 'd1-smoke-snapshot',
+      status: 'checkpoint',
+      itemCode,
     })
   })
 

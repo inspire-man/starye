@@ -20,12 +20,12 @@ export const trackedTargetProfiles = [
     urls: {
       gateway: 'https://starye.org',
       api: 'https://api.starye.org',
-      dashboard: 'https://dashboard.starye.org',
-      auth: 'https://starye-auth.pages.dev',
+      dashboard: 'https://starye-dashboard-5fz.pages.dev',
+      auth: 'https://starye-auth-die.pages.dev',
       blog: 'https://blog.starye.org',
-      movie: 'https://starye-movie.pages.dev',
-      comic: 'https://starye-comic.pages.dev',
-      tavern: 'https://starye-tavern.pages.dev',
+      movie: 'https://starye-movie-60w.pages.dev',
+      comic: 'https://starye-comic-3jr.pages.dev',
+      tavern: 'https://tavern.starye.org',
     },
     workers: {
       api: {
@@ -54,11 +54,11 @@ export const trackedTargetProfiles = [
     pages: {
       dashboard: {
         project: 'starye-dashboard',
-        canonicalUrl: 'https://dashboard.starye.org',
+        canonicalUrl: 'https://starye-dashboard-5fz.pages.dev',
       },
       auth: {
         project: 'starye-auth',
-        canonicalUrl: 'https://starye-auth.pages.dev',
+        canonicalUrl: 'https://starye-auth-die.pages.dev',
       },
       blog: {
         project: 'blog-pages',
@@ -66,15 +66,11 @@ export const trackedTargetProfiles = [
       },
       movie: {
         project: 'starye-movie',
-        canonicalUrl: 'https://starye-movie.pages.dev',
+        canonicalUrl: 'https://starye-movie-60w.pages.dev',
       },
       comic: {
         project: 'starye-comic',
-        canonicalUrl: 'https://starye-comic.pages.dev',
-      },
-      tavern: {
-        project: 'starye-tavern',
-        canonicalUrl: 'https://starye-tavern.pages.dev',
+        canonicalUrl: 'https://starye-comic-3jr.pages.dev',
       },
     },
     resources: {

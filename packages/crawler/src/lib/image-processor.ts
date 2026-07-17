@@ -1,13 +1,13 @@
-import type { CrawlerImagePurpose } from '../../../api-types/src/storage-purpose-policy'
+import type { CrawlerImagePurpose } from '@starye/config/storage-purpose-policy'
 import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { S3Client } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
+import { resolveCrawlerManagedAssetPrefix } from '@starye/config/storage-purpose-policy'
 import CacheableLookup from 'cacheable-lookup'
 import got from 'got'
 import sharp from 'sharp'
 import * as v from 'valibot'
-import { resolveCrawlerManagedAssetPrefix } from '../../../api-types/src/storage-purpose-policy'
 
 // Configuration Schema (使用 looseObject 允许未来扩展配置项)
 export const R2ConfigSchema = v.looseObject({

@@ -35,6 +35,40 @@ const SENTRY_NOISE_PATTERNS = [
   'the user aborted a request',
 ]
 
+const LOCAL_GATEWAY_ORIGIN = 'http://localhost:8080'
+
+function isInternalLocalhostAlias(url: URL): boolean {
+  return url.hostname === 'api.localhost'
+}
+
+function isLocalProxyTarget(targetOrigin: string): boolean {
+  try {
+    const target = new URL(targetOrigin)
+    return target.hostname === 'localhost' || target.hostname === '127.0.0.1'
+  }
+  catch {
+    return false
+  }
+}
+
+function normalizeInternalLocalhostRedirect(location: string): string {
+  try {
+    const redirect = new URL(location)
+    if (!isInternalLocalhostAlias(redirect)) {
+      return location
+    }
+
+    const canonical = new URL(LOCAL_GATEWAY_ORIGIN)
+    canonical.pathname = redirect.pathname
+    canonical.search = redirect.search
+    canonical.hash = redirect.hash
+    return canonical.toString()
+  }
+  catch {
+    return location
+  }
+}
+
 type SentryBeforeSend = NonNullable<CloudflareOptions['beforeSend']>
 type SentryErrorEvent = Parameters<SentryBeforeSend>[0]
 type SentryErrorHint = Parameters<SentryBeforeSend>[1]
@@ -66,8 +100,12 @@ const gatewayHandler = {
       || url.hostname === '127.0.0.1'
       || url.hostname.startsWith('192.168.')
       || url.hostname.startsWith('10.')
+      || isInternalLocalhostAlias(url)
     // Wrangler dev 环境检测：如果有 .dev.vars 配置，说明在本地
-      || !!(env.API_ORIGIN && env.API_ORIGIN.includes('127.0.0.1'))
+      || isLocalProxyTarget(env.API_ORIGIN ?? '')
+    const proxyCacheOptions = isLocal
+      ? { bypassCache: true, preserveUpstreamCacheControl: true, executionCtx: ctx }
+      : { executionCtx: ctx }
 
     // 0. robots.txt（D-15：在所有 proxy 分支之前 match，避免被 blog fallback 捕获）
     if (path === '/robots.txt') {
@@ -80,7 +118,7 @@ const gatewayHandler = {
     // 1. API Service (使用缓存)
     if (path.startsWith('/api')) {
       const target = isLocal ? 'http://127.0.0.1:8787' : (env.API_ORIGIN || 'http://127.0.0.1:8787')
-      return cachedProxy(request, target, undefined, { executionCtx: ctx })
+      return cachedProxy(request, target, undefined, proxyCacheOptions)
     }
 
     // 2. Dashboard (不缓存，前置鉴权)
@@ -102,9 +140,11 @@ const gatewayHandler = {
       // 路径重写：仅在生产环境剥离 /dashboard 前缀
       // - 本地：Vite base='/dashboard/'，保持完整路径
       // 生产：Pages 部署在根路径，剥离前缀
-      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/dashboard/, '') || '/'
+      const pathRewrite = isLocal || isLocalProxyTarget(target)
+        ? undefined
+        : (p: string) => p.replace(/^\/dashboard/, '') || '/'
 
-      return cachedProxy(request, target, pathRewrite, { bypassCache: true, executionCtx: ctx })
+      return cachedProxy(request, target, pathRewrite, { ...proxyCacheOptions, bypassCache: true })
     }
 
     // 3. Movie App
@@ -114,8 +154,10 @@ const gatewayHandler = {
       }
       const target = isLocal ? 'http://localhost:3001' : (env.MOVIE_ORIGIN || 'http://localhost:3001')
       // 生产环境：移除 /movie 前缀（Pages 部署在根路径）
-      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/movie/, '') || '/'
-      return cachedProxy(request, target, pathRewrite, { executionCtx: ctx })
+      const pathRewrite = isLocal || isLocalProxyTarget(target)
+        ? undefined
+        : (p: string) => p.replace(/^\/movie/, '') || '/'
+      return cachedProxy(request, target, pathRewrite, proxyCacheOptions)
     }
 
     // 4. Comic App
@@ -125,8 +167,10 @@ const gatewayHandler = {
       }
       const target = isLocal ? 'http://localhost:3000' : (env.COMIC_ORIGIN || 'http://localhost:3000')
       // 生产环境：移除 /comic 前缀（Pages 部署在根路径）
-      const pathRewrite = isLocal ? undefined : (p: string) => p.replace(/^\/comic/, '') || '/'
-      return cachedProxy(request, target, pathRewrite, { executionCtx: ctx })
+      const pathRewrite = isLocal || isLocalProxyTarget(target)
+        ? undefined
+        : (p: string) => p.replace(/^\/comic/, '') || '/'
+      return cachedProxy(request, target, pathRewrite, proxyCacheOptions)
     }
 
     // 5. Tavern App
@@ -136,7 +180,7 @@ const gatewayHandler = {
       }
       const target = env.TAVERN_ORIGIN || 'http://127.0.0.1:8000'
       const pathRewrite = (p: string) => p.replace(/^\/tavern/, '') || '/'
-      return cachedProxy(request, target, pathRewrite, { executionCtx: ctx })
+      return cachedProxy(request, target, pathRewrite, proxyCacheOptions)
     }
 
     // 6. Auth Service (Identity Provider) (不缓存)
@@ -145,7 +189,7 @@ const gatewayHandler = {
         return Response.redirect(`${url.origin}/auth/`, 301)
       }
       const target = isLocal ? 'http://localhost:3003' : (env.AUTH_ORIGIN || 'http://localhost:3003')
-      return cachedProxy(request, target, undefined, { bypassCache: true, executionCtx: ctx })
+      return cachedProxy(request, target, undefined, { ...proxyCacheOptions, bypassCache: true })
     }
 
     // 7. Blog App (Default / Main Site)
@@ -153,7 +197,7 @@ const gatewayHandler = {
       return Response.redirect(`${url.origin}/blog/`, 301)
     }
     const target = isLocal ? 'http://127.0.0.1:3002' : (env.BLOG_ORIGIN || 'http://127.0.0.1:3002')
-    return cachedProxy(request, target, undefined, { executionCtx: ctx })
+    return cachedProxy(request, target, undefined, proxyCacheOptions)
   },
 }
 
@@ -179,15 +223,22 @@ async function proxy(request: Request, targetOrigin: string, pathRewrite?: (path
     redirect: 'manual',
   })
 
-  // Set standard proxy headers
-  newRequest.headers.set('X-Forwarded-Host', url.host)
-  newRequest.headers.set('X-Forwarded-Proto', url.protocol.replace(':', ''))
+  // Wrangler exposes the canonical local Gateway through this HTTPS alias.
+  const forwardedOrigin = isInternalLocalhostAlias(url) || isLocalProxyTarget(targetOrigin)
+    ? new URL(LOCAL_GATEWAY_ORIGIN)
+    : url
+  newRequest.headers.set('X-Forwarded-Host', forwardedOrigin.host)
+  newRequest.headers.set('X-Forwarded-Proto', forwardedOrigin.protocol.replace(':', ''))
   newRequest.headers.set('X-Real-IP', request.headers.get('cf-connecting-ip') || '')
 
   try {
     const response = await fetch(newRequest)
     // D-15：对 /dashboard/* 和 /api/admin/* 注入 X-Robots-Tag
     const mutableHeaders = new Headers(response.headers)
+    const location = mutableHeaders.get('location')
+    if (location) {
+      mutableHeaders.set('location', normalizeInternalLocalhostRedirect(location))
+    }
     if (url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/api/admin')) {
       mutableHeaders.set('X-Robots-Tag', 'noindex, nofollow')
     }
