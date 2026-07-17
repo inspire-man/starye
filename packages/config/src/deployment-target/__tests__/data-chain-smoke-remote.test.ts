@@ -8,7 +8,7 @@ import {
   serializeDataChainEvidenceJson,
 } from '../data-chain-evidence'
 
-const evidenceRoot = 'D:\\phase13-remote-evidence'
+const evidenceRoot = path.resolve('phase13-remote-evidence')
 const baseOptions = {
   mode: 'remote' as const,
   target: 'starye-org',

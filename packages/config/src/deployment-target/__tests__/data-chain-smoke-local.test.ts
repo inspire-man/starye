@@ -10,7 +10,7 @@ import {
   serializeDataChainEvidenceJson,
 } from '../data-chain-evidence'
 
-const evidenceRoot = 'D:\\phase13-evidence'
+const evidenceRoot = path.resolve('phase13-evidence')
 const baseOptions = {
   mode: 'local' as const,
   target: 'starye-org',
