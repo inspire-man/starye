@@ -5,15 +5,15 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: 13-08 remote target_preflight_unmet checkpoint
-last_updated: "2026-07-18T09:16:51.725Z"
+stopped_at: 13-08 Attempt E remote target_preflight_unmet; R2 and gateway-worker read checks failed
+last_updated: "2026-07-18T10:27:19.187Z"
 last_activity: 2026-07-18
-last_activity_desc: 13-08 local terminal proof; remote target_preflight_unmet checkpoint
+last_activity_desc: 13-08 Attempt E local terminal proof; remote R2 and gateway-worker preflight checks failed
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
   percent: 50
 ---
 
@@ -42,13 +42,13 @@ progress:
 
 Phase: 13 (full-chain-data-smoke) — EXECUTING
 Plan: 8 of 8
-Status: Checkpoint — local terminal proof passed; selected-target preflight unmet
-Last activity: 2026-07-18 - Attempt D local terminal proof; remote preflight checkpoint
+Status: Checkpoint — Attempts D/E local terminal proof passed; selected-target R2 and gateway-worker checks failed
+Last activity: 2026-07-18 - Attempt E local terminal proof; remote live preflight checkpoint
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 14 / 16
+**Plans completed:** 16 / 16
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -85,7 +85,7 @@ Last activity: 2026-07-18 - Attempt D local terminal proof; remote preflight che
 
 ### Active Blockers
 
-- [ ] Phase 13 Attempt D proved the exact local chain, but selected-target `remote_preflight/target_preflight_unmet` stopped Task 2 before any remote mutation. Provider ownership, remote D1/API, and canonical remote Dashboard/viewer proof remain pending.
+- [ ] Phase 13 Attempts D/E proved exact local chains, but Attempt E still ended at `remote_preflight/target_preflight_unmet`. The official live preflight failed the read-only R2 `starye-media` and gateway-worker `starye-gateway` checks; provider D1/API and canonical remote Dashboard/viewer proof remain pending.
 
 ### Recent Context (Brownfield注释)
 
@@ -102,14 +102,14 @@ Last activity: 2026-07-18 - Attempt D local terminal proof; remote preflight che
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T09:16:51.725Z
-**Stopped at:** 13-08 remote target_preflight_unmet checkpoint
+**Last session:** 2026-07-18T10:27:19.187Z
+**Stopped at:** 13-08 Attempt E remote target_preflight_unmet; R2 and gateway-worker read checks failed
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Resume only from the Attempt D selected-target preflight checkpoint after the authorized target credential/ownership prerequisites are available; keep the proven local pair immutable.
+Resume only after the authorized selected-target context can pass the read-only R2 `starye-media` and Worker `starye-gateway` checks; keep Attempts D/E immutable and do not repeat remote mutation while the official preflight is red.
 ```
 
 **If interrupted, resume by:**
@@ -128,7 +128,7 @@ Resume only from the Attempt D selected-target preflight checkpoint after the au
 
 ## Operator Next Steps
 
-- Resolve the authorized selected-target preflight/ownership prerequisite, then resume Phase 13 from the 13-08 remote checkpoint; do not rerun or rewrite Attempt D local evidence.
+- Resolve the authorized selected-target access/ownership prerequisite for R2 `starye-media` and Worker `starye-gateway`, then resume Phase 13 from the 13-08 remote checkpoint; do not rerun or rewrite Attempts D/E evidence.
 
 ## Decisions
 
