@@ -24,6 +24,7 @@ interface VerificationResult {
 
 interface VerifyModule {
   inspectDataChainSmokeVerification: (options: unknown, dependencies?: unknown) => Promise<VerificationResult>
+  runVerifyDataChainSmokeCli: (argv: readonly string[], dependencies?: unknown) => Promise<0 | typeof CHECKPOINT_EXIT_CODE>
   verifyDataChainSmoke: (options: unknown, dependencies?: unknown) => Promise<0 | typeof CHECKPOINT_EXIT_CODE>
 }
 
@@ -219,5 +220,48 @@ describe('phase 13 provenance-aware verifier', () => {
     await expect(verifyDataChainSmoke(options, {
       run: async () => 1,
     })).rejects.toThrow('unexpected exit code')
+  })
+
+  it('emits an allowlisted machine result that does not promote checkpoint evidence', async () => {
+    const { runVerifyDataChainSmokeCli } = await loadVerify()
+    const itemCode = createDataChainCandidate({ targetId, runId }).itemCode
+    const checkpoint = createPreIngestEvidence({
+      targetId,
+      runId,
+      candidateItemCode: itemCode,
+      mode: 'remote',
+      timestamp: '2026-07-18T00:00:00.000Z',
+      observation: {
+        surface: 'remote_preflight',
+        status: 'checkpoint',
+        checkpoint: 'target_preflight_unmet',
+      },
+    })
+    const json = serializeDataChainEvidenceJson(checkpoint)
+    const markdown = renderDataChainEvidenceMarkdown(checkpoint)
+    const messages: string[] = []
+
+    await expect(runVerifyDataChainSmokeCli([
+      '--mode',
+      'remote',
+      '--target',
+      targetId,
+      '--run-id',
+      runId,
+    ], {
+      run: async () => CHECKPOINT_EXIT_CODE,
+      read: async (file: string) => file.endsWith('.json') ? json : markdown,
+      log: (message: string) => messages.push(message),
+    })).resolves.toBe(CHECKPOINT_EXIT_CODE)
+    expect(messages).toHaveLength(1)
+    expect(JSON.parse(messages[0] ?? '{}')).toEqual({
+      mode: 'remote',
+      target: targetId,
+      runId,
+      state: 'pre_ingest',
+      aggregate: 'checkpoint',
+      outcome: 'checkpoint',
+      provesExternalChain: false,
+    })
   })
 })

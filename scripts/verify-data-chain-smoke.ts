@@ -21,9 +21,23 @@ export interface VerifyDataChainSmokeDependencies {
   readonly read?: (file: string) => Promise<string | undefined>
 }
 
+export interface DataChainSmokeVerificationResult {
+  readonly exitCode: 0 | typeof CHECKPOINT_EXIT_CODE
+  readonly outcome: 'terminal_passed' | 'pending' | 'failed' | 'checkpoint'
+  readonly provesExternalChain: boolean
+  readonly evidence: DataChainEvidence
+}
+
+export interface VerifyDataChainSmokeCliDependencies extends VerifyDataChainSmokeDependencies {
+  readonly log?: (message: string) => void
+}
+
 function validPendingOrCheckpoint(evidence: DataChainEvidence): boolean {
-  return (evidence.ingestState === 'pre_ingest' && (evidence.aggregate === 'failed' || evidence.aggregate === 'checkpoint'))
-    || (evidence.ingestState === 'resolved_pending_observation' && evidence.aggregate !== 'pending' ? evidence.aggregate === 'failed' || evidence.aggregate === 'checkpoint' : evidence.ingestState === 'resolved_pending_observation')
+  if (evidence.ingestState === 'pre_ingest') {
+    return evidence.aggregate === 'failed' || evidence.aggregate === 'checkpoint'
+  }
+  return evidence.ingestState === 'resolved_pending_observation'
+    && (evidence.aggregate === 'pending' || evidence.aggregate === 'failed' || evidence.aggregate === 'checkpoint')
 }
 
 async function readDefault(file: string): Promise<string | undefined> {
@@ -59,24 +73,59 @@ async function loadPair(options: DataChainSmokeOptions, read: (file: string) => 
   return typed
 }
 
-export async function verifyDataChainSmoke(options: DataChainSmokeOptions, dependencies: VerifyDataChainSmokeDependencies = {}): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
+export async function inspectDataChainSmokeVerification(
+  options: DataChainSmokeOptions,
+  dependencies: VerifyDataChainSmokeDependencies = {},
+): Promise<DataChainSmokeVerificationResult> {
   const run = dependencies.run ?? (async input => (await runDataChainSmoke(input)).exitCode)
   const exitCode = await run(options)
-  if (exitCode !== 0 && exitCode !== CHECKPOINT_EXIT_CODE)
+  if (exitCode !== 0 && exitCode !== CHECKPOINT_EXIT_CODE) {
     throw new Error('Data-chain smoke runner returned an unexpected exit code.')
+  }
   const evidence = await loadPair(options, dependencies.read ?? readDefault)
-  if (exitCode === 0 && evidence.ingestState === 'resolved' && evidence.aggregate === 'passed')
-    return 0
-  if (exitCode === CHECKPOINT_EXIT_CODE && validPendingOrCheckpoint(evidence))
-    return CHECKPOINT_EXIT_CODE
+  if (exitCode === 0 && evidence.ingestState === 'resolved' && evidence.aggregate === 'passed') {
+    return {
+      exitCode: 0,
+      outcome: 'terminal_passed',
+      provesExternalChain: true,
+      evidence,
+    }
+  }
+  if (exitCode === CHECKPOINT_EXIT_CODE && validPendingOrCheckpoint(evidence)) {
+    return {
+      exitCode: CHECKPOINT_EXIT_CODE,
+      outcome: evidence.aggregate,
+      provesExternalChain: false,
+      evidence,
+    }
+  }
   throw new Error('Data-chain smoke runner exit code does not match persisted evidence.')
 }
 
-export async function runVerifyDataChainSmokeCli(argv: readonly string[] = process.argv.slice(2)): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
+export async function verifyDataChainSmoke(options: DataChainSmokeOptions, dependencies: VerifyDataChainSmokeDependencies = {}): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
+  return (await inspectDataChainSmokeVerification(options, dependencies)).exitCode
+}
+
+export async function runVerifyDataChainSmokeCli(
+  argv: readonly string[] = process.argv.slice(2),
+  dependencies: VerifyDataChainSmokeCliDependencies = {},
+): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
   const options = parseDataChainSmokeArgs(argv)
-  if (options.evidenceRoot !== DATA_CHAIN_EVIDENCE_ROOT)
+  if (options.evidenceRoot !== DATA_CHAIN_EVIDENCE_ROOT) {
     throw new Error('Data-chain verification requires the fixed Phase 13 evidence root.')
-  return verifyDataChainSmoke(options)
+  }
+  const result = await inspectDataChainSmokeVerification(options, dependencies)
+  const log = dependencies.log ?? console.log
+  log(JSON.stringify({
+    mode: options.mode,
+    target: options.target,
+    runId: options.runId,
+    state: result.evidence.ingestState,
+    aggregate: result.evidence.aggregate,
+    outcome: result.outcome,
+    provesExternalChain: result.provesExternalChain,
+  }))
+  return result.exitCode
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
