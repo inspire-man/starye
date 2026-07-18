@@ -4,22 +4,22 @@ milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: Full Chain Data Smoke
-status: in_progress
-stopped_at: "Phase 13 checkpoint: local user-managed secret presence required before full-chain retry"
-last_updated: "2026-07-15T20:32:53.782Z"
-last_activity: 2026-07-16
-last_activity_desc: Phase 13 local and remote checkpoint recorded
+status: ready_to_execute
+stopped_at: "Phase 13 gap-closure plans 13-05 through 13-08 passed plan verification"
+last_updated: "2026-07-18T00:00:00.000Z"
+last_activity: 2026-07-18
+last_activity_desc: Phase 13 gap-closure plans verified and ready for execution
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 12
+  total_plans: 16
   completed_plans: 10
   percent: 50
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-07-15
+**Last updated:** 2026-07-18
 **Mode:** yolo
 **Granularity:** standard
 
@@ -41,14 +41,14 @@ progress:
 ## Current Position
 
 Phase: 13 — Full Chain Data Smoke
-Plan: implementation complete; success evidence checkpointed
-Status: In progress — awaiting required local secret presence
-Last activity: 2026-07-16 — local and remote checkpoint recorded
+Plan: 13-05 through 13-08 gap closure ready to execute
+Status: Ready to execute — restore one-item contract, require provenance, then run the local and selected-target checkpoints
+Last activity: 2026-07-18 — gap-closure plans passed the plan checker
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 10 / 12
+**Plans completed:** 10 / 16
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -82,7 +82,7 @@ Last activity: 2026-07-16 — local and remote checkpoint recorded
 
 ### Active Blockers
 
-- [ ] Phase 13 local preflight requires the existing user-managed local secret keys before a new local run can create a non-empty tuple. See `13-04-SUMMARY.md`.
+- [ ] Phase 13 must execute the verified 13-05 through 13-07 code/provenance plans before 13-08 can attempt a new local or selected-target run. The external local secret, Dashboard session, and Cloudflare/provider gates remain fail-closed checkpoints rather than completion evidence.
 
 ### Recent Context (Brownfield注释)
 
@@ -99,14 +99,14 @@ Last activity: 2026-07-16 — local and remote checkpoint recorded
 
 ## Session Continuity
 
-**Last session:** 2026-07-15T20:32:53.770Z
-**Stopped at:** Phase 13 checkpoint: local user-managed secret presence required before full-chain retry
-**Resume file:** .planning/phases/13-full-chain-data-smoke/13-04-SUMMARY.md
+**Last session:** 2026-07-18T00:00:00.000Z
+**Stopped at:** Phase 13 gap-closure plans passed the revision gate
+**Resume file:** .planning/phases/13-full-chain-data-smoke/13-08-PLAN.md
 
 **Next recommended action:**
 
 ```text
-Restore the required user-managed local secret presence, then resume the exact Phase 13 local smoke checkpoint.
+Execute the Phase 13 gap-closure chain: restore the one-item contract, require provenance-backed evidence, then attempt the local and selected-target checkpoints.
 ```
 
 **If interrupted, resume by:**
@@ -114,7 +114,8 @@ Restore the required user-managed local secret presence, then resume the exact P
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md`
 3. Read `.planning/ROADMAP.md`
-4. Read `.planning/phases/13-full-chain-data-smoke/13-04-SUMMARY.md`
+4. Read `.planning/phases/13-full-chain-data-smoke/13-VERIFICATION.md`
+5. Read `.planning/phases/13-full-chain-data-smoke/13-05-PLAN.md` through `13-08-PLAN.md`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -124,7 +125,7 @@ Restore the required user-managed local secret presence, then resume the exact P
 
 ## Operator Next Steps
 
-- Restore the Phase 13 local user-managed secrets, then resume the exact local smoke checkpoint.
+- Run `$gsd-execute-phase 13 --gaps-only`; the final 13-08 checkpoint accepts only a provenance-backed local/remote run or an honest redacted external-boundary checkpoint.
 
 ## Decisions
 
