@@ -16,7 +16,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | 11/12 | In Progress|  |
+| 13 | 12/12 | In Progress|  |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
 
 ## Phase Details
@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 11/12 plans executed
+**Plans:** 12/12 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -126,7 +126,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 11** *(gap closure; blocked on Wave 10 completion)*
 
-- [ ] 13-12-PLAN.md — Use a new collision-gated `p13-12-*` run to prove the terminal local and selected-production D1/API/Dashboard/viewer chain through persistent Codex IAB.
+- [x] 13-12-PLAN.md — Use a new collision-gated `p13-12-*` run to prove the terminal local and selected-production D1/API/Dashboard/viewer chain through persistent Codex IAB. *(Executed once; all repaired local gates passed, but the immutable run stopped at `gateway_auth/gateway_auth_unavailable`, so IAB and remote proof were forbidden.)*
 
 **Success criteria:**
 
@@ -158,11 +158,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Plan 13-11 is complete and Plan 13-12 is ready. Wave 11 may allocate one new run after the completed ambient-token caller and checkpoint-diagnostic repair regressions:
+All twelve Phase 13 plans have executed. Plan 13-12 passed the repaired projection/preflight gates but its sole fresh run stopped at `gateway_auth_unavailable`; rerun canonical Phase verification before any further gap routing:
 
 ```text
-$gsd-execute-phase 13 --gaps-only
+Run the Phase 13 canonical goal verifier against `13-12-SUMMARY.md` and the immutable local-only checkpoint.
 ```
 
 ---
-*Last updated: 2026-07-19 after Phase 13 Plan 11 execution; Plan 12 ready*
+*Last updated: 2026-07-19 after Phase 13 Plan 12 immutable Gateway-auth checkpoint*

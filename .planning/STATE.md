@@ -4,16 +4,16 @@ milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
-status: executing
-stopped_at: Completed 13-11-PLAN.md; Plan 13-12 ready
-last_updated: "2026-07-18T20:57:34.786Z"
+status: verifying
+stopped_at: "13-12 local-only checkpoint: gateway_auth_unavailable; awaiting canonical Phase 13 verification"
+last_updated: "2026-07-18T21:30:59.751Z"
 last_activity: 2026-07-19
-last_activity_desc: Plan 13-11 complete; Plan 13-12 ready
+last_activity_desc: Plan 13-12 recorded one immutable local Gateway-auth checkpoint after all repaired local gates passed
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
   percent: 50
 ---
 
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — EXECUTING
-Plan: 11 of 12
-Status: Executing Phase 13 - Plan 13-12 ready
-Last activity: 2026-07-19 — Plan 13-11 complete; Plan 13-12 ready
+Phase: 13 (full-chain-data-smoke) — VERIFYING
+Plan: 12 of 12
+Status: Verifying Phase 13 after Plan 13-12 Gateway-auth checkpoint
+Last activity: 2026-07-19 — Plan 13-12 recorded one immutable local Gateway-auth checkpoint after all repaired local gates passed
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 19 / 20
+**Plans completed:** 20 / 20
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -104,14 +104,14 @@ Last activity: 2026-07-19 — Plan 13-11 complete; Plan 13-12 ready
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T20:56:38.819Z
-**Stopped at:** Completed 13-11-PLAN.md; Plan 13-12 ready
+**Last session:** 2026-07-18T21:30:59.751Z
+**Stopped at:** 13-12 local-only checkpoint; awaiting canonical Phase 13 verification
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Run `$gsd-execute-phase 13 --gaps-only`. Execute Plan 13-12 only: allocate one new `p13-12-*` run after the completed Plan 13-11 repair regressions; never retry or overwrite any prior run.
+Re-run Phase 13 goal verification against the Plan 13-12 Summary and immutable `gateway_auth_unavailable` local checkpoint. Do not retry or overwrite run `p13-12-81b811028cd94b9884f09f6147c6ca84`.
 ```
 
 **If interrupted, resume by:**
@@ -130,7 +130,7 @@ Run `$gsd-execute-phase 13 --gaps-only`. Execute Plan 13-12 only: allocate one n
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 13 --gaps-only`. Wave 10 repairs the diagnosed standalone-versus-runner environment discrepancy; Wave 11 then permits one new local-to-production proof with root-owned persistent Codex IAB handoff. Do not rewrite Attempts A-E or the Plan 13-09/13-10 checkpoint evidence.
+- Re-run Phase 13 canonical verification. Plan 13-11 closed the ambient-token mismatch, but Plan 13-12 stopped at local Gateway auth before fixture, IAB, or remote work. Do not rewrite Attempts A-E or the Plan 13-09/13-10/13-12 checkpoint evidence.
 
 ## Decisions
 
