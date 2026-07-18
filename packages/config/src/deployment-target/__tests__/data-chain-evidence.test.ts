@@ -1,9 +1,15 @@
+import type {
+  CreateDataChainExecutionReceiptInput,
+  DataChainMode,
+  DataChainSurface,
+} from '../data-chain-evidence'
 import { describe, expect, it } from 'vitest'
 import {
   appendBrowserObservation,
   assertRemoteEligibility,
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
+  createDataChainExecutionReceipt,
   createDataChainFixtureCodes,
   createPreIngestEvidence,
   createResolvedPendingEvidence,
@@ -21,18 +27,62 @@ const tuple = {
   itemId: 'movie-42',
 } as const
 
+function receiptFor(
+  surface: DataChainSurface,
+  overrides: Partial<CreateDataChainExecutionReceiptInput> = {},
+) {
+  const mode: DataChainMode = overrides.mode ?? 'local'
+  const itemCode = overrides.itemCode ?? tuple.itemCode
+  const capture = {
+    local_projection: 'local_projection',
+    local_d1_readiness: 'local_d1_readiness',
+    service_readiness: 'service_probe',
+    gateway_auth: 'gateway_auth',
+    remote_preflight: 'remote_preflight',
+    d1: mode === 'local' ? 'local_fixture_snapshot' : 'remote_fixture_snapshot',
+    api: 'canonical_api',
+    dashboard: 'browser_navigation',
+    viewer: 'browser_navigation',
+  } as const
+  const path = surface === 'gateway_auth'
+    ? '/auth/'
+    : surface === 'api'
+      ? `/api/public/movies/${itemCode}`
+      : surface === 'dashboard'
+        ? '/dashboard/movies'
+        : surface === 'viewer'
+          ? `/movie/${itemCode}`
+          : undefined
+
+  return createDataChainExecutionReceipt({
+    source: surface === 'dashboard' || surface === 'viewer'
+      ? 'browser_observer'
+      : mode === 'local' ? 'local_runner' : 'remote_provider',
+    capture: capture[surface],
+    mode,
+    targetId: tuple.targetId,
+    runId: tuple.runId,
+    itemCode,
+    itemId: tuple.itemId,
+    surface,
+    ...(path ? { path } : {}),
+    timestamp: '2026-07-16T00:00:00.000Z',
+    ...overrides,
+  })
+}
+
 function pendingEvidence() {
   return createResolvedPendingEvidence({
     ...tuple,
     mode: 'local',
     timestamp: '2026-07-16T00:00:00.000Z',
     observations: [
-      { surface: 'local_projection', status: 'passed' },
-      { surface: 'local_d1_readiness', status: 'passed' },
-      { surface: 'service_readiness', status: 'passed' },
-      { surface: 'gateway_auth', status: 'passed' },
-      { surface: 'd1', status: 'passed', itemCount: 1 },
-      { surface: 'api', status: 'passed' },
+      { surface: 'local_projection', status: 'passed', receipt: receiptFor('local_projection') },
+      { surface: 'local_d1_readiness', status: 'passed', receipt: receiptFor('local_d1_readiness') },
+      { surface: 'service_readiness', status: 'passed', receipt: receiptFor('service_readiness') },
+      { surface: 'gateway_auth', status: 'passed', receipt: receiptFor('gateway_auth') },
+      { surface: 'd1', status: 'passed', itemCount: 1, receipt: receiptFor('d1') },
+      { surface: 'api', status: 'passed', receipt: receiptFor('api') },
     ],
   })
 }
@@ -117,18 +167,26 @@ describe('phase 13 deterministic evidence contract', () => {
       ...tuple,
       surface: 'viewer',
       status: 'passed',
+      receipt: receiptFor('viewer'),
     })).toThrow('Dashboard')
     expect(() => appendBrowserObservation(pending, {
       ...tuple,
       itemId: 'different-item',
       surface: 'dashboard',
       status: 'passed',
+      receipt: receiptFor('dashboard'),
     })).toThrow('tuple')
+    expect(() => appendBrowserObservation(pending, {
+      ...tuple,
+      surface: 'dashboard',
+      status: 'passed',
+    })).toThrow('controlled execution receipt')
 
     const afterDashboard = appendBrowserObservation(pending, {
       ...tuple,
       surface: 'dashboard',
       status: 'passed',
+      receipt: receiptFor('dashboard'),
     })
     expect(afterDashboard.exitCode).toBe(CHECKPOINT_EXIT_CODE)
     expect(afterDashboard.evidence.ingestState).toBe('resolved_pending_observation')
@@ -147,12 +205,14 @@ describe('phase 13 deterministic evidence contract', () => {
       ...tuple,
       surface: 'dashboard',
       status: 'passed',
+      receipt: receiptFor('dashboard'),
     })).toThrow('duplicate')
 
     const afterViewer = appendBrowserObservation(afterDashboard.evidence, {
       ...tuple,
       surface: 'viewer',
       status: 'passed',
+      receipt: receiptFor('viewer'),
     })
     expect(afterViewer.exitCode).toBe(0)
     expect(afterViewer.evidence.ingestState).toBe('resolved')
@@ -183,8 +243,16 @@ describe('phase 13 deterministic evidence contract', () => {
       ...tuple,
       surface: 'viewer',
       status: 'passed',
+      receipt: receiptFor('viewer'),
     })).toThrow('non-success')
     expect(validateDataChainEvidenceForExitCode(afterDashboardFailure.evidence)).toBe(0)
+    expect(() => appendBrowserObservation(pendingEvidence(), {
+      ...tuple,
+      surface: 'dashboard',
+      status: 'checkpoint',
+      checkpoint: 'dashboard_auth_unavailable',
+      receipt: receiptFor('dashboard'),
+    })).toThrow('cannot carry')
   })
 
   it('requires the exact terminal local tuple before a remote run can begin', () => {
@@ -192,11 +260,13 @@ describe('phase 13 deterministic evidence contract', () => {
       ...tuple,
       surface: 'dashboard',
       status: 'passed',
+      receipt: receiptFor('dashboard'),
     })
     const local = appendBrowserObservation(dashboard.evidence, {
       ...tuple,
       surface: 'viewer',
       status: 'passed',
+      receipt: receiptFor('viewer'),
     }).evidence
 
     expect(assertRemoteEligibility(local, tuple)).toMatchObject({
@@ -300,6 +370,25 @@ describe('phase 13 deterministic evidence contract', () => {
         [unsafeField]: unsafeField === 'headers' ? { authorization: 'value' } : 'value',
       })).toThrow('Unexpected evidence key')
     }
+
+    const receiptInput = {
+      source: 'local_runner',
+      capture: 'canonical_api',
+      mode: 'local',
+      targetId: tuple.targetId,
+      runId: tuple.runId,
+      itemCode: tuple.itemCode,
+      itemId: tuple.itemId,
+      surface: 'api',
+      path: `/api/public/movies/${tuple.itemCode}`,
+      timestamp: '2026-07-16T00:00:00.000Z',
+    } as const
+    for (const unsafeField of ['cookie', 'headers', 'body', 'screenshot', 'origin', 'command', 'token', 'preparedContext', 'notes'] as const) {
+      expect(() => createDataChainExecutionReceipt({
+        ...receiptInput,
+        [unsafeField]: 'not-allowed',
+      } as never)).toThrow('Unexpected data-chain receipt input key')
+    }
   })
 
   it('requires one successful primary D1 row and rejects sibling or batch-shaped evidence', () => {
@@ -329,11 +418,13 @@ describe('phase 13 deterministic evidence contract', () => {
       ...tuple,
       surface: 'dashboard',
       status: 'passed',
+      receipt: receiptFor('dashboard'),
     })
     const viewer = appendBrowserObservation(dashboard.evidence, {
       ...tuple,
       surface: 'viewer',
       status: 'passed',
+      receipt: receiptFor('viewer'),
     })
 
     expect(viewer.evidence.observations).toHaveLength(beforeBrowser.observations.length + 2)
@@ -345,17 +436,79 @@ describe('phase 13 deterministic evidence contract', () => {
   })
 
   it('rejects a legacy terminal pair whose passed rows have no execution receipts', () => {
-    const dashboard = appendBrowserObservation(pendingEvidence(), {
+    const terminal = {
+      version: 1,
+      mode: 'local',
+      timestamp: '2026-07-16T00:00:00.000Z',
+      ...tuple,
+      ingestState: 'resolved',
+      aggregate: 'passed',
+      observations: [
+        { surface: 'local_projection', status: 'passed' },
+        { surface: 'local_d1_readiness', status: 'passed' },
+        { surface: 'service_readiness', status: 'passed' },
+        { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN },
+        { surface: 'd1', status: 'passed', itemCount: 1 },
+        { surface: 'api', status: 'passed', path: `/api/public/movies/${tuple.itemCode}`, origin: LOCAL_GATEWAY_ORIGIN },
+        { surface: 'dashboard', status: 'passed', path: '/dashboard/movies', origin: LOCAL_GATEWAY_ORIGIN },
+        { surface: 'viewer', status: 'passed', path: `/movie/${tuple.itemCode}`, origin: LOCAL_GATEWAY_ORIGIN },
+      ],
+    }
+
+    expect(validateDataChainEvidence(terminal)).toContain('Resolved evidence requires a provenance receipt for every passed required surface.')
+  })
+
+  it('accepts a complete remote receipt set only for the exact canonical tuple', () => {
+    const pending = createResolvedPendingEvidence({
+      ...tuple,
+      mode: 'remote',
+      timestamp: '2026-07-16T00:00:00.000Z',
+      observations: [
+        { surface: 'remote_preflight', status: 'passed', receipt: receiptFor('remote_preflight', { mode: 'remote' }) },
+        { surface: 'd1', status: 'passed', itemCount: 1, receipt: receiptFor('d1', { mode: 'remote' }) },
+        { surface: 'api', status: 'passed', path: `/api/public/movies/${tuple.itemCode}`, receipt: receiptFor('api', { mode: 'remote' }) },
+      ],
+    })
+    const dashboard = appendBrowserObservation(pending, {
       ...tuple,
       surface: 'dashboard',
       status: 'passed',
+      receipt: receiptFor('dashboard', { mode: 'remote' }),
     })
     const terminal = appendBrowserObservation(dashboard.evidence, {
       ...tuple,
       surface: 'viewer',
       status: 'passed',
+      receipt: receiptFor('viewer', { mode: 'remote' }),
     }).evidence
 
-    expect(validateDataChainEvidence(terminal)).toContain('Resolved evidence requires a provenance receipt for every passed required surface.')
+    expect(validateDataChainEvidence(terminal)).toEqual([])
+    expect(terminal.observations.every(row => row.receipt !== undefined)).toBe(true)
+  })
+
+  it('rejects mismatched, non-canonical, or tampered receipt metadata', () => {
+    const pending = pendingEvidence()
+    const apiIndex = pending.observations.findIndex(row => row.surface === 'api')
+    const mutateApiReceipt = (receipt: Record<string, unknown>) => ({
+      ...pending,
+      observations: pending.observations.map((row, index) => index === apiIndex
+        ? { ...row, receipt }
+        : row),
+    })
+    const apiReceipt = receiptFor('api')
+
+    for (const receipt of [
+      { ...apiReceipt, targetId: 'different-target' },
+      { ...apiReceipt, surface: 'viewer' },
+      { ...apiReceipt, source: 'browser_observer' },
+      { ...apiReceipt, capture: 'browser_navigation' },
+      { ...apiReceipt, path: `http://localhost:3000/api/public/movies/${tuple.itemCode}` },
+      { ...apiReceipt, timestamp: '2026-07-16T00:00:00.000+08:00' },
+      { ...apiReceipt, result: 'failed' },
+      { ...apiReceipt, integrity: '00000000' },
+      { ...apiReceipt, cookie: 'not-allowed' },
+    ]) {
+      expect(validateDataChainEvidence(mutateApiReceipt(receipt))).not.toEqual([])
+    }
   })
 })

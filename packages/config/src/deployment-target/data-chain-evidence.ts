@@ -24,6 +24,22 @@ export type DataChainSurface = (typeof dataChainSurfaceValues)[number]
 export const dataChainObservationStatusValues = ['passed', 'failed', 'checkpoint'] as const
 export type DataChainObservationStatus = (typeof dataChainObservationStatusValues)[number]
 
+export const dataChainReceiptSourceValues = ['local_runner', 'remote_provider', 'browser_observer'] as const
+export type DataChainReceiptSource = (typeof dataChainReceiptSourceValues)[number]
+
+export const dataChainReceiptCaptureValues = [
+  'local_projection',
+  'local_d1_readiness',
+  'service_probe',
+  'gateway_auth',
+  'local_fixture_snapshot',
+  'remote_preflight',
+  'remote_fixture_snapshot',
+  'canonical_api',
+  'browser_navigation',
+] as const
+export type DataChainReceiptCapture = (typeof dataChainReceiptCaptureValues)[number]
+
 export const dataChainCheckpointValues = [
   'target_projection_unmet',
   'local_d1_unready',
@@ -39,6 +55,24 @@ export const dataChainCheckpointValues = [
 ] as const
 export type DataChainCheckpoint = (typeof dataChainCheckpointValues)[number]
 
+/** Non-secret, tuple-bound proof derived from one controlled execution observation. */
+export interface DataChainExecutionReceipt {
+  source: DataChainReceiptSource
+  capture: DataChainReceiptCapture
+  mode: DataChainMode
+  targetId: string
+  runId: string
+  itemCode: string
+  itemId: string
+  surface: DataChainSurface
+  path?: string
+  timestamp: string
+  result: 'passed'
+  integrity: string
+}
+
+export type CreateDataChainExecutionReceiptInput = Omit<DataChainExecutionReceipt, 'integrity' | 'result'>
+
 export interface DataChainObservation {
   surface: DataChainSurface
   status: DataChainObservationStatus
@@ -48,6 +82,7 @@ export interface DataChainObservation {
   attempt?: number
   /** Present only for the successful, primary D1 row. */
   itemCount?: typeof DATA_CHAIN_FIXTURE_COUNT
+  receipt?: DataChainExecutionReceipt
 }
 
 interface DataChainEvidenceBase {
@@ -128,6 +163,7 @@ export interface BrowserObservationInput {
   surface: 'dashboard' | 'viewer'
   status: DataChainObservationStatus
   checkpoint?: DataChainCheckpoint
+  receipt?: DataChainExecutionReceipt
 }
 
 export interface BrowserObservationAppendResult {
@@ -182,8 +218,23 @@ const evidenceKeys = [
   'observations',
 ] as const
 
-const observationKeys = ['surface', 'status', 'checkpoint', 'path', 'origin', 'attempt', 'itemCount'] as const
-const browserInputKeys = ['targetId', 'runId', 'itemCode', 'itemId', 'surface', 'status', 'checkpoint'] as const
+const observationKeys = ['surface', 'status', 'checkpoint', 'path', 'origin', 'attempt', 'itemCount', 'receipt'] as const
+const browserInputKeys = ['targetId', 'runId', 'itemCode', 'itemId', 'surface', 'status', 'checkpoint', 'receipt'] as const
+const receiptKeys = [
+  'source',
+  'capture',
+  'mode',
+  'targetId',
+  'runId',
+  'itemCode',
+  'itemId',
+  'surface',
+  'path',
+  'timestamp',
+  'result',
+  'integrity',
+] as const
+const receiptInputKeys = ['source', 'capture', 'mode', 'targetId', 'runId', 'itemCode', 'itemId', 'surface', 'path', 'timestamp'] as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -208,6 +259,22 @@ function stableHash(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
+function receiptIntegrity(receipt: Omit<DataChainExecutionReceipt, 'integrity'>): string {
+  return stableHash([
+    receipt.source,
+    receipt.capture,
+    receipt.mode,
+    receipt.targetId,
+    receipt.runId,
+    receipt.itemCode,
+    receipt.itemId,
+    receipt.surface,
+    receipt.path ?? '',
+    receipt.timestamp,
+    receipt.result,
+  ].join('\u0000'))
+}
+
 function codeSegment(value: string): string {
   const segment = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
   return segment || 'target'
@@ -220,6 +287,36 @@ function expectedCanonicalPath(surface: 'gateway_auth' | 'api' | 'dashboard' | '
     case 'dashboard': return '/dashboard/movies'
     case 'viewer': return `/movie/${itemCode}`
   }
+}
+
+function expectedReceiptSource(mode: DataChainMode, surface: DataChainSurface): DataChainReceiptSource {
+  if (surface === 'dashboard' || surface === 'viewer') {
+    return 'browser_observer'
+  }
+
+  return mode === 'local' ? 'local_runner' : 'remote_provider'
+}
+
+function expectedReceiptCapture(mode: DataChainMode, surface: DataChainSurface): DataChainReceiptCapture | undefined {
+  switch (surface) {
+    case 'local_projection': return mode === 'local' ? 'local_projection' : undefined
+    case 'local_d1_readiness': return mode === 'local' ? 'local_d1_readiness' : undefined
+    case 'service_readiness': return mode === 'local' ? 'service_probe' : undefined
+    case 'gateway_auth': return mode === 'local' ? 'gateway_auth' : undefined
+    case 'remote_preflight': return mode === 'remote' ? 'remote_preflight' : undefined
+    case 'd1': return mode === 'local' ? 'local_fixture_snapshot' : 'remote_fixture_snapshot'
+    case 'api': return 'canonical_api'
+    case 'dashboard':
+    case 'viewer': return 'browser_navigation'
+  }
+}
+
+function receiptPathIsExpected(surface: DataChainSurface, itemCode: string, path: unknown): boolean {
+  if (surface === 'gateway_auth' || surface === 'api' || surface === 'dashboard' || surface === 'viewer') {
+    return path === expectedCanonicalPath(surface, itemCode)
+  }
+
+  return path === undefined
 }
 
 function isCanonicalRouteSurface(value: unknown): value is 'gateway_auth' | 'api' | 'dashboard' | 'viewer' {
@@ -263,6 +360,7 @@ function cloneObservation(observation: DataChainObservation): DataChainObservati
     ...(observation.origin ? { origin: observation.origin } : {}),
     ...(observation.attempt ? { attempt: observation.attempt } : {}),
     ...(observation.itemCount !== undefined ? { itemCount: observation.itemCount } : {}),
+    ...(observation.receipt ? { receipt: { ...observation.receipt } } : {}),
   }
 }
 
@@ -306,6 +404,23 @@ export function createDataChainCandidate(input: CreateDataChainCandidateInput): 
 export function createDataChainFixtureCodes(input: CreateDataChainCandidateInput): readonly string[] {
   const primaryCode = createDataChainCandidate(input).itemCode
   return [primaryCode]
+}
+
+/** D-07: generates a deterministic integrity binding for allowlisted receipt metadata only. */
+export function createDataChainExecutionReceipt(
+  input: CreateDataChainExecutionReceiptInput,
+): DataChainExecutionReceipt {
+  assertInputKeys(input, receiptInputKeys, 'data-chain receipt input')
+
+  const receipt: Omit<DataChainExecutionReceipt, 'integrity'> = {
+    ...input,
+    result: 'passed',
+  }
+
+  return {
+    ...receipt,
+    integrity: receiptIntegrity(receipt),
+  }
 }
 
 /** D-03: pre-ingest evidence is terminal only for an unmet prerequisite. */
@@ -445,6 +560,97 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
         issues.push(`Observation ${index} Gateway route path is not canonical.`)
       }
 
+      let parsedReceipt: DataChainExecutionReceipt | undefined
+      if (observation.receipt !== undefined) {
+        if (!isRecord(observation.receipt)) {
+          issues.push(`Observation ${index} receipt must be an object.`)
+        }
+        else {
+          const receipt = observation.receipt
+          const unexpectedReceiptKey = Object.keys(receipt).find(key => !receiptKeys.includes(key as (typeof receiptKeys)[number]))
+          if (unexpectedReceiptKey) {
+            issues.push(`Observation ${index} receipt has an unexpected key: ${unexpectedReceiptKey}.`)
+          }
+          if (!hasValue(dataChainReceiptSourceValues, receipt.source)) {
+            issues.push(`Observation ${index} receipt source is invalid.`)
+          }
+          if (!hasValue(dataChainReceiptCaptureValues, receipt.capture)) {
+            issues.push(`Observation ${index} receipt capture is invalid.`)
+          }
+          if (!hasValue(dataChainModeValues, receipt.mode) || receipt.mode !== evidence.mode) {
+            issues.push(`Observation ${index} receipt mode does not match evidence.`)
+          }
+          for (const key of ['targetId', 'runId', 'itemCode', 'itemId'] as const) {
+            if (!hasText(receipt[key]) || receipt[key] !== evidence[key]) {
+              issues.push(`Observation ${index} receipt ${key} does not match evidence.`)
+            }
+          }
+          if (receipt.surface !== observation.surface) {
+            issues.push(`Observation ${index} receipt surface does not match observation.`)
+          }
+          if (!hasText(receipt.timestamp) || !receipt.timestamp.endsWith('Z') || Number.isNaN(Date.parse(receipt.timestamp))) {
+            issues.push(`Observation ${index} receipt timestamp must be a UTC instant.`)
+          }
+          if (receipt.result !== 'passed') {
+            issues.push(`Observation ${index} receipt result must be passed.`)
+          }
+          if (!receiptPathIsExpected(observation.surface as DataChainSurface, String(evidence.itemCode), receipt.path)) {
+            issues.push(`Observation ${index} receipt path is not canonical.`)
+          }
+
+          const expectedSource = hasValue(dataChainModeValues, evidence.mode) && hasValue(dataChainSurfaceValues, observation.surface)
+            ? expectedReceiptSource(evidence.mode, observation.surface)
+            : undefined
+          const expectedCapture = hasValue(dataChainModeValues, evidence.mode) && hasValue(dataChainSurfaceValues, observation.surface)
+            ? expectedReceiptCapture(evidence.mode, observation.surface)
+            : undefined
+          if (receipt.source !== expectedSource) {
+            issues.push(`Observation ${index} receipt source is not allowed for this surface.`)
+          }
+          if (receipt.capture !== expectedCapture) {
+            issues.push(`Observation ${index} receipt capture is not allowed for this surface.`)
+          }
+          if (observation.status !== 'passed') {
+            issues.push(`Observation ${index} only passed rows may carry a receipt.`)
+          }
+
+          if (
+            hasValue(dataChainReceiptSourceValues, receipt.source)
+            && hasValue(dataChainReceiptCaptureValues, receipt.capture)
+            && hasValue(dataChainModeValues, receipt.mode)
+            && hasText(receipt.targetId)
+            && hasText(receipt.runId)
+            && hasText(receipt.itemCode)
+            && hasText(receipt.itemId)
+            && hasValue(dataChainSurfaceValues, receipt.surface)
+            && (receipt.path === undefined || typeof receipt.path === 'string')
+            && hasText(receipt.timestamp)
+            && receipt.result === 'passed'
+            && typeof receipt.integrity === 'string'
+          ) {
+            const withoutIntegrity: Omit<DataChainExecutionReceipt, 'integrity'> = {
+              source: receipt.source,
+              capture: receipt.capture,
+              mode: receipt.mode,
+              targetId: receipt.targetId,
+              runId: receipt.runId,
+              itemCode: receipt.itemCode,
+              itemId: receipt.itemId,
+              surface: receipt.surface,
+              ...(receipt.path !== undefined ? { path: receipt.path } : {}),
+              timestamp: receipt.timestamp,
+              result: 'passed',
+            }
+            if (!/^[a-f0-9]{8}$/.test(receipt.integrity) || receipt.integrity !== receiptIntegrity(withoutIntegrity)) {
+              issues.push(`Observation ${index} receipt integrity is invalid.`)
+            }
+            else {
+              parsedReceipt = { ...withoutIntegrity, integrity: receipt.integrity }
+            }
+          }
+        }
+      }
+
       if (hasValue(dataChainSurfaceValues, observation.surface) && hasValue(dataChainObservationStatusValues, observation.status)) {
         parsedObservations.push({
           surface: observation.surface,
@@ -454,6 +660,7 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
           ...(observation.origin === LOCAL_GATEWAY_ORIGIN ? { origin: observation.origin } : {}),
           ...(typeof observation.attempt === 'number' ? { attempt: observation.attempt } : {}),
           ...(observation.itemCount === DATA_CHAIN_FIXTURE_COUNT ? { itemCount: observation.itemCount } : {}),
+          ...(parsedReceipt ? { receipt: parsedReceipt } : {}),
         })
       }
     })
@@ -531,6 +738,11 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
           issues.push(`Resolved evidence requires passed ${surface}.`)
         }
       }
+      if (requiredResolvedSurfaces(evidence.mode).some(surface => !parsedObservations.some(row => (
+        row.surface === surface && row.status === 'passed' && row.receipt !== undefined
+      )))) {
+        issues.push('Resolved evidence requires a provenance receipt for every passed required surface.')
+      }
     }
   }
   else {
@@ -585,6 +797,12 @@ export function appendBrowserObservation(
   if (input.status !== 'checkpoint' && input.checkpoint !== undefined) {
     throw new Error('Browser observation may only include a checkpoint code for checkpoint status.')
   }
+  if (input.status === 'passed' && input.receipt === undefined) {
+    throw new Error('Browser passed observation requires a controlled execution receipt.')
+  }
+  if (input.status !== 'passed' && input.receipt !== undefined) {
+    throw new Error('Browser non-success observation cannot carry an execution receipt.')
+  }
 
   const existingBrowserRows = existingEvidence.observations.filter(row => row.surface === 'dashboard' || row.surface === 'viewer')
   const dashboard = existingBrowserRows.find(row => row.surface === 'dashboard')
@@ -609,8 +827,17 @@ export function appendBrowserObservation(
     path: expectedCanonicalPath(input.surface, existingEvidence.itemCode),
     ...(existingEvidence.mode === 'local' ? { origin: LOCAL_GATEWAY_ORIGIN } : {}),
     ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
+    ...(input.receipt ? { receipt: { ...input.receipt } } : {}),
   }
   const observations = [...existingEvidence.observations.map(cloneObservation), observation]
+
+  const receiptIssues = validateDataChainEvidence({
+    ...existingEvidence,
+    observations,
+  })
+  if (receiptIssues.length > 0) {
+    throw new Error(`Browser observation receipt is invalid: ${receiptIssues.join(' ')}`)
+  }
 
   if (input.surface === 'viewer' && input.status === 'passed') {
     const resolved: ResolvedDataChainEvidence = {
@@ -685,8 +912,8 @@ export function renderDataChainEvidenceMarkdown(evidence: unknown): string {
     `- State: ${evidence.ingestState}`,
     `- Aggregate: ${evidence.aggregate}`,
     '',
-    '| Surface | Status | Count | Checkpoint | Path | Origin |',
-    '| --- | --- | --- | --- | --- | --- |',
+    '| Surface | Status | Count | Checkpoint | Path | Origin | Receipt source | Capture | Result | Captured at | Integrity |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...evidence.observations.map(row => [
       row.surface,
       row.status,
@@ -694,6 +921,11 @@ export function renderDataChainEvidenceMarkdown(evidence: unknown): string {
       row.checkpoint ?? '',
       row.path ?? '',
       row.origin ?? '',
+      row.receipt?.source ?? '',
+      row.receipt?.capture ?? '',
+      row.receipt?.result ?? '',
+      row.receipt?.timestamp ?? '',
+      row.receipt?.integrity ?? '',
     ].join(' | ').replace(/^/, '| ').concat(' |')),
     '',
   ]
