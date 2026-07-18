@@ -163,7 +163,7 @@ describe('phase 13 local smoke runner', () => {
     }))
   })
 
-  it('turns a fixture or D1 count mismatch into checkpoint evidence before API proof', async () => {
+  it('turns fixture or D1 count, code, and id mismatches into checkpoint evidence before API proof', async () => {
     const { runDataChainSmoke } = await loadSmoke()
     const fixtureMismatch = successDependencies()
     fixtureMismatch.runFixture = vi.fn(async () => ({
@@ -187,6 +187,30 @@ describe('phase 13 local smoke runner', () => {
     const d1Result = await runDataChainSmoke(baseOptions, d1Mismatch)
     expect(d1Result.evidence.observations[0]).toMatchObject({ surface: 'local_d1_readiness', checkpoint: 'fixture_seed_incomplete' })
     expect(d1Mismatch.fetchGatewayApi).not.toHaveBeenCalled()
+
+    const codeMismatch = successDependencies()
+    codeMismatch.snapshot = vi.fn(async () => ({
+      status: 'found' as const,
+      itemCode: 'phase13-smoke-sibling-code',
+      itemId: 'movie-42',
+      itemCount: 1 as const,
+    }))
+
+    const codeResult = await runDataChainSmoke(baseOptions, codeMismatch)
+    expect(codeResult.evidence.observations[0]).toMatchObject({ surface: 'local_d1_readiness', checkpoint: 'fixture_seed_incomplete' })
+    expect(codeMismatch.fetchGatewayApi).not.toHaveBeenCalled()
+
+    const idMismatch = successDependencies()
+    idMismatch.snapshot = vi.fn(async () => ({
+      status: 'found' as const,
+      itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode,
+      itemId: '',
+      itemCount: 1 as const,
+    }))
+
+    const idResult = await runDataChainSmoke(baseOptions, idMismatch)
+    expect(idResult.evidence.observations[0]).toMatchObject({ surface: 'local_d1_readiness', checkpoint: 'fixture_seed_incomplete' })
+    expect(idMismatch.fetchGatewayApi).not.toHaveBeenCalled()
   })
 
   it('strictly separates observer append and validate forms', async () => {

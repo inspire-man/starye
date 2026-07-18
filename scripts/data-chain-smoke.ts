@@ -17,7 +17,6 @@ import {
   buildTargetProjections,
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
-  createDataChainFixtureCodes,
   createPreIngestEvidence,
   createResolvedPendingEvidence,
   DATA_CHAIN_FIXTURE_COUNT,
@@ -177,6 +176,24 @@ function d1Rows(stdout: string): readonly Record<string, unknown>[] | undefined 
   return undefined
 }
 
+function snapshotRows(stdout: string): readonly Record<string, unknown>[] | undefined {
+  try {
+    const parsed = JSON.parse(stdout) as unknown
+    const payloads = Array.isArray(parsed) ? parsed : [parsed]
+    if (payloads.length !== 1) {
+      return undefined
+    }
+    const payload = payloads[0]
+    if (isRecord(payload) && Array.isArray(payload.results) && payload.results.every(isRecord)) {
+      return payload.results
+    }
+  }
+  catch {
+    return undefined
+  }
+  return undefined
+}
+
 function executeLocalD1(configPath: string, command: string): LocalCommandResult {
   const invocation = packageManagerInvocation([
     'exec',
@@ -328,7 +345,7 @@ async function readLocalCrawlerSecret(): Promise<string | undefined> {
   }
   try {
     const contents = await readFile(path.resolve(import.meta.dirname, '../packages/crawler/.env'), 'utf8')
-    const value = contents.match(/^\s*(?:export\s+)?CRAWLER_SECRET\s*=\s*(.*?)\s*$/m)?.[1]
+    const value = contents.match(/^[ \t]*(?:export[ \t]+)?CRAWLER_SECRET[ \t]*=(.*)$/m)?.[1]
     if (!value) {
       return undefined
     }
@@ -365,35 +382,27 @@ async function snapshotDefault(input: { targetId: string, runId: string, itemCod
   }
 
   try {
-    const expectedCodes = createDataChainFixtureCodes(input)
     const escapedCode = input.itemCode.replaceAll('\'', '\'\'')
-    const escapedSiblingPattern = `${input.itemCode}-fixture-%`.replaceAll('\'', '\'\'')
     const result = executeLocalD1(materialized.apiConfigPath, [
       'SELECT movie.id AS id, movie.code AS code, movie.is_r18 AS isR18, COUNT(player.id) AS playerCount',
       'FROM movie',
       'LEFT JOIN player ON player.movie_id = movie.id AND player.is_active = 1',
-      `WHERE movie.code = '${escapedCode}' OR movie.code LIKE '${escapedSiblingPattern}'`,
+      `WHERE movie.code = '${escapedCode}'`,
       'GROUP BY movie.id, movie.code, movie.is_r18',
-      'ORDER BY movie.code',
-      `LIMIT ${DATA_CHAIN_FIXTURE_COUNT + 1}`,
+      'LIMIT 2',
     ].join(' '))
-    const rows = result.exitCode === 0 ? d1Rows(result.stdout) : undefined
+    const rows = result.exitCode === 0 ? snapshotRows(result.stdout) : undefined
     if (!rows) {
       return { status: 'checkpoint', itemCode: input.itemCode }
     }
     if (rows.length === 0) {
       return { status: 'not-found', itemCode: input.itemCode }
     }
-    const expectedCodeSet = new Set(expectedCodes)
-    const returnedCodes = new Set(rows.map(row => typeof row.code === 'string' ? row.code : ''))
-    const primary = rows.find(row => row.code === input.itemCode)
+    const primary = rows[0]
     if (rows.length !== DATA_CHAIN_FIXTURE_COUNT
-      || returnedCodes.size !== DATA_CHAIN_FIXTURE_COUNT
-      || returnedCodes.size !== expectedCodeSet.size
-      || [...expectedCodeSet].some(code => !returnedCodes.has(code))
-      || rows.some(row => Number(row.isR18) !== 0)
-      || rows.some(row => Number(row.playerCount) !== 1)
-      || !primary
+      || primary?.code !== input.itemCode
+      || Number(primary.isR18) !== 0
+      || Number(primary.playerCount) !== 1
       || !isText(primary.id)) {
       return { status: 'checkpoint', itemCode: input.itemCode }
     }
@@ -698,7 +707,10 @@ async function runRemoteDataChainSmoke(options: DataChainSmokeOptions, dependenc
   catch {
     return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
   }
-  if (snapshot.status !== 'found' || snapshot.itemCode !== candidate.itemCode || snapshot.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
+  if (snapshot.status !== 'found'
+    || snapshot.itemCode !== candidate.itemCode
+    || snapshot.itemCount !== DATA_CHAIN_FIXTURE_COUNT
+    || !isText(snapshot.itemId)) {
     return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
   }
 

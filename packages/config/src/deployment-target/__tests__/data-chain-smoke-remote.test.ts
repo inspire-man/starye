@@ -260,7 +260,10 @@ describe('phase 13 remote smoke runner', () => {
     expect(dependencies.runPreparedSnapshot).not.toHaveBeenCalled()
   })
 
-  it('rejects a prepared batch count mismatch before D1 snapshot and API proof', async () => {
+  it.each([
+    ['a batch count', { itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode, itemCount: 9 as never }],
+    ['a sibling code', { itemCode: 'phase13-smoke-sibling-code', itemCount: 1 as const }],
+  ])('rejects prepared fixture $0 before D1 snapshot and API proof', async (_name, fixture) => {
     const { runDataChainSmoke } = await loadSmoke()
     const files = new Map<string, string>()
     putPair(files, localPassedEvidence())
@@ -268,13 +271,34 @@ describe('phase 13 remote smoke runner', () => {
     dependencies.runPreparedFixture.mockResolvedValue({
       operation: 'crawler-smoke-fixture' as const,
       status: 'synced' as const,
-      itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode,
-      itemCount: 9 as never,
+      ...fixture,
     })
 
     const result = await runDataChainSmoke(baseOptions, dependencies)
     expect(result.evidence).toMatchObject({ ingestState: 'pre_ingest', itemId: null })
     expect(dependencies.runPreparedSnapshot).not.toHaveBeenCalled()
+    expect(dependencies.fetchCanonicalApi).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a batch count', { itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode, itemId: 'remote-movie-42', itemCount: 9 as never }],
+    ['a sibling code', { itemCode: 'phase13-smoke-sibling-code', itemId: 'remote-movie-42', itemCount: 1 as const }],
+    ['an empty id', { itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode, itemId: '' as never, itemCount: 1 as const }],
+  ])('rejects prepared D1 snapshot $0 before canonical API proof', async (_name, snapshot) => {
+    const { runDataChainSmoke } = await loadSmoke()
+    const files = new Map<string, string>()
+    putPair(files, localPassedEvidence())
+    const dependencies = remoteDependencies(files)
+    dependencies.runPreparedSnapshot.mockResolvedValue({
+      operation: 'd1-smoke-snapshot' as const,
+      status: 'found' as const,
+      ...snapshot,
+    })
+
+    const result = await runDataChainSmoke(baseOptions, dependencies)
+
+    expect(result.exitCode).toBe(CHECKPOINT_EXIT_CODE)
+    expect(result.evidence).toMatchObject({ ingestState: 'pre_ingest', itemId: null, aggregate: 'checkpoint' })
     expect(dependencies.fetchCanonicalApi).not.toHaveBeenCalled()
   })
 
