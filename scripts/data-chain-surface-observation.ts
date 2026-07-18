@@ -1,131 +1,146 @@
-import type { CHECKPOINT_EXIT_CODE, DataChainCheckpoint, DataChainEvidence, DataChainMode, DataChainObservationStatus, ResolvedPendingDataChainEvidence } from '../packages/config/src/deployment-target/index'
+import type {
+  CHECKPOINT_EXIT_CODE,
+  DataChainEvidence,
+  DataChainMode,
+  ResolvedPendingDataChainEvidence,
+} from '../packages/config/src/deployment-target/index'
 import { readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
   appendBrowserObservation,
+  createDataChainExecutionReceipt,
+  LOCAL_GATEWAY_ORIGIN,
   renderDataChainEvidenceMarkdown,
+  resolveTargetProfile,
   serializeDataChainEvidenceJson,
   validateDataChainEvidenceForExitCode,
 } from '../packages/config/src/deployment-target/index'
 import { DATA_CHAIN_EVIDENCE_ROOT, getDataChainEvidencePaths } from './data-chain-smoke'
 
-export interface DataChainSurfaceAppendOptions {
+export interface DataChainSurfaceObservationOptions {
   readonly mode: DataChainMode
   readonly target: string
+  readonly runId: string
+}
+
+export interface BrowserSurfaceObservationInput {
+  readonly mode: DataChainMode
+  readonly targetId: string
   readonly runId: string
   readonly itemCode: string
   readonly itemId: string
   readonly surface: 'dashboard' | 'viewer'
+  readonly baseUrl: string
   readonly path: string
-  readonly status: DataChainObservationStatus
-  readonly checkpoint?: DataChainCheckpoint
 }
 
-export interface DataChainSurfaceValidateOptions {
-  readonly target: string
-  readonly runId: string
-  readonly itemCode: string
-  readonly itemId: string
+export interface BrowserSurfaceObservationResult {
+  readonly status: 'passed' | 'unavailable'
+  readonly itemCode?: string
+  readonly itemId?: string
 }
 
-export type DataChainSurfaceObservationArgs
-  = | { readonly kind: 'append', readonly options: DataChainSurfaceAppendOptions }
-    | { readonly kind: 'validate', readonly options: DataChainSurfaceValidateOptions }
+interface ObserverTargetResolution {
+  readonly id: string
+  readonly profile: {
+    readonly urls: {
+      readonly gateway: string
+    }
+  }
+}
 
 export interface DataChainSurfaceObservationDependencies {
   readonly evidenceRoot?: string
   readonly read?: (file: string) => Promise<string | undefined>
   readonly write?: (file: string, contents: string) => Promise<void>
+  readonly resolveTarget?: (target: string) => ObserverTargetResolution
+  readonly observeSurface?: (input: BrowserSurfaceObservationInput) => Promise<BrowserSurfaceObservationResult>
+  readonly now?: () => string
 }
 
-function text(value: unknown): value is string {
+interface PuppeteerResponse {
+  ok: () => boolean
+}
+
+interface PuppeteerPage {
+  goto: (url: string, options: { waitUntil: 'domcontentloaded', timeout: number }) => Promise<PuppeteerResponse | null>
+  url: () => string
+  evaluate: <T, Args extends readonly unknown[]>(pageFunction: (...args: Args) => T, ...args: Args) => Promise<T>
+}
+
+interface PuppeteerBrowser {
+  newPage: () => Promise<PuppeteerPage>
+  close: () => Promise<void>
+}
+
+interface PuppeteerModule {
+  launch: (options: { headless: boolean, userDataDir: string }) => Promise<PuppeteerBrowser>
+}
+
+const controlledOptionKeys = ['mode', 'target', 'runId'] as const
+const browserResultKeys = ['status', 'itemCode', 'itemId'] as const
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-function optionMap(argv: readonly string[]): Record<string, string | true> {
-  const values: Record<string, string | true> = {}
-  for (let index = 0; index < argv.length; index += 1) {
-    const flag = argv[index]
-    if (!flag?.startsWith('--')) {
-      throw new Error(`Unknown data-chain observation argument: ${flag}.`)
-    }
-    if (flag === '--validate') {
-      if (values[flag] !== undefined)
-        throw new Error('Duplicate --validate.')
-      values[flag] = true
-      continue
-    }
-    const value = argv[index + 1]
-    if (!value || value.startsWith('--')) {
-      throw new Error(`Missing value for ${flag}.`)
-    }
-    if (values[flag] !== undefined)
-      throw new Error(`Duplicate data-chain observation argument: ${flag}.`)
-    values[flag] = value
-    index += 1
-  }
-  return values
+function isRunId(value: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
 }
 
-function requireText(values: Record<string, string | true>, flag: string): string {
-  const value = values[flag]
-  if (!text(value))
-    throw new Error(`Missing ${flag}.`)
+function requireValue(argv: readonly string[], index: number, flag: string): string {
+  const value = argv[index + 1]
+  if (!value || value.startsWith('--')) {
+    throw new Error(`Missing value for ${flag}.`)
+  }
   return value
 }
 
-export function parseDataChainSurfaceObservationArgs(argv: readonly string[]): DataChainSurfaceObservationArgs {
-  const values = optionMap(argv)
-  const validate = values['--validate'] === true
-  const validateKeys = ['--validate', '--target', '--run-id', '--item-code', '--item-id']
-  if (validate) {
-    const unexpected = Object.keys(values).find(key => !validateKeys.includes(key))
-    if (unexpected)
-      throw new Error(`--validate does not accept ${unexpected}.`)
-    return { kind: 'validate', options: {
-      target: requireText(values, '--target'),
-      runId: requireText(values, '--run-id'),
-      itemCode: requireText(values, '--item-code'),
-      itemId: requireText(values, '--item-id'),
-    } }
+export function parseDataChainSurfaceObservationArgs(argv: readonly string[]): DataChainSurfaceObservationOptions {
+  const values: Partial<Record<'mode' | 'target' | 'runId', string>> = {}
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index]
+    if (flag !== '--mode' && flag !== '--target' && flag !== '--run-id') {
+      throw new Error(`Unsupported data-chain observer argument: ${flag}.`)
+    }
+    const value = requireValue(argv, index, flag)
+    index += 1
+    const key = flag === '--run-id' ? 'runId' : flag.slice(2) as 'mode' | 'target'
+    if (values[key] !== undefined) {
+      throw new Error(`Duplicate data-chain observer argument: ${flag}.`)
+    }
+    values[key] = value
   }
-  const appendKeys = ['--mode', '--target', '--run-id', '--item-code', '--item-id', '--surface', '--path', '--status', '--checkpoint']
-  const unexpected = Object.keys(values).find(key => !appendKeys.includes(key))
-  if (unexpected)
-    throw new Error(`Unsupported data-chain observation argument: ${unexpected}.`)
-  const mode = requireText(values, '--mode')
-  if (mode !== 'local' && mode !== 'remote')
-    throw new Error('Append mode must be local or remote.')
-  const surface = requireText(values, '--surface')
-  if (surface !== 'dashboard' && surface !== 'viewer')
-    throw new Error('Append surface must be dashboard or viewer.')
-  if (surface === 'viewer' && !Object.hasOwn(values, '--surface'))
-    throw new Error('Viewer observation requires Dashboard first.')
-  const itemCode = requireText(values, '--item-code')
-  const routePath = requireText(values, '--path')
-  const expectedPath = surface === 'dashboard' ? '/dashboard/movies' : `/movie/${itemCode}`
-  if (routePath !== expectedPath)
-    throw new Error('Append path must be the canonical Gateway path.')
-  const status = requireText(values, '--status')
-  if (status !== 'passed' && status !== 'failed' && status !== 'checkpoint')
-    throw new Error('Append status is invalid.')
-  const checkpoint = values['--checkpoint']
-  if (status === 'checkpoint' && !text(checkpoint))
-    throw new Error('Checkpoint status requires --checkpoint.')
-  if (status !== 'checkpoint' && checkpoint !== undefined)
-    throw new Error('--checkpoint is only allowed with checkpoint status.')
-  return { kind: 'append', options: {
-    mode,
-    target: requireText(values, '--target'),
-    runId: requireText(values, '--run-id'),
-    itemCode,
-    itemId: requireText(values, '--item-id'),
-    surface,
-    path: routePath,
-    status,
-    ...(text(checkpoint) ? { checkpoint: checkpoint as DataChainCheckpoint } : {}),
-  } }
+  if (values.mode !== 'local' && values.mode !== 'remote') {
+    throw new Error('Data-chain observer requires --mode local|remote.')
+  }
+  if (!hasText(values.target)) {
+    throw new Error('Data-chain observer requires an explicit --target.')
+  }
+  if (!hasText(values.runId) || !isRunId(values.runId)) {
+    throw new Error('Data-chain observer requires a validated --run-id.')
+  }
+  return { mode: values.mode, target: values.target, runId: values.runId }
+}
+
+function assertControlledOptions(options: unknown): asserts options is DataChainSurfaceObservationOptions {
+  if (!isRecord(options)) {
+    throw new Error('Data-chain observer options must be an object.')
+  }
+  const unexpected = Object.keys(options).find(key => !controlledOptionKeys.includes(key as (typeof controlledOptionKeys)[number]))
+  if (unexpected) {
+    throw new Error(`Unsupported data-chain observer option: ${unexpected}.`)
+  }
+  if ((options.mode !== 'local' && options.mode !== 'remote') || !hasText(options.target) || !hasText(options.runId) || !isRunId(options.runId)) {
+    throw new Error('Data-chain observer requires mode, target, and a validated run id.')
+  }
 }
 
 async function readDefault(file: string): Promise<string | undefined> {
@@ -133,83 +148,239 @@ async function readDefault(file: string): Promise<string | undefined> {
     return await readFile(file, 'utf8')
   }
   catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return undefined
+    }
     throw error
   }
 }
 
-async function loadEvidence(file: string, read: (file: string) => Promise<string | undefined>): Promise<DataChainEvidence> {
-  const contents = await read(file)
-  if (!contents)
-    throw new Error('Data-chain evidence artifact is missing.')
+async function loadEvidencePair(
+  options: DataChainSurfaceObservationOptions,
+  evidenceRoot: string,
+  read: (file: string) => Promise<string | undefined>,
+): Promise<ResolvedPendingDataChainEvidence> {
+  const paths = getDataChainEvidencePaths({ ...options, evidenceRoot })
+  const [json, markdown] = await Promise.all([read(paths.json), read(paths.markdown)])
+  if (!json || !markdown) {
+    throw new Error('Data-chain evidence pair is missing.')
+  }
   let evidence: unknown
   try {
-    evidence = JSON.parse(contents)
+    evidence = JSON.parse(json)
   }
   catch {
     throw new Error('Data-chain evidence JSON is malformed.')
   }
   validateDataChainEvidenceForExitCode(evidence)
-  return evidence as DataChainEvidence
+  const typed = evidence as DataChainEvidence
+  if (typed.mode !== options.mode || typed.targetId !== options.target || typed.runId !== options.runId) {
+    throw new Error('Data-chain observer tuple does not match the exact evidence pair.')
+  }
+  if (markdown !== renderDataChainEvidenceMarkdown(typed)) {
+    throw new Error('Data-chain evidence Markdown does not match JSON.')
+  }
+  if (typed.ingestState !== 'resolved_pending_observation' || typed.aggregate !== 'pending') {
+    throw new Error('Data-chain observer requires pending post-snapshot evidence.')
+  }
+  if (typed.observations.some(row => row.surface === 'dashboard' || row.surface === 'viewer')) {
+    throw new Error('Data-chain observer requires an unobserved pending artifact.')
+  }
+  const requiredRunnerSurfaces = typed.mode === 'local'
+    ? ['local_projection', 'local_d1_readiness', 'service_readiness', 'gateway_auth', 'd1', 'api'] as const
+    : ['remote_preflight', 'd1', 'api'] as const
+  if (!requiredRunnerSurfaces.every(surface => typed.observations.some(row => (
+    row.surface === surface && row.status === 'passed' && row.receipt !== undefined
+  )))) {
+    throw new Error('Data-chain observer requires receipt-backed runner evidence.')
+  }
+  return typed
 }
 
-async function writePair(mode: DataChainMode, target: string, runId: string, evidence: DataChainEvidence, dependencies: DataChainSurfaceObservationDependencies): Promise<void> {
-  const root = dependencies.evidenceRoot ?? DATA_CHAIN_EVIDENCE_ROOT
-  const paths = getDataChainEvidencePaths({ mode, target, runId, evidenceRoot: root })
-  const write = dependencies.write ?? ((file, contents) => writeFile(file, contents, 'utf8'))
+async function writePair(
+  options: DataChainSurfaceObservationOptions,
+  evidenceRoot: string,
+  evidence: DataChainEvidence,
+  write: (file: string, contents: string) => Promise<void>,
+): Promise<void> {
+  const paths = getDataChainEvidencePaths({ ...options, evidenceRoot })
   await write(paths.json, serializeDataChainEvidenceJson(evidence))
   await write(paths.markdown, renderDataChainEvidenceMarkdown(evidence))
 }
 
-export async function appendDataChainSurfaceObservation(options: DataChainSurfaceAppendOptions, dependencies: DataChainSurfaceObservationDependencies = {}): Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }> {
-  const root = dependencies.evidenceRoot ?? DATA_CHAIN_EVIDENCE_ROOT
-  const paths = getDataChainEvidencePaths({ mode: options.mode, target: options.target, runId: options.runId, evidenceRoot: root })
-  const existing = await loadEvidence(paths.json, dependencies.read ?? readDefault)
-  if (existing.ingestState !== 'resolved_pending_observation')
-    throw new Error('Browser observation requires resolved_pending_observation evidence.')
-  const input = {
-    targetId: options.target,
-    runId: options.runId,
-    itemCode: options.itemCode,
-    itemId: options.itemId,
-    status: options.status,
-    ...(options.checkpoint ? { checkpoint: options.checkpoint } : {}),
+function resolveObserverBase(
+  options: DataChainSurfaceObservationOptions,
+  resolveTarget: (target: string) => ObserverTargetResolution,
+): string {
+  const resolution = resolveTarget(options.target)
+  if (resolution.id !== options.target) {
+    throw new Error('Data-chain observer target does not match the selected profile.')
   }
-  const result = options.surface === 'dashboard'
-    ? appendBrowserObservation(existing as ResolvedPendingDataChainEvidence, { ...input, surface: 'dashboard' })
-    : appendBrowserObservation(existing as ResolvedPendingDataChainEvidence, { ...input, surface: 'viewer' })
-  await writePair(options.mode, options.target, options.runId, result.evidence, { ...dependencies, evidenceRoot: root })
-  return result
+  if (options.mode === 'local') {
+    return LOCAL_GATEWAY_ORIGIN
+  }
+  let gateway: URL
+  try {
+    gateway = new URL(resolution.profile.urls.gateway)
+  }
+  catch {
+    throw new Error('Selected target canonical Gateway is invalid.')
+  }
+  if (gateway.protocol !== 'https:' || gateway.port || gateway.username || gateway.password || gateway.search || gateway.hash || !['', '/'].includes(gateway.pathname)) {
+    throw new Error('Selected target canonical Gateway must be an HTTPS origin without a direct port.')
+  }
+  return gateway.origin
 }
 
-export async function validateDataChainSurfaceObservation(options: DataChainSurfaceValidateOptions, dependencies: DataChainSurfaceObservationDependencies = {}): Promise<0> {
-  const root = dependencies.evidenceRoot ?? DATA_CHAIN_EVIDENCE_ROOT
-  const read = dependencies.read ?? readDefault
-  const matches: DataChainEvidence[] = []
-  for (const mode of ['local', 'remote'] as const) {
-    const paths = getDataChainEvidencePaths({ mode, target: options.target, runId: options.runId, evidenceRoot: root })
-    const contents = await read(paths.json)
-    if (!contents)
-      continue
-    const evidence = await loadEvidence(paths.json, read)
-    if (evidence.targetId === options.target && evidence.runId === options.runId && evidence.itemCode === options.itemCode && evidence.itemId === options.itemId) {
-      const markdown = await read(paths.markdown)
-      if (markdown !== renderDataChainEvidenceMarkdown(evidence))
-        throw new Error('Data-chain evidence Markdown does not match JSON.')
-      matches.push(evidence)
-    }
+function normalizeBrowserResult(value: unknown): BrowserSurfaceObservationResult | undefined {
+  if (!isRecord(value) || Object.keys(value).some(key => !browserResultKeys.includes(key as (typeof browserResultKeys)[number]))) {
+    return undefined
   }
-  if (matches.length !== 1)
-    throw new Error('Validation requires exactly one matching local or remote evidence tuple.')
-  return 0
+  if (value.status !== 'passed' && value.status !== 'unavailable') {
+    return undefined
+  }
+  if (value.status === 'passed' && (!hasText(value.itemCode) || !hasText(value.itemId))) {
+    return undefined
+  }
+  return {
+    status: value.status,
+    ...(hasText(value.itemCode) ? { itemCode: value.itemCode } : {}),
+    ...(hasText(value.itemId) ? { itemId: value.itemId } : {}),
+  }
+}
+
+function crawlerPuppeteer(): PuppeteerModule {
+  const crawlerPackage = path.resolve(import.meta.dirname, '../packages/crawler/package.json')
+  return createRequire(crawlerPackage)('puppeteer') as PuppeteerModule
+}
+
+async function observeSurfaceDefault(input: BrowserSurfaceObservationInput): Promise<BrowserSurfaceObservationResult> {
+  const endpoint = new URL(input.path, `${input.baseUrl}/`)
+  const base = new URL(input.baseUrl)
+  if (endpoint.origin !== base.origin || endpoint.pathname !== input.path || endpoint.port) {
+    return { status: 'unavailable' }
+  }
+  const browser = await crawlerPuppeteer().launch({
+    headless: process.env.CI === 'true',
+    userDataDir: path.resolve(import.meta.dirname, `../.target-runs/phase13-browser-profile/${input.targetId}`),
+  })
+  try {
+    const page = await browser.newPage()
+    const response = await page.goto(endpoint.href, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    const finalUrl = new URL(page.url())
+    if (!response?.ok() || finalUrl.origin !== endpoint.origin || finalUrl.pathname !== endpoint.pathname) {
+      return { status: 'unavailable' }
+    }
+    const tuple = await page.evaluate((itemCode, itemId) => {
+      const bodyText = document.body?.textContent ?? ''
+      const documentHtml = document.documentElement?.outerHTML ?? ''
+      return {
+        codeMatches: bodyText.includes(itemCode) || documentHtml.includes(itemCode),
+        idMatches: bodyText.includes(itemId) || documentHtml.includes(itemId),
+      }
+    }, input.itemCode, input.itemId)
+    return tuple.codeMatches && tuple.idMatches
+      ? { status: 'passed', itemCode: input.itemCode, itemId: input.itemId }
+      : { status: 'unavailable' }
+  }
+  finally {
+    await browser.close()
+  }
+}
+
+async function captureSurface(
+  evidence: ResolvedPendingDataChainEvidence,
+  surface: 'dashboard' | 'viewer',
+  baseUrl: string,
+  observeSurface: (input: BrowserSurfaceObservationInput) => Promise<BrowserSurfaceObservationResult>,
+  now: () => string,
+) {
+  const routePath = surface === 'dashboard' ? '/dashboard/movies' : `/movie/${evidence.itemCode}`
+  let observation: BrowserSurfaceObservationResult | undefined
+  try {
+    observation = normalizeBrowserResult(await observeSurface({
+      mode: evidence.mode,
+      targetId: evidence.targetId,
+      runId: evidence.runId,
+      itemCode: evidence.itemCode,
+      itemId: evidence.itemId,
+      surface,
+      baseUrl,
+      path: routePath,
+    }))
+  }
+  catch {
+    observation = undefined
+  }
+  const passed = observation?.status === 'passed'
+    && observation.itemCode === evidence.itemCode
+    && observation.itemId === evidence.itemId
+  if (!passed) {
+    const checkpoint = surface === 'dashboard' ? 'dashboard_auth_unavailable' : 'canonical_viewer_unavailable'
+    return appendBrowserObservation(evidence, {
+      targetId: evidence.targetId,
+      runId: evidence.runId,
+      itemCode: evidence.itemCode,
+      itemId: evidence.itemId,
+      surface,
+      status: 'checkpoint',
+      checkpoint,
+    })
+  }
+  const receipt = createDataChainExecutionReceipt({
+    source: 'browser_observer',
+    capture: 'browser_navigation',
+    mode: evidence.mode,
+    targetId: evidence.targetId,
+    runId: evidence.runId,
+    itemCode: evidence.itemCode,
+    itemId: evidence.itemId,
+    surface,
+    path: routePath,
+    timestamp: now(),
+  })
+  return appendBrowserObservation(evidence, {
+    targetId: evidence.targetId,
+    runId: evidence.runId,
+    itemCode: evidence.itemCode,
+    itemId: evidence.itemId,
+    surface,
+    status: 'passed',
+    receipt,
+  })
+}
+
+export async function observeDataChainSurfaces(
+  options: DataChainSurfaceObservationOptions,
+  dependencies: DataChainSurfaceObservationDependencies = {},
+): Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }> {
+  assertControlledOptions(options)
+  const evidenceRoot = dependencies.evidenceRoot ?? DATA_CHAIN_EVIDENCE_ROOT
+  const read = dependencies.read ?? readDefault
+  const write = dependencies.write ?? ((file, contents) => writeFile(file, contents, 'utf8'))
+  const resolveTarget = dependencies.resolveTarget ?? (target => resolveTargetProfile(target) as ObserverTargetResolution)
+  const observeSurface = dependencies.observeSurface ?? observeSurfaceDefault
+  const now = dependencies.now ?? (() => new Date().toISOString())
+  const evidence = await loadEvidencePair(options, evidenceRoot, read)
+  const baseUrl = resolveObserverBase(options, resolveTarget)
+
+  const dashboard = await captureSurface(evidence, 'dashboard', baseUrl, observeSurface, now)
+  await writePair(options, evidenceRoot, dashboard.evidence, write)
+  if (dashboard.evidence.aggregate !== 'pending') {
+    return dashboard
+  }
+  if (dashboard.evidence.ingestState !== 'resolved_pending_observation') {
+    throw new Error('Dashboard observation must retain pending evidence.')
+  }
+
+  const viewer = await captureSurface(dashboard.evidence, 'viewer', baseUrl, observeSurface, now)
+  await writePair(options, evidenceRoot, viewer.evidence, write)
+  return viewer
 }
 
 export async function runDataChainSurfaceObservationCli(argv: readonly string[] = process.argv.slice(2)): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
-  const parsed = parseDataChainSurfaceObservationArgs(argv)
-  if (parsed.kind === 'validate')
-    return validateDataChainSurfaceObservation(parsed.options)
-  const result = await appendDataChainSurfaceObservation(parsed.options)
+  const options = parseDataChainSurfaceObservationArgs(argv)
+  const result = await observeDataChainSurfaces(options)
   return result.exitCode
 }
 

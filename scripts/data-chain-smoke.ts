@@ -3,6 +3,7 @@ import type {
   DataChainEvidence,
   DataChainMode,
   DataChainObservation,
+  DataChainReceiptCapture,
   PreparedSmokeChildObservation,
   ProjectionValidationIssue,
 } from '../packages/config/src/deployment-target/index'
@@ -17,6 +18,7 @@ import {
   buildTargetProjections,
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
+  createDataChainExecutionReceipt,
   createPreIngestEvidence,
   createResolvedPendingEvidence,
   DATA_CHAIN_FIXTURE_COUNT,
@@ -93,6 +95,45 @@ export interface DataChainSmokeDependencies {
 export interface DataChainSmokeResult {
   readonly exitCode: 0 | typeof CHECKPOINT_EXIT_CODE
   readonly evidence: DataChainEvidence
+}
+
+type RunnerReceiptSurface = Exclude<DataChainObservation['surface'], 'dashboard' | 'viewer'>
+
+function createRunnerReceipt(input: {
+  mode: DataChainMode
+  targetId: string
+  runId: string
+  itemCode: string
+  itemId: string
+  surface: RunnerReceiptSurface
+  timestamp: string
+  path?: string
+}) {
+  const captureBySurface: Record<RunnerReceiptSurface, DataChainReceiptCapture | undefined> = {
+    local_projection: input.mode === 'local' ? 'local_projection' : undefined,
+    local_d1_readiness: input.mode === 'local' ? 'local_d1_readiness' : undefined,
+    service_readiness: input.mode === 'local' ? 'service_probe' : undefined,
+    gateway_auth: input.mode === 'local' ? 'gateway_auth' : undefined,
+    remote_preflight: input.mode === 'remote' ? 'remote_preflight' : undefined,
+    d1: input.mode === 'local' ? 'local_fixture_snapshot' : 'remote_fixture_snapshot',
+    api: 'canonical_api',
+  }
+  const capture = captureBySurface[input.surface]
+  if (!capture) {
+    throw new Error(`Runner receipt surface ${input.surface} is invalid for ${input.mode} mode.`)
+  }
+  return createDataChainExecutionReceipt({
+    source: input.mode === 'local' ? 'local_runner' : 'remote_provider',
+    capture,
+    mode: input.mode,
+    targetId: input.targetId,
+    runId: input.runId,
+    itemCode: input.itemCode,
+    itemId: input.itemId,
+    surface: input.surface,
+    ...(input.path ? { path: input.path } : {}),
+    timestamp: input.timestamp,
+  })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -719,23 +760,35 @@ async function runRemoteDataChainSmoke(options: DataChainSmokeOptions, dependenc
   const fetchCanonicalApi = dependencies.fetchCanonicalApi ?? fetchCanonicalApiDefault
   const api = await fetchCanonicalApi({ canonicalBase, path: canonicalPath, itemCode: candidate.itemCode, itemId: snapshot.itemId })
   const apiPassed = api.status >= 200 && api.status < 300 && api.itemCode === candidate.itemCode && api.itemId === snapshot.itemId
+  const evidenceTimestamp = now()
+  const receipt = (surface: RunnerReceiptSurface, routePath?: string) => createRunnerReceipt({
+    mode: 'remote',
+    targetId: resolution.id,
+    runId: options.runId,
+    itemCode: candidate.itemCode,
+    itemId: snapshot.itemId,
+    surface,
+    timestamp: evidenceTimestamp,
+    ...(routePath ? { path: routePath } : {}),
+  })
   const evidence = createResolvedPendingEvidence({
     targetId: resolution.id,
     runId: options.runId,
     itemCode: candidate.itemCode,
     itemId: snapshot.itemId,
     mode: 'remote',
-    timestamp: now(),
+    timestamp: evidenceTimestamp,
     aggregate: apiPassed ? 'pending' : 'checkpoint',
     observations: [
-      { surface: 'remote_preflight', status: 'passed' },
-      { surface: 'd1', status: 'passed', itemCount: DATA_CHAIN_FIXTURE_COUNT },
+      { surface: 'remote_preflight', status: 'passed', receipt: receipt('remote_preflight') },
+      { surface: 'd1', status: 'passed', itemCount: DATA_CHAIN_FIXTURE_COUNT, receipt: receipt('d1') },
       {
         surface: 'api',
         status: apiPassed ? 'passed' : 'checkpoint',
         ...(apiPassed ? {} : { checkpoint: 'canonical_api_unavailable' as const }),
         path: canonicalPath,
         ...(api.attempt ? { attempt: api.attempt } : {}),
+        ...(apiPassed ? { receipt: receipt('api', canonicalPath) } : {}),
       },
     ],
   })
@@ -811,12 +864,6 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'gateway_auth', status: 'checkpoint', checkpoint: 'gateway_auth_unavailable', path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN }, now, write)
   }
 
-  const prerequisiteObservations: readonly DataChainObservation[] = [
-    { surface: 'local_projection', status: 'passed' },
-    { surface: 'local_d1_readiness', status: 'passed' },
-    { surface: 'service_readiness', status: 'passed' },
-    { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN },
-  ]
   const runFixture = dependencies.runFixture ?? runFixtureDefault
   const snapshot = dependencies.snapshot ?? snapshotDefault
   try {
@@ -839,17 +886,34 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
   const fetchGatewayApi = dependencies.fetchGatewayApi ?? fetchGatewayApiDefault
   const api = await fetchGatewayApi({ itemCode: candidate.itemCode, itemId: snapshotResult.itemId })
   const apiPassed = api.status >= 200 && api.status < 300 && api.itemCode === candidate.itemCode && api.itemId === snapshotResult.itemId
+  const evidenceTimestamp = now()
+  const receipt = (surface: RunnerReceiptSurface, routePath?: string) => createRunnerReceipt({
+    mode: 'local',
+    targetId: resolution.id,
+    runId: options.runId,
+    itemCode: candidate.itemCode,
+    itemId: snapshotResult.itemId,
+    surface,
+    timestamp: evidenceTimestamp,
+    ...(routePath ? { path: routePath } : {}),
+  })
+  const prerequisiteObservations: readonly DataChainObservation[] = [
+    { surface: 'local_projection', status: 'passed', receipt: receipt('local_projection') },
+    { surface: 'local_d1_readiness', status: 'passed', receipt: receipt('local_d1_readiness') },
+    { surface: 'service_readiness', status: 'passed', receipt: receipt('service_readiness') },
+    { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN, receipt: receipt('gateway_auth', '/auth/') },
+  ]
   const evidence = createResolvedPendingEvidence({
     targetId: resolution.id,
     runId: options.runId,
     itemCode: candidate.itemCode,
     itemId: snapshotResult.itemId,
     mode: 'local',
-    timestamp: now(),
+    timestamp: evidenceTimestamp,
     aggregate: apiPassed ? 'pending' : 'checkpoint',
     observations: [
       ...prerequisiteObservations,
-      { surface: 'd1', status: 'passed', itemCount: DATA_CHAIN_FIXTURE_COUNT },
+      { surface: 'd1', status: 'passed', itemCount: DATA_CHAIN_FIXTURE_COUNT, receipt: receipt('d1') },
       {
         surface: 'api',
         status: apiPassed ? 'passed' : 'checkpoint',
@@ -857,6 +921,7 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
         path: `/api/public/movies/${candidate.itemCode}`,
         origin: LOCAL_GATEWAY_ORIGIN,
         ...(api.attempt ? { attempt: api.attempt } : {}),
+        ...(apiPassed ? { receipt: receipt('api', `/api/public/movies/${candidate.itemCode}`) } : {}),
       },
     ],
   })

@@ -289,12 +289,15 @@ describe('phase 13 local smoke runner', () => {
 
     await write(evidencePath('local', 'json'), serializeDataChainEvidenceJson(evidence))
     await write(evidencePath('local', 'md'), renderDataChainEvidenceMarkdown(evidence))
-    const observeSurface = vi.fn(async (input: { surface: 'dashboard' | 'viewer' }) => ({
-      status: 'passed' as const,
-      itemCode,
-      itemId: 'movie-42',
-      surface: input.surface,
-    }))
+    const observedInputs: Array<{ surface: 'dashboard' | 'viewer', baseUrl: string, path: string, itemCode: string, itemId: string }> = []
+    const observeSurface = vi.fn(async (input: { surface: 'dashboard' | 'viewer', baseUrl: string, path: string, itemCode: string, itemId: string }) => {
+      observedInputs.push(input)
+      return {
+        status: 'passed' as const,
+        itemCode,
+        itemId: 'movie-42',
+      }
+    })
 
     const result = await observeDataChainSurfaces({ mode: 'local', target: baseOptions.target, runId: baseOptions.runId }, {
       read,
@@ -306,9 +309,9 @@ describe('phase 13 local smoke runner', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.evidence).toMatchObject({ ingestState: 'resolved', aggregate: 'passed', itemCode, itemId: 'movie-42' })
-    expect(observeSurface.mock.calls.map(([input]) => input.surface)).toEqual(['dashboard', 'viewer'])
-    expect(observeSurface.mock.calls[0]?.[0]).toMatchObject({ baseUrl: 'http://localhost:8080', path: '/dashboard/movies', itemCode, itemId: 'movie-42' })
-    expect(observeSurface.mock.calls[1]?.[0]).toMatchObject({ path: `/movie/${itemCode}`, itemCode, itemId: 'movie-42' })
+    expect(observedInputs.map(input => input.surface)).toEqual(['dashboard', 'viewer'])
+    expect(observedInputs[0]).toMatchObject({ baseUrl: 'http://localhost:8080', path: '/dashboard/movies', itemCode, itemId: 'movie-42' })
+    expect(observedInputs[1]).toMatchObject({ path: `/movie/${itemCode}`, itemCode, itemId: 'movie-42' })
     expect(result.evidence.observations.slice(-2)).toEqual([
       expect.objectContaining({ surface: 'dashboard', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
       expect.objectContaining({ surface: 'viewer', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
@@ -338,12 +341,12 @@ describe('phase 13 local smoke runner', () => {
       [evidencePath('local', 'json'), serializeDataChainEvidenceJson(pending)],
       [evidencePath('local', 'md'), renderDataChainEvidenceMarkdown(pending)],
     ])
-    const observeSurface = vi.fn(async () => ({ status: 'passed' as const, itemCode, itemId: 'wrong-id', surface: 'dashboard' as const }))
+    const observeSurface = vi.fn(async () => ({ status: 'passed' as const, itemCode, itemId: 'wrong-id' }))
 
     const result = await observeDataChainSurfaces({ mode: 'local', target: baseOptions.target, runId: baseOptions.runId }, {
       evidenceRoot,
-      read: async file => files.get(file),
-      write: async (file, contents) => { files.set(file, contents) },
+      read: async (file: string) => files.get(file),
+      write: async (file: string, contents: string) => { files.set(file, contents) },
       observeSurface,
       now: () => '2026-07-16T00:01:00.000Z',
     })
@@ -352,6 +355,20 @@ describe('phase 13 local smoke runner', () => {
     expect(result.evidence).toMatchObject({ ingestState: 'resolved_pending_observation', aggregate: 'checkpoint', itemId: 'movie-42' })
     expect(result.evidence.observations.at(-1)).toMatchObject({ surface: 'dashboard', status: 'checkpoint', checkpoint: 'dashboard_auth_unavailable' })
     expect(observeSurface).toHaveBeenCalledTimes(1)
+
+    const unavailableFiles = new Map([
+      [evidencePath('local', 'json'), serializeDataChainEvidenceJson(pending)],
+      [evidencePath('local', 'md'), renderDataChainEvidenceMarkdown(pending)],
+    ])
+    const unavailable = await observeDataChainSurfaces({ mode: 'local', target: baseOptions.target, runId: baseOptions.runId }, {
+      evidenceRoot,
+      read: async (file: string) => unavailableFiles.get(file),
+      write: async (file: string, contents: string) => { unavailableFiles.set(file, contents) },
+      observeSurface: async () => { throw new Error('browser unavailable') },
+      now: () => '2026-07-16T00:01:00.000Z',
+    })
+    expect(unavailable.exitCode).toBe(CHECKPOINT_EXIT_CODE)
+    expect(unavailable.evidence.observations.at(-1)).toMatchObject({ surface: 'dashboard', status: 'checkpoint' })
   })
 
   it('preserves only valid runner exit 0 or 2 artifacts in the shared wrapper', async () => {

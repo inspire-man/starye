@@ -32,12 +32,20 @@ interface VerifyModule {
   verifyDataChainSmoke: (options: unknown, dependencies?: unknown) => Promise<0 | typeof CHECKPOINT_EXIT_CODE>
 }
 
+interface ObservationModule {
+  observeDataChainSurfaces: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
+}
+
 async function loadSmoke() {
   return import(/* @vite-ignore */ new URL('../../../../../scripts/data-chain-smoke.ts', import.meta.url).href) as Promise<SmokeModule>
 }
 
 async function loadVerify() {
   return import(/* @vite-ignore */ new URL('../../../../../scripts/verify-data-chain-smoke.ts', import.meta.url).href) as Promise<VerifyModule>
+}
+
+async function loadObservation() {
+  return import(/* @vite-ignore */ new URL('../../../../../scripts/data-chain-surface-observation.ts', import.meta.url).href) as Promise<ObservationModule>
 }
 
 function evidencePath(runId: string, mode: 'local' | 'remote', extension: 'json' | 'md'): string {
@@ -102,6 +110,39 @@ function localPassedEvidence(runId = baseOptions.runId): DataChainEvidence {
 function putPair(files: Map<string, string>, evidence: DataChainEvidence): void {
   files.set(evidencePath(evidence.runId, evidence.mode, 'json'), serializeDataChainEvidenceJson(evidence))
   files.set(evidencePath(evidence.runId, evidence.mode, 'md'), renderDataChainEvidenceMarkdown(evidence))
+}
+
+function remotePendingEvidence(): DataChainEvidence {
+  const itemCode = createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode
+  const itemId = 'remote-movie-42'
+  const receipt = (surface: 'remote_preflight' | 'd1' | 'api') => createDataChainExecutionReceipt({
+    source: 'remote_provider',
+    capture: surface === 'remote_preflight' ? 'remote_preflight' : surface === 'd1' ? 'remote_fixture_snapshot' : 'canonical_api',
+    mode: 'remote',
+    targetId: baseOptions.target,
+    runId: baseOptions.runId,
+    itemCode,
+    itemId,
+    surface,
+    ...(surface === 'api' ? { path: `/api/public/movies/${itemCode}` } : {}),
+    timestamp: '2026-07-16T04:10:00.000Z',
+  })
+  return {
+    version: 1,
+    mode: 'remote',
+    timestamp: '2026-07-16T04:10:00.000Z',
+    targetId: baseOptions.target,
+    runId: baseOptions.runId,
+    itemCode,
+    itemId,
+    ingestState: 'resolved_pending_observation',
+    aggregate: 'pending',
+    observations: [
+      { surface: 'remote_preflight', status: 'passed', receipt: receipt('remote_preflight') },
+      { surface: 'd1', status: 'passed', itemCount: 1, receipt: receipt('d1') },
+      { surface: 'api', status: 'passed', path: `/api/public/movies/${itemCode}`, receipt: receipt('api') },
+    ],
+  }
 }
 
 function remoteDependencies(files: Map<string, string>) {
@@ -279,6 +320,45 @@ describe('phase 13 remote smoke runner', () => {
     expect(result.evidence.observations).toContainEqual(expect.objectContaining({ surface: 'api', status: 'checkpoint', checkpoint: 'canonical_api_unavailable' }))
     expect(result.evidence.observations).not.toContainEqual(expect.objectContaining({ surface: 'dashboard', status: 'passed' }))
     expect(result.evidence.observations).not.toContainEqual(expect.objectContaining({ surface: 'viewer', status: 'passed' }))
+  })
+
+  it('observes remote surfaces only through the selected canonical Gateway base', async () => {
+    const { observeDataChainSurfaces } = await loadObservation()
+    const pending = remotePendingEvidence()
+    const files = new Map<string, string>()
+    putPair(files, pending)
+    const observedInputs: Array<{ surface: 'dashboard' | 'viewer', baseUrl: string }> = []
+    const observeSurface = vi.fn(async (input: { surface: 'dashboard' | 'viewer', baseUrl: string }) => {
+      observedInputs.push(input)
+      return { status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string }
+    })
+    const dependencies = {
+      evidenceRoot,
+      read: async (file: string) => files.get(file),
+      write: async (file: string, contents: string) => { files.set(file, contents) },
+      resolveTarget: () => ({ id: baseOptions.target, profile: { urls: { gateway: 'https://starye.org' } } }),
+      observeSurface,
+      now: () => '2026-07-16T04:11:00.000Z',
+    }
+
+    const result = await observeDataChainSurfaces({ mode: 'remote', target: baseOptions.target, runId: baseOptions.runId }, dependencies)
+
+    expect(result.exitCode).toBe(0)
+    expect(observeSurface).toHaveBeenCalledTimes(2)
+    expect(observedInputs.every(input => input.baseUrl === 'https://starye.org')).toBe(true)
+    expect(observedInputs.map(input => input.surface)).toEqual(['dashboard', 'viewer'])
+
+    const invalidFiles = new Map<string, string>()
+    putPair(invalidFiles, pending)
+    const invalidObserver = vi.fn(async () => ({ status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string }))
+    await expect(observeDataChainSurfaces({ mode: 'remote', target: baseOptions.target, runId: baseOptions.runId }, {
+      ...dependencies,
+      read: async (file: string) => invalidFiles.get(file),
+      write: async (file: string, contents: string) => { invalidFiles.set(file, contents) },
+      resolveTarget: () => ({ id: baseOptions.target, profile: { urls: { gateway: 'http://localhost:3001' } } }),
+      observeSurface: invalidObserver,
+    })).rejects.toThrow('HTTPS origin without a direct port')
+    expect(invalidObserver).not.toHaveBeenCalled()
   })
 
   it('records a prepared fixture failure without starting the D1 snapshot', async () => {
