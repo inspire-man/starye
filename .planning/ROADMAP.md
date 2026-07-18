@@ -16,7 +16,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | 9/9 | In Progress|  |
+| 13 | 9/10 | In Progress|  |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
 
 ## Phase Details
@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 9/9 plans complete
+**Plans:** 9/10 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -116,6 +116,10 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [x] 13-09-PLAN.md — Pass the official selected-target live preflight, then run one fresh collision-checked local/production proof without rewriting Attempts A-E. *(Executed once; stopped at the immutable local projection checkpoint, so the phase goal remains pending.)*
 
+**Wave 9** *(gap closure; blocked on Wave 8 completion)*
+
+- [ ] 13-10-PLAN.md — Re-prove or restore official local projection before allocating a fresh run, then execute one terminal local-to-production D1/API/Dashboard/viewer proof.
+
 **Success criteria:**
 
 1. Local smoke goes through `http://localhost:8080/...` and verifies API, auth/dashboard, and content routes without treating direct app ports as canonical.
@@ -146,11 +150,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-All nine Phase 13 plans have executed, but re-verification remains `gaps_found` at 9/13 must-haves. The next gap closure must restore local projection before a different fresh run can prove provider-backed D1/API/admin and selected-canonical Dashboard/viewer:
+Plan 13-10 is ready. It must pass official target-local projection and complete local preflight before generating a fresh run ID, then prove the local and selected-production chains with persistent Codex in-app browser receipts:
 
 ```text
-$gsd-plan-phase 13 --gaps
+$gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-18 after Phase 13 Plan 09 re-verification (gaps_found)*
+*Last updated: 2026-07-19 after Phase 13 Plan 10 gap planning and verification*
