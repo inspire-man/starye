@@ -842,7 +842,14 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
     ),
   })
   if (!preflightResult.ok) {
-    return preIngestCheckpoint(options, candidate.itemCode, { surface: 'local_projection', status: 'checkpoint', checkpoint: 'target_projection_unmet' }, now, write)
+    let checkpoint: DataChainCheckpoint = 'target_projection_unmet'
+    for (const issue of preflightResult.issues) {
+      if (issue.code === 'projection-mismatch' || issue.code === 'local-api-token-shadowing') {
+        checkpoint = issue.code
+        break
+      }
+    }
+    return preIngestCheckpoint(options, candidate.itemCode, { surface: 'local_projection', status: 'checkpoint', checkpoint }, now, write)
   }
 
   const inspectLocalD1 = dependencies.inspectLocalD1 ?? (input => inspectLocalD1Default(input))

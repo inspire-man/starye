@@ -119,6 +119,7 @@ export async function runVerifyDataChainSmokeCli(
   }
   const result = await inspectDataChainSmokeVerification(options, dependencies)
   const log = dependencies.log ?? console.log
+  const checkpoint = result.evidence.observations.find(row => row.status === 'checkpoint')?.checkpoint
   log(JSON.stringify({
     mode: options.mode,
     target: options.target,
@@ -127,6 +128,7 @@ export async function runVerifyDataChainSmokeCli(
     aggregate: result.evidence.aggregate,
     outcome: result.outcome,
     provesExternalChain: result.provesExternalChain,
+    ...(checkpoint ? { checkpoint } : {}),
   }))
   return result.exitCode
 }
