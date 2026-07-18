@@ -37,6 +37,7 @@ import {
 import { createDataChainFixture, runDataChainFixture } from '../packages/crawler/src/smoke/data-chain-fixture'
 import { ApiClient } from '../packages/crawler/src/utils/api-client'
 import { packageManagerInvocation } from './package-manager-command.ts'
+import { pickRuntimeEnvironment } from './target-profile.ts'
 
 export const DATA_CHAIN_EVIDENCE_ROOT = path.resolve(import.meta.dirname, '../.planning/phases/13-full-chain-data-smoke/evidence')
 
@@ -69,6 +70,7 @@ export interface DataChainSmokeDependencies {
   readonly resolveTarget?: (target: string) => {
     id: string
     profile: {
+      account?: { id: string }
       local?: { wranglerProfile: string }
       ci?: { githubEnvironment: string }
       urls?: { gateway: string }
@@ -834,7 +836,10 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
     command: 'validate',
     wranglerProfile: resolution.profile.local.wranglerProfile,
     projectionIssues,
-    environment: process.env,
+    environment: pickRuntimeEnvironment(
+      dependencies.environment ?? process.env,
+      resolution.profile.account?.id,
+    ),
   })
   if (!preflightResult.ok) {
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'local_projection', status: 'checkpoint', checkpoint: 'target_projection_unmet' }, now, write)

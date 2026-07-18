@@ -189,17 +189,24 @@ Phase 11 identity boundary:
 
 type PagesBuildExecutor = (command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number
 
-function pickRuntimeEnvironment(): NodeJS.ProcessEnv {
+export function pickRuntimeEnvironment(
+  source: Readonly<Record<string, string | undefined>> = process.env,
+  selectedAccountId?: string,
+): NodeJS.ProcessEnv {
   const names = process.platform === 'win32'
     ? ['Path', 'SystemRoot', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'CI', 'NODE_OPTIONS', 'PNPM_HOME']
     : ['PATH', 'HOME', 'TMPDIR', 'CI', 'NODE_OPTIONS', 'PNPM_HOME']
   const selected: NodeJS.ProcessEnv = {}
 
   for (const name of names) {
-    const value = process.env[name]
+    const value = source[name]
     if (value !== undefined) {
       selected[name] = value
     }
+  }
+
+  if (selectedAccountId !== undefined) {
+    selected.CLOUDFLARE_ACCOUNT_ID = selectedAccountId
   }
 
   return selected
@@ -428,7 +435,7 @@ async function runPreflight(options: TargetProfileCliOptions): Promise<void> {
     ? await collectPreflightProjectionIssues(options.target ?? '', root)
     : []
   const localEnvironment = options.scope === 'local'
-    ? { ...pickRuntimeEnvironment(), CLOUDFLARE_ACCOUNT_ID: resolveTargetProfile(options.target ?? '').profile.account.id }
+    ? pickRuntimeEnvironment(process.env, resolveTargetProfile(options.target ?? '').profile.account.id)
     : process.env
 
   const result = runTargetPreflight({
