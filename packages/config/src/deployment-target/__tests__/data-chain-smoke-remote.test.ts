@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
+  createDataChainExecutionReceipt,
   renderDataChainEvidenceMarkdown,
   serializeDataChainEvidenceJson,
 } from '../data-chain-evidence'
@@ -45,6 +46,36 @@ function evidencePath(runId: string, mode: 'local' | 'remote', extension: 'json'
 
 function localPassedEvidence(runId = baseOptions.runId): DataChainEvidence {
   const itemCode = createDataChainCandidate({ targetId: baseOptions.target, runId }).itemCode
+  const itemId = 'movie-42'
+  const receipt = (surface: 'local_projection' | 'local_d1_readiness' | 'service_readiness' | 'gateway_auth' | 'd1' | 'api' | 'dashboard' | 'viewer') => {
+    const capture = {
+      local_projection: 'local_projection',
+      local_d1_readiness: 'local_d1_readiness',
+      service_readiness: 'service_probe',
+      gateway_auth: 'gateway_auth',
+      d1: 'local_fixture_snapshot',
+      api: 'canonical_api',
+      dashboard: 'browser_navigation',
+      viewer: 'browser_navigation',
+    } as const
+    const routePath = surface === 'gateway_auth'
+      ? '/auth/'
+      : surface === 'api'
+        ? `/api/public/movies/${itemCode}`
+        : surface === 'dashboard' ? '/dashboard/movies' : surface === 'viewer' ? `/movie/${itemCode}` : undefined
+    return createDataChainExecutionReceipt({
+      source: surface === 'dashboard' || surface === 'viewer' ? 'browser_observer' : 'local_runner',
+      capture: capture[surface],
+      mode: 'local',
+      targetId: baseOptions.target,
+      runId,
+      itemCode,
+      itemId,
+      surface,
+      ...(routePath ? { path: routePath } : {}),
+      timestamp: '2026-07-16T04:10:00.000Z',
+    })
+  }
   return {
     version: 1,
     mode: 'local',
@@ -52,18 +83,18 @@ function localPassedEvidence(runId = baseOptions.runId): DataChainEvidence {
     targetId: baseOptions.target,
     runId,
     itemCode,
-    itemId: 'movie-42',
+    itemId,
     ingestState: 'resolved',
     aggregate: 'passed',
     observations: [
-      { surface: 'local_projection', status: 'passed' },
-      { surface: 'local_d1_readiness', status: 'passed' },
-      { surface: 'service_readiness', status: 'passed' },
-      { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: 'http://localhost:8080' },
-      { surface: 'd1', status: 'passed', itemCount: 1 },
-      { surface: 'api', status: 'passed', path: `/api/public/movies/${itemCode}`, origin: 'http://localhost:8080' },
-      { surface: 'dashboard', status: 'passed', path: '/dashboard/movies', origin: 'http://localhost:8080' },
-      { surface: 'viewer', status: 'passed', path: `/movie/${itemCode}`, origin: 'http://localhost:8080' },
+      { surface: 'local_projection', status: 'passed', receipt: receipt('local_projection') },
+      { surface: 'local_d1_readiness', status: 'passed', receipt: receipt('local_d1_readiness') },
+      { surface: 'service_readiness', status: 'passed', receipt: receipt('service_readiness') },
+      { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: 'http://localhost:8080', receipt: receipt('gateway_auth') },
+      { surface: 'd1', status: 'passed', itemCount: 1, receipt: receipt('d1') },
+      { surface: 'api', status: 'passed', path: `/api/public/movies/${itemCode}`, origin: 'http://localhost:8080', receipt: receipt('api') },
+      { surface: 'dashboard', status: 'passed', path: '/dashboard/movies', origin: 'http://localhost:8080', receipt: receipt('dashboard') },
+      { surface: 'viewer', status: 'passed', path: `/movie/${itemCode}`, origin: 'http://localhost:8080', receipt: receipt('viewer') },
     ],
   }
 }
@@ -227,6 +258,11 @@ describe('phase 13 remote smoke runner', () => {
       itemId: 'remote-movie-42',
     })
     expect(result.evidence.observations.map(row => row.surface)).toEqual(['remote_preflight', 'd1', 'api'])
+    expect(result.evidence.observations).toEqual([
+      expect.objectContaining({ surface: 'remote_preflight', receipt: expect.objectContaining({ source: 'remote_provider', capture: 'remote_preflight' }) }),
+      expect.objectContaining({ surface: 'd1', receipt: expect.objectContaining({ source: 'remote_provider', capture: 'remote_fixture_snapshot', itemId: 'remote-movie-42' }) }),
+      expect.objectContaining({ surface: 'api', receipt: expect.objectContaining({ source: 'remote_provider', capture: 'canonical_api' }) }),
+    ])
   })
 
   it('keeps the authoritative item id when the canonical API cannot correlate it', async () => {

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
+  createDataChainExecutionReceipt,
   createResolvedPendingEvidence,
 
   renderDataChainEvidenceMarkdown,
@@ -27,9 +28,8 @@ interface SmokeModule {
 }
 
 interface ObservationModule {
-  parseDataChainSurfaceObservationArgs: (argv: readonly string[]) => unknown
-  appendDataChainSurfaceObservation: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
-  validateDataChainSurfaceObservation: (options: unknown, dependencies?: unknown) => Promise<0>
+  parseDataChainSurfaceObservationArgs: (argv: readonly string[]) => { mode: 'local' | 'remote', target: string, runId: string }
+  observeDataChainSurfaces: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
 }
 
 interface VerifyModule {
@@ -65,6 +65,33 @@ function successDependencies() {
     fetchGatewayApi: vi.fn(async (): Promise<{ status: number, itemCode?: string, itemId?: string }> => ({ status: 200, itemCode: candidate.itemCode, itemId: 'movie-42' })),
     write: async () => {},
   }
+}
+
+function localReceipt(surface: 'local_projection' | 'local_d1_readiness' | 'service_readiness' | 'gateway_auth' | 'd1' | 'api') {
+  const candidate = createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId })
+  const capture = {
+    local_projection: 'local_projection',
+    local_d1_readiness: 'local_d1_readiness',
+    service_readiness: 'service_probe',
+    gateway_auth: 'gateway_auth',
+    d1: 'local_fixture_snapshot',
+    api: 'canonical_api',
+  } as const
+  const routePath = surface === 'gateway_auth'
+    ? '/auth/'
+    : surface === 'api' ? `/api/public/movies/${candidate.itemCode}` : undefined
+  return createDataChainExecutionReceipt({
+    source: 'local_runner',
+    capture: capture[surface],
+    mode: 'local',
+    targetId: baseOptions.target,
+    runId: baseOptions.runId,
+    itemCode: candidate.itemCode,
+    itemId: 'movie-42',
+    surface,
+    ...(routePath ? { path: routePath } : {}),
+    timestamp: '2026-07-16T00:00:00.000Z',
+  })
 }
 
 describe('phase 13 local smoke runner', () => {
@@ -161,6 +188,13 @@ describe('phase 13 local smoke runner', () => {
       path: expect.any(String),
       origin: 'http://localhost:8080',
     }))
+    expect(result.evidence.observations.filter(row => row.status === 'passed')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ surface: 'local_projection', receipt: expect.objectContaining({ source: 'local_runner', result: 'passed' }) }),
+        expect.objectContaining({ surface: 'd1', receipt: expect.objectContaining({ capture: 'local_fixture_snapshot', itemId: 'movie-42' }) }),
+        expect.objectContaining({ surface: 'api', receipt: expect.objectContaining({ path: expect.stringContaining('/api/public/movies/') }) }),
+      ]),
+    )
   })
 
   it('turns fixture or D1 count, code, and id mismatches into checkpoint evidence before API proof', async () => {
@@ -213,15 +247,23 @@ describe('phase 13 local smoke runner', () => {
     expect(idMismatch.fetchGatewayApi).not.toHaveBeenCalled()
   })
 
-  it('strictly separates observer append and validate forms', async () => {
+  it('accepts only the controlled observer mode, target, and run tuple', async () => {
     const { parseDataChainSurfaceObservationArgs } = await loadObservation()
-    expect(() => parseDataChainSurfaceObservationArgs(['--validate', '--target', 'starye-org', '--run-id', 'run', '--item-code', 'code', '--item-id', 'id', '--mode', 'local'])).toThrow('does not accept')
-    expect(parseDataChainSurfaceObservationArgs(['--mode', 'local', '--target', 'starye-org', '--run-id', 'run', '--item-code', 'code', '--item-id', 'id', '--surface', 'viewer', '--path', '/movie/code', '--status', 'passed'])).toMatchObject({ kind: 'append' })
-    expect(parseDataChainSurfaceObservationArgs(['--validate', '--target', 'starye-org', '--run-id', 'run', '--item-code', 'code', '--item-id', 'id'])).toMatchObject({ kind: 'validate' })
+    expect(parseDataChainSurfaceObservationArgs(['--mode', 'local', '--target', 'starye-org', '--run-id', 'run'])).toEqual({
+      mode: 'local',
+      target: 'starye-org',
+      runId: 'run',
+    })
+    for (const forbidden of ['--status', '--surface', '--item-code', '--item-id', '--path', '--origin', '--validate']) {
+      const argv = forbidden === '--validate'
+        ? ['--mode', 'local', '--target', 'starye-org', '--run-id', 'run', forbidden]
+        : ['--mode', 'local', '--target', 'starye-org', '--run-id', 'run', forbidden, 'passed']
+      expect(() => parseDataChainSurfaceObservationArgs(argv)).toThrow()
+    }
   })
 
-  it('requires a pending tuple for Dashboard then viewer and validates one deterministic pair', async () => {
-    const { appendDataChainSurfaceObservation, validateDataChainSurfaceObservation } = await loadObservation()
+  it('derives the pending tuple and observes Dashboard before viewer without caller claims', async () => {
+    const { observeDataChainSurfaces } = await loadObservation()
     const evidence = createResolvedPendingEvidence({
       targetId: baseOptions.target,
       runId: baseOptions.runId,
@@ -230,12 +272,12 @@ describe('phase 13 local smoke runner', () => {
       mode: 'local',
       timestamp: '2026-07-16T00:00:00.000Z',
       observations: [
-        { surface: 'local_projection', status: 'passed' },
-        { surface: 'local_d1_readiness', status: 'passed' },
-        { surface: 'service_readiness', status: 'passed' },
-        { surface: 'gateway_auth', status: 'passed' },
-        { surface: 'd1', status: 'passed', itemCount: 1 },
-        { surface: 'api', status: 'passed' },
+        { surface: 'local_projection', status: 'passed', receipt: localReceipt('local_projection') },
+        { surface: 'local_d1_readiness', status: 'passed', receipt: localReceipt('local_d1_readiness') },
+        { surface: 'service_readiness', status: 'passed', receipt: localReceipt('service_readiness') },
+        { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: 'http://localhost:8080', receipt: localReceipt('gateway_auth') },
+        { surface: 'd1', status: 'passed', itemCount: 1, receipt: localReceipt('d1') },
+        { surface: 'api', status: 'passed', path: `/api/public/movies/${createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode}`, origin: 'http://localhost:8080', receipt: localReceipt('api') },
       ],
     })
     const files = new Map<string, string>()
@@ -247,13 +289,69 @@ describe('phase 13 local smoke runner', () => {
 
     await write(evidencePath('local', 'json'), serializeDataChainEvidenceJson(evidence))
     await write(evidencePath('local', 'md'), renderDataChainEvidenceMarkdown(evidence))
-    await expect(appendDataChainSurfaceObservation({ ...baseOptions, itemCode, itemId: 'movie-42', surface: 'viewer', path: `/movie/${itemCode}`, status: 'passed' }, { read, write, evidenceRoot })).rejects.toThrow('Dashboard')
+    const observeSurface = vi.fn(async (input: { surface: 'dashboard' | 'viewer' }) => ({
+      status: 'passed' as const,
+      itemCode,
+      itemId: 'movie-42',
+      surface: input.surface,
+    }))
 
-    const dashboard = await appendDataChainSurfaceObservation({ ...baseOptions, itemCode, itemId: 'movie-42', surface: 'dashboard', path: '/dashboard/movies', status: 'passed' }, { read, write, evidenceRoot })
-    expect(dashboard.exitCode).toBe(CHECKPOINT_EXIT_CODE)
-    const viewer = await appendDataChainSurfaceObservation({ ...baseOptions, itemCode, itemId: 'movie-42', surface: 'viewer', path: `/movie/${itemCode}`, status: 'passed' }, { read, write, evidenceRoot })
-    expect(viewer.exitCode).toBe(0)
-    await expect(validateDataChainSurfaceObservation({ target: baseOptions.target, runId: baseOptions.runId, itemCode, itemId: 'movie-42' }, { read, evidenceRoot })).resolves.toBe(0)
+    const result = await observeDataChainSurfaces({ mode: 'local', target: baseOptions.target, runId: baseOptions.runId }, {
+      read,
+      write,
+      evidenceRoot,
+      observeSurface,
+      now: () => '2026-07-16T00:01:00.000Z',
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.evidence).toMatchObject({ ingestState: 'resolved', aggregate: 'passed', itemCode, itemId: 'movie-42' })
+    expect(observeSurface.mock.calls.map(([input]) => input.surface)).toEqual(['dashboard', 'viewer'])
+    expect(observeSurface.mock.calls[0]?.[0]).toMatchObject({ baseUrl: 'http://localhost:8080', path: '/dashboard/movies', itemCode, itemId: 'movie-42' })
+    expect(observeSurface.mock.calls[1]?.[0]).toMatchObject({ path: `/movie/${itemCode}`, itemCode, itemId: 'movie-42' })
+    expect(result.evidence.observations.slice(-2)).toEqual([
+      expect.objectContaining({ surface: 'dashboard', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
+      expect.objectContaining({ surface: 'viewer', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
+    ])
+  })
+
+  it('persists a Dashboard checkpoint when the browser cannot correlate the derived item', async () => {
+    const { observeDataChainSurfaces } = await loadObservation()
+    const itemCode = createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode
+    const pending = createResolvedPendingEvidence({
+      targetId: baseOptions.target,
+      runId: baseOptions.runId,
+      itemCode,
+      itemId: 'movie-42',
+      mode: 'local',
+      timestamp: '2026-07-16T00:00:00.000Z',
+      observations: [
+        { surface: 'local_projection', status: 'passed', receipt: localReceipt('local_projection') },
+        { surface: 'local_d1_readiness', status: 'passed', receipt: localReceipt('local_d1_readiness') },
+        { surface: 'service_readiness', status: 'passed', receipt: localReceipt('service_readiness') },
+        { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: 'http://localhost:8080', receipt: localReceipt('gateway_auth') },
+        { surface: 'd1', status: 'passed', itemCount: 1, receipt: localReceipt('d1') },
+        { surface: 'api', status: 'passed', path: `/api/public/movies/${itemCode}`, origin: 'http://localhost:8080', receipt: localReceipt('api') },
+      ],
+    })
+    const files = new Map([
+      [evidencePath('local', 'json'), serializeDataChainEvidenceJson(pending)],
+      [evidencePath('local', 'md'), renderDataChainEvidenceMarkdown(pending)],
+    ])
+    const observeSurface = vi.fn(async () => ({ status: 'passed' as const, itemCode, itemId: 'wrong-id', surface: 'dashboard' as const }))
+
+    const result = await observeDataChainSurfaces({ mode: 'local', target: baseOptions.target, runId: baseOptions.runId }, {
+      evidenceRoot,
+      read: async file => files.get(file),
+      write: async (file, contents) => { files.set(file, contents) },
+      observeSurface,
+      now: () => '2026-07-16T00:01:00.000Z',
+    })
+
+    expect(result.exitCode).toBe(CHECKPOINT_EXIT_CODE)
+    expect(result.evidence).toMatchObject({ ingestState: 'resolved_pending_observation', aggregate: 'checkpoint', itemId: 'movie-42' })
+    expect(result.evidence.observations.at(-1)).toMatchObject({ surface: 'dashboard', status: 'checkpoint', checkpoint: 'dashboard_auth_unavailable' })
+    expect(observeSurface).toHaveBeenCalledTimes(1)
   })
 
   it('preserves only valid runner exit 0 or 2 artifacts in the shared wrapper', async () => {
