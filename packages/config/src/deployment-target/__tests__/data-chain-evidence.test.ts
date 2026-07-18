@@ -343,4 +343,19 @@ describe('phase 13 deterministic evidence contract', () => {
       status: 'passed',
     })).toThrow('resolved_pending_observation')
   })
+
+  it('rejects a legacy terminal pair whose passed rows have no execution receipts', () => {
+    const dashboard = appendBrowserObservation(pendingEvidence(), {
+      ...tuple,
+      surface: 'dashboard',
+      status: 'passed',
+    })
+    const terminal = appendBrowserObservation(dashboard.evidence, {
+      ...tuple,
+      surface: 'viewer',
+      status: 'passed',
+    }).evidence
+
+    expect(validateDataChainEvidence(terminal)).toContain('Resolved evidence requires a provenance receipt for every passed required surface.')
+  })
 })
