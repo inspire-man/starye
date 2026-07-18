@@ -4,11 +4,11 @@ milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: Full Chain Data Smoke
-status: verifying
-stopped_at: "13-09 local-only checkpoint: local_projection/target_projection_unmet; Phase 13 remains open"
-last_updated: "2026-07-18T15:17:20.378Z"
+status: executing
+stopped_at: "Phase 13 re-verification gaps_found (9/13); plan the next gap closure"
+last_updated: "2026-07-18T15:46:34.847Z"
 last_activity: 2026-07-18
-last_activity_desc: Plan 13-09 recorded one immutable local projection checkpoint after passing live preflight
+last_activity_desc: Phase 13 re-verification confirmed three production-chain blockers after Plan 13-09
 progress:
   total_phases: 4
   completed_phases: 2
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (Full Chain Data Smoke) — VERIFYING
+Phase: 13 (Full Chain Data Smoke) — EXECUTING
 Plan: 9 of 9
-Status: Verifying Phase 13 after Plan 13-09 checkpoint
-Last activity: 2026-07-18 — Plan 13-09 recorded one immutable local projection checkpoint after passing live preflight
+Status: Gaps found — next gap closure must restore local projection before a fresh run
+Last activity: 2026-07-18 — Phase 13 re-verification confirmed three production-chain blockers after Plan 13-09
 
 ## Performance Metrics
 
@@ -85,7 +85,9 @@ Last activity: 2026-07-18 — Plan 13-09 recorded one immutable local projection
 
 ### Active Blockers
 
-- [ ] Plan 13-09 passed the official live preflight, but its fresh run stopped at `local_projection/target_projection_unmet` before D1 ingest or browser observation. Provider D1/API and canonical remote Dashboard/viewer proof remain pending; the failed run is immutable and cannot be retried.
+- [ ] A new collision-gated run must restore the selected target-managed local projection and reach terminal local proof; the failed Plan 13-09 run is immutable and cannot be retried.
+- [ ] Provider-backed D1/API/admin proof is still missing for one exact selected-production tuple.
+- [ ] Selected-production Dashboard/viewer receipts and a terminal remote verifier result are still missing.
 
 ### Recent Context (Brownfield注释)
 
@@ -102,14 +104,14 @@ Last activity: 2026-07-18 — Plan 13-09 recorded one immutable local projection
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T15:17:20.378Z
-**Stopped at:** 13-09 local-only checkpoint; awaiting phase verification
+**Last session:** 2026-07-18T15:46:34.847Z
+**Stopped at:** Phase 13 re-verification gaps_found (9/13)
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Re-run Phase 13 goal verification against the new Plan 13-09 Summary and immutable local-only checkpoint. Do not retry or overwrite run `p13-09-cfd3fd1d300b45109571668645774915`.
+Run `$gsd-plan-phase 13 --gaps`. The next plan must restore local projection before using a different collision-gated run ID; do not retry or overwrite run `p13-09-cfd3fd1d300b45109571668645774915`.
 ```
 
 **If interrupted, resume by:**
@@ -128,7 +130,7 @@ Re-run Phase 13 goal verification against the new Plan 13-09 Summary and immutab
 
 ## Operator Next Steps
 
-- Re-run Phase 13 verification. The selected-target live preflight is green, but a future gap plan must resolve the local target projection precondition before using a different fresh run ID. Do not rewrite Attempts A-E or the Plan 13-09 checkpoint evidence.
+- Run `$gsd-plan-phase 13 --gaps`. The selected-target live preflight is green, but the next gap plan must resolve local target projection before a different fresh run can attempt D1/API/Dashboard/viewer proof. Do not rewrite Attempts A-E or the Plan 13-09 checkpoint evidence.
 
 ## Decisions
 

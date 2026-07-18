@@ -146,11 +146,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-All nine Phase 13 plans have executed. Plan 13-09 passed the official live preflight but stopped at `local_projection/target_projection_unmet` before ingest, browser observation, or remote mode. Re-run phase verification before planning the next gap closure:
+All nine Phase 13 plans have executed, but re-verification remains `gaps_found` at 9/13 must-haves. The next gap closure must restore local projection before a different fresh run can prove provider-backed D1/API/admin and selected-canonical Dashboard/viewer:
 
 ```text
 $gsd-plan-phase 13 --gaps
 ```
 
 ---
-*Last updated: 2026-07-18 after Phase 13 Plan 09 execution checkpoint*
+*Last updated: 2026-07-18 after Phase 13 Plan 09 re-verification (gaps_found)*
