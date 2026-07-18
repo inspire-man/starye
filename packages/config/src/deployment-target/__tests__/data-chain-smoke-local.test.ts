@@ -1,6 +1,6 @@
 import type { DataChainEvidence } from '../data-chain-evidence'
 import path from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
@@ -49,6 +49,10 @@ async function loadVerify() {
   return import(/* @vite-ignore */ new URL('../../../../../scripts/verify-data-chain-smoke.ts', import.meta.url).href) as Promise<VerifyModule>
 }
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 function successDependencies() {
   const candidate = createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId })
   return {
@@ -96,6 +100,45 @@ function localReceipt(surface: 'local_projection' | 'local_d1_readiness' | 'serv
 }
 
 describe('phase 13 local smoke runner', () => {
+  it('sanitizes an ambient remote token through the default local preflight wiring', async () => {
+    vi.stubEnv('CLOUDFLARE_API_TOKEN', 'ambient-test-token')
+    const { runDataChainSmoke } = await loadSmoke()
+    const candidate = createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId })
+
+    const result = await runDataChainSmoke(baseOptions, {
+      resolveTarget: () => ({
+        id: baseOptions.target,
+        profile: { local: { wranglerProfile: 'starye-org' } },
+      }),
+      collectProjectionIssues: async () => [],
+      environment: { CLOUDFLARE_API_TOKEN: 'ambient-test-token' },
+      inspectLocalD1: async () => ({ status: 'ready' }),
+      checkServices: async () => ({ exitCode: 0, stdout: '[OK] all services', stderr: '' }),
+      observeGatewayAuth: async () => ({ status: 302, location: 'http://localhost:8080/auth/login' }),
+      runFixture: async () => ({ itemCode: candidate.itemCode, itemCount: 1 }),
+      snapshot: async () => ({
+        status: 'found',
+        itemCode: candidate.itemCode,
+        itemId: 'movie-42',
+        itemCount: 1,
+      }),
+      fetchGatewayApi: async () => ({
+        status: 200,
+        itemCode: candidate.itemCode,
+        itemId: 'movie-42',
+      }),
+      now: () => '2026-07-16T00:00:00.000Z',
+      write: async () => {},
+    })
+
+    expect(result.exitCode).toBe(CHECKPOINT_EXIT_CODE)
+    expect(result.evidence).toMatchObject({
+      ingestState: 'resolved_pending_observation',
+      aggregate: 'pending',
+      itemId: 'movie-42',
+    })
+  })
+
   it('uses local validate without a live executor and stops projection failures before fixture work', async () => {
     const { runDataChainSmoke } = await loadSmoke()
     const dependencies = successDependencies()

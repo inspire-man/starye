@@ -27,6 +27,7 @@ async function loadNodeTestRuntime() {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   const { fs } = await loadNodeTestRuntime()
   await Promise.all(fixtureRoots.splice(0).map(root => fs.rm(root, { force: true, recursive: true })))
 })
@@ -173,6 +174,12 @@ describe('target-profile CLI parser', () => {
   })
 
   it('passes local preflight only when every projected consumer is complete', async () => {
+    await expect(runLocalPreflight(await createProjectionFixture())).resolves.toBeUndefined()
+  })
+
+  it('sanitizes an ambient remote token before local CLI preflight', async () => {
+    vi.stubEnv('CLOUDFLARE_API_TOKEN', 'ambient-test-token')
+
     await expect(runLocalPreflight(await createProjectionFixture())).resolves.toBeUndefined()
   })
 
