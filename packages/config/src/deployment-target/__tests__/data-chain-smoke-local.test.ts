@@ -29,6 +29,7 @@ interface SmokeModule {
 
 interface ObservationModule {
   parseDataChainSurfaceObservationArgs: (argv: readonly string[]) => { mode: 'local' | 'remote', target: string, runId: string }
+  observeSurfaceDefault: (input: unknown, puppeteer: unknown) => Promise<{ status: 'passed' | 'unavailable', itemCode?: string, itemId?: string }>
   observeDataChainSurfaces: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
 }
 
@@ -316,6 +317,58 @@ describe('phase 13 local smoke runner', () => {
       expect.objectContaining({ surface: 'dashboard', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
       expect.objectContaining({ surface: 'viewer', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
     ])
+  })
+
+  it('waits for the exact SPA tuple before the default browser observer can pass', async () => {
+    const { observeSurfaceDefault } = await loadObservation()
+    const events: string[] = []
+    const waitForFunction = vi.fn(async () => {
+      events.push('wait-for-tuple')
+      return {}
+    })
+    const evaluate = vi.fn(async () => {
+      events.push('evaluate-tuple')
+      return { codeMatches: true, idMatches: true }
+    })
+    const close = vi.fn(async () => {
+      events.push('close')
+    })
+    const puppeteer = {
+      launch: vi.fn(async () => ({
+        newPage: async () => ({
+          goto: async () => {
+            events.push('goto')
+            return { ok: () => true }
+          },
+          url: () => 'http://localhost:8080/dashboard/movies',
+          waitForFunction,
+          evaluate,
+        }),
+        close,
+      })),
+    }
+
+    await expect(observeSurfaceDefault({
+      mode: 'local',
+      targetId: baseOptions.target,
+      runId: baseOptions.runId,
+      itemCode: 'starye-smoke-local-20260716t000000z',
+      itemId: 'movie-42',
+      surface: 'dashboard',
+      baseUrl: 'http://localhost:8080',
+      path: '/dashboard/movies',
+    }, puppeteer)).resolves.toEqual({
+      status: 'passed',
+      itemCode: 'starye-smoke-local-20260716t000000z',
+      itemId: 'movie-42',
+    })
+    expect(waitForFunction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { polling: 'mutation', timeout: 30_000 },
+      'starye-smoke-local-20260716t000000z',
+      'movie-42',
+    )
+    expect(events).toEqual(['goto', 'wait-for-tuple', 'evaluate-tuple', 'close'])
   })
 
   it('persists a Dashboard checkpoint when the browser cannot correlate the derived item', async () => {

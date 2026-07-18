@@ -351,13 +351,21 @@ describe('phase 13 remote smoke runner', () => {
     const invalidFiles = new Map<string, string>()
     putPair(invalidFiles, pending)
     const invalidObserver = vi.fn(async () => ({ status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string }))
-    await expect(observeDataChainSurfaces({ mode: 'remote', target: baseOptions.target, runId: baseOptions.runId }, {
+    const invalidResult = await observeDataChainSurfaces({ mode: 'remote', target: baseOptions.target, runId: baseOptions.runId }, {
       ...dependencies,
       read: async (file: string) => invalidFiles.get(file),
       write: async (file: string, contents: string) => { invalidFiles.set(file, contents) },
       resolveTarget: () => ({ id: baseOptions.target, profile: { urls: { gateway: 'http://localhost:3001' } } }),
       observeSurface: invalidObserver,
-    })).rejects.toThrow('HTTPS origin without a direct port')
+    })
+    expect(invalidResult.exitCode).toBe(CHECKPOINT_EXIT_CODE)
+    expect(invalidResult.evidence.observations.at(-1)).toMatchObject({
+      surface: 'dashboard',
+      status: 'checkpoint',
+      checkpoint: 'dashboard_auth_unavailable',
+    })
+    expect(invalidFiles.get(evidencePath(baseOptions.runId, 'remote', 'json'))).toBe(serializeDataChainEvidenceJson(invalidResult.evidence))
+    expect(invalidFiles.get(evidencePath(baseOptions.runId, 'remote', 'md'))).toBe(renderDataChainEvidenceMarkdown(invalidResult.evidence))
     expect(invalidObserver).not.toHaveBeenCalled()
   })
 

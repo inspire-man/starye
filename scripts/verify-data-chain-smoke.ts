@@ -10,10 +10,8 @@ import {
 } from '../packages/config/src/deployment-target/index'
 import {
   DATA_CHAIN_EVIDENCE_ROOT,
-
   getDataChainEvidencePaths,
   parseDataChainSmokeArgs,
-  runDataChainSmoke,
 } from './data-chain-smoke'
 
 export interface VerifyDataChainSmokeDependencies {
@@ -77,13 +75,15 @@ export async function inspectDataChainSmokeVerification(
   options: DataChainSmokeOptions,
   dependencies: VerifyDataChainSmokeDependencies = {},
 ): Promise<DataChainSmokeVerificationResult> {
-  const run = dependencies.run ?? (async input => (await runDataChainSmoke(input)).exitCode)
-  const exitCode = await run(options)
-  if (exitCode !== 0 && exitCode !== CHECKPOINT_EXIT_CODE) {
+  const runnerExitCode = dependencies.run ? await dependencies.run(options) : undefined
+  if (runnerExitCode !== undefined && runnerExitCode !== 0 && runnerExitCode !== CHECKPOINT_EXIT_CODE) {
     throw new Error('Data-chain smoke runner returned an unexpected exit code.')
   }
   const evidence = await loadPair(options, dependencies.read ?? readDefault)
-  if (exitCode === 0 && evidence.ingestState === 'resolved' && evidence.aggregate === 'passed') {
+  if (evidence.ingestState === 'resolved' && evidence.aggregate === 'passed') {
+    if (runnerExitCode !== undefined && runnerExitCode !== 0) {
+      throw new Error('Data-chain smoke runner exit code does not match persisted evidence.')
+    }
     return {
       exitCode: 0,
       outcome: 'terminal_passed',
@@ -91,7 +91,10 @@ export async function inspectDataChainSmokeVerification(
       evidence,
     }
   }
-  if (exitCode === CHECKPOINT_EXIT_CODE && validPendingOrCheckpoint(evidence)) {
+  if (validPendingOrCheckpoint(evidence)) {
+    if (runnerExitCode !== undefined && runnerExitCode !== CHECKPOINT_EXIT_CODE) {
+      throw new Error('Data-chain smoke runner exit code does not match persisted evidence.')
+    }
     return {
       exitCode: CHECKPOINT_EXIT_CODE,
       outcome: evidence.aggregate,

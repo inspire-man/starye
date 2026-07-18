@@ -68,6 +68,11 @@ interface PuppeteerResponse {
 interface PuppeteerPage {
   goto: (url: string, options: { waitUntil: 'domcontentloaded', timeout: number }) => Promise<PuppeteerResponse | null>
   url: () => string
+  waitForFunction: <Args extends readonly unknown[]>(
+    pageFunction: (...args: Args) => boolean,
+    options: { polling: 'mutation', timeout: number },
+    ...args: Args
+  ) => Promise<unknown>
   evaluate: <T, Args extends readonly unknown[]>(pageFunction: (...args: Args) => T, ...args: Args) => Promise<T>
 }
 
@@ -254,13 +259,16 @@ function crawlerPuppeteer(): PuppeteerModule {
   return createRequire(crawlerPackage)('puppeteer') as PuppeteerModule
 }
 
-async function observeSurfaceDefault(input: BrowserSurfaceObservationInput): Promise<BrowserSurfaceObservationResult> {
+export async function observeSurfaceDefault(
+  input: BrowserSurfaceObservationInput,
+  puppeteer: PuppeteerModule = crawlerPuppeteer(),
+): Promise<BrowserSurfaceObservationResult> {
   const endpoint = new URL(input.path, `${input.baseUrl}/`)
   const base = new URL(input.baseUrl)
-  if (endpoint.origin !== base.origin || endpoint.pathname !== input.path || endpoint.port) {
+  if (endpoint.origin !== base.origin || endpoint.pathname !== input.path) {
     return { status: 'unavailable' }
   }
-  const browser = await crawlerPuppeteer().launch({
+  const browser = await puppeteer.launch({
     headless: process.env.CI === 'true',
     userDataDir: path.resolve(import.meta.dirname, `../.target-runs/phase13-browser-profile/${input.targetId}`),
   })
@@ -269,6 +277,16 @@ async function observeSurfaceDefault(input: BrowserSurfaceObservationInput): Pro
     const response = await page.goto(endpoint.href, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     const finalUrl = new URL(page.url())
     if (!response?.ok() || finalUrl.origin !== endpoint.origin || finalUrl.pathname !== endpoint.pathname) {
+      return { status: 'unavailable' }
+    }
+    await page.waitForFunction((itemCode, itemId) => {
+      const bodyText = document.body?.textContent ?? ''
+      const documentHtml = document.documentElement?.outerHTML ?? ''
+      return (bodyText.includes(itemCode) || documentHtml.includes(itemCode))
+        && (bodyText.includes(itemId) || documentHtml.includes(itemId))
+    }, { polling: 'mutation', timeout: 30_000 }, input.itemCode, input.itemId)
+    const settledUrl = new URL(page.url())
+    if (settledUrl.origin !== endpoint.origin || settledUrl.pathname !== endpoint.pathname) {
       return { status: 'unavailable' }
     }
     const tuple = await page.evaluate((itemCode, itemId) => {
@@ -362,7 +380,23 @@ export async function observeDataChainSurfaces(
   const observeSurface = dependencies.observeSurface ?? observeSurfaceDefault
   const now = dependencies.now ?? (() => new Date().toISOString())
   const evidence = await loadEvidencePair(options, evidenceRoot, read)
-  const baseUrl = resolveObserverBase(options, resolveTarget)
+  let baseUrl: string
+  try {
+    baseUrl = resolveObserverBase(options, resolveTarget)
+  }
+  catch {
+    const dashboard = appendBrowserObservation(evidence, {
+      targetId: evidence.targetId,
+      runId: evidence.runId,
+      itemCode: evidence.itemCode,
+      itemId: evidence.itemId,
+      surface: 'dashboard',
+      status: 'checkpoint',
+      checkpoint: 'dashboard_auth_unavailable',
+    })
+    await writePair(options, evidenceRoot, dashboard.evidence, write)
+    return dashboard
+  }
 
   const dashboard = await captureSurface(evidence, 'dashboard', baseUrl, observeSurface, now)
   await writePair(options, evidenceRoot, dashboard.evidence, write)

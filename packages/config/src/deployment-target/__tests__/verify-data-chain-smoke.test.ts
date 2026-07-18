@@ -1,5 +1,5 @@
 import type { DataChainEvidence, DataChainMode, DataChainSurface } from '../data-chain-evidence'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -142,6 +142,15 @@ afterEach(async () => {
 })
 
 describe('phase 13 provenance-aware verifier', () => {
+  it('keeps stored-artifact verification independent from smoke runner execution', async () => {
+    const verifierSource = await readFile(
+      new URL('../../../../../scripts/verify-data-chain-smoke.ts', import.meta.url),
+      'utf8',
+    )
+
+    expect(verifierSource).not.toContain('runDataChainSmoke')
+  })
+
   it.each(['local', 'remote'] as const)('accepts a complete receipt-backed %s terminal pair', async (mode) => {
     const { verifyDataChainSmoke } = await loadVerify()
     const root = await temporaryRoot()
