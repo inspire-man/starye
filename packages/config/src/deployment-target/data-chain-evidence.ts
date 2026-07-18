@@ -42,6 +42,8 @@ export type DataChainReceiptCapture = (typeof dataChainReceiptCaptureValues)[num
 
 export const dataChainCheckpointValues = [
   'target_projection_unmet',
+  'projection-mismatch',
+  'local-api-token-shadowing',
   'local_d1_unready',
   'local_d1_readiness_unmet',
   'fixture_seed_incomplete',
