@@ -589,6 +589,10 @@ const tableColumns = [
         </div>
       </template>
 
+      <template #cell-code="{ item }">
+        <span :data-phase13-item-id="item.id">{{ item.code }}</span>
+      </template>
+
       <template #cell-actors="{ item }">
         <span v-if="item.actorNames && item.actorNames.length > 0" class="actor-tags">
           <span v-for="(actor, idx) in item.actorNames.slice(0, 3)" :key="idx" class="actor-tag">
