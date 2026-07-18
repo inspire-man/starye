@@ -5,15 +5,15 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Completed 13-05-PLAN.md
-last_updated: "2026-07-18T02:59:40.222Z"
+stopped_at: Completed 13-06-PLAN.md
+last_updated: "2026-07-18T03:32:05.625Z"
 last_activity: 2026-07-18
-last_activity_desc: Phase 13 execution started
+last_activity_desc: Completed 13-06-PLAN.md
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 13
+  completed_plans: 14
   percent: 50
 ---
 
@@ -41,14 +41,14 @@ progress:
 ## Current Position
 
 Phase: 13 (full-chain-data-smoke) — EXECUTING
-Plan: 2 of 8
+Plan: 6 of 8
 Status: Ready to execute
-Last activity: 2026-07-18 — Phase 13 execution started
+Last activity: 2026-07-18 - Completed 13-06-PLAN.md
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 10 / 16
+**Plans completed:** 14 / 16
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -70,6 +70,7 @@ Last activity: 2026-07-18 — Phase 13 execution started
 | Phase 11 P02 | 20min | 2 tasks | 5 files |
 | Phase 12 P02 | 11h 16m | 3 tasks | 57 files |
 | Phase 13 P05 | 22min | 2 tasks | 8 files |
+| Phase 13 P06 | 27min | 2 tasks | 7 files |
 
 ### Open Todos (carried across phases)
 
@@ -100,8 +101,8 @@ Last activity: 2026-07-18 — Phase 13 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T02:59:40.204Z
-**Stopped at:** Completed 13-05-PLAN.md
+**Last session:** 2026-07-18T03:32:05.597Z
+**Stopped at:** Completed 13-06-PLAN.md
 **Resume file:** None
 
 **Next recommended action:**
@@ -162,3 +163,6 @@ Execute the Phase 13 gap-closure chain: restore the one-item contract, require p
 - [Phase 12]: GitHub mutation workflows resolve an explicit target to its mapped Environment, then use one CI preparation gate and closed generated outputs rather than inline remote identity. — Locked by 12-03 workflow contract
 - [Phase 13]: Phase 13 accepts exactly one target/run-derived primary code and one successful D1 row; no sibling or batch compatibility remains. — Restores the canonical 13-02 contract and closes verified G-01 drift.
 - [Phase 13]: The shared ApiClient.syncMovie transport remains unchanged; the bounded adapter supplies one validated fixture through it. — GitNexus reported HIGH impact on the general crawler transport, so scope remains at the smoke adapter.
+- [Phase 13]: Prepared smoke child output is valid only when its code equals the target/run-derived primary code and its count is one. — 13-06 one-item prepared observation contract
+- [Phase 13]: Read-only D1 snapshots query one prepared code and accept exactly one non-R18 movie with one active player. — 13-06 fixed snapshot parser
+- [Phase 13]: Local and remote smoke runners turn count, code, or id mismatches into non-success checkpoint evidence before API or browser proof. — 13-06 orchestration gate

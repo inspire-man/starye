@@ -32,8 +32,8 @@
 
 ### Data Chain Smoke
 
-- [ ] **DATA-01**: Operator can run local smoke through `http://localhost:8080/...` for API, auth/dashboard, and content routes.
-- [ ] **DATA-02**: Operator can verify local D1 schema and minimal data setup before production deploy.
+- [x] **DATA-01**: Operator can run local smoke through `http://localhost:8080/...` for API, auth/dashboard, and content routes.
+- [x] **DATA-02**: Operator can verify local D1 schema and minimal data setup before production deploy.
 - [x] **DATA-03**: Operator can run a targeted crawler or fixture against the selected API target and record the resulting item identity.
 - [x] **DATA-04**: Operator can verify the crawled item exists in D1/API/admin state.
 - [ ] **DATA-05**: Operator can manage or validate the crawled item through dashboard.
@@ -95,8 +95,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPL-04 | Phase 12 | Complete |
 | DEPL-05 | Phase 12 | Complete |
 | DEPL-06 | Phase 12 | Complete |
-| DATA-01 | Phase 13 | Pending |
-| DATA-02 | Phase 13 | Pending |
+| DATA-01 | Phase 13 | Complete |
+| DATA-02 | Phase 13 | Complete |
 | DATA-03 | Phase 13 | Complete |
 | DATA-04 | Phase 13 | Complete |
 | DATA-05 | Phase 13 | Pending |
