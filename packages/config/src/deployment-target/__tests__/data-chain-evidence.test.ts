@@ -1,5 +1,6 @@
 import type {
   CreateDataChainExecutionReceiptInput,
+  DataChainCheckpoint,
   DataChainMode,
   DataChainSurface,
 } from '../data-chain-evidence'
@@ -26,6 +27,11 @@ const tuple = {
   itemCode: createDataChainCandidate({ targetId: 'starye-org', runId: 'phase13-run-20260716' }).itemCode,
   itemId: 'movie-42',
 } as const
+
+const preflightDiagnosticCheckpoints = [
+  'projection-mismatch',
+  'local-api-token-shadowing',
+] as const satisfies readonly DataChainCheckpoint[]
 
 function receiptFor(
   surface: DataChainSurface,
@@ -121,6 +127,34 @@ describe('phase 13 deterministic evidence contract', () => {
     expect(evidence.aggregate).toBe('checkpoint')
     expect(validateDataChainEvidence(evidence)).toEqual([])
   })
+
+  it.each(preflightDiagnosticCheckpoints)(
+    'round-trips the closed preflight diagnostic checkpoint %s',
+    (checkpoint) => {
+      const evidence = createPreIngestEvidence({
+        targetId: tuple.targetId,
+        runId: tuple.runId,
+        candidateItemCode: tuple.itemCode,
+        mode: 'local',
+        timestamp: '2026-07-16T00:00:00.000Z',
+        observation: {
+          surface: 'local_projection',
+          status: 'checkpoint',
+          checkpoint,
+        },
+      })
+      const json = serializeDataChainEvidenceJson(evidence)
+      const markdown = renderDataChainEvidenceMarkdown(evidence)
+
+      expect(validateDataChainEvidence(evidence)).toEqual([])
+      expect(JSON.parse(json)).toMatchObject({
+        observations: [{ checkpoint }],
+      })
+      expect(markdown).toContain(`| local_projection | checkpoint |  | ${checkpoint} |`)
+      expect(json).not.toMatch(/ambient-test-token|Local scope must not set/i)
+      expect(markdown).not.toMatch(/ambient-test-token|Local scope must not set/i)
+    },
+  )
 
   it('rejects passed pre-ingest rows, fabricated ids, and post-ingest surfaces before resolution', () => {
     const evidence = createPreIngestEvidence({
