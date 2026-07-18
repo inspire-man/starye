@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
-current_phase_name: Full Chain Data Smoke
-status: ready_to_execute
-stopped_at: "Phase 13 gap-closure plans 13-05 through 13-08 passed plan verification"
-last_updated: "2026-07-18T00:00:00.000Z"
+current_phase_name: full-chain-data-smoke
+status: executing
+stopped_at: Completed 13-05-PLAN.md
+last_updated: "2026-07-18T02:59:40.222Z"
 last_activity: 2026-07-18
-last_activity_desc: Phase 13 gap-closure plans verified and ready for execution
+last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 10
+  completed_plans: 13
   percent: 50
 ---
 
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 — Full Chain Data Smoke
-Plan: 13-05 through 13-08 gap closure ready to execute
-Status: Ready to execute — restore one-item contract, require provenance, then run the local and selected-target checkpoints
-Last activity: 2026-07-18 — gap-closure plans passed the plan checker
+Phase: 13 (full-chain-data-smoke) — EXECUTING
+Plan: 2 of 8
+Status: Ready to execute
+Last activity: 2026-07-18 — Phase 13 execution started
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Last activity: 2026-07-18 — gap-closure plans passed the plan checker
 | Phase 11 P01 | 42min | 3 tasks | 11 files |
 | Phase 11 P02 | 20min | 2 tasks | 5 files |
 | Phase 12 P02 | 11h 16m | 3 tasks | 57 files |
+| Phase 13 P05 | 22min | 2 tasks | 8 files |
 
 ### Open Todos (carried across phases)
 
@@ -99,9 +100,9 @@ Last activity: 2026-07-18 — gap-closure plans passed the plan checker
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T00:00:00.000Z
-**Stopped at:** Phase 13 gap-closure plans passed the revision gate
-**Resume file:** .planning/phases/13-full-chain-data-smoke/13-08-PLAN.md
+**Last session:** 2026-07-18T02:59:40.204Z
+**Stopped at:** Completed 13-05-PLAN.md
+**Resume file:** None
 
 **Next recommended action:**
 
@@ -159,3 +160,5 @@ Execute the Phase 13 gap-closure chain: restore the one-item contract, require p
 - [Phase 12]: Direct remote mutation uses a closed registry, fresh child environment, and run-scoped prepared context rather than ambient target identity or caller argv.
 - [Phase 12]: Browser runtime values use a closed typed allowlist; Vite reads only generated selected-target dotenv through audited entry adapters.
 - [Phase 12]: GitHub mutation workflows resolve an explicit target to its mapped Environment, then use one CI preparation gate and closed generated outputs rather than inline remote identity. — Locked by 12-03 workflow contract
+- [Phase 13]: Phase 13 accepts exactly one target/run-derived primary code and one successful D1 row; no sibling or batch compatibility remains. — Restores the canonical 13-02 contract and closes verified G-01 drift.
+- [Phase 13]: The shared ApiClient.syncMovie transport remains unchanged; the bounded adapter supplies one validated fixture through it. — GitNexus reported HIGH impact on the general crawler transport, so scope remains at the smoke adapter.

@@ -16,7 +16,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | 3/4 | In Progress|  |
+| 13 | 5/8 | In Progress|  |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
 
 ## Phase Details
@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 4/8 plans executed
+**Plans:** 5/8 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -98,7 +98,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 4** *(gap closure; blocked on Wave 3 completion)*
 
-- [ ] 13-05-PLAN.md — Restore the canonical one-item fixture and evidence contract.
+- [x] 13-05-PLAN.md — Restore the canonical one-item fixture and evidence contract.
 
 **Wave 5** *(gap closure; blocked on Wave 4 completion)*
 

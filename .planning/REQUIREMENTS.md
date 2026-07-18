@@ -34,11 +34,11 @@
 
 - [ ] **DATA-01**: Operator can run local smoke through `http://localhost:8080/...` for API, auth/dashboard, and content routes.
 - [ ] **DATA-02**: Operator can verify local D1 schema and minimal data setup before production deploy.
-- [ ] **DATA-03**: Operator can run a targeted crawler or fixture against the selected API target and record the resulting item identity.
-- [ ] **DATA-04**: Operator can verify the crawled item exists in D1/API/admin state.
+- [x] **DATA-03**: Operator can run a targeted crawler or fixture against the selected API target and record the resulting item identity.
+- [x] **DATA-04**: Operator can verify the crawled item exists in D1/API/admin state.
 - [ ] **DATA-05**: Operator can manage or validate the crawled item through dashboard.
 - [ ] **DATA-06**: Operator can view the crawled/managed item through the selected canonical gateway domain.
-- [ ] **DATA-07**: Operator can capture local and production smoke evidence as verification artifacts.
+- [x] **DATA-07**: Operator can capture local and production smoke evidence as verification artifacts.
 
 ### Tests And Ops
 
@@ -46,7 +46,7 @@
 - [x] **TEST-02**: Automated tests cover target profile validation and fail-closed mismatch cases.
 - [x] **TEST-03**: Automated tests cover domain-aware gateway/API/auth configuration.
 - [x] **TEST-04**: Automated tests cover deploy, migration, and crawler workflow target resolution without real secrets.
-- [ ] **TEST-05**: Smoke scripts produce repeatable local and production verification output.
+- [x] **TEST-05**: Smoke scripts produce repeatable local and production verification output.
 - [ ] **TEST-06**: RUNBOOK documents account/domain switching, required secrets, deploy, smoke, rollback, and recovery.
 - [ ] **TEST-07**: Final verification checklist maps every v1.2 requirement to command output or artifact evidence.
 
@@ -97,16 +97,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPL-06 | Phase 12 | Complete |
 | DATA-01 | Phase 13 | Pending |
 | DATA-02 | Phase 13 | Pending |
-| DATA-03 | Phase 13 | Pending |
-| DATA-04 | Phase 13 | Pending |
+| DATA-03 | Phase 13 | Complete |
+| DATA-04 | Phase 13 | Complete |
 | DATA-05 | Phase 13 | Pending |
 | DATA-06 | Phase 13 | Pending |
-| DATA-07 | Phase 13 | Pending |
+| DATA-07 | Phase 13 | Complete |
 | TEST-01 | Phase 14 | Pending |
 | TEST-02 | Phase 11 | Complete |
 | TEST-03 | Phase 12 | Complete |
 | TEST-04 | Phase 12 | Complete |
-| TEST-05 | Phase 13 | Pending |
+| TEST-05 | Phase 13 | Complete |
 | TEST-06 | Phase 14 | Pending |
 | TEST-07 | Phase 14 | Pending |
 
