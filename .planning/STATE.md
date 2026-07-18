@@ -5,10 +5,10 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Completed 13-07-PLAN.md
-last_updated: "2026-07-18T05:21:05.356Z"
+stopped_at: 13-08 remote target_preflight_unmet checkpoint
+last_updated: "2026-07-18T09:16:51.725Z"
 last_activity: 2026-07-18
-last_activity_desc: Completed 13-06-PLAN.md
+last_activity_desc: 13-08 local terminal proof; remote target_preflight_unmet checkpoint
 progress:
   total_phases: 4
   completed_phases: 2
@@ -41,9 +41,9 @@ progress:
 ## Current Position
 
 Phase: 13 (full-chain-data-smoke) — EXECUTING
-Plan: 7 of 8
-Status: Ready to execute
-Last activity: 2026-07-18 - Completed 13-06-PLAN.md
+Plan: 8 of 8
+Status: Checkpoint — local terminal proof passed; selected-target preflight unmet
+Last activity: 2026-07-18 - Attempt D local terminal proof; remote preflight checkpoint
 
 ## Performance Metrics
 
@@ -85,7 +85,7 @@ Last activity: 2026-07-18 - Completed 13-06-PLAN.md
 
 ### Active Blockers
 
-- [ ] Phase 13 must execute the verified 13-05 through 13-07 code/provenance plans before 13-08 can attempt a new local or selected-target run. The external local secret, Dashboard session, and Cloudflare/provider gates remain fail-closed checkpoints rather than completion evidence.
+- [ ] Phase 13 Attempt D proved the exact local chain, but selected-target `remote_preflight/target_preflight_unmet` stopped Task 2 before any remote mutation. Provider ownership, remote D1/API, and canonical remote Dashboard/viewer proof remain pending.
 
 ### Recent Context (Brownfield注释)
 
@@ -102,14 +102,14 @@ Last activity: 2026-07-18 - Completed 13-06-PLAN.md
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T05:21:05.338Z
-**Stopped at:** Completed 13-07-PLAN.md
+**Last session:** 2026-07-18T09:16:51.725Z
+**Stopped at:** 13-08 remote target_preflight_unmet checkpoint
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Execute the Phase 13 gap-closure chain: restore the one-item contract, require provenance-backed evidence, then attempt the local and selected-target checkpoints.
+Resume only from the Attempt D selected-target preflight checkpoint after the authorized target credential/ownership prerequisites are available; keep the proven local pair immutable.
 ```
 
 **If interrupted, resume by:**
@@ -128,7 +128,7 @@ Execute the Phase 13 gap-closure chain: restore the one-item contract, require p
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 13 --gaps-only`; the final 13-08 checkpoint accepts only a provenance-backed local/remote run or an honest redacted external-boundary checkpoint.
+- Resolve the authorized selected-target preflight/ownership prerequisite, then resume Phase 13 from the 13-08 remote checkpoint; do not rerun or rewrite Attempt D local evidence.
 
 ## Decisions
 

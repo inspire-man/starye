@@ -2,20 +2,20 @@
 phase: 13-full-chain-data-smoke
 plan: "08"
 subsystem: data-chain-smoke
-tags: [execution, gateway, oauth, checkpoint-evidence, provenance, fail-closed]
+tags: [execution, gateway, provenance, codex-iab, local-proof, remote-checkpoint, fail-closed]
 
 requires:
   - phase: 13-07
     provides: tuple-bound runner, provider, and browser provenance receipts plus artifact-only verification
 provides:
-  - two fresh, independent local code-2 checkpoint pairs at target projection and Dashboard auth/session boundaries
-  - redacted Codex built-in browser diagnosis of the unresolved local GitHub OAuth token exchange
-  - explicit prohibition on remote smoke without a terminal receipt-backed local pair from the same fresh run
+  - terminal local one-item proof through local D1, Gateway API, authorized Dashboard, and Gateway viewer
+  - repository-core-owned Dashboard/viewer receipts captured through the accepted live Codex IAB observeSurface adapter
+  - immutable selected-target remote target_preflight_unmet checkpoint recorded before any remote mutation
 affects: [13-verification, phase-14, selected-target-smoke]
 
 tech-stack:
   added: []
-  patterns: [fresh-run checkpoint retention, exact artifact-wrapper verification, local-before-remote gating]
+  patterns: [repository-core-owned IAB observation, exact local-to-remote tuple gating, fail-closed remote preflight]
 
 key-files:
   created:
@@ -23,155 +23,175 @@ key-files:
     - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-0b30d5c722be483d67f65305/local.md
     - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-50bd5b54f177491fa01e46c7908cd1bd/local.json
     - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-50bd5b54f177491fa01e46c7908cd1bd/local.md
+    - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-13fe3c66290d40eeaf294b4259afe411/local.json
+    - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-13fe3c66290d40eeaf294b4259afe411/local.md
+    - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-9c808cff04cc438d997beeaa8ecabafe/local.json
+    - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-9c808cff04cc438d997beeaa8ecabafe/local.md
+    - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-9c808cff04cc438d997beeaa8ecabafe/remote.json
+    - .planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-9c808cff04cc438d997beeaa8ecabafe/remote.md
   modified:
     - .planning/phases/13-full-chain-data-smoke/13-08-SUMMARY.md
+    - .planning/STATE.md
 
 key-decisions:
-  - "Keep Attempt A and Attempt B as separate immutable checkpoint runs; never promote or rewrite either pair."
-  - "Treat Attempt B dashboard_auth_unavailable as the honest gateway auth/session boundary after the one-item local runner reached pending observation."
-  - "Do not start Task 2 or issue any remote command because neither local pair is terminal resolved/passed."
-  - "Keep generated evidence untracked and record only allowlisted paths, tuple metadata, and outcomes."
+  - "Preserve Attempts A, B, C, and D as immutable, intentionally untracked evidence; never append receipts to or rewrite an earlier run."
+  - "Accept Attempt D local proof only because repository observeDataChainSurfaces core retained evidence validation, ordering, receipt construction, rendering, and writes while the Codex IAB adapter supplied live navigation only."
+  - "Allow Task 2 to start only from Attempt D's exact terminal local pair, then stop at target_preflight_unmet before any remote mutation."
+  - "Keep Phase 13 and every remote-dependent requirement pending because the selected-target external chain is not proven."
 
 patterns-established:
-  - "A fresh execution checkpoint is an auditable non-success result, not Phase 13 completion evidence."
-  - "OAuth diagnosis uses the Codex built-in browser; the repository observer captures only the current unavailable session state."
+  - "Terminal local proof can authorize a remote attempt without implying production proof."
+  - "A selected-target preflight checkpoint with itemId null is an auditable non-success result and proves no remote mutation."
 
 requirements-completed: []
 requirements-pending: [DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05]
 
 coverage:
   - id: D1
-    description: Two fresh local invocations retained schema-valid redacted code-2 checkpoints at distinct external boundaries.
+    description: Attempt D proves one exact local tuple through local D1, canonical Gateway API, authorized Dashboard, and Gateway viewer with ordered provenance receipts.
+    requirement: DATA-07
+    verification:
+      - kind: e2e
+        ref: pnpm smoke:data-chain:verify -- --mode local --target starye-org --run-id p13-08-9c808cff04cc438d997beeaa8ecabafe --evidence-dir .planning/phases/13-full-chain-data-smoke/evidence
+        status: pass
+      - kind: manual_procedural
+        ref: Human inspection of the authorized Codex IAB Dashboard-before-viewer observation
+        status: pass
+    human_judgment: false
+  - id: D2
+    description: Attempt D remote execution stopped at selected-target target_preflight_unmet before provider mutation and therefore does not prove the production external chain.
     requirement: DATA-07
     verification:
       - kind: other
-        ref: pnpm smoke:data-chain:verify -- --mode local --target starye-org --run-id p13-08-0b30d5c722be483d67f65305 --evidence-dir .planning/phases/13-full-chain-data-smoke/evidence
-        status: pass
-      - kind: other
-        ref: pnpm smoke:data-chain:verify -- --mode local --target starye-org --run-id p13-08-50bd5b54f177491fa01e46c7908cd1bd --evidence-dir .planning/phases/13-full-chain-data-smoke/evidence
-        status: pass
+        ref: pnpm smoke:data-chain:verify -- --mode remote --target starye-org --run-id p13-08-9c808cff04cc438d997beeaa8ecabafe --evidence-dir .planning/phases/13-full-chain-data-smoke/evidence
+        status: fail
     human_judgment: true
-    rationale: Both wrappers prove valid non-success checkpoint evidence only; neither proves the complete local external chain.
-  - id: D2
-    description: The selected-target remote chain remains blocked until a new exact local pair is terminal and receipt-backed.
-    requirement: DATA-07
-    verification: []
-    human_judgment: true
-    rationale: No provider, remote D1, canonical API, Dashboard, viewer, or remote mutation operation was permitted after the local checkpoints.
+    rationale: The verifier correctly reports checkpoint with provesExternalChain false; provider ownership, remote D1/API, and canonical remote browser surfaces remain unproven.
 
-duration: 12min
+duration: multi-session
 completed: 2026-07-18
 status: checkpoint
 ---
 
 # Phase 13 Plan 08: Authorized Smoke Execution Checkpoint Summary
 
-**Two independent fresh local runs now preserve distinct fail-closed boundaries: Attempt A stopped at target projection, while Attempt B reached a one-item pending tuple and stopped at unavailable Dashboard auth/session; remote smoke remains forbidden.**
+**Attempt D produced terminal, provenance-backed local proof for one exact tuple, then the matching selected-target run stopped fail-closed at `remote_preflight/target_preflight_unmet` before any remote mutation.**
 
 ## Performance
 
-- **Cumulative active duration:** 12 min
-- **Attempt A:** 2026-07-18T05:30:10Z to 2026-07-18T05:35:08Z
-- **Attempt B:** 2026-07-18T06:27:03Z to 2026-07-18T06:33:35Z
-- **Tasks:** Task 1 checkpoint retained across two fresh runs; Task 2 blocked
-- **Files modified:** 1 tracked summary; 4 untracked evidence files
+- **Execution:** Four immutable attempts across the authorized 2026-07-18 session
+- **Attempt D evidence window:** 2026-07-18T09:07:46.515Z to 2026-07-18T09:10:28.105Z
+- **Tasks:** Task 1 terminal local proof; Task 2 honest selected-target preflight checkpoint
+- **Tracked closeout files:** Summary and minimal STATE checkpoint fields
+- **Evidence policy:** All A/B/C/D JSON and Markdown pairs remain intentionally untracked and unchanged
 
 ## Accomplishments
 
-- Preserved Attempt A unchanged as a fresh `local_projection/target_projection_unmet` checkpoint.
-- Ran Attempt B with `CLOUDFLARE_API_TOKEN` removed only from the smoke child process; the exact runner passed local projection, local D1 readiness, service readiness, Gateway auth route readiness, one-row D1 snapshot, and canonical Gateway API observation.
-- Used only the repository observer with its existing persistent `userDataDir`; it captured `dashboard/dashboard_auth_unavailable`, wrote the redacted code-2 checkpoint, closed, and did not attempt GitHub login.
-- Exactly verified Attempt B as `outcome: checkpoint` and `provesExternalChain: false`, then stopped before viewer observation or every remote/provider command.
+- Resolved the local workerd network route outside the evidence artifacts: the Windows system proxy did not cover workerd, while Clash TUN restored the required route.
+- Added stable UUID-backed Dashboard and viewer DOM markers without weakening the observer's required code-plus-id predicate (`7f797bc`), then recorded the diagnosis (`d779481`).
+- Captured ordered Attempt D Dashboard and viewer `browser_observer` receipts through the explicitly accepted Codex IAB adapter and validated the local pair as `terminal_passed` with `provesExternalChain: true`.
+- Started the matching remote task only after that exact local pass, then retained `target_preflight_unmet` as a non-terminal checkpoint with no provider child, fixture, D1, API, browser, or other remote mutation.
 
-## Task Commits
+## Task And Support Commits
 
-No source task commit was created. Attempt A closeout is `a0cf93c`; this continuation updates only the tracked checkpoint summary. Both evidence pairs remain intentionally untracked.
+| Commit | Purpose |
+| --- | --- |
+| `a0cf93c` | Record Attempt A target-projection checkpoint |
+| `26b7936` | Record Attempt B Dashboard-session checkpoint |
+| `7f797bc` | Expose stable item UUID markers in Dashboard/viewer DOM and cover the tuple contract |
+| `d779481` | Record resolution of the observer DOM tuple mismatch |
+| `dd8c900` | Authorize the constrained Codex IAB `observeSurface` execution override in the plan |
+
+Generated evidence is not part of these commits and remains intentionally untracked. This closeout does not stage debug artifacts, evidence, AGENTS.md, CLAUDE.md, or unrelated changes.
 
 ## Evidence
 
-| Attempt | Run ID | Lifecycle | Checkpoint category | JSON | Markdown |
-| --- | --- | --- | --- | --- | --- |
-| A | `p13-08-0b30d5c722be483d67f65305` | `pre_ingest/checkpoint` | `local_projection/target_projection_unmet` | `.planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-0b30d5c722be483d67f65305/local.json` | `.planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-0b30d5c722be483d67f65305/local.md` |
-| B | `p13-08-50bd5b54f177491fa01e46c7908cd1bd` | `resolved_pending_observation/checkpoint` | `dashboard/dashboard_auth_unavailable` | `.planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-50bd5b54f177491fa01e46c7908cd1bd/local.json` | `.planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-50bd5b54f177491fa01e46c7908cd1bd/local.md` |
+| Attempt | Run ID | Mode | Lifecycle / outcome | Key fact |
+| --- | --- | --- | --- | --- |
+| A | `p13-08-0b30d5c722be483d67f65305` | local | `pre_ingest/checkpoint` | `local_projection/target_projection_unmet` |
+| B | `p13-08-50bd5b54f177491fa01e46c7908cd1bd` | local | `resolved_pending_observation/checkpoint` | Dashboard session unavailable after the local runner reached one item |
+| C | `p13-08-13fe3c66290d40eeaf294b4259afe411` | local | `resolved_pending_observation/pending` | Runner tuple retained unchanged; no browser observer receipt was appended |
+| D | `p13-08-9c808cff04cc438d997beeaa8ecabafe` | local | `resolved/passed` | Terminal local proof with runner plus ordered Dashboard/viewer receipts |
+| D | `p13-08-9c808cff04cc438d997beeaa8ecabafe` | remote | `pre_ingest/checkpoint` | `remote_preflight/target_preflight_unmet`, `itemId: null`, no remote mutation |
 
-Attempt B retained one non-empty item tuple. Its observations are:
+Attempt C's tuple is `p13-smoke-starye-org-b96f927b` / `545b4ace-7f97-423c-bfa2-5d0338539c73`. Its six local-runner observations stop at the canonical API; there is no Dashboard/viewer receipt and no remote pair. It remains a pending historical run, not evidence of terminal local success.
 
-| Surface | Result | Detail |
-| --- | --- | --- |
-| `local_projection` | passed | Explicit `starye-org` local projection/preflight |
-| `local_d1_readiness` | passed | Local D1 ready |
-| `service_readiness` | passed | Canonical local stack ready |
-| `gateway_auth` | passed | Gateway `/auth/` route probe; this is not an authenticated browser session claim |
-| `d1` | passed | Exact snapshot count `1` |
-| `api` | passed | Exact item through `http://localhost:8080/api/public/movies/<item-code>` |
-| `dashboard` | checkpoint | `dashboard_auth_unavailable` at `http://localhost:8080/dashboard/movies` |
+Attempt D's exact local tuple is `p13-smoke-starye-org-aa106c3d` / `78ba8f4d-bbf6-4c8e-b9db-92ae1ba28d78`. It contains count-one D1 evidence, canonical `http://localhost:8080` Gateway API evidence, then Dashboard `/dashboard/movies` and viewer `/movie/p13-smoke-starye-org-aa106c3d` receipts in that order.
 
-No viewer receipt was attempted after the Dashboard checkpoint. Neither run has a remote evidence file.
+The matching remote checkpoint retains the local-derived item code but has `itemId: null`, as required for a pre-ingest failure. It contains only the `remote_preflight` checkpoint observation; it does not contain a provider, D1, API, Dashboard, or viewer receipt.
 
-## Authentication Diagnosis
+## Accepted Codex IAB Provenance
 
-- The canonical local stack was cleanly restarted and `http://localhost:8080/api/health` returned `200`; the auth route was ready.
-- The Codex built-in browser used its persistent GitHub session and initiated OAuth through `http://localhost:8080/auth/login?next=/dashboard/movies` three times. Each GitHub round trip returned to `/api/auth/error?error=invalid_code`.
-- Redacted API logs place the failure in Better Auth `github.validateAuthorizationCode`: the token exchange took about 21 seconds and ended as an internal error.
-- GitHub OAuth App `Starye Local` uses callback `http://localhost:8080/api/auth/callback/github`. The configured client identity, current secret identity, process environment, start redirect client id, and redirect URI were checked for consistency without recording their values.
-- A safe fake-code probe against the GitHub token endpoint returned `bad_verification_code`, showing that the configured client credentials and token endpoint are accepted for that negative probe.
-- Direct navigation to `/dashboard/movies` still redirected to login, so no valid local Dashboard session exists. This is the unresolved external `gateway_auth/session unavailable` boundary.
-
-The repository observer was not used for any login attempt. It only captured the current unavailable Dashboard session into Attempt B and closed immediately.
+- Plan override `dd8c900` allowed the Browser plugin's persistent Node runtime to call exported repository core `observeDataChainSurfaces()` with exactly one injected dependency: `observeSurface`.
+- Repository core retained ownership of evidence loading and validation, target/base resolution, Dashboard-before-viewer ordering, receipt construction, deterministic rendering, and JSON/Markdown writes.
+- The adapter performed live navigation in the already-authorized Codex in-app browser, required the exact canonical origin/path, rejected direct application ports, and required exactly one item-id marker whose settled DOM contained both the expected code and UUID.
+- The resulting evidence identifies both observations as repository-rendered `browser_observer/browser_navigation` receipts. No caller-provided status, tuple, order, receipt, screenshot-only claim, cookie copy, or manual evidence edit was accepted.
 
 ## Verification
 
-- `pnpm --filter @starye/config exec vitest run src/deployment-target/__tests__/data-chain-evidence.test.ts src/deployment-target/__tests__/data-chain-smoke-local.test.ts src/deployment-target/__tests__/data-chain-smoke-remote.test.ts src/deployment-target/__tests__/verify-data-chain-smoke.test.ts` - passed, 4 files / 49 tests.
-- `GET http://localhost:8080/api/health` - `200`.
-- Attempt B runner - underlying exit `2`; persisted `resolved_pending_observation/pending` before browser observation.
-- Attempt B repository observer - underlying exit `2`; persisted `dashboard_auth_unavailable` and did not start viewer observation.
-- Attempt B exact verifier - underlying exit `2`; `outcome: checkpoint`, `provesExternalChain: false`.
-- Allowlisted inspection - exact mode/target/run/code/id correlation, D1 count one, seven observations, no secret-like keys, no direct app port, and no remote pair.
-- Attempt A SHA-256 values matched before and after Attempt B; its files were not changed.
-
-The root pnpm wrapper reports exit `1` when the hardened runner, observer, or verifier intentionally returns checkpoint exit `2`.
+- Focused provenance suite: 4 files / 49 tests passed after the DOM marker fix and accepted plan override.
+- Attempt D local exact verifier: exit `0`, `outcome: terminal_passed`, `provesExternalChain: true`.
+- Attempt D authorized browser human verification: passed for ordered Dashboard and viewer tuple visibility through the local Gateway.
+- Attempt D remote exact verifier: expected non-success, `outcome: checkpoint`, `provesExternalChain: false`.
+- Attempt C inspection: runner-only pending evidence, zero browser observer receipts, and no later append.
+- Closeout scope: no runner, observer, browser, provider command, or remote mutation was executed while updating this summary.
 
 ## Decisions Made
 
-- Preserve both newly written pairs exactly as emitted. The plan forbids retrying or editing a checkpointed run into success.
-- Do not modify code, OAuth App settings, local secrets, or GitHub settings in response to the external token-exchange failure.
-- Do not run Task 2. Remote eligibility requires a fresh run's exact local pair to be terminal `resolved/passed` with all runner and browser receipts.
+- Treat Attempt D as terminal local proof only. It satisfies the local prerequisite for starting Task 2 but cannot satisfy selected-target or production-chain requirements.
+- Preserve Attempt C exactly as a pending, no-receipt run rather than attaching Attempt D observations to it.
+- Stop Task 2 at `target_preflight_unmet`; do not issue ad hoc provider, Wrangler, SQL, crawler, deploy, rollback, Dashboard, or browser mutation commands.
+- Keep Phase 13 executing and every listed requirement pending until an authorized selected-target run independently proves provider, D1, canonical API, Dashboard, and viewer receipts.
 
 ## Deviations from Plan
 
-None - the plan explicitly accepts honest external-boundary checkpoints and requires immediate remote blocking when local proof is non-terminal.
+### Auto-fixed Issues
+
+**1. [Rule 3 - Blocking] Restored workerd network reachability**
+- **Found during:** Task 1 before Attempt D
+- **Issue:** Windows system proxy routing did not cover workerd, preventing the local OAuth/network path from completing.
+- **Fix:** The authorized operator environment restored the route with Clash TUN; no evidence pair was rewritten.
+- **Closeout scope:** Debug artifacts remain outside this commit and were not staged or modified here.
+
+**2. [Rule 1 - Bug] Exposed the full tuple identity in settled DOM**
+- **Found during:** Task 1 browser observation
+- **Issue:** The rendered surfaces did not expose the stable UUID required by the unchanged code-plus-id observation predicate.
+- **Fix:** Added UUID-backed markers to Dashboard and viewer without weakening tuple validation, plus regression coverage.
+- **Committed in:** `7f797bc`; diagnosis closeout `d779481`
+
+The Codex IAB path is not an unapproved deviation: its constrained adapter contract was added to the plan and committed as `dd8c900` before Attempt D.
 
 ## Issues Encountered
 
-- Attempt A exposed process-level provider token shadowing and stopped at `target_projection_unmet`.
-- Attempt B removed that key only from its process and reached the real browser boundary, where GitHub OAuth token exchange still failed and no authorized Dashboard session could be established.
-- The first parallel focused-test launch hit a Windows tool-layer `UV_HANDLE_CLOSING` assertion before producing a repository test result. The exact suite was rerun serially and passed 49/49; no repository artifact was changed by the tool-layer failure.
+- Attempts A and B retained their original fail-closed local checkpoints.
+- Attempt C reached a real pending tuple before the DOM fix but received no browser receipts; it was intentionally left unchanged.
+- Attempt D cleared the local boundary, but the selected-target environment failed `remote_preflight` before an item id or any mutation existed.
 
 ## Authentication Gates
 
-Task 1 remains at a genuine external authentication gate. No secret is requested. Continuation requires the existing Gateway GitHub OAuth exchange to complete successfully and leave an authorized Dashboard session that can access `http://localhost:8080/dashboard/movies`.
+The local Gateway browser gate is resolved for Attempt D. The remaining external gate is the authorized selected-target preflight/ownership environment; its absence is recorded as `target_preflight_unmet`, not production success.
 
 ## Known Stubs
 
-None. Attempt A's `itemId: null` is the required pre-ingest checkpoint shape; Attempt B contains a real one-item tuple and an explicit session checkpoint.
+None. Attempt A and Attempt D remote `itemId: null` values are required pre-ingest checkpoint shapes, not UI or implementation stubs. Attempt C's missing browser receipts are explicitly preserved as a non-terminal run.
 
 ## User Setup Required
 
-Resolve the external local OAuth token-exchange/session condition without changing either evidence pair. After an authorized Gateway Dashboard session exists, generate another fresh run id and rerun the exact local runner, repository observer, and verifier. Do not reuse Attempt A or Attempt B.
+An authorized selected-target operator environment must satisfy the existing explicit credential-key, account/resource ownership, and read-only live preflight contract before another matching remote run may proceed. No secret value belongs in Git or evidence.
 
 ## Next Phase Readiness
 
 - Phase 13 remains incomplete and must not be marked passed or complete.
-- Task 2 remains forbidden; no remote command, provider check, D1 mutation, deploy, or browser observation was attempted.
-- Remote execution becomes eligible only after a fresh exact local pair is terminal, count-one, and receipt-backed through both Dashboard and viewer.
+- Local proof is available from Attempt D, but selected-target provider/D1/API/Dashboard/viewer proof is absent.
+- DATA-01 through DATA-07 and TEST-05 remain pending for phase closeout; no production external-chain proof is claimed.
 
 ## Self-Check: PASSED
 
-- The tracked checkpoint summary and both fresh local JSON/Markdown pairs exist.
-- Attempt A closeout commit `a0cf93c` exists, and Attempt A hashes match before and after Attempt B.
-- Attempt B exact verification returns checkpoint/non-success, and no Attempt B remote artifact exists.
-- Summary frontmatter remains `status: checkpoint` with every Phase 13 requirement pending.
-- No source symbol or execution flow was edited; generated evidence remains untracked.
+- Attempts A/B/C/D evidence files exist and remained untracked and unchanged during this closeout.
+- Attempt D local evidence is terminal `resolved/passed`; its remote evidence is non-terminal `pre_ingest/checkpoint` at `target_preflight_unmet`.
+- Support commits `7f797bc`, `d779481`, and `dd8c900` exist.
+- Summary frontmatter remains `status: checkpoint`, with `requirements-completed: []`.
+- No new trust boundary or code symbol was introduced by this closeout.
 
 ---
 *Phase: 13-full-chain-data-smoke*
