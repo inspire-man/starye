@@ -5,6 +5,7 @@ status: ready
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-07-16
+updated: 2026-07-18
 ---
 
 # Phase 13 - Validation Strategy
@@ -32,6 +33,7 @@ created: 2026-07-16
 - **After Wave 5:** Run the 13-06 prepared-entry, D1, local, and remote focused suites. Confirm each fixed fixture/snapshot observation carries the same primary code/id/count-one tuple, while malformed, sibling, or multi-row results persist a checkpoint and never enter browser observation.
 - **After Wave 6:** Run the 13-07 provenance-focused config suites. Confirm terminal success requires allowlisted runner/provider/browser receipts for the exact tuple; test-created evidence is temporary or checkpoint-only, and a self-attested status or legacy pair cannot become success.
 - **After Wave 7:** Execute only the 13-08 controlled local then selected-target checkpoints using a new run id. Validate each exact JSON/Markdown pair with the mode/target/run wrapper, retain a redacted code-2 checkpoint as non-success, and permit remote work only after the new local pair is terminal, receipt-backed, and count-one.
+- **After Wave 8:** Run the exact 13-09 selected-target live preflight first. A red result leaves the plan paused with no SUMMARY or evidence; only a green result permits a collision-checked fresh run directory. Validate local and remote artifacts separately: both modes share target/run/code, while each mode's D1-owned item ID must remain internally consistent through its API/Dashboard/viewer receipts.
 - **Before `$gsd-verify-work`:** Revalidate the exact local/remote JSON and Markdown pairs with the shared typed schema, ensure the requested local record is terminal passed with projection/auth/readiness/D1/API/Dashboard/viewer rows before any remote pass claim, and run the full suite.
 - **Max feedback latency:** 90 seconds for unit/contract suites; authorized browser and provider steps are explicit, narrow checkpoints.
 
@@ -58,6 +60,8 @@ created: 2026-07-16
 | 13-07-03 | 07 | 6 | DATA-01, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05 | T-13-22, T-13-23 | The exact verifier rejects legacy/self-attested passed pairs and requires receipt coverage for every terminal surface. | unit/contract | `pnpm --filter @starye/config exec vitest run src/deployment-target/__tests__/data-chain-evidence.test.ts src/deployment-target/__tests__/data-chain-smoke-local.test.ts src/deployment-target/__tests__/data-chain-smoke-remote.test.ts src/deployment-target/__tests__/verify-data-chain-smoke.test.ts` | A checkpoint pair validates only as non-success; JSON/Markdown shape alone never proves local, provider, or browser completion. | add in task | planned |
 | 13-08-01 | 08 | 7 | DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05 | T-13-20, T-13-21, T-13-22, T-13-23 | A newly authorized local Gateway run may resolve only with runner/browser receipts for one code/id/count-one tuple. | controlled local checkpoint | `pnpm smoke:data-chain:verify -- --mode local --target starye-org --run-id <run-id> --evidence-dir .planning/phases/13-full-chain-data-smoke/evidence` | Any unavailable secret, D1, service, auth/session, browser, Dashboard, or viewer condition writes a redacted code-2 checkpoint; it blocks remote work and is not success. | controlled runtime | planned |
 | 13-08-02 | 08 | 7 | DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05 | T-13-20, T-13-21, T-13-22, T-13-23 | The selected-target run starts only from the exact terminal local pair and records provider/canonical browser receipts for the same one-item tuple. | controlled provider checkpoint | `pnpm smoke:data-chain:verify -- --mode remote --target starye-org --run-id <run-id> --evidence-dir .planning/phases/13-full-chain-data-smoke/evidence` | Missing credential, ownership, provider, session, route, or correlation condition stays a redacted code-2 checkpoint; no manual artifact or status argument can promote it. | controlled runtime | planned |
+| 13-09-01 | 09 | 8 | DATA-04, DATA-05, DATA-06, DATA-07 | T-13-38, T-13-40, T-13-41 | Fresh remote work remains blocked until the authorized selected-target context passes every official read-only ownership/resource check. | human-action/read-only checkpoint | `pnpm target-profile preflight --target starye-org --scope remote --command smoke --ci-environment starye-org --live` | Any non-zero result leaves Plan 13-09 paused, creates no SUMMARY or evidence, and does not authorize Task 2; only the non-secret failed gate categories may be reported in the active session. | existing command | planned |
+| 13-09-02 | 09 | 8 | DATA-04, DATA-05, DATA-06, DATA-07, TEST-05 | T-13-39, T-13-40, T-13-41, T-13-42 | A path proven absent receives one fresh local run; only terminal local proof permits remote execution sharing target/run/code, while remote D1 independently establishes the remote item ID used by all remote receipts. | controlled local/provider/browser checkpoint | First require the PowerShell `Test-Path -LiteralPath` collision gate to pass, then run the exact local and remote `pnpm smoke:data-chain:verify -- --mode <local|remote> --target starye-org --run-id <new-run-id> --evidence-dir .planning/phases/13-full-chain-data-smoke/evidence` commands after the corresponding runner/browser steps. | Local checkpoint creates only the local pair; local terminal proof permits a remote checkpoint or terminal pair. Both verifiers must report `terminal_passed` and `provesExternalChain: true` for Phase success; any checkpoint remains non-success and cannot prove zero provider side effects. | existing commands/controlled runtime | planned |
 
 *Status: planned -> green / red / flaky / checkpoint. `checkpoint` is evidence of an unavailable external prerequisite, never a success state.*
 
@@ -85,7 +89,7 @@ Existing Vitest, typed deployment-target tests, fake prepared executors, and imp
 
 ## Validation Sign-Off
 
-- [x] All 17 planned tasks have a focused automated command or a justified, typed browser/provider checkpoint.
+- [x] All 19 planned tasks have a focused automated command or a justified, typed browser/provider checkpoint.
 - [x] Every requirement in `DATA-01..DATA-07` and `TEST-05` maps to one or more tasks above.
 - [x] Sampling continuity has no three implementation tasks without focused automated verification.
 - [x] Wave 0 covers all runner, evidence, D1 readiness, Gateway auth, prepared-entry, one-item fixture, provenance receipt, and browser-handoff seams.
@@ -93,4 +97,4 @@ Existing Vitest, typed deployment-target tests, fake prepared executors, and imp
 - [x] Pending/checkpoint evidence and exit code 2 are explicitly distinguished from schema validation and terminal passed execution; the one wrapper rejects every runner code other than 0 or 2 and verifies the matching artifact before preserving either outcome.
 - [x] Revised plan frontmatter and structures passed; `nyquist_compliant: true` and `wave_0_complete: true` are set only after that static verification.
 
-**Approval:** lifecycle revision static verification passed on 2026-07-16: all Plan frontmatter/structures valid and decision coverage 7/7.
+**Approval:** Plan 13-09 and the Wave 8 validation map passed the independent plan checker on 2026-07-18; canonical one-item and per-mode item-ID decisions are covered.

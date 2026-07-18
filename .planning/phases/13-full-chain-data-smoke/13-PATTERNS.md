@@ -19,9 +19,9 @@ explicit --target + local/remote mode + run id
   -> selected-target validation and preflight
   -> local projection/schema/service gate OR remote read-only live gate
   -> one registry-owned fixture adapter
-  -> ApiClient.syncMovie(each item in a fixed 10-item set, service auth, upsert)
+  -> ApiClient.syncMovie(one deterministic item, service auth, upsert)
   -> API sync handler -> syncMovieData -> gateway movie-cache invalidation
-  -> correlate immutable { targetId, runId, itemCode, itemId }
+  -> correlate shared { targetId, runId, itemCode } plus each mode's D1-owned itemId
   -> D1/API + authenticated Dashboard + Gateway/canonical movie viewer
   -> allowlisted JSON record and Markdown summary
 
@@ -31,9 +31,11 @@ remote preflight/auth/provider failure
 
 Browser evidence is canonical only when it uses `http://localhost:8080/...`
 for local mode or the selected target's canonical domain for remote mode.
-Implementation ports are diagnostics only. The fixture set must contain exactly
-10 non-R18, target/run-derived codes, each with one player; only its primary
-code is the browser evidence tuple and no caller can widen the set.
+Implementation ports are diagnostics only. The fixture must contain exactly one
+non-R18, target/run-derived code with one player. That code is the browser
+evidence identity; no caller can widen it into a sibling or batch set. Local and
+remote D1 may establish different item IDs, but every receipt within one mode
+must use that mode's exact code/ID tuple.
 
 ## Likely File Classification
 
@@ -47,7 +49,7 @@ boundaries below are not discretionary.
 | `packages/config/src/deployment-target/mutation-entry.ts` | selected-target remote mutation registry | target + closed entry -> preflight -> materialized context -> fixed child argv | Add one dedicated smoke fixture entry only if remote execution needs it. Keep the closed union, fixed child module/operation, required secret-key inventory, `shell: false`, and no ambient target identity. |
 | `packages/crawler/scripts/target-crawl-mutation.ts` plus a new focused smoke-fixture adapter module | controlled ingest adapter | prepared registry context -> deterministic fixture -> existing `ApiClient.syncMovie()` -> normalized returned identity | Extend the intentional stub for exactly one registry-owned operation. Reject all non-owned context/operations; do not reactivate the legacy direct crawler entries or invoke a full corpus. |
 | New typed smoke modules under the owning package (for example `packages/crawler/src/smoke/`) | domain model and evidence writer | target/run -> fixture code -> surface observations -> allowlisted JSON/Markdown | Keep identity construction, correlation checks, redaction, path validation, and evidence serialization separate from CLI parsing. Never serialize `process.env`, request headers, tokens, raw prepared context, or a full remote origin. |
-| Config/crawler/API/frontend focused tests | regression contract | fake target/preflight/client/surface result -> pass, failure, or checkpoint | Test explicit target, fixed 10-item cap, primary identity, D1 cardinality, direct-port URL rejection, redaction, and no-mutation-on-checkpoint before integration runs. |
+| Config/crawler/API/frontend focused tests | regression contract | fake target/preflight/client/surface result -> pass, failure, or checkpoint | Test explicit target, fixed one-item cap, shared target/run/code identity, per-mode D1 item ID, count-one cardinality, direct-port URL rejection, redaction, and no-mutation-on-checkpoint before integration runs. |
 | `.planning/phases/13-full-chain-data-smoke/evidence/<target>/<run>.json` and `.md` (generated, uncommitted unless closeout selects an artifact) | run evidence | verified observations -> machine record + human summary | Store only target ID, run ID/timestamp, normalized item identity, surface/path, status, and redacted gate category. A failed remote gate must write `checkpoint`, never synthetic success. |
 
 Existing `apps/dashboard/src/lib/hono-rpc-client.ts`, `apps/dashboard/src/lib/api.ts`,
@@ -124,7 +126,7 @@ turn `operation`, API URL, target alias, or a remote command into caller input.
 
 ### 3. Fixed-batch per-item service-auth ingest and cache-aware API write
 
-The crawler already has the exact per-item transport needed for the fixed batch:
+The crawler already has the exact per-item transport needed for the fixed one-item fixture:
 
 ```ts
 // packages/crawler/src/utils/api-client.ts:71-75
@@ -212,9 +214,10 @@ rejecting direct application origins in evidence.
 
 ## Mandatory Implementation Rules
 
-1. Build the fixed 10-code set from the Phase 13 namespace and explicit
-   target/run inputs. Preserve the primary returned ID for surface evidence,
-   audit all 10 writes, and reject any count other than 10.
+1. Build one fixed code from the Phase 13 namespace and explicit target/run
+   inputs. Execute exactly one bounded write, preserve the D1-returned ID for
+   that mode's surface evidence, and reject any count other than one. Local and
+   remote share target/run/code but do not require cross-environment UUID equality.
 2. Keep local ordering strict: `target-profile validate` and
    `project-local --check`, local D1 schema/minimal-data check, local services,
    ingest, then D1/API/Dashboard/viewer correlation.
@@ -237,10 +240,10 @@ rejecting direct application origins in evidence.
 
 | Concern | Test owner | Required assertions |
 |---|---|---|
-| CLI/identity/evidence schema | new smoke runner tests | explicit target only; fixed deterministic 10-item set; one primary tuple; strict allowlist; JSON and Markdown have no secret-shaped data; direct port and mismatched tuple are rejected. |
+| CLI/identity/evidence schema | new smoke runner tests | explicit target only; one deterministic item; shared target/run/code plus mode-owned item ID; strict allowlist; JSON and Markdown have no secret-shaped data; direct port and mismatched per-mode tuple are rejected. |
 | Preflight/checkpoint | config or smoke runner tests | remote missing credentials/account/live check becomes checkpoint; adapter and child execution are not invoked; checkpoint exit is non-success and evidence is still valid. |
 | Registry adapter | mutation-entry and crawler tests | new entry is closed, fixed-operation only, rejects malformed prepared context and ambient identity, and cannot dispatch a general crawler operation. |
-| Ingest path | crawler/API focused tests | `ApiClient.syncMovie()` sends exactly 10 bounded upsert payloads through service auth; the primary normalized result yields the code/ID used for all later checks and D1 verifies the whole set. |
+| Ingest path | crawler/API focused tests | `ApiClient.syncMovie()` sends exactly one bounded upsert payload through service auth; the normalized result yields the code/ID used for that mode's later checks and D1 verifies count one. |
 | Browser surfaces | focused dashboard/movie/Gateway tests plus authorized runtime smoke | Dashboard remains cookie/session guarded and Gateway-relative; public detail uses code; persisted local URL is `localhost:8080`; remote URL is selected canonical host only. |
 
 ## Pattern Verdict

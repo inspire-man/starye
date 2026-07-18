@@ -4,15 +4,15 @@ milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
-status: executing
-stopped_at: 13-08 Attempt E remote target_preflight_unmet; R2 and gateway-worker read checks failed
-last_updated: "2026-07-18T10:27:19.187Z"
+status: planned
+stopped_at: 13-09 ready; awaiting authorized selected-target live preflight
+last_updated: "2026-07-18T14:40:50.257Z"
 last_activity: 2026-07-18
-last_activity_desc: 13-08 Attempt E local terminal proof; remote R2 and gateway-worker preflight checks failed
+last_activity_desc: 13-09 gap plan created and independently verified; ready to execute Task 1 preflight
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 16
+  total_plans: 17
   completed_plans: 16
   percent: 50
 ---
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — EXECUTING
-Plan: 8 of 8
-Status: Checkpoint — Attempts D/E local terminal proof passed; selected-target R2 and gateway-worker checks failed
-Last activity: 2026-07-18 - Attempt E local terminal proof; remote live preflight checkpoint
+Phase: 13 (full-chain-data-smoke) — PLANNED
+Plan: 9 of 9
+Status: Ready to execute — Plan 13-09 begins with the authorized selected-target live preflight
+Last activity: 2026-07-18 - Plan 13-09 gap plan passed the independent plan checker
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 16 / 16
+**Plans completed:** 16 / 17
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -85,7 +85,7 @@ Last activity: 2026-07-18 - Attempt E local terminal proof; remote live prefligh
 
 ### Active Blockers
 
-- [ ] Phase 13 Attempts D/E proved exact local chains, but Attempt E still ended at `remote_preflight/target_preflight_unmet`. The official live preflight failed the read-only R2 `starye-media` and gateway-worker `starye-gateway` checks; provider D1/API and canonical remote Dashboard/viewer proof remain pending.
+- [ ] Plan 13-09 is ready, but Task 1 remains blocked until the exact official live preflight passes the read-only R2 `starye-media` and gateway-worker `starye-gateway` checks. Provider D1/API and canonical remote Dashboard/viewer proof remain pending; no fresh mutation is authorized while the gate is red.
 
 ### Recent Context (Brownfield注释)
 
@@ -102,14 +102,14 @@ Last activity: 2026-07-18 - Attempt E local terminal proof; remote live prefligh
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T10:27:19.187Z
-**Stopped at:** 13-08 Attempt E remote target_preflight_unmet; R2 and gateway-worker read checks failed
+**Last session:** 2026-07-18T14:40:50.257Z
+**Stopped at:** 13-09 ready; awaiting authorized selected-target live preflight
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Resume only after the authorized selected-target context can pass the read-only R2 `starye-media` and Worker `starye-gateway` checks; keep Attempts D/E immutable and do not repeat remote mutation while the official preflight is red.
+Run `$gsd-execute-phase 13 --gaps-only`. Plan 13-09 Task 1 must pass the exact official selected-target live preflight before any fresh run; keep Attempts A-E immutable and leave the plan paused while that gate is red.
 ```
 
 **If interrupted, resume by:**
@@ -118,7 +118,7 @@ Resume only after the authorized selected-target context can pass the read-only 
 2. Read `.planning/PROJECT.md`
 3. Read `.planning/ROADMAP.md`
 4. Read `.planning/phases/13-full-chain-data-smoke/13-VERIFICATION.md`
-5. Read `.planning/phases/13-full-chain-data-smoke/13-05-PLAN.md` through `13-08-PLAN.md`
+5. Read `.planning/phases/13-full-chain-data-smoke/13-05-PLAN.md` through `13-09-PLAN.md`
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -128,7 +128,7 @@ Resume only after the authorized selected-target context can pass the read-only 
 
 ## Operator Next Steps
 
-- Resolve the authorized selected-target access/ownership prerequisite for R2 `starye-media` and Worker `starye-gateway`, then resume Phase 13 from the 13-08 remote checkpoint; do not rerun or rewrite Attempts D/E evidence.
+- Execute Plan 13-09 with `$gsd-execute-phase 13 --gaps-only`; its blocking Task 1 may resume only after authorized read access for R2 `starye-media` and Worker `starye-gateway` is available. Do not rewrite Attempts A-E evidence.
 
 ## Decisions
 

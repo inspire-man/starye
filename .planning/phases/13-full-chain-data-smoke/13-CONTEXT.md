@@ -1,6 +1,7 @@
 # Phase 13: Full Chain Data Smoke - Context
 
 **Gathered:** 2026-07-16
+**Updated:** 2026-07-18 after verified one-item gap closure
 **Status:** Ready for planning
 
 <domain>
@@ -27,12 +28,12 @@
 ## Implementation Decisions
 
 ### Smoke Item And Ingest Boundary
-- **D-01:** 本轮 crawler 验收使用固定、闭合、deterministic 的 **10 条** non-R18 smoke fixture 集合；每条都携带可审计的 namespace/target/run 语义且只有一个 player。集合中的 primary item 仍是 local/production evidence 与 Dashboard→Viewer 的唯一 correlation tuple；其余 9 条仅作为 D1/API 入库数量审计的 supporting records。不得依赖人工随机选择现有内容，也不得扩大为真实完整 crawler corpus。
+- **D-01:** 本轮 crawler 验收使用固定、闭合、deterministic 的 **1 条** non-R18 smoke fixture；它携带可审计的 namespace/target/run 语义且只有一个 player。local 与 production 共享 target ID、run ID 和 deterministic item code；各自 D1 独立建立该环境的 item ID，并要求该 ID 在本环境的 D1/API/Dashboard/Viewer receipts 内一致。不得依赖人工随机选择现有内容，也不得扩大为 sibling/batch 兼容或真实完整 crawler corpus。此条取代 2026-07-16 的 10-item 草案，并以 Plans 13-05 至 13-08 及最新 `13-VERIFICATION.md` 已执行、已验证的 one-item contract 为依据。
 - **D-02:** 写入只允许受限 crawler 或 fixture adapter；禁止用完整 crawler corpus 作为 release gate。planner 可根据当前受控 entry 和可用凭据选择 fixture 或 targeted crawler，但必须保持最小数据量、可重跑和明确 target。
 
 ### Local-First Execution Order
 - **D-03:** production 尝试前必须先验证 local D1 schema 与 minimal data，再经 `http://localhost:8080/...` 执行 local API、auth/dashboard 和 content route smoke；3000/3001/3002/3003/5173 等直连端口只能作为实现诊断，不得充当 canonical evidence URL。
-- **D-04:** local 与 production 都验证同一 smoke item：D1/API 可查、Dashboard 可管理或校验、public viewer 可通过 Gateway/canonical domain 读取。production browser/public evidence 只能使用 selected target 的 canonical domain。
+- **D-04:** local 与 production 都验证由同一 target ID、run ID 和 deterministic item code 关联的 smoke item：各环境的 D1/API 可查、Dashboard 可管理或校验、public viewer 可通过 Gateway/canonical domain 读取。local item ID 与 remote item ID 可以不同，但各自必须在本环境 receipts 内严格一致；production browser/public evidence 只能使用 selected target 的 canonical domain。
 
 ### Remote Checkpoint And Evidence
 - **D-05:** 所有 production 或 provider-side data-chain 命令必须显式选择 target，并先通过 target preflight、credential-key presence、account/resource ownership 和 read-only live checks；任一凭据或 provider access 缺失时 fail closed，记录 checkpoint evidence，绝不模拟或声称 production 成功。

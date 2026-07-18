@@ -16,7 +16,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | 8/8 | In Progress|  |
+| 13 | 8/9 | In Progress|  |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
 
 ## Phase Details
@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 8/8 plans executed
+**Plans:** 8/9 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -111,6 +111,10 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 **Wave 7** *(gap closure; blocked on Wave 6 completion)*
 
 - [x] 13-08-PLAN.md — Run authorized local and selected-target proof or retain an honest checkpoint. *(Executed to honest external-preflight checkpoint; phase goal remains pending.)*
+
+**Wave 8** *(gap closure; blocked on Wave 7 completion)*
+
+- [ ] 13-09-PLAN.md — Pass the official selected-target live preflight, then run one fresh collision-checked local/production proof without rewriting Attempts A-E.
 
 **Success criteria:**
 
@@ -142,11 +146,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Phase 13 remains pending on authorized selected-target read access for R2 `starye-media` and Worker `starye-gateway`. After that external prerequisite is restored, create the next gap plan from the fresh verification report:
+Plan 13-09 is ready. Its first task is the blocking official read-only selected-target preflight; no fresh smoke or remote mutation may start while R2 `starye-media` or Worker `starye-gateway` remains red:
 
 ```text
-$gsd-plan-phase 13 --gaps
+$gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-18 after Phase 13 Attempt E checkpoint and re-verification*
+*Last updated: 2026-07-18 after Phase 13 Plan 09 gap planning and verification*
