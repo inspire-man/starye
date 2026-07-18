@@ -1,68 +1,51 @@
 ---
 phase: 13-full-chain-data-smoke
-verified: 2026-07-17T10:09:45Z
+verified: 2026-07-18T09:37:12Z
 status: gaps_found
-score: 5/11 must-haves verified
-behavior_unverified: 5
+score: 9/11 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: gaps_found
+  previous_score: 5/11
+  gaps_closed:
+    - "The canonical one-item contract is restored across evidence, fixture, prepared children, D1 snapshot, and both runners."
+    - "Attempt D supplies terminal, receipt-backed local D1/Gateway/API/Dashboard/viewer proof for one exact tuple under the accepted Codex IAB execution adapter."
+  gaps_remaining:
+    - "The selected production target has no provider/D1/API/admin/browser proof; the exact remote pair remains a pre-ingest target_preflight_unmet checkpoint."
+  regressions: []
 gaps:
-  - truth: "D-01/D-02: the only write path creates or upserts exactly one deterministic, non-R18 fixture through ApiClient.syncMovie()."
+  - truth: "The selected production target proves the same item in provider-backed D1, canonical API, and authorized Dashboard management state."
     status: failed
-    reason: "The Phase 13 canonical plan still requires one payload and one syncMovie call, but the live implementation now derives and writes exactly ten fixtures. A later quick plan explains the change, but no accepted verification override updates the Phase 13 must-have."
+    reason: "Attempt D remote stopped at remote_preflight/target_preflight_unmet before any provider child, fixture, D1 snapshot, canonical API request, or Dashboard observation. The remote exact verifier reports checkpoint and provesExternalChain false."
     artifacts:
-      - path: "packages/config/src/deployment-target/data-chain-evidence.ts"
-        issue: "DATA_CHAIN_FIXTURE_COUNT is 10 and createDataChainFixtureCodes derives nine sibling codes."
-      - path: "packages/crawler/src/smoke/data-chain-fixture.ts"
-        issue: "createDataChainFixtureBatch builds ten payloads and runDataChainFixture calls syncMovie once per payload."
-      - path: ".planning/phases/13-full-chain-data-smoke/13-02-PLAN.md"
-        issue: "The canonical must-have and acceptance criteria still require exactly one payload/call."
+      - path: ".planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-9c808cff04cc438d997beeaa8ecabafe/remote.json"
+        issue: "pre_ingest/checkpoint, itemId null, and only one remote_preflight observation; no production data-surface receipt exists."
+      - path: ".planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-9c808cff04cc438d997beeaa8ecabafe/remote.md"
+        issue: "Deterministically matches the checkpoint JSON and therefore documents non-success rather than production usability."
     missing:
-      - "Restore the one-item contract, or add an explicit accepted override/update to the canonical Phase 13 contract for the ten-item batch."
-  - truth: "The selected target is proven usable by a completed local and production data chain through Gateway/canonical domain."
-    status: partial
-    reason: "The tracked Phase 13 evidence and 13-03/13-04 summaries stop at checkpoint with no itemId. Later ignored local/remote files claim resolved/passed and pass schema validation, but there is no independent runner output, provider result, or browser/session provenance. The observer accepts an operator-supplied --status passed and the validator checks only JSON/Markdown shape and tuple consistency, so those files do not independently prove the real external chain."
+      - "An authorized selected-target preflight/ownership pass for the exact terminal local run."
+      - "One bounded remote fixture receipt and matching count-one D1 snapshot/code/id receipt."
+      - "A selected-canonical API receipt for the same remote tuple."
+  - truth: "The item is visibly usable through the selected production canonical Dashboard and viewer routes, with captured evidence."
+    status: failed
+    reason: "This is the browser half of the same external-preflight blocker: no remote tuple was resolved, so no production Dashboard or viewer observation could run. The accepted Codex IAB adapter authorizes an observation mechanism but grants no provider credentials, remote mutation, or production-success override."
     artifacts:
-      - path: ".planning/phases/13-full-chain-data-smoke/13-03-SUMMARY.md"
-        issue: "status: checkpoint; the recorded real local run stopped before ingest."
-      - path: ".planning/phases/13-full-chain-data-smoke/13-04-SUMMARY.md"
-        issue: "status: checkpoint; records that provider/D1/API/Dashboard/viewer work was not attempted."
-      - path: ".planning/phases/13-full-chain-data-smoke/evidence/"
-        issue: "All tracked JSON records are pre_ingest/checkpoint; later passed records are ignored local artifacts with schema validity but no execution provenance."
-      - path: "scripts/data-chain-surface-observation.ts"
-        issue: "Dashboard/viewer pass rows are appended from CLI claims without a browser or provider observation binding."
+      - path: ".planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-08-9c808cff04cc438d997beeaa8ecabafe/remote.json"
+        issue: "Contains no browser_observer/browser_navigation receipt and no canonical production path."
+      - path: ".planning/phases/13-full-chain-data-smoke/13-08-PLAN.md"
+        issue: "The accepted execution override explicitly states that it grants no provider credential, remote mutation, or authorization bypass."
     missing:
-      - "A newly authorized, auditable local run proving D1, Gateway API, Dashboard, and viewer for one tuple."
-      - "A provider-backed remote run proving selected-target ownership, fixture, D1, canonical API, Dashboard, and viewer for the exact local run."
-      - "Human confirmation or independently captured browser/provider evidence for both terminal passed artifacts."
-behavior_unverified_items:
-  - truth: "Local smoke reaches API, auth/dashboard, and content only through http://localhost:8080."
-    test: "Run the canonical local smoke with the stack available, then inspect the same tuple through Gateway auth, Dashboard Movies, and /movie/<code>."
-    expected: "One terminal local resolved/passed record contains passed local_projection, local_d1_readiness, service_readiness, gateway_auth, d1, api, dashboard, and viewer rows, all for the same non-empty tuple."
-    why_human: "Injected tests prove ordering and URL guards, while current ignored evidence has no browser/session provenance."
-  - truth: "Local D1 schema and minimal deterministic data are verified before production work."
-    test: "Execute the canonical local runner and retain the read-only D1 command result associated with the run."
-    expected: "Required movie/player schema is ready and the exact deterministic fixture set resolves the primary non-empty itemId before remote work."
-    why_human: "The focused test replaces D1 with an injected dependency; schema-valid evidence alone cannot prove a real local D1 transition."
-  - truth: "The targeted fixture actually writes the selected run's known item through the service-auth API."
-    test: "Run the local fixture path with the authorized existing service secret and correlate the API acknowledgement with the read-only D1 snapshot."
-    expected: "The deterministic primary code resolves to a real itemId, with no arbitrary corpus or direct-port path."
-    why_human: "Tests use fake ApiClient acknowledgements and do not exercise the live write."
-  - truth: "The item is proven in selected-target D1, canonical API, and authorized Dashboard management state."
-    test: "For the exact local run, execute the remote smoke after ownership preflight and locate its remote tuple in D1, canonical API, and Dashboard Movies."
-    expected: "All three surfaces correlate the same target/run/code/id and the remote artifact preserves provider-backed observations."
-    why_human: "External Cloudflare integration and the authorized Dashboard session cannot be established from the current JSON schema."
-  - truth: "The item is visibly usable through local and production canonical viewer routes."
-    test: "Open the local Gateway and selected production canonical /movie/<code> routes for their respective recorded tuples."
-    expected: "Both routes visibly render the intended item and match the exact evidence tuple without direct application origins."
-    why_human: "Visual rendering and real browser navigation are not exercised by the automated contract tests."
+      - "Authorized Dashboard observation at the selected target canonical /dashboard/movies route for the resolved remote tuple."
+      - "Ordered canonical /movie/<item-code> viewer observation and terminal remote resolved/passed evidence."
 ---
 
 # Phase 13: Full Chain Data Smoke Verification Report
 
 **Phase Goal:** Prove the selected target is actually usable by running the local and production data chain through Gateway/canonical domain.
-**Verified:** 2026-07-17T10:09:45Z
+**Verified:** 2026-07-18T09:37:12Z
 **Status:** gaps_found
-**Re-verification:** No - initial verification
+**Re-verification:** Yes - after Plans 13-05 through 13-08
 
 ## Goal Achievement
 
@@ -70,125 +53,121 @@ behavior_unverified_items:
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | Local smoke proves API, auth/dashboard, and content through `http://localhost:8080` only. | PRESENT_BEHAVIOR_UNVERIFIED | Default code uses the Gateway at `scripts/data-chain-smoke.ts:288-321,407-415`; focused tests pass, but tracked evidence is checkpoint-only and ignored passed artifacts have no browser provenance. |
-| 2 | Local D1 schema and minimal data setup are actually verified before production. | PRESENT_BEHAVIOR_UNVERIFIED | Real default D1 inspection exists at `scripts/data-chain-smoke.ts:210-264`; focused tests inject the result, and no auditable command output is tied to a terminal tracked run. |
-| 3 | A targeted fixture writes a known item to the selected API target and records its identity. | PRESENT_BEHAVIOR_UNVERIFIED | The live path calls `ApiClient.syncMovie()` at `packages/crawler/src/smoke/data-chain-fixture.ts:128-141`; tests use fake acknowledgements and ignored artifacts do not establish execution provenance. |
-| 4 | D1, canonical API, and admin checks prove the item exists and is manageable after ingest. | PRESENT_BEHAVIOR_UNVERIFIED | Local/remote code correlates snapshot and API tuples, but the Dashboard row is an operator-supplied append rather than a browser-bound observation. |
-| 5 | Local and production canonical viewers visibly show the same recorded item, with evidence captured. | PRESENT_BEHAVIOR_UNVERIFIED | Two ignored local/remote pairs are schema-valid and marked passed; `appendBrowserObservation` can create those rows from CLI status alone (`data-chain-evidence.ts:539-627`). |
-| 6 | The selected local projection gate passes without exposing user-managed values. | VERIFIED | `pnpm target-profile project-local --target starye-org --check` and `target-profile validate` both passed; secret inspection printed presence booleans only. |
-| 7 | Evidence has a strict lifecycle, non-secret allowlist, tuple checks, canonical URL policy, and ordered browser grammar. | VERIFIED | `data-chain-evidence.ts` is 697 substantive lines, exported by the deployment-target barrel, and the focused config suite passed 32/32. |
-| 8 | The only smoke write is exactly one deterministic non-R18 fixture through one `syncMovie()` call. | FAILED | `DATA_CHAIN_FIXTURE_COUNT = 10`; the batch loop invokes `syncMovie()` ten times, contradicting `13-02-PLAN.md:24,127-138`. No override exists. |
-| 9 | Remote mutation is explicit-target, preflight-first, registry-owned, and starts no child after a failed gate. | VERIFIED | `runRemoteDataChainSmoke` gates exact local evidence and provider preflight before prepared children (`data-chain-smoke.ts:633-703`); remote contract tests passed. |
-| 10 | Local failures persist honest pre-ingest/pending evidence and preserve the tuple after snapshot. | VERIFIED | Local orchestration at `data-chain-smoke.ts:734-852` plus lifecycle tests exercise projection, D1, service, auth, fixture, snapshot, and API failure paths. |
-| 11 | Remote mode uses only the exact terminal local pair and selected canonical API path, preserving checkpoints. | VERIFIED | Exact pair validation is wired at `data-chain-smoke.ts:472-530`; remote canonical fetch and pending evidence are wired at `605-731`; tests pass. |
+| 1 | Local smoke proves API, auth/dashboard, and content through `http://localhost:8080` only. | VERIFIED | Attempt D local is `resolved/passed`; its eight ordered rows use the local runner and browser observer, and every browser/API origin is `http://localhost:8080`. The fresh exact verifier returned `terminal_passed`, `provesExternalChain: true`. |
+| 2 | Local D1 schema/readiness and minimal deterministic data are verified before production work. | VERIFIED | Attempt D records passed `local_d1_readiness` before D1/API/browser rows and a count-one `local_fixture_snapshot`; local orchestration and the fresh 49-test provenance suite enforce this order. |
+| 3 | A targeted one-item fixture writes a known item through the service-auth API and records its identity. | VERIFIED | `DATA_CHAIN_FIXTURE_COUNT = 1`; `runDataChainFixture()` validates one non-R18 payload with one player and calls `ApiClient.syncMovie()` once. Attempt D correlates code `p13-smoke-starye-org-aa106c3d` to UUID `78ba8f4d-bbf6-4c8e-b9db-92ae1ba28d78`. |
+| 4 | Local and selected-production D1/API/admin checks prove the item exists and is manageable after ingest. | FAILED | Local D1/API/Dashboard proof exists. Remote stopped at `target_preflight_unmet` before mutation, D1, API, or admin observation, so the production half is absent. |
+| 5 | Local and production canonical viewers visibly show the recorded item, with evidence captured. | FAILED | Local Dashboard then viewer receipts are present and accepted. Remote has no resolved tuple, canonical path, Dashboard receipt, or viewer receipt. |
+| 6 | The selected local projection gate passes without exposing user-managed values. | VERIFIED | Local evidence contains a passed `local_projection` receipt; the runner checks projection before D1/service/fixture work, and no evidence field contains environment or secret values. |
+| 7 | Evidence enforces strict lifecycle, tuple, redaction, canonical path, receipt, and browser-order contracts. | VERIFIED | `data-chain-evidence.ts` is substantive (934 lines), exported and consumed by runner/observer/verifier. Fresh focused config run passed 49/49, including anti-fabrication and checkpoint cases. |
+| 8 | The only smoke write is exactly one deterministic non-R18 fixture through one `syncMovie()` call. | VERIFIED | The previous ten-item drift is closed: constant is one, candidate contains one movie, fixture has one player/no batch fields, and fresh crawler tests passed 9/9 including `toHaveBeenCalledOnce()` and batch rejection. |
+| 9 | Remote mutation is explicit-target, exact-local-prerequisite, preflight-first, registry-owned, and starts no child after a failed gate. | VERIFIED | `runRemoteDataChainSmoke()` loads the exact local pair, checks credential presence and live preflight before prepared children. Tests assert no fixture/snapshot call on local, credential, or preflight failure; Attempt D stopped with no remote mutation. |
+| 10 | Failures persist honest pre-ingest or tuple-preserving pending evidence and never synthesize success. | VERIFIED | The remote artifact is the expected `pre_ingest/checkpoint` shape with `itemId: null`; its exact verifier reports `provesExternalChain: false`. Lifecycle/checkpoint tests pass. |
+| 11 | Remote mode preserves the exact local tuple and selected canonical API/browser path contract. | VERIFIED | Source and tests bind remote target/run/code to the exact terminal local pair, require count one, build only `/api/public/movies/<code>`, and derive Dashboard before viewer paths. This verifies the contract, not production execution. |
 
-**Score:** 5/11 truths verified (5 present, behavior-unverified; 1 failed)
+**Score:** 9/11 truths verified (0 present-but-behavior-unverified)
+
+The two failed truths share one root cause: selected-target external preflight did not pass. They remain separate because one covers provider/D1/API/admin correlation and the other covers canonical browser usability.
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `packages/config/src/deployment-target/data-chain-evidence.ts` | Typed lifecycle, tuple, redaction, canonical-path contract | VERIFIED | Exists, substantive, exported, used by runner/observer/verifier, and covered by focused tests. |
-| `packages/crawler/src/smoke/data-chain-fixture.ts` | Bounded deterministic service-auth fixture | VERIFIED WITH CONTRACT DRIFT | Substantive and wired, but now writes ten fixtures rather than the Phase 13 plan's one. |
-| `packages/config/src/deployment-target/mutation-entry.ts` | Closed prepared fixture/D1 registry | VERIFIED | Registry owns `crawler-smoke-fixture` and `d1-smoke-snapshot`; required-secret forwarding and child output parsing are allowlisted. |
-| `packages/crawler/scripts/target-crawl-mutation.ts` | Prepared crawler child | VERIFIED | Requires registry-owned context and `CRAWLER_SECRET`, then calls the bounded fixture adapter. |
-| `packages/db/scripts/target-d1-mutation.ts` | Read-only selected D1 snapshot | VERIFIED | Uses fixed `wrangler d1 execute --remote` invocation and validates exact deterministic rows. |
-| `scripts/data-chain-smoke.ts` | Local and remote orchestration | VERIFIED | Wired from `package.json`; real default D1/API/provider paths exist and fail closed. |
-| `scripts/data-chain-surface-observation.ts` | Constrained Dashboard/viewer append | PARTIAL | Ordering and tuple validation are substantive, but `status: passed` is a CLI claim with no real browser binding. |
-| `scripts/verify-data-chain-smoke.ts` | Deterministic runner/artifact consistency check | PARTIAL | Validates schema, Markdown parity, tuple, and runner exit; it does not validate provider/browser provenance. |
-| `.planning/phases/13-full-chain-data-smoke/evidence/` | Auditable local and production proof | HOLLOW/UNVERIFIED | Tracked artifacts are checkpoint-only. Ignored passed pairs validate structurally but are not authoritative behavioral evidence. |
+| `packages/config/src/deployment-target/data-chain-evidence.ts` | One-item identity, lifecycle, receipt, redaction, and canonical-path contract | VERIFIED | Exists, substantive, exported, wired into all smoke tools, and covered by fresh 49/49 config tests. |
+| `packages/crawler/src/smoke/data-chain-fixture.ts` | One deterministic service-auth upsert | VERIFIED | One validated non-R18 movie, one player, one `syncMovie()` call; fresh tests 9/9. |
+| `packages/config/src/deployment-target/mutation-entry.ts` | Closed prepared fixture/D1 operations | VERIFIED | Registry recognizes only fixed smoke entries and validates exact code/count-one child output. |
+| `packages/db/scripts/target-d1-mutation.ts` | Read-only one-row D1 snapshot | VERIFIED | Parses only the prepared code and returns a matching non-R18 movie/player row; fresh tests 14/14. |
+| `scripts/data-chain-smoke.ts` | Local and remote orchestration | VERIFIED | Local proof is real and terminal. Remote wiring is fail-closed and produced an honest checkpoint before children. |
+| `scripts/data-chain-surface-observation.ts` | Controlled Dashboard/viewer observation | VERIFIED | CLI accepts only mode/target/run-id; caller-provided status is unsupported. Core owns load/order/receipts/render/write and permits only injected `observeSurface`. |
+| `scripts/verify-data-chain-smoke.ts` | Artifact-only exact verifier | VERIFIED | Reads without running or rewriting evidence, checks JSON/Markdown parity and tuple, and distinguishes terminal proof from checkpoint. |
+| Dashboard/movie DOM marker files and tests | Exact code+UUID browser predicate | VERIFIED | Dashboard named DOM test passed 1/1; movie DOM contract passed 1/1. Both views render `data-phase13-item-id` with the code as marker text. |
+| Attempt D local evidence pair | Auditable local full-chain proof | VERIFIED | Exact verifier exit 0; same code/id across eight ordered receipts through Gateway. |
+| Attempt D remote evidence pair | Auditable selected-production full-chain proof | FAILED AS PROOF / VERIFIED AS CHECKPOINT | Pair is structurally valid and immutable, but contains only `remote_preflight/target_preflight_unmet`; it explicitly does not prove the external chain. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| Target/run | Fixture identity | `createDataChainCandidate` / fixture codes | WIRED | Deterministic primary tuple is shared; current implementation additionally derives nine siblings. |
-| Local projection | Local smoke | projected env validation before D1/service work | WIRED | Current projection and target validation commands pass. |
-| Local runner | D1 and Gateway API | Wrangler local query, service-auth fixture, Gateway fetch | WIRED, RUNTIME UNVERIFIED | Real implementations exist; live execution provenance is absent. |
-| Remote local pair | Provider preflight/children | exact JSON+Markdown load, `runTargetPreflight`, prepared registry | WIRED, RUNTIME UNVERIFIED | Injected tests prove ordering; ignored remote evidence does not prove provider execution. |
-| Pending tuple | Dashboard/viewer | typed CLI append | PARTIAL | Tuple/order is enforced; visual observation is not. |
-| Evidence pair | Validator | JSON schema + regenerated Markdown | WIRED | Latest ignored pairs pass this structural validation only. |
+| Target/run | One fixture | `createDataChainCandidate` -> `createDataChainFixture` -> `syncMovie` | WIRED | Deterministic code, count one, one service-auth call. |
+| Local readiness | Local D1/API | projection -> D1 -> service/auth -> fixture/snapshot -> Gateway API | WIRED AND PROVEN | Attempt D receipts preserve this order and tuple. |
+| Local pending tuple | Dashboard/viewer | `observeDataChainSurfaces` -> injected live `observeSurface` -> repository receipts | WIRED AND PROVEN | Accepted Plan 13-08 adapter retained core ownership; local receipts are Dashboard then viewer. |
+| Terminal local pair | Remote preflight | exact JSON/Markdown load -> explicit target/credential/live ownership gate | WIRED AND PROVEN FAIL-CLOSED | Attempt D reached this link and stopped at `target_preflight_unmet` before children. |
+| Remote preflight | Provider fixture/D1/API | closed prepared entries -> snapshot -> canonical API | WIRED, NOT EXECUTED | Tests prove ordering, but Attempt D contains no provider receipt or remote item id. |
+| Remote pending tuple | Canonical Dashboard/viewer | controlled observer | NOT REACHED | No remote pending tuple exists, so production browser evidence is absent. |
+| Evidence pair | Exact verifier | artifact-only load + schema + deterministic Markdown + tuple/outcome | WIRED | Local returns terminal proof; remote returns checkpoint/non-proof. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |---|---|---|---|---|
-| Local runner | `snapshotResult.itemId` | Local D1 query after service-auth fixture writes | Yes when actually run | FLOWING IN CODE; BEHAVIOR UNVERIFIED |
-| Remote runner | `snapshot.itemId` | Prepared remote D1 snapshot after provider preflight/fixture | Yes when actually run | FLOWING IN CODE; BEHAVIOR UNVERIFIED |
-| Canonical API row | code/id response | Local Gateway or selected HTTPS canonical API | Yes when actually run | FLOWING IN CODE; BEHAVIOR UNVERIFIED |
-| Dashboard/viewer rows | operator status | CLI flags passed to append writer | No independent browser data | HOLLOW PROVENANCE |
-| Verification result | parsed JSON/Markdown | Existing evidence files | Structural data only | STATIC VALIDATION |
+| Local runner | `snapshotResult.itemId` | Actual local fixture plus read-only D1 snapshot | Yes: Attempt D UUID | FLOWING |
+| Local API row | code/id response | Gateway `/api/public/movies/<code>` | Yes: exact Attempt D tuple | FLOWING |
+| Local Dashboard/viewer | code/id DOM tuple | Authorized Codex IAB live navigation under accepted adapter | Yes: receipt-backed ordered observations | FLOWING |
+| Remote runner | remote `snapshot.itemId` | Provider fixture/D1 after preflight | No: preflight stopped first | DISCONNECTED BY CHECKPOINT |
+| Remote Dashboard/viewer | remote pending tuple | Selected canonical browser session | No tuple/source exists | NOT REACHED |
+
+### Accepted Execution Override
+
+Commit `dd8c900` adds a Plan 13-08 execution override for the persistent Codex in-app browser. It permits only repository `observeDataChainSurfaces()` with one injected `observeSurface`; repository core retains evidence loading, tuple validation, target/base resolution, Dashboard-before-viewer order, receipt construction, deterministic rendering, and writes. The adapter may report passed only after exact canonical origin/path plus code-and-UUID DOM checks.
+
+This is not a `VERIFICATION.md` must-have override, so `overrides_applied` remains zero. The plan explicitly grants no provider credential, remote mutation, authorization bypass, or production-success waiver.
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
-| Selected local projection | `pnpm target-profile project-local --target starye-org --check` | Target-managed projection check passed | PASS |
-| Target profile | `pnpm target-profile validate --target starye-org` | Target/profile/resources validated | PASS |
-| Evidence/local/remote contract | focused config Vitest command | 3 files, 32 tests passed | PASS |
-| Fixture contract | focused crawler Vitest command | 1 file, 8 tests passed | PASS |
-| D1 snapshot contract | focused DB Vitest command | 1 file, 6 tests passed | PASS |
-| Latest ignored local pair | `smoke:data-chain-observe --validate ...local-20260717t084300z...` | Exit 0 | PASS (schema only) |
-| Latest ignored remote pair | `smoke:data-chain-observe --validate ...local-20260717t084300z...` | Exit 0 | PASS (schema only) |
-| Crawler regression gate | `pnpm --filter @starye/crawler test --run` | Provided gate: 15 files / 82 tests passed | PASS |
-| Config regression gate | config main suite plus isolated TypeChecker test | Provided gate: 138/139 initially; the sole default 30s TypeChecker timeout passed 2/2 with `--testTimeout=90000` | PASS; timeout is not a behavior failure |
+| Exact Attempt D local artifact | `pnpm smoke:data-chain:verify -- --mode local ...` | `resolved/passed`, `terminal_passed`, `provesExternalChain: true` | PASS |
+| Exact Attempt D remote artifact | `pnpm smoke:data-chain:verify -- --mode remote ...` | `pre_ingest/checkpoint`, `provesExternalChain: false`; wrapper exits non-success | PASS AS HONEST CHECKPOINT / GOAL NOT MET |
+| Provenance/lifecycle/runner/verifier contracts | Config Vitest, four named files | 4 files, 49 tests passed | PASS |
+| One-item fixture | Crawler focused Vitest | 1 file, 9 tests passed | PASS |
+| One-row D1 snapshot | DB focused Vitest | 1 file, 14 tests passed | PASS |
+| Dashboard tuple marker | Dashboard named Vitest test | 1 passed, 9 skipped | PASS |
+| Movie viewer tuple marker | Movie-app focused Vitest | 1 file, 1 test passed | PASS |
+
+The initial unfiltered Dashboard single-file command exceeded the 30-second verifier limit without output. The one named marker behavior then passed in 6.01 seconds; the timeout is retained as a test-runner warning, not counted as production evidence.
 
 ### Probe Execution
 
-No Phase 13 probe script is declared or present. Step 7c is skipped.
+No Phase 13 `probe-*.sh` is declared or present. Step 7c is skipped.
 
 ### Requirements Coverage
 
-| Requirement | Source Plan | Description | Status | Evidence |
-|---|---|---|---|---|
-| DATA-01 | 13-03 | Local Gateway smoke for API/auth/dashboard/content | NEEDS HUMAN | Code and contract tests exist; real browser/runtime provenance is absent. |
-| DATA-02 | 13-01, 13-03 | Local D1 schema/minimal data readiness | NEEDS HUMAN | Real query path exists; no authoritative terminal run output is retained. |
-| DATA-03 | 13-01, 13-02 | Targeted fixture and item identity | NEEDS HUMAN | Live write is unproven; the original one-item plan also drifted to ten items. |
-| DATA-04 | 13-02, 13-03, 13-04 | Item exists in D1/API/admin | NEEDS HUMAN | D1/API code is wired, but real selected-target/admin correlation is not independently evidenced. |
-| DATA-05 | 13-03, 13-04 | Manage/validate through Dashboard | NEEDS HUMAN | CLI append cannot prove an authorized Dashboard observation. |
-| DATA-06 | 13-03, 13-04 | View through selected canonical Gateway | NEEDS HUMAN | No independent local/production browser proof. |
-| DATA-07 | 13-01..13-04 | Capture local and production smoke evidence | BLOCKED | Tracked evidence is checkpoint-only; ignored passed artifacts have no auditable origin. |
-| TEST-05 | 13-01..13-04 | Repeatable smoke script output | SATISFIED | Strict scripts, structural validators, and focused/full regression gates pass. |
+| Requirement | Source Plans | Status | Evidence |
+|---|---|---|---|
+| DATA-01 | 13-03, 13-06, 13-07, 13-08 | SATISFIED | Attempt D local proves API, auth, Dashboard, and viewer only through `http://localhost:8080`. |
+| DATA-02 | 13-01, 13-03, 13-06, 13-08 | SATISFIED | Passed local D1 readiness precedes fixture and production attempt; count-one snapshot is retained. |
+| DATA-03 | 13-01, 13-02, 13-05, 13-06, 13-08 | SATISFIED | One deterministic targeted fixture was written locally and its exact code/UUID identity recorded. |
+| DATA-04 | 13-02 through 13-08 | PARTIAL - BLOCKER | Local D1/API/admin correlation passed; selected-production D1/API/admin correlation is absent. |
+| DATA-05 | 13-03, 13-04, 13-07, 13-08 | PARTIAL - BLOCKER | Authorized local Dashboard observation passed; selected-production Dashboard was never reached. |
+| DATA-06 | 13-03, 13-04, 13-07, 13-08 | PARTIAL - BLOCKER | Local Gateway viewer passed; selected production canonical viewer was never reached. |
+| DATA-07 | 13-01 through 13-08 | PARTIAL - BLOCKER | Local proof and an honest remote checkpoint are captured, but production smoke proof is not. |
+| TEST-05 | 13-01 through 13-08 | SATISFIED | Scripts produce deterministic local proof or remote checkpoint output; fresh 49-test contract suite and both exact artifact checks agree. |
 
-No Phase 13 requirement is orphaned: all eight ROADMAP requirement IDs appear in at least one Phase 13 plan.
+All eight Phase 13 requirement IDs appear in plan frontmatter; none is orphaned. The `[x]` markers currently present in `REQUIREMENTS.md` are planning metadata, not evidence, and do not override the partial runtime findings above.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |---|---|---|---|---|
-| Phase implementation files | - | No unreferenced TBD/FIXME/XXX markers found | INFO | No debt-marker blocker. |
-| `scripts/data-chain-smoke.ts` | 858 | `console.log` | INFO | Expected redacted CLI result output, not a console-only implementation. |
-| `packages/config/src/deployment-target/mutation-entry.ts` | 477 | `return {}` | INFO | Expected empty result for successful non-smoke prepared entries, not a Phase 13 stub. |
-| Ignored passed evidence | - | Self-attested external/browser status | WARNING | Structural validity cannot establish provider/browser execution. |
+| Phase implementation files | - | No unreferenced `TBD`, `FIXME`, or `XXX` markers | INFO | No debt-marker blocker. |
+| `packages/config/src/deployment-target/mutation-entry.ts` | 481 | `return {}` | INFO | Existing success result for non-smoke prepared entries; not a Phase 13 stub and not on the smoke observation path. |
+| Dashboard test command | - | Full single-file run exceeded 30 seconds; named marker test passed | WARNING | Test harness/runtime issue only; does not supply or invalidate remote production proof. |
 
 ### Human Verification Required
 
-1. **Local full-chain provenance**
-   - Test: Run one new canonical local smoke with the existing local stack and authorized Dashboard session, then retain the command result and ordered Dashboard/viewer observation for the exact tuple.
-   - Expected: Terminal `resolved/passed` through `http://localhost:8080` with all eight required surfaces.
-   - Why human: Real D1/service state and browser authorization are outside injected tests.
-
-2. **Provider-backed production provenance**
-   - Test: Use the exact terminal local run to execute remote preflight, bounded fixture, remote D1 snapshot, canonical API, Dashboard, and viewer checks.
-   - Expected: One terminal remote `resolved/passed` artifact for the same target/run/code and its remote itemId, with independently reviewable provider/browser provenance.
-   - Why human: External Cloudflare account access and authorized browser state cannot be inferred from JSON shape.
-
-3. **Ten-item contract decision**
-   - Test: Decide whether the newer quick-plan ten-item batch replaces the canonical 13-02 one-item requirement.
-   - Expected: Either restore exactly one fixture or record an accepted override/canonical contract update.
-   - Why human: Both implementations are intentional-looking, but only the developer can accept the scope change.
+None for the current verdict. Local browser verification is represented by accepted, tuple-bound live receipts. The production result is observably absent, so it is a failed must-have rather than an uncertain item awaiting visual judgment.
 
 ### Deferred Items
 
-None. Phase 14 covers literal cleanup, RUNBOOK procedures, and final evidence mapping; it does not explicitly perform or replace the missing Phase 13 real local/production chain.
+None. Phase 14 covers literal cleanup, RUNBOOK procedures, and final evidence mapping; its goal and success criteria do not perform or replace the missing selected-target provider/data/browser chain.
 
 ### Gaps Summary
 
-The implementation is substantial, wired, and well tested, but the goal is to **prove actual usability**, not merely provide a runner. Canonical Phase 13 state remains checkpointed, while later ignored passed artifacts are structurally valid self-attestations with no independent provider/browser provenance. The live workspace now has the required key presence and both local projection commands pass, so the old prerequisite description is stale; that makes a fresh auditable run possible, not already proven.
+The previous one-item and self-attestation gaps are closed. Attempt D is credible local proof: one deterministic item flows through local D1, Gateway API, authorized Dashboard, and Gateway viewer with receipt-bound code/UUID evidence. The accepted Codex IAB adapter changes only how live navigation is supplied; it does not weaken repository ownership of the evidence transition.
 
-Separately, the current ten-item fixture contradicts the canonical 13-02 exactly-one must-have. The later quick plan documents the intent but does not supply the accepted override required by the verifier contract.
+Phase 13 still misses its defining production outcome. The matching remote run stopped before mutation at `target_preflight_unmet`; consequently there is no provider-backed fixture, remote D1 row, selected-canonical API result, Dashboard management observation, or viewer observation. The checkpoint is structurally valid evidence of fail-closed behavior, not proof that the selected production target is usable. Phase 13 must remain pending.
 
 ---
 
-_Verified: 2026-07-17T10:09:45Z_
+_Verified: 2026-07-18T09:37:12Z_
 _Verifier: the agent (gsd-verifier)_
