@@ -2,8 +2,8 @@
 
 export const CHECKPOINT_EXIT_CODE = 2
 export const LOCAL_GATEWAY_ORIGIN = 'http://localhost:8080'
-/** Phase 13's controlled ingest is intentionally fixed-size and never a corpus crawl. */
-export const DATA_CHAIN_FIXTURE_COUNT = 10 as const
+/** Phase 13's controlled ingest is exactly one item and never a corpus crawl. */
+export const DATA_CHAIN_FIXTURE_COUNT = 1 as const
 
 export const dataChainModeValues = ['local', 'remote'] as const
 export type DataChainMode = (typeof dataChainModeValues)[number]
@@ -46,7 +46,7 @@ export interface DataChainObservation {
   path?: string
   origin?: typeof LOCAL_GATEWAY_ORIGIN
   attempt?: number
-  /** Present only for a fully audited, successful D1 batch observation. */
+  /** Present only for the successful, primary D1 row. */
   itemCount?: typeof DATA_CHAIN_FIXTURE_COUNT
 }
 
@@ -262,7 +262,7 @@ function cloneObservation(observation: DataChainObservation): DataChainObservati
     ...(observation.path ? { path: observation.path } : {}),
     ...(observation.origin ? { origin: observation.origin } : {}),
     ...(observation.attempt ? { attempt: observation.attempt } : {}),
-    ...(observation.itemCount ? { itemCount: observation.itemCount } : {}),
+    ...(observation.itemCount !== undefined ? { itemCount: observation.itemCount } : {}),
   }
 }
 
@@ -302,13 +302,10 @@ export function createDataChainCandidate(input: CreateDataChainCandidateInput): 
   }
 }
 
-/** D-01: derive the complete bounded batch solely from the explicit primary identity. */
+/** D-01: expose the one primary code derived solely from the explicit identity. */
 export function createDataChainFixtureCodes(input: CreateDataChainCandidateInput): readonly string[] {
   const primaryCode = createDataChainCandidate(input).itemCode
-  return [
-    primaryCode,
-    ...Array.from({ length: DATA_CHAIN_FIXTURE_COUNT - 1 }, (_, index) => `${primaryCode}-fixture-${index + 1}`),
-  ]
+  return [primaryCode]
 }
 
 /** D-03: pre-ingest evidence is terminal only for an unmet prerequisite. */
@@ -380,6 +377,14 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
       issues.push(`Evidence ${key} must be non-empty.`)
     }
   }
+  if (
+    hasText(evidence.targetId)
+    && hasText(evidence.runId)
+    && hasText(evidence.itemCode)
+    && evidence.itemCode !== createDataChainCandidate({ targetId: evidence.targetId, runId: evidence.runId }).itemCode
+  ) {
+    issues.push('Evidence itemCode must match the target/run-derived primary code.')
+  }
 
   const observations = evidence.observations
   if (!Array.isArray(observations) || observations.length === 0 || observations.length > 12) {
@@ -418,7 +423,7 @@ export function validateDataChainEvidence(evidence: unknown): readonly string[] 
         || observation.status !== 'passed'
         || observation.itemCount !== DATA_CHAIN_FIXTURE_COUNT
       )) {
-        issues.push(`Observation ${index} itemCount is only allowed as the exact successful D1 batch count.`)
+        issues.push(`Observation ${index} itemCount is only allowed for the exact successful primary D1 row.`)
       }
       if (observation.surface === 'd1' && observation.status === 'passed' && observation.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
         issues.push(`Observation ${index} passed D1 row requires itemCount ${DATA_CHAIN_FIXTURE_COUNT}.`)
