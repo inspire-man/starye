@@ -87,27 +87,19 @@ function diagnosticOutput(result: { readonly stdout?: string, readonly stderr?: 
 }
 
 export type D1SmokeSnapshotObservation
-  = Readonly<{ operation: 'd1-smoke-snapshot', status: 'found', itemCode: string, itemId: string, itemCount: 10 }>
+  = Readonly<{ operation: 'd1-smoke-snapshot', status: 'found', itemCode: string, itemId: string, itemCount: 1 }>
     | Readonly<{ operation: 'd1-smoke-snapshot', status: 'not-found' | 'checkpoint', itemCode: string }>
 
-const DATA_CHAIN_FIXTURE_COUNT = 10
+const DATA_CHAIN_FIXTURE_COUNT = 1
 
 const snapshotSql = [
   'SELECT movie.id AS id, movie.code AS code, movie.is_r18 AS isR18, COUNT(player.id) AS playerCount',
   'FROM movie',
   'LEFT JOIN player ON player.movie_id = movie.id AND player.is_active = 1',
-  'WHERE movie.code = ? OR movie.code LIKE ?',
+  'WHERE movie.code = ?',
   'GROUP BY movie.id, movie.code, movie.is_r18',
-  'ORDER BY movie.code',
-  `LIMIT ${DATA_CHAIN_FIXTURE_COUNT + 1}`,
+  'LIMIT 2',
 ].join(' ')
-
-function expectedFixtureCodes(primaryCode: string): readonly string[] {
-  return [
-    primaryCode,
-    ...Array.from({ length: DATA_CHAIN_FIXTURE_COUNT - 1 }, (_, index) => `${primaryCode}-fixture-${index + 1}`),
-  ]
-}
 
 function isPreparedDbContext(value: unknown, contextPath: string): value is PreparedDbContext {
   if (!value || typeof value !== 'object') {
@@ -250,10 +242,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function findResultRows(value: unknown): readonly Record<string, unknown>[] | undefined {
   const payloads = Array.isArray(value) ? value : [value]
-  for (const payload of payloads) {
-    if (isRecord(payload) && Array.isArray(payload.results) && payload.results.every(isRecord)) {
-      return payload.results
-    }
+  if (payloads.length !== 1) {
+    return undefined
+  }
+  const payload = payloads[0]
+  if (isRecord(payload) && Array.isArray(payload.results) && payload.results.every(isRecord)) {
+    return payload.results
   }
   return undefined
 }
@@ -270,17 +264,11 @@ function parseSnapshotResult(stdout: string | undefined, itemCode: string): D1Sm
     if (rows.length === 0) {
       return { operation: 'd1-smoke-snapshot', status: 'not-found', itemCode }
     }
-    const expectedCodes = expectedFixtureCodes(itemCode)
-    const expectedCodeSet = new Set(expectedCodes)
-    const primary = rows.find(row => row.code === itemCode)
-    const returnedCodes = new Set(rows.map(row => typeof row.code === 'string' ? row.code : ''))
+    const primary = rows[0]
     if (rows.length !== DATA_CHAIN_FIXTURE_COUNT
-      || returnedCodes.size !== DATA_CHAIN_FIXTURE_COUNT
-      || returnedCodes.size !== expectedCodeSet.size
-      || [...expectedCodeSet].some(code => !returnedCodes.has(code))
-      || rows.some(row => Number(row.isR18) !== 0)
-      || rows.some(row => Number(row.playerCount) !== 1)
-      || !primary
+      || primary?.code !== itemCode
+      || Number(primary.isR18) !== 0
+      || Number(primary.playerCount) !== 1
       || typeof primary.id !== 'string'
       || !primary.id.trim()) {
       return { operation: 'd1-smoke-snapshot', status: 'checkpoint', itemCode }
@@ -342,7 +330,7 @@ export async function runTargetD1Mutation(
     configPath: context.apiConfigPath,
     d1Name: context.identity.d1Name,
     sql: snapshotSql,
-    params: [itemCode, `${itemCode}-fixture-%`],
+    params: [itemCode],
   })
   if (result.exitCode !== 0) {
     return { operation: 'd1-smoke-snapshot', status: 'checkpoint', itemCode }

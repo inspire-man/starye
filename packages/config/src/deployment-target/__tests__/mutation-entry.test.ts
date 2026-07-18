@@ -170,12 +170,16 @@ describe('target mutation preparation', () => {
       appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
       runDirectory: path.join(root, 'run'),
     }, { executeReadOnly: readOnlyExecutor, materialize })
+    if (!prepared.smokeItemCode) {
+      throw new Error('Smoke prepared context is missing its primary code.')
+    }
+    const itemCode = prepared.smokeItemCode
     const execute = vi.fn((_command: string, _args: readonly string[], _environment: NodeJS.ProcessEnv) => ({
       exitCode: 0,
       stdout: JSON.stringify({
         operation: 'crawler-smoke-fixture',
         status: 'synced',
-        itemCode: 'phase13-smoke-starye-org-smoke-run',
+        itemCode,
         itemCount: 1,
       }),
     }))
@@ -224,10 +228,28 @@ describe('target mutation preparation', () => {
       observation: {
         operation: 'crawler-smoke-fixture',
         status: 'synced',
-        itemCode: 'phase13-smoke-starye-org-smoke-run',
+        itemCode,
         itemCount: 1,
       },
     })
+
+    await expect(runPreparedTargetMutation({
+      entry: 'crawler-smoke-fixture',
+      preparedContextPath: prepared.preparedContextPath,
+      authorizedEnvironment: {
+        CLOUDFLARE_API_TOKEN: 'cloudflare-token',
+        CRAWLER_SECRET: crawlerSecret,
+      },
+      execute: () => ({
+        exitCode: 0,
+        stdout: JSON.stringify({
+          operation: 'crawler-smoke-fixture',
+          status: 'synced',
+          itemCode: `${itemCode}-sibling`,
+          itemCount: 1,
+        }),
+      }),
+    })).rejects.toThrow('Prepared child observation is invalid.')
   })
 
   it('fails closed before the child when a declared secret is missing or child JSON includes a non-allowlisted field', async () => {

@@ -367,7 +367,11 @@ function isSmokeDefinition(definition: TargetRemoteEntryDefinition): boolean {
   return definition.id === 'crawler-smoke-fixture' || definition.id === 'd1-smoke-snapshot'
 }
 
-function parsePreparedSmokeObservation(definition: TargetRemoteEntryDefinition, stdout: string | undefined): PreparedSmokeChildObservation {
+function parsePreparedSmokeObservation(
+  definition: TargetRemoteEntryDefinition,
+  stdout: string | undefined,
+  expectedItemCode: string,
+): PreparedSmokeChildObservation {
   if (!stdout) {
     throw new Error('Prepared child observation is invalid.')
   }
@@ -390,7 +394,7 @@ function parsePreparedSmokeObservation(definition: TargetRemoteEntryDefinition, 
     if (!hasOnlyKeys(['itemCode', 'itemCount', 'operation', 'status'])
       || observation.operation !== 'crawler-smoke-fixture'
       || observation.status !== 'synced'
-      || !isNonEmptyText(observation.itemCode)
+      || observation.itemCode !== expectedItemCode
       || observation.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
       throw new Error('Prepared child observation is invalid.')
     }
@@ -398,7 +402,7 @@ function parsePreparedSmokeObservation(definition: TargetRemoteEntryDefinition, 
   }
 
   if (definition.id === 'd1-smoke-snapshot') {
-    if (!isNonEmptyText(observation.itemCode) || observation.operation !== 'd1-smoke-snapshot') {
+    if (observation.itemCode !== expectedItemCode || observation.operation !== 'd1-smoke-snapshot') {
       throw new Error('Prepared child observation is invalid.')
     }
     if (observation.status === 'found'
@@ -476,8 +480,11 @@ export async function runPreparedTargetMutation(request: PreparedMutationExecuti
   if (!isSmokeDefinition(definition)) {
     return {}
   }
+  if (!isNonEmptyText(prepared.smokeItemCode)) {
+    throw new Error('Prepared context is invalid or unavailable.')
+  }
   if (!isPreparedChildExecutionResult(execution)) {
     throw new Error('Prepared child observation is invalid.')
   }
-  return { observation: parsePreparedSmokeObservation(definition, execution.stdout) }
+  return { observation: parsePreparedSmokeObservation(definition, execution.stdout, prepared.smokeItemCode) }
 }

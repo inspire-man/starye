@@ -120,13 +120,9 @@ describe('prepared D1 smoke snapshot', () => {
   it('uses the selected prepared D1 identity with a fixed parameterized read-only snapshot query', async () => {
     const { contextPath, apiConfigPath, gatewayConfigPath } = await createPreparedContext()
     const itemCode = 'p13-smoke-starye-org-98bb7ab3'
-    const rows = [
-      itemCode,
-      ...Array.from({ length: 9 }, (_, index) => `${itemCode}-fixture-${index + 1}`),
-    ].map((code, index) => ({ id: `movie-${index + 1}`, code, isR18: 0, playerCount: 1 }))
     const execute = vi.fn(() => ({
       exitCode: 0,
-      stdout: JSON.stringify([{ results: rows }]),
+      stdout: JSON.stringify([{ results: [{ id: 'movie-1', code: itemCode, isR18: 0, playerCount: 1 }] }]),
     }))
 
     const result = await runTargetD1Mutation({
@@ -144,29 +140,31 @@ describe('prepared D1 smoke snapshot', () => {
       accountId: 'selected-account',
       configPath: apiConfigPath,
       d1Name: 'starye-d1',
-      sql: expect.stringContaining('WHERE movie.code = ? OR movie.code LIKE ?'),
-      params: [itemCode, `${itemCode}-fixture-%`],
+      sql: expect.stringContaining('WHERE movie.code = ?'),
+      params: [itemCode],
     }))
     expect(result).toEqual({
       operation: 'd1-smoke-snapshot',
       status: 'found',
       itemCode,
       itemId: 'movie-1',
-      itemCount: 10,
+      itemCount: 1,
     })
   })
 
-  it('does not resolve a D1 tuple when the prepared batch is incomplete', async () => {
+  it.each([
+    ['multiple movie rows', [{ id: 'movie-1', code: 'p13-smoke-starye-org-98bb7ab3', isR18: 0, playerCount: 1 }, { id: 'movie-2', code: 'p13-smoke-starye-org-98bb7ab3', isR18: 0, playerCount: 1 }]],
+    ['a sibling code', [{ id: 'movie-1', code: 'p13-smoke-starye-org-98bb7ab3-sibling', isR18: 0, playerCount: 1 }]],
+    ['an R18 movie', [{ id: 'movie-1', code: 'p13-smoke-starye-org-98bb7ab3', isR18: 1, playerCount: 1 }]],
+    ['no active player', [{ id: 'movie-1', code: 'p13-smoke-starye-org-98bb7ab3', isR18: 0, playerCount: 0 }]],
+    ['multiple active players', [{ id: 'movie-1', code: 'p13-smoke-starye-org-98bb7ab3', isR18: 0, playerCount: 2 }]],
+    ['an empty item id', [{ id: '', code: 'p13-smoke-starye-org-98bb7ab3', isR18: 0, playerCount: 1 }]],
+  ])('does not resolve a D1 tuple for $0', async (_name, rows) => {
     const { contextPath, apiConfigPath, gatewayConfigPath } = await createPreparedContext()
     const itemCode = 'p13-smoke-starye-org-98bb7ab3'
     const execute = vi.fn(() => ({
       exitCode: 0,
-      stdout: JSON.stringify([{ results: Array.from({ length: 9 }, (_, index) => ({
-        id: `movie-${index + 1}`,
-        code: index === 0 ? itemCode : `${itemCode}-fixture-${index}`,
-        isR18: 0,
-        playerCount: 1,
-      })) }]),
+      stdout: JSON.stringify([{ results: rows }]),
     }))
 
     await expect(runTargetD1Mutation({
@@ -179,6 +177,30 @@ describe('prepared D1 smoke snapshot', () => {
       CLOUDFLARE_ACCOUNT_ID: 'selected-account',
       CLOUDFLARE_API_TOKEN: 'cloudflare-token',
     }, { execute })).resolves.toEqual({
+      operation: 'd1-smoke-snapshot',
+      status: 'checkpoint',
+      itemCode,
+    })
+  })
+
+  it.each([
+    ['malformed JSON', { exitCode: 0, stdout: '{not-json' }],
+    ['a malformed child response', { exitCode: 0, stdout: JSON.stringify([{ errors: ['query failed'] }]) }],
+    ['a failed child command', { exitCode: 1, stdout: 'provider failure' }],
+  ])('does not expose an item id for $0', async (_name, commandResult) => {
+    const { contextPath, apiConfigPath, gatewayConfigPath } = await createPreparedContext()
+    const itemCode = 'p13-smoke-starye-org-98bb7ab3'
+
+    await expect(runTargetD1Mutation({
+      STARYE_PREPARED_CONTEXT_PATH: contextPath,
+      STARYE_PREPARED_ENTRY: 'd1-smoke-snapshot',
+      STARYE_PREPARED_OPERATION: 'smoke-snapshot',
+      STARYE_PREPARED_SECRET_KEYS: 'CLOUDFLARE_API_TOKEN',
+      STARYE_API_CONFIG_PATH: apiConfigPath,
+      STARYE_GATEWAY_CONFIG_PATH: gatewayConfigPath,
+      CLOUDFLARE_ACCOUNT_ID: 'selected-account',
+      CLOUDFLARE_API_TOKEN: 'cloudflare-token',
+    }, { execute: () => commandResult })).resolves.toEqual({
       operation: 'd1-smoke-snapshot',
       status: 'checkpoint',
       itemCode,
