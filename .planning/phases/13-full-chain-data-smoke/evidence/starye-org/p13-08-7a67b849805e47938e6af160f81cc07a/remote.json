@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "mode": "remote",
+  "timestamp": "2026-07-18T09:52:34.817Z",
+  "targetId": "starye-org",
+  "runId": "p13-08-7a67b849805e47938e6af160f81cc07a",
+  "itemCode": "p13-smoke-starye-org-e3851bf2",
+  "itemId": null,
+  "ingestState": "pre_ingest",
+  "aggregate": "checkpoint",
+  "observations": [
+    {
+      "surface": "remote_preflight",
+      "status": "checkpoint",
+      "checkpoint": "target_preflight_unmet"
+    }
+  ]
+}

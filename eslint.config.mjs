@@ -14,6 +14,7 @@ export default antfu({
     '.github/*',
     '.trae/*',
     'openspec/*',
+    'packages/crawler/examples/**',
   ],
   rules: {
     'e18e/prefer-static-regex': 'off',

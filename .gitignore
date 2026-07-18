@@ -60,7 +60,7 @@ coverage/
 # TypeScript declaration files (generated)
 *.d.ts
 *.d.ts.map
-!src/**/*.d.ts
+!**/src/**/*.d.ts
 
 # Husky
 .husky/_/
@@ -70,8 +70,8 @@ docs/_meta.json
 docs/_sections.json
 docs/*/.version
 
-# example
-examples*
+# Local crawler reference repositories
+/packages/crawler/examples/
 
 # SeesaaWiki
 .seesaawiki*
@@ -96,9 +96,9 @@ examples*
 
 test-*.txt
 
-test-results*
+**/test-results/
 
-playwright-report/*
+**/playwright-report/
 
 # Claude Code worktrees (local only, never tracked)
 .claude/worktrees/*
@@ -107,6 +107,7 @@ playwright-report/*
 # Local smoke and browser-run artifacts
 /.target-runs/
 /.playwright-cli/
+/output/
 
 # Timestamped data-chain smoke snapshots
 /.planning/phases/*/evidence/*/local-*/
