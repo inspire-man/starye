@@ -36,8 +36,8 @@
 - [x] **DATA-02**: Operator can verify local D1 schema and minimal data setup before production deploy.
 - [x] **DATA-03**: Operator can run a targeted crawler or fixture against the selected API target and record the resulting item identity.
 - [x] **DATA-04**: Operator can verify the crawled item exists in D1/API/admin state.
-- [ ] **DATA-05**: Operator can manage or validate the crawled item through dashboard.
-- [ ] **DATA-06**: Operator can view the crawled/managed item through the selected canonical gateway domain.
+- [x] **DATA-05**: Operator can manage or validate the crawled item through dashboard.
+- [x] **DATA-06**: Operator can view the crawled/managed item through the selected canonical gateway domain.
 - [x] **DATA-07**: Operator can capture local and production smoke evidence as verification artifacts.
 
 ### Tests And Ops
@@ -99,8 +99,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-02 | Phase 13 | Complete |
 | DATA-03 | Phase 13 | Complete |
 | DATA-04 | Phase 13 | Complete |
-| DATA-05 | Phase 13 | Pending |
-| DATA-06 | Phase 13 | Pending |
+| DATA-05 | Phase 13 | Complete |
+| DATA-06 | Phase 13 | Complete |
 | DATA-07 | Phase 13 | Complete |
 | TEST-01 | Phase 14 | Pending |
 | TEST-02 | Phase 11 | Complete |

@@ -16,7 +16,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | 6/8 | In Progress|  |
+| 13 | 7/8 | In Progress|  |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
 
 ## Phase Details
@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 6/8 plans executed
+**Plans:** 7/8 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -106,7 +106,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 6** *(gap closure; blocked on Wave 5 completion)*
 
-- [ ] 13-07-PLAN.md — Require runner/provider/browser provenance instead of self-attested pass rows.
+- [x] 13-07-PLAN.md — Require runner/provider/browser provenance instead of self-attested pass rows.
 
 **Wave 7** *(gap closure; blocked on Wave 6 completion)*
 

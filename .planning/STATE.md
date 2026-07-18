@@ -5,15 +5,15 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Completed 13-06-PLAN.md
-last_updated: "2026-07-18T03:32:05.625Z"
+stopped_at: Completed 13-07-PLAN.md
+last_updated: "2026-07-18T05:21:05.356Z"
 last_activity: 2026-07-18
 last_activity_desc: Completed 13-06-PLAN.md
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 50
 ---
 
@@ -41,7 +41,7 @@ progress:
 ## Current Position
 
 Phase: 13 (full-chain-data-smoke) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-07-18 - Completed 13-06-PLAN.md
 
@@ -71,6 +71,7 @@ Last activity: 2026-07-18 - Completed 13-06-PLAN.md
 | Phase 12 P02 | 11h 16m | 3 tasks | 57 files |
 | Phase 13 P05 | 22min | 2 tasks | 8 files |
 | Phase 13 P06 | 27min | 2 tasks | 7 files |
+| Phase 13 P07 | 1h 30m | 3 tasks | 8 files |
 
 ### Open Todos (carried across phases)
 
@@ -101,8 +102,8 @@ Last activity: 2026-07-18 - Completed 13-06-PLAN.md
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T03:32:05.597Z
-**Stopped at:** Completed 13-06-PLAN.md
+**Last session:** 2026-07-18T05:21:05.338Z
+**Stopped at:** Completed 13-07-PLAN.md
 **Resume file:** None
 
 **Next recommended action:**
@@ -166,3 +167,6 @@ Execute the Phase 13 gap-closure chain: restore the one-item contract, require p
 - [Phase 13]: Prepared smoke child output is valid only when its code equals the target/run-derived primary code and its count is one. — 13-06 one-item prepared observation contract
 - [Phase 13]: Read-only D1 snapshots query one prepared code and accept exactly one non-R18 movie with one active player. — 13-06 fixed snapshot parser
 - [Phase 13]: Local and remote smoke runners turn count, code, or id mismatches into non-success checkpoint evidence before API or browser proof. — 13-06 orchestration gate
+- [Phase 13]: Terminal evidence rows require source-specific allowlisted receipts bound to the exact mode/target/run/code/id/surface tuple. — Prevents self-attested or mismatched evidence from becoming terminal proof.
+- [Phase 13]: The controlled observer derives pending tuples, waits for SPA settlement, and persists browser or target-base failures as checkpoints. — Keeps browser evidence independently observed and fail-closed.
+- [Phase 13]: Smoke artifact verification is execution-free by default; runner exit consistency applies only when a run dependency is explicitly injected. — Prevents verification from overwriting the artifact under inspection.
