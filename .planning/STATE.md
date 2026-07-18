@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
-current_phase_name: full-chain-data-smoke
-status: planned
-stopped_at: 13-09 ready; awaiting authorized selected-target live preflight
-last_updated: "2026-07-18T14:40:50.257Z"
+current_phase_name: Full Chain Data Smoke
+status: verifying
+stopped_at: "13-09 local-only checkpoint: local_projection/target_projection_unmet; Phase 13 remains open"
+last_updated: "2026-07-18T15:17:20.378Z"
 last_activity: 2026-07-18
-last_activity_desc: 13-09 gap plan created and independently verified; ready to execute Task 1 preflight
+last_activity_desc: Plan 13-09 recorded one immutable local projection checkpoint after passing live preflight
 progress:
   total_phases: 4
   completed_phases: 2
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — PLANNED
+Phase: 13 (Full Chain Data Smoke) — VERIFYING
 Plan: 9 of 9
-Status: Ready to execute — Plan 13-09 begins with the authorized selected-target live preflight
-Last activity: 2026-07-18 - Plan 13-09 gap plan passed the independent plan checker
+Status: Verifying Phase 13 after Plan 13-09 checkpoint
+Last activity: 2026-07-18 — Plan 13-09 recorded one immutable local projection checkpoint after passing live preflight
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 16 / 17
+**Plans completed:** 17 / 17
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -85,7 +85,7 @@ Last activity: 2026-07-18 - Plan 13-09 gap plan passed the independent plan chec
 
 ### Active Blockers
 
-- [ ] Plan 13-09 is ready, but Task 1 remains blocked until the exact official live preflight passes the read-only R2 `starye-media` and gateway-worker `starye-gateway` checks. Provider D1/API and canonical remote Dashboard/viewer proof remain pending; no fresh mutation is authorized while the gate is red.
+- [ ] Plan 13-09 passed the official live preflight, but its fresh run stopped at `local_projection/target_projection_unmet` before D1 ingest or browser observation. Provider D1/API and canonical remote Dashboard/viewer proof remain pending; the failed run is immutable and cannot be retried.
 
 ### Recent Context (Brownfield注释)
 
@@ -102,14 +102,14 @@ Last activity: 2026-07-18 - Plan 13-09 gap plan passed the independent plan chec
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T14:40:50.257Z
-**Stopped at:** 13-09 ready; awaiting authorized selected-target live preflight
+**Last session:** 2026-07-18T15:17:20.378Z
+**Stopped at:** 13-09 local-only checkpoint; awaiting phase verification
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Run `$gsd-execute-phase 13 --gaps-only`. Plan 13-09 Task 1 must pass the exact official selected-target live preflight before any fresh run; keep Attempts A-E immutable and leave the plan paused while that gate is red.
+Re-run Phase 13 goal verification against the new Plan 13-09 Summary and immutable local-only checkpoint. Do not retry or overwrite run `p13-09-cfd3fd1d300b45109571668645774915`.
 ```
 
 **If interrupted, resume by:**
@@ -128,7 +128,7 @@ Run `$gsd-execute-phase 13 --gaps-only`. Plan 13-09 Task 1 must pass the exact o
 
 ## Operator Next Steps
 
-- Execute Plan 13-09 with `$gsd-execute-phase 13 --gaps-only`; its blocking Task 1 may resume only after authorized read access for R2 `starye-media` and Worker `starye-gateway` is available. Do not rewrite Attempts A-E evidence.
+- Re-run Phase 13 verification. The selected-target live preflight is green, but a future gap plan must resolve the local target projection precondition before using a different fresh run ID. Do not rewrite Attempts A-E or the Plan 13-09 checkpoint evidence.
 
 ## Decisions
 
