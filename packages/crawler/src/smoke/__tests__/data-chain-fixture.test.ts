@@ -6,7 +6,9 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { runTargetCrawlerMutation } from '../../../scripts/target-crawl-mutation'
-import { createDataChainFixture, createDataChainFixtureBatch, runDataChainFixture } from '../data-chain-fixture'
+import * as fixtureModule from '../data-chain-fixture'
+
+const { createDataChainFixture, runDataChainFixture } = fixtureModule
 
 const roots: string[] = []
 const targetId = 'starye-org'
@@ -47,9 +49,9 @@ function acknowledgedSync() {
 }
 
 describe('phase 13 data-chain fixture', () => {
-  it('builds and syncs exactly ten deterministic non-R18 movies with one player each through ApiClient', async () => {
+  it('builds and syncs exactly one deterministic non-R18 movie with one player through ApiClient', async () => {
     const syncMovie = vi.fn(async () => acknowledgedSync())
-    const fixtures = createDataChainFixtureBatch({ targetId, runId })
+    const fixture = createDataChainFixture({ targetId, runId })
 
     const result = await runDataChainFixture({
       targetId,
@@ -57,59 +59,57 @@ describe('phase 13 data-chain fixture', () => {
       apiClient: { syncMovie },
     })
 
-    expect(fixtures).toHaveLength(10)
-    expect(fixtures[0]?.code).toBe(result.itemCode)
-    for (const fixture of fixtures) {
-      expect(fixture).toEqual(expect.objectContaining({
-        isR18: false,
-        players: [{
-          sourceName: 'phase13-smoke',
-          sourceUrl: expect.stringContaining(fixture.code),
-          sortOrder: 0,
-        }],
-      }))
-      expect(fixture).not.toHaveProperty('actors')
-      expect(fixture).not.toHaveProperty('publisher')
-    }
-    expect(syncMovie).toHaveBeenCalledTimes(10)
+    expect(fixture.code).toBe(result.itemCode)
+    expect(fixture).toEqual(expect.objectContaining({
+      isR18: false,
+      players: [{
+        sourceName: 'phase13-smoke',
+        sourceUrl: expect.stringContaining(fixture.code),
+        sortOrder: 0,
+      }],
+    }))
+    expect(fixture).not.toHaveProperty('actors')
+    expect(fixture).not.toHaveProperty('publisher')
+    expect(syncMovie).toHaveBeenCalledOnce()
+    expect(syncMovie).toHaveBeenCalledWith(fixture)
     expect(result).toEqual({
       operation: 'crawler-smoke-fixture',
       status: 'synced',
-      itemCode: fixtures[0]?.code,
-      itemCount: 10,
+      itemCode: fixture.code,
+      itemCount: 1,
     })
   })
 
   it.each([
-    ['an incomplete item array', (fixtures: ReturnType<typeof createDataChainFixtureBatch>) => fixtures.slice(0, 9)],
-    ['an R18 item', (fixtures: ReturnType<typeof createDataChainFixtureBatch>) => [{ ...fixtures[0]!, isR18: true }, ...fixtures.slice(1)]],
-    ['no player', (fixtures: ReturnType<typeof createDataChainFixtureBatch>) => [{ ...fixtures[0]!, players: [] }, ...fixtures.slice(1)]],
-    ['multiple players', (fixtures: ReturnType<typeof createDataChainFixtureBatch>) => [{ ...fixtures[0]!, players: [...fixtures[0]!.players, fixtures[0]!.players[0]] }, ...fixtures.slice(1)]],
-    ['a mismatched code', (fixtures: ReturnType<typeof createDataChainFixtureBatch>) => [{ ...fixtures[0]!, code: 'other-item' }, ...fixtures.slice(1)]],
-  ])('rejects %s before the service-auth transport', async (_name, createFixtures) => {
+    ['a batch array', (fixture: ReturnType<typeof createDataChainFixture>) => [fixture]],
+    ['an R18 item', (fixture: ReturnType<typeof createDataChainFixture>) => ({ ...fixture, isR18: true })],
+    ['no player', (fixture: ReturnType<typeof createDataChainFixture>) => ({ ...fixture, players: [] })],
+    ['multiple players', (fixture: ReturnType<typeof createDataChainFixture>) => ({ ...fixture, players: [...fixture.players, fixture.players[0]] })],
+    ['a mismatched code', (fixture: ReturnType<typeof createDataChainFixture>) => ({ ...fixture, code: 'other-item' })],
+  ])('rejects %s before the service-auth transport', async (_name, createFixture) => {
     const syncMovie = vi.fn(async () => acknowledgedSync())
 
     await expect(runDataChainFixture({
       targetId,
       runId,
       apiClient: { syncMovie },
-      createFixtures: input => createFixtures(createDataChainFixtureBatch(input)),
+      createFixture: input => createFixture(createDataChainFixture(input)),
     })).rejects.toThrow('Data-chain fixture')
 
     expect(syncMovie).not.toHaveBeenCalled()
   })
 
-  it('never reports a synced batch when one service acknowledgement fails', async () => {
-    let calls = 0
-    const syncMovie = vi.fn(async () => {
-      calls += 1
-      return calls === 6 ? { message: 'Sync completed', result: { success: 0, failed: 1 } } : acknowledgedSync()
-    })
+  it('never reports a synced fixture when its only service acknowledgement fails', async () => {
+    const syncMovie = vi.fn(async () => ({ message: 'Sync completed', result: { success: 0, failed: 1 } }))
 
     await expect(runDataChainFixture({ targetId, runId, apiClient: { syncMovie } }))
       .rejects
       .toThrow('Data-chain fixture sync was not acknowledged.')
-    expect(syncMovie).toHaveBeenCalledTimes(6)
+    expect(syncMovie).toHaveBeenCalledOnce()
+  })
+
+  it('does not retain a batch fixture compatibility export', () => {
+    expect(fixtureModule).not.toHaveProperty('createDataChainFixtureBatch')
   })
 
   it('runs only the registry-owned prepared crawler operation and never constructs an API client for rejected input', async () => {

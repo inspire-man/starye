@@ -60,8 +60,8 @@ function successDependencies() {
     inspectLocalD1: async (): Promise<{ status: 'ready' | 'unready', checkpoint?: string }> => ({ status: 'ready' }),
     checkServices: async () => ({ exitCode: 0, stdout: '[OK] all services', stderr: '' }),
     observeGatewayAuth: async () => ({ status: 302, location: 'http://localhost:8080/auth/login' }),
-    runFixture: vi.fn(async () => ({ itemCode: candidate.itemCode, itemCount: 10 as const })),
-    snapshot: vi.fn(async () => ({ status: 'found' as const, itemCode: candidate.itemCode, itemId: 'movie-42', itemCount: 10 as const })),
+    runFixture: vi.fn(async () => ({ itemCode: candidate.itemCode, itemCount: 1 as const })),
+    snapshot: vi.fn(async () => ({ status: 'found' as const, itemCode: candidate.itemCode, itemId: 'movie-42', itemCount: 1 as const })),
     fetchGatewayApi: vi.fn(async (): Promise<{ status: number, itemCode?: string, itemId?: string }> => ({ status: 200, itemCode: candidate.itemCode, itemId: 'movie-42' })),
     write: async () => {},
   }
@@ -210,7 +210,7 @@ describe('phase 13 local smoke runner', () => {
         { surface: 'local_d1_readiness', status: 'passed' },
         { surface: 'service_readiness', status: 'passed' },
         { surface: 'gateway_auth', status: 'passed' },
-        { surface: 'd1', status: 'passed', itemCount: 10 },
+        { surface: 'd1', status: 'passed', itemCount: 1 },
         { surface: 'api', status: 'passed' },
       ],
     })

@@ -60,7 +60,7 @@ function localPassedEvidence(runId = baseOptions.runId): DataChainEvidence {
       { surface: 'local_d1_readiness', status: 'passed' },
       { surface: 'service_readiness', status: 'passed' },
       { surface: 'gateway_auth', status: 'passed', path: '/auth/', origin: 'http://localhost:8080' },
-      { surface: 'd1', status: 'passed', itemCount: 10 },
+      { surface: 'd1', status: 'passed', itemCount: 1 },
       { surface: 'api', status: 'passed', path: `/api/public/movies/${itemCode}`, origin: 'http://localhost:8080' },
       { surface: 'dashboard', status: 'passed', path: '/dashboard/movies', origin: 'http://localhost:8080' },
       { surface: 'viewer', status: 'passed', path: `/movie/${itemCode}`, origin: 'http://localhost:8080' },
@@ -94,8 +94,8 @@ function remoteDependencies(files: Map<string, string>) {
     } as Record<string, string | undefined>,
     runPreflight: vi.fn((_input: unknown): { ok: boolean, issues: unknown[] } => ({ ok: true, issues: [] })),
     executeReadOnly: vi.fn(() => ({ exitCode: 0, stdout: '' })),
-    runPreparedFixture: vi.fn(async () => ({ operation: 'crawler-smoke-fixture' as const, status: 'synced' as const, itemCode: candidate.itemCode, itemCount: 10 as const })),
-    runPreparedSnapshot: vi.fn(async () => ({ operation: 'd1-smoke-snapshot' as const, status: 'found' as const, itemCode: candidate.itemCode, itemId: 'remote-movie-42', itemCount: 10 as const })),
+    runPreparedFixture: vi.fn(async () => ({ operation: 'crawler-smoke-fixture' as const, status: 'synced' as const, itemCode: candidate.itemCode, itemCount: 1 as const })),
+    runPreparedSnapshot: vi.fn(async () => ({ operation: 'd1-smoke-snapshot' as const, status: 'found' as const, itemCode: candidate.itemCode, itemId: 'remote-movie-42', itemCount: 1 as const })),
     fetchCanonicalApi: vi.fn(async () => ({ status: 200, itemCode: candidate.itemCode, itemId: 'remote-movie-42' })),
   }
 }

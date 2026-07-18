@@ -1,6 +1,5 @@
 import {
   createDataChainCandidate,
-  createDataChainFixtureCodes,
   DATA_CHAIN_FIXTURE_COUNT,
 } from '@starye/config'
 
@@ -23,7 +22,7 @@ export interface CreateDataChainFixtureInput {
 
 export interface RunDataChainFixtureInput extends CreateDataChainFixtureInput {
   readonly apiClient: DataChainFixtureApiClient
-  readonly createFixtures?: (input: CreateDataChainFixtureInput) => unknown
+  readonly createFixture?: (input: CreateDataChainFixtureInput) => unknown
 }
 
 export interface CrawlerSmokeFixtureObservation {
@@ -65,25 +64,6 @@ function assertValidFixture(value: unknown, expectedCode: string): asserts value
   }
 }
 
-function assertValidFixtureBatch(value: unknown, expectedCodes: readonly string[]): asserts value is readonly DataChainFixture[] {
-  if (!Array.isArray(value) || value.length !== DATA_CHAIN_FIXTURE_COUNT || expectedCodes.length !== DATA_CHAIN_FIXTURE_COUNT) {
-    throw new Error('Data-chain fixture batch is invalid.')
-  }
-
-  const receivedCodes = new Set<string>()
-  for (const [index, fixture] of value.entries()) {
-    const expectedCode = expectedCodes[index]
-    if (!expectedCode) {
-      throw new Error('Data-chain fixture batch is invalid.')
-    }
-    assertValidFixture(fixture, expectedCode)
-    receivedCodes.add(fixture.code)
-  }
-  if (receivedCodes.size !== DATA_CHAIN_FIXTURE_COUNT) {
-    throw new Error('Data-chain fixture batch is invalid.')
-  }
-}
-
 function assertAcknowledged(result: unknown): void {
   if (!isRecord(result)
     || result.message !== 'Sync completed'
@@ -110,30 +90,12 @@ export function createDataChainFixture(input: CreateDataChainFixtureInput): Data
   }
 }
 
-/** The primary item remains the sole cross-surface identity; siblings exist only for cardinality audit. */
-export function createDataChainFixtureBatch(input: CreateDataChainFixtureInput): readonly DataChainFixture[] {
-  return createDataChainFixtureCodes(input).map(code => ({
-    code,
-    title: `Phase 13 smoke fixture ${code}`,
-    slug: code,
-    isR18: false,
-    players: [{
-      sourceName: 'phase13-smoke',
-      sourceUrl: `https://fixture.invalid/phase13/${code}`,
-      sortOrder: 0,
-    }],
-  }))
-}
-
 export async function runDataChainFixture(input: RunDataChainFixtureInput): Promise<CrawlerSmokeFixtureObservation> {
   const expectedCode = createDataChainCandidate(input).itemCode
-  const expectedCodes = createDataChainFixtureCodes(input)
-  const fixtures = (input.createFixtures ?? createDataChainFixtureBatch)(input)
-  assertValidFixtureBatch(fixtures, expectedCodes)
+  const fixture = (input.createFixture ?? createDataChainFixture)(input)
+  assertValidFixture(fixture, expectedCode)
 
-  for (const fixture of fixtures) {
-    assertAcknowledged(await input.apiClient.syncMovie(fixture))
-  }
+  assertAcknowledged(await input.apiClient.syncMovie(fixture))
   return {
     operation: 'crawler-smoke-fixture',
     status: 'synced',
