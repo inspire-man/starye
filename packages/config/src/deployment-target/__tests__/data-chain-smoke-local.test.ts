@@ -149,7 +149,7 @@ describe('phase 13 local smoke runner', () => {
 
     expect(result.exitCode).toBe(CHECKPOINT_EXIT_CODE)
     expect(result.evidence).toMatchObject({ ingestState: 'pre_ingest', itemId: null, aggregate: 'checkpoint' })
-    expect(result.evidence.observations).toEqual([{ surface: 'local_projection', status: 'checkpoint', checkpoint: 'target_projection_unmet' }])
+    expect(result.evidence.observations).toEqual([{ surface: 'local_projection', status: 'checkpoint', checkpoint: 'projection-mismatch' }])
     expect(dependencies.runPreflight).toHaveBeenCalledWith(expect.objectContaining({
       scope: 'local',
       command: 'validate',
@@ -160,6 +160,57 @@ describe('phase 13 local smoke runner', () => {
     expect(dependencies.runFixture).not.toHaveBeenCalled()
     expect(dependencies.snapshot).not.toHaveBeenCalled()
     expect(dependencies.fetchGatewayApi).not.toHaveBeenCalled()
+  })
+
+  it('persists the first allowlisted preflight diagnostic and keeps other failures generic', async () => {
+    const { runDataChainSmoke } = await loadSmoke()
+    const tokenDependencies = successDependencies()
+    tokenDependencies.collectProjectionIssues = async () => []
+    tokenDependencies.runPreflight = vi.fn(() => ({
+      ok: false,
+      issues: [
+        { code: 'invalid-command' },
+        { code: 'local-api-token-shadowing' },
+      ],
+    }))
+
+    const tokenResult = await runDataChainSmoke(baseOptions, tokenDependencies)
+
+    expect(tokenResult.evidence.observations).toEqual([{
+      surface: 'local_projection',
+      status: 'checkpoint',
+      checkpoint: 'local-api-token-shadowing',
+    }])
+    expect(tokenDependencies.runFixture).not.toHaveBeenCalled()
+
+    const genericDependencies = successDependencies()
+    genericDependencies.collectProjectionIssues = async () => []
+    genericDependencies.runPreflight = vi.fn(() => ({
+      ok: false,
+      issues: [{ code: 'invalid-command', message: 'ambient-test-token must stay private' }],
+    }))
+
+    const genericResult = await runDataChainSmoke(baseOptions, genericDependencies)
+
+    expect(genericResult.evidence.observations).toEqual([{
+      surface: 'local_projection',
+      status: 'checkpoint',
+      checkpoint: 'target_projection_unmet',
+    }])
+    expect(JSON.stringify(genericResult.evidence)).not.toContain('ambient-test-token')
+
+    const resolverDependencies = successDependencies()
+    resolverDependencies.resolveTarget = () => {
+      throw new Error('resolver failed')
+    }
+
+    const resolverResult = await runDataChainSmoke(baseOptions, resolverDependencies)
+
+    expect(resolverResult.evidence.observations).toEqual([{
+      surface: 'local_projection',
+      status: 'checkpoint',
+      checkpoint: 'target_projection_unmet',
+    }])
   })
 
   it('rejects missing schema and service [!!] output before fixture work', async () => {

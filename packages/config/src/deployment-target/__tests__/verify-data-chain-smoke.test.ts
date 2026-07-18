@@ -271,6 +271,94 @@ describe('phase 13 provenance-aware verifier', () => {
       aggregate: 'checkpoint',
       outcome: 'checkpoint',
       provesExternalChain: false,
+      checkpoint: 'target_preflight_unmet',
     })
+  })
+
+  it.each(['projection-mismatch', 'local-api-token-shadowing'] as const)(
+    'emits only the persisted checkpoint code %s for local preflight diagnostics',
+    async (checkpointCode) => {
+      const { runVerifyDataChainSmokeCli } = await loadVerify()
+      const itemCode = createDataChainCandidate({ targetId, runId }).itemCode
+      const checkpoint = createPreIngestEvidence({
+        targetId,
+        runId,
+        candidateItemCode: itemCode,
+        mode: 'local',
+        timestamp: '2026-07-18T00:00:00.000Z',
+        observation: {
+          surface: 'local_projection',
+          status: 'checkpoint',
+          checkpoint: checkpointCode,
+        },
+      })
+      const json = serializeDataChainEvidenceJson(checkpoint)
+      const markdown = renderDataChainEvidenceMarkdown(checkpoint)
+      const messages: string[] = []
+
+      await expect(runVerifyDataChainSmokeCli([
+        '--mode',
+        'local',
+        '--target',
+        targetId,
+        '--run-id',
+        runId,
+      ], {
+        read: async (file: string) => file.endsWith('.json') ? json : markdown,
+        log: (message: string) => messages.push(message),
+      })).resolves.toBe(CHECKPOINT_EXIT_CODE)
+
+      expect(messages).toHaveLength(1)
+      expect(JSON.parse(messages[0] ?? '{}')).toMatchObject({ checkpoint: checkpointCode })
+      expect(messages[0]).not.toMatch(/ambient-test-token|Local scope must not set/i)
+    },
+  )
+
+  it('omits checkpoint from terminal and pending machine output', async () => {
+    const { runVerifyDataChainSmokeCli } = await loadVerify()
+    const terminal = terminalEvidence('local')
+    const terminalMessages: string[] = []
+
+    await expect(runVerifyDataChainSmokeCli([
+      '--mode',
+      'local',
+      '--target',
+      targetId,
+      '--run-id',
+      runId,
+    ], {
+      read: async (file: string) => file.endsWith('.json')
+        ? serializeDataChainEvidenceJson(terminal)
+        : renderDataChainEvidenceMarkdown(terminal),
+      log: (message: string) => terminalMessages.push(message),
+    })).resolves.toBe(0)
+    expect(JSON.parse(terminalMessages[0] ?? '{}')).not.toHaveProperty('checkpoint')
+
+    const candidate = createDataChainCandidate({ targetId, runId })
+    const pending = createResolvedPendingEvidence({
+      targetId,
+      runId,
+      itemCode: candidate.itemCode,
+      itemId: 'local-movie-42',
+      mode: 'local',
+      timestamp: '2026-07-18T00:00:00.000Z',
+      observations: [{ surface: 'local_projection', status: 'passed' }],
+    })
+    const pendingMessages: string[] = []
+
+    await expect(runVerifyDataChainSmokeCli([
+      '--mode',
+      'local',
+      '--target',
+      targetId,
+      '--run-id',
+      runId,
+    ], {
+      read: async (file: string) => file.endsWith('.json')
+        ? serializeDataChainEvidenceJson(pending)
+        : renderDataChainEvidenceMarkdown(pending),
+      log: (message: string) => pendingMessages.push(message),
+    })).resolves.toBe(CHECKPOINT_EXIT_CODE)
+    expect(JSON.parse(pendingMessages[0] ?? '{}')).not.toHaveProperty('checkpoint')
   })
 })
