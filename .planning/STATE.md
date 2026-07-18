@@ -4,16 +4,16 @@ milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: Full Chain Data Smoke
-status: planned
-stopped_at: "13-10 planned and independently verified; ready for Wave 9 execution"
-last_updated: "2026-07-18T17:34:07.747Z"
+status: verifying
+stopped_at: "13-10 local-only checkpoint: local_projection/target_projection_unmet; Phase 13 remains open"
+last_updated: "2026-07-18T19:03:30.000Z"
 last_activity: 2026-07-19
-last_activity_desc: Plan 13-10 gap closure created and independently verified
+last_activity_desc: Plan 13-10 recorded one immutable local projection checkpoint after standalone local gates passed
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 18
-  completed_plans: 17
+  completed_plans: 18
   percent: 50
 ---
 
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 13 (Full Chain Data Smoke) — PLANNED
+Phase: 13 (Full Chain Data Smoke) — VERIFYING
 Plan: 10 of 10
-Status: Ready to execute — Plan 13-10 re-proves local gates before allocating a fresh run
-Last activity: 2026-07-19 — Plan 13-10 gap closure created and independently verified
+Status: Verifying Phase 13 after Plan 13-10 checkpoint
+Last activity: 2026-07-19 — Plan 13-10 recorded one immutable local projection checkpoint after standalone local gates passed
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 17 / 18
+**Plans completed:** 18 / 18
 **Plans in flight:** 0
 **Phase repair invocations used:** 0 / per-phase budget 2
 
@@ -85,7 +85,7 @@ Last activity: 2026-07-19 — Plan 13-10 gap closure created and independently v
 
 ### Active Blockers
 
-- [ ] A new collision-gated run must restore the selected target-managed local projection and reach terminal local proof; the failed Plan 13-09 run is immutable and cannot be retried.
+- [ ] Plan 13-10 passed the standalone official projection check and local preflight, but its fresh runner stopped at `local_projection/target_projection_unmet`. The runtime gate discrepancy must be diagnosed before a different collision-gated run can seek terminal local proof; Plans 13-09 and 13-10 runs are immutable.
 - [ ] Provider-backed D1/API/admin proof is still missing for one exact selected-production tuple.
 - [ ] Selected-production Dashboard/viewer receipts and a terminal remote verifier result are still missing.
 
@@ -104,14 +104,14 @@ Last activity: 2026-07-19 — Plan 13-10 gap closure created and independently v
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T17:34:07.747Z
-**Stopped at:** 13-10 planned and independently verified; ready for Wave 9 execution
+**Last session:** 2026-07-18T19:03:30.000Z
+**Stopped at:** 13-10 local-only checkpoint; awaiting canonical phase verification
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Run `$gsd-execute-phase 13 --gaps-only`. Plan 13-10 must pass the official projection check and complete local preflight before generating a new `p13-10-*` run ID; do not retry or overwrite any prior run.
+Re-run Phase 13 goal verification against the Plan 13-10 Summary and immutable local-only checkpoint. Do not retry or overwrite run `p13-10-a2917dfa94a74108afd2c6c696dfdbb8`.
 ```
 
 **If interrupted, resume by:**
@@ -130,7 +130,7 @@ Run `$gsd-execute-phase 13 --gaps-only`. Plan 13-10 must pass the official proje
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 13 --gaps-only`. Plan 13-10 first re-proves target-local projection and local readiness without allocating a run, then permits one fresh local-to-production proof. Do not rewrite Attempts A-E or the Plan 13-09 checkpoint evidence.
+- Re-run Phase 13 verification. A future gap plan must diagnose the standalone-versus-runner projection discrepancy before using a different fresh run ID. Do not rewrite Attempts A-E or the Plan 13-09/13-10 checkpoint evidence.
 
 ## Decisions
 

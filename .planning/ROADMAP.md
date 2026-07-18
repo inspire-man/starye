@@ -16,7 +16,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | 9/10 | In Progress|  |
+| 13 | 10/10 | In Progress|  |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
 
 ## Phase Details
@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -118,7 +118,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 9** *(gap closure; blocked on Wave 8 completion)*
 
-- [ ] 13-10-PLAN.md — Re-prove or restore official local projection before allocating a fresh run, then execute one terminal local-to-production D1/API/Dashboard/viewer proof.
+- [x] 13-10-PLAN.md — Re-prove or restore official local projection before allocating a fresh run, then execute one terminal local-to-production D1/API/Dashboard/viewer proof. *(Executed once; standalone local gates passed, but the immutable run stopped at `local_projection/target_projection_unmet`, so the phase goal remains pending.)*
 
 **Success criteria:**
 
@@ -150,11 +150,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Plan 13-10 is ready. It must pass official target-local projection and complete local preflight before generating a fresh run ID, then prove the local and selected-production chains with persistent Codex in-app browser receipts:
+All ten Phase 13 plans have executed. Plan 13-10 passed the official standalone projection and local preflight gates but its single fresh runner attempt stopped at `local_projection/target_projection_unmet`. Re-run canonical phase verification before planning another gap closure:
 
 ```text
-$gsd-execute-phase 13 --gaps-only
+$gsd-plan-phase 13 --gaps
 ```
 
 ---
-*Last updated: 2026-07-19 after Phase 13 Plan 10 gap planning and verification*
+*Last updated: 2026-07-19 after Phase 13 Plan 10 execution checkpoint*
