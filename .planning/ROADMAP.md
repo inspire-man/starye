@@ -16,7 +16,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | 10/12 | In Progress|  |
+| 13 | 11/12 | In Progress|  |
 | 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
 
 ## Phase Details
@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 10/12 plans executed
+**Plans:** 11/12 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -122,7 +122,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 10** *(gap closure; blocked on Wave 9 completion)*
 
-- [ ] 13-11-PLAN.md — Unify the standalone and runner local-preflight environment contract, preserve fail-closed token-shadowing, and expose an allowlisted non-secret checkpoint issue code.
+- [x] 13-11-PLAN.md — Unify the standalone and runner local-preflight environment contract, preserve fail-closed token-shadowing, and expose an allowlisted non-secret checkpoint issue code.
 
 **Wave 11** *(gap closure; blocked on Wave 10 completion)*
 
@@ -158,11 +158,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Plans 13-11 and 13-12 are independently verified and ready. Wave 10 first repairs the diagnosed ambient-token caller mismatch and checkpoint diagnostics; Wave 11 may allocate one new run only after the repair regressions pass:
+Plan 13-11 is complete and Plan 13-12 is ready. Wave 11 may allocate one new run after the completed ambient-token caller and checkpoint-diagnostic repair regressions:
 
 ```text
 $gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-19 after Phase 13 Plans 11-12 gap planning and verification*
+*Last updated: 2026-07-19 after Phase 13 Plan 11 execution; Plan 12 ready*

@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
-current_phase_name: Full Chain Data Smoke
-status: planned
-stopped_at: "13-11 and 13-12 planned and independently verified; ready for Wave 10 execution"
-last_updated: "2026-07-18T20:18:44.482Z"
+current_phase_name: full-chain-data-smoke
+status: executing
+stopped_at: Completed 13-11-PLAN.md; Plan 13-12 ready
+last_updated: "2026-07-18T20:57:34.786Z"
 last_activity: 2026-07-19
-last_activity_desc: Plans 13-11 and 13-12 gap closure created and independently verified
+last_activity_desc: Plan 13-11 complete; Plan 13-12 ready
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
   percent: 50
 ---
 
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 13 (Full Chain Data Smoke) — PLANNED
-Plan: 12 of 12
-Status: Ready to execute — Plan 13-11 repairs the diagnosed runtime environment mismatch before any new run allocation
-Last activity: 2026-07-19 — Plans 13-11 and 13-12 gap closure created and independently verified
+Phase: 13 (full-chain-data-smoke) — EXECUTING
+Plan: 11 of 12
+Status: Executing Phase 13 - Plan 13-12 ready
+Last activity: 2026-07-19 — Plan 13-11 complete; Plan 13-12 ready
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 18 / 20
+**Plans completed:** 19 / 20
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -72,6 +72,7 @@ Last activity: 2026-07-19 — Plans 13-11 and 13-12 gap closure created and inde
 | Phase 13 P05 | 22min | 2 tasks | 8 files |
 | Phase 13 P06 | 27min | 2 tasks | 7 files |
 | Phase 13 P07 | 1h 30m | 3 tasks | 8 files |
+| Phase 13 P11 | 20min | 3 tasks | 8 files |
 
 ### Open Todos (carried across phases)
 
@@ -85,7 +86,6 @@ Last activity: 2026-07-19 — Plans 13-11 and 13-12 gap closure created and inde
 
 ### Active Blockers
 
-- [ ] Plan 13-11 must make target-profile and the smoke runner share one sanitized local-preflight environment contract, preserve direct token-shadowing rejection, and persist an allowlisted issue code before Plan 13-12 may allocate a fresh run. Plans 13-09 and 13-10 runs remain immutable.
 - [ ] Provider-backed D1/API/admin proof is still missing for one exact selected-production tuple.
 - [ ] Selected-production Dashboard/viewer receipts and a terminal remote verifier result are still missing.
 
@@ -104,14 +104,14 @@ Last activity: 2026-07-19 — Plans 13-11 and 13-12 gap closure created and inde
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T20:18:44.482Z
-**Stopped at:** 13-11 and 13-12 planned and independently verified; ready for Wave 10 execution
+**Last session:** 2026-07-18T20:56:38.819Z
+**Stopped at:** Completed 13-11-PLAN.md; Plan 13-12 ready
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Run `$gsd-execute-phase 13 --gaps-only`. Execute Plan 13-11 and its full evidence/runner/observer/verifier regression before Plan 13-12 allocates a new `p13-12-*` run; never retry or overwrite any prior run.
+Run `$gsd-execute-phase 13 --gaps-only`. Execute Plan 13-12 only: allocate one new `p13-12-*` run after the completed Plan 13-11 repair regressions; never retry or overwrite any prior run.
 ```
 
 **If interrupted, resume by:**
@@ -172,3 +172,5 @@ Run `$gsd-execute-phase 13 --gaps-only`. Execute Plan 13-11 and its full evidenc
 - [Phase 13]: Terminal evidence rows require source-specific allowlisted receipts bound to the exact mode/target/run/code/id/surface tuple. — Prevents self-attested or mismatched evidence from becoming terminal proof.
 - [Phase 13]: The controlled observer derives pending tuples, waits for SPA settlement, and persists browser or target-base failures as checkpoints. — Keeps browser evidence independently observed and fail-closed.
 - [Phase 13]: Smoke artifact verification is execution-free by default; runner exit consistency applies only when a run dependency is explicitly injected. — Prevents verification from overwriting the artifact under inspection.
+- [Phase 13]: CLI and local smoke reuse pickRuntimeEnvironment for caller-side sanitation while direct raw-token preflight remains fail closed. — 13-11 local caller parity contract
+- [Phase 13]: Local preflight checkpoints persist only projection-mismatch or local-api-token-shadowing; every other issue stays target_projection_unmet. — 13-11 closed diagnostic vocabulary
