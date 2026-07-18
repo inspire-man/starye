@@ -13,7 +13,7 @@ progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
   percent: 50
 ---
 
