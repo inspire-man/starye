@@ -141,23 +141,31 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [ ] 13-16-PLAN.md — Establish fresh runtime ownership and canonical Gateway readiness, or record an honest runtime blocker.
 
-**Wave 15** *(gap closure; follows immutable 13-16 checkpoint and Wave 14 repairs)*
+**Wave 15** *(historical gap-closure checkpoint; immutable)*
 
-- [ ] 13-21-PLAN.md — Repair local-dev atomic seven-port startup, perform only an authorized exact-PID teardown of the diagnosed legacy partial tree, cold-start from all-free ports, and publish runtime eligibility after canonical Gateway checks. This is not a smoke or Phase-pass claim.
+- [x] 13-21-PLAN.md — Executed once and remains immutable as `blocked_pre_teardown/missing_process_39560`; it is historical diagnosis only and cannot release downstream work.
 
-**Wave 16** *(gap closure; blocked on Wave 15 released runtime eligibility)*
+**Wave 16** *(historical gap-closure checkpoint; immutable)*
+
+- [x] 13-22-PLAN.md — Executed once and remains immutable as `blocked_pre_teardown/supervisor_not_found`; its evaluator remains fail closed and cannot release downstream work.
+
+**Wave 21** *(gap closure; one-time human-escalated retry after the two-repair budget is exhausted)*
+
+- [ ] 13-23-PLAN.md — Repair only the evidence-backed snapshot-generator identifier defect, capture one exact read-only authorization checkpoint, and release runtime eligibility only after matching human PID/hash approval, equal re-snapshot, exact child-first stop evidence, two all-free observations, and canonical Gateway routes. The recorded approval is scoped to this plan and does not increase future repair budget.
+
+**Wave 22** *(gap closure; blocked on Wave 21 released runtime eligibility)*
 
 - [ ] 13-17-PLAN.md — Run one collision-gated local handoff only after all repaired gates pass.
 
-**Wave 17** *(gap closure; blocked on Wave 16 completion)*
+**Wave 23** *(gap closure; blocked on Wave 22 completion)*
 
 - [ ] 13-18-PLAN.md — Let root persistent Codex IAB record local Dashboard then viewer for the exact pending tuple.
 
-**Wave 18** *(gap closure; blocked on Wave 17 completion)*
+**Wave 24** *(gap closure; blocked on Wave 23 completion)*
 
 - [ ] 13-19-PLAN.md — Perform one reservation-backed remote handoff with official preflight and closed checkpoint behavior.
 
-**Wave 19** *(gap closure; blocked on Wave 18 completion)*
+**Wave 25** *(gap closure; blocked on Wave 24 completion)*
 
 - [ ] 13-20-PLAN.md — Record selected-production IAB surfaces and rerun exact plus canonical Phase verification.
 
@@ -191,11 +199,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Plans 13-13 through 13-21 close the diagnosed Gateway readiness, runtime ownership, handoff, and full selected-production proof gaps. Plan 13-16 remains immutable historical diagnosis; 13-21 is the only new runtime eligibility gate consumed by unexecuted Plans 13-17 through 13-20. Execute the revised waves, preserving every historical evidence directory and treating any new checkpoint as terminal for its run:
+Plans 13-13 through 13-23 close the diagnosed Gateway readiness, runtime ownership, handoff, and full selected-production proof gaps. Plans 13-21 and 13-22 are immutable blocked checkpoints. The only executable path is exactly 13-23 Wave 21 -> 13-17 Wave 22 -> 13-18 Wave 23 -> 13-19 Wave 24 -> 13-20 Wave 25; Plans 13-17 through 13-20 consume only `13-23-SUMMARY.md` with `runtime_eligibility: released`. The human escalation recorded for 13-23 is one-time and scoped to its evidence-backed runtime snapshot repair, not a general repair-budget increase. Preserve every historical evidence directory and treat any new checkpoint as terminal for its run:
 
 ```text
 $gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-19 after Phase 13 gap-plan repair waves 12-18*
+*Last updated: 2026-07-20 after Phase 13 scoped 13-23 plan revision and Wave 21-25 routing repair*

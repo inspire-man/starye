@@ -5,10 +5,10 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Planned 13-21 runtime ownership gap closure after immutable 13-16 checkpoint
-last_updated: "2026-07-19T22:00:00Z"
-last_activity: 2026-07-19
-last_activity_desc: Planned 13-21 bounded local-dev atomic startup repair and revised downstream runtime eligibility dependencies
+stopped_at: Revised scoped 13-23 runtime snapshot-capture gap closure after immutable 13-21 and 13-22 checkpoints
+last_updated: "2026-07-20T00:00:00Z"
+last_activity: 2026-07-20
+last_activity_desc: Recorded one-time human escalation for 13-23 and repaired the current Wave 21-25 execution graph
 progress:
   total_phases: 4
   completed_phases: 2
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 15-19
-Plan: 13-16 remains an immutable blocked runtime-ownership checkpoint; 13-21 is the next executable runtime repair and 13-17 through 13-20 consume its closed eligibility result
-Status: Ready to execute Wave 15 (13-21) only
-Last activity: 2026-07-19 — planned bounded local-dev atomic startup repair and revised unexecuted downstream dependency graph without changing historical runtime evidence
+Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 21-25
+Plan: 13-21 and 13-22 remain immutable blocked runtime-ownership checkpoints; only 13-23 can establish the released eligibility consumed by 13-17 through 13-20
+Status: Ready to execute Wave 21 (13-23) only under its recorded one-time scoped human escalation
+Last activity: 2026-07-20 — revised the snapshot-capture plan, Summary machine assertions, and exact downstream dependency graph without changing historical runtime evidence
 
 ## Performance Metrics
 
@@ -51,6 +51,8 @@ Last activity: 2026-07-19 — planned bounded local-dev atomic startup repair an
 **Plans completed:** 23 / 29
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
+
+**Scoped human escalation:** The root user explicitly directed execution through Phase 13/MVP completion and authorized recommended choices/local control. This is approval for exactly one evidence-backed Plan 13-23 runtime snapshot-capture/runtime-recovery repair after the configured budget was exhausted. It does not raise `workflow.node_repair_budget`, authorize any later repair, or waive a future human escalation requirement.
 
 ## Accumulated Context
 
@@ -107,8 +109,8 @@ Last activity: 2026-07-19 — planned bounded local-dev atomic startup repair an
 
 ## Session Continuity
 
-**Last session:** 2026-07-19T13:21:34.724Z
-**Stopped at:** Planned 13-21 runtime ownership gap closure after immutable 13-16 checkpoint
+**Last session:** 2026-07-20T00:00:00Z
+**Stopped at:** Revised scoped 13-23 runtime snapshot-capture gap closure after immutable 13-21 and 13-22 checkpoints
 **Resume file:** None
 
 **Next recommended action:**
@@ -121,9 +123,9 @@ $gsd-execute-phase 13 --gaps-only
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md` and `.planning/ROADMAP.md`
-3. Read `.planning/phases/13-full-chain-data-smoke/13-16-SUMMARY.md`, `13-21-PLAN.md`, and the revised unexecuted `13-17-PLAN.md` through `13-20-PLAN.md`
+3. Read `.planning/phases/13-full-chain-data-smoke/13-21-SUMMARY.md`, `13-22-SUMMARY.md`, `13-23-PLAN.md`, and the revised unexecuted `13-17-PLAN.md` through `13-20-PLAN.md`
 4. Read `.planning/phases/13-full-chain-data-smoke/13-VALIDATION.md` and `13-VERIFICATION.md`
-5. Preserve all historical evidence and start only Wave 15 Plan 13-21
+5. Preserve all historical evidence and start only Wave 21 Plan 13-23 under the scoped human escalation
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -133,7 +135,7 @@ $gsd-execute-phase 13 --gaps-only
 
 ## Operator Next Steps
 
-- Execute Phase 13 Wave 15 Plan 13-21 before revised Waves 16-19. Plan 13-16 remains an immutable local runtime-ownership checkpoint; it is diagnosis only, while the closed 13-21 runtime eligibility result gates Plans 13-17 through 13-20. Do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
+- Execute exactly this graph: 13-23 Wave 21 -> 13-17 Wave 22 -> 13-18 Wave 23 -> 13-19 Wave 24 -> 13-20 Wave 25. Plans 13-21 and 13-22 remain immutable blocked checkpoints; neither can release downstream work. The recorded escalation authorizes only 13-23's evidence-backed runtime snapshot capture/recovery and does not increase the configured two-repair budget or permit a later repair without fresh human escalation. Do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
 
 ## Decisions
 
