@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 12/12 plans executed
+**Plans:** 12/20 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -128,6 +128,35 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [x] 13-12-PLAN.md — Use a new collision-gated `p13-12-*` run to prove the terminal local and selected-production D1/API/Dashboard/viewer chain through persistent Codex IAB. *(Executed once; all repaired local gates passed, but the immutable run stopped at `gateway_auth/gateway_auth_unavailable`, so IAB and remote proof were forbidden.)*
 
+**Wave 12** *(gap closure; blocked on Wave 11 completion)*
+
+- [ ] 13-13-PLAN.md — Replace listener-only readiness with bounded canonical Gateway HTTP checks and deterministic local auth observation.
+
+**Wave 13** *(gap closure; blocked on Wave 12 completion)*
+
+- [ ] 13-14-PLAN.md — Add a target-first, fixed-root, reservation-backed handoff and exact root-script exit contract.
+- [ ] 13-15-PLAN.md — Persist closed auth checkpoint classes and prove checkpoint-before-exit process behavior.
+
+**Wave 14** *(gap closure; blocked on Wave 13 completion)*
+
+- [ ] 13-16-PLAN.md — Establish fresh runtime ownership and canonical Gateway readiness, or record an honest runtime blocker.
+
+**Wave 15** *(gap closure; blocked on Wave 14 completion)*
+
+- [ ] 13-17-PLAN.md — Run one collision-gated local handoff only after all repaired gates pass.
+
+**Wave 16** *(gap closure; blocked on Wave 15 completion)*
+
+- [ ] 13-18-PLAN.md — Let root persistent Codex IAB record local Dashboard then viewer for the exact pending tuple.
+
+**Wave 17** *(gap closure; blocked on Wave 16 completion)*
+
+- [ ] 13-19-PLAN.md — Perform one reservation-backed remote handoff with official preflight and closed checkpoint behavior.
+
+**Wave 18** *(gap closure; blocked on Wave 17 completion)*
+
+- [ ] 13-20-PLAN.md — Record selected-production IAB surfaces and rerun exact plus canonical Phase verification.
+
 **Success criteria:**
 
 1. Local smoke goes through `http://localhost:8080/...` and verifies API, auth/dashboard, and content routes without treating direct app ports as canonical.
@@ -158,11 +187,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-All twelve Phase 13 plans have executed. Plan 13-12 passed the repaired projection/preflight gates but its sole fresh run stopped at `gateway_auth_unavailable`; rerun canonical Phase verification before any further gap routing:
+Plans 13-13 through 13-20 close the diagnosed Gateway readiness, handoff, and full selected-production proof gaps. Execute them in waves, preserving every historical evidence directory and treating any new checkpoint as terminal for its run:
 
 ```text
-Run the Phase 13 canonical goal verifier against `13-12-SUMMARY.md` and the immutable local-only checkpoint.
+$gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-19 after Phase 13 Plan 12 immutable Gateway-auth checkpoint*
+*Last updated: 2026-07-19 after Phase 13 gap-plan repair waves 12-18*

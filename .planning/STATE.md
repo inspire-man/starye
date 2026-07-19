@@ -4,9 +4,9 @@ milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
-status: verifying
+status: executing
 stopped_at: "13-12 local-only checkpoint: gateway_auth_unavailable; awaiting canonical Phase 13 verification"
-last_updated: "2026-07-18T21:30:59.751Z"
+last_updated: "2026-07-19T08:46:54.992Z"
 last_activity: 2026-07-19
 last_activity_desc: Plan 13-12 recorded one immutable local Gateway-auth checkpoint after all repaired local gates passed
 progress:
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — VERIFYING
-Plan: 12 of 12
-Status: Verifying Phase 13 after Plan 13-12 Gateway-auth checkpoint
-Last activity: 2026-07-19 — Plan 13-12 recorded one immutable local Gateway-auth checkpoint after all repaired local gates passed
+Phase: 13 (full-chain-data-smoke) — READY TO EXECUTE GAP WAVES 12-18
+Plan: 12 executed; 13-13 through 13-20 planned
+Status: Ready to execute
+Last activity: 2026-07-19 — Phase 13 gap plans 13-13..20 passed structural, decision-coverage, validation-parity, and post-planning coverage gates
 
 ## Performance Metrics
 
@@ -104,23 +104,23 @@ Last activity: 2026-07-19 — Plan 13-12 recorded one immutable local Gateway-au
 
 ## Session Continuity
 
-**Last session:** 2026-07-18T21:30:59.751Z
-**Stopped at:** 13-12 local-only checkpoint; awaiting canonical Phase 13 verification
+**Last session:** 2026-07-19
+**Stopped at:** Phase 13 gap plans 13-13..20 are ready after the immutable 13-12 Gateway-auth checkpoint diagnosis
 **Resume file:** None
 
 **Next recommended action:**
 
 ```text
-Re-run Phase 13 goal verification against the Plan 13-12 Summary and immutable `gateway_auth_unavailable` local checkpoint. Do not retry or overwrite run `p13-12-81b811028cd94b9884f09f6147c6ca84`.
+$gsd-execute-phase 13 --gaps-only
 ```
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md` (this file)
-2. Read `.planning/PROJECT.md`
-3. Read `.planning/ROADMAP.md`
-4. Read `.planning/phases/13-full-chain-data-smoke/13-VERIFICATION.md`
-5. Read `.planning/phases/13-full-chain-data-smoke/13-05-PLAN.md` through `13-12-PLAN.md`
+2. Read `.planning/PROJECT.md` and `.planning/ROADMAP.md`
+3. Read `.planning/phases/13-full-chain-data-smoke/13-13-PLAN.md` through `13-20-PLAN.md`
+4. Read `.planning/phases/13-full-chain-data-smoke/13-VALIDATION.md` and `13-VERIFICATION.md`
+5. Preserve all historical evidence and start only Wave 12
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -130,7 +130,7 @@ Re-run Phase 13 goal verification against the Plan 13-12 Summary and immutable `
 
 ## Operator Next Steps
 
-- Re-run Phase 13 canonical verification. Plan 13-11 closed the ambient-token mismatch, but Plan 13-12 stopped at local Gateway auth before fixture, IAB, or remote work. Do not rewrite Attempts A-E or the Plan 13-09/13-10/13-12 checkpoint evidence.
+- Execute Phase 13 gap waves 12-18. Plan 13-12 remains an immutable local Gateway-auth checkpoint; do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
 
 ## Decisions
 

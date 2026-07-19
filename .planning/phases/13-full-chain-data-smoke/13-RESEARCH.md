@@ -26,7 +26,8 @@
 
 ### Smoke Item And Ingest Boundary
 
-- **D-01:** 本轮 crawler 验收使用固定、闭合、deterministic 的 10 条 non-R18 smoke fixture 集合；每条携带 namespace/target/run 语义且只有一个 player。primary item 保持为 local/production evidence 和 Dashboard→Viewer 的唯一 correlation tuple，其余 9 条仅作为 D1/API 数量审计的 supporting records。不得依赖人工随机选择现有内容，也不得扩大为完整 crawler corpus。
+- **D-01（2026-07-16 历史草案，已被取代 / SUPERSEDED）：** 原研究曾提出固定、闭合、deterministic 的 10 条 non-R18 smoke fixture 集合，其中 1 条 primary item 加 9 条 supporting records。该数量契约不再是可执行规划来源，不得被后续 plan、test 或 runtime 恢复。
+- **D-01（当前 active locked contract）：** 以更新后的 `13-CONTEXT.md` D-01 为唯一 canonical owner：本轮恰好使用 **1 条** deterministic、non-R18、target/run-derived smoke item，且只有一个 player；local/production 共享 target ID、run ID、item code，各环境 D1 独立建立并在本环境 receipts 内保持一致的 item ID。不得增加 sibling、batch、supporting records 或完整 crawler corpus。
 - **D-02:** 写入只允许受限 crawler 或 fixture adapter；禁止用完整 crawler corpus 作为 release gate。planner 可根据当前受控 entry 和可用凭据选择 fixture 或 targeted crawler，但必须保持最小数据量、可重跑和明确 target。
 
 ### Local-First Execution Order
