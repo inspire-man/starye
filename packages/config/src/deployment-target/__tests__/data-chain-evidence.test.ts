@@ -14,6 +14,7 @@ import {
   createDataChainFixtureCodes,
   createPreIngestEvidence,
   createResolvedPendingEvidence,
+  dataChainCheckpointValues,
   LOCAL_GATEWAY_ORIGIN,
   renderDataChainEvidenceMarkdown,
   serializeDataChainEvidenceJson,
@@ -155,6 +156,67 @@ describe('phase 13 deterministic evidence contract', () => {
       expect(markdown).not.toMatch(/ambient-test-token|Local scope must not set/i)
     },
   )
+
+  it.each([
+    'gateway_auth_timeout',
+    'gateway_auth_fetch_failed',
+    'gateway_auth_http_status_unaccepted',
+    'gateway_auth_redirect_invalid',
+  ] as const)('round-trips the closed Gateway auth checkpoint %s without transport detail', (checkpoint) => {
+    const evidence = createPreIngestEvidence({
+      targetId: tuple.targetId,
+      runId: tuple.runId,
+      candidateItemCode: tuple.itemCode,
+      mode: 'local',
+      timestamp: '2026-07-16T00:00:00.000Z',
+      observation: {
+        surface: 'gateway_auth',
+        status: 'checkpoint',
+        checkpoint,
+        path: '/auth/',
+        origin: LOCAL_GATEWAY_ORIGIN,
+      },
+    })
+    const json = serializeDataChainEvidenceJson(evidence)
+    const markdown = renderDataChainEvidenceMarkdown(evidence)
+
+    expect(dataChainCheckpointValues).toContain(checkpoint)
+    expect(validateDataChainEvidence(evidence)).toEqual([])
+    expect(JSON.parse(json)).toMatchObject({ observations: [{ checkpoint }] })
+    expect(markdown).toContain(`| gateway_auth | checkpoint |  | ${checkpoint} | /auth/ | ${LOCAL_GATEWAY_ORIGIN} |`)
+    expect(Object.keys(JSON.parse(json).observations[0]).sort()).toEqual(['checkpoint', 'origin', 'path', 'status', 'surface'])
+    expect(json).not.toMatch(/error|header|body/i)
+    expect(markdown).not.toMatch(/error|header|body/i)
+  })
+
+  it('retains the generic Gateway auth checkpoint while rejecting unknown values', () => {
+    const legacyEvidence = createPreIngestEvidence({
+      targetId: tuple.targetId,
+      runId: tuple.runId,
+      candidateItemCode: tuple.itemCode,
+      mode: 'local',
+      timestamp: '2026-07-16T00:00:00.000Z',
+      observation: {
+        surface: 'gateway_auth',
+        status: 'checkpoint',
+        checkpoint: 'gateway_auth_unavailable',
+        path: '/auth/',
+        origin: LOCAL_GATEWAY_ORIGIN,
+      },
+    })
+
+    expect(validateDataChainEvidence(legacyEvidence)).toEqual([])
+    expect(validateDataChainEvidence({
+      ...legacyEvidence,
+      observations: [{
+        surface: 'gateway_auth',
+        status: 'checkpoint',
+        checkpoint: 'gateway_auth_transport_detail',
+        path: '/auth/',
+        origin: LOCAL_GATEWAY_ORIGIN,
+      }],
+    })).not.toEqual([])
+  })
 
   it('rejects passed pre-ingest rows, fabricated ids, and post-ingest surfaces before resolution', () => {
     const evidence = createPreIngestEvidence({

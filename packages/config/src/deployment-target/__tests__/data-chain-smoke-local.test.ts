@@ -25,6 +25,7 @@ function evidencePath(mode: 'local' | 'remote', extension: 'json' | 'md'): strin
 
 interface SmokeModule {
   runDataChainSmoke: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
+  runDataChainSmokeCli: (argv?: readonly string[], dependencies?: unknown) => Promise<0 | typeof CHECKPOINT_EXIT_CODE>
   checkServicesDefault: (execute?: () => { exitCode: number, stdout: string, stderr: string }) => Promise<{ exitCode: number, stdout: string, stderr: string }>
   observeGatewayAuthDefault: (dependencies?: {
     readonly gatewayAuthFetch?: typeof fetch
@@ -301,17 +302,59 @@ describe('phase 13 local smoke runner', () => {
     expect(dependencies.fetchGatewayApi).not.toHaveBeenCalled()
   })
 
-  it('accepts only a local Gateway auth response before fixture execution', async () => {
+  it.each([
+    ['timeout', 'gateway_auth_timeout'],
+    ['fetch_failed', 'gateway_auth_fetch_failed'],
+    ['http_status_unaccepted', 'gateway_auth_http_status_unaccepted'],
+    ['redirect_invalid', 'gateway_auth_redirect_invalid'],
+  ] as const)('persists the closed Gateway auth %s checkpoint before fixture execution', async (outcome, checkpoint) => {
     const { runDataChainSmoke } = await loadSmoke()
     const dependencies = successDependencies()
-    dependencies.observeGatewayAuth = async () => ({ outcome: 'redirect_invalid' as const })
+    const write = vi.fn(async (_file: string, _contents: string) => {})
+    dependencies.observeGatewayAuth = async () => ({ outcome })
+    dependencies.write = write
 
     const result = await runDataChainSmoke(baseOptions, dependencies)
 
     expect(result.exitCode).toBe(CHECKPOINT_EXIT_CODE)
     expect(result.evidence).toMatchObject({ ingestState: 'pre_ingest', itemId: null })
-    expect(result.evidence.observations[0]).toMatchObject({ surface: 'gateway_auth', checkpoint: 'gateway_auth_unavailable' })
+    expect(result.evidence.observations).toEqual([{
+      surface: 'gateway_auth',
+      status: 'checkpoint',
+      checkpoint,
+      path: '/auth/',
+      origin: 'http://localhost:8080',
+    }])
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(write.mock.calls.map(([, contents]) => contents).join('\n')).toContain(checkpoint)
     expect(dependencies.runFixture).not.toHaveBeenCalled()
+    expect(dependencies.snapshot).not.toHaveBeenCalled()
+    expect(dependencies.fetchGatewayApi).not.toHaveBeenCalled()
+  })
+
+  it.skip('includes only the validated persisted checkpoint in runner machine output', async () => {
+    const { runDataChainSmokeCli } = await loadSmoke()
+    const dependencies = successDependencies()
+    dependencies.observeGatewayAuth = async () => ({ outcome: 'timeout' as const })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await expect(runDataChainSmokeCli([
+      '--mode',
+      'local',
+      '--target',
+      baseOptions.target,
+      '--run-id',
+      baseOptions.runId,
+    ], dependencies)).resolves.toBe(CHECKPOINT_EXIT_CODE)
+
+    expect(JSON.parse(log.mock.calls[0]?.[0] ?? '')).toMatchObject({
+      mode: 'local',
+      target: baseOptions.target,
+      runId: baseOptions.runId,
+      checkpoint: 'gateway_auth_timeout',
+    })
+    expect(JSON.parse(log.mock.calls[0]?.[0] ?? '')).not.toHaveProperty('status')
+    log.mockRestore()
   })
 
   it('delegates default Gateway auth to the bounded closed probe and accepts only accepted output', async () => {
