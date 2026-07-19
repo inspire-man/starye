@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 interface AuthorizationModule {
+  buildReadOnlySnapshotCommand: () => string
   evaluateLocalDevAuthorization: (snapshot: unknown) => unknown
 }
 
@@ -52,10 +53,26 @@ async function loadAuthorization(): Promise<AuthorizationModule> {
 }
 
 describe('local-dev supervisor-root authorization', () => {
+  it('uses non-reserved PowerShell identifiers while retaining the fixed snapshot JSON fields', async () => {
+    const authorization = await loadAuthorization()
+    const command = authorization.buildReadOnlySnapshotCommand()
+
+    expect(command).toContain('$listenerOwnerPid = [int]$_.OwningProcess')
+    expect(command).toContain('$win32ProcessId = [int]$_.ProcessId')
+    expect(command).toContain('$parentProcessId = [int]$_.ParentProcessId')
+    expect(command).toContain('ownerPid = $listenerOwnerPid')
+    expect(command).toContain('pid = $win32ProcessId')
+    expect(command).toContain('parentPid = $parentProcessId')
+    expect(command).not.toMatch(/\$pid\s*=/i)
+  })
+
   it('authorizes a complete legacy tree when only the supervisor external parent is unavailable', async () => {
     const authorization = await loadAuthorization()
 
-    expect(authorization.evaluateLocalDevAuthorization(legacySnapshot())).toMatchObject({
+    const first = authorization.evaluateLocalDevAuthorization(legacySnapshot())
+    const second = authorization.evaluateLocalDevAuthorization(legacySnapshot())
+
+    expect(first).toMatchObject({
       kind: 'authorized',
       authorizationSupervisorPid: supervisorPid,
       authorizationExternalAncestorContext: 'supervisor_parent_pid_unavailable:999',
@@ -63,9 +80,10 @@ describe('local-dev supervisor-root authorization', () => {
       authorizationDescendantPidsChildBeforeParent: [99, 100, 101, 102, 103, 104, 105],
       authorizedStopPidsChildBeforeParent: [99, 100, 101, 102, 103, 104, 105, supervisorPid],
     })
-    expect(authorization.evaluateLocalDevAuthorization(legacySnapshot())).toMatchObject({
+    expect(first).toMatchObject({
       authorizationSnapshotSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
     })
+    expect(first).toStrictEqual(second)
   })
 
   it('refuses before teardown when a listener chain is missing before the matched supervisor', async () => {
@@ -111,6 +129,61 @@ describe('local-dev supervisor-root authorization', () => {
       closedReason: 'ancestry_cycle_before_supervisor',
       authorizationDescendantPidsChildBeforeParent: [],
       authorizedStopPidsChildBeforeParent: [],
+    })
+  })
+
+  it('preserves malformed, supervisor, duplicate-owner, and listener-shape closed branches', async () => {
+    const authorization = await loadAuthorization()
+    const expectedBlocked = {
+      kind: 'blocked',
+      terminalBranch: 'blocked_pre_teardown',
+      authorizationDescendantPidsChildBeforeParent: [],
+      authorizedStopPidsChildBeforeParent: [],
+    }
+
+    expect(authorization.evaluateLocalDevAuthorization({})).toMatchObject({
+      ...expectedBlocked,
+      closedReason: 'malformed_snapshot',
+    })
+    expect(authorization.evaluateLocalDevAuthorization(legacySnapshot({
+      processes: [
+        processRecord(100, 999),
+        processRecord(101, 999),
+        processRecord(102, 999),
+        processRecord(103, 999),
+        processRecord(104, 999),
+        processRecord(105, 999),
+      ],
+    }))).toMatchObject({
+      ...expectedBlocked,
+      closedReason: 'supervisor_not_found',
+    })
+    expect(authorization.evaluateLocalDevAuthorization(legacySnapshot({
+      listeners: [
+        { port: 8787, ownerPid: 100 },
+        { port: 5173, ownerPid: 100 },
+        { port: 3002, ownerPid: 102 },
+        { port: 3003, ownerPid: 103 },
+        { port: 3000, ownerPid: 104 },
+        { port: 3001, ownerPid: 105 },
+      ],
+    }))).toMatchObject({
+      ...expectedBlocked,
+      closedReason: 'duplicate_listener_owner',
+    })
+    expect(authorization.evaluateLocalDevAuthorization(legacySnapshot({
+      listeners: [
+        { port: 8080, ownerPid: 99 },
+        { port: 8787, ownerPid: 100 },
+        { port: 5173, ownerPid: 101 },
+        { port: 3002, ownerPid: 102 },
+        { port: 3003, ownerPid: 103 },
+        { port: 3000, ownerPid: 104 },
+        { port: 3001, ownerPid: 105 },
+      ],
+    }))).toMatchObject({
+      ...expectedBlocked,
+      closedReason: 'legacy_listener_shape_mismatch',
     })
   })
 })
