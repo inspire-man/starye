@@ -324,15 +324,17 @@ export function evaluateLocalDevAuthorization(input: unknown): LocalDevAuthoriza
   }
 }
 
-const readOnlySnapshotCommand = [
-  '$ports = @(8080,8787,5173,3002,3003,3000,3001)',
-  '$listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ports -contains [int]$_.LocalPort } | ForEach-Object { [pscustomobject]@{ port = [int]$_.LocalPort; ownerPid = [int]$_.OwningProcess } })',
-  '$processes = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ProcessId -gt 0 } | ForEach-Object { [pscustomobject]@{ pid = [int]$_.ProcessId; parentPid = [int]$_.ParentProcessId; executable = $_.ExecutablePath; commandLine = $_.CommandLine; startTime = $_.CreationDate } })',
-  '[pscustomobject]@{ listeners = $listeners; processes = $processes } | ConvertTo-Json -Compress -Depth 3',
-].join('; ')
+export function buildReadOnlySnapshotCommand(): string {
+  return [
+    '$ports = @(8080,8787,5173,3002,3003,3000,3001)',
+    '$listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ports -contains [int]$_.LocalPort } | ForEach-Object { $listenerOwnerPid = [int]$_.OwningProcess; [pscustomobject]@{ port = [int]$_.LocalPort; ownerPid = $listenerOwnerPid } })',
+    '$processes = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ProcessId -gt 0 } | ForEach-Object { $win32ProcessId = [int]$_.ProcessId; $parentProcessId = [int]$_.ParentProcessId; [pscustomobject]@{ pid = $win32ProcessId; parentPid = $parentProcessId; executable = $_.ExecutablePath; commandLine = $_.CommandLine; startTime = $_.CreationDate } })',
+    '[pscustomobject]@{ listeners = $listeners; processes = $processes } | ConvertTo-Json -Compress -Depth 3',
+  ].join('; ')
+}
 
 function captureCurrentWorkspaceSnapshot(): unknown {
-  const output = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', readOnlySnapshotCommand], {
+  const output = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', buildReadOnlySnapshotCommand()], {
     cwd: path.resolve(import.meta.dirname, '..'),
     encoding: 'utf8',
     shell: false,
