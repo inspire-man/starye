@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 15/20 plans executed
+**Plans:** 15/21 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -141,19 +141,23 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [ ] 13-16-PLAN.md — Establish fresh runtime ownership and canonical Gateway readiness, or record an honest runtime blocker.
 
-**Wave 15** *(gap closure; blocked on Wave 14 completion)*
+**Wave 15** *(gap closure; follows immutable 13-16 checkpoint and Wave 14 repairs)*
+
+- [ ] 13-21-PLAN.md — Repair local-dev atomic seven-port startup, perform only an authorized exact-PID teardown of the diagnosed legacy partial tree, cold-start from all-free ports, and publish runtime eligibility after canonical Gateway checks. This is not a smoke or Phase-pass claim.
+
+**Wave 16** *(gap closure; blocked on Wave 15 released runtime eligibility)*
 
 - [ ] 13-17-PLAN.md — Run one collision-gated local handoff only after all repaired gates pass.
 
-**Wave 16** *(gap closure; blocked on Wave 15 completion)*
+**Wave 17** *(gap closure; blocked on Wave 16 completion)*
 
 - [ ] 13-18-PLAN.md — Let root persistent Codex IAB record local Dashboard then viewer for the exact pending tuple.
 
-**Wave 17** *(gap closure; blocked on Wave 16 completion)*
+**Wave 18** *(gap closure; blocked on Wave 17 completion)*
 
 - [ ] 13-19-PLAN.md — Perform one reservation-backed remote handoff with official preflight and closed checkpoint behavior.
 
-**Wave 18** *(gap closure; blocked on Wave 17 completion)*
+**Wave 19** *(gap closure; blocked on Wave 18 completion)*
 
 - [ ] 13-20-PLAN.md — Record selected-production IAB surfaces and rerun exact plus canonical Phase verification.
 
@@ -187,7 +191,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Plans 13-13 through 13-20 close the diagnosed Gateway readiness, handoff, and full selected-production proof gaps. Execute them in waves, preserving every historical evidence directory and treating any new checkpoint as terminal for its run:
+Plans 13-13 through 13-21 close the diagnosed Gateway readiness, runtime ownership, handoff, and full selected-production proof gaps. Plan 13-16 remains immutable historical diagnosis; 13-21 is the only new runtime eligibility gate consumed by unexecuted Plans 13-17 through 13-20. Execute the revised waves, preserving every historical evidence directory and treating any new checkpoint as terminal for its run:
 
 ```text
 $gsd-execute-phase 13 --gaps-only

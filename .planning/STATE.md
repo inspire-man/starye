@@ -5,16 +5,16 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Completed 13-15-PLAN.md
-last_updated: "2026-07-19T13:24:47Z"
+stopped_at: Planned 13-21 runtime ownership gap closure after immutable 13-16 checkpoint
+last_updated: "2026-07-19T22:00:00Z"
 last_activity: 2026-07-19
-last_activity_desc: Plan 13-15 completed closed Gateway auth checkpoints and in-memory timeout process proof
+last_activity_desc: Planned 13-21 bounded local-dev atomic startup repair and revised downstream runtime eligibility dependencies
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 28
+  total_plans: 29
   completed_plans: 23
-  percent: 82
+  percent: 79
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 13-18
-Plan: 15 executed; 13-16 through 13-20 planned
-Status: Ready to execute Wave 14
-Last activity: 2026-07-19 — Plan 13-15 completed closed Gateway auth checkpoints and in-memory timeout process proof
+Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 15-19
+Plan: 13-16 remains an immutable blocked runtime-ownership checkpoint; 13-21 is the next executable runtime repair and 13-17 through 13-20 consume its closed eligibility result
+Status: Ready to execute Wave 15 (13-21) only
+Last activity: 2026-07-19 — planned bounded local-dev atomic startup repair and revised unexecuted downstream dependency graph without changing historical runtime evidence
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 23 / 28
+**Plans completed:** 23 / 29
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -108,7 +108,7 @@ Last activity: 2026-07-19 — Plan 13-15 completed closed Gateway auth checkpoin
 ## Session Continuity
 
 **Last session:** 2026-07-19T13:21:34.724Z
-**Stopped at:** Completed 13-15-PLAN.md
+**Stopped at:** Planned 13-21 runtime ownership gap closure after immutable 13-16 checkpoint
 **Resume file:** None
 
 **Next recommended action:**
@@ -121,9 +121,9 @@ $gsd-execute-phase 13 --gaps-only
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md` and `.planning/ROADMAP.md`
-3. Read `.planning/phases/13-full-chain-data-smoke/13-14-PLAN.md` through `13-20-PLAN.md`
+3. Read `.planning/phases/13-full-chain-data-smoke/13-16-SUMMARY.md`, `13-21-PLAN.md`, and the revised unexecuted `13-17-PLAN.md` through `13-20-PLAN.md`
 4. Read `.planning/phases/13-full-chain-data-smoke/13-VALIDATION.md` and `13-VERIFICATION.md`
-5. Preserve all historical evidence and start only Wave 12
+5. Preserve all historical evidence and start only Wave 15 Plan 13-21
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -133,7 +133,7 @@ $gsd-execute-phase 13 --gaps-only
 
 ## Operator Next Steps
 
-- Execute Phase 13 gap waves 13-18. Plan 13-12 remains an immutable local Gateway-auth checkpoint; do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
+- Execute Phase 13 Wave 15 Plan 13-21 before revised Waves 16-19. Plan 13-16 remains an immutable local runtime-ownership checkpoint; it is diagnosis only, while the closed 13-21 runtime eligibility result gates Plans 13-17 through 13-20. Do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
 
 ## Decisions
 
