@@ -79,3 +79,8 @@ None - the repaired generator and the closed Task 2 branch executed exactly with
 ## Known Stubs
 
 None.
+
+## Self-Check: PASSED
+
+- The Summary and commits `2ab073a`, `3abf541`, and `03286a5` exist.
+- The checkpoint commit contains no file deletion and the machine branch contract remains valid.
