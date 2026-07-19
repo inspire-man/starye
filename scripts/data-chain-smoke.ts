@@ -947,10 +947,30 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
         })
   }
   catch {
-    return preIngestCheckpoint(options, candidate.itemCode, { surface: 'gateway_auth', status: 'checkpoint', checkpoint: 'gateway_auth_unavailable', path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN }, now, write)
+    return preIngestCheckpoint(options, candidate.itemCode, { surface: 'gateway_auth', status: 'checkpoint', checkpoint: 'gateway_auth_fetch_failed', path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN }, now, write)
   }
   if (!validGatewayAuth(auth)) {
-    return preIngestCheckpoint(options, candidate.itemCode, { surface: 'gateway_auth', status: 'checkpoint', checkpoint: 'gateway_auth_unavailable', path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN }, now, write)
+    let checkpoint: Extract<DataChainCheckpoint, | 'gateway_auth_timeout'
+      | 'gateway_auth_fetch_failed'
+      | 'gateway_auth_http_status_unaccepted'
+      | 'gateway_auth_redirect_invalid'>
+    switch (auth.outcome) {
+      case 'timeout':
+        checkpoint = 'gateway_auth_timeout'
+        break
+      case 'fetch_failed':
+        checkpoint = 'gateway_auth_fetch_failed'
+        break
+      case 'http_status_unaccepted':
+        checkpoint = 'gateway_auth_http_status_unaccepted'
+        break
+      case 'redirect_invalid':
+        checkpoint = 'gateway_auth_redirect_invalid'
+        break
+      case 'accepted':
+        throw new Error('Accepted Gateway auth cannot enter the failure checkpoint path.')
+    }
+    return preIngestCheckpoint(options, candidate.itemCode, { surface: 'gateway_auth', status: 'checkpoint', checkpoint, path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN }, now, write)
   }
 
   const runFixture = dependencies.runFixture ?? runFixtureDefault
@@ -1019,10 +1039,14 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
   return { exitCode: CHECKPOINT_EXIT_CODE, evidence }
 }
 
-export async function runDataChainSmokeCli(argv: readonly string[] = process.argv.slice(2)): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
+export async function runDataChainSmokeCli(
+  argv: readonly string[] = process.argv.slice(2),
+  dependencies: DataChainSmokeDependencies = {},
+): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
   const options = parseDataChainSmokeArgs(argv)
-  const result = await runDataChainSmoke(options)
-  console.log(JSON.stringify({ mode: options.mode, target: options.target, runId: options.runId, itemCode: result.evidence.itemCode, itemId: result.evidence.itemId, state: result.evidence.ingestState, aggregate: result.evidence.aggregate }))
+  const result = await runDataChainSmoke(options, dependencies)
+  const checkpoint = result.evidence.observations.find(observation => observation.status === 'checkpoint')?.checkpoint
+  console.log(JSON.stringify({ mode: options.mode, target: options.target, runId: options.runId, itemCode: result.evidence.itemCode, itemId: result.evidence.itemId, state: result.evidence.ingestState, aggregate: result.evidence.aggregate, ...(checkpoint ? { checkpoint } : {}) }))
   return result.exitCode
 }
 

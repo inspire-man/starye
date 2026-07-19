@@ -98,7 +98,7 @@ function successDependencies() {
     runFixture: vi.fn(async () => ({ itemCode: candidate.itemCode, itemCount: 1 as const })),
     snapshot: vi.fn(async () => ({ status: 'found' as const, itemCode: candidate.itemCode, itemId: 'movie-42', itemCount: 1 as const })),
     fetchGatewayApi: vi.fn(async (): Promise<{ status: number, itemCode?: string, itemId?: string }> => ({ status: 200, itemCode: candidate.itemCode, itemId: 'movie-42' })),
-    write: async () => {},
+    write: async (_file: string, _contents: string) => {},
   }
 }
 
@@ -332,7 +332,7 @@ describe('phase 13 local smoke runner', () => {
     expect(dependencies.fetchGatewayApi).not.toHaveBeenCalled()
   })
 
-  it.skip('includes only the validated persisted checkpoint in runner machine output', async () => {
+  it('includes only the validated persisted checkpoint in runner machine output', async () => {
     const { runDataChainSmokeCli } = await loadSmoke()
     const dependencies = successDependencies()
     dependencies.observeGatewayAuth = async () => ({ outcome: 'timeout' as const })
