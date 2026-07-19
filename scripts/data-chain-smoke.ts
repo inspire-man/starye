@@ -7,6 +7,7 @@ import type {
   PreparedSmokeChildObservation,
   ProjectionValidationIssue,
 } from '../packages/config/src/deployment-target/index'
+import type { GatewayAuthProbeResult } from './gateway-readiness.ts'
 import { spawnSync } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -36,6 +37,7 @@ import {
 } from '../packages/config/src/deployment-target/index'
 import { createDataChainFixture, runDataChainFixture } from '../packages/crawler/src/smoke/data-chain-fixture'
 import { ApiClient } from '../packages/crawler/src/utils/api-client'
+import { observeCanonicalGatewayAuth } from './gateway-readiness.ts'
 import { packageManagerInvocation } from './package-manager-command.ts'
 import { pickRuntimeEnvironment } from './target-profile.ts'
 
@@ -61,11 +63,6 @@ export interface LocalCommandResult {
   readonly stderr: string
 }
 
-export interface GatewayAuthResponse {
-  readonly status: number
-  readonly location?: string | null
-}
-
 export interface DataChainSmokeDependencies {
   readonly resolveTarget?: (target: string) => {
     id: string
@@ -80,7 +77,9 @@ export interface DataChainSmokeDependencies {
   readonly runPreflight?: (options: Parameters<typeof runTargetPreflight>[0]) => ReturnType<typeof runTargetPreflight>
   readonly inspectLocalD1?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<LocalD1Inspection>
   readonly checkServices?: () => Promise<LocalCommandResult>
-  readonly observeGatewayAuth?: () => Promise<GatewayAuthResponse>
+  readonly observeGatewayAuth?: () => Promise<GatewayAuthProbeResult>
+  readonly gatewayAuthFetch?: typeof fetch
+  readonly gatewayAuthTimeoutMs?: number
   readonly runFixture?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<{ itemCode: string, itemCount: typeof DATA_CHAIN_FIXTURE_COUNT }>
   readonly snapshot?: (input: { targetId: string, runId: string, itemCode: string }) => Promise<{ status: 'found' | 'not-found' | 'checkpoint', itemCode: string, itemId?: string, itemCount?: typeof DATA_CHAIN_FIXTURE_COUNT }>
   readonly fetchGatewayApi?: (input: { itemCode: string, itemId: string }) => Promise<{ status: number, itemCode?: string, itemId?: string, attempt?: number }>
@@ -339,34 +338,100 @@ async function collectProjectionIssuesDefault(target: string): Promise<readonly 
   return validateProjectedEnv(plan, contents)
 }
 
-async function checkServicesDefault(): Promise<LocalCommandResult> {
+const requiredServiceListeners = [
+  { name: 'Gateway', port: 8080 },
+  { name: 'API', port: 8787 },
+  { name: 'Dashboard', port: 5173 },
+  { name: 'Blog', port: 3002 },
+  { name: 'Auth', port: 3003 },
+  { name: 'Comic', port: 3000 },
+  { name: 'Movie', port: 3001 },
+] as const
+
+type ServiceMachineRecord = Record<string, unknown>
+
+function hasExactKeys(value: ServiceMachineRecord, keys: readonly string[]): boolean {
+  const actual = Object.keys(value).sort()
+  return actual.length === keys.length && actual.every((key, index) => key === [...keys].sort()[index])
+}
+
+function isAcceptedGatewayOutcome(value: unknown): boolean {
+  return isRecord(value) && hasExactKeys(value, ['outcome']) && value.outcome === 'accepted'
+}
+
+function isHealthyGatewayReadiness(value: unknown): boolean {
+  return isRecord(value)
+    && hasExactKeys(value, ['schema', 'healthy', 'robots', 'auth', 'authSlash'])
+    && value.schema === 'starye-gateway-readiness-1'
+    && value.healthy === true
+    && isAcceptedGatewayOutcome(value.robots)
+    && isAcceptedGatewayOutcome(value.auth)
+    && isAcceptedGatewayOutcome(value.authSlash)
+}
+
+function isExpectedServiceListeners(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length !== requiredServiceListeners.length) {
+    return false
+  }
+  return requiredServiceListeners.every((expected) => {
+    const matching = value.filter(listener => isRecord(listener)
+      && hasExactKeys(listener, ['name', 'port', 'listening'])
+      && listener.name === expected.name
+      && listener.port === expected.port
+      && listener.listening === true)
+    return matching.length === 1
+  })
+}
+
+function isHealthyServiceReadiness(value: unknown): value is ServiceMachineRecord {
+  return isRecord(value)
+    && hasExactKeys(value, ['schema', 'healthy', 'listeners', 'gateway'])
+    && value.schema === 'starye-local-services-1'
+    && value.healthy === true
+    && isExpectedServiceListeners(value.listeners)
+    && isHealthyGatewayReadiness(value.gateway)
+}
+
+function parseServiceReadiness(stdout: string): ServiceMachineRecord | undefined {
+  const machineLines = stdout.split(/\r?\n/).map(line => line.trim()).filter(line => line.startsWith('{'))
+  if (machineLines.length !== 1) {
+    return undefined
+  }
+  try {
+    const parsed = JSON.parse(machineLines[0]) as unknown
+    return isHealthyServiceReadiness(parsed) ? parsed : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+function executeCheckServicesDefault(): LocalCommandResult {
   const invocation = packageManagerInvocation(['check:services'])
   const result = spawnSync(invocation.command, invocation.args, { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', shell: false })
   return { exitCode: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
 }
 
-async function observeGatewayAuthDefault(): Promise<GatewayAuthResponse> {
-  const response = await fetch(`${LOCAL_GATEWAY_ORIGIN}/auth/`, { redirect: 'manual' })
-  return { status: response.status, location: response.headers.get('location') }
+export async function checkServicesDefault(execute: () => LocalCommandResult = executeCheckServicesDefault): Promise<LocalCommandResult> {
+  const result = execute()
+  if (result.exitCode !== 0 || !parseServiceReadiness(result.stdout)) {
+    return { ...result, exitCode: 1 }
+  }
+  return result
 }
 
-function validGatewayAuth(response: GatewayAuthResponse): boolean {
-  if (response.status >= 200 && response.status < 300) {
-    return true
-  }
-  if (![301, 302, 303, 307, 308].includes(response.status) || !response.location) {
-    return false
-  }
-  try {
-    const location = new URL(response.location, LOCAL_GATEWAY_ORIGIN)
-    return location.origin === LOCAL_GATEWAY_ORIGIN && location.pathname.startsWith('/auth/')
-  }
-  catch {
-    return false
-  }
+export async function observeGatewayAuthDefault(dependencies: Pick<DataChainSmokeDependencies, 'gatewayAuthFetch' | 'gatewayAuthTimeoutMs'> = {}): Promise<GatewayAuthProbeResult> {
+  return observeCanonicalGatewayAuth({
+    ...(dependencies.gatewayAuthFetch ? { fetch: dependencies.gatewayAuthFetch } : {}),
+    ...(dependencies.gatewayAuthTimeoutMs === undefined ? {} : { timeoutMs: dependencies.gatewayAuthTimeoutMs }),
+  })
 }
 
-async function runFixtureDefault(input: { targetId: string, runId: string, itemCode: string }): Promise<{ itemCode: string }> {
+export function validGatewayAuth(response: GatewayAuthProbeResult): boolean {
+  return response.outcome === 'accepted'
+}
+
+async function runFixtureDefault(input: { targetId: string, runId: string, itemCode: string }): Promise<{ itemCode: string, itemCount: typeof DATA_CHAIN_FIXTURE_COUNT }> {
   const secret = await readLocalCrawlerSecret()
   if (!secret) {
     throw new Error('Local crawler service secret is unavailable.')
@@ -735,7 +800,11 @@ async function runRemoteDataChainSmoke(options: DataChainSmokeOptions, dependenc
     environment,
   }))
   try {
-    const fixture = await runFixture({ target: resolution.id, runId: options.runId, executeReadOnly })
+    const observedFixture = await runFixture({ target: resolution.id, runId: options.runId, executeReadOnly })
+    if (observedFixture.operation !== 'crawler-smoke-fixture') {
+      throw new Error('Prepared smoke entry returned the wrong operation.')
+    }
+    const fixture = observedFixture
     if (fixture.itemCode !== candidate.itemCode || fixture.itemCount !== DATA_CHAIN_FIXTURE_COUNT) {
       throw new Error('Remote fixture tuple does not match the deterministic candidate.')
     }
@@ -745,7 +814,11 @@ async function runRemoteDataChainSmoke(options: DataChainSmokeOptions, dependenc
   }
   let snapshot: Extract<PreparedSmokeChildObservation, { operation: 'd1-smoke-snapshot' }>
   try {
-    snapshot = await runSnapshot({ target: resolution.id, runId: options.runId, executeReadOnly })
+    const observedSnapshot = await runSnapshot({ target: resolution.id, runId: options.runId, executeReadOnly })
+    if (observedSnapshot.operation !== 'd1-smoke-snapshot') {
+      return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
+    }
+    snapshot = observedSnapshot
   }
   catch {
     return preIngestCheckpoint({ ...options, target: resolution.id }, candidate.itemCode, { surface: 'remote_preflight', status: 'checkpoint', checkpoint: 'target_preflight_unmet' }, now, write)
@@ -818,7 +891,7 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
   const collectProjectionIssues = dependencies.collectProjectionIssues ?? collectProjectionIssuesDefault
   const preflight = dependencies.runPreflight ?? runTargetPreflight
 
-  let resolution: { id: string, profile: { local?: { wranglerProfile: string } } }
+  let resolution: { id: string, profile: { account?: { id: string }, local?: { wranglerProfile: string } } }
   let projectionIssues: readonly ProjectionValidationIssue[]
   try {
     resolution = resolve(options.target)
@@ -860,14 +933,18 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
 
   const checkServices = dependencies.checkServices ?? checkServicesDefault
   const service = await checkServices()
-  if (service.exitCode !== 0 || /^\s*\[!!\](?:\s|$)/m.test(`${service.stdout}\n${service.stderr}`)) {
+  if (service.exitCode !== 0) {
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'service_readiness', status: 'checkpoint', checkpoint: 'local_prerequisite_unmet' }, now, write)
   }
 
-  const observeGatewayAuth = dependencies.observeGatewayAuth ?? observeGatewayAuthDefault
-  let auth: GatewayAuthResponse
+  let auth: GatewayAuthProbeResult
   try {
-    auth = await observeGatewayAuth()
+    auth = dependencies.observeGatewayAuth
+      ? await dependencies.observeGatewayAuth()
+      : await observeGatewayAuthDefault({
+          gatewayAuthFetch: dependencies.gatewayAuthFetch,
+          gatewayAuthTimeoutMs: dependencies.gatewayAuthTimeoutMs,
+        })
   }
   catch {
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'gateway_auth', status: 'checkpoint', checkpoint: 'gateway_auth_unavailable', path: '/auth/', origin: LOCAL_GATEWAY_ORIGIN }, now, write)
@@ -888,23 +965,24 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'service_readiness', status: 'checkpoint', checkpoint: 'local_prerequisite_unmet' }, now, write)
   }
   const snapshotResult = await snapshot({ targetId: resolution.id, runId: options.runId, itemCode: candidate.itemCode })
+  const itemId = snapshotResult.itemId
   if (snapshotResult.status !== 'found'
     || snapshotResult.itemCode !== candidate.itemCode
     || snapshotResult.itemCount !== DATA_CHAIN_FIXTURE_COUNT
-    || !isText(snapshotResult.itemId)) {
+    || !isText(itemId)) {
     return preIngestCheckpoint(options, candidate.itemCode, { surface: 'local_d1_readiness', status: 'checkpoint', checkpoint: 'fixture_seed_incomplete' }, now, write)
   }
 
   const fetchGatewayApi = dependencies.fetchGatewayApi ?? fetchGatewayApiDefault
-  const api = await fetchGatewayApi({ itemCode: candidate.itemCode, itemId: snapshotResult.itemId })
-  const apiPassed = api.status >= 200 && api.status < 300 && api.itemCode === candidate.itemCode && api.itemId === snapshotResult.itemId
+  const api = await fetchGatewayApi({ itemCode: candidate.itemCode, itemId })
+  const apiPassed = api.status >= 200 && api.status < 300 && api.itemCode === candidate.itemCode && api.itemId === itemId
   const evidenceTimestamp = now()
   const receipt = (surface: RunnerReceiptSurface, routePath?: string) => createRunnerReceipt({
     mode: 'local',
     targetId: resolution.id,
     runId: options.runId,
     itemCode: candidate.itemCode,
-    itemId: snapshotResult.itemId,
+    itemId,
     surface,
     timestamp: evidenceTimestamp,
     ...(routePath ? { path: routePath } : {}),
@@ -919,7 +997,7 @@ export async function runDataChainSmoke(options: DataChainSmokeOptions, dependen
     targetId: resolution.id,
     runId: options.runId,
     itemCode: candidate.itemCode,
-    itemId: snapshotResult.itemId,
+    itemId,
     mode: 'local',
     timestamp: evidenceTimestamp,
     aggregate: apiPassed ? 'pending' : 'checkpoint',

@@ -1,3 +1,4 @@
+import type { RequestListener } from 'node:http'
 import type { Socket } from 'node:net'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
@@ -39,7 +40,7 @@ async function loadGatewayReadiness(): Promise<GatewayReadinessModule> {
   return import(/* @vite-ignore */ new URL('../../../../../scripts/gateway-readiness.ts', import.meta.url).href) as Promise<GatewayReadinessModule>
 }
 
-async function createTestServer(handler: Parameters<typeof createServer>[0]): Promise<TestServer> {
+async function createTestServer(handler: RequestListener): Promise<TestServer> {
   const server = createServer(handler)
   const sockets = new Set<Socket>()
   server.on('connection', (socket) => {

@@ -93,7 +93,7 @@ function successDependencies() {
     runPreflight: vi.fn((_options: unknown): { ok: boolean, issues: object[] } => ({ ok: true, issues: [] })),
     inspectLocalD1: async (): Promise<{ status: 'ready' | 'unready', checkpoint?: string }> => ({ status: 'ready' }),
     checkServices: async () => ({ exitCode: 0, stdout: '[OK] all services', stderr: '' }),
-    observeGatewayAuth: async () => ({ outcome: 'accepted' as const }),
+    observeGatewayAuth: async (): Promise<{ outcome: 'accepted' | 'timeout' | 'fetch_failed' | 'http_status_unaccepted' | 'redirect_invalid' }> => ({ outcome: 'accepted' }),
     runFixture: vi.fn(async () => ({ itemCode: candidate.itemCode, itemCount: 1 as const })),
     snapshot: vi.fn(async () => ({ status: 'found' as const, itemCode: candidate.itemCode, itemId: 'movie-42', itemCount: 1 as const })),
     fetchGatewayApi: vi.fn(async (): Promise<{ status: number, itemCode?: string, itemId?: string }> => ({ status: 200, itemCode: candidate.itemCode, itemId: 'movie-42' })),
@@ -242,7 +242,7 @@ describe('phase 13 local smoke runner', () => {
     }])
   })
 
-  it('rejects missing schema and service [!!] output before fixture work', async () => {
+  it('rejects missing schema and failed service status before fixture work', async () => {
     const { runDataChainSmoke } = await loadSmoke()
     const d1Dependencies = successDependencies()
     d1Dependencies.inspectLocalD1 = async () => ({ status: 'unready' as const, checkpoint: 'local_d1_readiness_unmet' as const })
@@ -253,7 +253,7 @@ describe('phase 13 local smoke runner', () => {
     expect(d1Dependencies.runFixture).not.toHaveBeenCalled()
 
     const servicesDependencies = successDependencies()
-    servicesDependencies.checkServices = async () => ({ exitCode: 0, stdout: '[!!] api unavailable', stderr: '' })
+    servicesDependencies.checkServices = async () => ({ exitCode: 1, stdout: '[!!] api unavailable', stderr: '' })
     const servicesResult = await runDataChainSmoke(baseOptions, servicesDependencies)
     expect(servicesResult.exitCode).toBe(CHECKPOINT_EXIT_CODE)
     expect(servicesResult.evidence.observations[0]).toMatchObject({ surface: 'service_readiness', checkpoint: 'local_prerequisite_unmet' })

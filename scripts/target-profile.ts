@@ -219,7 +219,6 @@ function pagesBuildArgs(surface: TargetPagesSurface): readonly string[] {
     case 'blog': return ['--filter', 'blog', 'build']
     case 'movie': return ['--filter', '@starye/movie-app', 'build']
     case 'comic': return ['--filter', '@starye/comic-app', 'build']
-    case 'tavern': throw new Error('Tavern has no registered Pages build command.')
   }
 }
 

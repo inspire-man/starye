@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "files": [
+    "gateway-readiness.ts",
+    "data-chain-smoke.ts"
+  ]
+}
