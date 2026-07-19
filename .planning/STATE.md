@@ -5,16 +5,16 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: "13-12 local-only checkpoint: gateway_auth_unavailable; awaiting canonical Phase 13 verification"
-last_updated: "2026-07-19T08:46:54.992Z"
+stopped_at: Completed 13-13-PLAN.md
+last_updated: "2026-07-19T10:30:15.465Z"
 last_activity: 2026-07-19
-last_activity_desc: Plan 13-12 recorded one immutable local Gateway-auth checkpoint after all repaired local gates passed
+last_activity_desc: Plan 13-13 completed bounded canonical Gateway readiness and strict local service-machine parsing
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 20
-  completed_plans: 20
-  percent: 50
+  total_plans: 28
+  completed_plans: 21
+  percent: 75
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — READY TO EXECUTE GAP WAVES 12-18
-Plan: 12 executed; 13-13 through 13-20 planned
-Status: Ready to execute
-Last activity: 2026-07-19 — Phase 13 gap plans 13-13..20 passed structural, decision-coverage, validation-parity, and post-planning coverage gates
+Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 13-18
+Plan: 13 executed; 13-14 through 13-20 planned
+Status: Ready to execute Wave 13
+Last activity: 2026-07-19 — Plan 13-13 completed bounded canonical Gateway readiness and strict local service-machine parsing
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 20 / 20
+**Plans completed:** 21 / 28
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -73,6 +73,7 @@ Last activity: 2026-07-19 — Phase 13 gap plans 13-13..20 passed structural, de
 | Phase 13 P06 | 27min | 2 tasks | 7 files |
 | Phase 13 P07 | 1h 30m | 3 tasks | 8 files |
 | Phase 13 P11 | 20min | 3 tasks | 8 files |
+| Phase 13 P13 | 49min | 2 tasks | 7 files |
 
 ### Open Todos (carried across phases)
 
@@ -104,8 +105,8 @@ Last activity: 2026-07-19 — Phase 13 gap plans 13-13..20 passed structural, de
 
 ## Session Continuity
 
-**Last session:** 2026-07-19
-**Stopped at:** Phase 13 gap plans 13-13..20 are ready after the immutable 13-12 Gateway-auth checkpoint diagnosis
+**Last session:** 2026-07-19T10:30:15.451Z
+**Stopped at:** Completed 13-13-PLAN.md
 **Resume file:** None
 
 **Next recommended action:**
@@ -118,7 +119,7 @@ $gsd-execute-phase 13 --gaps-only
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md` and `.planning/ROADMAP.md`
-3. Read `.planning/phases/13-full-chain-data-smoke/13-13-PLAN.md` through `13-20-PLAN.md`
+3. Read `.planning/phases/13-full-chain-data-smoke/13-14-PLAN.md` through `13-20-PLAN.md`
 4. Read `.planning/phases/13-full-chain-data-smoke/13-VALIDATION.md` and `13-VERIFICATION.md`
 5. Preserve all historical evidence and start only Wave 12
 
@@ -130,7 +131,7 @@ $gsd-execute-phase 13 --gaps-only
 
 ## Operator Next Steps
 
-- Execute Phase 13 gap waves 12-18. Plan 13-12 remains an immutable local Gateway-auth checkpoint; do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
+- Execute Phase 13 gap waves 13-18. Plan 13-12 remains an immutable local Gateway-auth checkpoint; do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
 
 ## Decisions
 
@@ -174,3 +175,5 @@ $gsd-execute-phase 13 --gaps-only
 - [Phase 13]: Smoke artifact verification is execution-free by default; runner exit consistency applies only when a run dependency is explicitly injected. — Prevents verification from overwriting the artifact under inspection.
 - [Phase 13]: CLI and local smoke reuse pickRuntimeEnvironment for caller-side sanitation while direct raw-token preflight remains fail closed. — 13-11 local caller parity contract
 - [Phase 13]: Local preflight checkpoints persist only projection-mismatch or local-api-token-shadowing; every other issue stays target_projection_unmet. — 13-11 closed diagnostic vocabulary
+- [Phase 13]: Canonical readiness is fixed Gateway HTTP, not listener diagnostics or direct ports. — D-03 and D-06 require a closed canonical readiness contract.
+- [Phase 13]: Gateway auth authorizes downstream work only with a closed accepted probe result. — The default transport must remain bounded and non-secret.
