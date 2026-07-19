@@ -25,6 +25,12 @@ function evidencePath(mode: 'local' | 'remote', extension: 'json' | 'md'): strin
 
 interface SmokeModule {
   runDataChainSmoke: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
+  checkServicesDefault: (execute?: () => { exitCode: number, stdout: string, stderr: string }) => Promise<{ exitCode: number, stdout: string, stderr: string }>
+  observeGatewayAuthDefault: (dependencies?: {
+    readonly gatewayAuthFetch?: typeof fetch
+    readonly gatewayAuthTimeoutMs?: number
+  }) => Promise<{ outcome: 'accepted' | 'timeout' | 'fetch_failed' | 'http_status_unaccepted' | 'redirect_invalid' }>
+  validGatewayAuth: (response: { outcome: 'accepted' | 'timeout' | 'fetch_failed' | 'http_status_unaccepted' | 'redirect_invalid' }) => boolean
 }
 
 interface ObservationModule {
@@ -49,6 +55,29 @@ async function loadVerify() {
   return import(/* @vite-ignore */ new URL('../../../../../scripts/verify-data-chain-smoke.ts', import.meta.url).href) as Promise<VerifyModule>
 }
 
+function validServiceReadinessRecord() {
+  return {
+    schema: 'starye-local-services-1',
+    healthy: true,
+    listeners: [
+      { name: 'Gateway', port: 8080, listening: true },
+      { name: 'API', port: 8787, listening: true },
+      { name: 'Dashboard', port: 5173, listening: true },
+      { name: 'Blog', port: 3002, listening: true },
+      { name: 'Auth', port: 3003, listening: true },
+      { name: 'Comic', port: 3000, listening: true },
+      { name: 'Movie', port: 3001, listening: true },
+    ],
+    gateway: {
+      schema: 'starye-gateway-readiness-1',
+      healthy: true,
+      robots: { outcome: 'accepted' },
+      auth: { outcome: 'accepted' },
+      authSlash: { outcome: 'accepted' },
+    },
+  }
+}
+
 afterEach(() => {
   vi.unstubAllEnvs()
 })
@@ -64,7 +93,7 @@ function successDependencies() {
     runPreflight: vi.fn((_options: unknown): { ok: boolean, issues: object[] } => ({ ok: true, issues: [] })),
     inspectLocalD1: async (): Promise<{ status: 'ready' | 'unready', checkpoint?: string }> => ({ status: 'ready' }),
     checkServices: async () => ({ exitCode: 0, stdout: '[OK] all services', stderr: '' }),
-    observeGatewayAuth: async () => ({ status: 302, location: 'http://localhost:8080/auth/login' }),
+    observeGatewayAuth: async () => ({ outcome: 'accepted' as const }),
     runFixture: vi.fn(async () => ({ itemCode: candidate.itemCode, itemCount: 1 as const })),
     snapshot: vi.fn(async () => ({ status: 'found' as const, itemCode: candidate.itemCode, itemId: 'movie-42', itemCount: 1 as const })),
     fetchGatewayApi: vi.fn(async (): Promise<{ status: number, itemCode?: string, itemId?: string }> => ({ status: 200, itemCode: candidate.itemCode, itemId: 'movie-42' })),
@@ -114,7 +143,7 @@ describe('phase 13 local smoke runner', () => {
       environment: { CLOUDFLARE_API_TOKEN: 'ambient-test-token' },
       inspectLocalD1: async () => ({ status: 'ready' }),
       checkServices: async () => ({ exitCode: 0, stdout: '[OK] all services', stderr: '' }),
-      observeGatewayAuth: async () => ({ status: 302, location: 'http://localhost:8080/auth/login' }),
+      observeGatewayAuth: async () => ({ outcome: 'accepted' as const }),
       runFixture: async () => ({ itemCode: candidate.itemCode, itemCount: 1 }),
       snapshot: async () => ({
         status: 'found',
@@ -231,10 +260,51 @@ describe('phase 13 local smoke runner', () => {
     expect(servicesDependencies.runFixture).not.toHaveBeenCalled()
   })
 
+  it('accepts one healthy service machine record and rejects human text, malformed, duplicate, or unhealthy records', async () => {
+    const { checkServicesDefault } = await loadSmoke()
+    const healthy = validServiceReadinessRecord()
+
+    await expect(checkServicesDefault(() => ({
+      exitCode: 0,
+      stdout: `[OK] all listeners are present\n${JSON.stringify(healthy)}`,
+      stderr: '',
+    }))).resolves.toMatchObject({ exitCode: 0 })
+
+    const invalidOutputs = [
+      '[OK] all listeners are present',
+      '{not-json}',
+      `${JSON.stringify(healthy)}\n${JSON.stringify(healthy)}`,
+      JSON.stringify({ ...healthy, schema: 'wrong-schema' }),
+      JSON.stringify({ ...healthy, healthy: false }),
+      JSON.stringify({ ...healthy, listeners: healthy.listeners.slice(1) }),
+    ]
+    for (const stdout of invalidOutputs) {
+      await expect(checkServicesDefault(() => ({ exitCode: 0, stdout: `[OK] all listeners are present\n${stdout}`, stderr: '' }))).resolves.toMatchObject({ exitCode: 1 })
+    }
+    await expect(checkServicesDefault(() => ({ exitCode: 1, stdout: JSON.stringify(healthy), stderr: '' }))).resolves.toMatchObject({ exitCode: 1 })
+  })
+
+  it('treats an unhealthy combined service record as a pre-ingest checkpoint with no downstream calls', async () => {
+    const { checkServicesDefault, runDataChainSmoke } = await loadSmoke()
+    const dependencies = successDependencies()
+    dependencies.checkServices = () => checkServicesDefault(() => ({
+      exitCode: 0,
+      stdout: `[OK] all listeners are present\n${JSON.stringify({ ...validServiceReadinessRecord(), healthy: false })}`,
+      stderr: '',
+    }))
+
+    const result = await runDataChainSmoke(baseOptions, dependencies)
+
+    expect(result.evidence.observations).toEqual([{ surface: 'service_readiness', status: 'checkpoint', checkpoint: 'local_prerequisite_unmet' }])
+    expect(dependencies.runFixture).not.toHaveBeenCalled()
+    expect(dependencies.snapshot).not.toHaveBeenCalled()
+    expect(dependencies.fetchGatewayApi).not.toHaveBeenCalled()
+  })
+
   it('accepts only a local Gateway auth response before fixture execution', async () => {
     const { runDataChainSmoke } = await loadSmoke()
     const dependencies = successDependencies()
-    dependencies.observeGatewayAuth = async () => ({ status: 302, location: 'http://localhost:3003/auth/login' })
+    dependencies.observeGatewayAuth = async () => ({ outcome: 'redirect_invalid' as const })
 
     const result = await runDataChainSmoke(baseOptions, dependencies)
 
@@ -242,6 +312,18 @@ describe('phase 13 local smoke runner', () => {
     expect(result.evidence).toMatchObject({ ingestState: 'pre_ingest', itemId: null })
     expect(result.evidence.observations[0]).toMatchObject({ surface: 'gateway_auth', checkpoint: 'gateway_auth_unavailable' })
     expect(dependencies.runFixture).not.toHaveBeenCalled()
+  })
+
+  it('delegates default Gateway auth to the bounded closed probe and accepts only accepted output', async () => {
+    const { observeGatewayAuthDefault, validGatewayAuth } = await loadSmoke()
+    const fetch = vi.fn(async () => new Response(null, { status: 200 }))
+
+    const result = await observeGatewayAuthDefault({ gatewayAuthFetch: fetch, gatewayAuthTimeoutMs: 25 })
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/auth/', expect.objectContaining({ redirect: 'manual', signal: expect.any(AbortSignal) }))
+    expect(result).toEqual({ outcome: 'accepted' })
+    expect(validGatewayAuth(result)).toBe(true)
+    expect(validGatewayAuth({ outcome: 'timeout' })).toBe(false)
   })
 
   it('preserves the resolved tuple when the Gateway API cannot correlate it', async () => {
