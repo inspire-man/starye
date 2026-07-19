@@ -5,16 +5,16 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Completed 13-13-PLAN.md
-last_updated: "2026-07-19T10:30:15.465Z"
+stopped_at: Completed 13-14-PLAN.md
+last_updated: "2026-07-19T12:23:15.426Z"
 last_activity: 2026-07-19
-last_activity_desc: Plan 13-13 completed bounded canonical Gateway readiness and strict local service-machine parsing
+last_activity_desc: Plan 13-14 completed target-first fixed-root handoff and direct root exit propagation contracts
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 28
-  completed_plans: 21
-  percent: 75
+  completed_plans: 22
+  percent: 79
 ---
 
 # Project State: Starye — 个人内容中台
@@ -41,14 +41,14 @@ progress:
 ## Current Position
 
 Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 13-18
-Plan: 13 executed; 13-14 through 13-20 planned
+Plan: 14 executed; 13-15 through 13-20 planned
 Status: Ready to execute Wave 13
-Last activity: 2026-07-19 — Plan 13-13 completed bounded canonical Gateway readiness and strict local service-machine parsing
+Last activity: 2026-07-19 — Plan 13-14 completed target-first fixed-root handoff and direct root exit propagation contracts
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 21 / 28
+**Plans completed:** 22 / 28
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -74,6 +74,7 @@ Last activity: 2026-07-19 — Plan 13-13 completed bounded canonical Gateway rea
 | Phase 13 P07 | 1h 30m | 3 tasks | 8 files |
 | Phase 13 P11 | 20min | 3 tasks | 8 files |
 | Phase 13 P13 | 49min | 2 tasks | 7 files |
+| Phase 13 P14 | 1h 27m | 2 tasks | 6 files |
 
 ### Open Todos (carried across phases)
 
@@ -105,8 +106,8 @@ Last activity: 2026-07-19 — Plan 13-13 completed bounded canonical Gateway rea
 
 ## Session Continuity
 
-**Last session:** 2026-07-19T10:30:15.451Z
-**Stopped at:** Completed 13-13-PLAN.md
+**Last session:** 2026-07-19T12:23:15.406Z
+**Stopped at:** Completed 13-14-PLAN.md
 **Resume file:** None
 
 **Next recommended action:**
@@ -177,3 +178,4 @@ $gsd-execute-phase 13 --gaps-only
 - [Phase 13]: Local preflight checkpoints persist only projection-mismatch or local-api-token-shadowing; every other issue stays target_projection_unmet. — 13-11 closed diagnostic vocabulary
 - [Phase 13]: Canonical readiness is fixed Gateway HTTP, not listener diagnostics or direct ports. — D-03 and D-06 require a closed canonical readiness contract.
 - [Phase 13]: Gateway auth authorizes downstream work only with a closed accepted probe result. — The default transport must remain bounded and non-secret.
+- [Phase 13]: Handoff resolves a tracked target before lazy path/evidence loading, and root scripts preserve run/verify 0/1/2 while handoff is binary. — Locked by 13-14 handoff contract.
