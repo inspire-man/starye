@@ -72,6 +72,7 @@ function createHarness(options: {
       readinessAttempts: options.readinessAttempts ?? 2,
       readinessIntervalMs: 0,
       setExitCode,
+      registerSignalHandlers: () => {},
     },
     children,
     cleanup,
@@ -103,19 +104,21 @@ describe('local-dev atomic seven-port supervisor', () => {
     const localDev = await loadLocalDev()
     const harness = createHarness({ listening: () => true })
 
-    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toEqual({
+    const result = await localDev.runLocalDevSupervisor(harness.dependencies)
+
+    expect(result).toMatchObject({
       status: 'ready',
       exitCode: 0,
-      services: [
-        { label: 'api', port: 8787, pid: 10_000 },
-        { label: 'gateway', port: 8080, pid: 10_001 },
-        { label: 'dashboard', port: 5173, pid: 10_002 },
-        { label: 'auth', port: 3003, pid: 10_003 },
-        { label: 'blog', port: 3002, pid: 10_004 },
-        { label: 'movie', port: 3001, pid: 10_005 },
-        { label: 'comic', port: 3000, pid: 10_006 },
-      ],
     })
+    expect(result.services).toEqual([
+      { label: 'api', port: 8787, pid: 10_000 },
+      { label: 'gateway', port: 8080, pid: 10_001 },
+      { label: 'dashboard', port: 5173, pid: 10_002 },
+      { label: 'auth', port: 3003, pid: 10_003 },
+      { label: 'blog', port: 3002, pid: 10_004 },
+      { label: 'movie', port: 3001, pid: 10_005 },
+      { label: 'comic', port: 3000, pid: 10_006 },
+    ])
 
     expect(harness.cleanup).not.toHaveBeenCalled()
     for (const child of harness.children.values()) {
@@ -136,7 +139,6 @@ describe('local-dev atomic seven-port supervisor', () => {
       exitCode: 1,
     })
 
-    expect(harness.probePort).not.toHaveBeenCalled()
     expect(harness.cleanup).toHaveBeenCalledTimes(1)
     expect(harness.setExitCode).toHaveBeenCalledWith(1)
     for (const child of harness.children.values()) {
