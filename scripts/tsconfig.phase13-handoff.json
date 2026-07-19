@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "files": [
+    "data-chain-handoff.ts",
+    "data-chain-smoke.ts",
+    "verify-data-chain-smoke.ts"
+  ]
+}
