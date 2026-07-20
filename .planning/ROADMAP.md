@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 15/21 plans executed
+**Plans:** 19/24 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -149,23 +149,27 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [x] 13-22-PLAN.md — Executed once and remains immutable as `blocked_pre_teardown/supervisor_not_found`; its evaluator remains fail closed and cannot release downstream work.
 
-**Wave 21** *(gap closure; one-time human-escalated retry after the two-repair budget is exhausted)*
+**Wave 21** *(historical gap-closure checkpoint; immutable)*
 
-- [ ] 13-23-PLAN.md — Repair only the evidence-backed snapshot-generator identifier defect, capture one exact read-only authorization checkpoint, and release runtime eligibility only after matching human PID/hash approval, equal re-snapshot, exact child-first stop evidence, two all-free observations, and canonical Gateway routes. The recorded approval is scoped to this plan and does not increase future repair budget.
+- [x] 13-23-PLAN.md — Executed once as a repaired read-only snapshot and remains immutable as `blocked_pre_teardown/supervisor_not_found`; it cannot release downstream work.
 
-**Wave 22** *(gap closure; blocked on Wave 21 released runtime eligibility)*
+**Wave 22** *(gap closure; blocked on the current all-free fixed-port observation)*
 
-- [ ] 13-17-PLAN.md — Run one collision-gated local handoff only after all repaired gates pass.
+- [ ] 13-24-PLAN.md — Start one fresh task-owned cold-start tree only after seven ports are immediately re-proven free; require canonical Gateway readiness, local regressions, and task-owned cleanup before releasing eligibility.
 
-**Wave 23** *(gap closure; blocked on Wave 22 completion)*
+**Wave 23** *(gap closure; blocked on Wave 22 released-and-cleaned eligibility)*
 
-- [ ] 13-18-PLAN.md — Let root persistent Codex IAB record local Dashboard then viewer for the exact pending tuple.
+- [ ] 13-17-PLAN.md — Run one collision-gated local handoff only after all repaired gates and 13-24 released eligibility pass.
 
 **Wave 24** *(gap closure; blocked on Wave 23 completion)*
 
-- [ ] 13-19-PLAN.md — Perform one reservation-backed remote handoff with official preflight and closed checkpoint behavior.
+- [ ] 13-18-PLAN.md — Let root persistent Codex IAB record local Dashboard then viewer for the exact pending tuple.
 
 **Wave 25** *(gap closure; blocked on Wave 24 completion)*
+
+- [ ] 13-19-PLAN.md — Perform one reservation-backed remote handoff with official preflight and closed checkpoint behavior.
+
+**Wave 26** *(gap closure; blocked on Wave 25 completion)*
 
 - [ ] 13-20-PLAN.md — Record selected-production IAB surfaces and rerun exact plus canonical Phase verification.
 
@@ -199,11 +203,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Plans 13-13 through 13-23 close the diagnosed Gateway readiness, runtime ownership, handoff, and full selected-production proof gaps. Plans 13-21 and 13-22 are immutable blocked checkpoints. The only executable path is exactly 13-23 Wave 21 -> 13-17 Wave 22 -> 13-18 Wave 23 -> 13-19 Wave 24 -> 13-20 Wave 25; Plans 13-17 through 13-20 consume only `13-23-SUMMARY.md` with `runtime_eligibility: released`. The human escalation recorded for 13-23 is one-time and scoped to its evidence-backed runtime snapshot repair, not a general repair-budget increase. Preserve every historical evidence directory and treat any new checkpoint as terminal for its run:
+Plans 13-13 through 13-24 close the diagnosed Gateway readiness, runtime ownership, handoff, and full selected-production proof gaps. Plans 13-21 through 13-23 are immutable historical checkpoints. The only executable path is exactly 13-24 Wave 22 -> 13-17 Wave 23 -> 13-18 Wave 24 -> 13-19 Wave 25 -> 13-20 Wave 26; Plans 13-17 through 13-20 consume only `13-24-SUMMARY.md` with released-and-cleaned `runtime_eligibility`. Plan 13-24 uses a fresh all-free snapshot and may start or clean only its own task-owned tree; it does not expand the historical 13-23 PID-repair authorization. Preserve every historical evidence directory and treat any new checkpoint as terminal for its run:
 
 ```text
 $gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-20 after Phase 13 scoped 13-23 plan revision and Wave 21-25 routing repair*
+*Last updated: 2026-07-20 after Phase 13 all-free cold-start recovery planning and Wave 22-26 routing repair*
