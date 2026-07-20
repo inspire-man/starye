@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 20/26 plans executed
+**Plans:** 25/28 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -175,19 +175,19 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 24** *(gap closure; blocked on Wave 23 released-and-cleaned eligibility)*
 
-- [ ] 13-17-PLAN.md — Run one collision-gated local handoff only after the three 13-25 release fields pass.
+- [x] 13-17-PLAN.md — Ran one collision-gated local handoff using the released 13-28 lifecycle fields.
 
 **Wave 25** *(gap closure; blocked on Wave 24 completion)*
 
-- [ ] 13-18-PLAN.md — Let root persistent Codex IAB record local Dashboard then viewer for the exact pending tuple.
+- [x] 13-18-PLAN.md — Root persistent Codex IAB recorded the exact local Dashboard then Viewer tuple.
 
 **Wave 26** *(gap closure; blocked on Wave 25 completion)*
 
-- [ ] 13-19-PLAN.md — Perform one reservation-backed remote handoff with official preflight and closed checkpoint behavior.
+- [ ] 13-19-PLAN.md — Deferred to MVP review/archival: reservation-backed remote handoff with official preflight and closed checkpoint behavior.
 
 **Wave 27** *(gap closure; blocked on Wave 26 completion)*
 
-- [ ] 13-20-PLAN.md — Record selected-production IAB surfaces and rerun exact plus canonical Phase verification.
+- [ ] 13-20-PLAN.md — Deferred to MVP review/archival: selected-production IAB surfaces and exact/canonical Phase verification.
 
 **Success criteria:**
 

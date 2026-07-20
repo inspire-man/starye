@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — LOCAL LIFECYCLE RELEASED
-Plan: 13-28 supplies `runtime_eligibility: released`, `runtime_lifecycle: cleaned`, and `post_cleanup_fixed_ports: all_free`. Plans 13-25 and 13-27 remain immutable blocked observations.
-Status: Update 13-17 to consume 13-28, then run one local handoff. Keep validation to the basic local handoff path; defer broad suites to MVP review.
-Last activity: 2026-07-20 — passed all seven services and canonical Gateway readiness, then cleaned every fixed port
+Phase: 13 (full-chain-data-smoke) — LOCAL PAIR TERMINAL
+Plan: 13-17 consumed the released 13-28 lifecycle fields; 13-18 recorded the exact local Dashboard-to-Viewer pair through the canonical Gateway. Plans 13-25 and 13-27 remain immutable blocked observations.
+Status: The minimal local scope is complete. Provider-backed and selected-production proof in 13-19/20 is deferred to MVP review or archival work; broad suites remain deferred.
+Last activity: 2026-07-20 — local exact verifier reached terminal_passed/provesExternalChain true, then the task-owned fixed-port listeners were cleaned.
 
 ## Performance Metrics
 
@@ -89,10 +89,10 @@ Last activity: 2026-07-20 — passed all seven services and canonical Gateway re
 - [x] P9 kick-off: 已拆成 09-01 / 09-02 / 09-03 plans，锁定 root entry docs、archive split、RUNBOOK owner 三条执行线
 - [x] P9 closeout: root docs 收缩、`docs/archive/` 建立、RUNBOOK/STRUCTURE owner 边界与 verification 已全部落盘
 
-### Active Blockers
+### Deferred Verification
 
-- [ ] Provider-backed D1/API/admin proof is still missing for one exact selected-production tuple.
-- [ ] Selected-production Dashboard/viewer receipts and a terminal remote verifier result are still missing.
+- [ ] Provider-backed D1/API/admin proof for one exact selected-production tuple is deferred to MVP review or archival work.
+- [ ] Selected-production Dashboard/viewer receipts and terminal remote verification are deferred to MVP review or archival work.
 
 ### Recent Context (Brownfield注释)
 
@@ -116,7 +116,7 @@ Last activity: 2026-07-20 — passed all seven services and canonical Gateway re
 **Next recommended action:**
 
 ```text
-$gsd-execute-phase 13 --gaps-only --wave 28
+$gsd-progress
 ```
 
 **If interrupted, resume by:**
@@ -135,7 +135,7 @@ $gsd-execute-phase 13 --gaps-only --wave 28
 
 ## Operator Next Steps
 
-- Resume only `$gsd-execute-phase 13 --gaps-only --wave 28` for Plan 13-26, so it cannot co-schedule with Wave 24 Plan 13-17. Its committed RED gate is `1e13a62`; first require the present candidate to exactly match the Plan 13-26 whitelist of the root exact `tsx` declaration/importer, two named Vitest peer strings, and two named optional flags while retaining the existing tsx snapshot/integrity. Do not run `pnpm add`, `pnpm install`, `pnpm update`, `pnpm remove`, another dependency-mutation command, or another registry request; only the named static `pnpm exec` validations are allowed after that whitelist passes. It must start no runtime and publish no release fields. Then re-run `$gsd-plan-phase 13 --gaps` to create Plan 13-27 for the next all-free task-owned retry; only that future plan may establish the three exact fields before 13-17 may allocate a run. Plans 13-21 through 13-25 remain immutable blocked checkpoints. Do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
+- Keep the terminal local pair and all untracked evidence intact. Do not run 13-19 or 13-20 during the minimal execution path; schedule those provider and selected-production checks only through MVP review or archival work.
 
 ## Decisions
 
