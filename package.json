@@ -10,7 +10,7 @@
   "keywords": [],
   "scripts": {
     "build": "turbo run build",
-    "dev": "pnpm --filter @starye/crawler exec node --import tsx ../../scripts/local-dev-entry.ts",
+    "dev": "node --import tsx scripts/local-dev-entry.ts",
     "dev:gateway": "pnpm --filter gateway dev",
     "dev:clean": "pnpm clean:ports && pnpm dev",
     "lint": "turbo run lint",
@@ -46,6 +46,7 @@
     "eslint": "^10.2.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
+    "tsx": "4.21.0",
     "turbo": "^2.9.6",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4",

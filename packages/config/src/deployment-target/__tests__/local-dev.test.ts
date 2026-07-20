@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { readFile } from 'node:fs/promises'
+import { isAbsolute, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -107,11 +108,33 @@ describe('local-dev atomic seven-port supervisor', () => {
       readonly scripts?: Readonly<Record<string, string>>
     }
     const lockfile = await readFile(rootLockfile, 'utf8')
+    const importersMarker = /^importers:\r?$/m.exec(lockfile)
 
     expect(manifest.devDependencies?.tsx).toBe('4.21.0')
     expect(manifest.scripts?.dev).toBe('node --import tsx scripts/local-dev-entry.ts')
     expect(manifest.scripts?.dev).not.toMatch(/\bpnpm\b/)
-    expect(lockfile).toMatch(/^ {2}\.:\r?\n[\s\S]*?^ {4}tsx:\r?\n {6}specifier: 4\.21\.0\r?\n {6}version: 4\.21\.0\r?$/m)
+    expect(importersMarker).not.toBeNull()
+    if (!importersMarker) {
+      throw new Error('pnpm lockfile importers section is required.')
+    }
+
+    const afterImporters = lockfile.slice(importersMarker.index + importersMarker[0].length)
+    const nextTopLevelKey = afterImporters.search(/^[A-Z][\w-]*:\r?$/im)
+
+    expect(nextTopLevelKey).toBeGreaterThanOrEqual(0)
+    const importersBlock = afterImporters.slice(0, nextTopLevelKey)
+    const rootImporterMarker = /^ {2}\.:\r?$/m.exec(importersBlock)
+
+    expect(rootImporterMarker).not.toBeNull()
+    if (!rootImporterMarker) {
+      throw new Error('pnpm lockfile root importer is required.')
+    }
+
+    const afterRootImporter = importersBlock.slice(rootImporterMarker.index + rootImporterMarker[0].length)
+    const nextImporter = afterRootImporter.search(/^ {2}\S.*:\r?$/m)
+    const rootImporterBlock = nextImporter === -1 ? afterRootImporter : afterRootImporter.slice(0, nextImporter)
+
+    expect(rootImporterBlock).toMatch(/^ {6}tsx:\r?\n {8}specifier: 4\.21\.0\r?\n {8}version: 4\.21\.0\r?$/m)
     expect(lockfile).toMatch(/^ {2}tsx@4\.21\.0:\r?\n {4}resolution: \{integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA\/0kPL01wxzpMqLILNxIxIOKiILz\+cdg\/pLnOUxFYOR5yhHU666wbw==\}\r?$/m)
     expect(() => execFileSync(process.execPath, [
       '--import',
@@ -132,8 +155,12 @@ describe('local-dev atomic seven-port supervisor', () => {
     const scriptPath = invocation.args.at(-1)
 
     expect(invocation.command).toContain('node')
-    expect(scriptPath).toMatch(/[\\/]scripts[\\/]local-dev\.ts$/)
-    expect(scriptPath).not.toContain('..')
+    expect(scriptPath).toBeDefined()
+    if (!scriptPath) {
+      throw new Error('Local development supervisor script argument is required.')
+    }
+    expect(isAbsolute(scriptPath)).toBe(true)
+    expect(normalize(scriptPath)).toBe(normalize(join(repositoryRoot, 'scripts', 'local-dev.ts')))
   })
 
   it('fails atomically when a live Gateway never binds 8080', async () => {
