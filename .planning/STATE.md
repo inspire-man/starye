@@ -5,10 +5,10 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Planned 13-25 current-source all-free retry after immutable 13-21 through 13-24 checkpoints
+stopped_at: Planned 13-26 Windows root-dev wrapper repair after immutable 13-25 blocked attribution
 last_updated: "2026-07-20T00:00:00Z"
 last_activity: 2026-07-20
-last_activity_desc: Added the 13-25 current-source retry and repaired the current Wave 23-27 execution graph
+last_activity_desc: Added the 13-26 static Windows root-dev wrapper repair before a separately planned fresh retry
 progress:
   total_phases: 4
   completed_phases: 2
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 23-27
-Plan: 13-21 through 13-24 remain immutable blocked runtime-ownership checkpoints; only 13-25 can establish the three-field released-and-cleaned eligibility consumed by 13-17 through 13-20
-Status: Ready to execute Wave 23 (13-25) from a freshly rechecked all-free fixed-port state; it may start and clean only its own task-owned tree
-Last activity: 2026-07-20 — added the current-source cold-start retry and exact downstream three-field dependency graph without changing historical runtime evidence
+Phase: 13 (full-chain-data-smoke) — PLANNED GAP REPAIR 13-26
+Plan: 13-25 is an immutable blocked runtime-ownership checkpoint. Plan 13-26 removes only the Windows nested root-pnpm wrapper; it cannot establish release eligibility.
+Status: Execute only `$gsd-execute-phase 13 --gaps-only --wave 28` for Plan 13-26 static repair, then re-run `$gsd-plan-phase 13 --gaps` to create a new all-free task-owned retry Plan 13-27 before rewiring or executing 13-17 through 13-20.
+Last activity: 2026-07-20 — planned a direct Node root-dev command repair without changing historical runtime evidence
 
 ## Performance Metrics
 
@@ -116,7 +116,7 @@ Last activity: 2026-07-20 — added the current-source cold-start retry and exac
 **Next recommended action:**
 
 ```text
-$gsd-execute-phase 13 --gaps-only
+$gsd-execute-phase 13 --gaps-only --wave 28
 ```
 
 **If interrupted, resume by:**
@@ -135,7 +135,7 @@ $gsd-execute-phase 13 --gaps-only
 
 ## Operator Next Steps
 
-- Execute exactly this graph: 13-25 Wave 23 -> 13-17 Wave 24 -> 13-18 Wave 25 -> 13-19 Wave 26 -> 13-20 Wave 27. Plans 13-21 through 13-24 remain immutable blocked checkpoints; none can release downstream work. Plan 13-25 may start and clean only its own fresh tree after a new all-free snapshot, then must emit exactly `runtime_eligibility: released`, `runtime_lifecycle: cleaned`, and `post_cleanup_fixed_ports: all_free` before 13-17 may allocate a run. Do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
+- Execute only `$gsd-execute-phase 13 --gaps-only --wave 28` for Plan 13-26, so it cannot co-schedule with Wave 24 Plan 13-17. It must not start a runtime or publish release fields. Then re-run `$gsd-plan-phase 13 --gaps` to create Plan 13-27 for the next all-free task-owned retry; only that future plan may establish the three exact fields before 13-17 may allocate a run. Plans 13-21 through 13-25 remain immutable blocked checkpoints. Do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
 
 ## Decisions
 

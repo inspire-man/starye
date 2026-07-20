@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 20/25 plans executed
+**Plans:** 20/26 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -161,6 +161,10 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [ ] 13-25-PLAN.md — Retry one current-source task-owned cold start only after seven ports are immediately re-proven free; release only after canonical readiness, local regressions, task-owned cleanup, and all-free post-cleanup ports.
 
+**Wave 28 isolated repair** *(gap closure; blocked on the immutable 13-25 wrapper diagnosis)*
+
+- [ ] 13-26-PLAN.md — Declare the locked root tsx loader, remove the nested Windows pnpm wrapper, and prove actual root resolution without launching a runtime; execute only with `$gsd-execute-phase 13 --gaps-only --wave 28` so 13-17 cannot be co-scheduled.
+
 **Wave 24** *(gap closure; blocked on Wave 23 released-and-cleaned eligibility)*
 
 - [ ] 13-17-PLAN.md — Run one collision-gated local handoff only after the three 13-25 release fields pass.
@@ -207,7 +211,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Plans 13-13 through 13-25 close the diagnosed Gateway readiness, runtime ownership, handoff, and full selected-production proof gaps. Plans 13-21 through 13-24 are immutable historical checkpoints. The only executable path is exactly 13-25 Wave 23 -> 13-17 Wave 24 -> 13-18 Wave 25 -> 13-19 Wave 26 -> 13-20 Wave 27; Plans 13-17 through 13-20 consume only `13-25-SUMMARY.md` fields `runtime_eligibility: released`, `runtime_lifecycle: cleaned`, and `post_cleanup_fixed_ports: all_free`. Plan 13-25 uses a fresh all-free snapshot and may start or clean only its own task-owned tree; it does not expand the historical 13-23 PID-repair authorization or reopen 13-24. Preserve every historical evidence directory and treat any new checkpoint as terminal for its run:
+Plans 13-13 through 13-26 close the diagnosed Gateway readiness, runtime ownership, handoff, and full selected-production proof gaps. Plans 13-21 through 13-25 are immutable historical checkpoints. Plan 13-26 repairs only the Windows root-command wrapper and cannot release data-chain work; execute it solely with `$gsd-execute-phase 13 --gaps-only --wave 28`, never as an unfiltered gaps-only run. After it passes static gates, run `$gsd-plan-phase 13 --gaps` again to create Plan 13-27: that separate retry must start from a new all-free snapshot, own one newly launched root `pnpm.cmd dev` tree, prove its absolute supervisor/listener ancestry, clean only its revalidated tree, and emit the three release fields before Plans 13-17 through 13-20 can be rewired and executed. Preserve every historical evidence directory and treat any new checkpoint as terminal for its run:
 
 ```text
 $gsd-execute-phase 13 --gaps-only
