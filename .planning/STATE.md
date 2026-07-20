@@ -5,16 +5,16 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Planned 13-24 all-free task-owned cold-start recovery after immutable 13-21 through 13-23 checkpoints
+stopped_at: Planned 13-25 current-source all-free retry after immutable 13-21 through 13-24 checkpoints
 last_updated: "2026-07-20T00:00:00Z"
 last_activity: 2026-07-20
-last_activity_desc: Added the 13-24 all-free cold-start recovery and repaired the current Wave 22-26 execution graph
+last_activity_desc: Added the 13-25 current-source retry and repaired the current Wave 23-27 execution graph
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 32
-  completed_plans: 26
-  percent: 81
+  total_plans: 33
+  completed_plans: 27
+  percent: 82
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,19 +40,19 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 22-26
-Plan: 13-21 through 13-23 remain immutable blocked runtime-ownership checkpoints; only 13-24 can establish the released-and-cleaned eligibility consumed by 13-17 through 13-20
-Status: Ready to execute Wave 22 (13-24) from a freshly rechecked all-free fixed-port state; it may start and clean only its own task-owned tree
-Last activity: 2026-07-20 — added the no-code cold-start recovery plan and exact downstream dependency graph without changing historical runtime evidence
+Phase: 13 (full-chain-data-smoke) — EXECUTING GAP WAVES 23-27
+Plan: 13-21 through 13-24 remain immutable blocked runtime-ownership checkpoints; only 13-25 can establish the three-field released-and-cleaned eligibility consumed by 13-17 through 13-20
+Status: Ready to execute Wave 23 (13-25) from a freshly rechecked all-free fixed-port state; it may start and clean only its own task-owned tree
+Last activity: 2026-07-20 — added the current-source cold-start retry and exact downstream three-field dependency graph without changing historical runtime evidence
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 26 / 31
+**Plans completed:** 27 / 33
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
-**Scoped human escalation:** The root user explicitly directed execution through Phase 13/MVP completion, authorized recommended choices/local control, and confirmed direct local actions need no further approval. Plan 13-23 remains the one-time evidence-backed snapshot-generator repair after the configured budget was exhausted. Plan 13-24 is a no-code all-free cold-start probe that may operate only its newly started tree; it does not raise `workflow.node_repair_budget`, reopen historic evidence, or authorize any later code repair.
+**Scoped human escalation:** The root user explicitly directed execution through Phase 13/MVP completion, authorized recommended choices/local control, and confirmed direct local actions need no further approval. Plan 13-23 remains the one-time evidence-backed snapshot-generator repair after the configured budget was exhausted. Plan 13-24 is immutable `blocked_after_launch` history. Plan 13-25 is a no-code current-source all-free retry that may operate only its newly started tree; it does not raise `workflow.node_repair_budget`, reopen historic evidence, or authorize any later code repair.
 
 ## Accumulated Context
 
@@ -110,7 +110,7 @@ Last activity: 2026-07-20 — added the no-code cold-start recovery plan and exa
 ## Session Continuity
 
 **Last session:** 2026-07-20T00:00:00Z
-**Stopped at:** Revised scoped 13-23 runtime snapshot-capture gap closure after immutable 13-21 and 13-22 checkpoints
+**Stopped at:** Planned 13-25 current-source retry after immutable 13-21 through 13-24 checkpoints
 **Resume file:** None
 
 **Next recommended action:**
@@ -123,9 +123,9 @@ $gsd-execute-phase 13 --gaps-only
 
 1. Read `.planning/STATE.md` (this file)
 2. Read `.planning/PROJECT.md` and `.planning/ROADMAP.md`
-3. Read `.planning/phases/13-full-chain-data-smoke/13-21-SUMMARY.md`, `13-22-SUMMARY.md`, `13-23-SUMMARY.md`, `13-24-PLAN.md`, and the revised unexecuted `13-17-PLAN.md` through `13-20-PLAN.md`
+3. Read `.planning/phases/13-full-chain-data-smoke/13-21-SUMMARY.md`, `13-22-SUMMARY.md`, `13-23-SUMMARY.md`, `13-24-SUMMARY.md`, `13-25-PLAN.md`, and the revised unexecuted `13-17-PLAN.md` through `13-20-PLAN.md`
 4. Read `.planning/phases/13-full-chain-data-smoke/13-VALIDATION.md` and `13-VERIFICATION.md`
-5. Preserve all historical evidence, recheck all seven fixed ports are free, and start only Wave 22 Plan 13-24 under its task-owned cold-start boundary
+5. Preserve all historical evidence, recheck all seven fixed ports are free, and start only Wave 23 Plan 13-25 under its task-owned cold-start boundary
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -135,7 +135,7 @@ $gsd-execute-phase 13 --gaps-only
 
 ## Operator Next Steps
 
-- Execute exactly this graph: 13-24 Wave 22 -> 13-17 Wave 23 -> 13-18 Wave 24 -> 13-19 Wave 25 -> 13-20 Wave 26. Plans 13-21 through 13-23 remain immutable blocked checkpoints; none can release downstream work. Plan 13-24 may start and clean only its own fresh tree after a new all-free snapshot, then must emit released-and-cleaned eligibility before 13-17 may allocate a run. Do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
+- Execute exactly this graph: 13-25 Wave 23 -> 13-17 Wave 24 -> 13-18 Wave 25 -> 13-19 Wave 26 -> 13-20 Wave 27. Plans 13-21 through 13-24 remain immutable blocked checkpoints; none can release downstream work. Plan 13-25 may start and clean only its own fresh tree after a new all-free snapshot, then must emit exactly `runtime_eligibility: released`, `runtime_lifecycle: cleaned`, and `post_cleanup_fixed_ports: all_free` before 13-17 may allocate a run. Do not rewrite Attempts A-E or Plan 13-09/13-10/13-12 evidence. Any fresh checkpoint remains terminal for its allocated run.
 
 ## Decisions
 
