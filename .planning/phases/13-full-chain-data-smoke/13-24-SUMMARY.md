@@ -93,4 +93,9 @@ None.
 
 ## Self-Check
 
-Pending final metadata-commit verification.
+PASSED
+
+- Found `.planning/phases/13-full-chain-data-smoke/13-24-SUMMARY.md` on disk.
+- Found metadata commit `7a461db` in git history.
+- Confirmed the Summary retains `runtime_eligibility: blocked` and `terminal_branch: blocked_after_launch`.
+- After this standalone Summary closeout commit, the worktree has no uncommitted `13-24-SUMMARY.md` change.
