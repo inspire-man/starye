@@ -1,4 +1,7 @@
+import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
 interface LocalDevServiceRecord {
@@ -45,6 +48,10 @@ async function loadLocalDev(): Promise<LocalDevModule> {
 async function loadLocalDevEntry(): Promise<LocalDevEntryModule> {
   return import(/* @vite-ignore */ new URL('../../../../../scripts/local-dev-entry.ts', import.meta.url).href) as Promise<LocalDevEntryModule>
 }
+
+const repositoryRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
+const rootPackageManifest = new URL('../../../../../package.json', import.meta.url)
+const rootLockfile = new URL('../../../../../pnpm-lock.yaml', import.meta.url)
 
 function createHarness(options: {
   readonly listening: (port: number) => boolean
@@ -94,6 +101,31 @@ function createHarness(options: {
 }
 
 describe('local-dev atomic seven-port supervisor', () => {
+  it('declares one direct root tsx entry command without entering its CLI main path', async () => {
+    const manifest = JSON.parse(await readFile(rootPackageManifest, 'utf8')) as {
+      readonly devDependencies?: Readonly<Record<string, string>>
+      readonly scripts?: Readonly<Record<string, string>>
+    }
+    const lockfile = await readFile(rootLockfile, 'utf8')
+
+    expect(manifest.devDependencies?.tsx).toBe('4.21.0')
+    expect(manifest.scripts?.dev).toBe('node --import tsx scripts/local-dev-entry.ts')
+    expect(manifest.scripts?.dev).not.toMatch(/\bpnpm\b/)
+    expect(lockfile).toMatch(/^ {2}\.:\r?\n[\s\S]*?^ {4}tsx:\r?\n {6}specifier: 4\.21\.0\r?\n {6}version: 4\.21\.0\r?$/m)
+    expect(lockfile).toMatch(/^ {2}tsx@4\.21\.0:\r?\n {4}resolution: \{integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA\/0kPL01wxzpMqLILNxIxIOKiILz\+cdg\/pLnOUxFYOR5yhHU666wbw==\}\r?$/m)
+    expect(() => execFileSync(process.execPath, [
+      '--import',
+      'tsx',
+      '--input-type=module',
+      '--eval',
+      'await import(\'./scripts/local-dev-entry.ts\')',
+    ], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    })).not.toThrow()
+  })
+
   it('starts the supervisor with an absolute current-workspace script path', async () => {
     const entry = await loadLocalDevEntry()
     const invocation = entry.buildLocalDevSupervisorInvocation()
