@@ -58,6 +58,7 @@ function createHarness(options: {
   readonly listening: (port: number) => boolean
   readonly readinessAttempts?: number
   readonly triggerGatewayError?: boolean
+  readonly triggerGatewayExit?: boolean
 }): {
   readonly dependencies: object
   readonly children: Map<string, FakeChild>
@@ -84,6 +85,9 @@ function createHarness(options: {
         children.set(service.label, child)
         if (options.triggerGatewayError && service.label === 'gateway') {
           queueMicrotask(() => child.emit('error', new Error('Gateway process failed before binding.')))
+        }
+        if (options.triggerGatewayExit && service.label === 'gateway') {
+          queueMicrotask(() => child.emit('exit', 0, null))
         }
         return child
       },
@@ -207,10 +211,22 @@ describe('local-dev atomic seven-port supervisor', () => {
     }
   })
 
+  it('keeps materialized inputs through readiness when a Windows pnpm wrapper exits early', async () => {
+    const localDev = await loadLocalDev()
+    const harness = createHarness({ listening: () => true, triggerGatewayExit: true })
+
+    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toMatchObject({
+      status: 'ready',
+      exitCode: 0,
+    })
+
+    expect(harness.cleanup).not.toHaveBeenCalled()
+  })
+
   it('uses the same idempotent task-owned cleanup when a child errors before readiness', async () => {
     const localDev = await loadLocalDev()
     const harness = createHarness({
-      listening: () => true,
+      listening: port => port !== 8080,
       readinessAttempts: 10,
       triggerGatewayError: true,
     })

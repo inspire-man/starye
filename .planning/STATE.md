@@ -5,10 +5,10 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Streamlined Plan 13-27 fresh local lifecycle retry after completed static root-loader repair
+stopped_at: Basic local lifecycle released by 13-28; rewire the local handoff to consume its release fields
 last_updated: "2026-07-20T00:00:00Z"
 last_activity: 2026-07-20
-last_activity_desc: Completed the static root-loader repair and prepared one basic lifecycle retry
+last_activity_desc: Passed the basic seven-service Gateway lifecycle smoke and cleaned all fixed ports
 progress:
   total_phases: 4
   completed_phases: 2
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — STREAMLINED LOCAL LIFECYCLE RETRY
-Plan: 13-25 remains an immutable blocked checkpoint. Plan 13-26 completed the static root-loader repair. Plan 13-27 performs one fresh task-owned lifecycle only.
-Status: Run `$gsd-execute-phase 13 --gaps-only --wave 29`. It checks only the all-free fixed-port gate, root entry/supervisor ownership, `pnpm check:services`, owned cleanup, and all-free post-cleanup ports. It does not create a data-chain run or perform broad regression suites.
-Last activity: 2026-07-20 — streamlined the remaining local lifecycle validation to the essential runtime path
+Phase: 13 (full-chain-data-smoke) — LOCAL LIFECYCLE RELEASED
+Plan: 13-28 supplies `runtime_eligibility: released`, `runtime_lifecycle: cleaned`, and `post_cleanup_fixed_ports: all_free`. Plans 13-25 and 13-27 remain immutable blocked observations.
+Status: Update 13-17 to consume 13-28, then run one local handoff. Keep validation to the basic local handoff path; defer broad suites to MVP review.
+Last activity: 2026-07-20 — passed all seven services and canonical Gateway readiness, then cleaned every fixed port
 
 ## Performance Metrics
 

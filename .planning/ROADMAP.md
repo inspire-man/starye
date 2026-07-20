@@ -165,13 +165,13 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [x] 13-26-PLAN.md — Repaired the root tsx loader and its static regression without launching a runtime.
 
-**Wave 29 streamlined retry** *(gap closure; blocked on 13-26)*
+**Wave 29 streamlined retry** *(historical gap-closure checkpoint; immutable)*
 
-- [ ] 13-27-PLAN.md — Run one fresh task-owned cold start, canonical Gateway service check, owned cleanup, and all-free port check. This is the only runtime release candidate for the next local handoff.
+- [x] 13-27-PLAN.md — Closed as an entry-observation blocker; it did not release downstream work.
 
 **Wave 30 basic lifecycle smoke** *(gap closure; blocked on the root-loader repair)*
 
-- [ ] 13-28-PLAN.md — Verify only the local service smoke, canonical Gateway check, and fixed-port cleanup from a fresh all-free state.
+- [x] 13-28-PLAN.md — Passed the basic local service smoke, canonical Gateway check, and fixed-port cleanup; its three release fields are the current handoff input.
 
 **Wave 24** *(gap closure; blocked on Wave 23 released-and-cleaned eligibility)*
 

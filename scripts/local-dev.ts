@@ -15,7 +15,7 @@ import {
 import { packageManagerInvocation } from './package-manager-command.ts'
 
 const localTarget = 'starye-org'
-const readinessAttempts = 40
+const readinessAttempts = 160
 const readinessIntervalMs = 250
 const pagesSurfaces = ['dashboard', 'auth', 'blog', 'movie', 'comic'] as const satisfies readonly TargetPagesSurface[]
 const localGatewayOrigins = [
@@ -245,6 +245,7 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
   })
   const started: StartedProcess[] = []
   let materialized: MaterializedLocalInputs | undefined
+  let ready = false
   let stopping = false
   let stopped: Promise<void> | undefined
 
@@ -277,12 +278,17 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
     stop,
   })
   const watchChild = (child: StartedProcess): void => {
-    child.process.once('error', () => void stop(1))
-    child.process.once('exit', () => {
-      if (!stopping) {
+    const stopAfterReadiness = (): void => {
+      if (!stopping && ready) {
         console.error(`Local ${child.label} service exited unexpectedly.`)
         void stop(1)
       }
+    }
+
+    child.process.once('error', stopAfterReadiness)
+    child.process.once('exit', () => {
+      // Windows pnpm wrappers can exit before their long-lived service child binds.
+      stopAfterReadiness()
     })
   }
 
@@ -323,6 +329,7 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
       return failed()
     }
     if (readiness.every(Boolean)) {
+      ready = true
       return {
         status: 'ready',
         exitCode: 0,
