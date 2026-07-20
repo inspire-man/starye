@@ -17,6 +17,14 @@ interface LocalDevModule {
   runLocalDevSupervisor: (dependencies: unknown) => Promise<LocalDevSupervisorResult>
 }
 
+interface LocalDevEntryModule {
+  buildLocalDevSupervisorInvocation: () => {
+    readonly args: readonly string[]
+    readonly command: string
+    readonly cwd: string
+  }
+}
+
 interface FakeService {
   readonly label: string
   readonly port: number
@@ -32,6 +40,10 @@ class FakeChild extends EventEmitter {
 
 async function loadLocalDev(): Promise<LocalDevModule> {
   return import(/* @vite-ignore */ new URL('../../../../../scripts/local-dev.ts', import.meta.url).href) as Promise<LocalDevModule>
+}
+
+async function loadLocalDevEntry(): Promise<LocalDevEntryModule> {
+  return import(/* @vite-ignore */ new URL('../../../../../scripts/local-dev-entry.ts', import.meta.url).href) as Promise<LocalDevEntryModule>
 }
 
 function createHarness(options: {
@@ -82,6 +94,16 @@ function createHarness(options: {
 }
 
 describe('local-dev atomic seven-port supervisor', () => {
+  it('starts the supervisor with an absolute current-workspace script path', async () => {
+    const entry = await loadLocalDevEntry()
+    const invocation = entry.buildLocalDevSupervisorInvocation()
+    const scriptPath = invocation.args.at(-1)
+
+    expect(invocation.command).toContain('node')
+    expect(scriptPath).toMatch(/[\\/]scripts[\\/]local-dev\.ts$/)
+    expect(scriptPath).not.toContain('..')
+  })
+
   it('fails atomically when a live Gateway never binds 8080', async () => {
     const localDev = await loadLocalDev()
     const harness = createHarness({ listening: port => port !== 8080 })
