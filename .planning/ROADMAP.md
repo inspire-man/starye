@@ -169,6 +169,10 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [ ] 13-27-PLAN.md — Run one fresh task-owned cold start, canonical Gateway service check, owned cleanup, and all-free port check. This is the only runtime release candidate for the next local handoff.
 
+**Wave 30 basic lifecycle smoke** *(gap closure; blocked on the root-loader repair)*
+
+- [ ] 13-28-PLAN.md — Verify only the local service smoke, canonical Gateway check, and fixed-port cleanup from a fresh all-free state.
+
 **Wave 24** *(gap closure; blocked on Wave 23 released-and-cleaned eligibility)*
 
 - [ ] 13-17-PLAN.md — Run one collision-gated local handoff only after the three 13-25 release fields pass.
