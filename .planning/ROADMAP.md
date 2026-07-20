@@ -157,13 +157,17 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [x] 13-24-PLAN.md — Executed once and remains immutable as `blocked_after_launch`; it cannot release downstream work.
 
-**Wave 23** *(gap closure; blocked on the current all-free fixed-port observation)*
+**Wave 23** *(historical gap-closure checkpoint; immutable)*
 
-- [ ] 13-25-PLAN.md — Retry one current-source task-owned cold start only after seven ports are immediately re-proven free; release only after canonical readiness, local regressions, task-owned cleanup, and all-free post-cleanup ports.
+- [x] 13-25-PLAN.md — Closed as `blocked_after_launch`; it is historical diagnosis only and cannot release downstream work.
 
 **Wave 28 isolated repair** *(gap closure; blocked on the immutable 13-25 wrapper diagnosis)*
 
-- [ ] 13-26-PLAN.md — Declare the locked root tsx loader, remove the nested Windows pnpm wrapper, and prove actual root resolution without launching a runtime; execute only with `$gsd-execute-phase 13 --gaps-only --wave 28` so 13-17 cannot be co-scheduled.
+- [x] 13-26-PLAN.md — Repaired the root tsx loader and its static regression without launching a runtime.
+
+**Wave 29 streamlined retry** *(gap closure; blocked on 13-26)*
+
+- [ ] 13-27-PLAN.md — Run one fresh task-owned cold start, canonical Gateway service check, owned cleanup, and all-free port check. This is the only runtime release candidate for the next local handoff.
 
 **Wave 24** *(gap closure; blocked on Wave 23 released-and-cleaned eligibility)*
 

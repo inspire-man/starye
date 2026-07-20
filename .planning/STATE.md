@@ -5,10 +5,10 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: executing
-stopped_at: Plan 13-26 committed RED loader regression; configured-registry candidate exists and must pass the explicit package/lock whitelist before static gates, with no 13-26 Summary permitted on failure
+stopped_at: Streamlined Plan 13-27 fresh local lifecycle retry after completed static root-loader repair
 last_updated: "2026-07-20T00:00:00Z"
 last_activity: 2026-07-20
-last_activity_desc: Committed 13-26 RED root-loader regression; retain the current exact tsx candidate and resume only after candidate-whitelist validation
+last_activity_desc: Completed the static root-loader repair and prepared one basic lifecycle retry
 progress:
   total_phases: 4
   completed_phases: 2
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — EXECUTION CHECKPOINT 13-26
-Plan: 13-25 is an immutable blocked runtime-ownership checkpoint. Plan 13-26 has the committed RED regression `1e13a62` and one task-owned configured-registry candidate: root exact `tsx@4.21.0`, root importer declaration, two named Vitest peer-string substitutions, and two named optional snapshot flags. Any diff outside that explicit whitelist, or a loader failure, remains an executor checkpoint and must not create `13-26-SUMMARY.md`.
-Status: Resume only `$gsd-execute-phase 13 --gaps-only --wave 28` from `1e13a62`, first comparing the existing candidate to Plan 13-26's explicit whitelist. Do not run `pnpm add`, `pnpm install`, `pnpm update`, `pnpm remove`, another dependency-mutation command, or another registry request; the named static `pnpm exec` validations remain allowed after the whitelist passes. It cannot establish release eligibility. After static gates pass, re-run `$gsd-plan-phase 13 --gaps` to create a new all-free task-owned retry Plan 13-27 before rewiring or executing 13-17 through 13-20.
-Last activity: 2026-07-20 — committed the static RED regression and recorded the exact task-owned registry candidate without changing historical runtime evidence
+Phase: 13 (full-chain-data-smoke) — STREAMLINED LOCAL LIFECYCLE RETRY
+Plan: 13-25 remains an immutable blocked checkpoint. Plan 13-26 completed the static root-loader repair. Plan 13-27 performs one fresh task-owned lifecycle only.
+Status: Run `$gsd-execute-phase 13 --gaps-only --wave 29`. It checks only the all-free fixed-port gate, root entry/supervisor ownership, `pnpm check:services`, owned cleanup, and all-free post-cleanup ports. It does not create a data-chain run or perform broad regression suites.
+Last activity: 2026-07-20 — streamlined the remaining local lifecycle validation to the essential runtime path
 
 ## Performance Metrics
 
