@@ -64,11 +64,20 @@ describe('legacy-domain audit', () => {
   })
 
   it('allows a named test fixture fragment only at its exact path', () => {
-    const path = 'packages/config/src/deployment-target/__tests__/data-chain-smoke-remote.test.ts'
-    const fixture = `canonicalBase: 'https://${legacyDomain}',`
+    const path = 'packages/config/src/deployment-target/__tests__/target-profile.schema.test.ts'
+    const fixture = `gateway: 'https://${legacyDomain}',`
 
     expect(audit({ [path]: `      ${fixture}\n` }).issues).toEqual([])
     expect(audit({ 'packages/config/src/deployment-target/__tests__/another.test.ts': `      ${fixture}\n` }).issues).toHaveLength(1)
+  })
+
+  it('does not retain allowances for ordinary profile-derived env and projection test inputs', () => {
+    const ordinaryFixturePaths = new Set([
+      'packages/config/src/deployment-target/__tests__/env-file-block.test.ts',
+      'packages/config/src/deployment-target/__tests__/target-projections.test.ts',
+    ])
+
+    expect(LEGACY_DOMAIN_ALLOWANCES.filter(allowance => ordinaryFixturePaths.has(allowance.path))).toEqual([])
   })
 
   it('does not treat the hyphenated target identifier as a legacy-domain match', () => {
