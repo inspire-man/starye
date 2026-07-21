@@ -83,7 +83,9 @@ export function renderRequirementEvidenceMatrixMarkdown(matrix: RequirementEvide
     '| Requirement | Source phase | Status | Evidence | Limitations |',
     '| --- | --- | --- | --- | --- |',
     ...matrix.requirements.map((row) => {
-      const evidence = row.evidence.map(item => `${item.kind}: [${item.path}#${item.anchor}](${item.path})`).join('<br>')
+      const evidence = row.evidence
+        .map(item => `${item.kind}: [${item.path}#${item.anchor.replaceAll('|', '\\|')}](${item.path})`)
+        .join('<br>')
       const recovery = row.status === 'verified'
         ? ''
         : `<br>Checkpoint: ${row.checkpointOrMissingArtifact}<br>Prerequisite: ${row.recoveryPrerequisite}<br>Next: ${row.nextOperatorCommand}`
