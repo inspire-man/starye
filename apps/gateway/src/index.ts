@@ -95,7 +95,7 @@ const gatewayHandler = {
     const cachedProxy = createCachedProxy(env.CACHE, proxy)
 
     // Detect local development environment
-    // 本地开发时，即使通过 starye.org 访问（Cloudflare tunnel），也应使用本地配置
+    // 本地开发时，即使通过 Cloudflare tunnel 访问，也应使用本地配置
     const isLocal = url.hostname === 'localhost'
       || url.hostname === '127.0.0.1'
       || url.hostname.startsWith('192.168.')

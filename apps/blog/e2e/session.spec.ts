@@ -103,14 +103,14 @@ test.describe('AUTH-02: Nuxt blog SSR session hydrate', () => {
 
     const mock = await startSsrMock({
       sessionPayload: {
-        user: { id: 'user-1', email: 'author@starye.org', role: 'admin' },
+        user: { id: 'user-1', email: 'author@starye.test', role: 'admin' },
         session: { id: 'session-1' },
       },
     })
 
     try {
       await mockClientSession(page, {
-        user: { id: 'user-1', email: 'author@starye.org', role: 'admin' },
+        user: { id: 'user-1', email: 'author@starye.test', role: 'admin' },
         session: { id: 'session-1' },
       })
       await page.goto('/', { waitUntil: 'domcontentloaded' })

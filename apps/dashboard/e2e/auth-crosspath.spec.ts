@@ -51,7 +51,7 @@ test.describe('AUTH-01: 登录后跨子路径 session 共享', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          user: { id: 'user-1', email: 'author@starye.org', role: 'admin' },
+          user: { id: 'user-1', email: 'author@starye.test', role: 'admin' },
           session: { id: 'session-1' },
         }),
       })
