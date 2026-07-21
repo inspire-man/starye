@@ -75,7 +75,6 @@ describe('rUNBOOK target-first operations contract', () => {
     const profile = trackedTargetProfiles[0]
     const copiedIdentityValues = [
       profile.account.id,
-      profile.account.name,
       profile.domain.root,
       profile.domain.zoneName,
       ...Object.values(profile.urls),

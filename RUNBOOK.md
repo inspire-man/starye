@@ -10,41 +10,10 @@
 
 ---
 
-## 1. 运维入口总览
+## 1. Operations ownership and local entry
 
-### 1.1 生产入口
-
-| Surface | Production URL | Deploy Path | Rollback Path |
-|---------|----------------|-------------|---------------|
-| gateway | `https://starye.org` | `.github/workflows/deploy-gateway.yml` | `.github/workflows/rollback.yml` |
-| api | `https://api.starye.org` | `.github/workflows/deploy-api.yml` | `.github/workflows/rollback.yml` |
-| auth | `https://starye.org/auth/login` | `.github/workflows/deploy-auth.yml` | Cloudflare Pages deployment history |
-| blog | `https://starye.org/blog/` | `.github/workflows/deploy-blog.yml` | Cloudflare Pages deployment history |
-| dashboard | `https://starye.org/dashboard/` | `.github/workflows/deploy-dashboard.yml` | Cloudflare Pages deployment history |
-| movie | `https://starye.org/movie/` | `.github/workflows/deploy-movie.yml` | Cloudflare Pages deployment history |
-| comic | `https://starye.org/comic/` | `.github/workflows/deploy-comic.yml` | Cloudflare Pages deployment history |
-| d1 migrations | n/a | `.github/workflows/deploy-migrations.yml` | forward-fix + D1 restore |
-
-### 1.2 关键 Secrets / 环境变量
-
-- GitHub Actions:
-  - `CLOUDFLARE_API_TOKEN`
-  - `CLOUDFLARE_ACCOUNT_ID`
-  - `API_URL`
-  - `CRAWLER_SECRET`
-  - `R2_ACCESS_KEY_ID`
-  - `R2_SECRET_ACCESS_KEY`
-  - `R2_BUCKET_NAME`
-  - `R2_PUBLIC_URL`
-- Workers / Pages:
-  - `ADMIN_GITHUB_ID`
-  - `SENTRY_DSN`
-  - `SENTRY_RELEASE`（Workers 可选）
-  - `NUXT_PUBLIC_SENTRY_DSN`（Nuxt 可选，若不直接复用 `SENTRY_DSN`）
-  - `VITE_SENTRY_DSN`（Vue apps）
-
-### 1.3 本地验证入口
-
+- `RUNBOOK.md` 只保存稳定的操作步骤；当前 phase 的结果、证据对和 requirement matrix 仍留在 `.planning/phases/`。
+- 每次远程操作都从明确的 `TargetProfile` 开始。域名、账户、资源和 Pages 项目均由 profile 解析，不能从本手册复制或手填。
 - 所有本地浏览器验证统一经由 Gateway：
   - `http://localhost:8080/dashboard/`
   - `http://localhost:8080/blog/`
@@ -54,51 +23,84 @@
 
 ---
 
-## 2. Deploy 流程
+## 2. Target-first operations procedure
 
-### 2.1 日常 deploy 规则
+此流程适用于切换、deploy、migration、crawl、smoke 与恢复。文中的 `<target-id>`、`<app>`、`<surface>`、`<run-id>` 和 `<closed-command>` 必须由操作者在当前受跟踪配置中选择；它们不是默认生产值。
 
-- 现状保持双入口：
-  - `push -> main` 自动部署
-  - `workflow_dispatch` 手动补发
-- Worker 与 Pages 保持独立 workflow，不合并成大一统流水线。
-- `wrangler` 版本基线统一为 `^4.90.0` 以上。
+### 2.1 Select an explicit TargetProfile
 
-### 2.2 手动触发 deploy
+1. 先选择一个明确的受跟踪目标，不使用默认别名、域名或账户名代替 target ID。
+2. 先验证目标的非 secret metadata：
 
-1. 打开 GitHub Actions。
-2. 选择目标 workflow：
-   - `deploy-api.yml`
-   - `deploy-gateway.yml`
-   - `deploy-auth.yml`
-   - `deploy-blog.yml`
-   - `deploy-dashboard.yml`
-   - `deploy-movie.yml`
-   - `deploy-comic.yml`
-3. 点击 `Run workflow`。
-4. 等待 workflow 成功。
-5. 对应访问以下 smoke URL：
-   - gateway: `https://starye.org`
-   - api health: `https://starye.org/api/health`
-   - auth: `https://starye.org/auth/login`
-   - blog: `https://starye.org/blog/`
-   - dashboard: `https://starye.org/dashboard/`
-   - movie: `https://starye.org/movie/`
-   - comic: `https://starye.org/comic/`
+   ```bash
+   pnpm target-profile validate --target <target-id>
+   ```
 
-### 2.3 Deploy 后最低 smoke checklist
+3. 后续每个 workflow、preflight、deploy、migration、crawl 和 smoke 都使用同一个 `<target-id>`。解析出的 canonical Gateway URL、资源绑定和 Pages surface 是操作输入，不复制到本手册。
 
-- API 返回 200：`GET /api/health`
-- gateway 根路由会 301 到 `/blog/`
-- dashboard 未登录仍跳 `/auth/login?next=...`
-- movie/comic 至少能打开首页，不出现白屏
-- auth/blog 能正常返回 HTML
+### Required-secret metadata matrix
+
+该矩阵只镜像 `TargetProfile.requiredSecrets` 的 name、consumer、local file 与 CI environment metadata；它不记录任何 secret value、账户 ID、资源 ID、bucket 名称或 canonical domain。每一行的 validation/preflight entry 都在使用前检查存在性和 target 边界。
+
+| Target profile | Required secret name | Consumers | Local files | CI environment | Validation / preflight entry |
+|----------------|----------------------|-----------|-------------|----------------|------------------------------|
+| `starye-org` | `CLOUDFLARE_API_TOKEN` | `ci` | - | `starye-org` | `target-profile preflight` |
+| `starye-org` | `BETTER_AUTH_SECRET` | `api, auth` | `apps/api/.dev.vars` | `starye-org` | `target-profile preflight` |
+| `starye-org` | `CRAWLER_SECRET` | `api, crawler, ci` | `apps/api/.dev.vars`, `packages/crawler/.env` | `starye-org` | `target-profile preflight` |
+| `starye-org` | `R2_ACCESS_KEY_ID` | `crawler` | `packages/crawler/.env` | `starye-org` | `target-profile preflight` |
+| `starye-org` | `R2_SECRET_ACCESS_KEY` | `crawler` | `packages/crawler/.env` | `starye-org` | `target-profile preflight` |
+
+若未来某个受跟踪 profile 的 `requiredSecrets` 为空，仍须保留该 profile 的 `No required secrets` 显式行，而不能省略此阶段或把它理解为跳过 preflight。
+
+### 2.2 Project local configuration and preflight
+
+1. 仅对已在 2.1 验证的 target 写入或检查本地 managed projection：
+
+   ```bash
+   pnpm target-profile project-local --target <target-id> --check
+   pnpm target-profile preflight --target <target-id> --scope local --command <closed-command>
+   ```
+
+2. projection 或 preflight 不通过时，在本地停止；不得继续 deploy、migration、crawl 或 smoke。修复由 preflight 报告的本地边界问题后，重新从本阶段开始。
+3. 本地浏览器证据只从 Gateway canonical entry 取得，例如 `http://localhost:8080/dashboard/`；直连应用端口仅用于诊断，不能作为操作证据。
+
+### 2.3 Operator-triggered deploy, migration, and crawl
+
+1. 完成 local preflight 后，操作者才可选择一个闭合的 app/surface 进行部署，或在带 explicit target input 的 workflow 中触发对应 deploy、migration 或 crawl。credentialed workflow 执行是操作者动作，不是本手册或静态测试自动执行的动作。
+2. 本地 target-aware deploy 的形状为：
+
+   ```bash
+   pnpm target-deploy -- --target <target-id> --app <app> [--surface <surface>]
+   ```
+
+3. migration 前后遵循既有的 [D1 migration safety](#4-d1-migration-safety)；不要绕过 reviewer、backup 或恢复门禁。Pages 的部署输入必须保留已解析 target 的闭合 surface。
+4. 每个 mutation 只在其前置步骤已通过时开始。未完成的步骤不能由过去的 phase evidence、requirement checkbox 或另一个 target 的结果替代。
+
+### 2.4 Smoke with mode, target, and run ID
+
+1. smoke 必须声明 explicit `<mode>`、`<target-id>` 和 `<run-id>`，并把同一 tuple 用于运行和后续验证：
+
+   ```bash
+   pnpm smoke:data-chain -- --mode <mode> --target <target-id> --run-id <run-id>
+   pnpm smoke:data-chain:verify -- --mode <mode> --target <target-id> --run-id <run-id>
+   ```
+
+2. `passed` is the only completed smoke result.
+3. `failed` and `checkpoint` stop immediately and preserve the current evidence.
+4. `failed`、`checkpoint`、pending、缺失 artifact 或 tuple 不一致均不是成功；不得进行后续 mutation，也不得写成完成记录。当前 phase 的 evidence matrix 与历史状态继续由 phase artifact owner 保存。
+
+### 2.5 Rollback and recovery
+
+1. `failed` 或 `checkpoint` 后，先停止后续 mutation，并保留 mode/target/run ID tuple 与当前 evidence 对。
+2. Classify recovery as local, target, or provider handling; do not continue the current run.
+3. 对修复后的目标重新执行 selected-target preflight，再按故障边界选择 [Worker rollback](#31-worker-rollback)、[Pages rollback](#32-pages-rollback) 或 [D1 migration safety](#4-d1-migration-safety) 的既有人工步骤。Pages 回滚仍为手工、fail-closed 边界。
+4. After recovery, start a new validation run with a new mode/target/run ID tuple.
 
 ---
 
-## 3. Rollback 流程
+## 3. Rollback procedure
 
-### 3.1 Worker 回滚
+### 3.1 Worker rollback
 
 适用：
 - `api`
@@ -108,26 +110,23 @@
 - `.github/workflows/rollback.yml`
 
 输入：
+- `target`
 - `app`
 - `version_id`
 
 行为：
-- `api` -> `wrangler rollback <version_id> --name starye-api`
-- `gateway` -> `wrangler rollback <version_id> --name starye-gateway`
+- selected-target workflow 先解析 profile，再为所选 Worker 生成受控配置并执行 rollback。
+- 不从 RUNBOOK 填写 Worker 名称、账户或资源身份。
 
 操作步骤：
 
 1. 在 Cloudflare Worker Versions 页面或之前 deploy 记录中找到目标 `version_id`。
 2. 打开 GitHub Actions -> `Rollback Deployment`。
-3. 输入：
-   - `app=api` 或 `gateway`
-   - `version_id=<目标版本>`
+3. 输入 selected `target`、`app` 和 `version_id`。
 4. 运行 workflow。
-5. 验证：
-   - `api`: `https://starye.org/api/health`
-   - `gateway`: `https://starye.org/blog/`、`/auth/login`、`/movie/`、`/comic/`
+5. 通过 selected target 的 canonical Gateway URL 验证对应 API health 或应用路径。
 
-### 3.2 Pages 回滚
+### 3.2 Pages rollback
 
 适用：
 - `auth`
@@ -142,16 +141,11 @@
 
 操作步骤：
 
-1. 打开对应 Pages 项目：
-   - `starye-auth`
-   - `blog-pages`
-   - `starye-dashboard`
-   - `starye-movie`
-   - `starye-comic`
-2. 进入 Deployments。
+1. 用 selected target 与 explicit Pages surface 触发 rollback workflow；该 workflow 只解析 profile，不自动执行 Pages 回退。
+2. 在 workflow 输出所解析的 Pages 项目中进入 Deployments。
 3. 找到上一条稳定 deployment。
 4. 使用 Cloudflare Pages 控制台的 rollback / promote 上一版本能力执行回退。
-5. 验证对应 `https://starye.org/<app>/` 可用。
+5. 通过 selected target 的 canonical Gateway URL 验证对应 surface 可用。
 
 ### 3.3 回滚优先级
 
@@ -164,7 +158,7 @@
 
 ---
 
-## 4. D1 Migration Safety
+## 4. D1 migration safety
 
 ### 4.1 标准顺序
 
@@ -172,13 +166,13 @@
 
 1. 检查本次 SQL 是否包含 destructive 语句
 2. 如命中 destructive 模式，先完成 reviewer ack
-3. 在远程 apply 前执行：
-   - `wrangler d1 export starye-db --remote --output=<backup.sql>`
+3. 在远程 apply 前导出 selected target 解析出的 D1 数据库：
+   - `wrangler d1 export <selected-d1-database> --remote --output=<backup.sql>`
 4. 上传 backup 到 R2：
-   - `wrangler r2 object put <bucket>/ops/d1-backups/<backup.sql> --file=<backup.sql> --remote`
+   - `wrangler r2 object put <selected-backup-bucket>/ops/d1-backups/<backup.sql> --file=<backup.sql> --remote`
 5. 上传 backup artifact 副本
-6. 再执行：
-   - `wrangler d1 migrations apply starye-db --remote`
+6. 再对 selected target 解析出的数据库执行：
+   - `wrangler d1 migrations apply <selected-d1-database> --remote`
 7. apply 后立即做 smoke query / 业务 smoke
 
 ### 4.2 Dangerous SQL Gate
@@ -202,7 +196,7 @@
 - 同一份 SQL 额外保留为 GitHub Actions artifact
 - artifact 保留 14 天
 - 文件名格式：
-  - `starye-db-<run_id>-<run_attempt>.sql`
+  - `<target-id>-d1-<run_id>-<run_attempt>.sql`
 
 恢复原则：
 
@@ -400,7 +394,7 @@ pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts --dry-run --s
 ### 8.1 API / Gateway 故障
 
 现象：
-- `https://starye.org/api/health` 不通
+- selected target 的 canonical Gateway `/api/health` 不通
 - 前台全部 502 / 504
 
 处理顺序：
@@ -468,11 +462,11 @@ pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts --dry-run --s
 | 阈值 | 10 requests per 1 minute per IP |
 | 动作 | Block（返回 429 Too Many Requests） |
 | 响应码 | 429 |
-| 适用范围 | starye.org（主域名） |
+| 适用范围 | selected target 的 root domain |
 
 **配置步骤：**
 
-1. 登录 Cloudflare Dashboard → 选择 `starye.org` 域名
+1. 登录 Cloudflare Dashboard → 选择 selected target 的 root domain
 2. 进入 Security → WAF → Rate Limiting Rules
 3. 点击 "Create rule"
 4. 填写规则名：`starye-signin-ratelimit`
@@ -488,7 +482,7 @@ pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts --dry-run --s
 ```bash
 for i in $(seq 1 11); do
   curl -s -o /dev/null -w "%{http_code}\n" \
-    -X POST https://starye.org/api/auth/sign-in \
+    -X POST <selected-gateway-origin>/api/auth/sign-in \
     -H "Content-Type: application/json" \
     -d '{"email":"test@test.com","password":"wrong"}'
 done
