@@ -9,16 +9,19 @@ import type {
   WranglerCommandExecutor,
 } from '../packages/config/src/deployment-target/index.ts'
 import { spawnSync } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
   applyTargetManagedEnvBlock,
+  assertPagesRedirectInputPath,
   assertTargetManagedEnvBlockIsWellFormed,
   buildLocalEnvProjectionPlan,
   isTargetPagesSurface,
   parsePagesBuildEnv,
+  parsePagesRedirectInput,
   prepareTargetMutation,
   resolveTargetProfile,
   runPreparedTargetMutation,
@@ -45,6 +48,7 @@ export interface TargetProfileCliOptions {
   envRoot?: string
   pagesSurface?: TargetPagesSurface
   pagesBuildEnvPath?: string
+  pagesRedirectInputPath?: string
   mutationCommand?: TargetMutationCommand
   githubOutput?: string
   entry?: TargetRemoteEntry
@@ -147,6 +151,9 @@ export function parseTargetProfileCliArgs(argv: readonly string[]): TargetProfil
       case '--pages-build-env-path':
         options.pagesBuildEnvPath = consumeValue()
         break
+      case '--pages-redirect-input-path':
+        options.pagesRedirectInputPath = consumeValue()
+        break
       case '--github-output':
         options.githubOutput = consumeValue()
         break
@@ -173,7 +180,7 @@ export function formatTargetProfileHelp(): string {
   target-profile validate --target <id>
   target-profile project-local --target <id> --check|--write [--env-root <path>]
   target-profile preflight --target <id> --scope <local|ci|remote> --command <command> [--env-root <path>] [--live]
-  target-profile run-pages-build --surface <dashboard|auth|blog|movie|comic> --pages-build-env-path <generated-path>
+  target-profile run-pages-build --surface <dashboard|auth|blog|movie|comic> --pages-build-env-path <generated-path> --pages-redirect-input-path <generated-path>
   target-profile prepare-mutation --target <id> --scope ci --command <closed-command> --ci-environment <name> --github-output <path> [--surface <surface>]
   target-profile run-prepared-entry --entry <closed-entry> --prepared-context <generated-path>
 
@@ -188,6 +195,23 @@ Phase 11 identity boundary:
 }
 
 type PagesBuildExecutor = (command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number
+type PagesRedirectWriter = (surface: TargetPagesSurface, text: string) => Promise<void>
+type PagesRedirectClearer = (surface: TargetPagesSurface) => Promise<void>
+
+interface PagesBuildOptions {
+  readonly execute?: PagesBuildExecutor
+  readonly runDirectory?: string
+  readonly writeRedirect?: PagesRedirectWriter
+  readonly clearRedirect?: PagesRedirectClearer
+}
+
+const pagesBuildOutputDirectories = {
+  dashboard: ['apps', 'dashboard', 'dist'],
+  auth: ['apps', 'auth', 'dist'],
+  blog: ['apps', 'blog', 'dist'],
+  movie: ['apps', 'movie-app', 'dist'],
+  comic: ['apps', 'comic-app', 'dist'],
+} as const satisfies Readonly<Record<TargetPagesSurface, readonly string[]>>
 
 export function pickRuntimeEnvironment(
   source: Readonly<Record<string, string | undefined>> = process.env,
@@ -222,6 +246,53 @@ function pagesBuildArgs(surface: TargetPagesSurface): readonly string[] {
   }
 }
 
+function assertPagesBuildInputPaths(
+  surface: TargetPagesSurface,
+  runDirectory: string,
+  pagesBuildEnvPath: string,
+  pagesRedirectInputPath: string,
+): string {
+  if (!isTargetPagesSurface(surface)) {
+    throw new Error('Unknown Pages surface.')
+  }
+
+  const root = path.resolve(runDirectory)
+  const buildEnvPath = path.resolve(pagesBuildEnvPath)
+  const match = new RegExp(`^pages-build-env\\.([\\w-]+)\\.${surface}\\.env$`).exec(path.basename(buildEnvPath))
+  const runId = match?.[1]
+  if (!runId || path.dirname(buildEnvPath) !== root || buildEnvPath !== path.join(root, `pages-build-env.${runId}.${surface}.env`)) {
+    throw new Error('Pages build env path is outside the declared run directory.')
+  }
+
+  return assertPagesRedirectInputPath(root, runId, surface, pagesRedirectInputPath)
+}
+
+function pagesBuildOutputDirectory(surface: TargetPagesSurface): string {
+  if (!isTargetPagesSurface(surface)) {
+    throw new Error('Unknown Pages surface.')
+  }
+  return path.join(repositoryRoot, ...pagesBuildOutputDirectories[surface])
+}
+
+async function clearPagesRedirect(surface: TargetPagesSurface): Promise<void> {
+  await rm(path.join(pagesBuildOutputDirectory(surface), '_redirects'), { force: true })
+}
+
+async function writePagesRedirect(surface: TargetPagesSurface, text: string): Promise<void> {
+  const outputDirectory = pagesBuildOutputDirectory(surface)
+  const outputPath = path.join(outputDirectory, '_redirects')
+  const temporaryPath = path.join(outputDirectory, `.redirects.${randomUUID()}.tmp`)
+
+  await mkdir(outputDirectory, { recursive: true })
+  try {
+    await writeFile(temporaryPath, text, 'utf8')
+    await rename(temporaryPath, outputPath)
+  }
+  finally {
+    await rm(temporaryPath, { force: true })
+  }
+}
+
 function spawnPagesBuild(command: string, args: readonly string[], environment: NodeJS.ProcessEnv): number {
   const invocation = command === 'pnpm'
     ? packageManagerInvocation(args)
@@ -248,23 +319,45 @@ function spawnPagesBuild(command: string, args: readonly string[], environment: 
 export async function runPagesBuild(
   surface: TargetPagesSurface,
   pagesBuildEnvPath: string,
-  execute: PagesBuildExecutor = spawnPagesBuild,
+  pagesRedirectInputPath: string,
+  options: PagesBuildOptions = {},
 ): Promise<void> {
+  const redirectInputPath = assertPagesBuildInputPaths(
+    surface,
+    options.runDirectory ?? path.join(repositoryRoot, '.target-runs'),
+    pagesBuildEnvPath,
+    pagesRedirectInputPath,
+  )
   const parsed = await parsePagesBuildEnv(pagesBuildEnvPath, surface)
+  const targetId = 'VITE_TARGET_ID' in parsed ? parsed.VITE_TARGET_ID : parsed.NUXT_PUBLIC_TARGET_ID
+  const redirectInput = parsePagesRedirectInput(resolveTargetProfile(targetId).profile, surface, await readFile(redirectInputPath, 'utf8'))
   const environment: NodeJS.ProcessEnv = {
     ...pickRuntimeEnvironment(),
     ...parsed,
     STARYE_PAGES_BUILD_ENV_PATH: pagesBuildEnvPath,
   }
+  const execute = options.execute ?? spawnPagesBuild
+  const clearRedirect = options.clearRedirect ?? clearPagesRedirect
+  const writeRedirect = options.writeRedirect ?? writePagesRedirect
   const apiTypesStatus = execute('pnpm', ['--filter', '@starye/api-types', 'build'], environment)
 
   if (apiTypesStatus !== 0) {
+    await clearRedirect(surface)
     throw new Error(`Shared API types build failed for ${surface}.`)
   }
   const status = execute('pnpm', pagesBuildArgs(surface), environment)
 
   if (status !== 0) {
+    await clearRedirect(surface)
     throw new Error(`Pages build failed for ${surface}.`)
+  }
+
+  try {
+    await writeRedirect(surface, redirectInput)
+  }
+  catch (error) {
+    await clearRedirect(surface)
+    throw error
   }
 }
 
@@ -476,10 +569,10 @@ export async function runTargetProfileCli(options: TargetProfileCliOptions): Pro
       await runPreflight(options)
       return
     case 'run-pages-build':
-      if (!options.pagesSurface || !options.pagesBuildEnvPath) {
-        throw new Error('run-pages-build requires --surface and --pages-build-env-path.')
+      if (!options.pagesSurface || !options.pagesBuildEnvPath || !options.pagesRedirectInputPath) {
+        throw new Error('run-pages-build requires --surface, --pages-build-env-path, and --pages-redirect-input-path.')
       }
-      await runPagesBuild(options.pagesSurface, options.pagesBuildEnvPath)
+      await runPagesBuild(options.pagesSurface, options.pagesBuildEnvPath, options.pagesRedirectInputPath)
       return
     case 'prepare-mutation':
       await runPrepareMutation(options)

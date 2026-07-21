@@ -169,6 +169,7 @@ export async function runTargetDeploy(options: TargetDeployOptions): Promise<voi
       gateway: path.join(repositoryRoot, 'apps', 'gateway'),
     },
     runDirectory: path.join(repositoryRoot, '.target-runs'),
+    profile: resolution.profile,
     ...(options.surface ? { pagesSurface: options.surface } : {}),
   })
   const execute = options.execute ?? spawnCommand
@@ -185,7 +186,16 @@ export async function runTargetDeploy(options: TargetDeployOptions): Promise<voi
     if (!materialized.pages || !options.surface) {
       throw new Error('Selected Pages deploy configuration is missing.')
     }
-    if (execute('pnpm', ['target-profile', 'run-pages-build', '--surface', options.surface, '--pages-build-env-path', materialized.pages.buildEnvPath], deploymentEnvironment) !== 0) {
+    if (execute('pnpm', [
+      'target-profile',
+      'run-pages-build',
+      '--surface',
+      options.surface,
+      '--pages-build-env-path',
+      materialized.pages.buildEnvPath,
+      '--pages-redirect-input-path',
+      materialized.pages.redirectInputPath,
+    ], deploymentEnvironment) !== 0) {
       throw new Error(`Pages build failed for ${options.app}.`)
     }
     if (execute('pnpm', ['--filter', packageFilter(options.app), 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', materialized.pages.project], deploymentEnvironment) !== 0) {
