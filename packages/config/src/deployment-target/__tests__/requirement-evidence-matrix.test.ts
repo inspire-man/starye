@@ -1,6 +1,7 @@
 import type { RequirementEvidenceMatrix, RequirementEvidenceStatus } from '../requirement-evidence-matrix'
-
 import { describe, expect, it } from 'vitest'
+
+import { verifyV12EvidenceMatrix } from '../../../../../scripts/verify-v12-evidence-matrix'
 import {
   renderRequirementEvidenceMatrixMarkdown,
   validateRequirementEvidenceMatrix,
@@ -102,5 +103,28 @@ describe('requirement evidence matrix', () => {
 
     const markdown = renderRequirementEvidenceMatrixMarkdown(matrix())
     expect(validate(matrix(), { renderedMarkdown: `${markdown}drift\n`, final: true })).not.toEqual([])
+  })
+
+  it('validates fixed local matrix paths through an injected read-only CLI dependency', () => {
+    const value = matrix()
+    const paths = {
+      requirements: 'requirements.md',
+      phase11: 'phase11.md',
+      phase12: 'phase12.md',
+      phase13: 'phase13.md',
+      matrix: 'matrix.json',
+      markdown: 'matrix.md',
+    }
+    const files = new Map<string, string>([
+      [paths.requirements, orderedIds.map(id => `- [x] **${id}**: fixture`).join('\n')],
+      [paths.phase11, reports.phase11],
+      [paths.phase12, reports.phase12],
+      [paths.phase13, reports.phase13],
+      [paths.matrix, `${JSON.stringify(value)}\n`],
+      [paths.markdown, renderRequirementEvidenceMatrixMarkdown(value)],
+      ['evidence/report.md', orderedIds.map(id => `anchor-${id}`).join('\n')],
+    ])
+
+    expect(verifyV12EvidenceMatrix({ final: true, paths, readFile: path => files.get(path) })).toEqual({ issues: [] })
   })
 })
