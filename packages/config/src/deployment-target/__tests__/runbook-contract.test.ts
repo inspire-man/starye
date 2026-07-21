@@ -78,7 +78,16 @@ describe('rUNBOOK target-first operations contract', () => {
       profile.domain.root,
       profile.domain.zoneName,
       ...Object.values(profile.urls),
-      ...Object.values(profile.resources).flatMap(resource => [resource.name, resource.id].filter(Boolean)),
+      ...Object.values(profile.resources).flatMap((resource) => {
+        switch (resource.kind) {
+          case 'd1':
+            return [resource.name, resource.id]
+          case 'r2':
+            return [resource.name]
+          case 'kv':
+            return [resource.id]
+        }
+      }),
       ...Object.values(profile.workers).map(worker => worker.name),
       ...Object.values(profile.pages).flatMap(page => [page.project, page.directOrigin, page.canonicalUrl]),
     ]

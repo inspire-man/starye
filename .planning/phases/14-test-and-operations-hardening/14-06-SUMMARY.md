@@ -99,8 +99,16 @@ status: complete
 - **Verification:** `pnpm --filter @starye/config exec vitest run src/deployment-target/__tests__/runbook-contract.test.ts` passed 4/4.
 - **Committed in:** `f612426`
 
-**Total deviations:** 1 auto-fixed (1 Rule 1 test-contract correction).
-**Impact on plan:** The correction narrows the negative assertion to the plan's actual boundary and preserves required profile metadata reconciliation.
+**2. [Rule 1 - TypeScript type correction] Narrowed resource identity assertions by resource kind.**
+- **Found during:** Wave 1 post-merge `pnpm build` gate.
+- **Issue:** The RUNBOOK contract treated every resource variant as though both `name` and `id` existed. The `kv` and `r2` variants intentionally expose only one of those fields, so the full config TypeScript build failed even though Vitest executed the runtime assertion.
+- **Fix:** Branch on the resource `kind` discriminant and collect only fields guaranteed by each variant: D1 `name`/`id`, R2 `name`, and KV `id`.
+- **Files modified:** `packages/config/src/deployment-target/__tests__/runbook-contract.test.ts`
+- **Verification:** Re-ran the focused Vitest contract and `pnpm --filter @starye/config build` after the correction.
+- **Committed in:** Post-merge 14-06 scoped repair commit.
+
+**Total deviations:** 2 auto-fixed (2 Rule 1 corrections).
+**Impact on plan:** Both corrections preserve the original metadata-only RUNBOOK contract. The post-merge change restores type safety without omitting any resource identity value that exists in a tracked profile.
 
 ## Issues Encountered
 
@@ -123,4 +131,5 @@ None - no provider, credential, deployment, migration, crawler, smoke, browser, 
 
 - Found `RUNBOOK.md`, the RUNBOOK contract test, and this summary on disk.
 - Found task commits `d1d887e` and `f612426` in Git history.
+- Confirmed the post-merge resource-union correction with the focused contract test and the `@starye/config` build.
 - No TODO/FIXME, placeholder, or empty-value stubs were found in Plan 14-06 files.
