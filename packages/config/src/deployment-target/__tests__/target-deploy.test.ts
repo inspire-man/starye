@@ -12,6 +12,7 @@ import {
   parseAuditedPublicRuntimeInput,
   resolveTargetProfile,
 } from '../index'
+import { defaultTargetUrls } from './default-target.fixture'
 
 const targetDeployModule = new URL('../../../../../scripts/target-deploy.ts', import.meta.url).href
 const targetProfileModule = new URL('../../../../../scripts/target-profile.ts', import.meta.url).href
@@ -231,8 +232,8 @@ describe('run-pages-build', () => {
     expect(argv).toEqual(['--filter', 'dashboard', 'build'])
     expect(environment).toMatchObject({
       VITE_TARGET_ID: 'starye-org',
-      VITE_GATEWAY_BASE_URL: 'https://starye.org',
-      VITE_API_BASE_URL: 'https://api.starye.org',
+      VITE_GATEWAY_BASE_URL: defaultTargetUrls.gateway,
+      VITE_API_BASE_URL: defaultTargetUrls.api,
       VITE_APP_BASE_PATH: '/dashboard/',
       VITE_BUILD_MODE: 'test',
       STARYE_PAGES_BUILD_ENV_PATH: materialized.pages!.buildEnvPath,

@@ -8,6 +8,7 @@ import {
   renderDataChainEvidenceMarkdown,
   serializeDataChainEvidenceJson,
 } from '../data-chain-evidence'
+import { defaultTargetUrls } from './default-target.fixture'
 
 const evidenceRoot = path.resolve('phase13-remote-evidence')
 const baseOptions = {
@@ -156,7 +157,7 @@ function remoteDependencies(files: Map<string, string>) {
       id: baseOptions.target,
       profile: {
         ci: { githubEnvironment: 'starye-org' },
-        urls: { gateway: 'https://starye.org' },
+        urls: { gateway: defaultTargetUrls.gateway },
       },
     }),
     environment: {
@@ -293,7 +294,7 @@ describe('phase 13 remote smoke runner', () => {
       itemId: 'remote-movie-42',
     })
     expect(dependencies.fetchCanonicalApi).toHaveBeenCalledWith({
-      canonicalBase: 'https://starye.org',
+      canonicalBase: defaultTargetUrls.gateway,
       path: `/api/public/movies/${createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode}`,
       itemCode: createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId }).itemCode,
       itemId: 'remote-movie-42',
@@ -336,7 +337,7 @@ describe('phase 13 remote smoke runner', () => {
       evidenceRoot,
       read: async (file: string) => files.get(file),
       write: async (file: string, contents: string) => { files.set(file, contents) },
-      resolveTarget: () => ({ id: baseOptions.target, profile: { urls: { gateway: 'https://starye.org' } } }),
+      resolveTarget: () => ({ id: baseOptions.target, profile: { urls: { gateway: defaultTargetUrls.gateway } } }),
       observeSurface,
       now: () => '2026-07-16T04:11:00.000Z',
     }
@@ -345,7 +346,7 @@ describe('phase 13 remote smoke runner', () => {
 
     expect(result.exitCode).toBe(0)
     expect(observeSurface).toHaveBeenCalledTimes(2)
-    expect(observedInputs.every(input => input.baseUrl === 'https://starye.org')).toBe(true)
+    expect(observedInputs.every(input => input.baseUrl === defaultTargetUrls.gateway)).toBe(true)
     expect(observedInputs.map(input => input.surface)).toEqual(['dashboard', 'viewer'])
 
     const invalidFiles = new Map<string, string>()

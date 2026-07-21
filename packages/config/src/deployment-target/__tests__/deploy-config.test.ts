@@ -14,6 +14,7 @@ import {
   renderPagesRedirects,
 } from '../index'
 import { resolveTargetProfile } from '../target-resolver'
+import { defaultTargetUrls } from './default-target.fixture'
 
 const roots: string[] = []
 
@@ -69,8 +70,8 @@ describe('target deploy config materializer', () => {
       .toBe(renderPagesRedirects(resolution.profile, 'dashboard'))
     expect(await parsePagesBuildEnv(result.pages!.buildEnvPath, 'dashboard')).toEqual({
       VITE_TARGET_ID: 'starye-org',
-      VITE_GATEWAY_BASE_URL: 'https://starye.org',
-      VITE_API_BASE_URL: 'https://api.starye.org',
+      VITE_GATEWAY_BASE_URL: defaultTargetUrls.gateway,
+      VITE_API_BASE_URL: defaultTargetUrls.api,
       VITE_APP_BASE_PATH: '/dashboard/',
       VITE_BUILD_MODE: 'production',
     })
@@ -88,7 +89,7 @@ describe('target deploy config materializer', () => {
     expect(() => parsePagesRedirectInput(
       resolution.profile,
       'dashboard',
-      'https://untrusted.pages.dev/* https://starye.org/dashboard/:splat 301!\n/* /index.html 200\n',
+      `https://untrusted.pages.dev/* ${defaultTargetUrls.gateway}/dashboard/:splat 301!\n/* /index.html 200\n`,
     )).toThrow('Pages redirect input')
 
     await expect(materializeTargetDeployConfig({

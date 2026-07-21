@@ -17,6 +17,7 @@ import {
   parseVitePublicRuntimeEnv,
 } from '../index'
 import { resolveTargetProfile } from '../target-resolver'
+import { defaultTargetUrls } from './default-target.fixture'
 
 const workspaceRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
 const roots: string[] = []
@@ -120,7 +121,7 @@ describe('public runtime consumer adapters', () => {
     expect(buildNuxtPublicRuntimeEnv(auth, 'auth')).toEqual(authGenerated)
     expect(buildVitePublicRuntimeEnv(movie, 'movie')).toEqual(movieGenerated)
     expect(buildVitePublicRuntimeEnv(comic, 'comic')).toEqual(comicGenerated)
-    expect(dashboard.publicRuntime.gatewayBaseUrl).toBe('https://starye.org')
+    expect(dashboard.publicRuntime.gatewayBaseUrl).toBe(defaultTargetUrls.gateway)
     expect(auth.publicRuntime.appBasePaths.auth).toBe('/auth/')
     expect(movie.publicRuntime.appBasePaths.movie).toBe('/movie/')
     expect(comic.publicRuntime.appBasePaths.comic).toBe('/comic/')
