@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import type { RequirementEvidenceMatrix, RequirementEvidenceStatus } from '../requirement-evidence-matrix'
 
+import { describe, expect, it } from 'vitest'
 import {
   renderRequirementEvidenceMatrixMarkdown,
   validateRequirementEvidenceMatrix,
@@ -7,8 +8,8 @@ import {
 
 const orderedIds = ['PROF-01', 'DATA-01', 'DATA-07', 'TEST-05', 'TEST-07']
 const reports = {
-  phase11: '| PROF-01 | VERIFIED | profile evidence |',
-  phase12: '| ENV-03 | VERIFIED | runtime evidence |',
+  phase11: '## Requirements Coverage\n| PROF-01 | VERIFIED | profile evidence |',
+  phase12: '## Requirement Coverage\n| ENV-03 | VERIFIED | runtime evidence |',
   phase13: [
     '### Requirements Coverage',
     '| DATA-01 | BLOCKED | missing local pair |',
@@ -22,13 +23,13 @@ const reports = {
   ].join('\n'),
 }
 
-function matrix(ids = orderedIds) {
+function matrix(ids = orderedIds): RequirementEvidenceMatrix {
   return {
     version: 1,
     requirements: ids.map(id => ({
       id,
       sourcePhase: id.startsWith('DATA') || id === 'TEST-05' ? 13 : id === 'TEST-07' ? 14 : 11,
-      status: id === 'DATA-07' || id === 'TEST-05' ? 'partial' : id === 'DATA-01' ? 'blocked' : 'verified',
+      status: (id === 'DATA-07' || id === 'TEST-05' ? 'partial' : id === 'DATA-01' ? 'blocked' : 'verified') as RequirementEvidenceStatus,
       evidence: [{ kind: 'verification', path: 'evidence/report.md', anchor: `anchor-${id}` }],
       limitations: ['local static evidence only'],
       ...(id === 'DATA-01' || id === 'DATA-07' || id === 'TEST-05'
