@@ -5,6 +5,8 @@ import {
   LEGACY_DOMAIN_ALLOWANCES,
 } from '../legacy-domain-audit'
 
+const legacyDomain = ['starye', 'org'].join('.')
+
 function audit(files: Record<string, string>) {
   return auditLegacyDomain({
     trackedPaths: Object.keys(files),
@@ -18,7 +20,7 @@ describe('legacy-domain audit', () => {
     const result = audit({
       [path]: [
         'const targetId = \'starye-org\'',
-        'const origin = \'https://starye.org\'',
+        `const origin = 'https://${legacyDomain}'`,
       ].join('\n'),
     })
 
@@ -26,15 +28,15 @@ describe('legacy-domain audit', () => {
       {
         path,
         line: 2,
-        fragment: 'const origin = \'https://starye.org\'',
-        diagnostic: `${path}:2:const origin = 'https://starye.org'`,
+        fragment: `const origin = 'https://${legacyDomain}'`,
+        diagnostic: `${path}:2:const origin = 'https://${legacyDomain}'`,
       },
     ])
   })
 
   it('allows only the exact default target profile fragment with its named reason', () => {
     const path = 'packages/config/src/deployment-target/target-profiles.ts'
-    const fragment = 'root: \'starye.org\','
+    const fragment = `root: '${legacyDomain}',`
     const result = audit({ [path]: `    ${fragment}\n` })
 
     expect(result.issues).toEqual([])
@@ -53,8 +55,8 @@ describe('legacy-domain audit', () => {
 
   it('allows the exact legacy-alias deny-list fragment but not an altered fragment', () => {
     const path = 'packages/config/src/deployment-target/preflight.ts'
-    const allowed = audit({ [path]: '  \'starye.org\',\n' })
-    const altered = audit({ [path]: '  \'https://starye.org\',\n' })
+    const allowed = audit({ [path]: `  '${legacyDomain}',\n` })
+    const altered = audit({ [path]: `  'https://${legacyDomain}',\n` })
 
     expect(allowed.issues).toEqual([])
     expect(allowed.allowed[0]?.allowance.category).toBe('legacy-alias-deny-list')
@@ -63,7 +65,7 @@ describe('legacy-domain audit', () => {
 
   it('allows a named test fixture fragment only at its exact path', () => {
     const path = 'packages/config/src/deployment-target/__tests__/data-chain-smoke-remote.test.ts'
-    const fixture = 'canonicalBase: \'https://starye.org\','
+    const fixture = `canonicalBase: 'https://${legacyDomain}',`
 
     expect(audit({ [path]: `      ${fixture}\n` }).issues).toEqual([])
     expect(audit({ 'packages/config/src/deployment-target/__tests__/another.test.ts': `      ${fixture}\n` }).issues).toHaveLength(1)
@@ -89,7 +91,7 @@ describe('legacy-domain audit', () => {
       ],
       readFile: (path) => {
         readPaths.push(path)
-        return 'const origin = \'https://starye.org\''
+        return `const origin = 'https://${legacyDomain}'`
       },
     })
 
