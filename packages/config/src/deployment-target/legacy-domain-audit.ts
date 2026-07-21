@@ -152,27 +152,6 @@ export const LEGACY_DOMAIN_ALLOWANCES: readonly LegacyDomainAllowance[] = [
     ],
   ),
   ...exactAllowances(
-    'packages/config/src/deployment-target/__tests__/data-chain-smoke-remote.test.ts',
-    'named-test-fixture',
-    'Exercises remote smoke evidence parsing against a named canonical-base fixture.',
-    [
-      `urls: { gateway: 'https://${LEGACY_DOMAIN}' },`,
-      `canonicalBase: 'https://${LEGACY_DOMAIN}',`,
-      `resolveTarget: () => ({ id: baseOptions.target, profile: { urls: { gateway: 'https://${LEGACY_DOMAIN}' } } }),`,
-      `expect(observedInputs.every(input => input.baseUrl === 'https://${LEGACY_DOMAIN}')).toBe(true)`,
-    ],
-  ),
-  ...exactAllowances(
-    'packages/config/src/deployment-target/__tests__/deploy-config.test.ts',
-    'named-test-fixture',
-    'Exercises generated public deployment config and redirect values for the default target.',
-    [
-      `VITE_GATEWAY_BASE_URL: 'https://${LEGACY_DOMAIN}',`,
-      `VITE_API_BASE_URL: 'https://api.${LEGACY_DOMAIN}',`,
-      `'https://untrusted.pages.dev/* https://${LEGACY_DOMAIN}/dashboard/:splat 301!\\n/* /index.html 200\\n',`,
-    ],
-  ),
-  ...exactAllowances(
     'packages/config/src/deployment-target/__tests__/env-file-block.test.ts',
     'named-test-fixture',
     'Exercises the target-managed env block with named default-target values.',
@@ -201,21 +180,6 @@ export const LEGACY_DOMAIN_ALLOWANCES: readonly LegacyDomainAllowance[] = [
     'named-test-fixture',
     'Exercises the preflight legacy-alias rejection contract.',
     [`it.each(['default', 'prod', 'production', '${LEGACY_DOMAIN}', 'api.${LEGACY_DOMAIN}'])(`],
-  ),
-  ...exactAllowances(
-    'packages/config/src/deployment-target/__tests__/public-runtime-consumers.test.ts',
-    'named-test-fixture',
-    'Exercises generated public runtime Gateway values for the default target.',
-    [`expect(dashboard.publicRuntime.gatewayBaseUrl).toBe('https://${LEGACY_DOMAIN}')`],
-  ),
-  ...exactAllowances(
-    'packages/config/src/deployment-target/__tests__/target-deploy.test.ts',
-    'named-test-fixture',
-    'Exercises target deployment input generation for the default target.',
-    [
-      `VITE_GATEWAY_BASE_URL: 'https://${LEGACY_DOMAIN}',`,
-      `VITE_API_BASE_URL: 'https://api.${LEGACY_DOMAIN}',`,
-    ],
   ),
   ...exactAllowances(
     'packages/config/src/deployment-target/__tests__/target-profile.schema.test.ts',

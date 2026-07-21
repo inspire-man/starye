@@ -96,6 +96,7 @@ async function materializeGeneratedEnv(surface: 'dashboard' | 'auth' | 'blog' | 
     appDirectories: { api: fixture.api, gateway: fixture.gateway },
     runDirectory: fixture.run,
     pagesSurface: surface,
+    profile: resolution.profile,
   })
 
   return parsePagesBuildEnv(generated.pages!.buildEnvPath, surface)
