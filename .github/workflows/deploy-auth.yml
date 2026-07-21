@@ -61,9 +61,9 @@ jobs:
           STARYE_PUBLIC_BUILD_MODE: ${{ vars.STARYE_PUBLIC_BUILD_MODE }}
         run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command pages-deploy --surface auth --github-output "$GITHUB_OUTPUT"
       - name: Build Auth Pages
-        run: pnpm target-profile run-pages-build --surface auth --pages-build-env-path "${{ steps.prepare.outputs.pages_build_env_path }}"
+        run: pnpm target-profile run-pages-build --surface auth --pages-build-env-path "${{ steps.prepare.outputs.pages_build_env_path }}" --pages-redirect-input-path "${{ steps.prepare.outputs.pages_redirect_input_path }}"
       - name: Deploy Auth Pages
         run: pnpm exec wrangler pages deploy apps/auth/dist --project-name "${{ steps.prepare.outputs.pages_project }}" --branch main --commit-hash "${{ github.sha }}"
       - name: Remove generated target files
         if: always()
-        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.pages_build_env_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
+        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.pages_build_env_path }}" "${{ steps.prepare.outputs.pages_redirect_input_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
