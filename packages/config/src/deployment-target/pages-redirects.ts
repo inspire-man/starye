@@ -161,3 +161,15 @@ export function renderPagesRedirects(
   assertSurface(surface)
   return renderPagesRedirectTemplate(profile, surface, pagesRedirectTemplates[surface])
 }
+
+export function parsePagesRedirectInput(
+  profile: TargetProfile,
+  surface: TargetPagesSurface,
+  raw: string,
+): string {
+  const expected = renderPagesRedirects(profile, surface)
+  if (raw !== expected) {
+    throw new Error('Pages redirect input does not match the selected target profile.')
+  }
+  return raw
+}

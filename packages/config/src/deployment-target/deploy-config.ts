@@ -5,11 +5,12 @@ import type {
   NuxtPublicRuntimeEnv,
   VitePublicRuntimeEnv,
 } from './public-runtime-input'
-import type { TargetPagesSurface } from './target-profile.schema'
+import type { TargetPagesSurface, TargetProfile } from './target-profile.schema'
 
 import type { TargetDeployProjection } from './target-projections'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { parsePagesRedirectInput, renderPagesRedirects } from './pages-redirects'
 import {
   buildNuxtPublicRuntimeEnv,
   buildVitePublicRuntimeEnv,
@@ -33,12 +34,14 @@ export interface MaterializeTargetDeployConfigRequest {
   readonly appDirectories: TargetDeployDirectories
   readonly runDirectory: string
   readonly pagesSurface?: TargetPagesSurface
+  readonly profile?: TargetProfile
 }
 
 export interface MaterializedPagesBuild {
   readonly surface: TargetPagesSurface
   readonly project: string
   readonly buildEnvPath: string
+  readonly redirectInputPath: string
 }
 
 export interface MaterializedTargetDeployConfig {
@@ -119,6 +122,20 @@ function assertChildPath(directory: string, filename: string): string {
   }
 
   return candidate
+}
+
+export function assertPagesRedirectInputPath(
+  runDirectory: string,
+  runId: string,
+  surface: TargetPagesSurface,
+  pathname: string,
+): string {
+  assertRunId(runId)
+  const expected = assertChildPath(runDirectory, `pages-redirects.${runId}.${surface}.txt`)
+  if (path.resolve(pathname) !== expected) {
+    throw new Error('Pages redirect input path is outside the validated run directory.')
+  }
+  return expected
 }
 
 function apiConfigContent(deploy: TargetDeployProjection): string {
@@ -299,39 +316,61 @@ export async function materializeTargetDeployConfig(
   const gatewayConfigPath = assertChildPath(request.appDirectories.gateway, `.target-wrangler.${request.runId}.toml`)
   const cleanupPaths = [apiConfigPath, gatewayConfigPath]
 
-  await Promise.all([
-    mkdir(path.dirname(apiConfigPath), { recursive: true }),
-    mkdir(path.dirname(gatewayConfigPath), { recursive: true }),
-  ])
-  await Promise.all([
-    writeFile(apiConfigPath, apiConfigContent(request.deploy), 'utf8'),
-    writeFile(gatewayConfigPath, gatewayConfigContent(request.deploy), 'utf8'),
-  ])
+  try {
+    await Promise.all([
+      mkdir(path.dirname(apiConfigPath), { recursive: true }),
+      mkdir(path.dirname(gatewayConfigPath), { recursive: true }),
+    ])
+    await Promise.all([
+      writeFile(apiConfigPath, apiConfigContent(request.deploy), 'utf8'),
+      writeFile(gatewayConfigPath, gatewayConfigContent(request.deploy), 'utf8'),
+    ])
 
-  let pages: MaterializedPagesBuild | undefined
-  if (request.pagesSurface !== undefined) {
-    const surface = request.pagesSurface
-    const environment = buildPagesEnvironment(request.publicRuntimeInput, surface)
-    const selected = request.deploy.pages.find(candidate => candidate.surface === surface)
-    if (!selected) {
-      await Promise.all(cleanupPaths.map(target => rm(target, { force: true })))
-      throw new Error(`Missing selected Pages project for ${surface}.`)
+    let pages: MaterializedPagesBuild | undefined
+    if (request.pagesSurface !== undefined) {
+      const surface = request.pagesSurface
+      const environment = buildPagesEnvironment(request.publicRuntimeInput, surface)
+      const selected = request.deploy.pages.find(candidate => candidate.surface === surface)
+      if (!selected) {
+        throw new Error(`Missing selected Pages project for ${surface}.`)
+      }
+      if (!request.profile) {
+        throw new Error('Selected Pages materialization requires a target profile.')
+      }
+
+      const runDirectory = path.resolve(request.runDirectory)
+      const buildEnvPath = assertChildPath(runDirectory, `pages-build-env.${request.runId}.${surface}.env`)
+      const redirectInputPath = assertPagesRedirectInputPath(
+        runDirectory,
+        request.runId,
+        surface,
+        path.join(runDirectory, `pages-redirects.${request.runId}.${surface}.txt`),
+      )
+      const redirectInput = parsePagesRedirectInput(
+        request.profile,
+        surface,
+        renderPagesRedirects(request.profile, surface),
+      )
+      cleanupPaths.push(buildEnvPath, redirectInputPath)
+      await mkdir(runDirectory, { recursive: true })
+      await Promise.all([
+        writeFile(buildEnvPath, serializePagesBuildEnv(environment, surface), 'utf8'),
+        writeFile(redirectInputPath, redirectInput, 'utf8'),
+      ])
+      pages = { surface, project: selected.project, buildEnvPath, redirectInputPath }
     }
 
-    const runDirectory = path.resolve(request.runDirectory)
-    const buildEnvPath = assertChildPath(runDirectory, `pages-build-env.${request.runId}.${surface}.env`)
-    await mkdir(runDirectory, { recursive: true })
-    await writeFile(buildEnvPath, serializePagesBuildEnv(environment, surface), 'utf8')
-    cleanupPaths.push(buildEnvPath)
-    pages = { surface, project: selected.project, buildEnvPath }
+    return {
+      apiConfigPath,
+      gatewayConfigPath,
+      ...(pages ? { pages } : {}),
+      async cleanup() {
+        await Promise.all(cleanupPaths.map(target => rm(target, { force: true })))
+      },
+    }
   }
-
-  return {
-    apiConfigPath,
-    gatewayConfigPath,
-    ...(pages ? { pages } : {}),
-    async cleanup() {
-      await Promise.all(cleanupPaths.map(target => rm(target, { force: true })))
-    },
+  catch (error) {
+    await Promise.all(cleanupPaths.map(target => rm(target, { force: true })))
+    throw error
   }
 }

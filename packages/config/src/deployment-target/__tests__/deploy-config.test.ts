@@ -49,6 +49,7 @@ describe('target deploy config materializer', () => {
       appDirectories: { api: fixture.apiDir, gateway: fixture.gatewayDir },
       runDirectory: fixture.runDir,
       pagesSurface: 'dashboard',
+      profile: resolution.profile,
     })
 
     expect(path.dirname(result.apiConfigPath)).toBe(fixture.apiDir)
@@ -115,6 +116,7 @@ describe('target deploy config materializer', () => {
       appDirectories: { api: fixture.apiDir, gateway: fixture.gatewayDir },
       runDirectory: fixture.runDir,
       pagesSurface: 'movie',
+      profile: resolution.profile,
     })
     const parsed = await parsePagesBuildEnv(result.pages!.buildEnvPath, 'movie')
 
