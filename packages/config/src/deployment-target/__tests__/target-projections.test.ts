@@ -35,11 +35,11 @@ function resolveFixtureTarget() {
       gateway: { name: 'alternate-gateway', routes: [{ pattern: 'alternate.example', customDomain: true }] },
     },
     pages: {
-      dashboard: { project: 'alternate-dashboard', canonicalUrl: 'https://dashboard.alternate.example' },
-      auth: { project: 'alternate-auth', canonicalUrl: 'https://auth.alternate.example' },
-      blog: { project: 'alternate-blog', canonicalUrl: 'https://blog.alternate.example' },
-      movie: { project: 'alternate-movie', canonicalUrl: 'https://movie.alternate.example' },
-      comic: { project: 'alternate-comic', canonicalUrl: 'https://comic.alternate.example' },
+      dashboard: { project: 'alternate-dashboard', directOrigin: 'https://dashboard.alternate.example', canonicalUrl: 'https://dashboard.alternate.example' },
+      auth: { project: 'alternate-auth', directOrigin: 'https://auth.alternate.example', canonicalUrl: 'https://auth.alternate.example' },
+      blog: { project: 'alternate-blog', directOrigin: 'https://blog.alternate.example', canonicalUrl: 'https://blog.alternate.example' },
+      movie: { project: 'alternate-movie', directOrigin: 'https://movie.alternate.example', canonicalUrl: 'https://movie.alternate.example' },
+      comic: { project: 'alternate-comic', directOrigin: 'https://comic.alternate.example', canonicalUrl: 'https://comic.alternate.example' },
     },
   }
 
