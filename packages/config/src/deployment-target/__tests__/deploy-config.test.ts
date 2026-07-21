@@ -10,6 +10,8 @@ import {
   materializeTargetDeployConfig,
   parseAuditedPublicRuntimeInput,
   parsePagesBuildEnv,
+  parsePagesRedirectInput,
+  renderPagesRedirects,
 } from '../index'
 import { resolveTargetProfile } from '../target-resolver'
 
@@ -59,6 +61,11 @@ describe('target deploy config materializer', () => {
     expect(apiConfig).toContain('name = "starye-api"')
     expect(apiConfig).toContain('database_name = "starye-db"')
     expect(result.pages).toMatchObject({ surface: 'dashboard', project: 'starye-dashboard' })
+    expect(path.dirname(result.pages!.redirectInputPath)).toBe(fixture.runDir)
+    expect(path.relative(fixture.runDir, result.pages!.redirectInputPath).startsWith('..')).toBe(false)
+    expect(await readFile(result.pages!.redirectInputPath, 'utf8')).toBe(renderPagesRedirects(resolution.profile, 'dashboard'))
+    expect(parsePagesRedirectInput(resolution.profile, 'dashboard', await readFile(result.pages!.redirectInputPath, 'utf8')))
+      .toBe(renderPagesRedirects(resolution.profile, 'dashboard'))
     expect(await parsePagesBuildEnv(result.pages!.buildEnvPath, 'dashboard')).toEqual({
       VITE_TARGET_ID: 'starye-org',
       VITE_GATEWAY_BASE_URL: 'https://starye.org',
@@ -70,6 +77,29 @@ describe('target deploy config materializer', () => {
     await result.cleanup()
     await expect(readFile(result.apiConfigPath, 'utf8')).rejects.toThrow()
     await expect(readFile(result.pages!.buildEnvPath, 'utf8')).rejects.toThrow()
+    await expect(readFile(result.pages!.redirectInputPath, 'utf8')).rejects.toThrow()
+  })
+
+  it('rejects malformed redirect text and an unknown Pages surface without exposing a redirect input', async () => {
+    const fixture = await createFixtureRoot()
+    const resolution = resolveTargetProfile('starye-org')
+
+    expect(() => parsePagesRedirectInput(
+      resolution.profile,
+      'dashboard',
+      'https://untrusted.pages.dev/* https://starye.org/dashboard/:splat 301!\n/* /index.html 200\n',
+    )).toThrow('Pages redirect input')
+
+    await expect(materializeTargetDeployConfig({
+      deploy: buildTargetProjections(resolution).deploy,
+      publicRuntimeInput: parseAuditedPublicRuntimeInput(resolution, { buildMode: 'production' }),
+      runId: 'unknown-surface',
+      appDirectories: { api: fixture.apiDir, gateway: fixture.gatewayDir },
+      runDirectory: fixture.runDir,
+      pagesSurface: 'unclassified' as never,
+    })).rejects.toThrow('Unknown Pages surface')
+
+    await expect(readFile(path.join(fixture.runDir, 'pages-redirects.unknown-surface.unclassified.txt'), 'utf8')).rejects.toThrow()
   })
 
   it('only serializes the selected surface public allowlist and rejects hostile dotenv input', async () => {
