@@ -54,22 +54,27 @@ export const trackedTargetProfiles = [
     pages: {
       dashboard: {
         project: 'starye-dashboard',
+        directOrigin: 'https://starye-dashboard.pages.dev',
         canonicalUrl: 'https://starye-dashboard-5fz.pages.dev',
       },
       auth: {
         project: 'starye-auth',
+        directOrigin: 'https://starye-auth-die.pages.dev',
         canonicalUrl: 'https://starye-auth-die.pages.dev',
       },
       blog: {
         project: 'blog-pages',
+        directOrigin: 'https://starye-blog.pages.dev',
         canonicalUrl: 'https://blog.starye.org',
       },
       movie: {
         project: 'starye-movie',
+        directOrigin: 'https://starye-movie-60w.pages.dev',
         canonicalUrl: 'https://starye-movie-60w.pages.dev',
       },
       comic: {
         project: 'starye-comic',
+        directOrigin: 'https://starye-comic-3jr.pages.dev',
         canonicalUrl: 'https://starye-comic-3jr.pages.dev',
       },
     },

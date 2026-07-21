@@ -59,6 +59,20 @@ function canonicalUrl(label: string) {
   )
 }
 
+function directPagesOrigin(label: string) {
+  return v.pipe(
+    canonicalUrl(label),
+    v.check((value) => {
+      try {
+        return new URL(value).origin === value
+      }
+      catch {
+        return false
+      }
+    }, `${label} must be an HTTPS origin without a path.`),
+  )
+}
+
 const targetProfileIdSchema = v.pipe(
   requiredText('Target id'),
   v.check(value => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value), 'Target id must be kebab-case.'),
@@ -76,6 +90,7 @@ const targetWorkerSchema = v.strictObject({
 
 const targetPageSchema = v.strictObject({
   project: requiredText('Pages project'),
+  directOrigin: directPagesOrigin('Pages direct origin'),
   canonicalUrl: canonicalUrl('Pages canonical URL'),
 })
 
@@ -167,11 +182,13 @@ const targetProfileObjectSchema = v.strictObject({
 function hasCanonicalResourceLinks(profile: v.InferOutput<typeof targetProfileObjectSchema>): boolean {
   const apiHost = new URL(profile.urls.api).hostname
   const gatewayHost = new URL(profile.urls.gateway).hostname
+  const directOrigins = targetPagesSurfaceValues.map(surface => profile.pages[surface].directOrigin)
 
   return (
     profile.workers.api.routes.some(route => route.pattern === apiHost)
     && profile.workers.gateway.routes.some(route => route.pattern === gatewayHost)
     && targetPagesSurfaceValues.every(surface => profile.pages[surface].canonicalUrl === profile.urls[surface])
+    && new Set(directOrigins).size === targetPagesSurfaceValues.length
   )
 }
 
@@ -179,7 +196,7 @@ export const targetProfileSchema = v.pipe(
   targetProfileObjectSchema,
   v.check(
     hasCanonicalResourceLinks,
-    'Worker routes and Pages canonical URLs must match the explicit URL surfaces.',
+    'Worker routes, Pages canonical URLs, and Pages direct origins must match explicit URL surfaces.',
   ),
 )
 
