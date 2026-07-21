@@ -1,11 +1,20 @@
 import type { RequirementEvidenceMatrix, RequirementEvidenceStatus } from '../requirement-evidence-matrix'
 import { describe, expect, it } from 'vitest'
 
-import { verifyV12EvidenceMatrix } from '../../../../../scripts/verify-v12-evidence-matrix'
 import {
   renderRequirementEvidenceMatrixMarkdown,
   validateRequirementEvidenceMatrix,
 } from '../requirement-evidence-matrix'
+
+async function loadMatrixCli(): Promise<{
+  verifyV12EvidenceMatrix: (options: {
+    final: boolean
+    paths: Record<string, string>
+    readFile: (path: string) => string | undefined
+  }) => { issues: string[] }
+}> {
+  return import(/* @vite-ignore */ new URL('../../../../../scripts/verify-v12-evidence-matrix.ts', import.meta.url).href)
+}
 
 const orderedIds = ['PROF-01', 'DATA-01', 'DATA-07', 'TEST-05', 'TEST-07']
 const reports = {
@@ -105,7 +114,7 @@ describe('requirement evidence matrix', () => {
     expect(validate(matrix(), { renderedMarkdown: `${markdown}drift\n`, final: true })).not.toEqual([])
   })
 
-  it('validates fixed local matrix paths through an injected read-only CLI dependency', () => {
+  it('validates fixed local matrix paths through an injected read-only CLI dependency', async () => {
     const value = matrix()
     const paths = {
       requirements: 'requirements.md',
@@ -125,6 +134,7 @@ describe('requirement evidence matrix', () => {
       ['evidence/report.md', orderedIds.map(id => `anchor-${id}`).join('\n')],
     ])
 
+    const { verifyV12EvidenceMatrix } = await loadMatrixCli()
     expect(verifyV12EvidenceMatrix({ final: true, paths, readFile: path => files.get(path) })).toEqual({ issues: [] })
   })
 })
