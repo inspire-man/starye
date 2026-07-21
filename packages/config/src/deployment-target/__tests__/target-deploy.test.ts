@@ -1,6 +1,6 @@
 /// <reference types="node" />
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -133,7 +133,16 @@ describe('target-deploy wrapper', () => {
     })
 
     expect(execute.mock.calls.map(([, argv]) => argv)).toEqual([
-      ['target-profile', 'run-pages-build', '--surface', 'blog', '--pages-build-env-path', expect.stringContaining('pages-build-env.blog-run.blog.env')],
+      [
+        'target-profile',
+        'run-pages-build',
+        '--surface',
+        'blog',
+        '--pages-build-env-path',
+        expect.stringContaining('pages-build-env.blog-run.blog.env'),
+        '--pages-redirect-input-path',
+        expect.stringContaining('pages-redirects.blog-run.blog.txt'),
+      ],
       ['--filter', 'blog', 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', 'blog-pages'],
     ])
   })
@@ -164,7 +173,16 @@ describe('target-deploy wrapper', () => {
     })
 
     expect(execute.mock.calls.map(([, argv]) => argv)).toEqual([
-      ['target-profile', 'run-pages-build', '--surface', 'movie', '--pages-build-env-path', expect.stringContaining('pages-build-env.movie-run.movie.env')],
+      [
+        'target-profile',
+        'run-pages-build',
+        '--surface',
+        'movie',
+        '--pages-build-env-path',
+        expect.stringContaining('pages-build-env.movie-run.movie.env'),
+        '--pages-redirect-input-path',
+        expect.stringContaining('pages-redirects.movie-run.movie.txt'),
+      ],
       ['--filter', '@starye/movie-app', 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', 'starye-movie'],
     ])
   })
@@ -182,11 +200,24 @@ describe('run-pages-build', () => {
       appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
       runDirectory: path.join(root, 'run'),
       pagesSurface: 'dashboard',
+      profile: resolution.profile,
     })
     const { runPagesBuild } = await loadTargetProfile()
     const execute = vi.fn<(command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number>(() => 0)
 
-    await runPagesBuild('dashboard', materialized.pages!.buildEnvPath, execute)
+    const outputPath = path.join(root, 'output', '_redirects')
+    const writeRedirect = vi.fn(async (_surface: string, text: string) => {
+      await mkdir(path.dirname(outputPath), { recursive: true })
+      await writeFile(outputPath, text, 'utf8')
+    })
+    const clearRedirect = vi.fn(async () => rm(outputPath, { force: true }))
+
+    await runPagesBuild('dashboard', materialized.pages!.buildEnvPath, materialized.pages!.redirectInputPath, {
+      execute,
+      runDirectory: path.join(root, 'run'),
+      writeRedirect,
+      clearRedirect,
+    })
 
     const [apiTypesCommand, apiTypesArgv, apiTypesEnvironment] = execute.mock.calls[0]
     const [command, argv, environment] = execute.mock.calls[1]
@@ -208,10 +239,15 @@ describe('run-pages-build', () => {
     })
     expect(environment).not.toHaveProperty('CLOUDFLARE_API_TOKEN')
     expect(environment).not.toHaveProperty('VITE_UNREGISTERED_SECRET')
+    expect(writeRedirect).toHaveBeenCalledWith('dashboard', await readFile(materialized.pages!.redirectInputPath, 'utf8'))
+    expect(await readFile(outputPath, 'utf8')).toBe(await readFile(materialized.pages!.redirectInputPath, 'utf8'))
     await materialized.cleanup()
   })
 
-  it('stops before the Pages app build when shared API types cannot be generated', async () => {
+  it.each([
+    ['shared API types', (_args: readonly string[]) => 1, 'Shared API types build failed for dashboard.'],
+    ['Pages app', (args: readonly string[]) => args[1] === 'dashboard' ? 1 : 0, 'Pages build failed for dashboard.'],
+  ])('clears final redirects when the %s build fails', async (_name, statusFor, message) => {
     const root = await mkdtemp(path.join(tmpdir(), 'starye-pages-build-'))
     roots.push(root)
     const resolution = resolveTargetProfile('starye-org')
@@ -222,16 +258,52 @@ describe('run-pages-build', () => {
       appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
       runDirectory: path.join(root, 'run'),
       pagesSurface: 'dashboard',
+      profile: resolution.profile,
     })
     const { runPagesBuild } = await loadTargetProfile()
-    const execute = vi.fn<(command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number>((_command, args) =>
-      args[1] === '@starye/api-types' ? 1 : 0,
-    )
+    const outputPath = path.join(root, 'output', '_redirects')
+    await mkdir(path.dirname(outputPath), { recursive: true })
+    await writeFile(outputPath, 'stale redirect\n', 'utf8')
+    const execute = vi.fn<(command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number>((_command, args) => statusFor(args))
+    const writeRedirect = vi.fn(async () => {})
+    const clearRedirect = vi.fn(async () => rm(outputPath, { force: true }))
 
-    await expect(runPagesBuild('dashboard', materialized.pages!.buildEnvPath, execute))
+    await expect(runPagesBuild('dashboard', materialized.pages!.buildEnvPath, materialized.pages!.redirectInputPath, {
+      execute,
+      runDirectory: path.join(root, 'run'),
+      writeRedirect,
+      clearRedirect,
+    }))
       .rejects
-      .toThrow('Shared API types build failed for dashboard.')
-    expect(execute).toHaveBeenCalledTimes(1)
+      .toThrow(message)
+    expect(execute).toHaveBeenCalledTimes(_name === 'shared API types' ? 1 : 2)
+    expect(writeRedirect).not.toHaveBeenCalled()
+    expect(clearRedirect).toHaveBeenCalledWith('dashboard')
+    await expect(readFile(outputPath, 'utf8')).rejects.toThrow()
+    await materialized.cleanup()
+  })
+
+  it('rejects a redirect input outside the declared run directory before running builds', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'starye-pages-build-'))
+    roots.push(root)
+    const resolution = resolveTargetProfile('starye-org')
+    const materialized = await materializeTargetDeployConfig({
+      deploy: buildTargetProjections(resolution).deploy,
+      publicRuntimeInput: parseAuditedPublicRuntimeInput(resolution, { buildMode: 'test' }),
+      runId: 'outside-run',
+      appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
+      runDirectory: path.join(root, 'run'),
+      pagesSurface: 'dashboard',
+      profile: resolution.profile,
+    })
+    const { runPagesBuild } = await loadTargetProfile()
+    const execute = vi.fn<(command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number>(() => 0)
+
+    await expect(runPagesBuild('dashboard', materialized.pages!.buildEnvPath, path.join(root, 'outside.redirects'), {
+      execute,
+      runDirectory: path.join(root, 'run'),
+    })).rejects.toThrow('Pages redirect input path is outside')
+    expect(execute).not.toHaveBeenCalled()
     await materialized.cleanup()
   })
 })
