@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 25/28 plans executed
+**Plans:** 28/31 plans executed
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -181,13 +181,25 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [x] 13-18-PLAN.md — Root persistent Codex IAB recorded the exact local Dashboard then Viewer tuple.
 
-**Wave 26** *(gap closure; blocked on Wave 25 completion)*
+**Wave 26** *(historical remote contract; superseded for execution by Wave 31)*
 
-- [ ] 13-19-PLAN.md — Deferred to MVP review/archival: reservation-backed remote handoff with official preflight and closed checkpoint behavior.
+- [ ] 13-19-PLAN.md — Historical remote-handoff contract retained on disk; do not execute as written (stale 13-25 lifecycle gate). Superseded by 13-29.
 
-**Wave 27** *(gap closure; blocked on Wave 26 completion)*
+**Wave 27** *(historical production IAB contract; superseded for execution by Wave 32)*
 
-- [ ] 13-20-PLAN.md — Deferred to MVP review/archival: selected-production IAB surfaces and exact/canonical Phase verification.
+- [ ] 13-20-PLAN.md — Historical production Dashboard/viewer contract retained on disk; do not execute as written (depends on unexecuted 13-19). Superseded by 13-30.
+
+**Wave 31** *(gap closure; blocked on live 13-18 terminal local + 13-28 lifecycle)*
+
+- [ ] 13-29-PLAN.md — Human-gated selected-production remote handoff consuming p13-17 local evidence (supersedes executable intent of 13-19).
+
+**Wave 32** *(gap closure; blocked on Wave 31 remote pending)*
+
+- [ ] 13-30-PLAN.md — Ordered selected-production Dashboard then viewer finalization + dual exact verifiers (supersedes executable intent of 13-20).
+
+**Wave 33** *(gap closure; blocked on Wave 32)*
+
+- [ ] 13-31-PLAN.md — Refresh 13-VERIFICATION.md from live 13-28/17/18/29/30 truth only.
 
 **Success criteria:**
 
@@ -239,11 +251,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Plans 13-13 through 13-26 close the diagnosed Gateway readiness, runtime ownership, handoff, and full selected-production proof gaps. Plans 13-21 through 13-25 are immutable historical checkpoints. Plan 13-26 repairs only the Windows root-command wrapper and cannot release data-chain work; execute it solely with `$gsd-execute-phase 13 --gaps-only --wave 28`, never as an unfiltered gaps-only run. After it passes static gates, run `$gsd-plan-phase 13 --gaps` again to create Plan 13-27: that separate retry must start from a new all-free snapshot, own one newly launched root `pnpm.cmd dev` tree, prove its absolute supervisor/listener ancestry, clean only its revalidated tree, and emit the three release fields before Plans 13-17 through 13-20 can be rewired and executed. Preserve every historical evidence directory and treat any new checkpoint as terminal for its run:
+Local data-chain proof is closed through Plans 13-28 (lifecycle), 13-17 (local handoff), and 13-18 (local Dashboard/viewer). Plans 13-21 through 13-25 and 13-27 remain immutable historical checkpoints and must not authorize downstream work. Historical 13-19/13-20 plan files stay on disk as contracts but are superseded for execution by gap-closure Plans 13-29 through 13-31 (Waves 31-33): human-gated selected-production remote handoff, ordered production surfaces, then re-verification. Preserve every historical evidence directory; keep evidence untracked; treat any new checkpoint as terminal for its run. Next:
 
 ```text
 $gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-20 after Phase 13 immutable 13-24 closeout and Wave 23-27 retry routing*
+*Last updated: 2026-07-21 after Phase 13 gap-closure plans 13-29..13-31 for remaining selected-production proof*
