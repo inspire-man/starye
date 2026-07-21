@@ -5,15 +5,15 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 14
 current_phase_name: Test and Operations Hardening
 status: executing
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-07-21T01:44:33.481Z"
+stopped_at: Completed 14-06-PLAN.md
+last_updated: "2026-07-21T02:05:12.969Z"
 last_activity: 2026-07-21
 last_activity_desc: Phase 14 execution started
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 43
-  completed_plans: 35
+  completed_plans: 36
   percent: 50
 ---
 
@@ -41,7 +41,7 @@ progress:
 ## Current Position
 
 Phase: 14 (Test and Operations Hardening) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-07-21 — Phase 14 execution started
 
@@ -58,6 +58,7 @@ Last activity: 2026-07-21 — Phase 14 execution started
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 14 P01 | 11m 8s | 2 tasks | 6 files |
+| Phase 14 P06 | 13m 45s | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -114,8 +115,8 @@ Last activity: 2026-07-21 — Phase 14 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-07-21T01:44:33.467Z
-**Stopped at:** Completed 14-01-PLAN.md
+**Last session:** 2026-07-21T02:05:12.948Z
+**Stopped at:** Completed 14-06-PLAN.md
 **Resume file:** None
 
 **Next recommended action:**
@@ -191,3 +192,4 @@ $gsd-progress
 - [Phase 13]: Timeout process proof keeps evidence peers in memory and asserts raw child exit 2 before the outer deadline. — Task 3 isolates lifecycle proof from services, evidence roots, and remote providers.
 - [Phase 14]: Pages direct origins and canonical Gateway destinations now resolve only from TargetProfile metadata.
 - [Phase 14]: Pages redirect templates are closed by surface and reject caller-supplied hosts before rendering.
+- [Phase ?]: Phase 14: RUNBOOK uses explicit target selection and metadata-only secret guidance; only passed completes smoke while failed/checkpoint preserve evidence and require a new run.

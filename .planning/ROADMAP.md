@@ -203,14 +203,14 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** TEST-01, TEST-06, TEST-07
 
-**Plans:** 1/7 plans executed
+**Plans:** 2/7 plans executed
 
 - [x] 14-01-PLAN.md — Promote TargetProfile Pages metadata and add the strict redirect renderer contract.
 - [ ] 14-02-PLAN.md — Materialize selected-target redirects, atomically write final build output, and remove tracked redirect sources.
 - [ ] 14-03-PLAN.md — Pass prepared redirect input through all five Pages CI workflows and enforce their inventory contract.
 - [ ] 14-04-PLAN.md — Add the tracked-file fixed-literal audit and migrate non-redirect active literals.
 - [ ] 14-05-PLAN.md — Consolidate test default-target fixtures and close the zero-unclassified TEST-01 gate.
-- [ ] 14-06-PLAN.md — Rewrite the stable target-first RUNBOOK and test its metadata and terminal-state contract.
+- [x] 14-06-PLAN.md — Rewrite the stable target-first RUNBOOK and test its metadata and terminal-state contract.
 - [ ] 14-07-PLAN.md — Create the final read-only 30-row requirement-to-evidence matrix and validator.
 
 **Wave 1:** `14-01-PLAN.md`, `14-06-PLAN.md`
