@@ -5,16 +5,16 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 14
 current_phase_name: Test and Operations Hardening
 status: executing
-stopped_at: Completed 14-05-PLAN.md
-last_updated: "2026-07-21T04:43:17.190Z"
+stopped_at: Completed 14-07-PLAN.md
+last_updated: "2026-07-21T06:53:31.718Z"
 last_activity: 2026-07-21
 last_activity_desc: Phase 14 execution started
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 43
-  completed_plans: 40
-  percent: 50
+  completed_plans: 41
+  percent: 75
 ---
 
 # Project State: Starye — 个人内容中台
@@ -41,7 +41,7 @@ progress:
 ## Current Position
 
 Phase: 14 (Test and Operations Hardening) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-07-21 — Phase 14 execution started
 
@@ -63,6 +63,7 @@ Last activity: 2026-07-21 — Phase 14 execution started
 | Phase 14 P03 | 9m | 3 tasks | 6 files |
 | Phase 14 P04 | 22m | 3 tasks | 9 files |
 | Phase 14 P05 | 16m 25s | 3 tasks | 15 files |
+| Phase 14 P07 | 25m 51s | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -119,8 +120,8 @@ Last activity: 2026-07-21 — Phase 14 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-07-21T04:40:53.183Z
-**Stopped at:** Completed 14-05-PLAN.md
+**Last session:** 2026-07-21T06:53:31.701Z
+**Stopped at:** Completed 14-07-PLAN.md
 **Resume file:** None
 
 **Next recommended action:**
@@ -206,3 +207,4 @@ $gsd-progress
 - [Phase ?]: Phase 14 P04: check:legacy-domain 无参数、只读且只枚举 Git 跟踪的活动输入。
 - [Phase ?]: Phase 14 P04: 活动示例和 E2E fixture 改用 fixture.invalid 与 .test，不保留默认 target 域名。
 - [Phase ?]: Phase 14 P05: Ordinary default-target test URLs resolve from explicit starye-org fixtures; raw literals remain only for named schema metadata and fail-closed aliases.
+- [Phase ?]: Phase 14 P07: Canonical JSON evidence matrix preserves Phase 13 blocked and partial truth; derived Markdown and fixed local CLI are deterministic and read-only.

@@ -48,7 +48,7 @@
 - [x] **TEST-04**: Automated tests cover deploy, migration, and crawler workflow target resolution without real secrets.
 - [x] **TEST-05**: Smoke scripts produce repeatable local and production verification output.
 - [x] **TEST-06**: RUNBOOK documents account/domain switching, required secrets, deploy, smoke, rollback, and recovery.
-- [ ] **TEST-07**: Final verification checklist maps every v1.2 requirement to command output or artifact evidence.
+- [x] **TEST-07**: Final verification checklist maps every v1.2 requirement to command output or artifact evidence.
 
 ## Future Requirements
 
@@ -108,7 +108,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-04 | Phase 12 | Complete |
 | TEST-05 | Phase 13 | Complete |
 | TEST-06 | Phase 14 | Complete |
-| TEST-07 | Phase 14 | Pending |
+| TEST-07 | Phase 14 | Complete |
 
 **Coverage:**
 
