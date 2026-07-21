@@ -203,7 +203,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** TEST-01, TEST-06, TEST-07
 
-**Plans:** 7/7 plans executed
+**Plans:** 7/7 plans complete
 
 - [x] 14-01-PLAN.md — Promote TargetProfile Pages metadata and add the strict redirect renderer contract.
 - [x] 14-02-PLAN.md — Materialize selected-target redirects, atomically write final build output, and remove tracked redirect sources.

@@ -37,6 +37,7 @@
 - root docs、RUNBOOK、`.planning` 和 `docs/archive/` 的 owner 边界已固定，后续里程碑应继续沿 canonical owner 更新。
 - v1.2 已启动，当前主线是 Cloudflare 账户/域名切换与本地到生产的数据链路闭环验证。
 - Phase 12 已完成 selected-target runtime、workflow 与 direct-entry closure；Phase 13 负责在授权边界内补齐真实数据链路 smoke evidence。
+- Phase 14 已完成旧域名审计、target-first RUNBOOK 与 30 项需求证据矩阵；Phase 13 的 DATA-01..06 仍为 blocked，DATA-07/TEST-05 仍为 partial，继续走 verifier-driven gap 路线。
 
 ## Current Milestone Notes
 
@@ -187,4 +188,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-15 after Phase 12 completion*
+*Last updated: 2026-07-21 after Phase 14 completion*
