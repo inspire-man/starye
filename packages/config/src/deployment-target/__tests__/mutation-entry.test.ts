@@ -1,6 +1,6 @@
 /// <reference types="node" />
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -31,6 +31,109 @@ function readOnlyExecutor(argv: readonly string[]) {
 }
 
 describe('target mutation preparation', () => {
+  it('serializes the contained Pages redirect input without secrets and preserves cleanup ownership', async () => {
+    const root = await createRoot()
+    const runDirectory = path.join(root, 'run')
+    const redirectInputPath = path.join(runDirectory, 'pages-redirects.ci-pages.dashboard.txt')
+    const cleanup = vi.fn(async () => rm(redirectInputPath, { force: true }))
+    const materialize = vi.fn(async () => {
+      await mkdir(runDirectory, { recursive: true })
+      await writeFile(redirectInputPath, 'generated redirect input\n', 'utf8')
+      return {
+        apiConfigPath: path.join(root, 'api', '.target-wrangler.ci-pages.toml'),
+        gatewayConfigPath: path.join(root, 'gateway', '.target-wrangler.ci-pages.toml'),
+        pages: {
+          surface: 'dashboard' as const,
+          project: 'starye-dashboard',
+          buildEnvPath: path.join(runDirectory, 'pages-build-env.ci-pages.dashboard.env'),
+          redirectInputPath,
+        },
+        cleanup,
+      }
+    })
+    const githubOutput = path.join(root, 'github-output')
+
+    const prepared = await prepareTargetMutation({
+      target: 'starye-org',
+      scope: 'ci',
+      command: 'pages-deploy',
+      ciEnvironment: 'starye-org',
+      pagesSurface: 'dashboard',
+      environment: {
+        CLOUDFLARE_API_TOKEN: 'fixture-token',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
+      },
+      githubOutput,
+      runId: 'ci-pages',
+      appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
+      runDirectory,
+    }, {
+      executeReadOnly: argv => argv[0] === 'pages'
+        ? { exitCode: 0, stdout: 'starye-dashboard' }
+        : readOnlyExecutor(argv),
+      materialize,
+    })
+
+    expect(prepared.pages).toMatchObject({
+      surface: 'dashboard',
+      project: 'starye-dashboard',
+      redirectInputPath,
+    })
+    expect(await readFile(prepared.preparedContextPath, 'utf8')).toContain(redirectInputPath)
+    const output = await readFile(githubOutput, 'utf8')
+    expect(output).toContain(`pages_redirect_input_path=${redirectInputPath}`)
+    expect(output).not.toMatch(/fixture-token|account_id|project_map/)
+
+    await prepared.cleanup()
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    await expect(readFile(redirectInputPath, 'utf8')).rejects.toThrow()
+  })
+
+  it('rejects an external fake Pages redirect path and cleans it up after output failure', async () => {
+    const root = await createRoot()
+    const runDirectory = path.join(root, 'run')
+    const externalRedirectPath = path.join(root, 'external.redirects')
+    const cleanup = vi.fn(async () => rm(externalRedirectPath, { force: true }))
+    const materialize = vi.fn(async () => {
+      await writeFile(externalRedirectPath, 'generated redirect input\n', 'utf8')
+      return {
+        apiConfigPath: path.join(root, 'api', '.target-wrangler.invalid-pages.toml'),
+        gatewayConfigPath: path.join(root, 'gateway', '.target-wrangler.invalid-pages.toml'),
+        pages: {
+          surface: 'dashboard' as const,
+          project: 'starye-dashboard',
+          buildEnvPath: path.join(runDirectory, 'pages-build-env.invalid-pages.dashboard.env'),
+          redirectInputPath: externalRedirectPath,
+        },
+        cleanup,
+      }
+    })
+
+    await expect(prepareTargetMutation({
+      target: 'starye-org',
+      scope: 'ci',
+      command: 'pages-deploy',
+      ciEnvironment: 'starye-org',
+      pagesSurface: 'dashboard',
+      environment: {
+        CLOUDFLARE_API_TOKEN: 'fixture-token',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
+      },
+      githubOutput: path.join(root, 'github-output'),
+      runId: 'invalid-pages',
+      appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
+      runDirectory,
+    }, {
+      executeReadOnly: argv => argv[0] === 'pages'
+        ? { exitCode: 0, stdout: 'starye-dashboard' }
+        : readOnlyExecutor(argv),
+      materialize,
+    })).rejects.toThrow('Pages redirect input path is outside')
+
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    await expect(readFile(externalRedirectPath, 'utf8')).rejects.toThrow()
+  })
+
   it('prepares CI from explicit profile identity without local projection files and emits only fixed output keys', async () => {
     const root = await createRoot()
     const materialize = vi.fn(async () => ({
