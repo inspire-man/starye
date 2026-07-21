@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCachedProxy, invalidateCache } from '../cache-middleware'
+import {
+  defaultApiOrigin,
+  defaultDashboardOrigin,
+  defaultGatewayRequest,
+  defaultMovieOrigin,
+} from './default-target.fixture'
 
 function createMockKv() {
   const store = new Map<string, string>()
@@ -51,15 +57,15 @@ describe('gateway cache middleware', () => {
       return Response.json({ calls })
     })
 
-    const request = new Request('https://starye.org/api/movies?page=1')
+    const request = defaultGatewayRequest('/api/movies?page=1')
 
-    const missResponse = await cachedProxy(request, 'https://api.starye.org')
+    const missResponse = await cachedProxy(request, defaultApiOrigin)
     expect(missResponse.headers.get('X-Cache-Status')).toBe('MISS')
     expect(missResponse.headers.get('X-Cache-Group')).toBe('movies')
     expect(missResponse.headers.get('X-Cache-Policy')).toBe('public')
     expect(missResponse.headers.get('Cache-Control')).toContain('max-age=300')
 
-    const hitResponse = await cachedProxy(request, 'https://api.starye.org')
+    const hitResponse = await cachedProxy(request, defaultApiOrigin)
     expect(hitResponse.headers.get('X-Cache-Status')).toBe('HIT')
     expect(await hitResponse.json()).toEqual({ calls: 1 })
     expect(calls).toBe(1)
@@ -77,8 +83,8 @@ describe('gateway cache middleware', () => {
     })
 
     const response = await cachedProxy(
-      new Request('https://starye.org/movie/assets/app.js'),
-      'https://movie.starye.org',
+      defaultGatewayRequest('/movie/assets/app.js'),
+      defaultMovieOrigin,
     )
 
     expect(response.headers.get('X-Cache-Status')).toBe('BYPASS')
@@ -117,8 +123,8 @@ describe('gateway cache middleware', () => {
     })
 
     const response = await cachedProxy(
-      new Request('https://starye.org/dashboard/settings'),
-      'https://dashboard.starye.org',
+      defaultGatewayRequest('/dashboard/settings'),
+      defaultDashboardOrigin,
       undefined,
       { bypassCache: true },
     )
@@ -153,11 +159,11 @@ describe('gateway cache middleware', () => {
       calls += 1
       return Response.json({ calls })
     })
-    const request = new Request('https://starye.org/api/movies')
+    const request = defaultGatewayRequest('/api/movies')
 
-    const miss = await cachedProxy(request, 'https://api.starye.org')
+    const miss = await cachedProxy(request, defaultApiOrigin)
     expect(miss.headers.get('X-Cache-Status')).toBe('MISS')
-    const hit = await cachedProxy(request, 'https://api.starye.org')
+    const hit = await cachedProxy(request, defaultApiOrigin)
     expect(hit.headers.get('X-Cache-Status')).toBe('HIT')
     expect(calls).toBe(1)
   })
@@ -170,11 +176,11 @@ describe('gateway cache middleware', () => {
       calls += 1
       return Response.json({ calls })
     })
-    const request = new Request('https://starye.org/api/movies', {
+    const request = defaultGatewayRequest('/api/movies', {
       headers: { cookie: 'starye.session_token=xxx' },
     })
 
-    const r1 = await cachedProxy(request, 'https://api.starye.org')
+    const r1 = await cachedProxy(request, defaultApiOrigin)
     expect(r1.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(r1.headers.get('X-Cache-Reason')).toBe('auth-headers')
     // CR-01：public 基线翻 bypass 时必须降级 Cache-Control，禁止泄漏 public 指令给共享缓存
@@ -183,7 +189,7 @@ describe('gateway cache middleware', () => {
     // WR-02：BYPASS 响应不得下发 X-Cache-TTL，避免监控面板误报
     expect(r1.headers.get('X-Cache-TTL')).toBeNull()
 
-    const r2 = await cachedProxy(request, 'https://api.starye.org')
+    const r2 = await cachedProxy(request, defaultApiOrigin)
     expect(r2.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(calls).toBe(2) // 不写 KV → 每次都穿透
   })
@@ -196,11 +202,11 @@ describe('gateway cache middleware', () => {
       calls += 1
       return Response.json({ calls })
     })
-    const request = new Request('https://starye.org/api/movies', {
+    const request = defaultGatewayRequest('/api/movies', {
       headers: { authorization: 'Bearer xxx' },
     })
 
-    const r1 = await cachedProxy(request, 'https://api.starye.org')
+    const r1 = await cachedProxy(request, defaultApiOrigin)
     expect(r1.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(r1.headers.get('X-Cache-Reason')).toBe('auth-headers')
     // CR-01：public 基线翻 bypass 时必须降级 Cache-Control，禁止泄漏 public 指令给共享缓存
@@ -210,7 +216,7 @@ describe('gateway cache middleware', () => {
     expect(r1.headers.get('X-Cache-TTL')).toBeNull()
 
     // 二次调用：确保不走 KV 缓存（calls 必须递增）
-    await cachedProxy(request, 'https://api.starye.org')
+    await cachedProxy(request, defaultApiOrigin)
     expect(calls).toBe(2)
   })
 
@@ -222,8 +228,8 @@ describe('gateway cache middleware', () => {
 
     // 无 cookie — NO_STORE_PREFIXES 命中
     const noCookie = await cachedProxy(
-      new Request('https://starye.org/api/auth/get-session'),
-      'https://api.starye.org',
+      defaultGatewayRequest('/api/auth/get-session'),
+      defaultApiOrigin,
     )
     expect(noCookie.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(noCookie.headers.get('X-Cache-Reason')).toBe('no-store-path')
@@ -232,10 +238,10 @@ describe('gateway cache middleware', () => {
 
     // 带 cookie — auth-headers 优先级高于 no-store-path
     const withCookie = await cachedProxy(
-      new Request('https://starye.org/api/auth/get-session', {
+      defaultGatewayRequest('/api/auth/get-session', {
         headers: { cookie: 'starye.session_token=xxx' },
       }),
-      'https://api.starye.org',
+      defaultApiOrigin,
     )
     expect(withCookie.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(withCookie.headers.get('X-Cache-Reason')).toBe('auth-headers')
@@ -253,8 +259,8 @@ describe('gateway cache middleware', () => {
           'set-cookie': 'starye.session_token=xxx; Path=/; HttpOnly',
         },
       }))
-    const request = new Request('https://starye.org/api/movies')
-    const r = await cachedProxy(request, 'https://api.starye.org')
+    const request = defaultGatewayRequest('/api/movies')
+    const r = await cachedProxy(request, defaultApiOrigin)
     expect(r.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(r.headers.get('X-Cache-Reason')).toBe('set-cookie-response')
     expect(r.headers.get('Cache-Control')).not.toContain('public')

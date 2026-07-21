@@ -4,6 +4,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { checkDashboardAuth, isInAdminWhitelist } from '../dashboard-guard'
+import { defaultGatewayRequest } from './default-target.fixture'
 
 describe('isInAdminWhitelist', () => {
   it('单个 ID 命中返回 true', () => {
@@ -29,7 +30,7 @@ describe('checkDashboardAuth', () => {
   })
 
   it('无 cookie 返回 no_session', async () => {
-    const req = new Request('https://starye.org/dashboard/')
+    const req = defaultGatewayRequest('/dashboard/')
     const result = await checkDashboardAuth(req, { ADMIN_GITHUB_ID: '12345' })
     expect(result).toEqual({ allowed: false, reason: 'no_session' })
   })
@@ -38,7 +39,7 @@ describe('checkDashboardAuth', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify({}), { status: 200 }),
     ))
-    const req = new Request('https://starye.org/dashboard/', {
+    const req = defaultGatewayRequest('/dashboard/', {
       headers: { cookie: 'starye.session_token=abc123' },
     })
     const result = await checkDashboardAuth(req, {
@@ -52,7 +53,7 @@ describe('checkDashboardAuth', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }),
     ))
-    const req = new Request('https://starye.org/dashboard/', {
+    const req = defaultGatewayRequest('/dashboard/', {
       headers: { cookie: 'starye.session_token=abc456' },
     })
     const result = await checkDashboardAuth(req, {
@@ -66,7 +67,7 @@ describe('checkDashboardAuth', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ user: { githubId: '99999' } }), { status: 200 }),
     ))
-    const req = new Request('https://starye.org/dashboard/', {
+    const req = defaultGatewayRequest('/dashboard/', {
       headers: { cookie: 'starye.session_token=abc789' },
     })
     const result = await checkDashboardAuth(req, {
@@ -78,7 +79,7 @@ describe('checkDashboardAuth', () => {
 
   it('fetch 失败时 fail-closed 返回 no_session', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')))
-    const req = new Request('https://starye.org/dashboard/', {
+    const req = defaultGatewayRequest('/dashboard/', {
       headers: { cookie: 'starye.session_token=abcfail' },
     })
     const result = await checkDashboardAuth(req, {

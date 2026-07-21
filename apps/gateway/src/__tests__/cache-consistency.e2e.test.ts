@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearGatewayCacheGroup } from '../../../api/src/lib/gateway-cache'
 import { createCachedProxy } from '../cache-middleware'
+import { defaultApiOrigin, defaultGatewayRequest } from './default-target.fixture'
 
 function createMockKv() {
   const store = new Map<string, string>()
@@ -53,23 +54,23 @@ describe('gateway cache consistency e2e', () => {
       })
     })
 
-    const request = new Request('https://starye.org/api/movies?page=1')
+    const request = defaultGatewayRequest('/api/movies?page=1')
 
-    const firstResponse = await cachedProxy(request, 'https://api.starye.org')
+    const firstResponse = await cachedProxy(request, defaultApiOrigin)
     expect(firstResponse.headers.get('X-Cache-Status')).toBe('MISS')
     expect(await firstResponse.json()).toEqual({ version: 1 })
     expect(store.size).toBe(1)
 
     upstreamVersion = 2
 
-    const staleResponse = await cachedProxy(request, 'https://api.starye.org')
+    const staleResponse = await cachedProxy(request, defaultApiOrigin)
     expect(staleResponse.headers.get('X-Cache-Status')).toBe('HIT')
     expect(await staleResponse.json()).toEqual({ version: 1 })
 
     await expect(clearGatewayCacheGroup(kv, 'movies')).resolves.toBe(1)
     expect(store.size).toBe(0)
 
-    const freshResponse = await cachedProxy(request, 'https://api.starye.org')
+    const freshResponse = await cachedProxy(request, defaultApiOrigin)
     expect(freshResponse.headers.get('X-Cache-Status')).toBe('MISS')
     expect(await freshResponse.json()).toEqual({ version: 2 })
   })

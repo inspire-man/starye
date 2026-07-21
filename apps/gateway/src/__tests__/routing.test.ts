@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import worker from '../index'
+import { defaultGatewayUrl } from './default-target.fixture'
 
 // ─── 辅助工具 ───────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ describe('环境检测', () => {
   })
 
   it('本地代理目标应使用 canonical Gateway 转发头', async () => {
-    const req = makeRequest('https://starye.org/auth/start/github')
+    const req = makeRequest(defaultGatewayUrl('/auth/start/github'))
     await worker.fetch(req, { API_ORIGIN: 'http://127.0.0.1:8787' })
 
     expect(capturedRequest!.headers.get('X-Forwarded-Host')).toBe('localhost:8080')
@@ -228,7 +229,7 @@ describe('路径匹配规则', () => {
     })
 
     const response = await worker.fetch(
-      makeRequest('https://starye.org/blog/_nuxt/assets/css/main.css'),
+      makeRequest(defaultGatewayUrl('/blog/_nuxt/assets/css/main.css')),
       { API_ORIGIN: 'http://localhost:8787' },
     )
 
@@ -364,7 +365,7 @@ describe('生产环境路径重写', () => {
         capturedRequest = req instanceof Request ? req : new Request(req)
         return mockFetchResponse
       }))
-    const req = makeRequest('https://starye.org/dashboard/movies', {
+    const req = makeRequest(defaultGatewayUrl('/dashboard/movies'), {
       headers: { cookie: 'starye.session_token=local-dashboard-target-token' },
     })
 
@@ -377,7 +378,7 @@ describe('生产环境路径重写', () => {
   })
 
   it('本地 Movie 代理目标应保留前缀，即使请求 Host 不是 localhost', async () => {
-    const req = makeRequest('https://starye.org/movie/ABP-123')
+    const req = makeRequest(defaultGatewayUrl('/movie/ABP-123'))
 
     await worker.fetch(req, {
       MOVIE_ORIGIN: 'http://localhost:3001',
