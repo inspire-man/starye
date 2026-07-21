@@ -8,7 +8,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { createDataChainCandidate, DATA_CHAIN_FIXTURE_COUNT } from './data-chain-evidence'
-import { materializeTargetDeployConfig } from './deploy-config'
+import { assertPagesRedirectInputPath, materializeTargetDeployConfig } from './deploy-config'
 import { runTargetPreflight } from './preflight'
 import { parseAuditedPublicRuntimeInput } from './public-runtime-input'
 import { buildTargetProjections, isTargetPagesSurface } from './target-projections'
@@ -135,7 +135,12 @@ export interface TargetMutationPreparation {
   readonly preparedContextPath: string
   readonly runId: string
   readonly smokeItemCode?: string
-  readonly pages?: Readonly<{ surface: TargetPagesSurface, project: string, buildEnvPath: string }>
+  readonly pages?: Readonly<{
+    surface: TargetPagesSurface
+    project: string
+    buildEnvPath: string
+    redirectInputPath: string
+  }>
   readonly identity: Readonly<{ apiUrl: string, d1Name: string, r2Name: string, accountId: string }>
   cleanup: () => Promise<void>
 }
@@ -224,7 +229,13 @@ function outputLines(prepared: TargetMutationPreparation): string[] {
     `api_config_path=${prepared.apiConfigPath}`,
     `gateway_config_path=${prepared.gatewayConfigPath}`,
     `prepared_context_path=${prepared.preparedContextPath}`,
-    ...(prepared.pages ? [`pages_project=${prepared.pages.project}`, `pages_build_env_path=${prepared.pages.buildEnvPath}`] : []),
+    ...(prepared.pages
+      ? [
+          `pages_project=${prepared.pages.project}`,
+          `pages_build_env_path=${prepared.pages.buildEnvPath}`,
+          `pages_redirect_input_path=${prepared.pages.redirectInputPath}`,
+        ]
+      : []),
   ]
 }
 
@@ -264,36 +275,62 @@ export async function prepareTargetMutation(
     runId: request.runId,
     appDirectories: request.appDirectories,
     runDirectory: request.runDirectory,
+    profile: resolution.profile,
     ...(request.pagesSurface ? { pagesSurface: request.pagesSurface } : {}),
   })
-  const preparedContextPath = assertPreparedPath(request.runDirectory, path.join(request.runDirectory, `prepared-context.${request.runId}.json`))
-  const prepared: TargetMutationPreparation = {
-    targetId: resolution.id,
-    githubEnvironment: resolution.profile.ci.githubEnvironment,
-    apiConfigPath: materialized.apiConfigPath,
-    gatewayConfigPath: materialized.gatewayConfigPath,
-    preparedContextPath,
-    runId: request.runId,
-    ...(isSmokeMutationCommand(request.command)
-      ? { smokeItemCode: createDataChainCandidate({ targetId: resolution.id, runId: request.runId }).itemCode }
-      : {}),
-    ...(materialized.pages ? { pages: { surface: materialized.pages.surface, project: materialized.pages.project, buildEnvPath: materialized.pages.buildEnvPath } } : {}),
-    identity: {
-      apiUrl: resolution.profile.urls.api,
-      d1Name: resolution.profile.resources.d1.name,
-      r2Name: resolution.profile.resources.r2.name,
-      accountId: resolution.profile.account.id,
-    },
-    cleanup: materialized.cleanup,
-  }
-  await mkdir(path.dirname(preparedContextPath), { recursive: true })
-  await writeFile(preparedContextPath, JSON.stringify({ ...prepared, cleanup: undefined }), 'utf8')
+  try {
+    const preparedContextPath = assertPreparedPath(request.runDirectory, path.join(request.runDirectory, `prepared-context.${request.runId}.json`))
+    const pages = materialized.pages
+      ? (() => {
+          if (!request.pagesSurface || materialized.pages.surface !== request.pagesSurface || !isTargetPagesSurface(materialized.pages.surface)) {
+            throw new Error('Prepared Pages output does not match the selected surface.')
+          }
+          const redirectInputPath = assertPagesRedirectInputPath(
+            request.runDirectory,
+            request.runId,
+            materialized.pages.surface,
+            materialized.pages.redirectInputPath,
+          )
+          return {
+            surface: materialized.pages.surface,
+            project: materialized.pages.project,
+            buildEnvPath: materialized.pages.buildEnvPath,
+            redirectInputPath,
+          }
+        })()
+      : undefined
+    const prepared: TargetMutationPreparation = {
+      targetId: resolution.id,
+      githubEnvironment: resolution.profile.ci.githubEnvironment,
+      apiConfigPath: materialized.apiConfigPath,
+      gatewayConfigPath: materialized.gatewayConfigPath,
+      preparedContextPath,
+      runId: request.runId,
+      ...(isSmokeMutationCommand(request.command)
+        ? { smokeItemCode: createDataChainCandidate({ targetId: resolution.id, runId: request.runId }).itemCode }
+        : {}),
+      ...(pages ? { pages } : {}),
+      identity: {
+        apiUrl: resolution.profile.urls.api,
+        d1Name: resolution.profile.resources.d1.name,
+        r2Name: resolution.profile.resources.r2.name,
+        accountId: resolution.profile.account.id,
+      },
+      cleanup: materialized.cleanup,
+    }
+    await mkdir(path.dirname(preparedContextPath), { recursive: true })
+    await writeFile(preparedContextPath, JSON.stringify({ ...prepared, cleanup: undefined }), 'utf8')
 
-  if (request.githubOutput) {
-    await writeFile(request.githubOutput, `${outputLines(prepared).join('\n')}\n`, { encoding: 'utf8', flag: 'a' })
-  }
+    if (request.githubOutput) {
+      await writeFile(request.githubOutput, `${outputLines(prepared).join('\n')}\n`, { encoding: 'utf8', flag: 'a' })
+    }
 
-  return prepared
+    return prepared
+  }
+  catch (error) {
+    await materialized.cleanup()
+    throw error
+  }
 }
 
 function resolveTargetRemoteEntryDefinition(entry: TargetRemoteEntry): TargetRemoteEntryDefinition {

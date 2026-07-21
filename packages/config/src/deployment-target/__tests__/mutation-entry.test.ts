@@ -79,7 +79,8 @@ describe('target mutation preparation', () => {
       project: 'starye-dashboard',
       redirectInputPath,
     })
-    expect(await readFile(prepared.preparedContextPath, 'utf8')).toContain(redirectInputPath)
+    const serialized = JSON.parse(await readFile(prepared.preparedContextPath, 'utf8')) as { pages?: { redirectInputPath?: string } }
+    expect(serialized.pages?.redirectInputPath).toBe(redirectInputPath)
     const output = await readFile(githubOutput, 'utf8')
     expect(output).toContain(`pages_redirect_input_path=${redirectInputPath}`)
     expect(output).not.toMatch(/fixture-token|account_id|project_map/)
