@@ -31,7 +31,7 @@ export const defaultEvidenceMatrixPaths: EvidenceMatrixPaths = {
   markdown: '.planning/phases/14-test-and-operations-hardening/14-EVIDENCE-MATRIX.md',
 }
 
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
+const repositoryRoot = path.resolve(fileURLToPath(new URL('../', import.meta.url)))
 
 function readLocalFile(relativePath: string): string | undefined {
   const candidate = path.resolve(repositoryRoot, relativePath)
