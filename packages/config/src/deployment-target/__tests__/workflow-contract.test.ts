@@ -115,6 +115,29 @@ describe('phase 12 workflow target contract', () => {
     expect(blog).not.toContain('starye-blog')
   })
 
+  it('requires selected redirect input handoff for every Pages build only', async () => {
+    const redirectInput = githubExpression('steps.prepare.outputs.pages_redirect_input_path')
+
+    for (const workflow of workflows.filter(item => item.kind === 'pages')) {
+      const source = await workflowText(workflow.file)
+      const surface = workflow.surface!
+      const buildCommand = `pnpm target-profile run-pages-build --surface ${surface} --pages-build-env-path "${githubExpression('steps.prepare.outputs.pages_build_env_path')}" --pages-redirect-input-path "${redirectInput}"`
+      const cleanupStart = source.indexOf('- name: Remove generated target files')
+      const cleanup = source.slice(cleanupStart)
+
+      expect(source, workflow.file).toContain(buildCommand)
+      expect(source, workflow.file).not.toContain('starye.org')
+      expect(prepareCount(source), workflow.file).toBe(1)
+      expect(cleanup, workflow.file).toContain('if: always()')
+      expect(cleanup, workflow.file).toContain(redirectInput)
+    }
+
+    for (const workflow of workflows.filter(item => item.kind !== 'pages')) {
+      const source = await workflowText(workflow.file)
+      expect(source, workflow.file).not.toContain('pages_redirect_input_path')
+    }
+  })
+
   it('routes every D1, crawler, and cleanup mutation through its fixed prepared entry', async () => {
     for (const workflow of workflows.filter(item => item.kind === 'prepared-entry')) {
       const source = await workflowText(workflow.file)
