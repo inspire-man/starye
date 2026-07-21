@@ -5,15 +5,15 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 14
 current_phase_name: Test and Operations Hardening
 status: executing
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-07-21T03:29:25.743Z"
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-07-21T03:58:25.508Z"
 last_activity: 2026-07-21
 last_activity_desc: Phase 14 execution started
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 43
-  completed_plans: 38
+  completed_plans: 39
   percent: 50
 ---
 
@@ -41,7 +41,7 @@ progress:
 ## Current Position
 
 Phase: 14 (Test and Operations Hardening) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-07-21 — Phase 14 execution started
 
@@ -61,6 +61,7 @@ Last activity: 2026-07-21 — Phase 14 execution started
 | Phase 14 P06 | 13m 45s | 2 tasks | 2 files |
 | Phase 14 P02 | 23m 9s | 3 tasks | 13 files |
 | Phase 14 P03 | 9m | 3 tasks | 6 files |
+| Phase 14 P04 | 22m | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -117,8 +118,8 @@ Last activity: 2026-07-21 — Phase 14 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-07-21T03:29:25.725Z
-**Stopped at:** Completed 14-03-PLAN.md
+**Last session:** 2026-07-21T03:58:25.486Z
+**Stopped at:** Completed 14-04-PLAN.md
 **Resume file:** None
 
 **Next recommended action:**
@@ -200,3 +201,6 @@ $gsd-progress
 - [Phase ?]: Local Pages builds write closed dist redirects atomically only after both builds succeed and clear stale output on failure.
 - [Phase ?]: All Pages workflows pass pages_redirect_input_path from one prepare step and clean it with always semantics.
 - [Phase ?]: Workflow inventory rejects redirect input outside Pages while preserving existing target and public-env boundaries.
+- [Phase ?]: Phase 14 P04: 旧域名审计采用精确路径加片段加理由的允许项，拒绝目录、glob、正则和基线。
+- [Phase ?]: Phase 14 P04: check:legacy-domain 无参数、只读且只枚举 Git 跟踪的活动输入。
+- [Phase ?]: Phase 14 P04: 活动示例和 E2E fixture 改用 fixture.invalid 与 .test，不保留默认 target 域名。
