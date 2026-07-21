@@ -10,6 +10,7 @@ import {
 } from '../index'
 import { trackedTargetProfiles } from '../target-profiles'
 import { resolveTargetProfile } from '../target-resolver'
+import { defaultTargetProfile, defaultTargetResolution, defaultTargetUrls } from './default-target.fixture'
 
 function resolveFixtureTarget() {
   const source = trackedTargetProfiles[0]
@@ -60,13 +61,13 @@ const overlay = {
 
 describe('target projections', () => {
   it('derives public, deploy, and workflow facts from the selected resolution', () => {
-    const current = buildTargetProjections(resolveTargetProfile('starye-org'), { runId: 'current-run' })
+    const current = buildTargetProjections(defaultTargetResolution, { runId: 'current-run' })
     const alternate = buildTargetProjections(resolveFixtureTarget(), { runId: 'alternate-run' })
 
     expect(current.publicRuntime).toEqual({
-      targetId: 'starye-org',
-      gatewayBaseUrl: 'https://starye.org',
-      apiBaseUrl: 'https://api.starye.org',
+      targetId: defaultTargetProfile.id,
+      gatewayBaseUrl: defaultTargetUrls.gateway,
+      apiBaseUrl: defaultTargetUrls.api,
       appBasePaths: {
         dashboard: '/dashboard/',
         auth: '/auth/',
@@ -82,13 +83,13 @@ describe('target projections', () => {
       apiBaseUrl: 'https://api.alternate.example',
     })
     expect(alternate.deploy.workers.api.name).toBe('alternate-api')
-    expect(current.deploy.workers.gateway.vars.tavernOrigin).toBe('https://tavern.starye.org')
+    expect(current.deploy.workers.gateway.vars.tavernOrigin).toBe(defaultTargetUrls.tavern)
     expect(current.deploy.pages.map(page => page.surface)).not.toContain('tavern')
     expect(alternate.workflow).toMatchObject({ targetId: 'alternate-org', githubEnvironment: 'alternate-org', runId: 'alternate-run' })
   })
 
   it('resolves only the selected Blog project and each closed Pages surface', () => {
-    const resolution = resolveTargetProfile('starye-org')
+    const resolution = defaultTargetResolution
     expect(getPagesDeployProjection(resolution, 'blog').project).toBe('blog-pages')
     expect(targetPagesSurfaceValues).not.toContain('tavern')
 
@@ -103,20 +104,20 @@ describe('target projections', () => {
   })
 
   it('builds an exact public browser allowlist without deployment identity', () => {
-    const input = parseAuditedPublicRuntimeInput(resolveTargetProfile('starye-org'), overlay)
+    const input = parseAuditedPublicRuntimeInput(defaultTargetResolution, overlay)
     const vite = buildVitePublicRuntimeEnv(input, 'movie')
     const nuxt = buildNuxtPublicRuntimeEnv(input, 'auth')
 
     expect(vite).toMatchObject({
-      VITE_TARGET_ID: 'starye-org',
-      VITE_GATEWAY_BASE_URL: 'https://starye.org',
-      VITE_API_BASE_URL: 'https://api.starye.org',
+      VITE_TARGET_ID: defaultTargetProfile.id,
+      VITE_GATEWAY_BASE_URL: defaultTargetUrls.gateway,
+      VITE_API_BASE_URL: defaultTargetUrls.api,
       VITE_APP_BASE_PATH: '/movie/',
       VITE_FEATURE_ARIA2: 'true',
     })
     expect(nuxt).toMatchObject({
-      NUXT_PUBLIC_TARGET_ID: 'starye-org',
-      NUXT_PUBLIC_GATEWAY_BASE_URL: 'https://starye.org',
+      NUXT_PUBLIC_TARGET_ID: defaultTargetProfile.id,
+      NUXT_PUBLIC_GATEWAY_BASE_URL: defaultTargetUrls.gateway,
       NUXT_PUBLIC_APP_BASE_PATH: '/auth/',
     })
     const serialized = JSON.stringify({ vite, nuxt })
@@ -124,7 +125,7 @@ describe('target projections', () => {
   })
 
   it('rejects unknown or credential-shaped overlay input without echoing it', () => {
-    const resolution = resolveTargetProfile('starye-org')
+    const resolution = defaultTargetResolution
     const secret = 'token-must-not-appear'
 
     expect(() => parseAuditedPublicRuntimeInput(resolution, { ...overlay, VITE_UNREGISTERED_SECRET: secret })).toThrow(/Unknown public runtime overlay field/)

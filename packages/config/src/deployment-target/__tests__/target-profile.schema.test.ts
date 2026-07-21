@@ -5,14 +5,15 @@ import {
   requiredTargetUrlSurfaces,
 } from '../target-profile.schema'
 import { trackedTargetProfiles } from '../target-profiles'
+import { defaultTargetProfile } from './default-target.fixture'
 
 describe('targetProfile schema', () => {
-  const profile = trackedTargetProfiles[0]
+  const defaultTargetProfileFixture = trackedTargetProfiles[0]
 
   it('接受具有完整明确 canonical URL surface 的当前目标', () => {
-    const parsed = parseTargetProfile(profile)
+    const parsed = parseTargetProfile(defaultTargetProfileFixture)
 
-    expect(parsed.id).toBe('starye-org')
+    expect(parsed.id).toBe(defaultTargetProfile.id)
     expect(Object.keys(parsed.urls).sort()).toEqual([...requiredTargetUrlSurfaces].sort())
     expect(parsed.urls).toEqual({
       gateway: 'https://starye.org',
@@ -28,24 +29,24 @@ describe('targetProfile schema', () => {
 
   it('要求每个 URL surface、资源身份和 secret metadata', () => {
     const missingUrlSurface = {
-      ...profile,
+      ...defaultTargetProfileFixture,
       urls: {
-        ...profile.urls,
+        ...defaultTargetProfileFixture.urls,
         tavern: undefined,
       },
     }
     const missingResourceIdentity = {
-      ...profile,
+      ...defaultTargetProfileFixture,
       resources: {
-        ...profile.resources,
+        ...defaultTargetProfileFixture.resources,
         d1: {
-          ...profile.resources.d1,
+          ...defaultTargetProfileFixture.resources.d1,
           id: '',
         },
       },
     }
     const missingRequiredSecretMetadata = {
-      ...profile,
+      ...defaultTargetProfileFixture,
       requiredSecrets: [],
     }
 
@@ -56,9 +57,9 @@ describe('targetProfile schema', () => {
 
   it('拒绝任何 secret value 字段', () => {
     const profileWithSecretValue = {
-      ...profile,
+      ...defaultTargetProfileFixture,
       requiredSecrets: [
-        ...profile.requiredSecrets,
+        ...defaultTargetProfileFixture.requiredSecrets,
         {
           name: 'BETTER_AUTH_SECRET',
           required: true,
@@ -74,7 +75,7 @@ describe('targetProfile schema', () => {
   })
 
   it('声明当前 Cloudflare 资源与本地/CI 身份映射', () => {
-    const parsed = parseTargetProfile(profile)
+    const parsed = parseTargetProfile(defaultTargetProfileFixture)
 
     expect(parsed.resources.d1).toMatchObject({
       binding: 'DB',

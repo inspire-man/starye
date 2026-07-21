@@ -6,13 +6,14 @@ import {
   targetManagedBlockEnd,
   targetManagedBlockStart,
 } from '../env-file-block'
+import { defaultTargetProfile, defaultTargetUrls } from './default-target.fixture'
 
 const targetEntries = {
-  STARYE_TARGET_ID: 'starye-org',
-  STARYE_TARGET_DOMAIN: 'starye.org',
-  STARYE_TARGET_ACCOUNT_ID: 'account-id',
-  WEB_URL: 'https://starye.org',
-  ADMIN_URL: 'https://dashboard.starye.org',
+  STARYE_TARGET_ID: defaultTargetProfile.id,
+  STARYE_TARGET_DOMAIN: defaultTargetProfile.domain.root,
+  STARYE_TARGET_ACCOUNT_ID: defaultTargetProfile.account.id,
+  WEB_URL: defaultTargetUrls.gateway,
+  ADMIN_URL: defaultTargetUrls.dashboard,
 }
 
 describe('target-managed env block updater', () => {
@@ -25,8 +26,8 @@ describe('target-managed env block updater', () => {
 
     expect(update.content.startsWith(before)).toBe(true)
     expect(update.content.endsWith(after)).toBe(true)
-    expect(update.content).toContain('STARYE_TARGET_ID=starye-org')
-    expect(update.content).toContain('WEB_URL=https://starye.org')
+    expect(update.content).toContain(`STARYE_TARGET_ID=${defaultTargetProfile.id}`)
+    expect(update.content).toContain(`WEB_URL=${defaultTargetUrls.gateway}`)
   })
 
   it('以新选择的 target block 替换旧 target identity', () => {
@@ -44,7 +45,7 @@ describe('target-managed env block updater', () => {
     expect(update.hadManagedBlock).toBe(true)
     expect(update.content).not.toContain('old-target')
     expect(update.content).not.toContain('old.example')
-    expect(update.content).toContain('STARYE_TARGET_ID=starye-org')
+    expect(update.content).toContain(`STARYE_TARGET_ID=${defaultTargetProfile.id}`)
   })
 
   it('只移除 marker 外明确列出的旧 managed keys', () => {

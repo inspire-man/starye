@@ -152,17 +152,6 @@ export const LEGACY_DOMAIN_ALLOWANCES: readonly LegacyDomainAllowance[] = [
     ],
   ),
   ...exactAllowances(
-    'packages/config/src/deployment-target/__tests__/env-file-block.test.ts',
-    'named-test-fixture',
-    'Exercises the target-managed env block with named default-target values.',
-    [
-      `STARYE_TARGET_DOMAIN: '${LEGACY_DOMAIN}',`,
-      `WEB_URL: 'https://${LEGACY_DOMAIN}',`,
-      `ADMIN_URL: 'https://dashboard.${LEGACY_DOMAIN}',`,
-      `expect(update.content).toContain('WEB_URL=https://${LEGACY_DOMAIN}')`,
-    ],
-  ),
-  ...exactAllowances(
     'packages/config/src/deployment-target/__tests__/pages-redirects.test.ts',
     'named-test-fixture',
     'Exercises selected-target Pages redirect materialization for every Pages surface.',
@@ -184,25 +173,12 @@ export const LEGACY_DOMAIN_ALLOWANCES: readonly LegacyDomainAllowance[] = [
   ...exactAllowances(
     'packages/config/src/deployment-target/__tests__/target-profile.schema.test.ts',
     'named-test-fixture',
-    'Exercises the TargetProfile schema with the named default target fixture.',
+    'Verifies exact raw default target profile metadata through the named schema fixture.',
     [
       `gateway: 'https://${LEGACY_DOMAIN}',`,
       `api: 'https://api.${LEGACY_DOMAIN}',`,
       `blog: 'https://blog.${LEGACY_DOMAIN}',`,
       `tavern: 'https://tavern.${LEGACY_DOMAIN}',`,
-    ],
-  ),
-  ...exactAllowances(
-    'packages/config/src/deployment-target/__tests__/target-projections.test.ts',
-    'named-test-fixture',
-    'Exercises target projections with named default target URLs.',
-    [
-      `gatewayBaseUrl: 'https://${LEGACY_DOMAIN}',`,
-      `apiBaseUrl: 'https://api.${LEGACY_DOMAIN}',`,
-      `expect(current.deploy.workers.gateway.vars.tavernOrigin).toBe('https://tavern.${LEGACY_DOMAIN}')`,
-      `VITE_GATEWAY_BASE_URL: 'https://${LEGACY_DOMAIN}',`,
-      `VITE_API_BASE_URL: 'https://api.${LEGACY_DOMAIN}',`,
-      `NUXT_PUBLIC_GATEWAY_BASE_URL: 'https://${LEGACY_DOMAIN}',`,
     ],
   ),
   ...exactAllowances(
