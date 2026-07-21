@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
-current_phase: 13
-current_phase_name: full-chain-data-smoke
+current_phase: 14
+current_phase_name: Test and Operations Hardening
 status: executing
-stopped_at: Phase 14 context gathered
-last_updated: "2026-07-20T15:58:20.971Z"
-last_activity: 2026-07-20
-last_activity_desc: local exact verifier reached terminal_passed/provesExternalChain true, then the task-owned fixed-port listeners were cleaned.
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-07-21T01:44:33.481Z"
+last_activity: 2026-07-21
+last_activity_desc: Phase 14 execution started
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 36
-  completed_plans: 34
+  total_plans: 43
+  completed_plans: 35
   percent: 50
 ---
 
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — LOCAL PAIR TERMINAL
-Plan: 13-17 consumed the released 13-28 lifecycle fields; 13-18 recorded the exact local Dashboard-to-Viewer pair through the canonical Gateway. Plans 13-25 and 13-27 remain immutable blocked observations.
-Status: The minimal local scope is complete. Provider-backed and selected-production proof in 13-19/20 is deferred to MVP review or archival work; broad suites remain deferred.
-Last activity: 2026-07-20 — local exact verifier reached terminal_passed/provesExternalChain true, then the task-owned fixed-port listeners were cleaned.
+Phase: 14 (Test and Operations Hardening) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-07-21 — Phase 14 execution started
 
 ## Performance Metrics
 
@@ -53,6 +53,11 @@ Last activity: 2026-07-20 — local exact verifier reached terminal_passed/prove
 **Phase repair invocations used:** 2 / per-phase budget 2
 
 **Scoped human escalation:** The root user explicitly directed execution through Phase 13/MVP completion, authorized recommended choices/local control, and confirmed direct local actions need no further approval. Plan 13-23 remains the one-time evidence-backed snapshot-generator repair after the configured budget was exhausted. Plan 13-24 is immutable `blocked_after_launch` history. Plan 13-25 is a no-code current-source all-free retry that may operate only its newly started tree; it does not raise `workflow.node_repair_budget`, reopen historic evidence, or authorize any later code repair.
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 14 P01 | 11m 8s | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -109,9 +114,9 @@ Last activity: 2026-07-20 — local exact verifier reached terminal_passed/prove
 
 ## Session Continuity
 
-**Last session:** 2026-07-20T15:58:20.946Z
-**Stopped at:** Phase 14 context gathered
-**Resume file:** .planning/phases/14-test-and-operations-hardening/14-CONTEXT.md
+**Last session:** 2026-07-21T01:44:33.467Z
+**Stopped at:** Completed 14-01-PLAN.md
+**Resume file:** None
 
 **Next recommended action:**
 
@@ -184,3 +189,5 @@ $gsd-progress
 - [Phase 13]: Handoff resolves a tracked target before lazy path/evidence loading, and root scripts preserve run/verify 0/1/2 while handoff is binary. — Locked by 13-14 handoff contract.
 - [Phase 13]: Gateway auth failures persist as four closed non-secret checkpoint codes while gateway_auth_unavailable remains valid. — Task 2 preserves historical evidence while making new observations diagnosable without transport detail.
 - [Phase 13]: Timeout process proof keeps evidence peers in memory and asserts raw child exit 2 before the outer deadline. — Task 3 isolates lifecycle proof from services, evidence roots, and remote providers.
+- [Phase 14]: Pages direct origins and canonical Gateway destinations now resolve only from TargetProfile metadata.
+- [Phase 14]: Pages redirect templates are closed by surface and reject caller-supplied hosts before rendering.

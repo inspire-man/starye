@@ -42,7 +42,7 @@
 
 ### Tests And Ops
 
-- [ ] **TEST-01**: Active source/tests no longer depend on unqualified `starye.org` literals except default-target fixtures.
+- [x] **TEST-01**: Active source/tests no longer depend on unqualified `starye.org` literals except default-target fixtures.
 - [x] **TEST-02**: Automated tests cover target profile validation and fail-closed mismatch cases.
 - [x] **TEST-03**: Automated tests cover domain-aware gateway/API/auth configuration.
 - [x] **TEST-04**: Automated tests cover deploy, migration, and crawler workflow target resolution without real secrets.
@@ -102,7 +102,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-05 | Phase 13 | Complete |
 | DATA-06 | Phase 13 | Complete |
 | DATA-07 | Phase 13 | Complete |
-| TEST-01 | Phase 14 | Pending |
+| TEST-01 | Phase 14 | Complete |
 | TEST-02 | Phase 11 | Complete |
 | TEST-03 | Phase 12 | Complete |
 | TEST-04 | Phase 12 | Complete |
