@@ -104,6 +104,7 @@ async function materializeLocalInputs(): Promise<MaterializedLocalInputs> {
     for (const surface of pagesSurfaces) {
       materialized.set(surface, await materializeTargetDeployConfig({
         deploy,
+        profile: resolution.profile,
         publicRuntimeInput: localPublicRuntimeInput,
         runId: `local-dev-${process.pid}-${surface}`,
         appDirectories: {
