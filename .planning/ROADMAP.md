@@ -195,11 +195,25 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 32** *(gap closure; blocked on Wave 31 remote pending)*
 
-- [ ] 13-30-PLAN.md — Ordered selected-production Dashboard then viewer finalization + dual exact verifiers (supersedes executable intent of 13-20).
+- [ ] 13-30-PLAN.md — Historical post-13-29 production IAB contract; do not execute against p13-17 checkpoint. Superseded for execution by 13-38/13-39.
 
 **Wave 33** *(gap closure; blocked on Wave 32)*
 
-- [ ] 13-31-PLAN.md — Refresh 13-VERIFICATION.md from live 13-28/17/18/29/30 truth only.
+- [ ] 13-31-PLAN.md — Historical re-verify contract dependent on 13-30; superseded for execution by 13-39.
+
+**Wave 34** *(gap closure; blocked on 13-29 complete + local-dev profile fix)*
+- [ ] 13-36-PLAN.md — Commit/regression-lock local-dev Pages profile wiring for fresh pnpm dev.
+
+**Wave 35** *(gap closure; blocked on Wave 34)*
+- [ ] 13-37-PLAN.md — New run_id local lifecycle + handoff + Dashboard/viewer terminal proof (not p13-17).
+
+**Wave 36** *(gap closure; blocked on Wave 35 local terminal; human remote auth)*
+- [ ] 13-38-PLAN.md — One remote handoff for 13-37 run; pending or honest checkpoint.
+
+**Wave 37** *(gap closure; blocked on Wave 36)*
+- [ ] 13-39-PLAN.md — Production surfaces if remote pending + refresh 13-VERIFICATION.md from live truths.
+
+
 
 **Success criteria:**
 
@@ -258,4 +272,4 @@ $gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-21 after Phase 13 gap-closure plans 13-29..13-31 for remaining selected-production proof*
+*Last updated: 2026-07-23 after UAT complete and gap-closure plans 13-36..13-39 for new-run production proof + verification refresh*
