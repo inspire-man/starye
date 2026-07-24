@@ -1,5 +1,5 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "Phase 13 Plan 13-45 local supervisor exits after listeners start and before Gateway readiness settles"
 created: "2026-07-24"
 updated: "2026-07-24"
@@ -20,7 +20,7 @@ updated: "2026-07-24"
 - hypothesis: `watchChild` calls `stop(1)` for every child `exit` after seven TCP probes set `ready = true`; it never distinguishes a zero-code wrapper exit from a managed-service failure or verifies that the service port remains healthy.
 - test: The focused suite passed 9/9 in three consecutive runs; it covers a zero-code exit with a live port, a zero-code exit with a closed port, and a nonzero exit.
 - expecting: The real Windows local lifecycle now retains healthy managed services through wrapper completion, while a real managed-service exit still triggers task-owned cleanup.
-- next_action: session manager or user performs the scoped real local check: start `pnpm dev`, then run `pnpm check:services` through `http://localhost:8080`; do not create Plan 13-45 evidence or run remote commands.
+- next_action: Resume Plan 13-45 from its still-unallocated local lifecycle task.
 - reasoning_checkpoint:
   hypothesis: "A post-readiness zero-code wrapper exit causes premature cleanup because `watchChild` equates all exits with a managed-service failure and never observes the continued service listener."
   confirming_evidence:
@@ -44,6 +44,8 @@ updated: "2026-07-24"
 - timestamp: 2026-07-24; checked: zero-code closed-port control against the repaired handler; found: it logs the expected failure and invokes cleanup, but the test observed `setExitCode(1)` one microtask before the async cleanup continuation completed; implication: the failure branch is active and the test must await the full cleanup sequence before asserting the exit code.
 - timestamp: 2026-07-24; checked: repaired focused suite, ESLint, and scoped diff; found: `local-dev.test.ts` passes 9/9, `pnpm exec eslint scripts/local-dev.ts packages/config/src/deployment-target/__tests__/local-dev.test.ts` exits 0, and `git diff --check` exits 0; implication: the repair and its focused lifecycle controls are syntactically and statically clean.
 - timestamp: 2026-07-24; checked: stability run; found: three consecutive focused runs passed 9/9 with zero failures; implication: the asynchronous port-recheck classification is stable for the reproduced event sequences.
+- timestamp: 2026-07-24; checked: scoped real local gate; found: after the seven fixed ports became ready, `pnpm check:services` passed on its second Gateway probe using `http://localhost:8080`; implication: the repaired supervisor keeps the healthy local tree alive through canonical Gateway readiness.
+- timestamp: 2026-07-24; checked: task-owned cleanup; found: every fixed-port listener descended from the newly started launcher before child-first cleanup, and all seven fixed ports were free afterwards; implication: the real check left no local service tree running.
 
 ## Eliminated
 
@@ -52,7 +54,7 @@ updated: "2026-07-24"
 
 - root_cause: "After TCP-only readiness, `watchChild` classifies every child `exit` as fatal. A normal zero-code Windows wrapper exit is therefore treated identically to a managed-service failure, so `stop(1)` kills the still-healthy local tree before canonical Gateway HTTP readiness can settle."
 - fix: "For post-readiness exits only, `watchChild` now verifies the corresponding port after a zero-code, non-signalled exit. A still-listening port preserves the service tree as an expected wrapper lifecycle; a closed port, probe failure, nonzero exit, signal, or child error retains atomic cleanup."
-- verification: "Focused lifecycle suite passed 9/9 in three consecutive runs; ESLint passed for the changed script and test; `git diff --check` passed. No live local service tree was started under this scoped debugger task."
+- verification: "Focused lifecycle suite passed 9/9 in three consecutive runs; ESLint passed for the changed script and test; `git diff --check` passed. A new task-owned `pnpm dev` tree also passed `pnpm check:services` through the canonical Gateway after all fixed ports became ready, then cleaned up to all-free ports."
 - files_changed:
   - scripts/local-dev.ts
   - packages/config/src/deployment-target/__tests__/local-dev.test.ts
