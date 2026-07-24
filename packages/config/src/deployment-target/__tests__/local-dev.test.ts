@@ -223,6 +223,84 @@ describe('local-dev atomic seven-port supervisor', () => {
     expect(harness.cleanup).not.toHaveBeenCalled()
   })
 
+  it('keeps healthy managed services when a Windows wrapper exits after port readiness', async () => {
+    const localDev = await loadLocalDev()
+    const harness = createHarness({ listening: () => true })
+
+    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toMatchObject({
+      status: 'ready',
+      exitCode: 0,
+    })
+
+    const gateway = harness.children.get('gateway')
+    expect(gateway).toBeDefined()
+    if (!gateway) {
+      throw new Error('Gateway child is required.')
+    }
+
+    gateway.emit('exit', 0, null)
+    await Promise.resolve()
+
+    expect(harness.probePort).toHaveBeenLastCalledWith(8080)
+    expect(harness.cleanup).not.toHaveBeenCalled()
+    for (const child of harness.children.values()) {
+      expect(child.kill).not.toHaveBeenCalled()
+    }
+  })
+
+  it('still cleans up atomically when a managed service exits with a failure code after readiness', async () => {
+    const localDev = await loadLocalDev()
+    const harness = createHarness({ listening: () => true })
+
+    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toMatchObject({
+      status: 'ready',
+      exitCode: 0,
+    })
+
+    const gateway = harness.children.get('gateway')
+    expect(gateway).toBeDefined()
+    if (!gateway) {
+      throw new Error('Gateway child is required.')
+    }
+
+    gateway.emit('exit', 1, null)
+    await Promise.resolve()
+
+    expect(harness.cleanup).toHaveBeenCalledTimes(1)
+    expect(harness.setExitCode).toHaveBeenCalledWith(1)
+    for (const child of harness.children.values()) {
+      expect(child.kill).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('still cleans up atomically when a zero-code exit no longer owns its service port', async () => {
+    const localDev = await loadLocalDev()
+    let gatewayListening = true
+    const harness = createHarness({ listening: port => port !== 8080 || gatewayListening })
+
+    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toMatchObject({
+      status: 'ready',
+      exitCode: 0,
+    })
+
+    const gateway = harness.children.get('gateway')
+    expect(gateway).toBeDefined()
+    if (!gateway) {
+      throw new Error('Gateway child is required.')
+    }
+
+    gatewayListening = false
+    gateway.emit('exit', 0, null)
+    await Promise.resolve()
+
+    expect(harness.probePort).toHaveBeenLastCalledWith(8080)
+    expect(harness.cleanup).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(harness.setExitCode).toHaveBeenCalledWith(1))
+    for (const child of harness.children.values()) {
+      expect(child.kill).toHaveBeenCalledTimes(1)
+    }
+  })
+
   it('uses the same idempotent task-owned cleanup when a child errors before readiness', async () => {
     const localDev = await loadLocalDev()
     const harness = createHarness({

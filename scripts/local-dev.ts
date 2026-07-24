@@ -286,10 +286,27 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
       }
     }
 
-    child.process.once('error', stopAfterReadiness)
-    child.process.once('exit', () => {
-      // Windows pnpm wrappers can exit before their long-lived service child binds.
+    const stopForUnexpectedExit = async (code: number | null, signal: NodeJS.Signals | null): Promise<void> => {
+      if (stopping || !ready) {
+        return
+      }
+      if (code === 0 && signal === null) {
+        try {
+          if (await isPortListening(child.port)) {
+            return
+          }
+        }
+        catch {
+          // A failed liveness probe must not mask an exited managed service.
+        }
+      }
       stopAfterReadiness()
+    }
+
+    child.process.once('error', stopAfterReadiness)
+    child.process.once('exit', (code, signal) => {
+      // Windows pnpm wrappers can exit before their long-lived service child binds.
+      void stopForUnexpectedExit(code, signal)
     })
   }
 
