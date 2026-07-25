@@ -25,7 +25,11 @@ async function loadDataChainCli(): Promise<DataChainCliModule> {
 const temporaryRoots: string[] = []
 const repositoryRoot = path.resolve(import.meta.dirname, '../../../../..')
 
-async function createProcessHook(code: 0 | 1 | 2, entry: 'run' | 'verify' | 'handoff'): Promise<string> {
+async function createProcessHook(
+  code: 0 | 1 | 2,
+  entry: 'run' | 'verify' | 'handoff',
+  reportArgv = false,
+): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'starye-13-14-cli-'))
   temporaryRoots.push(root)
   const moduleByEntry = {
@@ -50,8 +54,9 @@ async function createProcessHook(code: 0 | 1 | 2, entry: 'run' | 'verify' | 'han
     : `__data_chain_cli_test__:${entry}:${code}`
   const fixtureSource = [
     `import process from 'node:process';`,
-    `export async function ${fixture.exportName}() {`,
+    `export async function ${fixture.exportName}(argv) {`,
     `  process.stdout.write(${JSON.stringify(`${message}\n`)});`,
+    ...(reportArgv ? [`  process.stdout.write('__data_chain_cli_argv__:' + JSON.stringify(argv) + '\\n');`] : []),
     `  return ${code};`,
     '}',
   ].join('\n')
@@ -67,7 +72,7 @@ async function createProcessHook(code: 0 | 1 | 2, entry: 'run' | 'verify' | 'han
     '  const fixture = fixtureByUrl[specifier];',
     '  if (specifier !== fixtureUrl) throw new Error(\'unexpected test entry\');',
     '  const module = await import(\'data:text/javascript,\' + encodeURIComponent(fixtureSource));',
-    '  return { [fixture.exportName]: async () => module[fixture.exportName]() };',
+    '  return { [fixture.exportName]: async (argv) => module[fixture.exportName](argv) };',
     '}',
   ].join('\n')
   const hookSource = [
@@ -88,10 +93,15 @@ async function createProcessHook(code: 0 | 1 | 2, entry: 'run' | 'verify' | 'han
   return pathToFileURL(preload).href
 }
 
-function runRootScript(scriptName: string, preload: string): Promise<{ exitCode: number, stdout: string, stderr: string }> {
+function runRootScript(
+  scriptName: string,
+  preload: string,
+  argv: readonly string[] = [],
+): Promise<{ exitCode: number, stdout: string, stderr: string }> {
   const pnpmEntry = path.join(path.dirname(process.execPath), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [pnpmEntry, 'run', scriptName], {
+    const pnpmArgv = argv.length > 0 ? ['--', ...argv] : []
+    const child = spawn(process.execPath, [pnpmEntry, 'run', scriptName, ...pnpmArgv], {
       cwd: repositoryRoot,
       env: {
         ...process.env,
@@ -122,13 +132,14 @@ describe('data-chain root launcher', () => {
     const run = vi.fn(async () => 2)
     const verify = vi.fn(async () => 2)
     const handoff = vi.fn(async () => 2)
+    const argv = ['--mode', 'local']
 
-    await expect(dispatchDataChainCli('run', ['--mode', 'local'], { run, verify, handoff })).resolves.toBe(2)
-    await expect(dispatchDataChainCli('verify', ['--mode', 'local'], { run, verify, handoff })).resolves.toBe(2)
-    await expect(dispatchDataChainCli('handoff', ['--mode', 'local'], { run, verify, handoff })).resolves.toBe(1)
-    expect(run).toHaveBeenCalledOnce()
-    expect(verify).toHaveBeenCalledOnce()
-    expect(handoff).toHaveBeenCalledOnce()
+    await expect(dispatchDataChainCli('run', argv, { run, verify, handoff })).resolves.toBe(2)
+    await expect(dispatchDataChainCli('verify', argv, { run, verify, handoff })).resolves.toBe(2)
+    await expect(dispatchDataChainCli('handoff', argv, { run, verify, handoff })).resolves.toBe(1)
+    expect(run).toHaveBeenCalledExactlyOnceWith(argv)
+    expect(verify).toHaveBeenCalledExactlyOnceWith(argv)
+    expect(handoff).toHaveBeenCalledExactlyOnceWith(argv)
   })
 
   it('rejects unknown entries and normalizes a thrown fixed entry at the CLI boundary', async () => {
@@ -165,6 +176,33 @@ describe('data-chain root launcher', () => {
       : `__data_chain_cli_test__:${entry}:${code}`
     expect(result.stdout.split(marker).length - 1).toBe(1)
     expect(result.stderr).not.toContain('Data-chain smoke requires')
+  })
+
+  it.each([
+    ['smoke:data-chain', 'run'],
+    ['smoke:data-chain:verify', 'verify'],
+    ['smoke:data-chain:handoff', 'handoff'],
+  ] as const)('strips pnpm\'s single leading delimiter before forwarding $scriptName argv', async (scriptName, entry) => {
+    const expectedArgv = ['--mode', 'local', '--target', 'starye-org', '--run-id', 'p13-45-delimiter-regression']
+    const preload = await createProcessHook(0, entry, true)
+    const result = await runRootScript(scriptName, preload, expectedArgv)
+
+    expect(result.exitCode, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(result.stdout).toContain(`__data_chain_cli_argv__:${JSON.stringify(expectedArgv)}`)
+    expect(result.stdout).not.toContain('__data_chain_cli_argv__:["--"')
+  })
+
+  it.each([
+    ['smoke:data-chain', 'run'],
+    ['smoke:data-chain:verify', 'verify'],
+    ['smoke:data-chain:handoff', 'handoff'],
+  ] as const)('removes only pnpm\'s delimiter before forwarding $scriptName argv', async (scriptName, entry) => {
+    const expectedArgv = ['--', '--mode', 'local', '--target', 'starye-org', '--run-id', 'p13-45-delimiter-regression']
+    const preload = await createProcessHook(0, entry, true)
+    const result = await runRootScript(scriptName, preload, expectedArgv)
+
+    expect(result.exitCode, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(result.stdout).toContain(`__data_chain_cli_argv__:${JSON.stringify(expectedArgv)}`)
   })
 
   it('uses only the three direct closed root launchers', async () => {

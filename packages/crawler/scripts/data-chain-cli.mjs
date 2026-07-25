@@ -51,7 +51,8 @@ async function main() {
     return
   }
   try {
-    process.exitCode = await dispatchDataChainCli(entry, argv)
+    const forwardedArgv = argv[0] === '--' ? argv.slice(1) : argv
+    process.exitCode = await dispatchDataChainCli(entry, forwardedArgv)
   }
   catch {
     process.exitCode = 1
