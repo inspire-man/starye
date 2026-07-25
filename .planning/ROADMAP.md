@@ -82,7 +82,24 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 50 historical + gap plans 13-51..13-55; local terminal on 13-55; remote/production still open
+**Plans:** 44/55 plans executed
+
+- [ ] 13-32-PLAN.md
+- [ ] 13-33-PLAN.md
+- [ ] 13-34-PLAN.md
+- [ ] 13-35-PLAN.md
+- [x] 13-40-PLAN.md
+- [x] 13-41-PLAN.md
+- [x] 13-42-PLAN.md
+- [x] 13-43-PLAN.md
+- [x] 13-44-PLAN.md
+- [ ] 13-45-PLAN.md
+- [ ] 13-46-PLAN.md
+- [ ] 13-47-PLAN.md
+- [x] 13-48-PLAN.md
+- [x] 13-49-PLAN.md
+- [x] 13-50-PLAN.md
+
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -139,7 +156,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 14** *(gap closure; blocked on Wave 13 completion)*
 
-- [ ] 13-16-PLAN.md — Establish fresh runtime ownership and canonical Gateway readiness, or record an honest runtime blocker.
+- [x] 13-16-PLAN.md — Establish fresh runtime ownership and canonical Gateway readiness, or record an honest runtime blocker.
 
 **Wave 15** *(historical gap-closure checkpoint; immutable)*
 
@@ -191,7 +208,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 31** *(gap closure; blocked on live 13-18 terminal local + 13-28 lifecycle)*
 
-- [ ] 13-29-PLAN.md — Human-gated selected-production remote handoff consuming p13-17 local evidence (supersedes executable intent of 13-19).
+- [x] 13-29-PLAN.md — Human-gated selected-production remote handoff consuming p13-17 local evidence (supersedes executable intent of 13-19).
 
 **Wave 32** *(gap closure; blocked on Wave 31 remote pending)*
 
@@ -202,31 +219,37 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 - [ ] 13-31-PLAN.md — Historical re-verify contract dependent on 13-30; superseded for execution by 13-39.
 
 **Wave 34** *(gap closure; blocked on 13-29 complete + local-dev profile fix)*
-- [ ] 13-36-PLAN.md — Commit/regression-lock local-dev Pages profile wiring for fresh pnpm dev.
+
+- [x] 13-36-PLAN.md — Commit/regression-lock local-dev Pages profile wiring for fresh pnpm dev.
 
 **Wave 35** *(gap closure; blocked on Wave 34)*
-- [ ] 13-37-PLAN.md — New run_id local lifecycle + handoff + Dashboard/viewer terminal proof (not p13-17).
+
+- [x] 13-37-PLAN.md — New run_id local lifecycle + handoff + Dashboard/viewer terminal proof (not p13-17).
 
 **Wave 36** *(gap closure; blocked on Wave 35 local terminal; human remote auth)*
-- [ ] 13-38-PLAN.md — One remote handoff for 13-37 run; pending or honest checkpoint.
+
+- [x] 13-38-PLAN.md — One remote handoff for 13-37 run; pending or honest checkpoint.
 
 **Wave 37** *(gap closure; blocked on Wave 36)*
-- [ ] 13-39-PLAN.md — Production surfaces if remote pending + refresh 13-VERIFICATION.md from live truths.
 
-
+- [x] 13-39-PLAN.md — Production surfaces if remote pending + refresh 13-VERIFICATION.md from live truths.
 
 **Wave 46** *(gap closure; blocked on live 13-50 local Dashboard observer checkpoint + 13-VERIFICATION production UI gap)*
+
 - [x] 13-51-PLAN.md — Repair local observer choke point where signed-in Dashboard still maps to `dashboard_auth_unavailable`; regression-lock; no new smoke run.
 
 **Wave 47** *(gap closure; blocked on Wave 46)*
+
 - [x] 13-52-PLAN.md — Executed; immutable local Dashboard checkpoint `dashboard_auth_unavailable` on p13-52; does not unlock 13-53.
 - [x] 13-55-PLAN.md — Executed; local terminal_passed / provesExternalChain true on p13-55 via signed-in IAB observeSurface; unlocks human-gated 13-53 on this run.
 
 **Wave 48** *(gap closure; blocked on Wave 47 local terminal; human remote auth)*
+
 - [x] 13-53-PLAN.md — Executed; human-authorized but frozen at remote preflight Invalid access token [code: 9109]; no remote pending pair; does not unlock 13-54.
 
 **Wave 49** *(gap closure; blocked on Wave 48)*
-- [ ] 13-54-PLAN.md — Production session + ordered Dashboard→viewer on the fresh remote pending pair, dual verify or honest checkpoint, refresh 13-VERIFICATION.md from live truths.
+
+- [x] 13-54-PLAN.md — Production session + ordered Dashboard→viewer on the fresh remote pending pair, dual verify or honest checkpoint, refresh 13-VERIFICATION.md from live truths.
 
 **Success criteria:**
 
@@ -278,17 +301,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Local terminal is green on p13-55 (`terminal_passed`, `provesExternalChain: true`). p13-49/p13-50/p13-52 remain immutable local Dashboard auth checkpoints. Production Dashboard/viewer still open per 13-VERIFICATION.md. 13-53 froze at Cloudflare Invalid access token [code: 9109] before remote handoff. Operator must rotate untracked CLOUDFLARE_API_TOKEN, prove remote preflight green, then re-authorize a sole remote handoff before 13-54. Preserve every historical evidence directory; keep evidence untracked. Next:
+p13-55 local remains green. Authorized remote handoff for p13-55 froze at `target_preflight_unmet` (nested preflight unmet; runnerInvocations 0). That remote pair is immutable and must not be reopened. Nested preflight reliability fix is in tree (expanded Windows runtime env + spawn timeouts). Next: allocate a **new** local terminal run, prove preflight green in the handoff path, then authorize remote handoff for the **new** run_id only. Keep evidence untracked.
 
 ```text
 $gsd-execute-phase 13 --gaps-only
 ```
 
-Authorize remote only with explicit operator approval for run `p13-55-7de1edf355a408c3e9394f66b7d97520`.
-
 ---
-*Last updated: 2026-07-25 after 13-55 local IAB terminal_passed*
-
-
-
-
+*Last updated: 2026-07-26 after p13-55 remote preflight checkpoint + 13-54 blocked closeout*

@@ -218,7 +218,7 @@ export function pickRuntimeEnvironment(
   selectedAccountId?: string,
 ): NodeJS.ProcessEnv {
   const names = process.platform === 'win32'
-    ? ['Path', 'SystemRoot', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'CI', 'NODE_OPTIONS', 'PNPM_HOME']
+    ? ['Path', 'PATH', 'SystemRoot', 'SystemDrive', 'windir', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'USERNAME', 'USERDOMAIN', 'HOMEDRIVE', 'HOMEPATH', 'APPDATA', 'LOCALAPPDATA', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'CI', 'NODE_OPTIONS', 'PNPM_HOME', 'WRANGLER_SEND_METRICS', 'NO_UPDATE_NOTIFIER']
     : ['PATH', 'HOME', 'TMPDIR', 'CI', 'NODE_OPTIONS', 'PNPM_HOME']
   const selected: NodeJS.ProcessEnv = {}
 
@@ -478,6 +478,8 @@ function createWranglerExecutor(environment: NodeJS.ProcessEnv = process.env): W
         shell: false,
         cwd: repositoryRoot,
         env: environment,
+        timeout: 60_000,
+        maxBuffer: 4 * 1024 * 1024,
       })
 
       return {

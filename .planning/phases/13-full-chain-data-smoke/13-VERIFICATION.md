@@ -1,32 +1,41 @@
 ---
 phase: 13-full-chain-data-smoke
-verified: 2026-07-23T08:40:00Z
+verified: 2026-07-25T18:16:40.499Z
 status: gaps_found
-score: 11/13 must-haves verified
+score: 10/13 must-haves verified
 behavior_unverified: 1
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 10/13
+  previous_score: 11/13
   gaps_closed:
-    - "13-40 rotated operator CLOUDFLARE_API_TOKEN; wrangler whoami exit 0; remote live preflight exit 0 for starye-org."
-    - "13-41 fresh local terminal on p13-41-379b38f7ce29f2a621097bbd42ccfe3b (handoff pending + ordered Gateway Dashboard/viewer terminal_passed)."
-    - "13-42 authorized remote handoff pending with non-empty remote itemId 03a9a090-c747-421e-b40b-fda7b8c378b2; public production API 200."
+    - "13-55 local terminal_passed / provesExternalChain true on p13-55-7de1edf355a408c3e9394f66b7d97520."
+    - "Operator rotated durable CLOUDFLARE_API_TOKEN (cfut_*); wrangler whoami exit 0; standalone remote live preflight exit 0 after versions-list live-check fix (59eb9cb)."
+    - "Authorized one remote handoff for p13-55; permanent remote checkpoint pair written honestly (no runner mutation)."
   gaps_remaining:
-    - "Production Dashboard observation stopped at dashboard_auth_unavailable (no production-valid signed session). Viewer not observed. Remote exact verify is checkpoint, not terminal_passed."
+    - "p13-55 remote frozen at target_preflight_unmet (nested handoff preflight unmet despite standalone green). No remote pending itemId; production Dashboard/viewer not observed on a fresh pending pair."
   regressions: []
 gaps:
+  - truth: "Selected-production remote pending fixture exists with non-empty itemId after authorized handoff."
+    status: failed
+    reason: "Authorized p13-55 handoff wrote remote checkpoint target_preflight_unmet; runnerInvocations 0; itemId null. Nested preflight under stripped runtime env hung/failed after standalone preflight was green."
+    artifacts:
+      - path: ".planning/phases/13-full-chain-data-smoke/13-54-SUMMARY.md"
+        issue: "blocked_on_remote_checkpoint"
+      - path: ".planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-55-7de1edf355a408c3e9394f66b7d97520/remote.json"
+        issue: "aggregate checkpoint; remote_preflight target_preflight_unmet; itemId null."
+    missing:
+      - "New local terminal run after nested-preflight reliability fix."
+      - "Green nested handoff preflight and sole authorized remote pending pair with non-empty itemId."
   - truth: "The item is visibly usable through the selected production canonical Dashboard and viewer routes, with captured terminal evidence."
     status: failed
-    reason: "Provider-backed remote pending exists and public API returns the tuple, but production Dashboard requires authenticated session. Unauthenticated observe redirected to /auth/login; local BETTER_AUTH_SECRET cannot sign production cookies; browser cookie extraction/automation host did not yield a production session. remote.json now carries dashboard=checkpoint dashboard_auth_unavailable."
+    reason: "Blocked on remote pending absence after p13-55 preflight checkpoint. Historical p13-41 dashboard_auth_unavailable remains immutable and is not current proof."
     artifacts:
-      - path: ".planning/phases/13-full-chain-data-smoke/13-43-SUMMARY.md"
-        issue: "production_dashboard: checkpoint; remote_verify_exit: 2; provesExternalChain_remote: false."
-      - path: ".planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-41-379b38f7ce29f2a621097bbd42ccfe3b/remote.json"
-        issue: "aggregate checkpoint; dashboard surface dashboard_auth_unavailable; viewer absent."
+      - path: ".planning/phases/13-full-chain-data-smoke/13-54-SUMMARY.md"
+        issue: "production surfaces skipped under blocked_on_remote_checkpoint"
     missing:
-      - "Production-valid signed-in session for https://starye.org (production BETTER_AUTH_SECRET or live operator browser session usable by observer)."
-      - "Ordered production Dashboard then /movie/p13-smoke-starye-org-c656ccd0 viewer receipts and remote exact verify terminal_passed on an unobserved pending remote pair."
+      - "Production-valid signed session material."
+      - "Ordered production Dashboard then /movie/<item-code> terminal_passed on an unobserved remote pending pair."
 behavior_unverified_items:
   - truth: "Attempts A-E and the Plan 13-09/13-10 evidence remain byte-for-byte immutable since their original creation."
     test: "Compare authoritative manifests captured immediately after each historical run was first written against the current evidence tree."
@@ -37,6 +46,16 @@ prohibition_flags:
     status: unverified
     reason: "No authoritative original-creation baseline was supplied; human review remains recommended."
 ---
+# Phase 13: Full Chain Data Smoke Verification Report
+
+**Phase Goal:** Prove the selected target is actually usable by running the local and production data chain through Gateway/canonical domain.
+
+**Verified:** 2026-07-25T18:16:40.499Z
+**Status:** gaps_found
+**Re-verification:** Yes — after authorized p13-55 remote handoff + 13-54 blocked closeout
+
+## Goal Achievement
+
 
 # Phase 13: Full Chain Data Smoke Verification Report
 

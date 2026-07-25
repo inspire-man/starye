@@ -334,8 +334,15 @@ export async function invokeOfficialDataChainRemotePreflight(
   const child = spawnSync(invocation.command, invocation.args, {
     cwd: new URL('..', import.meta.url),
     encoding: 'utf8',
-    env: environment,
+    env: {
+      ...environment,
+      CI: process.env.CI ?? 'true',
+      WRANGLER_SEND_METRICS: process.env.WRANGLER_SEND_METRICS ?? 'false',
+      NO_UPDATE_NOTIFIER: process.env.NO_UPDATE_NOTIFIER ?? '1',
+    },
     shell: false,
+    timeout: 180_000,
+    maxBuffer: 8 * 1024 * 1024,
   })
   return child.status === 0 ? 'passed' : 'unmet'
 }
