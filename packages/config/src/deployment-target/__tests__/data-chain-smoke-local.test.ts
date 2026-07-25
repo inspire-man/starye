@@ -36,8 +36,11 @@ interface SmokeModule {
 
 interface ObservationModule {
   parseDataChainSurfaceObservationArgs: (argv: readonly string[]) => { mode: 'local' | 'remote', target: string, runId: string }
-  observeSurfaceDefault: (input: unknown, puppeteer: unknown) => Promise<{ status: 'passed' | 'unavailable', itemCode?: string, itemId?: string }>
+  observeSurfaceDefault: (input: unknown, puppeteer: unknown, sessionCookie?: string) => Promise<{ status: 'passed' | 'unavailable', itemCode?: string, itemId?: string }>
   observeDataChainSurfaces: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
+  isAuthLoginPath: (pathname: string) => boolean
+  resolveObserverSessionCookie: (env?: NodeJS.ProcessEnv, readText?: (file: string, encoding: 'utf8') => string) => string | undefined
+  DATA_CHAIN_SESSION_COOKIE_NAME: string
 }
 
 interface VerifyModule {
@@ -669,6 +672,64 @@ describe('phase 13 local smoke runner', () => {
     expect(unavailable.evidence.observations.at(-1)).toMatchObject({ surface: 'dashboard', status: 'checkpoint' })
   })
 
+
+  it('classifies auth login paths and resolves session cookie material without logging values', async () => {
+    const {
+      isAuthLoginPath,
+      resolveObserverSessionCookie,
+      DATA_CHAIN_SESSION_COOKIE_NAME,
+    } = await loadObservation()
+    expect(DATA_CHAIN_SESSION_COOKIE_NAME).toBe('starye.session_token')
+    expect(isAuthLoginPath('/auth/login')).toBe(true)
+    expect(isAuthLoginPath('/auth/login?next=/dashboard/movies')).toBe(true)
+    expect(isAuthLoginPath('/dashboard/movies')).toBe(false)
+    expect(resolveObserverSessionCookie({ STARYE_DATA_CHAIN_SESSION_COOKIE: 'raw-token-value' } as NodeJS.ProcessEnv)).toBe('raw-token-value')
+    expect(resolveObserverSessionCookie({ STARYE_DATA_CHAIN_SESSION_COOKIE: 'starye.session_token=raw-token-value' } as NodeJS.ProcessEnv)).toBe('raw-token-value')
+    expect(resolveObserverSessionCookie(
+      { STARYE_DATA_CHAIN_SESSION_COOKIE_FILE: 'C:/tmp/untracked-session.txt' } as NodeJS.ProcessEnv,
+      () => 'starye.session_token=file-token',
+    )).toBe('file-token')
+  })
+
+  it('returns unavailable immediately when the default observer lands on /auth/login', async () => {
+    const { observeSurfaceDefault } = await loadObservation()
+    const setCookie = vi.fn(async () => {})
+    const puppeteer = {
+      launch: vi.fn(async () => ({
+        newPage: async () => ({
+          setCookie,
+          goto: async () => ({ ok: () => true }),
+          url: () => 'http://localhost:8080/auth/login?next=/dashboard/movies',
+          waitForFunction: vi.fn(async () => {
+            throw new Error('should not wait for tuple after auth redirect')
+          }),
+          evaluate: vi.fn(async () => {
+            throw new Error('should not evaluate after auth redirect')
+          }),
+        }),
+        close: vi.fn(async () => {}),
+      })),
+    }
+
+    await expect(observeSurfaceDefault({
+      mode: 'local',
+      targetId: baseOptions.target,
+      runId: baseOptions.runId,
+      itemCode: 'code-1',
+      itemId: 'id-1',
+      surface: 'dashboard',
+      baseUrl: 'http://localhost:8080',
+      path: '/dashboard/movies',
+    }, puppeteer, 'signed-session-token')).resolves.toEqual({ status: 'unavailable' })
+    expect(setCookie).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'starye.session_token',
+      value: 'signed-session-token',
+      url: 'http://localhost:8080',
+      path: '/',
+    }))
+    expect(puppeteer.launch).toHaveBeenCalled()
+  })
+
   it('preserves only valid runner exit 0 or 2 artifacts in the shared wrapper', async () => {
     const { verifyDataChainSmoke } = await loadVerify()
     const candidate = createDataChainCandidate({ targetId: baseOptions.target, runId: baseOptions.runId })
@@ -696,3 +757,6 @@ describe('phase 13 local smoke runner', () => {
     })).rejects.toThrow('unexpected exit code')
   })
 })
+
+
+

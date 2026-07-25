@@ -4,6 +4,7 @@ import type {
   DataChainMode,
   ResolvedPendingDataChainEvidence,
 } from '../packages/config/src/deployment-target/index'
+import { readFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -65,9 +66,18 @@ interface PuppeteerResponse {
   ok: () => boolean
 }
 
+interface PuppeteerCookie {
+  name: string
+  value: string
+  url?: string
+  domain?: string
+  path?: string
+}
+
 interface PuppeteerPage {
   goto: (url: string, options: { waitUntil: 'domcontentloaded', timeout: number }) => Promise<PuppeteerResponse | null>
   url: () => string
+  setCookie?: (...cookies: PuppeteerCookie[]) => Promise<void>
   waitForFunction: <Args extends readonly unknown[]>(
     pageFunction: (...args: Args) => boolean,
     options: { polling: 'mutation', timeout: number },
@@ -254,6 +264,45 @@ function normalizeBrowserResult(value: unknown): BrowserSurfaceObservationResult
   }
 }
 
+
+/** Closed cookie name for better-auth with cookiePrefix `starye`. */
+export const DATA_CHAIN_SESSION_COOKIE_NAME = 'starye.session_token'
+
+/** True when navigation landed on the auth login surface instead of the requested route. */
+export function isAuthLoginPath(pathname: string): boolean {
+  const normalized = pathname.toLowerCase()
+  return normalized === '/auth/login' || normalized.startsWith('/auth/login/') || normalized.includes('/auth/login?')
+}
+
+/**
+ * Optional non-secret-path session material for the default observer.
+ * Prefer STARYE_DATA_CHAIN_SESSION_COOKIE_FILE (untracked file) over inline env.
+ * Never log the resolved value.
+ */
+export function resolveObserverSessionCookie(
+  env: NodeJS.ProcessEnv = process.env,
+  readText: (file: string, encoding: 'utf8') => string = readFileSync,
+): string | undefined {
+  const inline = env.STARYE_DATA_CHAIN_SESSION_COOKIE?.trim()
+  if (inline) {
+    return inline.includes('=') ? inline.split('=').slice(1).join('=').trim() || undefined : inline
+  }
+  const filePath = env.STARYE_DATA_CHAIN_SESSION_COOKIE_FILE?.trim()
+  if (!filePath) {
+    return undefined
+  }
+  try {
+    const raw = readText(filePath, 'utf8').trim()
+    if (!raw) {
+      return undefined
+    }
+    return raw.includes('=') ? raw.split('=').slice(1).join('=').trim() || undefined : raw
+  }
+  catch {
+    return undefined
+  }
+}
+
 function crawlerPuppeteer(): PuppeteerModule {
   const crawlerPackage = path.resolve(import.meta.dirname, '../packages/crawler/package.json')
   return createRequire(crawlerPackage)('puppeteer') as PuppeteerModule
@@ -262,10 +311,15 @@ function crawlerPuppeteer(): PuppeteerModule {
 export async function observeSurfaceDefault(
   input: BrowserSurfaceObservationInput,
   puppeteer: PuppeteerModule = crawlerPuppeteer(),
+  sessionCookie: string | undefined = resolveObserverSessionCookie(),
 ): Promise<BrowserSurfaceObservationResult> {
   const endpoint = new URL(input.path, `${input.baseUrl}/`)
   const base = new URL(input.baseUrl)
   if (endpoint.origin !== base.origin || endpoint.pathname !== input.path) {
+    return { status: 'unavailable' }
+  }
+  // Local smoke must stay on the canonical Gateway origin; selected remote uses HTTPS target gateway only.
+  if (input.mode === 'local' && base.origin !== LOCAL_GATEWAY_ORIGIN) {
     return { status: 'unavailable' }
   }
   const browser = await puppeteer.launch({
@@ -274,19 +328,44 @@ export async function observeSurfaceDefault(
   })
   try {
     const page = await browser.newPage()
+    if (sessionCookie && page.setCookie) {
+      // Cookie value is never logged. Name is the closed better-auth prefix contract.
+      await page.setCookie({
+        name: DATA_CHAIN_SESSION_COOKIE_NAME,
+        value: sessionCookie,
+        url: base.origin,
+        path: '/',
+      })
+    }
     const response = await page.goto(endpoint.href, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     const finalUrl = new URL(page.url())
-    if (!response?.ok() || finalUrl.origin !== endpoint.origin || finalUrl.pathname !== endpoint.pathname) {
+    if (finalUrl.origin !== endpoint.origin) {
       return { status: 'unavailable' }
     }
-    await page.waitForFunction((itemCode, itemId) => {
-      const bodyText = document.body?.textContent ?? ''
-      const documentHtml = document.documentElement?.outerHTML ?? ''
-      return (bodyText.includes(itemCode) || documentHtml.includes(itemCode))
-        && (bodyText.includes(itemId) || documentHtml.includes(itemId))
-    }, { polling: 'mutation', timeout: 30_000 }, input.itemCode, input.itemId)
+    // Auth login redirect is the honest local/production signed-out failure mode (maps to dashboard_auth_unavailable).
+    if (isAuthLoginPath(finalUrl.pathname) || isAuthLoginPath(`${finalUrl.pathname}${finalUrl.search}`)) {
+      return { status: 'unavailable' }
+    }
+    if (!response?.ok() || finalUrl.pathname !== endpoint.pathname) {
+      return { status: 'unavailable' }
+    }
+    try {
+      await page.waitForFunction((itemCode, itemId) => {
+        const bodyText = document.body?.textContent ?? ''
+        const documentHtml = document.documentElement?.outerHTML ?? ''
+        return (bodyText.includes(itemCode) || documentHtml.includes(itemCode))
+          && (bodyText.includes(itemId) || documentHtml.includes(itemId))
+      }, { polling: 'mutation', timeout: 30_000 }, input.itemCode, input.itemId)
+    }
+    catch {
+      // Closed evidence vocabulary has no distinct tuple-miss code; still unavailable → dashboard_auth_unavailable / canonical_viewer_unavailable.
+      return { status: 'unavailable' }
+    }
     const settledUrl = new URL(page.url())
     if (settledUrl.origin !== endpoint.origin || settledUrl.pathname !== endpoint.pathname) {
+      return { status: 'unavailable' }
+    }
+    if (isAuthLoginPath(settledUrl.pathname)) {
       return { status: 'unavailable' }
     }
     const tuple = await page.evaluate((itemCode, itemId) => {
