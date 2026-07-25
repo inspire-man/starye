@@ -216,10 +216,10 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 
 **Wave 46** *(gap closure; blocked on live 13-50 local Dashboard observer checkpoint + 13-VERIFICATION production UI gap)*
-- [ ] 13-51-PLAN.md — Repair local observer choke point where signed-in Dashboard still maps to `dashboard_auth_unavailable`; regression-lock; no new smoke run.
+- [x] 13-51-PLAN.md — Repair local observer choke point where signed-in Dashboard still maps to `dashboard_auth_unavailable`; regression-lock; no new smoke run.
 
 **Wave 47** *(gap closure; blocked on Wave 46)*
-- [ ] 13-52-PLAN.md — Fresh `p13-52-*` local handoff + ordered Dashboard→Viewer terminal_passed (never reuse p13-49/p13-50).
+- [x] 13-52-PLAN.md — Executed; immutable local Dashboard checkpoint `dashboard_auth_unavailable` on p13-52; does not unlock 13-53. — Fresh `p13-52-*` local handoff + ordered Dashboard→Viewer terminal_passed (never reuse p13-49/p13-50).
 
 **Wave 48** *(gap closure; blocked on Wave 47 local terminal; human remote auth)*
 - [ ] 13-53-PLAN.md — One authorized remote handoff for the p13-52 run; pending or honest checkpoint; do not reopen p13-41/p13-45.
@@ -285,4 +285,5 @@ $gsd-execute-phase 13 --gaps-only
 
 ---
 *Last updated: 2026-07-25 after `$gsd-plan-phase 13 --gaps` created observer-repair + fresh local/remote/production gap plans 13-51..13-54*
+
 
