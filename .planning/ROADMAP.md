@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 50 historical + 4 new gap plans (13-51..13-54) pending execution
+**Plans:** 50 historical + gap plans 13-51..13-55; local terminal on 13-55; remote/production still open
 **Wave 1**
 
 - [x] 13-01-PLAN.md
@@ -219,10 +219,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 - [x] 13-51-PLAN.md — Repair local observer choke point where signed-in Dashboard still maps to `dashboard_auth_unavailable`; regression-lock; no new smoke run.
 
 **Wave 47** *(gap closure; blocked on Wave 46)*
-- [x] 13-52-PLAN.md — Executed; immutable local Dashboard checkpoint `dashboard_auth_unavailable` on p13-52; does not unlock 13-53. — Fresh `p13-52-*` local handoff + ordered Dashboard→Viewer terminal_passed (never reuse p13-49/p13-50).
+- [x] 13-52-PLAN.md — Executed; immutable local Dashboard checkpoint `dashboard_auth_unavailable` on p13-52; does not unlock 13-53.
+- [x] 13-55-PLAN.md — Executed; local terminal_passed / provesExternalChain true on p13-55 via signed-in IAB observeSurface; unlocks human-gated 13-53 on this run.
 
 **Wave 48** *(gap closure; blocked on Wave 47 local terminal; human remote auth)*
-- [ ] 13-53-PLAN.md — One authorized remote handoff for the p13-52 run; pending or honest checkpoint; do not reopen p13-41/p13-45.
+- [ ] 13-53-PLAN.md — One authorized remote handoff for the p13-55 local-terminal run; pending or honest checkpoint; do not reopen p13-41/p13-45; p13-52 remains checkpoint history.
 
 **Wave 49** *(gap closure; blocked on Wave 48)*
 - [ ] 13-54-PLAN.md — Production session + ordered Dashboard→viewer on the fresh remote pending pair, dual verify or honest checkpoint, refresh 13-VERIFICATION.md from live truths.
@@ -277,13 +278,16 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Local data-chain proof progressed through 13-28/13-17/13-18 and later gap waves through 13-50. Live remaining gaps after 13-50: local observer still checkpointed at `dashboard_auth_unavailable` on p13-49/p13-50, and production Dashboard/viewer still open per 13-VERIFICATION.md. Historical 13-21..13-25/13-27 and p13-41/p13-45 checkpoints remain immutable. Next gap-closure plans are 13-51..13-54. Preserve every historical evidence directory; keep evidence untracked. Next:
+Local terminal is green on p13-55 (`terminal_passed`, `provesExternalChain: true`). p13-49/p13-50/p13-52 remain immutable local Dashboard auth checkpoints. Production Dashboard/viewer still open per 13-VERIFICATION.md. Next gap-closure is human-gated 13-53 remote handoff for p13-55, then 13-54 production UI. Preserve every historical evidence directory; keep evidence untracked. Next:
 
 ```text
 $gsd-execute-phase 13 --gaps-only
 ```
 
+Authorize remote only with explicit operator approval for run `p13-55-7de1edf355a408c3e9394f66b7d97520`.
+
 ---
-*Last updated: 2026-07-25 after `$gsd-plan-phase 13 --gaps` created observer-repair + fresh local/remote/production gap plans 13-51..13-54*
+*Last updated: 2026-07-25 after 13-55 local IAB terminal_passed*
+
 
 
