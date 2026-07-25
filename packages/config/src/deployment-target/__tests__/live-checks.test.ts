@@ -41,11 +41,11 @@ describe('live resource checks', () => {
       }),
       expect.objectContaining({
         resource: 'api-worker',
-        argv: ['deployments', 'list', '--name', 'starye-api'],
+        argv: ['versions', 'list', '--name', 'starye-api'],
       }),
       expect.objectContaining({
         resource: 'gateway-worker',
-        argv: ['deployments', 'list', '--name', 'starye-gateway'],
+        argv: ['versions', 'list', '--name', 'starye-gateway'],
       }),
     ])
     expect(checks.every(check => Array.isArray(check.argv))).toBe(true)
@@ -68,8 +68,8 @@ describe('live resource checks', () => {
       ['d1', 'info', 'starye-db'],
       ['r2', 'bucket', 'info', 'starye-media'],
       ['kv', 'namespace', 'list'],
-      ['deployments', 'list', '--name', 'starye-api'],
-      ['deployments', 'list', '--name', 'starye-gateway'],
+      ['versions', 'list', '--name', 'starye-api'],
+      ['versions', 'list', '--name', 'starye-gateway'],
     ])
   })
 
@@ -86,7 +86,7 @@ describe('live resource checks', () => {
 
   it.each(['migrate', 'deploy'] as const)('allows the first %s to validate account resources before Workers exist', (command) => {
     const execute = vi.fn((argv: readonly string[]) => ({
-      exitCode: argv[0] === 'deployments' ? 1 : 0,
+      exitCode: argv[0] === 'versions' ? 1 : 0,
       stdout: argv[0] === 'kv' ? 'acf49df06ae0447b82a092cf238714d8' : argv.at(-1),
     }))
 
