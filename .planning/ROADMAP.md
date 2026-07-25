@@ -223,7 +223,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 - [x] 13-55-PLAN.md — Executed; local terminal_passed / provesExternalChain true on p13-55 via signed-in IAB observeSurface; unlocks human-gated 13-53 on this run.
 
 **Wave 48** *(gap closure; blocked on Wave 47 local terminal; human remote auth)*
-- [ ] 13-53-PLAN.md — One authorized remote handoff for the p13-55 local-terminal run; pending or honest checkpoint; do not reopen p13-41/p13-45; p13-52 remains checkpoint history.
+- [x] 13-53-PLAN.md — Executed; human-authorized but frozen at remote preflight Invalid access token [code: 9109]; no remote pending pair; does not unlock 13-54.
 
 **Wave 49** *(gap closure; blocked on Wave 48)*
 - [ ] 13-54-PLAN.md — Production session + ordered Dashboard→viewer on the fresh remote pending pair, dual verify or honest checkpoint, refresh 13-VERIFICATION.md from live truths.
@@ -278,7 +278,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Local terminal is green on p13-55 (`terminal_passed`, `provesExternalChain: true`). p13-49/p13-50/p13-52 remain immutable local Dashboard auth checkpoints. Production Dashboard/viewer still open per 13-VERIFICATION.md. Next gap-closure is human-gated 13-53 remote handoff for p13-55, then 13-54 production UI. Preserve every historical evidence directory; keep evidence untracked. Next:
+Local terminal is green on p13-55 (`terminal_passed`, `provesExternalChain: true`). p13-49/p13-50/p13-52 remain immutable local Dashboard auth checkpoints. Production Dashboard/viewer still open per 13-VERIFICATION.md. 13-53 froze at Cloudflare Invalid access token [code: 9109] before remote handoff. Operator must rotate untracked CLOUDFLARE_API_TOKEN, prove remote preflight green, then re-authorize a sole remote handoff before 13-54. Preserve every historical evidence directory; keep evidence untracked. Next:
 
 ```text
 $gsd-execute-phase 13 --gaps-only
@@ -288,6 +288,7 @@ Authorize remote only with explicit operator approval for run `p13-55-7de1edf355
 
 ---
 *Last updated: 2026-07-25 after 13-55 local IAB terminal_passed*
+
 
 
 
