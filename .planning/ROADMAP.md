@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 48/59 plans present (gap waves 50-53 open: 13-56..13-59)
+**Plans:** 51/62 plans present (gap waves 54-56 open: 13-60..13-62; 13-58/13-59 superseded)
 
 - [ ] 13-32-PLAN.md
 - [ ] 13-33-PLAN.md
@@ -261,11 +261,23 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 52** *(gap closure; blocked on Wave 51 local terminal; human remote auth for new run only)*
 
-- [ ] 13-58-PLAN.md — One human-gated remote handoff bound to p13-57; remote pending with non-empty itemId or permanent checkpoint; never reopen p13-55.
+- [ ] 13-58-PLAN.md — Historical remote-handoff contract bound to p13-57; do not execute (local terminal never unlocked). Superseded by 13-61.
 
 **Wave 53** *(gap closure; blocked on Wave 52)*
 
-- [ ] 13-59-PLAN.md — Production session + ordered https://starye.org Dashboard→viewer on p13-57 remote pending (or blocked_on_remote_checkpoint), dual verify, refresh 13-VERIFICATION.md from live truths.
+- [ ] 13-59-PLAN.md — Historical production UI contract bound to p13-57; do not execute. Superseded by 13-62.
+
+**Wave 54** *(gap closure; blocked on 13-57 local dashboard auth freeze + 13-56 preflight green)*
+
+- [ ] 13-60-PLAN.md — Signed-session gate first, then new p13-60 local carrier + IAB/cookie Dashboard→Viewer terminal_passed (never reopen p13-57).
+
+**Wave 55** *(gap closure; blocked on Wave 54 local terminal; human remote auth for new run only)*
+
+- [ ] 13-61-PLAN.md — One human-gated remote handoff bound to p13-60; remote pending with non-empty itemId or permanent checkpoint; never reopen p13-55/p13-57.
+
+**Wave 56** *(gap closure; blocked on Wave 55)*
+
+- [ ] 13-62-PLAN.md — Production session + ordered https://starye.org Dashboard→viewer on p13-60 remote pending (or blocked_on_remote_checkpoint), dual verify, refresh 13-VERIFICATION.md from live truths.
 
 **Success criteria:**
 
@@ -317,16 +329,17 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-13-56 preflight green. 13-57 local carrier froze at `dashboard_auth_unavailable` (unsigned default observe). **13-58/13-59 blocked.**
+Gap-closure plans **13-60..13-62** supersede blocked 13-58/13-59 after p13-57 local auth freeze:
 
-Required before next local carrier:
-1. Sign in local Dashboard at `http://localhost:8080/dashboard` (IAB or cookie file)
-2. Plan a **new** local terminal run (do not reopen p13-57 / p13-55)
-3. Then human-gated remote handoff for that new run only
+1. **13-60** — signed local Dashboard session gate, then new `p13-60-*` local terminal (IAB/cookie only; never unsigned observe)
+2. **13-61** — human-gated sole remote handoff for the new run_id only
+3. **13-62** — production Dashboard→viewer + refresh `13-VERIFICATION.md`
+
+Immutable: p13-55 remote `target_preflight_unmet`, p13-57 local `dashboard_auth_unavailable`. Keep evidence untracked.
 
 ```text
-$gsd-plan-phase 13 --gaps
+$gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-26 after 13-57 local dashboard auth checkpoint*
+*Last updated: 2026-07-26 after plan-phase 13 --gaps wrote 13-60..13-62*
