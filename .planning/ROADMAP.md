@@ -269,7 +269,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 54** *(gap closure; blocked on 13-57 local dashboard auth freeze + 13-56 preflight green)*
 
-- [ ] 13-60-PLAN.md — Signed-session gate first, then new p13-60 local carrier + IAB/cookie Dashboard→Viewer terminal_passed (never reopen p13-57).
+- [x] 13-60-PLAN.md — Executed once as pre-allocation block `blocked_without_local_session_proof`; no run id; re-execute after cookie/IAB session proof.
 
 **Wave 55** *(gap closure; blocked on Wave 54 local terminal; human remote auth for new run only)*
 
@@ -329,17 +329,13 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Gap-closure plans **13-60..13-62** supersede blocked 13-58/13-59 after p13-57 local auth freeze:
-
-1. **13-60** — signed local Dashboard session gate, then new `p13-60-*` local terminal (IAB/cookie only; never unsigned observe)
-2. **13-61** — human-gated sole remote handoff for the new run_id only
-3. **13-62** — production Dashboard→viewer + refresh `13-VERIFICATION.md`
-
-Immutable: p13-55 remote `target_preflight_unmet`, p13-57 local `dashboard_auth_unavailable`. Keep evidence untracked.
+13-60 stopped at local session gate (no run id). Unblock with untracked `local-session.cookie` or recoverable IAB signed-session proof, then re-run:
 
 ```text
 $gsd-execute-phase 13 --gaps-only
 ```
 
+Immutable: p13-55 remote, p13-57 local. 13-61/13-62 still wait on a terminal local carrier.
+
 ---
-*Last updated: 2026-07-26 after plan-phase 13 --gaps wrote 13-60..13-62*
+*Last updated: 2026-07-26 after 13-60 pre-allocation session-gate block*
