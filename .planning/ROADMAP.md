@@ -82,7 +82,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 44/55 plans executed
+**Plans:** 48/59 plans present (gap waves 50-53 open: 13-56..13-59)
 
 - [ ] 13-32-PLAN.md
 - [ ] 13-33-PLAN.md
@@ -251,6 +251,22 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 - [x] 13-54-PLAN.md — Production session + ordered Dashboard→viewer on the fresh remote pending pair, dual verify or honest checkpoint, refresh 13-VERIFICATION.md from live truths.
 
+**Wave 50** *(gap closure; blocked on Wave 49 p13-55 remote preflight freeze + nested reliability fix in tree)*
+
+- [ ] 13-56-PLAN.md — Prove standalone + nested/handoff-owned remote preflight green for starye-org without creating remote.attempt or a new run id.
+
+**Wave 51** *(gap closure; blocked on Wave 50 nested preflight green)*
+
+- [ ] 13-57-PLAN.md — Allocate new p13-57 local carrier; one local handoff + Gateway IAB Dashboard→Viewer; dual verify terminal_passed.
+
+**Wave 52** *(gap closure; blocked on Wave 51 local terminal; human remote auth for new run only)*
+
+- [ ] 13-58-PLAN.md — One human-gated remote handoff bound to p13-57; remote pending with non-empty itemId or permanent checkpoint; never reopen p13-55.
+
+**Wave 53** *(gap closure; blocked on Wave 52)*
+
+- [ ] 13-59-PLAN.md — Production session + ordered https://starye.org Dashboard→viewer on p13-57 remote pending (or blocked_on_remote_checkpoint), dual verify, refresh 13-VERIFICATION.md from live truths.
+
 **Success criteria:**
 
 1. Local smoke goes through `http://localhost:8080/...` and verifies API, auth/dashboard, and content routes without treating direct app ports as canonical.
@@ -301,11 +317,18 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-p13-55 local remains green. Authorized remote handoff for p13-55 froze at `target_preflight_unmet` (nested preflight unmet; runnerInvocations 0). That remote pair is immutable and must not be reopened. Nested preflight reliability fix is in tree (expanded Windows runtime env + spawn timeouts). Next: allocate a **new** local terminal run, prove preflight green in the handoff path, then authorize remote handoff for the **new** run_id only. Keep evidence untracked.
+Gap-closure plans **13-56..13-59** are ready after p13-55 remote freeze:
+
+1. **13-56** — prove standalone + nested remote preflight green (no `remote.attempt`)
+2. **13-57** — new `p13-57-*` local terminal carrier (never reuse p13-55 remote)
+3. **13-58** — human-gated sole remote handoff for the new run_id only
+4. **13-59** — production Dashboard→viewer + refresh `13-VERIFICATION.md`
+
+p13-55 remote remains immutable at `target_preflight_unmet`. Keep evidence untracked.
 
 ```text
 $gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-26 after p13-55 remote preflight checkpoint + 13-54 blocked closeout*
+*Last updated: 2026-07-26 after plan-phase 13 --gaps wrote 13-56..13-59*
