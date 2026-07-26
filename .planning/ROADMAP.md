@@ -253,7 +253,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 50** *(gap closure; blocked on Wave 49 p13-55 remote preflight freeze + nested reliability fix in tree)*
 
-- [ ] 13-56-PLAN.md — Prove standalone + nested/handoff-owned remote preflight green for starye-org without creating remote.attempt or a new run id.
+- [x] 13-56-PLAN.md — Prove standalone + nested/handoff-owned remote preflight green for starye-org without creating remote.attempt or a new run id.
 
 **Wave 51** *(gap closure; blocked on Wave 50 nested preflight green)*
 
@@ -317,12 +317,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-Gap-closure plans **13-56..13-59** are ready after p13-55 remote freeze:
+13-56 nested+standalone remote preflight is green. Next live gap plan:
 
-1. **13-56** — prove standalone + nested remote preflight green (no `remote.attempt`)
-2. **13-57** — new `p13-57-*` local terminal carrier (never reuse p13-55 remote)
-3. **13-58** — human-gated sole remote handoff for the new run_id only
-4. **13-59** — production Dashboard→viewer + refresh `13-VERIFICATION.md`
+1. **13-57** — new `p13-57-*` local terminal carrier (never reuse p13-55 remote)
+2. **13-58** — human-gated sole remote handoff for the new run_id only
+3. **13-59** — production Dashboard→viewer + refresh `13-VERIFICATION.md`
 
 p13-55 remote remains immutable at `target_preflight_unmet`. Keep evidence untracked.
 
@@ -331,4 +330,4 @@ $gsd-execute-phase 13 --gaps-only
 ```
 
 ---
-*Last updated: 2026-07-26 after plan-phase 13 --gaps wrote 13-56..13-59*
+*Last updated: 2026-07-26 after 13-56 nested preflight green*
