@@ -4,11 +4,11 @@ milestone: v1.2
 milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
-status: ready_to_execute
+status: blocked
 stopped_at: Phase 14 complete; Phase 13 verifier-driven gap closure pending
 last_updated: "2026-07-26T04:00:00.000Z"
 last_activity: 2026-07-26
-last_activity_desc: Phase 13 plan 13-56 nested preflight green
+last_activity_desc: Phase 13 plan 13-57 local dashboard_auth_unavailable checkpoint
 progress:
   total_phases: 4
   completed_phases: 3
@@ -41,9 +41,9 @@ progress:
 ## Current Position
 
 Phase: 13 (full-chain-data-smoke) — READY
-Plan: 13-57 of gap wave 50-53 (13-56 done)
-Status: Executing gaps-only; 13-56 complete
-Last activity: 2026-07-26 — Phase 13 gap plans 13-56..13-59 written via plan-phase --gaps
+Plan: blocked after 13-57 checkpoint; need new local carrier plan
+Status: Blocked on local dashboard auth; 13-58 not unlocked
+Last activity: 2026-07-26 — 13-57 local dashboard_auth_unavailable checkpoint
 
 ## Performance Metrics
 

@@ -257,7 +257,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Wave 51** *(gap closure; blocked on Wave 50 nested preflight green)*
 
-- [ ] 13-57-PLAN.md — Allocate new p13-57 local carrier; one local handoff + Gateway IAB Dashboard→Viewer; dual verify terminal_passed.
+- [x] 13-57-PLAN.md — Executed; local handoff pending then frozen at dashboard_auth_unavailable; does not unlock 13-58.
 
 **Wave 52** *(gap closure; blocked on Wave 51 local terminal; human remote auth for new run only)*
 
@@ -317,17 +317,16 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-13-56 nested+standalone remote preflight is green. Next live gap plan:
+13-56 preflight green. 13-57 local carrier froze at `dashboard_auth_unavailable` (unsigned default observe). **13-58/13-59 blocked.**
 
-1. **13-57** — new `p13-57-*` local terminal carrier (never reuse p13-55 remote)
-2. **13-58** — human-gated sole remote handoff for the new run_id only
-3. **13-59** — production Dashboard→viewer + refresh `13-VERIFICATION.md`
-
-p13-55 remote remains immutable at `target_preflight_unmet`. Keep evidence untracked.
+Required before next local carrier:
+1. Sign in local Dashboard at `http://localhost:8080/dashboard` (IAB or cookie file)
+2. Plan a **new** local terminal run (do not reopen p13-57 / p13-55)
+3. Then human-gated remote handoff for that new run only
 
 ```text
-$gsd-execute-phase 13 --gaps-only
+$gsd-plan-phase 13 --gaps
 ```
 
 ---
-*Last updated: 2026-07-26 after 13-56 nested preflight green*
+*Last updated: 2026-07-26 after 13-57 local dashboard auth checkpoint*
