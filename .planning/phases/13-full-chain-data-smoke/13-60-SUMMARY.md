@@ -2,59 +2,62 @@
 phase: 13-full-chain-data-smoke
 plan: "60"
 subsystem: data-chain-local
-tags: [gap-closure, local-smoke, blocked, session-gate]
+tags: [gap-closure, local-smoke, signed-session, pending]
 dependency-graph:
   requires: [13-56, 13-57]
   provides:
-    - honest pre-allocation block without local session proof
+    - one fresh local pending pair bound to p13-60
   affects: [13-61]
+tech-stack:
+  added: []
+  patterns:
+    - signed-session gate precedes local carrier allocation
+    - dual Gateway readiness precedes one local handoff
+key-files:
+  created:
+    - .planning/phases/13-full-chain-data-smoke/13-60-RUN-ID.txt
+  modified:
+    - .planning/phases/13-full-chain-data-smoke/13-60-SUMMARY.md
 key-decisions:
-  - "Did not allocate p13-60 run id without signed-session proof (13-57 lesson)."
-  - "Dual check:services accepted robots/auth/authSlash while services were up."
-  - "IAB ambient URL was http://localhost:8080/dashboard/ but shell get-session without cookies is null; browser automation tools unavailable this turn."
-  - "Chrome localhost starye.session_token decrypt failed (app-bound/v20 InvalidTag); IAB cookie DB locked (sharing violation)."
+  - "Operator-confirmed signed-in Codex IAB satisfied the pre-allocation session gate."
+  - "Allocated exactly one fresh p13-60 local carrier after two Gateway readiness passes."
 requirements-completed: []
-duration: 25m
-completed: 2026-07-26
-status: complete
-execution_outcome: blocked_without_local_session_proof
-run_id: null
+duration: in_progress
+status: in_progress
+execution_outcome: local_pending_observation
+run_id: p13-60-5b545aa10389b50cfa86e78319665398
+item_code: p13-smoke-starye-org-9f9b088c
+item_id: 3dafb33b-435e-48a7-873c-5695856d4d43
+handoff_exit: 0
+pending_verify_exit: 2
 provesExternalChain: false
 ---
 
-# Phase 13 Plan 60: Blocked Before Allocation — Local Session Gate
+# Phase 13 Plan 60: Local Carrier Allocated
 
-## Result
+## Task 1: Session Gate
 
-Stopped at Task 1 (signed-session gate). **No p13-60 run id was allocated** and no local handoff/observe ran, to avoid repeating the 13-57 unauthenticated observe freeze.
+The operator confirmed that the Codex in-app Browser Dashboard session at
+`http://localhost:8080/dashboard/` is signed in before allocation. No cookie,
+session value, or profile data was read or recorded.
 
-| Check | Outcome |
-| --- | --- |
-| Dual `pnpm check:services` | accepted robots/auth/authSlash; Gateway healthy |
-| Ambient IAB URL | `http://localhost:8080/dashboard/` open |
-| Shell `GET /api/auth/get-session` (no cookie) | `null` |
-| Shell `GET /dashboard/` (no cookie) | 302 redirect |
-| Cookie decrypt / IAB cookie copy | fail / locked |
-| Browser automation (node_repl / Playwright / Chrome MCP) | unavailable this turn |
-| Run id / handoff / observe | **not started** |
+## Task 2: Local Pending Pair
 
-## Immutable history preserved
+| Step | Exit | Outcome |
+| --- | ---: | --- |
+| First `pnpm check:services` | 0 | Gateway healthy; robots/auth/authSlash accepted |
+| Second `pnpm check:services` | 0 | Gateway healthy; robots/auth/authSlash accepted |
+| Allocate run id | n/a | `p13-60-5b545aa10389b50cfa86e78319665398` |
+| Local handoff | 0 | pending; runnerInvocations 1; itemId non-empty |
+| Exact local verifier | 2 | `resolved_pending_observation`; `provesExternalChain: false` |
 
-- p13-57 local `dashboard_auth_unavailable` not reopened
-- p13-55 remote `target_preflight_unmet` not reopened
+## Evidence
 
-## Operator unblock options (pick one)
-
-1. Write untracked cookie file (value only, one line):
-   `.planning/phases/13-full-chain-data-smoke/.untracked-session/local-session.cookie`
-   then reply: `cookie ready`
-2. Keep IAB signed in at `http://localhost:8080/dashboard` and reply: `已登录` after browser automation is available again
-3. Re-run execute once tools can claim the IAB tab and prove get-session has `user`
+- Untracked root: `.planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-60-5b545aa10389b50cfa86e78319665398/`
+- `local.json` records one local fixture, D1 item count 1, and canonical Gateway API evidence.
+- No remote artifacts or remote commands were created or run.
 
 ## Next
 
-```text
-$gsd-execute-phase 13 --gaps-only
-```
-
-After session proof: allocate p13-60, local handoff, IAB/cookie observe only, then stop at 13-61 human remote auth.
+Task 3 must observe Dashboard then Viewer through the already signed-in IAB
+adapter only. A bare default observer is forbidden.
