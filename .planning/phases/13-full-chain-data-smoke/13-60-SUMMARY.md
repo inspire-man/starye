@@ -103,8 +103,10 @@ permitted signed-session observation adapter is unavailable.
 
 Plan 13-61's remote human gate has **not** been reached: this run remains
 `resolved_pending_observation` and does not prove the local external chain. A
-future continuation needs an available signed IAB observeSurface bridge or an
-explicit cookie-backed adapter before any observation can be attempted.
+future continuation must leave this frozen p13-60 carrier untouched. It needs
+an available signed IAB observeSurface bridge or an explicit cookie-backed
+adapter before allocating a new carrier; p13-60 must not be observed, verified,
+or handed off again.
 
 ## Self-Check: PASSED
 
