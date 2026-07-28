@@ -82,7 +82,11 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 51/62 plans present (gap waves 54-56 open: 13-60..13-62; 13-58/13-59 superseded)
+**Plans:** 48/65 plans executed
+
+- [x] 13-63-PLAN.md
+- [ ] 13-64-PLAN.md
+- [ ] 13-65-PLAN.md
 
 - [ ] 13-32-PLAN.md
 - [ ] 13-33-PLAN.md

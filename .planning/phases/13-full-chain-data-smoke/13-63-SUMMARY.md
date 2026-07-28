@@ -23,7 +23,7 @@ key-decisions:
   - "Historical carriers and evidence remain outside this plan's execution surface."
 requirements-completed: []
 coverage: []
-duration: pending
+duration: 4 min
 completed: 2026-07-28
 status: complete
 execution_outcome: blocked_without_observation_adapter
@@ -40,7 +40,7 @@ provesExternalChain: false
 ## Performance
 
 - **Started:** 2026-07-28T10:54:01Z
-- **Completed:** pending final metadata update
+- **Completed:** 2026-07-28T10:58:13Z
 - **Tasks completed:** 1/3; Tasks 2-3 were ineligible after the pre-allocation gate blocked.
 - **Files modified:** 1
 
@@ -50,6 +50,10 @@ provesExternalChain: false
 - Confirmed the permitted cookie-backed observer was not explicitly configured through `STARYE_DATA_CHAIN_SESSION_COOKIE_FILE`, without printing or opening any session file.
 - Confirmed no `13-63-RUN-ID.txt` or `p13-63-*` local evidence directory existed before stopping.
 - Preserved p13-60, p13-57, p13-55, p13-52, p13-50, p13-49, and p13-41 as immutable history; no Dashboard or Viewer navigation, handoff, verifier, remote, provider, deploy, or migration command ran.
+
+## Task Commits
+
+1. **Task 1: Prove the signed observation adapter before allocation** - `4d6884f` (docs)
 
 ## Execution Record
 
@@ -71,7 +75,20 @@ provesExternalChain: false
 
 ## Deviations from Plan
 
-None - the plan explicitly requires this no-allocation outcome when neither permitted signed observation adapter is usable.
+### Auto-fixed Issues
+
+**1. [Rule 3 - Blocking] Preserved pre-existing STATE.md worktree changes during metadata commit**
+- **Found during:** Final metadata commit
+- **Issue:** The standard metadata helper stages every listed file. `STATE.md` already contained unrelated worktree changes before this plan.
+- **Fix:** Staged only the 13-63 metric, decision, blocker, and session hunks; left unrelated STATE.md hunks unstaged.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** Staged GitNexus check reports zero changed symbols and zero affected execution flows.
+- **Committed in:** Final plan metadata commit
+
+---
+
+**Total deviations:** 1 auto-fixed (1 blocking tooling issue).
+**Impact on plan:** The metadata commit remains limited to 13-63 artifacts and required planning-state updates.
 
 ## Issues Encountered
 
@@ -81,6 +98,8 @@ None - the plan explicitly requires this no-allocation outcome when neither perm
 
 - Phase 13 remains blocked on a callable signed local observation adapter. Plans 13-61 and 13-62 are not unlocked because no p13-63 local carrier exists and no local external-chain proof was produced.
 
-## Self-Check: PENDING
+## Self-Check: PASSED
 
-- Pending final on-disk artifact, run-id absence, evidence absence, commit, and tracked-artifact scans.
+- `13-63-SUMMARY.md` exists and Task 1 commit `4d6884f` is present in git history.
+- `13-63-RUN-ID.txt` is absent and the p13-63 evidence directory count is zero.
+- The tracked summary is clean of placeholder markers and no commit deletion was introduced.

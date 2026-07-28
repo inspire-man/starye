@@ -5,8 +5,8 @@ milestone_name: Cloudflare 账户/域名切换与全链路发布验证
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: blocked
-stopped_at: Phase 14 complete; Phase 13 verifier-driven gap closure pending
-last_updated: "2026-07-26T04:00:00.000Z"
+stopped_at: "Completed 13-63-PLAN.md: blocked_without_observation_adapter"
+last_updated: "2026-07-28T10:59:58.423Z"
 last_activity: 2026-07-26
 last_activity_desc: Phase 13 plan 13-60 blocked_without_local_session_proof
 progress:
@@ -64,6 +64,7 @@ Last activity: 2026-07-26 — Phase 13 gap plans 13-60..13-62 written via plan-p
 | Phase 14 P04 | 22m | 3 tasks | 9 files |
 | Phase 14 P05 | 16m 25s | 3 tasks | 15 files |
 | Phase 14 P07 | 25m 51s | 3 tasks | 5 files |
+| Phase 13 P63 | 4 min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -120,8 +121,8 @@ Last activity: 2026-07-26 — Phase 13 gap plans 13-60..13-62 written via plan-p
 
 ## Session Continuity
 
-**Last session:** 2026-07-21T06:53:31.701Z
-**Stopped at:** Completed 14-07-PLAN.md
+**Last session:** 2026-07-28T10:59:58.399Z
+**Stopped at:** Completed 13-63-PLAN.md: blocked_without_observation_adapter
 **Resume file:** None
 
 **Next recommended action:**
@@ -208,3 +209,8 @@ $gsd-progress
 - [Phase ?]: Phase 14 P04: 活动示例和 E2E fixture 改用 fixture.invalid 与 .test，不保留默认 target 域名。
 - [Phase ?]: Phase 14 P05: Ordinary default-target test URLs resolve from explicit starye-org fixtures; raw literals remain only for named schema metadata and fail-closed aliases.
 - [Phase ?]: Phase 14 P07: Canonical JSON evidence matrix preserves Phase 13 blocked and partial truth; derived Markdown and fixed local CLI are deterministic and read-only.
+- [Phase 13]: 13-63 在分配前冻结：IAB observeSurface 不可用且未配置 cookie-backed observer。 — 计划禁止默认观察器和无适配器的 run-id 分配。
+
+### Blockers
+
+- Phase 13 Plan 13-63: blocked_without_observation_adapter; no p13-63 run id was created.
