@@ -1,69 +1,60 @@
 ---
 phase: 13-full-chain-data-smoke
-verified: 2026-07-25T18:16:40.499Z
+verified: 2026-07-28T13:17:18Z
 status: gaps_found
-score: 10/13 must-haves verified
+score: 11/13 must-haves verified
 behavior_unverified: 1
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 11/13
+  previous_score: 10/13
   gaps_closed:
-    - "13-55 local terminal_passed / provesExternalChain true on p13-55-7de1edf355a408c3e9394f66b7d97520."
-    - "Operator rotated durable CLOUDFLARE_API_TOKEN (cfut_*); wrangler whoami exit 0; standalone remote live preflight exit 0 after versions-list live-check fix (59eb9cb)."
-    - "Authorized one remote handoff for p13-55; permanent remote checkpoint pair written honestly (no runner mutation)."
+    - "p13-66 local terminal evidence is terminal_passed with provesExternalChain true and a non-empty local itemId."
+    - "p13-66 remote handoff passed nested selected-target preflight and created one pending remote tuple with a non-empty itemId."
+    - "The root IAB observed the selected-production Dashboard Movies surface first and correlated the exact p13-66 code and remote itemId."
   gaps_remaining:
-    - "p13-55 remote frozen at target_preflight_unmet (nested handoff preflight unmet despite standalone green). No remote pending itemId; production Dashboard/viewer not observed on a fresh pending pair."
+    - "p13-66 is frozen at canonical_viewer_unavailable before terminal Viewer evidence. No remote verifier ran after the first Viewer checkpoint."
   regressions: []
 gaps:
   - truth: "Selected-production remote pending fixture exists with non-empty itemId after authorized handoff."
-    status: failed
-    reason: "Authorized p13-55 handoff wrote remote checkpoint target_preflight_unmet; runnerInvocations 0; itemId null. Nested preflight under stripped runtime env hung/failed after standalone preflight was green."
+    status: passed
+    reason: "p13-66 remote handoff recorded preflightStatus passed, runnerInvocations 1, a deterministic non-R18 code, and a non-empty remote itemId."
     artifacts:
-      - path: ".planning/phases/13-full-chain-data-smoke/13-54-SUMMARY.md"
-        issue: "blocked_on_remote_checkpoint"
-      - path: ".planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-55-7de1edf355a408c3e9394f66b7d97520/remote.json"
-        issue: "aggregate checkpoint; remote_preflight target_preflight_unmet; itemId null."
-    missing:
-      - "New local terminal run after nested-preflight reliability fix."
-      - "Green nested handoff preflight and sole authorized remote pending pair with non-empty itemId."
-  - truth: "The item is visibly usable through the selected production canonical Dashboard and viewer routes, with captured terminal evidence."
+      - path: ".planning/phases/13-full-chain-data-smoke/13-67-SUMMARY.md"
+        issue: "authorized_remote_pending"
+      - path: ".planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-66-4c29f617725a4de19a2eb48738631ce6/remote.json"
+        issue: "remote pending tuple with preflight, D1, API, and Dashboard receipts."
+  - truth: "The item is visibly usable through the selected production canonical Dashboard and Viewer routes, with captured terminal evidence."
     status: failed
-    reason: "Blocked on remote pending absence after p13-55 preflight checkpoint. Historical p13-41 dashboard_auth_unavailable remains immutable and is not current proof."
+    reason: "p13-66 Dashboard passed first with exact code/itemId correlation, then the first canonical Viewer observation checkpointed at canonical_viewer_unavailable. The run is frozen before terminal proof."
     artifacts:
-      - path: ".planning/phases/13-full-chain-data-smoke/13-54-SUMMARY.md"
-        issue: "production surfaces skipped under blocked_on_remote_checkpoint"
+      - path: ".planning/phases/13-full-chain-data-smoke/13-68-SUMMARY.md"
+        issue: "production_viewer_checkpoint"
+      - path: ".planning/phases/13-full-chain-data-smoke/evidence/starye-org/p13-66-4c29f617725a4de19a2eb48738631ce6/remote.json"
+        issue: "Dashboard receipt passed; Viewer receipt is canonical_viewer_unavailable."
     missing:
-      - "Production-valid signed session material."
-      - "Ordered production Dashboard then /movie/<item-code> terminal_passed on an unobserved remote pending pair."
+      - "A future fresh remote pending tuple with a terminal selected-production Viewer receipt; p13-66 must not be retried."
 behavior_unverified_items:
-  - truth: "Attempts A-E and the Plan 13-09/13-10 evidence remain byte-for-byte immutable since their original creation."
-    test: "Compare authoritative manifests captured immediately after each historical run was first written against the current evidence tree."
+  - truth: "Attempts A-E and the historical Plan 13 evidence remain byte-for-byte immutable since their original creation."
+    test: "Compare authoritative original-creation manifests against the current historical evidence tree."
     expected: "Every historical artifact hash equals its original post-creation hash, and no failed run was reopened."
-    why_human: "No original-creation manifests were supplied; only later bounded hashes are available."
+    why_human: "No original-creation manifests were supplied."
 prohibition_flags:
   - statement: "Judgment-tier prohibitions in the historical gap plans."
     status: unverified
     reason: "No authoritative original-creation baseline was supplied; human review remains recommended."
 ---
-# Phase 13: Full Chain Data Smoke Verification Report
-
-**Phase Goal:** Prove the selected target is actually usable by running the local and production data chain through Gateway/canonical domain.
-
-**Verified:** 2026-07-25T18:16:40.499Z
-**Status:** gaps_found
-**Re-verification:** Yes — after authorized p13-55 remote handoff + 13-54 blocked closeout
-
-## Goal Achievement
-
 
 # Phase 13: Full Chain Data Smoke Verification Report
 
-**Phase Goal:** Prove the selected target is actually usable by running the local and production data chain through Gateway/canonical domain.
+**Phase Goal:** Prove the selected target through a fresh deterministic local
+and selected-production remote data chain, with terminal Dashboard-to-Viewer
+evidence required for a pass.
 
-**Verified:** 2026-07-23T08:40:00Z
+**Verified:** 2026-07-28T13:17:18Z
 **Status:** gaps_found
-**Re-verification:** Yes — after gap-closure Waves 38–41 (13-40..13-43)
+**Re-verification:** Yes - p13-66 local terminal, authorized remote pending
+handoff, and first selected-production IAB observation.
 
 ## Goal Achievement
 
@@ -71,79 +62,68 @@ prohibition_flags:
 
 | # | Truth | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | Local smoke regression contract exists for Gateway/API/auth/dashboard/content. | VERIFIED | Contract tests + live local path on p13-41. |
-| 2 | Local D1 readiness and minimal-data contract exists before production work. | VERIFIED | p13-41 local pair includes passed local_d1_readiness + d1 count 1. |
-| 3 | A one-item deterministic non-R18 fixture contract exists. | VERIFIED | itemCode `p13-smoke-starye-org-c656ccd0`. |
-| 4 | The selected production tuple is proved in D1/API/admin state. | PARTIAL | Remote D1 + public API proved (itemId non-null); Dashboard admin UI not authenticated. |
-| 5 | The selected production Dashboard and viewer visibly prove the tuple. | FAILED | Dashboard auth checkpoint; viewer not observed. |
-| 6 | The current local path can create a fresh terminal local pair. | VERIFIED | 13-41 local terminal_passed / provesExternalChain true. |
-| 7 | Evidence contracts enforce tuple, lifecycle, redaction, canonical path, and receipt ordering. | VERIFIED | Exact verifier honest terminal/checkpoint outcomes. |
-| 8 | The only smoke write is one deterministic non-R18 fixture and count-one snapshot. | VERIFIED | Local and remote runnerInvocations 1 each on p13-41. |
-| 9 | Remote work is explicit-target, official-preflight-first, registry-owned, and fail-closed. | VERIFIED | 13-40 green preflight; 13-42 one handoff; 13-43 auth fail-closed. |
-| 10 | Failures persist honest non-success evidence and never synthesize success. | VERIFIED | dashboard_auth_unavailable checkpoint; no production terminal synthesis. |
-| 11 | Local/remote correlation is target/run/code shared with mode-owned item IDs. | VERIFIED | Shared target/run/code; local `0fb330bf-...`; remote `03a9a090-...`. |
-| 12 | Historical evidence is immutable from its original creation. | PRESENT_BEHAVIOR_UNVERIFIED | Locked p13-17/p13-37 remotes hash-stable; original A-E manifests still absent. |
-| 13 | Phase 14 cleanup and final documentation remain deferred / non-blocking for this gap set. | VERIFIED | Phase 14 complete separately; does not replace Phase 13 production UI proof. |
+| 1 | Local smoke contract remains available for the fresh deterministic path. | VERIFIED | p13-66 local terminal evidence. |
+| 2 | One-item local readiness completes before remote work. | VERIFIED | p13-66 local terminal evidence. |
+| 3 | A deterministic non-R18 one-item fixture exists. | VERIFIED | p13-66 item code. |
+| 4 | The selected-production tuple is proved in remote preflight, D1, API, and Dashboard state. | VERIFIED | p13-66 remote receipts plus selected-production Dashboard receipt. |
+| 5 | The selected-production Dashboard and Viewer visibly prove the tuple terminally. | FAILED/CHECKPOINT | Dashboard passed first; Viewer froze at `canonical_viewer_unavailable`. |
+| 6 | A fresh local terminal pair can be created. | VERIFIED | p13-66 local `terminal_passed` / `provesExternalChain: true`. |
+| 7 | Evidence contracts enforce tuple, order, redaction, terminal, and checkpoint behavior. | VERIFIED | p13-66 records a first Viewer checkpoint without success synthesis. |
+| 8 | The only smoke write is one deterministic non-R18 fixture and count-one snapshot. | VERIFIED | p13-66 remote handoff `runnerInvocations: 1`. |
+| 9 | Remote work is explicit-target, official-preflight-first, registry-owned, and fail-closed. | VERIFIED | p13-67 nested preflight passed before its sole handoff. |
+| 10 | Non-success observations persist honest frozen evidence. | VERIFIED | p13-66 Viewer checkpoint; no retry or remote verifier. |
+| 11 | Local and remote correlation share target, run, code, and mode-owned item IDs. | VERIFIED | p13-66 tuple correlation through Dashboard receipt. |
+| 12 | Historical evidence is immutable from original creation. | PRESENT_BEHAVIOR_UNVERIFIED | Historical evidence is preserved; original-creation manifests remain absent. |
+| 13 | Phase 14 scope remains deferred and non-substitutive. | VERIFIED | This report uses only Phase 13 p13-66 live facts. |
 
-**Score:** 11/13 truths verified (truth 4 partial counts toward remaining production admin UI gap with truth 5); 1 present-but-behavior-unverified; production UI still failed.
+**Score:** 11/13 must-haves verified; one selected-production Viewer checkpoint
+remains and one historical immutability baseline remains behavior-unverified.
+
+### Current Gaps
+
+| Truth | Status | Current p13-66 fact | Remaining work |
+| --- | --- | --- | --- |
+| Remote pending tuple with non-empty itemId | PASSED | Nested preflight, one handoff, D1/API, and Dashboard evidence passed. | None for p13-66 handoff. |
+| Terminal selected-production Dashboard -> Viewer proof | FAILED/CHECKPOINT | Dashboard passed first; Viewer checkpointed at `canonical_viewer_unavailable`. | A future fresh remote pending carrier must reach a terminal Viewer receipt. |
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 | --- | --- | --- | --- |
-| 13-28-SUMMARY.md | Released/cleaned/all_free lifecycle | VERIFIED | Current local release source. |
-| 13-36-SUMMARY.md | local-dev profile wiring | VERIFIED | Local Pages materialization fix. |
-| 13-37/13-41 local terminal | Fresh local terminal proof | VERIFIED | p13-41 supersedes for post-credential chain; p13-37 historical. |
-| 13-UAT.md | Human UAT complete | VERIFIED | 34 pass / 0 issues. |
-| 13-40-SUMMARY.md | Credential/preflight green | VERIFIED | whoami 0 + remote live preflight 0. |
-| 13-42-SUMMARY.md + remote pending | Provider-backed pending | VERIFIED | remote itemId non-null; public API 200. |
-| 13-43 production browser | Ordered Dashboard/viewer terminal | FAILED/CHECKPOINT | dashboard_auth_unavailable. |
-| 13-VERIFICATION.md | Live-aligned status | VERIFIED | This file. |
-
-### Key Link Verification
-
-| From | To | Status | Details |
-| --- | --- | --- | --- |
-| 13-40 preflight green | 13-41 local terminal | WIRED | Local terminal on new run. |
-| 13-41 local terminal | 13-42 remote handoff | WIRED | Authorized pending remote pair. |
-| 13-42 remote pending | 13-43 production browser | PARTIAL | API/D1 yes; Dashboard auth blocked. |
-| UAT | phase completion | PARTIAL | UAT complete; production UI still open. |
-
-### Behavioral Spot-Checks
-
-| Behavior | Command | Result | Status |
-| --- | --- | --- | --- |
-| Remote live preflight | `pnpm target-profile preflight --target starye-org --scope remote --command smoke --live --ci-environment starye-org --wrangler-profile starye-org` | exit 0, Target preflight passed | PASS |
-| Local exact verify (p13-41) | `pnpm smoke:data-chain:verify -- --mode local --target starye-org --run-id p13-41-...` | exit 0, terminal_passed | PASS |
-| Remote exact verify (p13-41 post-observe) | same remote mode | exit 2, checkpoint dashboard_auth_unavailable | PASS (honest) |
-| Public production API | `GET https://starye.org/api/public/movies/p13-smoke-starye-org-c656ccd0` | 200 + remote id/code | PASS |
+| 13-66-SUMMARY.md | Fresh local terminal carrier | VERIFIED | Local terminal proof precedes remote work. |
+| 13-67-SUMMARY.md | One authorized remote pending tuple | VERIFIED | Nested preflight passed; remote itemId non-empty. |
+| 13-68-SUMMARY.md | Production observation outcome | VERIFIED/CHECKPOINT | Dashboard passed; Viewer `canonical_viewer_unavailable`. |
+| p13-66 remote evidence | Tuple-bound remote evidence | CHECKPOINT | Frozen after the first Viewer non-success. |
+| 13-VERIFICATION.md | Live-aligned Phase 13 status | VERIFIED | This p13-66-only re-verification. |
 
 ### Requirements Coverage
 
 | Requirement | Status | Evidence |
 | --- | --- | --- |
-| DATA-01 | SATISFIED (local) | p13-41 local Gateway chain. |
-| DATA-02 | SATISFIED (local) | local D1 readiness + count 1. |
-| DATA-03 | SATISFIED | Local + remote one-item fixture written. |
-| DATA-04 | PARTIAL | Remote D1/API yes; admin Dashboard UI auth blocked. |
-| DATA-05 | PARTIAL | Local Dashboard passed; production Dashboard auth checkpoint. |
-| DATA-06 | PARTIAL | Local viewer passed; production viewer not observed. |
-| DATA-07 | PARTIAL | Honest remote pending then auth checkpoint; production terminal missing. |
-| TEST-05 | PARTIAL | UAT + local terminal + remote pending API; production UI incomplete. |
+| DATA-01 | SATISFIED (local) | p13-66 local terminal chain. |
+| DATA-02 | SATISFIED (local) | p13-66 local readiness and one-item tuple. |
+| DATA-03 | SATISFIED | p13-66 one-item local and remote fixture path. |
+| DATA-04 | SATISFIED | p13-66 remote preflight, D1, API, and Dashboard tuple evidence. |
+| DATA-05 | PARTIAL | Selected-production Dashboard passed; Viewer terminal absent. |
+| DATA-06 | FAILED/CHECKPOINT | First selected-production Viewer observation is `canonical_viewer_unavailable`. |
+| DATA-07 | PARTIAL | Honest p13-66 remote checkpoint with no retry or terminal verifier. |
+| TEST-05 | PARTIAL | Exact local/remote evidence and Dashboard observation exist; terminal Viewer evidence does not. |
 
-## What Closed Since 13-39
+## Frozen Historical Context
 
-1. Invalid API token root cause fixed (13-40).
-2. New local terminal run after credential repair (13-41).
-3. First provider-backed remote pending pair for selected-production after preflight green (13-42).
-4. Production public API visibility of the fixture confirmed.
+p13-55, p13-57, p13-60, p13-63, p13-64, p13-65, and earlier evidence
+remain immutable historical context. None are substituted for p13-66 live
+production evidence or operated by this re-verification.
 
 ## What Still Blocks Phase Pass
 
-Production authenticated Dashboard → Viewer terminal observation on a pending remote pair. Current p13-41 remote pair is already checkpointed at `dashboard_auth_unavailable`; a later gap plan must use a fresh unobserved pending remote pair once production session signing material is available.
+The remaining live gap is selected-production terminal Viewer evidence for a
+fresh remote pending tuple. p13-66 is frozen at `canonical_viewer_unavailable`;
+it must not receive another observer, verifier, preflight, handoff, or retry.
 
 ## Self-Check
 
-- No success synthesis for production UI
-- Locked p13-17/p13-37 remotes untouched
-- Historical A-E immutability remains human-needed
+- `status: gaps_found` is retained.
+- The report names p13-66 as the fresh live carrier.
+- No local development endpoint is represented as production evidence.
+- No Phase 14 artifact is changed or used as substitute proof.
