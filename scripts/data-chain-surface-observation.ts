@@ -35,6 +35,13 @@ export interface RootIabDashboardProbeResult {
   readonly status: 'ready' | 'unavailable'
 }
 
+export const ROOT_IAB_SURFACE_TUPLE_ATTRIBUTES = {
+  itemCode: 'data-phase13-item-code',
+  itemId: 'data-phase13-item-id',
+} as const
+
+export type RootIabSurfaceTupleAttributes = Readonly<typeof ROOT_IAB_SURFACE_TUPLE_ATTRIBUTES>
+
 export interface RootIabSurfaceObservationInput {
   readonly mode: DataChainMode
   readonly targetId: string
@@ -42,6 +49,7 @@ export interface RootIabSurfaceObservationInput {
   readonly itemId: string
   readonly baseUrl: string
   readonly path: string
+  readonly tupleAttributes: RootIabSurfaceTupleAttributes
 }
 
 export interface RootIabSurfaceObservationResult {
@@ -327,6 +335,7 @@ async function captureSurface(
       itemId: evidence.itemId,
       baseUrl,
       path: routePath,
+      tupleAttributes: ROOT_IAB_SURFACE_TUPLE_ATTRIBUTES,
     }))
   }
   catch {

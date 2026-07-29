@@ -594,6 +594,7 @@ onMounted(() => {
               </h1>
               <div class="flex flex-wrap items-center gap-2">
                 <span
+                  :data-phase13-item-code="movie.code"
                   :data-phase13-item-id="movie.id"
                   class="bg-gray-700/80 text-primary-400 font-mono text-sm px-3 py-1.5 rounded-md border border-gray-600"
                 >

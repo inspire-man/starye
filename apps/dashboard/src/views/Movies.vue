@@ -590,7 +590,7 @@ const tableColumns = [
       </template>
 
       <template #cell-code="{ item }">
-        <span :data-phase13-item-id="item.id">{{ item.code }}</span>
+        <span :data-phase13-item-code="item.code" :data-phase13-item-id="item.id">{{ item.code }}</span>
       </template>
 
       <template #cell-actors="{ item }">
