@@ -108,6 +108,29 @@ or create a third validation or automatic replan loop.
 
 ## First-round local validation receipt
 
-Pending Task 3 deterministic local gates. A delegated validation is bounded by
-the configured `workflow.subagent_timeout: 1800000`; a timeout records its
-non-sensitive result and stops rather than retrying indefinitely.
+Executed locally on 2026-07-29. All commands use fixed repository inputs and
+performed no provider, credential, session, browser, deploy, migration, crawl,
+or smoke operation.
+
+| Command | Result | Non-sensitive receipt |
+| --- | --- | --- |
+| `pnpm --filter @starye/config exec vitest run src/deployment-target/__tests__/requirement-evidence-matrix.test.ts` | pass | 1 file, 12 tests passed. |
+| `pnpm --filter @starye/config type-check` | pass | `tsc --noEmit` completed with exit 0. |
+| `pnpm --filter @starye/crawler exec node --import tsx ../../scripts/verify-v12-evidence-matrix.ts --final` | pass | `{"valid":true,"issues":[]}`. |
+| `git diff --check` | pass | exit 0; no whitespace diagnostics. |
+
+GitNexus `detect-changes --scope all` was run before each task commit. It
+reported low risk and no affected execution flows for the planned
+evidence-validator flow; the only unrelated touched symbols were the preserved
+user-owned `AGENTS.md` and `CLAUDE.md` documentation changes.
+
+## Conditional second-round gate evaluation
+
+The current canonical Phase 13 verifier records p13-66 as the frozen Viewer
+checkpoint and records no later current-run terminal artifact. Therefore the
+single run-bound precondition for round two is absent, and no second validation
+was initiated. This is the completed first and only reconciliation round.
+
+If validation is delegated later, the configured
+`workflow.subagent_timeout: 1800000` remains the ceiling: a timeout must record
+its non-sensitive result and stop rather than waiting or retrying indefinitely.
