@@ -2,6 +2,10 @@ export const requirementEvidenceStatusValues = ['verified', 'partial', 'blocked'
 
 export type RequirementEvidenceStatus = (typeof requirementEvidenceStatusValues)[number]
 
+export const phase13RawRequirementStatusValues = ['SATISFIED', 'PARTIAL', 'FAILED/CHECKPOINT'] as const
+
+export type Phase13RawRequirementStatus = (typeof phase13RawRequirementStatusValues)[number]
+
 export interface RequirementEvidenceReference {
   kind: string
   path: string
@@ -12,6 +16,7 @@ export interface RequirementEvidenceRow {
   id: string
   sourcePhase: number
   status: RequirementEvidenceStatus
+  sourceRawStatus?: Phase13RawRequirementStatus
   evidence: RequirementEvidenceReference[]
   limitations: string[]
   checkpointOrMissingArtifact?: string
@@ -32,7 +37,7 @@ export interface RequirementEvidenceMatrixValidationOptions {
   final?: boolean
 }
 
-const phase13RequirementIds = new Set([
+const phase13RequirementIds = [
   'DATA-01',
   'DATA-02',
   'DATA-03',
@@ -41,7 +46,25 @@ const phase13RequirementIds = new Set([
   'DATA-06',
   'DATA-07',
   'TEST-05',
-])
+] as const
+
+const phase13RequirementIdSet = new Set<string>(phase13RequirementIds)
+
+const phase13RawStatusMap: Record<Phase13RawRequirementStatus, RequirementEvidenceStatus> = {
+  'SATISFIED': 'verified',
+  'PARTIAL': 'partial',
+  'FAILED/CHECKPOINT': 'blocked',
+}
+
+interface CanonicalPhase13Status {
+  raw: Phase13RawRequirementStatus
+  status: RequirementEvidenceStatus
+}
+
+interface CanonicalPhase13Statuses {
+  statuses: Map<string, CanonicalPhase13Status>
+  issues: string[]
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -56,19 +79,46 @@ function isLocalEvidencePath(path: string): boolean {
     && !path.split(/[\\/]/).includes('..')
 }
 
-function canonicalPhase13Statuses(report: string): Map<string, RequirementEvidenceStatus> {
-  const statuses = new Map<string, RequirementEvidenceStatus>()
-  if (!report.includes('Requirements Coverage')) {
-    return statuses
+function canonicalPhase13Statuses(report: string): CanonicalPhase13Statuses {
+  const statuses = new Map<string, CanonicalPhase13Status>()
+  const issues: string[] = []
+  const heading = /^#{2,3}\s+Requirements Coverage\s*$/m.exec(report)
+  if (!heading || heading.index === undefined) {
+    return { statuses, issues: ['Canonical Phase 13 Requirements Coverage is missing.'] }
+  }
+
+  const afterHeading = report.slice(heading.index + heading[0].length)
+  const nextHeading = afterHeading.search(/^#{1,3}\s+/m)
+  const coverage = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading)
+  const rowPattern = /^\|\s*([A-Z]+-\d{2})\s*\|\s*([^|]+?)\s*\|/gm
+
+  for (const match of coverage.matchAll(rowPattern)) {
+    const id = match[1]!
+    const rawCell = match[2]!.trim()
+    const raw = phase13RawRequirementStatusValues.find(value => rawCell === value || rawCell.startsWith(`${value} `))
+    if (phase13RequirementIdSet.has(id)) {
+      if (statuses.has(id)) {
+        issues.push(`Canonical Phase 13 requirement ${id} is duplicated.`)
+        continue
+      }
+      if (!raw) {
+        issues.push(`Canonical Phase 13 requirement ${id} has an unrecognized raw status: ${rawCell}.`)
+        continue
+      }
+      statuses.set(id, { raw, status: phase13RawStatusMap[raw] })
+    }
+    else if (id.startsWith('DATA-') || id === 'TEST-05') {
+      issues.push(`Canonical Phase 13 requirement ${id} is unknown.`)
+    }
   }
 
   for (const id of phase13RequirementIds) {
-    const match = report.match(new RegExp(`\\|\\s*${id}\\s*\\|\\s*(BLOCKED|PARTIAL)\\s*\\|`, 'i'))
-    if (match) {
-      statuses.set(id, match[1]!.toLowerCase() as RequirementEvidenceStatus)
+    if (!statuses.has(id)) {
+      issues.push(`Canonical Phase 13 requirement ${id} is missing.`)
     }
   }
-  return statuses
+
+  return { statuses, issues }
 }
 
 export function parseV12RequirementIds(requirementsText: string): string[] {
@@ -80,8 +130,8 @@ export function renderRequirementEvidenceMatrixMarkdown(matrix: RequirementEvide
   const lines = [
     '# v1.2 Requirement Evidence Matrix',
     '',
-    '| Requirement | Source phase | Status | Evidence | Limitations |',
-    '| --- | --- | --- | --- | --- |',
+    '| Requirement | Source phase | Status | Phase 13 raw status | Evidence | Limitations |',
+    '| --- | --- | --- | --- | --- | --- |',
     ...matrix.requirements.map((row) => {
       const evidence = row.evidence
         .map(item => `${item.kind}: [${item.path}#${item.anchor.replaceAll('|', '\\|')}](${item.path})`)
@@ -89,7 +139,7 @@ export function renderRequirementEvidenceMatrixMarkdown(matrix: RequirementEvide
       const recovery = row.status === 'verified'
         ? ''
         : `<br>Checkpoint: ${row.checkpointOrMissingArtifact}<br>Prerequisite: ${row.recoveryPrerequisite}<br>Next: ${row.nextOperatorCommand}`
-      return `| ${row.id} | ${row.sourcePhase} | ${row.status} | ${evidence} | ${row.limitations.join('; ')}${recovery} |`
+      return `| ${row.id} | ${row.sourcePhase} | ${row.status} | ${row.sourceRawStatus ?? '—'} | ${evidence} | ${row.limitations.join('; ')}${recovery} |`
     }),
     '',
   ]
@@ -111,10 +161,8 @@ export function validateRequirementEvidenceMatrix(
     issues.push(`Matrix must contain exactly ${options.requirementIds.length} requirement rows.`)
   }
 
-  const phase13Statuses = canonicalPhase13Statuses(options.canonicalReports.phase13)
-  if (phase13Statuses.size !== phase13RequirementIds.size) {
-    issues.push('Canonical Phase 13 Requirements Coverage is incomplete.')
-  }
+  const phase13 = canonicalPhase13Statuses(options.canonicalReports.phase13)
+  issues.push(...phase13.issues)
   if (!options.canonicalReports.phase11.includes('Requirements Coverage') || !options.canonicalReports.phase12.includes('Requirement Coverage')) {
     issues.push('Canonical Phase 11/12 requirement coverage is missing.')
   }
@@ -180,9 +228,39 @@ export function validateRequirementEvidenceMatrix(
       }
     }
 
-    const canonicalStatus = phase13Statuses.get(id)
-    if (canonicalStatus && status !== canonicalStatus) {
-      issues.push(`Requirement ${id} status must remain ${canonicalStatus} per Phase 13 verification.`)
+    const canonicalStatus = phase13.statuses.get(id)
+    if (phase13RequirementIdSet.has(id)) {
+      if (!hasText(unknownRow.sourceRawStatus)) {
+        issues.push(`Requirement ${id} must preserve its Phase 13 sourceRawStatus.`)
+      }
+      else if (!phase13RawRequirementStatusValues.includes(unknownRow.sourceRawStatus as Phase13RawRequirementStatus)) {
+        issues.push(`Requirement ${id} has an invalid Phase 13 sourceRawStatus.`)
+      }
+      else if (canonicalStatus && unknownRow.sourceRawStatus !== canonicalStatus.raw) {
+        issues.push(`Requirement ${id} sourceRawStatus must remain ${canonicalStatus.raw} per Phase 13 verification.`)
+      }
+
+      if (canonicalStatus && status !== canonicalStatus.status) {
+        issues.push(`Requirement ${id} status must remain ${canonicalStatus.status} per Phase 13 verification.`)
+      }
+
+      const evidenceReferences = Array.isArray(unknownRow.evidence) ? unknownRow.evidence : []
+      if (canonicalStatus && !evidenceReferences.some((reference: unknown) => isRecord(reference)
+        && hasText(reference.anchor)
+        && reference.anchor.includes(`| ${id} | ${canonicalStatus.raw}`))) {
+        issues.push(`Requirement ${id} evidence must anchor the current Phase 13 raw status.`)
+      }
+
+      if (canonicalStatus && canonicalStatus.status !== 'verified') {
+        const narrative = [
+          ...(Array.isArray(unknownRow.limitations) ? unknownRow.limitations.filter(hasText) : []),
+          unknownRow.checkpointOrMissingArtifact,
+          unknownRow.recoveryPrerequisite,
+        ].filter(hasText).join(' ')
+        if (!/terminal.*Viewer|Viewer.*terminal/i.test(narrative)) {
+          issues.push(`Requirement ${id} must retain the terminal Viewer recovery narrative.`)
+        }
+      }
     }
     if (options.final && unknownRow.sourcePhase === 14 && id.startsWith('TEST-') && status !== 'verified') {
       issues.push(`Final matrix requires Phase 14 ${id} to be verified.`)
