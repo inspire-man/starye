@@ -81,11 +81,27 @@ describe('movie detail DOM tuple contract', () => {
     })
   })
 
-  it('renders the loaded item UUID on the element that displays its code', async () => {
+  it('renders the loaded item tuple on the element that displays its code', async () => {
     const wrapper = mount(MovieDetail)
     await flushPromises()
 
     expect(getMovieDetailMock).toHaveBeenCalledWith('TEST-001')
-    expect(wrapper.get('[data-phase13-item-id="movie-uuid-1"]').text()).toBe('TEST-001')
+    expect(routeState.params).toEqual({ code: 'TEST-001' })
+    expect(wrapper.get('[data-phase13-item-code="TEST-001"][data-phase13-item-id="movie-uuid-1"]').text()).toBe('TEST-001')
+  })
+
+  it('does not manufacture an identity marker while loading or after a detail error', async () => {
+    getMovieDetailMock.mockImplementation(() => new Promise(() => {}))
+    const loadingWrapper = mount(MovieDetail)
+    await flushPromises()
+
+    expect(loadingWrapper.find('[data-phase13-item-code]').exists()).toBe(false)
+    loadingWrapper.unmount()
+
+    getMovieDetailMock.mockRejectedValueOnce(new Error('detail unavailable'))
+    const errorWrapper = mount(MovieDetail)
+    await flushPromises()
+
+    expect(errorWrapper.find('[data-phase13-item-code]').exists()).toBe(false)
   })
 })

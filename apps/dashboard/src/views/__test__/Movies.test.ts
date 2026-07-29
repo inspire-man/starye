@@ -156,6 +156,10 @@ describe('movies.vue 集成测试', () => {
       expect(wrapper.text()).toContain('Movie 2')
       expect(wrapper.get('[data-phase13-item-id="movie-uuid-1"]').text()).toBe('TEST-001')
       expect(wrapper.get('[data-phase13-item-id="movie-uuid-2"]').text()).toBe('TEST-002')
+      expect(wrapper.get('[data-phase13-item-code="TEST-001"][data-phase13-item-id="movie-uuid-1"]').text()).toBe('TEST-001')
+      expect(wrapper.get('[data-phase13-item-code="TEST-002"][data-phase13-item-id="movie-uuid-2"]').text()).toBe('TEST-002')
+      expect(wrapper.find('[data-phase13-item-code="TEST-001"][data-phase13-item-id="movie-uuid-2"]').exists()).toBe(false)
+      expect(wrapper.find('[data-phase13-item-code="TEST-002"][data-phase13-item-id="movie-uuid-1"]').exists()).toBe(false)
     })
 
     it('加载失败应该显示错误处理', async () => {

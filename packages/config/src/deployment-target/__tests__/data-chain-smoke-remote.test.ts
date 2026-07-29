@@ -328,11 +328,27 @@ describe('phase 13 remote smoke runner', () => {
     const pending = remotePendingEvidence()
     const files = new Map<string, string>()
     putPair(files, pending)
-    const observedInputs: Array<{ mode: 'remote', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }> = []
+    const observedInputs: Array<{
+      mode: 'remote'
+      targetId: string
+      baseUrl: string
+      path: string
+      itemCode: string
+      itemId: string
+      tupleAttributes: { itemCode: 'data-phase13-item-code', itemId: 'data-phase13-item-id' }
+    }> = []
     const rootIab = {
       owner: 'root_iab' as const,
       probeDashboard: vi.fn(async () => ({ status: 'ready' as const })),
-      observeSurface: vi.fn(async (input: { mode: 'remote', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }) => {
+      observeSurface: vi.fn(async (input: {
+        mode: 'remote'
+        targetId: string
+        baseUrl: string
+        path: string
+        itemCode: string
+        itemId: string
+        tupleAttributes: { itemCode: 'data-phase13-item-code', itemId: 'data-phase13-item-id' }
+      }) => {
         observedInputs.push(input)
         return { status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string }
       }),
@@ -351,8 +367,24 @@ describe('phase 13 remote smoke runner', () => {
     expect(result.exitCode).toBe(0)
     expect(rootIab.observeSurface).toHaveBeenCalledTimes(2)
     expect(observedInputs).toEqual([
-      { mode: 'remote', targetId: baseOptions.target, baseUrl: defaultTargetUrls.gateway, path: '/dashboard/movies', itemCode: pending.itemCode, itemId: pending.itemId },
-      { mode: 'remote', targetId: baseOptions.target, baseUrl: defaultTargetUrls.gateway, path: `/movie/${pending.itemCode}`, itemCode: pending.itemCode, itemId: pending.itemId },
+      {
+        mode: 'remote',
+        targetId: baseOptions.target,
+        baseUrl: defaultTargetUrls.gateway,
+        path: '/dashboard/movies',
+        itemCode: pending.itemCode,
+        itemId: pending.itemId,
+        tupleAttributes: { itemCode: 'data-phase13-item-code', itemId: 'data-phase13-item-id' },
+      },
+      {
+        mode: 'remote',
+        targetId: baseOptions.target,
+        baseUrl: defaultTargetUrls.gateway,
+        path: `/movie/${pending.itemCode}`,
+        itemCode: pending.itemCode,
+        itemId: pending.itemId,
+        tupleAttributes: { itemCode: 'data-phase13-item-code', itemId: 'data-phase13-item-id' },
+      },
     ])
 
     const invalidFiles = new Map<string, string>()

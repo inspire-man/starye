@@ -510,11 +510,27 @@ describe('phase 13 local smoke runner', () => {
 
     await write(evidencePath('local', 'json'), serializeDataChainEvidenceJson(evidence))
     await write(evidencePath('local', 'md'), renderDataChainEvidenceMarkdown(evidence))
-    const observedInputs: Array<{ mode: 'local', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }> = []
+    const observedInputs: Array<{
+      mode: 'local'
+      targetId: string
+      baseUrl: string
+      path: string
+      itemCode: string
+      itemId: string
+      tupleAttributes: { itemCode: 'data-phase13-item-code', itemId: 'data-phase13-item-id' }
+    }> = []
     const rootIab = {
       owner: 'root_iab' as const,
       probeDashboard: vi.fn(async () => ({ status: 'ready' as const })),
-      observeSurface: vi.fn(async (input: { mode: 'local', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }) => {
+      observeSurface: vi.fn(async (input: {
+        mode: 'local'
+        targetId: string
+        baseUrl: string
+        path: string
+        itemCode: string
+        itemId: string
+        tupleAttributes: { itemCode: 'data-phase13-item-code', itemId: 'data-phase13-item-id' }
+      }) => {
         observedInputs.push(input)
         return {
           status: 'passed' as const,
@@ -535,8 +551,24 @@ describe('phase 13 local smoke runner', () => {
     expect(result.exitCode).toBe(0)
     expect(result.evidence).toMatchObject({ ingestState: 'resolved', aggregate: 'passed', itemCode, itemId: 'movie-42' })
     expect(observedInputs).toEqual([
-      { mode: 'local', targetId: baseOptions.target, baseUrl: 'http://localhost:8080', path: '/dashboard/movies', itemCode, itemId: 'movie-42' },
-      { mode: 'local', targetId: baseOptions.target, baseUrl: 'http://localhost:8080', path: `/movie/${itemCode}`, itemCode, itemId: 'movie-42' },
+      {
+        mode: 'local',
+        targetId: baseOptions.target,
+        baseUrl: 'http://localhost:8080',
+        path: '/dashboard/movies',
+        itemCode,
+        itemId: 'movie-42',
+        tupleAttributes: { itemCode: 'data-phase13-item-code', itemId: 'data-phase13-item-id' },
+      },
+      {
+        mode: 'local',
+        targetId: baseOptions.target,
+        baseUrl: 'http://localhost:8080',
+        path: `/movie/${itemCode}`,
+        itemCode,
+        itemId: 'movie-42',
+        tupleAttributes: { itemCode: 'data-phase13-item-code', itemId: 'data-phase13-item-id' },
+      },
     ])
     expect(result.evidence.observations.slice(-2)).toEqual([
       expect.objectContaining({ surface: 'dashboard', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
