@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: evidence matrix with Phase 13 closeout
-current_phase: 13
-current_phase_name: full-chain-data-smoke
-status: blocked
-stopped_at: Phase 15 context gathered
-last_updated: "2026-07-29T08:58:01.084Z"
-last_activity: 2026-07-26
-last_activity_desc: Phase 13 gap plans 13-60..13-62 written via plan-phase --gaps
+current_phase: 15
+current_phase_name: reconcile-v1-2-evidence-matrix-with-phase-13-closeout
+status: verifying
+stopped_at: Completed 15-01-PLAN.md; Phase 13 remains gaps_found
+last_updated: "2026-07-29T10:20:50.533Z"
+last_activity: 2026-07-29
+last_activity_desc: Phase 15 execution started
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 95
-  completed_plans: 72
-  percent: 60
+  completed_phases: 4
+  total_plans: 96
+  completed_plans: 73
+  percent: 76
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — READY
-Plan: 13-60 session gate blocked; no run id
-status: blocked on local dashboard auth; 13-58 not unlocked
-Last activity: 2026-07-26 — Phase 13 gap plans 13-60..13-62 written via plan-phase --gaps
+Phase: 15 (reconcile-v1-2-evidence-matrix-with-phase-13-closeout) — EXECUTING
+Plan: 1 of 1
+status: Phase complete — ready for verification
+Last activity: 2026-07-29 — Phase 15 execution started
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Last activity: 2026-07-26 — Phase 13 gap plans 13-60..13-62 written via plan-p
 | Phase 14 P05 | 16m 25s | 3 tasks | 15 files |
 | Phase 14 P07 | 25m 51s | 3 tasks | 5 files |
 | Phase 13 P63 | 4 min | 1 tasks | 1 files |
+| Phase 15 P01 | 20 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -125,9 +126,9 @@ Last activity: 2026-07-26 — Phase 13 gap plans 13-60..13-62 written via plan-p
 
 ## Session Continuity
 
-**Last session:** 2026-07-29T08:58:01.057Z
-**Stopped at:** Phase 15 context gathered
-**Resume file:** .planning/phases/15-reconcile-v1-2-evidence-matrix-with-phase-13-closeout/15-CONTEXT.md
+**Last session:** 2026-07-29T10:20:50.510Z
+**Stopped at:** Completed 15-01-PLAN.md; Phase 13 remains gaps_found
+**Resume file:** None
 
 **Next recommended action:**
 
@@ -214,6 +215,8 @@ $gsd-progress
 - [Phase ?]: Phase 14 P05: Ordinary default-target test URLs resolve from explicit starye-org fixtures; raw literals remain only for named schema metadata and fail-closed aliases.
 - [Phase ?]: Phase 14 P07: Canonical JSON evidence matrix preserves Phase 13 blocked and partial truth; derived Markdown and fixed local CLI are deterministic and read-only.
 - [Phase 13]: 13-63 在分配前冻结：IAB observeSurface 不可用且未配置 cookie-backed observer。 — 计划禁止默认观察器和无适配器的 run-id 分配。
+- [Phase ?]: Phase 15 maps canonical Phase 13 SATISFIED, PARTIAL, and FAILED/CHECKPOINT labels to verified, partial, and blocked while preserving raw source wording.
+- [Phase ?]: Phase 15 completes one local reconciliation round; a second round is manual, at most once, and requires a new run-bound terminal Phase 13 artifact.
 
 ### Blockers
 
