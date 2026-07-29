@@ -4,10 +4,7 @@ import type {
   DataChainMode,
   ResolvedPendingDataChainEvidence,
 } from '../packages/config/src/deployment-target/index'
-import { readFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
-import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
@@ -27,21 +24,41 @@ export interface DataChainSurfaceObservationOptions {
   readonly runId: string
 }
 
-export interface BrowserSurfaceObservationInput {
+export interface RootIabDashboardProbeInput {
   readonly mode: DataChainMode
   readonly targetId: string
-  readonly runId: string
+  readonly baseUrl: string
+  readonly path: '/dashboard/movies'
+}
+
+export interface RootIabDashboardProbeResult {
+  readonly status: 'ready' | 'unavailable'
+}
+
+export interface RootIabSurfaceObservationInput {
+  readonly mode: DataChainMode
+  readonly targetId: string
   readonly itemCode: string
   readonly itemId: string
-  readonly surface: 'dashboard' | 'viewer'
   readonly baseUrl: string
   readonly path: string
 }
 
-export interface BrowserSurfaceObservationResult {
+export interface RootIabSurfaceObservationResult {
   readonly status: 'passed' | 'unavailable'
   readonly itemCode?: string
   readonly itemId?: string
+}
+
+export interface RootIabSurfaceObserver {
+  readonly owner: 'root_iab'
+  readonly probeDashboard: (input: RootIabDashboardProbeInput) => Promise<RootIabDashboardProbeResult>
+  readonly observeSurface: (input: RootIabSurfaceObservationInput) => Promise<RootIabSurfaceObservationResult>
+}
+
+export interface RootIabObservationReadinessOptions {
+  readonly mode: DataChainMode
+  readonly target: string
 }
 
 interface ObserverTargetResolution {
@@ -54,49 +71,18 @@ interface ObserverTargetResolution {
 }
 
 export interface DataChainSurfaceObservationDependencies {
+  readonly rootIab?: RootIabSurfaceObserver
   readonly evidenceRoot?: string
   readonly read?: (file: string) => Promise<string | undefined>
   readonly write?: (file: string, contents: string) => Promise<void>
   readonly resolveTarget?: (target: string) => ObserverTargetResolution
-  readonly observeSurface?: (input: BrowserSurfaceObservationInput) => Promise<BrowserSurfaceObservationResult>
   readonly now?: () => string
 }
 
-interface PuppeteerResponse {
-  ok: () => boolean
-}
-
-interface PuppeteerCookie {
-  name: string
-  value: string
-  url?: string
-  domain?: string
-  path?: string
-}
-
-interface PuppeteerPage {
-  goto: (url: string, options: { waitUntil: 'domcontentloaded', timeout: number }) => Promise<PuppeteerResponse | null>
-  url: () => string
-  setCookie?: (...cookies: PuppeteerCookie[]) => Promise<void>
-  waitForFunction: <Args extends readonly unknown[]>(
-    pageFunction: (...args: Args) => boolean,
-    options: { polling: 'mutation', timeout: number },
-    ...args: Args
-  ) => Promise<unknown>
-  evaluate: <T, Args extends readonly unknown[]>(pageFunction: (...args: Args) => T, ...args: Args) => Promise<T>
-}
-
-interface PuppeteerBrowser {
-  newPage: () => Promise<PuppeteerPage>
-  close: () => Promise<void>
-}
-
-interface PuppeteerModule {
-  launch: (options: { headless: boolean, userDataDir: string }) => Promise<PuppeteerBrowser>
-}
-
 const controlledOptionKeys = ['mode', 'target', 'runId'] as const
-const browserResultKeys = ['status', 'itemCode', 'itemId'] as const
+const readinessOptionKeys = ['mode', 'target'] as const
+const rootIabProbeResultKeys = ['status'] as const
+const rootIabObservationResultKeys = ['status', 'itemCode', 'itemId'] as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -156,6 +142,29 @@ function assertControlledOptions(options: unknown): asserts options is DataChain
   if ((options.mode !== 'local' && options.mode !== 'remote') || !hasText(options.target) || !hasText(options.runId) || !isRunId(options.runId)) {
     throw new Error('Data-chain observer requires mode, target, and a validated run id.')
   }
+}
+
+function assertReadinessOptions(options: unknown): asserts options is RootIabObservationReadinessOptions {
+  if (!isRecord(options)) {
+    throw new Error('Root IAB readiness options must be an object.')
+  }
+  const unexpected = Object.keys(options).find(key => !readinessOptionKeys.includes(key as (typeof readinessOptionKeys)[number]))
+  if (unexpected) {
+    throw new Error(`Unsupported root IAB readiness option: ${unexpected}.`)
+  }
+  if ((options.mode !== 'local' && options.mode !== 'remote') || !hasText(options.target)) {
+    throw new Error('Root IAB readiness requires mode and target.')
+  }
+}
+
+function requireRootIabSurfaceObserver(value: unknown): RootIabSurfaceObserver {
+  if (!isRecord(value)
+    || value.owner !== 'root_iab'
+    || typeof value.probeDashboard !== 'function'
+    || typeof value.observeSurface !== 'function') {
+    throw new Error('root_iab_adapter_required')
+  }
+  return value as RootIabSurfaceObserver
 }
 
 async function readDefault(file: string): Promise<string | undefined> {
@@ -224,7 +233,7 @@ async function writePair(
 }
 
 function resolveObserverBase(
-  options: DataChainSurfaceObservationOptions,
+  options: Pick<DataChainSurfaceObservationOptions, 'mode' | 'target'>,
   resolveTarget: (target: string) => ObserverTargetResolution,
 ): string {
   const resolution = resolveTarget(options.target)
@@ -247,8 +256,18 @@ function resolveObserverBase(
   return gateway.origin
 }
 
-function normalizeBrowserResult(value: unknown): BrowserSurfaceObservationResult | undefined {
-  if (!isRecord(value) || Object.keys(value).some(key => !browserResultKeys.includes(key as (typeof browserResultKeys)[number]))) {
+function normalizeRootIabProbeResult(value: unknown): RootIabDashboardProbeResult | undefined {
+  if (!isRecord(value) || Object.keys(value).some(key => !rootIabProbeResultKeys.includes(key as (typeof rootIabProbeResultKeys)[number]))) {
+    return undefined
+  }
+  if (value.status !== 'ready' && value.status !== 'unavailable') {
+    return undefined
+  }
+  return { status: value.status }
+}
+
+function normalizeRootIabObservationResult(value: unknown): RootIabSurfaceObservationResult | undefined {
+  if (!isRecord(value) || Object.keys(value).some(key => !rootIabObservationResultKeys.includes(key as (typeof rootIabObservationResultKeys)[number]))) {
     return undefined
   }
   if (value.status !== 'passed' && value.status !== 'unavailable') {
@@ -264,124 +283,30 @@ function normalizeBrowserResult(value: unknown): BrowserSurfaceObservationResult
   }
 }
 
-
-/** Closed cookie name for better-auth with cookiePrefix `starye`. */
-export const DATA_CHAIN_SESSION_COOKIE_NAME = 'starye.session_token'
-
-/** True when navigation landed on the auth login surface instead of the requested route. */
-export function isAuthLoginPath(pathname: string): boolean {
-  const normalized = pathname.toLowerCase()
-  return normalized === '/auth/login' || normalized.startsWith('/auth/login/') || normalized.includes('/auth/login?')
-}
-
-/**
- * Optional non-secret-path session material for the default observer.
- * Prefer STARYE_DATA_CHAIN_SESSION_COOKIE_FILE (untracked file) over inline env.
- * Never log the resolved value.
- */
-export function resolveObserverSessionCookie(
-  env: NodeJS.ProcessEnv = process.env,
-  readText: (file: string, encoding: 'utf8') => string = readFileSync,
-): string | undefined {
-  const inline = env.STARYE_DATA_CHAIN_SESSION_COOKIE?.trim()
-  if (inline) {
-    return inline.includes('=') ? inline.split('=').slice(1).join('=').trim() || undefined : inline
-  }
-  const filePath = env.STARYE_DATA_CHAIN_SESSION_COOKIE_FILE?.trim()
-  if (!filePath) {
-    return undefined
-  }
+export async function verifyRootIabObservationReadiness(
+  options: RootIabObservationReadinessOptions,
+  dependencies: Pick<DataChainSurfaceObservationDependencies, 'rootIab' | 'resolveTarget'> = {},
+): Promise<RootIabDashboardProbeResult> {
+  assertReadinessOptions(options)
+  const rootIab = requireRootIabSurfaceObserver(dependencies.rootIab)
+  const resolveTarget = dependencies.resolveTarget ?? (target => resolveTargetProfile(target) as ObserverTargetResolution)
+  let baseUrl: string
   try {
-    const raw = readText(filePath, 'utf8').trim()
-    if (!raw) {
-      return undefined
-    }
-    return raw.includes('=') ? raw.split('=').slice(1).join('=').trim() || undefined : raw
+    baseUrl = resolveObserverBase(options, resolveTarget)
   }
   catch {
-    return undefined
-  }
-}
-
-function crawlerPuppeteer(): PuppeteerModule {
-  const crawlerPackage = path.resolve(import.meta.dirname, '../packages/crawler/package.json')
-  return createRequire(crawlerPackage)('puppeteer') as PuppeteerModule
-}
-
-export async function observeSurfaceDefault(
-  input: BrowserSurfaceObservationInput,
-  puppeteer: PuppeteerModule = crawlerPuppeteer(),
-  sessionCookie: string | undefined = resolveObserverSessionCookie(),
-): Promise<BrowserSurfaceObservationResult> {
-  const endpoint = new URL(input.path, `${input.baseUrl}/`)
-  const base = new URL(input.baseUrl)
-  if (endpoint.origin !== base.origin || endpoint.pathname !== input.path) {
     return { status: 'unavailable' }
   }
-  // Local smoke must stay on the canonical Gateway origin; selected remote uses HTTPS target gateway only.
-  if (input.mode === 'local' && base.origin !== LOCAL_GATEWAY_ORIGIN) {
-    return { status: 'unavailable' }
-  }
-  const browser = await puppeteer.launch({
-    headless: process.env.CI === 'true',
-    userDataDir: path.resolve(import.meta.dirname, `../.target-runs/phase13-browser-profile/${input.targetId}`),
-  })
   try {
-    const page = await browser.newPage()
-    if (sessionCookie && page.setCookie) {
-      // Cookie value is never logged. Name is the closed better-auth prefix contract.
-      await page.setCookie({
-        name: DATA_CHAIN_SESSION_COOKIE_NAME,
-        value: sessionCookie,
-        url: base.origin,
-        path: '/',
-      })
-    }
-    const response = await page.goto(endpoint.href, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    const finalUrl = new URL(page.url())
-    if (finalUrl.origin !== endpoint.origin) {
-      return { status: 'unavailable' }
-    }
-    // Auth login redirect is the honest local/production signed-out failure mode (maps to dashboard_auth_unavailable).
-    if (isAuthLoginPath(finalUrl.pathname) || isAuthLoginPath(`${finalUrl.pathname}${finalUrl.search}`)) {
-      return { status: 'unavailable' }
-    }
-    if (!response?.ok() || finalUrl.pathname !== endpoint.pathname) {
-      return { status: 'unavailable' }
-    }
-    try {
-      await page.waitForFunction((itemCode, itemId) => {
-        const bodyText = document.body?.textContent ?? ''
-        const documentHtml = document.documentElement?.outerHTML ?? ''
-        return (bodyText.includes(itemCode) || documentHtml.includes(itemCode))
-          && (bodyText.includes(itemId) || documentHtml.includes(itemId))
-      }, { polling: 'mutation', timeout: 30_000 }, input.itemCode, input.itemId)
-    }
-    catch {
-      // Closed evidence vocabulary has no distinct tuple-miss code; still unavailable → dashboard_auth_unavailable / canonical_viewer_unavailable.
-      return { status: 'unavailable' }
-    }
-    const settledUrl = new URL(page.url())
-    if (settledUrl.origin !== endpoint.origin || settledUrl.pathname !== endpoint.pathname) {
-      return { status: 'unavailable' }
-    }
-    if (isAuthLoginPath(settledUrl.pathname)) {
-      return { status: 'unavailable' }
-    }
-    const tuple = await page.evaluate((itemCode, itemId) => {
-      const bodyText = document.body?.textContent ?? ''
-      const documentHtml = document.documentElement?.outerHTML ?? ''
-      return {
-        codeMatches: bodyText.includes(itemCode) || documentHtml.includes(itemCode),
-        idMatches: bodyText.includes(itemId) || documentHtml.includes(itemId),
-      }
-    }, input.itemCode, input.itemId)
-    return tuple.codeMatches && tuple.idMatches
-      ? { status: 'passed', itemCode: input.itemCode, itemId: input.itemId }
-      : { status: 'unavailable' }
+    return normalizeRootIabProbeResult(await rootIab.probeDashboard({
+      mode: options.mode,
+      targetId: options.target,
+      baseUrl,
+      path: '/dashboard/movies',
+    })) ?? { status: 'unavailable' }
   }
-  finally {
-    await browser.close()
+  catch {
+    return { status: 'unavailable' }
   }
 }
 
@@ -389,19 +314,17 @@ async function captureSurface(
   evidence: ResolvedPendingDataChainEvidence,
   surface: 'dashboard' | 'viewer',
   baseUrl: string,
-  observeSurface: (input: BrowserSurfaceObservationInput) => Promise<BrowserSurfaceObservationResult>,
+  rootIab: RootIabSurfaceObserver,
   now: () => string,
 ) {
   const routePath = surface === 'dashboard' ? '/dashboard/movies' : `/movie/${evidence.itemCode}`
-  let observation: BrowserSurfaceObservationResult | undefined
+  let observation: RootIabSurfaceObservationResult | undefined
   try {
-    observation = normalizeBrowserResult(await observeSurface({
+    observation = normalizeRootIabObservationResult(await rootIab.observeSurface({
       mode: evidence.mode,
       targetId: evidence.targetId,
-      runId: evidence.runId,
       itemCode: evidence.itemCode,
       itemId: evidence.itemId,
-      surface,
       baseUrl,
       path: routePath,
     }))
@@ -452,11 +375,11 @@ export async function observeDataChainSurfaces(
   dependencies: DataChainSurfaceObservationDependencies = {},
 ): Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }> {
   assertControlledOptions(options)
+  const rootIab = requireRootIabSurfaceObserver(dependencies.rootIab)
   const evidenceRoot = dependencies.evidenceRoot ?? DATA_CHAIN_EVIDENCE_ROOT
   const read = dependencies.read ?? readDefault
   const write = dependencies.write ?? ((file, contents) => writeFile(file, contents, 'utf8'))
   const resolveTarget = dependencies.resolveTarget ?? (target => resolveTargetProfile(target) as ObserverTargetResolution)
-  const observeSurface = dependencies.observeSurface ?? observeSurfaceDefault
   const now = dependencies.now ?? (() => new Date().toISOString())
   const evidence = await loadEvidencePair(options, evidenceRoot, read)
   let baseUrl: string
@@ -477,7 +400,7 @@ export async function observeDataChainSurfaces(
     return dashboard
   }
 
-  const dashboard = await captureSurface(evidence, 'dashboard', baseUrl, observeSurface, now)
+  const dashboard = await captureSurface(evidence, 'dashboard', baseUrl, rootIab, now)
   await writePair(options, evidenceRoot, dashboard.evidence, write)
   if (dashboard.evidence.aggregate !== 'pending') {
     return dashboard
@@ -486,14 +409,17 @@ export async function observeDataChainSurfaces(
     throw new Error('Dashboard observation must retain pending evidence.')
   }
 
-  const viewer = await captureSurface(dashboard.evidence, 'viewer', baseUrl, observeSurface, now)
+  const viewer = await captureSurface(dashboard.evidence, 'viewer', baseUrl, rootIab, now)
   await writePair(options, evidenceRoot, viewer.evidence, write)
   return viewer
 }
 
-export async function runDataChainSurfaceObservationCli(argv: readonly string[] = process.argv.slice(2)): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
+export async function runDataChainSurfaceObservationCli(
+  argv: readonly string[] = process.argv.slice(2),
+  dependencies: DataChainSurfaceObservationDependencies = {},
+): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
   const options = parseDataChainSurfaceObservationArgs(argv)
-  const result = await observeDataChainSurfaces(options)
+  const result = await observeDataChainSurfaces(options, dependencies)
   return result.exitCode
 }
 
