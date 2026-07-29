@@ -10,7 +10,7 @@
 
 **In scope:**
 
-- 以 Phase 13 verifier/receipt 为真相源，复核全部 30 个 requirement 的状态、来源、工件路径与 matrix CLI 输出。
+- 以 Phase 13 verifier/receipt 为真相源，复核全部 30 个 requirement 的状态、来源、工件路径与 matrix CLI 输出，并收口当前 matrix parser/matrix row 仍按旧 `BLOCKED` anchor 解释、而 verifier 已输出 `SATISFIED` / `PARTIAL` / `FAILED/CHECKPOINT` 的跨 phase contract drift。
 - 新增 Phase 15 reconciliation/closeout 工件，并从该工件更新派生 evidence matrix；历史 Phase 13 evidence 保持不可改写。
 - 采用最多两轮的验证预算：第一轮全量对账；只有出现新的、run 绑定的 Phase 13 terminal artifact 后才允许第二轮重算与最终一致性验证。
 - 为未就绪的本地会话/远程证明留下结构化、非敏感且需显式授权的 handoff。
@@ -29,6 +29,7 @@
 ### Evidence Truth And Representation
 - **D-01:** Phase 13 canonical verifier 及同一 target/run/item/surface tuple 的 receipt 是唯一状态真相源；Phase 14 evidence matrix 只能从它派生并解释，`REQUIREMENTS.md` 仅保留 requirement-to-phase traceability。
 - **D-02:** 对账结果必须完整保留 `verified`、`partial`、`blocked`、`deferred` 四态；每一个非 `verified` 项都要指向 source artifact，说明缺失证据、恢复前置条件和下一条命令。
+- **D-02a:** reconciliation 必须完整解析 Phase 13 的 raw verifier vocabulary；其公开四态映射须显式且可测，不能继续把仅有 `BLOCKED` / `PARTIAL` 的历史 anchor 当作唯一可接受输入。当前 `SATISFIED`、`PARTIAL`、`FAILED/CHECKPOINT` 必须如实进入 matrix 及其 locator/narrative。
 - **D-03:** Phase 13 verifier、receipt 和历史 checkpoint 不可改写。Phase 15 以新的 reconciliation/closeout 工件表达当前对账结论，并据此更新派生矩阵。
 - **D-04:** `REQUIREMENTS.md` checkbox 不在本 phase 改写；新工件必须明确该 checkbox 不表示 runtime evidence status。
 
@@ -71,6 +72,7 @@
 - `.planning/phases/14-test-and-operations-hardening/14-VERIFICATION.md` — Phase 14 的静态验证范围与 provider-proof exclusion。
 - `.planning/phases/14-test-and-operations-hardening/14-EVIDENCE-MATRIX.json` — 现有 30 行 evidence matrix 的机器可读输入。
 - `.planning/phases/14-test-and-operations-hardening/14-EVIDENCE-MATRIX.md` — 现有 matrix 的人类可读派生展示。
+- `.planning/v1.2-MILESTONE-AUDIT.md` — 当前跨 phase integration audit：记录 Phase 13 raw status 与 Phase 14 matrix parser 的已验证 drift。
 
 ### Reusable Validation Contracts
 - `packages/config/src/deployment-target/requirement-evidence-matrix.ts` — typed requirement-evidence matrix contract 和状态/路径验证规则。
@@ -85,7 +87,7 @@
 ## Existing Code Insights
 
 ### Reusable Assets
-- `packages/config/src/deployment-target/requirement-evidence-matrix.ts` 与 `scripts/verify-v12-evidence-matrix.ts` 已提供确定性、只读的 30 行 matrix validation seam，可作为第一轮全量验证的基础。
+- `packages/config/src/deployment-target/requirement-evidence-matrix.ts` 与 `scripts/verify-v12-evidence-matrix.ts` 已提供确定性、只读的 30 行 matrix validation seam；当前它们暴露了只接受历史 `BLOCKED` / `PARTIAL` anchor 的 drift，Phase 15 应在不执行远程操作的前提下将它收口。
 - `scripts/verify-data-chain-smoke.ts` 已区分 terminal 与 checkpoint evidence，可防止非成功或不匹配的 artifact 被提升为成功。
 - `14-EVIDENCE-MATRIX.json` 和其 Markdown 派生文件已保存 requirement、status、source phase 与 artifact locator，可作为 reconciliation 的受控输入，而非重造第二套状态模型。
 
@@ -104,6 +106,7 @@
 ## Specific Ideas
 
 - “全量验证”固定指全 30 项 evidence 来源、状态、路径和 matrix CLI 的核对，不隐含一次昂贵或未授权的远程重跑。
+- 当前首轮的明确验收是 matrix parser、JSON/Markdown row、Phase 13 raw verifier coverage 和 `--final` CLI 互相一致；现状下 `--final` 预期先失败，直到旧 `BLOCKED` anchor 与过时 recovery narrative 被替换为 canonical 结论。
 - 第二轮是条件性的一次 final consistency pass，不是再一次 gap-planning 循环。
 - 子代理超时固定为 30 分钟，超过时保留已观察的非敏感结果并走 handoff。
 
