@@ -4,11 +4,11 @@
 
 - ✅ **v1.0 部署可用、日常使用态** - Phases 1-5 shipped 2026-07-11. Archive: [v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 存储成本控制与代码/文件整理** - Phases 6-10 shipped 2026-07-13. Archive: [v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
-- ◇ **v1.2 Cloudflare 账户/域名切换与全链路发布验证** - Phase 15 local reconciliation complete; Phase 13 selected-production Viewer proof remains blocked.
+- ◇ **v1.2 Cloudflare 账户/域名切换与全链路发布验证** - Phase 13 is scope-closed for this milestone; selected-production Viewer proof is deferred, not passed.
 
 ## Current Status
 
-v1.2 is active. The milestone goal is to make Starye switchable across Cloudflare account/domain targets, normalize local env and public frontend runtime config, and prove the full local-to-production chain: deploy, migrate, crawl, ingest, manage, view, and verify.
+v1.2 work is scope-closed with one explicitly deferred proof: a fresh selected-production Viewer receipt. The completed local/remote Dashboard evidence remains recorded, while the deferred Viewer proof is not represented as production success.
 
 ## Phase Plan
 
@@ -16,7 +16,7 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | Full Chain Data Smoke | Blocked — selected-production Viewer checkpoint remains unresolved. | DATA-01..DATA-07, TEST-05 |
+| 13 | Full Chain Data Smoke | Scope closed for v1.2 — selected-production Viewer proof deferred; canonical verifier remains `gaps_found`. | DATA-01..DATA-07, TEST-05 |
 | 14 | Test and Operations Hardening | Complete — old-domain, RUNBOOK, and initial evidence-matrix hardening. | TEST-01, TEST-06, TEST-07 |
 | 15 | Reconcile v1.2 evidence matrix with Phase 13 closeout | Complete — local-only evidence reconciliation; does not complete Phase 13 or v1.2. | No new requirement; reconciles the existing 30-row evidence matrix |
 
@@ -83,8 +83,9 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04, DATA-05, DATA-06, DATA-07, TEST-05
 
-**Plans:** 48/65 plans executed
+**Plans:** Scope closed after 13-81; historical unexecuted carrier plans are retained but not queued for v1.2 execution.
 
+- [x] 13-81-PLAN.md
 - [x] 13-63-PLAN.md
 - [ ] 13-64-PLAN.md
 - [ ] 13-65-PLAN.md
@@ -334,13 +335,10 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 
 ## Next
 
-13-60 stopped at local session gate (no run id). Unblock with untracked `local-session.cookie` or recoverable IAB signed-session proof, then re-run:
-
-```text
-$gsd-execute-phase 13 --gaps-only
-```
-
-Immutable: p13-55 remote, p13-57 local. 13-61/13-62 still wait on a terminal local carrier.
+Phase 13 is scope-closed for v1.2. The p13-66 Viewer checkpoint remains immutable at
+`canonical_viewer_unavailable`; no existing carrier receives a retry. A later milestone
+may explicitly authorize a fresh Viewer-proof effort, beginning with a new Phase 13 gap
+plan and preserving all frozen evidence.
 
 ### Phase 15: Reconcile v1.2 evidence matrix with Phase 13 closeout
 
@@ -360,4 +358,4 @@ Plans:
 3. The reconciliation records one local validation round and a single manually opened, run-bound future validation condition without promoting Phase 13 or v1.2 completion.
 
 ---
-*Last updated: 2026-07-29 after Phase 15 local evidence reconciliation; Phase 13 Viewer checkpoint remains the milestone blocker.*
+*Last updated: 2026-07-29 after Phase 13 scope closeout; the selected-production Viewer proof is deferred and remains production-unproven.*
