@@ -92,6 +92,35 @@
 
 ---
 
+## Milestone: v1.2 - Cloudflare Account and Domain Switching
+
+**Shipped:** 2026-07-29 | **Phases:** 5 | **Plans:** 97
+**Closeout:** Override closeout; the selected-production Viewer terminal proof is deferred.
+
+### What Was Built
+
+- Added explicit non-secret TargetProfile resolution, four-file local env projection, and fail-closed target preflight.
+- Made deploy, runtime, Pages redirect, and workflow inputs selected-target aware without treating local operator state as CI input.
+- Established tuple-bound local and selected-production data-chain evidence through Dashboard, then reconciled the 30-row matrix against the canonical Phase 13 verifier.
+
+### What Worked
+
+- The explicit target and tuple contracts prevented a checkpoint from being represented as passed evidence.
+- Phase 15 corrected the derived matrix rather than rewriting frozen Phase 13 evidence.
+
+### What Was Inefficient
+
+- Repeated Phase 13 carrier recovery became disproportionately expensive once external Viewer observation remained unavailable.
+- Eight historical debug sessions and the Viewer checkpoint reached milestone close as accepted debt.
+
+### Key Lessons
+
+1. Cap full validation/replanning loops, then make the evidence boundary explicit in the closeout.
+2. Treat production browser proof as a separately authorized resource, not an automatic continuation of local success.
+3. Keep requirement checkboxes and summary metadata distinct from the current verifier state.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -100,6 +129,7 @@
 |-----------|----------|--------|------------|
 | v1.0 | multiple | 5 | Moved from implementation evidence to verifier-backed milestone closure |
 | v1.1 | multiple | 5 | Turned storage/cost policy into code, audit tooling, doc ownership, and shared semantics instead of one-off cleanup rules |
+| v1.2 | multiple | 5 | Added target-aware deployment contracts and accepted a bounded production-Viewer evidence deferral rather than restarting frozen carriers |
 
 ### Cumulative Quality
 
@@ -107,6 +137,7 @@
 |-----------|-------|----------|-------|
 | v1.0 | Phase-specific unit, typecheck, UAT, security, validation checks | 5/5 phases verified | Remaining debt is metadata/security-artifact cleanup, not unsatisfied runtime requirements |
 | v1.1 | Phase-specific unit, typecheck, audit, doc-contract, and milestone regression checks | 5/5 phases verified, 22/22 requirements satisfied | Milestone audit passed with no unsatisfied requirements |
+| v1.2 | Target-profile, deployment-contract, smoke, matrix, and audit checks | 26/30 requirements verified; override closeout | DATA-05/06/07 and TEST-05 remain deferred Viewer-proof evidence |
 
 ### Top Lessons
 

@@ -8,42 +8,41 @@
 
 **"部署在公网、能稳定日常使用的个人内容中台"** —— 所有子应用在同一域名下协同工作，能长期保持可访问、可阅读、可观看。其他一切（特性完整度、多用户、正式审核流）都可以退让，但"能用、不崩"必须守住。
 
-## Current Milestone: v1.2 Cloudflare 账户/域名切换与全链路发布验证
+## Latest Archived Milestone: v1.2 Cloudflare 账户/域名切换与全链路发布验证
 
-**Goal:** 让 Starye 可以面向不同 Cloudflare 账户与域名完成可重复部署，并用真实端到端链路证明本地环境、生产部署、爬取、入库、管理、查看都能跑通。
+**Closeout:** `override_closeout` on 2026-07-29. The milestone is archived with a current evidence matrix, but the selected-production Viewer terminal proof is deferred rather than claimed as production success.
 
-**Target features:**
+**Delivered and deferred scope:**
 
-- Cloudflare 账户与域名切换：配置、密钥、Pages/Workers/D1/R2/KV 绑定、域名路由不再写死单一账户。
-- 本地到生产部署闭环：从本地验证到生产部署、迁移/回滚、网关访问路径按规范走通。
-- 数据全链路：爬虫抓取 → 入库 → 后台管理/校验 → 前台查看，覆盖 comic/movie/blog/dashboard/API/gateway 的关键路径。
-- 测试完善：补齐部署、爬虫、入库、管理、查看链路的自动化测试、smoke/UAT 和必要 runbook 验证。
-- 约束继承：Cloudflare free-tier-first、R2 只存必要资产、正文图外链语义、文档 owner 边界继续保留。
+- 完成显式 TargetProfile、四个本地 env consumer 投影、target-first preflight、部署/workflow contract 和运行手册验证。
+- 完成本地 terminal proof、selected-production preflight/D1/API/Dashboard tuple，以及 30 行 evidence matrix reconciliation。
+- 延期 selected-production Viewer terminal proof；p13-66 永久冻结在 `canonical_viewer_unavailable`，不重试或改写。
+- 保持 Cloudflare free-tier-first、R2 必要资产、正文图外链语义和文档 owner 边界。
 
 ## Current State
 
-**Latest shipped milestone:** v1.1 存储成本控制与代码/文件整理（2026-07-13）
+**Latest archived milestone:** v1.2 Cloudflare 账户/域名切换与全链路发布验证（2026-07-29，override closeout）
 
 **Archive evidence:**
 
-- `.planning/milestones/v1.1-MILESTONE-AUDIT.md` — milestone audit passed
-- `.planning/milestones/v1.1-ROADMAP.md` — full v1.1 phase roadmap archive
-- `.planning/milestones/v1.1-REQUIREMENTS.md` — archived v1.1 requirements snapshot
+- `.planning/milestones/v1.2-MILESTONE-AUDIT.md` — audit records 26/30 verified and the four deferred Viewer-proof requirements
+- `.planning/milestones/v1.2-ROADMAP.md` — full v1.2 phase roadmap archive
+- `.planning/milestones/v1.2-REQUIREMENTS.md` — archived v1.2 requirements and override outcomes
 
 **Repository posture after v1.1:**
 
 - 漫画章节正文图默认保持 external/source URL，不再把“进 R2”当成业务正确性的隐含条件。
 - R2 使用已收口到必要资产与短期诊断用途，upload/crawler/admin/script 共用同一套 policy-aware storage semantics。
 - root docs、RUNBOOK、`.planning` 和 `docs/archive/` 的 owner 边界已固定，后续里程碑应继续沿 canonical owner 更新。
-- v1.2 已启动，当前主线是 Cloudflare 账户/域名切换与本地到生产的数据链路闭环验证。
-- Phase 12 已完成 selected-target runtime、workflow 与 direct-entry closure；Phase 13 负责在授权边界内补齐真实数据链路 smoke evidence。
-- Phase 14 已完成旧域名审计、target-first RUNBOOK 与 30 项需求证据矩阵；Phase 13 的 DATA-01..06 仍为 blocked，DATA-07/TEST-05 仍为 partial，继续走 verifier-driven gap 路线。
+- v1.2 已归档；target-profile、runtime/workflow projections、runbook 和 evidence reconciliation 均已落地。
+- Phase 13 仅完成到 selected-production Dashboard tuple；Viewer terminal proof 被明确延期，不构成生产成功断言。
+- 下一个里程碑从新需求开始；只有显式选择 Viewer proof 时才新建独立 fresh-run 工作。
 
-## Current Milestone Notes
+## Deferred v1.2 Evidence
 
-- 本轮主线是账户/域名切换与全链路生产验证，不默认延续 v1.1 的 `REL-*` / `OPS-*` 候选方向；相关可靠性或 ops 工作只有在服务该链路时才纳入。
-- 保持 Cloudflare free-tier-first、source-vs-managed asset distinction、以及 root doc ownership 这三条 v1.1 已验证的长期约束。
-- 新 `.planning/REQUIREMENTS.md` 将围绕 Cloudflare profile/deployment/data pipeline/admin viewing/test coverage 生成。
+- DATA-05、DATA-07 和 TEST-05 是 partial；DATA-06 在 `canonical_viewer_unavailable` 处 blocked。
+- 该结论与冻结 p13-66 证据不可被静态矩阵、旧 summary 或未来未授权运行替代。
+- 新 `.planning/REQUIREMENTS.md` 由下一里程碑工作流创建。
 
 <details>
 <summary>Archived Milestone Focus - v1.1 存储成本控制与代码/文件整理</summary>
@@ -88,13 +87,13 @@
 - ✓ v1.1 成本护栏：预算提醒、R2 prefix 审计、生命周期清理和运行手册可执行。 — v1.1
 - ✓ v1.1 文档/入口瘦身：AGENTS.md、RUNBOOK、`.planning` 文档边界清楚，历史 phase 文件按 GSD 规则清理或归档。 — v1.1
 - ✓ v1.1 存储相关代码整理：上传目的、R2 key、图片处理和 crawler 脚本策略统一，测试覆盖关键防线。 — v1.1
+- ✓ v1.2 显式 TargetProfile、env 投影、target-first preflight 与 typed runtime/workflow contract。 — v1.2
+- ✓ v1.2 Pages redirect、legacy-domain、RUNBOOK 与 30-row evidence-matrix 静态验证。 — v1.2
 
 ### Active
 
-- [ ] v1.2 Cloudflare 账户/域名切换：不同账户、域名、资源绑定和 secrets 可以被清楚区分并安全切换。
-- [ ] v1.2 本地到生产部署闭环：本地验证、生产部署、迁移/回滚和 gateway canonical URL 均有可执行路径和验证证据。
-- [ ] v1.2 数据全链路：爬虫抓取、D1 入库、dashboard 管理/校验、前台查看形成可重复 smoke/UAT。
-- [ ] v1.2 测试完善：关键链路有自动化测试、部署 smoke、人工 UAT 和 runbook 验证入口。
+- [ ] 选定生产环境 Viewer terminal proof：在后续里程碑用 fresh run 完成，不重试 p13-66。
+- [ ] 评估并处理 v1.2 接纳的历史 debug sessions，仅在新的明确范围内进行。
 
 ### Out of Scope
 
@@ -127,11 +126,12 @@
 - `0121cc9` dashboard 加 SillyTavern 入口
 - `4cefbe6` movie-app advance search + personalized recommendation + new release
 
-**当前状态（2026-07-13）**：
+**当前状态（2026-07-29）**：
 
 - v1.0 与 v1.1 都已完成并归档到 `.planning/milestones/`
 - v1.1 已通过 milestone audit：5/5 phases complete，15/15 plans complete，22/22 v1 requirements satisfied
-- 当前 active milestone 是 v1.2 Cloudflare 账户/域名切换与全链路发布验证；下一步是定义 `.planning/REQUIREMENTS.md` 和 phased roadmap
+- v1.2 已以 override closeout 归档；下一步是定义新里程碑的 `.planning/REQUIREMENTS.md` 和 phased roadmap
+- selected-production Viewer proof 保留为未来独立范围，当前不存在可重试的 Phase 13 carrier
 - 已接受的历史归档债仍主要来自 v1.0：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
 - v1.1 已把 R2 必要资产边界、external/source image semantics、shared storage helper、policy-aware admin/script behavior 和 canonical doc ownership 一并收口
 
@@ -169,6 +169,8 @@
 | AGENTS.md 只保留入口级规则 | 当前文件过长，容易埋没真正必须执行的 repo 边界；细节迁入 RUNBOOK/.planning 或专题文档 | ✓ Validated in Phase 9 |
 | 文档 owner 固定为 README / AGENTS / RUNBOOK / `.planning` / `docs` / `docs/archive` / `openspec` | 避免 root docs 和旧存储文档继续漂移成多份 source of truth | ✓ Validated in Phase 9 |
 | v1.2 以 Cloudflare 账户/域名切换与真实全链路验证为主线 | 需要证明部署与数据链路可迁移、可复现、可验收，而不是继续扩大存储/文档整理 scope | — Pending |
+| v1.2 证据矩阵以当前 verifier 为状态源 | 历史 summary 和 checkbox 仅表明 ownership；`SATISFIED`、`PARTIAL`、`FAILED/CHECKPOINT` 必须保留原始语义 | ✓ Validated in Phase 15 |
+| v1.2 以 override closeout 归档 | 生产 Viewer 终态证明未达成，用户接受将其与 8 个历史 debug sessions 记录为延期项 | ✓ Accepted at v1.2 closeout |
 
 ## Evolution
 
@@ -188,4 +190,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-21 after Phase 14 completion*
+*Last updated: 2026-07-29 after v1.2 override closeout*

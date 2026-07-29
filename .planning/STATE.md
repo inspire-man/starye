@@ -1,25 +1,25 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: evidence matrix with Phase 13 closeout
-current_phase: 13
-status: paused
-stopped_at: Phase 13 scope closeout; selected-production Viewer proof deferred
-last_updated: "2026-07-29T10:40:00.000Z"
+milestone: null
+milestone_name: null
+status: planning_next_milestone
+stopped_at: Phase 13 scope closeout; Viewer proof deferred to a later authorized milestone
+last_updated: "2026-07-29T13:17:45.887Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 13 scope closed without production-success assertion
+last_activity_desc: Milestone v1.2 completed and archived
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 96
-  completed_plans: 73
-  percent: 76
-current_phase_name: full-chain-data-smoke
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+current_phase: null
+current_phase_name: null
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-07-26
+**Last updated:** 2026-07-29
 **Mode:** yolo
 **Granularity:** standard
 
@@ -27,23 +27,23 @@ current_phase_name: full-chain-data-smoke
 
 **Core Value:** 部署在公网、能稳定日常使用的个人内容中台 —— "能用、不崩" 优先于 "功能全"。
 
-**Current Milestone:** v1.2 Cloudflare 账户/域名切换与全链路发布验证。
+**Current Milestone:** None. v1.2 is archived by override closeout; plan the next milestone explicitly.
 
 **Project Docs:**
 
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
-- `.planning/ROADMAP.md` — active v1.2 phase roadmap and requirement mapping
-- `.planning/REQUIREMENTS.md` — active v1.2 checkable requirements and traceability
+- `.planning/ROADMAP.md` — milestone index and deferred-evidence boundary
+- `.planning/REQUIREMENTS.md` — created fresh by the next milestone workflow
 - `.planning/MILESTONES.md` — shipped milestone summaries and archive links
 - `.planning/research/SUMMARY.md` — v1.2 Cloudflare account/domain switching research
 - `.planning/codebase/ARCHITECTURE.md` — Brownfield system overview
 
 ## Current Position
 
-Phase: 13 (full-chain-data-smoke) — SCOPE CLOSED / DEFERRED
-Plan: 13-81 scope closeout complete
-status: No Phase 13 execution remains in v1.2. The canonical verifier stays `gaps_found`; a fresh selected-production Viewer receipt is deferred to a separately authorized later milestone.
-Last activity: 2026-07-29 — Phase 13 scope closeout completed; Phase 15 local reconciliation remains complete
+Phase: None — planning next milestone
+Plan: v1.2 archived by override closeout
+Status: The Phase 13 Viewer proof is deferred to a separately authorized later milestone; no existing carrier is eligible for retry.
+Last activity: 2026-07-29 — v1.2 archives, audit, and deferred-item record completed
 
 ## Performance Metrics
 
@@ -124,6 +124,22 @@ Last activity: 2026-07-29 — Phase 13 scope closeout completed; Phase 15 local 
 
 - Phase 15 added: Reconcile v1.2 evidence matrix with Phase 13 closeout
 
+## Deferred Items
+
+Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | deploy-api-remote-resource-check | diagnosed |
+| debug | knowledge-base | unknown |
+| debug | phase13-gateway-auth-readiness | awaiting_human_verify |
+| debug | phase13-gateway-auth-timeout | diagnosed |
+| debug | phase13-legacy-parent-missing | investigating |
+| debug | phase13-orphaned-listener-owners | investigating |
+| debug | phase13-runtime-ownership | diagnosed |
+| debug | phase13-supervisor-not-found | investigating |
+| verification_gap | Phase 13 13-VERIFICATION.md | gaps_found |
+
 ## Session Continuity
 
 **Last session:** 2026-07-29T10:40:00.000Z
@@ -148,7 +164,7 @@ Last activity: 2026-07-29 — Phase 13 scope closeout completed; Phase 15 local 
 
 ## Operator Next Steps
 
-- Keep the terminal local pair and all untracked evidence intact. Do not run 13-19 or 13-20 during the minimal execution path; schedule those provider and selected-production checks only through MVP review or archival work.
+- Start the next milestone with /gsd-new-milestone
 
 ## Decisions
 
