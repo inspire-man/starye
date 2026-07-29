@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.2
-milestone_name: Cloudflare 账户/域名切换与全链路发布验证
+milestone_name: evidence matrix with Phase 13 closeout
 current_phase: 13
 current_phase_name: full-chain-data-smoke
 status: blocked
-stopped_at: "Completed 13-63-PLAN.md: blocked_without_observation_adapter"
-last_updated: "2026-07-28T10:59:58.423Z"
+stopped_at: Phase 15 context gathered
+last_updated: "2026-07-29T08:58:01.084Z"
 last_activity: 2026-07-26
-last_activity_desc: Phase 13 plan 13-60 blocked_without_local_session_proof
+last_activity_desc: Phase 13 gap plans 13-60..13-62 written via plan-phase --gaps
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 3
-  total_plans: 77
-  completed_plans: 59
-  percent: 75
+  total_plans: 95
+  completed_plans: 72
+  percent: 60
 ---
 
 # Project State: Starye — 个人内容中台
@@ -119,11 +119,15 @@ Last activity: 2026-07-26 — Phase 13 gap plans 13-60..13-62 written via plan-p
 - Phase 11 Plan 02 已完成四个既有 local env consumer 的显式 target projection、marker-aware managed block 更新和 preservation tests；未直接写入任何 local env 文件或 runtime consumer
 - Phase 11 Plan 03 已完成 fail-closed target preflight、local Wrangler/CI identity boundary、argv-only D1/R2/KV read checks 与 import-safe `target-profile` CLI；未改 Worker/Pages/GitHub workflow consumer，也未执行带凭据的远程命令
 
+### Roadmap Evolution
+
+- Phase 15 added: Reconcile v1.2 evidence matrix with Phase 13 closeout
+
 ## Session Continuity
 
-**Last session:** 2026-07-28T10:59:58.399Z
-**Stopped at:** Completed 13-63-PLAN.md: blocked_without_observation_adapter
-**Resume file:** None
+**Last session:** 2026-07-29T08:58:01.057Z
+**Stopped at:** Phase 15 context gathered
+**Resume file:** .planning/phases/15-reconcile-v1-2-evidence-matrix-with-phase-13-closeout/15-CONTEXT.md
 
 **Next recommended action:**
 
