@@ -127,3 +127,9 @@ it must not receive another observer, verifier, preflight, handoff, or retry.
 - The report names p13-66 as the fresh live carrier.
 - No local development endpoint is represented as production evidence.
 - No Phase 14 artifact is changed or used as substitute proof.
+
+## 2026-07-29 Scope Closeout
+
+The operator ended further Phase 13 carrier planning and execution after two final full-repository validation rounds. `pnpm type-check` passed. `pnpm test` failed locally: Dashboard Vitest fork workers timed out before tests started, and `@starye/config` `data-chain-cli-process.test.ts` reported nine failures. No remote preflight, handoff, browser observation, provider mutation, or evidence write ran in this closeout.
+
+Phase 13 is closed by scope decision, not marked production-proven. The selected-production Dashboard-to-Viewer terminal receipt remains deferred; `status: gaps_found` and the frozen-carrier facts above remain authoritative. Plans 13-77 through 13-80 are retained as unexecuted historical planning only and must not auto-advance.
