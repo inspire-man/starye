@@ -333,8 +333,8 @@ describe('phase 13 remote smoke runner', () => {
       owner: 'root_iab' as const,
       probeDashboard: vi.fn(async () => ({ status: 'ready' as const })),
       observeSurface: vi.fn(async (input: { mode: 'remote', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }) => {
-      observedInputs.push(input)
-      return { status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string }
+        observedInputs.push(input)
+        return { status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string }
       }),
     }
     const dependencies = {

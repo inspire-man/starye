@@ -515,12 +515,12 @@ describe('phase 13 local smoke runner', () => {
       owner: 'root_iab' as const,
       probeDashboard: vi.fn(async () => ({ status: 'ready' as const })),
       observeSurface: vi.fn(async (input: { mode: 'local', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }) => {
-      observedInputs.push(input)
-      return {
-        status: 'passed' as const,
-        itemCode,
-        itemId: 'movie-42',
-      }
+        observedInputs.push(input)
+        return {
+          status: 'passed' as const,
+          itemCode,
+          itemId: 'movie-42',
+        }
       }),
     }
 
@@ -638,7 +638,12 @@ describe('phase 13 local smoke runner', () => {
       rootIab: { owner: 'puppeteer', probeDashboard: vi.fn(), observeSurface: vi.fn() },
     })).rejects.toThrow('root_iab_adapter_required')
     await expect(observation.runDataChainSurfaceObservationCli([
-      '--mode', 'local', '--target', baseOptions.target, '--run-id', baseOptions.runId,
+      '--mode',
+      'local',
+      '--target',
+      baseOptions.target,
+      '--run-id',
+      baseOptions.runId,
     ], { read, write })).rejects.toThrow('root_iab_adapter_required')
 
     expect(read).not.toHaveBeenCalled()
