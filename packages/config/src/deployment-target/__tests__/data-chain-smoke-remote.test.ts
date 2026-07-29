@@ -328,36 +328,46 @@ describe('phase 13 remote smoke runner', () => {
     const pending = remotePendingEvidence()
     const files = new Map<string, string>()
     putPair(files, pending)
-    const observedInputs: Array<{ surface: 'dashboard' | 'viewer', baseUrl: string }> = []
-    const observeSurface = vi.fn(async (input: { surface: 'dashboard' | 'viewer', baseUrl: string }) => {
+    const observedInputs: Array<{ mode: 'remote', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }> = []
+    const rootIab = {
+      owner: 'root_iab' as const,
+      probeDashboard: vi.fn(async () => ({ status: 'ready' as const })),
+      observeSurface: vi.fn(async (input: { mode: 'remote', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }) => {
       observedInputs.push(input)
       return { status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string }
-    })
+      }),
+    }
     const dependencies = {
       evidenceRoot,
       read: async (file: string) => files.get(file),
       write: async (file: string, contents: string) => { files.set(file, contents) },
       resolveTarget: () => ({ id: baseOptions.target, profile: { urls: { gateway: defaultTargetUrls.gateway } } }),
-      observeSurface,
+      rootIab,
       now: () => '2026-07-16T04:11:00.000Z',
     }
 
     const result = await observeDataChainSurfaces({ mode: 'remote', target: baseOptions.target, runId: baseOptions.runId }, dependencies)
 
     expect(result.exitCode).toBe(0)
-    expect(observeSurface).toHaveBeenCalledTimes(2)
-    expect(observedInputs.every(input => input.baseUrl === defaultTargetUrls.gateway)).toBe(true)
-    expect(observedInputs.map(input => input.surface)).toEqual(['dashboard', 'viewer'])
+    expect(rootIab.observeSurface).toHaveBeenCalledTimes(2)
+    expect(observedInputs).toEqual([
+      { mode: 'remote', targetId: baseOptions.target, baseUrl: defaultTargetUrls.gateway, path: '/dashboard/movies', itemCode: pending.itemCode, itemId: pending.itemId },
+      { mode: 'remote', targetId: baseOptions.target, baseUrl: defaultTargetUrls.gateway, path: `/movie/${pending.itemCode}`, itemCode: pending.itemCode, itemId: pending.itemId },
+    ])
 
     const invalidFiles = new Map<string, string>()
     putPair(invalidFiles, pending)
-    const invalidObserver = vi.fn(async () => ({ status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string }))
+    const invalidRootIab = {
+      owner: 'root_iab' as const,
+      probeDashboard: vi.fn(async () => ({ status: 'ready' as const })),
+      observeSurface: vi.fn(async () => ({ status: 'passed' as const, itemCode: pending.itemCode, itemId: pending.itemId as string })),
+    }
     const invalidResult = await observeDataChainSurfaces({ mode: 'remote', target: baseOptions.target, runId: baseOptions.runId }, {
       ...dependencies,
       read: async (file: string) => invalidFiles.get(file),
       write: async (file: string, contents: string) => { invalidFiles.set(file, contents) },
       resolveTarget: () => ({ id: baseOptions.target, profile: { urls: { gateway: 'http://localhost:3001' } } }),
-      observeSurface: invalidObserver,
+      rootIab: invalidRootIab,
     })
     expect(invalidResult.exitCode).toBe(CHECKPOINT_EXIT_CODE)
     expect(invalidResult.evidence.observations.at(-1)).toMatchObject({
@@ -367,7 +377,7 @@ describe('phase 13 remote smoke runner', () => {
     })
     expect(invalidFiles.get(evidencePath(baseOptions.runId, 'remote', 'json'))).toBe(serializeDataChainEvidenceJson(invalidResult.evidence))
     expect(invalidFiles.get(evidencePath(baseOptions.runId, 'remote', 'md'))).toBe(renderDataChainEvidenceMarkdown(invalidResult.evidence))
-    expect(invalidObserver).not.toHaveBeenCalled()
+    expect(invalidRootIab.observeSurface).not.toHaveBeenCalled()
   })
 
   it('records a prepared fixture failure without starting the D1 snapshot', async () => {

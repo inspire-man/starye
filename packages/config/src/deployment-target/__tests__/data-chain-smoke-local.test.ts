@@ -36,11 +36,9 @@ interface SmokeModule {
 
 interface ObservationModule {
   parseDataChainSurfaceObservationArgs: (argv: readonly string[]) => { mode: 'local' | 'remote', target: string, runId: string }
-  observeSurfaceDefault: (input: unknown, puppeteer: unknown, sessionCookie?: string) => Promise<{ status: 'passed' | 'unavailable', itemCode?: string, itemId?: string }>
+  verifyRootIabObservationReadiness: (options: unknown, dependencies?: unknown) => Promise<{ status: 'ready' | 'unavailable' }>
   observeDataChainSurfaces: (options: unknown, dependencies?: unknown) => Promise<{ exitCode: 0 | typeof CHECKPOINT_EXIT_CODE, evidence: DataChainEvidence }>
-  isAuthLoginPath: (pathname: string) => boolean
-  resolveObserverSessionCookie: (env?: NodeJS.ProcessEnv, readText?: (file: string, encoding: 'utf8') => string) => string | undefined
-  DATA_CHAIN_SESSION_COOKIE_NAME: string
+  runDataChainSurfaceObservationCli: (argv?: readonly string[], dependencies?: unknown) => Promise<0 | typeof CHECKPOINT_EXIT_CODE>
 }
 
 interface VerifyModule {
@@ -512,111 +510,58 @@ describe('phase 13 local smoke runner', () => {
 
     await write(evidencePath('local', 'json'), serializeDataChainEvidenceJson(evidence))
     await write(evidencePath('local', 'md'), renderDataChainEvidenceMarkdown(evidence))
-    const observedInputs: Array<{ surface: 'dashboard' | 'viewer', baseUrl: string, path: string, itemCode: string, itemId: string }> = []
-    const observeSurface = vi.fn(async (input: { surface: 'dashboard' | 'viewer', baseUrl: string, path: string, itemCode: string, itemId: string }) => {
+    const observedInputs: Array<{ mode: 'local', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }> = []
+    const rootIab = {
+      owner: 'root_iab' as const,
+      probeDashboard: vi.fn(async () => ({ status: 'ready' as const })),
+      observeSurface: vi.fn(async (input: { mode: 'local', targetId: string, baseUrl: string, path: string, itemCode: string, itemId: string }) => {
       observedInputs.push(input)
       return {
         status: 'passed' as const,
         itemCode,
         itemId: 'movie-42',
       }
-    })
+      }),
+    }
 
     const result = await observeDataChainSurfaces({ mode: 'local', target: baseOptions.target, runId: baseOptions.runId }, {
       read,
       write,
       evidenceRoot,
-      observeSurface,
+      rootIab,
       now: () => '2026-07-16T00:01:00.000Z',
     })
 
     expect(result.exitCode).toBe(0)
     expect(result.evidence).toMatchObject({ ingestState: 'resolved', aggregate: 'passed', itemCode, itemId: 'movie-42' })
-    expect(observedInputs.map(input => input.surface)).toEqual(['dashboard', 'viewer'])
-    expect(observedInputs[0]).toMatchObject({ baseUrl: 'http://localhost:8080', path: '/dashboard/movies', itemCode, itemId: 'movie-42' })
-    expect(observedInputs[1]).toMatchObject({ path: `/movie/${itemCode}`, itemCode, itemId: 'movie-42' })
+    expect(observedInputs).toEqual([
+      { mode: 'local', targetId: baseOptions.target, baseUrl: 'http://localhost:8080', path: '/dashboard/movies', itemCode, itemId: 'movie-42' },
+      { mode: 'local', targetId: baseOptions.target, baseUrl: 'http://localhost:8080', path: `/movie/${itemCode}`, itemCode, itemId: 'movie-42' },
+    ])
     expect(result.evidence.observations.slice(-2)).toEqual([
       expect.objectContaining({ surface: 'dashboard', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
       expect.objectContaining({ surface: 'viewer', status: 'passed', receipt: expect.objectContaining({ source: 'browser_observer' }) }),
     ])
   })
 
-  it('waits for the exact SPA tuple before the default browser observer can pass', async () => {
-    const { observeSurfaceDefault } = await loadObservation()
-    const events: string[] = []
-    const itemCode = 'starye-smoke-local-20260716t000000z'
-    const itemId = 'movie-42'
-    const pageDocument = {
-      body: { textContent: itemCode },
-      documentElement: { outerHTML: `<span>${itemCode}</span>` },
-    }
-    const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
-    Object.defineProperty(globalThis, 'document', { configurable: true, value: pageDocument })
-    const waitForFunction = vi.fn(async (
-      predicate: (code: string, id: string) => boolean,
-      _options: unknown,
-      code: string,
-      id: string,
-    ) => {
-      events.push('wait-for-tuple')
-      expect(predicate(code, id)).toBe(false)
-      pageDocument.documentElement.outerHTML = `<span data-phase13-item-id="${id}">${code}</span>`
-      expect(predicate(code, id)).toBe(true)
-      return {}
-    })
-    const evaluate = vi.fn(async (
-      evaluateTuple: (code: string, id: string) => { codeMatches: boolean, idMatches: boolean },
-      code: string,
-      id: string,
-    ) => {
-      events.push('evaluate-tuple')
-      return evaluateTuple(code, id)
-    })
-    const close = vi.fn(async () => {
-      events.push('close')
-    })
-    const puppeteer = {
-      launch: vi.fn(async () => ({
-        newPage: async () => ({
-          goto: async () => {
-            events.push('goto')
-            return { ok: () => true }
-          },
-          url: () => 'http://localhost:8080/dashboard/movies',
-          waitForFunction,
-          evaluate,
-        }),
-        close,
-      })),
-    }
+  it('probes only the canonical Dashboard route through the root IAB before any carrier exists', async () => {
+    const { verifyRootIabObservationReadiness } = await loadObservation()
+    const probeDashboard = vi.fn(async () => ({ status: 'ready' as const }))
 
-    try {
-      await expect(observeSurfaceDefault({
-        mode: 'local',
-        targetId: baseOptions.target,
-        runId: baseOptions.runId,
-        itemCode,
-        itemId,
-        surface: 'dashboard',
-        baseUrl: 'http://localhost:8080',
-        path: '/dashboard/movies',
-      }, puppeteer)).resolves.toEqual({ status: 'passed', itemCode, itemId })
-      expect(waitForFunction).toHaveBeenCalledWith(
-        expect.any(Function),
-        { polling: 'mutation', timeout: 30_000 },
-        itemCode,
-        itemId,
-      )
-      expect(events).toEqual(['goto', 'wait-for-tuple', 'evaluate-tuple', 'close'])
-    }
-    finally {
-      if (originalDocument) {
-        Object.defineProperty(globalThis, 'document', originalDocument)
-      }
-      else {
-        Reflect.deleteProperty(globalThis, 'document')
-      }
-    }
+    await expect(verifyRootIabObservationReadiness({ mode: 'local', target: baseOptions.target }, {
+      rootIab: {
+        owner: 'root_iab',
+        probeDashboard,
+        observeSurface: vi.fn(),
+      },
+    })).resolves.toEqual({ status: 'ready' })
+
+    expect(probeDashboard).toHaveBeenCalledWith({
+      mode: 'local',
+      targetId: baseOptions.target,
+      baseUrl: 'http://localhost:8080',
+      path: '/dashboard/movies',
+    })
   })
 
   it('persists a Dashboard checkpoint when the browser cannot correlate the derived item', async () => {
@@ -642,20 +587,24 @@ describe('phase 13 local smoke runner', () => {
       [evidencePath('local', 'json'), serializeDataChainEvidenceJson(pending)],
       [evidencePath('local', 'md'), renderDataChainEvidenceMarkdown(pending)],
     ])
-    const observeSurface = vi.fn(async () => ({ status: 'passed' as const, itemCode, itemId: 'wrong-id' }))
+    const rootIab = {
+      owner: 'root_iab' as const,
+      probeDashboard: vi.fn(async () => ({ status: 'ready' as const })),
+      observeSurface: vi.fn(async () => ({ status: 'passed' as const, itemCode, itemId: 'wrong-id' })),
+    }
 
     const result = await observeDataChainSurfaces({ mode: 'local', target: baseOptions.target, runId: baseOptions.runId }, {
       evidenceRoot,
       read: async (file: string) => files.get(file),
       write: async (file: string, contents: string) => { files.set(file, contents) },
-      observeSurface,
+      rootIab,
       now: () => '2026-07-16T00:01:00.000Z',
     })
 
     expect(result.exitCode).toBe(CHECKPOINT_EXIT_CODE)
     expect(result.evidence).toMatchObject({ ingestState: 'resolved_pending_observation', aggregate: 'checkpoint', itemId: 'movie-42' })
     expect(result.evidence.observations.at(-1)).toMatchObject({ surface: 'dashboard', status: 'checkpoint', checkpoint: 'dashboard_auth_unavailable' })
-    expect(observeSurface).toHaveBeenCalledTimes(1)
+    expect(rootIab.observeSurface).toHaveBeenCalledTimes(1)
 
     const unavailableFiles = new Map([
       [evidencePath('local', 'json'), serializeDataChainEvidenceJson(pending)],
@@ -665,69 +614,37 @@ describe('phase 13 local smoke runner', () => {
       evidenceRoot,
       read: async (file: string) => unavailableFiles.get(file),
       write: async (file: string, contents: string) => { unavailableFiles.set(file, contents) },
-      observeSurface: async () => { throw new Error('browser unavailable') },
+      rootIab: {
+        owner: 'root_iab',
+        probeDashboard: async () => ({ status: 'ready' as const }),
+        observeSurface: async () => { throw new Error('root IAB unavailable') },
+      },
       now: () => '2026-07-16T00:01:00.000Z',
     })
     expect(unavailable.exitCode).toBe(CHECKPOINT_EXIT_CODE)
     expect(unavailable.evidence.observations.at(-1)).toMatchObject({ surface: 'dashboard', status: 'checkpoint' })
   })
 
+  it('rejects absent or non-root adapters before evidence reads, writes, or a standalone CLI fallback', async () => {
+    const observation = await loadObservation()
+    const read = vi.fn(async () => undefined)
+    const write = vi.fn(async () => {})
+    const options = { mode: 'local' as const, target: baseOptions.target, runId: baseOptions.runId }
 
-  it('classifies auth login paths and resolves session cookie material without logging values', async () => {
-    const {
-      isAuthLoginPath,
-      resolveObserverSessionCookie,
-      DATA_CHAIN_SESSION_COOKIE_NAME,
-    } = await loadObservation()
-    expect(DATA_CHAIN_SESSION_COOKIE_NAME).toBe('starye.session_token')
-    expect(isAuthLoginPath('/auth/login')).toBe(true)
-    expect(isAuthLoginPath('/auth/login?next=/dashboard/movies')).toBe(true)
-    expect(isAuthLoginPath('/dashboard/movies')).toBe(false)
-    expect(resolveObserverSessionCookie({ STARYE_DATA_CHAIN_SESSION_COOKIE: 'raw-token-value' } as NodeJS.ProcessEnv)).toBe('raw-token-value')
-    expect(resolveObserverSessionCookie({ STARYE_DATA_CHAIN_SESSION_COOKIE: 'starye.session_token=raw-token-value' } as NodeJS.ProcessEnv)).toBe('raw-token-value')
-    expect(resolveObserverSessionCookie(
-      { STARYE_DATA_CHAIN_SESSION_COOKIE_FILE: 'C:/tmp/untracked-session.txt' } as NodeJS.ProcessEnv,
-      () => 'starye.session_token=file-token',
-    )).toBe('file-token')
-  })
+    await expect(observation.observeDataChainSurfaces(options, { read, write })).rejects.toThrow('root_iab_adapter_required')
+    await expect(observation.observeDataChainSurfaces(options, {
+      read,
+      write,
+      rootIab: { owner: 'puppeteer', probeDashboard: vi.fn(), observeSurface: vi.fn() },
+    })).rejects.toThrow('root_iab_adapter_required')
+    await expect(observation.runDataChainSurfaceObservationCli([
+      '--mode', 'local', '--target', baseOptions.target, '--run-id', baseOptions.runId,
+    ], { read, write })).rejects.toThrow('root_iab_adapter_required')
 
-  it('returns unavailable immediately when the default observer lands on /auth/login', async () => {
-    const { observeSurfaceDefault } = await loadObservation()
-    const setCookie = vi.fn(async () => {})
-    const puppeteer = {
-      launch: vi.fn(async () => ({
-        newPage: async () => ({
-          setCookie,
-          goto: async () => ({ ok: () => true }),
-          url: () => 'http://localhost:8080/auth/login?next=/dashboard/movies',
-          waitForFunction: vi.fn(async () => {
-            throw new Error('should not wait for tuple after auth redirect')
-          }),
-          evaluate: vi.fn(async () => {
-            throw new Error('should not evaluate after auth redirect')
-          }),
-        }),
-        close: vi.fn(async () => {}),
-      })),
-    }
-
-    await expect(observeSurfaceDefault({
-      mode: 'local',
-      targetId: baseOptions.target,
-      runId: baseOptions.runId,
-      itemCode: 'code-1',
-      itemId: 'id-1',
-      surface: 'dashboard',
-      baseUrl: 'http://localhost:8080',
-      path: '/dashboard/movies',
-    }, puppeteer, 'signed-session-token')).resolves.toEqual({ status: 'unavailable' })
-    expect(setCookie).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'starye.session_token',
-      value: 'signed-session-token',
-      url: 'http://localhost:8080',
-      path: '/',
-    }))
-    expect(puppeteer.launch).toHaveBeenCalled()
+    expect(read).not.toHaveBeenCalled()
+    expect(write).not.toHaveBeenCalled()
+    expect(observation).not.toHaveProperty('observeSurfaceDefault')
+    expect(observation).not.toHaveProperty('resolveObserverSessionCookie')
   })
 
   it('preserves only valid runner exit 0 or 2 artifacts in the shared wrapper', async () => {
@@ -757,6 +674,3 @@ describe('phase 13 local smoke runner', () => {
     })).rejects.toThrow('unexpected exit code')
   })
 })
-
-
-
