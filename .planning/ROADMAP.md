@@ -341,5 +341,16 @@ $gsd-execute-phase 13 --gaps-only
 
 Immutable: p13-55 remote, p13-57 local. 13-61/13-62 still wait on a terminal local carrier.
 
+### Phase 15: Reconcile v1.2 evidence matrix with Phase 13 closeout
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 14
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 15 to break down)
+
 ---
 *Last updated: 2026-07-26 after 13-60 pre-allocation session-gate block*
