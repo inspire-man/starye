@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 部署可用、日常使用态** - Phases 1-5 shipped 2026-07-11. Archive: [v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 存储成本控制与代码/文件整理** - Phases 6-10 shipped 2026-07-13. Archive: [v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
-- ◇ **v1.2 Cloudflare 账户/域名切换与全链路发布验证** - Phases 11-14 active.
+- ◇ **v1.2 Cloudflare 账户/域名切换与全链路发布验证** - Phase 15 local reconciliation complete; Phase 13 selected-production Viewer proof remains blocked.
 
 ## Current Status
 
@@ -16,8 +16,9 @@ v1.2 is active. The milestone goal is to make Starye switchable across Cloudflar
 |-------|------|------|--------------|
 | 11 | 4/4 | Complete    | 2026-07-14 |
 | 12 | 4/4 | Complete    | 2026-07-15 |
-| 13 | Scope closeout | Complete (production Viewer proof deferred) | 2026-07-29 |
-| 14 | Test and Operations Hardening | Close old-domain drift, document account/domain switching, and produce final requirement-to-evidence verification. | TEST-01, TEST-06, TEST-07 |
+| 13 | Full Chain Data Smoke | Blocked — selected-production Viewer checkpoint remains unresolved. | DATA-01..DATA-07, TEST-05 |
+| 14 | Test and Operations Hardening | Complete — old-domain, RUNBOOK, and initial evidence-matrix hardening. | TEST-01, TEST-06, TEST-07 |
+| 15 | Reconcile v1.2 evidence matrix with Phase 13 closeout | Complete — local-only evidence reconciliation; does not complete Phase 13 or v1.2. | No new requirement; reconciles the existing 30-row evidence matrix |
 
 ## Phase Details
 
@@ -343,16 +344,20 @@ Immutable: p13-55 remote, p13-57 local. 13-61/13-62 still wait on a terminal loc
 
 ### Phase 15: Reconcile v1.2 evidence matrix with Phase 13 closeout
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Reconcile the 30-row v1.2 evidence matrix with the current canonical Phase 13 verifier without changing frozen evidence or asserting missing production proof.
+**Requirements**: No new requirement; reconciles existing v1.2 evidence rows.
 **Depends on:** Phase 14
-**Plans:** 1/1 plans executed
+**Plans:** 1/1 plans complete
 
 Plans:
 
 - [x] 15-01-PLAN.md
 
-- [ ] TBD (run /gsd-plan-phase 15 to break down)
+**Success criteria:**
+
+1. The local final matrix gate accepts the current canonical Phase 13 raw statuses and preserves their source vocabulary.
+2. DATA-06 remains blocked at the selected-production Viewer checkpoint; partial rows preserve their accurate recovery prerequisites.
+3. The reconciliation records one local validation round and a single manually opened, run-bound future validation condition without promoting Phase 13 or v1.2 completion.
 
 ---
-*Last updated: 2026-07-26 after 13-60 pre-allocation session-gate block*
+*Last updated: 2026-07-29 after Phase 15 local evidence reconciliation; Phase 13 Viewer checkpoint remains the milestone blocker.*

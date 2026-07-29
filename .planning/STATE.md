@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: evidence matrix with Phase 13 closeout
 current_phase: 15
-current_phase_name: reconcile-v1-2-evidence-matrix-with-phase-13-closeout
-status: verifying
+status: completed
 stopped_at: Completed 15-01-PLAN.md; Phase 13 remains gaps_found
-last_updated: "2026-07-29T10:20:50.533Z"
+last_updated: "2026-07-29T10:29:05.340Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 15 execution started
+last_activity_desc: Phase 15 complete
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 96
   completed_plans: 73
   percent: 76
+current_phase_name: reconcile-v1-2-evidence-matrix-with-phase-13-closeout
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 15 (reconcile-v1-2-evidence-matrix-with-phase-13-closeout) — EXECUTING
-Plan: 1 of 1
-status: Phase complete — ready for verification
-Last activity: 2026-07-29 — Phase 15 execution started
+Phase: 15 (reconcile-v1-2-evidence-matrix-with-phase-13-closeout) — COMPLETE
+Plan: 1 of 1 complete
+status: Phase 15 is complete; v1.2 remains blocked by the Phase 13 selected-production Viewer checkpoint.
+Last activity: 2026-07-29 — Phase 15 local reconciliation completed; no Phase 13 or milestone completion asserted
 
 ## Performance Metrics
 
