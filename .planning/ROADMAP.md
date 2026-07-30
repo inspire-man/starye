@@ -35,9 +35,12 @@ v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面
 3. 失败或取消的任务创建新的 attempt 并完整保留历史；同一模板的活动执行不会并发重复运行。
 4. runner event 经过独立 HMAC、时间窗、nonce 和幂等校验，日志内容受限并完成脱敏。
 
-**Plans:** 3/3 plans executed
+**Plans:** 4/4 plans executed
 
 Plans:
+
+- [x] 16-04-PLAN.md
+
 **Wave 1**
 
 - [x] 16-01-PLAN.md — 固化任务/attempt/lease/log 的 D1 模型、状态机与保留契约。
