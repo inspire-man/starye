@@ -15,7 +15,7 @@ export function redactRunnerEventText(value: string): string {
   return value
     .replace(/authorization\s*[:=]\s*(?:bearer\s+)?[^\s,;]+(?:\s+[^\s,;]+)?/giu, 'Authorization: [REDACTED]')
     .replace(/(cookie\s*[:=]\s*)([^\s,;]+)/giu, '$1[REDACTED]')
-    .replace(/\b(?:token|secret|signature|password|api[_-]?key)\s*=\s*[^\s&]+/giu, '[REDACTED]')
+    .replace(/\b(?:token|secret|signature|password|api[_-]?key)\s*[:=]\s*[^\s&]+/giu, '[REDACTED]')
     .replace(/https?:\/\/\S+/giu, '[REDACTED]')
 }
 
