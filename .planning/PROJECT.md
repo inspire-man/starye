@@ -32,6 +32,8 @@
 
 ## Current State
 
+**Phase 16 complete:** 已交付受控 movie/manga task 模板、D1 task/run/attempt/log/lease 审计模型、状态机、task/run 归属授权、独立 HMAC runner 回调、凭据脱敏与 90 天详细日志清理；下一步为 Phase 17 本地 runner vertical slice。
+
 **Latest archived milestone:** v1.2 Cloudflare 账户/域名切换与全链路发布验证（2026-07-29，override closeout）
 
 **Archive evidence:**
@@ -100,6 +102,7 @@
 - ✓ v1.1 存储相关代码整理：上传目的、R2 key、图片处理和 crawler 脚本策略统一，测试覆盖关键防线。 — v1.1
 - ✓ v1.2 显式 TargetProfile、env 投影、target-first preflight 与 typed runtime/workflow contract。 — v1.2
 - ✓ v1.2 Pages redirect、legacy-domain、RUNBOOK 与 30-row evidence-matrix 静态验证。 — v1.2
+- ✓ v1.3 Phase 16 任务域基础：受控模板、D1 task/run/attempt/log/lease、审计状态机、task/run 授权、独立 HMAC 回调与日志脱敏。 — Validated in Phase 16
 
 ### Active
 
@@ -187,6 +190,7 @@
 | v1.2 证据矩阵以当前 verifier 为状态源 | 历史 summary 和 checkbox 仅表明 ownership；`SATISFIED`、`PARTIAL`、`FAILED/CHECKPOINT` 必须保留原始语义 | ✓ Validated in Phase 15 |
 | v1.2 以 override closeout 归档 | 生产 Viewer 终态证明未达成，用户接受将其与 8 个历史 debug sessions 记录为延期项 | ✓ Accepted at v1.2 closeout |
 | v1.3 生产 crawler 继续由 GitHub Actions 执行 | Cloudflare API 负责受控编排与状态汇总，Node/Puppeteer crawler 保持在现有 GitHub Actions 执行环境 | — Pending |
+| v1.3 task/run 控制面以 D1 为唯一可审计事实 | 本地 runner 与 GitHub Actions 需共享同一状态、attempt、日志和受限 command 语义 | ✓ Validated in Phase 16 |
 
 ## Evolution
 
@@ -206,4 +210,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-30 after v1.3 milestone initialization*
+*Last updated: 2026-07-30 after Phase 16 completion*
