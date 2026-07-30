@@ -7,11 +7,11 @@
 
 ### 任务控制
 
-- [ ] **CTRL-01**: 管理员可从固定的视频或漫画模板创建爬虫任务，接口拒绝任意命令、URL、密钥和 workflow 参数。
-- [ ] **CTRL-02**: 系统持久化任务、每次 attempt、结构化日志、操作者与受控输入快照。
+- [x] **CTRL-01**: 管理员可从固定的视频或漫画模板创建爬虫任务，接口拒绝任意命令、URL、密钥和 workflow 参数。
+- [x] **CTRL-02**: 系统持久化任务、每次 attempt、结构化日志、操作者与受控输入快照。
 - [x] **CTRL-03**: 任务状态支持排队、分发、运行、成功、失败、取消请求和已取消；非法状态迁移被拒绝。
-- [ ] **CTRL-04**: 失败或已取消任务可创建新的可追溯 attempt，历史状态和日志保持不变。
-- [ ] **CTRL-05**: 视频/漫画模板的重复活动执行受 D1 claim/lease 约束，避免双重运行。
+- [x] **CTRL-04**: 失败或已取消任务可创建新的可追溯 attempt，历史状态和日志保持不变。
+- [x] **CTRL-05**: 视频/漫画模板的重复活动执行受 D1 claim/lease 约束，避免双重运行。
 
 ### 本地执行
 
@@ -60,11 +60,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CTRL-01 | Phase 16 | Pending |
-| CTRL-02 | Phase 16 | Pending |
+| CTRL-01 | Phase 16 | Complete |
+| CTRL-02 | Phase 16 | Complete |
 | CTRL-03 | Phase 16 | Complete |
-| CTRL-04 | Phase 16 | Pending |
-| CTRL-05 | Phase 16 | Pending |
+| CTRL-04 | Phase 16 | Complete |
+| CTRL-05 | Phase 16 | Complete |
 | LOCAL-01 | Phase 17 | Pending |
 | LOCAL-02 | Phase 17 | Pending |
 | LOCAL-03 | Phase 17 | Pending |
