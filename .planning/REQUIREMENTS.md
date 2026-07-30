@@ -9,7 +9,7 @@
 
 - [ ] **CTRL-01**: 管理员可从固定的视频或漫画模板创建爬虫任务，接口拒绝任意命令、URL、密钥和 workflow 参数。
 - [ ] **CTRL-02**: 系统持久化任务、每次 attempt、结构化日志、操作者与受控输入快照。
-- [ ] **CTRL-03**: 任务状态支持排队、分发、运行、成功、失败、取消请求和已取消；非法状态迁移被拒绝。
+- [x] **CTRL-03**: 任务状态支持排队、分发、运行、成功、失败、取消请求和已取消；非法状态迁移被拒绝。
 - [ ] **CTRL-04**: 失败或已取消任务可创建新的可追溯 attempt，历史状态和日志保持不变。
 - [ ] **CTRL-05**: 视频/漫画模板的重复活动执行受 D1 claim/lease 约束，避免双重运行。
 
@@ -34,7 +34,7 @@
 
 ### 安全与运维
 
-- [ ] **OPS-01**: runner 回调使用独立 HMAC、时间窗、nonce、事件幂等和日志脱敏。
+- [x] **OPS-01**: runner 回调使用独立 HMAC、时间窗、nonce、事件幂等和日志脱敏。
 - [ ] **OPS-02**: 为 GitHub 凭据、日志留存、失联 run、取消、重试和回滚更新 canonical RUNBOOK。
 - [ ] **TEST-01**: 本地与生产路径均具备从任务创建到入库后内容 CRUD 的可重复验收证据。
 
@@ -62,7 +62,7 @@
 |-------------|-------|--------|
 | CTRL-01 | Phase 16 | Pending |
 | CTRL-02 | Phase 16 | Pending |
-| CTRL-03 | Phase 16 | Pending |
+| CTRL-03 | Phase 16 | Complete |
 | CTRL-04 | Phase 16 | Pending |
 | CTRL-05 | Phase 16 | Pending |
 | LOCAL-01 | Phase 17 | Pending |
@@ -75,11 +75,12 @@
 | DASH-02 | Phase 19 | Pending |
 | DASH-03 | Phase 19 | Pending |
 | DATA-01 | Phase 17 | Pending |
-| OPS-01 | Phase 16 | Pending |
+| OPS-01 | Phase 16 | Complete |
 | OPS-02 | Phase 19 | Pending |
 | TEST-01 | Phase 19 | Pending |
 
 **Coverage:**
+
 - v1.3 requirements: 18 total
 - Mapped to phases: 18
 - Unmapped: 0 ✓

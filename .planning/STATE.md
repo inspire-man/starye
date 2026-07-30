@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: 后台爬虫任务与内容运维
 current_phase: 16
 current_phase_name: task-domain-foundation
-status: executing
-stopped_at: Phase 16 plans created
-last_updated: "2026-07-30T05:40:43.609Z"
+status: verifying
+stopped_at: Completed 16-03-PLAN.md
+last_updated: "2026-07-30T08:26:08.513Z"
 last_activity: 2026-07-30
 last_activity_desc: Phase 16 execution started
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 0
-  percent: 0
+  completed_plans: 3
+  percent: 25
 ---
 
 # Project State: Starye — 个人内容中台
@@ -41,8 +41,8 @@ progress:
 ## Current Position
 
 Phase: 16 (task-domain-foundation) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 16
+Plan: 3 of 3
+Status: Phase complete — ready for verification
 Last activity: 2026-07-30 — Phase 16 execution started
 
 ## Performance Metrics
@@ -66,6 +66,7 @@ Last activity: 2026-07-30 — Phase 16 execution started
 | Phase 14 P07 | 25m 51s | 3 tasks | 5 files |
 | Phase 13 P63 | 4 min | 1 tasks | 1 files |
 | Phase 15 P01 | 20 min | 3 tasks | 6 files |
+| Phase 16-task-domain-foundation P03 | 29min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -143,9 +144,9 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-30T04:46:27.648Z
-**Stopped at:** Phase 16 planning complete
-**Resume file:** .planning/phases/16-task-domain-foundation/16-01-PLAN.md
+**Last session:** 2026-07-30T08:25:04.969Z
+**Stopped at:** Completed 16-03-PLAN.md
+**Resume file:** None
 
 **Next recommended action:** Execute Phase 16 plans in wave order.
 
@@ -229,6 +230,9 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 - [Phase 13]: 13-63 在分配前冻结：IAB observeSurface 不可用且未配置 cookie-backed observer。 — 计划禁止默认观察器和无适配器的 run-id 分配。
 - [Phase ?]: Phase 15 maps canonical Phase 13 SATISFIED, PARTIAL, and FAILED/CHECKPOINT labels to verified, partial, and blocked while preserving raw source wording.
 - [Phase ?]: Phase 15 completes one local reconciliation round; a second round is manual, at most once, and requires a new run-bound terminal Phase 13 artifact.
+- [Phase ?]: Runner callbacks use separate HMAC bindings and never reuse CRAWLER_SECRET.
+- [Phase ?]: Identical event replay returns a stored outcome; changed event ID or nonce bindings conflict before lifecycle mutation.
+- [Phase ?]: Daily log retention delegates only to repository detailed-log expiry cleanup.
 
 ### Blockers
 
