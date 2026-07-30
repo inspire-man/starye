@@ -2,8 +2,52 @@ import * as v from 'valibot'
 
 const Identifier = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))
 
+const Attempt = v.pipe(v.number(), v.integer(), v.minValue(1))
+const Sequence = v.pipe(v.number(), v.integer(), v.minValue(1))
+const Timestamp = v.pipe(v.number(), v.integer())
+
+export const CrawlerRunSnapshotSchema = v.strictObject({
+  entrypoint: v.picklist(['movie-crawler', 'manga-crawler']),
+  permissionResource: v.picklist(['movie', 'comic']),
+  templateKey: v.picklist(['movie', 'manga']),
+  templateVersion: v.literal(1),
+})
+
+export const CrawlerRunnerControlEnvelopeSchema = v.strictObject({
+  event_id: Identifier,
+  key_id: Identifier,
+  nonce: Identifier,
+  timestamp: Timestamp,
+})
+
+export const CrawlerRunPollRequestSchema = CrawlerRunnerControlEnvelopeSchema
+
+export const CrawlerRunClaimRequestSchema = v.strictObject({
+  attempt: Attempt,
+  event_id: Identifier,
+  key_id: Identifier,
+  nonce: Identifier,
+  run_id: Identifier,
+  sequence: Sequence,
+  timestamp: Timestamp,
+})
+
+export const CrawlerRunPollResponseSchema = v.strictObject({
+  candidate: v.nullable(v.strictObject({
+    attempt: Attempt,
+    run_id: Identifier,
+    sequence: Sequence,
+    snapshot: CrawlerRunSnapshotSchema,
+  })),
+})
+
+export const CrawlerRunClaimResponseSchema = v.strictObject({
+  accepted: v.boolean(),
+  reason: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))),
+})
+
 export const CrawlerRunEventSchema = v.strictObject({
-  attempt: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  attempt: Attempt,
   code: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(100))),
   counts: v.optional(v.record(v.string(), v.pipe(v.number(), v.integer(), v.minValue(0)))),
   event_id: Identifier,
@@ -16,8 +60,8 @@ export const CrawlerRunEventSchema = v.strictObject({
     templateKey: v.picklist(['movie', 'manga']),
   })),
   run_id: Identifier,
-  sequence: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  timestamp: v.pipe(v.number(), v.integer()),
+  sequence: Sequence,
+  timestamp: Timestamp,
   type: v.picklist(['heartbeat', 'progress', 'log', 'succeeded', 'failed', 'cancelled']),
 })
 

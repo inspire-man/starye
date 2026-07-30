@@ -166,12 +166,12 @@ describe('crawler task repository', () => {
       eventId: 'event-1',
       keyId: 'key-current',
       nonce: 'nonce-1',
-      outcome: { outcome: 'accepted' },
       runId,
       sequence: 2,
     }
-    await expect(repository.processRunnerEvent(input)).resolves.toEqual({ kind: 'accepted', outcome: { outcome: 'accepted' } })
-    await expect(repository.processRunnerEvent(input)).resolves.toEqual({ kind: 'duplicate', outcome: { outcome: 'accepted' } })
+    const actualOutcome = { accepted: true, status: 'running' }
+    await expect(repository.processRunnerEvent(input)).resolves.toEqual({ kind: 'accepted', outcome: actualOutcome })
+    await expect(repository.processRunnerEvent(input)).resolves.toEqual({ kind: 'duplicate', outcome: actualOutcome })
     await expect(repository.processRunnerEvent({ ...input, bodySha256: 'body-two' })).resolves.toEqual({ kind: 'conflict' })
     await expect(repository.processRunnerEvent({ ...input, eventId: 'event-2' })).resolves.toEqual({ kind: 'conflict' })
     await expect(repository.processRunnerEvent({ ...input, nonce: 'nonce-2' })).resolves.toEqual({ kind: 'conflict' })

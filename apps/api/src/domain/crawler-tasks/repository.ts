@@ -78,7 +78,6 @@ export interface ProcessCrawlerRunnerEventInput {
   readonly keyId: string
   readonly log?: AppendCrawlerRunLogInput
   readonly nonce: string
-  readonly outcome: Readonly<Record<string, unknown>>
   readonly receipt?: CrawlerRunReceipt
   readonly runId: string
   readonly safeSummary?: string
@@ -91,7 +90,33 @@ export type ProcessCrawlerRunnerEventResult
     | { readonly kind: 'conflict' }
     | { readonly kind: 'duplicate', readonly outcome: Readonly<Record<string, unknown>> }
     | { readonly kind: 'not_found' }
+    | { readonly kind: 'rejected', readonly outcome: Readonly<Record<string, unknown>> }
     | { readonly kind: 'receipt_template_mismatch' }
+
+export interface ClaimCrawlerRunInput {
+  readonly attempt: number
+  readonly bodySha256: string
+  readonly eventId: string
+  readonly keyId: string
+  readonly nonce: string
+  readonly runId: string
+  readonly sequence: number
+}
+
+export interface CrawlerRunDispatchCandidate {
+  readonly attempt: number
+  readonly runId: string
+  readonly sequence: number
+  readonly snapshot: CrawlerTaskSnapshot
+}
+
+export type ClaimCrawlerRunResult
+  = | { readonly kind: 'accepted', readonly outcome: Readonly<Record<string, unknown>> }
+    | { readonly kind: 'attempt_mismatch' }
+    | { readonly kind: 'conflict' }
+    | { readonly kind: 'duplicate', readonly outcome: Readonly<Record<string, unknown>> }
+    | { readonly kind: 'not_found' }
+    | { readonly kind: 'rejected', readonly outcome: Readonly<Record<string, unknown>> }
 
 interface CrawlerRunnerEventRow {
   body_sha256: string
@@ -137,7 +162,7 @@ function transitionSequence(decision: Extract<CrawlerRunTransitionDecision, { ki
 }
 
 function staleAuditSequence(event: CrawlerRunTransitionEvent): number {
-  return event.actor === 'runner' ? -(event.sequence + 1) : -1
+  return event.actor === 'runner' || event.actor === 'dispatcher' ? -(event.sequence + 1) : -1
 }
 
 function truncateUtf8(value: string, maxBytes: number): string {
@@ -167,6 +192,12 @@ function parseRunnerEventOutcome(value: string): Readonly<Record<string, unknown
   return parsed as Readonly<Record<string, unknown>>
 }
 
+function transitionOutcome(decision: CrawlerRunTransitionDecision): Readonly<Record<string, unknown>> {
+  return decision.kind === 'transition'
+    ? { accepted: true, status: decision.nextStatus }
+    : { accepted: false, reason: decision.reasonCode }
+}
+
 export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: CrawlerRepositoryOptions = {}) {
   const d1 = asD1Client(db)
   const now = options.now ?? (() => new Date())
@@ -191,6 +222,34 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       WHERE run.id = ?
     `).bind(runId).all<{ template_key: CrawlerTaskTemplateKey }>()
     return result.results?.[0]?.template_key
+  }
+
+  async function pollDispatch(): Promise<CrawlerRunDispatchCandidate | undefined> {
+    const result = await d1.prepare(`
+      SELECT run.id, run.attempt_number, run.last_event_sequence, task.request_snapshot_json
+      FROM crawler_run AS run
+      INNER JOIN crawler_task AS task ON task.id = run.task_id
+      WHERE run.status = 'queued'
+      ORDER BY run.created_at ASC, run.id ASC
+      LIMIT 1
+    `).all<{
+      attempt_number: number
+      id: string
+      last_event_sequence: number
+      request_snapshot_json: string
+    }>()
+    const row = result.results?.[0]
+    if (!row) {
+      return undefined
+    }
+
+    const snapshot = JSON.parse(row.request_snapshot_json) as CrawlerTaskSnapshot
+    return {
+      attempt: row.attempt_number,
+      runId: row.id,
+      sequence: row.last_event_sequence + 1,
+      snapshot,
+    }
   }
 
   async function findActiveLease(templateKey: CrawlerTaskTemplateKey, nowSeconds: number): Promise<CrawlerTaskRun | undefined> {
@@ -395,16 +454,67 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return decision
   }
 
-  async function claimDispatch(runId: string): Promise<CrawlerRunTransitionDecision> {
-    const run = await getRunRow(runId)
-    if (!run) {
-      throw new Error(`Crawler run ${runId} was not found`)
+  async function claimDispatch(runId: string): Promise<CrawlerRunTransitionDecision>
+  async function claimDispatch(input: ClaimCrawlerRunInput): Promise<ClaimCrawlerRunResult>
+  async function claimDispatch(input: string | ClaimCrawlerRunInput): Promise<ClaimCrawlerRunResult | CrawlerRunTransitionDecision> {
+    if (typeof input === 'string') {
+      const run = await getRunRow(input)
+      if (!run) {
+        throw new Error(`Crawler run ${input} was not found`)
+      }
+      return applyTransition(input, {
+        actor: 'dispatcher',
+        sequence: run.last_event_sequence + 1,
+        type: 'dispatch_claim',
+      })
     }
-    return applyTransition(runId, {
-      actor: 'dispatcher',
-      sequence: run.last_event_sequence + 1,
-      type: 'dispatch_claim',
+
+    const run = await getRunRow(input.runId)
+    if (!run) {
+      return { kind: 'not_found' }
+    }
+    if (run.attempt_number !== input.attempt) {
+      return { kind: 'attempt_mismatch' }
+    }
+
+    const existing = await findRunnerEvent(input.runId, input.eventId, input.nonce)
+    if (existing) {
+      return classifyExistingRunnerEvent(existing, input)
+    }
+
+    const decision = input.sequence === run.last_event_sequence + 1
+      ? await applyTransition(input.runId, {
+          actor: 'dispatcher',
+          sequence: input.sequence,
+          type: 'dispatch_claim',
+        })
+      : {
+          currentStatus: run.status,
+          kind: 'stale' as const,
+          reasonCode: 'stale_event' as const,
+          sequence: input.sequence,
+        }
+    const outcome = transitionOutcome(decision)
+    const recorded = await recordRunnerEvent({
+      bodySha256: input.bodySha256,
+      eventId: input.eventId,
+      keyId: input.keyId,
+      nonce: input.nonce,
+      outcome,
+      runId: input.runId,
+      sequence: input.sequence,
     })
+    if (!recorded) {
+      const concurrent = await findRunnerEvent(input.runId, input.eventId, input.nonce)
+      if (!concurrent) {
+        throw new Error('Runner claim outcome was not persisted')
+      }
+      return classifyExistingRunnerEvent(concurrent, input)
+    }
+
+    return decision.kind === 'transition'
+      ? { kind: 'accepted', outcome }
+      : { kind: 'rejected', outcome }
   }
 
   async function renewLease(runId: string, sequence: number): Promise<CrawlerRunTransitionDecision> {
@@ -566,7 +676,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
   function classifyExistingRunnerEvent(
     existing: CrawlerRunnerEventRow,
-    input: Pick<ProcessCrawlerRunnerEventInput, 'bodySha256' | 'eventId' | 'nonce'>,
+    input: Pick<ClaimCrawlerRunInput, 'bodySha256' | 'eventId' | 'nonce'>,
   ): Extract<ProcessCrawlerRunnerEventResult, { kind: 'conflict' | 'duplicate' }> {
     if (existing.event_id !== input.eventId || existing.nonce !== input.nonce || existing.body_sha256 !== input.bodySha256) {
       return { kind: 'conflict' }
@@ -592,12 +702,17 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return classifyExistingRunnerEvent(existing, input)
     }
 
+    const decision = await applyTransition(input.runId, input.event, {
+      receipt: input.receipt,
+      safeSummary: input.safeSummary,
+    })
+    const outcome = transitionOutcome(decision)
     const recorded = await recordRunnerEvent({
       bodySha256: input.bodySha256,
       eventId: input.eventId,
       keyId: input.keyId,
       nonce: input.nonce,
-      outcome: input.outcome,
+      outcome,
       runId: input.runId,
       sequence: input.sequence,
     })
@@ -609,14 +724,12 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return classifyExistingRunnerEvent(concurrent, input)
     }
 
-    await applyTransition(input.runId, input.event, {
-      receipt: input.receipt,
-      safeSummary: input.safeSummary,
-    })
-    if (input.log) {
+    if (decision.kind === 'transition' && input.log) {
       await appendLog(input.log)
     }
-    return { kind: 'accepted', outcome: input.outcome }
+    return decision.kind === 'transition'
+      ? { kind: 'accepted', outcome }
+      : { kind: 'rejected', outcome }
   }
 
   async function sweepExpiredRuns(): Promise<readonly string[]> {
@@ -657,6 +770,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     },
     purgeExpiredRunLogs,
     processRunnerEvent,
+    pollDispatch,
     recordRunnerEvent,
     renewLease,
     retryRun,

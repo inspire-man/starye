@@ -231,6 +231,7 @@ describe('signed crawler runner poll and claim routes', () => {
       kind: 'rejected',
       reasonCode: 'invalid_transition',
     })
+    processor.claimDispatch.mockResolvedValueOnce({ kind: 'conflict' })
     const app = createApp(processor)
     const tamperedBody = JSON.stringify(createControlEnvelope({ attempt: 1, run_id: 'run-1', sequence: 1 }))
     const tampered = await app.request('/crawler-runs/run-1/claim', {
@@ -276,6 +277,6 @@ describe('signed crawler runner poll and claim routes', () => {
 
     expect([tampered.status, expired.status, unknownKey.status, foreignAttempt.status, conflict.status]).toEqual([401, 400, 401, 409, 409])
     expect(processor.processRunnerEvent).not.toHaveBeenCalled()
-    expect(processor.claimDispatch).toHaveBeenCalledTimes(1)
+    expect(processor.claimDispatch).toHaveBeenCalledTimes(2)
   })
 })
