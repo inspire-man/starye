@@ -330,6 +330,114 @@ export const jobs = sqliteTable('job', {
   processedAt: integer('processed_at', { mode: 'timestamp' }),
 })
 
+// --- 受控爬虫任务领域 ---
+export const crawlerTasks = sqliteTable('crawler_task', {
+  id: text('id').primaryKey(),
+  templateKey: text('template_key', { enum: ['movie', 'manga'] }).notNull(),
+  templateVersion: integer('template_version').notNull(),
+  requestedByUserId: text('requested_by_user_id').notNull().references(() => user.id),
+  requestSnapshotJson: text('request_snapshot_json', { mode: 'json' }).notNull(),
+  idempotencyKey: text('idempotency_key'),
+  latestRunId: text('latest_run_id'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_crawler_task_requester_idempotency').on(table.requestedByUserId, table.idempotencyKey),
+  index('idx_crawler_task_requester_created').on(table.requestedByUserId, table.createdAt),
+  index('idx_crawler_task_template_updated').on(table.templateKey, table.updatedAt),
+])
+
+export type CrawlerTask = InferSelectModel<typeof crawlerTasks>
+export type NewCrawlerTask = InferInsertModel<typeof crawlerTasks>
+
+export const crawlerRuns = sqliteTable('crawler_run', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => crawlerTasks.id),
+  attemptNumber: integer('attempt_number').notNull(),
+  status: text('status', {
+    enum: ['queued', 'dispatching', 'running', 'cancel_requested', 'succeeded', 'failed', 'cancelled'],
+  }).notNull(),
+  stateVersion: integer('state_version').notNull().default(0),
+  lastEventSequence: integer('last_event_sequence').notNull().default(0),
+  leaseExpiresAt: integer('lease_expires_at', { mode: 'timestamp' }),
+  lastHeartbeatAt: integer('last_heartbeat_at', { mode: 'timestamp' }),
+  cancelRequestedAt: integer('cancel_requested_at', { mode: 'timestamp' }),
+  failureCode: text('failure_code'),
+  receiptSummaryJson: text('receipt_summary_json', { mode: 'json' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  terminalAt: integer('terminal_at', { mode: 'timestamp' }),
+}, table => [
+  uniqueIndex('idx_crawler_run_task_attempt').on(table.taskId, table.attemptNumber),
+  index('idx_crawler_run_task_created').on(table.taskId, table.createdAt),
+  index('idx_crawler_run_status_lease_expiry').on(table.status, table.leaseExpiresAt),
+])
+
+export type CrawlerRun = InferSelectModel<typeof crawlerRuns>
+export type NewCrawlerRun = InferInsertModel<typeof crawlerRuns>
+
+export const crawlerRunTransitions = sqliteTable('crawler_run_transition', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id),
+  sequence: integer('sequence').notNull(),
+  fromStatus: text('from_status').notNull(),
+  toStatus: text('to_status').notNull(),
+  reasonCode: text('reason_code').notNull(),
+  safeSummary: text('safe_summary'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_crawler_run_transition_run_sequence').on(table.runId, table.sequence),
+])
+
+export type CrawlerRunTransition = InferSelectModel<typeof crawlerRunTransitions>
+export type NewCrawlerRunTransition = InferInsertModel<typeof crawlerRunTransitions>
+
+export const crawlerTemplateLeases = sqliteTable('crawler_template_lease', {
+  templateKey: text('template_key', { enum: ['movie', 'manga'] }).primaryKey(),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  renewedAt: integer('renewed_at', { mode: 'timestamp' }).notNull(),
+})
+
+export type CrawlerTemplateLease = InferSelectModel<typeof crawlerTemplateLeases>
+export type NewCrawlerTemplateLease = InferInsertModel<typeof crawlerTemplateLeases>
+
+export const crawlerRunnerEvents = sqliteTable('crawler_runner_event', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id),
+  eventId: text('event_id').notNull(),
+  nonce: text('nonce').notNull(),
+  sequence: integer('sequence').notNull(),
+  bodySha256: text('body_sha256').notNull(),
+  keyId: text('key_id').notNull(),
+  outcome: text('outcome', { mode: 'json' }).notNull(),
+  receivedAt: integer('received_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_crawler_runner_event_run_event').on(table.runId, table.eventId),
+  uniqueIndex('idx_crawler_runner_event_run_nonce').on(table.runId, table.nonce),
+])
+
+export type CrawlerRunnerEvent = InferSelectModel<typeof crawlerRunnerEvents>
+export type NewCrawlerRunnerEvent = InferInsertModel<typeof crawlerRunnerEvents>
+
+export const crawlerRunLogs = sqliteTable('crawler_run_log', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id),
+  sequence: integer('sequence').notNull(),
+  level: text('level', { enum: ['debug', 'info', 'warn', 'error'] }).notNull(),
+  code: text('code').notNull(),
+  safeMessage: text('safe_message').notNull(),
+  countsJson: text('counts_json', { mode: 'json' }),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_crawler_run_log_run_sequence').on(table.runId, table.sequence),
+  index('idx_crawler_run_log_expiry').on(table.expiresAt),
+])
+
+export type CrawlerRunLog = InferSelectModel<typeof crawlerRunLogs>
+export type NewCrawlerRunLog = InferInsertModel<typeof crawlerRunLogs>
+
 // --- 审计日志 ---
 export const auditLogs = sqliteTable('audit_log', {
   id: text('id').primaryKey(),
@@ -446,6 +554,7 @@ export const userRelations = relations(user, ({ many }) => ({
   favorites: many(userFavorites),
   ratings: many(ratings),
   aria2Config: many(aria2Configs),
+  crawlerTasks: many(crawlerTasks),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -536,6 +645,53 @@ export const auditLogRelations = relations(auditLogs, ({ one }) => ({
   user: one(user, {
     fields: [auditLogs.userId],
     references: [user.id],
+  }),
+}))
+
+export const crawlerTaskRelations = relations(crawlerTasks, ({ many, one }) => ({
+  requester: one(user, {
+    fields: [crawlerTasks.requestedByUserId],
+    references: [user.id],
+  }),
+  runs: many(crawlerRuns),
+}))
+
+export const crawlerRunRelations = relations(crawlerRuns, ({ many, one }) => ({
+  task: one(crawlerTasks, {
+    fields: [crawlerRuns.taskId],
+    references: [crawlerTasks.id],
+  }),
+  transitions: many(crawlerRunTransitions),
+  runnerEvents: many(crawlerRunnerEvents),
+  logs: many(crawlerRunLogs),
+  templateLease: one(crawlerTemplateLeases),
+}))
+
+export const crawlerRunTransitionRelations = relations(crawlerRunTransitions, ({ one }) => ({
+  run: one(crawlerRuns, {
+    fields: [crawlerRunTransitions.runId],
+    references: [crawlerRuns.id],
+  }),
+}))
+
+export const crawlerTemplateLeaseRelations = relations(crawlerTemplateLeases, ({ one }) => ({
+  run: one(crawlerRuns, {
+    fields: [crawlerTemplateLeases.runId],
+    references: [crawlerRuns.id],
+  }),
+}))
+
+export const crawlerRunnerEventRelations = relations(crawlerRunnerEvents, ({ one }) => ({
+  run: one(crawlerRuns, {
+    fields: [crawlerRunnerEvents.runId],
+    references: [crawlerRuns.id],
+  }),
+}))
+
+export const crawlerRunLogRelations = relations(crawlerRunLogs, ({ one }) => ({
+  run: one(crawlerRuns, {
+    fields: [crawlerRunLogs.runId],
+    references: [crawlerRuns.id],
   }),
 }))
 
