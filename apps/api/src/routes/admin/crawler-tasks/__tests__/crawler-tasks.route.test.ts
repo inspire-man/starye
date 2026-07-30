@@ -102,7 +102,7 @@ describe('admin crawler task routes', () => {
 
     expect(response.status).toBe(404)
     expect(prepare).toHaveBeenCalledTimes(2)
-    expect(prepare.mock.calls[1]?.[0]).toContain('INNER JOIN crawler_run')
+    expect(prepare.mock.calls[1]?.[0]).toContain('INNER JOIN crawler_task')
   })
 
   it('rejects a movie administrator cancelling a manga run through their own movie task before the repository mutation', async () => {

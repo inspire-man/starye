@@ -59,6 +59,19 @@ async function requireTaskAccess(c: any, user: SessionUser, taskId: string): Pro
   return task
 }
 
+async function requireTaskRunAccess(c: any, user: SessionUser, taskId: string, runId: string): Promise<void> {
+  await requireTaskAccess(c, user, taskId)
+  const row = await getD1(c).prepare(`
+    SELECT run.id
+    FROM crawler_run AS run
+    INNER JOIN crawler_task AS task ON task.id = run.task_id
+    WHERE task.id = ? AND run.id = ?
+  `).bind(taskId, runId).all<{ id: string }>()
+  if (!row.results?.[0]) {
+    throw new HTTPException(404, { message: 'Crawler run not found for task' })
+  }
+}
+
 export const adminCrawlerTasksRoutes = new Hono<AppEnv>()
 
 adminCrawlerTasksRoutes.post('/', validator('json', CreateCrawlerTaskSchema), async (c) => {
@@ -108,19 +121,21 @@ adminCrawlerTasksRoutes.get('/:taskId/runs/:runId/logs', validator('param', Craw
   const user = await requireSessionUser(c)
   const { taskId, runId } = c.req.valid('param')
   const { cursor, limit } = c.req.valid('query')
-  await requireTaskAccess(c, user, taskId)
+  await requireTaskRunAccess(c, user, taskId, runId)
   const logs = await getD1(c).prepare(`
-    SELECT sequence, level, code, safe_message, counts_json, created_at
-    FROM crawler_run_log WHERE run_id = ? AND (? IS NULL OR sequence > ?)
-    ORDER BY sequence ASC LIMIT ?
-  `).bind(runId, cursor ?? null, cursor ?? null, limit).all<Record<string, unknown>>()
+    SELECT log.sequence, log.level, log.code, log.safe_message, log.counts_json, log.created_at
+    FROM crawler_run_log AS log
+    INNER JOIN crawler_run AS run ON run.id = log.run_id
+    WHERE run.task_id = ? AND log.run_id = ? AND (? IS NULL OR log.sequence > ?)
+    ORDER BY log.sequence ASC LIMIT ?
+  `).bind(taskId, runId, cursor ?? null, cursor ?? null, limit).all<Record<string, unknown>>()
   return c.json({ logs: logs.results ?? [] })
 })
 
 adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/cancel', validator('param', CrawlerTaskRunParamsSchema), async (c) => {
   const user = await requireSessionUser(c)
   const { taskId, runId } = c.req.valid('param')
-  await requireTaskAccess(c, user, taskId)
+  await requireTaskRunAccess(c, user, taskId, runId)
   const result = await createCrawlerTaskRepository(c.get('db')).applyTransition(runId, {
     actor: 'admin',
     type: 'admin_cancel',
@@ -131,7 +146,7 @@ adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/cancel', validator('param', C
 adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/retry', validator('param', CrawlerTaskRunParamsSchema), validator('json', RetryCrawlerTaskSchema), async (c) => {
   const user = await requireSessionUser(c)
   const { taskId, runId } = c.req.valid('param')
-  await requireTaskAccess(c, user, taskId)
+  await requireTaskRunAccess(c, user, taskId, runId)
   const result = await createCrawlerTaskRepository(c.get('db')).retryRun(runId)
   return c.json({ kind: result.kind, run: result.run })
 })
