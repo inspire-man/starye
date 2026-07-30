@@ -24,6 +24,7 @@ import { favoritesRoutes } from './routes/favorites'
 import featureFlagsRouter from './routes/feature-flags'
 import feedbackRouter from './routes/feedback'
 import { healthRoutes } from './routes/health'
+import { crawlerRunsRoutes } from './routes/internal/crawler-runs'
 import monitoringRouter from './routes/monitoring'
 import { moviesRoutes } from './routes/movies'
 import { postsRoutes } from './routes/posts'
@@ -97,6 +98,7 @@ const routes = app
   .route('/api/feedback', feedbackRouter)
   .route('/api/feature-flags', featureFlagsRouter)
   .route('/api/monitoring', monitoringRouter)
+  .route('/api/internal/crawler-runs', crawlerRunsRoutes)
   .route('/api/admin', adminMainRoutes)
   .route('/api/auth', authRoutes)
   .route('/api/upload', uploadRoutes)

@@ -152,6 +152,49 @@ describe('crawler task repository', () => {
     expect(staleAudits.rows).toHaveLength(1)
   })
 
+  it('binds runner events to a run attempt and returns stored outcomes only for identical replays', async () => {
+    const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    if (created.kind !== 'created')
+      throw new Error('expected created run')
+    const runId = created.run.id
+    await repository.claimDispatch(runId)
+
+    const input = {
+      attempt: 1,
+      bodySha256: 'body-one',
+      event: { actor: 'runner' as const, sequence: 2, type: 'runner_heartbeat' as const },
+      eventId: 'event-1',
+      keyId: 'key-current',
+      nonce: 'nonce-1',
+      outcome: { outcome: 'accepted' },
+      runId,
+      sequence: 2,
+    }
+    await expect(repository.processRunnerEvent(input)).resolves.toEqual({ kind: 'accepted', outcome: { outcome: 'accepted' } })
+    await expect(repository.processRunnerEvent(input)).resolves.toEqual({ kind: 'duplicate', outcome: { outcome: 'accepted' } })
+    await expect(repository.processRunnerEvent({ ...input, bodySha256: 'body-two' })).resolves.toEqual({ kind: 'conflict' })
+    await expect(repository.processRunnerEvent({ ...input, eventId: 'event-2' })).resolves.toEqual({ kind: 'conflict' })
+    await expect(repository.processRunnerEvent({ ...input, nonce: 'nonce-2' })).resolves.toEqual({ kind: 'conflict' })
+    await expect(repository.processRunnerEvent({ ...input, attempt: 2, eventId: 'event-3', nonce: 'nonce-3' })).resolves.toEqual({ kind: 'attempt_mismatch' })
+    await expect(repository.processRunnerEvent({
+      ...input,
+      event: {
+        actor: 'runner',
+        receipt: { contentIds: ['content-1'], templateKey: 'manga' },
+        sequence: 3,
+        type: 'runner_succeeded',
+      },
+      eventId: 'event-4',
+      nonce: 'nonce-4',
+      receipt: { contentIds: ['content-1'], templateKey: 'manga' },
+      sequence: 3,
+    })).resolves.toEqual({ kind: 'receipt_template_mismatch' })
+
+    await expect(repository.getRun(runId)).resolves.toMatchObject({ status: 'running' })
+    const receipts = await client.execute({ args: [runId], sql: 'SELECT event_id, nonce, body_sha256 FROM crawler_runner_event WHERE run_id = ?' })
+    expect(receipts.rows).toEqual([{ body_sha256: 'body-one', event_id: 'event-1', nonce: 'nonce-1' }])
+  })
+
   it('lets receipt success win a cancel race, rejects retry for success, and creates the next immutable attempt after failure', async () => {
     const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'manga' })
     if (created.kind !== 'created')

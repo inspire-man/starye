@@ -70,6 +70,36 @@ export interface CrawlerRepositoryOptions {
   readonly now?: () => Date
 }
 
+export interface ProcessCrawlerRunnerEventInput {
+  readonly attempt: number
+  readonly bodySha256: string
+  readonly event: CrawlerRunTransitionEvent
+  readonly eventId: string
+  readonly keyId: string
+  readonly log?: AppendCrawlerRunLogInput
+  readonly nonce: string
+  readonly outcome: Readonly<Record<string, unknown>>
+  readonly receipt?: CrawlerRunReceipt
+  readonly runId: string
+  readonly safeSummary?: string
+  readonly sequence: number
+}
+
+export type ProcessCrawlerRunnerEventResult
+  = | { readonly kind: 'accepted', readonly outcome: Readonly<Record<string, unknown>> }
+    | { readonly kind: 'attempt_mismatch' }
+    | { readonly kind: 'conflict' }
+    | { readonly kind: 'duplicate', readonly outcome: Readonly<Record<string, unknown>> }
+    | { readonly kind: 'not_found' }
+    | { readonly kind: 'receipt_template_mismatch' }
+
+interface CrawlerRunnerEventRow {
+  body_sha256: string
+  event_id: string
+  nonce: string
+  outcome: string
+}
+
 function asD1Client(db: CrawlerTaskDatabase): D1Client {
   return db.$client as unknown as D1Client
 }
@@ -127,6 +157,14 @@ function truncateUtf8(value: string, maxBytes: number): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function parseRunnerEventOutcome(value: string): Readonly<Record<string, unknown>> {
+  const parsed: unknown = JSON.parse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Stored runner event outcome is invalid')
+  }
+  return parsed as Readonly<Record<string, unknown>>
 }
 
 export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: CrawlerRepositoryOptions = {}) {
@@ -516,6 +554,71 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return (result.meta?.changes ?? 0) === 1
   }
 
+  async function findRunnerEvent(runId: string, eventId: string, nonce: string): Promise<CrawlerRunnerEventRow | undefined> {
+    const result = await d1.prepare(`
+      SELECT event_id, nonce, body_sha256, outcome
+      FROM crawler_runner_event
+      WHERE run_id = ? AND (event_id = ? OR nonce = ?)
+      LIMIT 1
+    `).bind(runId, eventId, nonce).all<CrawlerRunnerEventRow>()
+    return result.results?.[0]
+  }
+
+  function classifyExistingRunnerEvent(
+    existing: CrawlerRunnerEventRow,
+    input: Pick<ProcessCrawlerRunnerEventInput, 'bodySha256' | 'eventId' | 'nonce'>,
+  ): Extract<ProcessCrawlerRunnerEventResult, { kind: 'conflict' | 'duplicate' }> {
+    if (existing.event_id !== input.eventId || existing.nonce !== input.nonce || existing.body_sha256 !== input.bodySha256) {
+      return { kind: 'conflict' }
+    }
+    return { kind: 'duplicate', outcome: parseRunnerEventOutcome(existing.outcome) }
+  }
+
+  async function processRunnerEvent(input: ProcessCrawlerRunnerEventInput): Promise<ProcessCrawlerRunnerEventResult> {
+    const run = await getRunRow(input.runId)
+    const templateKey = await getTemplateKey(input.runId)
+    if (!run || !templateKey) {
+      return { kind: 'not_found' }
+    }
+    if (run.attempt_number !== input.attempt) {
+      return { kind: 'attempt_mismatch' }
+    }
+    if (input.receipt && input.receipt.templateKey !== templateKey) {
+      return { kind: 'receipt_template_mismatch' }
+    }
+
+    const existing = await findRunnerEvent(input.runId, input.eventId, input.nonce)
+    if (existing) {
+      return classifyExistingRunnerEvent(existing, input)
+    }
+
+    const recorded = await recordRunnerEvent({
+      bodySha256: input.bodySha256,
+      eventId: input.eventId,
+      keyId: input.keyId,
+      nonce: input.nonce,
+      outcome: input.outcome,
+      runId: input.runId,
+      sequence: input.sequence,
+    })
+    if (!recorded) {
+      const concurrent = await findRunnerEvent(input.runId, input.eventId, input.nonce)
+      if (!concurrent) {
+        throw new Error('Runner event receipt was not persisted')
+      }
+      return classifyExistingRunnerEvent(concurrent, input)
+    }
+
+    await applyTransition(input.runId, input.event, {
+      receipt: input.receipt,
+      safeSummary: input.safeSummary,
+    })
+    if (input.log) {
+      await appendLog(input.log)
+    }
+    return { kind: 'accepted', outcome: input.outcome }
+  }
+
   async function sweepExpiredRuns(): Promise<readonly string[]> {
     const currentNow = toUnixSeconds(now())
     const expired = await d1.prepare(`
@@ -553,6 +656,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return run ? toCrawlerTaskRun(run) : undefined
     },
     purgeExpiredRunLogs,
+    processRunnerEvent,
     recordRunnerEvent,
     renewLease,
     retryRun,

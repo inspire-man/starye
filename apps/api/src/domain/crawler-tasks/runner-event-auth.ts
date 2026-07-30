@@ -16,13 +16,17 @@ export function base64UrlEncode(value: ArrayBuffer): string {
   return btoa(encoded).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '')
 }
 
-function base64UrlDecode(value: string): Uint8Array | undefined {
+function base64UrlDecode(value: string): ArrayBuffer | undefined {
   if (!/^[\w-]+$/u.test(value))
     return undefined
   try {
     const base64 = value.replaceAll('-', '+').replaceAll('_', '/') + '='.repeat((4 - value.length % 4) % 4)
     const binary = atob(base64)
-    return Uint8Array.from(binary, character => character.charCodeAt(0))
+    const bytes = new Uint8Array(binary.length)
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index)
+    }
+    return bytes.buffer
   }
   catch {
     return undefined
@@ -36,6 +40,14 @@ function selectKey(keys: RunnerEventSigningKeys, keyId: string, now: number): Ru
     return keys.previous
   }
   return undefined
+}
+
+function toArrayBuffer(value: ArrayBuffer | Uint8Array): ArrayBuffer {
+  if (value instanceof ArrayBuffer)
+    return value
+  const copy = new Uint8Array(value.byteLength)
+  copy.set(value)
+  return copy.buffer
 }
 
 export async function verifyRunnerEventSignature(input: {
@@ -57,6 +69,6 @@ export async function verifyRunnerEventSignature(input: {
     false,
     ['verify'],
   )
-  const valid = await crypto.subtle.verify('HMAC', key, signature, input.body)
+  const valid = await crypto.subtle.verify('HMAC', key, signature, toArrayBuffer(input.body))
   return valid ? { keyId: keyConfig.id, valid: true } : { valid: false }
 }
