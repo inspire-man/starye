@@ -5,6 +5,7 @@ import { adminAuditLogsRoutes } from '../audit-logs'
 import { adminCacheRoutes } from '../cache'
 import { adminChaptersRoutes } from '../chapters'
 import { adminComicsRoutes } from '../comics'
+import { adminCrawlerTasksRoutes } from '../crawler-tasks'
 import { adminCrawlersRoutes } from '../crawlers'
 import { adminMoviesRoutes } from '../movies'
 import { adminPublishersRoutes } from '../publishers'
@@ -19,6 +20,7 @@ const admin = new Hono<AppEnv>()
 // 挂载子路由
 admin.route('/movies', adminMoviesRoutes)
 admin.route('/crawlers', adminCrawlersRoutes)
+admin.route('/crawler-tasks', adminCrawlerTasksRoutes)
 admin.route('/actors', adminActorsRoutes)
 admin.route('/publishers', adminPublishersRoutes)
 admin.route('/audit-logs', adminAuditLogsRoutes)

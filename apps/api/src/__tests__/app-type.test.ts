@@ -1,5 +1,6 @@
 import type { AppType } from '../index'
 import { describe, expect, it } from 'vitest'
+import adminMainRoutes from '../routes/admin/main'
 
 describe('appType Export', () => {
   it('应该正确导出 AppType', () => {
@@ -12,5 +13,9 @@ describe('appType Export', () => {
     // 类型测试: 验证路由字符串常量
     const hasMoviesRoute = 'movies' as const
     expect(hasMoviesRoute).toBeDefined()
+  })
+
+  it('将 crawler task router 保持在既有 admin 组合和 AppType 路径中', () => {
+    expect(adminMainRoutes.routes.some(route => route.path === '/crawler-tasks')).toBe(true)
   })
 })
