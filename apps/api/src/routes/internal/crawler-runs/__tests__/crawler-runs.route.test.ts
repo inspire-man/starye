@@ -26,7 +26,28 @@ function createEvent(overrides: Record<string, unknown> = {}) {
 }
 
 function createProcessor(result: unknown = { kind: 'accepted', outcome: { outcome: 'accepted' } }) {
-  return { processRunnerEvent: vi.fn(async () => result) }
+  return {
+    claimDispatch: vi.fn(async () => ({
+      currentStatus: 'queued',
+      kind: 'transition',
+      nextStateVersion: 1,
+      nextStatus: 'dispatching',
+      reasonCode: 'dispatch_claimed',
+      releaseLease: false,
+    })),
+    pollDispatch: vi.fn(async () => ({
+      attempt: 1,
+      runId: 'run-1',
+      sequence: 1,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        permissionResource: 'movie',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+    })),
+    processRunnerEvent: vi.fn(async () => result),
+  }
 }
 
 function createApp(processor = createProcessor()) {
@@ -48,7 +69,11 @@ function createApp(processor = createProcessor()) {
 
 async function postEvent(app: Hono<any>, event: Record<string, unknown>, pathRunId = 'run-1') {
   const body = JSON.stringify(event)
-  return app.request(`/crawler-runs/${pathRunId}/events`, {
+  return postSigned(app, `/crawler-runs/${pathRunId}/events`, body)
+}
+
+async function postSigned(app: Hono<any>, path: string, body: string) {
+  return app.request(path, {
     body,
     headers: {
       'content-type': 'application/json',
@@ -57,6 +82,16 @@ async function postEvent(app: Hono<any>, event: Record<string, unknown>, pathRun
     },
     method: 'POST',
   })
+}
+
+function createControlEnvelope(overrides: Record<string, unknown> = {}) {
+  return {
+    event_id: 'control-event-1',
+    key_id: 'key-current',
+    nonce: 'control-nonce-1',
+    timestamp: NOW,
+    ...overrides,
+  }
 }
 
 describe('signed crawler runner event route', () => {
@@ -130,5 +165,117 @@ describe('signed crawler runner event route', () => {
 
     expect(success.status).toBe(400)
     expect(heartbeatWithReceipt.status).toBe(400)
+  })
+})
+
+describe('signed crawler runner poll and claim routes', () => {
+  it('keeps poll read-only and returns only an API-owned candidate snapshot', async () => {
+    const processor = createProcessor()
+    const app = createApp(processor)
+    const accepted = await postSigned(app, '/crawler-runs/poll', JSON.stringify(createControlEnvelope()))
+    const surplus = await postSigned(app, '/crawler-runs/poll', JSON.stringify(createControlEnvelope({
+      command: 'node arbitrary.js',
+      event_id: 'control-event-2',
+      nonce: 'control-nonce-2',
+      source_url: 'https://untrusted.example',
+      workflow: 'dispatch-anything',
+    })))
+
+    expect(accepted.status).toBe(200)
+    await expect(accepted.json()).resolves.toEqual({
+      candidate: {
+        attempt: 1,
+        run_id: 'run-1',
+        sequence: 1,
+        snapshot: {
+          entrypoint: 'movie-crawler',
+          permissionResource: 'movie',
+          templateKey: 'movie',
+          templateVersion: 1,
+        },
+      },
+    })
+    expect(surplus.status).toBe(400)
+    expect(processor.pollDispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('binds a signed claim to API run/attempt/sequence and returns the actual CAS decision', async () => {
+    const processor = createProcessor()
+    processor.claimDispatch.mockResolvedValueOnce({
+      currentStatus: 'dispatching',
+      kind: 'stale',
+      reasonCode: 'stale_event',
+      sequence: 1,
+    })
+    const response = await postSigned(processor && createApp(processor), '/crawler-runs/run-1/claim', JSON.stringify(createControlEnvelope({
+      attempt: 1,
+      run_id: 'run-1',
+      sequence: 1,
+    })))
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ accepted: false, reason: 'stale_event' })
+    expect(processor.claimDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      attempt: 1,
+      eventId: 'control-event-1',
+      nonce: 'control-nonce-1',
+      runId: 'run-1',
+      sequence: 1,
+    }))
+  })
+
+  it('rejects tampered, expired, unknown-key, foreign-attempt, and conflicting claim envelopes without a lifecycle callback', async () => {
+    const processor = createProcessor()
+    processor.claimDispatch.mockResolvedValueOnce({
+      currentStatus: 'dispatching',
+      kind: 'rejected',
+      reasonCode: 'invalid_transition',
+    })
+    const app = createApp(processor)
+    const tamperedBody = JSON.stringify(createControlEnvelope({ attempt: 1, run_id: 'run-1', sequence: 1 }))
+    const tampered = await app.request('/crawler-runs/run-1/claim', {
+      body: tamperedBody.replace('run-1', 'run-2'),
+      headers: {
+        'content-type': 'application/json',
+        'x-runner-key-id': 'key-current',
+        'x-runner-signature': await signedRequest(tamperedBody),
+      },
+      method: 'POST',
+    })
+    const expired = await postSigned(app, '/crawler-runs/run-1/claim', JSON.stringify(createControlEnvelope({
+      attempt: 1,
+      event_id: 'claim-expired',
+      nonce: 'claim-expired',
+      run_id: 'run-1',
+      sequence: 1,
+      timestamp: NOW - 5 * 60_000 - 1,
+    })))
+    const unknownKey = await app.request('/crawler-runs/run-1/claim', {
+      body: JSON.stringify(createControlEnvelope({ attempt: 1, run_id: 'run-1', sequence: 1 })),
+      headers: {
+        'content-type': 'application/json',
+        'x-runner-key-id': 'unknown-key',
+        'x-runner-signature': 'invalid',
+      },
+      method: 'POST',
+    })
+    const foreignAttempt = await postSigned(app, '/crawler-runs/run-1/claim', JSON.stringify(createControlEnvelope({
+      attempt: 2,
+      event_id: 'claim-foreign-attempt',
+      nonce: 'claim-foreign-attempt',
+      run_id: 'run-1',
+      sequence: 1,
+    })))
+    const conflict = await postSigned(app, '/crawler-runs/run-1/claim', JSON.stringify(createControlEnvelope({
+      attempt: 1,
+      event_id: 'control-event-1',
+      nonce: 'different-nonce',
+      run_id: 'run-1',
+      sequence: 1,
+    })))
+
+    expect([tampered.status, expired.status, unknownKey.status, foreignAttempt.status, conflict.status]).toEqual([401, 400, 401, 409, 409])
+    expect(processor.processRunnerEvent).not.toHaveBeenCalled()
+    expect(processor.claimDispatch).toHaveBeenCalledTimes(1)
   })
 })
