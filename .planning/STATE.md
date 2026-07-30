@@ -5,15 +5,15 @@ milestone_name: 后台爬虫任务与内容运维
 current_phase: 17
 current_phase_name: Local Runner Vertical Slice
 status: executing
-stopped_at: Phase 17 UI-SPEC approved
-last_updated: "2026-07-30T12:27:38.673Z"
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-07-30T13:41:34.091Z"
 last_activity: 2026-07-30
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
   percent: 25
 ---
 
@@ -41,8 +41,8 @@ progress:
 ## Current Position
 
 Phase: 17 (Local Runner Vertical Slice) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 17
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-07-30 — Phase 17 execution started
 
 ## Performance Metrics
@@ -68,6 +68,7 @@ Last activity: 2026-07-30 — Phase 17 execution started
 | Phase 15 P01 | 20 min | 3 tasks | 6 files |
 | Phase 16-task-domain-foundation P03 | 29min | 3 tasks | 12 files |
 | Phase 16 P04 | 16min | 2 tasks | 4 files |
+| Phase 17-local-runner-vertical-slice P01 | 44m | 2 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -145,9 +146,9 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-30T11:48:56.187Z
-**Stopped at:** Phase 17 UI-SPEC approved
-**Resume file:** .planning/phases/17-local-runner-vertical-slice/17-UI-SPEC.md
+**Last session:** 2026-07-30T13:41:34.066Z
+**Stopped at:** Completed 17-01-PLAN.md
+**Resume file:** None
 
 **Next recommended action:** Execute Phase 16 plans in wave order.
 
@@ -234,6 +235,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 - [Phase ?]: Runner callbacks use separate HMAC bindings and never reuse CRAWLER_SECRET.
 - [Phase ?]: Identical event replay returns a stored outcome; changed event ID or nonce bindings conflict before lifecycle mutation.
 - [Phase ?]: Daily log retention delegates only to repository detailed-log expiry cleanup.
+- [Phase ?]: Runner poll is read-only and signed claims replay only actual post-CAS outcomes.
+- [Phase ?]: Local runner allows one active run and observes cancellation only at heartbeat checkpoints.
 
 ### Blockers
 
