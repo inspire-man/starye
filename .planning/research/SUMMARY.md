@@ -1,152 +1,75 @@
 # Project Research Summary
 
-**Project:** Starye — 个人内容中台
-**Domain:** Cloudflare account/domain switching and local-to-production content pipeline verification
-**Researched:** 2026-07-13
-**Confidence:** HIGH
+**Project:** Starye v1.3 后台爬虫任务与内容运维
+**Domain:** 单作者内容中台的 crawler control plane
+**Researched:** 2026-07-30
+**Overall confidence:** MEDIUM
 
 ## Executive Summary
 
-v1.2 should be treated as a deployment-target and verification milestone, not a feature expansion milestone. The main problem is that Starye currently has one implicit production target (`starye.org` plus one Cloudflare account/resource set) spread across Wrangler files, GitHub workflows, CORS/auth config, gateway origins, crawler secrets, tests and RUNBOOK. Switching Cloudflare account/domain safely requires one explicit target model and fail-closed validation before deployment, migration, crawler or smoke commands run.
+v1.3 的正确形态是持久化的“爬虫控制平面”。Dashboard 发起受控的视频或漫画任务，`apps/api` 在 D1 中保存任务、每次执行和结构化日志；真正的数据面继续使用现有 Node/Puppeteer crawler。本地由显式 Node runner 执行，生产继续由 GitHub Actions 执行。Cloudflare Worker 只负责鉴权、状态、受控 dispatch 和回调，不承担浏览器自动化。
 
-Official Cloudflare guidance supports two different switching mechanisms that must not be confused: Wrangler authentication profiles are useful for local operators working across multiple accounts, while CI/CD uses `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Therefore v1.2 should separate local profile ergonomics from GitHub Actions target selection and secret inventory. The acceptance path should remain Gateway-first: local verification through `http://localhost:8080/...`, production verification through the selected canonical domain, not direct app ports or `*.pages.dev` URLs.
+现有仓库已具备视频/漫画 crawler、内容同步、Dashboard 内容 CRUD、GitHub Actions `workflow_dispatch`、target-profile 和 crawler 监控页。实际缺口是任务事实源：当前恢复接口只返回手工操作说明，失败任务只存在于本地/Actions 文件，无法形成可查询、可取消、可重试、可审计的后台执行记录。
 
-The highest-risk part is the data chain. A deploy can succeed while crawler auth, D1 migration, R2 backup, dashboard management or front-end viewing still point at the wrong target. The milestone should therefore end with a minimal, deterministic full-chain smoke: targeted crawl or fixture -> API write -> D1/admin validation -> front-end viewing through canonical gateway -> verification artifact.
+生产链路可在既有 Actions 上实现，但要坚持“D1 是业务真相、Actions 是执行器”的边界。API 必须先创建应用级 run ID，再把它作为固定 workflow input；Action 以签名回调绑定 `GITHUB_RUN_ID` 并持续上报。成功必须拥有经过校验的入库 receipt，绝不能由 dispatch 受理、runner 启动或进程退出码推断。
 
 ## Key Findings
 
-### Recommended Stack
+**Stack:** 复用 Turborepo、TypeScript、Hono、Drizzle/D1、Valibot、现有 Node 24/Puppeteer 和 GitHub Actions；GitHub 控制面采用窄的原生 Workers `fetch` client，避免新增 Octokit、Redis、BullMQ、Temporal 或 Durable Objects。
 
-Use the existing stack and harden its configuration boundaries rather than introducing a new platform.
+**Feature baseline:** 固定视频/漫画模板、任务/attempt 生命周期、状态和结构化日志、启动/详情/取消/重试、local/Actions 双 runner、入库 receipt 与现有内容 CRUD 跳转，是本里程碑的 table stakes。
 
-**Core technologies:**
-- Wrangler `^4.90.0`: deployment, env/config/profile selection, D1/R2/KV commands.
-- Cloudflare Workers: API and gateway runtime with target-specific bindings/routes.
-- Cloudflare Pages: dashboard/movie/comic/blog/auth front-end hosting with target-specific public API/origin values.
-- D1/R2/KV: existing data/cache/storage layer; all identifiers must become target-specific.
-- GitHub Actions: CI/CD, migration, crawler, rollback and evidence collection.
-- Vitest/Playwright/smoke scripts: automated local and production evidence.
+**Architecture:** `crawler_task` 保存一次受控请求，`crawler_run` 保存每个 attempt，`crawler_run_log` 保存追加式脱敏事件；API command routes 和 runner-event routes 分离鉴权。模板 registry 由服务端封闭映射到两个现有 entry 和 workflow，Dashboard 永远不传 shell、密钥、任意 URL、workflow 名或 target-profile 参数。
 
-### Expected Features
-
-**Must have (table stakes):**
-- Deployment target profile with account, domain, Workers, Pages, D1, R2, KV, URL and required-secret metadata.
-- Wrangler/API/gateway/dashboard config selection by target.
-- GitHub Actions target selection for deploy, migration, crawl and rollback workflows.
-- Domain-aware API CORS, auth URL, gateway origins and front-end public API config.
-- Local Gateway-first full-chain smoke.
-- Production full-chain smoke with crawler -> D1 -> admin -> viewing evidence.
-- Tests and RUNBOOK updates for repeatability.
-
-**Should have (differentiators):**
-- Fail-closed preflight that prevents mixed account/resource/domain deploys.
-- Evidence bundle or verification artifact per target.
-- One-command smoke wrappers for local and production checks.
-
-**Defer (v2+):**
-- Full Cloudflare IaC provisioning.
-- Automated DNS/project/resource creation.
-- Multi-target scheduled crawler matrix.
-- Blue/green account migration.
-
-### Architecture Approach
-
-Introduce a small target-profile layer that projects non-secret target identity into Wrangler config, GitHub workflow inputs/environments, app public URLs, CORS/auth config and smoke scripts. Keep secrets in Wrangler/GitHub/.dev.vars only. Preserve app-specific deploy/rollback workflow boundaries, but make each workflow target-aware. Accept only Gateway/canonical-domain smoke as release evidence.
-
-**Major components:**
-1. Target profile manifest — owns account/domain/resource identity without secrets.
-2. Config/preflight resolver — validates target completeness and renders/selects config.
-3. CI target selection — maps target to GitHub environment/secrets.
-4. Runtime config adoption — API/gateway/dashboard/pages consume target values.
-5. Smoke/evidence harness — local and production chain verification.
-
-### Critical Pitfalls
-
-1. **Mixed account/resource/domain target** — avoid with target manifest and preflight validation.
-2. **Wrangler profiles mistaken for CI auth** — local profiles are separate from GitHub token/account secrets.
-3. **Domain switch breaks auth/CORS/gateway** — parameterize domains and test through gateway.
-4. **Deploy succeeds but data chain fails** — require crawler/D1/admin/viewing smoke.
-5. **Full crawler as gate** — use a deterministic small target, not full scheduled volume.
-6. **Tests hard-code old domain** — move domain assumptions into fixtures/profile factories.
+**Critical pitfall:** GitHub `workflow_dispatch` 的成功响应不等于执行或入库成功。必须用应用级 run ID、回调 nonce、HMAC、事件幂等和条件状态迁移避免串单、重放、晚到回调和错误成功声明。
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+1. **Phase 16: Task Domain Foundation**
+   - 交付 D1 schema/migration、共享 DTO/状态机、受控模板 registry、API command/query routes、审计、幂等与日志 redaction。
+   - 先锁定 `queued -> dispatching -> running -> terminal`、取消与 retry 新 attempt 语义。
+   - 避免复用 `movies`/`comics` 的 `crawlStatus`，也不让 Actions concurrency 充当业务队列。
 
-### Phase 11: Deployment Target Profile Foundation
-**Rationale:** Everything else depends on one authoritative target model and fail-closed validation.
-**Delivers:** Target manifest/schema, inventory of current `starye.org` resources, local Wrangler profile guidance, preflight checks.
-**Addresses:** Profile, account/domain/resource identity, secret requirements.
-**Avoids:** Mixed account/resource/domain pitfall.
+2. **Phase 17: Local Runner Vertical Slice**
+   - 交付 local runner adapter、签名 event/heartbeat/receipt、取消协作、retry 和 Dashboard 查询面。
+   - 通过 Gateway `http://localhost:8080` 证明“后台创建 -> 本地 crawler -> D1 状态/日志 -> 入库 -> 现有内容 CRUD”。
+   - 复用既有 crawler/ApiClient/cleanup，避免重写站点策略和 Puppeteer。
 
-### Phase 12: Cloudflare Config and CI Target Switching
-**Rationale:** After the target is explicit, API/gateway/dashboard/CI workflows can consume it.
-**Delivers:** Target-aware Wrangler config or generated env/config, GitHub environment/input strategy, deploy/migration/crawler workflow selection, domain-aware CORS/gateway/front-end config.
-**Uses:** Wrangler env/config/profile, GitHub Actions secrets/environments.
-**Implements:** Config projection layer and CI target selection.
+3. **Phase 18: GitHub Actions Production Orchestration**
+   - 交付固定 workflow dispatch/correlation、GitHub run 回调、missed-callback reconciliation、provider cancel/retry 和 schedule 接入。
+   - 保留 target-profile、GitHub Environment 与现有 Cloudflare/R2 secrets；API 使用单仓最小权限 Actions token，runner callback 使用独立 HMAC secret。
 
-### Phase 13: Local-to-Production Data Chain Smoke
-**Rationale:** User's stated success is not deployment alone; it is crawl -> ingest -> manage -> view.
-**Delivers:** Local Gateway-first smoke, production canonical-domain smoke, targeted crawler/fixture flow, D1/admin/front-end evidence.
-**Addresses:** End-to-end data chain and "looks deployed but not usable" risk.
+4. **Phase 19: Dashboard Operations And End-to-End Proof**
+   - 交付任务启动、列表、详情、分页日志、取消/重试、receipt 到现有内容 CRUD 的跳转，以及本地和生产路径验收。
+   - 成功证据包含应用 run、Actions/local runner、D1 状态/日志、入库 receipt 和内容编辑，不把 provider dispatch 当验收终点。
 
-### Phase 14: Test Coverage and Operations Hardening
-**Rationale:** The milestone asks to complete tests; after the flow exists, harden regression coverage and runbook ownership.
-**Delivers:** Parameterized tests, smoke wrappers, RUNBOOK updates, verification checklist, old-domain literal audit, evidence artifact format.
-**Addresses:** Tests locking in old domain, non-repeatable release proof.
+**Phase ordering rationale:** 持久化契约与签名事件同时是两类执行器和 Dashboard 的依赖，必须优先。随后用本地纵向切片低风险验证状态机和 crawler adapter，再接入 GitHub 的异步/凭据语义，最后做生产端到端证明和运维收口。
 
-### Phase Ordering Rationale
+## Research Flags
 
-- Target identity must come before runtime config changes; otherwise each file invents its own target language.
-- CI/deploy switching must come before production smoke; otherwise smoke can only prove the current singleton target.
-- Data-chain smoke should come after deploy switching so it proves the selected target.
-- Test/runbook hardening should close the milestone after real paths exist and can be documented accurately.
-
-### Research Flags
-
-Phases likely needing deeper research during planning:
-- **Phase 11:** Confirm exact current Cloudflare resource inventory and what can be validated without live credentials.
-- **Phase 12:** Decide whether to use Wrangler env blocks, generated config files, or both; verify Pages workflows/project configuration.
-- **Phase 13:** Pick a deterministic crawler target/fixture that is useful but cheap and non-flaky.
-
-Phases with standard patterns:
-- **Phase 14:** Mostly repo-local test/runbook work once phase 11-13 contracts are fixed.
+| Phase | Assessment | Follow-up |
+|-------|------------|-----------|
+| 16 | Needs focused design | 明确 migration、状态转换矩阵、D1 条件更新和回调签名格式。 |
+| 17 | Needs implementation research | 核对现有 target-crawl mutation guard，收窄为两个 registry-owned 实际 crawler adapter。 |
+| 18 | Needs provider verification | 在实现前验证 GitHub fine-grained PAT 的确切 Actions 权限、dispatch/cancel 回应和 workflow input 契约。 |
+| 19 | Standard application patterns | 复用 Dashboard 的确认、资源权限、错误处理和既有内容 CRUD。 |
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Official Cloudflare docs and current repo dependencies align on Wrangler/Workers/Pages/D1/R2/KV/GitHub Actions. |
-| Features | HIGH | User goal maps directly to identifiable repo surfaces and official deployment primitives. |
-| Architecture | HIGH | Target manifest + config projection is a standard fail-closed pattern for multi-target deployment. |
-| Pitfalls | HIGH | Most risks are visible in current repo hard-coded domains/resources and Cloudflare auth semantics. |
+| Stack | MEDIUM | 仓库依赖和平台能力已核对；GitHub/Cloudflare API 由官方资料支持。 |
+| Features | HIGH | 直接来自用户确认的 v1.3 目标和现有 crawler/dashboard 缺口。 |
+| Architecture | HIGH | 基于现有 Hono、D1、target-profile、Actions workflow 和 Node crawler 的真实边界。 |
+| Pitfalls | MEDIUM | 幂等、取消和 provider correlation 基于平台行为与仓库执行模式，需以实现测试进一步固化。 |
 
-**Overall confidence:** HIGH
+## Gaps To Address
 
-### Gaps to Address
-
-- **Live Cloudflare inventory:** Research could not verify the user's actual accounts/zones/resource IDs. Phase 11 should inventory from current config and any live credentials the operator chooses to provide.
-- **Pages configuration source:** Only dashboard has a tracked Wrangler config; other Pages apps likely rely on workflows/Cloudflare project settings. Phase 12 must inspect each deploy workflow.
-- **Crawler smoke target:** Needs a user/repo-approved low-cost target URL or fixture during phase planning.
-- **Secrets strategy:** GitHub environment names and secret naming convention need a concrete decision before workflow edits.
+- GitHub Actions dispatch token 的最终权限/轮换方式需在 Phase 18 按实际 repository owner 和 secret 管理面验证；单仓 fine-grained PAT 是当前建议，GitHub App 仅作为明确升级路径。
+- 本地 runner 的启动方式需在 Phase 17 与现有本地 dev supervisor 协调，但其状态/事件契约已固定。
+- 日志单条大小、保留期、heartbeat 超时和每模板并发上限需在 Phase 16 形成可测试的具体数值。
 
 ## Sources
 
-### Primary (HIGH confidence)
-- Context7 `/llmstxt/developers_cloudflare_workers_llms-full_txt` — Wrangler config, env bindings, routes/custom domains, CI deploy commands.
-- Context7 `/cloudflare/workers-sdk` — Wrangler E2E helper, Miniflare persisted D1/KV/R2, secrets config behavior.
-- Cloudflare Docs: <https://developers.cloudflare.com/workers/wrangler/profiles/> — authentication profiles, resolution order, local-vs-CI boundary, account selection.
-- Cloudflare Docs: <https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/> — GitHub Actions authentication with API token/account ID.
-- Cloudflare Docs: <https://developers.cloudflare.com/d1/wrangler-commands/> — D1 local/remote, migrations, export, time travel.
-
-### Repository Evidence (HIGH confidence)
-- `apps/api/wrangler.toml` — current D1/R2/KV/routes/domain values.
-- `apps/gateway/wrangler.toml` — current gateway routes/origins/domain values.
-- `apps/dashboard/wrangler.toml` — current public API URL.
-- `.github/workflows/deploy-*.yml`, `.github/workflows/deploy-migrations.yml`, `.github/workflows/daily-manga-crawl.yml` — current CI deploy/migration/crawler environment.
-- `apps/api/src/config.ts`, `apps/gateway/src/index.ts` — domain/CORS/gateway behavior.
-- `RUNBOOK.md` — canonical operations owner for deployment, rollback, D1/R2 and accidental upload handling.
-
----
-*Research completed: 2026-07-13*
-*Ready for roadmap: yes*
+- Repository evidence (HIGH): [`.planning/PROJECT.md`](../PROJECT.md), [`apps/api/src/routes/admin/crawlers/index.ts`](../../apps/api/src/routes/admin/crawlers/index.ts), [`apps/dashboard/src/views/Crawlers.vue`](../../apps/dashboard/src/views/Crawlers.vue), [daily movie/manga workflows](../../.github/workflows/), [`packages/crawler/package.json`](../../packages/crawler/package.json).
+- Platform documentation (MEDIUM): GitHub workflow dispatch/cancel/concurrency and Cloudflare D1 prepared statement/transaction documentation, recorded in [STACK.md](STACK.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
