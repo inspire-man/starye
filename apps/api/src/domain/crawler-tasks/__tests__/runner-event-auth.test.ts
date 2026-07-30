@@ -65,6 +65,37 @@ describe('runner event signature and safe normalization', () => {
     expect(normalized.receipt).toEqual({ contentIds: ['movie-1'], templateKey: 'movie' })
   })
 
+  it('redacts credential values with both colon and equals delimiters from logs and terminal summaries', () => {
+    for (const delimiter of [':', '=']) {
+      const message = [
+        `X-API-Key${delimiter}API_KEY_VALUE`,
+        `secret${delimiter}SECRET_VALUE`,
+        `authorization${delimiter}Bearer AUTH_VALUE`,
+        `cookie${delimiter}COOKIE_VALUE`,
+        'crawl progress remains safe',
+      ].join(' ')
+
+      const normalizedLog = normalizeRunnerEventForStorage({
+        code: 'crawl_progress',
+        level: 'info',
+        message,
+        type: 'progress',
+      })
+      const normalizedTerminal = normalizeRunnerEventForStorage({
+        code: 'runner_failed',
+        level: 'error',
+        message,
+        type: 'failed',
+      })
+
+      for (const marker of ['API_KEY_VALUE', 'SECRET_VALUE', 'AUTH_VALUE', 'COOKIE_VALUE']) {
+        expect(normalizedLog.log?.message).not.toContain(marker)
+        expect(normalizedTerminal.terminalSummary).not.toContain(marker)
+      }
+      expect(normalizedLog.log?.message).toContain('crawl progress remains safe')
+    }
+  })
+
   it('caps normal UTF-8 log detail without dropping terminal summaries', () => {
     const normalized = normalizeRunnerEventForStorage({
       code: 'runner_failed',
