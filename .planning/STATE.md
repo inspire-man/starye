@@ -3,19 +3,22 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: 后台爬虫任务与内容运维
 status: planning
-last_updated: "2026-07-30T01:53:01.413Z"
+last_updated: "2026-07-30T02:18:00.000Z"
 last_activity: 2026-07-30
+last_activity_desc: v1.3 roadmap approved; Phase 16 ready for planning
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
+current_phase: 16
+current_phase_name: Task Domain Foundation
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-07-29
+**Last updated:** 2026-07-30
 **Mode:** yolo
 **Granularity:** standard
 
@@ -23,28 +26,28 @@ progress:
 
 **Core Value:** 部署在公网、能稳定日常使用的个人内容中台 —— "能用、不崩" 优先于 "功能全"。
 
-**Current Milestone:** None. v1.2 is archived by override closeout; plan the next milestone explicitly.
+**Current Milestone:** v1.3 后台爬虫任务与内容运维。以 D1 控制面连接本地 runner 与 GitHub Actions，验证视频/漫画 crawler 从后台任务到内容 CRUD 的完整链路。
 
 **Project Docs:**
 
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
-- `.planning/ROADMAP.md` — milestone index and deferred-evidence boundary
-- `.planning/REQUIREMENTS.md` — created fresh by the next milestone workflow
+- `.planning/ROADMAP.md` — v1.3 Phases 16-19 and requirement coverage
+- `.planning/REQUIREMENTS.md` — v1.3 scoped and mapped requirements
 - `.planning/MILESTONES.md` — shipped milestone summaries and archive links
-- `.planning/research/SUMMARY.md` — v1.2 Cloudflare account/domain switching research
+- `.planning/research/SUMMARY.md` — v1.3 crawler control-plane research
 - `.planning/codebase/ARCHITECTURE.md` — Brownfield system overview
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-30 — Milestone v1.3 started
+Phase: 16 — Task Domain Foundation
+Plan: Roadmap created; Phase 16 is ready for discussion or planning
+Status: Ready to plan Phase 16
+Last activity: 2026-07-30 — v1.3 roadmap approved
 
 ## Performance Metrics
 
-**Phases completed:** 3 / 4
-**Plans completed:** 40 / 43
+**Phases completed:** 0 / 4
+**Plans completed:** 0 / 0
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -119,6 +122,7 @@ Last activity: 2026-07-30 — Milestone v1.3 started
 ### Roadmap Evolution
 
 - Phase 15 added: Reconcile v1.2 evidence matrix with Phase 13 closeout
+- Phase 16-19 added: v1.3 crawler task control plane, local runner, GitHub Actions orchestration, and end-to-end operations proof
 
 ## Deferred Items
 
@@ -138,29 +142,28 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-29T10:40:00.000Z
-**Stopped at:** Phase 13 scope closeout; Viewer proof deferred to a later authorized milestone
+**Last session:** 2026-07-30T02:18:00.000Z
+**Stopped at:** v1.3 roadmap approved; Phase 16 ready for planning
 **Resume file:** None
 
-**Next recommended action:** Start a new milestone only when the deferred Viewer proof or a separate scope is explicitly selected.
+**Next recommended action:** Start Phase 16 discussion or planning.
 
 **If interrupted, resume by:**
 
-1. Read `.planning/STATE.md` (this file)
-2. Read `.planning/PROJECT.md` and `.planning/ROADMAP.md`
-3. Read `.planning/phases/13-full-chain-data-smoke/13-21-SUMMARY.md`, `13-22-SUMMARY.md`, `13-23-SUMMARY.md`, `13-24-SUMMARY.md`, `13-25-SUMMARY.md`, commit `1e13a62`, `13-26-PLAN.md`, and the revised unexecuted `13-17-PLAN.md` through `13-20-PLAN.md`
-4. Read `.planning/phases/13-full-chain-data-smoke/13-VALIDATION.md` and `13-VERIFICATION.md`
-5. Preserve all historical evidence; accept `1e13a62` as the completed RED gate, compare the present package/lock candidate to the explicit Plan 13-26 whitelist before further code/script/test work, and resume only Wave 28 static gates. Do not run a dependency-mutation command or make another registry request; the named static `pnpm exec` validations remain allowed after the whitelist passes. Do not start a runtime or inspect ports in this plan.
+1. Read `.planning/STATE.md`, `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, and `.planning/ROADMAP.md`.
+2. Read `.planning/research/SUMMARY.md` and its STACK / FEATURES / ARCHITECTURE / PITFALLS inputs.
+3. Preserve v1.2 archived evidence and its deferred Viewer-proof boundary; do not reinterpret it as a v1.3 success condition.
+4. Continue with `$gsd-discuss-phase 16` or `$gsd-plan-phase 16` after roadmap approval.
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
 
 ---
-*State initialized: 2026-05-11 after roadmap creation*
+*State updated: 2026-07-30 after v1.3 roadmap approval*
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `$gsd-discuss-phase 16` or `$gsd-plan-phase 16`
 
 ## Decisions
 

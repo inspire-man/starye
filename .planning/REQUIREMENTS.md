@@ -60,30 +60,30 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CTRL-01 | Unmapped | Pending |
-| CTRL-02 | Unmapped | Pending |
-| CTRL-03 | Unmapped | Pending |
-| CTRL-04 | Unmapped | Pending |
-| CTRL-05 | Unmapped | Pending |
-| LOCAL-01 | Unmapped | Pending |
-| LOCAL-02 | Unmapped | Pending |
-| LOCAL-03 | Unmapped | Pending |
-| PROD-01 | Unmapped | Pending |
-| PROD-02 | Unmapped | Pending |
-| PROD-03 | Unmapped | Pending |
-| DASH-01 | Unmapped | Pending |
-| DASH-02 | Unmapped | Pending |
-| DASH-03 | Unmapped | Pending |
-| DATA-01 | Unmapped | Pending |
-| OPS-01 | Unmapped | Pending |
-| OPS-02 | Unmapped | Pending |
-| TEST-01 | Unmapped | Pending |
+| CTRL-01 | Phase 16 | Pending |
+| CTRL-02 | Phase 16 | Pending |
+| CTRL-03 | Phase 16 | Pending |
+| CTRL-04 | Phase 16 | Pending |
+| CTRL-05 | Phase 16 | Pending |
+| LOCAL-01 | Phase 17 | Pending |
+| LOCAL-02 | Phase 17 | Pending |
+| LOCAL-03 | Phase 17 | Pending |
+| PROD-01 | Phase 18 | Pending |
+| PROD-02 | Phase 18 | Pending |
+| PROD-03 | Phase 18 | Pending |
+| DASH-01 | Phase 19 | Pending |
+| DASH-02 | Phase 19 | Pending |
+| DASH-03 | Phase 19 | Pending |
+| DATA-01 | Phase 17 | Pending |
+| OPS-01 | Phase 16 | Pending |
+| OPS-02 | Phase 19 | Pending |
+| TEST-01 | Phase 19 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-30*
-*Last updated: 2026-07-30 after v1.3 requirement confirmation*
+*Last updated: 2026-07-30 after v1.3 roadmap creation*
