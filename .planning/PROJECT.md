@@ -19,6 +19,17 @@
 - 延期 selected-production Viewer terminal proof；p13-66 永久冻结在 `canonical_viewer_unavailable`，不重试或改写。
 - 保持 Cloudflare free-tier-first、R2 必要资产、正文图外链语义和文档 owner 边界。
 
+## Current Milestone: v1.3 后台爬虫任务与内容运维
+
+**Goal:** 作者可在本地与生产后台受控发起视频、漫画爬虫任务，观察完整执行状态和日志，完成入库后进行内容增删改。
+
+**Target features:**
+
+- D1 持久化爬虫任务、执行记录和结构化日志。
+- 固定视频、漫画任务模板，支持排队、运行、成功、失败、取消和重试。
+- 本地 runner 与 GitHub Actions 共用 API、状态模型和验收链路；生产继续由 GitHub Actions 实际执行 crawler。
+- 后台管理已入库内容，并以实际爬取、入库、增删改完成验收。
+
 ## Current State
 
 **Latest archived milestone:** v1.2 Cloudflare 账户/域名切换与全链路发布验证（2026-07-29，override closeout）
@@ -92,8 +103,10 @@
 
 ### Active
 
-- [ ] 选定生产环境 Viewer terminal proof：在后续里程碑用 fresh run 完成，不重试 p13-66。
-- [ ] 评估并处理 v1.2 接纳的历史 debug sessions，仅在新的明确范围内进行。
+- [ ] 后台可创建视频、漫画的受控爬虫执行任务，并在本地与生产环境分别调度对应 runner。
+- [ ] 任务执行记录可持久化呈现排队、运行、成功、失败、取消和重试状态，并记录结构化日志。
+- [ ] 生产后台可受控编排 GitHub Actions，任务状态和最终入库结果会回写到后台。
+- [ ] 后台可在爬取入库后管理视频、漫画内容的增删改，并完成端到端验收。
 
 ### Out of Scope
 
@@ -107,6 +120,8 @@
 - 支付 / 会员体系 — 自用，无商业化
 - Worker/Pages Function 代理漫画正文图 — 会把阅读流量转成 Cloudflare 请求/CPU 成本，默认禁止；仅允许短期诊断开关且必须有上限
 - Cloudflare Images / Stream / Cache Reserve / Argo 等付费 add-on — v1.1 不启用，除非单独完成成本评估
+- v1.2 selected-production Viewer terminal proof — 已冻结的 p13-66 不重试；仅在单独定义的新里程碑中以 fresh run 处理
+- 后台任意命令、密钥、来源地址和定时策略编辑 — 任务仅使用受控视频/漫画模板，避免绕过既有 target-profile 与凭据边界
 
 ## Context
 
@@ -171,6 +186,7 @@
 | v1.2 以 Cloudflare 账户/域名切换与真实全链路验证为主线 | 需要证明部署与数据链路可迁移、可复现、可验收，而不是继续扩大存储/文档整理 scope | — Pending |
 | v1.2 证据矩阵以当前 verifier 为状态源 | 历史 summary 和 checkbox 仅表明 ownership；`SATISFIED`、`PARTIAL`、`FAILED/CHECKPOINT` 必须保留原始语义 | ✓ Validated in Phase 15 |
 | v1.2 以 override closeout 归档 | 生产 Viewer 终态证明未达成，用户接受将其与 8 个历史 debug sessions 记录为延期项 | ✓ Accepted at v1.2 closeout |
+| v1.3 生产 crawler 继续由 GitHub Actions 执行 | Cloudflare API 负责受控编排与状态汇总，Node/Puppeteer crawler 保持在现有 GitHub Actions 执行环境 | — Pending |
 
 ## Evolution
 
@@ -190,4 +206,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-29 after v1.2 override closeout*
+*Last updated: 2026-07-30 after v1.3 milestone initialization*

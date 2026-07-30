@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: null
-milestone_name: null
-status: planning_next_milestone
-stopped_at: Phase 13 scope closeout; Viewer proof deferred to a later authorized milestone
-last_updated: "2026-07-29T13:17:45.887Z"
-last_activity: 2026-07-29
-last_activity_desc: Milestone v1.2 completed and archived
+milestone: v1.3
+milestone_name: 后台爬虫任务与内容运维
+status: planning
+last_updated: "2026-07-30T01:53:01.413Z"
+last_activity: 2026-07-30
 progress:
   total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
-current_phase: null
-current_phase_name: null
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,10 +36,10 @@ current_phase_name: null
 
 ## Current Position
 
-Phase: None — planning next milestone
-Plan: v1.2 archived by override closeout
-Status: The Phase 13 Viewer proof is deferred to a separately authorized later milestone; no existing carrier is eligible for retry.
-Last activity: 2026-07-29 — v1.2 archives, audit, and deferred-item record completed
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-30 — Milestone v1.3 started
 
 ## Performance Metrics
 
