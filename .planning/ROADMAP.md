@@ -35,6 +35,18 @@ v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面
 3. 失败或取消的任务创建新的 attempt 并完整保留历史；同一模板的活动执行不会并发重复运行。
 4. runner event 经过独立 HMAC、时间窗、nonce 和幂等校验，日志内容受限并完成脱敏。
 
+**Plans:** 3 plans in 2 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 16-01-PLAN.md — 固化任务/attempt/lease/log 的 D1 模型、状态机与保留契约。
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 16-02-PLAN.md — 提供受会话与资源权限保护的固定模板任务命令、查询、取消与重试 API。
+- [ ] 16-03-PLAN.md — 提供独立 HMAC runner-event 回调、日志脱敏与 90 天明细日志清理。
+
 ### Phase 17: Local Runner Vertical Slice
 
 **Goal:** 通过本地 runner 证明从后台创建到入库 receipt 与内容 CRUD 的完整纵向链路。

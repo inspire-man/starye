@@ -5,16 +5,16 @@ milestone_name: 后台爬虫任务与内容运维
 current_phase: 16
 current_phase_name: Task Domain Foundation
 status: planning
-stopped_at: Phase 16 context gathered
-last_updated: "2026-07-30T03:32:36.388Z"
+stopped_at: Phase 16 plans created
+last_updated: "2026-07-30T04:46:27.648Z"
 last_activity: 2026-07-30
-last_activity_desc: v1.3 roadmap approved
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
+last_activity_desc: Phase 16 planning complete — 3 plans ready
 ---
 
 # Project State: Starye — 个人内容中台
@@ -41,14 +41,14 @@ progress:
 ## Current Position
 
 Phase: 16 — Task Domain Foundation
-Plan: Roadmap created; Phase 16 is ready for discussion or planning
-Status: Ready to plan Phase 16
-Last activity: 2026-07-30 — v1.3 roadmap approved
+Plan: 3 executable plans in 2 waves
+Status: Ready to execute
+Last activity: 2026-07-30 — Phase 16 planning complete
 
 ## Performance Metrics
 
 **Phases completed:** 0 / 4
-**Plans completed:** 0 / 0
+**Plans completed:** 0 / 3
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -143,24 +143,24 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-30T03:32:36.365Z
-**Stopped at:** Phase 16 context gathered
-**Resume file:** .planning/phases/16-task-domain-foundation/16-CONTEXT.md
+**Last session:** 2026-07-30T04:46:27.648Z
+**Stopped at:** Phase 16 planning complete
+**Resume file:** .planning/phases/16-task-domain-foundation/16-01-PLAN.md
 
-**Next recommended action:** Start Phase 16 discussion or planning.
+**Next recommended action:** Execute Phase 16 plans in wave order.
 
 **If interrupted, resume by:**
 
 1. Read `.planning/STATE.md`, `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, and `.planning/ROADMAP.md`.
 2. Read `.planning/research/SUMMARY.md` and its STACK / FEATURES / ARCHITECTURE / PITFALLS inputs.
 3. Preserve v1.2 archived evidence and its deferred Viewer-proof boundary; do not reinterpret it as a v1.3 success condition.
-4. Continue with `$gsd-discuss-phase 16` or `$gsd-plan-phase 16` after roadmap approval.
+4. Run `$gsd-execute-phase 16` to execute Wave 1, then the independent Wave 2 plans.
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
 
 ---
-*State updated: 2026-07-30 after v1.3 roadmap approval*
+*State updated: 2026-07-30 after Phase 16 planning completion*
 
 ## Operator Next Steps
 
