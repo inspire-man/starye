@@ -2,6 +2,7 @@ import type { CloudflareOptions } from '@sentry/cloudflare'
 import type { AppEnv } from './types'
 import { Scalar } from '@scalar/hono-api-reference'
 import * as Sentry from '@sentry/cloudflare'
+import { createDb } from '@starye/db'
 import { Hono } from 'hono'
 import { openAPIRouteHandler } from 'hono-openapi'
 import { etag } from 'hono/etag'
@@ -10,6 +11,7 @@ import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import { timeout } from 'hono/timeout'
 import { timing } from 'hono/timing'
+import { createCrawlerTaskRepository } from './domain/crawler-tasks/repository'
 import { authMiddleware } from './middleware/auth'
 import { corsMiddleware } from './middleware/cors'
 import { databaseMiddleware } from './middleware/database'
@@ -232,6 +234,29 @@ Starye 是一个现代化的内容聚合平台，支持漫画、电影和演员�
 // Export the routes type for RPC, not the app type
 export type AppType = typeof routes
 
+type CrawlerTaskLogCleanup = (env: Pick<AppEnv['Bindings'], 'DB'>, at: Date) => Promise<number>
+
+interface ScheduledTaskContext {
+  waitUntil: (promise: Promise<unknown>) => void
+}
+
+function purgeCrawlerTaskLogDetails(env: Pick<AppEnv['Bindings'], 'DB'>, at: Date): Promise<number> {
+  return createCrawlerTaskRepository(createDb(env.DB)).purgeExpiredRunLogs(at)
+}
+
+export function createCrawlerTaskLogCleanupHandler(cleanup: CrawlerTaskLogCleanup = purgeCrawlerTaskLogDetails) {
+  return (_controller: unknown, env: AppEnv['Bindings'], context: ScheduledTaskContext) => {
+    context.waitUntil(cleanup(env, new Date()))
+  }
+}
+
+const crawlerTaskLogCleanupHandler = createCrawlerTaskLogCleanupHandler()
+
+const worker = {
+  fetch: routes.fetch,
+  scheduled: crawlerTaskLogCleanupHandler,
+} satisfies ExportedHandler<AppEnv['Bindings']>
+
 export default Sentry.withSentry(
   (env: AppEnv['Bindings']) => ({
     dsn: env.SENTRY_DSN,
@@ -249,5 +274,5 @@ export default Sentry.withSentry(
       return event
     },
   }),
-  routes,
+  worker,
 )
