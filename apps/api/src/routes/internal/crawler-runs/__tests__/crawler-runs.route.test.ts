@@ -35,6 +35,7 @@ function createProcessor(result: unknown = { kind: 'accepted', outcome: { outcom
       reasonCode: 'dispatch_claimed',
       releaseLease: false,
     })),
+    getRun: vi.fn(async () => ({ status: 'running' })),
     pollDispatch: vi.fn(async () => ({
       attempt: 1,
       runId: 'run-1',
@@ -112,7 +113,7 @@ describe('signed crawler runner event route', () => {
     const response = await postEvent(createApp(processor), createEvent())
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ outcome: 'accepted' })
+    await expect(response.json()).resolves.toEqual({ cancel_requested: false, outcome: 'accepted' })
     expect(processor.processRunnerEvent).toHaveBeenCalledWith(expect.objectContaining({
       attempt: 1,
       event: expect.objectContaining({ sequence: 2, type: 'runner_heartbeat' }),
@@ -141,7 +142,7 @@ describe('signed crawler runner event route', () => {
     const duplicate = createProcessor({ kind: 'duplicate', outcome: { outcome: 'accepted' } })
     const duplicateResponse = await postEvent(createApp(duplicate), createEvent())
     expect(duplicateResponse.status).toBe(200)
-    await expect(duplicateResponse.json()).resolves.toEqual({ outcome: 'accepted' })
+    await expect(duplicateResponse.json()).resolves.toEqual({ cancel_requested: false, outcome: 'accepted' })
 
     const conflict = createProcessor({ kind: 'conflict' })
     const conflictResponse = await postEvent(createApp(conflict), createEvent())

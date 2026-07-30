@@ -150,12 +150,13 @@ export abstract class OptimizedCrawler {
   /**
    * 同步到 API
    */
-  private async syncToApi(movieInfo: MovieInfo): Promise<void> {
+  protected async syncToApi(movieInfo: MovieInfo): Promise<void> {
     await this.queueManager.addApiTask(async () => {
       try {
         const result = await this.apiClient.syncMovie(movieInfo)
         if (result) {
           this.progressMonitor.incrementApiSynced()
+          this.onMovieSynchronized(movieInfo)
         }
       }
       catch (error) {
@@ -180,6 +181,8 @@ export abstract class OptimizedCrawler {
   getStats() {
     return this.progressMonitor.getStats()
   }
+
+  protected onMovieSynchronized(_movieInfo: MovieInfo): void {}
 
   /**
    * 抽象方法：获取影片信息（子类实现）

@@ -389,7 +389,7 @@ export class ComicCrawler extends BaseCrawler {
       }
 
       // 2. Sync Metadata
-      await this.syncToApi('/api/admin/sync', {
+      const syncResult = await this.syncToApi('/api/admin/sync', {
         type: 'manga',
         data: {
           ...info,
@@ -401,6 +401,9 @@ export class ComicCrawler extends BaseCrawler {
           })),
         },
       })
+      if (syncResult) {
+        this.onMangaSynchronized(info.slug)
+      }
 
       // 3. Check Existing Chapters to skip
       let existingChapters: string[] = []
@@ -521,6 +524,8 @@ export class ComicCrawler extends BaseCrawler {
       console.warn(`  ⚠️ 进度更新失败:`, e)
     }
   }
+
+  protected onMangaSynchronized(_slug: string): void {}
 
   private recordSkip(reason: string, title: string) {
     if (!this.stats.skippedReasons.has(reason)) {

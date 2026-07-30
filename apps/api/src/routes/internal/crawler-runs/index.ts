@@ -47,7 +47,7 @@ function claimResponse(outcome: Readonly<Record<string, unknown>>): { accepted: 
   }
 }
 
-type RunnerEventRepository = Pick<ReturnType<typeof createCrawlerTaskRepository>, 'claimDispatch' | 'pollDispatch' | 'processRunnerEvent'>
+type RunnerEventRepository = Pick<ReturnType<typeof createCrawlerTaskRepository>, 'claimDispatch' | 'getRun' | 'pollDispatch' | 'processRunnerEvent'>
 
 export function createCrawlerRunsRoutes(options: {
   readonly createRepository?: (database: AppEnv['Variables']['db']) => RunnerEventRepository
@@ -201,7 +201,11 @@ export function createCrawlerRunsRoutes(options: {
     }
     if (result.kind === 'conflict')
       throw new HTTPException(409, { message: 'Conflicting runner event replay' })
-    return c.json(result.outcome)
+    const run = await createRepository(c.get('db')).getRun(event.run_id)
+    return c.json({
+      ...result.outcome,
+      cancel_requested: run?.status === 'cancel_requested',
+    })
   })
 
   return crawlerRunsRoutes
