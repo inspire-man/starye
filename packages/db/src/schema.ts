@@ -376,6 +376,38 @@ export const crawlerRuns = sqliteTable('crawler_run', {
 export type CrawlerRun = InferSelectModel<typeof crawlerRuns>
 export type NewCrawlerRun = InferInsertModel<typeof crawlerRuns>
 
+/** Immutable GitHub Actions identity and bounded provider facts for one application run attempt. */
+export const crawlerRunProviderAssociations = sqliteTable('crawler_run_provider_association', {
+  runId: text('run_id').primaryKey().references(() => crawlerRuns.id),
+  applicationAttempt: integer('application_attempt').notNull(),
+  provider: text('provider', { enum: ['github-actions'] }).notNull(),
+  templateKey: text('template_key', { enum: ['movie', 'manga'] }).notNull(),
+  target: text('target').notNull(),
+  workflow: text('workflow').notNull(),
+  repository: text('repository').notNull(),
+  ref: text('ref').notNull(),
+  environment: text('environment').notNull(),
+  crawlerEntrypoint: text('crawler_entrypoint').notNull(),
+  providerRunId: text('provider_run_id'),
+  providerRunAttempt: integer('provider_run_attempt'),
+  sha: text('sha'),
+  providerStatus: text('provider_status'),
+  providerConclusion: text('provider_conclusion'),
+  reconciliationWindowEndsAt: integer('reconciliation_window_ends_at', { mode: 'timestamp' }),
+  safeFactsJson: text('safe_facts_json', { mode: 'json' }),
+  scheduleBucket: text('schedule_bucket'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_crawler_provider_run_attempt').on(table.providerRunId, table.providerRunAttempt),
+  uniqueIndex('idx_crawler_provider_application_run_attempt').on(table.runId, table.applicationAttempt),
+  uniqueIndex('idx_crawler_provider_schedule_bucket').on(table.templateKey, table.target, table.workflow, table.scheduleBucket),
+  index('idx_crawler_provider_reconciliation_window').on(table.reconciliationWindowEndsAt),
+])
+
+export type CrawlerRunProviderAssociation = InferSelectModel<typeof crawlerRunProviderAssociations>
+export type NewCrawlerRunProviderAssociation = InferInsertModel<typeof crawlerRunProviderAssociations>
+
 export const crawlerRunTransitions = sqliteTable('crawler_run_transition', {
   id: text('id').primaryKey(),
   runId: text('run_id').notNull().references(() => crawlerRuns.id),
@@ -664,7 +696,15 @@ export const crawlerRunRelations = relations(crawlerRuns, ({ many, one }) => ({
   transitions: many(crawlerRunTransitions),
   runnerEvents: many(crawlerRunnerEvents),
   logs: many(crawlerRunLogs),
+  providerAssociation: one(crawlerRunProviderAssociations),
   templateLease: one(crawlerTemplateLeases),
+}))
+
+export const crawlerRunProviderAssociationRelations = relations(crawlerRunProviderAssociations, ({ one }) => ({
+  run: one(crawlerRuns, {
+    fields: [crawlerRunProviderAssociations.runId],
+    references: [crawlerRuns.id],
+  }),
 }))
 
 export const crawlerRunTransitionRelations = relations(crawlerRunTransitions, ({ one }) => ({
