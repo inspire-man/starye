@@ -5,8 +5,8 @@ milestone_name: 后台爬虫任务与内容运维
 current_phase: 17
 current_phase_name: local-runner-vertical-slice
 status: executing
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-07-31T03:04:39.159Z"
+stopped_at: Phase 17 Plan 03 implementation complete; local E2E blocked on ignored runner config and Dashboard session
+last_updated: "2026-07-31T03:54:35.111Z"
 last_activity: 2026-07-31
 last_activity_desc: Phase 17 execution started
 progress:
@@ -147,18 +147,18 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-31T03:04:39.139Z
-**Stopped at:** Completed 17-02-PLAN.md
+**Last session:** 2026-07-31T03:54:34.839Z
+**Stopped at:** Phase 17 Plan 03 implementation complete; local E2E blocked on ignored runner config and Dashboard session
 **Resume file:** None
 
-**Next recommended action:** Execute Phase 16 plans in wave order.
+**Next recommended action:** Provide the ignored local runner E2E config and Dashboard session, then re-run `pnpm local:task-runner:e2e --target local` for Phase 17 Plan 03.
 
 **If interrupted, resume by:**
 
-1. Read `.planning/STATE.md`, `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, and `.planning/ROADMAP.md`.
-2. Read `.planning/research/SUMMARY.md` and its STACK / FEATURES / ARCHITECTURE / PITFALLS inputs.
-3. Preserve v1.2 archived evidence and its deferred Viewer-proof boundary; do not reinterpret it as a v1.3 success condition.
-4. Run `$gsd-execute-phase 16` to execute Wave 1, then the independent Wave 2 plans.
+1. Provide an ignored `TASK_RUNNER_E2E_CONFIG` that names the ignored local runner config and a local Dashboard session-cookie file; do not commit either file.
+2. Run `pnpm local:task-runner:e2e --target local` and retain only its sanitized local evidence (run IDs, validated content IDs, and counts).
+3. Run the Gateway-scoped receipt browser proof at `http://localhost:8080`; do not treat a direct Vite/API result as canonical evidence.
+4. Only after those checks pass, create `17-03-SUMMARY.md`, advance Phase 17 state, and keep `--no-transition` at phase closeout.
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -242,3 +242,4 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 ### Blockers
 
 - Phase 13 Plan 13-63: blocked_without_observation_adapter; no p13-63 run id was created.
+- Phase 17 Plan 03 local Gateway acceptance is blocked: TASK_RUNNER_E2E_CONFIG and a local Dashboard session cookie are absent. The local runner and browser proof must be rerun with ignored local config/session files.
