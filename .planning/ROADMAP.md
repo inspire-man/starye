@@ -91,6 +91,27 @@ Plans:
 3. 后台可取消、重试和补偿生产任务；dispatch 受理、晚到事件或 provider 不匹配均不会被误报为成功。
 4. schedule 与手动 Actions run 都通过控制平面注册，避免形成不可见或双重执行的任务。
 
+**Plans:** 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 18-01-PLAN.md — Provider snapshot、D1 association schema 与 GitHub App binding
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 18-02-PLAN.md — GitHub App JWT/token 与固定 Actions REST client
+- [ ] 18-03-PLAN.md — 签名 callback、schedule 注册与双 workflow 入口
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 18-04-PLAN.md — D1 CAS lifecycle、取消/重试与 provider reconciliation
+- [ ] 18-05-PLAN.md — movie/manga production adapter 与 prepared mutation registry
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 18-06-PLAN.md — 跨 API/D1/Actions 的 integration contract 与 proof handoff
+
 ### Phase 19: Dashboard Operations and End-to-End Proof
 
 **Goal:** 完善后台任务运维体验、内容管理交接、运行手册和本地/生产验收。
