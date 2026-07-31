@@ -5,16 +5,16 @@ milestone_name: 后台爬虫任务与内容运维
 current_phase: 18
 current_phase_name: GitHub Actions Production Orchestration
 status: executing
-stopped_at: Phase 18 context gathered
-last_updated: "2026-07-31T16:33:38.249Z"
-last_activity: 2026-07-31
-last_activity_desc: Phase 17 complete; Phase 18 left at planning under --no-transition
+stopped_at: Phase 18 Plan 18-01 complete
+last_updated: "2026-07-31T17:04:50Z"
+last_activity: 2026-08-01
+last_activity_desc: Phase 18 Plan 18-01 completed
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
-  percent: 50
+  total_plans: 13
+  completed_plans: 8
+  percent: 61
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 18 — GitHub Actions Production Orchestration
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-31 — Phase 17 complete; Phase 18 left at planning under --no-transition
+Phase: 18 (GitHub Actions Production Orchestration) — EXECUTING
+Plan: 1 of 6 complete
+Status: Ready for Plan 18-02
+Last activity: 2026-08-01 — Phase 18 Plan 18-01 completed
 
 ## Performance Metrics
 
 **Phases completed:** 2 / 4
-**Plans completed:** 7 / 7
+**Plans completed:** 8 / 13
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -70,6 +70,7 @@ Last activity: 2026-07-31 — Phase 17 complete; Phase 18 left at planning under
 | Phase 16 P04 | 16min | 2 tasks | 4 files |
 | Phase 17-local-runner-vertical-slice P01 | 44m | 2 tasks | 22 files |
 | Phase 17 P2 | resumed-after-capacity-failure | 2 tasks | 13 files |
+| Phase 18 P01 | 17m | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -147,26 +148,26 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-31T12:00:38.527Z
-**Stopped at:** Phase 18 context gathered
-**Resume file:** .planning/phases/18-github-actions-production-orchestration/18-CONTEXT.md
+**Last session:** 2026-07-31T17:04:50Z
+**Stopped at:** Phase 18 Plan 18-01 complete
+**Resume file:** .planning/phases/18-github-actions-production-orchestration/18-01-SUMMARY.md
 
-**Next recommended action:** Start Phase 18 planning when requested; Phase 17 local evidence and Gateway CRUD proof are complete.
+**Next recommended action:** Run `$gsd-execute-phase 18` to execute 18-02 (GitHub App JWT/token and fixed Actions REST client).
 
 **If interrupted, resume by:**
 
-1. Read Phase 17 `17-VERIFICATION.md` and `.target-runs/phase17-local-e2e/evidence.json` for the completed local proof.
-2. Use `$gsd-discuss-phase 18` or `$gsd-plan-phase 18` to begin the next phase when requested.
+1. Read `18-01-SUMMARY.md` and `18-02-PLAN.md` for the fixed provider snapshot/D1 binding contract.
+2. Use `$gsd-execute-phase 18` to continue with the next Wave 2 plan after its dependency gate.
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
 
 ---
-*State updated: 2026-07-30 after Phase 16 planning completion*
+*State updated: 2026-08-01 after Phase 18 Plan 18-01 execution*
 
 ## Operator Next Steps
 
-- Run `$gsd-discuss-phase 16` or `$gsd-plan-phase 16`
+- Run `$gsd-execute-phase 18` to continue with 18-02.
 
 ## Decisions
 
@@ -236,6 +237,9 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 - [Phase ?]: Daily log retention delegates only to repository detailed-log expiry cleanup.
 - [Phase ?]: Runner poll is read-only and signed claims replay only actual post-CAS outcomes.
 - [Phase ?]: Local runner allows one active run and observes cancellation only at heartbeat checkpoints.
+- [Phase 18]: Movie/manga provider identity is an immutable server-owned GitHub Actions snapshot; dispatch carries only run ID, attempt, template, and target. — 18-01 provider registry
+- [Phase 18]: A one-to-one provider association retains redacted provider facts while unique provider run/attempt and schedule-bucket indexes reject duplicate bindings. — 18-01 D1 migration
+- [Phase 18]: GitHub App bindings stay optional in Env until configured and missing values return names-only `github_app_configuration_missing`. — 18-01 Worker binding contract
 
 ### Blockers
 

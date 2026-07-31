@@ -9,7 +9,7 @@
 
 ## Current Status
 
-v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面。Cloudflare API/D1 负责任务真相、鉴权、状态与日志；本地 Node runner 和 GitHub Actions 分别执行同一类固定模板。Phase 17 已完成本地 Gateway 纵向 proof；当前停在 Phase 18 planning，未执行生产 Actions。
+v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面。Cloudflare API/D1 负责任务真相、鉴权、状态与日志；本地 Node runner 和 GitHub Actions 分别执行同一类固定模板。Phase 17 已完成本地 Gateway 纵向 proof；Phase 18 已完成 provider snapshot、D1 association 与 GitHub App binding 基座，尚未 dispatch 生产 Actions。
 
 ## Phase Plan
 
@@ -24,7 +24,7 @@ v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面
 
 - [x] **Phase 16: Task Domain Foundation** — Complete
 - [x] **Phase 17: Local Runner Vertical Slice** — Complete (2026-07-31)
-- [ ] **Phase 18: GitHub Actions Production Orchestration** — Ready to plan
+- [ ] **Phase 18: GitHub Actions Production Orchestration** — In progress (1/6 plans complete)
 - [ ] **Phase 19: Dashboard Operations and End-to-End Proof** — Planned
 
 ## Phase Details
@@ -96,7 +96,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 18-01-PLAN.md — Provider snapshot、D1 association schema 与 GitHub App binding
+- [x] 18-01-PLAN.md — Provider snapshot、D1 association schema 与 GitHub App binding
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
