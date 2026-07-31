@@ -71,7 +71,7 @@ function transition(
   nextStatus: CrawlerRunStatus,
   reasonCode: string,
   options: {
-    readonly failureCode?: 'runner_lost' | 'runner_failed' | 'cancelled_by_runner'
+    readonly failureCode?: 'runner_lost' | 'runner_failed' | 'cancelled_by_runner' | 'receipt_missing'
     readonly sequence?: number
   } = {},
 ): CrawlerRunTransitionDecision {

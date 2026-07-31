@@ -16,7 +16,7 @@ export type CrawlerRunStatus
     | 'succeeded'
     | 'failed'
     | 'cancelled'
-export type CrawlerRunFailureCode = 'runner_lost' | 'runner_failed' | 'cancelled_by_runner'
+export type CrawlerRunFailureCode = 'runner_lost' | 'runner_failed' | 'cancelled_by_runner' | 'receipt_missing'
 
 export interface CrawlerTaskSnapshot {
   readonly entrypoint: 'movie-crawler' | 'manga-crawler'
@@ -40,9 +40,21 @@ export interface CrawlerRunState {
   readonly templateKey?: CrawlerTaskTemplateKey
 }
 
-export interface CrawlerRunReceipt {
+export interface CrawlerRunReceiptCandidate {
   readonly contentIds: readonly string[]
+  readonly createdCount?: number
   readonly templateKey: CrawlerTaskTemplateKey
+  readonly updatedCount?: number
+}
+
+/** Backwards-compatible candidate name used by the state machine/event envelope. */
+export type CrawlerRunReceipt = CrawlerRunReceiptCandidate
+
+export interface ValidatedCrawlerRunReceipt {
+  readonly createdCount: number
+  readonly primaryContentId: string
+  readonly templateKey: CrawlerTaskTemplateKey
+  readonly updatedCount: number
 }
 
 export type CrawlerRunTransitionEvent

@@ -79,6 +79,25 @@ async function createTestDatabase() {
     args: ['admin-1', 'Admin', 'admin@example.com', 1, 'admin', 0, 1, 1, 1],
     sql: 'INSERT INTO user VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)',
   })
+  await client.execute(`
+    CREATE TABLE movie (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      code TEXT NOT NULL,
+      total_players INTEGER DEFAULT 0,
+      crawled_players INTEGER DEFAULT 0
+    )
+  `)
+  await client.execute(`
+    CREATE TABLE comic (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      total_chapters INTEGER DEFAULT 0,
+      crawled_chapters INTEGER DEFAULT 0
+    )
+  `)
   const migration = await readFile(new URL('../../../../../../packages/db/drizzle/0027_crawler_task_domain_foundation.sql', import.meta.url), 'utf8')
   const statements = migration
     .split('--> statement-breakpoint')
@@ -223,6 +242,95 @@ describe('crawler task repository', () => {
     expect(retried).toMatchObject({ kind: 'created', run: { attemptNumber: 2, status: 'queued' } })
     const runs = await client.execute({ args: [failed.run.taskId], sql: 'SELECT attempt_number, status FROM crawler_run WHERE task_id = ? ORDER BY attempt_number' })
     expect(runs.rows).toEqual([{ attempt_number: 1, status: 'failed' }, { attempt_number: 2, status: 'queued' }])
+  })
+
+  it('only persists D1-validated receipts, maps invalid candidates to receipt_missing, and keeps cancelled runs receipt-free', async () => {
+    await client.execute({
+      args: ['movie-verified', 'Verified movie', 'verified-movie', 'MOV-VERIFIED', 2, 2],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    await client.execute({
+      args: ['comic-verified', 'Verified comic', 'verified-comic', 3, 3],
+      sql: 'INSERT INTO comic (id, title, slug, total_chapters, crawled_chapters) VALUES (?, ?, ?, ?, ?)',
+    })
+
+    const movie = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    if (movie.kind !== 'created')
+      throw new Error('expected movie run')
+    await repository.claimDispatch(movie.run.id)
+    await repository.renewLease(movie.run.id, 2)
+
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'receipt-body',
+      event: { actor: 'runner', receipt: { contentIds: ['MOV-VERIFIED'], templateKey: 'movie' }, sequence: 3, type: 'runner_succeeded' },
+      eventId: 'receipt-event',
+      keyId: 'key-current',
+      nonce: 'receipt-nonce',
+      receipt: { contentIds: ['MOV-VERIFIED'], createdCount: 2, templateKey: 'movie', updatedCount: 1 },
+      runId: movie.run.id,
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'succeeded' } })
+
+    const movieReceipt = await client.execute({ args: [movie.run.id], sql: 'SELECT status, failure_code, receipt_summary_json FROM crawler_run WHERE id = ?' })
+    expect(movieReceipt.rows[0]).toMatchObject({
+      failure_code: null,
+      receipt_summary_json: JSON.stringify({ createdCount: 2, primaryContentId: 'movie-verified', templateKey: 'movie', updatedCount: 1 }),
+      status: 'succeeded',
+    })
+
+    const missing = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    if (missing.kind !== 'created')
+      throw new Error('expected missing-receipt run')
+    await repository.claimDispatch(missing.run.id)
+    await repository.renewLease(missing.run.id, 2)
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'missing-body',
+      event: { actor: 'runner', receipt: { contentIds: ['not-in-d1'], templateKey: 'movie' }, sequence: 3, type: 'runner_succeeded' },
+      eventId: 'missing-event',
+      keyId: 'key-current',
+      nonce: 'missing-nonce',
+      receipt: { contentIds: ['not-in-d1'], templateKey: 'movie' },
+      runId: missing.run.id,
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'failed' } })
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'missing-body',
+      event: { actor: 'runner', receipt: { contentIds: ['not-in-d1'], templateKey: 'movie' }, sequence: 3, type: 'runner_succeeded' },
+      eventId: 'missing-event',
+      keyId: 'key-current',
+      nonce: 'missing-nonce',
+      receipt: { contentIds: ['not-in-d1'], templateKey: 'movie' },
+      runId: missing.run.id,
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'duplicate', outcome: { accepted: true, status: 'failed' } })
+    const missingReceipt = await client.execute({ args: [missing.run.id], sql: 'SELECT status, failure_code, receipt_summary_json FROM crawler_run WHERE id = ?' })
+    expect(missingReceipt.rows[0]).toEqual({ failure_code: 'receipt_missing', receipt_summary_json: null, status: 'failed' })
+
+    const cancelled = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'manga' })
+    if (cancelled.kind !== 'created')
+      throw new Error('expected cancelled run')
+    await repository.claimDispatch(cancelled.run.id)
+    await repository.renewLease(cancelled.run.id, 2)
+    await repository.applyTransition(cancelled.run.id, { actor: 'admin', type: 'admin_cancel' })
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'cancel-body',
+      event: { actor: 'runner', receipt: { contentIds: ['verified-comic'], templateKey: 'manga' }, sequence: 3, type: 'runner_succeeded' },
+      eventId: 'cancel-event',
+      keyId: 'key-current',
+      nonce: 'cancel-nonce',
+      receipt: { contentIds: ['verified-comic'], templateKey: 'manga' },
+      runId: cancelled.run.id,
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'succeeded' } })
+    const cancelledReceipt = await client.execute({ args: [cancelled.run.id], sql: 'SELECT status, receipt_summary_json FROM crawler_run WHERE id = ?' })
+    expect(cancelledReceipt.rows[0]).toMatchObject({
+      receipt_summary_json: JSON.stringify({ createdCount: 1, primaryContentId: 'comic-verified', templateKey: 'manga', updatedCount: 0 }),
+      status: 'succeeded',
+    })
   })
 
   it('renews heartbeat leases, fails lost runs after ten minutes, and preserves terminal failure facts', async () => {

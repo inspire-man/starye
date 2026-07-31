@@ -1,5 +1,6 @@
 import type { Database } from '@starye/db'
-import type { CrawlerRunReceipt, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskSnapshot, CrawlerTaskTemplateKey } from './types'
+import type { CrawlerRunFailureCode, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskSnapshot, CrawlerTaskTemplateKey, ValidatedCrawlerRunReceipt } from './types'
+import { validateReceiptCandidate } from './receipt-validation'
 import { createManualRetryAttempt, decideCrawlerRunTransition, isTerminalCrawlerRunStatus } from './state-machine'
 import { createCrawlerTaskSnapshot } from './template-registry'
 import {
@@ -78,7 +79,7 @@ export interface ProcessCrawlerRunnerEventInput {
   readonly keyId: string
   readonly log?: AppendCrawlerRunLogInput
   readonly nonce: string
-  readonly receipt?: CrawlerRunReceipt
+  readonly receipt?: CrawlerRunReceiptCandidate
   readonly runId: string
   readonly safeSummary?: string
   readonly sequence: number
@@ -338,7 +339,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
   async function applyTransition(
     runId: string,
     event: CrawlerRunTransitionEvent,
-    options: { readonly receipt?: CrawlerRunReceipt, readonly safeSummary?: string } = {},
+    options: { readonly failureCode?: CrawlerRunFailureCode, readonly receipt?: CrawlerRunReceipt | ValidatedCrawlerRunReceipt, readonly safeSummary?: string } = {},
   ): Promise<CrawlerRunTransitionDecision> {
     const run = await getRunRow(runId)
     const templateKey = await getTemplateKey(runId)
@@ -375,7 +376,15 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       ? addMillisecondsInSeconds(currentNow, CRAWLER_LEASE_DURATION_MS)
       : run.lease_expires_at
     const terminalAt = isTerminal ? currentNow : null
-    const receipt = event.type === 'runner_succeeded' ? event.receipt : options.receipt
+    const receipt = options.receipt ?? (event.type === 'runner_succeeded' ? event.receipt : undefined)
+    const failureCode = options.failureCode ?? decision.failureCode
+    const receiptSummary = receipt
+      ? 'primaryContentId' in receipt
+        ? JSON.stringify(receipt)
+        : JSON.stringify({ contentIds: receipt.contentIds, templateKey: receipt.templateKey })
+      : isTerminal
+        ? null
+        : run.receipt_summary_json
 
     const batchResults = await d1.batch([
       d1.prepare(`
@@ -423,8 +432,8 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         currentNow,
         decision.nextStatus === 'cancel_requested' ? 1 : 0,
         currentNow,
-        decision.failureCode ?? null,
-        receipt ? JSON.stringify({ contentIds: receipt.contentIds, templateKey: receipt.templateKey }) : run.receipt_summary_json,
+        failureCode ?? null,
+        receiptSummary,
         terminalAt,
         currentNow,
         runId,
@@ -702,9 +711,31 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return classifyExistingRunnerEvent(existing, input)
     }
 
-    const decision = await applyTransition(input.runId, input.event, {
-      receipt: input.receipt,
-      safeSummary: input.safeSummary,
+    let event = input.event
+    let receipt: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | undefined
+    let safeSummary = input.safeSummary
+    let failureCode: 'receipt_missing' | undefined
+
+    if (input.event.type === 'runner_succeeded') {
+      const validation = await validateReceiptCandidate({
+        candidate: input.receipt,
+        database: db,
+        templateKey,
+      })
+      if (!validation.ok) {
+        event = { actor: 'runner', sequence: input.sequence, type: 'runner_failed' }
+        safeSummary = 'receipt_missing'
+        failureCode = 'receipt_missing'
+      }
+      else {
+        receipt = validation.receipt
+      }
+    }
+
+    const decision = await applyTransition(input.runId, event, {
+      failureCode,
+      receipt,
+      safeSummary,
     })
     const outcome = transitionOutcome(decision)
     const recorded = await recordRunnerEvent({

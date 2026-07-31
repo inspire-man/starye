@@ -57,7 +57,9 @@ export const CrawlerRunEventSchema = v.strictObject({
   nonce: Identifier,
   receipt: v.optional(v.strictObject({
     contentIds: v.pipe(v.array(Identifier), v.minLength(1), v.maxLength(100)),
+    createdCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
     templateKey: v.picklist(['movie', 'manga']),
+    updatedCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
   })),
   run_id: Identifier,
   sequence: Sequence,
