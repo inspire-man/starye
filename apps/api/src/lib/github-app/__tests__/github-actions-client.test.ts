@@ -41,11 +41,31 @@ describe('github Actions client', () => {
     const snapshot = createProviderSnapshot('movie')
     const dispatch = createProviderDispatchInput({ attempt: 2, runId: 'run-1', templateKey: 'movie' })
 
-    await expect(client.dispatchWorkflow({ dispatch, snapshot })).resolves.toEqual({ accepted: true, kind: 'dispatch_accepted', ok: true })
+    await expect(client.dispatchWorkflow({ dispatch, snapshot })).resolves.toEqual({
+      ok: true,
+      value: { accepted: true, kind: 'dispatch_accepted' },
+    })
     expect(String(calls[1].input)).toBe('https://api.github.com/repos/inspire-man/starye/actions/workflows/.github%2Fworkflows%2Fdaily-movie-crawl.yml/dispatches')
     expect(JSON.parse(String(calls[1].init?.body))).toEqual({
       inputs: { attempt: '2', run_id: 'run-1', target: 'starye-org', template: 'movie' },
       ref: 'main',
+    })
+  })
+
+  it('accepts a provider dispatch response with run details without treating it as crawler success', async () => {
+    let calls = 0
+    const client = await createClient(async () => {
+      calls += 1
+      return calls === 1
+        ? Response.json({ token: 'installation-token-value' })
+        : Response.json({ id: 123 })
+    })
+    const snapshot = createProviderSnapshot('manga')
+    const dispatch = createProviderDispatchInput({ attempt: 1, runId: 'run-1', templateKey: 'manga' })
+
+    await expect(client.dispatchWorkflow({ dispatch, snapshot })).resolves.toEqual({
+      ok: true,
+      value: { accepted: true, kind: 'dispatch_accepted' },
     })
   })
 
@@ -54,7 +74,7 @@ describe('github Actions client', () => {
       if (init?.method === 'POST' && String(init.body).includes('permissions'))
         return Response.json({ token: 'installation-token-value' })
       if (init?.method === 'POST')
-        return new Response(null, { status: 202 })
+        return new Response(null, { status: 204 })
       if (init?.method === 'DELETE')
         return new Response(null, { status: 202 })
       return Response.json({
@@ -68,8 +88,14 @@ describe('github Actions client', () => {
     const snapshot = createProviderSnapshot('movie')
     const dispatch = createProviderDispatchInput({ attempt: 1, runId: 'run-1', templateKey: 'movie' })
 
-    await expect(client.dispatchWorkflow({ dispatch, snapshot })).resolves.toEqual({ accepted: true, kind: 'dispatch_accepted', ok: true })
-    await expect(client.cancelWorkflowRun({ providerRunId: '123', snapshot })).resolves.toEqual({ accepted: true, kind: 'cancel_accepted', ok: true })
+    await expect(client.dispatchWorkflow({ dispatch, snapshot })).resolves.toEqual({
+      ok: true,
+      value: { accepted: true, kind: 'dispatch_accepted' },
+    })
+    await expect(client.cancelWorkflowRun({ providerRunId: '123', snapshot })).resolves.toEqual({
+      ok: true,
+      value: { accepted: true, kind: 'cancel_accepted' },
+    })
     await expect(client.getWorkflowRun({ providerRunId: '123', snapshot })).resolves.toEqual({
       ok: true,
       value: {
@@ -105,7 +131,10 @@ describe('github Actions client', () => {
     }, async () => {
       retries += 1
     })
-    await expect(retrying.dispatchWorkflow({ dispatch, snapshot })).resolves.toEqual({ accepted: true, kind: 'dispatch_accepted', ok: true })
+    await expect(retrying.dispatchWorkflow({ dispatch, snapshot })).resolves.toEqual({
+      ok: true,
+      value: { accepted: true, kind: 'dispatch_accepted' },
+    })
     expect(retries).toBe(1)
 
     const forbidden = await createClient(async (_input, init) => init?.method === 'POST' && String(init.body).includes('permissions')
