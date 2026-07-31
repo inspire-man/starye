@@ -22,7 +22,7 @@
 ### 生产编排
 
 - [x] **PROD-01**: 生产 API 使用最小权限凭据触发固定的电影或漫画 GitHub Actions workflow。
-- [ ] **PROD-02**: Actions 将应用 run 与 `GITHUB_RUN_ID` 绑定，并以签名事件回写状态、日志和终态 receipt。
+- [x] **PROD-02**: Actions 将应用 run 与 `GITHUB_RUN_ID` 绑定，并以签名事件回写状态、日志和终态 receipt。
 - [x] **PROD-03**: 生产任务支持 provider 状态补偿、取消和重试，且不会把 dispatch 受理视为成功。
 
 ### 后台与内容运维
@@ -69,7 +69,7 @@
 | LOCAL-02 | Phase 17 | Complete |
 | LOCAL-03 | Phase 17 | Complete |
 | PROD-01 | Phase 18 | Complete |
-| PROD-02 | Phase 18 | Pending |
+| PROD-02 | Phase 18 | Complete |
 | PROD-03 | Phase 18 | Complete |
 | DASH-01 | Phase 19 | Pending |
 | DASH-02 | Phase 19 | Pending |

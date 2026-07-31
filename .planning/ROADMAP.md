@@ -91,7 +91,7 @@ Plans:
 3. 后台可取消、重试和补偿生产任务；dispatch 受理、晚到事件或 provider 不匹配均不会被误报为成功。
 4. schedule 与手动 Actions run 都通过控制平面注册，避免形成不可见或双重执行的任务。
 
-**Plans:** 2/6 plans executed
+**Plans:** 3/6 plans executed
 
 Plans:
 **Wave 1**
@@ -101,7 +101,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 18-02-PLAN.md — GitHub App JWT/token 与固定 Actions REST client
-- [ ] 18-03-PLAN.md — 签名 callback、schedule 注册与双 workflow 入口
+- [x] 18-03-PLAN.md — 签名 callback、schedule 注册与双 workflow 入口
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
