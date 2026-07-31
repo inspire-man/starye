@@ -6,6 +6,7 @@ import {
   productionCrawlerEnvironmentKeys,
   runTargetCrawlerMutation,
 } from '../../../scripts/target-crawl-mutation'
+import { ActionsEventClient } from '../actions-event-client'
 
 const roots: string[] = []
 
@@ -174,5 +175,67 @@ describe('registry-owned production crawler adapters', () => {
     expect(result).toMatchObject({ status: 'succeeded', contentIds: ['MOV-LATE-CANCEL'] })
     expect(events.at(-1)?.type).toBe('succeeded')
     expect(events.some(event => event.type === 'cancelled')).toBe(false)
+  })
+
+  it('rejects invalid attempt and content identifier shapes before reporting success', async () => {
+    const base = await fixture()
+    const client = actionsFixture().client
+
+    await expect(runTargetCrawlerMutation({ ...base.environment, ACTIONS_APPLICATION_ATTEMPT: '0' }, { createActionsEventClient: () => client })).rejects.toThrow('invalid prepared environment value')
+    await expect(runTargetCrawlerMutation(base.environment, {
+      createActionsEventClient: () => client,
+      executeMovie: async () => ({ contentIds: [42 as unknown as string] }),
+    })).rejects.toThrow('Production crawler operation failed.')
+    expect(client.succeeded).not.toHaveBeenCalled()
+  })
+
+  it('binds a retried attempt to its new provider run tuple', async () => {
+    const { environment } = await fixture({ ACTIONS_APPLICATION_ATTEMPT: '3', GITHUB_RUN_ID: '88' })
+    const { client } = actionsFixture()
+    const result = await runTargetCrawlerMutation(environment, {
+      createActionsEventClient: () => client,
+      executeMovie: async () => ({ contentIds: ['MOV-RETRY-3'] }),
+    })
+
+    expect(result).toMatchObject({ attempt: 3, providerRunId: '88', status: 'succeeded' })
+    expect(client.providerStarted).toHaveBeenCalledWith(expect.objectContaining({ attempt: 3, providerRunId: '88' }))
+  })
+
+  it('keeps source body, credentials, and Authorization-shaped values out of signed callback payloads', async () => {
+    const { environment } = await fixture()
+    const requests: RequestInit[] = []
+    const callback = new ActionsEventClient({
+      apiBaseUrl: environment.ACTIONS_CALLBACK_API_BASE_URL!,
+      attempt: 2,
+      callbackKeyId: environment.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT!,
+      callbackSecret: environment.TASK_RUNNER_CALLBACK_SECRET_CURRENT!,
+      environment: 'starye-org',
+      fetch: vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        if (init)
+          requests.push(init)
+        return new Response(JSON.stringify({ accepted: true }), { status: 200 })
+      }),
+      providerRunAttempt: 1,
+      providerRunId: environment.GITHUB_RUN_ID!,
+      ref: 'main',
+      repository: 'inspire-man/starye',
+      runId: environment.ACTIONS_APPLICATION_RUN_ID!,
+      sha: environment.GITHUB_SHA!,
+      target: 'starye-org',
+      template: 'movie',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    })
+
+    await runTargetCrawlerMutation(environment, {
+      createActionsEventClient: () => callback,
+      executeMovie: async () => ({ contentIds: ['MOV-REDACTED'] }),
+    })
+
+    const serialized = JSON.stringify(requests)
+    expect(serialized).not.toContain(environment.CRAWLER_SECRET!)
+    expect(serialized).not.toContain(environment.TASK_RUNNER_CALLBACK_SECRET_CURRENT!)
+    expect(serialized).not.toContain('Authorization')
+    expect(serialized).not.toContain('source body')
+    expect((requests[0]?.headers as Record<string, string>)['x-runner-signature']).not.toContain(environment.TASK_RUNNER_CALLBACK_SECRET_CURRENT!)
   })
 })
