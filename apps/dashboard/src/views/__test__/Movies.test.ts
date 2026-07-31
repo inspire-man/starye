@@ -6,11 +6,15 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Movies from '../Movies.vue'
 
+const { mockRoute } = vi.hoisted(() => ({ mockRoute: { query: {}, params: {} } }))
+
 // Mock dependencies
 vi.mock('@/lib/api', () => ({
   api: {
     admin: {
       getMovies: vi.fn(),
+      getMovie: vi.fn(),
+      getPlayers: vi.fn(),
       saveMovie: vi.fn(),
       deleteMovie: vi.fn(),
     },
@@ -22,10 +26,7 @@ vi.mock('@/lib/auth-client', () => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: vi.fn(() => ({
-    query: {},
-    params: {},
-  })),
+  useRoute: vi.fn(() => mockRoute),
   useRouter: vi.fn(() => ({
     push: vi.fn(),
     replace: vi.fn(),
@@ -118,10 +119,13 @@ vi.mock('@/composables/useErrorHandler', () => ({
 
 describe('movies.vue 集成测试', () => {
   let mockGetMovies: ReturnType<typeof vi.fn>
+  let mockGetMovie: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
     const { api } = await import('@/lib/api')
     mockGetMovies = vi.mocked(api.admin.getMovies)
+    mockGetMovie = vi.mocked(api.admin.getMovie)
+    mockRoute.query = {}
     // 默认返回空数据
     mockGetMovies.mockResolvedValue({ data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } })
     vi.clearAllMocks()
@@ -132,6 +136,30 @@ describe('movies.vue 集成测试', () => {
   })
 
   describe('完整流程', () => {
+    it('valid receipt 会直接读取并打开既有电影编辑器', async () => {
+      mockRoute.query = { receipt: 'movie-uuid-1' }
+      mockGetMovie.mockResolvedValue({ id: 'movie-uuid-1', code: 'TEST-001', title: 'Receipt Movie', isR18: false })
+      const { api } = await import('@/lib/api')
+      vi.mocked(api.admin.getPlayers).mockResolvedValue({ movieId: 'movie-uuid-1', players: [], total: 0 })
+
+      mount(Movies)
+      await flushPromises()
+
+      expect(mockGetMovie).toHaveBeenCalledTimes(1)
+      expect(mockGetMovie).toHaveBeenCalledWith('movie-uuid-1')
+      expect(document.body.textContent).toContain('编辑电影')
+      expect([...document.querySelectorAll('input')].some(input => (input as HTMLInputElement).value === 'Receipt Movie')).toBe(true)
+    })
+
+    it('忽略不符合主内容 ID 格式的 receipt 查询', async () => {
+      mockRoute.query = { receipt: 'https://foreign.example/content' }
+      const wrapper = mount(Movies)
+      await flushPromises()
+
+      expect(mockGetMovie).not.toHaveBeenCalled()
+      expect(wrapper.text()).not.toContain('编辑电影')
+    })
+
     it('应该加载时显示 SkeletonTable', async () => {
       // 设置 API 返回 pending promise 保持 loading 状态
       mockGetMovies.mockImplementation(() => new Promise(() => {}))

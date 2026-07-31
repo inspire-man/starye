@@ -14,12 +14,15 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Comics from '../Comics.vue'
 
+const { mockRoute } = vi.hoisted(() => ({ mockRoute: { query: {}, params: {} } }))
+
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 
 vi.mock('@/lib/api', () => ({
   api: {
     admin: {
       getComics: vi.fn(),
+      getComic: vi.fn(),
       updateComic: vi.fn(),
       deleteComic: vi.fn(),
       bulkOperationComics: vi.fn(),
@@ -38,10 +41,7 @@ vi.mock('@/lib/auth-client', () => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: vi.fn(() => ({
-    query: {},
-    params: {},
-  })),
+  useRoute: vi.fn(() => mockRoute),
   useRouter: vi.fn(() => ({
     push: vi.fn(),
     replace: vi.fn(),
@@ -174,6 +174,7 @@ const comicsResponse = { data: mockComics, meta: { total: 2, page: 1, limit: 18,
 
 describe('comics.vue 集成测试', () => {
   let mockGetComics: ReturnType<typeof vi.fn>
+  let mockGetComic: ReturnType<typeof vi.fn>
   let mockBulkOperationComics: ReturnType<typeof vi.fn>
   let mockDeleteComic: ReturnType<typeof vi.fn>
   let mockBulkDeleteChapters: ReturnType<typeof vi.fn>
@@ -183,6 +184,7 @@ describe('comics.vue 集成测试', () => {
   beforeEach(async () => {
     const { api } = await import('@/lib/api')
     mockGetComics = vi.mocked(api.admin.getComics)
+    mockGetComic = vi.mocked(api.admin.getComic)
     mockBulkOperationComics = vi.mocked(api.admin.bulkOperationComics)
     mockDeleteComic = vi.mocked(api.admin.deleteComic)
     mockBulkDeleteChapters = vi.mocked(api.admin.bulkDeleteChapters)
@@ -190,6 +192,7 @@ describe('comics.vue 集成测试', () => {
     mockUploadImage = vi.mocked(api.upload.uploadImage)
 
     mockGetComics.mockResolvedValue(emptyResponse)
+    mockRoute.query = {}
     mockBulkOperationComics.mockResolvedValue({ success: [], failed: [] })
     mockDeleteComic.mockResolvedValue({ success: true })
     mockBulkDeleteChapters.mockResolvedValue({ success: true })
@@ -209,6 +212,26 @@ describe('comics.vue 集成测试', () => {
   })
 
   // ─── 加载状态 ────────────────────────────────────────────────────────────
+
+  it('valid receipt 会直接读取并打开既有漫画编辑器', async () => {
+    mockRoute.query = { receipt: 'comic-uuid-1' }
+    mockGetComic.mockResolvedValue({ data: { id: 'comic-uuid-1', title: 'Receipt Comic', isR18: false, metadataLocked: false } })
+
+    const wrapper = mount(Comics)
+    await flushPromises()
+
+    expect(mockGetComic).toHaveBeenCalledOnce()
+    expect(mockGetComic).toHaveBeenCalledWith('comic-uuid-1')
+    expect(wrapper.findAll('input').some(input => (input.element as HTMLInputElement).value === 'Receipt Comic')).toBe(true)
+  })
+
+  it('忽略不符合主内容 ID 格式的 receipt 查询', async () => {
+    mockRoute.query = { receipt: 'https://foreign.example/content' }
+    mount(Comics)
+    await flushPromises()
+
+    expect(mockGetComic).not.toHaveBeenCalled()
+  })
 
   describe('加载状态', () => {
     it('初始加载时应显示 SkeletonCard', async () => {

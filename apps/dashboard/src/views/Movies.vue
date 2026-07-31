@@ -11,7 +11,8 @@
 
 import type { Movie, Player } from '@/lib/api'
 import { ConfirmDialog, DataTable, FilterPanel, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import ActorSelector from '@/components/ActorSelector.vue'
 import BatchOperationMenu from '@/components/BatchOperationMenu.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
@@ -25,6 +26,8 @@ import { useSession } from '@/lib/auth-client'
 import { formatDateTime } from '@/lib/date-utils'
 
 useSession()
+
+const route = useRoute()
 
 const { success, warning, showProgress, updateProgress, hideProgress } = useToast()
 const { handleError } = useErrorHandler()
@@ -78,6 +81,10 @@ const { selected, toggleItem, toggleAll, clearSelection, selectedCount, selected
 
 // 获取 total 用于分页组件
 const total = ref(0)
+const receiptQuery = typeof route.query.receipt === 'string' && /^\w[\w-]{0,127}$/.test(route.query.receipt.trim())
+  ? route.query.receipt.trim()
+  : ''
+let receiptHandled = false
 
 // 监听页码变化时自动加载
 watch(currentPage, () => {
@@ -226,14 +233,14 @@ watch(
   },
 )
 
-async function openEditModal(movie: Movie) {
+async function openEditModal(movie: Movie, resolvedMovie?: Movie) {
   editingMovie.value = { ...movie }
   isEditModalOpen.value = true
   activeTab.value = 'metadata'
 
   // 重新获取完整的电影数据（包含关联的女优和厂商）
   try {
-    const fullMovie = await api.admin.getMovie(movie.id)
+    const fullMovie = resolvedMovie ?? await api.admin.getMovie(movie.id)
     editingMovie.value = fullMovie
 
     // 初始化女优选择器数据
@@ -275,6 +282,23 @@ async function openEditModal(movie: Movie) {
     selectedPublishers.value = []
   }
 }
+
+async function openReceiptContent(): Promise<void> {
+  if (receiptHandled || !receiptQuery)
+    return
+  receiptHandled = true
+  try {
+    const movie = await api.admin.getMovie(receiptQuery)
+    await openEditModal(movie, movie)
+  }
+  catch (e: unknown) {
+    handleError(e, '加载已验证电影 receipt 失败')
+  }
+}
+
+onMounted(() => {
+  void openReceiptContent()
+})
 
 async function loadPlayers(movieId: string) {
   playersLoading.value = true

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '@/lib/api'
 import { ConfirmDialog, DataTable, FilterPanel, Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import BatchOperationMenu from '@/components/BatchOperationMenu.vue'
 import { useBatchSelect } from '@/composables/useBatchSelect'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -12,6 +13,8 @@ import { useSession } from '@/lib/auth-client'
 
 const { t } = useI18n()
 useSession()
+
+const route = useRoute()
 
 const { success, warning, showProgress, updateProgress, hideProgress } = useToast()
 const { handleError } = useErrorHandler()
@@ -109,6 +112,10 @@ const editingComic = ref<Comic | null>(null)
 const updateLoading = ref(false)
 const uploadLoading = ref(false)
 const activeTab = ref<'metadata' | 'chapters'>('metadata')
+const receiptQuery = typeof route.query.receipt === 'string' && /^\w[\w-]{0,127}$/.test(route.query.receipt.trim())
+  ? route.query.receipt.trim()
+  : ''
+let receiptHandled = false
 
 // 视图模式：card（卡片）| table（表格）
 const viewMode = ref<'card' | 'table'>('card')
@@ -190,6 +197,23 @@ function openEditModal(comic: Comic) {
     loadChapters(comic.id)
   }
 }
+
+async function openReceiptContent(): Promise<void> {
+  if (receiptHandled || !receiptQuery)
+    return
+  receiptHandled = true
+  try {
+    const response = await api.admin.getComic(receiptQuery)
+    openEditModal(response.data)
+  }
+  catch (e: unknown) {
+    handleError(e, '加载已验证漫画 receipt 失败')
+  }
+}
+
+onMounted(() => {
+  void openReceiptContent()
+})
 
 async function loadChapters(comicId: string) {
   chaptersLoading.value = true
