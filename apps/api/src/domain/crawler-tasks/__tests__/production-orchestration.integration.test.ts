@@ -68,6 +68,10 @@ async function createTestDatabase() {
     args: ['admin-1', 'Admin', 'admin@example.com', 1, 'admin', 0, 1, 1, 1],
     sql: 'INSERT INTO user VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)',
   })
+  await client.execute({
+    args: ['github-actions-schedule', 'GitHub Actions', 'github-actions@example.com', 1, 'admin', 0, 1, 1, 1],
+    sql: 'INSERT INTO user VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)',
+  })
   await client.execute(`
     CREATE TABLE movie (
       id TEXT PRIMARY KEY NOT NULL,
@@ -93,15 +97,24 @@ async function createTestDatabase() {
   return { client, db: createDb(new LibsqlD1(client) as never) }
 }
 
+async function createRepositoryFixture() {
+  const database = await createTestDatabase()
+  let nextId = 0
+  let now = new Date('2026-07-30T00:00:00.000Z')
+  const repository = createCrawlerTaskRepository(database.db, {
+    createId: () => `fixture-${++nextId}`,
+    now: () => now,
+  })
+  return {
+    ...database,
+    now: (value: Date) => { now = value },
+    repository,
+  }
+}
+
 describe('production orchestration lifecycle integration', () => {
   it('replays manual dispatch through provider_started, poll compensation, and a validated receipt', async () => {
-    const { client, db } = await createTestDatabase()
-    let nextId = 0
-    const now = new Date('2026-07-30T00:00:00.000Z')
-    const repository = createCrawlerTaskRepository(db, {
-      createId: () => `fixture-${++nextId}`,
-      now: () => now,
-    })
+    const { client, repository } = await createRepositoryFixture()
 
     const created = await repository.createOrGetActiveRun({
       requestedByUserId: 'admin-1',
@@ -191,5 +204,110 @@ describe('production orchestration lifecycle integration', () => {
       expect.objectContaining({ reason_code: 'provider_success_pending_receipt' }),
       expect.objectContaining({ reason_code: 'runner_succeeded' }),
     ]))
+  })
+
+  it('deduplicates schedule buckets, expires mismatched providers, and rejects a late provider start', async () => {
+    const { client, now, repository } = await createRepositoryFixture()
+    const schedule = {
+      bodySha256: 'schedule-body',
+      environment: 'starye-org',
+      eventId: 'schedule-event-1',
+      keyId: 'key-current',
+      nonce: 'schedule-nonce-1',
+      ref: 'main',
+      repository: 'inspire-man/starye',
+      scheduleBucket: '2026-07-30T00:00Z',
+      scheduledAt: '2026-07-30T00:00:00.000Z',
+      target: 'starye-org',
+      template: 'movie' as const,
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    }
+    const first = await repository.scheduleRegister(schedule)
+    const duplicate = await repository.scheduleRegister({ ...schedule, eventId: 'schedule-event-duplicate', nonce: 'schedule-nonce-duplicate' })
+    expect(duplicate).toEqual(first)
+
+    await expect(repository.claimDispatch(first.runId)).resolves.toMatchObject({ nextStatus: 'dispatching' })
+    await expect(repository.providerStarted({
+      attempt: 1,
+      bodySha256: 'mismatch-start-body',
+      environment: 'starye-org',
+      eventId: 'mismatch-start',
+      keyId: 'key-current',
+      nonce: 'mismatch-start-nonce',
+      providerRunAttempt: 1,
+      providerRunId: '99999',
+      ref: 'main',
+      repository: 'inspire-man/starye',
+      runId: first.runId,
+      sha: 'b'.repeat(40),
+      target: 'wrong-target',
+      template: 'movie',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    })).resolves.toEqual({ accepted: false, cancelRequested: false })
+
+    const current = Math.floor(new Date('2026-07-30T00:00:00.000Z').getTime() / 1000)
+    now(new Date((current + 301) * 1000))
+    await expect(repository.recordProviderObservation({
+      attempt: 1,
+      providerRunId: '99999',
+      runId: first.runId,
+      status: 'in_progress',
+    })).resolves.toMatchObject({ kind: 'provider_lost' })
+    await expect(repository.getRun(first.runId)).resolves.toMatchObject({ status: 'failed' })
+
+    const late = await repository.providerStarted({
+      attempt: 1,
+      bodySha256: 'late-start-body',
+      environment: 'starye-org',
+      eventId: 'late-start',
+      keyId: 'key-current',
+      nonce: 'late-start-nonce',
+      providerRunAttempt: 1,
+      providerRunId: '12345',
+      ref: 'main',
+      repository: 'inspire-man/starye',
+      runId: first.runId,
+      sha: 'a'.repeat(40),
+      target: 'starye-org',
+      template: 'movie',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    })
+    expect(late).toEqual({ accepted: false, cancelRequested: false })
+    const facts = await client.execute({ args: [first.runId], sql: 'SELECT safe_facts_json FROM crawler_run_provider_association WHERE run_id = ?' })
+    expect(String(facts.rows[0]?.safe_facts_json ?? '')).not.toMatch(/token|secret|private[_-]?key/i)
+  })
+
+  it('preserves cancellation facts and creates a new provider attempt only after a cancelled run', async () => {
+    const { repository } = await createRepositoryFixture()
+    const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    if (created.kind !== 'created')
+      throw new Error('expected a newly created run')
+    await repository.ensureProviderAssociation({ attempt: 1, runId: created.run.id, template: 'movie' })
+    await repository.claimDispatch(created.run.id)
+    await expect(repository.applyTransition(created.run.id, { actor: 'admin', type: 'admin_cancel' })).resolves.toMatchObject({ nextStatus: 'cancel_requested' })
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'cancelled-body',
+      event: { actor: 'runner', sequence: 2, type: 'runner_cancelled' },
+      eventId: 'cancelled-1',
+      keyId: 'key-current',
+      nonce: 'cancelled-nonce',
+      runId: created.run.id,
+      sequence: 2,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { status: 'cancelled' } })
+
+    const retry = await repository.retryRun(created.run.id)
+    expect(retry).toMatchObject({ kind: 'created', run: { attemptNumber: 2, status: 'queued' } })
+    if (retry.kind !== 'created')
+      throw new Error('expected a new retry attempt')
+    await expect(repository.getProviderAssociation(retry.run.id)).resolves.toMatchObject({
+      applicationAttempt: 2,
+      runId: retry.run.id,
+      template: 'movie',
+    })
+    await expect(repository.getProviderAssociation(created.run.id)).resolves.toMatchObject({
+      applicationAttempt: 1,
+      runId: created.run.id,
+    })
   })
 })

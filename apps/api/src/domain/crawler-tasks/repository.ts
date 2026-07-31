@@ -1118,6 +1118,19 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const row = association.results?.[0]
     const run = await getRunRow(input.runId)
     const cancelRequested = run?.status === 'cancel_requested'
+    if (run && isTerminalCrawlerRunStatus(run.status)) {
+      const outcome = { accepted: false, cancel_requested: false, reason: 'terminal_run' }
+      await recordRunnerEvent({
+        bodySha256: input.bodySha256,
+        eventId: input.eventId,
+        keyId: input.keyId,
+        nonce: input.nonce,
+        outcome,
+        runId: input.runId,
+        sequence: 1,
+      })
+      return { accepted: false, cancelRequested: false }
+    }
     if (!row || !run || row.application_attempt !== input.attempt || row.template_key !== input.template
       || row.target !== input.target || row.workflow !== input.workflow || row.repository !== input.repository
       || row.ref !== input.ref || row.environment !== input.environment) {
