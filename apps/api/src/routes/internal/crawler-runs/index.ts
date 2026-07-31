@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import * as v from 'valibot'
 import { normalizeRunnerEventForStorage } from '../../../domain/crawler-tasks/log-redaction'
+import { createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
 import { createCrawlerTaskRepository } from '../../../domain/crawler-tasks/repository'
 import { verifyRunnerEventSignature } from '../../../domain/crawler-tasks/runner-event-auth'
 import {
@@ -21,7 +22,9 @@ function previousValidity(env: AppEnv['Bindings']): number | undefined {
   return Number.isFinite(rotatedAt) ? rotatedAt + 24 * 60 * 60_000 : undefined
 }
 
-function eventForTransition(event: v.InferOutput<typeof CrawlerRunEventSchema>) {
+type LifecycleEvent = Extract<v.InferOutput<typeof CrawlerRunEventSchema>, { type: 'heartbeat' | 'progress' | 'log' | 'succeeded' | 'failed' | 'cancelled' }>
+
+function eventForTransition(event: LifecycleEvent) {
   switch (event.type) {
     case 'heartbeat': return { actor: 'runner' as const, sequence: event.sequence, type: 'runner_heartbeat' as const }
     case 'progress': return { actor: 'runner' as const, sequence: event.sequence, type: 'runner_progress' as const }
@@ -47,13 +50,45 @@ function claimResponse(outcome: Readonly<Record<string, unknown>>): { accepted: 
   }
 }
 
-type RunnerEventRepository = Pick<ReturnType<typeof createCrawlerTaskRepository>, 'claimDispatch' | 'getRun' | 'pollDispatch' | 'processRunnerEvent'>
+interface ScheduleRegisterResult {
+  readonly accepted: boolean
+  readonly attempt: number
+  readonly runId: string
+}
+
+interface ProviderStartedResult {
+  readonly accepted: boolean
+  readonly cancelRequested: boolean
+}
+
+interface RunnerEventRepository {
+  readonly claimDispatch: ReturnType<typeof createCrawlerTaskRepository>['claimDispatch']
+  readonly getRun: ReturnType<typeof createCrawlerTaskRepository>['getRun']
+  readonly pollDispatch: ReturnType<typeof createCrawlerTaskRepository>['pollDispatch']
+  readonly processRunnerEvent: ReturnType<typeof createCrawlerTaskRepository>['processRunnerEvent']
+  readonly providerStarted?: (input: Record<string, unknown>) => Promise<ProviderStartedResult>
+  readonly scheduleRegister?: (input: Record<string, unknown>) => Promise<ScheduleRegisterResult>
+}
+
+function providerSnapshotMatches(event: Extract<v.InferOutput<typeof CrawlerRunEventSchema>, { type: 'schedule_register' | 'provider_started' }>): boolean {
+  try {
+    const snapshot = createProviderSnapshot(event.template)
+    return snapshot.workflow === event.workflow
+      && snapshot.repository === event.repository
+      && snapshot.ref === event.ref
+      && snapshot.environment === event.environment
+      && snapshot.target === event.target
+  }
+  catch {
+    return false
+  }
+}
 
 export function createCrawlerRunsRoutes(options: {
   readonly createRepository?: (database: AppEnv['Variables']['db']) => RunnerEventRepository
   readonly now?: () => number
 } = {}) {
-  const createRepository = options.createRepository ?? createCrawlerTaskRepository
+  const createRepository = options.createRepository ?? (database => createCrawlerTaskRepository(database) as unknown as RunnerEventRepository)
   const now = options.now ?? (() => Date.now())
   const crawlerRunsRoutes = new Hono<AppEnv>()
 
@@ -155,15 +190,91 @@ export function createCrawlerRunsRoutes(options: {
     )
   })
 
+  crawlerRunsRoutes.post('/schedule-register', async (c) => {
+    const rawBody = await c.req.arrayBuffer()
+    const currentNow = now()
+    const signature = await verifySignedRequest(c, rawBody, currentNow)
+    const parsed = v.safeParse(CrawlerRunEventSchema, await parseRawJson(rawBody))
+    if (!parsed.success || parsed.output.type !== 'schedule_register')
+      throw new HTTPException(400, { message: 'Invalid schedule registration envelope' })
+    const event = parsed.output as Extract<v.InferOutput<typeof CrawlerRunEventSchema>, { type: 'schedule_register' }>
+    if (event.key_id !== signature.keyId || Math.abs(currentNow - Date.parse(event.scheduled_at)) > MAX_EVENT_AGE_MS)
+      throw new HTTPException(400, { message: 'Invalid schedule registration identity' })
+    if (!providerSnapshotMatches(event))
+      throw new HTTPException(400, { message: 'Schedule provider snapshot mismatch' })
+    const repository = createRepository(c.get('db'))
+    if (!repository.scheduleRegister)
+      throw new HTTPException(503, { message: 'Schedule registration unavailable' })
+
+    const result = await repository.scheduleRegister({
+      bodySha256: await sha256Hex(rawBody),
+      environment: event.environment,
+      eventId: event.event_id,
+      keyId: event.key_id,
+      nonce: event.nonce,
+      ref: event.ref,
+      repository: event.repository,
+      scheduleBucket: event.schedule_bucket ?? event.scheduled_at,
+      scheduledAt: event.scheduled_at,
+      target: event.target,
+      template: event.template,
+      workflow: event.workflow,
+    })
+    return c.json({
+      accepted: result.accepted,
+      attempt: result.attempt,
+      run_id: result.runId,
+    }, result.accepted ? 200 : 409)
+  })
+
+  crawlerRunsRoutes.post('/:runId/provider-started', async (c) => {
+    const rawBody = await c.req.arrayBuffer()
+    const currentNow = now()
+    const signature = await verifySignedRequest(c, rawBody, currentNow)
+    const parsed = v.safeParse(CrawlerRunEventSchema, await parseRawJson(rawBody))
+    if (!parsed.success || parsed.output.type !== 'provider_started')
+      throw new HTTPException(400, { message: 'Invalid provider start envelope' })
+    const event = parsed.output as Extract<v.InferOutput<typeof CrawlerRunEventSchema>, { type: 'provider_started' }>
+    if (event.key_id !== signature.keyId || event.run_id !== c.req.param('runId'))
+      throw new HTTPException(400, { message: 'Provider start identity mismatch' })
+    if (Math.abs(currentNow - event.timestamp) > MAX_EVENT_AGE_MS || !providerSnapshotMatches(event))
+      throw new HTTPException(400, { message: 'Provider start snapshot mismatch' })
+    const repository = createRepository(c.get('db'))
+    if (!repository.providerStarted)
+      throw new HTTPException(503, { message: 'Provider start unavailable' })
+
+    const result = await repository.providerStarted({
+      attempt: event.attempt,
+      bodySha256: await sha256Hex(rawBody),
+      environment: event.environment,
+      eventId: event.event_id,
+      keyId: event.key_id,
+      nonce: event.nonce,
+      providerRunAttempt: event.provider_run_attempt,
+      providerRunId: event.provider_run_id,
+      ref: event.ref,
+      repository: event.repository,
+      runId: event.run_id,
+      sha: event.sha,
+      target: event.target,
+      template: event.template,
+      workflow: event.workflow,
+    })
+    return c.json({
+      accepted: result.accepted,
+      cancel_requested: result.cancelRequested,
+    }, result.accepted ? 200 : 409)
+  })
+
   crawlerRunsRoutes.post('/:runId/events', async (c) => {
     const rawBody = await c.req.arrayBuffer()
     const currentNow = now()
     const signature = await verifySignedRequest(c, rawBody, currentNow)
 
     const parsed = v.safeParse(CrawlerRunEventSchema, await parseRawJson(rawBody))
-    if (!parsed.success)
+    if (!parsed.success || (parsed.output.type !== 'heartbeat' && parsed.output.type !== 'progress' && parsed.output.type !== 'log' && parsed.output.type !== 'succeeded' && parsed.output.type !== 'failed' && parsed.output.type !== 'cancelled'))
       throw new HTTPException(400, { message: 'Invalid runner event envelope' })
-    const event = parsed.output
+    const event = parsed.output as LifecycleEvent
     if (event.key_id !== signature.keyId || event.run_id !== c.req.param('runId'))
       throw new HTTPException(400, { message: 'Runner event identity mismatch' })
     if (Math.abs(currentNow - event.timestamp) > MAX_EVENT_AGE_MS)

@@ -56,7 +56,6 @@ function createProviderStartedEvent(overrides: Record<string, unknown> = {}) {
     ref: 'main',
     repository: 'inspire-man/starye',
     run_id: 'run-1',
-    scheduled_at: '2026-07-30T00:00:00.000Z',
     sha: 'a'.repeat(40),
     target: 'starye-org',
     template: 'movie',

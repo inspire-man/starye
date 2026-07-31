@@ -1,5 +1,6 @@
 import type { Database } from '@starye/db'
-import type { CrawlerRunFailureCode, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskSnapshot, CrawlerTaskTemplateKey, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerRunFailureCode, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskSnapshot, CrawlerTaskTemplateKey, ProviderRunStatus, ValidatedCrawlerRunReceipt } from './types'
+import { createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
 import { createManualRetryAttempt, decideCrawlerRunTransition, isTerminalCrawlerRunStatus } from './state-machine'
 import { createCrawlerTaskSnapshot } from './template-registry'
@@ -83,6 +84,50 @@ export interface ProcessCrawlerRunnerEventInput {
   readonly runId: string
   readonly safeSummary?: string
   readonly sequence: number
+}
+
+export interface ScheduleRegisterInput {
+  readonly bodySha256: string
+  readonly environment: string
+  readonly eventId: string
+  readonly keyId: string
+  readonly nonce: string
+  readonly ref: string
+  readonly repository: string
+  readonly scheduleBucket: string
+  readonly scheduledAt: string
+  readonly target: string
+  readonly template: CrawlerTaskTemplateKey
+  readonly workflow: string
+}
+
+export interface ScheduleRegisterResult {
+  readonly accepted: boolean
+  readonly attempt: number
+  readonly runId: string
+}
+
+export interface ProviderStartedInput {
+  readonly attempt: number
+  readonly bodySha256: string
+  readonly environment: string
+  readonly eventId: string
+  readonly keyId: string
+  readonly nonce: string
+  readonly providerRunAttempt: number
+  readonly providerRunId: string
+  readonly ref: string
+  readonly repository: string
+  readonly runId: string
+  readonly sha: string
+  readonly target: string
+  readonly template: CrawlerTaskTemplateKey
+  readonly workflow: string
+}
+
+export interface ProviderStartedResult {
+  readonly accepted: boolean
+  readonly cancelRequested: boolean
 }
 
 export type ProcessCrawlerRunnerEventResult
@@ -763,6 +808,177 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       : { kind: 'rejected', outcome }
   }
 
+  async function scheduleRegister(input: ScheduleRegisterInput): Promise<ScheduleRegisterResult> {
+    const snapshot = createProviderSnapshot(input.template)
+    if (snapshot.workflow !== input.workflow || snapshot.repository !== input.repository || snapshot.ref !== input.ref
+      || snapshot.environment !== input.environment || snapshot.target !== input.target) {
+      return { accepted: false, attempt: 0, runId: '' }
+    }
+
+    const existing = await d1.prepare(`
+      SELECT run_id, application_attempt, safe_facts_json
+      FROM crawler_run_provider_association
+      WHERE template_key = ? AND target = ? AND workflow = ? AND schedule_bucket = ?
+      LIMIT 1
+    `).bind(input.template, input.target, input.workflow, input.scheduleBucket).all<{
+      application_attempt: number
+      run_id: string
+      safe_facts_json: string | null
+    }>()
+    const existingRow = existing.results?.[0]
+    if (existingRow) {
+      return { accepted: true, attempt: existingRow.application_attempt, runId: existingRow.run_id }
+    }
+
+    const created = await createOrGetActiveRun({
+      idempotencyKey: `github-actions:schedule:${input.template}:${input.scheduleBucket}`,
+      requestedByUserId: 'github-actions-schedule',
+      templateKey: input.template,
+    })
+    const run = created.run
+    const currentNow = toUnixSeconds(now())
+    const safeFacts = JSON.stringify({ scheduledAt: input.scheduledAt })
+    try {
+      await d1.prepare(`
+        INSERT INTO crawler_run_provider_association (
+          run_id, application_attempt, provider, template_key, target, workflow,
+          repository, ref, environment, crawler_entrypoint, safe_facts_json,
+          schedule_bucket, created_at, updated_at
+        ) VALUES (?, ?, 'github-actions', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        run.id,
+        run.attemptNumber,
+        snapshot.templateKey,
+        snapshot.target,
+        snapshot.workflow,
+        snapshot.repository,
+        snapshot.ref,
+        snapshot.environment,
+        snapshot.crawlerEntrypoint,
+        safeFacts,
+        input.scheduleBucket,
+        currentNow,
+        currentNow,
+      ).run()
+    }
+    catch {
+      const concurrent = await d1.prepare(`
+        SELECT run_id, application_attempt
+        FROM crawler_run_provider_association
+        WHERE template_key = ? AND target = ? AND workflow = ? AND schedule_bucket = ?
+        LIMIT 1
+      `).bind(input.template, input.target, input.workflow, input.scheduleBucket).all<{
+        application_attempt: number
+        run_id: string
+      }>()
+      const row = concurrent.results?.[0]
+      if (row)
+        return { accepted: true, attempt: row.application_attempt, runId: row.run_id }
+      throw new Error('schedule_registration_persistence_failed')
+    }
+
+    return { accepted: true, attempt: run.attemptNumber, runId: run.id }
+  }
+
+  async function providerStarted(input: ProviderStartedInput): Promise<ProviderStartedResult> {
+    const existingEvent = await findRunnerEvent(input.runId, input.eventId, input.nonce)
+    if (existingEvent) {
+      if (existingEvent.event_id !== input.eventId || existingEvent.nonce !== input.nonce || existingEvent.body_sha256 !== input.bodySha256)
+        return { accepted: false, cancelRequested: false }
+      const outcome = parseRunnerEventOutcome(existingEvent.outcome)
+      return {
+        accepted: outcome.accepted === true,
+        cancelRequested: outcome.cancel_requested === true,
+      }
+    }
+
+    const association = await d1.prepare(`
+      SELECT application_attempt, environment, provider_run_attempt, provider_run_id,
+        ref, repository, run_id, sha, target, template_key, workflow
+      FROM crawler_run_provider_association
+      WHERE run_id = ?
+      LIMIT 1
+    `).bind(input.runId).all<{
+      application_attempt: number
+      environment: string
+      provider_run_attempt: number | null
+      provider_run_id: string | null
+      ref: string
+      repository: string
+      run_id: string
+      sha: string | null
+      target: string
+      template_key: CrawlerTaskTemplateKey
+      workflow: string
+    }>()
+    const row = association.results?.[0]
+    const run = await getRunRow(input.runId)
+    const cancelRequested = run?.status === 'cancel_requested'
+    if (!row || !run || row.application_attempt !== input.attempt || row.template_key !== input.template
+      || row.target !== input.target || row.workflow !== input.workflow || row.repository !== input.repository
+      || row.ref !== input.ref || row.environment !== input.environment) {
+      const outcome = { accepted: false, cancel_requested: cancelRequested, reason: 'provider_mismatch' }
+      await recordRunnerEvent({
+        bodySha256: input.bodySha256,
+        eventId: input.eventId,
+        keyId: input.keyId,
+        nonce: input.nonce,
+        outcome,
+        runId: input.runId,
+        sequence: 1,
+      })
+      if (run) {
+        await d1.prepare(`
+          INSERT OR IGNORE INTO crawler_run_transition (
+            id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+          ) VALUES (?, ?, ?, ?, ?, 'provider_mismatch', 'provider snapshot mismatch', ?)
+        `).bind(createId(), input.runId, -2, run.status, run.status, toUnixSeconds(now())).run()
+      }
+      return { accepted: false, cancelRequested }
+    }
+
+    if ((row.provider_run_id && row.provider_run_id !== input.providerRunId)
+      || (row.provider_run_attempt && row.provider_run_attempt !== input.providerRunAttempt)
+      || (row.sha && row.sha !== input.sha)) {
+      return { accepted: false, cancelRequested }
+    }
+
+    await d1.prepare(`
+      UPDATE crawler_run_provider_association
+      SET provider_run_id = ?, provider_run_attempt = ?, sha = ?, provider_status = ?,
+        safe_facts_json = ?, updated_at = ?
+      WHERE run_id = ? AND application_attempt = ?
+    `).bind(
+      input.providerRunId,
+      input.providerRunAttempt,
+      input.sha,
+      'in_progress' satisfies ProviderRunStatus,
+      JSON.stringify({ providerStarted: true }),
+      toUnixSeconds(now()),
+      input.runId,
+      input.attempt,
+    ).run()
+
+    const outcome = { accepted: true, cancel_requested: cancelRequested }
+    const recorded = await recordRunnerEvent({
+      bodySha256: input.bodySha256,
+      eventId: input.eventId,
+      keyId: input.keyId,
+      nonce: input.nonce,
+      outcome,
+      runId: input.runId,
+      sequence: 1,
+    })
+    if (!recorded) {
+      const concurrent = await findRunnerEvent(input.runId, input.eventId, input.nonce)
+      if (concurrent) {
+        const concurrentOutcome = parseRunnerEventOutcome(concurrent.outcome)
+        return { accepted: concurrentOutcome.accepted === true, cancelRequested: concurrentOutcome.cancel_requested === true }
+      }
+    }
+    return { accepted: true, cancelRequested }
+  }
+
   async function sweepExpiredRuns(): Promise<readonly string[]> {
     const currentNow = toUnixSeconds(now())
     const expired = await d1.prepare(`
@@ -801,10 +1017,12 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     },
     purgeExpiredRunLogs,
     processRunnerEvent,
+    providerStarted,
     pollDispatch,
     recordRunnerEvent,
     renewLease,
     retryRun,
     sweepExpiredRuns,
+    scheduleRegister,
   }
 }
