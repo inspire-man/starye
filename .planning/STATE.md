@@ -2,24 +2,24 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: 后台爬虫任务与内容运维
-current_phase: 17
-current_phase_name: local-runner-vertical-slice
-status: executing
-stopped_at: Phase 17 Plan 03 implementation complete; deep-link fix committed, local E2E and Gateway CRUD proof remain blocked on runner config and Dashboard auth
-last_updated: "2026-07-31T08:08:16.171Z"
+current_phase: 18
+current_phase_name: GitHub Actions Production Orchestration
+status: planning
+stopped_at: Phase 17 complete; --no-transition retained Phase 18 at planning
+last_updated: "2026-07-31T10:48:18.923Z"
 last_activity: 2026-07-31
-last_activity_desc: Phase 17 receipt deep-link fix verified; local OAuth bootstrap returned 502
+last_activity_desc: Phase 17 complete; Phase 18 left at planning under --no-transition
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
-  percent: 25
+  completed_plans: 7
+  percent: 50
 ---
 
 # Project State: Starye — 个人内容中台
 
-**Last updated:** 2026-07-30
+**Last updated:** 2026-07-31
 **Mode:** yolo
 **Granularity:** standard
 
@@ -40,15 +40,15 @@ progress:
 
 ## Current Position
 
-Phase: 17 (local-runner-vertical-slice) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
-Last activity: 2026-07-31 — Phase 17 execution started
+Phase: 18 — GitHub Actions Production Orchestration
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-31 — Phase 17 complete; Phase 18 left at planning under --no-transition
 
 ## Performance Metrics
 
-**Phases completed:** 0 / 4
-**Plans completed:** 0 / 3
+**Phases completed:** 2 / 4
+**Plans completed:** 7 / 7
 **Plans in flight:** 0
 **Phase repair invocations used:** 2 / per-phase budget 2
 
@@ -147,18 +147,16 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-31T08:08:16.171Z
-**Stopped at:** Phase 17 Plan 03 implementation complete; receipt deep-link fix committed, local E2E and Gateway CRUD proof blocked on runner config and Dashboard auth
+**Last session:** 2026-07-31T10:48:18.923Z
+**Stopped at:** Phase 17 complete; --no-transition retained Phase 18 at planning
 **Resume file:** None
 
-**Next recommended action:** Provide the ignored local runner E2E config and restore the local Dashboard auth/API OAuth bootstrap, then re-run `pnpm local:task-runner:e2e --target local` and the Gateway receipt CRUD proof for Phase 17 Plan 03.
+**Next recommended action:** Start Phase 18 planning when requested; Phase 17 local evidence and Gateway CRUD proof are complete.
 
 **If interrupted, resume by:**
 
-1. Provide an ignored `TASK_RUNNER_E2E_CONFIG` that names the ignored local runner config and a local Dashboard session-cookie file; do not commit either file.
-2. Run `pnpm local:task-runner:e2e --target local` and retain only its sanitized local evidence (run IDs, validated content IDs, and counts).
-3. Run the Gateway-scoped receipt browser proof at `http://localhost:8080`; do not treat a direct Vite/API result as canonical evidence.
-4. Only after those checks pass, create `17-03-SUMMARY.md`, advance Phase 17 state, and keep `--no-transition` at phase closeout.
+1. Read Phase 17 `17-VERIFICATION.md` and `.target-runs/phase17-local-e2e/evidence.json` for the completed local proof.
+2. Use `$gsd-discuss-phase 18` or `$gsd-plan-phase 18` to begin the next phase when requested.
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
@@ -242,4 +240,3 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 ### Blockers
 
 - Phase 13 Plan 13-63: blocked_without_observation_adapter; no p13-63 run id was created.
-- Phase 17 Plan 03 local Gateway acceptance is blocked: TASK_RUNNER_E2E_CONFIG is absent, and the local OAuth bootstrap currently returns 502 from `/api/auth/sign-in/social`; the local runner and browser proof must be rerun after ignored local config/session setup and auth recovery.

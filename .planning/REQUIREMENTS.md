@@ -17,7 +17,7 @@
 
 - [x] **LOCAL-01**: 本地 runner 使用 API 创建的 run ID 执行现有视频或漫画 crawler。
 - [x] **LOCAL-02**: 本地 runner 回写启动、心跳、日志、终态和入库 receipt，并支持协作取消。
-- [ ] **LOCAL-03**: 本地任务可在 Gateway `http://localhost:8080` 观察状态、取消、重试和入库结果。
+- [x] **LOCAL-03**: 本地任务可在 Gateway `http://localhost:8080` 观察状态、取消、重试和入库结果。
 
 ### 生产编排
 
@@ -67,7 +67,7 @@
 | CTRL-05 | Phase 16 | Complete |
 | LOCAL-01 | Phase 17 | Complete |
 | LOCAL-02 | Phase 17 | Complete |
-| LOCAL-03 | Phase 17 | Pending |
+| LOCAL-03 | Phase 17 | Complete |
 | PROD-01 | Phase 18 | Pending |
 | PROD-02 | Phase 18 | Pending |
 | PROD-03 | Phase 18 | Pending |

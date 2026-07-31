@@ -9,7 +9,7 @@
 
 ## Current Status
 
-v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面。Cloudflare API/D1 负责任务真相、鉴权、状态与日志；本地 Node runner 和 GitHub Actions 分别执行同一类固定模板。v1.2 的 selected-production Viewer proof 仍保持独立延期，未纳入本里程碑。
+v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面。Cloudflare API/D1 负责任务真相、鉴权、状态与日志；本地 Node runner 和 GitHub Actions 分别执行同一类固定模板。Phase 17 已完成本地 Gateway 纵向 proof；当前停在 Phase 18 planning，未执行生产 Actions。
 
 ## Phase Plan
 
@@ -19,6 +19,13 @@ v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面
 | 17 | Local Runner Vertical Slice | 通过本地 runner 证明从后台创建到入库 receipt 与内容 CRUD 的完整纵向链路。 | LOCAL-01..LOCAL-03, DATA-01 |
 | 18 | GitHub Actions Production Orchestration | 让生产 API 安全编排现有 Actions，并可信关联、取消、重试和补偿任务。 | PROD-01..PROD-03 |
 | 19 | Dashboard Operations and End-to-End Proof | 完善后台任务运维体验、内容管理交接、运行手册和本地/生产验收。 | DASH-01..DASH-03, OPS-02, TEST-01 |
+
+## Phase Status
+
+- [x] **Phase 16: Task Domain Foundation** — Complete
+- [x] **Phase 17: Local Runner Vertical Slice** — Complete (2026-07-31)
+- [ ] **Phase 18: GitHub Actions Production Orchestration** — Ready to plan
+- [ ] **Phase 19: Dashboard Operations and End-to-End Proof** — Planned
 
 ## Phase Details
 
@@ -63,6 +70,14 @@ Plans:
 3. 成功 run 提供经验证的入库摘要和内容标识；空或不匹配 receipt 不会标记为成功。
 4. 操作者可从 receipt 进入既有视频/漫画内容 CRUD，完成一次实际入库后的管理操作。
 
+**Plans:** 3/3 plans complete
+
+Plans:
+
+- [x] 17-01-PLAN.md — 签名 runner poll/claim 控制面与串行本地 crawler runner。
+- [x] 17-02-PLAN.md — D1 validated receipt、safe task read model 与漫画详情交接。
+- [x] 17-03-PLAN.md — Dashboard task panel、receipt editor handoff 与 Gateway 本地 E2E proof。
+
 ### Phase 18: GitHub Actions Production Orchestration
 
 **Goal:** 让生产 API 安全编排现有 Actions，并可信关联、取消、重试和补偿任务。
@@ -93,16 +108,16 @@ Plans:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CTRL-01 | Phase 16 | Pending |
-| CTRL-02 | Phase 16 | Pending |
-| CTRL-03 | Phase 16 | Pending |
-| CTRL-04 | Phase 16 | Pending |
-| CTRL-05 | Phase 16 | Pending |
-| OPS-01 | Phase 16 | Pending |
-| LOCAL-01 | Phase 17 | Pending |
-| LOCAL-02 | Phase 17 | Pending |
-| LOCAL-03 | Phase 17 | Pending |
-| DATA-01 | Phase 17 | Pending |
+| CTRL-01 | Phase 16 | Complete |
+| CTRL-02 | Phase 16 | Complete |
+| CTRL-03 | Phase 16 | Complete |
+| CTRL-04 | Phase 16 | Complete |
+| CTRL-05 | Phase 16 | Complete |
+| OPS-01 | Phase 16 | Complete |
+| LOCAL-01 | Phase 17 | Complete |
+| LOCAL-02 | Phase 17 | Complete |
+| LOCAL-03 | Phase 17 | Complete |
+| DATA-01 | Phase 17 | Complete |
 | PROD-01 | Phase 18 | Pending |
 | PROD-02 | Phase 18 | Pending |
 | PROD-03 | Phase 18 | Pending |
@@ -120,4 +135,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-07-30*
-*Last updated: 2026-07-30 after v1.3 roadmap creation*
+*Last updated: 2026-07-31 after Phase 17 completion*

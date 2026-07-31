@@ -254,12 +254,12 @@ async function handleUpdate() {
   try {
     await api.admin.updateComic(editingComic.value.id, {
       title: editingComic.value.title,
-      author: editingComic.value.author,
-      description: editingComic.value.description,
+      author: editingComic.value.author ?? '',
+      description: editingComic.value.description ?? '',
       isR18: editingComic.value.isR18,
       metadataLocked: editingComic.value.metadataLocked,
       status: editingComic.value.status as any,
-      region: editingComic.value.region,
+      region: editingComic.value.region ?? '',
       genres: Array.isArray(editingComic.value.genres)
         ? editingComic.value.genres
         : (typeof editingComic.value.genres === 'string' ? (editingComic.value.genres as string).split(',').map(s => s.trim()).filter(Boolean) : []),
