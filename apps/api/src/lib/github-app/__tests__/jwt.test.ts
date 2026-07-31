@@ -37,4 +37,17 @@ describe('gitHub App JWT', () => {
     expect(signature).toMatch(/^[\w-]+$/u)
     expect(encoder.encode(signature).byteLength).toBeGreaterThan(0)
   })
+
+  it('returns safe reason codes for malformed PKCS#8 material and invalid expiration windows', async () => {
+    await expect(createGitHubAppJwt({
+      appId: '12345',
+      privateKeyPem: '-----BEGIN PRIVATE KEY-----\nnot a key\n-----END PRIVATE KEY-----',
+    })).resolves.toEqual({ code: 'github_app_jwt_private_key_invalid', ok: false })
+
+    await expect(createGitHubAppJwt({
+      appId: '12345',
+      expiresInSeconds: 601,
+      privateKeyPem: await createPrivateKeyPem(),
+    })).resolves.toEqual({ code: 'github_app_jwt_expiration_invalid', ok: false })
+  })
 })
