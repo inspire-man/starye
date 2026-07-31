@@ -9,6 +9,26 @@ import { getAllowedOrigins } from '../config'
 // Move regex to module scope to avoid re-compilation
 const IP_ADDRESS_REGEX = /\d+\.\d+\.\d+\.\d+/
 
+export const GITHUB_APP_CONFIGURATION_ERROR = 'github_app_configuration_missing' as const
+export const GITHUB_APP_BINDING_NAMES = [
+  'GITHUB_APP_ID',
+  'GITHUB_APP_INSTALLATION_ID',
+  'GITHUB_APP_PRIVATE_KEY',
+  'GITHUB_ACTIONS_OWNER',
+  'GITHUB_ACTIONS_REPOSITORY',
+  'GITHUB_ACTIONS_ENVIRONMENT',
+  'GITHUB_ACTIONS_RUNNER_EVENT_CALLBACK_URL',
+] as const
+
+export type GitHubAppBindingName = typeof GITHUB_APP_BINDING_NAMES[number]
+export type GitHubAppBindingValidation
+  = | { readonly ok: true }
+    | {
+      readonly code: typeof GITHUB_APP_CONFIGURATION_ERROR
+      readonly missing: readonly GitHubAppBindingName[]
+      readonly ok: false
+    }
+
 // 定义环境类型
 export interface Env {
   DB: D1Database
@@ -24,6 +44,14 @@ export interface Env {
   TASK_RUNNER_CALLBACK_PREVIOUS_ROTATED_AT?: string
   GITHUB_CLIENT_ID: string
   GITHUB_CLIENT_SECRET: string
+  // GitHub App provider bindings are optional until production orchestration is configured.
+  GITHUB_APP_ID?: string
+  GITHUB_APP_INSTALLATION_ID?: string
+  GITHUB_APP_PRIVATE_KEY?: string // PKCS#8 PEM; secret value never enters DTOs, D1, logs, or receipts
+  GITHUB_ACTIONS_OWNER?: string
+  GITHUB_ACTIONS_REPOSITORY?: string
+  GITHUB_ACTIONS_ENVIRONMENT?: string
+  GITHUB_ACTIONS_RUNNER_EVENT_CALLBACK_URL?: string
   WEB_URL?: string
   ADMIN_URL?: string
   OPENROUTER_API_KEY?: string
@@ -36,6 +64,20 @@ export interface Env {
   R2_SECRET_ACCESS_KEY: string
   R2_BUCKET_NAME: string
   R2_PUBLIC_URL: string
+}
+
+/** Reports missing GitHub App bindings by name only, so provider clients can fail closed without exposing values. */
+export function validateGitHubAppBindings(env: Pick<Env, GitHubAppBindingName>): GitHubAppBindingValidation {
+  const missing = GITHUB_APP_BINDING_NAMES.filter(name => !env[name]?.trim())
+  if (missing.length > 0) {
+    return {
+      code: GITHUB_APP_CONFIGURATION_ERROR,
+      missing,
+      ok: false,
+    }
+  }
+
+  return { ok: true }
 }
 
 /**
