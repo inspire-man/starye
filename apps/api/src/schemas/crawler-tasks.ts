@@ -28,5 +28,5 @@ export const ListCrawlerTasksQuerySchema = v.strictObject({
 
 export const CrawlerTaskLogsQuerySchema = v.strictObject({
   cursor: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(0))),
-  limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1), v.maxValue(100)), '50'),
+  limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1), v.maxValue(50)), '50'),
 })

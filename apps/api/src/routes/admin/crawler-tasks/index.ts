@@ -28,6 +28,51 @@ interface TaskAccessRow {
   template_key: CrawlerTaskTemplateKey
 }
 
+interface SafeCrawlerReceipt {
+  createdCount: number
+  primaryContentId: string
+  templateKey: CrawlerTaskTemplateKey
+  updatedCount: number
+}
+
+function projectReceipt(status: unknown, raw: unknown): SafeCrawlerReceipt | null {
+  if (status !== 'succeeded' || typeof raw !== 'string')
+    return null
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return null
+    const receipt = value as Record<string, unknown>
+    if ((receipt.templateKey !== 'movie' && receipt.templateKey !== 'manga')
+      || typeof receipt.primaryContentId !== 'string'
+      || receipt.primaryContentId.length === 0
+      || typeof receipt.createdCount !== 'number'
+      || !Number.isInteger(receipt.createdCount)
+      || typeof receipt.updatedCount !== 'number'
+      || !Number.isInteger(receipt.updatedCount)) {
+      return null
+    }
+    return {
+      createdCount: receipt.createdCount,
+      primaryContentId: receipt.primaryContentId,
+      templateKey: receipt.templateKey,
+      updatedCount: receipt.updatedCount,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function projectRun(row: Record<string, unknown>): Record<string, unknown> {
+  const { receipt_summary_json: receiptSummary, ...safeRun } = row
+  const receipt = projectReceipt(row.status, receiptSummary)
+  return {
+    ...safeRun,
+    receipt,
+  }
+}
+
 function getD1(c: { get: (key: 'db') => unknown }): D1Client {
   return (c.get('db') as { $client: D1Client }).$client
 }
@@ -114,7 +159,7 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
     d1.prepare('SELECT id, template_key, latest_run_id, created_at, updated_at FROM crawler_task WHERE id = ?').bind(taskId).all<Record<string, unknown>>(),
     d1.prepare('SELECT id, attempt_number, status, state_version, failure_code, receipt_summary_json, created_at, terminal_at FROM crawler_run WHERE task_id = ? ORDER BY attempt_number DESC').bind(taskId).all<Record<string, unknown>>(),
   ])
-  return c.json({ runs: runs.results ?? [], task: task.results?.[0] })
+  return c.json({ runs: (runs.results ?? []).map(projectRun), task: task.results?.[0] })
 })
 
 adminCrawlerTasksRoutes.get('/:taskId/runs/:runId/logs', validator('param', CrawlerTaskRunParamsSchema), validator('query', CrawlerTaskLogsQuerySchema), async (c) => {
@@ -126,10 +171,14 @@ adminCrawlerTasksRoutes.get('/:taskId/runs/:runId/logs', validator('param', Craw
     SELECT log.sequence, log.level, log.code, log.safe_message, log.counts_json, log.created_at
     FROM crawler_run_log AS log
     INNER JOIN crawler_run AS run ON run.id = log.run_id
-    WHERE run.task_id = ? AND log.run_id = ? AND (? IS NULL OR log.sequence > ?)
-    ORDER BY log.sequence ASC LIMIT ?
+    WHERE run.task_id = ? AND log.run_id = ? AND (? IS NULL OR log.sequence < ?)
+    ORDER BY log.sequence DESC LIMIT ?
   `).bind(taskId, runId, cursor ?? null, cursor ?? null, limit).all<Record<string, unknown>>()
-  return c.json({ logs: logs.results ?? [] })
+  const rows = logs.results ?? []
+  return c.json({
+    logs: rows,
+    nextCursor: rows.length === limit ? Number(rows[rows.length - 1]?.sequence) : null,
+  })
 })
 
 adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/cancel', validator('param', CrawlerTaskRunParamsSchema), async (c) => {

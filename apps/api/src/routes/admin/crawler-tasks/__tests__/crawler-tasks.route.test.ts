@@ -144,6 +144,74 @@ describe('admin crawler task routes', () => {
     ])
     const response = await allowed.app.request('/crawler-tasks/task-movie/runs/run-movie/logs')
 
-    await expect(response.json()).resolves.toEqual({ logs: [{ code: 'crawl_progress', sequence: 1 }] })
+    await expect(response.json()).resolves.toEqual({
+      logs: [{ code: 'crawl_progress', sequence: 1 }],
+      nextCursor: null,
+    })
+  })
+
+  it('projects only validated success receipts and pages logs newest-first', async () => {
+    const { app } = createApp({}, [
+      [{ template_key: 'movie' }],
+      [{
+        id: 'run-movie',
+        template_key: 'movie',
+        latest_run_id: 'run-movie',
+        created_at: 0,
+        updated_at: 0,
+        attempt_number: 1,
+        status: 'succeeded',
+        state_version: 1,
+        receipt_summary_json: JSON.stringify({
+          createdCount: 2,
+          primaryContentId: 'movie-1',
+          templateKey: 'movie',
+          updatedCount: 1,
+          rawRunnerField: 'hidden',
+        }),
+      }],
+      [{
+        id: 'run-movie',
+        template_key: 'movie',
+        latest_run_id: 'run-movie',
+        created_at: 0,
+        updated_at: 0,
+        attempt_number: 1,
+        status: 'succeeded',
+        state_version: 1,
+        receipt_summary_json: JSON.stringify({
+          createdCount: 2,
+          primaryContentId: 'movie-1',
+          templateKey: 'movie',
+          updatedCount: 1,
+          rawRunnerField: 'hidden',
+        }),
+      }],
+    ])
+
+    const detail = await app.request('/crawler-tasks/task-movie')
+    const detailBody = await detail.json()
+    expect(detailBody).toMatchObject({
+      runs: [{
+        id: 'run-movie',
+        receipt: {
+          createdCount: 2,
+          primaryContentId: 'movie-1',
+          templateKey: 'movie',
+          updatedCount: 1,
+        },
+      }],
+    })
+    expect(JSON.stringify(detailBody.runs)).not.toContain('rawRunnerField')
+
+    const logsApp = createApp({}, [
+      [{ template_key: 'movie' }],
+      [{ id: 'run-movie' }],
+      [{ code: 'crawl_progress', sequence: 19 }],
+    ])
+    const logs = await logsApp.app.request('/crawler-tasks/task-movie/runs/run-movie/logs?cursor=20&limit=2')
+    expect(logs.status).toBe(200)
+    expect(logsApp.prepare.mock.calls.at(-1)?.[0]).toContain('log.sequence < ?')
+    expect(logsApp.prepare.mock.calls.at(-1)?.[0]).toContain('ORDER BY log.sequence DESC')
   })
 })

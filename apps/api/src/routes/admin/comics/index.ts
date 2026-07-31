@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { describeRoute, validator } from 'hono-openapi'
 import { serviceAuth } from '../../../middleware/service-auth'
 import { BatchOperationComicsSchema, UpdateComicMetadataSchema, UpdateComicProgressSchema } from '../../../schemas/admin'
-import { bulkOperateComics, getBatchComicStatus, getComicList, getCrawlStats, updateComicMetadata, updateComicProgress } from './handlers'
+import { bulkOperateComics, getBatchComicStatus, getComicById, getComicList, getCrawlStats, updateComicMetadata, updateComicProgress } from './handlers'
 
 export const adminComicsRoutes = new Hono<AppEnv>()
 
@@ -51,6 +51,9 @@ adminComicsRoutes.post(
 
 // 获取爬取统计
 adminComicsRoutes.get('/crawl-stats', serviceAuth(['admin', 'comic_admin']), getCrawlStats)
+
+// 漫画 receipt 管理交接的直接读取，复用现有资源角色边界。
+adminComicsRoutes.get('/:id', serviceAuth(['admin', 'comic_admin']), getComicById)
 
 // 批量操作漫画
 adminComicsRoutes.post(

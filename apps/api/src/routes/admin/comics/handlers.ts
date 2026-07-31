@@ -91,6 +91,19 @@ export async function getComicList(c: Context<AppEnv>) {
   })
 }
 
+/** 获取已验证 receipt 交接所需的单个漫画详情。 */
+export async function getComicById(c: Context<AppEnv>) {
+  const id = c.req.param('id')!
+  const comic = await c.get('db').query.comics.findFirst({
+    where: eq(comics.id, id),
+  })
+
+  if (!comic)
+    return c.json({ error: 'Comic not found' }, 404)
+
+  return c.json({ data: comic })
+}
+
 /**
  * 更新漫画信息
  */
