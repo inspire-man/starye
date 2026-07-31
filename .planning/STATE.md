@@ -5,15 +5,15 @@ milestone_name: 后台爬虫任务与内容运维
 current_phase: 18
 current_phase_name: GitHub Actions Production Orchestration
 status: executing
-stopped_at: Completed 18-03-PLAN.md
-last_updated: "2026-07-31T18:20:30.106Z"
+stopped_at: Completed 18-04-PLAN.md
+last_updated: "2026-08-01T02:45:00.000Z"
 last_activity: 2026-08-01
-last_activity_desc: Phase 18 Plan 18-03 completed
+last_activity_desc: Phase 18 Plan 18-04 completed
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 13
-  completed_plans: 9
+  completed_plans: 10
   percent: 50
 ---
 
@@ -41,9 +41,9 @@ progress:
 ## Current Position
 
 Phase: 18 (GitHub Actions Production Orchestration) — EXECUTING
-Plan: 3 of 6 complete
-Status: Ready for Plan 18-04
-Last activity: 2026-08-01 — Phase 18 Plan 18-03 completed
+Plan: 4 of 6 complete
+Status: Ready for Plan 18-05
+Last activity: 2026-08-01 — Phase 18 Plan 18-04 completed
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Last activity: 2026-08-01 — Phase 18 Plan 18-03 completed
 | Phase 18 P01 | 17m | 3 tasks | 8 files |
 | Phase 18 P02 | 22 min | 3 tasks | 7 files |
 | Phase 18 P03 | 33 min | 3 tasks | 10 files |
+| Phase 18 P04 | 21 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -151,25 +152,25 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 ## Session Continuity
 
 **Last session:** 2026-07-31T18:20:30.091Z
-**Stopped at:** Completed 18-03-PLAN.md
+**Stopped at:** Completed 18-04-PLAN.md
 **Resume file:** None
 
-**Next recommended action:** Run `$gsd-execute-phase 18` to execute 18-02 (GitHub App JWT/token and fixed Actions REST client).
+**Next recommended action:** Run `$gsd-execute-phase 18` to execute 18-05 (movie/manga production adapter and prepared mutation registry).
 
 **If interrupted, resume by:**
 
-1. Read `18-01-SUMMARY.md` and `18-02-PLAN.md` for the fixed provider snapshot/D1 binding contract.
-2. Use `$gsd-execute-phase 18` to continue with the next Wave 2 plan after its dependency gate.
+1. Read `18-04-SUMMARY.md` and `18-05-PLAN.md` for provider lifecycle and production adapter contracts.
+2. Use `$gsd-execute-phase 18` to continue with the next Wave 3 plan after its dependency gate.
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
 
 ---
-*State updated: 2026-08-01 after Phase 18 Plan 18-01 execution*
+*State updated: 2026-08-01 after Phase 18 Plan 18-04 execution*
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 18` to continue with 18-02.
+- Run `$gsd-execute-phase 18` to continue with 18-05.
 
 ## Decisions
 
@@ -244,6 +245,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 - [Phase 18]: GitHub App bindings stay optional in Env until configured and missing values return names-only `github_app_configuration_missing`. — 18-01 Worker binding contract
 - [Phase 18]: App JWT uses a 60-second backdate, a 9-minute default lifetime, and a 10-minute hard maximum. — Constrains GitHub App bearer lifetime before the installation token exchange.
 - [Phase 18]: Actions dispatch accepts only run_id, attempt, template, and target; immutable snapshots own workflow, repository, ref, and Environment. — Prevents caller-controlled GitHub Actions execution controls.
+- [Phase 18]: Provider poll/callback facts share repository CAS; provider success remains pending until the signed terminal event and validated receipt agree. — 18-04 lifecycle gate
+- [Phase 18]: Provider mismatch is windowed and provider_lost has no automatic business retry; retry is a new administrator-confirmed attempt. — 18-04 reconciliation
 
 ### Blockers
 
