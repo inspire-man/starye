@@ -22,6 +22,17 @@ export interface RunnerClientConfig {
   readonly timeoutMs?: number
 }
 
+/** Shared callback envelope builder used by local and provider-backed runners. */
+export function createRunnerEnvelope(keyId: string, fields: Record<string, unknown> = {}, now = Date.now()): Record<string, unknown> {
+  return {
+    event_id: createRunnerEventId(),
+    key_id: keyId,
+    nonce: createRunnerEventId(),
+    timestamp: now,
+    ...fields,
+  }
+}
+
 interface EventResult {
   readonly accepted: boolean
   readonly cancel_requested?: boolean
@@ -77,12 +88,7 @@ export class RunnerClient {
   }
 
   private controlEnvelope() {
-    return {
-      event_id: createRunnerEventId(),
-      key_id: this.config.callbackKeyId,
-      nonce: createRunnerEventId(),
-      timestamp: Date.now(),
-    }
+    return createRunnerEnvelope(this.config.callbackKeyId)
   }
 
   private async event(candidate: RunnerCandidate, sequence: number, type: 'cancelled' | 'failed' | 'heartbeat' | 'log' | 'succeeded', extra: Record<string, unknown> = {}): Promise<EventResult> {

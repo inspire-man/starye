@@ -25,7 +25,7 @@ describe('actionsEventClient', () => {
 
     await client.scheduleRegister({ scheduledAt: '2026-07-30T00:00:00.000Z', scheduleBucket: '2026-07-30T00:00Z' })
 
-    const request = fetch.mock.calls[0]?.[1] as RequestInit
+    const request = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
     const payload = JSON.parse(String(request.body)) as Record<string, unknown>
     expect(payload).toMatchObject({
       environment: 'starye-org',
@@ -61,8 +61,8 @@ describe('actionsEventClient', () => {
     await expect(client.progress(4, { fetched: 2 })).resolves.toEqual({ accepted: true, cancel_requested: true })
     await client.succeeded(5, ['MOV-1'])
 
-    const progress = JSON.parse(String((fetch.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, unknown>
-    const terminal = JSON.parse(String((fetch.mock.calls[1]?.[1] as RequestInit).body)) as Record<string, unknown>
+    const progress = JSON.parse(String(((fetch.mock.calls[0] as unknown as [string, RequestInit])[1]).body)) as Record<string, unknown>
+    const terminal = JSON.parse(String(((fetch.mock.calls[1] as unknown as [string, RequestInit])[1]).body)) as Record<string, unknown>
     expect(progress).toMatchObject({ attempt: 2, run_id: 'run-1', sequence: 4, type: 'progress' })
     expect(terminal).toMatchObject({ receipt: { contentIds: ['MOV-1'], templateKey: 'movie' }, type: 'succeeded' })
   })
