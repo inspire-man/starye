@@ -194,6 +194,55 @@ export interface Paginated<T> {
   }
 }
 
+export type CrawlerTaskTemplate = 'movie' | 'manga'
+export type CrawlerRunStatus = 'queued' | 'dispatching' | 'running' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled'
+
+export interface CrawlerRunReceipt {
+  createdCount: number
+  primaryContentId: string
+  templateKey: CrawlerTaskTemplate
+  updatedCount: number
+}
+
+export interface CrawlerRun {
+  id: string
+  attempt_number?: number
+  attemptNumber?: number
+  status: CrawlerRunStatus
+  state_version?: number
+  failure_code?: string | null
+  created_at?: string
+  terminal_at?: string | null
+  receipt: CrawlerRunReceipt | null
+}
+
+export interface CrawlerTask {
+  id: string
+  template_key: CrawlerTaskTemplate
+  latest_run_id: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface CrawlerTaskDetail {
+  task: CrawlerTask
+  runs: CrawlerRun[]
+}
+
+export interface CrawlerTaskLog {
+  sequence: number
+  level: string
+  code: string
+  safe_message: string
+  counts_json?: string | null
+  created_at: string
+}
+
+export interface CrawlerTaskLogsPage {
+  logs: CrawlerTaskLog[]
+  nextCursor: number | null
+}
+
 // ─── API 对象 ─────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -237,6 +286,8 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
+
+    getComic: (id: string) => apiFetch<{ data: Comic }>(`/admin/comics/${encodeURIComponent(id)}`),
 
     getChapters: (comicId: string) => apiFetch<Chapter[]>(`/admin/comics/${comicId}/chapters`),
     getChapter: (id: string) => apiFetch<Chapter>(`/admin/chapters/${id}`),
@@ -391,6 +442,40 @@ export const api = {
       apiFetch('/admin/crawlers/clear-failed', {
         method: 'POST',
         body: JSON.stringify({ type }),
+      }),
+
+    createCrawlerTask: (template: CrawlerTaskTemplate) =>
+      apiFetch<{ kind: 'created' | 'existing_active_run', template: CrawlerTaskTemplate, run: CrawlerRun }>(`/admin/crawler-tasks`, {
+        method: 'POST',
+        body: JSON.stringify({ template }),
+      }),
+
+    listCrawlerTasks: (params?: { template?: CrawlerTaskTemplate, cursor?: string, limit?: number }) => {
+      const query = new URLSearchParams()
+      if (params?.template)
+        query.set('template', params.template)
+      if (params?.cursor)
+        query.set('cursor', params.cursor)
+      if (params?.limit)
+        query.set('limit', String(params.limit))
+      return apiFetch<{ tasks: CrawlerTask[] }>(`/admin/crawler-tasks${query.toString() ? `?${query}` : ''}`)
+    },
+
+    getCrawlerTask: (taskId: string) =>
+      apiFetch<CrawlerTaskDetail>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}`),
+
+    getCrawlerTaskLogs: (taskId: string, runId: string, cursor?: number) => {
+      const query = cursor == null ? '' : `?cursor=${encodeURIComponent(String(cursor))}`
+      return apiFetch<CrawlerTaskLogsPage>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/runs/${encodeURIComponent(runId)}/logs${query}`)
+    },
+
+    cancelCrawlerRun: (taskId: string, runId: string) =>
+      apiFetch(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' }),
+
+    retryCrawlerRun: (taskId: string, runId: string) =>
+      apiFetch<{ kind: 'created' | 'existing_active_run', run: CrawlerRun }>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/runs/${encodeURIComponent(runId)}/retry`, {
+        method: 'POST',
+        body: JSON.stringify({}),
       }),
 
     getAuditLogs: (params?: Record<string, any>) => {
