@@ -139,9 +139,9 @@ Plans:
 | LOCAL-02 | Phase 17 | Complete |
 | LOCAL-03 | Phase 17 | Complete |
 | DATA-01 | Phase 17 | Complete |
-| PROD-01 | Phase 18 | Pending |
-| PROD-02 | Phase 18 | Pending |
-| PROD-03 | Phase 18 | Pending |
+| PROD-01 | Phase 18 | Complete |
+| PROD-02 | Phase 18 | Complete |
+| PROD-03 | Phase 18 | Complete |
 | DASH-01 | Phase 19 | Pending |
 | DASH-02 | Phase 19 | Pending |
 | DASH-03 | Phase 19 | Pending |
