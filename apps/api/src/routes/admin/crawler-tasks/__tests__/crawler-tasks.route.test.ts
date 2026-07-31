@@ -6,12 +6,24 @@ import { adminCrawlerTasksRoutes } from '../index'
 
 const crawlerTaskRepository = vi.hoisted(() => ({
   applyTransition: vi.fn(),
+  claimDispatch: vi.fn().mockResolvedValue({ kind: 'transition', nextStatus: 'dispatching' }),
   createOrGetActiveRun: vi.fn().mockResolvedValue({ kind: 'created', run: { id: 'run-movie' } }),
+  ensureProviderAssociation: vi.fn().mockResolvedValue({ applicationAttempt: 1, runId: 'run-movie' }),
+  getProviderAssociation: vi.fn(),
   retryRun: vi.fn(),
+}))
+
+const actionsClient = vi.hoisted(() => ({
+  cancelWorkflowRun: vi.fn(),
+  dispatchWorkflow: vi.fn(),
 }))
 
 vi.mock('../../../../domain/crawler-tasks/repository', () => ({
   createCrawlerTaskRepository: vi.fn(() => crawlerTaskRepository),
+}))
+
+vi.mock('../../../../lib/github-app/github-actions-client', () => ({
+  createGitHubActionsClient: vi.fn(() => actionsClient),
 }))
 
 function createApp(
@@ -213,5 +225,39 @@ describe('admin crawler task routes', () => {
     expect(logs.status).toBe(200)
     expect(logsApp.prepare.mock.calls.at(-1)?.[0]).toContain('log.sequence < ?')
     expect(logsApp.prepare.mock.calls.at(-1)?.[0]).toContain('ORDER BY log.sequence DESC')
+  })
+
+  it('creates the D1 association before a fixed provider dispatch and never projects token-shaped provider fields', async () => {
+    crawlerTaskRepository.createOrGetActiveRun.mockResolvedValueOnce({
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'run-movie', taskId: 'task-movie' },
+    })
+    actionsClient.dispatchWorkflow.mockResolvedValueOnce({
+      ok: true,
+      value: { kind: 'dispatch_accepted', token: 'ghs_hidden-value' },
+    })
+    const { app } = createApp()
+
+    const response = await app.request('/crawler-tasks', {
+      body: JSON.stringify({ template: 'movie' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }, {
+      GITHUB_ACTIONS_ENVIRONMENT: 'starye-org',
+      GITHUB_ACTIONS_OWNER: 'inspire-man',
+      GITHUB_ACTIONS_REPOSITORY: 'starye',
+      GITHUB_APP_ID: '1',
+      GITHUB_APP_INSTALLATION_ID: '2',
+      GITHUB_APP_PRIVATE_KEY: 'test-key',
+    } as any)
+
+    const body = await response.json()
+    expect(crawlerTaskRepository.ensureProviderAssociation).toHaveBeenCalledBefore(actionsClient.dispatchWorkflow)
+    expect(crawlerTaskRepository.claimDispatch).toHaveBeenCalledWith('run-movie')
+    expect(actionsClient.dispatchWorkflow).toHaveBeenCalledWith(expect.objectContaining({
+      dispatch: expect.objectContaining({ attempt: 1, runId: 'run-movie', template: 'movie' }),
+    }))
+    expect(body).toMatchObject({ dispatch: { provider: { accepted: true, kind: 'dispatch_accepted' } } })
+    expect(JSON.stringify(body)).not.toContain('ghs_hidden-value')
   })
 })

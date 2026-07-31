@@ -1,10 +1,13 @@
 import type { CrawlerTaskTemplateKey } from '../../../domain/crawler-tasks/types'
+import type { GitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import type { AppEnv, SessionUser } from '../../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { HTTPException } from 'hono/http-exception'
+import { createProviderDispatchInput, createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
 import { createCrawlerTaskRepository } from '../../../domain/crawler-tasks/repository'
 import { getCrawlerTaskTemplate } from '../../../domain/crawler-tasks/template-registry'
+import { createGitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import { canAccessCrawler } from '../../../lib/permissions'
 import {
   CrawlerTaskIdParamsSchema,
@@ -22,6 +25,68 @@ interface D1Statement {
 
 interface D1Client {
   prepare: (query: string) => D1Statement
+}
+
+type CrawlerRepository = ReturnType<typeof createCrawlerTaskRepository>
+
+function createProviderClient(env: AppEnv['Bindings']): GitHubActionsClient | undefined {
+  if (!env)
+    return undefined
+  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_INSTALLATION_ID || !env.GITHUB_APP_PRIVATE_KEY
+    || !env.GITHUB_ACTIONS_OWNER || !env.GITHUB_ACTIONS_REPOSITORY || !env.GITHUB_ACTIONS_ENVIRONMENT) {
+    return undefined
+  }
+  return createGitHubActionsClient({
+    bindings: {
+      appId: env.GITHUB_APP_ID,
+      environment: env.GITHUB_ACTIONS_ENVIRONMENT,
+      installationId: env.GITHUB_APP_INSTALLATION_ID,
+      owner: env.GITHUB_ACTIONS_OWNER,
+      privateKeyPem: env.GITHUB_APP_PRIVATE_KEY,
+      repository: env.GITHUB_ACTIONS_REPOSITORY,
+    },
+  })
+}
+
+function projectProviderResult(result: unknown): Record<string, unknown> {
+  if (!result || typeof result !== 'object' || Array.isArray(result))
+    return { kind: 'provider_unavailable' }
+  const value = result as Record<string, unknown>
+  if (value.ok === true)
+    return { accepted: true, kind: value.value && typeof value.value === 'object' ? (value.value as Record<string, unknown>).kind ?? 'provider_accepted' : 'provider_accepted' }
+  return {
+    ...(typeof value.code === 'string' ? { code: value.code } : {}),
+    ...(typeof value.retryable === 'boolean' ? { retryable: value.retryable } : {}),
+    ...(typeof value.status === 'number' ? { status: value.status } : {}),
+  }
+}
+
+async function dispatchCreatedRun(
+  c: any,
+  repository: CrawlerRepository,
+  input: { readonly runId: string, readonly attempt: number, readonly template: CrawlerTaskTemplateKey },
+): Promise<Record<string, unknown>> {
+  const provider = createProviderClient(c.env as AppEnv['Bindings'])
+  const association = await repository.ensureProviderAssociation?.({
+    attempt: input.attempt,
+    runId: input.runId,
+    template: input.template,
+  })
+  const decision = await repository.claimDispatch?.(input.runId)
+  if (!provider)
+    return { kind: 'provider_not_configured', ...(decision ? { decision } : {}) }
+  const snapshot = createProviderSnapshot(input.template)
+  const result = await provider.dispatchWorkflow({
+    dispatch: createProviderDispatchInput({ attempt: input.attempt, runId: input.runId, templateKey: input.template }),
+    snapshot,
+  })
+  if (!result.ok && !result.retryable)
+    await repository.failProviderReconciliation?.(input.runId, input.attempt, result.code)
+  return {
+    ...(association ? { association: { runId: association.runId, applicationAttempt: association.applicationAttempt } } : {}),
+    ...(decision ? { decision } : {}),
+    provider: projectProviderResult(result),
+  }
 }
 
 interface TaskAccessRow {
@@ -124,12 +189,16 @@ adminCrawlerTasksRoutes.post('/', validator('json', CreateCrawlerTaskSchema), as
   const { template } = c.req.valid('json')
   requireTemplateAccess(user, template)
 
-  const result = await createCrawlerTaskRepository(c.get('db')).createOrGetActiveRun({
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const result = await repository.createOrGetActiveRun({
     requestedByUserId: user.id,
     templateKey: template,
   })
+  const dispatch = result.kind === 'created'
+    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template })
+    : { kind: 'existing_active_run' }
 
-  return c.json({ kind: result.kind, run: result.run, template })
+  return c.json({ dispatch, kind: result.kind, run: result.run, template })
 })
 
 adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema), async (c) => {
@@ -141,7 +210,7 @@ adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema)
     SELECT id, template_key, latest_run_id, created_at, updated_at
     FROM crawler_task
     WHERE (? IS NULL OR template_key = ?) AND (? IS NULL OR id < ?)
-    ORDER BY id DESC LIMIT ?
+    ORDER BY created_at DESC, id DESC LIMIT ?
   `).bind(template ?? null, template ?? null, cursor ?? null, cursor ?? null, limit).all<Record<string, unknown>>()
   const tasks = (rows.results ?? []).filter((task) => {
     const key = task.template_key as CrawlerTaskTemplateKey
@@ -185,17 +254,39 @@ adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/cancel', validator('param', C
   const user = await requireSessionUser(c)
   const { taskId, runId } = c.req.valid('param')
   await requireTaskRunAccess(c, user, taskId, runId)
-  const result = await createCrawlerTaskRepository(c.get('db')).applyTransition(runId, {
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const result = await repository.applyTransition(runId, {
     actor: 'admin',
     type: 'admin_cancel',
   })
-  return c.json({ decision: result })
+  let provider: Record<string, unknown> = { kind: 'not_requested' }
+  if (result.kind === 'transition' && result.nextStatus === 'cancel_requested') {
+    const association = await repository.getProviderAssociation?.(runId)
+    const client = createProviderClient(c.env as AppEnv['Bindings'])
+    if (association?.providerRunId && client) {
+      provider = projectProviderResult(await client.cancelWorkflowRun({
+        providerRunId: association.providerRunId,
+        snapshot: createProviderSnapshot(association.template),
+      }))
+    }
+    else if (!association?.providerRunId) {
+      provider = { kind: 'provider_binding_pending' }
+    }
+    else {
+      provider = { kind: 'provider_not_configured' }
+    }
+  }
+  return c.json({ decision: result, provider })
 })
 
 adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/retry', validator('param', CrawlerTaskRunParamsSchema), validator('json', RetryCrawlerTaskSchema), async (c) => {
   const user = await requireSessionUser(c)
   const { taskId, runId } = c.req.valid('param')
   await requireTaskRunAccess(c, user, taskId, runId)
-  const result = await createCrawlerTaskRepository(c.get('db')).retryRun(runId)
-  return c.json({ kind: result.kind, run: result.run })
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const result = await repository.retryRun(runId)
+  const dispatch = result.kind === 'created'
+    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template: result.snapshot.templateKey })
+    : { kind: 'existing_active_run' }
+  return c.json({ dispatch, kind: result.kind, run: result.run })
 })
