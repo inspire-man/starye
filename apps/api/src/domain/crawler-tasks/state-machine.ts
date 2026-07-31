@@ -71,7 +71,7 @@ function transition(
   nextStatus: CrawlerRunStatus,
   reasonCode: string,
   options: {
-    readonly failureCode?: 'runner_lost' | 'runner_failed' | 'cancelled_by_runner' | 'receipt_missing'
+    readonly failureCode?: 'runner_lost' | 'runner_failed' | 'cancelled_by_runner' | 'receipt_missing' | 'provider_lost' | 'provider_failed'
     readonly sequence?: number
   } = {},
 ): CrawlerRunTransitionDecision {
@@ -114,6 +114,14 @@ export function decideCrawlerRunTransition(
         : { currentStatus: state.status, kind: 'rejected', reasonCode: 'invalid_transition' }
     case 'lease_expired':
       return transition(state, 'failed', 'runner_lost', { failureCode: 'runner_lost' })
+    case 'provider_lost':
+      return transition(state, 'failed', 'provider_lost', { failureCode: 'provider_lost' })
+    case 'provider_failed':
+      return transition(state, 'failed', 'provider_failed', { failureCode: 'provider_failed' })
+    case 'provider_cancelled':
+      return state.status === 'dispatching' || state.status === 'running' || state.status === 'cancel_requested'
+        ? transition(state, 'cancelled', 'provider_cancelled', { failureCode: 'cancelled_by_runner' })
+        : { currentStatus: state.status, kind: 'rejected', reasonCode: 'invalid_transition' }
     case 'runner_heartbeat':
       if (state.status === 'dispatching') {
         return transition(state, 'running', 'runner_heartbeat', { sequence: event.sequence })

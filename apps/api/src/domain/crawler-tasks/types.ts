@@ -28,7 +28,13 @@ export type CrawlerRunStatus
     | 'succeeded'
     | 'failed'
     | 'cancelled'
-export type CrawlerRunFailureCode = 'runner_lost' | 'runner_failed' | 'cancelled_by_runner' | 'receipt_missing'
+export type CrawlerRunFailureCode
+  = | 'runner_lost'
+    | 'runner_failed'
+    | 'cancelled_by_runner'
+    | 'receipt_missing'
+    | 'provider_lost'
+    | 'provider_failed'
 
 export interface CrawlerTaskSnapshot {
   readonly entrypoint: 'movie-crawler' | 'manga-crawler'
@@ -103,6 +109,9 @@ export type CrawlerRunTransitionEvent
   = | { readonly actor: 'admin', readonly type: 'admin_cancel' }
     | { readonly actor: 'dispatcher', readonly sequence: number, readonly type: 'dispatch_claim' }
     | { readonly actor: 'scheduler', readonly type: 'lease_expired' }
+    | { readonly actor: 'scheduler', readonly type: 'provider_cancelled' }
+    | { readonly actor: 'scheduler', readonly type: 'provider_failed' }
+    | { readonly actor: 'scheduler', readonly type: 'provider_lost' }
     | { readonly actor: 'runner', readonly sequence: number, readonly type: 'runner_cancelled' }
     | { readonly actor: 'runner', readonly sequence: number, readonly type: 'runner_failed' }
     | { readonly actor: 'runner', readonly sequence: number, readonly type: 'runner_heartbeat' }

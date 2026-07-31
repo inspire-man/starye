@@ -130,6 +130,53 @@ export interface ProviderStartedResult {
   readonly cancelRequested: boolean
 }
 
+export interface ProviderAssociationRecord {
+  readonly applicationAttempt: number
+  readonly environment: string
+  readonly providerConclusion?: string
+  readonly providerRunAttempt?: number
+  readonly providerRunId?: string
+  readonly providerStatus?: ProviderRunStatus
+  readonly reconciliationWindowEndsAt?: number
+  readonly ref: string
+  readonly repository: string
+  readonly runId: string
+  readonly scheduleBucket?: string
+  readonly sha?: string
+  readonly target: string
+  readonly template: CrawlerTaskTemplateKey
+  readonly workflow: string
+}
+
+export interface EnsureProviderAssociationInput {
+  readonly runId: string
+  readonly attempt: number
+  readonly template: CrawlerTaskTemplateKey
+  readonly scheduleBucket?: string
+}
+
+export interface ProviderObservationInput {
+  readonly attempt: number
+  readonly conclusion?: string
+  readonly headSha?: string
+  readonly path?: string
+  readonly providerRunAttempt?: number
+  readonly providerRunId: string
+  readonly runId: string
+  readonly status: ProviderRunStatus
+}
+
+export type ProviderObservationResult
+  = | { readonly kind: 'not_found' }
+    | { readonly kind: 'attempt_mismatch' }
+    | { readonly kind: 'provider_mismatch', readonly reconciliationWindowEndsAt: number }
+    | { readonly kind: 'updated', readonly status: ProviderRunStatus, readonly conclusion?: string }
+    | { readonly kind: 'provider_lost', readonly reason: 'reconciliation_window_expired' }
+
+export interface ProviderReconciliationCandidate extends ProviderAssociationRecord {
+  readonly runStatus: CrawlerRunStatus
+}
+
 export interface ValidateDispatchInput {
   readonly attempt: number
   readonly runId: string
@@ -183,6 +230,8 @@ interface CrawlerRunnerEventRow {
   outcome: string
 }
 
+const DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS = 5 * 60_000
+
 function asD1Client(db: CrawlerTaskDatabase): D1Client {
   return db.$client as unknown as D1Client
 }
@@ -202,6 +251,44 @@ function toCrawlerTaskRun(row: CrawlerRunRow): CrawlerTaskRun {
     stateVersion: row.state_version,
     status: row.status,
     taskId: row.task_id,
+  }
+}
+
+interface CrawlerProviderRow {
+  application_attempt: number
+  environment: string
+  provider_conclusion: string | null
+  provider_run_attempt: number | null
+  provider_run_id: string | null
+  provider_status: ProviderRunStatus | null
+  reconciliation_window_ends_at: number | null
+  ref: string
+  repository: string
+  run_id: string
+  schedule_bucket: string | null
+  sha: string | null
+  target: string
+  template_key: CrawlerTaskTemplateKey
+  workflow: string
+}
+
+function toProviderAssociationRecord(row: CrawlerProviderRow): ProviderAssociationRecord {
+  return {
+    applicationAttempt: row.application_attempt,
+    environment: row.environment,
+    ...(row.provider_conclusion ? { providerConclusion: row.provider_conclusion } : {}),
+    ...(row.provider_run_attempt ? { providerRunAttempt: row.provider_run_attempt } : {}),
+    ...(row.provider_run_id ? { providerRunId: row.provider_run_id } : {}),
+    ...(row.provider_status ? { providerStatus: row.provider_status } : {}),
+    ...(row.reconciliation_window_ends_at === null ? {} : { reconciliationWindowEndsAt: row.reconciliation_window_ends_at }),
+    ref: row.ref,
+    repository: row.repository,
+    runId: row.run_id,
+    ...(row.schedule_bucket ? { scheduleBucket: row.schedule_bucket } : {}),
+    ...(row.sha ? { sha: row.sha } : {}),
+    target: row.target,
+    template: row.template_key,
+    workflow: row.workflow,
   }
 }
 
@@ -280,6 +367,47 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       WHERE run.id = ?
     `).bind(runId).all<{ template_key: CrawlerTaskTemplateKey }>()
     return result.results?.[0]?.template_key
+  }
+
+  async function getProviderAssociation(runId: string): Promise<ProviderAssociationRecord | undefined> {
+    try {
+      const result = await d1.prepare(`
+        SELECT run_id, application_attempt, template_key, target, workflow, repository, ref,
+          environment, provider_run_id, provider_run_attempt, sha, provider_status,
+          provider_conclusion, reconciliation_window_ends_at, schedule_bucket
+        FROM crawler_run_provider_association
+        WHERE run_id = ?
+        LIMIT 1
+      `).bind(runId).all<CrawlerProviderRow>()
+      const row = result.results?.[0]
+      return row ? toProviderAssociationRecord(row) : undefined
+    }
+    catch {
+      // Phase 16/17 local runner fixtures use the pre-provider schema.
+      return undefined
+    }
+  }
+
+  async function listProviderReconciliationCandidates(): Promise<readonly ProviderReconciliationCandidate[]> {
+    try {
+      const result = await d1.prepare(`
+        SELECT association.run_id, association.application_attempt, association.template_key,
+          association.target, association.workflow, association.repository, association.ref,
+          association.environment, association.provider_run_id, association.provider_run_attempt,
+          association.sha, association.provider_status, association.provider_conclusion,
+          association.reconciliation_window_ends_at, association.schedule_bucket,
+          run.status AS run_status
+        FROM crawler_run_provider_association AS association
+        INNER JOIN crawler_run AS run ON run.id = association.run_id
+        WHERE run.status IN ('dispatching', 'running', 'cancel_requested')
+          AND association.provider_run_id IS NOT NULL
+        ORDER BY association.updated_at ASC, association.run_id ASC
+      `).all<CrawlerProviderRow & { run_status: CrawlerRunStatus }>()
+      return (result.results ?? []).map(row => ({ ...toProviderAssociationRecord(row), runStatus: row.run_status }))
+    }
+    catch {
+      return []
+    }
   }
 
   async function pollDispatch(): Promise<CrawlerRunDispatchCandidate | undefined> {
@@ -390,6 +518,42 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         taskId,
       },
       snapshot,
+    }
+  }
+
+  async function ensureProviderAssociation(input: EnsureProviderAssociationInput): Promise<ProviderAssociationRecord | undefined> {
+    const snapshot = createProviderSnapshot(input.template)
+    const currentNow = toUnixSeconds(now())
+    const windowEndsAt = addMillisecondsInSeconds(currentNow, DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS)
+    try {
+      await d1.prepare(`
+        INSERT INTO crawler_run_provider_association (
+          run_id, application_attempt, provider, template_key, target, workflow,
+          repository, ref, environment, crawler_entrypoint, reconciliation_window_ends_at,
+          schedule_bucket, created_at, updated_at
+        ) VALUES (?, ?, 'github-actions', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(run_id) DO UPDATE SET
+          application_attempt = excluded.application_attempt,
+          updated_at = excluded.updated_at
+      `).bind(
+        input.runId,
+        input.attempt,
+        snapshot.templateKey,
+        snapshot.target,
+        snapshot.workflow,
+        snapshot.repository,
+        snapshot.ref,
+        snapshot.environment,
+        snapshot.crawlerEntrypoint,
+        windowEndsAt,
+        input.scheduleBucket ?? null,
+        currentNow,
+        currentNow,
+      ).run()
+      return getProviderAssociation(input.runId)
+    }
+    catch {
+      return undefined
     }
   }
 
@@ -636,6 +800,12 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       throw new Error(`Could not retry crawler run: ${errorMessage(error)}`)
     }
 
+    await ensureProviderAssociation({
+      attempt: retry.attemptNumber,
+      runId: nextRunId,
+      template: templateKey,
+    })
+
     return {
       kind: 'created',
       run: {
@@ -768,6 +938,26 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return classifyExistingRunnerEvent(existing, input)
     }
 
+    if (input.event.type === 'runner_succeeded') {
+      const provider = await getProviderAssociation(input.runId)
+      if (provider && (provider.applicationAttempt !== input.attempt
+        || !provider.providerRunId
+        || provider.providerStatus !== 'completed'
+        || provider.providerConclusion !== 'success')) {
+        const outcome = { accepted: false, reason: 'provider_success_required' }
+        await recordRunnerEvent({
+          bodySha256: input.bodySha256,
+          eventId: input.eventId,
+          keyId: input.keyId,
+          nonce: input.nonce,
+          outcome,
+          runId: input.runId,
+          sequence: input.sequence,
+        })
+        return { kind: 'rejected', outcome }
+      }
+    }
+
     let event = input.event
     let receipt: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | undefined
     let safeSummary = input.safeSummary
@@ -855,8 +1045,8 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         INSERT INTO crawler_run_provider_association (
           run_id, application_attempt, provider, template_key, target, workflow,
           repository, ref, environment, crawler_entrypoint, safe_facts_json,
-          schedule_bucket, created_at, updated_at
-        ) VALUES (?, ?, 'github-actions', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          reconciliation_window_ends_at, schedule_bucket, created_at, updated_at
+        ) VALUES (?, ?, 'github-actions', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         run.id,
         run.attemptNumber,
@@ -868,6 +1058,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         snapshot.environment,
         snapshot.crawlerEntrypoint,
         safeFacts,
+        addMillisecondsInSeconds(currentNow, DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS),
         input.scheduleBucket,
         currentNow,
         currentNow,
@@ -952,24 +1143,40 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     if ((row.provider_run_id && row.provider_run_id !== input.providerRunId)
       || (row.provider_run_attempt && row.provider_run_attempt !== input.providerRunAttempt)
       || (row.sha && row.sha !== input.sha)) {
+      await d1.prepare(`
+        INSERT OR IGNORE INTO crawler_run_transition (
+          id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+        ) VALUES (?, ?, -3, ?, ?, 'provider_mismatch', 'provider binding already claimed', ?)
+      `).bind(createId(), input.runId, run.status, run.status, toUnixSeconds(now())).run()
       return { accepted: false, cancelRequested }
     }
 
-    await d1.prepare(`
+    const update = await d1.prepare(`
       UPDATE crawler_run_provider_association
       SET provider_run_id = ?, provider_run_attempt = ?, sha = ?, provider_status = ?,
+        reconciliation_window_ends_at = COALESCE(reconciliation_window_ends_at, ?),
         safe_facts_json = ?, updated_at = ?
       WHERE run_id = ? AND application_attempt = ?
+        AND (provider_run_id IS NULL OR provider_run_id = ?)
+        AND (provider_run_attempt IS NULL OR provider_run_attempt = ?)
+        AND (sha IS NULL OR sha = ?)
     `).bind(
       input.providerRunId,
       input.providerRunAttempt,
       input.sha,
       'in_progress' satisfies ProviderRunStatus,
+      addMillisecondsInSeconds(toUnixSeconds(now()), DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS),
       JSON.stringify({ providerStarted: true }),
       toUnixSeconds(now()),
       input.runId,
       input.attempt,
+      input.providerRunId,
+      input.providerRunAttempt,
+      input.sha,
     ).run()
+    if ((update.meta?.changes ?? 0) === 0) {
+      return { accepted: false, cancelRequested }
+    }
 
     const outcome = { accepted: true, cancel_requested: cancelRequested }
     const recorded = await recordRunnerEvent({
@@ -989,6 +1196,102 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       }
     }
     return { accepted: true, cancelRequested }
+  }
+
+  async function recordProviderObservation(input: ProviderObservationInput): Promise<ProviderObservationResult> {
+    const association = await getProviderAssociation(input.runId)
+    const run = await getRunRow(input.runId)
+    if (!association || !run)
+      return { kind: 'not_found' }
+    if (association.applicationAttempt !== input.attempt)
+      return { kind: 'attempt_mismatch' }
+
+    const snapshot = createProviderSnapshot(association.template)
+    const snapshotMatches = snapshot.workflow === association.workflow
+      && snapshot.repository === association.repository
+      && snapshot.ref === association.ref
+      && snapshot.environment === association.environment
+      && snapshot.target === association.target
+      && (!input.path || input.path === snapshot.workflow)
+    const providerMatches = association.providerRunId === input.providerRunId
+      && (association.providerRunAttempt === undefined || association.providerRunAttempt === input.providerRunAttempt)
+    const currentNow = toUnixSeconds(now())
+    if (!snapshotMatches || !providerMatches) {
+      const windowEndsAt = association.reconciliationWindowEndsAt ?? addMillisecondsInSeconds(currentNow, DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS)
+      await d1.prepare(`
+        UPDATE crawler_run_provider_association
+        SET reconciliation_window_ends_at = ?, safe_facts_json = ?, updated_at = ?
+        WHERE run_id = ? AND application_attempt = ?
+      `).bind(
+        windowEndsAt,
+        JSON.stringify({ providerMismatch: true, providerRunId: input.providerRunId }),
+        currentNow,
+        input.runId,
+        input.attempt,
+      ).run()
+      await d1.prepare(`
+        INSERT OR IGNORE INTO crawler_run_transition (
+          id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+        ) VALUES (?, ?, -4, ?, ?, 'provider_mismatch', 'provider observation mismatch', ?)
+      `).bind(createId(), input.runId, run.status, run.status, currentNow).run()
+      return currentNow >= windowEndsAt
+        ? await expireProviderReconciliation(input.runId, input.attempt)
+        : { kind: 'provider_mismatch', reconciliationWindowEndsAt: windowEndsAt }
+    }
+
+    const updated = await d1.prepare(`
+      UPDATE crawler_run_provider_association
+      SET provider_status = ?, provider_conclusion = ?, sha = COALESCE(?, sha),
+        safe_facts_json = ?, updated_at = ?
+      WHERE run_id = ? AND application_attempt = ? AND provider_run_id = ?
+    `).bind(
+      input.status,
+      input.conclusion ?? null,
+      input.headSha ?? null,
+      JSON.stringify({ providerPoll: true, status: input.status, conclusion: input.conclusion ?? null }),
+      currentNow,
+      input.runId,
+      input.attempt,
+      input.providerRunId,
+    ).run()
+    if ((updated.meta?.changes ?? 0) === 0)
+      return { kind: 'provider_mismatch', reconciliationWindowEndsAt: association.reconciliationWindowEndsAt ?? addMillisecondsInSeconds(currentNow, DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS) }
+
+    if (input.status === 'completed' && input.conclusion === 'cancelled') {
+      await applyTransition(input.runId, { actor: 'scheduler', type: 'provider_cancelled' })
+    }
+    else if (input.status === 'completed' && input.conclusion && input.conclusion !== 'success') {
+      await applyTransition(input.runId, { actor: 'scheduler', type: 'provider_failed' })
+    }
+    else if (input.status === 'completed' && input.conclusion === 'success') {
+      await d1.prepare(`
+        INSERT OR IGNORE INTO crawler_run_transition (
+          id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+        ) VALUES (?, ?, -5, ?, ?, 'provider_success_pending_receipt', 'provider success requires signed validated receipt', ?)
+      `).bind(createId(), input.runId, run.status, run.status, currentNow).run()
+    }
+
+    return { kind: 'updated', status: input.status, ...(input.conclusion ? { conclusion: input.conclusion } : {}) }
+  }
+
+  async function expireProviderReconciliation(runId: string, attempt: number): Promise<ProviderObservationResult> {
+    const association = await getProviderAssociation(runId)
+    const run = await getRunRow(runId)
+    if (!association || !run)
+      return { kind: 'not_found' }
+    if (association.applicationAttempt !== attempt)
+      return { kind: 'attempt_mismatch' }
+    if (isTerminalCrawlerRunStatus(run.status))
+      return { kind: 'updated', status: association.providerStatus ?? 'completed', ...(association.providerConclusion ? { conclusion: association.providerConclusion } : {}) }
+    const decision = await applyTransition(runId, { actor: 'scheduler', type: 'provider_lost' })
+    if (decision.kind === 'transition') {
+      await d1.prepare(`
+        INSERT OR IGNORE INTO crawler_run_transition (
+          id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+        ) VALUES (?, ?, -6, ?, ?, 'provider_lost', 'provider reconciliation window expired', ?)
+      `).bind(createId(), runId, run.status, decision.nextStatus, toUnixSeconds(now())).run()
+    }
+    return { kind: 'provider_lost', reason: 'reconciliation_window_expired' }
   }
 
   async function validateDispatch(input: ValidateDispatchInput): Promise<ValidateDispatchResult> {
@@ -1035,13 +1338,18 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     applyTransition,
     claimDispatch,
     createOrGetActiveRun,
+    ensureProviderAssociation,
+    expireProviderReconciliation,
     getRun: async (runId: string) => {
       const run = await getRunRow(runId)
       return run ? toCrawlerTaskRun(run) : undefined
     },
+    getProviderAssociation,
+    listProviderReconciliationCandidates,
     purgeExpiredRunLogs,
     processRunnerEvent,
     providerStarted,
+    recordProviderObservation,
     pollDispatch,
     recordRunnerEvent,
     renewLease,

@@ -105,6 +105,13 @@ async function createTestDatabase() {
     .filter(Boolean)
     .map(sql => ({ sql }))
   await client.batch(statements, 'write')
+  const providerMigration = await readFile(new URL('../../../../../../packages/db/drizzle/0028_crawler_provider_association.sql', import.meta.url), 'utf8')
+  const providerStatements = providerMigration
+    .split('--> statement-breakpoint')
+    .map(statement => statement.trim())
+    .filter(Boolean)
+    .map(sql => ({ sql }))
+  await client.batch(providerStatements, 'write')
 
   return { client, db: createDb(new LibsqlD1(client) as never) }
 }
@@ -347,6 +354,60 @@ describe('crawler task repository', () => {
     const failure = await client.execute({ args: [runId], sql: 'SELECT failure_code, terminal_at FROM crawler_run WHERE id = ?' })
     expect(failure.rows[0]).toMatchObject({ failure_code: 'runner_lost' })
     expect(failure.rows[0]?.terminal_at).not.toBeNull()
+  })
+
+  it('binds provider facts with exact snapshots, keeps schedule registration idempotent, and gates receipt success', async () => {
+    const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    if (created.kind !== 'created')
+      throw new Error('expected provider run')
+    const association = await repository.ensureProviderAssociation({ attempt: 1, runId: created.run.id, template: 'movie' })
+    expect(association).toMatchObject({
+      applicationAttempt: 1,
+      repository: 'inspire-man/starye',
+      runId: created.run.id,
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    })
+
+    await repository.claimDispatch(created.run.id)
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'provider-gate',
+      event: { actor: 'runner', receipt: { contentIds: ['movie-1'], templateKey: 'movie' }, sequence: 2, type: 'runner_succeeded' },
+      eventId: 'provider-gate-event',
+      keyId: 'key-current',
+      nonce: 'provider-gate-nonce',
+      receipt: { contentIds: ['movie-1'], templateKey: 'movie' },
+      runId: created.run.id,
+      sequence: 2,
+    })).resolves.toMatchObject({ kind: 'rejected', outcome: { reason: 'provider_success_required' } })
+
+    await expect(repository.providerStarted({
+      attempt: 1,
+      bodySha256: 'provider-start',
+      environment: 'starye-org',
+      eventId: 'provider-start-event',
+      keyId: 'key-current',
+      nonce: 'provider-start-nonce',
+      providerRunAttempt: 1,
+      providerRunId: '123',
+      ref: 'main',
+      repository: 'inspire-man/starye',
+      runId: created.run.id,
+      sha: 'a'.repeat(40),
+      target: 'starye-org',
+      template: 'movie',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    })).resolves.toMatchObject({ accepted: true })
+    await expect(repository.recordProviderObservation({
+      attempt: 1,
+      conclusion: 'success',
+      headSha: 'a'.repeat(40),
+      path: '.github/workflows/daily-movie-crawl.yml',
+      providerRunAttempt: 1,
+      providerRunId: '123',
+      runId: created.run.id,
+      status: 'completed',
+    })).resolves.toMatchObject({ kind: 'updated', status: 'completed' })
   })
 
   it('caps safe messages at 4 KiB, records one truncation marker after 500 normal logs, and only purges expired detail logs', async () => {

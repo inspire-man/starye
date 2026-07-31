@@ -185,4 +185,30 @@ describe('crawler task state machine', () => {
       sequence: 5,
     })
   })
+
+  it('keeps provider terminal facts behind the same lifecycle state machine', () => {
+    expect(decideCrawlerRunTransition({ ...queuedRun, status: 'running' }, {
+      actor: 'scheduler',
+      type: 'provider_failed',
+    })).toMatchObject({
+      failureCode: 'provider_failed',
+      kind: 'transition',
+      nextStatus: 'failed',
+    })
+    expect(decideCrawlerRunTransition({ ...queuedRun, status: 'cancel_requested' }, {
+      actor: 'scheduler',
+      type: 'provider_cancelled',
+    })).toMatchObject({
+      kind: 'transition',
+      nextStatus: 'cancelled',
+    })
+    expect(decideCrawlerRunTransition({ ...queuedRun, status: 'running' }, {
+      actor: 'scheduler',
+      type: 'provider_lost',
+    })).toMatchObject({
+      failureCode: 'provider_lost',
+      kind: 'transition',
+      nextStatus: 'failed',
+    })
+  })
 })
