@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: 后台爬虫任务与内容运维
 current_phase: 18
 current_phase_name: GitHub Actions Production Orchestration
-status: executing
-stopped_at: Completed 18-05-PLAN.md
-last_updated: "2026-08-01T03:21:00.000Z"
+status: ready_for_phase
+stopped_at: Completed 18-06-PLAN.md
+last_updated: "2026-07-31T19:57:19.783Z"
 last_activity: 2026-08-01
-last_activity_desc: Phase 18 Plan 18-05 completed
+last_activity_desc: Phase 18 Plan 18-06 completed
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 13
-  completed_plans: 12
-  percent: 50
+  completed_plans: 13
+  percent: 75
 ---
 
 # Project State: Starye — 个人内容中台
@@ -40,10 +40,10 @@ progress:
 
 ## Current Position
 
-Phase: 18 (GitHub Actions Production Orchestration) — EXECUTING
-Plan: 5 of 6 complete
-Status: Ready for Plan 18-06
-Last activity: 2026-08-01 — Phase 18 Plan 18-05 completed
+Phase: 18 (GitHub Actions Production Orchestration) — COMPLETE
+Plan: 6 of 6 complete
+Status: Ready for Phase 19
+Last activity: 2026-08-01 — Phase 18 Plan 18-06 completed
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Last activity: 2026-08-01 — Phase 18 Plan 18-05 completed
 | Phase 18 P03 | 33 min | 3 tasks | 10 files |
 | Phase 18 P04 | 21 min | 3 tasks | 10 files |
 | Phase 18 P05 | 15 min | 3 tasks | 11 files |
+| Phase 18 P06 | 25 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -152,26 +153,26 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-08-01T03:21:00.000Z
-**Stopped at:** Completed 18-05-PLAN.md
+**Last session:** 2026-07-31T19:57:19.764Z
+**Stopped at:** Completed 18-06-PLAN.md
 **Resume file:** None
 
-**Next recommended action:** Run `$gsd-execute-phase 18` to execute 18-06 (API/D1/Actions integration contract and proof handoff).
+**Next recommended action:** Run `$gsd-plan-phase 19` to plan Dashboard Operations and End-to-End Proof, then execute the Phase 19 provider-proof handoff.
 
 **If interrupted, resume by:**
 
-1. Read `18-05-SUMMARY.md` and `18-06-PLAN.md` for the prepared-child lifecycle and integration-proof contracts.
-2. Use `$gsd-execute-phase 18` to continue with the Wave 4 integration plan.
+1. Read `18-06-SUMMARY.md` and `COVERAGE.md` for the local integration evidence and Phase 19 provider tuple.
+2. Use `$gsd-plan-phase 19` to continue with Dashboard Operations and End-to-End Proof.
 
 **Worktree:** `D:\my-workspace\starye`
 **Branch:** `main`
 
 ---
-*State updated: 2026-08-01 after Phase 18 Plan 18-05 execution*
+*State updated: 2026-08-01 after Phase 18 Plan 18-06 execution*
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 18` to continue with 18-06.
+- Run `$gsd-plan-phase 19` to plan Dashboard Operations and End-to-End Proof.
 
 ## Decisions
 
@@ -249,6 +250,9 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 - [Phase 18]: Provider poll/callback facts share repository CAS; provider success remains pending until the signed terminal event and validated receipt agree. — 18-04 lifecycle gate
 - [Phase 18]: Provider mismatch is windowed and provider_lost has no automatic business retry; retry is a new administrator-confirmed attempt. — 18-04 reconciliation
 - [Phase 18]: GitHub Actions workflow shells retain validate, prepare, run-prepared-entry, and cleanup; only the registry-owned production child emits signed lifecycle events and terminal receipts. — 18-05 adapter boundary
+- [Phase 18]: Validated receipts are copied into runner_succeeded transitions before state-machine evaluation. — 18-06 lifecycle integration fixture
+- [Phase 18]: Terminal runs reject late provider_started callbacks and preserve redacted attempt facts. — 18-06 provider-lost boundary
+- [Phase 18]: Local Gateway fixtures remain contract evidence; credentialed provider proof is handed to Phase 19. — 18-06 coverage handoff
 
 ### Blockers
 
