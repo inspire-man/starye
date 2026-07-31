@@ -976,6 +976,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       }
       else {
         receipt = validation.receipt
+        event = { ...input.event, receipt: input.receipt! }
       }
     }
 
