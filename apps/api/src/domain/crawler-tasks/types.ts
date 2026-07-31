@@ -8,6 +8,18 @@ export const CRAWLER_MAX_NORMAL_LOG_ROWS = 500
 
 export type CrawlerTaskTemplateKey = 'movie' | 'manga'
 export type CrawlerPermissionResource = Extract<Resource, 'comic' | 'movie'>
+export type ProviderName = 'github-actions'
+export type ProviderRunStatus = 'completed' | 'in_progress' | 'pending' | 'queued' | 'requested' | 'waiting'
+export type ProviderRunConclusion
+  = | 'action_required'
+    | 'cancelled'
+    | 'failure'
+    | 'neutral'
+    | 'skipped'
+    | 'stale'
+    | 'startup_failure'
+    | 'success'
+    | 'timed_out'
 export type CrawlerRunStatus
   = | 'queued'
     | 'dispatching'
@@ -30,6 +42,36 @@ export interface CrawlerTaskTemplate {
   readonly permissionResource: CrawlerPermissionResource
   readonly templateKey: CrawlerTaskTemplateKey
   readonly templateVersion: CrawlerTaskSnapshot['templateVersion']
+}
+
+/** Immutable, server-owned identity for a GitHub Actions crawler execution. */
+export interface ProviderSnapshot {
+  readonly crawlerEntrypoint: 'crawler-comic' | 'crawler-optimized'
+  readonly environment: 'starye-org'
+  readonly provider: ProviderName
+  readonly ref: 'main'
+  readonly repository: 'inspire-man/starye'
+  readonly target: 'starye-org'
+  readonly templateKey: CrawlerTaskTemplateKey
+  readonly workflow: '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml'
+}
+
+/** The only server-to-workflow dispatch envelope; caller-controlled provider fields are excluded. */
+export interface ProviderDispatchInput {
+  readonly attempt: number
+  readonly runId: string
+  readonly target: ProviderSnapshot['target']
+  readonly template: ProviderSnapshot['templateKey']
+}
+
+/** Redacted provider state that is safe to expose in task/run read models and audit facts. */
+export interface ProviderAssociationSummary {
+  readonly provider: ProviderName
+  readonly providerConclusion?: ProviderRunConclusion
+  readonly providerRunAttempt?: number
+  readonly providerRunId?: string
+  readonly providerStatus?: ProviderRunStatus
+  readonly sha?: string
 }
 
 export interface CrawlerRunState {

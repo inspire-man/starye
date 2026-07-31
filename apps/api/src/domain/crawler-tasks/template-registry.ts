@@ -19,6 +19,10 @@ export const crawlerTaskTemplates = {
   },
 } as const satisfies Record<CrawlerTaskTemplateKey, CrawlerTaskTemplate>
 
+export function isCrawlerTaskTemplateKey(value: unknown): value is CrawlerTaskTemplateKey {
+  return value === 'manga' || value === 'movie'
+}
+
 export function getCrawlerTaskTemplate(templateKey: CrawlerTaskTemplateKey): CrawlerTaskTemplate {
   return crawlerTaskTemplates[templateKey]
 }
