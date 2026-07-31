@@ -143,7 +143,7 @@ describe('crawlers local task panel', () => {
     const wrapper = mountCrawler()
     await flushPromises()
     expect(wrapper.text()).toContain('管理电影内容')
-    expect(wrapper.get('a').attributes('href')).toBe('/movies?receipt=movie-1')
+    expect(wrapper.get('a').attributes('href')).toBe('/dashboard/movies?receipt=movie-1')
     await wrapper.get('button.load-more').trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('完成')

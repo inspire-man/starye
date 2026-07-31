@@ -203,8 +203,8 @@ function managementPath(run: CrawlerRun): string | null {
   if (run.status !== 'succeeded' || !run.receipt)
     return null
   return run.receipt.templateKey === 'movie'
-    ? `/movies?receipt=${encodeURIComponent(run.receipt.primaryContentId)}`
-    : `/comics?receipt=${encodeURIComponent(run.receipt.primaryContentId)}`
+    ? `/dashboard/movies?receipt=${encodeURIComponent(run.receipt.primaryContentId)}`
+    : `/dashboard/comics?receipt=${encodeURIComponent(run.receipt.primaryContentId)}`
 }
 
 async function loadStats() {
