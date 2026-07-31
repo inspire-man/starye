@@ -17,6 +17,7 @@ export function createMovieAdapter(config: JavBusCrawlerConfig, execute?: (conte
       class ObservedJavBusCrawler extends JavBusCrawler {
         protected override onMovieSynchronized(movieInfo: MovieInfo): void {
           contentIds.add(movieInfo.code)
+          context.observe(movieInfo.code)
         }
       }
       await new ObservedJavBusCrawler(config).run()

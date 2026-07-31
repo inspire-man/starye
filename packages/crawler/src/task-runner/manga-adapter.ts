@@ -19,6 +19,7 @@ export function createMangaAdapter(config: CrawlerConfig, execute?: (context: Ad
       class ObservedComicCrawler extends ComicCrawler {
         protected override onMangaSynchronized(slug: string): void {
           contentIds.add(slug)
+          context.observe(slug)
         }
       }
       await new ObservedComicCrawler(config, new Site92Hm(), MANGA_ENTRYPOINT).run()

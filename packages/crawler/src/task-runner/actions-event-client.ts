@@ -197,61 +197,74 @@ export class ActionsEventClient {
   }
 }
 
-function envRequired(name: string): string {
-  const value = process.env[name]?.trim()
+function envRequired(environment: NodeJS.ProcessEnv, name: string): string {
+  const value = environment[name]?.trim()
   if (!value)
     throw new Error(`Missing Actions callback environment: ${name}`)
   return value
 }
 
-function clientFromEnvironment(): ActionsEventClient {
+function envPositiveInteger(environment: NodeJS.ProcessEnv, name: string): number {
+  const value = Number(envRequired(environment, name))
+  if (!Number.isInteger(value) || value < 1)
+    throw new Error(`Invalid Actions callback environment: ${name}`)
+  return value
+}
+
+export function createActionsEventClientFromEnvironment(environment: NodeJS.ProcessEnv = process.env): ActionsEventClient {
   return new ActionsEventClient({
-    apiBaseUrl: envRequired('ACTIONS_CALLBACK_API_BASE_URL'),
-    callbackKeyId: envRequired('TASK_RUNNER_CALLBACK_KEY_ID_CURRENT'),
-    callbackSecret: envRequired('TASK_RUNNER_CALLBACK_SECRET_CURRENT'),
-    environment: envRequired('ACTIONS_PROVIDER_ENVIRONMENT') as 'starye-org',
-    ref: envRequired('ACTIONS_PROVIDER_REF') as 'main',
-    repository: envRequired('ACTIONS_PROVIDER_REPOSITORY') as 'inspire-man/starye',
-    target: envRequired('ACTIONS_PROVIDER_TARGET') as 'starye-org',
-    template: envRequired('ACTIONS_PROVIDER_TEMPLATE') as 'movie' | 'manga',
-    workflow: envRequired('ACTIONS_PROVIDER_WORKFLOW') as '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml',
+    apiBaseUrl: envRequired(environment, 'ACTIONS_CALLBACK_API_BASE_URL'),
+    attempt: envPositiveInteger(environment, 'ACTIONS_APPLICATION_ATTEMPT'),
+    callbackKeyId: envRequired(environment, 'TASK_RUNNER_CALLBACK_KEY_ID_CURRENT'),
+    callbackSecret: envRequired(environment, 'TASK_RUNNER_CALLBACK_SECRET_CURRENT'),
+    environment: envRequired(environment, 'ACTIONS_PROVIDER_ENVIRONMENT') as 'starye-org',
+    providerRunAttempt: envPositiveInteger(environment, 'GITHUB_RUN_ATTEMPT'),
+    providerRunId: envRequired(environment, 'GITHUB_RUN_ID'),
+    ref: envRequired(environment, 'ACTIONS_PROVIDER_REF') as 'main',
+    repository: envRequired(environment, 'ACTIONS_PROVIDER_REPOSITORY') as 'inspire-man/starye',
+    runId: envRequired(environment, 'ACTIONS_APPLICATION_RUN_ID'),
+    sha: envRequired(environment, 'GITHUB_SHA'),
+    target: envRequired(environment, 'ACTIONS_PROVIDER_TARGET') as 'starye-org',
+    template: envRequired(environment, 'ACTIONS_PROVIDER_TEMPLATE') as 'movie' | 'manga',
+    workflow: envRequired(environment, 'ACTIONS_PROVIDER_WORKFLOW') as '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml',
   })
 }
 
 async function runCli(): Promise<void> {
-  const client = clientFromEnvironment()
+  const environment = process.env
+  const client = createActionsEventClientFromEnvironment(environment)
   const [command, ...args] = process.argv.slice(2)
   let result: ActionsEventResponse
   switch (command) {
     case 'schedule-register':
-      result = await client.scheduleRegister({ scheduledAt: envRequired('ACTIONS_SCHEDULED_AT'), scheduleBucket: envRequired('ACTIONS_SCHEDULE_BUCKET') })
+      result = await client.scheduleRegister({ scheduledAt: envRequired(environment, 'ACTIONS_SCHEDULED_AT'), scheduleBucket: envRequired(environment, 'ACTIONS_SCHEDULE_BUCKET') })
       break
     case 'provider-started':
       result = await client.providerStarted({
-        attempt: Number(envRequired('ACTIONS_APPLICATION_ATTEMPT')),
-        providerRunAttempt: Number(envRequired('GITHUB_RUN_ATTEMPT')),
-        providerRunId: envRequired('GITHUB_RUN_ID'),
-        runId: envRequired('ACTIONS_APPLICATION_RUN_ID'),
-        sha: envRequired('GITHUB_SHA'),
+        attempt: envPositiveInteger(environment, 'ACTIONS_APPLICATION_ATTEMPT'),
+        providerRunAttempt: envPositiveInteger(environment, 'GITHUB_RUN_ATTEMPT'),
+        providerRunId: envRequired(environment, 'GITHUB_RUN_ID'),
+        runId: envRequired(environment, 'ACTIONS_APPLICATION_RUN_ID'),
+        sha: envRequired(environment, 'GITHUB_SHA'),
       })
       break
     case 'validate-dispatch':
-      result = await client.validateDispatch({ attempt: Number(envRequired('ACTIONS_APPLICATION_ATTEMPT')), runId: envRequired('ACTIONS_APPLICATION_RUN_ID') })
+      result = await client.validateDispatch({ attempt: envPositiveInteger(environment, 'ACTIONS_APPLICATION_ATTEMPT'), runId: envRequired(environment, 'ACTIONS_APPLICATION_RUN_ID') })
       break
     case 'progress':
-      result = await client.progress(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')))
+      result = await client.progress(Number(args[0] ?? envRequired(environment, 'ACTIONS_SEQUENCE')))
       break
     case 'log':
-      result = await client.log(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')), args[1] ?? 'actions crawler checkpoint')
+      result = await client.log(Number(args[0] ?? envRequired(environment, 'ACTIONS_SEQUENCE')), args[1] ?? 'actions crawler checkpoint')
       break
     case 'succeeded':
-      result = await client.succeeded(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')), (args[1] ?? '').split(',').filter(Boolean))
+      result = await client.succeeded(Number(args[0] ?? envRequired(environment, 'ACTIONS_SEQUENCE')), (args[1] ?? '').split(',').filter(Boolean))
       break
     case 'failed':
-      result = await client.failed(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')), args[1] ?? 'actions_failed')
+      result = await client.failed(Number(args[0] ?? envRequired(environment, 'ACTIONS_SEQUENCE')), args[1] ?? 'actions_failed')
       break
     case 'cancelled':
-      result = await client.cancelled(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')))
+      result = await client.cancelled(Number(args[0] ?? envRequired(environment, 'ACTIONS_SEQUENCE')))
       break
     default:
       throw new Error(`Unknown Actions callback command: ${command ?? ''}`)
