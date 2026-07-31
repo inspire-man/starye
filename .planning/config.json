@@ -28,7 +28,7 @@
     "skip_discuss": true,
     "code_review": false,
     "code_review_depth": "standard",
-    "subagent_timeout": 1800000,
+    "subagent_timeout": 3600000,
     "_auto_chain_active": false,
     "ui_review": false,
     "post_planning_gaps": false
