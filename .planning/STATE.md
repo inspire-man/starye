@@ -5,10 +5,10 @@ milestone_name: 后台爬虫任务与内容运维
 current_phase: 17
 current_phase_name: local-runner-vertical-slice
 status: executing
-stopped_at: Phase 17 Plan 03 implementation complete; local E2E blocked on ignored runner config and Dashboard session
-last_updated: "2026-07-31T03:54:35.111Z"
+stopped_at: Phase 17 Plan 03 implementation complete; deep-link fix committed, local E2E and Gateway CRUD proof remain blocked on runner config and Dashboard auth
+last_updated: "2026-07-31T08:08:16.171Z"
 last_activity: 2026-07-31
-last_activity_desc: Phase 17 execution started
+last_activity_desc: Phase 17 receipt deep-link fix verified; local OAuth bootstrap returned 502
 progress:
   total_phases: 4
   completed_phases: 1
@@ -147,11 +147,11 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-31T03:54:34.839Z
-**Stopped at:** Phase 17 Plan 03 implementation complete; local E2E blocked on ignored runner config and Dashboard session
+**Last session:** 2026-07-31T08:08:16.171Z
+**Stopped at:** Phase 17 Plan 03 implementation complete; receipt deep-link fix committed, local E2E and Gateway CRUD proof blocked on runner config and Dashboard auth
 **Resume file:** None
 
-**Next recommended action:** Provide the ignored local runner E2E config and Dashboard session, then re-run `pnpm local:task-runner:e2e --target local` for Phase 17 Plan 03.
+**Next recommended action:** Provide the ignored local runner E2E config and restore the local Dashboard auth/API OAuth bootstrap, then re-run `pnpm local:task-runner:e2e --target local` and the Gateway receipt CRUD proof for Phase 17 Plan 03.
 
 **If interrupted, resume by:**
 
@@ -242,4 +242,4 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 ### Blockers
 
 - Phase 13 Plan 13-63: blocked_without_observation_adapter; no p13-63 run id was created.
-- Phase 17 Plan 03 local Gateway acceptance is blocked: TASK_RUNNER_E2E_CONFIG and a local Dashboard session cookie are absent. The local runner and browser proof must be rerun with ignored local config/session files.
+- Phase 17 Plan 03 local Gateway acceptance is blocked: TASK_RUNNER_E2E_CONFIG is absent, and the local OAuth bootstrap currently returns 502 from `/api/auth/sign-in/social`; the local runner and browser proof must be rerun after ignored local config/session setup and auth recovery.
