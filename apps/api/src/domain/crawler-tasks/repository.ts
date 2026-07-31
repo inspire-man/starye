@@ -1294,6 +1294,24 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return { kind: 'provider_lost', reason: 'reconciliation_window_expired' }
   }
 
+  async function failProviderReconciliation(runId: string, attempt: number, reason: string): Promise<ProviderObservationResult> {
+    const association = await getProviderAssociation(runId)
+    const run = await getRunRow(runId)
+    if (!association || !run)
+      return { kind: 'not_found' }
+    if (association.applicationAttempt !== attempt)
+      return { kind: 'attempt_mismatch' }
+    if (!isTerminalCrawlerRunStatus(run.status)) {
+      await d1.prepare(`
+        INSERT OR IGNORE INTO crawler_run_transition (
+          id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+        ) VALUES (?, ?, -7, ?, ?, 'provider_failed', ?, ?)
+      `).bind(createId(), runId, run.status, run.status, truncateUtf8(reason, CRAWLER_MAX_SAFE_LOG_BYTES), toUnixSeconds(now())).run()
+      await applyTransition(runId, { actor: 'scheduler', type: 'provider_failed' })
+    }
+    return { kind: 'updated', status: 'completed', conclusion: 'failure' }
+  }
+
   async function validateDispatch(input: ValidateDispatchInput): Promise<ValidateDispatchResult> {
     const run = await getRunRow(input.runId)
     const template = await getTemplateKey(input.runId)
@@ -1340,6 +1358,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     createOrGetActiveRun,
     ensureProviderAssociation,
     expireProviderReconciliation,
+    failProviderReconciliation,
     getRun: async (runId: string) => {
       const run = await getRunRow(runId)
       return run ? toCrawlerTaskRun(run) : undefined

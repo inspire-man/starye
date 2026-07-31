@@ -11,7 +11,10 @@ import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import { timeout } from 'hono/timeout'
 import { timing } from 'hono/timing'
+import { createCrawlerTaskReconciliationService } from './domain/crawler-tasks/reconciliation'
 import { createCrawlerTaskRepository } from './domain/crawler-tasks/repository'
+import { validateGitHubAppBindings } from './lib/auth'
+import { createGitHubActionsClient } from './lib/github-app/github-actions-client'
 import { authMiddleware } from './middleware/auth'
 import { corsMiddleware } from './middleware/cors'
 import { databaseMiddleware } from './middleware/database'
@@ -235,6 +238,7 @@ Starye 是一个现代化的内容聚合平台，支持漫画、电影和演员�
 export type AppType = typeof routes
 
 type CrawlerTaskLogCleanup = (env: Pick<AppEnv['Bindings'], 'DB'>, at: Date) => Promise<number>
+type CrawlerTaskReconciliation = (env: AppEnv['Bindings'], at: Date) => Promise<unknown>
 
 interface ScheduledTaskContext {
   waitUntil: (promise: Promise<unknown>) => void
@@ -244,13 +248,53 @@ function purgeCrawlerTaskLogDetails(env: Pick<AppEnv['Bindings'], 'DB'>, at: Dat
   return createCrawlerTaskRepository(createDb(env.DB)).purgeExpiredRunLogs(at)
 }
 
+async function reconcileCrawlerTaskProviderRuns(env: AppEnv['Bindings'], at: Date): Promise<unknown> {
+  if (!validateGitHubAppBindings(env).ok
+    || !env.GITHUB_APP_ID
+    || !env.GITHUB_APP_INSTALLATION_ID
+    || !env.GITHUB_APP_PRIVATE_KEY
+    || !env.GITHUB_ACTIONS_OWNER
+    || !env.GITHUB_ACTIONS_REPOSITORY
+    || !env.GITHUB_ACTIONS_ENVIRONMENT) {
+    return { skipped: 'github_app_configuration_missing' }
+  }
+  const repository = createCrawlerTaskRepository(createDb(env.DB))
+  const client = createGitHubActionsClient({
+    bindings: {
+      appId: env.GITHUB_APP_ID,
+      environment: env.GITHUB_ACTIONS_ENVIRONMENT,
+      installationId: env.GITHUB_APP_INSTALLATION_ID,
+      owner: env.GITHUB_ACTIONS_OWNER,
+      privateKeyPem: env.GITHUB_APP_PRIVATE_KEY,
+      repository: env.GITHUB_ACTIONS_REPOSITORY,
+    },
+  })
+  return createCrawlerTaskReconciliationService({
+    client,
+    now: () => at,
+    repository,
+  }).reconcile()
+}
+
+export function createCrawlerTaskScheduledHandler(
+  cleanup: CrawlerTaskLogCleanup = purgeCrawlerTaskLogDetails,
+  reconcile: CrawlerTaskReconciliation = reconcileCrawlerTaskProviderRuns,
+) {
+  return (_controller: unknown, env: AppEnv['Bindings'], context: ScheduledTaskContext) => {
+    context.waitUntil(Promise.allSettled([
+      cleanup(env, new Date()),
+      reconcile(env, new Date()),
+    ]))
+  }
+}
+
 export function createCrawlerTaskLogCleanupHandler(cleanup: CrawlerTaskLogCleanup = purgeCrawlerTaskLogDetails) {
   return (_controller: unknown, env: AppEnv['Bindings'], context: ScheduledTaskContext) => {
     context.waitUntil(cleanup(env, new Date()))
   }
 }
 
-const crawlerTaskLogCleanupHandler = createCrawlerTaskLogCleanupHandler()
+const crawlerTaskLogCleanupHandler = createCrawlerTaskScheduledHandler()
 
 const worker = {
   fetch: routes.fetch,
