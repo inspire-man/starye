@@ -41,6 +41,27 @@ export const targetRemoteEntryValues = [
 
 export type TargetRemoteEntry = (typeof targetRemoteEntryValues)[number]
 
+export const productionCrawlerRequiredEnvironmentKeys = [
+  'ACTIONS_APPLICATION_ATTEMPT',
+  'ACTIONS_APPLICATION_RUN_ID',
+  'ACTIONS_CALLBACK_API_BASE_URL',
+  'ACTIONS_PROVIDER_ENVIRONMENT',
+  'ACTIONS_PROVIDER_REF',
+  'ACTIONS_PROVIDER_REPOSITORY',
+  'ACTIONS_PROVIDER_TARGET',
+  'ACTIONS_PROVIDER_TEMPLATE',
+  'ACTIONS_PROVIDER_WORKFLOW',
+  'CRAWLER_SECRET',
+  'GITHUB_RUN_ATTEMPT',
+  'GITHUB_RUN_ID',
+  'GITHUB_SHA',
+  'R2_ACCESS_KEY_ID',
+  'R2_PUBLIC_URL',
+  'R2_SECRET_ACCESS_KEY',
+  'TASK_RUNNER_CALLBACK_KEY_ID_CURRENT',
+  'TASK_RUNNER_CALLBACK_SECRET_CURRENT',
+] as const
+
 export interface TargetRemoteEntryDefinition {
   readonly id: TargetRemoteEntry
   readonly family: TargetRemoteEntryFamily
@@ -87,8 +108,8 @@ export const targetRemoteEntryDefinitions = [
   dbEntry('d1-cleanup-backup-preview', 'cleanup-backup-preview', 'read-only'),
   dbEntry('d1-cleanup-backup-execute', 'cleanup-backup-execute'),
   dbEntry('d1-cleanup-invalid-covers', 'cleanup-invalid-covers'),
-  crawlerEntry('crawler-comic', 'comic', 'mutation', ['url', 'limit', 'dry-run']),
-  crawlerEntry('crawler-optimized', 'optimized', 'mutation', ['limit', 'dry-run']),
+  crawlerEntry('crawler-comic', 'manga-production', 'mutation', [], productionCrawlerRequiredEnvironmentKeys),
+  crawlerEntry('crawler-optimized', 'movie-production', 'mutation', [], productionCrawlerRequiredEnvironmentKeys),
   crawlerEntry('crawler-actor', 'actor', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-publisher', 'publisher', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-search-index', 'search-index'),

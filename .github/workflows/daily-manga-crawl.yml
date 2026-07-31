@@ -124,6 +124,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       TASK_RUNNER_CALLBACK_KEY_ID_CURRENT: ${{ secrets.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT }}
       TASK_RUNNER_CALLBACK_SECRET_CURRENT: ${{ secrets.TASK_RUNNER_CALLBACK_SECRET_CURRENT }}
@@ -137,27 +138,10 @@ jobs:
       - name: Validate manual dispatch binding
         if: github.event_name == 'workflow_dispatch'
         run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts validate-dispatch
-      - id: provider-started
-        name: Bind GitHub provider run
-        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts provider-started
-      - name: Stop at cancellation checkpoint
-        if: steps.provider-started.outputs.cancel_requested == 'true'
-        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts cancelled 2
       - id: prepare
-        if: steps.provider-started.outputs.cancel_requested != 'true'
         run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command crawler-comic --github-output "$GITHUB_OUTPUT"
-      - name: Emit crawler progress
-        if: steps.provider-started.outputs.cancel_requested != 'true'
-        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts progress 2
       - name: Run selected manga entry
-        if: steps.provider-started.outputs.cancel_requested != 'true'
         run: pnpm target-profile run-prepared-entry --entry crawler-comic --prepared-context "${{ steps.prepare.outputs.prepared_context_path }}"
-      - name: Emit successful crawler receipt
-        if: success() && steps.provider-started.outputs.cancel_requested != 'true'
-        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts succeeded 3
-      - name: Emit failed crawler terminal
-        if: failure()
-        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts failed 3 actions_failed
       - name: Remove generated target files
         if: always()
         run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"

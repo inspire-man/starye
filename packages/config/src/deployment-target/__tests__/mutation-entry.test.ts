@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   prepareTargetMutation,
+  productionCrawlerRequiredEnvironmentKeys,
   runPreparedTargetMutation,
   targetRemoteEntryDefinitions,
 } from '../mutation-entry'
@@ -31,6 +32,25 @@ function readOnlyExecutor(argv: readonly string[]) {
 }
 
 describe('target mutation preparation', () => {
+  it('exposes only fixed movie and manga production child operations with the declared environment boundary', () => {
+    expect(targetRemoteEntryDefinitions.filter(definition => definition.id === 'crawler-comic' || definition.id === 'crawler-optimized')).toEqual([
+      expect.objectContaining({
+        id: 'crawler-comic',
+        childOperation: 'manga-production',
+        allowedOptions: [],
+        requiredSecretKeys: productionCrawlerRequiredEnvironmentKeys,
+      }),
+      expect.objectContaining({
+        id: 'crawler-optimized',
+        childOperation: 'movie-production',
+        allowedOptions: [],
+        requiredSecretKeys: productionCrawlerRequiredEnvironmentKeys,
+      }),
+    ])
+    expect(productionCrawlerRequiredEnvironmentKeys).not.toContain('target_url')
+    expect(productionCrawlerRequiredEnvironmentKeys).not.toContain('COMMAND')
+  })
+
   it('serializes the contained Pages redirect input without secrets and preserves cleanup ownership', async () => {
     const root = await createRoot()
     const runDirectory = path.join(root, 'run')

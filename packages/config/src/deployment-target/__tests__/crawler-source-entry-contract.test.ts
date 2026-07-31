@@ -27,6 +27,7 @@ const trackedEntries = [
   'scripts/verify-data-integrity.ts',
   'scripts/verify-r2-upload.ts',
   'src/index.ts',
+  'src/task-runner/actions-event-client.ts',
   'src/scripts/enrich-players.ts',
   'src/scripts/enrich-players-javbus.ts',
 ] as const
@@ -54,6 +55,7 @@ const directEntryClassifications = {
   'scripts/debug-javbus-magnet.ts': 'blocked-import-only',
   'scripts/diagnose-seesaawiki-parser.ts': 'blocked-import-only',
   'src/scripts/enrich-players.ts': 'blocked-import-only',
+  'src/task-runner/actions-event-client.ts': 'prepared-remote-operation',
   'src/scripts/enrich-players-javbus.ts': 'blocked-import-only',
   'src/scripts/crawl-seesaawiki-index.ts': 'blocked-import-only',
 } as const
@@ -129,6 +131,16 @@ describe('crawler source entry contract', () => {
       ['registry-child', 'prepared-remote-operation', 'blocked-import-only', 'local-or-external-only'].includes(classification),
     )).toBe(true)
   }, 30_000)
+
+  it('keeps production crawler source behind the prepared path and fixed operation boundary', async () => {
+    const source = await readFile(path.join(crawlerRoot, 'scripts/target-crawl-mutation.ts'), 'utf8')
+    expect(source).toContain('\'movie-production\'')
+    expect(source).toContain('\'manga-production\'')
+    expect(source).toContain('STARYE_PREPARED_CONTEXT_PATH')
+    expect(source).toContain('productionCrawlerEnvironmentKeys')
+    expect(source).toContain('Production crawler operation failed.')
+    expect(source).not.toMatch(/target_url|caller-supplied|process\.env\.(?:API_URL|CRAWLER_SECRET)/u)
+  })
 
   it('resolves an aliased ImageProcessor export and rejects it as a direct sink', () => {
     const fixtureDirectory = path.join(repositoryRoot, '.target-runs', 'crawler-source-fixture')
