@@ -5,16 +5,16 @@ milestone_name: 后台爬虫任务与内容运维
 current_phase: 18
 current_phase_name: GitHub Actions Production Orchestration
 status: executing
-stopped_at: Phase 18 Plan 18-01 complete
-last_updated: "2026-07-31T17:04:50Z"
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-07-31T17:47:22.286Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 18 Plan 18-01 completed
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 13
-  completed_plans: 8
-  percent: 61
+  completed_plans: 9
+  percent: 50
 ---
 
 # Project State: Starye — 个人内容中台
@@ -41,7 +41,7 @@ progress:
 ## Current Position
 
 Phase: 18 (GitHub Actions Production Orchestration) — EXECUTING
-Plan: 1 of 6 complete
+Plan: 2 of 6 complete
 Status: Ready for Plan 18-02
 Last activity: 2026-08-01 — Phase 18 Plan 18-01 completed
 
@@ -71,6 +71,7 @@ Last activity: 2026-08-01 — Phase 18 Plan 18-01 completed
 | Phase 17-local-runner-vertical-slice P01 | 44m | 2 tasks | 22 files |
 | Phase 17 P2 | resumed-after-capacity-failure | 2 tasks | 13 files |
 | Phase 18 P01 | 17m | 3 tasks | 8 files |
+| Phase 18 P02 | 22 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -148,9 +149,9 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 
 ## Session Continuity
 
-**Last session:** 2026-07-31T17:04:50Z
-**Stopped at:** Phase 18 Plan 18-01 complete
-**Resume file:** .planning/phases/18-github-actions-production-orchestration/18-01-SUMMARY.md
+**Last session:** 2026-07-31T17:47:22.266Z
+**Stopped at:** Completed 18-02-PLAN.md
+**Resume file:** None
 
 **Next recommended action:** Run `$gsd-execute-phase 18` to execute 18-02 (GitHub App JWT/token and fixed Actions REST client).
 
@@ -240,6 +241,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 - [Phase 18]: Movie/manga provider identity is an immutable server-owned GitHub Actions snapshot; dispatch carries only run ID, attempt, template, and target. — 18-01 provider registry
 - [Phase 18]: A one-to-one provider association retains redacted provider facts while unique provider run/attempt and schedule-bucket indexes reject duplicate bindings. — 18-01 D1 migration
 - [Phase 18]: GitHub App bindings stay optional in Env until configured and missing values return names-only `github_app_configuration_missing`. — 18-01 Worker binding contract
+- [Phase 18]: App JWT uses a 60-second backdate, a 9-minute default lifetime, and a 10-minute hard maximum. — Constrains GitHub App bearer lifetime before the installation token exchange.
+- [Phase 18]: Actions dispatch accepts only run_id, attempt, template, and target; immutable snapshots own workflow, repository, ref, and Environment. — Prevents caller-controlled GitHub Actions execution controls.
 
 ### Blockers
 
