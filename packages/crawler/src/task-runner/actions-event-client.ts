@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { signRunnerBody } from './event-signer'
 import { createRunnerEnvelope } from './runner-client'
 
@@ -173,4 +174,82 @@ export class ActionsEventClient {
     }
     throw new Error('Actions callback request exhausted retries')
   }
+}
+
+function envRequired(name: string): string {
+  const value = process.env[name]?.trim()
+  if (!value)
+    throw new Error(`Missing Actions callback environment: ${name}`)
+  return value
+}
+
+function clientFromEnvironment(): ActionsEventClient {
+  return new ActionsEventClient({
+    apiBaseUrl: envRequired('ACTIONS_CALLBACK_API_BASE_URL'),
+    callbackKeyId: envRequired('TASK_RUNNER_CALLBACK_KEY_ID_CURRENT'),
+    callbackSecret: envRequired('TASK_RUNNER_CALLBACK_SECRET_CURRENT'),
+    environment: envRequired('ACTIONS_PROVIDER_ENVIRONMENT') as 'starye-org',
+    ref: envRequired('ACTIONS_PROVIDER_REF') as 'main',
+    repository: envRequired('ACTIONS_PROVIDER_REPOSITORY') as 'inspire-man/starye',
+    target: envRequired('ACTIONS_PROVIDER_TARGET') as 'starye-org',
+    template: envRequired('ACTIONS_PROVIDER_TEMPLATE') as 'movie' | 'manga',
+    workflow: envRequired('ACTIONS_PROVIDER_WORKFLOW') as '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml',
+  })
+}
+
+async function runCli(): Promise<void> {
+  const client = clientFromEnvironment()
+  const [command, ...args] = process.argv.slice(2)
+  let result: ActionsEventResponse
+  switch (command) {
+    case 'schedule-register':
+      result = await client.scheduleRegister({ scheduledAt: envRequired('ACTIONS_SCHEDULED_AT'), scheduleBucket: envRequired('ACTIONS_SCHEDULE_BUCKET') })
+      break
+    case 'provider-started':
+      result = await client.providerStarted({
+        attempt: Number(envRequired('ACTIONS_APPLICATION_ATTEMPT')),
+        providerRunAttempt: Number(envRequired('GITHUB_RUN_ATTEMPT')),
+        providerRunId: envRequired('GITHUB_RUN_ID'),
+        runId: envRequired('ACTIONS_APPLICATION_RUN_ID'),
+        sha: envRequired('GITHUB_SHA'),
+      })
+      break
+    case 'progress':
+      result = await client.progress(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')))
+      break
+    case 'log':
+      result = await client.log(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')), args[1] ?? 'actions crawler checkpoint')
+      break
+    case 'succeeded':
+      result = await client.succeeded(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')), (args[1] ?? '').split(',').filter(Boolean))
+      break
+    case 'failed':
+      result = await client.failed(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')), args[1] ?? 'actions_failed')
+      break
+    case 'cancelled':
+      result = await client.cancelled(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')))
+      break
+    default:
+      throw new Error(`Unknown Actions callback command: ${command ?? ''}`)
+  }
+  if (process.env.GITHUB_OUTPUT) {
+    const lines = [
+      result.run_id ? `run_id=${result.run_id}` : '',
+      result.attempt ? `attempt=${result.attempt}` : '',
+      `accepted=${result.accepted}`,
+      `cancel_requested=${result.cancel_requested === true}`,
+    ].filter(Boolean)
+    const { appendFile } = await import('node:fs/promises')
+    await appendFile(process.env.GITHUB_OUTPUT, `${lines.join('\n')}\n`, 'utf8')
+  }
+  process.stdout.write(`${JSON.stringify(result)}\n`)
+  if (!result.accepted)
+    process.exitCode = 1
+}
+
+if (process.argv[1]?.endsWith('actions-event-client.ts')) {
+  void runCli().catch((error: unknown) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    process.exitCode = 1
+  })
 }
