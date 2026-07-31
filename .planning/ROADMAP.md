@@ -9,7 +9,7 @@
 
 ## Current Status
 
-v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面。Cloudflare API/D1 负责任务真相、鉴权、状态与日志；本地 Node runner 和 GitHub Actions 分别执行同一类固定模板。Phase 17 已完成本地 Gateway 纵向 proof；Phase 18 已完成 provider snapshot、D1 association、GitHub App binding 与生产 lifecycle 控制面，production adapter 仍待接入。
+v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面。Cloudflare API/D1 负责任务真相、鉴权、状态与日志；本地 Node runner 和 GitHub Actions 分别执行同一类固定模板。Phase 17 已完成本地 Gateway 纵向 proof；Phase 18 已完成 provider snapshot、D1 association、GitHub App binding、生产 lifecycle 控制面与 registry-owned production adapter，仍待 integration contract/proof handoff。
 
 ## Phase Plan
 
@@ -24,7 +24,7 @@ v1.3 将视频与漫画 crawler 接入一个持久化、受控的任务控制面
 
 - [x] **Phase 16: Task Domain Foundation** — Complete
 - [x] **Phase 17: Local Runner Vertical Slice** — Complete (2026-07-31)
-- [ ] **Phase 18: GitHub Actions Production Orchestration** — In progress (4/6 plans complete)
+- [ ] **Phase 18: GitHub Actions Production Orchestration** — In progress (5/6 plans complete)
 - [ ] **Phase 19: Dashboard Operations and End-to-End Proof** — Planned
 
 ## Phase Details
@@ -91,7 +91,7 @@ Plans:
 3. 后台可取消、重试和补偿生产任务；dispatch 受理、晚到事件或 provider 不匹配均不会被误报为成功。
 4. schedule 与手动 Actions run 都通过控制平面注册，避免形成不可见或双重执行的任务。
 
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -106,7 +106,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 18-04-PLAN.md — D1 CAS lifecycle、取消/重试与 provider reconciliation
-- [ ] 18-05-PLAN.md — movie/manga production adapter 与 prepared mutation registry
+- [x] 18-05-PLAN.md — movie/manga production adapter 与 prepared mutation registry
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
