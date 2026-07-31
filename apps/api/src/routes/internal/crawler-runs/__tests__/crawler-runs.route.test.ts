@@ -25,6 +25,48 @@ function createEvent(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function createScheduleEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    event_id: 'schedule-event-1',
+    key_id: 'key-current',
+    nonce: 'schedule-nonce-1',
+    scheduled_at: '2026-07-30T00:00:00.000Z',
+    schedule_bucket: '2026-07-30T00:00Z',
+    target: 'starye-org',
+    template: 'movie',
+    timestamp: NOW,
+    type: 'schedule_register',
+    workflow: '.github/workflows/daily-movie-crawl.yml',
+    repository: 'inspire-man/starye',
+    ref: 'main',
+    environment: 'starye-org',
+    ...overrides,
+  }
+}
+
+function createProviderStartedEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    attempt: 1,
+    environment: 'starye-org',
+    event_id: 'provider-event-1',
+    key_id: 'key-current',
+    nonce: 'provider-nonce-1',
+    provider_run_attempt: 1,
+    provider_run_id: '12345',
+    ref: 'main',
+    repository: 'inspire-man/starye',
+    run_id: 'run-1',
+    scheduled_at: '2026-07-30T00:00:00.000Z',
+    sha: 'a'.repeat(40),
+    target: 'starye-org',
+    template: 'movie',
+    timestamp: NOW,
+    type: 'provider_started',
+    workflow: '.github/workflows/daily-movie-crawl.yml',
+    ...overrides,
+  }
+}
+
 function createProcessor(result: unknown = { kind: 'accepted', outcome: { outcome: 'accepted' } }) {
   return {
     claimDispatch: vi.fn(async () => ({
@@ -48,6 +90,8 @@ function createProcessor(result: unknown = { kind: 'accepted', outcome: { outcom
       },
     })),
     processRunnerEvent: vi.fn(async () => result),
+    providerStarted: vi.fn(async () => ({ accepted: true, cancelRequested: false })),
+    scheduleRegister: vi.fn(async () => ({ attempt: 1, runId: 'run-1', accepted: true })),
   }
 }
 
@@ -96,6 +140,42 @@ function createControlEnvelope(overrides: Record<string, unknown> = {}) {
 }
 
 describe('signed crawler runner event route', () => {
+  it('accepts a signed strict schedule registration and returns an idempotent control-plane run', async () => {
+    const processor = createProcessor()
+    const response = await postSigned(createApp(processor), '/crawler-runs/schedule-register', JSON.stringify(createScheduleEvent()))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ accepted: true, attempt: 1, run_id: 'run-1' })
+    expect(processor.scheduleRegister).toHaveBeenCalledWith(expect.objectContaining({
+      scheduleBucket: '2026-07-30T00:00Z',
+      template: 'movie',
+      target: 'starye-org',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    }))
+  })
+
+  it('binds provider_started to the exact provider snapshot before any crawler state mutation', async () => {
+    const processor = createProcessor()
+    const response = await postSigned(createApp(processor), '/crawler-runs/run-1/provider-started', JSON.stringify(createProviderStartedEvent()))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ accepted: true, cancel_requested: false })
+    expect(processor.providerStarted).toHaveBeenCalledWith(expect.objectContaining({
+      attempt: 1,
+      providerRunId: '12345',
+      runId: 'run-1',
+      sha: 'a'.repeat(40),
+    }))
+  })
+
+  it('rejects provider snapshot drift before the provider association callback', async () => {
+    const processor = createProcessor()
+    const response = await postSigned(createApp(processor), '/crawler-runs/run-1/provider-started', JSON.stringify(createProviderStartedEvent({ target: 'other-target' })))
+
+    expect(response.status).toBe(400)
+    expect(processor.providerStarted).not.toHaveBeenCalled()
+  })
+
   it('rejects an unsigned payload before parsing the event envelope', async () => {
     const processor = createProcessor()
     const response = await createApp(processor).request('/crawler-runs/run-1/events', {
