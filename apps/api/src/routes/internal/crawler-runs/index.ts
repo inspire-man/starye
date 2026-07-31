@@ -61,16 +61,22 @@ interface ProviderStartedResult {
   readonly cancelRequested: boolean
 }
 
+interface DispatchValidationResult {
+  readonly accepted: boolean
+  readonly reason?: string
+}
+
 interface RunnerEventRepository {
   readonly claimDispatch: ReturnType<typeof createCrawlerTaskRepository>['claimDispatch']
   readonly getRun: ReturnType<typeof createCrawlerTaskRepository>['getRun']
   readonly pollDispatch: ReturnType<typeof createCrawlerTaskRepository>['pollDispatch']
   readonly processRunnerEvent: ReturnType<typeof createCrawlerTaskRepository>['processRunnerEvent']
   readonly providerStarted?: (input: Record<string, unknown>) => Promise<ProviderStartedResult>
+  readonly validateDispatch?: (input: Record<string, unknown>) => Promise<DispatchValidationResult>
   readonly scheduleRegister?: (input: Record<string, unknown>) => Promise<ScheduleRegisterResult>
 }
 
-function providerSnapshotMatches(event: Extract<v.InferOutput<typeof CrawlerRunEventSchema>, { type: 'schedule_register' | 'provider_started' }>): boolean {
+function providerSnapshotMatches(event: Extract<v.InferOutput<typeof CrawlerRunEventSchema>, { type: 'schedule_register' | 'provider_started' | 'dispatch_validate' }>): boolean {
   try {
     const snapshot = createProviderSnapshot(event.template)
     return snapshot.workflow === event.workflow
@@ -225,6 +231,30 @@ export function createCrawlerRunsRoutes(options: {
       attempt: result.attempt,
       run_id: result.runId,
     }, result.accepted ? 200 : 409)
+  })
+
+  crawlerRunsRoutes.post('/dispatch-validate', async (c) => {
+    const rawBody = await c.req.arrayBuffer()
+    const currentNow = now()
+    const signature = await verifySignedRequest(c, rawBody, currentNow)
+    const parsed = v.safeParse(CrawlerRunEventSchema, await parseRawJson(rawBody))
+    if (!parsed.success || parsed.output.type !== 'dispatch_validate')
+      throw new HTTPException(400, { message: 'Invalid dispatch validation envelope' })
+    const event = parsed.output
+    if (event.key_id !== signature.keyId)
+      throw new HTTPException(400, { message: 'Dispatch validation identity mismatch' })
+    if (Math.abs(currentNow - event.timestamp) > MAX_EVENT_AGE_MS || !providerSnapshotMatches(event))
+      throw new HTTPException(400, { message: 'Dispatch validation snapshot mismatch' })
+    const repository = createRepository(c.get('db'))
+    if (!repository.validateDispatch)
+      throw new HTTPException(503, { message: 'Dispatch validation unavailable' })
+    const result = await repository.validateDispatch({
+      attempt: event.attempt,
+      runId: event.run_id,
+      target: event.target,
+      template: event.template,
+    })
+    return c.json({ accepted: result.accepted, reason: result.reason }, result.accepted ? 200 : 409)
   })
 
   crawlerRunsRoutes.post('/:runId/provider-started', async (c) => {

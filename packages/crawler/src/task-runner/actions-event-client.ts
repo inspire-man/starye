@@ -44,6 +44,11 @@ interface ProviderStartedInput {
   readonly sha: string
 }
 
+interface DispatchValidationInput {
+  readonly attempt: number
+  readonly runId: string
+}
+
 type TerminalType = 'cancelled' | 'failed' | 'succeeded'
 
 export class ActionsEventClient {
@@ -88,6 +93,22 @@ export class ActionsEventClient {
         type: 'provider_started',
         workflow: this.config.workflow,
       }),
+    }, false)
+  }
+
+  async validateDispatch(input: DispatchValidationInput): Promise<ActionsEventResponse> {
+    return this.request('/api/internal/crawler-runs/dispatch-validate', {
+      ...createRunnerEnvelope(this.config.callbackKeyId, {
+        attempt: input.attempt,
+        environment: this.config.environment,
+        ref: this.config.ref,
+        repository: this.config.repository,
+        run_id: input.runId,
+        target: this.config.target,
+        template: this.config.template,
+        type: 'dispatch_validate',
+        workflow: this.config.workflow,
+      }, this.now()),
     }, false)
   }
 
@@ -213,6 +234,9 @@ async function runCli(): Promise<void> {
         runId: envRequired('ACTIONS_APPLICATION_RUN_ID'),
         sha: envRequired('GITHUB_SHA'),
       })
+      break
+    case 'validate-dispatch':
+      result = await client.validateDispatch({ attempt: Number(envRequired('ACTIONS_APPLICATION_ATTEMPT')), runId: envRequired('ACTIONS_APPLICATION_RUN_ID') })
       break
     case 'progress':
       result = await client.progress(Number(args[0] ?? envRequired('ACTIONS_SEQUENCE')))

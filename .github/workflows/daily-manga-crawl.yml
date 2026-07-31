@@ -5,21 +5,70 @@ on:
     - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
+      run_id:
+        description: Control-plane crawler run ID
+        required: true
+        type: string
+      attempt:
+        description: Control-plane attempt number
+        required: true
+        type: string
+      template:
+        description: Closed crawler template key
+        required: true
+        type: choice
+        options: [manga]
       target:
         description: Selected tracked deployment target
         required: true
         type: string
-      target_url:
-        description: Optional source URL for a future targeted run
-        required: false
-        type: string
 
 jobs:
+  register-schedule:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    environment: starye-org
+    outputs:
+      run_id: ${{ steps.register.outputs.run_id }}
+      attempt: ${{ steps.register.outputs.attempt }}
+    env:
+      ACTIONS_CALLBACK_API_BASE_URL: ${{ secrets.ACTIONS_CALLBACK_API_BASE_URL }}
+      ACTIONS_PROVIDER_ENVIRONMENT: starye-org
+      ACTIONS_PROVIDER_REF: main
+      ACTIONS_PROVIDER_REPOSITORY: inspire-man/starye
+      ACTIONS_PROVIDER_TARGET: starye-org
+      ACTIONS_PROVIDER_TEMPLATE: manga
+      ACTIONS_PROVIDER_WORKFLOW: .github/workflows/daily-manga-crawl.yml
+      ACTIONS_SCHEDULE_BUCKET: ''
+      ACTIONS_SCHEDULED_AT: ''
+      TASK_RUNNER_CALLBACK_KEY_ID_CURRENT: ${{ secrets.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT }}
+      TASK_RUNNER_CALLBACK_SECRET_CURRENT: ${{ secrets.TASK_RUNNER_CALLBACK_SECRET_CURRENT }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: register
+        shell: bash
+        run: |
+          set -euo pipefail
+          scheduled_at="$(date -u +%Y-%m-%dT%H:00:00.000Z)"
+          schedule_bucket="${scheduled_at:0:13}:00Z"
+          ACTIONS_SCHEDULED_AT="$scheduled_at" ACTIONS_SCHEDULE_BUCKET="$schedule_bucket" \
+            pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts schedule-register
+
   resolve-target:
+    needs: register-schedule
+    if: always()
     runs-on: ubuntu-latest
     outputs:
       target: ${{ steps.resolve.outputs.target }}
       github_environment: ${{ steps.resolve.outputs.github_environment }}
+      run_id: ${{ steps.resolve.outputs.run_id }}
+      attempt: ${{ steps.resolve.outputs.attempt }}
+      template: ${{ steps.resolve.outputs.template }}
     env:
       STARYE_TARGET_ID: starye-org
     steps:
@@ -33,26 +82,51 @@ jobs:
         shell: bash
         env:
           INPUT_TARGET: ${{ inputs.target || '' }}
+          INPUT_RUN_ID: ${{ inputs.run_id || '' }}
+          INPUT_ATTEMPT: ${{ inputs.attempt || '' }}
+          INPUT_TEMPLATE: ${{ inputs.template || '' }}
+          REGISTER_RUN_ID: ${{ needs.register-schedule.outputs.run_id || '' }}
+          REGISTER_ATTEMPT: ${{ needs.register-schedule.outputs.attempt || '' }}
         run: |
           set -euo pipefail
           target="${INPUT_TARGET:-$STARYE_TARGET_ID}"
-          test -n "$target"
+          run_id="${INPUT_RUN_ID:-$REGISTER_RUN_ID}"
+          attempt="${INPUT_ATTEMPT:-$REGISTER_ATTEMPT}"
+          template="${INPUT_TEMPLATE:-manga}"
+          test "$target" = starye-org
+          test -n "$run_id"
+          test "$attempt" -ge 1
+          test "$template" = manga
           output="$(pnpm target-profile validate --target "$target")"
           github_environment="$(printf '%s\n' "$output" | sed -n 's/^CI GitHub environment: //p')"
-          test -n "$github_environment"
+          test "$github_environment" = starye-org
           echo "target=$target" >> "$GITHUB_OUTPUT"
           echo "github_environment=$github_environment" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "attempt=$attempt" >> "$GITHUB_OUTPUT"
+          echo "template=$template" >> "$GITHUB_OUTPUT"
 
   crawl:
     needs: resolve-target
     runs-on: ubuntu-latest
     environment: ${{ needs.resolve-target.outputs.github_environment }}
     env:
+      ACTIONS_CALLBACK_API_BASE_URL: ${{ secrets.ACTIONS_CALLBACK_API_BASE_URL }}
+      ACTIONS_APPLICATION_RUN_ID: ${{ needs.resolve-target.outputs.run_id }}
+      ACTIONS_APPLICATION_ATTEMPT: ${{ needs.resolve-target.outputs.attempt }}
+      ACTIONS_PROVIDER_ENVIRONMENT: ${{ needs.resolve-target.outputs.github_environment }}
+      ACTIONS_PROVIDER_REF: main
+      ACTIONS_PROVIDER_REPOSITORY: inspire-man/starye
+      ACTIONS_PROVIDER_TARGET: ${{ needs.resolve-target.outputs.target }}
+      ACTIONS_PROVIDER_TEMPLATE: ${{ needs.resolve-target.outputs.template }}
+      ACTIONS_PROVIDER_WORKFLOW: .github/workflows/daily-manga-crawl.yml
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      TASK_RUNNER_CALLBACK_KEY_ID_CURRENT: ${{ secrets.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT }}
+      TASK_RUNNER_CALLBACK_SECRET_CURRENT: ${{ secrets.TASK_RUNNER_CALLBACK_SECRET_CURRENT }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -60,10 +134,30 @@ jobs:
       - uses: actions/setup-node@v6.3.0
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - name: Validate manual dispatch binding
+        if: github.event_name == 'workflow_dispatch'
+        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts validate-dispatch
+      - id: provider-started
+        name: Bind GitHub provider run
+        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts provider-started
+      - name: Stop at cancellation checkpoint
+        if: steps.provider-started.outputs.cancel_requested == 'true'
+        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts cancelled 2
       - id: prepare
+        if: steps.provider-started.outputs.cancel_requested != 'true'
         run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command crawler-comic --github-output "$GITHUB_OUTPUT"
+      - name: Emit crawler progress
+        if: steps.provider-started.outputs.cancel_requested != 'true'
+        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts progress 2
       - name: Run selected manga entry
+        if: steps.provider-started.outputs.cancel_requested != 'true'
         run: pnpm target-profile run-prepared-entry --entry crawler-comic --prepared-context "${{ steps.prepare.outputs.prepared_context_path }}"
+      - name: Emit successful crawler receipt
+        if: success() && steps.provider-started.outputs.cancel_requested != 'true'
+        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts succeeded 3
+      - name: Emit failed crawler terminal
+        if: failure()
+        run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts failed 3 actions_failed
       - name: Remove generated target files
         if: always()
         run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"

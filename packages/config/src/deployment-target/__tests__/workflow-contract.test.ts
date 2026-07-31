@@ -173,3 +173,27 @@ describe('phase 12 workflow target contract', () => {
     }
   })
 })
+
+describe('phase 18 GitHub Actions crawler orchestration contract', () => {
+  it('keeps movie and manga schedule/manual entries inside the signed control plane', async () => {
+    for (const file of ['daily-movie-crawl.yml', 'daily-manga-crawl.yml']) {
+      const source = await workflowText(file)
+      expect(source, file).toContain('schedule:')
+      expect(source, file).toContain('workflow_dispatch:')
+      expect(source, file).toMatch(/run_id:\n\s+description: Control-plane crawler run ID\n\s+required: true/)
+      expect(source, file).toMatch(/attempt:\n\s+description: Control-plane attempt number\n\s+required: true/)
+      expect(source, file).toMatch(/template:\n\s+description: Closed crawler template key\n\s+required: true/)
+      expect(source, file).toContain('actions-event-client.ts schedule-register')
+      expect(source, file).toContain('actions-event-client.ts validate-dispatch')
+      expect(source, file).toContain('actions-event-client.ts provider-started')
+      expect(source, file).toContain('actions-event-client.ts progress 2')
+      expect(source, file).toContain('actions-event-client.ts succeeded 3')
+      expect(source, file).toContain('actions-event-client.ts failed 3')
+      expect(source, file).toContain('environment: starye-org')
+      expect(source, file).toContain(`environment: ${githubExpression('needs.resolve-target.outputs.github_environment')}`)
+      expect(source, file).toContain('if: always()')
+      expect(source, file).not.toContain('target_url')
+      expect(source, file).not.toContain('ACTIONS_PROVIDER_REPOSITORY: inspire-man/starye/starye')
+    }
+  })
+})

@@ -130,6 +130,18 @@ export interface ProviderStartedResult {
   readonly cancelRequested: boolean
 }
 
+export interface ValidateDispatchInput {
+  readonly attempt: number
+  readonly runId: string
+  readonly target: string
+  readonly template: CrawlerTaskTemplateKey
+}
+
+export interface ValidateDispatchResult {
+  readonly accepted: boolean
+  readonly reason?: string
+}
+
 export type ProcessCrawlerRunnerEventResult
   = | { readonly kind: 'accepted', readonly outcome: Readonly<Record<string, unknown>> }
     | { readonly kind: 'attempt_mismatch' }
@@ -979,6 +991,18 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return { accepted: true, cancelRequested }
   }
 
+  async function validateDispatch(input: ValidateDispatchInput): Promise<ValidateDispatchResult> {
+    const run = await getRunRow(input.runId)
+    const template = await getTemplateKey(input.runId)
+    if (!run || !template)
+      return { accepted: false, reason: 'run_not_found' }
+    if (run.attempt_number !== input.attempt || template !== input.template)
+      return { accepted: false, reason: 'dispatch_binding_mismatch' }
+    if (createProviderSnapshot(input.template).target !== input.target)
+      return { accepted: false, reason: 'target_mismatch' }
+    return { accepted: true }
+  }
+
   async function sweepExpiredRuns(): Promise<readonly string[]> {
     const currentNow = toUnixSeconds(now())
     const expired = await d1.prepare(`
@@ -1024,5 +1048,6 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     retryRun,
     sweepExpiredRuns,
     scheduleRegister,
+    validateDispatch,
   }
 }

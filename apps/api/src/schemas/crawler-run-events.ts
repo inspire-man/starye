@@ -79,6 +79,19 @@ export const CrawlerProviderStartedEventSchema = v.strictObject({
   workflow: ProviderWorkflow,
 })
 
+export const CrawlerDispatchValidationEventSchema = v.strictObject({
+  ...RunnerEventFields,
+  attempt: Attempt,
+  environment: ProviderEnvironment,
+  ref: ProviderRef,
+  repository: ProviderRepository,
+  run_id: Identifier,
+  target: ProviderTarget,
+  template: ProviderTemplate,
+  type: v.literal('dispatch_validate'),
+  workflow: ProviderWorkflow,
+})
+
 export const CrawlerRunPollResponseSchema = v.strictObject({
   candidate: v.nullable(v.strictObject({
     attempt: Attempt,
@@ -118,6 +131,7 @@ export const CrawlerRunEventSchema = v.union([
   CrawlerRunLifecycleEventSchema,
   CrawlerScheduleRegisterEventSchema,
   CrawlerProviderStartedEventSchema,
+  CrawlerDispatchValidationEventSchema,
 ])
 
 export type CrawlerRunEvent = v.InferOutput<typeof CrawlerRunEventSchema>
