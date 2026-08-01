@@ -226,11 +226,28 @@ describe('comics.vue 集成测试', () => {
   })
 
   it('忽略不符合主内容 ID 格式的 receipt 查询', async () => {
-    mockRoute.query = { receipt: 'https://foreign.example/content' }
-    mount(Comics)
+    mockRoute.query = {
+      receipt: 'https://foreign.example/content',
+      sourceTask: 'task-manga-1',
+      sourceRun: 'run-manga-1',
+      sourceAttempt: '3',
+    }
+    const wrapper = mount(Comics)
     await flushPromises()
 
     expect(mockGetComic).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('receipt 缺少受控的 primaryContentId')
+    expect(wrapper.get('a').attributes('href')).toBe('/dashboard/crawlers?taskId=task-manga-1&runId=run-manga-1&attempt=3')
+  })
+
+  it('lookup 403/404 时保留受控任务详情入口', async () => {
+    mockRoute.query = { receipt: 'comic-uuid-404', sourceTask: 'task-manga-2', sourceRun: 'run-manga-2', sourceAttempt: '1' }
+    mockGetComic.mockRejectedValue(new Error('Request failed with status 404'))
+    const wrapper = mount(Comics)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('无法读取已验证的漫画 receipt')
+    expect(wrapper.get('a').attributes('href')).toBe('/dashboard/crawlers?taskId=task-manga-2&runId=run-manga-2&attempt=1')
   })
 
   describe('加载状态', () => {

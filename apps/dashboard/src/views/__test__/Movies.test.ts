@@ -152,12 +152,29 @@ describe('movies.vue 集成测试', () => {
     })
 
     it('忽略不符合主内容 ID 格式的 receipt 查询', async () => {
-      mockRoute.query = { receipt: 'https://foreign.example/content' }
+      mockRoute.query = {
+        receipt: 'https://foreign.example/content',
+        sourceTask: 'task-movie-1',
+        sourceRun: 'run-movie-1',
+        sourceAttempt: '2',
+      }
       const wrapper = mount(Movies)
       await flushPromises()
 
       expect(mockGetMovie).not.toHaveBeenCalled()
       expect(wrapper.text()).not.toContain('编辑电影')
+      expect(wrapper.text()).toContain('receipt 缺少受控的 primaryContentId')
+      expect(wrapper.get('a').attributes('href')).toBe('/dashboard/crawlers?taskId=task-movie-1&runId=run-movie-1&attempt=2')
+    })
+
+    it('lookup 403/404 时保留受控任务详情入口', async () => {
+      mockRoute.query = { receipt: 'movie-uuid-404', sourceTask: 'task-movie-2', sourceRun: 'run-movie-2', sourceAttempt: '1' }
+      mockGetMovie.mockRejectedValue(new Error('Request failed with status 404'))
+      const wrapper = mount(Movies)
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('无法读取已验证的电影 receipt')
+      expect(wrapper.get('a').attributes('href')).toBe('/dashboard/crawlers?taskId=task-movie-2&runId=run-movie-2&attempt=1')
     })
 
     it('应该加载时显示 SkeletonTable', async () => {

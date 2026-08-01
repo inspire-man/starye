@@ -115,7 +115,21 @@ const activeTab = ref<'metadata' | 'chapters'>('metadata')
 const receiptQuery = typeof route.query.receipt === 'string' && /^\w[\w-]{0,127}$/.test(route.query.receipt.trim())
   ? route.query.receipt.trim()
   : ''
+const receiptSourceTask = typeof route.query.sourceTask === 'string' && /^\w[\w-]{0,127}$/.test(route.query.sourceTask)
+  ? route.query.sourceTask
+  : ''
+const receiptSourceRun = typeof route.query.sourceRun === 'string' && /^\w[\w-]{0,127}$/.test(route.query.sourceRun)
+  ? route.query.sourceRun
+  : ''
+const receiptSourceAttempt = typeof route.query.sourceAttempt === 'string' && /^[1-9]\d{0,5}$/.test(route.query.sourceAttempt)
+  ? route.query.sourceAttempt
+  : ''
+const receiptError = ref('')
 let receiptHandled = false
+
+const receiptReturnPath = receiptSourceTask && receiptSourceRun && receiptSourceAttempt
+  ? `/dashboard/crawlers?${new URLSearchParams({ taskId: receiptSourceTask, runId: receiptSourceRun, attempt: receiptSourceAttempt })}`
+  : ''
 
 // 视图模式：card（卡片）| table（表格）
 const viewMode = ref<'card' | 'table'>('card')
@@ -199,14 +213,20 @@ function openEditModal(comic: Comic) {
 }
 
 async function openReceiptContent(): Promise<void> {
-  if (receiptHandled || !receiptQuery)
+  if (receiptHandled)
     return
   receiptHandled = true
+  if (!receiptQuery) {
+    if (typeof route.query.receipt === 'string')
+      receiptError.value = 'receipt 缺少受控的 primaryContentId，未打开内容编辑器。'
+    return
+  }
   try {
     const response = await api.admin.getComic(receiptQuery)
     openEditModal(response.data)
   }
   catch (e: unknown) {
+    receiptError.value = '无法读取已验证的漫画 receipt（可能已失效或无权访问）。'
     handleError(e, '加载已验证漫画 receipt 失败')
   }
 }
@@ -414,6 +434,10 @@ async function executeBatchOperation() {
 
 <template>
   <div class="space-y-6 relative">
+    <div v-if="receiptError" class="receipt-error" role="alert">
+      <span>{{ receiptError }}</span>
+      <a v-if="receiptReturnPath" :href="receiptReturnPath">返回任务详情</a>
+    </div>
     <!-- 页面标题 -->
     <div class="flex items-center justify-between">
       <div>
@@ -1013,6 +1037,20 @@ async function executeBatchOperation() {
   background: transparent;
   border: none;
 }
+
+.receipt-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.375rem;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.receipt-error a { color: #1d4ed8; text-decoration: underline; }
 
 .view-toggle-btn:hover {
   color: #111827;
