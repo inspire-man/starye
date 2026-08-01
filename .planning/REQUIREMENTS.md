@@ -27,9 +27,9 @@
 
 ### 后台与内容运维
 
-- [ ] **DASH-01**: Dashboard 支持创建、列表、详情、分页日志和状态自动刷新。
-- [ ] **DASH-02**: Dashboard 支持确认后的取消/重试，并继承现有视频/漫画资源权限。
-- [ ] **DASH-03**: 成功 receipt 链接到现有视频/漫画内容 CRUD，管理员可完成增删改。
+- [x] **DASH-01**: Dashboard 支持创建、列表、详情、分页日志和状态自动刷新。
+- [x] **DASH-02**: Dashboard 支持确认后的取消/重试，并继承现有视频/漫画资源权限。
+- [x] **DASH-03**: 成功 receipt 链接到现有视频/漫画内容 CRUD，管理员可完成增删改。
 - [x] **DATA-01**: 成功任务必须记录可验证的入库摘要与内容标识；空或不匹配 receipt 不得标记成功。
 
 ### 安全与运维
@@ -71,9 +71,9 @@
 | PROD-01 | Phase 18 | Complete |
 | PROD-02 | Phase 18 | Complete |
 | PROD-03 | Phase 18 | Complete |
-| DASH-01 | Phase 19 | Pending |
-| DASH-02 | Phase 19 | Pending |
-| DASH-03 | Phase 19 | Pending |
+| DASH-01 | Phase 19 | Complete |
+| DASH-02 | Phase 19 | Complete |
+| DASH-03 | Phase 19 | Complete |
 | DATA-01 | Phase 17 | Complete |
 | OPS-01 | Phase 16 | Complete |
 | OPS-02 | Phase 19 | Pending |

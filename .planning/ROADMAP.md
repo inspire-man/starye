@@ -125,11 +125,11 @@ Plans:
 3. RUNBOOK 说明 GitHub 凭据、日志留存、失联 run、取消、重试和回滚；不暴露秘密内容。
 4. 本地和生产均有从后台任务创建到入库后内容 CRUD 的可重复验收证据。
 
-**Plans:** 6 plans in 5 waves
+**Plans:** 1/6 plans executed
 
 **Wave 1**
 
-- [ ] 19-01-PLAN.md — API 完整 task/attempt/read model、稳定游标、provider/receipt 脱敏投影。
+- [x] 19-01-PLAN.md — API 完整 task/attempt/read model、稳定游标、provider/receipt 脱敏投影。
 - [ ] 19-02-PLAN.md — local/production evidence schema、JSON+Markdown builder 与模式隔离。
 
 **Wave 2** *(blocked on Wave 1 completion)*
