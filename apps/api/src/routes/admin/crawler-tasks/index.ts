@@ -5,7 +5,7 @@ import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { HTTPException } from 'hono/http-exception'
 import { createProviderDispatchInput, createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
-import { createCrawlerTaskRepository } from '../../../domain/crawler-tasks/repository'
+import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTaskCursor } from '../../../domain/crawler-tasks/repository'
 import { getCrawlerTaskTemplate } from '../../../domain/crawler-tasks/template-registry'
 import { createGitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import { canAccessCrawler } from '../../../lib/permissions'
@@ -182,6 +182,17 @@ async function requireTaskRunAccess(c: any, user: SessionUser, taskId: string, r
   }
 }
 
+function parseTaskCursor(value: string | undefined) {
+  if (!value)
+    return undefined
+  try {
+    return decodeCrawlerTaskCursor(value)
+  }
+  catch {
+    throw new HTTPException(400, { message: 'Invalid crawler task cursor' })
+  }
+}
+
 export const adminCrawlerTasksRoutes = new Hono<AppEnv>()
 
 adminCrawlerTasksRoutes.post('/', validator('json', CreateCrawlerTaskSchema), async (c) => {
@@ -206,23 +217,52 @@ adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema)
   const { cursor, limit, template } = c.req.valid('query')
   if (template)
     requireTemplateAccess(user, template)
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const decodedCursor = parseTaskCursor(cursor)
+  if (repository.listTasks) {
+    const page = await repository.listTasks({ cursor: decodedCursor, limit, templateKey: template })
+    if (page)
+      return c.json(page)
+  }
   const rows = await getD1(c).prepare(`
     SELECT id, template_key, latest_run_id, created_at, updated_at
     FROM crawler_task
-    WHERE (? IS NULL OR template_key = ?) AND (? IS NULL OR id < ?)
-    ORDER BY created_at DESC, id DESC LIMIT ?
-  `).bind(template ?? null, template ?? null, cursor ?? null, cursor ?? null, limit).all<Record<string, unknown>>()
-  const tasks = (rows.results ?? []).filter((task) => {
+    WHERE (? IS NULL OR template_key = ?)
+      AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
+    ORDER BY updated_at DESC, id DESC LIMIT ?
+  `).bind(
+    template ?? null,
+    template ?? null,
+    decodedCursor ? decodedCursor.updatedAt : null,
+    decodedCursor ? decodedCursor.updatedAt : null,
+    decodedCursor ? decodedCursor.updatedAt : null,
+    decodedCursor?.id ?? null,
+    limit + 1,
+  ).all<Record<string, unknown>>()
+  const pageRows = rows.results ?? []
+  const visible = pageRows.slice(0, limit).filter((task) => {
     const key = task.template_key as CrawlerTaskTemplateKey
     return canAccessCrawler(user, getCrawlerTaskTemplate(key).permissionResource)
   })
-  return c.json({ tasks })
+  const last = visible.at(-1)
+  return c.json({
+    nextCursor: pageRows.length > limit && last
+      ? encodeCrawlerTaskCursor({ id: String(last.id), updatedAt: Number(last.updated_at) })
+      : null,
+    tasks: visible,
+  })
 })
 
 adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSchema), async (c) => {
   const user = await requireSessionUser(c)
   const { taskId } = c.req.valid('param')
   await requireTaskAccess(c, user, taskId)
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  if (repository.getTaskDetail) {
+    const detail = await repository.getTaskDetail(taskId)
+    if (detail)
+      return c.json(detail)
+  }
   const d1 = getD1(c)
   const [task, runs] = await Promise.all([
     d1.prepare('SELECT id, template_key, latest_run_id, created_at, updated_at FROM crawler_task WHERE id = ?').bind(taskId).all<Record<string, unknown>>(),
@@ -236,6 +276,12 @@ adminCrawlerTasksRoutes.get('/:taskId/runs/:runId/logs', validator('param', Craw
   const { taskId, runId } = c.req.valid('param')
   const { cursor, limit } = c.req.valid('query')
   await requireTaskRunAccess(c, user, taskId, runId)
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  if (repository.listRunLogs) {
+    const page = await repository.listRunLogs({ cursor, limit, runId, taskId })
+    if (page)
+      return c.json(page)
+  }
   const logs = await getD1(c).prepare(`
     SELECT log.sequence, log.level, log.code, log.safe_message, log.counts_json, log.created_at
     FROM crawler_run_log AS log

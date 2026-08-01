@@ -1,6 +1,6 @@
 import type { Database } from '@starye/db'
-import type { CrawlerRunFailureCode, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskSnapshot, CrawlerTaskTemplateKey, ProviderRunStatus, ValidatedCrawlerRunReceipt } from './types'
-import { createProviderSnapshot } from './provider-association'
+import type { CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskSnapshot, CrawlerTaskTemplateKey, ProviderRunStatus, ValidatedCrawlerRunReceipt } from './types'
+import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
 import { createManualRetryAttempt, decideCrawlerRunTransition, isTerminalCrawlerRunStatus } from './state-machine'
 import { createCrawlerTaskSnapshot } from './template-registry'
@@ -38,6 +38,25 @@ interface CrawlerRunRow {
   status: CrawlerRunStatus
   task_id: string
   terminal_at: number | null
+  created_at: number
+  updated_at: number
+}
+
+interface CrawlerTaskRow {
+  created_at: number
+  id: string
+  latest_run_id: string | null
+  template_key: CrawlerTaskTemplateKey
+  updated_at: number
+}
+
+interface CrawlerRunLogRow {
+  code: string
+  counts_json: string | null
+  created_at: number
+  level: CrawlerRunLogReadModel['level']
+  safe_message: string
+  sequence: number
 }
 
 export interface CrawlerTaskRun {
@@ -240,6 +259,97 @@ function toUnixSeconds(date: Date): number {
   return Math.floor(date.getTime() / 1000)
 }
 
+function toCrawlerTaskListItem(row: CrawlerTaskRow): CrawlerTaskListItem {
+  return {
+    createdAt: row.created_at,
+    id: row.id,
+    latestRunId: row.latest_run_id,
+    templateKey: row.template_key,
+    updatedAt: row.updated_at,
+  }
+}
+
+function parseValidatedReceipt(status: CrawlerRunStatus, raw: string | null): ValidatedCrawlerRunReceipt | null {
+  if (status !== 'succeeded' || !raw)
+    return null
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return null
+    const receipt = value as Record<string, unknown>
+    if ((receipt.templateKey !== 'movie' && receipt.templateKey !== 'manga')
+      || typeof receipt.primaryContentId !== 'string'
+      || !/^\w[\w-]{0,127}$/u.test(receipt.primaryContentId)
+      || typeof receipt.createdCount !== 'number'
+      || !Number.isSafeInteger(receipt.createdCount)
+      || receipt.createdCount < 0
+      || typeof receipt.updatedCount !== 'number'
+      || !Number.isSafeInteger(receipt.updatedCount)
+      || receipt.updatedCount < 0) {
+      return null
+    }
+    return {
+      createdCount: receipt.createdCount,
+      primaryContentId: receipt.primaryContentId,
+      templateKey: receipt.templateKey,
+      updatedCount: receipt.updatedCount,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function parseSafeCounts(raw: string | null): Readonly<Record<string, number>> | undefined {
+  if (!raw)
+    return undefined
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return undefined
+    const counts = Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => (
+      /^[A-Za-z][\w-]{0,63}$/u.test(entry[0])
+      && typeof entry[1] === 'number'
+      && Number.isSafeInteger(entry[1])
+      && entry[1] >= 0
+    )))
+    return Object.keys(counts).length > 0 ? Object.freeze(counts) : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+export function encodeCrawlerTaskCursor(cursor: CrawlerTaskCursor): string {
+  return btoa(JSON.stringify({ id: cursor.id, updatedAt: cursor.updatedAt }))
+    .replace(/\+/gu, '-')
+    .replace(/\//gu, '_')
+    .replace(/=+$/u, '')
+}
+
+export function decodeCrawlerTaskCursor(value: string): CrawlerTaskCursor {
+  try {
+    const normalized = value.replace(/-/gu, '+').replace(/_/gu, '/')
+    const decoded = atob(`${normalized}${'='.repeat((4 - normalized.length % 4) % 4)}`)
+    const parsed: unknown = JSON.parse(decoded)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      throw new Error('invalid')
+    const cursor = parsed as Record<string, unknown>
+    if (Object.keys(cursor).some(key => key !== 'id' && key !== 'updatedAt')
+      || typeof cursor.id !== 'string'
+      || !/^\w[\w-]{0,127}$/u.test(cursor.id)
+      || typeof cursor.updatedAt !== 'number'
+      || !Number.isSafeInteger(cursor.updatedAt)
+      || cursor.updatedAt < 0) {
+      throw new Error('invalid')
+    }
+    return { id: cursor.id, updatedAt: cursor.updatedAt }
+  }
+  catch {
+    throw new Error('crawler_task_cursor_invalid')
+  }
+}
+
 function addMillisecondsInSeconds(now: number, milliseconds: number): number {
   return now + Math.ceil(milliseconds / 1000)
 }
@@ -385,6 +495,132 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     catch {
       // Phase 16/17 local runner fixtures use the pre-provider schema.
       return undefined
+    }
+  }
+
+  async function listTasks(input: {
+    readonly cursor?: CrawlerTaskCursor
+    readonly limit: number
+    readonly templateKey?: CrawlerTaskTemplateKey
+  }): Promise<CrawlerTaskListPage> {
+    const requestedLimit = Math.max(1, Math.min(50, input.limit))
+    const result = await d1.prepare(`
+      SELECT id, template_key, latest_run_id, created_at, updated_at
+      FROM crawler_task
+      WHERE (? IS NULL OR template_key = ?)
+        AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
+      ORDER BY updated_at DESC, id DESC
+      LIMIT ?
+    `).bind(
+      input.templateKey ?? null,
+      input.templateKey ?? null,
+      input.cursor?.updatedAt ?? null,
+      input.cursor?.updatedAt ?? null,
+      input.cursor?.updatedAt ?? null,
+      input.cursor?.id ?? null,
+      requestedLimit + 1,
+    ).all<CrawlerTaskRow>()
+    const rows = result.results ?? []
+    const hasMore = rows.length > requestedLimit
+    const pageRows = rows.slice(0, requestedLimit)
+    const last = pageRows.at(-1)
+    return {
+      nextCursor: hasMore && last
+        ? encodeCrawlerTaskCursor({ id: last.id, updatedAt: last.updated_at })
+        : null,
+      tasks: pageRows.map(toCrawlerTaskListItem),
+    }
+  }
+
+  async function getTaskDetail(taskId: string): Promise<CrawlerTaskDetailReadModel | undefined> {
+    const taskResult = await d1.prepare(`
+      SELECT id, template_key, latest_run_id, created_at, updated_at
+      FROM crawler_task
+      WHERE id = ?
+      LIMIT 1
+    `).bind(taskId).all<CrawlerTaskRow>()
+    const taskRow = taskResult.results?.[0]
+    if (!taskRow)
+      return undefined
+
+    const runsResult = await d1.prepare(`
+      SELECT id, task_id, attempt_number, status, state_version, last_event_sequence,
+        lease_expires_at, last_heartbeat_at, cancel_requested_at, failure_code,
+        receipt_summary_json, created_at, updated_at, terminal_at
+      FROM crawler_run
+      WHERE task_id = ?
+      ORDER BY attempt_number DESC, id DESC
+    `).bind(taskId).all<CrawlerRunRow>()
+
+    const runs: CrawlerRunReadModel[] = []
+    for (const row of runsResult.results ?? []) {
+      const association = await getProviderAssociation(row.id)
+      let provider = null
+      if (association) {
+        try {
+          provider = createProviderAssociationSummary({
+            environment: association.environment,
+            providerConclusion: association.providerConclusion,
+            providerRunAttempt: association.providerRunAttempt,
+            providerRunId: association.providerRunId,
+            providerStatus: association.providerStatus,
+            ref: association.ref,
+            repository: association.repository,
+            sha: association.sha,
+            workflow: association.workflow,
+          })
+        }
+        catch {
+          // Legacy or malformed provider rows remain unavailable at the API boundary.
+          provider = null
+        }
+      }
+      runs.push({
+        attemptNumber: row.attempt_number,
+        cancelRequestedAt: row.cancel_requested_at,
+        createdAt: row.created_at,
+        failureCode: row.failure_code as CrawlerRunFailureCode | null,
+        id: row.id,
+        provider,
+        receipt: parseValidatedReceipt(row.status, row.receipt_summary_json),
+        stateVersion: row.state_version,
+        status: row.status,
+        taskId: row.task_id,
+        terminalAt: row.terminal_at,
+        updatedAt: row.updated_at,
+      })
+    }
+    return { runs, task: toCrawlerTaskListItem(taskRow) }
+  }
+
+  async function listRunLogs(input: {
+    readonly cursor?: number
+    readonly limit: number
+    readonly runId: string
+    readonly taskId: string
+  }): Promise<CrawlerRunLogPage> {
+    const requestedLimit = Math.max(1, Math.min(50, input.limit))
+    const result = await d1.prepare(`
+      SELECT log.sequence, log.level, log.code, log.safe_message, log.counts_json, log.created_at
+      FROM crawler_run_log AS log
+      INNER JOIN crawler_run AS run ON run.id = log.run_id
+      WHERE run.task_id = ? AND log.run_id = ? AND (? IS NULL OR log.sequence < ?)
+      ORDER BY log.sequence DESC
+      LIMIT ?
+    `).bind(input.taskId, input.runId, input.cursor ?? null, input.cursor ?? null, requestedLimit + 1).all<CrawlerRunLogRow>()
+    const rows = result.results ?? []
+    const hasMore = rows.length > requestedLimit
+    const pageRows = rows.slice(0, requestedLimit)
+    return {
+      logs: pageRows.map(row => ({
+        code: row.code,
+        ...(parseSafeCounts(row.counts_json) ? { counts: parseSafeCounts(row.counts_json) } : {}),
+        createdAt: row.created_at,
+        level: row.level,
+        safeMessage: row.safe_message,
+        sequence: row.sequence,
+      })),
+      nextCursor: hasMore ? pageRows.at(-1)?.sequence ?? null : null,
     }
   }
 
@@ -1378,6 +1614,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return run ? toCrawlerTaskRun(run) : undefined
     },
     getProviderAssociation,
+    getTaskDetail,
+    listRunLogs,
+    listTasks,
     listProviderReconciliationCandidates,
     purgeExpiredRunLogs,
     processRunnerEvent,

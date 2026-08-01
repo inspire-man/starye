@@ -72,12 +72,69 @@ export interface ProviderDispatchInput {
 
 /** Redacted provider state that is safe to expose in task/run read models and audit facts. */
 export interface ProviderAssociationSummary {
+  readonly environment?: 'starye-org'
+  readonly providerRunUrl?: string
   readonly provider: ProviderName
   readonly providerConclusion?: ProviderRunConclusion
   readonly providerRunAttempt?: number
   readonly providerRunId?: string
   readonly providerStatus?: ProviderRunStatus
+  readonly ref?: 'main'
+  readonly repository?: 'inspire-man/starye'
   readonly sha?: string
+  readonly workflow?: '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml'
+}
+
+export interface CrawlerTaskCursor {
+  readonly id: string
+  readonly updatedAt: number
+}
+
+export interface CrawlerTaskListItem {
+  readonly createdAt: number
+  readonly id: string
+  readonly latestRunId: string | null
+  readonly templateKey: CrawlerTaskTemplateKey
+  readonly updatedAt: number
+}
+
+export interface CrawlerTaskListPage {
+  readonly nextCursor: string | null
+  readonly tasks: readonly CrawlerTaskListItem[]
+}
+
+export interface CrawlerRunReadModel {
+  readonly attemptNumber: number
+  readonly cancelRequestedAt: number | null
+  readonly createdAt: number
+  readonly failureCode: CrawlerRunFailureCode | null
+  readonly id: string
+  readonly stateVersion: number
+  readonly status: CrawlerRunStatus
+  readonly taskId: string
+  readonly terminalAt: number | null
+  readonly updatedAt: number
+  readonly provider: ProviderAssociationSummary | null
+  readonly receipt: ValidatedCrawlerRunReceipt | null
+}
+
+export interface CrawlerTaskDetailReadModel {
+  readonly task: CrawlerTaskListItem
+  readonly runs: readonly CrawlerRunReadModel[]
+}
+
+export interface CrawlerRunLogReadModel {
+  readonly code: string
+  readonly counts?: Readonly<Record<string, number>>
+  readonly createdAt: number
+  readonly level: 'debug' | 'info' | 'warn' | 'error'
+  readonly safeMessage: string
+  readonly sequence: number
+}
+
+export interface CrawlerRunLogPage {
+  readonly logs: readonly CrawlerRunLogReadModel[]
+  readonly nextCursor: number | null
 }
 
 export interface CrawlerRunState {

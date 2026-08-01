@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { createClient } from '@libsql/client'
 import { createDb } from '@starye/db'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createCrawlerTaskRepository } from '../repository'
+import { createCrawlerTaskRepository, decodeCrawlerTaskCursor } from '../repository'
 import {
   CRAWLER_MAX_NORMAL_LOG_ROWS,
   CRAWLER_MAX_SAFE_LOG_BYTES,
@@ -432,5 +432,70 @@ describe('crawler task repository', () => {
     now = new Date(now.getTime() + CRAWLER_RUN_LOG_RETENTION_MS + 1)
     await expect(repository.purgeExpiredRunLogs()).resolves.toBe(CRAWLER_MAX_NORMAL_LOG_ROWS + 1)
     await expect(client.execute({ args: [runId], sql: 'SELECT * FROM crawler_run WHERE id = ?' })).resolves.toMatchObject({ rows: [expect.objectContaining({ id: runId })] })
+  })
+
+  it('pages task history by the updated-at/id tuple without repeating tied timestamps', async () => {
+    await client.batch([
+      {
+        args: ['task-a', 'movie', 1, 'admin-1', '{}', null, 'run-a', 100, 200],
+        sql: 'INSERT INTO crawler_task (id, template_key, template_version, requested_by_user_id, request_snapshot_json, idempotency_key, latest_run_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      },
+      {
+        args: ['task-b', 'movie', 1, 'admin-1', '{}', null, 'run-b', 101, 200],
+        sql: 'INSERT INTO crawler_task (id, template_key, template_version, requested_by_user_id, request_snapshot_json, idempotency_key, latest_run_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      },
+      {
+        args: ['task-c', 'movie', 1, 'admin-1', '{}', null, 'run-c', 102, 199],
+        sql: 'INSERT INTO crawler_task (id, template_key, template_version, requested_by_user_id, request_snapshot_json, idempotency_key, latest_run_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      },
+    ], 'write')
+
+    const first = await repository.listTasks({ limit: 2, templateKey: 'movie' })
+    expect(first.tasks.map(task => task.id)).toEqual(['task-b', 'task-a'])
+    expect(first.nextCursor).toBeTruthy()
+    const cursor = decodeCrawlerTaskCursor(first.nextCursor!)
+    expect(cursor).toEqual({ id: 'task-a', updatedAt: 200 })
+
+    const second = await repository.listTasks({ cursor, limit: 2, templateKey: 'movie' })
+    expect(second.tasks.map(task => task.id)).toEqual(['task-c'])
+    expect(second.nextCursor).toBeNull()
+  })
+
+  it('returns every attempt with safe receipt/provider projections and tolerates legacy provider schemas', async () => {
+    await client.execute({
+      args: ['task-detail', 'movie', 1, 'admin-1', '{}', null, 'run-2', 1, 2],
+      sql: 'INSERT INTO crawler_task (id, template_key, template_version, requested_by_user_id, request_snapshot_json, idempotency_key, latest_run_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    })
+    await client.batch([
+      {
+        args: ['run-1', 'task-detail', 1, 'failed', 1, 0, null, null, null, 'runner_failed', null, 1, 1, 1],
+        sql: 'INSERT INTO crawler_run (id, task_id, attempt_number, status, state_version, last_event_sequence, lease_expires_at, last_heartbeat_at, cancel_requested_at, failure_code, receipt_summary_json, created_at, updated_at, terminal_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      },
+      {
+        args: ['run-2', 'task-detail', 2, 'succeeded', 2, 1, null, null, null, null, JSON.stringify({ createdCount: 1, primaryContentId: 'movie-1', templateKey: 'movie', updatedCount: 0, token: 'hidden' }), 2, 2, 2],
+        sql: 'INSERT INTO crawler_run (id, task_id, attempt_number, status, state_version, last_event_sequence, lease_expires_at, last_heartbeat_at, cancel_requested_at, failure_code, receipt_summary_json, created_at, updated_at, terminal_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      },
+      {
+        args: ['run-2', 2, 'github-actions', 'movie', 'starye-org', '.github/workflows/daily-movie-crawl.yml', 'inspire-man/starye', 'main', 'starye-org', 'crawler-optimized', '123', 1, 'a'.repeat(40), 'completed', 'success', null, null, null, 3, 3],
+        sql: 'INSERT INTO crawler_run_provider_association (run_id, application_attempt, provider, template_key, target, workflow, repository, ref, environment, crawler_entrypoint, provider_run_id, provider_run_attempt, sha, provider_status, provider_conclusion, reconciliation_window_ends_at, safe_facts_json, schedule_bucket, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      },
+    ], 'write')
+
+    const detail = await repository.getTaskDetail('task-detail')
+    expect(detail?.runs.map(run => run.attemptNumber)).toEqual([2, 1])
+    expect(detail?.runs[0]).toMatchObject({
+      provider: {
+        providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/123',
+      },
+      receipt: {
+        primaryContentId: 'movie-1',
+        templateKey: 'movie',
+      },
+    })
+    expect(JSON.stringify(detail)).not.toContain('token')
+
+    await client.execute('DROP TABLE crawler_run_provider_association')
+    const legacy = await repository.getTaskDetail('task-detail')
+    expect(legacy?.runs.every(run => run.provider === null)).toBe(true)
   })
 })

@@ -1,7 +1,11 @@
 import * as v from 'valibot'
 
 const TaskIdSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))
-const CursorSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))
+const CursorSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.regex(/^[\w-]{16,256}$/u, 'Invalid opaque cursor'),
+)
 
 export const CreateCrawlerTaskSchema = v.strictObject({
   template: v.picklist(['movie', 'manga']),
@@ -30,3 +34,5 @@ export const CrawlerTaskLogsQuerySchema = v.strictObject({
   cursor: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(0))),
   limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1), v.maxValue(50)), '50'),
 })
+
+export const CrawlerTaskCursorSchema = CursorSchema

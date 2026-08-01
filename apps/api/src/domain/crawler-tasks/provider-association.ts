@@ -123,6 +123,14 @@ function optionalSha(value: unknown): string | undefined {
   return value
 }
 
+function optionalFixedMetadata<const T extends string>(value: unknown, expected: T, code: string): T | undefined {
+  if (value === undefined)
+    return undefined
+  if (value !== expected)
+    throw new Error(code)
+  return expected
+}
+
 /** Resolves the immutable provider identity from the already-closed crawler template registry. */
 export function createProviderSnapshot(templateKey: unknown): ProviderSnapshot {
   if (!isCrawlerTaskTemplateKey(templateKey))
@@ -155,7 +163,17 @@ export function createProviderAssociationSummary(input: unknown): ProviderAssoci
   const record = asRecord(input, 'provider_summary_invalid')
   requireExactKeys(
     record,
-    ['providerConclusion', 'providerRunAttempt', 'providerRunId', 'providerStatus', 'sha'],
+    [
+      'environment',
+      'providerConclusion',
+      'providerRunAttempt',
+      'providerRunId',
+      'providerStatus',
+      'ref',
+      'repository',
+      'sha',
+      'workflow',
+    ],
     'provider_summary_invalid',
   )
 
@@ -164,13 +182,33 @@ export function createProviderAssociationSummary(input: unknown): ProviderAssoci
   const providerStatus = optionalProviderStatus(record.providerStatus)
   const providerConclusion = optionalProviderConclusion(record.providerConclusion)
   const sha = optionalSha(record.sha)
+  const environment = optionalFixedMetadata(record.environment, 'starye-org', 'provider_summary_invalid')
+  const ref = optionalFixedMetadata(record.ref, 'main', 'provider_summary_invalid')
+  const repository = optionalFixedMetadata(record.repository, 'inspire-man/starye', 'provider_summary_invalid')
+  const workflow = record.workflow === undefined
+    ? undefined
+    : (record.workflow === '.github/workflows/daily-manga-crawl.yml' || record.workflow === '.github/workflows/daily-movie-crawl.yml'
+        ? record.workflow
+        : (() => { throw new Error('provider_summary_invalid') })())
+
+  if (record.providerRunUrl !== undefined)
+    throw new Error('provider_summary_invalid')
+
+  const providerRunUrl = providerRunId && repository
+    ? `https://github.com/${repository}/actions/runs/${providerRunId}`
+    : undefined
 
   return Object.freeze({
     provider: 'github-actions',
+    ...(environment ? { environment } : {}),
     ...(providerRunId ? { providerRunId } : {}),
+    ...(providerRunUrl ? { providerRunUrl } : {}),
     ...(providerRunAttempt ? { providerRunAttempt } : {}),
     ...(providerStatus ? { providerStatus } : {}),
     ...(providerConclusion ? { providerConclusion } : {}),
+    ...(ref ? { ref } : {}),
+    ...(repository ? { repository } : {}),
     ...(sha ? { sha } : {}),
+    ...(workflow ? { workflow } : {}),
   })
 }

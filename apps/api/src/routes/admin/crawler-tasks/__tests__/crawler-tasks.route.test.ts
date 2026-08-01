@@ -262,7 +262,7 @@ describe('admin crawler task routes', () => {
       task: { id: 'task-1', templateKey: 'movie' },
     })
 
-    const { app } = createApp()
+    const { app } = createApp({}, [[{ template_key: 'movie' }]])
     const list = await app.request('/crawler-tasks?template=movie&limit=1')
     expect(list.status).toBe(200)
     await expect(list.json()).resolves.toEqual({
