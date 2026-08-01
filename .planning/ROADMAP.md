@@ -125,6 +125,37 @@ Plans:
 3. RUNBOOK 说明 GitHub 凭据、日志留存、失联 run、取消、重试和回滚；不暴露秘密内容。
 4. 本地和生产均有从后台任务创建到入库后内容 CRUD 的可重复验收证据。
 
+**Plans:** 6 plans in 5 waves
+
+**Wave 1**
+
+- [ ] 19-01-PLAN.md — API 完整 task/attempt/read model、稳定游标、provider/receipt 脱敏投影。
+- [ ] 19-02-PLAN.md — local/production evidence schema、JSON+Markdown builder 与模式隔离。
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 19-03-PLAN.md — Dashboard 分组历史、同页详情、attempt/log 分页、可见性刷新、取消/重试。
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 19-04-PLAN.md — validated receipt 到既有 Movies/Comics 编辑器的受控交接与可回退 CRUD 测试。
+
+**Wave 4** *(blocked on Wave 3 and evidence contract completion)*
+
+- [ ] 19-05-PLAN.md — Gateway 双模板 local runner → receipt → CRUD evidence 与取消 checkpoint。
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 19-06-PLAN.md — 单条 credentialed provider tuple、生产 evidence 与 RUNBOOK 运维收口。
+
+Cross-cutting constraints:
+
+- 稳定 `(updated_at,id)` task keyset 和 descending sequence log cursor。
+- UI 仅按资源权限显示固定 movie/manga 模板；API 每次重复最终授权校验。
+- provider、receipt、callback 和 evidence 只投影经过验证的脱敏字段。
+- 本地 Gateway evidence 与 credentialed production tuple 永远分开标记。
+- 取消保持 `cancel_requested`，重试创建新 attempt，旧历史和日志长期保留。
+
 ## Requirement Coverage
 
 | Requirement | Phase | Status |
