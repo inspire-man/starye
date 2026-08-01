@@ -143,10 +143,40 @@ describe('crawlers local task panel', () => {
     const wrapper = mountCrawler()
     await flushPromises()
     expect(wrapper.text()).toContain('管理电影内容')
-    expect(wrapper.get('a').attributes('href')).toBe('/dashboard/movies?receipt=movie-1')
+    expect(wrapper.get('a').attributes('href')).toBe('/dashboard/movies?receipt=movie-1&sourceAttempt=1&sourceRun=run-1&sourceTask=task-1')
     await wrapper.get('button.load-more').trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('完成')
     expect(wrapper.text()).toContain('开始')
+  })
+
+  it('renders complete template history, stable task cursor, attempts and safe provider summary', async () => {
+    const firstTask = { id: 'task-1', template_key: 'movie', latest_run_id: 'run-2' }
+    const secondTask = { id: 'task-2', template_key: 'movie', latest_run_id: 'run-3' }
+    api.admin.listCrawlerTasks.mockImplementation(({ template, cursor }: { template: string, cursor?: string }) => Promise.resolve(
+      template === 'movie'
+        ? cursor
+          ? { tasks: [secondTask], nextCursor: null }
+          : { tasks: [firstTask], nextCursor: 'cursor-1' }
+        : { tasks: [], nextCursor: null },
+    ))
+    api.admin.getCrawlerTask.mockImplementation((taskId: string) => Promise.resolve(taskId === 'task-1'
+      ? {
+          task: firstTask,
+          runs: [
+            { id: 'run-2', status: 'running', attemptNumber: 2, receipt: null, provider: { provider: 'github-actions', providerStatus: 'in_progress', providerRunAttempt: 1 } },
+            { id: 'run-1', status: 'failed', attemptNumber: 1, failureCode: 'provider_lost', receipt: null },
+          ],
+        }
+      : { task: secondTask, runs: [{ id: 'run-3', status: 'cancelled', attemptNumber: 1, receipt: null }] }))
+    const wrapper = mountCrawler()
+    await flushPromises()
+    expect(wrapper.text()).toContain('任务历史')
+    expect(wrapper.text()).toContain('Provider 摘要')
+    expect(wrapper.text()).toContain('全部 attempt')
+    await wrapper.get('button.load-more').trigger('click')
+    await flushPromises()
+    expect(api.admin.listCrawlerTasks).toHaveBeenCalledWith({ template: 'movie', cursor: 'cursor-1', limit: 20 })
+    expect(wrapper.text()).toContain('task-2')
   })
 })

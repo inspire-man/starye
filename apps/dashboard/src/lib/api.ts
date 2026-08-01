@@ -204,24 +204,51 @@ export interface CrawlerRunReceipt {
   updatedCount: number
 }
 
+export interface CrawlerProviderSummary {
+  provider?: string
+  providerRunUrl?: string
+  providerConclusion?: string
+  providerRunAttempt?: number
+  providerRunId?: string
+  providerStatus?: string
+  environment?: string
+  ref?: string
+  repository?: string
+  sha?: string
+  workflow?: string
+}
+
 export interface CrawlerRun {
   id: string
+  taskId?: string
   attempt_number?: number
   attemptNumber?: number
   status: CrawlerRunStatus
   state_version?: number
+  stateVersion?: number
   failure_code?: string | null
+  failureCode?: string | null
+  cancel_requested_at?: number | null
+  cancelRequestedAt?: number | null
   created_at?: string
+  createdAt?: number | string
   terminal_at?: string | null
+  terminalAt?: number | string | null
+  updatedAt?: number
+  provider?: CrawlerProviderSummary | null
   receipt: CrawlerRunReceipt | null
 }
 
 export interface CrawlerTask {
   id: string
-  template_key: CrawlerTaskTemplate
-  latest_run_id: string | null
+  template_key?: CrawlerTaskTemplate
+  templateKey?: CrawlerTaskTemplate
+  latest_run_id?: string | null
+  latestRunId?: string | null
   created_at?: string
+  createdAt?: number | string
   updated_at?: string
+  updatedAt?: number | string
 }
 
 export interface CrawlerTaskDetail {
@@ -233,14 +260,22 @@ export interface CrawlerTaskLog {
   sequence: number
   level: string
   code: string
-  safe_message: string
+  safe_message?: string
+  safeMessage?: string
   counts_json?: string | null
-  created_at: string
+  counts?: Record<string, number>
+  created_at?: string
+  createdAt?: number
 }
 
 export interface CrawlerTaskLogsPage {
   logs: CrawlerTaskLog[]
   nextCursor: number | null
+}
+
+export interface CrawlerTaskListPage {
+  tasks: CrawlerTask[]
+  nextCursor: string | null
 }
 
 // ─── API 对象 ─────────────────────────────────────────────────────────────────
@@ -458,14 +493,19 @@ export const api = {
         query.set('cursor', params.cursor)
       if (params?.limit)
         query.set('limit', String(params.limit))
-      return apiFetch<{ tasks: CrawlerTask[] }>(`/admin/crawler-tasks${query.toString() ? `?${query}` : ''}`)
+      return apiFetch<CrawlerTaskListPage>(`/admin/crawler-tasks${query.toString() ? `?${query}` : ''}`)
     },
 
     getCrawlerTask: (taskId: string) =>
       apiFetch<CrawlerTaskDetail>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}`),
 
-    getCrawlerTaskLogs: (taskId: string, runId: string, cursor?: number) => {
-      const query = cursor == null ? '' : `?cursor=${encodeURIComponent(String(cursor))}`
+    getCrawlerTaskLogs: (taskId: string, runId: string, cursor?: number, limit?: number) => {
+      const queryParams = new URLSearchParams()
+      if (cursor != null)
+        queryParams.set('cursor', String(cursor))
+      if (limit != null)
+        queryParams.set('limit', String(limit))
+      const query = queryParams.toString() ? `?${queryParams}` : ''
       return apiFetch<CrawlerTaskLogsPage>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/runs/${encodeURIComponent(runId)}/logs${query}`)
     },
 

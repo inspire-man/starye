@@ -20,7 +20,8 @@ const loading = ref(true)
 const autoRefresh = ref(true)
 let refreshInterval: any = null
 
-const crawlerTasks = ref<Record<CrawlerTaskTemplate, CrawlerTask | null>>({ movie: null, manga: null })
+const crawlerTasks = ref<Record<CrawlerTaskTemplate, CrawlerTask[]>>({ movie: [], manga: [] })
+const taskCursors = ref<Record<CrawlerTaskTemplate, string | null>>({ movie: null, manga: null })
 const taskDetails = ref<Record<string, { task: CrawlerTask, runs: CrawlerRun[] }>>({})
 const selectedRun = ref<{ task: CrawlerTask, run: CrawlerRun } | null>(null)
 const taskLogs = ref<CrawlerTaskLog[]>([])
@@ -48,12 +49,24 @@ function canAccessTemplate(template: CrawlerTaskTemplate): boolean {
   return canAccessCrawler(template === 'manga' ? 'comic' : 'movie')
 }
 
-function latestRunFor(template: CrawlerTaskTemplate): CrawlerRun | null {
-  const task = crawlerTasks.value[template]
-  if (!task)
+function taskTemplate(task: CrawlerTask): CrawlerTaskTemplate {
+  return task.templateKey ?? task.template_key!
+}
+
+function taskLatestRunId(task: CrawlerTask): string | null {
+  return task.latestRunId ?? task.latest_run_id ?? null
+}
+
+function taskRuns(task: CrawlerTask): CrawlerRun[] {
+  return taskDetails.value[task.id]?.runs ?? []
+}
+
+function latestRunFor(task: CrawlerTask): CrawlerRun | null {
+  const runs = taskRuns(task)
+  if (!runs.length)
     return null
-  return taskDetails.value[task.id]?.runs?.find(run => run.id === task.latest_run_id)
-    ?? taskDetails.value[task.id]?.runs?.[0]
+  return runs.find(run => run.id === taskLatestRunId(task))
+    ?? runs[0]
     ?? null
 }
 
@@ -63,7 +76,7 @@ function selectRun(task: CrawlerTask, run: CrawlerRun | null): void {
 
 async function loadTaskLogs(task: CrawlerTask, run: CrawlerRun, append = false): Promise<void> {
   try {
-    const page = await api.admin.getCrawlerTaskLogs(task.id, run.id, append ? taskLogCursor.value ?? undefined : undefined)
+    const page = await api.admin.getCrawlerTaskLogs(task.id, run.id, append ? taskLogCursor.value ?? undefined : undefined, 50)
     taskLogs.value = append ? [...taskLogs.value, ...page.logs] : page.logs
     taskLogCursor.value = page.nextCursor
   }
@@ -79,15 +92,16 @@ async function loadTaskPanel(): Promise<void> {
   try {
     const visibleTemplates = (['movie', 'manga'] as const).filter(canAccessTemplate)
     const responses = await Promise.all(visibleTemplates.map(async (template) => {
-      const response = await api.admin.listCrawlerTasks({ template, limit: 1 })
-      return [template, response.tasks[0] ?? null] as const
+      const response = await api.admin.listCrawlerTasks({ template, limit: 20 })
+      return [template, response] as const
     }))
-    for (const [template, task] of responses) {
-      crawlerTasks.value[template] = task
-      if (task) {
+    for (const [template, response] of responses) {
+      crawlerTasks.value[template] = response.tasks
+      taskCursors.value[template] = response.nextCursor ?? null
+      for (const task of response.tasks) {
         const detail = await api.admin.getCrawlerTask(task.id)
         taskDetails.value[task.id] = detail
-        const run = detail.runs.find(item => item.id === task.latest_run_id) ?? detail.runs[0] ?? null
+        const run = latestRunFor(task)
         if (selectedRun.value?.task.id === task.id && run) {
           selectRun(task, run)
         }
@@ -111,6 +125,17 @@ async function loadTaskPanel(): Promise<void> {
     taskLoading.value = false
     taskRefreshing.value = false
   }
+}
+
+async function loadMoreTasks(template: CrawlerTaskTemplate): Promise<void> {
+  const cursor = taskCursors.value[template]
+  if (!cursor)
+    return
+  const response = await api.admin.listCrawlerTasks({ template, cursor, limit: 20 })
+  crawlerTasks.value[template] = [...crawlerTasks.value[template], ...response.tasks]
+  taskCursors.value[template] = response.nextCursor ?? null
+  for (const task of response.tasks)
+    taskDetails.value[task.id] = await api.admin.getCrawlerTask(task.id)
 }
 
 function startTaskPolling(): void {
@@ -141,9 +166,9 @@ async function createTask(template: CrawlerTaskTemplate): Promise<void> {
     if (response.kind === 'existing_active_run')
       info('该模板已有活动任务，已打开当前任务。')
     await loadTaskPanel()
-    const task = crawlerTasks.value[template]
+    const task = crawlerTasks.value[template][0]
     if (task)
-      selectRun(task, latestRunFor(template))
+      selectRun(task, latestRunFor(task))
   }
   catch {
     taskError.value = '无法创建任务。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
@@ -187,9 +212,9 @@ async function confirmRetry(): Promise<void> {
   try {
     await api.admin.retryCrawlerRun(target.task.id, target.run.id)
     await loadTaskPanel()
-    const task = crawlerTasks.value[target.task.template_key]
+    const task = crawlerTasks.value[taskTemplate(target.task)][0]
     if (task)
-      selectRun(task, latestRunFor(target.task.template_key))
+      selectRun(task, latestRunFor(task))
   }
   catch {
     taskError.value = '无法加载任务数据。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
@@ -199,12 +224,34 @@ async function confirmRetry(): Promise<void> {
   }
 }
 
-function managementPath(run: CrawlerRun): string | null {
+function managementPath(task: CrawlerTask, run: CrawlerRun): string | null {
   if (run.status !== 'succeeded' || !run.receipt)
     return null
+  const query = new URLSearchParams({
+    receipt: run.receipt.primaryContentId,
+    sourceAttempt: String(run.attemptNumber ?? run.attempt_number ?? ''),
+    sourceRun: run.id,
+    sourceTask: task.id,
+  })
   return run.receipt.templateKey === 'movie'
-    ? `/dashboard/movies?receipt=${encodeURIComponent(run.receipt.primaryContentId)}`
-    : `/dashboard/comics?receipt=${encodeURIComponent(run.receipt.primaryContentId)}`
+    ? `/dashboard/movies?${query}`
+    : `/dashboard/comics?${query}`
+}
+
+function runFailureCode(run: CrawlerRun): string | null {
+  return run.failureCode ?? run.failure_code ?? null
+}
+
+function runTimestamp(run: CrawlerRun): number | string | null | undefined {
+  return run.terminalAt ?? run.terminal_at ?? run.createdAt ?? run.created_at
+}
+
+function logMessage(log: CrawlerTaskLog): string {
+  return log.safeMessage ?? log.safe_message ?? ''
+}
+
+function logTimestamp(log: CrawlerTaskLog): number | string | undefined {
+  return log.createdAt ?? log.created_at
 }
 
 async function loadStats() {
@@ -322,51 +369,60 @@ async function executeClearFailed() {
         <SkeletonCard v-if="canAccessTemplate('movie')" variant="stat" />
         <SkeletonCard v-if="canAccessTemplate('manga')" variant="stat" />
       </div>
-      <div v-else-if="!crawlerTasks.movie && !crawlerTasks.manga && !canAccessTemplate('movie') && !canAccessTemplate('manga')" class="task-empty">
+      <div v-else-if="!crawlerTasks.movie.length && !crawlerTasks.manga.length && !canAccessTemplate('movie') && !canAccessTemplate('manga')" class="task-empty">
         <strong>暂无本地任务</strong>
       </div>
-      <div v-else class="task-grid">
+      <div v-else class="task-history-grid">
         <template v-for="template in (['movie', 'manga'] as const)" :key="template">
-          <article
-            v-if="canAccessTemplate(template)"
-            class="task-card"
-            :class="{ 'task-card-selected': selectedRun?.task.template_key === template }"
-            tabindex="0"
-            @click="crawlerTasks[template] && selectRun(crawlerTasks[template]!, latestRunFor(template))"
-            @keydown.enter="crawlerTasks[template] && selectRun(crawlerTasks[template]!, latestRunFor(template))"
-          >
-            <div class="task-card-heading">
-              <h3>{{ template === 'movie' ? '视频' : '漫画' }}</h3>
-              <span v-if="latestRunFor(template)" class="status-label">{{ taskStatusLabels[latestRunFor(template)!.status] }}</span>
-              <span v-else class="status-label">尚未创建</span>
-            </div>
-            <p>仅执行服务端固定模板</p>
-            <div v-if="latestRunFor(template)" class="task-meta">
-              <span>attempt {{ latestRunFor(template)!.attemptNumber ?? latestRunFor(template)!.attempt_number ?? '尚未上报' }}</span>
-              <span>{{ latestRunFor(template)!.terminal_at ?? latestRunFor(template)!.created_at ?? '尚未上报' }}</span>
-            </div>
-            <div class="task-actions">
+          <section v-if="canAccessTemplate(template)" class="task-group" :aria-labelledby="`${template}-task-title`">
+            <div class="task-group-heading">
+              <h3 :id="`${template}-task-title`">{{ template === 'movie' ? '视频' : '漫画' }}任务历史</h3>
               <button class="task-primary" type="button" :disabled="taskAction === template" @click="createTask(template)">
                 {{ taskAction === template ? '创建中…' : template === 'movie' ? '创建视频任务' : '创建漫画任务' }}
               </button>
-              <button
-                v-if="latestRunFor(template) && ['queued', 'dispatching', 'running'].includes(latestRunFor(template)!.status)"
-                class="task-secondary task-danger"
-                type="button"
-                @click="askCancel(crawlerTasks[template]!, latestRunFor(template)!)"
-              >
-                取消任务
-              </button>
-              <button
-                v-if="latestRunFor(template) && ['failed', 'cancelled'].includes(latestRunFor(template)!.status)"
-                class="task-secondary"
-                type="button"
-                @click="askRetry(crawlerTasks[template]!, latestRunFor(template)!)"
-              >
-                重试任务
-              </button>
             </div>
-          </article>
+            <p v-if="!crawlerTasks[template].length" class="task-empty">尚未创建</p>
+            <article
+              v-for="task in crawlerTasks[template]"
+              :key="task.id"
+              class="task-card"
+              :class="{ 'task-card-selected': selectedRun?.task.id === task.id }"
+              tabindex="0"
+              @click="selectRun(task, latestRunFor(task))"
+              @keydown.enter="selectRun(task, latestRunFor(task))"
+            >
+              <div class="task-card-heading">
+                <h4>{{ task.id }}</h4>
+                <span v-if="latestRunFor(task)" class="status-label">{{ taskStatusLabels[latestRunFor(task)!.status] }}</span>
+                <span v-else class="status-label">尚未上报</span>
+              </div>
+              <div v-if="latestRunFor(task)" class="task-meta">
+                <span>attempt {{ latestRunFor(task)!.attemptNumber ?? latestRunFor(task)!.attempt_number ?? '尚未上报' }}</span>
+                <span>{{ runTimestamp(latestRunFor(task)!) ?? '尚未上报' }}</span>
+              </div>
+              <div class="task-actions">
+                <button
+                  v-if="latestRunFor(task) && ['queued', 'dispatching', 'running'].includes(latestRunFor(task)!.status)"
+                  class="task-secondary task-danger"
+                  type="button"
+                  @click.stop="askCancel(task, latestRunFor(task)!)"
+                >
+                  取消任务
+                </button>
+                <button
+                  v-if="latestRunFor(task) && ['failed', 'cancelled'].includes(latestRunFor(task)!.status)"
+                  class="task-secondary"
+                  type="button"
+                  @click.stop="askRetry(task, latestRunFor(task)!)"
+                >
+                  重试任务
+                </button>
+              </div>
+            </article>
+            <button v-if="taskCursors[template]" class="task-secondary load-more" type="button" @click="loadMoreTasks(template)">
+              加载更多任务
+            </button>
+          </section>
         </template>
       </div>
 
@@ -375,15 +431,42 @@ async function executeClearFailed() {
           <h3>任务执行详情</h3>
           <span>{{ taskStatusLabels[selectedRun.run.status] }}</span>
         </div>
-        <p>模板：{{ selectedRun.task.template_key === 'movie' ? '视频' : '漫画' }} · attempt {{ selectedRun.run.attemptNumber ?? selectedRun.run.attempt_number ?? '尚未上报' }}</p>
-        <div v-if="selectedRun.run.status === 'failed' && selectedRun.run.failure_code === 'receipt_missing'" class="task-warning">
+        <p>模板：{{ taskTemplate(selectedRun.task) === 'movie' ? '视频' : '漫画' }} · attempt {{ selectedRun.run.attemptNumber ?? selectedRun.run.attempt_number ?? '尚未上报' }}</p>
+        <p v-if="runFailureCode(selectedRun.run)" class="task-warning">
+          终态原因：{{ runFailureCode(selectedRun.run) }}
+        </p>
+        <div v-if="selectedRun.run.status === 'failed' && runFailureCode(selectedRun.run) === 'receipt_missing'" class="task-warning">
           任务未找到可验证的入库结果，未生成内容管理链接。
+        </div>
+        <div v-if="selectedRun.run.status === 'cancel_requested'" class="task-warning">
+          已请求取消，等待 runner 在安全检查点确认。
+        </div>
+        <div v-if="taskRuns(selectedRun.task).length > 1" class="attempt-switcher">
+          <span>全部 attempt：</span>
+          <button
+            v-for="run in taskRuns(selectedRun.task)"
+            :key="run.id"
+            class="task-secondary"
+            :class="{ 'attempt-selected': run.id === selectedRun.run.id }"
+            type="button"
+            @click="selectRun(selectedRun.task, run)"
+          >
+            #{{ run.attemptNumber ?? run.attempt_number }} · {{ taskStatusLabels[run.status] }}
+          </button>
         </div>
         <div v-if="selectedRun.run.receipt && selectedRun.run.status === 'succeeded'" class="receipt-card">
           <strong>已验证入库结果</strong>
           <span>主内容 ID：{{ selectedRun.run.receipt.primaryContentId }}</span>
           <span>新增 {{ selectedRun.run.receipt.createdCount }} · 更新 {{ selectedRun.run.receipt.updatedCount }}</span>
-          <a v-if="managementPath(selectedRun.run)" :href="managementPath(selectedRun.run)!">管理{{ selectedRun.run.receipt.templateKey === 'movie' ? '电影' : '漫画' }}内容</a>
+          <a v-if="managementPath(selectedRun.task, selectedRun.run)" :href="managementPath(selectedRun.task, selectedRun.run)!">管理{{ selectedRun.run.receipt.templateKey === 'movie' ? '电影' : '漫画' }}内容</a>
+        </div>
+        <div v-if="selectedRun.run.provider" class="provider-summary">
+          <strong>Provider 摘要</strong>
+          <span>{{ selectedRun.run.provider.provider ?? 'provider' }}</span>
+          <span v-if="selectedRun.run.provider.providerStatus">状态：{{ selectedRun.run.provider.providerStatus }}</span>
+          <span v-if="selectedRun.run.provider.providerConclusion">结论：{{ selectedRun.run.provider.providerConclusion }}</span>
+          <span v-if="selectedRun.run.provider.providerRunAttempt">attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
+          <span v-if="selectedRun.run.provider.sha">SHA：{{ selectedRun.run.provider.sha }}</span>
         </div>
         <div class="safe-log-scroller">
           <p v-if="taskLogs.length === 0">
@@ -391,10 +474,10 @@ async function executeClearFailed() {
           </p>
           <div v-for="log in taskLogs" :key="`${log.sequence}-${log.created_at}`" class="safe-log-row">
             <code :title="String(log.sequence)">#{{ log.sequence }}</code>
-            <time>{{ log.created_at }}</time>
+            <time>{{ logTimestamp(log) }}</time>
             <strong>{{ log.level }}</strong>
             <code :title="log.code">{{ log.code }}</code>
-            <span>{{ log.safe_message }}</span>
+            <span>{{ logMessage(log) }}</span>
           </div>
           <button v-if="taskLogCursor !== null" class="task-secondary load-more" type="button" @click="selectedRun && loadTaskLogs(selectedRun.task, selectedRun.run, true)">
             加载更早日志
@@ -603,6 +686,32 @@ async function executeClearFailed() {
   gap: 1rem;
 }
 
+.task-history-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.task-group {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.task-group-heading,
+.attempt-switcher,
+.provider-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.task-group-heading h3 { margin: 0; flex: 1; }
+.task-group-heading .task-primary { min-height: 36px; }
+.attempt-selected { border-color: hsl(var(--primary)); }
+.provider-summary { margin-bottom: 1rem; color: hsl(var(--muted-foreground)); font-size: 0.875rem; }
+
 .task-card,
 .task-detail,
 .receipt-card {
@@ -644,7 +753,8 @@ async function executeClearFailed() {
 .task-empty { padding: 1.5rem; color: hsl(var(--muted-foreground)); text-align: center; }
 
 @media (max-width: 1023px) {
-  .task-grid { grid-template-columns: 1fr; }
+  .task-grid,
+  .task-history-grid { grid-template-columns: 1fr; }
 }
 
 .crawlers-page {
