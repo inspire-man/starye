@@ -376,12 +376,16 @@ async function executeClearFailed() {
         <template v-for="template in (['movie', 'manga'] as const)" :key="template">
           <section v-if="canAccessTemplate(template)" class="task-group" :aria-labelledby="`${template}-task-title`">
             <div class="task-group-heading">
-              <h3 :id="`${template}-task-title`">{{ template === 'movie' ? '视频' : '漫画' }}任务历史</h3>
+              <h3 :id="`${template}-task-title`">
+                {{ template === 'movie' ? '视频' : '漫画' }}任务历史
+              </h3>
               <button class="task-primary" type="button" :disabled="taskAction === template" @click="createTask(template)">
                 {{ taskAction === template ? '创建中…' : template === 'movie' ? '创建视频任务' : '创建漫画任务' }}
               </button>
             </div>
-            <p v-if="!crawlerTasks[template].length" class="task-empty">尚未创建</p>
+            <p v-if="!crawlerTasks[template].length" class="task-empty">
+              尚未创建
+            </p>
             <article
               v-for="task in crawlerTasks[template]"
               :key="task.id"
