@@ -78,4 +78,28 @@ describe('provider association registry', () => {
       token: 'must-not-cross-the-boundary',
     })).toThrow('provider_summary_invalid')
   })
+
+  it('derives a server-owned provider URL from the fixed repository metadata', () => {
+    expect(createProviderAssociationSummary({
+      environment: 'starye-org',
+      providerRunId: '123',
+      providerRunAttempt: 2,
+      providerStatus: 'completed',
+      repository: 'inspire-man/starye',
+      ref: 'main',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+      sha: 'b'.repeat(40),
+    })).toMatchObject({
+      environment: 'starye-org',
+      providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/123',
+      repository: 'inspire-man/starye',
+      ref: 'main',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    })
+    expect(() => createProviderAssociationSummary({
+      environment: 'starye-org',
+      providerRunId: '123',
+      providerRunUrl: 'https://attacker.invalid/callback',
+    })).toThrow('provider_summary_invalid')
+  })
 })

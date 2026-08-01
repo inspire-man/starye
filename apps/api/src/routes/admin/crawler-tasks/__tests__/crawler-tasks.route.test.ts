@@ -10,6 +10,9 @@ const crawlerTaskRepository = vi.hoisted(() => ({
   createOrGetActiveRun: vi.fn().mockResolvedValue({ kind: 'created', run: { id: 'run-movie' } }),
   ensureProviderAssociation: vi.fn().mockResolvedValue({ applicationAttempt: 1, runId: 'run-movie' }),
   getProviderAssociation: vi.fn(),
+  getTaskDetail: vi.fn(),
+  listRunLogs: vi.fn(),
+  listTasks: vi.fn(),
   retryRun: vi.fn(),
 }))
 
@@ -225,6 +228,79 @@ describe('admin crawler task routes', () => {
     expect(logs.status).toBe(200)
     expect(logsApp.prepare.mock.calls.at(-1)?.[0]).toContain('log.sequence < ?')
     expect(logsApp.prepare.mock.calls.at(-1)?.[0]).toContain('ORDER BY log.sequence DESC')
+  })
+
+  it('returns an opaque updated-at/id cursor and complete attempt/provider projections', async () => {
+    crawlerTaskRepository.listTasks.mockResolvedValueOnce({
+      nextCursor: 'eyJ1cGRhdGVkQXQiOjEwMCwiaWQiOiJ0YXNrLTIifQ',
+      tasks: [{ id: 'task-1', templateKey: 'movie', updatedAt: 100 }],
+    })
+    crawlerTaskRepository.getTaskDetail.mockResolvedValueOnce({
+      runs: [{
+        attemptNumber: 2,
+        failureCode: 'provider_failed',
+        id: 'run-2',
+        provider: {
+          environment: 'starye-org',
+          providerRunAttempt: 1,
+          providerRunId: '123',
+          providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/123',
+          repository: 'inspire-man/starye',
+          sha: 'a'.repeat(40),
+          workflow: '.github/workflows/daily-movie-crawl.yml',
+        },
+        receipt: null,
+        status: 'failed',
+      }, {
+        attemptNumber: 1,
+        failureCode: 'runner_failed',
+        id: 'run-1',
+        provider: null,
+        receipt: null,
+        status: 'failed',
+      }],
+      task: { id: 'task-1', templateKey: 'movie' },
+    })
+
+    const { app } = createApp()
+    const list = await app.request('/crawler-tasks?template=movie&limit=1')
+    expect(list.status).toBe(200)
+    await expect(list.json()).resolves.toEqual({
+      nextCursor: 'eyJ1cGRhdGVkQXQiOjEwMCwiaWQiOiJ0YXNrLTIifQ',
+      tasks: [{ id: 'task-1', templateKey: 'movie', updatedAt: 100 }],
+    })
+
+    const detail = await app.request('/crawler-tasks/task-1')
+    expect(detail.status).toBe(200)
+    await expect(detail.json()).resolves.toMatchObject({
+      runs: [
+        { attemptNumber: 2, failureCode: 'provider_failed', provider: { providerRunUrl: expect.stringContaining('/actions/runs/123') } },
+        { attemptNumber: 1, failureCode: 'runner_failed', provider: null },
+      ],
+    })
+  })
+
+  it('rejects malformed task history cursors before the repository query', async () => {
+    const { app } = createApp()
+    const response = await app.request('/crawler-tasks?cursor=not-a-valid-cursor')
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect(crawlerTaskRepository.listTasks).not.toHaveBeenCalled()
+  })
+
+  it('keeps log cursors sequence-based and rejects token/header-shaped log fields', async () => {
+    crawlerTaskRepository.listRunLogs.mockResolvedValueOnce({
+      logs: [{ code: 'crawl_progress', level: 'info', sequence: 9 }],
+      nextCursor: 9,
+    })
+    const { app } = createApp({}, [[{ template_key: 'movie' }], [{ id: 'run-movie' }]])
+    const response = await app.request('/crawler-tasks/task-movie/runs/run-movie/logs?cursor=10&limit=2')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      logs: [{ code: 'crawl_progress', level: 'info', sequence: 9 }],
+      nextCursor: 9,
+    })
+    const injected = await app.request('/crawler-tasks/task-movie/runs/run-movie/logs?authorization=Bearer%20TOKEN&cursor=10')
+    expect(injected.status).toBeGreaterThanOrEqual(400)
   })
 
   it('creates the D1 association before a fixed provider dispatch and never projects token-shaped provider fields', async () => {
