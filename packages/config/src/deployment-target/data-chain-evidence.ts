@@ -938,3 +938,417 @@ export function renderDataChainEvidenceMarkdown(evidence: unknown): string {
 
   return lines.join('\n')
 }
+
+/** Phase 19 keeps local contract proof separate from credentialed provider sign-off. */
+export const phase19EvidenceModeValues = ['local_contract', 'credentialed_provider'] as const
+export type Phase19EvidenceMode = (typeof phase19EvidenceModeValues)[number]
+
+export const phase19EvidenceStatusValues = ['passed', 'failed', 'checkpoint'] as const
+export type Phase19EvidenceStatus = (typeof phase19EvidenceStatusValues)[number]
+
+export const phase19EvidenceTemplateValues = ['movie', 'manga'] as const
+export type Phase19EvidenceTemplate = (typeof phase19EvidenceTemplateValues)[number]
+
+export const phase19EvidenceCrudStatusValues = ['passed', 'failed', 'checkpoint'] as const
+export type Phase19EvidenceCrudStatus = (typeof phase19EvidenceCrudStatusValues)[number]
+
+export const phase19EvidenceCommandValues = [
+  'phase19-local-proof',
+  'phase19-provider-signoff',
+] as const
+export type Phase19EvidenceCommand = (typeof phase19EvidenceCommandValues)[number]
+
+export const PHASE19_LOCAL_TARGET = 'local-gateway'
+export const PHASE19_LOCAL_WORKFLOW = 'local-contract'
+export const PHASE19_LOCAL_REPOSITORY = 'local-contract'
+export const PHASE19_LOCAL_REF = 'fixture'
+export const PHASE19_LOCAL_ENVIRONMENT = 'local'
+export const PHASE19_PROVIDER = 'github-actions'
+export const PHASE19_PROVIDER_TARGET = 'starye-org'
+export const PHASE19_PROVIDER_REPOSITORY = 'inspire-man/starye'
+export const PHASE19_PROVIDER_REF = 'main'
+export const PHASE19_PROVIDER_ENVIRONMENT = 'starye-org'
+export const PHASE19_PROVIDER_WORKFLOW_VALUES = [
+  '.github/workflows/daily-manga-crawl.yml',
+  '.github/workflows/daily-movie-crawl.yml',
+] as const
+
+export interface Phase19ProviderFacts {
+  runId: string
+  attempt: number
+  sha: string
+  url: string
+}
+
+export interface Phase19ValidatedReceipt {
+  validated: true
+  source: 'local_runner' | 'remote_provider'
+  template: Phase19EvidenceTemplate
+  primaryContentId: string
+  createdCount: number
+  updatedCount: number
+}
+
+export interface Phase19CrudEvidence {
+  mutation: Phase19EvidenceCrudStatus
+  readback: Phase19EvidenceCrudStatus
+  restore: Phase19EvidenceCrudStatus
+}
+
+export interface Phase19Evidence {
+  version: 1
+  mode: Phase19EvidenceMode
+  status: Phase19EvidenceStatus
+  target: string
+  template: Phase19EvidenceTemplate
+  workflow: string
+  repository: string
+  ref: string
+  environment: string
+  taskId: string
+  runId: string
+  attempt: number
+  provider?: Phase19ProviderFacts
+  callbackEventIds: readonly string[]
+  callbackNonces: readonly string[]
+  validatedReceipt?: Phase19ValidatedReceipt
+  gatewayUrl: string
+  crud: Phase19CrudEvidence
+  command: Phase19EvidenceCommand
+  timestamp: string
+}
+
+export type Phase19EvidenceInput = Omit<Phase19Evidence, 'version' | 'provider' | 'validatedReceipt'> & {
+  provider?: Phase19ProviderFacts
+  validatedReceipt?: Omit<Phase19ValidatedReceipt, 'validated' | 'source'> & Partial<Pick<Phase19ValidatedReceipt, 'validated' | 'source'>>
+}
+
+const phase19EvidenceKeys = [
+  'version',
+  'mode',
+  'status',
+  'target',
+  'template',
+  'workflow',
+  'repository',
+  'ref',
+  'environment',
+  'taskId',
+  'runId',
+  'attempt',
+  'provider',
+  'callbackEventIds',
+  'callbackNonces',
+  'validatedReceipt',
+  'gatewayUrl',
+  'crud',
+  'command',
+  'timestamp',
+] as const
+
+const phase19ProviderKeys = ['runId', 'attempt', 'sha', 'url'] as const
+const phase19ReceiptKeys = ['validated', 'source', 'template', 'primaryContentId', 'createdCount', 'updatedCount'] as const
+const phase19CrudKeys = ['mutation', 'readback', 'restore'] as const
+
+function phase19HasText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 256
+}
+
+function phase19HasValue<T extends string>(values: readonly T[], value: unknown): value is T {
+  return typeof value === 'string' && (values as readonly string[]).includes(value)
+}
+
+function phase19IsPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function phase19IsUtcTimestamp(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
+    && !Number.isNaN(Date.parse(value))
+}
+
+function phase19ProviderUrl(runId: string): string {
+  return `https://github.com/${PHASE19_PROVIDER_REPOSITORY}/actions/runs/${runId}`
+}
+
+function phase19WorkflowForTemplate(template: Phase19EvidenceTemplate): typeof PHASE19_PROVIDER_WORKFLOW_VALUES[number] {
+  return template === 'movie'
+    ? '.github/workflows/daily-movie-crawl.yml'
+    : '.github/workflows/daily-manga-crawl.yml'
+}
+
+function phase19CloneEvidence(evidence: Phase19Evidence): Phase19Evidence {
+  return {
+    version: 1,
+    mode: evidence.mode,
+    status: evidence.status,
+    target: evidence.target,
+    template: evidence.template,
+    workflow: evidence.workflow,
+    repository: evidence.repository,
+    ref: evidence.ref,
+    environment: evidence.environment,
+    taskId: evidence.taskId,
+    runId: evidence.runId,
+    attempt: evidence.attempt,
+    ...(evidence.provider ? { provider: { ...evidence.provider } } : {}),
+    callbackEventIds: [...evidence.callbackEventIds],
+    callbackNonces: [...evidence.callbackNonces],
+    ...(evidence.validatedReceipt ? { validatedReceipt: { ...evidence.validatedReceipt } } : {}),
+    gatewayUrl: evidence.gatewayUrl,
+    crud: { ...evidence.crud },
+    command: evidence.command,
+    timestamp: evidence.timestamp,
+  }
+}
+
+function phase19UnexpectedKey(value: Record<string, unknown>, allowed: readonly string[], label: string, issues: string[]): void {
+  const unexpected = Object.keys(value).find(key => !allowed.includes(key))
+  if (unexpected) {
+    issues.push(`Unexpected ${label} key: ${unexpected}.`)
+  }
+}
+
+/** Deterministically builds a Phase 19 evidence record from an allowlisted input. */
+export function buildPhase19Evidence(input: Phase19EvidenceInput): Phase19Evidence {
+  if (!isRecord(input)) {
+    throw new Error('Phase 19 evidence input must be an object.')
+  }
+  const inputKeys = Object.keys(input).filter(key => (input as Record<string, unknown>)[key] !== undefined)
+  const unexpected = inputKeys.find(key => !phase19EvidenceKeys.includes(key as (typeof phase19EvidenceKeys)[number]))
+  if (unexpected) {
+    throw new Error(`Unexpected Phase 19 evidence key: ${unexpected}.`)
+  }
+
+  const source = input.validatedReceipt?.source ?? (input.mode === 'local_contract' ? 'local_runner' : 'remote_provider')
+  const evidence: Phase19Evidence = {
+    version: 1,
+    mode: input.mode,
+    status: input.status,
+    target: input.target,
+    template: input.template,
+    workflow: input.workflow,
+    repository: input.repository,
+    ref: input.ref,
+    environment: input.environment,
+    taskId: input.taskId,
+    runId: input.runId,
+    attempt: input.attempt,
+    ...(input.provider ? { provider: { ...input.provider } } : {}),
+    callbackEventIds: [...input.callbackEventIds],
+    callbackNonces: [...input.callbackNonces],
+    ...(input.validatedReceipt ? { validatedReceipt: { ...input.validatedReceipt, validated: input.validatedReceipt.validated ?? true, source } } : {}),
+    gatewayUrl: input.gatewayUrl,
+    crud: { ...input.crud },
+    command: input.command,
+    timestamp: input.timestamp,
+  }
+
+  const issues = validatePhase19Evidence(evidence)
+  if (issues.length > 0) {
+    throw new Error(`Invalid Phase 19 evidence: ${issues.join(' ')}`)
+  }
+  return evidence
+}
+
+/** Validates tuple completeness, mode separation, provider binding and redaction boundaries. */
+export function validatePhase19Evidence(value: unknown): readonly string[] {
+  const issues: string[] = []
+  if (!isRecord(value)) {
+    return ['Phase 19 evidence must be an object.']
+  }
+  phase19UnexpectedKey(value, phase19EvidenceKeys, 'Phase 19 evidence', issues)
+
+  if (value.version !== 1)
+    issues.push('Phase 19 evidence version must be 1.')
+  if (!phase19HasValue(phase19EvidenceModeValues, value.mode))
+    issues.push('Phase 19 evidence mode is invalid.')
+  if (!phase19HasValue(phase19EvidenceStatusValues, value.status))
+    issues.push('Phase 19 evidence status is invalid.')
+  if (!phase19HasValue(phase19EvidenceTemplateValues, value.template))
+    issues.push('Phase 19 evidence template is invalid.')
+  for (const key of ['target', 'workflow', 'repository', 'ref', 'environment', 'taskId', 'runId', 'gatewayUrl'] as const) {
+    if (!phase19HasText(value[key]))
+      issues.push(`Phase 19 evidence ${key} must be non-empty.`)
+  }
+  if (!phase19IsPositiveInteger(value.attempt))
+    issues.push('Phase 19 evidence attempt must be a positive integer.')
+  if (!phase19IsUtcTimestamp(value.timestamp))
+    issues.push('Phase 19 evidence timestamp must be a UTC instant.')
+  if (!phase19HasValue(phase19EvidenceCommandValues, value.command))
+    issues.push('Phase 19 evidence command must be an allowlisted label.')
+
+  if (value.mode === 'local_contract') {
+    if (value.target !== PHASE19_LOCAL_TARGET)
+      issues.push('Local contract evidence requires the local target label.')
+    if (value.workflow !== PHASE19_LOCAL_WORKFLOW || value.repository !== PHASE19_LOCAL_REPOSITORY || value.ref !== PHASE19_LOCAL_REF || value.environment !== PHASE19_LOCAL_ENVIRONMENT) {
+      issues.push('Local contract evidence requires local workflow, repository, ref and Environment labels.')
+    }
+    if (value.command !== 'phase19-local-proof')
+      issues.push('Local contract evidence requires the local command label.')
+  }
+
+  if (value.mode === 'credentialed_provider') {
+    if (value.target !== PHASE19_PROVIDER_TARGET)
+      issues.push('Credentialed provider evidence requires the production target label.')
+    if (value.workflow !== phase19WorkflowForTemplate(value.template as Phase19EvidenceTemplate))
+      issues.push('Credentialed provider workflow does not match template.')
+    if (value.repository !== PHASE19_PROVIDER_REPOSITORY || value.ref !== PHASE19_PROVIDER_REF || value.environment !== PHASE19_PROVIDER_ENVIRONMENT) {
+      issues.push('Credentialed provider evidence requires the server-owned repository, ref and Environment.')
+    }
+    if (value.command !== 'phase19-provider-signoff')
+      issues.push('Credentialed provider evidence requires the provider command label.')
+  }
+
+  if (!Array.isArray(value.callbackEventIds) || value.callbackEventIds.some(id => !phase19HasText(id))) {
+    issues.push('Phase 19 callback event IDs must be a string array.')
+  }
+  if (!Array.isArray(value.callbackNonces) || value.callbackNonces.some(nonce => !phase19HasText(nonce))) {
+    issues.push('Phase 19 callback nonces must be a string array.')
+  }
+  const callbackEventIds = Array.isArray(value.callbackEventIds) ? value.callbackEventIds : []
+  const callbackNonces = Array.isArray(value.callbackNonces) ? value.callbackNonces : []
+
+  if (value.mode === 'local_contract' && (callbackEventIds.length > 0 || callbackNonces.length > 0)) {
+    issues.push('Local contract evidence must not contain provider callback facts.')
+  }
+  if (value.mode === 'credentialed_provider' && callbackEventIds.length !== callbackNonces.length) {
+    issues.push('Provider callback event IDs and nonces must have matching cardinality.')
+  }
+  if (value.mode === 'credentialed_provider' && value.status === 'passed' && (callbackEventIds.length === 0 || callbackNonces.length === 0)) {
+    issues.push('Credentialed provider success requires callback event IDs and nonces.')
+  }
+
+  const gateway = typeof value.gatewayUrl === 'string'
+    ? (() => {
+        try {
+          return new URL(value.gatewayUrl)
+        }
+        catch {
+          return undefined
+        }
+      })()
+    : undefined
+  if (!gateway || gateway.pathname !== '/' || gateway.search || gateway.hash) {
+    issues.push('Phase 19 Gateway URL must be an origin URL.')
+  }
+  else if (value.mode === 'local_contract' && value.gatewayUrl !== LOCAL_GATEWAY_ORIGIN) {
+    issues.push('Local contract evidence must use the canonical Gateway URL.')
+  }
+  else if (value.mode === 'credentialed_provider' && (gateway.protocol !== 'https:' || gateway.port !== '')) {
+    issues.push('Credentialed provider evidence requires an HTTPS Gateway origin without a direct port.')
+  }
+
+  if (value.provider !== undefined) {
+    if (!isRecord(value.provider)) {
+      issues.push('Phase 19 provider facts must be an object.')
+    }
+    else {
+      phase19UnexpectedKey(value.provider, phase19ProviderKeys, 'Phase 19 provider', issues)
+      if (typeof value.provider.runId !== 'string' || !/^\d{1,20}$/u.test(value.provider.runId))
+        issues.push('Provider run ID must be numeric.')
+      if (!phase19IsPositiveInteger(value.provider.attempt))
+        issues.push('Provider attempt must be a positive integer.')
+      if (typeof value.provider.sha !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(value.provider.sha))
+        issues.push('Provider SHA must be a lowercase 40 or 64 character hash.')
+      if (typeof value.provider.url !== 'string' || value.provider.url !== phase19ProviderUrl(String(value.provider.runId)))
+        issues.push('Provider URL must be derived from the server-owned repository and run ID.')
+    }
+  }
+  if (value.mode === 'local_contract' && value.provider !== undefined)
+    issues.push('Local contract evidence must not contain provider facts.')
+  if (value.mode === 'credentialed_provider' && value.status === 'passed' && value.provider === undefined)
+    issues.push('Credentialed provider success requires provider run facts.')
+
+  if (value.validatedReceipt !== undefined) {
+    if (!isRecord(value.validatedReceipt)) {
+      issues.push('Validated receipt must be an object.')
+    }
+    else {
+      phase19UnexpectedKey(value.validatedReceipt, phase19ReceiptKeys, 'Phase 19 validated receipt', issues)
+      if (value.validatedReceipt.validated !== true)
+        issues.push('Validated receipt must carry the literal validated=true marker.')
+      if (value.validatedReceipt.source !== (value.mode === 'local_contract' ? 'local_runner' : 'remote_provider'))
+        issues.push('Validated receipt source does not match evidence mode.')
+      if (!phase19HasValue(phase19EvidenceTemplateValues, value.validatedReceipt.template) || value.validatedReceipt.template !== value.template)
+        issues.push('Validated receipt template does not match evidence template.')
+      if (!phase19HasText(value.validatedReceipt.primaryContentId))
+        issues.push('Validated receipt primary content ID must be non-empty.')
+      if (typeof value.validatedReceipt.createdCount !== 'number' || !Number.isSafeInteger(value.validatedReceipt.createdCount) || value.validatedReceipt.createdCount < 0)
+        issues.push('Validated receipt created count is invalid.')
+      if (typeof value.validatedReceipt.updatedCount !== 'number' || !Number.isSafeInteger(value.validatedReceipt.updatedCount) || value.validatedReceipt.updatedCount < 0)
+        issues.push('Validated receipt updated count is invalid.')
+    }
+  }
+  if (value.status === 'passed' && value.validatedReceipt === undefined)
+    issues.push('Passed Phase 19 evidence requires a validated receipt.')
+  if (value.status !== 'passed' && value.validatedReceipt !== undefined)
+    issues.push('Failed/checkpoint Phase 19 evidence must not carry a validated receipt.')
+
+  if (!isRecord(value.crud)) {
+    issues.push('Phase 19 CRUD evidence must be an object.')
+  }
+  else {
+    const crud = value.crud
+    phase19UnexpectedKey(crud, phase19CrudKeys, 'Phase 19 CRUD', issues)
+    for (const key of phase19CrudKeys) {
+      if (!phase19HasValue(phase19EvidenceCrudStatusValues, crud[key]))
+        issues.push(`Phase 19 CRUD ${key} status is invalid.`)
+    }
+    if (value.status === 'passed' && phase19CrudKeys.some(key => crud[key] !== 'passed'))
+      issues.push('Passed Phase 19 evidence requires mutation, readback and restore to pass.')
+  }
+
+  return issues
+}
+
+export function assertValidPhase19Evidence(value: unknown): asserts value is Phase19Evidence {
+  const issues = validatePhase19Evidence(value)
+  if (issues.length > 0)
+    throw new Error(`Invalid Phase 19 evidence: ${issues.join(' ')}`)
+}
+
+export function serializePhase19EvidenceJson(value: unknown): string {
+  assertValidPhase19Evidence(value)
+  return `${JSON.stringify(phase19CloneEvidence(value), null, 2)}\n`
+}
+
+export function renderPhase19EvidenceMarkdown(value: unknown): string {
+  assertValidPhase19Evidence(value)
+  const evidence = phase19CloneEvidence(value)
+  const lines = [
+    '# Phase 19 Evidence',
+    '',
+    `- Mode: ${evidence.mode}`,
+    `- Status: ${evidence.status}`,
+    `- Target: ${evidence.target}`,
+    `- Template: ${evidence.template}`,
+    `- Workflow: ${evidence.workflow}`,
+    `- Repository: ${evidence.repository}`,
+    `- Ref: ${evidence.ref}`,
+    `- Environment: ${evidence.environment}`,
+    `- Task: ${evidence.taskId}`,
+    `- D1 run/attempt: ${evidence.runId} / ${evidence.attempt}`,
+    `- Gateway: ${evidence.gatewayUrl}`,
+    `- Command: ${evidence.command}`,
+    `- Timestamp: ${evidence.timestamp}`,
+    '',
+    '| Provider run | Provider attempt | SHA | Provider URL | Callback event IDs | Callback nonces | Receipt | Mutation | Readback | Restore |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    [
+      evidence.provider?.runId ?? '',
+      evidence.provider?.attempt ?? '',
+      evidence.provider?.sha ?? '',
+      evidence.provider?.url ?? '',
+      evidence.callbackEventIds.join(', '),
+      evidence.callbackNonces.join(', '),
+      evidence.validatedReceipt?.primaryContentId ?? '',
+      evidence.crud.mutation,
+      evidence.crud.readback,
+      evidence.crud.restore,
+    ].join(' | ').replace(/^/, '| ').concat(' |'),
+    '',
+  ]
+  return lines.join('\n')
+}
