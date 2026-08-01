@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import {
   appendBrowserObservation,
   assertRemoteEligibility,
+  buildPhase19Evidence,
   CHECKPOINT_EXIT_CODE,
   createDataChainCandidate,
   createDataChainExecutionReceipt,
@@ -16,10 +17,12 @@ import {
   createResolvedPendingEvidence,
   dataChainCheckpointValues,
   LOCAL_GATEWAY_ORIGIN,
+  phase19EvidenceCommandValues,
   renderDataChainEvidenceMarkdown,
   serializeDataChainEvidenceJson,
   validateDataChainEvidence,
   validateDataChainEvidenceForExitCode,
+  validatePhase19Evidence,
 } from '../data-chain-evidence'
 
 const tuple = {
@@ -606,5 +609,143 @@ describe('phase 13 deterministic evidence contract', () => {
     ]) {
       expect(validateDataChainEvidence(mutateApiReceipt(receipt))).not.toEqual([])
     }
+  })
+})
+
+describe('phase 19 run-bound evidence contract', () => {
+  const localInput = {
+    mode: 'local_contract' as const,
+    status: 'passed' as const,
+    target: 'local-gateway',
+    template: 'movie' as const,
+    workflow: 'local-contract',
+    repository: 'local-contract',
+    ref: 'fixture',
+    environment: 'local',
+    taskId: 'task-local-movie-01',
+    runId: 'run-local-movie-01',
+    attempt: 1,
+    callbackEventIds: [],
+    callbackNonces: [],
+    validatedReceipt: {
+      template: 'movie' as const,
+      primaryContentId: 'movie-local-01',
+      createdCount: 1,
+      updatedCount: 1,
+    },
+    gatewayUrl: LOCAL_GATEWAY_ORIGIN,
+    crud: { mutation: 'passed' as const, readback: 'passed' as const, restore: 'passed' as const },
+    command: 'phase19-local-proof' as const,
+    timestamp: '2026-08-01T00:00:00.000Z',
+  }
+
+  it('requires one explicit tuple and emits deterministic local evidence', () => {
+    const evidence = buildPhase19Evidence(localInput)
+
+    expect(validatePhase19Evidence(evidence)).toEqual([])
+    expect(evidence).toMatchObject({
+      mode: 'local_contract',
+      target: 'local-gateway',
+      taskId: localInput.taskId,
+      runId: localInput.runId,
+      attempt: 1,
+      gatewayUrl: LOCAL_GATEWAY_ORIGIN,
+      crud: localInput.crud,
+    })
+    expect(evidence.provider).toBeUndefined()
+    expect(evidence.callbackEventIds).toEqual([])
+    expect(evidence.callbackNonces).toEqual([])
+    expect(phase19EvidenceCommandValues).toContain(evidence.command)
+  })
+
+  it('requires provider facts, signed callback facts and remote receipt for production success', () => {
+    const production = buildPhase19Evidence({
+      ...localInput,
+      mode: 'credentialed_provider',
+      status: 'passed',
+      target: 'starye-org',
+      template: 'movie',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+      repository: 'inspire-man/starye',
+      ref: 'main',
+      environment: 'starye-org',
+      callbackEventIds: ['evt-provider-success'],
+      callbackNonces: ['nonce-provider-success'],
+      validatedReceipt: { ...localInput.validatedReceipt, source: 'remote_provider' as const },
+      gatewayUrl: 'https://starye.example.test',
+      provider: {
+        runId: '12345',
+        attempt: 1,
+        sha: 'a'.repeat(40),
+        url: 'https://github.com/inspire-man/starye/actions/runs/12345',
+      },
+      command: 'phase19-provider-signoff',
+    })
+
+    expect(validatePhase19Evidence(production)).toEqual([])
+    expect(production.provider?.url).toBe('https://github.com/inspire-man/starye/actions/runs/12345')
+
+    expect(validatePhase19Evidence({
+      ...production,
+      provider: undefined,
+    })).not.toEqual([])
+    expect(validatePhase19Evidence({
+      ...production,
+      provider: { ...production.provider!, url: 'https://example.com/run/12345' },
+    })).not.toEqual([])
+    expect(validatePhase19Evidence({
+      ...production,
+      callbackNonces: [],
+    })).not.toEqual([])
+  })
+
+  it('keeps local and production semantics separate and rejects unsafe fields', () => {
+    const local = buildPhase19Evidence(localInput)
+
+    expect(validatePhase19Evidence({
+      ...local,
+      mode: 'credentialed_provider',
+      target: 'starye-org',
+      status: 'passed',
+    })).not.toEqual([])
+    expect(validatePhase19Evidence({
+      ...local,
+      secret: 'TOKEN',
+    })).not.toEqual([])
+    expect(validatePhase19Evidence({
+      ...local,
+      headers: { authorization: 'TOKEN' },
+    })).not.toEqual([])
+    expect(validatePhase19Evidence({
+      ...local,
+      validatedReceipt: { ...local.validatedReceipt, validated: false },
+    })).not.toEqual([])
+    expect(validatePhase19Evidence({
+      ...local,
+      command: ['pnpm', 'run', 'real-command'],
+    })).not.toEqual([])
+  })
+
+  it('retains checkpoint truth when production facts are incomplete', () => {
+    const checkpoint = buildPhase19Evidence({
+      ...localInput,
+      mode: 'credentialed_provider',
+      status: 'checkpoint',
+      target: 'starye-org',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+      repository: 'inspire-man/starye',
+      ref: 'main',
+      environment: 'starye-org',
+      callbackEventIds: [],
+      callbackNonces: [],
+      validatedReceipt: undefined,
+      gatewayUrl: 'https://starye.example.test',
+      provider: undefined,
+      command: 'phase19-provider-signoff',
+    })
+
+    expect(checkpoint.status).toBe('checkpoint')
+    expect(validatePhase19Evidence(checkpoint)).toEqual([])
+    expect(validatePhase19Evidence({ ...checkpoint, status: 'passed' })).not.toEqual([])
   })
 })
