@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "mode": "local",
+  "timestamp": "2026-07-28T08:14:18.934Z",
+  "targetId": "starye-org",
+  "runId": "p13-60-5b545aa10389b50cfa86e78319665398",
+  "itemCode": "p13-smoke-starye-org-9f9b088c",
+  "itemId": "3dafb33b-435e-48a7-873c-5695856d4d43",
+  "ingestState": "resolved_pending_observation",
+  "aggregate": "pending",
+  "observations": [
+    {
+      "surface": "local_projection",
+      "status": "passed",
+      "receipt": {
+        "source": "local_runner",
+        "capture": "local_projection",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-60-5b545aa10389b50cfa86e78319665398",
+        "itemCode": "p13-smoke-starye-org-9f9b088c",
+        "itemId": "3dafb33b-435e-48a7-873c-5695856d4d43",
+        "surface": "local_projection",
+        "timestamp": "2026-07-28T08:14:18.934Z",
+        "result": "passed",
+        "integrity": "40c74256"
+      }
+    },
+    {
+      "surface": "local_d1_readiness",
+      "status": "passed",
+      "receipt": {
+        "source": "local_runner",
+        "capture": "local_d1_readiness",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-60-5b545aa10389b50cfa86e78319665398",
+        "itemCode": "p13-smoke-starye-org-9f9b088c",
+        "itemId": "3dafb33b-435e-48a7-873c-5695856d4d43",
+        "surface": "local_d1_readiness",
+        "timestamp": "2026-07-28T08:14:18.934Z",
+        "result": "passed",
+        "integrity": "3bd71f8c"
+      }
+    },
+    {
+      "surface": "service_readiness",
+      "status": "passed",
+      "receipt": {
+        "source": "local_runner",
+        "capture": "service_probe",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-60-5b545aa10389b50cfa86e78319665398",
+        "itemCode": "p13-smoke-starye-org-9f9b088c",
+        "itemId": "3dafb33b-435e-48a7-873c-5695856d4d43",
+        "surface": "service_readiness",
+        "timestamp": "2026-07-28T08:14:18.934Z",
+        "result": "passed",
+        "integrity": "04d26e9e"
+      }
+    },
+    {
+      "surface": "gateway_auth",
+      "status": "passed",
+      "path": "/auth/",
+      "origin": "http://localhost:8080",
+      "receipt": {
+        "source": "local_runner",
+        "capture": "gateway_auth",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-60-5b545aa10389b50cfa86e78319665398",
+        "itemCode": "p13-smoke-starye-org-9f9b088c",
+        "itemId": "3dafb33b-435e-48a7-873c-5695856d4d43",
+        "surface": "gateway_auth",
+        "path": "/auth/",
+        "timestamp": "2026-07-28T08:14:18.934Z",
+        "result": "passed",
+        "integrity": "f2005bc6"
+      }
+    },
+    {
+      "surface": "d1",
+      "status": "passed",
+      "itemCount": 1,
+      "receipt": {
+        "source": "local_runner",
+        "capture": "local_fixture_snapshot",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-60-5b545aa10389b50cfa86e78319665398",
+        "itemCode": "p13-smoke-starye-org-9f9b088c",
+        "itemId": "3dafb33b-435e-48a7-873c-5695856d4d43",
+        "surface": "d1",
+        "timestamp": "2026-07-28T08:14:18.934Z",
+        "result": "passed",
+        "integrity": "0c051bab"
+      }
+    },
+    {
+      "surface": "api",
+      "status": "passed",
+      "path": "/api/public/movies/p13-smoke-starye-org-9f9b088c",
+      "origin": "http://localhost:8080",
+      "attempt": 1,
+      "receipt": {
+        "source": "local_runner",
+        "capture": "canonical_api",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-60-5b545aa10389b50cfa86e78319665398",
+        "itemCode": "p13-smoke-starye-org-9f9b088c",
+        "itemId": "3dafb33b-435e-48a7-873c-5695856d4d43",
+        "surface": "api",
+        "path": "/api/public/movies/p13-smoke-starye-org-9f9b088c",
+        "timestamp": "2026-07-28T08:14:18.934Z",
+        "result": "passed",
+        "integrity": "c36e178f"
+      }
+    }
+  ]
+}

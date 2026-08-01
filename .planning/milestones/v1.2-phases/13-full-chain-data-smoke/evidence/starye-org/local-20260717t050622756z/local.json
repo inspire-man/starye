@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "mode": "local",
+  "timestamp": "2026-07-17T05:07:02.032Z",
+  "targetId": "starye-org",
+  "runId": "local-20260717t050622756z",
+  "itemCode": "p13-smoke-starye-org-d48e9a83",
+  "itemId": "2f2bd287-4388-4adb-99cf-1c39f11f8b76",
+  "ingestState": "resolved",
+  "aggregate": "passed",
+  "observations": [
+    {
+      "surface": "local_projection",
+      "status": "passed"
+    },
+    {
+      "surface": "local_d1_readiness",
+      "status": "passed"
+    },
+    {
+      "surface": "service_readiness",
+      "status": "passed"
+    },
+    {
+      "surface": "gateway_auth",
+      "status": "passed",
+      "path": "/auth/",
+      "origin": "http://localhost:8080"
+    },
+    {
+      "surface": "d1",
+      "status": "passed"
+    },
+    {
+      "surface": "api",
+      "status": "passed",
+      "path": "/api/public/movies/p13-smoke-starye-org-d48e9a83",
+      "origin": "http://localhost:8080",
+      "attempt": 1
+    },
+    {
+      "surface": "dashboard",
+      "status": "passed",
+      "path": "/dashboard/movies",
+      "origin": "http://localhost:8080"
+    },
+    {
+      "surface": "viewer",
+      "status": "passed",
+      "path": "/movie/p13-smoke-starye-org-d48e9a83",
+      "origin": "http://localhost:8080"
+    }
+  ]
+}

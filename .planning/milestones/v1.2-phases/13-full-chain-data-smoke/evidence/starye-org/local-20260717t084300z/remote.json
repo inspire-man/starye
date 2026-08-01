@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "mode": "remote",
+  "timestamp": "2026-07-17T08:57:15.081Z",
+  "targetId": "starye-org",
+  "runId": "local-20260717t084300z",
+  "itemCode": "p13-smoke-starye-org-6f6f56fb",
+  "itemId": "3ef173ae-d80e-4bec-938a-4351f95d0256",
+  "ingestState": "resolved",
+  "aggregate": "passed",
+  "observations": [
+    {
+      "surface": "remote_preflight",
+      "status": "passed"
+    },
+    {
+      "surface": "d1",
+      "status": "passed",
+      "itemCount": 10
+    },
+    {
+      "surface": "api",
+      "status": "passed",
+      "path": "/api/public/movies/p13-smoke-starye-org-6f6f56fb",
+      "attempt": 1
+    },
+    {
+      "surface": "dashboard",
+      "status": "passed",
+      "path": "/dashboard/movies"
+    },
+    {
+      "surface": "viewer",
+      "status": "passed",
+      "path": "/movie/p13-smoke-starye-org-6f6f56fb"
+    }
+  ]
+}

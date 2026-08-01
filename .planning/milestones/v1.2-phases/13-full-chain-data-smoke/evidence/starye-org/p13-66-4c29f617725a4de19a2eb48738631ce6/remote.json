@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "mode": "remote",
+  "timestamp": "2026-07-28T13:01:23.498Z",
+  "targetId": "starye-org",
+  "runId": "p13-66-4c29f617725a4de19a2eb48738631ce6",
+  "itemCode": "p13-smoke-starye-org-7ed63aa1",
+  "itemId": "e9d9ea93-8f4f-4052-ab88-632785e2b805",
+  "ingestState": "resolved_pending_observation",
+  "aggregate": "checkpoint",
+  "observations": [
+    {
+      "surface": "remote_preflight",
+      "status": "passed",
+      "receipt": {
+        "source": "remote_provider",
+        "capture": "remote_preflight",
+        "mode": "remote",
+        "targetId": "starye-org",
+        "runId": "p13-66-4c29f617725a4de19a2eb48738631ce6",
+        "itemCode": "p13-smoke-starye-org-7ed63aa1",
+        "itemId": "e9d9ea93-8f4f-4052-ab88-632785e2b805",
+        "surface": "remote_preflight",
+        "timestamp": "2026-07-28T13:01:23.498Z",
+        "result": "passed",
+        "integrity": "3b15f60f"
+      }
+    },
+    {
+      "surface": "d1",
+      "status": "passed",
+      "itemCount": 1,
+      "receipt": {
+        "source": "remote_provider",
+        "capture": "remote_fixture_snapshot",
+        "mode": "remote",
+        "targetId": "starye-org",
+        "runId": "p13-66-4c29f617725a4de19a2eb48738631ce6",
+        "itemCode": "p13-smoke-starye-org-7ed63aa1",
+        "itemId": "e9d9ea93-8f4f-4052-ab88-632785e2b805",
+        "surface": "d1",
+        "timestamp": "2026-07-28T13:01:23.498Z",
+        "result": "passed",
+        "integrity": "bdd2bddf"
+      }
+    },
+    {
+      "surface": "api",
+      "status": "passed",
+      "path": "/api/public/movies/p13-smoke-starye-org-7ed63aa1",
+      "attempt": 1,
+      "receipt": {
+        "source": "remote_provider",
+        "capture": "canonical_api",
+        "mode": "remote",
+        "targetId": "starye-org",
+        "runId": "p13-66-4c29f617725a4de19a2eb48738631ce6",
+        "itemCode": "p13-smoke-starye-org-7ed63aa1",
+        "itemId": "e9d9ea93-8f4f-4052-ab88-632785e2b805",
+        "surface": "api",
+        "path": "/api/public/movies/p13-smoke-starye-org-7ed63aa1",
+        "timestamp": "2026-07-28T13:01:23.498Z",
+        "result": "passed",
+        "integrity": "68f03d93"
+      }
+    },
+    {
+      "surface": "dashboard",
+      "status": "passed",
+      "path": "/dashboard/movies",
+      "receipt": {
+        "source": "browser_observer",
+        "capture": "browser_navigation",
+        "mode": "remote",
+        "targetId": "starye-org",
+        "runId": "p13-66-4c29f617725a4de19a2eb48738631ce6",
+        "itemCode": "p13-smoke-starye-org-7ed63aa1",
+        "itemId": "e9d9ea93-8f4f-4052-ab88-632785e2b805",
+        "surface": "dashboard",
+        "path": "/dashboard/movies",
+        "timestamp": "2026-07-28T13:14:27.420Z",
+        "result": "passed",
+        "integrity": "02fc2649"
+      }
+    },
+    {
+      "surface": "viewer",
+      "status": "checkpoint",
+      "checkpoint": "canonical_viewer_unavailable",
+      "path": "/movie/p13-smoke-starye-org-7ed63aa1"
+    }
+  ]
+}

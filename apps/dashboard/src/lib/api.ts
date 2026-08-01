@@ -475,7 +475,7 @@ export const api = {
     retryCrawlerRun: (taskId: string, runId: string) =>
       apiFetch<{ kind: 'created' | 'existing_active_run', run: CrawlerRun }>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/runs/${encodeURIComponent(runId)}/retry`, {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ confirmed: true }),
       }),
 
     getAuditLogs: (params?: Record<string, any>) => {

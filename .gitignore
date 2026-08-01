@@ -112,5 +112,31 @@ test-*.txt
 # Timestamped data-chain smoke snapshots
 /.planning/phases/*/evidence/*/local-*/
 
+# Archived Phase 13 local-run diagnostics and session material
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/.untracked-session/
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/cookie-dbs/
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/evidence/**/.iab-ipc/
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/_*
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.exit
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.pid
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.err
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.stderr
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.stdout
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.out
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.body
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.status
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.attempt
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.bad-observe-checkpoint
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.ps1
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.mjs
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.py
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.json
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.txt
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.token
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.raw
+/.planning/milestones/v1.2-phases/13-full-chain-data-smoke/13-*.b64
+**/*.attempt
+**/*.bad-observe-checkpoint
+
 # Locally generated Wrangler target configs
 /apps/*/.target-wrangler.local-dev-*.toml

@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "mode": "remote",
+  "timestamp": "2026-07-23T08:13:33.333Z",
+  "targetId": "starye-org",
+  "runId": "p13-41-379b38f7ce29f2a621097bbd42ccfe3b",
+  "itemCode": "p13-smoke-starye-org-c656ccd0",
+  "itemId": "03a9a090-c747-421e-b40b-fda7b8c378b2",
+  "ingestState": "resolved_pending_observation",
+  "aggregate": "checkpoint",
+  "observations": [
+    {
+      "surface": "remote_preflight",
+      "status": "passed",
+      "receipt": {
+        "source": "remote_provider",
+        "capture": "remote_preflight",
+        "mode": "remote",
+        "targetId": "starye-org",
+        "runId": "p13-41-379b38f7ce29f2a621097bbd42ccfe3b",
+        "itemCode": "p13-smoke-starye-org-c656ccd0",
+        "itemId": "03a9a090-c747-421e-b40b-fda7b8c378b2",
+        "surface": "remote_preflight",
+        "timestamp": "2026-07-23T08:13:33.333Z",
+        "result": "passed",
+        "integrity": "8f8d7b7a"
+      }
+    },
+    {
+      "surface": "d1",
+      "status": "passed",
+      "itemCount": 1,
+      "receipt": {
+        "source": "remote_provider",
+        "capture": "remote_fixture_snapshot",
+        "mode": "remote",
+        "targetId": "starye-org",
+        "runId": "p13-41-379b38f7ce29f2a621097bbd42ccfe3b",
+        "itemCode": "p13-smoke-starye-org-c656ccd0",
+        "itemId": "03a9a090-c747-421e-b40b-fda7b8c378b2",
+        "surface": "d1",
+        "timestamp": "2026-07-23T08:13:33.333Z",
+        "result": "passed",
+        "integrity": "4562a062"
+      }
+    },
+    {
+      "surface": "api",
+      "status": "passed",
+      "path": "/api/public/movies/p13-smoke-starye-org-c656ccd0",
+      "attempt": 1,
+      "receipt": {
+        "source": "remote_provider",
+        "capture": "canonical_api",
+        "mode": "remote",
+        "targetId": "starye-org",
+        "runId": "p13-41-379b38f7ce29f2a621097bbd42ccfe3b",
+        "itemCode": "p13-smoke-starye-org-c656ccd0",
+        "itemId": "03a9a090-c747-421e-b40b-fda7b8c378b2",
+        "surface": "api",
+        "path": "/api/public/movies/p13-smoke-starye-org-c656ccd0",
+        "timestamp": "2026-07-23T08:13:33.333Z",
+        "result": "passed",
+        "integrity": "97792272"
+      }
+    },
+    {
+      "surface": "dashboard",
+      "status": "checkpoint",
+      "checkpoint": "dashboard_auth_unavailable",
+      "path": "/dashboard/movies"
+    }
+  ]
+}

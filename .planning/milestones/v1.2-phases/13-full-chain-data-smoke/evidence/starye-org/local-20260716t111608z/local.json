@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "mode": "local",
+  "timestamp": "2026-07-16T03:16:31.166Z",
+  "targetId": "starye-org",
+  "runId": "local-20260716t111608z",
+  "itemCode": "p13-smoke-starye-org-af253a74",
+  "itemId": null,
+  "ingestState": "pre_ingest",
+  "aggregate": "checkpoint",
+  "observations": [
+    {
+      "surface": "service_readiness",
+      "status": "checkpoint",
+      "checkpoint": "local_prerequisite_unmet"
+    }
+  ]
+}

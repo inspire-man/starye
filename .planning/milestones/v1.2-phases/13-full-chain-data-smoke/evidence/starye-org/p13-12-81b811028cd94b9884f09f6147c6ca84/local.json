@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "mode": "local",
+  "timestamp": "2026-07-18T21:23:53.612Z",
+  "targetId": "starye-org",
+  "runId": "p13-12-81b811028cd94b9884f09f6147c6ca84",
+  "itemCode": "p13-smoke-starye-org-a7ed839e",
+  "itemId": null,
+  "ingestState": "pre_ingest",
+  "aggregate": "checkpoint",
+  "observations": [
+    {
+      "surface": "gateway_auth",
+      "status": "checkpoint",
+      "checkpoint": "gateway_auth_unavailable",
+      "path": "/auth/",
+      "origin": "http://localhost:8080"
+    }
+  ]
+}

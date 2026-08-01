@@ -49,17 +49,20 @@ adminCrawlers.get('/stats', async (c) => {
 
   const stats: any = {}
 
-  // 代理池状态（如果配置了）
-  // eslint-disable-next-line node/prefer-global/process
-  const proxyPoolEnabled = !!process.env.PROXY_POOL
+  // 代理池状态（如果配置了）。Cloudflare Workers 没有 Node `process`；
+  // 读取可选绑定时使用 request-scoped env，避免 Dashboard 统计请求崩溃。
+  const runtimeEnv = c.env as AppEnv['Bindings'] & {
+    PROXY_POOL?: string
+    PROXY_HEALTH_CHECK_INTERVAL?: string
+    PROXY_ROTATION_STRATEGY?: string
+  }
+  const proxyPoolEnabled = !!runtimeEnv.PROXY_POOL
   if (proxyPoolEnabled) {
     stats.proxyPool = {
       enabled: true,
       status: 'Proxy pool status available in crawler logs',
-      // eslint-disable-next-line node/prefer-global/process
-      healthCheckInterval: Number(process.env.PROXY_HEALTH_CHECK_INTERVAL) || 300000,
-      // eslint-disable-next-line node/prefer-global/process
-      strategy: process.env.PROXY_ROTATION_STRATEGY || 'on-failure',
+      healthCheckInterval: Number(runtimeEnv.PROXY_HEALTH_CHECK_INTERVAL) || 300000,
+      strategy: runtimeEnv.PROXY_ROTATION_STRATEGY || 'on-failure',
     }
   }
   else {

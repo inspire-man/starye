@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "mode": "local",
+  "timestamp": "2026-07-25T03:04:07.699Z",
+  "targetId": "starye-org",
+  "runId": "p13-49-ff6c8d29fd91408c90b22e8e4935d947",
+  "itemCode": "p13-smoke-starye-org-d7c0de43",
+  "itemId": "7b4ba711-1068-403a-aebe-314b9f187844",
+  "ingestState": "resolved_pending_observation",
+  "aggregate": "checkpoint",
+  "observations": [
+    {
+      "surface": "local_projection",
+      "status": "passed",
+      "receipt": {
+        "source": "local_runner",
+        "capture": "local_projection",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-49-ff6c8d29fd91408c90b22e8e4935d947",
+        "itemCode": "p13-smoke-starye-org-d7c0de43",
+        "itemId": "7b4ba711-1068-403a-aebe-314b9f187844",
+        "surface": "local_projection",
+        "timestamp": "2026-07-25T03:04:07.699Z",
+        "result": "passed",
+        "integrity": "4a056d42"
+      }
+    },
+    {
+      "surface": "local_d1_readiness",
+      "status": "passed",
+      "receipt": {
+        "source": "local_runner",
+        "capture": "local_d1_readiness",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-49-ff6c8d29fd91408c90b22e8e4935d947",
+        "itemCode": "p13-smoke-starye-org-d7c0de43",
+        "itemId": "7b4ba711-1068-403a-aebe-314b9f187844",
+        "surface": "local_d1_readiness",
+        "timestamp": "2026-07-25T03:04:07.699Z",
+        "result": "passed",
+        "integrity": "1410997c"
+      }
+    },
+    {
+      "surface": "service_readiness",
+      "status": "passed",
+      "receipt": {
+        "source": "local_runner",
+        "capture": "service_probe",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-49-ff6c8d29fd91408c90b22e8e4935d947",
+        "itemCode": "p13-smoke-starye-org-d7c0de43",
+        "itemId": "7b4ba711-1068-403a-aebe-314b9f187844",
+        "surface": "service_readiness",
+        "timestamp": "2026-07-25T03:04:07.699Z",
+        "result": "passed",
+        "integrity": "18703860"
+      }
+    },
+    {
+      "surface": "gateway_auth",
+      "status": "passed",
+      "path": "/auth/",
+      "origin": "http://localhost:8080",
+      "receipt": {
+        "source": "local_runner",
+        "capture": "gateway_auth",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-49-ff6c8d29fd91408c90b22e8e4935d947",
+        "itemCode": "p13-smoke-starye-org-d7c0de43",
+        "itemId": "7b4ba711-1068-403a-aebe-314b9f187844",
+        "surface": "gateway_auth",
+        "path": "/auth/",
+        "timestamp": "2026-07-25T03:04:07.699Z",
+        "result": "passed",
+        "integrity": "fbcb524a"
+      }
+    },
+    {
+      "surface": "d1",
+      "status": "passed",
+      "itemCount": 1,
+      "receipt": {
+        "source": "local_runner",
+        "capture": "local_fixture_snapshot",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-49-ff6c8d29fd91408c90b22e8e4935d947",
+        "itemCode": "p13-smoke-starye-org-d7c0de43",
+        "itemId": "7b4ba711-1068-403a-aebe-314b9f187844",
+        "surface": "d1",
+        "timestamp": "2026-07-25T03:04:07.699Z",
+        "result": "passed",
+        "integrity": "42891447"
+      }
+    },
+    {
+      "surface": "api",
+      "status": "passed",
+      "path": "/api/public/movies/p13-smoke-starye-org-d7c0de43",
+      "origin": "http://localhost:8080",
+      "attempt": 1,
+      "receipt": {
+        "source": "local_runner",
+        "capture": "canonical_api",
+        "mode": "local",
+        "targetId": "starye-org",
+        "runId": "p13-49-ff6c8d29fd91408c90b22e8e4935d947",
+        "itemCode": "p13-smoke-starye-org-d7c0de43",
+        "itemId": "7b4ba711-1068-403a-aebe-314b9f187844",
+        "surface": "api",
+        "path": "/api/public/movies/p13-smoke-starye-org-d7c0de43",
+        "timestamp": "2026-07-25T03:04:07.699Z",
+        "result": "passed",
+        "integrity": "c5bdf368"
+      }
+    },
+    {
+      "surface": "dashboard",
+      "status": "checkpoint",
+      "checkpoint": "dashboard_auth_unavailable",
+      "path": "/dashboard/movies",
+      "origin": "http://localhost:8080"
+    }
+  ]
+}
