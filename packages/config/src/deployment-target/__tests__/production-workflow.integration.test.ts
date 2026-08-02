@@ -3,7 +3,7 @@
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   prepareTargetMutation,
   productionCrawlerRequiredEnvironmentKeys,
@@ -86,7 +86,10 @@ describe('production target/workflow integration boundary', () => {
     expect(output).toContain('github_environment=starye-org')
     expect(output).not.toContain('fixture-cloudflare-token')
 
-    const execute = vi.fn(() => ({ exitCode: 0, stdout: 'production child completed' }))
+    const execute = vi.fn((_command: string, _args: readonly string[], _environment: NodeJS.ProcessEnv) => ({
+      exitCode: 0,
+      stdout: 'production child completed',
+    }))
     await expect(runPreparedTargetMutation({
       entry: 'crawler-optimized',
       preparedContextPath: prepared.preparedContextPath,
