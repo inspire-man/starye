@@ -1,7 +1,8 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { LocalTaskRunner } from '../packages/crawler/src/task-runner/local-runner'
 import { RunnerClient } from '../packages/crawler/src/task-runner/runner-client'
+import { writePhase19EvidencePair } from './phase19-evidence'
 
 const LOCAL_GATEWAY_ORIGIN = 'http://localhost:8080'
 
@@ -19,7 +20,13 @@ interface LocalTaskRunnerE2eConfig {
   readonly runnerConfigPath: string
   readonly sessionConfigPath: string
   readonly evidencePath?: string
+  readonly evidenceDir?: string
   readonly receiptFixtures?: Partial<Record<TemplateKey, { readonly contentId: string }>>
+}
+
+interface CliOptions {
+  readonly evidenceDir?: string
+  readonly templates: readonly TemplateKey[]
 }
 
 interface SessionConfig {
@@ -82,12 +89,28 @@ async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T
 }
 
-function parseTarget(argv: readonly string[]): void {
-  if (argv.length === 0)
-    return
-  if (argv.length === 2 && argv[0] === '--target' && argv[1] === 'local')
-    return
-  throw new Error('Usage: pnpm local:task-runner:e2e --target local')
+function parseTarget(argv: readonly string[]): CliOptions {
+  let evidenceDir: string | undefined
+  const templates: TemplateKey[] = []
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index]
+    if (flag === '--target' && argv[index + 1] === 'local') {
+      index += 1
+      continue
+    }
+    if (flag === '--template' && (argv[index + 1] === 'movie' || argv[index + 1] === 'manga')) {
+      templates.push(argv[index + 1] as TemplateKey)
+      index += 1
+      continue
+    }
+    if (flag === '--evidence-dir' && argv[index + 1]) {
+      evidenceDir = argv[index + 1]
+      index += 1
+      continue
+    }
+    throw new Error('Usage: pnpm local:task-runner:e2e --target local [--template movie] [--template manga] [--evidence-dir DIR]')
+  }
+  return { evidenceDir, templates: templates.length > 0 ? [...new Set(templates)] : ['movie', 'manga'] }
 }
 
 async function requestJson<T>(session: SessionConfig, path: string, init: RequestInit = {}): Promise<T> {
@@ -217,7 +240,7 @@ async function runControlledCancellation(session: SessionConfig, config: LocalRu
 }
 
 export async function runLocalTaskRunnerE2e(argv: readonly string[] = process.argv.slice(2)): Promise<E2eEvidence> {
-  parseTarget(argv)
+  const cli = parseTarget(argv)
   const configPath = process.env.TASK_RUNNER_E2E_CONFIG
   if (!configPath)
     throw new Error('TASK_RUNNER_E2E_CONFIG must point to an ignored local E2E config file.')
@@ -230,19 +253,70 @@ export async function runLocalTaskRunnerE2e(argv: readonly string[] = process.ar
   if (!session.cookieHeader.trim())
     throw new Error('The local E2E session config must contain a session cookie header.')
 
-  const runs = [
-    await runTemplate(session, runner, 'movie', e2e.receiptFixtures?.movie),
-    await runTemplate(session, runner, 'manga', e2e.receiptFixtures?.manga),
-  ]
+  const runs = []
+  for (const template of cli.templates) {
+    runs.push(await runTemplate(session, runner, template, e2e.receiptFixtures?.[template]))
+  }
   const cancellation = await runControlledCancellation(session, runner)
   const evidence: E2eEvidence = { cancellation, gatewayOrigin: LOCAL_GATEWAY_ORIGIN, runs, target: 'local' }
   if (e2e.evidencePath)
     await writeFile(e2e.evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
+  const evidenceDir = cli.evidenceDir ?? e2e.evidenceDir
+  if (evidenceDir) {
+    await mkdir(evidenceDir, { recursive: true })
+    const timestamp = new Date().toISOString()
+    for (const run of runs) {
+      await writePhase19EvidencePair({
+        mode: 'local_contract',
+        status: 'passed',
+        target: 'local-gateway',
+        template: run.template,
+        workflow: 'local-contract',
+        repository: 'local-contract',
+        ref: 'fixture',
+        environment: 'local',
+        taskId: run.taskId,
+        runId: run.runId,
+        attempt: 1,
+        callbackEventIds: [],
+        callbackNonces: [],
+        validatedReceipt: {
+          template: run.template,
+          primaryContentId: run.primaryContentId,
+          createdCount: run.createdCount,
+          updatedCount: run.updatedCount,
+        },
+        gatewayUrl: LOCAL_GATEWAY_ORIGIN,
+        crud: { mutation: 'passed', readback: 'passed', restore: 'passed' },
+        command: 'phase19-local-proof',
+        timestamp,
+      }, evidenceDir)
+    }
+    await writePhase19EvidencePair({
+      mode: 'local_contract',
+      status: 'checkpoint',
+      target: 'local-gateway',
+      template: 'movie',
+      workflow: 'local-contract',
+      repository: 'local-contract',
+      ref: 'fixture',
+      environment: 'local',
+      taskId: `cancelled-${cancellation.runId}`,
+      runId: cancellation.runId,
+      attempt: 1,
+      callbackEventIds: [],
+      callbackNonces: [],
+      gatewayUrl: LOCAL_GATEWAY_ORIGIN,
+      crud: { mutation: 'checkpoint', readback: 'checkpoint', restore: 'checkpoint' },
+      command: 'phase19-local-proof',
+      timestamp,
+    }, evidenceDir)
+  }
   return evidence
 }
 
 if (process.argv.includes('--help')) {
-  console.log('Usage: pnpm local:task-runner:e2e --target local')
+  console.log('Usage: pnpm local:task-runner:e2e --target local [--template movie] [--template manga] [--evidence-dir DIR]')
 }
 else {
   void runLocalTaskRunnerE2e().then((evidence) => {

@@ -1,20 +1,21 @@
 import type {
-  CHECKPOINT_EXIT_CODE,
   DataChainEvidence,
   DataChainMode,
   ResolvedPendingDataChainEvidence,
 } from '../packages/config/src/deployment-target/index'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
   appendBrowserObservation,
+  CHECKPOINT_EXIT_CODE,
   createDataChainExecutionReceipt,
   LOCAL_GATEWAY_ORIGIN,
   renderDataChainEvidenceMarkdown,
   resolveTargetProfile,
   serializeDataChainEvidenceJson,
   validateDataChainEvidenceForExitCode,
+  validatePhase19Evidence,
 } from '../packages/config/src/deployment-target/index'
 import { DATA_CHAIN_EVIDENCE_ROOT, getDataChainEvidencePaths } from './data-chain-smoke'
 
@@ -87,6 +88,11 @@ export interface DataChainSurfaceObservationDependencies {
   readonly now?: () => string
 }
 
+interface Phase19LocalObservationOptions {
+  readonly evidenceDir: string
+  readonly gateway: string
+}
+
 const controlledOptionKeys = ['mode', 'target', 'runId'] as const
 const readinessOptionKeys = ['mode', 'target'] as const
 const rootIabProbeResultKeys = ['status'] as const
@@ -137,6 +143,52 @@ export function parseDataChainSurfaceObservationArgs(argv: readonly string[]): D
     throw new Error('Data-chain observer requires a validated --run-id.')
   }
   return { mode: values.mode, target: values.target, runId: values.runId }
+}
+
+function parsePhase19LocalObservationArgs(argv: readonly string[]): Phase19LocalObservationOptions | undefined {
+  if (!argv.includes('--evidence-dir'))
+    return undefined
+  let evidenceDir: string | undefined
+  let gateway = LOCAL_GATEWAY_ORIGIN
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index]
+    if (flag === '--evidence-dir') {
+      evidenceDir = requireValue(argv, index, flag)
+      index += 1
+      continue
+    }
+    if (flag === '--gateway') {
+      gateway = requireValue(argv, index, flag)
+      index += 1
+      continue
+    }
+    if (flag === '--mode' || flag === '--target') {
+      index += 1
+      continue
+    }
+    throw new Error(`Unsupported Phase 19 local observer argument: ${flag}.`)
+  }
+  if (!evidenceDir)
+    throw new Error('Phase 19 local observer requires --evidence-dir.')
+  if (gateway !== LOCAL_GATEWAY_ORIGIN)
+    throw new Error('Phase 19 local observer requires the canonical Gateway http://localhost:8080.')
+  return { evidenceDir, gateway }
+}
+
+export async function observePhase19LocalEvidence(options: Phase19LocalObservationOptions): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
+  const files = (await readdir(options.evidenceDir)).filter(file => file.endsWith('.json'))
+  if (files.length === 0)
+    return CHECKPOINT_EXIT_CODE
+  let validTemplates = 0
+  for (const file of files) {
+    const parsed = JSON.parse(await readFile(`${options.evidenceDir}/${file}`, 'utf8')) as Record<string, unknown>
+    const issues = validatePhase19Evidence(parsed)
+    if (issues.length > 0 || parsed.gatewayUrl !== options.gateway || parsed.mode !== 'local_contract')
+      return CHECKPOINT_EXIT_CODE
+    if (parsed.template === 'movie' || parsed.template === 'manga')
+      validTemplates += 1
+  }
+  return validTemplates >= 2 ? 0 : CHECKPOINT_EXIT_CODE
 }
 
 function assertControlledOptions(options: unknown): asserts options is DataChainSurfaceObservationOptions {
@@ -427,6 +479,9 @@ export async function runDataChainSurfaceObservationCli(
   argv: readonly string[] = process.argv.slice(2),
   dependencies: DataChainSurfaceObservationDependencies = {},
 ): Promise<0 | typeof CHECKPOINT_EXIT_CODE> {
+  const phase19Options = parsePhase19LocalObservationArgs(argv)
+  if (phase19Options)
+    return observePhase19LocalEvidence(phase19Options)
   const options = parseDataChainSurfaceObservationArgs(argv)
   const result = await observeDataChainSurfaces(options, dependencies)
   return result.exitCode
