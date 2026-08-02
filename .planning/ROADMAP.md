@@ -125,24 +125,24 @@ Plans:
 3. RUNBOOK 说明 GitHub 凭据、日志留存、失联 run、取消、重试和回滚；不暴露秘密内容。
 4. 本地和生产均有从后台任务创建到入库后内容 CRUD 的可重复验收证据。
 
-**Plans:** 1/6 plans executed
+**Plans:** 5/6 plans executed
 
 **Wave 1**
 
 - [x] 19-01-PLAN.md — API 完整 task/attempt/read model、稳定游标、provider/receipt 脱敏投影。
-- [ ] 19-02-PLAN.md — local/production evidence schema、JSON+Markdown builder 与模式隔离。
+- [x] 19-02-PLAN.md — local/production evidence schema、JSON+Markdown builder 与模式隔离。
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 19-03-PLAN.md — Dashboard 分组历史、同页详情、attempt/log 分页、可见性刷新、取消/重试。
+- [x] 19-03-PLAN.md — Dashboard 分组历史、同页详情、attempt/log 分页、可见性刷新、取消/重试。
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 19-04-PLAN.md — validated receipt 到既有 Movies/Comics 编辑器的受控交接与可回退 CRUD 测试。
+- [x] 19-04-PLAN.md — validated receipt 到既有 Movies/Comics 编辑器的受控交接与可回退 CRUD 测试。
 
 **Wave 4** *(blocked on Wave 3 and evidence contract completion)*
 
-- [ ] 19-05-PLAN.md — Gateway 双模板 local runner → receipt → CRUD evidence 与取消 checkpoint。
+- [x] 19-05-PLAN.md — Gateway 双模板 local runner → receipt → CRUD evidence 与取消 checkpoint。
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
