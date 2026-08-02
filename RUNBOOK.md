@@ -492,6 +492,29 @@ done
 
 **配置人：** _（填写）_
 
+## 5. Crawler provider operations and evidence
+
+### 5.1 Fixed provider tuple and metadata-only preflight
+
+Production crawler dispatch is limited to the server-owned `starye-org` target, the registered movie/manga workflow, `inspire-man/starye@main`, and the `starye-org` Environment. Before dispatch, record only GitHub App metadata, installation permissions, Environment name, and the presence of existing secret names. Secret values, JWTs, cookies, authentication headers, and raw callback payloads stay in the managed secret store and never enter chat or evidence.
+
+The relevant secret names and consumers are `CRAWLER_SECRET` (API, crawler, CI), `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (crawler), and the existing GitHub App installation credentials (CI/provider adapter). Rotation is: add the replacement secret, run target-profile preflight, dispatch one new attempt, verify signed callbacks and receipt, then revoke the old secret.
+
+### 5.2 Retention and terminal evidence
+
+Keep task, run, attempt, provider association, terminal receipt, and CRUD readback/restore metadata for operational history. Detailed crawler logs are retained for 90 days and then removed by the repository expiry job; verify the expiry count and preserve only aggregate evidence. Evidence records contain IDs, timestamps, workflow/repository/ref/Environment, provider SHA/URL, callback IDs/nonces, and controlled content IDs, never secret material or raw crawler output.
+
+### 5.3 Lost, cancellation, retry, and partial ingest
+
+- `provider_lost` or a late callback: freeze the current attempt, preserve redacted logs, reconcile provider association, and do not mutate content or reuse the attempt.
+- `cancel_requested`: wait for the runner heartbeat to confirm cancellation; keep the state and logs, then inspect the terminal run before deciding the next action.
+- Failed or partial ingest: freeze receipt handoff and existing-editor mutations, preserve the tuple/checkpoint, and inspect D1/API logs before any repair.
+- Retry: create a new administrator-confirmed attempt with a new run tuple. Keep the old attempt and its failure/checkpoint history linked.
+
+### 5.4 Rollback
+
+For a provider or content regression, freeze new dispatches, record the affected task/run/attempt, and follow the existing Worker, Pages, or D1 rollback procedure in sections 3.1, 3.2, and 4. Re-run selected-target preflight after configuration repair. Restore content through the existing editor using the validated `primaryContentId`; never repair by copying a raw receipt or provider payload.
+
 ---
 
 ## 10. ADMIN_GITHUB_ID 白名单配置

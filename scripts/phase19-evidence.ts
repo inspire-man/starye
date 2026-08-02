@@ -183,6 +183,17 @@ async function main(): Promise<void> {
     return
   }
 
+  const validateIndex = args.indexOf('--validate')
+  if (validateIndex >= 0) {
+    const inputPath = args[validateIndex + 1]
+    if (!inputPath)
+      throw new Error('Usage: tsx scripts/phase19-evidence.ts --validate evidence.json')
+    const input = await readInput(inputPath)
+    const evidence = buildPhase19Evidence(input)
+    process.stdout.write(`${JSON.stringify({ valid: true, mode: evidence.mode, template: evidence.template, status: evidence.status })}\n`)
+    return
+  }
+
   const inputIndex = args.indexOf('--input')
   const outputIndex = args.indexOf('--output-dir')
   if (inputIndex < 0 || outputIndex < 0 || !args[inputIndex + 1] || !args[outputIndex + 1]) {

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "mode": "credentialed_provider",
+  "status": "checkpoint",
+  "target": "starye-org",
+  "template": "movie",
+  "workflow": ".github/workflows/daily-movie-crawl.yml",
+  "repository": "inspire-man/starye",
+  "ref": "main",
+  "environment": "starye-org",
+  "taskId": "pending-human-preflight",
+  "runId": "pending-new-attempt",
+  "attempt": 1,
+  "callbackEventIds": [],
+  "callbackNonces": [],
+  "gatewayUrl": "https://starye.example.test",
+  "crud": {
+    "mutation": "checkpoint",
+    "readback": "checkpoint",
+    "restore": "checkpoint"
+  },
+  "command": "phase19-provider-signoff",
+  "timestamp": "2026-08-02T00:00:00.000Z"
+}
