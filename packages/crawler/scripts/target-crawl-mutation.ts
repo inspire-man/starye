@@ -112,6 +112,17 @@ function redactedDiagnostic(environment: NodeJS.ProcessEnv): {
   }
 }
 
+function productionErrorDiagnostic(error: unknown, environment: NodeJS.ProcessEnv): string {
+  const raw = error instanceof Error
+    ? `${error.name}: ${error.message}`
+    : `UnknownError: ${String(error)}`
+  const secretValues = productionCrawlerEnvironmentKeys
+    .map(key => environment[key])
+    .filter((value): value is string => Boolean(value && value.length > 0))
+  const redacted = secretValues.reduce((message, value) => message.split(value).join('[redacted]'), raw)
+  return redacted.replace(/\s+/gu, ' ').slice(0, 400)
+}
+
 function isPreparedCrawlerContext(value: unknown, contextPath: string): value is PreparedCrawlerContext {
   if (!value || typeof value !== 'object') {
     return false
@@ -310,7 +321,8 @@ async function runProductionCrawlerMutation(
       template: production.template,
     }
   }
-  catch {
+  catch (error) {
+    console.error(`Production crawler diagnostic: ${productionErrorDiagnostic(error, environment)}`)
     if (!terminalEmitted) {
       try {
         await client.progress(sequence++, { observed: contentIds.size })
