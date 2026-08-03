@@ -45,6 +45,8 @@ describe('github Actions client', () => {
       ok: true,
       value: { accepted: true, kind: 'dispatch_accepted' },
     })
+    expect(calls[0].init?.headers).toMatchObject({ 'User-Agent': 'starye-api' })
+    expect(calls[1].init?.headers).toMatchObject({ 'User-Agent': 'starye-api' })
     expect(String(calls[1].input)).toBe('https://api.github.com/repos/inspire-man/starye/actions/workflows/.github%2Fworkflows%2Fdaily-movie-crawl.yml/dispatches')
     expect(JSON.parse(String(calls[1].init?.body))).toEqual({
       inputs: { attempt: '2', run_id: 'run-1', target: 'starye-org', template: 'movie' },
@@ -157,3 +159,4 @@ describe('github Actions client', () => {
     })
   })
 })
+
