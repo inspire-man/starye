@@ -108,6 +108,7 @@ jobs:
 
   crawl:
     needs: resolve-target
+    if: ${{ always() && needs.resolve-target.result == 'success' }}
     runs-on: ubuntu-latest
     environment: ${{ needs.resolve-target.outputs.github_environment }}
     env:
@@ -145,3 +146,4 @@ jobs:
       - name: Remove generated target files
         if: always()
         run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
+
