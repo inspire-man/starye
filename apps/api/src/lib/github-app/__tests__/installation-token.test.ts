@@ -40,6 +40,7 @@ describe('github installation token exchange', () => {
     expect(String(calls[0].input)).toBe('https://api.github.com/app/installations/67890/access_tokens')
     expect(calls[0].init?.headers).toMatchObject({
       'Accept': 'application/vnd.github+json',
+      'User-Agent': 'starye-api',
       'X-GitHub-Api-Version': '2022-11-28',
     })
     expect(JSON.parse(String(calls[0].init?.body))).toEqual({
@@ -97,3 +98,4 @@ describe('github installation token exchange', () => {
     })
   })
 })
+
