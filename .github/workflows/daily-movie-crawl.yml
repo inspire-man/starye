@@ -108,6 +108,7 @@ jobs:
 
   crawl:
     needs: resolve-target
+    if: ${{ always() && needs.resolve-target.result == 'success' }}
     runs-on: ubuntu-latest
     environment: ${{ needs.resolve-target.outputs.github_environment }}
     env:

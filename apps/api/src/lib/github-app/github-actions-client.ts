@@ -186,6 +186,7 @@ export function createGitHubActionsClient(input: {
             'Accept': 'application/vnd.github+json',
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
+            'User-Agent': 'starye-api',
             'X-GitHub-Api-Version': '2022-11-28',
           },
           method: request.method,
