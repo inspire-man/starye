@@ -106,9 +106,9 @@ describe('registry-owned production crawler adapters', () => {
     })
 
     expect(result).toMatchObject({ attempt: 2, contentIds: ['MOV-001'], operation: 'movie-production', providerRunId: '77', runId: 'run-1', status: 'succeeded', template: 'movie' })
-    expect(events.map(event => event.type)).toEqual(['provider_started', 'log', 'heartbeat', 'progress', 'heartbeat', 'succeeded'])
+    expect(events.map(event => event.type)).toEqual(['provider_started', 'heartbeat', 'log', 'heartbeat', 'progress', 'heartbeat', 'succeeded'])
     expect(client.providerStarted).toHaveBeenCalledWith(expect.objectContaining({ attempt: 2, providerRunAttempt: 1, providerRunId: '77', runId: 'run-1', sha: 'a'.repeat(40) }))
-    expect(client.succeeded).toHaveBeenCalledWith(6, ['MOV-001'], { createdCount: 1 })
+    expect(client.succeeded).toHaveBeenCalledWith(7, ['MOV-001'], { createdCount: 1 })
   })
 
   it('runs manga production through the fixed entry and stops before crawler work when cancellation is requested', async () => {
@@ -144,8 +144,8 @@ describe('registry-owned production crawler adapters', () => {
     const serializedEvents = JSON.stringify(events)
     expect(serializedEvents).not.toContain(leakedError)
     expect(serializedEvents).not.toContain('crawler-secret-fixture')
-    expect(events.map(event => event.type)).toEqual(['provider_started', 'log', 'heartbeat', 'heartbeat', 'progress', 'failed'])
-    expect(events.at(-1)?.args).toEqual([6, 'partial_ingest'])
+    expect(events.map(event => event.type)).toEqual(['provider_started', 'heartbeat', 'log', 'heartbeat', 'heartbeat', 'progress', 'failed'])
+    expect(events.at(-1)?.args).toEqual([7, 'partial_ingest'])
   })
 
   it('rejects free-form operation, provider identity, template, and empty receipt inputs before success', async () => {
@@ -159,7 +159,7 @@ describe('registry-owned production crawler adapters', () => {
       createActionsEventClient: () => client,
       executeMovie: async () => ({ contentIds: [] }),
     })).rejects.toThrow('Production crawler operation failed.')
-    expect(client.failed).toHaveBeenCalledWith(6, 'receipt_missing')
+    expect(client.failed).toHaveBeenCalledWith(7, 'receipt_missing')
   })
 
   it('records a successful receipt when cancellation is observed after the provider already accepted it', async () => {

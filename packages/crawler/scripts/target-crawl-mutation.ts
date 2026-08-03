@@ -246,6 +246,20 @@ async function runProductionCrawlerMutation(
     ? createMovieAdapter(config as JavBusCrawlerConfig, dependencies.executeMovie)
     : createMangaAdapter(config, dependencies.executeManga)
   try {
+    // Dispatch claim leaves the run in dispatching; heartbeat first to enter running before log/progress events.
+    if (await checkpoint()) {
+      await client.cancelled(sequence++)
+      return {
+        attempt: binding.attempt,
+        contentIds: [],
+        itemCount: 0,
+        operation: production.operation,
+        providerRunId: binding.providerRunId,
+        runId: binding.runId,
+        status: 'cancelled',
+        template: production.template,
+      }
+    }
     await client.log(sequence++, 'production crawler started')
     const result = await adapter.execute({
       candidate: {
