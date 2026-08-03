@@ -209,7 +209,8 @@ async function runProductionCrawlerMutation(
   const started = await client.providerStarted(binding)
   if (!started.accepted)
     throw new Error('target-crawl-mutation rejected an unbound production provider.')
-  let sequence = 1
+  // The control-plane dispatch claim consumes sequence 1 before the provider starts.
+  let sequence = 2
   const contentIds = new Set<string>()
   const observeContentId = (value: string) => {
     if (typeof value !== 'string' || value.trim().length === 0 || value.trim().length > 128)
