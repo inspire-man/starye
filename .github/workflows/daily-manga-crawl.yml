@@ -140,7 +140,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts validate-dispatch
       - id: prepare
-        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command crawler-comic --github-output "$GITHUB_OUTPUT"
+        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command crawler-comic --run-id "${{ needs.resolve-target.outputs.run_id }}" --github-output "$GITHUB_OUTPUT"
       - name: Run selected manga entry
         run: pnpm target-profile run-prepared-entry --entry crawler-comic --prepared-context "${{ steps.prepare.outputs.prepared_context_path }}"
       - name: Remove generated target files

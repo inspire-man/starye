@@ -51,6 +51,7 @@ export interface TargetProfileCliOptions {
   pagesRedirectInputPath?: string
   mutationCommand?: TargetMutationCommand
   githubOutput?: string
+  runId?: string
   entry?: TargetRemoteEntry
   preparedContextPath?: string
   help: boolean
@@ -157,6 +158,9 @@ export function parseTargetProfileCliArgs(argv: readonly string[]): TargetProfil
       case '--github-output':
         options.githubOutput = consumeValue()
         break
+      case '--run-id':
+        options.runId = consumeValue()
+        break
       case '--prepared-context':
         options.preparedContextPath = consumeValue()
         break
@@ -181,7 +185,7 @@ export function formatTargetProfileHelp(): string {
   target-profile project-local --target <id> --check|--write [--env-root <path>]
   target-profile preflight --target <id> --scope <local|ci|remote> --command <command> [--env-root <path>] [--live]
   target-profile run-pages-build --surface <dashboard|auth|blog|movie|comic> --pages-build-env-path <generated-path> --pages-redirect-input-path <generated-path>
-  target-profile prepare-mutation --target <id> --scope ci --command <closed-command> --ci-environment <name> --github-output <path> [--surface <surface>]
+  target-profile prepare-mutation --target <id> --scope ci --command <closed-command> --ci-environment <name> --github-output <path> [--run-id <id>] [--surface <surface>]
   target-profile run-prepared-entry --entry <closed-entry> --prepared-context <generated-path>
 
 Preflight reads exactly the four local consumer files below --env-root, or the repository root when omitted.
@@ -376,7 +380,7 @@ async function runPrepareMutation(options: TargetProfileCliOptions): Promise<voi
     ciEnvironment: options.ciEnvironment,
     environment: process.env,
     githubOutput: options.githubOutput,
-    runId: `ci-${process.pid}`,
+    runId: options.runId ?? `ci-${process.pid}`,
     appDirectories: { api: path.join(root, 'apps/api'), gateway: path.join(root, 'apps/gateway') },
     runDirectory: path.join(root, '.target-runs'),
     ...(options.pagesSurface ? { pagesSurface: options.pagesSurface } : {}),

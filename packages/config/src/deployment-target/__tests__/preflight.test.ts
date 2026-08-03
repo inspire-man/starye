@@ -163,6 +163,29 @@ describe('target-profile CLI parser', () => {
     })
   })
 
+  it('accepts the control-plane run id for prepared provider mutations', async () => {
+    const { parseTargetProfileCliArgs } = await loadTargetProfileCli()
+
+    expect(parseTargetProfileCliArgs([
+      'prepare-mutation',
+      '--target',
+      'starye-org',
+      '--scope',
+      'ci',
+      '--command',
+      'crawler-comic',
+      '--ci-environment',
+      'starye-org',
+      '--run-id',
+      'run-20260803-01',
+      '--github-output',
+      'GITHUB_OUTPUT',
+    ])).toMatchObject({
+      commandName: 'prepare-mutation',
+      runId: 'run-20260803-01',
+    })
+  })
+
   it('documents the separate local profile and CI credential boundary', async () => {
     const { formatTargetProfileHelp } = await loadTargetProfileCli()
     const help = formatTargetProfileHelp()

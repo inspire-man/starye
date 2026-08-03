@@ -190,6 +190,7 @@ describe('phase 18 GitHub Actions crawler orchestration contract', () => {
       expect(source, file).not.toContain('actions-event-client.ts succeeded 3')
       expect(source, file).not.toContain('actions-event-client.ts failed 3')
       expect(source, file).toContain('run-prepared-entry')
+      expect(source, file).toContain(`--run-id "${githubExpression('needs.resolve-target.outputs.run_id')}"`)
       expect(source, file).toContain('environment: starye-org')
       expect(source, file).toContain(`environment: ${githubExpression('needs.resolve-target.outputs.github_environment')}`)
       expect(source, file).toContain('if: always()')
