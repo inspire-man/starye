@@ -98,6 +98,7 @@ export async function withGitHubInstallationToken<T>(
           'Accept': 'application/vnd.github+json',
           'Authorization': `Bearer ${appJwt.value}`,
           'Content-Type': 'application/json',
+          'User-Agent': 'starye-api',
           'X-GitHub-Api-Version': '2022-11-28',
         },
         method: 'POST',
@@ -131,3 +132,4 @@ export async function withGitHubInstallationToken<T>(
 
   return { ok: true, value: await operation(body.token) }
 }
+
