@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
-import { createCrawlerTaskLogCleanupHandler } from '../index'
+import { createCrawlerTaskLogCleanupHandler, createCrawlerTaskScheduledHandler } from '../index'
 
 describe('crawler task log cleanup schedule', () => {
   it('delegates one detailed-log cleanup through waitUntil without direct task/run mutation', async () => {
@@ -15,6 +15,27 @@ describe('crawler task log cleanup schedule', () => {
     expect(cleanup).toHaveBeenCalledWith(env, expect.any(Date))
     expect(waitUntil).toHaveBeenCalledOnce()
     await expect(waitUntil.mock.calls[0]?.[0]).resolves.toBe(7)
+  })
+
+  it('runs cleanup, expired-run sweep, and provider reconciliation in one scheduled batch', async () => {
+    const cleanup = vi.fn(async () => 7)
+    const sweep = vi.fn(async () => ['run-expired'])
+    const reconcile = vi.fn(async () => ({ observed: 1 }))
+    const waitUntil = vi.fn()
+    const handler = createCrawlerTaskScheduledHandler(cleanup, sweep, reconcile)
+    const env = { DB: {} }
+
+    handler({}, env as never, { waitUntil })
+
+    expect(cleanup).toHaveBeenCalledWith(env, expect.any(Date))
+    expect(sweep).toHaveBeenCalledWith(env, expect.any(Date))
+    expect(reconcile).toHaveBeenCalledWith(env, expect.any(Date))
+    expect(waitUntil).toHaveBeenCalledOnce()
+    await expect(waitUntil.mock.calls[0]?.[0]).resolves.toEqual([
+      { status: 'fulfilled', value: 7 },
+      { status: 'fulfilled', value: ['run-expired'] },
+      { status: 'fulfilled', value: { observed: 1 } },
+    ])
   })
 
   it('configures a daily cron trigger for the repository-scoped cleanup', async () => {

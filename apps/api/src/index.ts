@@ -238,6 +238,7 @@ Starye 是一个现代化的内容聚合平台，支持漫画、电影和演员�
 export type AppType = typeof routes
 
 type CrawlerTaskLogCleanup = (env: Pick<AppEnv['Bindings'], 'DB'>, at: Date) => Promise<number>
+type CrawlerTaskLeaseSweep = (env: Pick<AppEnv['Bindings'], 'DB'>, at: Date) => Promise<readonly string[]>
 type CrawlerTaskReconciliation = (env: AppEnv['Bindings'], at: Date) => Promise<unknown>
 
 interface ScheduledTaskContext {
@@ -246,6 +247,10 @@ interface ScheduledTaskContext {
 
 function purgeCrawlerTaskLogDetails(env: Pick<AppEnv['Bindings'], 'DB'>, at: Date): Promise<number> {
   return createCrawlerTaskRepository(createDb(env.DB)).purgeExpiredRunLogs(at)
+}
+
+function sweepExpiredCrawlerTaskRuns(env: Pick<AppEnv['Bindings'], 'DB'>, at: Date): Promise<readonly string[]> {
+  return createCrawlerTaskRepository(createDb(env.DB), { now: () => at }).sweepExpiredRuns()
 }
 
 async function reconcileCrawlerTaskProviderRuns(env: AppEnv['Bindings'], at: Date): Promise<unknown> {
@@ -278,12 +283,15 @@ async function reconcileCrawlerTaskProviderRuns(env: AppEnv['Bindings'], at: Dat
 
 export function createCrawlerTaskScheduledHandler(
   cleanup: CrawlerTaskLogCleanup = purgeCrawlerTaskLogDetails,
+  sweep: CrawlerTaskLeaseSweep = sweepExpiredCrawlerTaskRuns,
   reconcile: CrawlerTaskReconciliation = reconcileCrawlerTaskProviderRuns,
 ) {
   return (_controller: unknown, env: AppEnv['Bindings'], context: ScheduledTaskContext) => {
+    const at = new Date()
     context.waitUntil(Promise.allSettled([
-      cleanup(env, new Date()),
-      reconcile(env, new Date()),
+      cleanup(env, at),
+      sweep(env, at),
+      reconcile(env, at),
     ]))
   }
 }
