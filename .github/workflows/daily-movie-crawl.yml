@@ -136,6 +136,8 @@ jobs:
       - uses: actions/setup-node@v6.3.0
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - name: Install Chromium for crawler
+        run: pnpm --filter @starye/crawler exec puppeteer browsers install chrome
       - name: Validate manual dispatch binding
         if: github.event_name == 'workflow_dispatch'
         run: pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts validate-dispatch
@@ -146,4 +148,3 @@ jobs:
       - name: Remove generated target files
         if: always()
         run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
-
