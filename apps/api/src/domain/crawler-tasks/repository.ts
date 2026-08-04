@@ -1176,10 +1176,13 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
     if (input.event.type === 'runner_succeeded') {
       const provider = await getProviderAssociation(input.runId)
-      if (provider && (provider.applicationAttempt !== input.attempt
-        || !provider.providerRunId
-        || provider.providerStatus !== 'completed'
-        || provider.providerConclusion !== 'success')) {
+      const providerIsBoundToAttempt = provider
+        && provider.applicationAttempt === input.attempt
+        && Boolean(provider.providerRunId)
+      const providerAllowsRunnerSuccess = providerIsBoundToAttempt
+        && (provider.providerStatus === 'in_progress'
+          || (provider.providerStatus === 'completed' && provider.providerConclusion === 'success'))
+      if (provider && !providerAllowsRunnerSuccess) {
         const outcome = { accepted: false, reason: 'provider_success_required' }
         await recordRunnerEvent({
           bodySha256: input.bodySha256,

@@ -356,7 +356,7 @@ describe('crawler task repository', () => {
     expect(failure.rows[0]?.terminal_at).not.toBeNull()
   })
 
-  it('binds provider facts with exact snapshots, keeps schedule registration idempotent, and gates receipt success', async () => {
+  it('binds provider facts with exact snapshots, keeps schedule registration idempotent, and accepts a validated receipt while the provider runs', async () => {
     const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
     if (created.kind !== 'created')
       throw new Error('expected provider run')
@@ -398,6 +398,21 @@ describe('crawler task repository', () => {
       template: 'movie',
       workflow: '.github/workflows/daily-movie-crawl.yml',
     })).resolves.toMatchObject({ accepted: true })
+    await client.execute({
+      args: ['provider-movie', 'Provider movie', 'provider-movie', 'MOVIE-PROVIDER', 1, 1],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'provider-running-success',
+      event: { actor: 'runner', receipt: { contentIds: ['MOVIE-PROVIDER'], templateKey: 'movie' }, sequence: 2, type: 'runner_succeeded' },
+      eventId: 'provider-running-success-event',
+      keyId: 'key-current',
+      nonce: 'provider-running-success-nonce',
+      receipt: { contentIds: ['MOVIE-PROVIDER'], createdCount: 1, templateKey: 'movie', updatedCount: 0 },
+      runId: created.run.id,
+      sequence: 2,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'succeeded' } })
     await expect(repository.recordProviderObservation({
       attempt: 1,
       conclusion: 'success',
