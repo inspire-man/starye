@@ -8,56 +8,38 @@
 
 **"部署在公网、能稳定日常使用的个人内容中台"** —— 所有子应用在同一域名下协同工作，能长期保持可访问、可阅读、可观看。其他一切（特性完整度、多用户、正式审核流）都可以退让，但"能用、不崩"必须守住。
 
-## Latest Archived Milestone: v1.2 Cloudflare 账户/域名切换与全链路发布验证
+## Latest Archived Milestone: v1.3 后台爬虫任务与内容运维
 
-**Closeout:** `override_closeout` on 2026-07-29. The milestone is archived with a current evidence matrix, but the selected-production Viewer terminal proof is deferred rather than claimed as production success.
+**Closeout:** `override_closeout` on 2026-08-04. All 18 requirements, 4 phase verifications, 4 integration flows, and 4 end-to-end flows passed. Eight historical artifact-audit items were acknowledged as deferred in `.planning/STATE.md`.
 
 **Delivered and deferred scope:**
 
-- 完成显式 TargetProfile、四个本地 env consumer 投影、target-first preflight、部署/workflow contract 和运行手册验证。
-- 完成本地 terminal proof、selected-production preflight/D1/API/Dashboard tuple，以及 30 行 evidence matrix reconciliation。
-- 延期 selected-production Viewer terminal proof；p13-66 永久冻结在 `canonical_viewer_unavailable`，不重试或改写。
-- 保持 Cloudflare free-tier-first、R2 必要资产、正文图外链语义和文档 owner 边界。
+- Phase 16-19 delivered the controlled movie/manga task templates, D1 task/run/attempt/log/lease audit model, independent HMAC runner callbacks, local runner, GitHub Actions production orchestration, Dashboard operations, and canonical RUNBOOK guidance.
+- Local and credentialed production evidence both complete the receipt → existing content CRUD chain. Production tuple `4af1519d-f12b-4418-8bba-1c2536ee3e2b` / `9ef31b31-f66a-4e11-927e-c890edbdf209` / provider `30890327381` is recorded in the phase archive.
+- `SUN-064` metadata mutation/readback/restore passed; its production receipt currently reports `players=0`, so player availability remains a follow-up observation.
+- The unrelated `@starye/config` CI lint baseline remains tracked as non-causal technical debt.
 
-## Current Milestone: v1.3 后台爬虫任务与内容运维
+## Current Milestone: Planning next milestone
 
-**Goal:** 作者可在本地与生产后台受控发起视频、漫画爬虫任务，观察完整执行状态和日志，完成入库后进行内容增删改。
-
-**Target features:**
-
-- D1 持久化爬虫任务、执行记录和结构化日志。
-- 固定视频、漫画任务模板，支持排队、运行、成功、失败、取消和重试。
-- 本地 runner 与 GitHub Actions 共用 API、状态模型和验收链路；生产继续由 GitHub Actions 实际执行 crawler。
-- 后台管理已入库内容，并以实际爬取、入库、增删改完成验收。
+**Goal:** 通过 `$gsd-new-milestone` 定义下一组需求、验收边界和 phased roadmap。
 
 ## Current State
 
-**v1.3 complete:** Phase 16-19 已交付受控 movie/manga task 模板、D1 task/run/attempt/log/lease 审计模型、独立 HMAC runner 回调、本地 runner、GitHub Actions 生产编排、Dashboard 运维、secret-free RUNBOOK，以及 local 与 credentialed production 的 receipt → 既有内容 CRUD 证据。生产 tuple `4af1519d-f12b-4418-8bba-1c2536ee3e2b` / `9ef31b31-f66a-4e11-927e-c890edbdf209` / provider `30890327381` 已完成并可审计。
+v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations 和 receipt-backed content CRUD；后续需求从新里程碑重新定义。
 
-生产证据中的 `SUN-064` 当前仍观察到 `players=0`，因此公共详情页加载问题作为入库播放器观察保留；本次验收的元数据 mutation/readback/restore 已通过。
-
-**Latest archived milestone:** v1.2 Cloudflare 账户/域名切换与全链路发布验证（2026-07-29，override closeout）
+**Latest archived milestone:** v1.3 后台爬虫任务与内容运维（2026-08-04，override closeout）
 
 **Archive evidence:**
 
-- `.planning/milestones/v1.2-MILESTONE-AUDIT.md` — audit records 26/30 verified and the four deferred Viewer-proof requirements
-- `.planning/milestones/v1.2-ROADMAP.md` — full v1.2 phase roadmap archive
-- `.planning/milestones/v1.2-REQUIREMENTS.md` — archived v1.2 requirements and override outcomes
+- `.planning/milestones/v1.3-MILESTONE-AUDIT.md` — 18/18 requirements, 4/4 phases, 4/4 integration flows, and 4/4 end-to-end flows, with two non-blocking tech-debt observations
+- `.planning/milestones/v1.3-ROADMAP.md` — full v1.3 phase roadmap archive
+- `.planning/milestones/v1.3-REQUIREMENTS.md` — archived v1.3 requirements and traceability outcomes
+- `.planning/milestones/v1.3-phases/` — archived phase plans, summaries, verification, UAT, and local/production evidence
 
-**Repository posture after v1.1:**
+**Deferred historical evidence:**
 
-- 漫画章节正文图默认保持 external/source URL，不再把“进 R2”当成业务正确性的隐含条件。
-- R2 使用已收口到必要资产与短期诊断用途，upload/crawler/admin/script 共用同一套 policy-aware storage semantics。
-- root docs、RUNBOOK、`.planning` 和 `docs/archive/` 的 owner 边界已固定，后续里程碑应继续沿 canonical owner 更新。
-- v1.2 已归档；target-profile、runtime/workflow projections、runbook 和 evidence reconciliation 均已落地。
-- Phase 13 仅完成到 selected-production Dashboard tuple；Viewer terminal proof 被明确延期，不构成生产成功断言。
-- 下一个里程碑从新需求开始；只有显式选择 Viewer proof 时才新建独立 fresh-run 工作。
-
-## Deferred v1.2 Evidence
-
-- DATA-05、DATA-07 和 TEST-05 是 partial；DATA-06 在 `canonical_viewer_unavailable` 处 blocked。
-- 该结论与冻结 p13-66 证据不可被静态矩阵、旧 summary 或未来未授权运行替代。
-- 新 `.planning/REQUIREMENTS.md` 由下一里程碑工作流创建。
+- The v1.2 selected-production Viewer terminal proof remains frozen at `canonical_viewer_unavailable` in the v1.2 archive.
+- The eight historical debug sessions acknowledged at v1.3 close remain listed in `.planning/STATE.md` for future explicit triage.
 
 <details>
 <summary>Archived Milestone Focus - v1.1 存储成本控制与代码/文件整理</summary>
@@ -150,14 +132,17 @@
 - `0121cc9` dashboard 加 SillyTavern 入口
 - `4cefbe6` movie-app advance search + personalized recommendation + new release
 
-**当前状态（2026-07-29）**：
+**当前状态（2026-08-04）**：
 
 - v1.0 与 v1.1 都已完成并归档到 `.planning/milestones/`
 - v1.1 已通过 milestone audit：5/5 phases complete，15/15 plans complete，22/22 v1 requirements satisfied
-- v1.2 已以 override closeout 归档；下一步是定义新里程碑的 `.planning/REQUIREMENTS.md` 和 phased roadmap
+- v1.2 已以 override closeout 归档；其 selected-production Viewer proof 保持历史 deferred 状态
+- v1.3 已以 override closeout 归档：18/18 requirements、4/4 phases、4/4 integration flows、4/4 end-to-end flows 均通过
+- 下一步通过 `$gsd-new-milestone` 定义新里程碑的 `.planning/REQUIREMENTS.md` 和 phased roadmap
 - selected-production Viewer proof 保留为未来独立范围，当前不存在可重试的 Phase 13 carrier
 - 已接受的历史归档债仍主要来自 v1.0：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
 - v1.1 已把 R2 必要资产边界、external/source image semantics、shared storage helper、policy-aware admin/script behavior 和 canonical doc ownership 一并收口
+- v1.3 的 `SUN-064 players=0` 与 `@starye/config` lint baseline 已记录为后续技术债，不改变本次 metadata CRUD 与端到端验收结论
 
 **已知风险区**：见 [`.planning/codebase/CONCERNS.md`](.planning/codebase/CONCERNS.md) —— v1 Active 需求会优先覆盖里面影响"日常使用"的问题。
 
@@ -192,13 +177,14 @@
 | R2 上传改为 purpose allowlist | 通用 `images/` 上传路径无法表达成本边界，必须从 API 与 crawler 双侧阻止正文图误入 R2 | ✓ Validated in Phase 8 |
 | AGENTS.md 只保留入口级规则 | 当前文件过长，容易埋没真正必须执行的 repo 边界；细节迁入 RUNBOOK/.planning 或专题文档 | ✓ Validated in Phase 9 |
 | 文档 owner 固定为 README / AGENTS / RUNBOOK / `.planning` / `docs` / `docs/archive` / `openspec` | 避免 root docs 和旧存储文档继续漂移成多份 source of truth | ✓ Validated in Phase 9 |
-| v1.2 以 Cloudflare 账户/域名切换与真实全链路验证为主线 | 需要证明部署与数据链路可迁移、可复现、可验收，而不是继续扩大存储/文档整理 scope | — Pending |
+| v1.2 以 Cloudflare 账户/域名切换与真实全链路验证为主线 | 需要证明部署与数据链路可迁移、可复现、可验收，而不是继续扩大存储/文档整理 scope | ✓ Accepted at v1.2 closeout |
 | v1.2 证据矩阵以当前 verifier 为状态源 | 历史 summary 和 checkbox 仅表明 ownership；`SATISFIED`、`PARTIAL`、`FAILED/CHECKPOINT` 必须保留原始语义 | ✓ Validated in Phase 15 |
 | v1.2 以 override closeout 归档 | 生产 Viewer 终态证明未达成，用户接受将其与 8 个历史 debug sessions 记录为延期项 | ✓ Accepted at v1.2 closeout |
 | v1.3 生产 crawler 继续由 GitHub Actions 执行 | Cloudflare API 负责受控编排与状态汇总，Node/Puppeteer crawler 保持在现有 GitHub Actions 执行环境 | ✓ Validated in Phase 19 |
 | v1.3 task/run 控制面以 D1 为唯一可审计事实 | 本地 runner 与 GitHub Actions 需共享同一状态、attempt、日志和受限 command 语义 | ✓ Validated in Phase 16 |
 | v1.3 生产成功必须绑定完整 provider tuple | 只有匹配的 D1 task/run/attempt、provider run、签名事件、validated receipt 与既有编辑器 CRUD readback/restore 才能标记生产通过 | ✓ Validated in Phase 19 |
 | v1.3 receipt 复用既有内容编辑器 | 生产验收沿用 `primaryContentId` 进入现有 Dashboard/API/remote D1 CRUD，不新增第二套编辑器 | ✓ Validated in Phase 19 |
+| v1.3 以 override closeout 归档 | 8 个历史 artifact-audit items 被明确记录为 deferred；`SUN-064 players=0` 与 lint baseline 保留为非阻塞技术债 | ✓ Accepted at v1.3 closeout |
 
 ## Evolution
 

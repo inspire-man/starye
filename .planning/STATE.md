@@ -2,18 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: 后台爬虫任务与内容运维
-current_phase: 19
-status: completed
-stopped_at: Phase 19 complete; v1.3 ready for milestone audit
-last_updated: "2026-08-04T10:12:16.184Z"
+status: Awaiting next milestone
+closeout_type: override_closeout
+stopped_at: Milestone v1.3 archived; ready for next milestone definition
+last_updated: "2026-08-04T12:16:02.056Z"
 last_activity: 2026-08-04
-last_activity_desc: Phase 19 complete
+last_activity_desc: Milestone v1.3 completed, archived, and tagged
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 19
   completed_plans: 19
   percent: 100
+current_phase: 19
 current_phase_name: Dashboard Operations and End-to-End Proof
 ---
 
@@ -27,23 +28,23 @@ current_phase_name: Dashboard Operations and End-to-End Proof
 
 **Core Value:** 部署在公网、能稳定日常使用的个人内容中台 —— "能用、不崩" 优先于 "功能全"。
 
-**Current Milestone:** v1.3 后台爬虫任务与内容运维。以 D1 控制面连接本地 runner 与 GitHub Actions，验证视频/漫画 crawler 从后台任务到内容 CRUD 的完整链路。
+**Current Milestone:** Planning next milestone. v1.3 后台爬虫任务与内容运维已完成归档。
 
 **Project Docs:**
 
 - `.planning/PROJECT.md` — Core value, constraints, key decisions
-- `.planning/ROADMAP.md` — v1.3 Phases 16-19 and requirement coverage
-- `.planning/REQUIREMENTS.md` — v1.3 scoped and mapped requirements
+- `.planning/ROADMAP.md` — shipped milestone index and next-milestone entry point
+- `.planning/milestones/v1.3-REQUIREMENTS.md` — archived v1.3 scoped requirements and traceability
 - `.planning/MILESTONES.md` — shipped milestone summaries and archive links
 - `.planning/research/SUMMARY.md` — v1.3 crawler control-plane research
 - `.planning/codebase/ARCHITECTURE.md` — Brownfield system overview
 
 ## Current Position
 
-Phase: 19 (Dashboard Operations and End-to-End Proof) — COMPLETE
-Plan: 6 of 6 complete
-Status: All v1.3 phases complete; ready for milestone audit
-Last activity: 2026-08-04 — Phase 19 complete
+Phase: Milestone v1.3 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-04 — Milestone v1.3 completed and archived
 
 ## Performance Metrics
 
@@ -116,7 +117,7 @@ Last activity: 2026-08-04 — Phase 19 complete
 ### Deferred Verification
 
 - [ ] Historical Phase 13 `13-VERIFICATION.md` remains `gaps_found`; its selected-production Viewer terminal proof stays deferred and frozen in the v1.2 archive.
-- Phase 19 credentialed provider/D1/API/admin tuple is complete and recorded separately in `production/provider.json` and `production/provider.md`.
+- Phase 19 credentialed provider/D1/API/admin tuple is complete and recorded separately in `.planning/milestones/v1.3-phases/19-dashboard-operations-and-end-to-end-proof/production/provider.json` and `provider.md`.
 
 ### Recent Context (Brownfield注释)
 
@@ -153,28 +154,43 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-29:
 | debug | phase13-supervisor-not-found | investigating |
 | verification_gap | Phase 13 13-VERIFICATION.md | gaps_found |
 
+Items acknowledged and deferred at v1.3 milestone close on 2026-08-04:
+
+**v1.3 closeout type:** `override_closeout` — 8 historical artifact items acknowledged; v1.3 phase verification and requirements remain complete.
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | deploy-api-remote-resource-check | diagnosed |
+| debug | knowledge-base | unknown |
+| debug | phase13-gateway-auth-readiness | awaiting_human_verify |
+| debug | phase13-gateway-auth-timeout | diagnosed |
+| debug | phase13-legacy-parent-missing | investigating |
+| debug | phase13-orphaned-listener-owners | investigating |
+| debug | phase13-runtime-ownership | diagnosed |
+| debug | phase13-supervisor-not-found | investigating |
+
 ## Session Continuity
 
-**Last session:** 2026-08-04T10:12:16.184Z
-**Stopped at:** Phase 19 complete; v1.3 ready for milestone audit
+**Last session:** 2026-08-04T12:16:02.056Z
+**Stopped at:** v1.3 milestone archived with accepted deferred artifact items
 **Resume file:** None
 
-**Next recommended action:** Run `$gsd-complete-milestone v1.3` to archive the audited milestone, accepting the two non-blocking tech-debt observations recorded in `.planning/v1.3-MILESTONE-AUDIT.md`.
+**Next recommended action:** Run `$gsd-new-milestone` to define the next requirements and roadmap.
 
 **If interrupted, resume by:**
 
-1. Read `19-VERIFICATION.md`, `19-UAT.md`, and `production/provider.md` for the completed local/production evidence.
-2. Review `.planning/v1.3-MILESTONE-AUDIT.md`, then run `$gsd-complete-milestone v1.3` before archival.
+1. Read `.planning/milestones/v1.3-MILESTONE-AUDIT.md` and the archived Phase 19 verification/UAT/provider evidence.
+2. Run `$gsd-new-milestone` for the next milestone; keep the v1.3 archives immutable.
 
 **Worktree:** `D:\my-workspace\starye`
-**Branch:** `main`
+**Branch:** `codex/phase19-production-proof-closeout`
 
 ---
-*State updated: 2026-08-04 after Phase 19 completion*
+*State updated: 2026-08-04 after v1.3 milestone closeout*
 
 ## Operator Next Steps
 
-- Run `$gsd-plan-phase 19` to plan Dashboard Operations and End-to-End Proof.
+- Start the next milestone with `$gsd-new-milestone`
 
 ## Decisions
 

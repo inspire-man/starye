@@ -1,5 +1,32 @@
 # Project Milestones: Starye
 
+## v1.3 后台爬虫任务与内容运维 (Shipped: 2026-08-04)
+
+**Closeout:** `override_closeout`.
+
+**Verification:** 18/18 requirements, 4/4 phases, 4/4 integration flows, and 4/4 end-to-end flows passed.
+
+**Known verification overrides:** 8 historical artifact-audit items acknowledged and recorded in `STATE.md` under `## Deferred Items`.
+
+**Known technical debt:** Production receipt-backed `SUN-064` currently has `players=0`; unrelated `@starye/config` CI lint baseline remains open. Both are non-causal to the Phase 19 metadata CRUD sign-off.
+
+**Key accomplishments:**
+
+- Delivered a D1-backed crawler task control plane with closed lifecycle transitions, leases, immutable retry history, and bounded audit-safe logs.
+- Delivered signed API-owned polling/claim and a one-active-run local movie/manga runner with validated receipts and existing-editor handoff.
+- Delivered server-owned GitHub Actions provider snapshots, scoped GitHub App authentication, signed callbacks, cancellation/retry, reconciliation, and fixed prepared entries.
+- Delivered Dashboard task history/detail/log operations, confirmation-gated cancellation/retry, local/production evidence contracts, and canonical RUNBOOK operations.
+- Completed one credentialed production tuple: task `4af1519d-f12b-4418-8bba-1c2536ee3e2b`, D1 run `9ef31b31-f66a-4e11-927e-c890edbdf209`, provider run `30890327381`, receipt-backed `SUN-064` metadata CRUD readback/restore.
+
+**Archives:**
+
+- [v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
+- [v1.3-REQUIREMENTS.md](milestones/v1.3-REQUIREMENTS.md)
+- [v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md)
+- [v1.3-phases/](milestones/v1.3-phases/)
+
+---
+
 ## v1.2 Cloudflare account and domain switching with deferred Viewer proof (Shipped: 2026-07-29)
 
 **Closeout:** `override_closeout`. The user accepted 9 known deferred items;
