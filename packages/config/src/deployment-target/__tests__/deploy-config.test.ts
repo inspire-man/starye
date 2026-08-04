@@ -62,6 +62,7 @@ describe('target deploy config materializer', () => {
     expect(apiConfig).toContain('migrations_dir = "../../packages/db/drizzle"')
     expect(apiConfig).toContain('name = "starye-api"')
     expect(apiConfig).toContain('database_name = "starye-db"')
+    expect(apiConfig).toContain('[triggers]\ncrons = ["*/1 * * * *"]')
     expect(result.pages).toMatchObject({ surface: 'dashboard', project: 'starye-dashboard' })
     expect(path.dirname(result.pages!.redirectInputPath)).toBe(fixture.runDir)
     expect(path.relative(fixture.runDir, result.pages!.redirectInputPath).startsWith('..')).toBe(false)

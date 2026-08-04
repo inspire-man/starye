@@ -38,11 +38,12 @@ describe('crawler task log cleanup schedule', () => {
     ])
   })
 
-  it('configures a daily cron trigger for the repository-scoped cleanup', async () => {
+  it('configures a minute cron trigger for cleanup and provider reconciliation', async () => {
     const wrangler = await readFile(new URL('../../wrangler.toml', import.meta.url), 'utf8')
     const cron = wrangler.match(/^crons\s*=\s*\["([^"]+)"\]/mu)?.[1]?.trim().split(/\s+/u)
 
+    expect(wrangler).toContain('[triggers]\ncrons = ["*/1 * * * *"]')
     expect(cron).toHaveLength(5)
-    expect(cron?.slice(2)).toEqual(['*', '*', '*'])
+    expect(cron).toEqual(['*/1', '*', '*', '*', '*'])
   })
 })
