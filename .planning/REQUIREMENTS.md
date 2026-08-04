@@ -35,8 +35,8 @@
 ### 安全与运维
 
 - [x] **OPS-01**: runner 回调使用独立 HMAC、时间窗、nonce、事件幂等和日志脱敏。
-- [ ] **OPS-02**: 为 GitHub 凭据、日志留存、失联 run、取消、重试和回滚更新 canonical RUNBOOK。
-- [ ] **TEST-01**: 本地与生产路径均具备从任务创建到入库后内容 CRUD 的可重复验收证据。
+- [x] **OPS-02**: 为 GitHub 凭据、日志留存、失联 run、取消、重试和回滚更新 canonical RUNBOOK。
+- [x] **TEST-01**: 本地与生产路径均具备从任务创建到入库后内容 CRUD 的可重复验收证据。
 
 ## Future Requirements
 
@@ -76,8 +76,8 @@
 | DASH-03 | Phase 19 | Complete |
 | DATA-01 | Phase 17 | Complete |
 | OPS-01 | Phase 16 | Complete |
-| OPS-02 | Phase 19 | Pending |
-| TEST-01 | Phase 19 | Pending |
+| OPS-02 | Phase 19 | Complete |
+| TEST-01 | Phase 19 | Complete |
 
 **Coverage:**
 

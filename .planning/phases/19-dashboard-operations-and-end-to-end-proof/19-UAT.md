@@ -1,14 +1,14 @@
 ---
-status: partial
+status: complete
 phase: 19-dashboard-operations-and-end-to-end-proof
 source: [19-01-SUMMARY.md, 19-02-SUMMARY.md, 19-03-SUMMARY.md, 19-04-SUMMARY.md, 19-05-SUMMARY.md, 19-06-SUMMARY.md]
 started: 2026-08-02T23:34:27+08:00
-updated: 2026-08-03T02:12:00+08:00
+updated: 2026-08-04T17:46:38+08:00
 ---
 
 ## Current Test
 
-[testing paused — 1 items outstanding]
+[completed]
 
 ## Tests
 
@@ -42,18 +42,19 @@ result: pass
 
 ### 8. Credentialed Provider End-to-End Proof
 expected: After metadata-only GitHub App and Environment preflight, exactly one new movie or manga workflow dispatch on inspire-man/starye@main produces a matching D1 task/run/attempt and provider run/attempt/SHA/derived URL, signed callbacks, a validated receipt, and reversible existing-editor CRUD evidence. The production evidence replaces checkpoint status only after the full observed tuple passes.
-result: blocked
-blocked_by: third-party
-reason: "After the GitHub Environment callback and runner secrets were configured and API/Dashboard were redeployed from f4e2b40, the production Dashboard exposed the Phase 19 controls. Exactly one movie task was created (452e07b1-0c1f-4790-b64b-eeadb454b997) and reached 正在领取 / attempt 1 with provider github-actions. No GitHub Actions provider run, attempt, SHA, URL, callback, or receipt appeared because the dedicated GitHub App provider binding remains absent. The task was then cancelled and is now 已请求取消 · 等待 runner 确认. Production evidence remains mode=credentialed_provider, status=checkpoint."
+result: pass
+recorded: 2026-08-04T17:46:38+08:00
+source: production
+evidence: "Fresh task 4af1519d-f12b-4418-8bba-1c2536ee3e2b, D1 run 9ef31b31-f66a-4e11-927e-c890edbdf209 attempt 1, provider run 30890327381 attempt 1 at SHA d57c0ed3bf4b9337a14fcb58c49465b9effa8ba6; seven accepted signed runner events, validated receipt primaryContentId 1cf4d537-324d-45f5-be96-9fe9bcf430a7 with createdCount 6 and updatedCount 0, and reversible SUN-064 Dashboard/API/remote-D1 CRUD readback."
 
 ## Summary
 
 total: 8
-passed: 7
+passed: 8
 issues: 0
 pending: 0
 skipped: 0
-blocked: 1
+blocked: 0
 
 ## Gaps
 

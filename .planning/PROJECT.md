@@ -32,7 +32,9 @@
 
 ## Current State
 
-**Phase 16 complete:** 已交付受控 movie/manga task 模板、D1 task/run/attempt/log/lease 审计模型、状态机、task/run 归属授权、独立 HMAC runner 回调、凭据脱敏与 90 天详细日志清理；下一步为 Phase 17 本地 runner vertical slice。
+**v1.3 complete:** Phase 16-19 已交付受控 movie/manga task 模板、D1 task/run/attempt/log/lease 审计模型、独立 HMAC runner 回调、本地 runner、GitHub Actions 生产编排、Dashboard 运维、secret-free RUNBOOK，以及 local 与 credentialed production 的 receipt → 既有内容 CRUD 证据。生产 tuple `4af1519d-f12b-4418-8bba-1c2536ee3e2b` / `9ef31b31-f66a-4e11-927e-c890edbdf209` / provider `30890327381` 已完成并可审计。
+
+生产证据中的 `SUN-064` 当前仍观察到 `players=0`，因此公共详情页加载问题作为入库播放器观察保留；本次验收的元数据 mutation/readback/restore 已通过。
 
 **Latest archived milestone:** v1.2 Cloudflare 账户/域名切换与全链路发布验证（2026-07-29，override closeout）
 
@@ -104,12 +106,16 @@
 - ✓ v1.2 Pages redirect、legacy-domain、RUNBOOK 与 30-row evidence-matrix 静态验证。 — v1.2
 - ✓ v1.3 Phase 16 任务域基础：受控模板、D1 task/run/attempt/log/lease、审计状态机、task/run 授权、独立 HMAC 回调与日志脱敏。 — Validated in Phase 16
 
+### Validated in v1.3
+
+- ✓ 后台可创建视频、漫画的受控爬虫执行任务，并在本地与生产环境分别调度对应 runner。 — Phases 16-19
+- ✓ 任务执行记录可持久化呈现排队、运行、成功、失败、取消和重试状态，并记录结构化日志。 — Phases 16-19
+- ✓ 生产后台可受控编排 GitHub Actions，任务状态和最终入库结果会回写到后台。 — Phases 18-19
+- ✓ 后台可在爬取入库后管理视频、漫画内容的增删改，并完成端到端验收。 — Phases 17, 19
+
 ### Active
 
-- [ ] 后台可创建视频、漫画的受控爬虫执行任务，并在本地与生产环境分别调度对应 runner。
-- [ ] 任务执行记录可持久化呈现排队、运行、成功、失败、取消和重试状态，并记录结构化日志。
-- [ ] 生产后台可受控编排 GitHub Actions，任务状态和最终入库结果会回写到后台。
-- [ ] 后台可在爬取入库后管理视频、漫画内容的增删改，并完成端到端验收。
+- [ ] 下一里程碑需求待定义。
 
 ### Out of Scope
 
@@ -189,8 +195,10 @@
 | v1.2 以 Cloudflare 账户/域名切换与真实全链路验证为主线 | 需要证明部署与数据链路可迁移、可复现、可验收，而不是继续扩大存储/文档整理 scope | — Pending |
 | v1.2 证据矩阵以当前 verifier 为状态源 | 历史 summary 和 checkbox 仅表明 ownership；`SATISFIED`、`PARTIAL`、`FAILED/CHECKPOINT` 必须保留原始语义 | ✓ Validated in Phase 15 |
 | v1.2 以 override closeout 归档 | 生产 Viewer 终态证明未达成，用户接受将其与 8 个历史 debug sessions 记录为延期项 | ✓ Accepted at v1.2 closeout |
-| v1.3 生产 crawler 继续由 GitHub Actions 执行 | Cloudflare API 负责受控编排与状态汇总，Node/Puppeteer crawler 保持在现有 GitHub Actions 执行环境 | — Pending |
+| v1.3 生产 crawler 继续由 GitHub Actions 执行 | Cloudflare API 负责受控编排与状态汇总，Node/Puppeteer crawler 保持在现有 GitHub Actions 执行环境 | ✓ Validated in Phase 19 |
 | v1.3 task/run 控制面以 D1 为唯一可审计事实 | 本地 runner 与 GitHub Actions 需共享同一状态、attempt、日志和受限 command 语义 | ✓ Validated in Phase 16 |
+| v1.3 生产成功必须绑定完整 provider tuple | 只有匹配的 D1 task/run/attempt、provider run、签名事件、validated receipt 与既有编辑器 CRUD readback/restore 才能标记生产通过 | ✓ Validated in Phase 19 |
+| v1.3 receipt 复用既有内容编辑器 | 生产验收沿用 `primaryContentId` 进入现有 Dashboard/API/remote D1 CRUD，不新增第二套编辑器 | ✓ Validated in Phase 19 |
 
 ## Evolution
 
@@ -210,4 +218,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-30 after Phase 16 completion*
+*Last updated: 2026-08-04 after v1.3 Phase 19 completion*
