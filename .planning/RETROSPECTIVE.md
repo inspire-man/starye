@@ -121,6 +121,48 @@
 
 ---
 
+## Milestone: v1.3 - 后台爬虫任务与内容运维
+
+**Shipped:** 2026-08-04 | **Phases:** 4 | **Plans:** 19
+**Closeout:** Override closeout; eight historical artifact-audit items were acknowledged and two non-blocking technical-debt observations were retained.
+
+### What Was Built
+
+- D1-backed crawler task/run/attempt/log/lease control plane with closed lifecycle transitions, leases, immutable retries, and bounded audit logs.
+- Signed API-owned poll/claim and local one-active-run movie/manga runner with validated receipts and existing content-editor handoff.
+- Server-owned GitHub Actions provider snapshots, scoped GitHub App authentication, signed callbacks, provider reconciliation, cancellation/retry, and fixed prepared entries.
+- Dashboard task history/detail/log operations, confirmation-gated cancellation/retry, local/production evidence contracts, canonical RUNBOOK operations, and one credentialed production tuple.
+
+### What Worked
+
+- Keeping D1 as the sole auditable task/run source let local runner and GitHub Actions share lifecycle, receipt, and retry semantics.
+- Separating local contract evidence from credentialed provider evidence preserved the production sign-off boundary.
+- Reusing the existing content editor made receipt-backed CRUD proof concrete without introducing a parallel management surface.
+
+### What Was Inefficient
+
+- The generated archive needed a manual pass to compress the live roadmap and normalize accomplishments, state, project context, and retrospective together.
+- Historical debug sessions from the v1.2 close remained open in the artifact audit and required explicit deferred-item acknowledgement again at v1.3 close.
+- The production tuple passed metadata CRUD while `SUN-064 players=0` required a separate player-availability follow-up observation.
+
+### Patterns Established
+
+- Production crawler success is a tuple-bound chain: D1 task/run/attempt, provider run, signed lifecycle, validated receipt, and existing-editor CRUD readback/restore.
+- Dashboard cancellation remains a confirmed `cancel_requested` fact and retry creates a new attempt while preserving prior history.
+- Evidence artifacts carry explicit mode separation and only expose redacted provider, receipt, callback, and credential metadata.
+
+### Key Lessons
+
+1. Treat provider dispatch acceptance as an intermediate fact; only signed terminal events plus a validated non-empty receipt can close a run.
+2. Keep production player availability separate from metadata CRUD sign-off so one observation does not rewrite an otherwise valid tuple.
+3. Run the artifact audit before closeout and record accepted historical items in STATE.md with a clear closeout type.
+
+### Cost Observations
+
+- Model mix: not tracked.
+- Sessions: multiple GSD workflow sessions across four execution phases plus production proof and closeout.
+- Notable: fixed templates, shared control-plane contracts, and evidence builders kept the production proof bounded while avoiding a second editor.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
