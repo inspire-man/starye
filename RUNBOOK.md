@@ -492,28 +492,58 @@ done
 
 **配置人：** _（填写）_
 
-## 5. Crawler provider operations and evidence
+## Crawler provider operations and evidence
 
-### 5.1 Fixed provider tuple and metadata-only preflight
+### Fixed provider tuple and metadata-only preflight
 
-Production crawler dispatch is limited to the server-owned `starye-org` target, the registered movie/manga workflow, `inspire-man/starye@main`, and the `starye-org` Environment. Before dispatch, record only GitHub App metadata, installation permissions, Environment name, and the presence of existing secret names. Secret values, JWTs, cookies, authentication headers, and raw callback payloads stay in the managed secret store and never enter chat or evidence.
+Production dispatch is limited to the server-owned `starye-org` target, the registered movie/manga workflow, `inspire-man/starye@main`, and the `starye-org` GitHub Environment. Before dispatch, record only GitHub App metadata, installation permissions, Environment name, fixed workflow/repository/ref, and the presence of binding names. Secret values, JWTs, cookies, authentication headers, and raw callback payloads stay in the managed secret store and never enter chat, logs, D1, or evidence.
 
-The relevant secret names and consumers are `CRAWLER_SECRET` (API, crawler, CI), `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (crawler), and the existing GitHub App installation credentials (CI/provider adapter). Rotation is: add the replacement secret, run target-profile preflight, dispatch one new attempt, verify signed callbacks and receipt, then revoke the old secret.
+Use the selected target profile for the preflight and keep its output metadata-only:
 
-### 5.2 Retention and terminal evidence
+```bash
+pnpm target-profile preflight --target <target-id> --scope remote --command smoke --ci-environment <ci-environment> --live
+```
 
-Keep task, run, attempt, provider association, terminal receipt, and CRUD readback/restore metadata for operational history. Detailed crawler logs are retained for 90 days and then removed by the repository expiry job; verify the expiry count and preserve only aggregate evidence. Evidence records contain IDs, timestamps, workflow/repository/ref/Environment, provider SHA/URL, callback IDs/nonces, and controlled content IDs, never secret material or raw crawler output.
+The production binding names and consumers are:
 
-### 5.3 Lost, cancellation, retry, and partial ingest
+| Binding name | Consumer | Purpose / boundary |
+|---|---|---|
+| `GITHUB_APP_ID` | API Worker provider adapter | App identity used to mint an installation token; value is managed configuration. |
+| `GITHUB_APP_INSTALLATION_ID` | API Worker provider adapter | Installation identity; scoped to the fixed repository. |
+| `GITHUB_APP_PRIVATE_KEY` | API Worker provider adapter | PKCS#8 signing key; secret value stays in the Worker secret store. |
+| `GITHUB_ACTIONS_OWNER` | API Worker provider adapter | Server-owned owner projection; never accepted from a task request. |
+| `GITHUB_ACTIONS_REPOSITORY` | API Worker provider adapter | Server-owned repository projection; never accepted from a task request. |
+| `GITHUB_ACTIONS_ENVIRONMENT` | API Worker provider adapter | Fixed GitHub Environment projection; never accepted from a task request. |
+| `CRAWLER_SECRET` | API, crawler, CI | Signed runner-event authentication; rotate independently from the GitHub App key. |
+| `R2_ACCESS_KEY_ID` | crawler | R2 upload identity for the selected target. |
+| `R2_SECRET_ACCESS_KEY` | crawler | R2 upload credential; secret value stays in the managed secret store. |
 
-- `provider_lost` or a late callback: freeze the current attempt, preserve redacted logs, reconcile provider association, and do not mutate content or reuse the attempt.
-- `cancel_requested`: wait for the runner heartbeat to confirm cancellation; keep the state and logs, then inspect the terminal run before deciding the next action.
-- Failed or partial ingest: freeze receipt handoff and existing-editor mutations, preserve the tuple/checkpoint, and inspect D1/API logs before any repair.
-- Retry: create a new administrator-confirmed attempt with a new run tuple. Keep the old attempt and its failure/checkpoint history linked.
+Least privilege is part of preflight: the GitHub App installation is limited to `inspire-man/starye` with `Actions: write` and `Metadata: read`; the workflow receives only the selected `starye-org` Environment secrets. The API mints a short-lived installation token per dispatch, uses the fixed workflow registry, and does not accept arbitrary workflow, repository, ref, Environment, command, source URL, or secret fields from the Dashboard.
 
-### 5.4 Rollback
+### Secret rotation and preflight
 
-For a provider or content regression, freeze new dispatches, record the affected task/run/attempt, and follow the existing Worker, Pages, or D1 rollback procedure in sections 3.1, 3.2, and 4. Re-run selected-target preflight after configuration repair. Restore content through the existing editor using the validated `primaryContentId`; never repair by copying a raw receipt or provider payload.
+1. Add the replacement App key or binding value in the managed secret store; keep the old value active during the overlap window.
+2. Run selected-target metadata-only preflight and verify binding-name presence, App metadata, installation permissions, fixed repository/workflow, and Environment mapping. Do not print values.
+3. Deploy the API configuration through the target-aware prepared path.
+4. Dispatch exactly one fresh attempt, then wait for the matching signed `provider_started`, progress/terminal events, validated receipt, and provider association.
+5. Confirm Dashboard/API/receipt and controlled existing-editor readback before revoking the old value.
+6. If any gate fails, keep the attempt as a checkpoint, freeze further mutation, and repair or rotate using a new attempt.
+
+### Retention and terminal evidence
+
+Keep task, run, attempt, provider association, terminal state, validated receipt, and CRUD readback/restore metadata for operational history. Detailed crawler logs are retained for 90 days, then removed by the repository expiry job; verify expiry counts and preserve only aggregate evidence after cleanup. Evidence records contain IDs, timestamps, workflow/repository/ref/Environment, provider SHA/URL, callback IDs/nonces, and controlled content IDs. They exclude secret material, authentication headers, JWTs, cookies, and raw callback or crawler payloads.
+
+### Lost, late, cancellation, retry, and partial ingest
+
+- `provider_lost` or a late callback: freeze the current attempt, preserve redacted logs and the provider association, reconcile the provider status, and do not mutate content or reuse that attempt. A late `provider_started` does not reopen a terminal attempt.
+- `cancel_requested`: wait for the runner heartbeat/terminal event to confirm cancellation; retain the state and logs. If a validated success receipt arrived first, record the terminal outcome and do not issue a second mutation.
+- Failed or partial ingest: freeze receipt handoff and existing-editor mutations, preserve the task/run/attempt checkpoint, and inspect D1/API logs plus the provider run before repair. Do not label a partial row as provider success.
+- Retry: create a new administrator-confirmed attempt with a new run tuple and retain the old failure/checkpoint history. Re-run preflight before dispatching the new attempt.
+- Controlled CRUD correction: only use the existing editor/API with the validated `primaryContentId`; read back through the Dashboard and API, then restore or complete the correction and read back again.
+
+### Rollback and deployment/config recovery
+
+For a provider, configuration, or content regression, freeze new dispatches, record the affected task/run/attempt, and follow the existing Worker, Pages, or D1 rollback procedure in sections 3.1, 3.2, and 4. Re-run selected-target preflight after configuration repair and before a new provider attempt. Restore content through the existing editor using the validated `primaryContentId`; never repair by copying a raw receipt or provider payload. If the provider is healthy but the API binding is stale, roll back the API configuration first, then reconcile the attempt and start a new attempt after the binding gate passes.
 
 ---
 
