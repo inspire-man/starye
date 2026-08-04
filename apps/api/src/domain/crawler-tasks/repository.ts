@@ -635,8 +635,11 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
           run.status AS run_status
         FROM crawler_run_provider_association AS association
         INNER JOIN crawler_run AS run ON run.id = association.run_id
-        WHERE run.status IN ('dispatching', 'running', 'cancel_requested')
-          AND association.provider_run_id IS NOT NULL
+        WHERE association.provider_run_id IS NOT NULL
+          AND (
+            run.status IN ('dispatching', 'running', 'cancel_requested')
+            OR (run.status = 'succeeded' AND (association.provider_status IS NULL OR association.provider_status <> 'completed'))
+          )
         ORDER BY association.updated_at ASC, association.run_id ASC
       `).all<CrawlerProviderRow & { run_status: CrawlerRunStatus }>()
       return (result.results ?? []).map(row => ({ ...toProviderAssociationRecord(row), runStatus: row.run_status }))

@@ -172,17 +172,6 @@ describe('production orchestration lifecycle integration', () => {
       sequence: 3,
     })).resolves.toMatchObject({ kind: 'accepted' })
 
-    await expect(repository.recordProviderObservation({
-      attempt: 1,
-      conclusion: 'success',
-      headSha: 'a'.repeat(40),
-      path: '.github/workflows/daily-movie-crawl.yml',
-      providerRunAttempt: 1,
-      providerRunId: '12345',
-      runId,
-      status: 'completed',
-    })).resolves.toEqual({ kind: 'updated', status: 'completed', conclusion: 'success' })
-
     const succeeded = await repository.processRunnerEvent({
       attempt: 1,
       bodySha256: 'success-body',
@@ -196,6 +185,21 @@ describe('production orchestration lifecycle integration', () => {
     })
 
     expect(succeeded).toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'succeeded' } })
+    await expect(repository.listProviderReconciliationCandidates()).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ providerStatus: 'in_progress', runId, runStatus: 'succeeded' }),
+    ]))
+
+    await expect(repository.recordProviderObservation({
+      attempt: 1,
+      conclusion: 'success',
+      headSha: 'a'.repeat(40),
+      path: '.github/workflows/daily-movie-crawl.yml',
+      providerRunAttempt: 1,
+      providerRunId: '12345',
+      runId,
+      status: 'completed',
+    })).resolves.toEqual({ kind: 'updated', status: 'completed', conclusion: 'success' })
+    await expect(repository.listProviderReconciliationCandidates()).resolves.toEqual([])
     await expect(repository.getRun(runId)).resolves.toMatchObject({ status: 'succeeded', attemptNumber: 1 })
     const providerRows = await client.execute({ args: [runId], sql: 'SELECT provider_run_id, provider_status, provider_conclusion FROM crawler_run_provider_association WHERE run_id = ?' })
     const transitions = await client.execute({ args: [runId], sql: 'SELECT reason_code FROM crawler_run_transition WHERE run_id = ? ORDER BY created_at, sequence' })
