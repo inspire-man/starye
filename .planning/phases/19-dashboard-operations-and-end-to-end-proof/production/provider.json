@@ -8,17 +8,17 @@
   "repository": "inspire-man/starye",
   "ref": "main",
   "environment": "starye-org",
-  "taskId": "pending-human-preflight",
-  "runId": "pending-new-attempt",
+  "taskId": "pending-old-attempt-terminal",
+  "runId": "pending-new-attempt-after-terminal",
   "attempt": 1,
   "callbackEventIds": [],
   "callbackNonces": [],
-  "gatewayUrl": "https://starye.example.test",
+  "gatewayUrl": "https://starye.org",
   "crud": {
     "mutation": "checkpoint",
     "readback": "checkpoint",
     "restore": "checkpoint"
   },
   "command": "phase19-provider-signoff",
-  "timestamp": "2026-08-02T00:00:00.000Z"
+  "timestamp": "2026-08-04T03:39:07.000Z"
 }
