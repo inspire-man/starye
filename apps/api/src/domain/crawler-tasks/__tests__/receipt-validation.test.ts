@@ -43,7 +43,7 @@ function database(rows: { movie?: Row[], comic?: Row[] }) {
 }
 
 describe('validateReceiptCandidate', () => {
-  it('re-queries a movie row and keeps only the validated primary id and counts', async () => {
+  it('accepts a persisted movie even when the crawler found no players', async () => {
     const result = await validateReceiptCandidate({
       candidate: {
         contentIds: ['MOV-001'],
@@ -52,7 +52,7 @@ describe('validateReceiptCandidate', () => {
         updatedCount: 1,
       },
       database: database({
-        movie: [{ code: 'MOV-001', crawled_players: 2, id: 'movie-1', total_players: 2 }],
+        movie: [{ code: 'MOV-001', crawled_players: 0, id: 'movie-1', total_players: 0 }],
       }),
       templateKey: 'movie',
     })
@@ -97,7 +97,6 @@ describe('validateReceiptCandidate', () => {
     { candidate: { contentIds: [], templateKey: 'movie' as const }, name: 'empty candidate' },
     { candidate: { contentIds: ['missing'], templateKey: 'movie' as const }, name: 'missing row' },
     { candidate: { contentIds: ['comic-1'], templateKey: 'movie' as const }, name: 'wrong-template row' },
-    { candidate: { contentIds: ['MOV-001'], templateKey: 'movie' as const }, name: 'empty aggregate' },
   ])('$name is receipt_missing', async ({ candidate }) => {
     const result = await validateReceiptCandidate({
       candidate,

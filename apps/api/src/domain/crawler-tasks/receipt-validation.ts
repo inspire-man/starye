@@ -13,9 +13,7 @@ interface ReceiptValidationDatabase {
 
 interface MovieReceiptRow {
   readonly code: string | null
-  readonly crawled_players: number | null
   readonly id: string
-  readonly total_players: number | null
 }
 
 interface ComicReceiptRow {
@@ -39,10 +37,6 @@ function candidateIds(candidate: CrawlerRunReceiptCandidate): string[] {
   return [...new Set(candidate.contentIds
     .map(value => value.trim())
     .filter(Boolean))].slice(0, 100)
-}
-
-function hasMovieAggregate(row: MovieReceiptRow): boolean {
-  return Math.max(Number(row.total_players ?? 0), Number(row.crawled_players ?? 0)) > 0
 }
 
 function hasComicAggregate(row: ComicReceiptRow): boolean {
@@ -73,14 +67,14 @@ export async function validateReceiptCandidate(input: {
   const placeholders = ids.map(() => '?').join(', ')
   if (input.templateKey === 'movie') {
     const rows = await input.database.$client.prepare(`
-      SELECT id, code, total_players, crawled_players
+      SELECT id, code
       FROM movie
       WHERE id IN (${placeholders}) OR code IN (${placeholders})
       ORDER BY id ASC
       LIMIT 1
     `).bind(...ids, ...ids).all<MovieReceiptRow>()
     const row = rows.results?.[0]
-    if (!row || !row.id || !hasMovieAggregate(row))
+    if (!row || !row.id)
       return missing()
 
     return {
