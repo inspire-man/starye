@@ -11,6 +11,7 @@ import { createDataChainFixture, runDataChainFixture } from '../src/smoke/data-c
 import { createActionsEventClientFromEnvironment } from '../src/task-runner/actions-event-client'
 import { createMangaAdapter } from '../src/task-runner/manga-adapter'
 import { createMovieAdapter } from '../src/task-runner/movie-adapter'
+import { GITHUB_ACTIONS_CONFIG } from '../src/types/config'
 import { ApiClient } from '../src/utils/api-client'
 
 interface PreparedCrawlerContext {
@@ -266,7 +267,7 @@ async function runProductionCrawlerMutation(
 
   const config = createCrawlerConfig(context, environment)
   const adapter = production.template === 'movie'
-    ? createMovieAdapter(config as JavBusCrawlerConfig, dependencies.executeMovie)
+    ? createMovieAdapter({ ...GITHUB_ACTIONS_CONFIG, ...config } as JavBusCrawlerConfig, dependencies.executeMovie)
     : createMangaAdapter(config, dependencies.executeManga)
   try {
     // Dispatch claim leaves the run in dispatching; heartbeat first to enter running before log/progress events.
