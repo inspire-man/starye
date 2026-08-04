@@ -111,6 +111,36 @@ describe('registry-owned production crawler adapters', () => {
     expect(client.succeeded).toHaveBeenCalledWith(7, ['MOV-001'], { createdCount: 1 })
   })
 
+  it('renews the production lease while the crawler adapter is still running', async () => {
+    vi.useFakeTimers()
+    try {
+      const { environment } = await fixture()
+      const { client } = actionsFixture()
+      let release: (() => void) | undefined
+      const blocked = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const runPromise = runTargetCrawlerMutation(environment, {
+        createActionsEventClient: () => client,
+        executeMovie: async (context) => {
+          await blocked
+          context.observe('MOV-LONG-RUN')
+          return { contentIds: ['MOV-LONG-RUN'] }
+        },
+      })
+
+      await vi.waitFor(() => expect(client.log).toHaveBeenCalledWith(3, 'production crawler started'))
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(client.heartbeat).toHaveBeenCalledTimes(3)
+
+      release?.()
+      await expect(runPromise).resolves.toMatchObject({ status: 'succeeded', contentIds: ['MOV-LONG-RUN'] })
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('runs manga production through the fixed entry and stops before crawler work when cancellation is requested', async () => {
     const { environment } = await fixture({
       ACTIONS_PROVIDER_TEMPLATE: 'manga',

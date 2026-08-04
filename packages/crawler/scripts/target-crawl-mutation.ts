@@ -94,6 +94,8 @@ const productionOperations = {
   },
 } as const
 
+const PRODUCTION_HEARTBEAT_INTERVAL_MS = 60_000
+
 export interface TargetCrawlerMutationDependencies {
   readonly createApiClient?: (config: { url: string, token: string, timeout: number }) => CrawlerApiClient
   readonly createActionsEventClient?: (environment: NodeJS.ProcessEnv) => ProductionActionsClient
@@ -230,12 +232,22 @@ async function runProductionCrawlerMutation(
   }
   let cancelled = started.cancel_requested === true
   let terminalEmitted = false
-  const checkpoint = async () => {
+  let heartbeatPromise: Promise<boolean> | undefined
+  let heartbeatFailure: unknown
+  const checkpoint = () => {
     if (cancelled)
-      return true
-    const heartbeat = await client.heartbeat(sequence++)
-    cancelled = heartbeat.cancel_requested === true
-    return cancelled
+      return Promise.resolve(true)
+    if (!heartbeatPromise) {
+      heartbeatPromise = client.heartbeat(sequence++)
+        .then((heartbeat) => {
+          cancelled = heartbeat.cancel_requested === true
+          return cancelled
+        })
+        .finally(() => {
+          heartbeatPromise = undefined
+        })
+    }
+    return heartbeatPromise
   }
 
   if (cancelled) {
@@ -272,21 +284,42 @@ async function runProductionCrawlerMutation(
       }
     }
     await client.log(sequence++, 'production crawler started')
-    const result = await adapter.execute({
-      candidate: {
-        attempt: binding.attempt,
-        runId: binding.runId,
-        sequence: 0,
-        snapshot: {
-          entrypoint: production.template === 'movie' ? 'movie-crawler' : 'manga-crawler',
-          permissionResource: production.template === 'movie' ? 'movie' : 'comic',
-          templateKey: production.template,
-          templateVersion: 1,
+    const heartbeatTimer = setInterval(() => {
+      void checkpoint().catch((error: unknown) => {
+        heartbeatFailure ??= error
+      })
+    }, PRODUCTION_HEARTBEAT_INTERVAL_MS)
+    let result: AdapterExecutionResult
+    try {
+      result = await adapter.execute({
+        candidate: {
+          attempt: binding.attempt,
+          runId: binding.runId,
+          sequence: 0,
+          snapshot: {
+            entrypoint: production.template === 'movie' ? 'movie-crawler' : 'manga-crawler',
+            permissionResource: production.template === 'movie' ? 'movie' : 'comic',
+            templateKey: production.template,
+            templateVersion: 1,
+          },
         },
-      },
-      checkpoint,
-      observe: observeContentId,
-    })
+        checkpoint,
+        observe: observeContentId,
+      })
+    }
+    finally {
+      clearInterval(heartbeatTimer)
+      if (heartbeatPromise) {
+        try {
+          await heartbeatPromise
+        }
+        catch (error: unknown) {
+          heartbeatFailure ??= error
+        }
+      }
+    }
+    if (heartbeatFailure)
+      throw heartbeatFailure
     for (const contentId of result.contentIds) observeContentId(contentId)
     await client.progress(sequence++, { observed: contentIds.size })
     if (await checkpoint()) {
