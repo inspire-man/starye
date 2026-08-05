@@ -5,6 +5,7 @@ import { and, count, desc, eq, getTableColumns, gte, inArray, like, lte, ne, not
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import * as v from 'valibot'
+import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MovieItemSchema, MoviesListDataSchema } from '../../../schemas/movie'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
 import { buildAdultVisibilityCondition } from '../../../services/adult-filter'
@@ -462,6 +463,16 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
               with: { publisher: true },
               orderBy: (mp, { asc }) => [asc(mp.sortOrder)],
             },
+            sourceState: {
+              columns: {
+                disposition: true,
+                eligibleCount: true,
+                observedAt: true,
+                reasonCode: true,
+                repairable: true,
+                sourceRevision: true,
+              },
+            },
           },
         })
 
@@ -476,6 +487,12 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
         const playerList = await db.query.players.findMany({
           where: eq(players.movieId, movie.id),
           orderBy: (players, { asc }) => [asc(players.sortOrder)],
+        })
+
+        const readiness = createServerReadinessProjection({
+          contentId: movie.id,
+          metadataObservedAt: movie.updatedAt,
+          sourceState: movie.sourceState,
         })
 
         // 结构化演员和厂商数据
@@ -606,15 +623,17 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
         }
 
         // 构建响应：用关联表的结构化数据覆盖老的 JSON 文本字段
-        const { movieActors: _ma, moviePublishers: _mp, ...movieData } = movie
+        const { movieActors: _ma, moviePublishers: _mp, sourceState: _sourceState, ...movieData } = movie
 
         return c.json({
           success: true,
           data: {
             ...movieData,
+            primaryContentId: movie.id,
             actors: movieActorsList,
             publishers: moviePublishersList,
             players: playerList,
+            readiness,
             relatedMovies,
           },
         })

@@ -76,6 +76,23 @@ export interface ReadinessProjectionInput {
   readonly source: SourceReadinessInput
 }
 
+export interface ServerSourceState {
+  readonly disposition: SourceDisposition
+  readonly eligibleCount: number
+  readonly observedAt: Date | number | null | undefined
+  readonly reasonCode: SourceReasonCode | null
+  readonly repairable: boolean
+  readonly sourceRevision: number
+}
+
+export interface ServerReadinessProjectionInput {
+  readonly contentId: string
+  readonly metadataObservedAt: Date | number | null | undefined
+  readonly playbackEvidence?: unknown
+  readonly receipt?: Partial<ReceiptProjection>
+  readonly sourceState?: ServerSourceState | null
+}
+
 export function isEligiblePlayer(candidate: SourceCandidate): boolean {
   return candidate.isActive === true
     && typeof candidate.sourceUrl === 'string'
@@ -173,5 +190,69 @@ export function createReadinessProjection(input: ReadinessProjectionInput): Read
       schemaVersion: input.receipt?.schemaVersion ?? null,
     },
     source: deriveSourceReadiness(input.source),
+  }
+}
+
+function toEpochSeconds(value: Date | number | null | undefined): number | null {
+  if (value instanceof Date) {
+    const seconds = Math.floor(value.getTime() / 1000)
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds : null
+  }
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null
+}
+
+function normalizedSourceState(
+  state: ServerSourceState | null | undefined,
+  fallbackObservedAt: number,
+): SourceReadinessProjection {
+  if (!state) {
+    return deriveSourceReadiness({
+      candidates: [],
+      failure: { reasonCode: 'source_read_failed' },
+      observedAt: fallbackObservedAt,
+      sourceRevision: 0,
+    })
+  }
+
+  const observedAt = toEpochSeconds(state.observedAt) ?? fallbackObservedAt
+  const sourceRevision = Number.isSafeInteger(state.sourceRevision) && state.sourceRevision >= 0
+    ? state.sourceRevision
+    : 0
+  const eligibleCount = Number.isSafeInteger(state.eligibleCount) && state.eligibleCount >= 0
+    ? state.eligibleCount
+    : 0
+
+  return {
+    disposition: state.disposition,
+    eligibleCount,
+    observedAt,
+    reasonCode: isSourceReasonCode(state.reasonCode) ? state.reasonCode : null,
+    repairable: state.repairable === true,
+    sourceRevision,
+  }
+}
+
+/** Projects persisted API facts without deriving readiness from player rows. */
+export function createServerReadinessProjection(input: ServerReadinessProjectionInput): ReadinessProjection {
+  const fallbackObservedAt = toEpochSeconds(input.metadataObservedAt) ?? Math.floor(Date.now() / 1000)
+  const primaryContentId = input.receipt?.primaryContentId === input.contentId
+    ? input.contentId
+    : null
+
+  return {
+    metadata: {
+      contentId: input.contentId,
+      observedAt: toEpochSeconds(input.metadataObservedAt),
+      persisted: true,
+    },
+    playback: derivePlaybackProof(input.playbackEvidence),
+    receipt: {
+      persisted: input.receipt?.persisted === true && primaryContentId !== null,
+      primaryContentId,
+      schemaVersion: primaryContentId === null ? null : (input.receipt?.schemaVersion ?? null),
+    },
+    source: normalizedSourceState(input.sourceState, fallbackObservedAt),
   }
 }

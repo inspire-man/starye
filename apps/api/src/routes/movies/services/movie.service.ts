@@ -2,6 +2,7 @@ import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
 import { movies as moviesTable } from '@starye/db/schema'
 import { count, desc, eq } from 'drizzle-orm'
+import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { FilterBuilder } from '../../../services/query-builder'
 
 // 使用 Drizzle 推导的基础类型
@@ -31,6 +32,8 @@ interface MovieListItem {
 }
 
 interface MovieDetailResult extends Omit<Movie, 'actors' | 'publishers'> {
+  primaryContentId: string
+  readiness: ReturnType<typeof createServerReadinessProjection>
   actors: Array<{
     id: string
     name: string
@@ -273,12 +276,28 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
           },
         },
       },
+      sourceState: {
+        columns: {
+          disposition: true,
+          eligibleCount: true,
+          observedAt: true,
+          reasonCode: true,
+          repairable: true,
+          sourceRevision: true,
+        },
+      },
     },
   })
 
   if (!movie) {
     return null
   }
+
+  const readiness = createServerReadinessProjection({
+    contentId: movie.id,
+    metadataObservedAt: movie.updatedAt,
+    sourceState: movie.sourceState,
+  })
 
   const actorsData = (movie.movieActors || [])
     .map(ma => ma.actor)
@@ -391,8 +410,11 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
   }))
 
   if (movie.isR18 && !isAdult) {
+    const { sourceState: _sourceState, ...movieData } = movie
     return {
-      ...movie,
+      ...movieData,
+      primaryContentId: movie.id,
+      readiness,
       coverImage: null,
       players: [],
       actors: actorsData,
@@ -401,9 +423,12 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     }
   }
 
+  const { sourceState: _sourceState, ...movieData } = movie
   return {
-    ...movie,
-    players: playersWithRatings,
+    ...movieData,
+    primaryContentId: movie.id,
+    readiness,
+    players: playersWithRatings ?? [],
     actors: actorsData,
     publishers: publishersData,
     relatedMovies,

@@ -1,6 +1,77 @@
 import * as v from 'valibot'
 import { OptionalKeywordSchema, PageNumberSchema, TimestampSchema } from './common'
 
+const SourceDispositionSchema = v.picklist(['ready', 'no_source', 'source_failed', 'repairing'])
+const SourceReasonCodeSchema = v.nullable(v.picklist([
+  'no_eligible_source',
+  'repair_requested',
+  'source_candidate_invalid',
+  'source_read_failed',
+  'source_write_failed',
+]))
+const PlaybackProofStatusSchema = v.picklist(['playback_verified', 'unverified'])
+
+export const MetadataProjectionSchema = v.pipe(
+  v.object({
+    contentId: v.pipe(v.string(), v.minLength(1)),
+    observedAt: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    persisted: v.boolean(),
+  }),
+  v.metadata({ ref: 'MetadataProjection' }),
+)
+
+export type MetadataProjection = v.InferOutput<typeof MetadataProjectionSchema>
+
+export const SourceReadinessProjectionSchema = v.pipe(
+  v.object({
+    disposition: SourceDispositionSchema,
+    eligibleCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    observedAt: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    reasonCode: SourceReasonCodeSchema,
+    repairable: v.boolean(),
+    sourceRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  }),
+  v.metadata({ ref: 'SourceReadinessProjection' }),
+)
+
+export type SourceReadinessProjection = v.InferOutput<typeof SourceReadinessProjectionSchema>
+
+export const PlaybackProjectionSchema = v.pipe(
+  v.object({
+    evidence: v.optional(v.object({
+      currentTime: v.pipe(v.number(), v.minValue(0)),
+      observedAt: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    })),
+    status: PlaybackProofStatusSchema,
+  }),
+  v.metadata({ ref: 'PlaybackProjection' }),
+)
+
+export type PlaybackProjection = v.InferOutput<typeof PlaybackProjectionSchema>
+
+export const ReceiptProjectionSchema = v.pipe(
+  v.object({
+    persisted: v.boolean(),
+    primaryContentId: v.nullable(v.pipe(v.string(), v.minLength(1))),
+    schemaVersion: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  }),
+  v.metadata({ ref: 'ReceiptProjection' }),
+)
+
+export type ReceiptProjection = v.InferOutput<typeof ReceiptProjectionSchema>
+
+export const ReadinessProjectionSchema = v.pipe(
+  v.object({
+    metadata: MetadataProjectionSchema,
+    playback: PlaybackProjectionSchema,
+    receipt: ReceiptProjectionSchema,
+    source: SourceReadinessProjectionSchema,
+  }),
+  v.metadata({ ref: 'ReadinessProjection' }),
+)
+
+export type ReadinessProjection = v.InferOutput<typeof ReadinessProjectionSchema>
+
 /**
  * 播放源 Schema
  */
@@ -61,6 +132,7 @@ export type MovieItem = v.InferOutput<typeof MovieItemSchema>
 export const MovieDetailSchema = v.pipe(
   v.object({
     id: v.string(),
+    primaryContentId: v.string(),
     code: v.string(),
     title: v.string(),
     cover: v.nullable(v.pipe(v.string(), v.url())),
@@ -75,6 +147,7 @@ export const MovieDetailSchema = v.pipe(
     createdAt: TimestampSchema,
     updatedAt: TimestampSchema,
     players: v.array(PlayerItemSchema),
+    readiness: ReadinessProjectionSchema,
     relatedMovies: v.array(MovieItemSchema),
   }),
   v.metadata({ ref: 'MovieDetail' }),
