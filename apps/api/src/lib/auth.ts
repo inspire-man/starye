@@ -100,13 +100,13 @@ export function createAuth(env: Env, request: Request) {
   // 动态获取 BaseURL
   const url = new URL(request.url)
 
-  // 检查是否通过 Gateway 转发
-  const forwardedHost = request.headers.get('x-forwarded-host')
+  // OAuth provider callback 必须指向 API Worker，而不是浏览器看到的 Gateway host。
+  // Gateway 转发时 request.url 仍保留 API Worker origin；x-forwarded-host 只代表外部入口。
   const forwardedProto = request.headers.get('x-forwarded-proto')
-  const origin = forwardedHost ? `${forwardedProto || 'https'}://${forwardedHost}` : `${url.protocol}//${url.host}`
+  const requestOrigin = `${url.protocol}//${url.host}`
 
   // 核心：Better Auth 的 baseURL 必须指向它自己挂载的端点
-  const baseURL = env.BETTER_AUTH_URL || `${origin}/api/auth`
+  const baseURL = env.BETTER_AUTH_URL || `${requestOrigin}/api/auth`
   const isHttps = url.protocol === 'https:' || forwardedProto === 'https'
 
   const originHostname = new URL(baseURL).hostname

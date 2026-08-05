@@ -29,6 +29,12 @@ describe('local env projection plan', () => {
     })
   })
 
+  it('将 Better Auth 基址固定投影到 API origin，而不是 Auth Pages origin', () => {
+    const apiEnv = plan.entries.find(entry => entry.file === 'apps/api/.dev.vars')
+
+    expect(apiEnv?.targetManagedEntries.BETTER_AUTH_URL).toBe(plan.target.profile.urls.api)
+  })
+
   it('不会为 user-managed secrets 生成具体值', () => {
     const projectedKeys = new Set(
       plan.entries.flatMap(entry => Object.keys(entry.targetManagedEntries)),

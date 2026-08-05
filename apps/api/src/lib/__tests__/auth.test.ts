@@ -3,7 +3,7 @@
  * 覆盖：ACCESS-02（githubId 字段注入逻辑）
  */
 import { describe, expect, it } from 'vitest'
-import { injectGithubIdIntoSession } from '../auth'
+import { createAuth, injectGithubIdIntoSession } from '../auth'
 
 describe('injectGithubIdIntoSession', () => {
   it('有 GitHub account 时返回 accountId', () => {
@@ -23,6 +23,28 @@ describe('injectGithubIdIntoSession', () => {
 })
 
 describe('createAuth 基础验证', () => {
+  it('gateway 转发时仍以 API request origin 作为 OAuth callback 基址', () => {
+    const env = {
+      DB: {} as any,
+      CACHE: {} as any,
+      BETTER_AUTH_SECRET: 'test-secret-32-chars-minimum-len',
+      WEB_URL: 'https://starye.org',
+      ADMIN_URL: 'https://dashboard.starye.org',
+      GITHUB_CLIENT_ID: 'test-client-id',
+      GITHUB_CLIENT_SECRET: 'test-client-secret',
+    } as any
+    const request = new Request('https://api.starye.org/api/auth/sign-in/social', {
+      headers: {
+        'x-forwarded-host': 'starye.org',
+        'x-forwarded-proto': 'https',
+      },
+    })
+
+    const auth = createAuth(env, request)
+
+    expect(auth.options.baseURL).toBe('https://api.starye.org/api/auth')
+  })
+
   it('createAuth 返回包含 api 的 auth 实例', async () => {
     // 动态 import 避免 Better Auth 初始化副作用
     const { createAuth } = await import('../auth')

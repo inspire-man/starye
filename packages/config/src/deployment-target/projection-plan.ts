@@ -135,7 +135,7 @@ export function buildLocalEnvProjectionPlan(resolution: TargetResolution): Local
         ...identity,
         WEB_URL: profile.urls.gateway,
         ADMIN_URL: profile.urls.dashboard,
-        BETTER_AUTH_URL: profile.urls.auth,
+        BETTER_AUTH_URL: profile.urls.api,
         R2_BUCKET_NAME: profile.resources.r2.name,
         R2_PUBLIC_URL: targetR2PublicUrl(resolution),
       },
