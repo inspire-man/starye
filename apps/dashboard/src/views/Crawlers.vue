@@ -3,8 +3,9 @@
  * 爬虫监控页面
  */
 
-import type { CrawlerRun, CrawlerTask, CrawlerTaskLog, CrawlerTaskTemplate } from '@/lib/api'
+import type { CrawlerRun, CrawlerSourceDisposition, CrawlerTask, CrawlerTaskLog, CrawlerTaskTemplate, ReadinessProjection } from '@/lib/api'
 import { ConfirmDialog, info, SkeletonCard, success } from '@starye/ui'
+import { AlertTriangle, CheckCircle2, CircleHelp, RefreshCw, Wrench } from 'lucide-vue-next'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { useResourceGuard } from '@/composables/useResourceGuard'
@@ -43,6 +44,40 @@ const taskStatusLabels: Record<CrawlerRun['status'], string> = {
   succeeded: '已完成',
   failed: '执行失败',
   cancelled: '已取消',
+}
+
+const sourceDispositionLabels: Record<CrawlerSourceDisposition, string> = {
+  ready: 'ready · 有可用播放源',
+  no_source: 'no_source · 暂无可用播放源',
+  repairing: 'repairing · 修复进行中',
+  source_failed: 'source_failed · 来源读取失败',
+}
+
+const sourceReasonLabels: Record<NonNullable<ReadinessProjection['source']['reasonCode']>, string> = {
+  no_eligible_source: '没有符合条件的播放源',
+  repair_requested: '已提交受控修复意图',
+  source_candidate_invalid: '播放源候选未通过校验',
+  source_read_failed: '来源状态读取失败',
+  source_write_failed: '播放源写入失败',
+}
+
+function runReadiness(run: CrawlerRun): ReadinessProjection | null {
+  return run.readiness ?? null
+}
+
+function sourceDispositionLabel(disposition: CrawlerSourceDisposition): string {
+  return sourceDispositionLabels[disposition]
+}
+
+function sourceReasonLabel(reasonCode: ReadinessProjection['source']['reasonCode']): string {
+  return reasonCode ? sourceReasonLabels[reasonCode] : '无'
+}
+
+function managementLabel(run: CrawlerRun): string {
+  const readiness = runReadiness(run)
+  if (!readiness)
+    return `管理${run.receipt?.templateKey === 'movie' ? '电影' : '漫画'}内容`
+  return readiness.source.disposition === 'ready' ? '查看影片' : '查看修复意图'
 }
 
 function canAccessTemplate(template: CrawlerTaskTemplate): boolean {
@@ -458,11 +493,93 @@ async function executeClearFailed() {
             #{{ run.attemptNumber ?? run.attempt_number }} · {{ taskStatusLabels[run.status] }}
           </button>
         </div>
-        <div v-if="selectedRun.run.receipt && selectedRun.run.status === 'succeeded'" class="receipt-card">
-          <strong>已验证入库结果</strong>
-          <span>主内容 ID：{{ selectedRun.run.receipt.primaryContentId }}</span>
-          <span>新增 {{ selectedRun.run.receipt.createdCount }} · 更新 {{ selectedRun.run.receipt.updatedCount }}</span>
-          <a v-if="managementPath(selectedRun.task, selectedRun.run)" :href="managementPath(selectedRun.task, selectedRun.run)!">管理{{ selectedRun.run.receipt.templateKey === 'movie' ? '电影' : '漫画' }}内容</a>
+        <div class="readiness-detail" aria-live="polite">
+          <div class="readiness-identity">
+            <strong>内容身份</strong>
+            <span v-if="runReadiness(selectedRun.run)">primaryContentId：{{ runReadiness(selectedRun.run)!.metadata.contentId }}</span>
+            <span v-else-if="selectedRun.run.receipt">primaryContentId：{{ selectedRun.run.receipt.primaryContentId }}</span>
+            <span v-else>状态读取中</span>
+          </div>
+          <div v-if="runReadiness(selectedRun.run)" class="readiness-grid">
+            <section class="readiness-block">
+              <h4>Metadata persisted</h4>
+              <p class="readiness-state readiness-state-success">
+                <CheckCircle2 :size="16" aria-hidden="true" />
+                已持久化
+              </p>
+              <span>content ID：{{ runReadiness(selectedRun.run)!.metadata.contentId }}</span>
+              <span>观察时间：{{ runReadiness(selectedRun.run)!.metadata.observedAt ?? '尚未上报' }}</span>
+            </section>
+            <section
+              class="readiness-block"
+              :class="`readiness-${runReadiness(selectedRun.run)!.source.disposition}`"
+              :role="runReadiness(selectedRun.run)!.source.disposition === 'source_failed' ? 'alert' : runReadiness(selectedRun.run)!.source.disposition === 'repairing' ? 'status' : undefined"
+            >
+              <h4>Source readiness</h4>
+              <p class="readiness-state">
+                <CheckCircle2 v-if="runReadiness(selectedRun.run)!.source.disposition === 'ready'" :size="16" aria-hidden="true" />
+                <AlertTriangle v-else-if="runReadiness(selectedRun.run)!.source.disposition === 'source_failed'" :size="16" aria-hidden="true" />
+                <Wrench v-else-if="runReadiness(selectedRun.run)!.source.disposition === 'repairing'" :size="16" aria-hidden="true" />
+                <CircleHelp v-else :size="16" aria-hidden="true" />
+                <span>{{ sourceDispositionLabel(runReadiness(selectedRun.run)!.source.disposition) }}</span>
+              </p>
+              <span>eligible count：{{ runReadiness(selectedRun.run)!.source.eligibleCount }}</span>
+              <span>source revision：{{ runReadiness(selectedRun.run)!.source.sourceRevision }}</span>
+              <span>受控原因：{{ sourceReasonLabel(runReadiness(selectedRun.run)!.source.reasonCode) }}</span>
+              <strong v-if="runReadiness(selectedRun.run)!.source.repairable">可修复</strong>
+            </section>
+            <section class="readiness-block">
+              <h4>Playback proof</h4>
+              <p class="readiness-state">
+                <CheckCircle2 v-if="runReadiness(selectedRun.run)!.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
+                <CircleHelp v-else :size="16" aria-hidden="true" />
+                <span>{{ runReadiness(selectedRun.run)!.playback.status === 'playback_verified' ? '播放已验证' : '播放未验证' }}</span>
+              </p>
+              <span v-if="runReadiness(selectedRun.run)!.playback.evidence">独立证据：playing · currentTime {{ runReadiness(selectedRun.run)!.playback.evidence!.currentTime }}</span>
+              <span v-else>ready/receipt 不等于浏览器播放证据</span>
+            </section>
+            <section class="readiness-block">
+              <h4>Receipt/source summary</h4>
+              <p class="readiness-state readiness-state-success">
+                <CheckCircle2 :size="16" aria-hidden="true" />
+                {{ runReadiness(selectedRun.run)!.receipt.persisted ? 'receipt 已持久化' : 'receipt 未持久化' }}
+              </p>
+              <span>content identity matched：{{ runReadiness(selectedRun.run)!.receipt.primaryContentId === runReadiness(selectedRun.run)!.metadata.contentId ? '是' : '否' }}</span>
+              <span>source revision：{{ runReadiness(selectedRun.run)!.source.sourceRevision }}</span>
+              <span>candidate count：{{ runReadiness(selectedRun.run)!.source.eligibleCount }} · disposition：{{ runReadiness(selectedRun.run)!.source.disposition }}</span>
+              <span v-if="selectedRun.run.receipt">新增 {{ selectedRun.run.receipt.createdCount }} · 更新 {{ selectedRun.run.receipt.updatedCount }}</span>
+            </section>
+          </div>
+          <div v-else class="readiness-loading" role="status">
+            <RefreshCw :size="16" aria-hidden="true" />状态读取中，未推导 ready 或 playback proof。
+          </div>
+          <div v-if="selectedRun.run.receipt && selectedRun.run.status === 'succeeded'" class="readiness-actions">
+            <a
+              v-if="managementPath(selectedRun.task, selectedRun.run) && (!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition))"
+              class="task-secondary readiness-link"
+              :href="managementPath(selectedRun.task, selectedRun.run)!"
+            >
+              {{ managementLabel(selectedRun.run) }}
+            </a>
+            <button
+              v-if="!runReadiness(selectedRun.run) || ['no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition)"
+              class="task-secondary"
+              type="button"
+              :disabled="taskRefreshing"
+              @click="loadTaskPanel"
+            >
+              {{ taskRefreshing ? '读取中…' : '重试读取' }}
+            </button>
+            <button
+              v-else-if="runReadiness(selectedRun.run)?.source.disposition === 'repairing'"
+              class="task-secondary"
+              type="button"
+              :disabled="taskRefreshing"
+              @click="loadTaskPanel"
+            >
+              {{ taskRefreshing ? '刷新中…' : '刷新状态' }}
+            </button>
+          </div>
         </div>
         <div v-if="selectedRun.run.provider" class="provider-summary">
           <strong>Provider 摘要</strong>
@@ -749,6 +866,23 @@ async function executeClearFailed() {
 .task-error { border-radius: 0.375rem; background: hsl(var(--secondary)); padding: 0.75rem; color: hsl(var(--destructive)); }
 .receipt-card { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
 .receipt-card a { min-height: 44px; color: hsl(var(--primary)); text-decoration: underline; }
+.readiness-detail { display: grid; gap: 1rem; margin-bottom: 1rem; border: 1px solid hsl(var(--border)); border-radius: 0.5rem; background: hsl(var(--card)); padding: 1rem; }
+.readiness-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem; overflow-wrap: anywhere; }
+.readiness-identity span,
+.readiness-block > span,
+.readiness-block > strong { overflow-wrap: anywhere; }
+.readiness-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.readiness-block { display: grid; align-content: start; gap: 0.5rem; min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 0.375rem; padding: 0.875rem; }
+.readiness-block h4 { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.readiness-state { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-weight: 600; }
+.readiness-state-success { color: hsl(var(--primary)); }
+.readiness-no_source { background: hsl(var(--secondary)); }
+.readiness-source_failed { border-color: hsl(var(--destructive)); }
+.readiness-repairing { border-color: hsl(var(--primary)); }
+.readiness-loading,
+.readiness-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.readiness-loading { color: hsl(var(--muted-foreground)); }
+.readiness-actions .readiness-link { display: inline-flex; align-items: center; text-decoration: none; }
 .safe-log-scroller { max-height: 448px; overflow-y: auto; border-radius: 0.375rem; background: hsl(var(--muted)); padding: 0.75rem; }
 .safe-log-row { display: grid; grid-template-columns: auto auto auto minmax(0, 10rem) minmax(0, 1fr); gap: 0.5rem; align-items: start; padding: 0.5rem 0; border-bottom: 1px solid hsl(var(--border)); font-size: 0.875rem; }
 .safe-log-row span { overflow-wrap: anywhere; }
@@ -758,7 +892,8 @@ async function executeClearFailed() {
 
 @media (max-width: 1023px) {
   .task-grid,
-  .task-history-grid { grid-template-columns: 1fr; }
+  .task-history-grid,
+  .readiness-grid { grid-template-columns: 1fr; }
 }
 
 .crawlers-page {

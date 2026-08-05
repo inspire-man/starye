@@ -1,4 +1,5 @@
 import type { CrawlerTaskTemplateKey } from '../../../domain/crawler-tasks/types'
+import type { SourceReadinessProjection } from '../../../domain/movies/source-contract'
 import type { GitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import type { AppEnv, SessionUser } from '../../../types'
 import { Hono } from 'hono'
@@ -7,6 +8,7 @@ import { HTTPException } from 'hono/http-exception'
 import { createProviderDispatchInput, createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTaskCursor } from '../../../domain/crawler-tasks/repository'
 import { getCrawlerTaskTemplate } from '../../../domain/crawler-tasks/template-registry'
+import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { createGitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import { canAccessCrawler } from '../../../lib/permissions'
 import {
@@ -96,13 +98,24 @@ interface TaskAccessRow {
 interface SafeCrawlerReceipt {
   createdCount: number
   primaryContentId: string
+  receiptSchemaVersion?: 2
+  source?: SourceReadinessProjection
   templateKey: CrawlerTaskTemplateKey
   updatedCount: number
 }
 
-function projectReceipt(status: unknown, raw: unknown): SafeCrawlerReceipt | null {
-  if (status !== 'succeeded' || typeof raw !== 'string')
-    return null
+interface PersistedReceiptColumns {
+  receipt_schema_version?: unknown
+  receipt_primary_content_id?: unknown
+  receipt_source_revision?: unknown
+}
+
+function projectReceipt(status: unknown, raw: unknown, persisted: PersistedReceiptColumns = {}): SafeCrawlerReceipt | null {
+  if (status !== 'succeeded' || typeof raw !== 'string') {
+    return status === 'succeeded' && raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? projectReceipt(status, JSON.stringify(raw), persisted)
+      : null
+  }
   try {
     const value: unknown = JSON.parse(raw)
     if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -110,16 +123,68 @@ function projectReceipt(status: unknown, raw: unknown): SafeCrawlerReceipt | nul
     const receipt = value as Record<string, unknown>
     if ((receipt.templateKey !== 'movie' && receipt.templateKey !== 'manga')
       || typeof receipt.primaryContentId !== 'string'
+      || !/^\w[\w-]{0,127}$/u.test(receipt.primaryContentId)
       || receipt.primaryContentId.length === 0
       || typeof receipt.createdCount !== 'number'
       || !Number.isInteger(receipt.createdCount)
+      || receipt.createdCount < 0
       || typeof receipt.updatedCount !== 'number'
       || !Number.isInteger(receipt.updatedCount)) {
       return null
     }
+    if (receipt.updatedCount < 0
+      || (receipt.receiptSchemaVersion !== undefined && receipt.receiptSchemaVersion !== 2)
+      || (persisted.receipt_schema_version !== undefined
+        && persisted.receipt_schema_version !== null
+        && persisted.receipt_schema_version !== 2)
+      || (typeof persisted.receipt_primary_content_id === 'string'
+        && persisted.receipt_primary_content_id.length > 0
+        && persisted.receipt_primary_content_id !== receipt.primaryContentId)) {
+      return null
+    }
+
+    let source: SourceReadinessProjection | undefined
+    if (receipt.source !== undefined) {
+      if (!receipt.source || typeof receipt.source !== 'object' || Array.isArray(receipt.source))
+        return null
+      const candidate = receipt.source as Record<string, unknown>
+      const reasonCodes = ['no_eligible_source', 'repair_requested', 'source_candidate_invalid', 'source_read_failed', 'source_write_failed']
+      const validReason = candidate.reasonCode === null
+        || (typeof candidate.reasonCode === 'string' && reasonCodes.includes(candidate.reasonCode))
+      if ((candidate.disposition !== 'ready'
+        && candidate.disposition !== 'no_source'
+        && candidate.disposition !== 'source_failed'
+        && candidate.disposition !== 'repairing')
+      || typeof candidate.eligibleCount !== 'number'
+      || !Number.isSafeInteger(candidate.eligibleCount)
+      || candidate.eligibleCount < 0
+      || typeof candidate.observedAt !== 'number'
+      || !Number.isSafeInteger(candidate.observedAt)
+      || candidate.observedAt < 0
+      || typeof candidate.repairable !== 'boolean'
+      || !validReason
+      || typeof candidate.sourceRevision !== 'number'
+      || !Number.isSafeInteger(candidate.sourceRevision)
+      || candidate.sourceRevision < 0
+      || (typeof persisted.receipt_source_revision === 'number'
+        && persisted.receipt_source_revision !== candidate.sourceRevision)) {
+        return null
+      }
+      source = {
+        disposition: candidate.disposition,
+        eligibleCount: candidate.eligibleCount,
+        observedAt: candidate.observedAt,
+        reasonCode: candidate.reasonCode,
+        repairable: candidate.repairable,
+        sourceRevision: candidate.sourceRevision,
+      } as SourceReadinessProjection
+    }
+
     return {
       createdCount: receipt.createdCount,
       primaryContentId: receipt.primaryContentId,
+      ...(receipt.receiptSchemaVersion === 2 || persisted.receipt_schema_version === 2 ? { receiptSchemaVersion: 2 as const } : {}),
+      ...(source ? { source } : {}),
       templateKey: receipt.templateKey,
       updatedCount: receipt.updatedCount,
     }
@@ -129,12 +194,57 @@ function projectReceipt(status: unknown, raw: unknown): SafeCrawlerReceipt | nul
   }
 }
 
+function projectReadiness(row: Record<string, unknown>, receipt: SafeCrawlerReceipt | null): ReturnType<typeof createServerReadinessProjection> | null {
+  if (!receipt)
+    return null
+  const observedAt = row.terminal_at ?? row.terminalAt ?? row.updated_at ?? row.updatedAt ?? row.created_at ?? row.createdAt
+  const source = receipt.source ?? {
+    disposition: 'source_failed' as const,
+    eligibleCount: 0,
+    observedAt: typeof observedAt === 'number' && Number.isSafeInteger(observedAt) && observedAt >= 0 ? observedAt : 0,
+    reasonCode: 'source_read_failed' as const,
+    repairable: true,
+    sourceRevision: typeof row.receipt_source_revision === 'number' && Number.isSafeInteger(row.receipt_source_revision) && row.receipt_source_revision >= 0
+      ? row.receipt_source_revision
+      : 0,
+  }
+  return createServerReadinessProjection({
+    contentId: receipt.primaryContentId,
+    metadataObservedAt: observedAt as number | null | undefined,
+    receipt: {
+      persisted: true,
+      primaryContentId: receipt.primaryContentId,
+      schemaVersion: receipt.receiptSchemaVersion ?? null,
+    },
+    sourceState: source,
+  })
+}
+
 function projectRun(row: Record<string, unknown>): Record<string, unknown> {
-  const { receipt_summary_json: receiptSummary, ...safeRun } = row
-  const receipt = projectReceipt(row.status, receiptSummary)
+  const {
+    receipt: rawReceipt,
+    receipt_primary_content_id: _receiptPrimaryContentId,
+    receipt_schema_version: _receiptSchemaVersion,
+    receipt_source_revision: _receiptSourceRevision,
+    receipt_summary_json: receiptSummary,
+    ...safeRun
+  } = row
+  const receipt = projectReceipt(row.status, receiptSummary ?? rawReceipt, {
+    receipt_primary_content_id: row.receipt_primary_content_id,
+    receipt_schema_version: row.receipt_schema_version,
+    receipt_source_revision: row.receipt_source_revision,
+  })
   return {
     ...safeRun,
     receipt,
+    ...(receipt ? { readiness: projectReadiness(row, receipt) } : {}),
+  }
+}
+
+function projectTaskDetail(detail: { task: unknown, runs: readonly unknown[] }): Record<string, unknown> {
+  return {
+    runs: detail.runs.map(run => projectRun(run as Record<string, unknown>)),
+    task: detail.task,
   }
 }
 
@@ -261,12 +371,12 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
   if (repository.getTaskDetail) {
     const detail = await repository.getTaskDetail(taskId)
     if (detail)
-      return c.json(detail)
+      return c.json(projectTaskDetail(detail))
   }
   const d1 = getD1(c)
   const [task, runs] = await Promise.all([
     d1.prepare('SELECT id, template_key, latest_run_id, created_at, updated_at FROM crawler_task WHERE id = ?').bind(taskId).all<Record<string, unknown>>(),
-    d1.prepare('SELECT id, attempt_number, status, state_version, failure_code, receipt_summary_json, created_at, terminal_at FROM crawler_run WHERE task_id = ? ORDER BY attempt_number DESC').bind(taskId).all<Record<string, unknown>>(),
+    d1.prepare('SELECT id, attempt_number, status, state_version, failure_code, receipt_summary_json, receipt_schema_version, receipt_primary_content_id, receipt_source_revision, created_at, terminal_at FROM crawler_run WHERE task_id = ? ORDER BY attempt_number DESC').bind(taskId).all<Record<string, unknown>>(),
   ])
   return c.json({ runs: (runs.results ?? []).map(projectRun), task: task.results?.[0] })
 })

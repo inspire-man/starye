@@ -196,10 +196,50 @@ export interface Paginated<T> {
 
 export type CrawlerTaskTemplate = 'movie' | 'manga'
 export type CrawlerRunStatus = 'queued' | 'dispatching' | 'running' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled'
+export type CrawlerSourceDisposition = 'ready' | 'no_source' | 'source_failed' | 'repairing'
+export type CrawlerSourceReasonCode = 'no_eligible_source' | 'repair_requested' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
+
+export interface MetadataProjection {
+  contentId: string
+  observedAt: number | null
+  persisted: boolean
+}
+
+export interface SourceReadinessProjection {
+  disposition: CrawlerSourceDisposition
+  eligibleCount: number
+  observedAt: number
+  reasonCode: CrawlerSourceReasonCode | null
+  repairable: boolean
+  sourceRevision: number
+}
+
+export interface PlaybackProjection {
+  evidence?: {
+    currentTime: number
+    observedAt?: number
+  }
+  status: 'playback_verified' | 'unverified'
+}
+
+export interface ReceiptProjection {
+  persisted: boolean
+  primaryContentId: string | null
+  schemaVersion: number | null
+}
+
+export interface ReadinessProjection {
+  metadata: MetadataProjection
+  playback: PlaybackProjection
+  receipt: ReceiptProjection
+  source: SourceReadinessProjection
+}
 
 export interface CrawlerRunReceipt {
   createdCount: number
   primaryContentId: string
+  receiptSchemaVersion?: number
+  source?: SourceReadinessProjection
   templateKey: CrawlerTaskTemplate
   updatedCount: number
 }
@@ -236,6 +276,7 @@ export interface CrawlerRun {
   terminalAt?: number | string | null
   updatedAt?: number
   provider?: CrawlerProviderSummary | null
+  readiness?: ReadinessProjection | null
   receipt: CrawlerRunReceipt | null
 }
 
