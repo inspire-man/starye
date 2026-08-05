@@ -1,136 +1,300 @@
 # Technology Stack
 
-**Project:** Starye v1.3 - 后台爬虫任务与内容运维
-**Researched:** 2026-07-30
+**Project:** Starye v1.4 - 播放可用性与生产自愈闭环
+**Domain:** 个人内容中台的播放源校验、播放器恢复、受控 crawler repair 与生产浏览器验收
+**Researched:** 2026-08-05
+**Overall confidence:** MEDIUM
+
+## Decision Summary
+
+v1.4 的最小可交付栈是当前仓库已经运行的 Vue 3.5 + xgplayer 3.0.24、原生 HTMLMediaElement 事件、Hono + Cloudflare Workers + D1 + Drizzle、Node 24 + Puppeteer GitHub Actions runner，以及 Playwright Test 1.59.1。播放校验、错误恢复、repair dispatch 与 Dashboard -> Viewer 证明都由现有运行时覆盖，生产 runtime 依赖保持零新增。
+
+播放源校验分为三层：Node runner 做有界的 HTTP/Range probe，D1 保存规范化的 health 状态，浏览器用 playing 与 currentTime 前进完成实际播放证明。HTTP 2xx 或 canplay 只代表中间层的就绪信号；fresh production run 的验收终点是 Viewer 中实际发生播放进度。
+
+API Worker 负责鉴权、状态机、D1 投影、固定模板 dispatch 和回调验签。GitHub Actions 继续承载 Puppeteer、来源抓取和 repair；Dashboard 只提交 allowlisted 的内容 ID、模板和 target。Movie App 继续由 xgplayer 管理播放实例、重试、回退和错误呈现。各层通过现有 @starye/api-types、crawler task/run/attempt/receipt 契约连接。
+
+最小 schema 变化是给电影和播放源增加当前 health 投影字段，保持现有 player 行作为来源身份与排序事实；repair 历史复用已经存在的 D1 crawler_task、crawler_run、attempt、log、lease 和 HMAC callback。players.isActive 继续表达用户上报后的运营状态，source probe 状态使用独立字段，避免语义混用。
 
 ## Recommended Stack
 
 ### Core Framework
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Turborepo + pnpm workspace | Turbo `^2.9.6`, pnpm `10.33.0` | 保持 API、dashboard、crawler 和共享类型同仓交付 | 已是生产构建路径；任务状态契约必须由 API、Vue 页面与 Node runner 同时消费，不能新建独立服务仓库。 |
-| TypeScript | `^6.0.2` | 任务模板、状态机、回调事件与日志上下文的共享类型 | 沿用严格 TypeScript，新增判别联合 `CrawlerTaskTemplate`、`CrawlerRunState`、`CrawlerLogEvent` 到 `@starye/api-types`，不复制 dashboard 专有类型。 |
-| Cloudflare Worker + Hono | Workers types `^4.20260417.1`; Hono `^4.12.14`; `hono-openapi ^1.3.0` | 受控控制面：创建/查询/取消/重试任务、向 Actions 发起请求、接收 runner 回调 | `apps/api` 已有 Hono、D1 binding、角色认证与 OpenAPI。Worker 只处理短请求与状态汇总，绝不承载 Puppeteer。 |
-| Valibot + `@hono/standard-validator` | Valibot `^1.3.1`; validator `^0.2.2` | 验证固定的漫画/视频模板、回调事件和分页查询 | 已用于 API schema；服务端只接受模板 ID、允许的 target、受限选项和 task ID，不能接收任意命令、URL、环境变量或 workflow 名。 |
-| 原生 Workers `fetch` GitHub REST client | GitHub REST API version header `2022-11-28`; 无新增 npm 包 | 触发、取消、有限查询 Actions workflow run | Cloudflare 官方文档确认 Worker handler 可进行 HTTP `fetch`。这里只有 dispatch/cancel/status 三类调用，自写约 100 行的窄客户端比引入 Octokit 更适合 Worker 和当前单仓边界。 |
-| 原生 Web Crypto | Workers `crypto.subtle`; 无新增 npm 包 | 验证本地/Actions runner 的 HMAC-SHA-256 回调 | Cloudflare 官方文档确认 `crypto.subtle.verify` 及 HMAC 支持；保持签名验签运行在边缘，不需要 Node crypto 兼容层。 |
+| Technology | Version | Purpose | v1.4 decision |
+|------------|---------|---------|---------------|
+| Turborepo + pnpm workspace | Turbo ^2.9.6; pnpm 10.33.0 | 同仓构建 API、Dashboard、Movie App、crawler 和共享契约 | 沿用现有 monorepo。API、Vue、runner 与 migration 共享同一版本基线。 |
+| TypeScript | ^6.0.2 | health 状态、repair 输入、receipt、播放事件和 E2E evidence 的闭合类型 | 在 @starye/api-types 增加判别联合和 DTO；保持 API、Dashboard、runner 共用。 |
+| Cloudflare Workers + Hono | Workers types ^4.20260417.1; Hono ^4.12.14 | API 控制面、鉴权、状态投影、GitHub Actions dispatch/callback | Worker 承载短请求和状态写入；Puppeteer 与长时来源工作落在 Actions。 |
+| Vue + Vue Router | Vue ^3.5.32; Vue Router ^5.0.4 | MovieDetail.vue、Player.vue 的播放状态和恢复交互 | 复用现有响应式状态与路由；把 no-source、probe、retry、fallback、error 作为显式视图状态。 |
+| Nuxt | ^4.4.2 | 现有 Nuxt surfaces 和统一仓库工具链 | v1.4 的 Viewer 主链位于 Movie App；Nuxt 依赖保持当前 workspace 基线。 |
+| xgplayer | ^3.0.24 | HTML5 播放器实例、事件、销毁和重建 | 保持现有播放器。用 canplay、playing、waiting、error 连接状态机，使用 destroy() 后重建实例完成 bounded retry。 |
+| Valibot + @starye/api-types | Valibot ^1.3.1; workspace package | repair 输入、health 状态、receipt 和 API projection 的运行时/编译期契约 | 只接受闭合的 template、target、movie ID 和 attempt 关联字段；固定 workflow 由 registry 持有。 |
+
+### Playback Validation
+
+| Capability | Existing API | v1.4 use | Dependency |
+|------------|---------------|-----------|------------|
+| Readiness signal | HTMLMediaElement.canplay; readyState | 显示“可开始尝试”，启动短时缓冲窗口 | Browser built-in |
+| Actual playback signal | playing; currentTime delta | Viewer 验收的成功条件 | Browser built-in + Playwright |
+| Stall signal | waiting; bounded timer | 进入 buffering/source-degraded，触发有限重试 | Browser built-in + existing Player.vue timer |
+| Failure signal | error; networkState; play() Promise rejection | 分类 source-invalid、network、xgplayer、torrserver | Browser built-in + xgplayer |
+| Source restart | HTMLMediaElement.load() and xgplayer instance lifecycle | 同源重试、切换下一来源、销毁后重建 | Browser built-in + xgplayer destroy() |
+| Server-side probe | Node global fetch; AbortSignal.timeout() | Actions 中的 HEAD 或 byte-range GET 有界探测 | Node 24 built-in |
+
+canplay 的含义是浏览器拥有开始播放所需的数据，playing 的含义是播放已经开始；两者在证据中分别承担 readiness 和 actual playback 角色。playing 事件后采集两个时间点的 currentTime，可把“事件触发”提升为“进度确实前进”的可验证证据。
+
+Server-side probe 采用小响应策略：优先 HEAD，源站拒绝 HEAD 时使用 Range: bytes=0-0 的 GET；每次请求绑定 AbortSignal.timeout()，限定重定向、状态码、Content-Type 和响应大小，记录规范化的 probeStatus、httpStatus、contentType、errorCode 与 checkedAt。probe 是来源筛选信号，浏览器播放仍是最终验收信号。
+
+磁力链接进入 download-only 或 torrserver-pending 分支。MovieDetail.vue 继续使用现有 Aria2/TorrServer 交互，直接把 magnet 当作 HTML5 可播放 URL 会造成错误分类。
 
 ### Database
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Cloudflare D1 | 现有 Worker binding | 任务队列、执行记录、结构化日志和回调幂等键的唯一业务事实源 | v1.3 是单作者、低并发运维面；D1 已在 API 中通过 Drizzle 使用。把任务状态留在 Actions 或本地文件会重现当前 `failed-tasks` 无法在 Worker 查询的缺口。 |
-| Drizzle ORM + drizzle-kit | ORM `0.45.2`; kit `^0.31.10` | schema、关系、migration、D1 测试数据库 | 延续现有 `@starye/db` 边界。新增 `crawler_task`、`crawler_run`、`crawler_run_log` 和每模板一个 active lease/claim，而不是复用语义过宽的旧 `job` 表。 |
-| D1 prepared statements + `batch()` | Cloudflare binding API | 原子写入状态转换、run 元数据和首/末条生命周期日志 | 官方 D1 文档说明 `batch()` 按顺序在一个 SQL transaction 中执行，任一失败回滚整个序列。请求参数一律 `prepare().bind()`；禁止对 API 或回调输入使用 `exec()`。 |
-| `nanoid` | `^5.1.9` (现有) | task/run/callback nonce 的可追踪 ID | 已被数据库包采用；每次重试新建 run ID，并用 `retry_of_run_id` 关联，不能复用旧 run ID。 |
+| Technology | Version | Purpose | v1.4 decision |
+|------------|---------|---------|---------------|
+| Cloudflare D1 | Existing Worker binding | 播放源身份、movie aggregate、health projection、repair task/run receipt | 沿用唯一业务事实源；把 Viewer 需要的状态从 D1/API 投影出来。 |
+| Drizzle ORM | 0.45.2 | movies、players、crawler tables 的 schema 和查询 | 沿用 @starye/db。migration 扩展 current health 字段与索引。 |
+| drizzle-kit | ^0.31.10 | migration generation and application | 沿用 packages/db 的 generate 与 target-remote-entry --entry d1-migrate 路径。 |
+| D1 prepared statements | Cloudflare D1 Worker API | 所有 health、task、run、receipt 写入 | 使用 prepare().bind()，输入字段进入显式 allowlist。 |
+| D1 batch() | Cloudflare D1 Worker API | 状态转换、probe 结果、receipt 和末条日志的成组写入 | 让一次 repair 结果的关联写入按既有 repository 边界完成。 |
+
+#### Minimal schema extension
+
+现有 movie 已有 crawlStatus、totalPlayers、crawledPlayers，现有 player 已有 sourceUrl、quality、sortOrder、reportCount、isActive。推荐增加以下 current projection 字段，repair 历史继续使用 crawler run：
+
+| Entity | Fields | Meaning |
+|--------|--------|---------|
+| movie | playbackStatus、playbackCheckedAt、playbackLastErrorCode、playbackRepairTaskId | 让 players=0 具有可查询的 no_source/source_repairable/repair_running/repair_exhausted 状态。 |
+| player | healthStatus、lastCheckedAt、lastProbeStatus、lastProbeHttpStatus、lastProbeErrorCode、lastProbeRunId | 区分来源探测与用户上报；保留 isActive 的运营语义。 |
+| crawler_run.receipt_summary_json | sourceSummary、playerCount、healthCounts | 把 repair 的来源结果挂到现有 receipt，支持 Dashboard 和 fresh run 证据关联。 |
+
+推荐的闭合状态值：
+
+~~~text
+movie.playbackStatus:
+  no_source | source_unverified | source_ready | source_degraded
+  source_repairable | repair_queued | repair_running | repair_failed
+  repair_exhausted | playback_verified
+
+player.healthStatus:
+  unprobed | probe_ok | probe_http_error | probe_timeout
+  probe_invalid_media | browser_failed | download_only | disabled
+~~~
+
+这些字段只表示当前投影；每次 repair 的完整历史仍由 task_id、run_id、attempt、sequence、receipt 和 provider_run_url 关联。状态更新使用 Drizzle repository 和 D1 batch()，避免 route 层直接散落 SQL。
 
 ### Infrastructure
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| GitHub Actions | 现有 GitHub-hosted runner | 生产实际运行 Node/Puppeteer crawler | 项目已用 `daily-manga-crawl.yml` 与 `daily-movie-crawl.yml`，并把 Cloudflare/R2 凭据置于 GitHub Environment；继续使用而非把浏览器自动化迁入 Worker。 |
-| `workflow_dispatch` + typed inputs | GitHub Actions workflow syntax | Worker 只向两个允许的 workflow 传递 `task_id`、`run_id`、`template`、`attempt` 与回调 nonce | GitHub REST dispatch 要求 workflow 声明 `workflow_dispatch`。将 `ref` 固定为 `main`，workflow 文件名固定为现有两份，不让 dashboard 指定 YAML、branch 或 shell 参数。 |
-| GitHub Actions concurrency | workflow-level guard | 防止同一视频/漫画模板的直接并发执行 | 设 `group: crawler-${{ inputs.template }}` 且 `cancel-in-progress: false`，但不把它当队列。官方文档说明同组 pending run 会被替换；D1 负责 FIFO/claim，Worker 仅在无 active lease 时 dispatch 下一项。 |
-| Node.js + `tsx` runner | Node `24` in current workflows; `tsx ^4.21.0` | 本地和 Actions 共用的任务 runner CLI | 将 runner 做成 `@starye/crawler` 的显式 `task-runner --task-id --mode local|actions` 入口；本地仍经 Gateway `http://localhost:8080/api`，生产经 selected target profile。 |
-| Puppeteer stack | `puppeteer-core ^24.41.0`, `puppeteer ^24.41.0`, `puppeteer-extra ^3.3.6` | 视频 crawler 浏览器自动化 | 已验证且只在 Node 环境可用。不能在 Cloudflare Worker、Pages Function 或 dashboard 浏览器进程执行。 |
-| GitHub Environment + Cloudflare secrets | 现有 `starye-org` target/environment | 隔离 crawler 的 Cloudflare/R2/回调凭据 | 复用工作流的 `target-profile validate`、`prepare-mutation` 与 `run-prepared-entry`，不要旁路为手填 account ID、D1 ID 或临时 `.env`。 |
+| Technology | Version | Purpose | v1.4 decision |
+|------------|---------|---------|---------------|
+| GitHub Actions | Existing workflows with workflow_dispatch | production crawler and player repair execution | 复用固定 workflow、target-profile、prepare-mutation、run-prepared-entry；每次 repair 产生 fresh run_id。 |
+| Node.js | Actions node-version: 24 | Puppeteer、source probe、receipt builder、callback client | 使用 Node 24 内建 fetch 和 AbortSignal.timeout()，保持 runner 与现有 workflow 一致。 |
+| Puppeteer | puppeteer-core ^24.41.0; puppeteer ^24.41.0; puppeteer-extra ^3.3.6 | crawler source extraction and repair | 继续由 GitHub-hosted runner 执行；Actions 是浏览器执行边界。 |
+| tsx | 4.21.0 | local/Actions TypeScript entrypoints | 复用 target-remote-entry.ts 和 task runner CLI，显式传入 target、entry、task/run identifiers。 |
+| GitHub REST via native fetch | GitHub API 2022-11-28 headers | dispatch、run lookup、cancel、reconcile | 现有窄 client 已覆盖控制面；请求只引用 registry-owned workflow/ref/template 和保存的 provider run ID。 |
+| GitHub Environment secrets | Existing starye-org | Cloudflare、R2、crawler、callback credentials | 沿用现有 secret projection 和 HMAC callback key rotation。 |
 
-### Supporting Libraries
+### E2E Evidence
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| `@starye/api-types` | workspace | 任务 DTO、日志事件、状态值和 API client 类型 | API route、dashboard 与 runner 都通过它消费同一 JSON contract。 |
-| `p-queue` | `^9.1.2` (现有) | 单个 Node runner 内的抓取子工作并发和 `AbortSignal` 停止 | 仅用于一个已 claim run 内的 URL/页面并发；不能替代跨 Actions run 的 D1 队列。 |
-| `p-map` | `^7.0.4` (现有) | 有界批处理 | 子资源并行抓取且每项都能检查 cancellation 后使用；保留已有 concurrency 上限。 |
-| `got` / `got-scraping` | `^15.0.2` / `^4.2.1` (现有) | Node crawler 的来源 HTTP 请求 | 继续用于 crawler 数据面；Worker 的 GitHub 控制面使用原生 `fetch`，不要把 Node HTTP client 打进 Worker。 |
-| Vitest | `^4.1.4` (现有) | 状态机、claim、回调验签、GitHub client 与 runner cancellation 测试 | 以 stubbed `fetch` 与 D1 fixture 覆盖；不新增端到端 SaaS 或队列测试框架。 |
+| Technology | Version | Purpose | v1.4 decision |
+|------------|---------|---------|---------------|
+| Playwright Test | @playwright/test ^1.59.1 | fresh production run 的 Dashboard -> Viewer -> playback proof | 复用现有 projects、assertions、trace/video/screenshot；加入成功路径的结构化 evidence JSON 和关键截图。 |
+| Gateway | Local canonical URL http://localhost:8080 | 本地统一入口、cookie/auth、Dashboard 与 Viewer 的同源路径 | 本地验证和本地 evidence 使用 Gateway；app 的 5173 仅作为 dev server implementation detail。 |
+| Production target profile | Existing tracked target | selected production deployment and evidence metadata | fresh run 绑定目标 profile、task/run/attempt 和 receipt；历史 Phase 13 carrier 保持冻结。 |
+
+Playwright 的 baseURL 和 webServer 适合本地启动，生产验收使用选定 target URL。成功 proof 至少记录：
+
+~~~text
+task_id
+run_id
+attempt
+template
+target
+receipt.primaryContentId
+receipt.playerCount
+viewerPath
+sourceState
+readyState
+playingObservedAt
+currentTimeBefore
+currentTimeAfter
+evidencePaths
+~~~
+
+视频源 URL、token、cookie 和签名 material 进入 redaction；evidence 只保留可审计的 IDs、状态、时间和 artifact path。
 
 ## Integration Boundaries
 
-### GitHub Actions REST API
+| Surface | Owns | Reads/Writes | v1.4 contract |
+|---------|------|--------------|---------------|
+| API Worker + Hono | auth, validation, status transitions, projections, dispatch, callback verification | D1, GitHub REST | Dashboard 只提交 movieId/code、闭合 template、target profile 和可选 repair reason。 |
+| D1 + Drizzle repository | current playback health, task/run/attempt/log/lease, receipt summary | prepared statements and batch() | source health 是查询事实；crawler run 是 repair history；两者用 run IDs 关联。 |
+| Crawler registry | fixed movie/crawler/repair templates | validated target and entry | template、workflow、ref、command、environment 均由 registry 决定，输入只包含 allowlisted content identifiers。 |
+| GitHub Actions runner | Puppeteer enrichment, source probe, sync, receipt, HMAC events | Node 24, R2/API, selected target secrets | 生产浏览器执行保持在 Actions；每次 attempt 发送 started/heartbeat/log/completed/failed 事件。 |
+| Movie App + xgplayer | user-facing source selection, bounded retry, fallback, playback state | public movie API and browser media element | MovieDetail 呈现 no-source/repair/error 状态；Player 以 playing + currentTime 完成 success。 |
+| Playwright | browser assertions and evidence | Gateway/production target, trace/video/screenshot | 只接受 fresh task/run/attempt 的 receipt，沿 Dashboard -> Viewer -> actual playback 顺序验收。 |
+| Gateway | routing and same-origin local proof | app/API Workers | 本地 canonical proof 入口固定为 http://localhost:8080/...。 |
 
-**控制面只允许四种资源操作：**
+### Repair control flow
 
-| Operation | REST API | Request boundary | D1 effect |
-|-----------|----------|------------------|-----------|
-| Dispatch | `POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches` | 固定 workflow ID、`ref: main`、经 schema 验证的固定模板 inputs | task 从 `queued` 原子 claim 至 `dispatching`；收到 runner started callback 后才是 `running`。 |
-| Cancel | `POST /repos/{owner}/{repo}/actions/runs/{run_id}/cancel` | 只接受 task 当前保存的 `github_run_id` | REST 成功仅写 `cancelling` 与审计日志；终态必须由 callback 或 Action terminal result 确认。 |
-| Reconcile | `GET /repos/{owner}/{repo}/actions/runs/{run_id}` | 仅查询该 task 已关联的 run ID；限频作为 callback 异常兜底 | 更新缺失的 GitHub URL/结论，不能从外部 run 猜测或接管任务。 |
-| Retry | 再次 dispatch 同一固定模板 | 创建新 `crawler_run`，递增 attempt，关联 `retry_of_run_id` | 旧 run 永久保留，新的 task/run ID 与 nonce 使晚到回调不能覆盖当前状态。 |
+~~~text
+Dashboard repair action
+  -> API validates closed template + movie identifier + target profile
+  -> D1 creates crawler_task / crawler_run / lease
+  -> fixed GitHub workflow_dispatch
+  -> Actions target-profile + controlled entry + Puppeteer/source probe
+  -> API sync + D1 health projection + signed receipt callback
+  -> Dashboard refreshes task and movie playback projection
+  -> fresh Playwright proof: Dashboard -> Viewer -> playing/currentTime
+~~~
 
-Dispatch API 的默认响应在不同服务版本可能只确认受理，因而不能以 HTTP 204/202 推断 `running`。workflow 首步必须用 `${{ github.run_id }}`、`${{ github.run_attempt }}` 和原始 `task_id` 调用 `started` 回调，作为 `github_run_id` 的可信绑定；这也适用于本地 runner 的模拟 run ID。不要依赖扫描最近 workflow run 来做关联。
+workflow_dispatch 的 HTTP response 表示 dispatch 受理；running、succeeded 和 failed 使用 provider run association、signed callback、receipt 与状态查询共同判定。run_id、attempt 和 github_run_id 的对应关系写入 D1，晚到事件按照既有 state machine 与 sequence 规则处理。
 
-### Credential Decision: Fine-grained PAT Now, GitHub App Only on a Clear Trigger
+## Execution Recommendations
 
-**v1.3 production credential: one fine-grained PAT。** 原因是 Starye 是单作者单仓，现有 GitHub Environment 已负责 crawler secrets；GitHub App 会额外引入私钥、JWT 签发、installation ID、token exchange 和轮换运维，而 v1.3 只需要对一个仓库的 Actions 控制面调用。
+### 1. Source probe
 
-| Credential | v1.3 Decision | Exact boundary |
-|------------|---------------|----------------|
-| Fine-grained PAT | **Use** | 保存为 API Worker secret `STARYE_GITHUB_ACTIONS_TOKEN`，resource owner/repository 限定为 Starye；仅授予 GitHub 文档要求的 `Actions: write`（metadata read 为平台固有）。Worker 使用 `Authorization: Bearer`，绝不返回 dashboard、写入 D1 日志或传入 runner。设置过期日和轮换 runbook。 |
-| GitHub App installation token | **Defer, do not combine** | 当需要跨仓库、组织级安装或强制短期凭据时替换 PAT。届时 App 仅安装到目标 repo、仅 `Actions: write`；Worker 以 App 私钥 secret 生成 JWT，再换 installation token。不得把 App 私钥或 installation token 下发给 Pages/dashboard。 |
-| Classic PAT | **Do not use** | `repo` scope 过宽，和 v1.3 的单仓最小权限边界不符。 |
-| `GITHUB_TOKEN` | **Do not use for Worker dispatch/cancel** | 它属于当前 Actions run；Worker 没有可供复用的 Actions job token。workflow 内部仍用最小 `permissions`，例如 checkout 所需的 `contents: read`。 |
+1. runner 从 D1 receipt 或固定 repair input 读取来源身份，API 负责 ID 校验和 target 选择。
+2. Node 24 使用 fetch + AbortSignal.timeout() 发出 bounded HEAD 或 byte-range GET。
+3. probe 记录规范化状态，响应体保持最小；D1 通过 prepared statement 写入 current projection。
+4. Browser proof 再用 xgplayer/native media events 确认 canplay、playing 和 currentTime progress。
 
-### Secure Runner Callbacks
+Probe 输入来自数据库的既有 sourceUrl；修复模板从受控 crawler 输出生成来源。Dashboard 的任意 URL 进入验证错误状态，来源范围由模板和 target profile 固定。
 
-1. 新增独立的 `TASK_RUNNER_CALLBACK_SECRET`，分别作为 Worker secret 与 GitHub Environment/local ignored env 的值；不要复用更宽用途的 `CRAWLER_SECRET`。
-2. runner 对原始 JSON body 签名：`timestamp + '.' + body` 的 HMAC-SHA-256；传 `X-Starye-Timestamp`、`X-Starye-Signature`、`task_id`、`run_id`、递增 `sequence` 和 D1 保存的 nonce。
-3. Worker 先在常数时间/`crypto.subtle.verify` 完成验签，再校验时间窗、run nonce、task-run 对应关系和 `sequence` 唯一索引，之后才写状态或日志。任何重放、乱序、过期或不同 task 的回调返回 401/409 并记录最小审计信息。
-4. `started`、`heartbeat`、`log`、`completed`、`failed`、`cancelled` 是封闭事件集。message/context 有大小上限、字段 allowlist 与 secret redaction；不存请求头、token、完整 HTML 或长期 debug dump。
+### 2. Player recovery
 
-### Task/Run/Log Persistence
+保留 Player.vue 当前的 canplay、playing、waiting、error、10 秒 waiting timeout、同源重试、销毁重建、Aria2 fallback 与 TorrServer origin 校验。v1.4 将这些回调统一投影为有限状态机：
 
-| Entity | Required fields | Index / invariant |
-|--------|-----------------|-------------------|
-| `crawler_task` | id, template, state, requested_by, queued_at, cancel_requested_at, current_run_id, idempotency_key | `(template, state, queued_at)`；同一用户操作的 idempotency key 唯一。只允许固定 video/comic template。 |
-| `crawler_run` | id, task_id, attempt, mode, state, github_run_id, github_run_attempt, started_at, finished_at, result summary, retry_of_run_id, callback_nonce | `(task_id, attempt)` 唯一，`github_run_id` 唯一非空；状态转换是 compare-and-set。 |
-| `crawler_run_log` | run_id, sequence, level, event, message, context_json, emitted_at | `(run_id, sequence)` 唯一；按 `(run_id, sequence)` 分页读取。日志只作受限 JSON，保留期与数量上限须随 migration 记录。 |
-| template lease/claim | template, active_run_id, acquired_at | 每个视频/漫画模板最多一个 production active run；D1 transaction 获得/释放，避免 API 与 schedule 双 dispatch。 |
+~~~text
+source_unverified
+  -> loading
+  -> canplay
+  -> playing
+  -> buffering
+  -> retrying
+  -> fallback
+  -> source_failed
+~~~
 
-状态转换、claim 和第一条/最后一条审计日志使用 D1 `batch()`；普通进度日志可小批量写入。runner 每个安全检查点读取 `cancel_requested_at`，以 `AbortController` 停止新的抓取、等待安全清理、回传终态。GitHub cancel 是第二道中断，不是唯一取消机制。
+同源重试、下一来源和 TorrServer/Aria2 fallback 各自拥有有限次数和可观察的 attempt label。retry 到达上限后，UI 返回详情页并提供 repair 状态入口；用户仍能看到原始来源的 health/error code。
+
+### 3. SUN-064 / players=0
+
+sync.service.ts 当前过滤空 sourceUrl、按影片去重后删除再批量插入；v1.4 先为 players=0 写入明确 aggregate status，再由固定 movie-player-repair 模板补抓并生成 receipt。totalPlayers 继续作为计数投影，playbackStatus 负责可用性语义。
+
+Repair 成功的 acceptance contract：
+
+~~~text
+receipt.templateKey === "movie-player-repair"
+receipt.primaryContentId === movie.code
+receipt.playerCount >= 1
+receipt.healthCounts.probe_ok + receipt.healthCounts.download_only >= 1
+current_run.status === "succeeded"
+~~~
+
+实际播放 acceptance 继续由 Viewer 的 playing 与进度前进完成；receipt 中的 playerCount 只证明数据链结果。
+
+### 4. Fresh production proof
+
+fresh run 先在 Dashboard 触发或确认 repair task，再读取 receipt 和 source health projection，打开 Viewer，选择排序后的可播放来源，等待 playing，采集 currentTime 前后值和截图。成功与失败都生成 task/run/attempt 绑定的 JSON evidence；失败证据额外保留 Playwright trace、video 或 screenshot。
+
+历史 Phase 13 carrier 作为冻结上下文；v1.4 的 production claim 只引用本 milestone 新生成的 task/run/attempt、receipt 和 browser artifact。
 
 ## Alternatives Considered
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Durable queue | D1 task/run/lease + Worker dispatch | GitHub Actions concurrency | Actions concurrency 会替换 pending run，不能表示 v1.3 的排队/重试历史。 |
-| Orchestration client | 原生 Worker `fetch` | `@octokit/rest` | 只有窄的三类 GitHub 调用；不增加依赖、Node runtime 假设或可泛化的 GitHub 管理面。 |
-| Production credential | repo-scoped fine-grained PAT | GitHub App from day one | 单仓单作者阶段的 JWT/private-key 生命周期成本高；保留明确升级路径但不并行维护两套认证。 |
-| Browser execution | Node 24 GitHub Actions/local runner | Cloudflare Worker / Pages Function | Puppeteer 与现有 anti-detection 依赖 Node/浏览器进程，Worker 应保持控制面。 |
-| Cross-run queue | D1 | BullMQ + Redis, Temporal, Trigger.dev | 需要常驻或付费基础设施，超出单用户、近免费和现有 Cloudflare/D1 约束。 |
-| Cloudflare primitives | 现有 D1 + API | Durable Objects / Cloudflare Queues | 本阶段没有高吞吐 producer/consumer 或长连接协调需求；会增加状态双写与运维面。 |
-| Structured logs | D1 bounded rows + GitHub console | R2 长期 debug dump / SaaS logging | v1.1 已限制 R2 到必要资产与短期诊断；D1 能满足后台查询，GitHub 保留原始执行日志。 |
-| Cancellation | HMAC callback + cooperative `AbortController` + Actions cancel | 仅调用 Actions cancel | 仅靠远端取消会遗漏 runner 已启动的 HTTP/browser 子任务，也会让 D1 过早显示终态。 |
+| Category | v1.4 choice | Alternative | Current boundary / upgrade trigger |
+|----------|-------------|-------------|-------------------------------------|
+| Player engine | Existing xgplayer 3.0.24 + native media APIs | HLS.js, Shaka Player | 当前来源契约以 direct URL、magnet、TorrServer 为主；出现统一 HLS/DRM manifest 契约时再引入专用 engine。 |
+| HTTP probe | Node 24 global fetch | got / undici direct dependency | got 继续服务 crawler extraction；health probe 需要的 timeout、range、redirect 和 status policy 由 built-in API 覆盖。 |
+| GitHub client | Existing narrow native Worker fetch client | @octokit/rest | v1.4 只需要 dispatch、run lookup、cancel、reconcile；跨仓库 GitHub administration 需求出现时再评估 Octokit。 |
+| Queue/orchestration | D1 task/run/attempt/lease + Actions | Cloudflare Queues, Durable Objects, BullMQ, Temporal | 当前是单作者、低并发、近免费运维面；达到高吞吐 producer/consumer 或长时协调需求时再升级。 |
+| Media platform | Existing direct source + TorrServer/Aria2 fallback | Cloudflare Stream | 当前验收关注外部来源可用性和 repair receipt；统一转码、托管和 DRM 需求出现时再做独立成本与迁移评估。 |
+| Browser proof | Existing Playwright Test | Cypress or a second browser framework | 当前 Movie App、Dashboard 已有 Playwright 配置和 artifacts；跨框架会分散 Gateway、auth、evidence contract。 |
+| Long-term health history | D1 bounded current projection + crawler receipts | R2 debug dump or logging SaaS | 当前保留结构化状态、错误码、run IDs 和有限 artifacts；高频时间序列需求出现时再引入专用 telemetry storage。 |
 
-## Installation
+## Installation and Verification
 
-v1.3 不新增生产 runtime 包；先复用锁定版本并用 migration 和共享类型落地契约。
+v1.4 生产 runtime 依赖维持现有 lockfile。实现阶段优先使用现有包，播放器、HTTP client、queue 或 orchestration package 均沿用当前组合。
 
-```bash
-# 建立/检查 D1 schema 与共享契约
+~~~bash
+# workspace baseline
+pnpm install --frozen-lockfile
+
+# schema and shared contracts
 pnpm --filter @starye/db generate
 pnpm --filter @starye/db type-check
 pnpm --filter @starye/api-types build
 
-# 验证 Worker、dashboard 和 runner 使用同一 contract
+# control plane and runner
 pnpm --filter api type-check
-pnpm --filter dashboard type-check
 pnpm --filter @starye/crawler type-check
-```
+pnpm --filter @starye/crawler test:unit
 
-配置项只由秘密管理系统提供：Worker `STARYE_GITHUB_ACTIONS_TOKEN`、`TASK_RUNNER_CALLBACK_SECRET`；GitHub Environment `TASK_RUNNER_CALLBACK_SECRET` 及既有 Cloudflare/R2 secrets。所有 token、nonce 和签名值都必须被日志 redactor 排除。
+# player and browser contracts
+pnpm --filter @starye/movie-app type-check
+pnpm --filter @starye/movie-app test:run
+pnpm --filter @starye/movie-app test:e2e
+pnpm --filter dashboard test:e2e
+~~~
+
+migration 的远端执行继续经过 target-remote-entry 和选定 target profile。Playwright 本地运行经过 Gateway http://localhost:8080，生产 proof 使用新鲜 target profile 和新鲜 run IDs。
 
 ## Version Policy
 
-- 以当前 `pnpm-lock.yaml` 的解析版本为验收基线；package.json 中已有的 caret 不构成在 v1.3 中顺手升级依赖的授权。
-- 新增逻辑优先使用平台 API 与已安装包；只有测试证明缺失能力时才提出新增依赖并锁定精确版本。
-- GitHub REST 请求显式带 `Accept: application/vnd.github+json` 与固定 API version header；把 dispatch/cancel/status 响应做契约测试，避免 GitHub API 行为变更静默影响状态机。
-- Actions workflow 继续锁定当前 `actions/checkout@v6`、`pnpm/action-setup@v4`、`actions/setup-node@v6.3.0`、Node 24 与 pnpm 10.33.0，且必须保留 `target-profile` prepare/cleanup 步骤。
+- pnpm-lock.yaml 是 v1.4 的解析版本基线；package manifest 中的 caret 范围按当前锁定结果验收。
+- 现有 xgplayer ^3.0.24、Vue ^3.5.32、Hono ^4.12.14、Drizzle 0.45.2、Wrangler ^4.90.0、Playwright ^1.59.1、Puppeteer ^24.41.0 和 Node 24 workflow pin 进入计划验收矩阵。
+- migration、API contract、Dashboard projection、Movie App state machine 和 evidence schema 一起做 type-check/test；版本升级作为独立决策。
+- GitHub Actions dispatch 请求使用 Accept: application/vnd.github+json 与 X-GitHub-Api-Version: 2022-11-28，并把 workflow、ref、target、template 固定在 registry/target profile。
+- source URL、cookie、token、HMAC secret、provider credentials 和 signed session material 进入 secret/env 或 redaction policy；D1 receipt 只保留可审计的 ID、状态、数量和错误码。
+
+## Dependency Order for Roadmap
+
+1. **Schema and shared contract:** health statuses、probe result、repair receipt 和 evidence fields 先进入 @starye/db 与 @starye/api-types。
+2. **API projection and repair control:** API route、D1 repository、closed template registry、lease、HMAC callback 和 Actions dispatch 依赖第 1 步。
+3. **Crawler repair and probe:** Node 24 runner、Puppeteer enrichment、bounded probe、sync fix、receipt 依赖第 2 步。
+4. **Movie playback states:** MovieDetail、Player、retry/fallback/error UI 消费第 1 步的 projection，并以第 3 步的来源结果做联调。
+5. **Fresh production evidence:** Playwright Dashboard -> Viewer -> actual playback proof 依赖第 2 至第 4 步以及新鲜 production run。
+
+## Confidence Assessment
+
+| Area | Confidence | Basis |
+|------|------------|-------|
+| Current repository stack | HIGH | 当前 package.json、源码、workflow、Playwright config 和 required_reading 直接核对。 |
+| Browser media semantics | MEDIUM | MDN 官方 API 文档和现有 Player.vue 事件链交叉核对；研究 seam classifier 返回 MEDIUM。 |
+| xgplayer capability | MEDIUM | xgplayer 官方 repository/README/source definitions 与当前 3.0.24 使用方式核对。 |
+| Cloudflare D1/Workers | MEDIUM | Cloudflare 官方 Workers Fetch、D1 Worker API、prepared statements、batch 文档核对。 |
+| GitHub Actions control | MEDIUM | GitHub 官方 workflow dispatch、workflow runs、cancel、workflow syntax 文档核对；现有 workflow contract 作为仓库事实。 |
+| Playwright evidence | MEDIUM | Playwright 官方 webServer、baseURL、assertions、trace/video 文档与现有 configs 核对。 |
+| Node probe | MEDIUM | Node 24 官方 global fetch、AbortSignal.timeout() 文档与 Actions runtime pin 核对。 |
 
 ## Sources
 
-- Repository evidence (HIGH): [`.planning/PROJECT.md`](../PROJECT.md), [`apps/api/src/routes/admin/crawlers/index.ts`](../../apps/api/src/routes/admin/crawlers/index.ts), [`apps/dashboard/src/views/Crawlers.vue`](../../apps/dashboard/src/views/Crawlers.vue), [`daily-manga-crawl.yml`](../../.github/workflows/daily-manga-crawl.yml), [`daily-movie-crawl.yml`](../../.github/workflows/daily-movie-crawl.yml), [`packages/crawler/package.json`](../../packages/crawler/package.json).
-- GitHub REST: [Create a workflow dispatch event](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event) and [Cancel a workflow run](https://docs.github.com/en/rest/actions/workflow-runs#cancel-a-workflow-run) (MEDIUM; official documentation and current OpenAPI reviewed through research fallback).
-- GitHub Actions: [Workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax) and [Concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) (MEDIUM; official source reviewed).
-- Cloudflare: [D1Database Worker API](https://developers.cloudflare.com/d1/worker-api/d1-database/), [prepared statements](https://developers.cloudflare.com/d1/worker-api/prepared-statements/), [Worker Fetch](https://developers.cloudflare.com/workers/runtime-apis/fetch/), [Web Crypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/) (MEDIUM; official source reviewed).
+### Repository evidence (HIGH)
+
+- [.planning/PROJECT.md](../PROJECT.md)
+- [.planning/STATE.md](../STATE.md)
+- [.planning/milestones/v1.3-REQUIREMENTS.md](../milestones/v1.3-REQUIREMENTS.md)
+- [.planning/milestones/v1.3-ROADMAP.md](../milestones/v1.3-ROADMAP.md)
+- [packages/db/src/schema.ts](../../packages/db/src/schema.ts)
+- [apps/api/src/routes/movies/services/sync.service.ts](../../apps/api/src/routes/movies/services/sync.service.ts)
+- [apps/movie-app/src/views/Player.vue](../../apps/movie-app/src/views/Player.vue)
+- [apps/movie-app/src/views/MovieDetail.vue](../../apps/movie-app/src/views/MovieDetail.vue)
+- [packages/crawler/src/task-runner/runner-client.ts](../../packages/crawler/src/task-runner/runner-client.ts)
+- [packages/crawler/src/task-runner/template-adapters.ts](../../packages/crawler/src/task-runner/template-adapters.ts)
+- [scripts/target-remote-entry.ts](../../scripts/target-remote-entry.ts)
+- [apps/dashboard/playwright.config.ts](../../apps/dashboard/playwright.config.ts)
+- [apps/movie-app/playwright.config.ts](../../apps/movie-app/playwright.config.ts)
+- [daily-movie-crawl.yml](../../.github/workflows/daily-movie-crawl.yml)
+
+### Official sources (MEDIUM)
+
+- [MDN HTMLMediaElement events](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement)
+- [MDN canplay event](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/canplay_event), [playing](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/playing_event), [waiting](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/waiting_event), [error](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/error_event)
+- [MDN HTMLMediaElement.readyState](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/readyState), [load()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/load), [play()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play)
+- [xgplayer official repository](https://github.com/bytedance/xgplayer), [official README](https://raw.githubusercontent.com/bytedance/xgplayer/main/README.md)
+- [Cloudflare Workers Fetch](https://developers.cloudflare.com/workers/runtime-apis/fetch/)
+- [Cloudflare D1 Worker API](https://developers.cloudflare.com/d1/worker-api/d1-database/), [prepared statements](https://developers.cloudflare.com/d1/worker-api/prepared-statements/)
+- [GitHub REST workflow dispatch](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event), [workflow run](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run), [cancel workflow run](https://docs.github.com/en/rest/actions/workflow-runs#cancel-a-workflow-run)
+- [GitHub Actions workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
+- [Playwright webServer](https://playwright.dev/docs/test-webserver), [configuration](https://playwright.dev/docs/test-configuration), [assertions](https://playwright.dev/docs/test-assertions), [trace viewer](https://playwright.dev/docs/trace-viewer), [videos](https://playwright.dev/docs/videos)
+- [Node.js globals: fetch](https://nodejs.org/api/globals.html#fetch), [AbortSignal.timeout()](https://nodejs.org/api/globals.html#static-method-abortsignaltimeoutdelay)
+
+The research plan used the context7 provider keys for these six official questions. Context7 MCP was unavailable in this runtime, so the official documentation URLs and repository behavior were used for the digest; the classifier returned MEDIUM for the stored entries.
