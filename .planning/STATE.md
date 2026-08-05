@@ -1,21 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: 后台爬虫任务与内容运维
-status: Awaiting next milestone
-closeout_type: override_closeout
-stopped_at: Milestone v1.3 archived; ready for next milestone definition
-last_updated: "2026-08-04T12:16:02.056Z"
-last_activity: 2026-08-04
-last_activity_desc: Milestone v1.3 completed, archived, and tagged
+milestone: v1.4
+milestone_name: 播放可用性与生产自愈闭环
+status: planning
+last_updated: "2026-08-05T01:36:32.057Z"
+last_activity: 2026-08-05
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
-current_phase: 19
-current_phase_name: Dashboard Operations and End-to-End Proof
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State: Starye — 个人内容中台
@@ -41,10 +36,10 @@ current_phase_name: Dashboard Operations and End-to-End Proof
 
 ## Current Position
 
-Phase: Milestone v1.3 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-04 — Milestone v1.3 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-05 — Milestone v1.4 started
 
 ## Performance Metrics
 

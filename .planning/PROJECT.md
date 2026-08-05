@@ -19,13 +19,20 @@
 - `SUN-064` metadata mutation/readback/restore passed; its production receipt currently reports `players=0`, so player availability remains a follow-up observation.
 - The unrelated `@starye/config` CI lint baseline remains tracked as non-causal technical debt.
 
-## Current Milestone: Planning next milestone
+## Current Milestone: v1.4 播放可用性与生产自愈闭环
 
-**Goal:** 通过 `$gsd-new-milestone` 定义下一组需求、验收边界和 phased roadmap。
+**Goal:** 让爬虫入库结果稳定转化为可播放内容，并用 fresh production run 证明 Dashboard → Viewer → 实际播放的完整日常使用链路。
+
+**Target features:**
+
+- 新抓取内容明确区分元数据入库与可播放源；无播放源内容进入可修复状态，并修复 `SUN-064` 的 `players=0`。
+- MovieDetail / Player 覆盖无源、失效、重试、回退和错误提示等真实播放状态。
+- 通过受控任务执行恢复播放源，并保留可审计的修复结果与运行证据。
+- 使用 fresh production run 完成 Dashboard → Viewer → 实际播放验收，保留历史冻结 carrier 的边界。
 
 ## Current State
 
-v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations 和 receipt-backed content CRUD；后续需求从新里程碑重新定义。
+v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations 和 receipt-backed content CRUD；v1.4 聚焦把成功入库继续闭环到可播放和可验证。
 
 **Latest archived milestone:** v1.3 后台爬虫任务与内容运维（2026-08-04，override closeout）
 
@@ -97,7 +104,9 @@ v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plan
 
 ### Active
 
-- [ ] 下一里程碑需求待定义。
+- [ ] 播放源抓取、校验与修复：新内容具备可播放源或明确的可修复无源状态，`SUN-064` 完成修复并读回验证。
+- [ ] 播放端状态闭环：MovieDetail / Player 对无源、失效、重试、回退和错误状态给出可操作反馈。
+- [ ] 生产链路证明：fresh production run 完成 Dashboard → Viewer → 实际播放，并产出 receipt、运行与修复证据。
 
 ### Out of Scope
 
@@ -132,17 +141,17 @@ v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plan
 - `0121cc9` dashboard 加 SillyTavern 入口
 - `4cefbe6` movie-app advance search + personalized recommendation + new release
 
-**当前状态（2026-08-04）**：
+**当前状态（2026-08-05）**：
 
 - v1.0 与 v1.1 都已完成并归档到 `.planning/milestones/`
 - v1.1 已通过 milestone audit：5/5 phases complete，15/15 plans complete，22/22 v1 requirements satisfied
 - v1.2 已以 override closeout 归档；其 selected-production Viewer proof 保持历史 deferred 状态
 - v1.3 已以 override closeout 归档：18/18 requirements、4/4 phases、4/4 integration flows、4/4 end-to-end flows 均通过
-- 下一步通过 `$gsd-new-milestone` 定义新里程碑的 `.planning/REQUIREMENTS.md` 和 phased roadmap
-- selected-production Viewer proof 保留为未来独立范围，当前不存在可重试的 Phase 13 carrier
+- v1.4 通过 `$gsd-new-milestone` 进入需求定义，随后生成 `.planning/REQUIREMENTS.md` 和 phased roadmap
+- selected-production Viewer proof 的历史 Phase 13 carrier 继续冻结；v1.4 使用独立 fresh run 处理播放验收
 - 已接受的历史归档债仍主要来自 v1.0：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
 - v1.1 已把 R2 必要资产边界、external/source image semantics、shared storage helper、policy-aware admin/script behavior 和 canonical doc ownership 一并收口
-- v1.3 的 `SUN-064 players=0` 与 `@starye/config` lint baseline 已记录为后续技术债，不改变本次 metadata CRUD 与端到端验收结论
+- v1.4 将处理 `SUN-064 players=0` 的播放源修复；`@starye/config` lint baseline 继续作为独立技术债
 
 **已知风险区**：见 [`.planning/codebase/CONCERNS.md`](.planning/codebase/CONCERNS.md) —— v1 Active 需求会优先覆盖里面影响"日常使用"的问题。
 
@@ -204,4 +213,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-04 after v1.3 Phase 19 completion*
+*Last updated: 2026-08-05 after v1.4 milestone definition*
