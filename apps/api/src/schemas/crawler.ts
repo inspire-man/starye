@@ -81,7 +81,7 @@ export const MovieInfoSchema = v.pipe(
     series: v.optional(v.string()),
     publisher: v.optional(v.string()),
     isR18: v.pipe(v.boolean(), v.description('是否为 R18 内容')),
-    players: v.array(PlayerInputSchema),
+    players: v.optional(v.array(PlayerInputSchema)),
   }),
   v.transform(input => ({
     ...input,
