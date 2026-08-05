@@ -185,6 +185,43 @@ describe('movieService', () => {
 
       expect(result?.players).toEqual([])
     })
+
+    it('应该从 server-owned source state 返回独立 readiness projection', async () => {
+      const mockMovie = {
+        id: 'movie-1',
+        title: 'SUN-064',
+        slug: 'sun-064',
+        code: 'SUN-064',
+        isR18: false,
+        updatedAt: new Date('2026-08-05T00:00:00.000Z'),
+        sourceState: {
+          sourceRevision: 8,
+          disposition: 'no_source',
+          eligibleCount: 0,
+          repairable: true,
+          reasonCode: 'no_eligible_source',
+          observedAt: new Date('2026-08-05T00:00:00.000Z'),
+        },
+        movieActors: [],
+        moviePublishers: [],
+        players: [{ id: 'player-1', sourceName: 'candidate', sourceUrl: 'https://media.example/movie.m3u8', isActive: true }],
+      }
+
+      mockDb.query.movies.findFirst.mockResolvedValue(mockMovie)
+
+      const result = await getMovieByIdentifier({
+        db: mockDb,
+        identifier: 'SUN-064',
+        isAdult: true,
+      })
+
+      expect(result?.primaryContentId).toBe('movie-1')
+      expect(result?.readiness).toMatchObject({
+        metadata: { contentId: 'movie-1', persisted: true },
+        source: { disposition: 'no_source', eligibleCount: 0, repairable: true },
+        playback: { status: 'unverified' },
+      })
+    })
   })
 
   describe('getHotMovies', () => {
