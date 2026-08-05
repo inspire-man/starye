@@ -1,4 +1,5 @@
 import type { Resource } from '../../lib/permissions'
+import type { SourceReadinessProjection } from '../movies/source-contract'
 
 export const CRAWLER_HEARTBEAT_INTERVAL_MS = 60_000
 export const CRAWLER_LEASE_DURATION_MS = 10 * 60_000
@@ -7,6 +8,7 @@ export const CRAWLER_MAX_SAFE_LOG_BYTES = 4 * 1024
 export const CRAWLER_MAX_NORMAL_LOG_ROWS = 500
 
 export type CrawlerTaskTemplateKey = 'movie' | 'manga'
+export const CRAWLER_RECEIPT_SCHEMA_VERSION = 2 as const
 export type CrawlerPermissionResource = Extract<Resource, 'comic' | 'movie'>
 export type ProviderName = 'github-actions'
 export type ProviderRunStatus = 'completed' | 'in_progress' | 'pending' | 'queued' | 'requested' | 'waiting'
@@ -158,6 +160,9 @@ export type CrawlerRunReceipt = CrawlerRunReceiptCandidate
 export interface ValidatedCrawlerRunReceipt {
   readonly createdCount: number
   readonly primaryContentId: string
+  /** Optional while legacy receipt rows are read during the schema boundary rollout. */
+  readonly receiptSchemaVersion?: typeof CRAWLER_RECEIPT_SCHEMA_VERSION
+  readonly source?: SourceReadinessProjection
   readonly templateKey: CrawlerTaskTemplateKey
   readonly updatedCount: number
 }
