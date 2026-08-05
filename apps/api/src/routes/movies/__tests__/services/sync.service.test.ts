@@ -7,9 +7,18 @@ import { syncMovieData } from '../../services/sync.service'
 function createMockDb(overrides?: {
   existingMovie?: any
   existingActor?: any
+  existingPlayers?: any[]
+  sourceState?: any
+  failPlayerWrite?: boolean
+  failSourceReadback?: boolean
 }): Database {
   const existingMovie = overrides?.existingMovie ?? null
   const existingActor = overrides?.existingActor ?? null
+  const state = {
+    movie: existingMovie,
+    players: [...(overrides?.existingPlayers ?? [])],
+    sourceState: overrides?.sourceState ?? null,
+  }
 
   const mockUpdate = {
     set: vi.fn().mockReturnThis(),
@@ -17,12 +26,28 @@ function createMockDb(overrides?: {
   }
 
   const mockInsertChain = {
-    values: vi.fn().mockReturnThis(),
+    values: vi.fn().mockImplementation((values: any) => {
+      if (Array.isArray(values) && values.some(value => value.movieId)) {
+        if (overrides?.failPlayerWrite)
+          throw new Error('player write failed')
+        state.players = values
+      }
+      else if (values?.disposition) {
+        state.sourceState = values
+      }
+      else if (values?.code) {
+        state.movie = values
+      }
+      return mockInsertChain
+    }),
     onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+    onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
   }
 
   const mockDeleteChain = {
-    where: vi.fn().mockResolvedValue(undefined),
+    where: vi.fn().mockImplementation(async () => {
+      state.players = []
+    }),
   }
 
   const mockSelectChain = {
@@ -33,8 +58,18 @@ function createMockDb(overrides?: {
   return {
     query: {
       movies: {
-        findFirst: vi.fn().mockResolvedValue(existingMovie),
+        findFirst: vi.fn().mockImplementation(async () => state.movie),
         findMany: vi.fn(),
+      },
+      players: {
+        findMany: vi.fn().mockImplementation(async () => {
+          if (overrides?.failSourceReadback)
+            throw new Error('source readback failed')
+          return [...state.players]
+        }),
+      },
+      movieSourceStates: {
+        findFirst: vi.fn().mockImplementation(async () => state.sourceState),
       },
       actors: {
         findFirst: vi.fn().mockResolvedValue(existingActor),
@@ -210,9 +245,17 @@ describe('syncMovieData', () => {
 
       expect(result.success).toBe(1)
       expect(db.delete).toHaveBeenCalledOnce()
+      expect(result.sourceStates[0]).toMatchObject({
+        code: 'TEST-001',
+        source: {
+          disposition: 'ready',
+          eligibleCount: 2,
+          repairable: false,
+        },
+      })
     })
 
-    it('players 为空数组时不应该调用 delete', async () => {
+    it('players 为空数组时应该删除 stale rows并返回 no_source/repairable', async () => {
       const db = createMockDb({ existingMovie: { id: 'existing-id', code: 'TEST-001' } })
 
       const result = await syncMovieData({
@@ -221,7 +264,15 @@ describe('syncMovieData', () => {
       })
 
       expect(result.success).toBe(1)
-      expect(db.delete).not.toHaveBeenCalled()
+      expect(db.delete).toHaveBeenCalledOnce()
+      expect(result.sourceStates[0]).toMatchObject({
+        code: 'TEST-001',
+        source: {
+          disposition: 'no_source',
+          eligibleCount: 0,
+          repairable: true,
+        },
+      })
     })
 
     it('players 未提供时不应该影响现有 players', async () => {
@@ -265,25 +316,8 @@ describe('syncMovieData', () => {
       expect(playerValues).toHaveLength(2)
     })
 
-    it('players 写入失败时不应影响影片 success 计数', async () => {
-      const db = createMockDb({ existingMovie: null })
-
-      let insertCallCount = 0
-      ;(db as any).insert = vi.fn().mockImplementation(() => {
-        insertCallCount++
-        // 第1次 insert: movie, 第2次 insert: players（模拟失败）
-        if (insertCallCount === 2) {
-          return {
-            values: vi.fn().mockRejectedValue(new Error('DB constraint error')),
-            onConflictDoNothing: vi.fn().mockRejectedValue(new Error('DB constraint error')),
-          }
-        }
-        return {
-          values: vi.fn().mockReturnThis(),
-          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
-        }
-      })
-
+    it('players 写入失败时保留 metadata success并返回 bounded source_failed', async () => {
+      const db = createMockDb({ existingMovie: null, failPlayerWrite: true })
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const result = await syncMovieData({
@@ -297,6 +331,39 @@ describe('syncMovieData', () => {
 
       expect(result.success).toBe(1)
       expect(result.failed).toBe(0)
+      expect(result.sourceStates[0]).toMatchObject({
+        code: 'TEST-004',
+        source: {
+          disposition: 'source_failed',
+          reasonCode: 'source_write_failed',
+          repairable: true,
+        },
+      })
+      expect(JSON.stringify(result)).not.toContain('DB constraint error')
+      consoleSpy.mockRestore()
+    })
+
+    it('post-write readback failure returns bounded source_failed without raw error', async () => {
+      const db = createMockDb({ existingMovie: { id: 'existing-id', code: 'TEST-005' }, failSourceReadback: true })
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const result = await syncMovieData({
+        db,
+        movies: [{
+          code: 'TEST-005',
+          title: '读回失败测试',
+          players: [{ sourceName: '磁力', sourceUrl: 'magnet:?xt=urn:btih:test-005' }],
+        }],
+      })
+
+      expect(result.sourceStates[0]).toMatchObject({
+        source: {
+          disposition: 'source_failed',
+          reasonCode: 'source_read_failed',
+          repairable: true,
+        },
+      })
+      expect(JSON.stringify(result)).not.toContain('source readback failed')
       consoleSpy.mockRestore()
     })
   })

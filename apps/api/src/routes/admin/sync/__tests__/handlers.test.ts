@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { syncChapterData } from '../handlers'
+import { syncChapterData, syncCrawlerData } from '../handlers'
 
 interface StoredPage {
   id: string
@@ -190,5 +190,81 @@ describe('syncChapterData', () => {
     ])
     expect(spies.insertValues).toHaveBeenCalledTimes(3)
     expect(spies.updateSet).not.toHaveBeenCalled()
+  })
+})
+
+function createMovieSyncDb() {
+  const state = {
+    movie: { id: 'canonical-movie-id', slug: 'movie-slug' },
+    players: [{ movieId: 'canonical-movie-id', sourceUrl: 'magnet:?xt=urn:btih:stale', isActive: true }],
+    sourceState: {
+      movieId: 'canonical-movie-id',
+      sourceRevision: 2,
+      disposition: 'ready',
+      eligibleCount: 1,
+      repairable: false,
+      reasonCode: null,
+      observedAt: 1_725_000_000,
+    },
+  }
+  const insertChain = {
+    values: vi.fn().mockImplementation(async (values: any) => {
+      if (Array.isArray(values))
+        state.players = values
+      return insertChain
+    }),
+    onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+  }
+  const deleteWhere = vi.fn().mockImplementation(async () => {
+    state.players = []
+  })
+  const db = {
+    query: {
+      movies: { findFirst: vi.fn().mockResolvedValue(state.movie) },
+      players: { findMany: vi.fn().mockImplementation(async () => [...state.players]) },
+      movieSourceStates: { findFirst: vi.fn().mockImplementation(async () => state.sourceState) },
+    },
+    insert: vi.fn().mockReturnValue(insertChain),
+    delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+  } as any
+  return { db, state, deleteWhere }
+}
+
+describe('syncMovieData', () => {
+  it('explicit empty players clears stale rows, reads canonical id, and invalidates movie cache', async () => {
+    const { db, state, deleteWhere } = createMovieSyncDb()
+    const cache = {
+      delete: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({
+        keys: [{ name: 'gateway-cache:v2:movies:public:movie-slug' }],
+        list_complete: true,
+      }),
+    }
+    const c = {
+      env: { CACHE: cache },
+      get: vi.fn().mockReturnValue(db),
+      req: { valid: vi.fn().mockReturnValue({
+        data: { code: 'MOV-064', slug: 'movie-slug', title: 'SUN-064', players: [] },
+        type: 'movie',
+      }) },
+      json: (body: any, status = 200) => ({ status, body }),
+    } as any
+
+    const response = await syncCrawlerData(c) as { status: number, body: any }
+
+    expect(response.status).toBe(200)
+    expect(response.body).toMatchObject({
+      id: 'canonical-movie-id',
+      source: {
+        disposition: 'no_source',
+        eligibleCount: 0,
+        repairable: true,
+        sourceRevision: 3,
+      },
+      success: true,
+    })
+    expect(deleteWhere).toHaveBeenCalledOnce()
+    expect(state.players).toEqual([])
+    expect(cache.delete).toHaveBeenCalledWith('gateway-cache:v2:movies:public:movie-slug')
   })
 })
