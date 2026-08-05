@@ -183,6 +183,26 @@ export const movies = sqliteTable('movie', {
 export type Movie = InferSelectModel<typeof movies>
 export type NewMovie = InferInsertModel<typeof movies>
 
+/** Server-owned current source/readiness projection keyed by the canonical movie identity. */
+export const movieSourceStates = sqliteTable('movie_source_state', {
+  movieId: text('movie_id').primaryKey().references(() => movies.id, { onDelete: 'cascade' }),
+  sourceRevision: integer('source_revision').notNull().default(0),
+  disposition: text('disposition', {
+    enum: ['ready', 'no_source', 'source_failed', 'repairing'],
+  }).notNull(),
+  eligibleCount: integer('eligible_count').notNull().default(0),
+  repairable: integer('repairable', { mode: 'boolean' }).notNull().default(true),
+  reasonCode: text('reason_code', {
+    enum: ['no_eligible_source', 'repair_requested', 'source_candidate_invalid', 'source_read_failed', 'source_write_failed'],
+  }),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+}, table => [
+  index('idx_movie_source_state_disposition').on(table.disposition),
+])
+
+export type MovieSourceState = InferSelectModel<typeof movieSourceStates>
+export type NewMovieSourceState = InferInsertModel<typeof movieSourceStates>
+
 export const players = sqliteTable('player', {
   id: text('id').primaryKey(),
   movieId: text('movie_id').notNull().references(() => movies.id, { onDelete: 'cascade' }),
@@ -364,6 +384,10 @@ export const crawlerRuns = sqliteTable('crawler_run', {
   cancelRequestedAt: integer('cancel_requested_at', { mode: 'timestamp' }),
   failureCode: text('failure_code'),
   receiptSummaryJson: text('receipt_summary_json', { mode: 'json' }),
+  // Versioned canonical receipt boundary; legacy JSON remains the audit payload.
+  receiptSchemaVersion: integer('receipt_schema_version'),
+  receiptPrimaryContentId: text('receipt_primary_content_id'),
+  receiptSourceRevision: integer('receipt_source_revision'),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
   terminalAt: integer('terminal_at', { mode: 'timestamp' }),
@@ -629,10 +653,18 @@ export const pageRelations = relations(pages, ({ one }) => ({
   }),
 }))
 
-export const movieRelations = relations(movies, ({ many }) => ({
+export const movieRelations = relations(movies, ({ many, one }) => ({
   players: many(players),
   movieActors: many(movieActors),
   moviePublishers: many(moviePublishers),
+  sourceState: one(movieSourceStates),
+}))
+
+export const movieSourceStateRelations = relations(movieSourceStates, ({ one }) => ({
+  movie: one(movies, {
+    fields: [movieSourceStates.movieId],
+    references: [movies.id],
+  }),
 }))
 
 export const playerRelations = relations(players, ({ one, many }) => ({

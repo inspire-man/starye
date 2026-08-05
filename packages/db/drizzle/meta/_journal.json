@@ -183,6 +183,13 @@
       "when": 1775548076541,
       "tag": "0025_normal_marten_broadcloak",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1785912000000,
+      "tag": "0029_source_contract_receipt_boundary",
+      "breakpoints": true
     }
   ]
 }
