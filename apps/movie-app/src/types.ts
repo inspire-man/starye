@@ -102,11 +102,53 @@ export interface Player {
   isActive?: boolean // 是否有效（超过阈值后为 false）
 }
 
+export type SourceDisposition = 'ready' | 'no_source' | 'source_failed' | 'repairing'
+export type SourceReasonCode = 'no_eligible_source' | 'repair_requested' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
+export type PlaybackProofStatus = 'playback_verified' | 'unverified'
+
+export interface MetadataProjection {
+  contentId: string
+  observedAt: number | null
+  persisted: boolean
+}
+
+export interface SourceReadinessProjection {
+  disposition: SourceDisposition
+  eligibleCount: number
+  observedAt: number
+  reasonCode: SourceReasonCode | null
+  repairable: boolean
+  sourceRevision: number
+}
+
+export interface PlaybackProjection {
+  evidence?: {
+    currentTime: number
+    observedAt?: number
+  }
+  status: PlaybackProofStatus
+}
+
+export interface ReceiptProjection {
+  persisted: boolean
+  primaryContentId: string | null
+  schemaVersion: number | null
+}
+
+export interface ReadinessProjection {
+  metadata: MetadataProjection
+  playback: PlaybackProjection
+  receipt: ReceiptProjection
+  source: SourceReadinessProjection
+}
+
 export interface MovieDetail extends Movie {
   actors: ActorSummary[]
   publishers: PublisherSummary[]
   players: Player[]
   relatedMovies: Movie[]
+  primaryContentId: string
+  readiness: ReadinessProjection
 }
 
 export interface WatchingProgress {

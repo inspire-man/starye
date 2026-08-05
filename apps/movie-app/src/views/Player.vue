@@ -37,6 +37,7 @@ const { isConnected: aria2Connected, addMagnetTask } = useAria2()
 
 const loading = ref(true)
 const error = ref('')
+const sourceGuardVisible = ref(false)
 const movieTitle = ref('')
 const movieCode = ref('')
 const movieData = ref<MovieDetail | null>(null)
@@ -284,9 +285,24 @@ function getPlaybackErrorState(): PlayerErrorState {
   }
 }
 
+function isEligiblePlayer(candidate: MovieDetail['players'][number]): boolean {
+  return candidate.isActive === true
+    && typeof candidate.sourceUrl === 'string'
+    && candidate.sourceUrl.trim().length > 0
+}
+
+function showNoSourceGuard() {
+  destroyPlayerInstance()
+  resetPlayerFeedback()
+  error.value = ''
+  sourceGuardVisible.value = true
+  loading.value = false
+}
+
 async function fetchMovieAndPlay() {
   loading.value = true
   error.value = ''
+  sourceGuardVisible.value = false
   movieData.value = null
   currentMagnetUrl.value = ''
   currentSourceUrl.value = ''
@@ -350,20 +366,28 @@ async function fetchMovieAndPlay() {
       const movie = response.data
       movieTitle.value = movie.title
       movieData.value = movie
-      currentMagnetUrl.value = movie.players.find(p => isMagnetLink(p.sourceUrl))?.sourceUrl || ''
+      const eligiblePlayers = (movie.players ?? []).filter(isEligiblePlayer)
+
+      if (movie.readiness?.source.disposition !== 'ready'
+        || movie.readiness.source.eligibleCount < 1
+        || eligiblePlayers.length === 0) {
+        showNoSourceGuard()
+        return
+      }
+
+      currentMagnetUrl.value = eligiblePlayers.find(p => isMagnetLink(p.sourceUrl))?.sourceUrl || ''
 
       const playerId = route.query.player as string | undefined
-      let selectedPlayer = movie.players[0]
+      let selectedPlayer = eligiblePlayers[0]
 
       if (playerId) {
-        const found = movie.players.find(p => p.id === playerId)
+        const found = eligiblePlayers.find(p => p.id === playerId)
         if (found)
           selectedPlayer = found
       }
 
       if (!selectedPlayer) {
-        error.value = '未找到播放源'
-        loading.value = false
+        showNoSourceGuard()
         return
       }
 
@@ -647,6 +671,29 @@ onUnmounted(() => {
     >
       <div class="text-white text-lg">
         加载中...
+      </div>
+    </div>
+
+    <div
+      v-else-if="sourceGuardVisible"
+      role="status"
+      class="flex items-center justify-center h-full px-6"
+    >
+      <div class="text-center max-w-lg">
+        <p class="text-amber-300 text-xl mb-3">
+          暂无可用播放源
+        </p>
+        <p class="text-gray-400 text-sm mb-6">
+          当前影片的来源尚未通过可播放读回检查，请返回详情页查看状态或受控修复意图。
+        </p>
+        <button
+          type="button"
+          class="min-h-11 px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+          title="返回影片详情页"
+          @click="goToDetail"
+        >
+          返回影片详情
+        </button>
       </div>
     </div>
 

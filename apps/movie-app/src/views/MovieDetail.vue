@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MovieDetail, Player } from '../types'
+import type { MovieDetail, Player, ReadinessProjection, SourceDisposition, SourceReasonCode } from '../types'
 import type { TorrentFile } from '../utils/torrServerClient'
 import QrcodeVue from 'qrcode.vue'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -23,6 +23,7 @@ const router = useRouter()
 const loading = ref(true)
 const error = ref('')
 const movie = ref<MovieDetail | null>(null)
+const readiness = computed<ReadinessProjection | null>(() => movie.value?.readiness ?? null)
 
 // 用户状态
 const userStore = useUserStore()
@@ -77,6 +78,49 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
   setTimeout(() => {
     toast.value.show = false
   }, 3000)
+}
+
+const sourceDispositionLabels: Record<SourceDisposition, string> = {
+  ready: '来源就绪',
+  no_source: '暂无来源',
+  source_failed: '来源失败',
+  repairing: '修复中',
+}
+
+const sourceReasonLabels: Record<SourceReasonCode, string> = {
+  no_eligible_source: '读回未发现可用来源',
+  repair_requested: '受控修复已请求',
+  source_candidate_invalid: '候选来源未通过校验',
+  source_read_failed: '来源读回失败',
+  source_write_failed: '来源写入失败',
+}
+
+function sourceDispositionLabel(disposition: SourceDisposition): string {
+  return `${disposition} · ${sourceDispositionLabels[disposition]}`
+}
+
+function sourceReasonLabel(reasonCode: SourceReasonCode | null): string {
+  return reasonCode ? sourceReasonLabels[reasonCode] : '无'
+}
+
+function playbackStatusLabel(status: ReadinessProjection['playback']['status']): string {
+  return status === 'playback_verified'
+    ? 'playback_verified · 播放已验证'
+    : 'unverified · 播放未验证'
+}
+
+function showRepairIntent() {
+  if (!readiness.value?.source.repairable)
+    return
+
+  showToast('当前来源状态可由受控修复任务处理')
+}
+
+async function refreshReadiness() {
+  if (loading.value)
+    return
+
+  await fetchMovieDetail()
 }
 
 function getAria2ButtonTitle(player: Player) {
@@ -688,8 +732,147 @@ onMounted(() => {
       </div>
     </div>
 
+    <div
+      v-if="readiness"
+      data-readiness-summary
+      class="bg-gray-800 rounded-lg shadow-lg p-6 space-y-4"
+      aria-live="polite"
+    >
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="text-xl font-bold text-white">
+            播放可用性
+          </h2>
+          <p class="text-sm text-gray-300 mt-1">
+            内容身份：{{ movie.id }} / {{ movie.primaryContentId }}
+          </p>
+        </div>
+        <RouterLink
+          v-if="readiness.source.disposition === 'ready'"
+          :to="`/movie/${movie.code}`"
+          data-readiness-action="view"
+          class="min-h-11 inline-flex items-center justify-center px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm rounded-lg transition-colors"
+        >
+          查看影片
+        </RouterLink>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <section class="border border-gray-700 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-200">
+            Metadata persisted
+          </h3>
+          <p class="mt-2 text-sm text-green-300">
+            <span aria-hidden="true">✓</span>
+            {{ readiness.metadata.persisted ? '已持久化' : '未持久化' }}
+          </p>
+          <p class="mt-1 text-xs text-gray-400 break-words">
+            content ID：{{ readiness.metadata.contentId }}
+          </p>
+          <p class="mt-1 text-xs text-gray-400">
+            最近持久化：{{ readiness.metadata.observedAt ?? '尚未上报' }}
+          </p>
+        </section>
+
+        <section
+          class="border border-gray-700 rounded-lg p-4"
+          :class="`readiness-${readiness.source.disposition}`"
+          :role="readiness.source.disposition === 'source_failed' ? 'alert' : readiness.source.disposition === 'repairing' ? 'status' : undefined"
+        >
+          <h3 class="text-sm font-semibold text-gray-200">
+            Source readiness
+          </h3>
+          <p class="mt-2 text-sm text-white">
+            <span aria-hidden="true">{{ readiness.source.disposition === 'ready' ? '✓' : readiness.source.disposition === 'source_failed' ? '!' : readiness.source.disposition === 'repairing' ? '↻' : '?' }}</span>
+            {{ sourceDispositionLabel(readiness.source.disposition) }}
+          </p>
+          <p class="mt-1 text-sm text-gray-300">
+            eligible count：{{ readiness.source.eligibleCount }}
+          </p>
+          <p class="mt-1 text-xs text-gray-400">
+            source revision：{{ readiness.source.sourceRevision }} · 最近读回：{{ readiness.source.observedAt }}
+          </p>
+          <p class="mt-1 text-xs text-gray-300 break-words">
+            受控原因：{{ sourceReasonLabel(readiness.source.reasonCode) }}
+          </p>
+          <p v-if="readiness.source.disposition === 'no_source'" class="mt-2 text-base text-amber-300">
+            暂无可用播放源
+          </p>
+          <p v-if="readiness.source.repairable" class="mt-1 text-sm text-amber-300">
+            可修复
+          </p>
+        </section>
+
+        <section class="border border-gray-700 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-200">
+            Playback proof
+          </h3>
+          <p class="mt-2 text-sm text-white">
+            <span aria-hidden="true">{{ readiness.playback.status === 'playback_verified' ? '✓' : '?' }}</span>
+            {{ playbackStatusLabel(readiness.playback.status) }}
+          </p>
+          <p v-if="readiness.playback.evidence" class="mt-1 text-xs text-gray-300">
+            独立证据：playing · currentTime {{ readiness.playback.evidence.currentTime }}<span v-if="readiness.playback.evidence.observedAt"> · {{ readiness.playback.evidence.observedAt }}</span>
+          </p>
+          <p v-else class="mt-1 text-xs text-gray-400">
+            ready/receipt 不等于浏览器播放证据
+          </p>
+        </section>
+
+        <section class="border border-gray-700 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-200">
+            Receipt/source summary
+          </h3>
+          <p class="mt-2 text-sm text-gray-300">
+            <span aria-hidden="true">{{ readiness.receipt.persisted ? '✓' : '?' }}</span>
+            {{ readiness.receipt.persisted ? 'receipt 已持久化' : 'receipt 未持久化' }}
+          </p>
+          <p class="mt-1 text-xs text-gray-400">
+            content identity matched：{{ readiness.receipt.primaryContentId === readiness.metadata.contentId ? '是' : '否' }}
+          </p>
+          <p class="mt-1 text-xs text-gray-400">
+            schema version：{{ readiness.receipt.schemaVersion ?? '未提供' }} · source revision：{{ readiness.source.sourceRevision }}
+          </p>
+          <p class="mt-1 text-xs text-gray-400">
+            candidate count：{{ readiness.source.eligibleCount }} · disposition：{{ readiness.source.disposition }}
+          </p>
+        </section>
+      </div>
+
+      <div class="flex flex-wrap gap-2" aria-label="受控 readiness 操作">
+        <button
+          v-if="['no_source', 'source_failed'].includes(readiness.source.disposition)"
+          data-readiness-action="repair"
+          type="button"
+          class="min-h-11 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg transition-colors"
+          @click="showRepairIntent"
+        >
+          查看修复意图
+        </button>
+        <button
+          v-if="['no_source', 'source_failed'].includes(readiness.source.disposition)"
+          data-readiness-action="refresh"
+          type="button"
+          class="min-h-11 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="loading"
+          @click="refreshReadiness"
+        >
+          {{ loading ? '读取中…' : '重试读取' }}
+        </button>
+        <button
+          v-else-if="readiness.source.disposition === 'repairing'"
+          data-readiness-action="refresh"
+          type="button"
+          disabled
+          class="min-h-11 px-4 py-2 bg-gray-700 text-gray-300 text-sm rounded-lg cursor-not-allowed opacity-60"
+        >
+          刷新状态
+        </button>
+      </div>
+    </div>
+
     <!-- 播放源区块 -->
-    <div v-if="sortedPlayers.length > 0" class="bg-gray-800 rounded-lg shadow-lg p-6">
+    <div v-if="sortedPlayers.length > 0 && (!readiness || readiness.source.disposition === 'ready')" class="bg-gray-800 rounded-lg shadow-lg p-6">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-4">
           <h2 class="text-xl font-bold text-white">
@@ -790,7 +973,7 @@ onMounted(() => {
                 </span>
               </div>
               <div class="text-xs text-gray-400 truncate mb-2">
-                {{ isMagnetLink(player.sourceUrl) ? 'magnet:...' : player.sourceUrl }}
+                {{ isMagnetLink(player.sourceUrl) ? '磁力来源' : '直连来源' }} · {{ player.isActive === false ? 'inactive' : 'eligible' }}
               </div>
 
               <!-- 评分显示 -->
@@ -902,7 +1085,31 @@ onMounted(() => {
       <h2 class="text-xl font-bold text-white mb-4">
         播放源
       </h2>
-      <div class="text-center py-8 text-gray-400">
+      <div v-if="readiness?.source.disposition === 'source_failed'" role="alert" class="text-center py-8 text-red-300">
+        <p class="text-lg mb-2">
+          来源失败
+        </p>
+        <p class="text-sm">
+          受控原因：{{ sourceReasonLabel(readiness.source.reasonCode) }}
+        </p>
+      </div>
+      <div v-else-if="readiness?.source.disposition === 'repairing'" role="status" class="text-center py-8 text-amber-300">
+        <p class="text-lg mb-2">
+          来源修复中
+        </p>
+        <p class="text-sm">
+          当前状态尚未完成读回确认，请刷新状态。
+        </p>
+      </div>
+      <div v-else-if="readiness?.source.disposition === 'no_source'" class="text-center py-8 text-gray-400">
+        <p class="text-lg mb-2">
+          暂无可用播放源
+        </p>
+        <p class="text-sm">
+          eligible count：{{ readiness.source.eligibleCount }}，当前状态可修复。
+        </p>
+      </div>
+      <div v-else class="text-center py-8 text-gray-400">
         <p class="text-lg mb-2">
           暂无播放源
         </p>
