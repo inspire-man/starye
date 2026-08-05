@@ -40,7 +40,15 @@ v1.4 将 v1.3 已验证的受控 crawler control plane 延伸到播放可用性�
   1. 用户在 crawler task detail 和 MovieDetail 中能分别看到 metadata persisted 与 playback readiness，并能区分 `ready`、`no_source`、`source_failed`、`repairing` 和 `playback_verified`。
   2. 用户查看新受控视频抓取结果时，有候选源的内容进入 source health/ready 路径；零源、解析失败或 source 写入失败的内容显示明确的 `no_source`、repairable 或 `source_failed` 结果，不被 metadata success 包装为可播放。
   3. 用户查看 `SUN-064` 时，`players=0` 被读回为明确的 `no_source`/repairable disposition，receipt/source summary 与同一 content identity 一致，并给出受控修复意图。
-**Plans**: TBD
+**Plans**:
+**Wave 1**
+- [ ] 20-01-PLAN.md — Source contract、eligibility 与 D1 schema/migration
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 20-02-PLAN.md — Receipt readback、sync reconciliation 与 SUN-064 回归
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 20-03-PLAN.md — Admin/MovieDetail DTO、Dashboard 与 Player no-source guard
 **UI hint**: yes
 
 ### Phase 21: Source Health And Local repair_players Vertical Slice
