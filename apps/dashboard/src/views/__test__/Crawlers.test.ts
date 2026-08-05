@@ -179,4 +179,104 @@ describe('crawlers local task panel', () => {
     expect(api.admin.listCrawlerTasks).toHaveBeenCalledWith({ template: 'movie', cursor: 'cursor-1', limit: 20 })
     expect(wrapper.text()).toContain('task-2')
   })
+
+  it('renders the readiness focal point in identity, metadata, source, playback and receipt order', async () => {
+    const task = { id: 'task-sun-064', template_key: 'movie', latest_run_id: 'run-sun-064' }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{
+        id: 'run-sun-064',
+        status: 'succeeded',
+        attemptNumber: 1,
+        receipt: {
+          createdCount: 0,
+          primaryContentId: 'movie-sun-064',
+          receiptSchemaVersion: 2,
+          templateKey: 'movie',
+          updatedCount: 1,
+        },
+        readiness: {
+          metadata: { contentId: 'movie-sun-064', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-sun-064', schemaVersion: 2 },
+          source: {
+            disposition: 'no_source',
+            eligibleCount: 0,
+            observedAt: 100,
+            reasonCode: 'no_eligible_source',
+            repairable: true,
+            sourceRevision: 4,
+          },
+        },
+      }],
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+    const rendered = wrapper.text()
+
+    expect(rendered).toContain('内容身份')
+    expect(rendered).toContain('movie-sun-064')
+    expect(rendered).toContain('Metadata persisted')
+    expect(rendered).toContain('Source readiness')
+    expect(rendered).toContain('暂无可用播放源')
+    expect(rendered).toContain('eligible count：0')
+    expect(rendered).toContain('可修复')
+    expect(rendered).toContain('Playback proof')
+    expect(rendered).toContain('播放未验证')
+    expect(rendered).toContain('Receipt/source summary')
+    expect(rendered).toContain('source revision：4')
+    expect(rendered.indexOf('内容身份')).toBeLessThan(rendered.indexOf('Metadata persisted'))
+    expect(rendered.indexOf('Metadata persisted')).toBeLessThan(rendered.indexOf('Source readiness'))
+    expect(rendered.indexOf('Source readiness')).toBeLessThan(rendered.indexOf('Playback proof'))
+    expect(rendered.indexOf('Playback proof')).toBeLessThan(rendered.indexOf('Receipt/source summary'))
+    expect(rendered).not.toContain('rawRunnerField')
+    expect(rendered).not.toContain('https://source.example')
+  })
+
+  it.each([
+    ['source_failed', 'source_failed', '重试读取'],
+    ['repairing', 'repairing', '刷新状态'],
+  ] as const)('renders bounded %s state and its controlled action', async (label, disposition, action) => {
+    const task = { id: `task-${label}`, template_key: 'movie', latest_run_id: `run-${label}` }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{
+        id: `run-${label}`,
+        status: 'succeeded',
+        attemptNumber: 1,
+        receipt: { createdCount: 1, primaryContentId: 'movie-1', templateKey: 'movie', updatedCount: 0 },
+        readiness: {
+          metadata: { contentId: 'movie-1', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-1', schemaVersion: 2 },
+          source: {
+            disposition,
+            eligibleCount: disposition === 'repairing' ? 0 : 0,
+            observedAt: 100,
+            reasonCode: disposition === 'repairing' ? 'repair_requested' : 'source_read_failed',
+            repairable: true,
+            sourceRevision: 5,
+          },
+        },
+      }],
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(label)
+    expect(wrapper.text()).toContain(action)
+    expect(wrapper.text()).toContain('受控原因')
+    if (disposition === 'repairing')
+      expect(wrapper.text()).not.toContain('查看修复意图')
+  })
 })
