@@ -1,7 +1,9 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
-import { chapters, comics, movies, pages, players } from '@starye/db/schema'
+import { chapters, comics, movies, pages } from '@starye/db/schema'
 import { eq } from 'drizzle-orm'
+import { reconcileMovieSources } from '../../../domain/movies/source-reconciliation'
+import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
 
 /**
  * 同步电影数据
@@ -13,13 +15,14 @@ export async function syncMovieData(c: Context<AppEnv>, payload: any) {
   // console.log(`[Sync] 🎬 Received movie: ${data.title} (${data.code})`)
 
   try {
+    const hasPlayers = Object.hasOwn(data, 'players')
     const { players: playerData, ...movieData } = data
-    const movieId = movieData.slug
+    const requestedMovieId = movieData.slug
 
     // 1. Upsert Movie
     await db.insert(movies).values({
       ...movieData,
-      id: movieId,
+      id: requestedMovieId,
       releaseDate: movieData.releaseDate ? new Date(movieData.releaseDate * 1000) : null,
       updatedAt: new Date(),
     }).onConflictDoUpdate({
@@ -31,24 +34,33 @@ export async function syncMovieData(c: Context<AppEnv>, payload: any) {
       },
     })
 
-    // 2. Sync Players
-    if (playerData && playerData.length > 0) {
-      await db.delete(players).where(eq(players.movieId, movieId))
-      await db.insert(players).values(
-        playerData.map((p: any) => ({
-          ...p,
-          id: crypto.randomUUID(),
-          movieId,
-        })),
-      )
+    const persistedMovie = await db.query.movies.findFirst({
+      where: eq(movies.slug, movieData.slug),
+      columns: { id: true },
+    })
+    if (!persistedMovie?.id) {
+      return c.json({
+        disposition: 'source_failed',
+        error: 'source_read_failed',
+        id: requestedMovieId,
+        reasonCode: 'source_read_failed',
+        repairable: true,
+        success: false,
+      }, 500)
     }
 
-    // console.log(`[Sync] ✅ Movie synced: ${data.code}`)
-    return c.json({ success: true, id: movieId })
+    const sourceResult = await reconcileMovieSources({
+      db,
+      movieId: persistedMovie.id,
+      players: hasPlayers ? playerData : undefined,
+    })
+    await clearGatewayCacheGroup(c.env.CACHE, 'movies')
+
+    return c.json({ success: true, id: persistedMovie.id, source: sourceResult.source })
   }
-  catch (e: unknown) {
-    console.error('[Sync] ❌ Movie Sync Error:', e)
-    return c.json({ success: false, error: String(e) }, 500)
+  catch (error) {
+    console.error('[Sync] ❌ Movie Sync Error: sync_failed', error instanceof Error ? error.name : 'unknown')
+    return c.json({ success: false, error: 'sync_failed' }, 500)
   }
 }
 

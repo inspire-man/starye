@@ -30,7 +30,7 @@ function createMockDb(overrides?: {
       if (Array.isArray(values) && values.some(value => value.movieId)) {
         if (overrides?.failPlayerWrite)
           throw new Error('player write failed')
-        state.players = values
+        state.players = values.map(value => ({ ...value, isActive: value.isActive ?? true }))
       }
       else if (values?.disposition) {
         state.sourceState = values

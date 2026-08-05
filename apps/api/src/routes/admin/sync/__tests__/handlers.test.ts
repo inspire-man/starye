@@ -208,7 +208,7 @@ function createMovieSyncDb() {
     },
   }
   const insertChain = {
-    values: vi.fn().mockImplementation(async (values: any) => {
+    values: vi.fn().mockImplementation((values: any) => {
       if (Array.isArray(values))
         state.players = values
       return insertChain

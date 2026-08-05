@@ -1,17 +1,15 @@
 import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
-import { actors as actorsTable, movieActors as movieActorsTable, moviePublishers as moviePublishersTable, movies as moviesTable, players as playersTable, publishers as publishersTable } from '@starye/db/schema'
+import type { SourceReadinessProjection } from '../../../domain/movies/source-contract'
+import type { SourcePlayerInput } from '../../../domain/movies/source-reconciliation'
+import { actors as actorsTable, movieActors as movieActorsTable, moviePublishers as moviePublishersTable, movies as moviesTable, publishers as publishersTable } from '@starye/db/schema'
 import { count, eq } from 'drizzle-orm'
+import { reconcileMovieSources } from '../../../domain/movies/source-reconciliation'
 
 // 使用 Drizzle 推导的基础类型
 type Movie = InferSelectModel<typeof moviesTable>
 
-export interface PlayerInput {
-  sourceName: string
-  sourceUrl: string
-  quality?: string
-  sortOrder?: number
-}
+export interface PlayerInput extends SourcePlayerInput {}
 
 /**
  * 同步电影数据
@@ -41,6 +39,10 @@ export interface SyncMovieDataResult {
   success: number
   failed: number
   skipped: number
+  sourceStates: Array<{
+    code: string
+    source: SourceReadinessProjection
+  }>
   errors: Array<{
     code: string
     error: string
@@ -236,6 +238,7 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
     success: 0,
     failed: 0,
     skipped: 0,
+    sourceStates: [],
     errors: [],
   }
 
@@ -327,47 +330,18 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
         }
       }
 
-      // 写入播放源（独立 try-catch，失败不影响影片元数据）
-      if (players && players.length > 0) {
-        try {
-          // 去重：过滤空 sourceUrl，同一影片内 sourceUrl 唯一
-          const seen = new Set<string>()
-          const uniquePlayers = players.filter((p) => {
-            if (!p.sourceUrl || seen.has(p.sourceUrl))
-              return false
-            seen.add(p.sourceUrl)
-            return true
-          })
-
-          if (uniquePlayers.length > 0) {
-            // 幂等写入：先删除现有 players，再批量插入
-            await db.delete(playersTable).where(eq(playersTable.movieId, movieId))
-            await db.insert(playersTable).values(
-              uniquePlayers.map((p, idx) => ({
-                id: crypto.randomUUID(),
-                movieId,
-                sourceName: p.sourceName,
-                sourceUrl: p.sourceUrl,
-                quality: p.quality ?? null,
-                sortOrder: p.sortOrder ?? idx,
-              })),
-            )
-            // 同步更新冗余计数字段
-            await db.update(moviesTable)
-              .set({ totalPlayers: uniquePlayers.length, updatedAt: new Date() })
-              .where(eq(moviesTable.id, movieId))
-          }
-        }
-        catch (playerError) {
-          console.warn(`[SyncService] ⚠️ 写入播放源失败 (${code}):`, playerError instanceof Error ? playerError.message : String(playerError))
-        }
-      }
+      const sourceResult = await reconcileMovieSources({
+        db,
+        movieId,
+        players,
+      })
+      result.sourceStates.push({ code, source: sourceResult.source })
     }
-    catch (error) {
+    catch {
       result.failed++
       result.errors.push({
         code: movieData.code,
-        error: error instanceof Error ? error.message : String(error),
+        error: 'sync_failed',
       })
     }
   }
