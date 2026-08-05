@@ -112,6 +112,13 @@ async function createTestDatabase() {
     .filter(Boolean)
     .map(sql => ({ sql }))
   await client.batch(providerStatements, 'write')
+  const receiptMigration = await readFile(new URL('../../../../../../packages/db/drizzle/0029_source_contract_receipt_boundary.sql', import.meta.url), 'utf8')
+  const receiptStatements = receiptMigration
+    .split('--> statement-breakpoint')
+    .map(statement => statement.trim())
+    .filter(Boolean)
+    .map(sql => ({ sql }))
+  await client.batch(receiptStatements, 'write')
 
   return { client, db: createDb(new LibsqlD1(client) as never) }
 }
@@ -279,11 +286,66 @@ describe('crawler task repository', () => {
       sequence: 3,
     })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'succeeded' } })
 
-    const movieReceipt = await client.execute({ args: [movie.run.id], sql: 'SELECT status, failure_code, receipt_summary_json FROM crawler_run WHERE id = ?' })
+    const movieReceipt = await client.execute({ args: [movie.run.id], sql: 'SELECT status, failure_code, receipt_summary_json, receipt_schema_version, receipt_primary_content_id, receipt_source_revision FROM crawler_run WHERE id = ?' })
     expect(movieReceipt.rows[0]).toMatchObject({
       failure_code: null,
-      receipt_summary_json: JSON.stringify({ createdCount: 2, primaryContentId: 'movie-verified', templateKey: 'movie', updatedCount: 1 }),
+      receipt_primary_content_id: 'movie-verified',
+      receipt_schema_version: 2,
+      receipt_source_revision: 0,
       status: 'succeeded',
+    })
+    expect(JSON.parse(String(movieReceipt.rows[0]?.receipt_summary_json))).toMatchObject({
+      createdCount: 2,
+      primaryContentId: 'movie-verified',
+      receiptSchemaVersion: 2,
+      source: {
+        disposition: 'no_source',
+        eligibleCount: 0,
+        repairable: true,
+        sourceRevision: 0,
+      },
+      templateKey: 'movie',
+      updatedCount: 1,
+    })
+
+    await client.execute({
+      args: ['movie-source-failed', 'Source failed movie', 'source-failed-movie', 'MOV-SOURCE-FAILED', 0, 0],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    await client.execute({
+      args: ['movie-source-failed', 3, 'source_failed', 0, 1, 'source_write_failed', 1_725_000_010],
+      sql: 'INSERT INTO movie_source_state (movie_id, source_revision, disposition, eligible_count, repairable, reason_code, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    })
+    const sourceFailed = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    if (sourceFailed.kind !== 'created')
+      throw new Error('expected source-failed run')
+    await repository.claimDispatch(sourceFailed.run.id)
+    await repository.renewLease(sourceFailed.run.id, 2)
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'source-failed-body',
+      event: { actor: 'runner', receipt: { contentIds: ['MOV-SOURCE-FAILED'], templateKey: 'movie' }, sequence: 3, type: 'runner_succeeded' },
+      eventId: 'source-failed-event',
+      keyId: 'key-current',
+      nonce: 'source-failed-nonce',
+      receipt: { contentIds: ['MOV-SOURCE-FAILED'], templateKey: 'movie' },
+      runId: sourceFailed.run.id,
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'succeeded' } })
+    const sourceFailedReceipt = await client.execute({ args: [sourceFailed.run.id], sql: 'SELECT receipt_summary_json, receipt_schema_version, receipt_primary_content_id, receipt_source_revision FROM crawler_run WHERE id = ?' })
+    expect(sourceFailedReceipt.rows[0]).toMatchObject({
+      receipt_primary_content_id: 'movie-source-failed',
+      receipt_schema_version: 2,
+      receipt_source_revision: 3,
+    })
+    expect(JSON.parse(String(sourceFailedReceipt.rows[0]?.receipt_summary_json))).toMatchObject({
+      primaryContentId: 'movie-source-failed',
+      source: {
+        disposition: 'source_failed',
+        reasonCode: 'source_write_failed',
+        repairable: true,
+        sourceRevision: 3,
+      },
     })
 
     const missing = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
@@ -491,13 +553,18 @@ describe('crawler task repository', () => {
         sql: 'INSERT INTO crawler_run (id, task_id, attempt_number, status, state_version, last_event_sequence, lease_expires_at, last_heartbeat_at, cancel_requested_at, failure_code, receipt_summary_json, created_at, updated_at, terminal_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       },
       {
+        args: ['run-3', 'task-detail', 3, 'succeeded', 3, 1, null, null, null, null, JSON.stringify({ createdCount: 1, primaryContentId: 'movie-1', source: { disposition: 'ready', eligibleCount: 'raw-error', error: 'do-not-expose' }, templateKey: 'movie', updatedCount: 0 }), 3, 3, 3],
+        sql: 'INSERT INTO crawler_run (id, task_id, attempt_number, status, state_version, last_event_sequence, lease_expires_at, last_heartbeat_at, cancel_requested_at, failure_code, receipt_summary_json, created_at, updated_at, terminal_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      },
+      {
         args: ['run-2', 2, 'github-actions', 'movie', 'starye-org', '.github/workflows/daily-movie-crawl.yml', 'inspire-man/starye', 'main', 'starye-org', 'crawler-optimized', '123', 1, 'a'.repeat(40), 'completed', 'success', null, null, null, 3, 3],
         sql: 'INSERT INTO crawler_run_provider_association (run_id, application_attempt, provider, template_key, target, workflow, repository, ref, environment, crawler_entrypoint, provider_run_id, provider_run_attempt, sha, provider_status, provider_conclusion, reconciliation_window_ends_at, safe_facts_json, schedule_bucket, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       },
     ], 'write')
 
     const detail = await repository.getTaskDetail('task-detail')
-    expect(detail?.runs.map(run => run.attemptNumber)).toEqual([2, 1])
+    expect(detail?.runs.map(run => run.attemptNumber)).toEqual([3, 2, 1])
+    expect(detail?.runs[0]?.receipt).toBeNull()
     expect(detail?.runs[0]).toMatchObject({
       provider: {
         providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/123',
@@ -508,6 +575,7 @@ describe('crawler task repository', () => {
       },
     })
     expect(JSON.stringify(detail)).not.toContain('token')
+    expect(JSON.stringify(detail)).not.toContain('do-not-expose')
 
     await client.execute('DROP TABLE crawler_run_provider_association')
     const legacy = await repository.getTaskDetail('task-detail')
