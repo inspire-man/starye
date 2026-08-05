@@ -1,23 +1,20 @@
 ---
 phase: 20-source-contract-receipt-boundary-and-sun-064
-verified: 2026-08-05T12:05:07Z
-status: human_needed
+verified: 2026-08-05T13:30:44Z
+status: passed
 score: 10/10 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
-human_verification:
-  - test: "执行 UAT 第 5 项：通过 canonical Gateway 打开 crawler task detail，使用真实登录会话检查 readiness 与受控 receipt/source summary。"
-    expected: "Dashboard task detail 显示 Metadata persisted、Source readiness、Playback proof 与 bounded receipt/source summary；页面只展示受控字段和动作，不暴露 raw receipt、runner command/workflow、token、secret 或 signed material。"
-    why_human: "当前浏览器只有本地登录页，MovieDetail 与标准 Player 已完成 Gateway/浏览器核验；Dashboard task detail 仍需要真实登录会话。"
+human_verification: []
 ---
 
 # Phase 20: Source Contract, Receipt Boundary And SUN-064 Verification Report
 
 **Phase Goal:** 用户能区分 metadata 已入库、source 当前状态和实际可播放 readiness；新抓取结果不会再把 `players=0` 或 source 写入异常显示成可播放成功。
 
-**Verified:** 2026-08-05T12:05:07Z
+**Verified:** 2026-08-05T13:30:44Z
 
-**Status:** `human_needed`
+**Status:** `passed`
 
 **Re-verification:** Yes, canonical Gateway and in-app Browser evidence appended.
 
@@ -98,7 +95,7 @@ No Phase 20 probe was declared, and no `scripts/**/probe-*.sh` file was found. N
 
 | Requirement | Source Plan | Description | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| SRC-01 | 20-01, 20-03 | Task detail/MovieDetail distinguish metadata persisted, playback readiness and required states | NEEDS HUMAN | MovieDetail/Player were checked through the canonical Gateway; Dashboard task detail visual/user-flow check remains pending until a real signed-in session is available. |
+| SRC-01 | 20-01, 20-03 | Task detail/MovieDetail distinguish metadata persisted, playback readiness and required states | VERIFIED | MovieDetail/Player and the signed Dashboard task detail were checked through the canonical Gateway; all readiness layers and bounded actions were visible without raw runner or signed-session material. |
 | SRC-03 | 20-01, 20-02, 20-03 | Controlled fetch reaches ready or explicit no-source/repairable terminal state; SUN-064 players=0 readback and repair判定 | VERIFIED | Canonical Gateway sequence confirmed ready, explicit empty no_source/repairable, omitted players preservation and same MovieDetail content identity; bounded source failure paths pass focused API tests. |
 
 No Phase 20 requirement is orphaned in `REQUIREMENTS.md`; both declared IDs map to Phase 20.
@@ -111,7 +108,7 @@ No Phase 20 requirement is orphaned in `REQUIREMENTS.md`; both declared IDs map 
 
 No unreferenced `TBD`, `FIXME` or `XXX` marker was found in the Phase 20 artifacts. `git diff --check` passed.
 
-## Human Verification Required
+## Dashboard Task Detail Check
 
 ### 1. Dashboard task detail visual/user-flow check
 
@@ -119,13 +116,13 @@ No unreferenced `TBD`, `FIXME` or `XXX` marker was found in the Phase 20 artifac
 
 **Expected:** Metadata persisted, Source readiness, Playback proof and bounded receipt/source summary remain separate; controlled actions are visible; raw receipt, runner command/workflow, token, secret and signed material remain outside the UI.
 
-**Why human:** The current browser has only the local login page; a Dashboard session was not inferred or created, while MovieDetail/standard Player browser checks are complete.
+**Observed:** A signed local Dashboard session opened task `29cba19a-2a0c-45c1-9f0b-a899f248d148` attempt 1 through `http://localhost:8080/dashboard/crawlers`. The detail showed Metadata persisted, `source_failed` / `来源读取失败`, eligible count 0, source revision 0, repairable state, `播放未验证`, receipt persisted, content identity matched, candidate count 0 and bounded disposition `source_failed`. No raw receipt, URL, runner command/workflow, token, secret or signed material was rendered.
 
 ## Gaps Summary
 
-No implementation blocker was found. All 10 merged roadmap/plan truths have substantive, wired, data-flow-backed code and passing focused local tests. The canonical local Gateway reconciliation and MovieDetail/Player browser checks are now recorded. The phase remains `human_needed` solely for the signed Dashboard task-detail check; production deployment and actual playback proof remain outside this Phase 20 result.
+No implementation blocker was found. All 10 merged roadmap/plan truths have substantive, wired, data-flow-backed code and passing focused local tests. The canonical local Gateway reconciliation, signed Dashboard task-detail check and MovieDetail/Player browser checks are recorded. Phase 20 verification is passed; production deployment and actual playback proof remain outside this Phase 20 result.
 
 ---
 
-_Verified: 2026-08-05T12:05:07Z_
+_Verified: 2026-08-05T13:30:44Z_
 _Verifier: the agent (gsd-verifier)_
