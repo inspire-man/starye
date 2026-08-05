@@ -58,23 +58,23 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SRC-01 | Phase TBD | Pending |
-| SRC-02 | Phase TBD | Pending |
-| SRC-03 | Phase TBD | Pending |
-| REP-01 | Phase TBD | Pending |
-| REP-02 | Phase TBD | Pending |
-| REP-03 | Phase TBD | Pending |
-| PLAY-01 | Phase TBD | Pending |
-| PLAY-02 | Phase TBD | Pending |
-| PLAY-03 | Phase TBD | Pending |
-| EVID-01 | Phase TBD | Pending |
-| EVID-02 | Phase TBD | Pending |
-| EVID-03 | Phase TBD | Pending |
+| SRC-01 | Phase 20 | Pending |
+| SRC-02 | Phase 21 | Pending |
+| SRC-03 | Phase 20 | Pending |
+| REP-01 | Phase 21 | Pending |
+| REP-02 | Phase 23 | Pending |
+| REP-03 | Phase 23 | Pending |
+| PLAY-01 | Phase 22 | Pending |
+| PLAY-02 | Phase 22 | Pending |
+| PLAY-03 | Phase 22 | Pending |
+| EVID-01 | Phase 24 | Pending |
+| EVID-02 | Phase 24 | Pending |
+| EVID-03 | Phase 24 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 (roadmap pending)
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-08-05*
