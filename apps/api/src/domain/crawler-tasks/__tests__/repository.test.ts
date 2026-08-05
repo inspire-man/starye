@@ -98,6 +98,15 @@ async function createTestDatabase() {
       crawled_chapters INTEGER DEFAULT 0
     )
   `)
+  await client.execute(`
+    CREATE TABLE player (
+      id TEXT PRIMARY KEY NOT NULL,
+      movie_id TEXT NOT NULL,
+      source_url TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      sort_order INTEGER NOT NULL
+    )
+  `)
   const migration = await readFile(new URL('../../../../../../packages/db/drizzle/0027_crawler_task_domain_foundation.sql', import.meta.url), 'utf8')
   const statements = migration
     .split('--> statement-breakpoint')
@@ -565,7 +574,7 @@ describe('crawler task repository', () => {
     const detail = await repository.getTaskDetail('task-detail')
     expect(detail?.runs.map(run => run.attemptNumber)).toEqual([3, 2, 1])
     expect(detail?.runs[0]?.receipt).toBeNull()
-    expect(detail?.runs[0]).toMatchObject({
+    expect(detail?.runs[1]).toMatchObject({
       provider: {
         providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/123',
       },

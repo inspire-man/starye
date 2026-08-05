@@ -1,5 +1,7 @@
 import type { Database } from '@starye/db'
+import type { SourceReadinessProjection } from '../movies/source-contract'
 import type { CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskSnapshot, CrawlerTaskTemplateKey, ProviderRunStatus, ValidatedCrawlerRunReceipt } from './types'
+import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
 import { createManualRetryAttempt, decideCrawlerRunTransition, isTerminalCrawlerRunStatus } from './state-machine'
@@ -34,6 +36,9 @@ interface CrawlerRunRow {
   last_heartbeat_at: number | null
   lease_expires_at: number | null
   receipt_summary_json: string | null
+  receipt_schema_version: number | null
+  receipt_primary_content_id: string | null
+  receipt_source_revision: number | null
   state_version: number
   status: CrawlerRunStatus
   task_id: string
@@ -269,7 +274,11 @@ function toCrawlerTaskListItem(row: CrawlerTaskRow): CrawlerTaskListItem {
   }
 }
 
-function parseValidatedReceipt(status: CrawlerRunStatus, raw: string | null): ValidatedCrawlerRunReceipt | null {
+function parseValidatedReceipt(
+  status: CrawlerRunStatus,
+  raw: string | null,
+  persisted?: Pick<CrawlerRunRow, 'receipt_schema_version' | 'receipt_primary_content_id' | 'receipt_source_revision'>,
+): ValidatedCrawlerRunReceipt | null {
   if (status !== 'succeeded' || !raw)
     return null
   try {
@@ -288,9 +297,64 @@ function parseValidatedReceipt(status: CrawlerRunStatus, raw: string | null): Va
       || receipt.updatedCount < 0) {
       return null
     }
+    if (receipt.receiptSchemaVersion !== undefined && receipt.receiptSchemaVersion !== 2)
+      return null
+    if (persisted?.receipt_schema_version !== null
+      && persisted?.receipt_schema_version !== undefined
+      && persisted.receipt_schema_version !== 2) {
+      return null
+    }
+    if (persisted?.receipt_primary_content_id
+      && persisted.receipt_primary_content_id !== receipt.primaryContentId) {
+      return null
+    }
+
+    let source: SourceReadinessProjection | undefined
+    if (receipt.source !== undefined) {
+      if (!receipt.source || typeof receipt.source !== 'object' || Array.isArray(receipt.source))
+        return null
+      const candidate = receipt.source as Record<string, unknown>
+      const validDisposition = candidate.disposition === 'ready'
+        || candidate.disposition === 'no_source'
+        || candidate.disposition === 'source_failed'
+        || candidate.disposition === 'repairing'
+      const validReason = candidate.reasonCode === null
+        || (typeof candidate.reasonCode === 'string' && (SOURCE_REASON_CODES as readonly string[]).includes(candidate.reasonCode))
+      if (!validDisposition
+        || typeof candidate.eligibleCount !== 'number'
+        || !Number.isSafeInteger(candidate.eligibleCount)
+        || candidate.eligibleCount < 0
+        || candidate.eligibleCount > 1_000_000
+        || typeof candidate.observedAt !== 'number'
+        || !Number.isSafeInteger(candidate.observedAt)
+        || candidate.observedAt < 0
+        || typeof candidate.repairable !== 'boolean'
+        || !validReason
+        || typeof candidate.sourceRevision !== 'number'
+        || !Number.isSafeInteger(candidate.sourceRevision)
+        || candidate.sourceRevision < 0
+        || candidate.sourceRevision > 1_000_000) {
+        return null
+      }
+      if (persisted?.receipt_source_revision !== null
+        && persisted?.receipt_source_revision !== undefined
+        && persisted.receipt_source_revision !== candidate.sourceRevision) {
+        return null
+      }
+      source = {
+        disposition: candidate.disposition,
+        eligibleCount: candidate.eligibleCount,
+        observedAt: candidate.observedAt,
+        reasonCode: candidate.reasonCode,
+        repairable: candidate.repairable,
+        sourceRevision: candidate.sourceRevision,
+      } as SourceReadinessProjection
+    }
     return {
       createdCount: receipt.createdCount,
       primaryContentId: receipt.primaryContentId,
+      ...(receipt.receiptSchemaVersion === 2 ? { receiptSchemaVersion: 2 } : {}),
+      ...(source ? { source } : {}),
       templateKey: receipt.templateKey,
       updatedCount: receipt.updatedCount,
     }
@@ -462,7 +526,8 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const result = await d1.prepare(`
       SELECT id, task_id, attempt_number, status, state_version, last_event_sequence,
         lease_expires_at, last_heartbeat_at, cancel_requested_at, failure_code,
-        receipt_summary_json, terminal_at
+        receipt_summary_json, receipt_schema_version, receipt_primary_content_id,
+        receipt_source_revision, terminal_at
       FROM crawler_run
       WHERE id = ?
     `).bind(runId).all<CrawlerRunRow>()
@@ -546,7 +611,8 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const runsResult = await d1.prepare(`
       SELECT id, task_id, attempt_number, status, state_version, last_event_sequence,
         lease_expires_at, last_heartbeat_at, cancel_requested_at, failure_code,
-        receipt_summary_json, created_at, updated_at, terminal_at
+        receipt_summary_json, receipt_schema_version, receipt_primary_content_id,
+        receipt_source_revision, created_at, updated_at, terminal_at
       FROM crawler_run
       WHERE task_id = ?
       ORDER BY attempt_number DESC, id DESC
@@ -582,7 +648,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         failureCode: row.failure_code as CrawlerRunFailureCode | null,
         id: row.id,
         provider,
-        receipt: parseValidatedReceipt(row.status, row.receipt_summary_json),
+        receipt: parseValidatedReceipt(row.status, row.receipt_summary_json, row),
         stateVersion: row.state_version,
         status: row.status,
         taskId: row.task_id,
@@ -838,13 +904,17 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const terminalAt = isTerminal ? currentNow : null
     const receipt = options.receipt ?? (event.type === 'runner_succeeded' ? event.receipt : undefined)
     const failureCode = options.failureCode ?? decision.failureCode
-    const receiptSummary = receipt
-      ? 'primaryContentId' in receipt
-        ? JSON.stringify(receipt)
-        : JSON.stringify({ contentIds: receipt.contentIds, templateKey: receipt.templateKey })
+    const validatedReceipt = receipt && 'primaryContentId' in receipt
+      ? receipt as ValidatedCrawlerRunReceipt
+      : undefined
+    const receiptSummary = validatedReceipt
+      ? JSON.stringify(validatedReceipt)
       : isTerminal
         ? null
         : run.receipt_summary_json
+    const receiptSchemaVersion = validatedReceipt?.receiptSchemaVersion ?? (isTerminal ? null : run.receipt_schema_version)
+    const receiptPrimaryContentId = validatedReceipt?.primaryContentId ?? (isTerminal ? null : run.receipt_primary_content_id)
+    const receiptSourceRevision = validatedReceipt?.source?.sourceRevision ?? (isTerminal ? null : run.receipt_source_revision)
 
     const batchResults = await d1.batch([
       d1.prepare(`
@@ -880,6 +950,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
           cancel_requested_at = CASE WHEN ? THEN ? ELSE cancel_requested_at END,
           failure_code = ?,
           receipt_summary_json = ?,
+          receipt_schema_version = ?,
+          receipt_primary_content_id = ?,
+          receipt_source_revision = ?,
           terminal_at = ?,
           updated_at = ?
         WHERE id = ? AND status = ? AND state_version = ? AND last_event_sequence = ?
@@ -894,6 +967,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         currentNow,
         failureCode ?? null,
         receiptSummary,
+        receiptSchemaVersion,
+        receiptPrimaryContentId,
+        receiptSourceRevision,
         terminalAt,
         currentNow,
         runId,
