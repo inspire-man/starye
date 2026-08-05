@@ -7,9 +7,9 @@
 
 ### Source Readiness
 
-- [ ] **SRC-01**: 用户可以在任务详情和 MovieDetail 中分别看到 metadata persisted 与 playback readiness；状态至少区分 `ready`、`no_source`、`source_failed`、`repairing` 和 `playback_verified`。
+- [x] **SRC-01**: 用户可以在任务详情和 MovieDetail 中分别看到 metadata persisted 与 playback readiness；状态至少区分 `ready`、`no_source`、`source_failed`、`repairing` 和 `playback_verified`。
 - [ ] **SRC-02**: 用户可以查看每个受控播放源的 source 类型与有限健康信息；至少区分 direct、magnet、TorrServer、inactive、unverified 和 failed，并显示最近观察时间或受控失败原因。
-- [ ] **SRC-03**: 每次新的受控视频抓取都会得到“存在候选源并进入健康检查”或“明确 no-source / repairable”两种终态；`SUN-064` 的 `players=0` 必须完成状态读回和修复判定。
+- [x] **SRC-03**: 每次新的受控视频抓取都会得到“存在候选源并进入健康检查”或“明确 no-source / repairable”两种终态；`SUN-064` 的 `players=0` 必须完成状态读回和修复判定。
 
 ### Repair Operations
 
@@ -58,9 +58,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SRC-01 | Phase 20 | Pending |
+| SRC-01 | Phase 20 | Complete |
 | SRC-02 | Phase 21 | Pending |
-| SRC-03 | Phase 20 | Pending |
+| SRC-03 | Phase 20 | Complete |
 | REP-01 | Phase 21 | Pending |
 | REP-02 | Phase 23 | Pending |
 | REP-03 | Phase 23 | Pending |
@@ -72,6 +72,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | EVID-03 | Phase 24 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 12 total
 - Mapped to phases: 12
 - Unmapped: 0
