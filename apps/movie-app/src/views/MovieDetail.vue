@@ -25,6 +25,18 @@ const error = ref('')
 const movie = ref<MovieDetail | null>(null)
 const readiness = computed<ReadinessProjection | null>(() => movie.value?.readiness ?? null)
 
+type InformationalSourceType = 'direct' | 'magnet' | 'TorrServer'
+type InformationalSourceHealth = 'inactive' | 'unverified' | 'failed'
+type InformationalSourceReason = 'source_inactive' | 'source_unverified' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
+
+interface InformationalSourceHealthRow {
+  eligible: boolean
+  health: InformationalSourceHealth
+  observedAt: number
+  reasonCode: InformationalSourceReason
+  sourceType: InformationalSourceType
+}
+
 // 用户状态
 const userStore = useUserStore()
 
@@ -109,11 +121,73 @@ function playbackStatusLabel(status: ReadinessProjection['playback']['status']):
     : 'unverified · 播放未验证'
 }
 
+const sourceHealthLabels: Record<InformationalSourceHealth, string> = {
+  inactive: 'inactive · 未参与候选',
+  unverified: 'unverified · 尚未验证',
+  failed: 'failed · 来源失败',
+}
+
+const sourceHealthReasonLabels: Record<InformationalSourceReason, string> = {
+  source_inactive: '来源未启用',
+  source_unverified: '来源尚未验证',
+  source_candidate_invalid: '来源候选未通过校验',
+  source_read_failed: '来源读取失败',
+  source_write_failed: '来源写入失败',
+}
+
+function informationalSourceType(player: Player): InformationalSourceType {
+  if (player.source === 'TorrServer' || player.sourceName.includes('TorrServer'))
+    return 'TorrServer'
+  return isMagnetLink(player.sourceUrl) ? 'magnet' : 'direct'
+}
+
+function informationalSourceHealth(player: Player): InformationalSourceHealth {
+  if (player.isActive === false)
+    return 'inactive'
+  if (readiness.value?.source.disposition === 'source_failed')
+    return 'failed'
+  return 'unverified'
+}
+
+function informationalSourceReason(health: InformationalSourceHealth): InformationalSourceReason {
+  if (health === 'inactive')
+    return 'source_inactive'
+  if (health === 'failed')
+    return 'source_read_failed'
+  return 'source_unverified'
+}
+
+const sourceHealthRows = computed<InformationalSourceHealthRow[]>(() => {
+  const observedAt = readiness.value?.source.observedAt ?? 0
+  const disposition = readiness.value?.source.disposition
+  return (movie.value?.players ?? []).map((player) => {
+    const health = informationalSourceHealth(player)
+    return {
+      eligible: health !== 'inactive' && disposition === 'ready',
+      health,
+      observedAt,
+      reasonCode: informationalSourceReason(health),
+      sourceType: informationalSourceType(player),
+    }
+  })
+})
+
+function sourceHealthLabel(health: InformationalSourceHealth): string {
+  return `${health} · ${sourceHealthLabels[health]}`
+}
+
+function sourceHealthReasonLabel(reasonCode: InformationalSourceReason): string {
+  return `${reasonCode} · ${sourceHealthReasonLabels[reasonCode]}`
+}
+
 function showRepairIntent() {
-  if (!readiness.value?.source.repairable)
+  const source = readiness.value?.source
+  const movieId = movie.value?.id
+  if (!source?.repairable || !movieId || !['no_source', 'source_failed'].includes(source.disposition))
     return
 
-  showToast('当前来源状态可由受控修复任务处理')
+  const reason = source.disposition
+  router.push(`/dashboard/crawlers?movieId=${encodeURIComponent(movieId)}&reason=${reason}`)
 }
 
 async function refreshReadiness() {
@@ -838,6 +912,39 @@ onMounted(() => {
           </p>
         </section>
       </div>
+
+      <section v-if="sourceHealthRows.length" data-source-health-summary class="mt-3 border border-gray-700 rounded-lg p-4" aria-labelledby="source-health-title">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 id="source-health-title" class="text-sm font-semibold text-gray-200">
+            Source health
+          </h3>
+          <span class="text-xs text-gray-400">最近观察：{{ readiness.source.observedAt }}</span>
+        </div>
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <article
+            v-for="source in sourceHealthRows"
+            :key="`${source.sourceType}-${source.health}-${source.reasonCode}`"
+            :data-source-health-row="source.sourceType"
+            class="border border-gray-700 rounded-lg p-3 text-xs text-gray-300"
+          >
+            <p class="font-semibold text-gray-100">
+              {{ source.sourceType }}
+            </p>
+            <p class="mt-1">
+              {{ sourceHealthLabel(source.health) }}
+            </p>
+            <p class="mt-1">
+              观察时间：{{ source.observedAt }}
+            </p>
+            <p class="mt-1 break-words">
+              受控原因：{{ sourceHealthReasonLabel(source.reasonCode) }}
+            </p>
+            <p class="mt-1" :class="source.eligible ? 'text-green-300' : 'text-gray-400'">
+              {{ source.eligible ? 'eligible · 可作为候选' : 'ineligible · 不作为候选' }}
+            </p>
+          </article>
+        </div>
+      </section>
 
       <div class="flex flex-wrap gap-2" aria-label="受控 readiness 操作">
         <button
