@@ -5,15 +5,15 @@ milestone_name: 播放可用性与生产自愈闭环
 current_phase: 21
 current_phase_name: Source Health And Local repair_players Vertical Slice
 status: executing
-stopped_at: Completed 21-02-PLAN.md
-last_updated: "2026-08-06T07:09:54.726Z"
+stopped_at: Completed 21-03-PLAN.md
+last_updated: "2026-08-06T08:08:44.155Z"
 last_activity: 2026-08-06
 last_activity_desc: Phase 21 execution started
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 10
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State: Starye — 个人内容中台
@@ -28,11 +28,11 @@ See: `.planning/PROJECT.md` (updated 2026-08-05)
 ## Current Position
 
 Phase: 21 (Source Health And Local repair_players Vertical Slice) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-08-06 — Phase 21 execution started
 
-Progress: ██░░░░░░░░ [█████░░░░░] 50% (Phase 20: 100%)
+Progress: ██░░░░░░░░ [██████░░░░] 60% (Phase 20: 100%)
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: ██░░░░░░░░ [█████░░░░░] 50% (P
 | Phase 20 P03 | 1h 20m | 3 tasks | 15 files |
 | Phase 21 P01 | 31m | 2 tasks | 5 files |
 | Phase 21 P02 | 33m | 2 tasks | 5 files |
+| Phase 21-source-health-and-local-repair-players-vertical-slice P03 | 32m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 保持 deriveSourceReadiness 与 ordinary sync contract 不变，repair observation 作为新增 operation-aware 服务边界。
 - [Phase ?]: 在同一 D1 transaction 内先做 sourceRevision CAS projection guard，再写 player 与 append-only observation facts，提交后只从 persisted readback 生成 bounded DTO。
 - [Phase ?]: 成功 readback 后清理注入的 API detail cache 与 Gateway movies cache group。
+- [Phase ?]: repair_players snapshot reuses movie templateKey but owns operation/movieId/reason/sourceRevision/targetIntent server-side
+- [Phase ?]: repair success requires authoritative readback equality on movieId/sourceRevision/observedAt/sourceSummary before succeeded
+- [Phase ?]: repair transient source_read/source_write failures auto-retry once on the same task; manual retry always creates a new task after reread
 
 ### Pending Todos
 
@@ -94,6 +98,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T07:09:54.711Z
-Stopped at: Completed 21-02-PLAN.md
+Last session: 2026-08-06T08:08:44.137Z
+Stopped at: Completed 21-03-PLAN.md
 Resume file: None
