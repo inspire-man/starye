@@ -198,6 +198,12 @@ export type CrawlerTaskTemplate = 'movie' | 'manga'
 export type CrawlerRunStatus = 'queued' | 'dispatching' | 'running' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled'
 export type CrawlerSourceDisposition = 'ready' | 'no_source' | 'source_failed' | 'repairing'
 export type CrawlerSourceReasonCode = 'no_eligible_source' | 'repair_requested' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
+export type CrawlerSourceType = 'direct' | 'magnet' | 'TorrServer'
+export type CrawlerSourceHealth = 'inactive' | 'unverified' | 'failed'
+export type CrawlerSourceHealthReasonCode = 'source_inactive' | 'source_unverified' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
+export type CrawlerRepairReason = 'no_source' | 'source_failed'
+export type CrawlerRepairTargetIntent = 'restore_playable_sources'
+export type CrawlerRepairNextAction = 'none' | 'wait_for_observation' | 'create_new_task'
 
 export interface MetadataProjection {
   contentId: string
@@ -244,6 +250,69 @@ export interface CrawlerRunReceipt {
   updatedCount: number
 }
 
+export interface CrawlerSourceHealthRow {
+  eligible: boolean
+  health: CrawlerSourceHealth
+  observedAt: number
+  reasonCode: CrawlerSourceHealthReasonCode
+  sourceType: CrawlerSourceType
+}
+
+export interface CrawlerRepairReceipt {
+  movieId: string
+  observedAt: number
+  operation: 'repair_players'
+  sourceRevision: number
+  sourceSummary: CrawlerSourceHealthRow[]
+  summary: {
+    eligibleCount: number
+    sourceCount: number
+  }
+}
+
+export type CrawlerReceipt = CrawlerRunReceipt | CrawlerRepairReceipt
+
+export interface CrawlerRepairCommand {
+  confirmed: true
+  movieId: string
+  reason: CrawlerRepairReason
+  targetIntent: CrawlerRepairTargetIntent
+}
+
+export interface CrawlerRepairTask {
+  allowedNextAction: CrawlerRepairNextAction
+  createdAt?: number
+  id: string
+  latestRunId?: string | null
+  movie: { id: string, title: string }
+  operation: 'repair_players'
+  reason: CrawlerRepairReason
+  sourceRevision: number
+  targetIntent: CrawlerRepairTargetIntent
+  templateKey: 'movie'
+  updatedAt?: number
+}
+
+export interface CrawlerRepairRun {
+  attemptNumber: number
+  createdAt?: number
+  failureCode?: string | null
+  id: string
+  observedAt?: number
+  receipt?: CrawlerRepairReceipt | null
+  sourceRevision?: number
+  status: CrawlerRunStatus
+  terminalAt?: number | null
+  updatedAt?: number
+}
+
+export interface CrawlerRepairTaskResponse {
+  kind?: 'created' | 'existing_active_run'
+  run: CrawlerRepairRun | null
+  runs?: CrawlerRepairRun[]
+  task: CrawlerRepairTask
+}
+
 export interface CrawlerProviderSummary {
   provider?: string
   providerRunUrl?: string
@@ -277,11 +346,17 @@ export interface CrawlerRun {
   updatedAt?: number
   provider?: CrawlerProviderSummary | null
   readiness?: ReadinessProjection | null
-  receipt: CrawlerRunReceipt | null
+  receipt: CrawlerReceipt | null
 }
 
 export interface CrawlerTask {
+  allowedNextAction?: CrawlerRepairNextAction
   id: string
+  movie?: { id: string, title: string }
+  operation?: CrawlerTaskTemplate | 'repair_players'
+  reason?: CrawlerRepairReason
+  sourceRevision?: number
+  targetIntent?: CrawlerRepairTargetIntent
   template_key?: CrawlerTaskTemplate
   templateKey?: CrawlerTaskTemplate
   latest_run_id?: string | null
@@ -524,6 +599,12 @@ export const api = {
       apiFetch<{ kind: 'created' | 'existing_active_run', template: CrawlerTaskTemplate, run: CrawlerRun }>(`/admin/crawler-tasks`, {
         method: 'POST',
         body: JSON.stringify({ template }),
+      }),
+
+    repairPlayers: (command: CrawlerRepairCommand) =>
+      apiFetch<CrawlerRepairTaskResponse>('/admin/crawler-tasks/repair-players', {
+        method: 'POST',
+        body: JSON.stringify(command),
       }),
 
     listCrawlerTasks: (params?: { template?: CrawlerTaskTemplate, cursor?: string, limit?: number }) => {

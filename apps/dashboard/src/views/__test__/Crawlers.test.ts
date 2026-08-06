@@ -327,8 +327,8 @@ describe('crawlers local task panel', () => {
     await wrapper.get('[data-repair-action="open"]').trigger('click')
 
     expect(api.admin.repairPlayers).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('SUN-064')
-    expect(wrapper.text()).toContain('恢复可播放源')
+    expect(wrapper.text()).toContain('movie-sun-064')
+    expect(document.body.textContent).toContain('恢复可播放源')
 
     await (wrapper.vm as any).confirmRepair()
     await flushPromises()

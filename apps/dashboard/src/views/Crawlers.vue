@@ -3,10 +3,10 @@
  * 爬虫监控页面
  */
 
-import type { CrawlerRun, CrawlerSourceDisposition, CrawlerTask, CrawlerTaskLog, CrawlerTaskTemplate, ReadinessProjection } from '@/lib/api'
+import type { CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskLog, CrawlerTaskTemplate, ReadinessProjection } from '@/lib/api'
 import { ConfirmDialog, info, SkeletonCard, success } from '@starye/ui'
 import { AlertTriangle, CheckCircle2, CircleHelp, RefreshCw, Wrench } from 'lucide-vue-next'
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { useResourceGuard } from '@/composables/useResourceGuard'
 import { api } from '@/lib/api'
@@ -34,6 +34,9 @@ const taskAction = ref<CrawlerTaskTemplate | null>(null)
 const cancelConfirmOpen = ref(false)
 const retryConfirmOpen = ref(false)
 const pendingAction = ref<{ task: CrawlerTask, run: CrawlerRun } | null>(null)
+const repairConfirmOpen = ref(false)
+const pendingRepair = ref<{ movieId: string, movieTitle: string, reason: CrawlerRepairReason } | null>(null)
+const repairAction = ref(false)
 let taskRefreshInterval: ReturnType<typeof setInterval> | null = null
 
 const taskStatusLabels: Record<CrawlerRun['status'], string> = {
@@ -61,6 +64,44 @@ const sourceReasonLabels: Record<NonNullable<ReadinessProjection['source']['reas
   source_write_failed: '播放源写入失败',
 }
 
+const sourceHealthLabels: Record<CrawlerSourceHealth, string> = {
+  inactive: 'inactive · 未参与候选',
+  unverified: 'unverified · 尚未验证',
+  failed: 'failed · 来源失败',
+}
+
+const sourceHealthReasonLabels: Record<CrawlerSourceHealthReasonCode, string> = {
+  source_inactive: '来源未启用',
+  source_unverified: '来源尚未验证',
+  source_candidate_invalid: '来源候选未通过校验',
+  source_read_failed: '来源读取失败',
+  source_write_failed: '来源写入失败',
+}
+
+const repairNextActionLabels: Record<CrawlerRepairNextAction, string> = {
+  none: '暂无下一步',
+  wait_for_observation: '等待来源观察与读回',
+  create_new_task: '允许创建新的修复任务',
+}
+
+const boundedFailureCodes = new Set([
+  'cancelled',
+  'operation_mismatch',
+  'provider_lost',
+  'receipt_missing',
+  'source_read_failed',
+  'source_revision_mismatch',
+  'source_stale',
+  'source_write_failed',
+])
+
+const repairConfirmationMessage = computed(() => {
+  const target = pendingRepair.value
+  if (!target)
+    return ''
+  return `确认对 ${target.movieTitle} 发起 ${target.reason}，意图为恢复可播放源？`
+})
+
 function runReadiness(run: CrawlerRun): ReadinessProjection | null {
   return run.readiness ?? null
 }
@@ -73,10 +114,43 @@ function sourceReasonLabel(reasonCode: ReadinessProjection['source']['reasonCode
   return reasonCode ? sourceReasonLabels[reasonCode] : '无'
 }
 
+function isRepairReceipt(receipt: CrawlerRun['receipt']): receipt is CrawlerRepairReceipt {
+  return Boolean(receipt && 'operation' in receipt && receipt.operation === 'repair_players')
+}
+
+function sourceHealthRows(run: CrawlerRun): CrawlerSourceHealthRow[] {
+  return isRepairReceipt(run.receipt) ? run.receipt.sourceSummary : []
+}
+
+function sourceHealthLabel(health: CrawlerSourceHealth): string {
+  return sourceHealthLabels[health]
+}
+
+function sourceHealthReasonLabel(reasonCode: CrawlerSourceHealthReasonCode): string {
+  return `${reasonCode} · ${sourceHealthReasonLabels[reasonCode]}`
+}
+
+function sourceTypeLabel(sourceType: CrawlerSourceType): string {
+  return sourceType
+}
+
+function repairReasonFor(run: CrawlerRun): CrawlerRepairReason | null {
+  const disposition = runReadiness(run)?.source.disposition
+  return disposition === 'no_source' || disposition === 'source_failed' ? disposition : null
+}
+
+function repairMovieId(run: CrawlerRun): string | null {
+  return runReadiness(run)?.metadata.contentId ?? (run.receipt && !isRepairReceipt(run.receipt) ? run.receipt.primaryContentId : null)
+}
+
+function receiptContentId(run: CrawlerRun): string | null {
+  return run.receipt && !isRepairReceipt(run.receipt) ? run.receipt.primaryContentId : null
+}
+
 function managementLabel(run: CrawlerRun): string {
   const readiness = runReadiness(run)
   if (!readiness)
-    return `管理${run.receipt?.templateKey === 'movie' ? '电影' : '漫画'}内容`
+    return `管理${run.receipt && !isRepairReceipt(run.receipt) && run.receipt.templateKey === 'movie' ? '电影' : '漫画'}内容`
   return readiness.source.disposition === 'ready' ? '查看影片' : '查看修复意图'
 }
 
@@ -85,7 +159,7 @@ function canAccessTemplate(template: CrawlerTaskTemplate): boolean {
 }
 
 function taskTemplate(task: CrawlerTask): CrawlerTaskTemplate {
-  return task.templateKey ?? task.template_key!
+  return task.templateKey ?? task.template_key ?? 'movie'
 }
 
 function taskLatestRunId(task: CrawlerTask): string | null {
@@ -136,12 +210,13 @@ async function loadTaskPanel(): Promise<void> {
       for (const task of response.tasks) {
         const detail = await api.admin.getCrawlerTask(task.id)
         taskDetails.value[task.id] = detail
-        const run = latestRunFor(task)
+        const displayTask = detail.task ?? task
+        const run = latestRunFor(displayTask)
         if (selectedRun.value?.task.id === task.id && run) {
-          selectRun(task, run)
+          selectRun(displayTask, run)
         }
         else if (!selectedRun.value && run) {
-          selectRun(task, run)
+          selectRun(displayTask, run)
         }
       }
     }
@@ -260,7 +335,7 @@ async function confirmRetry(): Promise<void> {
 }
 
 function managementPath(task: CrawlerTask, run: CrawlerRun): string | null {
-  if (run.status !== 'succeeded' || !run.receipt)
+  if (run.status !== 'succeeded' || !run.receipt || isRepairReceipt(run.receipt))
     return null
   const query = new URLSearchParams({
     receipt: run.receipt.primaryContentId,
@@ -274,7 +349,8 @@ function managementPath(task: CrawlerTask, run: CrawlerRun): string | null {
 }
 
 function runFailureCode(run: CrawlerRun): string | null {
-  return run.failureCode ?? run.failure_code ?? null
+  const value = run.failureCode ?? run.failure_code ?? null
+  return value && boundedFailureCodes.has(value) ? value : null
 }
 
 function runTimestamp(run: CrawlerRun): number | string | null | undefined {
@@ -287,6 +363,45 @@ function logMessage(log: CrawlerTaskLog): string {
 
 function logTimestamp(log: CrawlerTaskLog): number | string | undefined {
   return log.createdAt ?? log.created_at
+}
+
+function askRepair(run: CrawlerRun): void {
+  const reason = repairReasonFor(run)
+  const movieId = repairMovieId(run)
+  if (!reason || !movieId || repairAction.value)
+    return
+  pendingRepair.value = { movieId, movieTitle: selectedRun.value?.task.movie?.title ?? movieId, reason }
+  repairConfirmOpen.value = true
+}
+
+async function confirmRepair(): Promise<void> {
+  const target = pendingRepair.value
+  if (!target || repairAction.value)
+    return
+  repairAction.value = true
+  try {
+    const response = await api.admin.repairPlayers({
+      confirmed: true,
+      movieId: target.movieId,
+      reason: target.reason,
+      targetIntent: 'restore_playable_sources',
+    })
+    success('已创建受控来源修复任务，正在等待读回。')
+    await loadTaskPanel()
+    const task = crawlerTasks.value.movie.find(item => item.id === response.task.id)
+    if (task) {
+      const run = latestRunFor(task)
+      if (run)
+        selectRun(task, run)
+    }
+  }
+  catch {
+    taskError.value = '无法创建修复任务。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
+  }
+  finally {
+    pendingRepair.value = null
+    repairAction.value = false
+  }
 }
 
 async function loadStats() {
@@ -497,7 +612,7 @@ async function executeClearFailed() {
           <div class="readiness-identity">
             <strong>内容身份</strong>
             <span v-if="runReadiness(selectedRun.run)">primaryContentId：{{ runReadiness(selectedRun.run)!.metadata.contentId }}</span>
-            <span v-else-if="selectedRun.run.receipt">primaryContentId：{{ selectedRun.run.receipt.primaryContentId }}</span>
+            <span v-else-if="receiptContentId(selectedRun.run)">primaryContentId：{{ receiptContentId(selectedRun.run) }}</span>
             <span v-else>状态读取中</span>
           </div>
           <div v-if="runReadiness(selectedRun.run)" class="readiness-grid">
@@ -547,13 +662,53 @@ async function executeClearFailed() {
               <span>content identity matched：{{ runReadiness(selectedRun.run)!.receipt.primaryContentId === runReadiness(selectedRun.run)!.metadata.contentId ? '是' : '否' }}</span>
               <span>source revision：{{ runReadiness(selectedRun.run)!.source.sourceRevision }}</span>
               <span>candidate count：{{ runReadiness(selectedRun.run)!.source.eligibleCount }} · disposition：{{ runReadiness(selectedRun.run)!.source.disposition }}</span>
-              <span v-if="selectedRun.run.receipt">新增 {{ selectedRun.run.receipt.createdCount }} · 更新 {{ selectedRun.run.receipt.updatedCount }}</span>
+              <span v-if="selectedRun.run.receipt && !isRepairReceipt(selectedRun.run.receipt)">新增 {{ selectedRun.run.receipt.createdCount }} · 更新 {{ selectedRun.run.receipt.updatedCount }}</span>
             </section>
           </div>
-          <div v-else class="readiness-loading" role="status">
+          <section v-if="sourceHealthRows(selectedRun.run).length" class="source-health-block" aria-labelledby="source-health-title">
+            <div class="source-health-heading">
+              <div>
+                <h4 id="source-health-title">
+                  Source health
+                </h4>
+                <span v-if="isRepairReceipt(selectedRun.run.receipt)">观察时间：{{ selectedRun.run.receipt.observedAt }} · revision：{{ selectedRun.run.receipt.sourceRevision }}</span>
+              </div>
+              <span v-if="selectedRun.task.operation === 'repair_players'" class="bounded-next-action">
+                下一步：{{ repairNextActionLabels[selectedRun.task.allowedNextAction ?? 'none'] }}
+              </span>
+            </div>
+            <div class="source-health-grid">
+              <article
+                v-for="source in sourceHealthRows(selectedRun.run)"
+                :key="`${source.sourceType}-${source.observedAt}-${source.reasonCode}`"
+                :data-source-row="source.sourceType"
+                class="source-health-row"
+              >
+                <strong>{{ sourceTypeLabel(source.sourceType) }}</strong>
+                <span>{{ sourceHealthLabel(source.health) }}</span>
+                <span>观察时间：{{ source.observedAt }}</span>
+                <span>受控原因：{{ sourceHealthReasonLabel(source.reasonCode) }}</span>
+                <span>{{ source.eligible ? 'eligible · 可作为候选' : 'ineligible · 不作为候选' }}</span>
+                <button v-if="source.eligible" data-source-action type="button" class="task-secondary" disabled>
+                  当前候选
+                </button>
+              </article>
+            </div>
+          </section>
+          <div v-if="!runReadiness(selectedRun.run)" class="readiness-loading" role="status">
             <RefreshCw :size="16" aria-hidden="true" />状态读取中，未推导 ready 或 playback proof。
           </div>
           <div v-if="selectedRun.run.receipt && selectedRun.run.status === 'succeeded'" class="readiness-actions">
+            <button
+              v-if="repairReasonFor(selectedRun.run)"
+              data-repair-action="open"
+              class="task-secondary"
+              type="button"
+              :disabled="repairAction"
+              @click="askRepair(selectedRun.run)"
+            >
+              {{ repairAction ? '创建中…' : '发起来源修复' }}
+            </button>
             <a
               v-if="managementPath(selectedRun.task, selectedRun.run) && (!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition))"
               class="task-secondary readiness-link"
@@ -756,6 +911,14 @@ async function executeClearFailed() {
     cancel-text="返回任务"
     @confirm="confirmRetry"
   />
+  <ConfirmDialog
+    v-model:open="repairConfirmOpen"
+    title="确认来源修复"
+    :message="repairConfirmationMessage"
+    confirm-text="确认恢复可播放源"
+    cancel-text="返回"
+    @confirm="confirmRepair"
+  />
 </template>
 
 <style scoped>
@@ -883,6 +1046,14 @@ async function executeClearFailed() {
 .readiness-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 .readiness-loading { color: hsl(var(--muted-foreground)); }
 .readiness-actions .readiness-link { display: inline-flex; align-items: center; text-decoration: none; }
+.source-health-block { display: grid; gap: 0.75rem; margin-top: 1rem; border-top: 1px solid hsl(var(--border)); padding-top: 1rem; }
+.source-health-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+.source-health-heading h4 { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.source-health-heading span { color: hsl(var(--muted-foreground)); font-size: 0.8rem; }
+.bounded-next-action { color: hsl(var(--primary)) !important; font-weight: 600; }
+.source-health-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.source-health-row { display: grid; gap: 0.35rem; min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 0.375rem; padding: 0.75rem; font-size: 0.8rem; }
+.source-health-row span { overflow-wrap: anywhere; }
 .safe-log-scroller { max-height: 448px; overflow-y: auto; border-radius: 0.375rem; background: hsl(var(--muted)); padding: 0.75rem; }
 .safe-log-row { display: grid; grid-template-columns: auto auto auto minmax(0, 10rem) minmax(0, 1fr); gap: 0.5rem; align-items: start; padding: 0.5rem 0; border-bottom: 1px solid hsl(var(--border)); font-size: 0.875rem; }
 .safe-log-row span { overflow-wrap: anywhere; }
@@ -893,7 +1064,8 @@ async function executeClearFailed() {
 @media (max-width: 1023px) {
   .task-grid,
   .task-history-grid,
-  .readiness-grid { grid-template-columns: 1fr; }
+  .readiness-grid,
+  .source-health-grid { grid-template-columns: 1fr; }
 }
 
 .crawlers-page {
