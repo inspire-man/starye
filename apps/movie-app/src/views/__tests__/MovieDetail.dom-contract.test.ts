@@ -2,9 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MovieDetail from '../MovieDetail.vue'
 
-const { getMovieDetailMock, routeState } = vi.hoisted(() => ({
+const { getMovieDetailMock, routeState, routerPushMock } = vi.hoisted(() => ({
   getMovieDetailMock: vi.fn(),
   routeState: { params: { code: 'TEST-001' } },
+  routerPushMock: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -14,7 +15,7 @@ vi.mock('vue-router', () => ({
     template: '<a><slot /></a>',
   },
   useRoute: () => routeState,
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPushMock }),
 }))
 
 vi.mock('qrcode.vue', () => ({
@@ -190,5 +191,58 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.get('[data-readiness-summary]').text()).toContain(playbackLabel)
     if (disposition === 'repairing')
       expect(wrapper.get('[data-readiness-action="refresh"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('renders bounded per-source health and hands repairable state to Dashboard with the same movie identity', async () => {
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'movie-sun-064',
+        primaryContentId: 'movie-sun-064',
+        code: 'SUN-064',
+        title: 'SUN-064',
+        isR18: false,
+        players: [
+          { id: 'direct-1', movieId: 'movie-sun-064', sourceName: 'direct', sourceUrl: 'RAW_SOURCE_SENTINEL', sortOrder: 1, isActive: true },
+          { id: 'magnet-1', movieId: 'movie-sun-064', sourceName: 'magnet', sourceUrl: 'magnet:RAW_SOURCE_SENTINEL', sortOrder: 2, isActive: true },
+          { id: 'inactive-1', movieId: 'movie-sun-064', sourceName: 'TorrServer', sourceUrl: 'https://raw.example/SENTINEL', sortOrder: 3, isActive: false },
+        ],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-sun-064', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-sun-064', schemaVersion: 2 },
+          source: {
+            disposition: 'no_source',
+            eligibleCount: 0,
+            observedAt: 100,
+            reasonCode: 'no_eligible_source',
+            repairable: true,
+            sourceRevision: 4,
+          },
+        },
+        rawRequest: 'RAW_REQUEST_SENTINEL',
+        rawException: 'RAW_EXCEPTION_SENTINEL',
+        signature: 'RAW_SIGNATURE_SENTINEL',
+      },
+    })
+
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-source-health-row]')).toHaveLength(3)
+    expect(wrapper.text()).toContain('direct')
+    expect(wrapper.text()).toContain('magnet')
+    expect(wrapper.text()).toContain('TorrServer')
+    expect(wrapper.text()).toContain('unverified')
+    expect(wrapper.text()).toContain('inactive')
+    expect(wrapper.text()).toContain('最近观察：100')
+    expect(wrapper.text()).not.toContain('RAW_SOURCE_SENTINEL')
+    expect(wrapper.text()).not.toContain('RAW_REQUEST_SENTINEL')
+    expect(wrapper.text()).not.toContain('RAW_EXCEPTION_SENTINEL')
+    expect(wrapper.text()).not.toContain('RAW_SIGNATURE_SENTINEL')
+
+    await wrapper.get('[data-readiness-action="repair"]').trigger('click')
+    expect(routerPushMock).toHaveBeenCalledWith('/dashboard/crawlers?movieId=movie-sun-064&reason=no_source')
   })
 })
