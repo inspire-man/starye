@@ -5,9 +5,10 @@ import type { AppEnv, SessionUser } from '../../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { HTTPException } from 'hono/http-exception'
+import * as v from 'valibot'
 import { createProviderDispatchInput, createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTaskCursor } from '../../../domain/crawler-tasks/repository'
-import { getCrawlerTaskTemplate } from '../../../domain/crawler-tasks/template-registry'
+import { getCrawlerTaskTemplate, readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { createGitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import { canAccessCrawler } from '../../../lib/permissions'
@@ -92,8 +93,48 @@ async function dispatchCreatedRun(
 }
 
 interface TaskAccessRow {
+  operation?: 'movie' | 'manga' | 'repair_players'
+  request_snapshot_json?: string
   template_key: CrawlerTaskTemplateKey
 }
+
+interface RepairMovieLookupRow {
+  id: string
+  source_disposition: 'ready' | 'no_source' | 'repairing' | 'source_failed' | null
+  source_reason: string | null
+  source_revision: number | null
+  title: string
+}
+
+interface RepairTaskRow {
+  created_at: number
+  id: string
+  latest_run_id: string | null
+  operation: 'movie' | 'manga' | 'repair_players'
+  request_snapshot_json: string
+  template_key: CrawlerTaskTemplateKey
+  updated_at: number
+}
+
+interface RepairRunRow {
+  attempt_number: number
+  cancel_requested_at: number | null
+  created_at: number
+  failure_code: string | null
+  id: string
+  receipt_summary_json: string | null
+  status: string
+  task_id: string
+  terminal_at: number | null
+  updated_at: number
+}
+
+const RepairPlayersCommandSchema = v.strictObject({
+  confirmed: v.literal(true),
+  movieId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  reason: v.picklist(['no_source', 'source_failed']),
+  targetIntent: v.literal('restore_playable_sources'),
+})
 
 interface SafeCrawlerReceipt {
   createdCount: number
@@ -248,6 +289,169 @@ function projectTaskDetail(detail: { task: unknown, runs: readonly unknown[] }):
   }
 }
 
+function allowedRepairNextAction(status: unknown): 'none' | 'wait_for_observation' | 'create_new_task' {
+  switch (status) {
+    case 'queued':
+    case 'dispatching':
+    case 'running':
+    case 'cancel_requested':
+      return 'wait_for_observation'
+    case 'failed':
+    case 'cancelled':
+      return 'create_new_task'
+    default:
+      return 'none'
+  }
+}
+
+function projectRepairReceipt(raw: unknown) {
+  if (!raw)
+    return null
+  const value = typeof raw === 'string'
+    ? (() => {
+        try {
+          return JSON.parse(raw)
+        }
+        catch {
+          return null
+        }
+      })()
+    : raw
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return null
+  const receipt = value as Record<string, unknown>
+  if (receipt.operation !== 'repair_players'
+    || typeof receipt.movieId !== 'string'
+    || typeof receipt.observedAt !== 'number'
+    || !Number.isSafeInteger(receipt.observedAt)
+    || typeof receipt.sourceRevision !== 'number'
+    || !Number.isSafeInteger(receipt.sourceRevision)
+    || !Array.isArray(receipt.sourceSummary)) {
+    return null
+  }
+  const sourceSummary = receipt.sourceSummary
+    .filter((source): source is Record<string, unknown> => Boolean(source) && typeof source === 'object' && !Array.isArray(source))
+    .map(source => ({
+      eligible: source.eligible === true,
+      health: source.health,
+      observedAt: source.observedAt,
+      reasonCode: source.reasonCode,
+      sourceType: source.sourceType,
+    }))
+    .filter(source => (
+      typeof source.observedAt === 'number'
+      && Number.isSafeInteger(source.observedAt)
+      && (source.health === 'inactive' || source.health === 'unverified' || source.health === 'failed')
+      && (source.reasonCode === 'source_inactive'
+        || source.reasonCode === 'source_unverified'
+        || source.reasonCode === 'source_candidate_invalid'
+        || source.reasonCode === 'source_read_failed'
+        || source.reasonCode === 'source_write_failed')
+      && (source.sourceType === 'direct' || source.sourceType === 'magnet' || source.sourceType === 'TorrServer')
+    ))
+  if (sourceSummary.length !== receipt.sourceSummary.length)
+    return null
+  return {
+    movieId: receipt.movieId,
+    observedAt: receipt.observedAt,
+    operation: 'repair_players' as const,
+    sourceRevision: receipt.sourceRevision,
+    sourceSummary,
+    summary: {
+      eligibleCount: sourceSummary.filter(source => source.eligible).length,
+      sourceCount: sourceSummary.length,
+    },
+  }
+}
+
+function readRepairSnapshot(task: RepairTaskRow) {
+  try {
+    const parsed = readCrawlerTaskSnapshot(JSON.parse(task.request_snapshot_json), task.operation)
+    if (!parsed.ok || parsed.snapshot.operation !== 'repair_players')
+      return null
+    return parsed.snapshot
+  }
+  catch {
+    return null
+  }
+}
+
+async function readRepairMovieLookup(c: any, movieId: string): Promise<RepairMovieLookupRow | undefined> {
+  const row = await getD1(c).prepare(`
+    SELECT movie.id, movie.title,
+      state.disposition AS source_disposition,
+      state.reason_code AS source_reason,
+      state.source_revision
+    FROM movie
+    LEFT JOIN movie_source_state AS state ON state.movie_id = movie.id
+    WHERE movie.id = ?
+    LIMIT 1
+  `).bind(movieId).all<RepairMovieLookupRow>()
+  return row.results?.[0]
+}
+
+async function readRepairTaskResponse(
+  c: any,
+  input: {
+    readonly movie: Pick<RepairMovieLookupRow, 'id' | 'title'>
+    readonly taskId: string
+  },
+) {
+  const d1 = getD1(c)
+  const [taskResult, runResult] = await Promise.all([
+    d1.prepare(`
+      SELECT id, template_key, operation, request_snapshot_json, latest_run_id, created_at, updated_at
+      FROM crawler_task
+      WHERE id = ?
+      LIMIT 1
+    `).bind(input.taskId).all<RepairTaskRow>(),
+    d1.prepare(`
+      SELECT id, task_id, attempt_number, status, failure_code, cancel_requested_at,
+        receipt_summary_json, created_at, updated_at, terminal_at
+      FROM crawler_run
+      WHERE task_id = ?
+      ORDER BY attempt_number DESC, id DESC
+    `).bind(input.taskId).all<RepairRunRow>(),
+  ])
+  const task = taskResult.results?.[0]
+  const snapshot = task ? readRepairSnapshot(task) : null
+  if (!task || !snapshot) {
+    throw new HTTPException(500, { message: 'Repair task snapshot unavailable' })
+  }
+  const runs = (runResult.results ?? []).map((run) => {
+    const receipt = projectRepairReceipt(run.receipt_summary_json)
+    return {
+      attemptNumber: run.attempt_number,
+      ...(run.cancel_requested_at !== null ? { cancelRequestedAt: run.cancel_requested_at } : {}),
+      createdAt: run.created_at,
+      failureCode: run.failure_code,
+      id: run.id,
+      ...(receipt ? { observedAt: receipt.observedAt, receipt, sourceRevision: receipt.sourceRevision } : {}),
+      status: run.status,
+      terminalAt: run.terminal_at,
+      updatedAt: run.updated_at,
+    }
+  })
+  const latestRun = runs[0] ?? null
+  return {
+    run: latestRun,
+    runs,
+    task: {
+      allowedNextAction: allowedRepairNextAction(latestRun?.status),
+      createdAt: task.created_at,
+      id: task.id,
+      latestRunId: task.latest_run_id,
+      movie: input.movie,
+      operation: 'repair_players' as const,
+      reason: snapshot.reason,
+      sourceRevision: snapshot.sourceRevision,
+      targetIntent: snapshot.targetIntent,
+      templateKey: task.template_key,
+      updatedAt: task.updated_at,
+    },
+  }
+}
+
 function getD1(c: { get: (key: 'db') => unknown }): D1Client {
   return (c.get('db') as { $client: D1Client }).$client
 }
@@ -269,7 +473,7 @@ function requireTemplateAccess(user: SessionUser, templateKey: CrawlerTaskTempla
 
 async function requireTaskAccess(c: any, user: SessionUser, taskId: string): Promise<TaskAccessRow> {
   const row = await getD1(c).prepare(`
-    SELECT template_key FROM crawler_task WHERE id = ?
+    SELECT template_key, operation, request_snapshot_json FROM crawler_task WHERE id = ?
   `).bind(taskId).all<TaskAccessRow>()
   const task = row.results?.[0]
   if (!task) {
@@ -322,6 +526,52 @@ adminCrawlerTasksRoutes.post('/', validator('json', CreateCrawlerTaskSchema), as
   return c.json({ dispatch, kind: result.kind, run: result.run, template })
 })
 
+adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersCommandSchema), async (c) => {
+  const user = await requireSessionUser(c)
+  requireTemplateAccess(user, 'movie')
+  const command = c.req.valid('json')
+  const movie = await readRepairMovieLookup(c, command.movieId)
+  if (!movie) {
+    throw new HTTPException(404, { message: 'Repair movie not found' })
+  }
+  if (movie.source_disposition !== command.reason) {
+    throw new HTTPException(409, { message: 'Repair movie source disposition is stale' })
+  }
+  if (command.reason !== 'no_source' && command.reason !== 'source_failed') {
+    throw new HTTPException(400, { message: 'Repair reason is invalid' })
+  }
+
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  let result: Awaited<ReturnType<CrawlerRepository['createOrGetActiveRun']>>
+  try {
+    result = await repository.createOrGetActiveRun({
+      movieId: movie.id,
+      operation: 'repair_players',
+      reason: command.reason,
+      requestedByUserId: user.id,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    })
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('repair task source disposition is no longer repairable')) {
+      throw new HTTPException(409, { message: 'Repair movie source disposition is stale' })
+    }
+    throw error
+  }
+
+  const detail = await readRepairTaskResponse(c, {
+    movie: { id: movie.id, title: movie.title },
+    taskId: result.run.taskId,
+  })
+  return c.json({
+    kind: result.kind,
+    run: detail.run,
+    task: detail.task,
+  })
+})
+
 adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema), async (c) => {
   const user = await requireSessionUser(c)
   const { cursor, limit, template } = c.req.valid('query')
@@ -366,7 +616,31 @@ adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema)
 adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSchema), async (c) => {
   const user = await requireSessionUser(c)
   const { taskId } = c.req.valid('param')
-  await requireTaskAccess(c, user, taskId)
+  const taskAccess = await requireTaskAccess(c, user, taskId)
+  if (taskAccess.operation === 'repair_players') {
+    const snapshot = taskAccess.request_snapshot_json
+      ? (() => {
+          try {
+            const parsed = readCrawlerTaskSnapshot(JSON.parse(taskAccess.request_snapshot_json), taskAccess.operation)
+            return parsed.ok && parsed.snapshot.operation === 'repair_players' ? parsed.snapshot : null
+          }
+          catch {
+            return null
+          }
+        })()
+      : null
+    if (!snapshot) {
+      throw new HTTPException(500, { message: 'Repair task snapshot unavailable' })
+    }
+    const movie = await readRepairMovieLookup(c, snapshot.movieId)
+    if (!movie) {
+      throw new HTTPException(404, { message: 'Repair movie not found' })
+    }
+    return c.json(await readRepairTaskResponse(c, {
+      movie: { id: movie.id, title: movie.title },
+      taskId,
+    }))
+  }
   const repository = createCrawlerTaskRepository(c.get('db'))
   if (repository.getTaskDetail) {
     const detail = await repository.getTaskDetail(taskId)

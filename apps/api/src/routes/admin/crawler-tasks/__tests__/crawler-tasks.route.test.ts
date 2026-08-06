@@ -451,6 +451,35 @@ describe('admin crawler task routes', () => {
       source_reason: 'no_source',
       source_disposition: 'no_source',
       title: 'Repair Movie',
+    }], [{
+      created_at: 100,
+      id: 'task-repair',
+      latest_run_id: 'run-repair',
+      operation: 'repair_players',
+      request_snapshot_json: JSON.stringify({
+        entrypoint: 'movie-crawler',
+        movieId: 'movie-1',
+        operation: 'repair_players',
+        permissionResource: 'movie',
+        reason: 'no_source',
+        sourceRevision: 7,
+        targetIntent: 'restore_playable_sources',
+        templateKey: 'movie',
+        templateVersion: 1,
+      }),
+      template_key: 'movie',
+      updated_at: 100,
+    }], [{
+      attempt_number: 1,
+      cancel_requested_at: null,
+      created_at: 100,
+      failure_code: null,
+      id: 'run-repair',
+      receipt_summary_json: null,
+      status: 'queued',
+      task_id: 'task-repair',
+      terminal_at: null,
+      updated_at: 100,
     }]])
 
     const response = await app.request('/crawler-tasks/repair-players', {
