@@ -5,15 +5,15 @@ milestone_name: 播放可用性与生产自愈闭环
 current_phase: 21
 current_phase_name: Source Health And Local repair_players Vertical Slice
 status: executing
-stopped_at: Completed 21-05-PLAN.md
-last_updated: "2026-08-06T18:58:26.987+08:00"
+stopped_at: Completed 21-06-PLAN.md
+last_updated: "2026-08-06T11:32:20.443Z"
 last_activity: 2026-08-06
 last_activity_desc: Completed 21-05-PLAN.md; ready for Wave 5 UI work
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 9
 ---
 
 # Project State: Starye — 个人内容中台
@@ -28,11 +28,11 @@ See: `.planning/PROJECT.md` (updated 2026-08-05)
 ## Current Position
 
 Phase: 21 (Source Health And Local repair_players Vertical Slice) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-08-06 — Completed 21-05-PLAN.md; ready for Wave 5 UI work
 
-Progress: ██░░░░░░░░ [███████░░░] 70% (Phase 20: 100%)
+Progress: ██░░░░░░░░ [█████████░] 90% (Phase 20: 100%)
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: ██░░░░░░░░ [███████░░░] 70% (P
 | Phase 21 P01 | 31m | 2 tasks | 5 files |
 | Phase 21 P02 | 33m | 2 tasks | 5 files |
 | Phase 21-source-health-and-local-repair-players-vertical-slice P03 | 32m | 2 tasks | 7 files |
+| Phase 21 P6 | 32m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,8 @@ Recent decisions affecting current work:
 - [Phase ?]: repair_players snapshot reuses movie templateKey but owns operation/movieId/reason/sourceRevision/targetIntent server-side
 - [Phase ?]: repair success requires authoritative readback equality on movieId/sourceRevision/observedAt/sourceSummary before succeeded
 - [Phase ?]: repair transient source_read/source_write failures auto-retry once on the same task; manual retry always creates a new task after reread
+- [Phase ?]: Dashboard uses the existing repair task detail/readback as the source-health focal surface; the client never selects target, workflow, adapter, URL, command or secret fields.
+- [Phase ?]: MovieDetail remains informational and hands the same movie identity plus bounded reason to Dashboard without an admin mutation call.
 
 ### Pending Todos
 
@@ -98,6 +101,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T08:08:44.137Z
-Stopped at: Completed 21-05-PLAN.md
+Last session: 2026-08-06T11:32:20.429Z
+Stopped at: Completed 21-06-PLAN.md
 Resume file: None
