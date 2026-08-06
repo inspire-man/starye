@@ -1,5 +1,20 @@
 export const SOURCE_CONTRACT_VERSION = 1 as const
 
+export const SOURCE_TYPES = ['direct', 'magnet', 'TorrServer'] as const
+export type SourceType = typeof SOURCE_TYPES[number]
+
+export const SOURCE_HEALTH_VALUES = ['inactive', 'unverified', 'failed'] as const
+export type SourceHealth = typeof SOURCE_HEALTH_VALUES[number]
+
+export const SOURCE_HEALTH_REASON_CODES = [
+  'source_inactive',
+  'source_unverified',
+  'source_candidate_invalid',
+  'source_read_failed',
+  'source_write_failed',
+] as const
+export type SourceHealthReasonCode = typeof SOURCE_HEALTH_REASON_CODES[number]
+
 export const SOURCE_REASON_CODES = [
   'no_eligible_source',
   'repair_requested',
@@ -15,6 +30,24 @@ export type PlaybackProofStatus = 'playback_verified' | 'unverified'
 export interface SourceCandidate {
   readonly isActive: boolean | null | undefined
   readonly sourceUrl: string | null | undefined
+  readonly sourceType?: SourceType | null | undefined
+}
+
+export interface SourceHealthInput {
+  readonly health?: unknown
+  readonly isActive: boolean | null | undefined
+  readonly observedAt: number
+  readonly reasonCode?: unknown
+  readonly sourceType?: SourceType | null | undefined
+  readonly sourceUrl: string | null | undefined
+}
+
+export interface SourceHealthProjection {
+  readonly eligible: boolean
+  readonly health: SourceHealth
+  readonly observedAt: number
+  readonly reasonCode: SourceHealthReasonCode
+  readonly sourceType: SourceType
 }
 
 export interface SourceFailureInput {
@@ -97,6 +130,54 @@ export function isEligiblePlayer(candidate: SourceCandidate): boolean {
   return candidate.isActive === true
     && typeof candidate.sourceUrl === 'string'
     && candidate.sourceUrl.trim().length > 0
+}
+
+function isSourceHealthReasonCode(value: unknown): value is SourceHealthReasonCode {
+  return typeof value === 'string'
+    && (SOURCE_HEALTH_REASON_CODES as readonly string[]).includes(value)
+}
+
+function isSourceType(value: unknown): value is SourceType {
+  return typeof value === 'string'
+    && (SOURCE_TYPES as readonly string[]).includes(value)
+}
+
+/** Projects one server-owned source row without exposing its raw source material. */
+export function projectSourceHealth(input: SourceHealthInput): SourceHealthProjection {
+  const sourceType = isSourceType(input.sourceType) ? input.sourceType : 'direct'
+  const eligible = input.health !== 'failed' && isEligiblePlayer(input)
+
+  if (input.health === 'failed') {
+    return {
+      eligible: false,
+      health: 'failed',
+      observedAt: input.observedAt,
+      reasonCode: isSourceHealthReasonCode(input.reasonCode)
+        && input.reasonCode !== 'source_inactive'
+        && input.reasonCode !== 'source_unverified'
+        ? input.reasonCode
+        : 'source_read_failed',
+      sourceType,
+    }
+  }
+
+  if (input.isActive !== true) {
+    return {
+      eligible: false,
+      health: 'inactive',
+      observedAt: input.observedAt,
+      reasonCode: 'source_inactive',
+      sourceType,
+    }
+  }
+
+  return {
+    eligible,
+    health: 'unverified',
+    observedAt: input.observedAt,
+    reasonCode: eligible ? 'source_unverified' : 'source_candidate_invalid',
+    sourceType,
+  }
 }
 
 function isSourceReasonCode(value: unknown): value is SourceReasonCode {

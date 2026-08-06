@@ -11,6 +11,14 @@ export const CreateCrawlerTaskSchema = v.strictObject({
   template: v.picklist(['movie', 'manga']),
 })
 
+const MovieIdSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))
+
+export const CreateRepairPlayersTaskSchema = v.strictObject({
+  movieId: MovieIdSchema,
+  reason: v.picklist(['no_source', 'source_failed']),
+  targetIntent: v.literal('restore_playable_sources'),
+})
+
 export const RetryCrawlerTaskSchema = v.strictObject({
   confirmed: v.literal(true),
 })

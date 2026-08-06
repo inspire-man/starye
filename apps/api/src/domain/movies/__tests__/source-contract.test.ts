@@ -1,9 +1,12 @@
-import type { ValidatedCrawlerRunReceipt } from '../../crawler-tasks/types'
+import type { RepairPlayersReceipt, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from '../../crawler-tasks/types'
 
 import { crawlerRuns, movieSourceStates } from '@starye/db/schema'
 import * as v from 'valibot'
 
 import { describe, expect, it } from 'vitest'
+import {
+  CreateRepairPlayersTaskSchema,
+} from '../../../schemas/crawler-tasks'
 import {
   createReadinessProjection,
   derivePlaybackProof,
@@ -12,13 +15,6 @@ import {
   SOURCE_HEALTH_REASON_CODES,
   SOURCE_REASON_CODES,
 } from '../source-contract'
-import {
-  CreateRepairPlayersTaskSchema,
-} from '../../../schemas/crawler-tasks'
-import type {
-  RepairPlayersReceipt,
-  RepairPlayersTaskSnapshot,
-} from '../../crawler-tasks/types'
 
 describe('movie source contract', () => {
   it('derives ready from one active player with a trimmed source', () => {
