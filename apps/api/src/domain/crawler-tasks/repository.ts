@@ -1,11 +1,11 @@
 import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
-import type { CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskSnapshot, CrawlerTaskTemplateKey, ProviderRunStatus, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
 import { createManualRetryAttempt, decideCrawlerRunTransition, isTerminalCrawlerRunStatus } from './state-machine'
-import { createCrawlerTaskSnapshot } from './template-registry'
+import { createCrawlerTaskSnapshot, readCrawlerTaskSnapshot } from './template-registry'
 import {
   CRAWLER_LEASE_DURATION_MS,
   CRAWLER_MAX_NORMAL_LOG_ROWS,
@@ -25,7 +25,7 @@ interface D1Client {
   prepare: (query: string) => D1Statement
 }
 
-type CrawlerTaskDatabase = Pick<Database, '$client'>
+type CrawlerTaskDatabase = Pick<Database, '$client' | 'query'>
 
 interface CrawlerRunRow {
   attempt_number: number
@@ -51,6 +51,9 @@ interface CrawlerTaskRow {
   created_at: number
   id: string
   latest_run_id: string | null
+  operation?: CrawlerTaskOperation
+  request_snapshot_json?: string
+  requested_by_user_id?: string
   template_key: CrawlerTaskTemplateKey
   updated_at: number
 }
@@ -74,12 +77,16 @@ export interface CrawlerTaskRun {
 
 export interface CreateCrawlerTaskRunInput {
   readonly idempotencyKey?: string
+  readonly movieId?: string
+  readonly operation?: CrawlerTaskOperation
+  readonly reason?: RepairPlayersReason
   readonly requestedByUserId: string
+  readonly targetIntent?: RepairPlayersTargetIntent
   readonly templateKey: CrawlerTaskTemplateKey
 }
 
 export type CrawlerTaskRunResult
-  = | { readonly kind: 'created', readonly run: CrawlerTaskRun, readonly snapshot: CrawlerTaskSnapshot }
+  = | { readonly kind: 'created', readonly run: CrawlerTaskRun, readonly snapshot: CrawlerTaskSnapshotUnion }
     | { readonly kind: 'existing_active_run', readonly run: CrawlerTaskRun }
 
 export interface AppendCrawlerRunLogInput {
@@ -104,7 +111,13 @@ export interface ProcessCrawlerRunnerEventInput {
   readonly keyId: string
   readonly log?: AppendCrawlerRunLogInput
   readonly nonce: string
-  readonly receipt?: CrawlerRunReceiptCandidate
+  readonly receipt?: CrawlerRunReceiptCandidate | {
+    readonly movieId: string
+    readonly observedAt: number
+    readonly operation: 'repair_players'
+    readonly sourceRevision: number
+    readonly sourceSummary: readonly unknown[]
+  }
   readonly runId: string
   readonly safeSummary?: string
   readonly sequence: number
@@ -236,7 +249,7 @@ export interface CrawlerRunDispatchCandidate {
   readonly attempt: number
   readonly runId: string
   readonly sequence: number
-  readonly snapshot: CrawlerTaskSnapshot
+  readonly snapshot: CrawlerTaskSnapshotUnion
 }
 
 export type ClaimCrawlerRunResult
@@ -252,6 +265,19 @@ interface CrawlerRunnerEventRow {
   event_id: string
   nonce: string
   outcome: string
+}
+
+interface RepairTaskStateRow {
+  disposition: 'ready' | 'no_source' | 'repairing' | 'source_failed'
+  source_revision: number
+}
+
+interface TaskBindingRow {
+  operation: CrawlerTaskOperation
+  requested_by_user_id: string
+  request_snapshot_json: string
+  task_id: string
+  template_key: CrawlerTaskTemplateKey
 }
 
 const DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS = 5 * 60_000
@@ -466,13 +492,17 @@ function toProviderAssociationRecord(row: CrawlerProviderRow): ProviderAssociati
   }
 }
 
-function toCrawlerRunState(row: CrawlerRunRow, templateKey: CrawlerTaskTemplateKey): CrawlerRunState {
+function toCrawlerRunState(
+  row: CrawlerRunRow,
+  task: Pick<TaskBindingRow, 'operation' | 'template_key'>,
+): CrawlerRunState & { readonly operation: CrawlerTaskOperation } {
   return {
     attemptNumber: row.attempt_number,
     lastEventSequence: row.last_event_sequence,
+    operation: task.operation,
     stateVersion: row.state_version,
     status: row.status,
-    templateKey,
+    templateKey: task.template_key,
   }
 }
 
@@ -517,6 +547,39 @@ function transitionOutcome(decision: CrawlerRunTransitionDecision): Readonly<Rec
     : { accepted: false, reason: decision.reasonCode }
 }
 
+function isRepairSnapshot(snapshot: CrawlerTaskSnapshotUnion): snapshot is RepairPlayersTaskSnapshot {
+  return 'operation' in snapshot && snapshot.operation === 'repair_players'
+}
+
+function isRepairReceiptCandidate(
+  value: ProcessCrawlerRunnerEventInput['receipt'],
+): value is Extract<ProcessCrawlerRunnerEventInput['receipt'], { readonly operation: 'repair_players' }> {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && 'operation' in value
+    && value.operation === 'repair_players'
+}
+
+function isOrdinaryReceiptCandidate(value: ProcessCrawlerRunnerEventInput['receipt']): value is CrawlerRunReceiptCandidate {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && 'templateKey' in value
+}
+
+function shouldAutoRetryRepairFailure(input: {
+  readonly attemptNumber: number
+  readonly operation: CrawlerTaskOperation
+  readonly safeSummary?: string
+  readonly status: CrawlerRunStatus
+}): boolean {
+  return input.operation === 'repair_players'
+    && input.status === 'failed'
+    && input.attemptNumber === 1
+    && (input.safeSummary === 'source_read_failed' || input.safeSummary === 'source_write_failed')
+}
+
 export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: CrawlerRepositoryOptions = {}) {
   const d1 = asD1Client(db)
   const now = options.now ?? (() => new Date())
@@ -534,14 +597,37 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return result.results?.[0]
   }
 
-  async function getTemplateKey(runId: string): Promise<CrawlerTaskTemplateKey | undefined> {
+  async function getTaskBinding(runId: string): Promise<TaskBindingRow | undefined> {
     const result = await d1.prepare(`
-      SELECT task.template_key
+      SELECT task.template_key, task.operation, task.requested_by_user_id, task.request_snapshot_json, run.task_id
       FROM crawler_run AS run
       INNER JOIN crawler_task AS task ON task.id = run.task_id
       WHERE run.id = ?
-    `).bind(runId).all<{ template_key: CrawlerTaskTemplateKey }>()
-    return result.results?.[0]?.template_key
+    `).bind(runId).all<TaskBindingRow>()
+    return result.results?.[0]
+  }
+
+  async function readRepairTaskState(movieId: string): Promise<{ readonly reason: RepairPlayersReason, readonly sourceRevision: number } | undefined> {
+    const result = await d1.prepare(`
+      SELECT disposition, source_revision
+      FROM movie_source_state
+      WHERE movie_id = ?
+      LIMIT 1
+    `).bind(movieId).all<RepairTaskStateRow>()
+    const row = result.results?.[0]
+    if (!row || (row.disposition !== 'no_source' && row.disposition !== 'source_failed'))
+      return undefined
+    return {
+      reason: row.disposition,
+      sourceRevision: row.source_revision,
+    }
+  }
+
+  function parseTaskSnapshot(raw: string, operation: CrawlerTaskOperation): CrawlerTaskSnapshotUnion {
+    const parsed = readCrawlerTaskSnapshot(JSON.parse(raw), operation)
+    if (!parsed.ok)
+      throw new Error(`task snapshot ${parsed.reason}`)
+    return parsed.snapshot
   }
 
   async function getProviderAssociation(runId: string): Promise<ProviderAssociationRecord | undefined> {
@@ -717,7 +803,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
   async function pollDispatch(): Promise<CrawlerRunDispatchCandidate | undefined> {
     const result = await d1.prepare(`
-      SELECT run.id, run.attempt_number, run.last_event_sequence, task.request_snapshot_json
+      SELECT run.id, run.attempt_number, run.last_event_sequence, task.operation, task.request_snapshot_json
       FROM crawler_run AS run
       INNER JOIN crawler_task AS task ON task.id = run.task_id
       WHERE run.status = 'queued'
@@ -727,6 +813,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       attempt_number: number
       id: string
       last_event_sequence: number
+      operation: CrawlerTaskOperation
       request_snapshot_json: string
     }>()
     const row = result.results?.[0]
@@ -734,7 +821,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return undefined
     }
 
-    const snapshot = JSON.parse(row.request_snapshot_json) as CrawlerTaskSnapshot
+    const snapshot = parseTaskSnapshot(row.request_snapshot_json, row.operation)
     return {
       attempt: row.attempt_number,
       runId: row.id,
@@ -765,21 +852,45 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return { kind: 'existing_active_run', run: existing }
     }
 
+    const operation = input.operation ?? input.templateKey
     const taskId = createId()
     const runId = createId()
-    const snapshot = createCrawlerTaskSnapshot(input.templateKey)
+    let snapshot: CrawlerTaskSnapshotUnion
+    if (operation === 'repair_players') {
+      if (input.templateKey !== 'movie'
+        || !input.movieId
+        || input.targetIntent !== 'restore_playable_sources'
+        || (input.reason !== 'no_source' && input.reason !== 'source_failed')) {
+        throw new Error('repair task input is invalid')
+      }
+      const currentState = await readRepairTaskState(input.movieId)
+      if (!currentState || currentState.reason !== input.reason) {
+        throw new Error('repair task source disposition is no longer repairable')
+      }
+      snapshot = createCrawlerTaskSnapshot({
+        movieId: input.movieId,
+        operation: 'repair_players',
+        reason: currentState.reason,
+        sourceRevision: currentState.sourceRevision,
+        targetIntent: 'restore_playable_sources',
+      })
+    }
+    else {
+      snapshot = createCrawlerTaskSnapshot(input.templateKey)
+    }
     const leaseExpiresAt = addMillisecondsInSeconds(currentNow, CRAWLER_LEASE_DURATION_MS)
 
     try {
       await d1.batch([
         d1.prepare(`
           INSERT INTO crawler_task (
-            id, template_key, template_version, requested_by_user_id, request_snapshot_json,
-            idempotency_key, latest_run_id, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, template_key, operation, template_version, requested_by_user_id,
+            request_snapshot_json, idempotency_key, latest_run_id, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           taskId,
           snapshot.templateKey,
+          operation,
           snapshot.templateVersion,
           input.requestedByUserId,
           JSON.stringify(snapshot),
@@ -865,15 +976,15 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
   async function applyTransition(
     runId: string,
     event: CrawlerRunTransitionEvent,
-    options: { readonly failureCode?: CrawlerRunFailureCode, readonly receipt?: CrawlerRunReceipt | ValidatedCrawlerRunReceipt, readonly safeSummary?: string } = {},
+    options: { readonly failureCode?: CrawlerRunFailureCode, readonly receipt?: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | Readonly<Record<string, unknown>>, readonly safeSummary?: string } = {},
   ): Promise<CrawlerRunTransitionDecision> {
     const run = await getRunRow(runId)
-    const templateKey = await getTemplateKey(runId)
-    if (!run || !templateKey) {
+    const task = await getTaskBinding(runId)
+    if (!run || !task) {
       throw new Error(`Crawler run ${runId} was not found`)
     }
 
-    const decision = decideCrawlerRunTransition(toCrawlerRunState(run, templateKey), event)
+    const decision = decideCrawlerRunTransition(toCrawlerRunState(run, task), event)
     const currentNow = toUnixSeconds(now())
     const safeSummary = options.safeSummary ? truncateUtf8(options.safeSummary, CRAWLER_MAX_SAFE_LOG_BYTES) : null
 
@@ -907,14 +1018,20 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const validatedReceipt = receipt && 'primaryContentId' in receipt
       ? receipt as ValidatedCrawlerRunReceipt
       : undefined
-    const receiptSummary = validatedReceipt
-      ? JSON.stringify(validatedReceipt)
+    const repairReceipt = receipt && 'operation' in receipt && receipt.operation === 'repair_players'
+      ? receipt as Readonly<Record<string, unknown>> & { readonly movieId: string, readonly sourceRevision: number }
+      : undefined
+    const receiptSummary = validatedReceipt || repairReceipt
+      ? JSON.stringify(validatedReceipt ?? repairReceipt)
       : isTerminal
         ? null
         : run.receipt_summary_json
-    const receiptSchemaVersion = validatedReceipt?.receiptSchemaVersion ?? (isTerminal ? null : run.receipt_schema_version)
-    const receiptPrimaryContentId = validatedReceipt?.primaryContentId ?? (isTerminal ? null : run.receipt_primary_content_id)
-    const receiptSourceRevision = validatedReceipt?.source?.sourceRevision ?? (isTerminal ? null : run.receipt_source_revision)
+    const receiptSchemaVersion = validatedReceipt?.receiptSchemaVersion
+      ?? (repairReceipt ? 2 : (isTerminal ? null : run.receipt_schema_version))
+    const receiptPrimaryContentId = validatedReceipt?.primaryContentId
+      ?? (repairReceipt?.movieId ?? (isTerminal ? null : run.receipt_primary_content_id))
+    const receiptSourceRevision = validatedReceipt?.source?.sourceRevision
+      ?? (repairReceipt?.sourceRevision ?? (isTerminal ? null : run.receipt_source_revision))
 
     const batchResults = await d1.batch([
       d1.prepare(`
@@ -978,7 +1095,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         run.last_event_sequence,
       ),
       ...(isTerminal
-        ? [d1.prepare('DELETE FROM crawler_template_lease WHERE template_key = ? AND run_id = ?').bind(templateKey, runId)]
+        ? [d1.prepare('DELETE FROM crawler_template_lease WHERE template_key = ? AND run_id = ?').bind(task.template_key, runId)]
         : []),
     ])
 
@@ -1066,19 +1183,66 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return applyTransition(runId, { actor: 'runner', sequence, type: 'runner_heartbeat' })
   }
 
+  async function createAutomaticRetryRun(run: CrawlerRunRow, snapshot: CrawlerTaskSnapshotUnion): Promise<void> {
+    const currentNow = toUnixSeconds(now())
+    const nextRunId = createId()
+    const expiresAt = addMillisecondsInSeconds(currentNow, CRAWLER_LEASE_DURATION_MS)
+    const retry = createManualRetryAttempt({
+      attemptNumber: run.attempt_number,
+      snapshot,
+      status: 'failed',
+    })
+
+    await d1.batch([
+      d1.prepare(`
+        INSERT INTO crawler_run (
+          id, task_id, attempt_number, status, state_version, last_event_sequence,
+          lease_expires_at, created_at, updated_at
+        ) VALUES (?, ?, ?, 'queued', 0, 0, ?, ?, ?)
+      `).bind(nextRunId, run.task_id, retry.attemptNumber, expiresAt, currentNow, currentNow),
+      d1.prepare(`
+        INSERT INTO crawler_template_lease (template_key, run_id, expires_at, renewed_at)
+        VALUES (?, ?, ?, ?)
+      `).bind(snapshot.templateKey, nextRunId, expiresAt, currentNow),
+      d1.prepare(`
+        INSERT INTO crawler_run_transition (
+          id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+        ) VALUES (?, ?, 0, 'queued', 'queued', 'automatic_retry_created', 'automatic retry from immutable task snapshot', ?)
+      `).bind(createId(), nextRunId, currentNow),
+      d1.prepare('UPDATE crawler_task SET latest_run_id = ?, updated_at = ? WHERE id = ?')
+        .bind(nextRunId, currentNow, run.task_id),
+    ])
+  }
+
   async function retryRun(runId: string): Promise<CrawlerTaskRunResult> {
     const run = await getRunRow(runId)
-    const templateKey = await getTemplateKey(runId)
-    if (!run || !templateKey) {
+    const task = await getTaskBinding(runId)
+    if (!run || !task) {
       throw new Error(`Crawler run ${runId} was not found`)
+    }
+
+    const snapshot = parseTaskSnapshot(task.request_snapshot_json, task.operation)
+    if (isRepairSnapshot(snapshot)) {
+      const currentState = await readRepairTaskState(snapshot.movieId)
+      if (!currentState) {
+        throw new Error('repair task source disposition is no longer repairable')
+      }
+      return createOrGetActiveRun({
+        movieId: snapshot.movieId,
+        operation: 'repair_players',
+        reason: currentState.reason,
+        requestedByUserId: task.requested_by_user_id,
+        targetIntent: snapshot.targetIntent,
+        templateKey: 'movie',
+      })
     }
 
     const retry = createManualRetryAttempt({
       attemptNumber: run.attempt_number,
-      snapshot: createCrawlerTaskSnapshot(templateKey),
+      snapshot,
       status: run.status,
     })
-    const existing = await findActiveLease(templateKey, toUnixSeconds(now()))
+    const existing = await findActiveLease(task.template_key, toUnixSeconds(now()))
     if (existing) {
       return { kind: 'existing_active_run', run: existing }
     }
@@ -1097,7 +1261,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         d1.prepare(`
           INSERT INTO crawler_template_lease (template_key, run_id, expires_at, renewed_at)
           VALUES (?, ?, ?, ?)
-        `).bind(templateKey, nextRunId, expiresAt, currentNow),
+        `).bind(task.template_key, nextRunId, expiresAt, currentNow),
         d1.prepare(`
           INSERT INTO crawler_run_transition (
             id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
@@ -1118,7 +1282,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     await ensureProviderAssociation({
       attempt: retry.attemptNumber,
       runId: nextRunId,
-      template: templateKey,
+      template: task.template_key,
     })
 
     return {
@@ -1237,14 +1401,15 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
   async function processRunnerEvent(input: ProcessCrawlerRunnerEventInput): Promise<ProcessCrawlerRunnerEventResult> {
     const run = await getRunRow(input.runId)
-    const templateKey = await getTemplateKey(input.runId)
-    if (!run || !templateKey) {
+    const task = await getTaskBinding(input.runId)
+    if (!run || !task) {
       return { kind: 'not_found' }
     }
     if (run.attempt_number !== input.attempt) {
       return { kind: 'attempt_mismatch' }
     }
-    if (input.receipt && input.receipt.templateKey !== templateKey) {
+    const snapshot = parseTaskSnapshot(task.request_snapshot_json, task.operation)
+    if (isOrdinaryReceiptCandidate(input.receipt) && input.receipt.templateKey !== task.template_key) {
       return { kind: 'receipt_template_mismatch' }
     }
 
@@ -1276,8 +1441,30 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       }
     }
 
+    if (isRepairSnapshot(snapshot) && input.event.type === 'runner_succeeded') {
+      const repairReceipt = isRepairReceiptCandidate(input.receipt) ? input.receipt : undefined
+      const currentState = repairReceipt ? await readRepairTaskState(snapshot.movieId) : undefined
+      const repairMatchesTask = repairReceipt
+        && repairReceipt.movieId === snapshot.movieId
+        && repairReceipt.sourceRevision === snapshot.sourceRevision
+        && currentState?.sourceRevision === snapshot.sourceRevision
+      if (!repairMatchesTask) {
+        const outcome = { accepted: false, reason: 'repair_source_revision_conflict' }
+        await recordRunnerEvent({
+          bodySha256: input.bodySha256,
+          eventId: input.eventId,
+          keyId: input.keyId,
+          nonce: input.nonce,
+          outcome,
+          runId: input.runId,
+          sequence: input.sequence,
+        })
+        return { kind: 'rejected', outcome }
+      }
+    }
+
     let event = input.event
-    let receipt: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | undefined
+    let receipt: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | Readonly<Record<string, unknown>> | undefined
     let safeSummary = input.safeSummary
     let failureCode: 'receipt_missing' | undefined
 
@@ -1285,7 +1472,8 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       const validation = await validateReceiptCandidate({
         candidate: input.receipt,
         database: db,
-        templateKey,
+        snapshot,
+        templateKey: task.template_key,
       })
       if (!validation.ok) {
         event = { actor: 'runner', sequence: input.sequence, type: 'runner_failed' }
@@ -1319,6 +1507,16 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         throw new Error('Runner event receipt was not persisted')
       }
       return classifyExistingRunnerEvent(concurrent, input)
+    }
+
+    if (decision.kind === 'transition'
+      && shouldAutoRetryRepairFailure({
+        attemptNumber: run.attempt_number,
+        operation: task.operation,
+        safeSummary,
+        status: decision.nextStatus,
+      })) {
+      await createAutomaticRetryRun(run, snapshot)
     }
 
     if (decision.kind === 'transition' && input.log) {
@@ -1646,10 +1844,11 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
   async function validateDispatch(input: ValidateDispatchInput): Promise<ValidateDispatchResult> {
     const run = await getRunRow(input.runId)
-    const template = await getTemplateKey(input.runId)
-    if (!run || !template)
+    const task = await getTaskBinding(input.runId)
+    if (!run || !task)
       return { accepted: false, reason: 'run_not_found' }
-    if (run.attempt_number !== input.attempt || template !== input.template)
+    const snapshot = parseTaskSnapshot(task.request_snapshot_json, task.operation)
+    if (run.attempt_number !== input.attempt || task.template_key !== input.template || snapshot.templateKey !== input.template)
       return { accepted: false, reason: 'dispatch_binding_mismatch' }
     if (createProviderSnapshot(input.template).target !== input.target)
       return { accepted: false, reason: 'target_mismatch' }

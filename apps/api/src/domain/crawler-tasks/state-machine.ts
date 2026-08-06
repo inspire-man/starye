@@ -5,7 +5,8 @@ import type {
   CrawlerRunStatus,
   CrawlerRunTransitionDecision,
   CrawlerRunTransitionEvent,
-  CrawlerTaskSnapshot,
+  CrawlerTaskOperation,
+  CrawlerTaskSnapshotUnion,
 } from './types'
 
 const terminalStatuses: readonly CrawlerRunStatus[] = ['succeeded', 'failed', 'cancelled']
@@ -30,9 +31,9 @@ export function resolveActiveCrawlerCreate(
 
 export function createManualRetryAttempt(input: {
   readonly attemptNumber: number
-  readonly snapshot: CrawlerTaskSnapshot
+  readonly snapshot: CrawlerTaskSnapshotUnion
   readonly status: CrawlerRunStatus
-}): { readonly attemptNumber: number, readonly snapshot: CrawlerTaskSnapshot, readonly status: 'queued' } {
+}): { readonly attemptNumber: number, readonly snapshot: CrawlerTaskSnapshotUnion, readonly status: 'queued' } {
   if (input.status !== 'failed' && input.status !== 'cancelled') {
     throw new Error('Only failed or cancelled runs may be retried')
   }
@@ -48,7 +49,30 @@ function isRunnerEvent(event: CrawlerRunTransitionEvent): event is Extract<Crawl
   return event.actor === 'runner'
 }
 
-function hasValidReceipt(state: CrawlerRunState, receipt: CrawlerRunReceipt): boolean {
+function isRepairReceipt(receipt: CrawlerRunReceipt): receipt is CrawlerRunReceipt & {
+  readonly movieId: string
+  readonly observedAt: number
+  readonly operation: 'repair_players'
+  readonly sourceRevision: number
+  readonly sourceSummary: readonly unknown[]
+} {
+  return Boolean(receipt)
+    && typeof receipt === 'object'
+    && !Array.isArray(receipt)
+    && 'operation' in receipt
+    && receipt.operation === 'repair_players'
+    && typeof receipt.movieId === 'string'
+    && Number.isSafeInteger(receipt.observedAt)
+    && Number.isSafeInteger(receipt.sourceRevision)
+    && Array.isArray(receipt.sourceSummary)
+    && receipt.sourceSummary.length > 0
+}
+
+function hasValidReceipt(state: CrawlerRunState & { readonly operation?: CrawlerTaskOperation }, receipt: CrawlerRunReceipt): boolean {
+  if (state.operation === 'repair_players') {
+    return isRepairReceipt(receipt)
+  }
+
   return receipt.contentIds.length > 0
     && receipt.contentIds.every(contentId => contentId.length > 0)
     && (!state.templateKey || state.templateKey === receipt.templateKey)
@@ -88,7 +112,7 @@ function transition(
 }
 
 export function decideCrawlerRunTransition(
-  state: CrawlerRunState,
+  state: CrawlerRunState & { readonly operation?: CrawlerTaskOperation },
   event: CrawlerRunTransitionEvent,
 ): CrawlerRunTransitionDecision {
   if (isTerminalCrawlerRunStatus(state.status)) {
