@@ -367,7 +367,7 @@ function projectRepairReceipt(raw: unknown) {
 function readRepairSnapshot(task: RepairTaskRow) {
   try {
     const parsed = readCrawlerTaskSnapshot(JSON.parse(task.request_snapshot_json), task.operation)
-    if (!parsed.ok || parsed.snapshot.operation !== 'repair_players')
+    if (!parsed.ok || !('operation' in parsed.snapshot) || parsed.snapshot.operation !== 'repair_players')
       return null
     return parsed.snapshot
   }
@@ -622,7 +622,7 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
       ? (() => {
           try {
             const parsed = readCrawlerTaskSnapshot(JSON.parse(taskAccess.request_snapshot_json), taskAccess.operation)
-            return parsed.ok && parsed.snapshot.operation === 'repair_players' ? parsed.snapshot : null
+            return parsed.ok && 'operation' in parsed.snapshot && parsed.snapshot.operation === 'repair_players' ? parsed.snapshot : null
           }
           catch {
             return null

@@ -87,7 +87,9 @@ async function createTestDatabase() {
   })
   const foundation = await readFile(new URL('../../../../../../../packages/db/drizzle/0027_crawler_task_domain_foundation.sql', import.meta.url), 'utf8')
   const provider = await readFile(new URL('../../../../../../../packages/db/drizzle/0028_crawler_provider_association.sql', import.meta.url), 'utf8')
-  const statements = [foundation, provider]
+  const receipt = await readFile(new URL('../../../../../../../packages/db/drizzle/0029_source_contract_receipt_boundary.sql', import.meta.url), 'utf8')
+  const repair = await readFile(new URL('../../../../../../../packages/db/drizzle/0030_source_health_repair.sql', import.meta.url), 'utf8')
+  const statements = [foundation, provider, receipt, repair]
     .flatMap(migration => migration.split('--> statement-breakpoint'))
     .map(statement => statement.trim())
     .filter(Boolean)

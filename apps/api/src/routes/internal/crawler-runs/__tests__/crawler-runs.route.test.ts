@@ -1,7 +1,17 @@
 import { Hono } from 'hono'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { base64UrlEncode } from '../../../../domain/crawler-tasks/runner-event-auth'
 import { createCrawlerRunsRoutes } from '../index'
+
+const repairSourceObservation = vi.hoisted(() => vi.fn())
+
+vi.mock('../../../../domain/movies/source-reconciliation', () => ({
+  acceptRepairSourceObservation: repairSourceObservation,
+}))
+
+beforeEach(() => {
+  repairSourceObservation.mockReset()
+})
 
 const NOW = new Date('2026-07-30T00:00:00.000Z').getTime()
 
@@ -94,21 +104,54 @@ function createProcessor(result: unknown = { kind: 'accepted', outcome: { outcom
   }
 }
 
-function createApp(processor = createProcessor()) {
+function createSourceObservationEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    attempt: 1,
+    event_id: 'repair-event-1',
+    key_id: 'key-current',
+    nonce: 'repair-nonce-1',
+    observed_at: Math.floor(NOW / 1000),
+    operation: 'repair_players',
+    run_id: 'run-1',
+    sequence: 3,
+    source_revision: 7,
+    sources: [{
+      health: 'unverified',
+      isActive: true,
+      reasonCode: 'source_unverified',
+      sourceName: '线路 1',
+      sourceType: 'direct',
+      sourceUrl: 'https://media.example/movie-1.m3u8',
+    }],
+    timestamp: NOW,
+    type: 'source_observation',
+    ...overrides,
+  }
+}
+
+function createApp(processor = createProcessor(), results: Array<unknown[]> = [], runChanges: number[] = []) {
   const app = new Hono<any>()
+  const prepare = vi.fn()
+  const statement = {
+    all: vi.fn().mockImplementation(async () => ({ results: results.shift() ?? [] })),
+    bind: vi.fn(),
+    run: vi.fn().mockImplementation(async () => ({ meta: { changes: runChanges.shift() ?? 1 } })),
+  }
+  statement.bind.mockReturnValue(statement)
+  prepare.mockReturnValue(statement)
   app.use('*', async (c, next) => {
     c.env = {
       TASK_RUNNER_CALLBACK_KEY_ID_CURRENT: 'key-current',
       TASK_RUNNER_CALLBACK_SECRET_CURRENT: 'runner-secret',
     }
-    c.set('db', {})
+    c.set('db', { $client: { prepare } })
     await next()
   })
   app.route('/crawler-runs', createCrawlerRunsRoutes({
     createRepository: () => processor as never,
     now: () => NOW,
   }))
-  return app
+  return Object.assign(app, { app, prepare, statement })
 }
 
 async function postEvent(app: Hono<any>, event: Record<string, unknown>, pathRunId = 'run-1') {
@@ -126,6 +169,10 @@ async function postSigned(app: Hono<any>, path: string, body: string) {
     },
     method: 'POST',
   })
+}
+
+async function postSourceObservation(app: Hono<any>, event: Record<string, unknown>, pathRunId = 'run-1') {
+  return postSigned(app, `/crawler-runs/${pathRunId}/source-observation`, JSON.stringify(event))
 }
 
 function createControlEnvelope(overrides: Record<string, unknown> = {}) {
@@ -245,6 +292,175 @@ describe('signed crawler runner event route', () => {
 
     expect(success.status).toBe(400)
     expect(heartbeatWithReceipt.status).toBe(400)
+  })
+
+  it('accepts a signed repair source observation only for the bound repair run and returns bounded readback plus receipt candidate', async () => {
+    repairSourceObservation.mockResolvedValueOnce({
+      outcome: 'accepted',
+      readback: {
+        movieId: 'movie-1',
+        observedAt: 1_720_000_000,
+        sourceRevision: 8,
+        sources: [{
+          eligible: true,
+          health: 'unverified',
+          observedAt: 1_720_000_000,
+          reasonCode: 'source_unverified',
+          sourceType: 'direct',
+        }],
+        summary: { eligibleCount: 1, sourceCount: 1 },
+      },
+      repairable: true,
+      source: {
+        disposition: 'ready',
+        eligibleCount: 1,
+        observedAt: 1_720_000_000,
+        reasonCode: null,
+        repairable: false,
+        sourceRevision: 8,
+      },
+    })
+    const { app } = createApp(createProcessor(), [
+      [],
+      [{
+        attempt_number: 1,
+        last_event_sequence: 2,
+        movie_id: 'movie-1',
+        operation: 'repair_players',
+        request_snapshot_json: JSON.stringify({
+          entrypoint: 'movie-crawler',
+          movieId: 'movie-1',
+          operation: 'repair_players',
+          permissionResource: 'movie',
+          reason: 'no_source',
+          sourceRevision: 7,
+          targetIntent: 'restore_playable_sources',
+          templateKey: 'movie',
+          templateVersion: 1,
+        }),
+        status: 'running',
+        task_id: 'task-repair',
+        template_key: 'movie',
+      }],
+    ])
+
+    const response = await postSourceObservation(app, createSourceObservationEvent())
+
+    expect(response.status).toBe(200)
+    const responseBody = await response.json()
+    expect(responseBody).toMatchObject({
+      accepted: true,
+      outcome: 'accepted',
+      readback: {
+        movieId: 'movie-1',
+        sourceRevision: 8,
+        summary: { eligibleCount: 1, sourceCount: 1 },
+      },
+      receipt: {
+        movieId: 'movie-1',
+        observedAt: 1_720_000_000,
+        operation: 'repair_players',
+        sourceRevision: 8,
+      },
+    })
+    expect(repairSourceObservation).toHaveBeenCalledWith(expect.objectContaining({
+      attemptNumber: 1,
+      eventId: 'repair-event-1',
+      expectedSourceRevision: 7,
+      movieId: 'movie-1',
+      operation: 'repair_players',
+      runId: 'run-1',
+      sequence: 3,
+    }))
+    const body = JSON.stringify(responseBody)
+    expect(body).not.toContain('sourceUrl')
+    expect(body).not.toContain('signature')
+    expect(body).not.toContain('page')
+  })
+
+  it('keeps exact replay idempotent and rejects conflicting or stale repair observation callbacks', async () => {
+    const duplicateOutcome = JSON.stringify({
+      accepted: true,
+      outcome: 'accepted',
+      readback: { movieId: 'movie-1', sourceRevision: 8 },
+      receipt: { movieId: 'movie-1', observedAt: 1_720_000_000, operation: 'repair_players', sourceRevision: 8, sourceSummary: [] },
+    })
+    const duplicate = createApp(createProcessor(), [[{
+      body_sha256: await (async () => {
+        const body = JSON.stringify(createSourceObservationEvent())
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body))
+        return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+      })(),
+      event_id: 'repair-event-1',
+      nonce: 'repair-nonce-1',
+      outcome: duplicateOutcome,
+    }]])
+    const duplicateResponse = await postSourceObservation(duplicate.app, createSourceObservationEvent())
+    expect(duplicateResponse.status).toBe(200)
+    await expect(duplicateResponse.json()).resolves.toMatchObject({ accepted: true, outcome: 'accepted' })
+    expect(repairSourceObservation).not.toHaveBeenCalled()
+
+    const conflict = createApp(createProcessor(), [[{
+      body_sha256: 'different-body',
+      event_id: 'repair-event-1',
+      nonce: 'repair-nonce-1',
+      outcome: duplicateOutcome,
+    }]])
+    const conflictResponse = await postSourceObservation(conflict.app, createSourceObservationEvent())
+    expect(conflictResponse.status).toBe(409)
+
+    const stale = createApp(createProcessor(), [
+      [],
+      [{
+        attempt_number: 1,
+        last_event_sequence: 3,
+        movie_id: 'movie-1',
+        operation: 'repair_players',
+        request_snapshot_json: JSON.stringify({
+          entrypoint: 'movie-crawler',
+          movieId: 'movie-1',
+          operation: 'repair_players',
+          permissionResource: 'movie',
+          reason: 'no_source',
+          sourceRevision: 7,
+          targetIntent: 'restore_playable_sources',
+          templateKey: 'movie',
+          templateVersion: 1,
+        }),
+        status: 'running',
+        task_id: 'task-repair',
+        template_key: 'movie',
+      }],
+    ])
+    const staleResponse = await postSourceObservation(stale.app, createSourceObservationEvent())
+    expect(staleResponse.status).toBe(409)
+    expect(repairSourceObservation).not.toHaveBeenCalled()
+  })
+
+  it('rejects signed repair observation envelopes with operation, revision, or attempt mismatches before persistence', async () => {
+    const mismatch = createApp(createProcessor(), [
+      [],
+      [{
+        attempt_number: 2,
+        last_event_sequence: 1,
+        movie_id: 'movie-1',
+        operation: 'movie',
+        request_snapshot_json: JSON.stringify({
+          entrypoint: 'movie-crawler',
+          permissionResource: 'movie',
+          templateKey: 'movie',
+          templateVersion: 1,
+        }),
+        status: 'running',
+        task_id: 'task-repair',
+        template_key: 'movie',
+      }],
+    ])
+
+    const response = await postSourceObservation(mismatch.app, createSourceObservationEvent())
+
+    expect(response.status).toBe(409)
+    expect(repairSourceObservation).not.toHaveBeenCalled()
   })
 })
 
