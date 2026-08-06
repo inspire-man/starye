@@ -94,14 +94,18 @@ interface RepairReceiptCandidate {
 }
 
 function asRepairReceiptCandidate(candidate: unknown): RepairReceiptCandidate | undefined {
+  const observedAt = isRecord(candidate) ? candidate.observedAt : undefined
+  const sourceRevision = isRecord(candidate) ? candidate.sourceRevision : undefined
   if (!isRecord(candidate)
     || candidate.operation !== 'repair_players'
     || typeof candidate.movieId !== 'string'
     || candidate.movieId.trim().length === 0
-    || !Number.isSafeInteger(candidate.observedAt)
-    || candidate.observedAt < 0
-    || !Number.isSafeInteger(candidate.sourceRevision)
-    || candidate.sourceRevision < 0
+    || typeof observedAt !== 'number'
+    || !Number.isSafeInteger(observedAt)
+    || observedAt < 0
+    || typeof sourceRevision !== 'number'
+    || !Number.isSafeInteger(sourceRevision)
+    || sourceRevision < 0
     || !Array.isArray(candidate.sourceSummary)
     || candidate.sourceSummary.length === 0
     || !candidate.sourceSummary.every(isSourceHealthProjection)) {
@@ -110,9 +114,9 @@ function asRepairReceiptCandidate(candidate: unknown): RepairReceiptCandidate | 
 
   return {
     movieId: candidate.movieId.trim(),
-    observedAt: candidate.observedAt,
+    observedAt,
     operation: 'repair_players',
-    sourceRevision: candidate.sourceRevision,
+    sourceRevision,
     sourceSummary: candidate.sourceSummary,
   }
 }
@@ -204,7 +208,7 @@ async function readMovieSource(
  * The returned receipt contains only fields derived from this API boundary.
  */
 export async function validateReceiptCandidate(input: {
-  readonly candidate: CrawlerRunReceiptCandidate | undefined
+  readonly candidate: CrawlerRunReceiptCandidate | RepairReceiptCandidate | undefined
   readonly database: ReceiptValidationDatabase
   readonly snapshot?: CrawlerTaskSnapshotUnion | unknown
   readonly templateKey: CrawlerTaskTemplateKey
@@ -228,7 +232,7 @@ export async function validateReceiptCandidate(input: {
 
     try {
       const readback = await readRepairSourceReadback({
-        db: input.database,
+        db: input.database as unknown as Parameters<typeof readRepairSourceReadback>[0]['db'],
         movieId: repairCandidate.movieId,
         sourceRevision: repairCandidate.sourceRevision,
       })

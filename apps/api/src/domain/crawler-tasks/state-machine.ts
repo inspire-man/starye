@@ -1,6 +1,5 @@
 import type {
   ActiveCrawlerLeaseOwner,
-  CrawlerRunReceipt,
   CrawlerRunState,
   CrawlerRunStatus,
   CrawlerRunTransitionDecision,
@@ -8,6 +7,18 @@ import type {
   CrawlerTaskOperation,
   CrawlerTaskSnapshotUnion,
 } from './types'
+
+interface RepairReceiptLike {
+  readonly movieId: string
+  readonly observedAt: number
+  readonly operation: 'repair_players'
+  readonly sourceRevision: number
+  readonly sourceSummary: readonly unknown[]
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
 
 const terminalStatuses: readonly CrawlerRunStatus[] = ['succeeded', 'failed', 'cancelled']
 
@@ -49,17 +60,8 @@ function isRunnerEvent(event: CrawlerRunTransitionEvent): event is Extract<Crawl
   return event.actor === 'runner'
 }
 
-function isRepairReceipt(receipt: CrawlerRunReceipt): receipt is CrawlerRunReceipt & {
-  readonly movieId: string
-  readonly observedAt: number
-  readonly operation: 'repair_players'
-  readonly sourceRevision: number
-  readonly sourceSummary: readonly unknown[]
-} {
-  return Boolean(receipt)
-    && typeof receipt === 'object'
-    && !Array.isArray(receipt)
-    && 'operation' in receipt
+function isRepairReceipt(receipt: unknown): receipt is RepairReceiptLike {
+  return isRecord(receipt)
     && receipt.operation === 'repair_players'
     && typeof receipt.movieId === 'string'
     && Number.isSafeInteger(receipt.observedAt)
@@ -68,14 +70,20 @@ function isRepairReceipt(receipt: CrawlerRunReceipt): receipt is CrawlerRunRecei
     && receipt.sourceSummary.length > 0
 }
 
-function hasValidReceipt(state: CrawlerRunState & { readonly operation?: CrawlerTaskOperation }, receipt: CrawlerRunReceipt): boolean {
+function hasValidReceipt(state: CrawlerRunState & { readonly operation?: CrawlerTaskOperation }, receipt: unknown): boolean {
   if (state.operation === 'repair_players') {
     return isRepairReceipt(receipt)
   }
 
-  return receipt.contentIds.length > 0
-    && receipt.contentIds.every(contentId => contentId.length > 0)
-    && (!state.templateKey || state.templateKey === receipt.templateKey)
+  if (!isRecord(receipt) || !('contentIds' in receipt) || !('templateKey' in receipt))
+    return false
+  const contentIds = receipt.contentIds
+  const templateKey = receipt.templateKey
+  return Array.isArray(contentIds)
+    && contentIds.length > 0
+    && contentIds.every(contentId => typeof contentId === 'string' && contentId.length > 0)
+    && (templateKey === 'movie' || templateKey === 'manga')
+    && (!state.templateKey || state.templateKey === templateKey)
 }
 
 function staleDecision(

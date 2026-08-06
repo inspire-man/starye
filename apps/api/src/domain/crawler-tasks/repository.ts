@@ -1,6 +1,6 @@
 import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
-import type { CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
@@ -976,7 +976,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
   async function applyTransition(
     runId: string,
     event: CrawlerRunTransitionEvent,
-    options: { readonly failureCode?: CrawlerRunFailureCode, readonly receipt?: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | Readonly<Record<string, unknown>>, readonly safeSummary?: string } = {},
+    options: { readonly failureCode?: CrawlerRunFailureCode, readonly receipt?: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | RepairPlayersReceipt, readonly safeSummary?: string } = {},
   ): Promise<CrawlerRunTransitionDecision> {
     const run = await getRunRow(runId)
     const task = await getTaskBinding(runId)
@@ -1019,7 +1019,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       ? receipt as ValidatedCrawlerRunReceipt
       : undefined
     const repairReceipt = receipt && 'operation' in receipt && receipt.operation === 'repair_players'
-      ? receipt as Readonly<Record<string, unknown>> & { readonly movieId: string, readonly sourceRevision: number }
+      ? receipt as RepairPlayersReceipt
       : undefined
     const receiptSummary = validatedReceipt || repairReceipt
       ? JSON.stringify(validatedReceipt ?? repairReceipt)
@@ -1272,7 +1272,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       ])
     }
     catch (error) {
-      const leaseOwner = await findActiveLease(templateKey, currentNow)
+      const leaseOwner = await findActiveLease(task.template_key, currentNow)
       if (leaseOwner) {
         return { kind: 'existing_active_run', run: leaseOwner }
       }
@@ -1464,13 +1464,13 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     }
 
     let event = input.event
-    let receipt: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | Readonly<Record<string, unknown>> | undefined
+    let receipt: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | RepairPlayersReceipt | undefined
     let safeSummary = input.safeSummary
     let failureCode: 'receipt_missing' | undefined
 
     if (input.event.type === 'runner_succeeded') {
       const validation = await validateReceiptCandidate({
-        candidate: input.receipt,
+        candidate: input.receipt as Parameters<typeof validateReceiptCandidate>[0]['candidate'],
         database: db,
         snapshot,
         templateKey: task.template_key,
@@ -1482,7 +1482,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       }
       else {
         receipt = validation.receipt
-        event = { ...input.event, receipt: input.receipt! }
+        event = { ...input.event, receipt: input.receipt as CrawlerRunReceipt } as CrawlerRunTransitionEvent
       }
     }
 
