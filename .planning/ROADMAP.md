@@ -70,7 +70,16 @@ v1.4 将 v1.3 已验证的受控 crawler control plane 延伸到播放可用性�
   2. 用户从已入库的 `no_source` 或 `source_failed` 电影发起修复时，只需选择受控电影身份、原因和目标意图；Dashboard 不要求也不暴露任意 URL、命令、workflow 或 secrets。
   3. 用户通过 `http://localhost:8080` 观察本地修复纵向链路时，能看到固定 `repair_players` 请求进入受控任务并返回同一电影的 source observation/readback；失败仍保留可解释的 repairable 状态和下一步动作。
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — source health、repair operation contracts 与 Drizzle schema
+- [ ] 21-02-PLAN.md — local D1 migration、observation persistence 与 authoritative readback
+- [ ] 21-03-PLAN.md — operation registry、repair receipt 与 task lifecycle/CAS/retry
+- [ ] 21-04-PLAN.md — admin repair command 与 signed runner callback routes
+- [ ] 21-05-PLAN.md — local repair_players adapter 与 signed runner envelope
+- [ ] 21-06-PLAN.md — Dashboard confirmation/source health 与 MovieDetail handoff
+- [ ] 21-07-PLAN.md — canonical Gateway local vertical proof 与全阶段 verification
 **UI hint**: yes
 
 ### Phase 22: Dashboard, MovieDetail And Player State Closure
