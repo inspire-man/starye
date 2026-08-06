@@ -155,6 +155,49 @@ describe('crawler task state machine', () => {
     })).toMatchObject({ kind: 'rejected', reasonCode: 'terminal_state' })
   })
 
+  it('accepts only the repair_players receipt shape when the run is bound to a repair operation', () => {
+    const repairState = {
+      ...queuedRun,
+      operation: 'repair_players' as const,
+      status: 'running' as const,
+      templateKey: 'movie' as const,
+    }
+
+    expect(decideCrawlerRunTransition(repairState as never, {
+      actor: 'runner',
+      receipt: {
+        movieId: 'movie-1',
+        observedAt: 1_725_000_200,
+        operation: 'repair_players',
+        sourceRevision: 7,
+        sourceSummary: [
+          {
+            eligible: true,
+            health: 'unverified',
+            observedAt: 1_725_000_200,
+            reasonCode: 'source_unverified',
+            sourceType: 'direct',
+          },
+        ],
+      } as never,
+      sequence: 1,
+      type: 'runner_succeeded',
+    } as never)).toMatchObject({
+      kind: 'transition',
+      nextStatus: 'succeeded',
+    })
+
+    expect(decideCrawlerRunTransition(repairState as never, {
+      actor: 'runner',
+      receipt: { contentIds: ['movie-1'], templateKey: 'movie' } as never,
+      sequence: 1,
+      type: 'runner_succeeded',
+    })).toMatchObject({
+      kind: 'rejected',
+      reasonCode: 'invalid_receipt',
+    })
+  })
+
   it('records stale or out-of-sequence nonterminal events without replacing current status', () => {
     const current = {
       ...queuedRun,

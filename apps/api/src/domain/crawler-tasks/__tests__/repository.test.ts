@@ -128,6 +128,13 @@ async function createTestDatabase() {
     .filter(Boolean)
     .map(sql => ({ sql }))
   await client.batch(receiptStatements, 'write')
+  const repairMigration = await readFile(new URL('../../../../../../packages/db/drizzle/0030_source_health_repair.sql', import.meta.url), 'utf8')
+  const repairStatements = repairMigration
+    .split('--> statement-breakpoint')
+    .map(statement => statement.trim())
+    .filter(Boolean)
+    .map(sql => ({ sql }))
+  await client.batch(repairStatements, 'write')
 
   return { client, db: createDb(new LibsqlD1(client) as never) }
 }
@@ -235,6 +242,277 @@ describe('crawler task repository', () => {
     await expect(repository.getRun(runId)).resolves.toMatchObject({ status: 'running' })
     const receipts = await client.execute({ args: [runId], sql: 'SELECT event_id, nonce, body_sha256 FROM crawler_runner_event WHERE run_id = ?' })
     expect(receipts.rows).toEqual([{ body_sha256: 'body-one', event_id: 'event-1', nonce: 'nonce-1' }])
+  })
+
+  it('creates a repair_players task from the current movie disposition and persists an immutable one-movie snapshot', async () => {
+    await client.execute({
+      args: ['movie-repair-1', 'Repair movie', 'repair-movie-1', 'MOV-REPAIR-1', 0, 0],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    await client.execute({
+      args: ['movie-repair-1', 7, 'source_failed', 0, 1, 'source_write_failed', 1_725_000_300],
+      sql: 'INSERT INTO movie_source_state (movie_id, source_revision, disposition, eligible_count, repairable, reason_code, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    })
+
+    const created = await repository.createOrGetActiveRun({
+      movieId: 'movie-repair-1',
+      operation: 'repair_players',
+      reason: 'source_failed',
+      requestedByUserId: 'admin-1',
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    } as never)
+
+    expect(created).toMatchObject({
+      kind: 'created',
+      run: { attemptNumber: 1, status: 'queued' },
+      snapshot: {
+        movieId: 'movie-repair-1',
+        operation: 'repair_players',
+        reason: 'source_failed',
+        sourceRevision: 7,
+        targetIntent: 'restore_playable_sources',
+      },
+    })
+
+    const taskRow = await client.execute({
+      args: [created.run.taskId],
+      sql: 'SELECT operation, request_snapshot_json FROM crawler_task WHERE id = ?',
+    })
+    expect(taskRow.rows[0]?.operation).toBe('repair_players')
+    expect(JSON.parse(String(taskRow.rows[0]?.request_snapshot_json))).toMatchObject({
+      movieId: 'movie-repair-1',
+      operation: 'repair_players',
+      reason: 'source_failed',
+      sourceRevision: 7,
+    })
+  })
+
+  it('rejects repair success with a stale source revision and keeps the current run active', async () => {
+    await client.execute({
+      args: ['movie-repair-2', 'Repair movie 2', 'repair-movie-2', 'MOV-REPAIR-2', 0, 0],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    await client.execute({
+      args: ['movie-repair-2', 7, 'source_failed', 0, 1, 'source_write_failed', 1_725_000_310],
+      sql: 'INSERT INTO movie_source_state (movie_id, source_revision, disposition, eligible_count, repairable, reason_code, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    })
+    const created = await repository.createOrGetActiveRun({
+      movieId: 'movie-repair-2',
+      operation: 'repair_players',
+      reason: 'source_failed',
+      requestedByUserId: 'admin-1',
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    } as never)
+    if (created.kind !== 'created')
+      throw new Error('expected created repair run')
+
+    await repository.claimDispatch(created.run.id)
+    await repository.renewLease(created.run.id, 2)
+    await client.execute({
+      args: [8, 1_725_000_311, 'movie-repair-2'],
+      sql: 'UPDATE movie_source_state SET source_revision = ?, observed_at = ? WHERE movie_id = ?',
+    })
+
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'repair-stale-body',
+      event: {
+        actor: 'runner',
+        receipt: {
+          movieId: 'movie-repair-2',
+          observedAt: 1_725_000_310,
+          operation: 'repair_players',
+          sourceRevision: 7,
+          sourceSummary: [
+            {
+              eligible: true,
+              health: 'unverified',
+              observedAt: 1_725_000_310,
+              reasonCode: 'source_unverified',
+              sourceType: 'direct',
+            },
+          ],
+        } as never,
+        sequence: 3,
+        type: 'runner_succeeded',
+      } as never,
+      eventId: 'repair-stale-event',
+      keyId: 'key-current',
+      nonce: 'repair-stale-nonce',
+      receipt: {
+        movieId: 'movie-repair-2',
+        observedAt: 1_725_000_310,
+        operation: 'repair_players',
+        sourceRevision: 7,
+        sourceSummary: [
+          {
+            eligible: true,
+            health: 'unverified',
+            observedAt: 1_725_000_310,
+            reasonCode: 'source_unverified',
+            sourceType: 'direct',
+          },
+        ],
+      } as never,
+      runId: created.run.id,
+      sequence: 3,
+    })).resolves.toEqual({
+      kind: 'rejected',
+      outcome: { accepted: false, reason: 'repair_source_revision_conflict' },
+    })
+
+    await expect(repository.getRun(created.run.id)).resolves.toMatchObject({ status: 'running' })
+  })
+
+  it('schedules at most one automatic repair retry for transient source failures and leaves deterministic failures terminal', async () => {
+    await client.execute({
+      args: ['movie-repair-3', 'Repair movie 3', 'repair-movie-3', 'MOV-REPAIR-3', 0, 0],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    await client.execute({
+      args: ['movie-repair-3', 4, 'source_failed', 0, 1, 'source_read_failed', 1_725_000_320],
+      sql: 'INSERT INTO movie_source_state (movie_id, source_revision, disposition, eligible_count, repairable, reason_code, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    })
+    const created = await repository.createOrGetActiveRun({
+      movieId: 'movie-repair-3',
+      operation: 'repair_players',
+      reason: 'source_failed',
+      requestedByUserId: 'admin-1',
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    } as never)
+    if (created.kind !== 'created')
+      throw new Error('expected created repair run')
+
+    await repository.claimDispatch(created.run.id)
+    await repository.renewLease(created.run.id, 2)
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'repair-transient-body-1',
+      event: { actor: 'runner', sequence: 3, type: 'runner_failed' },
+      eventId: 'repair-transient-event-1',
+      keyId: 'key-current',
+      nonce: 'repair-transient-nonce-1',
+      runId: created.run.id,
+      safeSummary: 'source_read_failed',
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'failed' } })
+
+    const firstRetryRows = await client.execute({
+      args: [created.run.taskId],
+      sql: 'SELECT id, attempt_number, status FROM crawler_run WHERE task_id = ? ORDER BY attempt_number',
+    })
+    expect(firstRetryRows.rows).toEqual([
+      expect.objectContaining({ attempt_number: 1, status: 'failed' }),
+      expect.objectContaining({ attempt_number: 2, status: 'queued' }),
+    ])
+
+    const secondRunId = String(firstRetryRows.rows[1]?.id)
+    await repository.claimDispatch(secondRunId)
+    await repository.renewLease(secondRunId, 2)
+    await expect(repository.processRunnerEvent({
+      attempt: 2,
+      bodySha256: 'repair-transient-body-2',
+      event: { actor: 'runner', sequence: 3, type: 'runner_failed' },
+      eventId: 'repair-transient-event-2',
+      keyId: 'key-current',
+      nonce: 'repair-transient-nonce-2',
+      runId: secondRunId,
+      safeSummary: 'source_read_failed',
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'failed' } })
+
+    const cappedRows = await client.execute({
+      args: [created.run.taskId],
+      sql: 'SELECT attempt_number, status FROM crawler_run WHERE task_id = ? ORDER BY attempt_number',
+    })
+    expect(cappedRows.rows).toHaveLength(2)
+
+    const deterministic = await repository.createOrGetActiveRun({
+      movieId: 'movie-repair-3',
+      operation: 'repair_players',
+      reason: 'source_failed',
+      requestedByUserId: 'admin-1',
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    } as never)
+    if (deterministic.kind !== 'created')
+      throw new Error('expected created deterministic repair run')
+    await repository.claimDispatch(deterministic.run.id)
+    await repository.renewLease(deterministic.run.id, 2)
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'repair-deterministic-body',
+      event: { actor: 'runner', sequence: 3, type: 'runner_failed' },
+      eventId: 'repair-deterministic-event',
+      keyId: 'key-current',
+      nonce: 'repair-deterministic-nonce',
+      runId: deterministic.run.id,
+      safeSummary: 'receipt_missing',
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'failed' } })
+
+    const deterministicRows = await client.execute({
+      args: [deterministic.run.taskId],
+      sql: 'SELECT attempt_number FROM crawler_run WHERE task_id = ? ORDER BY attempt_number',
+    })
+    expect(deterministicRows.rows).toEqual([{ attempt_number: 1 }])
+  })
+
+  it('creates a new repair task for manual retry after rereading the current disposition and revision', async () => {
+    await client.execute({
+      args: ['movie-repair-4', 'Repair movie 4', 'repair-movie-4', 'MOV-REPAIR-4', 0, 0],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    await client.execute({
+      args: ['movie-repair-4', 4, 'no_source', 0, 1, 'no_eligible_source', 1_725_000_330],
+      sql: 'INSERT INTO movie_source_state (movie_id, source_revision, disposition, eligible_count, repairable, reason_code, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    })
+    const created = await repository.createOrGetActiveRun({
+      movieId: 'movie-repair-4',
+      operation: 'repair_players',
+      reason: 'no_source',
+      requestedByUserId: 'admin-1',
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    } as never)
+    if (created.kind !== 'created')
+      throw new Error('expected created repair run')
+    await repository.claimDispatch(created.run.id)
+    await repository.renewLease(created.run.id, 2)
+    await repository.applyTransition(created.run.id, { actor: 'runner', sequence: 3, type: 'runner_failed' })
+
+    await client.execute({
+      args: [5, 'source_failed', 'source_write_failed', 1_725_000_331, 'movie-repair-4'],
+      sql: 'UPDATE movie_source_state SET source_revision = ?, disposition = ?, reason_code = ?, observed_at = ? WHERE movie_id = ?',
+    })
+
+    const retried = await repository.retryRun(created.run.id)
+    expect(retried).toMatchObject({
+      kind: 'created',
+      run: { attemptNumber: 1, status: 'queued' },
+      snapshot: {
+        movieId: 'movie-repair-4',
+        operation: 'repair_players',
+        reason: 'source_failed',
+        sourceRevision: 5,
+      },
+    })
+    expect(retried.run.taskId).not.toBe(created.run.taskId)
+
+    const tasks = await client.execute({
+      args: ['admin-1'],
+      sql: 'SELECT id, operation, request_snapshot_json FROM crawler_task WHERE requested_by_user_id = ? ORDER BY created_at, id',
+    })
+    expect(tasks.rows).toHaveLength(2)
+    expect(JSON.parse(String(tasks.rows[1]?.request_snapshot_json))).toMatchObject({
+      movieId: 'movie-repair-4',
+      operation: 'repair_players',
+      reason: 'source_failed',
+      sourceRevision: 5,
+    })
   })
 
   it('lets receipt success win a cancel race, rejects retry for success, and creates the next immutable attempt after failure', async () => {
