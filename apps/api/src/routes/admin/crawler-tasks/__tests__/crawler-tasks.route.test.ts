@@ -64,6 +64,8 @@ function createApp(
 describe('admin crawler task routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    crawlerTaskRepository.createOrGetActiveRun.mockResolvedValue({ kind: 'created', run: { id: 'run-movie' } })
+    crawlerTaskRepository.getTaskDetail.mockResolvedValue(undefined)
   })
 
   it('accepts only a registry template and resolves access from the session role', async () => {
@@ -335,5 +337,164 @@ describe('admin crawler task routes', () => {
     }))
     expect(body).toMatchObject({ dispatch: { provider: { accepted: true, kind: 'dispatch_accepted' } } })
     expect(JSON.stringify(body)).not.toContain('ghs_hidden-value')
+  })
+
+  it('requires confirmation and current repairable movie state before creating a repair_players task', async () => {
+    const noConfirm = createApp()
+    const noConfirmResponse = await noConfirm.app.request('/crawler-tasks/repair-players', {
+      body: JSON.stringify({
+        movieId: 'movie-1',
+        reason: 'no_source',
+        targetIntent: 'restore_playable_sources',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(noConfirmResponse.status).toBeGreaterThanOrEqual(400)
+    expect(crawlerTaskRepository.createOrGetActiveRun).not.toHaveBeenCalled()
+
+    const mismatch = createApp({}, [[{
+      id: 'movie-1',
+      source_revision: 7,
+      source_reason: 'source_failed',
+      source_disposition: 'source_failed',
+      title: 'Repair Movie',
+    }]])
+    const mismatchResponse = await mismatch.app.request('/crawler-tasks/repair-players', {
+      body: JSON.stringify({
+        confirmed: true,
+        movieId: 'movie-1',
+        reason: 'no_source',
+        targetIntent: 'restore_playable_sources',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(mismatchResponse.status).toBe(409)
+    expect(crawlerTaskRepository.createOrGetActiveRun).not.toHaveBeenCalled()
+  })
+
+  it('rejects a repair command for a missing movie or forbidden role before repository mutation', async () => {
+    const missingMovie = createApp({}, [[]])
+    const notFound = await missingMovie.app.request('/crawler-tasks/repair-players', {
+      body: JSON.stringify({
+        confirmed: true,
+        movieId: 'movie-missing',
+        reason: 'no_source',
+        targetIntent: 'restore_playable_sources',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(notFound.status).toBe(404)
+
+    const forbidden = createApp({ role: 'comic_admin' }, [[{
+      id: 'movie-1',
+      source_revision: 7,
+      source_reason: 'no_source',
+      source_disposition: 'no_source',
+      title: 'Repair Movie',
+    }]])
+    const denied = await forbidden.app.request('/crawler-tasks/repair-players', {
+      body: JSON.stringify({
+        confirmed: true,
+        movieId: 'movie-1',
+        reason: 'no_source',
+        targetIntent: 'restore_playable_sources',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(denied.status).toBe(403)
+    expect(crawlerTaskRepository.createOrGetActiveRun).not.toHaveBeenCalled()
+  })
+
+  it('creates a single-movie repair task with fixed server-owned inputs and bounded response fields', async () => {
+    crawlerTaskRepository.createOrGetActiveRun.mockResolvedValueOnce({
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'run-repair', taskId: 'task-repair' },
+    })
+    crawlerTaskRepository.getTaskDetail.mockResolvedValueOnce({
+      runs: [{
+        attemptNumber: 1,
+        cancelRequestedAt: null,
+        createdAt: 100,
+        failureCode: null,
+        id: 'run-repair',
+        provider: {
+          providerRunId: '123',
+          providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/123',
+          workflow: '.github/workflows/daily-movie-crawl.yml',
+        },
+        receipt: null,
+        stateVersion: 0,
+        status: 'queued',
+        taskId: 'task-repair',
+        terminalAt: null,
+        updatedAt: 100,
+      }],
+      task: {
+        createdAt: 100,
+        id: 'task-repair',
+        latestRunId: 'run-repair',
+        templateKey: 'movie',
+        updatedAt: 100,
+      },
+    })
+    const { app } = createApp({}, [[{
+      id: 'movie-1',
+      source_revision: 7,
+      source_reason: 'no_source',
+      source_disposition: 'no_source',
+      title: 'Repair Movie',
+    }]])
+
+    const response = await app.request('/crawler-tasks/repair-players', {
+      body: JSON.stringify({
+        confirmed: true,
+        movieId: 'movie-1',
+        reason: 'no_source',
+        targetIntent: 'restore_playable_sources',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(200)
+    expect(crawlerTaskRepository.createOrGetActiveRun).toHaveBeenCalledWith({
+      movieId: 'movie-1',
+      operation: 'repair_players',
+      reason: 'no_source',
+      requestedByUserId: 'admin-1',
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    })
+
+    const body = await response.json()
+    expect(body).toMatchObject({
+      kind: 'created',
+      task: {
+        allowedNextAction: 'wait_for_observation',
+        id: 'task-repair',
+        movie: { id: 'movie-1', title: 'Repair Movie' },
+        operation: 'repair_players',
+        reason: 'no_source',
+        sourceRevision: 7,
+        targetIntent: 'restore_playable_sources',
+      },
+      run: {
+        attemptNumber: 1,
+        id: 'run-repair',
+        status: 'queued',
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain('providerRunUrl')
+    expect(JSON.stringify(body)).not.toContain('workflow')
+    expect(JSON.stringify(body)).not.toContain('command')
+    expect(JSON.stringify(body)).not.toContain('signature')
   })
 })
