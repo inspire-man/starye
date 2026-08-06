@@ -13,6 +13,7 @@ const { api } = vi.hoisted(() => ({
       getCrawlerTask: vi.fn(),
       getCrawlerTaskLogs: vi.fn(),
       createCrawlerTask: vi.fn(),
+      repairPlayers: vi.fn(),
       cancelCrawlerRun: vi.fn(),
       retryCrawlerRun: vi.fn(),
     },
@@ -278,5 +279,112 @@ describe('crawlers local task panel', () => {
     expect(wrapper.text()).toContain('受控原因')
     if (disposition === 'repairing')
       expect(wrapper.text()).not.toContain('查看修复意图')
+  })
+
+  it('requires confirmation before posting the fixed repair command and refreshes the task readback', async () => {
+    const task = { id: 'task-sun-064', template_key: 'movie', latest_run_id: 'run-sun-064' }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{
+        id: 'run-sun-064',
+        status: 'succeeded',
+        attemptNumber: 1,
+        receipt: { createdCount: 0, primaryContentId: 'movie-sun-064', templateKey: 'movie', updatedCount: 0 },
+        readiness: {
+          metadata: { contentId: 'movie-sun-064', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-sun-064', schemaVersion: 2 },
+          source: {
+            disposition: 'no_source',
+            eligibleCount: 0,
+            observedAt: 100,
+            reasonCode: 'no_eligible_source',
+            repairable: true,
+            sourceRevision: 4,
+          },
+        },
+      }],
+    })
+    api.admin.repairPlayers.mockResolvedValue({
+      kind: 'created',
+      task: {
+        id: 'repair-task-1',
+        operation: 'repair_players',
+        movie: { id: 'movie-sun-064', title: 'SUN-064' },
+        reason: 'no_source',
+        targetIntent: 'restore_playable_sources',
+        allowedNextAction: 'wait_for_observation',
+      },
+      run: { id: 'repair-run-1', status: 'queued', attemptNumber: 1 },
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+    await wrapper.get('[data-repair-action="open"]').trigger('click')
+
+    expect(api.admin.repairPlayers).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('SUN-064')
+    expect(wrapper.text()).toContain('恢复可播放源')
+
+    await (wrapper.vm as any).confirmRepair()
+    await flushPromises()
+
+    expect(api.admin.repairPlayers).toHaveBeenCalledWith({
+      confirmed: true,
+      movieId: 'movie-sun-064',
+      reason: 'no_source',
+      targetIntent: 'restore_playable_sources',
+    })
+    expect(api.admin.listCrawlerTasks).toHaveBeenCalled()
+  })
+
+  it('renders bounded source health rows and excludes raw runner fields and inactive actions', async () => {
+    const task = { id: 'repair-task-1', template_key: 'movie', latest_run_id: 'repair-run-1' }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{
+        id: 'repair-run-1',
+        status: 'succeeded',
+        attemptNumber: 2,
+        failureCode: 'RAW_RUNNER_SENTINEL',
+        runnerRaw: 'RAW_RUNNER_SENTINEL',
+        receipt: {
+          operation: 'repair_players',
+          movieId: 'movie-1',
+          observedAt: 200,
+          sourceRevision: 7,
+          sourceSummary: [
+            { sourceType: 'direct', health: 'unverified', eligible: true, observedAt: 200, reasonCode: 'source_unverified' },
+            { sourceType: 'magnet', health: 'failed', eligible: false, observedAt: 200, reasonCode: 'source_read_failed' },
+            { sourceType: 'TorrServer', health: 'inactive', eligible: false, observedAt: 200, reasonCode: 'source_inactive' },
+          ],
+          rawSource: 'RAW_SOURCE_SENTINEL',
+        },
+      }],
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-source-row]')).toHaveLength(3)
+    expect(wrapper.text()).toContain('direct')
+    expect(wrapper.text()).toContain('magnet')
+    expect(wrapper.text()).toContain('TorrServer')
+    expect(wrapper.text()).toContain('unverified')
+    expect(wrapper.text()).toContain('failed')
+    expect(wrapper.text()).toContain('inactive')
+    expect(wrapper.text()).toContain('200')
+    expect(wrapper.text()).toContain('source_read_failed')
+    expect(wrapper.find('[data-source-row="TorrServer"] [data-source-action]').exists()).toBe(false)
+    expect(wrapper.html()).not.toContain('RAW_RUNNER_SENTINEL')
+    expect(wrapper.html()).not.toContain('RAW_SOURCE_SENTINEL')
   })
 })
