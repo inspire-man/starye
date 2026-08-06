@@ -26,7 +26,7 @@ v1.4 将 v1.3 已验证的受控 crawler control plane 延伸到播放可用性�
 - Decimal phases are reserved for urgent insertions and are not planned for v1.4.
 
 - [x] **Phase 20: Source Contract, Receipt Boundary And SUN-064** - 建立 metadata 与 playback readiness 的边界，形成 source disposition、receipt 和 SUN-064 的诚实状态。
-- [ ] **Phase 21: Source Health And Local repair_players Vertical Slice** - 提供来源健康观察和本地受控修复纵向链路。
+- [x] **Phase 21: Source Health And Local repair_players Vertical Slice** - 提供来源健康观察和本地受控修复纵向链路。
 - [ ] **Phase 22: Dashboard, MovieDetail And Player State Closure** - 将 source projection 转化为 Dashboard、MovieDetail 和 Player 的可操作状态体验。
 - [ ] **Phase 23: GitHub Actions Production Repair And Reconciliation** - 把受控修复接入生产 provider，并保持 attempt、lease、callback 和 receipt 可追溯。
 - [ ] **Phase 24: Fresh Production Dashboard -> Viewer -> Playback Proof** - 用独立 fresh production run 验收完整 Dashboard → Viewer → 实际播放证据链。
@@ -70,7 +70,7 @@ v1.4 将 v1.3 已验证的受控 crawler control plane 延伸到播放可用性�
   2. 用户从已入库的 `no_source` 或 `source_failed` 电影发起修复时，只需选择受控电影身份、原因和目标意图；Dashboard 不要求也不暴露任意 URL、命令、workflow 或 secrets。
   3. 用户通过 `http://localhost:8080` 观察本地修复纵向链路时，能看到固定 `repair_players` 请求进入受控任务并返回同一电影的 source observation/readback；失败仍保留可解释的 repairable 状态和下一步动作。
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans complete
 
 Plans:
 **Wave 1**
@@ -94,9 +94,9 @@ Plans:
 - [x] 21-05-PLAN.md — local repair_players adapter 与 signed runner envelope
 - [x] 21-06-PLAN.md — Dashboard confirmation/source health 与 MovieDetail handoff
 
-**Wave 6** *(blocked on Wave 5 completion)*
+**Wave 6** *(completed after Wave 5)*
 
-- [ ] 21-07-PLAN.md — canonical Gateway local vertical proof 与全阶段 verification
+- [x] 21-07-PLAN.md — canonical Gateway local vertical proof 与全阶段 verification
 
 **UI hint**: yes
 
@@ -149,7 +149,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Source Contract, Receipt Boundary And SUN-064 | 3/3 | Complete | 2026-08-05 |
-| 21. Source Health And Local repair_players Vertical Slice | 6/7 | In Progress|  |
+| 21. Source Health And Local repair_players Vertical Slice | 7/7 | Complete | 2026-08-06 |
 | 22. Dashboard, MovieDetail And Player State Closure | 0/TBD | Not started | - |
 | 23. GitHub Actions Production Repair And Reconciliation | 0/TBD | Not started | - |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | 0/TBD | Not started | - |

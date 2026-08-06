@@ -109,6 +109,8 @@ export function createRepairPlayersAdapter(options: RepairPlayersAdapterOptions 
       const input = await sourceInput(options, context, snapshot)
       if (await context.checkpoint())
         return { contentIds: [] }
+      if (input.sources.length === 0)
+        return { contentIds: [], failureCode: 'receipt_missing' }
       const sequence = context.nextSequence?.() ?? context.candidate.sequence + 1
       const response = await client.observeRepairSource(context.candidate, sequence, input)
       const boundedResponse = response as RepairSourceObservationResponse

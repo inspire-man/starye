@@ -349,11 +349,13 @@ describe('signed crawler runner event route', () => {
         sourceRevision: 8,
       },
     })
-    const { app } = createApp(createProcessor(), [
+    const processor = createProcessor()
+    const { app } = createApp(processor, [
       [],
       [{
         attempt_number: 1,
         last_event_sequence: 2,
+        state_version: 2,
         movie_id: 'movie-1',
         operation: 'repair_players',
         request_snapshot_json: JSON.stringify({
@@ -405,6 +407,25 @@ describe('signed crawler runner event route', () => {
     expect(body).not.toContain('sourceUrl')
     expect(body).not.toContain('signature')
     expect(body).not.toContain('page')
+
+    const heartbeat = await postEvent(app, createEvent({
+      event_id: 'heartbeat-after-repair',
+      nonce: 'heartbeat-after-repair',
+      sequence: 4,
+      type: 'heartbeat',
+    }))
+    const terminal = await postEvent(app, createEvent({
+      event_id: 'terminal-after-repair',
+      nonce: 'terminal-after-repair',
+      receipt: { contentIds: ['movie-1'], templateKey: 'movie' },
+      sequence: 5,
+      type: 'succeeded',
+    }))
+
+    expect(heartbeat.status).toBe(200)
+    expect(terminal.status).toBe(200)
+    expect(processor.processRunnerEvent).toHaveBeenNthCalledWith(1, expect.objectContaining({ sequence: 4 }))
+    expect(processor.processRunnerEvent).toHaveBeenNthCalledWith(2, expect.objectContaining({ sequence: 5 }))
   })
 
   it('keeps exact replay idempotent and rejects conflicting or stale repair observation callbacks', async () => {
@@ -443,6 +464,7 @@ describe('signed crawler runner event route', () => {
       [{
         attempt_number: 1,
         last_event_sequence: 3,
+        state_version: 3,
         movie_id: 'movie-1',
         operation: 'repair_players',
         request_snapshot_json: JSON.stringify({
@@ -472,6 +494,7 @@ describe('signed crawler runner event route', () => {
       [{
         attempt_number: 2,
         last_event_sequence: 1,
+        state_version: 1,
         movie_id: 'movie-1',
         operation: 'movie',
         request_snapshot_json: JSON.stringify({

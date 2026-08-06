@@ -1548,7 +1548,11 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     let event = input.event
     let receipt: CrawlerRunReceipt | ValidatedCrawlerRunReceipt | RepairPlayersReceipt | undefined
     let safeSummary = input.safeSummary
-    let failureCode: 'receipt_missing' | undefined
+    let failureCode: CrawlerRunFailureCode | undefined
+
+    if (input.event.type === 'runner_failed' && input.safeSummary === 'receipt_missing') {
+      failureCode = 'receipt_missing'
+    }
 
     if (input.event.type === 'runner_succeeded') {
       const validation = await validateReceiptCandidate({

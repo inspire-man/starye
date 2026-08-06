@@ -70,14 +70,15 @@ async function dispatchCreatedRun(
   input: { readonly runId: string, readonly attempt: number, readonly template: CrawlerTaskTemplateKey },
 ): Promise<Record<string, unknown>> {
   const provider = createProviderClient(c.env as AppEnv['Bindings'])
+  if (!provider)
+    return { kind: 'provider_not_configured' }
+
   const association = await repository.ensureProviderAssociation?.({
     attempt: input.attempt,
     runId: input.runId,
     template: input.template,
   })
   const decision = await repository.claimDispatch?.(input.runId)
-  if (!provider)
-    return { kind: 'provider_not_configured', ...(decision ? { decision } : {}) }
   const snapshot = createProviderSnapshot(input.template)
   const result = await provider.dispatchWorkflow({
     dispatch: createProviderDispatchInput({ attempt: input.attempt, runId: input.runId, templateKey: input.template }),

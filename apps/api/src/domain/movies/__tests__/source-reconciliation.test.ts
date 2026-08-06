@@ -11,6 +11,24 @@ interface FakeState {
   observations: any[]
 }
 
+const observationInput = {
+  db: undefined as unknown as Database,
+  movieId: 'movie-1',
+  operation: 'repair_players' as const,
+  runId: 'run-1',
+  attemptNumber: 1,
+  sequence: 1,
+  eventId: 'event-1',
+  expectedSourceRevision: 0,
+  observedAt: new Date(1710000000 * 1000),
+  sources: [
+    { sourceName: 'direct', sourceUrl: 'https://source.example/raw-sentinel', sourceType: 'direct' as const, isActive: true },
+    { sourceName: 'magnet', sourceUrl: 'magnet:?xt=urn:btih/raw-sentinel', sourceType: 'magnet' as const, isActive: true },
+    { sourceName: 'inactive', sourceUrl: 'https://inactive.example/raw-sentinel', sourceType: 'TorrServer' as const, isActive: false },
+    { sourceName: 'blank', sourceUrl: '   ', sourceType: 'direct' as const, isActive: true },
+  ],
+}
+
 function createFakeDb(options: {
   sourceRevision?: number
   players?: any[]
@@ -51,6 +69,49 @@ function createFakeDb(options: {
     onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
   }
 
+  const nativeClient = {
+    prepare: vi.fn().mockReturnValue({
+      bind: vi.fn().mockReturnValue({}),
+    }),
+    batch: vi.fn().mockImplementation(async (statements: readonly unknown[]) => {
+      if (options.failWrite)
+        throw new Error('D1 batch constraint error token=raw')
+
+      const eligibleSources = observationInput.sources.filter(source => source.isActive !== false && source.sourceUrl.trim().length > 0)
+      const nextRevision = (state.sourceState?.sourceRevision ?? 0) + 1
+      state.sourceState = {
+        ...(state.sourceState ?? { movieId: 'movie-1' }),
+        sourceRevision: nextRevision,
+        disposition: eligibleSources.length > 0 ? 'ready' : 'no_source',
+        eligibleCount: eligibleSources.length,
+        repairable: eligibleSources.length === 0,
+        reasonCode: eligibleSources.length > 0 ? null : 'no_eligible_source',
+        observedAt: new Date(1710000000 * 1000),
+      }
+      state.players = observationInput.sources.map((source, index) => ({
+        isActive: source.isActive !== false,
+        sourceUrl: source.sourceUrl.trim(),
+        sortOrder: index,
+      }))
+      state.observations = observationInput.sources.map((source, sourceOrdinal) => ({
+        movieId: 'movie-1',
+        operation: 'repair_players',
+        runId: 'run-1',
+        eventId: 'event-1',
+        sourceRevision: nextRevision,
+        sourceOrdinal,
+        sourceType: source.sourceType ?? 'direct',
+        health: source.isActive === false ? 'inactive' : 'unverified',
+        observedAt: new Date(1710000000 * 1000),
+        reasonCode: source.isActive === false
+          ? 'source_inactive'
+          : source.sourceUrl.trim().length > 0 ? 'source_unverified' : 'source_candidate_invalid',
+        eligible: source.isActive !== false && source.sourceUrl.trim().length > 0,
+      }))
+      return statements.map(() => ({ meta: { changes: 1 } }))
+    }),
+  }
+
   const db = {
     query: {
       movieSourceStates: {
@@ -69,6 +130,8 @@ function createFakeDb(options: {
       },
     },
     transaction: vi.fn().mockImplementation(async (callback: (tx: any) => Promise<unknown>) => callback(db)),
+    $client: nativeClient,
+    run: vi.fn().mockReturnValue({ getQuery: vi.fn().mockReturnValue({ sql: '', params: [] }) }),
     insert: vi.fn().mockReturnValue(insertChain),
     update: vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
@@ -86,24 +149,6 @@ function createFakeDb(options: {
   }
 
   return db as unknown as Database
-}
-
-const observationInput = {
-  db: undefined as unknown as Database,
-  movieId: 'movie-1',
-  operation: 'repair_players' as const,
-  runId: 'run-1',
-  attemptNumber: 1,
-  sequence: 1,
-  eventId: 'event-1',
-  expectedSourceRevision: 0,
-  observedAt: new Date(1710000000 * 1000),
-  sources: [
-    { sourceName: 'direct', sourceUrl: 'https://source.example/raw-sentinel', sourceType: 'direct' as const, isActive: true },
-    { sourceName: 'magnet', sourceUrl: 'magnet:?xt=urn:btih/raw-sentinel', sourceType: 'magnet' as const, isActive: true },
-    { sourceName: 'inactive', sourceUrl: 'https://inactive.example/raw-sentinel', sourceType: 'TorrServer' as const, isActive: false },
-    { sourceName: 'blank', sourceUrl: '   ', sourceType: 'direct' as const, isActive: true },
-  ],
 }
 
 describe('repair source reconciliation', () => {

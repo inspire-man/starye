@@ -119,6 +119,10 @@ interface EventResult {
   readonly cancel_requested?: boolean
 }
 
+interface PostOptions {
+  readonly allowNonOk?: boolean
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -303,7 +307,7 @@ export class RunnerClient {
       source_revision: candidate.snapshot.sourceRevision,
       sources: input.sources,
       type: 'source_observation',
-    }) as Promise<RepairSourceObservationResponse>
+    }, { allowNonOk: true }) as Promise<RepairSourceObservationResponse>
   }
 
   async repairSourceObservation(candidate: RunnerCandidate, sequence: number, input: RepairSourceObservationInput): Promise<RepairSourceObservationResponse> {
@@ -329,7 +333,7 @@ export class RunnerClient {
     }) as Promise<EventResult>
   }
 
-  private async post(path: string, payload: Record<string, unknown>): Promise<unknown> {
+  private async post(path: string, payload: Record<string, unknown>, options: PostOptions = {}): Promise<unknown> {
     const body = JSON.stringify(payload)
     const response = await this.fetch(`${this.config.apiBaseUrl.replace(/\/$/u, '')}${path}`, {
       body,
@@ -341,7 +345,7 @@ export class RunnerClient {
       method: 'POST',
       signal: AbortSignal.timeout(this.timeoutMs),
     })
-    if (!response.ok) {
+    if (!response.ok && !options.allowNonOk) {
       throw new Error(`Runner control request failed: ${response.status}`)
     }
     return response.json()

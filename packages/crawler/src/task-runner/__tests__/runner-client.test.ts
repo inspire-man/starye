@@ -73,4 +73,36 @@ describe('runnerClient', () => {
     expect(JSON.stringify(terminalBody)).not.toContain('secret')
     expect(terminalBody).toMatchObject({ receipt: { movieId: 'movie-1', operation: 'repair_players', sourceRevision: 8 } })
   })
+
+  it('returns bounded repair observation failures from a controlled non-2xx response', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({
+      accepted: false,
+      errorCode: 'source_write_failed',
+      outcome: 'source_failed',
+      readback: null,
+    }), { status: 409 }))
+    const client = new RunnerClient({ apiBaseUrl: 'http://localhost:8080', callbackKeyId: 'key-1', callbackSecret: 'secret', fetch: fetch as never })
+    const candidate: Parameters<RunnerClient['observeRepairSource']>[0] = {
+      attempt: 1,
+      runId: 'run-repair-failed',
+      sequence: 2,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        movieId: 'movie-1',
+        operation: 'repair_players',
+        permissionResource: 'movie',
+        reason: 'no_source',
+        sourceRevision: 7,
+        targetIntent: 'restore_playable_sources',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+    }
+
+    await expect(client.observeRepairSource(candidate, 3, { sources: [] })).resolves.toMatchObject({
+      accepted: false,
+      errorCode: 'source_write_failed',
+      outcome: 'source_failed',
+    })
+  })
 })

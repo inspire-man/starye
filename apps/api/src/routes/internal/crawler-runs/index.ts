@@ -156,6 +156,7 @@ interface StoredRunnerEvent {
 interface RepairRunBinding {
   attempt_number: number
   last_event_sequence: number
+  state_version: number
   operation: string
   request_snapshot_json: string
   status: string
@@ -255,7 +256,8 @@ export function createCrawlerRunsRoutes(options: {
 
   async function readRepairRunBinding(c: Context<AppEnv>, runId: string): Promise<RepairRunBinding | undefined> {
     const result = await getD1(c).prepare(`
-      SELECT run.attempt_number, run.last_event_sequence, run.status, task.operation, task.request_snapshot_json, run.task_id
+      SELECT run.attempt_number, run.last_event_sequence, run.state_version,
+        run.status, task.operation, task.request_snapshot_json, run.task_id
       FROM crawler_run AS run
       INNER JOIN crawler_task AS task ON task.id = run.task_id
       WHERE run.id = ?
@@ -510,6 +512,9 @@ export function createCrawlerRunsRoutes(options: {
     if (event.sequence <= binding.last_event_sequence) {
       return reject('stale_event')
     }
+    if (event.sequence !== binding.last_event_sequence + 1) {
+      return reject('out_of_sequence_event')
+    }
 
     let snapshot: RepairPlayersTaskSnapshot | null = null
     try {
@@ -533,6 +538,8 @@ export function createCrawlerRunsRoutes(options: {
       db: c.get('db'),
       eventId: event.event_id,
       expectedSourceRevision: event.source_revision,
+      expectedRunStateVersion: binding.state_version,
+      expectedLastEventSequence: binding.last_event_sequence,
       gatewayCache: c.env.CACHE,
       movieId: snapshot.movieId,
       observedAt: new Date(event.observed_at * 1000),

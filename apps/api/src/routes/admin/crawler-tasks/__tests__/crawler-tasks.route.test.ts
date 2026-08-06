@@ -339,6 +339,29 @@ describe('admin crawler task routes', () => {
     expect(JSON.stringify(body)).not.toContain('ghs_hidden-value')
   })
 
+  it('leaves a locally runnable run queued when the provider is not configured', async () => {
+    crawlerTaskRepository.createOrGetActiveRun.mockResolvedValueOnce({
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'run-local', status: 'queued', taskId: 'task-local' },
+    })
+    const { app } = createApp()
+
+    const response = await app.request('/crawler-tasks', {
+      body: JSON.stringify({ template: 'movie' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      dispatch: { kind: 'provider_not_configured' },
+      run: { id: 'run-local', status: 'queued' },
+    })
+    expect(crawlerTaskRepository.ensureProviderAssociation).not.toHaveBeenCalled()
+    expect(crawlerTaskRepository.claimDispatch).not.toHaveBeenCalled()
+    expect(actionsClient.dispatchWorkflow).not.toHaveBeenCalled()
+  })
+
   it('requires confirmation and current repairable movie state before creating a repair_players task', async () => {
     const noConfirm = createApp()
     const noConfirmResponse = await noConfirm.app.request('/crawler-tasks/repair-players', {

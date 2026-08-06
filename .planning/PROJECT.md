@@ -32,7 +32,7 @@
 
 ## Current State
 
-v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations 和 receipt-backed content CRUD；v1.4 聚焦把成功入库继续闭环到可播放和可验证。
+v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations 和 receipt-backed content CRUD；v1.4 Phase 21 已完成本地 source health 与 repair_players control-plane vertical proof，后续继续闭环到播放状态与生产可验证性。
 
 **Latest archived milestone:** v1.3 后台爬虫任务与内容运维（2026-08-04，override closeout）
 
@@ -102,9 +102,13 @@ v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plan
 - ✓ 生产后台可受控编排 GitHub Actions，任务状态和最终入库结果会回写到后台。 — Phases 18-19
 - ✓ 后台可在爬取入库后管理视频、漫画内容的增删改，并完成端到端验收。 — Phases 17, 19
 
+### Validated in v1.4
+
+- ✓ 受控播放源可展示 bounded health/readback，并通过 canonical local Gateway 发起 `repair_players`，完成失败、重复、source observation、authoritative readback、receipt 和同电影 readiness 验证。 — Phase 21
+
 ### Active
 
-- [ ] 播放源抓取、校验与修复：新内容具备可播放源或明确的可修复无源状态，`SUN-064` 完成修复并读回验证。
+- [ ] 生产播放源修复与 reconciliation：生产 provider 执行恢复同一内容的播放源，并保留可追溯的 attempt、lease、callback 与 receipt。
 - [ ] 播放端状态闭环：MovieDetail / Player 对无源、失效、重试、回退和错误状态给出可操作反馈。
 - [ ] 生产链路证明：fresh production run 完成 Dashboard → Viewer → 实际播放，并产出 receipt、运行与修复证据。
 
@@ -213,4 +217,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-05 after v1.4 milestone definition*
+*Last updated: 2026-08-06 after Phase 21 completion*

@@ -37,10 +37,30 @@ export class LocalTaskRunner {
 
       this.activeRun = candidate
       let sequence = candidate.sequence + 1
+      let pendingSequence: number | undefined
       let cancelled = false
       const contentIds = new Set<string>()
+      const issueSequence = (): number => {
+        const issued = sequence++
+        pendingSequence = issued
+        return issued
+      }
+      const completeSequence = (issued: number): void => {
+        if (pendingSequence === issued)
+          pendingSequence = undefined
+      }
+      const terminalSequence = (): number => {
+        if (pendingSequence !== undefined) {
+          const issued = pendingSequence
+          pendingSequence = undefined
+          return issued
+        }
+        return issueSequence()
+      }
       const checkpoint = async () => {
-        const heartbeat = await this.options.client.heartbeat(candidate, sequence++)
+        const issued = issueSequence()
+        const heartbeat = await this.options.client.heartbeat(candidate, issued)
+        completeSequence(issued)
         cancelled = heartbeat.cancel_requested === true
         return cancelled
       }
@@ -51,29 +71,29 @@ export class LocalTaskRunner {
           candidate,
           checkpoint,
           client: this.options.client,
-          nextSequence: () => sequence++,
+          nextSequence: issueSequence,
           observe: contentId => contentIds.add(contentId),
         })
         for (const contentId of result.contentIds) contentIds.add(contentId)
 
         if (cancelled) {
-          await this.options.client.cancelled(candidate, sequence++)
+          await this.options.client.cancelled(candidate, terminalSequence())
         }
         else if (candidate.snapshot.operation === 'repair_players') {
           if (result.repairReceipt)
-            await this.options.client.succeededRepair(candidate, sequence++, result.repairReceipt)
+            await this.options.client.succeededRepair(candidate, terminalSequence(), result.repairReceipt)
           else
-            await this.options.client.failed(candidate, sequence++, result.failureCode ?? 'receipt_missing')
+            await this.options.client.failed(candidate, terminalSequence(), result.failureCode ?? 'receipt_missing')
         }
         else if (contentIds.size > 0) {
-          await this.options.client.succeeded(candidate, sequence++, [...contentIds])
+          await this.options.client.succeeded(candidate, terminalSequence(), [...contentIds])
         }
         else {
-          await this.options.client.failed(candidate, sequence++, 'receipt_missing')
+          await this.options.client.failed(candidate, terminalSequence(), 'receipt_missing')
         }
       }
       catch {
-        await this.options.client.failed(candidate, sequence++, 'runner_failed')
+        await this.options.client.failed(candidate, terminalSequence(), 'runner_failed')
       }
       finally {
         this.activeRun = undefined

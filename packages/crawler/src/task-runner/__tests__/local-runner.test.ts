@@ -147,4 +147,32 @@ describe('localTaskRunner', () => {
     expect(client.failed).toHaveBeenCalledWith(repairCandidate, 3, 'receipt_missing')
     expect(client.succeededRepair).not.toHaveBeenCalled()
   })
+
+  it('uses the pending adapter sequence when a repair observation fails before terminal acknowledgement', async () => {
+    const client = {
+      cancelled: vi.fn(),
+      claim: vi.fn().mockResolvedValue({ accepted: true }),
+      failed: vi.fn(),
+      heartbeat: vi.fn().mockResolvedValue({ accepted: true }),
+      poll: vi.fn().mockResolvedValue(repairCandidate),
+      succeeded: vi.fn(),
+      succeededRepair: vi.fn(),
+    }
+    const runner = new LocalTaskRunner({
+      adapters: { select: () => ({
+        execute: async ({ nextSequence }) => {
+          nextSequence?.()
+          throw new Error('source observation failed')
+        },
+        operation: 'repair_players' as const,
+        templateKey: 'movie' as const,
+      }) },
+      client: client as never,
+    })
+
+    await runner.runOnce()
+
+    expect(client.failed).toHaveBeenCalledWith(repairCandidate, 3, 'runner_failed')
+    expect(client.succeededRepair).not.toHaveBeenCalled()
+  })
 })

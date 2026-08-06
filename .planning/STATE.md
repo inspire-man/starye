@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: 播放可用性与生产自愈闭环
-current_phase: 21
-current_phase_name: Source Health And Local repair_players Vertical Slice
-status: executing
-stopped_at: Completed 21-06-PLAN.md
-last_updated: "2026-08-06T11:32:20.443Z"
+current_phase: 22
+current_phase_name: Dashboard, MovieDetail And Player State Closure
+status: planning
+stopped_at: Phase 21 complete, ready to plan Phase 22
+last_updated: "2026-08-06T23:00:00.000Z"
 last_activity: 2026-08-06
-last_activity_desc: Completed 21-05-PLAN.md; ready for Wave 5 UI work
+last_activity_desc: Phase 21 complete; canonical local Gateway repair_players proof passed and transitioned to Phase 22
 progress:
-  total_phases: 2
-  completed_phases: 1
+  total_phases: 5
+  completed_phases: 2
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State: Starye — 个人内容中台
@@ -27,18 +27,18 @@ See: `.planning/PROJECT.md` (updated 2026-08-05)
 
 ## Current Position
 
-Phase: 21 (Source Health And Local repair_players Vertical Slice) — EXECUTING
-Plan: 6 of 7
-Status: Ready to execute
-Last activity: 2026-08-06 — Completed 21-05-PLAN.md; ready for Wave 5 UI work
+Phase: 22 (Dashboard, MovieDetail And Player State Closure) — PLANNING
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-06 — Phase 21 complete; local Gateway repair_players proof passed
 
-Progress: ██░░░░░░░░ [█████████░] 90% (Phase 20: 100%)
+Progress: ████░░░░░░ [████████░░] 40% (Phase 20: 100%; Phase 21: 100%)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 3
+- Total plans completed: 10
 - Average duration: —
 - Total execution time: —
 
@@ -46,7 +46,8 @@ Progress: ██░░░░░░░░ [█████████░] 90% (P
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 20-24 | 3 | 3 | — |
+| 20 | 3 | 3 | — |
+| 21 | 7 | 7 | — |
 **Per-Plan Metrics:**
 
 | Plan | Duration | Tasks | Files |
@@ -56,6 +57,7 @@ Progress: ██░░░░░░░░ [█████████░] 90% (P
 | Phase 21 P02 | 33m | 2 tasks | 5 files |
 | Phase 21-source-health-and-local-repair-players-vertical-slice P03 | 32m | 2 tasks | 7 files |
 | Phase 21 P6 | 32m | 2 tasks | 5 files |
+| Phase 21 P7 | unmeasured-continuation | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -79,10 +81,11 @@ Recent decisions affecting current work:
 - [Phase ?]: repair transient source_read/source_write failures auto-retry once on the same task; manual retry always creates a new task after reread
 - [Phase ?]: Dashboard uses the existing repair task detail/readback as the source-health focal surface; the client never selects target, workflow, adapter, URL, command or secret fields.
 - [Phase ?]: MovieDetail remains informational and hands the same movie identity plus bounded reason to Dashboard without an admin mutation call.
+- [Phase ?]: 21-07 通过 active local D1 fixture 完成 canonical Gateway repair_players proof；local control-plane proof 与 production/provider/playback proof 保持分离。
 
 ### Pending Todos
 
-- [ ] Plan Phase 21 after Phase 20 closeout.
+- [ ] Plan Phase 22 after Phase 21 closeout.
 
 ### Blockers/Concerns
 
@@ -101,6 +104,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T11:32:20.429Z
-Stopped at: Completed 21-06-PLAN.md
+Last session: 2026-08-06T23:00:00.000Z
+Stopped at: Phase 21 complete, ready to plan Phase 22
 Resume file: None

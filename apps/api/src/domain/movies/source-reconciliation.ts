@@ -1,7 +1,8 @@
+import type { D1PreparedStatement } from '@cloudflare/workers-types'
 import type { Database } from '@starye/db'
 import type { SourceHealthReasonCode, SourceReadinessProjection, SourceType } from './source-contract'
 import { movieSourceObservations, movieSourceStates, players } from '@starye/db/schema'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { clearGatewayCacheGroup } from '../../lib/gateway-cache'
 import { deriveSourceReadiness, isEligiblePlayer, projectSourceHealth } from './source-contract'
 
@@ -26,6 +27,9 @@ export interface AcceptRepairSourceObservationInput {
   readonly runId: string
   readonly attemptNumber: number
   readonly sequence: number
+  /** The run CAS values immediately before accepting this source event. */
+  readonly expectedRunStateVersion?: number
+  readonly expectedLastEventSequence?: number
   readonly eventId: string
   /** The revision in the server-owned movie_source_state before this observation. */
   readonly expectedSourceRevision: number
@@ -108,6 +112,12 @@ interface PersistedSourceObservation {
 
 type ReconciliationDb = Pick<Database, 'query' | 'insert' | 'update' | 'delete'>
 
+interface BatchResult {
+  readonly meta?: {
+    readonly changes?: number
+  }
+}
+
 const MAX_REPAIR_SOURCE_ROWS = 50
 const MAX_REPAIR_FIELD_LENGTH = 4096
 
@@ -119,6 +129,19 @@ function boundedRevision(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000
     ? value
     : 0
+}
+
+function batchChanges(value: unknown): number {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return 0
+  const meta = (value as BatchResult).meta
+  return typeof meta?.changes === 'number' && Number.isSafeInteger(meta.changes)
+    ? meta.changes
+    : 0
+}
+
+function prepareNativeD1Statement(db: Database, query: ReturnType<ReturnType<Database['run']>['getQuery']>): D1PreparedStatement {
+  return db.$client.prepare(query.sql).bind(...query.params)
 }
 
 function observedSeconds(value: Date | number | null | undefined, fallback: number): number {
@@ -337,7 +360,7 @@ function failedObservationResult(
 
 /**
  * Accepts one server-validated repair observation. All player, fact, and
- * current-projection writes share one D1 transaction; public output is built
+ * current-projection writes share one native D1 batch; public output is built
  * only from the committed state and bounded observation facts.
  */
 export async function acceptRepairSourceObservation(
@@ -347,6 +370,7 @@ export async function acceptRepairSourceObservation(
   const observedAtDate = input.observedAt ?? now()
   const observedAt = seconds(observedAtDate)
   const currentRevision = boundedRevision(input.expectedSourceRevision)
+  const hasRunSequenceCas = input.expectedRunStateVersion !== undefined || input.expectedLastEventSequence !== undefined
   let persistedState: ExistingSourceState | undefined
 
   if (input.operation !== 'repair_players'
@@ -358,7 +382,13 @@ export async function acceptRepairSourceObservation(
     || !Number.isSafeInteger(input.sequence)
     || input.sequence < 1
     || !Number.isSafeInteger(input.expectedSourceRevision)
-    || input.expectedSourceRevision < 0) {
+    || input.expectedSourceRevision < 0
+    || (hasRunSequenceCas && (
+      !Number.isSafeInteger(input.expectedRunStateVersion)
+      || input.expectedRunStateVersion! < 0
+      || !Number.isSafeInteger(input.expectedLastEventSequence)
+      || input.expectedLastEventSequence! < 0
+    ))) {
     return failedObservationResult(failureProjection('source_write_failed', currentRevision, observedAt), 'source_write_failed')
   }
 
@@ -372,86 +402,204 @@ export async function acceptRepairSourceObservation(
   }
 
   try {
-    const writeResult = await input.db.transaction(async (tx) => {
-      persistedState = await readState(tx, input.movieId)
-      const existingObservation = await readObservationIdentity(tx, input)
-      if (existingObservation) {
-        return { kind: 'duplicate' as const, revision: boundedRevision(existingObservation.sourceRevision) }
-      }
+    persistedState = await readState(input.db, input.movieId)
+    const existingObservation = await readObservationIdentity(input.db, input)
+    let writeResult:
+      | { kind: 'accepted', revision: number, source: SourceReadinessProjection }
+      | { kind: 'duplicate', revision: number }
+      | { kind: 'stale', revision: number }
 
+    if (existingObservation) {
+      writeResult = { kind: 'duplicate', revision: boundedRevision(existingObservation.sourceRevision) }
+    }
+    else {
       const persistedRevision = boundedRevision(persistedState?.sourceRevision)
       if (persistedRevision !== currentRevision) {
-        return { kind: 'stale' as const, revision: persistedRevision }
-      }
-
-      const nextRevision = currentRevision + 1
-      const healthRows = sourceHealthRows(sources, observedAt)
-      const source = sourceReadinessFromRows(sources, healthRows, observedAt, nextRevision)
-
-      if (persistedState) {
-        const updateResult = await tx.update(movieSourceStates)
-          .set({
-            sourceRevision: source.sourceRevision,
-            disposition: source.disposition,
-            eligibleCount: source.eligibleCount,
-            repairable: source.repairable,
-            reasonCode: source.reasonCode,
-            observedAt: observedAtDate,
-          })
-          .where(and(
-            eq(movieSourceStates.movieId, input.movieId),
-            eq(movieSourceStates.sourceRevision, currentRevision),
-          ))
-        const changes = (updateResult as { meta?: { changes?: number } } | undefined)?.meta?.changes
-        if (changes === 0)
-          return { kind: 'stale' as const, revision: boundedRevision((await readState(tx, input.movieId))?.sourceRevision) }
+        writeResult = { kind: 'stale', revision: persistedRevision }
       }
       else {
-        await tx.insert(movieSourceStates).values({
+        const nextRevision = currentRevision + 1
+        const healthRows = sourceHealthRows(sources, observedAt)
+        const source = sourceReadinessFromRows(sources, healthRows, observedAt, nextRevision)
+        const playerValues = sources.map((source, index) => ({
+          id: crypto.randomUUID(),
           movieId: input.movieId,
-          sourceRevision: source.sourceRevision,
-          disposition: source.disposition,
-          eligibleCount: source.eligibleCount,
-          repairable: source.repairable,
-          reasonCode: source.reasonCode,
-          observedAt: observedAtDate,
-        })
+          sourceName: source.sourceName.trim().slice(0, 200) || 'repair-source',
+          sourceUrl: source.sourceUrl.trim(),
+          quality: source.quality?.slice(0, 200) ?? null,
+          sortOrder: source.sortOrder ?? index,
+          isActive: source.isActive !== false,
+        }))
+        const observationValues = healthRows.map((health, sourceOrdinal) => ({
+          id: crypto.randomUUID(),
+          movieId: input.movieId,
+          operation: input.operation,
+          runId: input.runId,
+          attemptNumber: input.attemptNumber,
+          sequence: input.sequence,
+          eventId: input.eventId,
+          sourceRevision: nextRevision,
+          sourceOrdinal,
+          sourceType: health.sourceType,
+          health: health.health,
+          observedAt,
+          reasonCode: health.reasonCode,
+          eligible: health.eligible,
+        }))
+        const statements = [
+          prepareNativeD1Statement(input.db, hasRunSequenceCas
+            ? input.db.run(sql`
+              INSERT INTO movie_source_state (
+                movie_id, source_revision, disposition, eligible_count,
+                repairable, reason_code, observed_at
+              )
+              SELECT
+                ${input.movieId}, ${source.sourceRevision}, ${source.disposition},
+                ${source.eligibleCount}, ${source.repairable ? 1 : 0},
+                ${source.reasonCode ?? null}, ${observedAt}
+              WHERE EXISTS (
+                SELECT 1 FROM crawler_run
+                WHERE id = ${input.runId}
+                  AND attempt_number = ${input.attemptNumber}
+                  AND status IN ('dispatching', 'running', 'cancel_requested')
+                  AND state_version = ${input.expectedRunStateVersion!}
+                  AND last_event_sequence = ${input.expectedLastEventSequence!}
+              )
+              ON CONFLICT(movie_id) DO UPDATE SET
+                source_revision = excluded.source_revision,
+                disposition = excluded.disposition,
+                eligible_count = excluded.eligible_count,
+                repairable = excluded.repairable,
+                reason_code = excluded.reason_code,
+                observed_at = excluded.observed_at
+              WHERE movie_source_state.source_revision = ${currentRevision}
+            `).getQuery()
+            : input.db.run(sql`
+              INSERT INTO movie_source_state (
+                movie_id, source_revision, disposition, eligible_count,
+                repairable, reason_code, observed_at
+              ) VALUES (
+                ${input.movieId}, ${source.sourceRevision}, ${source.disposition},
+                ${source.eligibleCount}, ${source.repairable ? 1 : 0},
+                ${source.reasonCode ?? null}, ${observedAt}
+              )
+              ON CONFLICT(movie_id) DO UPDATE SET
+                source_revision = excluded.source_revision,
+                disposition = excluded.disposition,
+                eligible_count = excluded.eligible_count,
+                repairable = excluded.repairable,
+                reason_code = excluded.reason_code,
+                observed_at = excluded.observed_at
+              WHERE movie_source_state.source_revision = ${currentRevision}
+            `).getQuery()),
+        ]
+
+        let acceptedStatementIndex = statements.length - 1
+        if (hasRunSequenceCas) {
+          statements.push(prepareNativeD1Statement(input.db, input.db.run(sql`
+            UPDATE crawler_run
+            SET state_version = ${input.expectedRunStateVersion! + 1},
+              last_event_sequence = ${input.sequence},
+              updated_at = ${observedAt}
+            WHERE changes() = 1
+              AND id = ${input.runId}
+              AND attempt_number = ${input.attemptNumber}
+              AND status IN ('dispatching', 'running', 'cancel_requested')
+              AND state_version = ${input.expectedRunStateVersion!}
+              AND last_event_sequence = ${input.expectedLastEventSequence!}
+          `).getQuery()))
+          acceptedStatementIndex = statements.length - 1
+          statements.push(prepareNativeD1Statement(input.db, input.db.run(sql`
+            INSERT INTO crawler_run_transition (
+              id, run_id, sequence, from_status, to_status,
+              reason_code, safe_summary, created_at
+            )
+            SELECT
+              ${crypto.randomUUID()}, id, ${input.expectedRunStateVersion! + 1},
+              status, status, 'repair_source_observation', NULL, ${observedAt}
+            FROM crawler_run
+            WHERE changes() = 1
+              AND id = ${input.runId}
+              AND state_version = ${input.expectedRunStateVersion! + 1}
+              AND last_event_sequence = ${input.sequence}
+          `).getQuery()))
+        }
+
+        if (observationValues.length > 0) {
+          for (const observation of observationValues) {
+            statements.push(prepareNativeD1Statement(input.db, input.db.run(sql`
+              INSERT INTO movie_source_observation (
+                id, movie_id, operation, run_id, attempt_number, sequence,
+                event_id, source_revision, source_ordinal, source_type,
+                health, observed_at, reason_code, eligible
+              )
+              SELECT
+                ${observation.id}, ${observation.movieId}, ${observation.operation},
+                ${observation.runId}, ${observation.attemptNumber}, ${observation.sequence},
+                ${observation.eventId}, ${observation.sourceRevision}, ${observation.sourceOrdinal},
+                ${observation.sourceType}, ${observation.health}, ${observation.observedAt},
+                ${observation.reasonCode}, ${observation.eligible ? 1 : 0}
+              WHERE changes() = 1
+            `).getQuery()))
+          }
+          statements.push(prepareNativeD1Statement(input.db, input.db.run(sql`
+            DELETE FROM player
+            WHERE movie_id = ${input.movieId}
+              AND ${hasRunSequenceCas ? sql`changes() = 1 AND` : sql``}
+              EXISTS (
+                  SELECT 1 FROM movie_source_observation
+                  WHERE movie_id = ${input.movieId}
+                    AND run_id = ${input.runId}
+                    AND event_id = ${input.eventId}
+                )
+          `).getQuery()))
+          for (const player of playerValues) {
+            statements.push(prepareNativeD1Statement(input.db, input.db.run(sql`
+              INSERT INTO player (
+                id, movie_id, source_name, source_url, quality, sort_order, is_active
+              )
+              SELECT
+                ${player.id}, ${player.movieId}, ${player.sourceName}, ${player.sourceUrl},
+                ${player.quality}, ${player.sortOrder}, ${player.isActive ? 1 : 0}
+              WHERE EXISTS (
+                SELECT 1 FROM movie_source_observation
+                WHERE movie_id = ${input.movieId}
+                  AND run_id = ${input.runId}
+                  AND event_id = ${input.eventId}
+              )
+                AND ${hasRunSequenceCas
+                  ? sql`EXISTS (
+                    SELECT 1 FROM crawler_run
+                    WHERE id = ${input.runId}
+                      AND state_version = ${input.expectedRunStateVersion! + 1}
+                      AND last_event_sequence = ${input.sequence}
+                  )`
+                  : sql`1 = 1`}
+            `).getQuery()))
+          }
+        }
+        else {
+          statements.push(prepareNativeD1Statement(input.db, input.db.run(sql`
+            DELETE FROM player
+            WHERE movie_id = ${input.movieId}
+              AND changes() = 1
+          `).getQuery()))
+        }
+
+        const batchResults = await input.db.$client.batch(statements)
+        if (batchChanges(batchResults[acceptedStatementIndex]) === 0) {
+          const currentState = await readState(input.db, input.movieId)
+          persistedState = currentState
+          const replayedObservation = await readObservationIdentity(input.db, input)
+          writeResult = replayedObservation
+            ? { kind: 'duplicate', revision: boundedRevision(replayedObservation.sourceRevision) }
+            : { kind: 'stale', revision: boundedRevision(currentState?.sourceRevision) }
+        }
+        else {
+          writeResult = { kind: 'accepted', revision: nextRevision, source }
+        }
       }
-
-      await tx.delete(players).where(eq(players.movieId, input.movieId))
-      const playerValues = sources.map((source, index) => ({
-        id: crypto.randomUUID(),
-        movieId: input.movieId,
-        sourceName: source.sourceName.trim().slice(0, 200) || 'repair-source',
-        sourceUrl: source.sourceUrl.trim(),
-        quality: source.quality?.slice(0, 200) ?? null,
-        sortOrder: source.sortOrder ?? index,
-        isActive: source.isActive !== false,
-      }))
-      if (playerValues.length > 0)
-        await tx.insert(players).values(playerValues)
-
-      const observationValues = healthRows.map((health, sourceOrdinal) => ({
-        id: crypto.randomUUID(),
-        movieId: input.movieId,
-        operation: input.operation,
-        runId: input.runId,
-        attemptNumber: input.attemptNumber,
-        sequence: input.sequence,
-        eventId: input.eventId,
-        sourceRevision: nextRevision,
-        sourceOrdinal,
-        sourceType: health.sourceType,
-        health: health.health,
-        observedAt: observedAtDate,
-        reasonCode: health.reasonCode,
-        eligible: health.eligible,
-      }))
-      if (observationValues.length > 0)
-        await tx.insert(movieSourceObservations).values(observationValues)
-
-      return { kind: 'accepted' as const, revision: nextRevision, source }
-    })
+    }
 
     const resultSource = writeResult.kind === 'accepted'
       ? writeResult.source

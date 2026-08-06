@@ -556,6 +556,12 @@ describe('crawler task repository', () => {
       sequence: 3,
     })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'failed' } })
 
+    const deterministicFailure = await client.execute({
+      args: [deterministic.run.id],
+      sql: 'SELECT failure_code FROM crawler_run WHERE id = ?',
+    })
+    expect(deterministicFailure.rows).toEqual([{ failure_code: 'receipt_missing' }])
+
     const deterministicRows = await client.execute({
       args: [deterministic.run.taskId],
       sql: 'SELECT attempt_number FROM crawler_run WHERE task_id = ? ORDER BY attempt_number',

@@ -123,4 +123,45 @@ describe('task runner template registry', () => {
     })
     expect(JSON.stringify(result)).not.toContain(rawSource)
   })
+
+  it('fails an empty repair source set before sending an observation', async () => {
+    let observationCalls = 0
+    let sequenceCalls = 0
+    const adapter = createRepairPlayersAdapter({ sources: [] })
+
+    const result = await adapter.execute({
+      candidate: {
+        attempt: 1,
+        runId: 'run-empty-repair',
+        sequence: 2,
+        snapshot: {
+          entrypoint: 'movie-crawler',
+          movieId: 'movie-1',
+          operation: 'repair_players',
+          permissionResource: 'movie',
+          reason: 'no_source',
+          sourceRevision: 7,
+          targetIntent: 'restore_playable_sources',
+          templateKey: 'movie',
+          templateVersion: 1,
+        },
+      },
+      checkpoint: async () => false,
+      client: {
+        observeRepairSource: async () => {
+          observationCalls += 1
+          throw new Error('observation should not be sent')
+        },
+      },
+      nextSequence: () => {
+        sequenceCalls += 1
+        return 3
+      },
+      observe: () => {},
+    })
+
+    expect(result).toEqual({ contentIds: [], failureCode: 'receipt_missing' })
+    expect(observationCalls).toBe(0)
+    expect(sequenceCalls).toBe(0)
+  })
 })
