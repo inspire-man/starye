@@ -354,6 +354,7 @@ export const jobs = sqliteTable('job', {
 export const crawlerTasks = sqliteTable('crawler_task', {
   id: text('id').primaryKey(),
   templateKey: text('template_key', { enum: ['movie', 'manga'] }).notNull(),
+  operation: text('operation', { enum: ['movie', 'manga', 'repair_players'] }).notNull().default('movie'),
   templateVersion: integer('template_version').notNull(),
   requestedByUserId: text('requested_by_user_id').notNull().references(() => user.id),
   requestSnapshotJson: text('request_snapshot_json', { mode: 'json' }).notNull(),
@@ -399,6 +400,46 @@ export const crawlerRuns = sqliteTable('crawler_run', {
 
 export type CrawlerRun = InferSelectModel<typeof crawlerRuns>
 export type NewCrawlerRun = InferInsertModel<typeof crawlerRuns>
+
+/** Append-only, bounded per-source facts keyed by the crawler event identity. */
+export const movieSourceObservations = sqliteTable('movie_source_observation', {
+  id: text('id').primaryKey(),
+  movieId: text('movie_id').notNull().references(() => movies.id, { onDelete: 'cascade' }),
+  operation: text('operation', { enum: ['source_read', 'repair_players'] }).notNull(),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id, { onDelete: 'cascade' }),
+  attemptNumber: integer('attempt_number').notNull(),
+  sequence: integer('sequence').notNull(),
+  eventId: text('event_id').notNull(),
+  sourceRevision: integer('source_revision').notNull(),
+  sourceOrdinal: integer('source_ordinal').notNull(),
+  sourceType: text('source_type', { enum: ['direct', 'magnet', 'TorrServer'] }).notNull(),
+  health: text('health', { enum: ['inactive', 'unverified', 'failed'] }).notNull(),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  reasonCode: text('reason_code', {
+    enum: ['source_inactive', 'source_unverified', 'source_candidate_invalid', 'source_read_failed', 'source_write_failed'],
+  }).notNull(),
+  eligible: integer('eligible', { mode: 'boolean' }).notNull(),
+}, table => [
+  uniqueIndex('idx_movie_source_observation_identity').on(
+    table.movieId,
+    table.sourceRevision,
+    table.operation,
+    table.runId,
+    table.attemptNumber,
+    table.sequence,
+    table.eventId,
+    table.sourceOrdinal,
+  ),
+  uniqueIndex('idx_movie_source_observation_run_event_source').on(
+    table.runId,
+    table.eventId,
+    table.sourceOrdinal,
+  ),
+  index('idx_movie_source_observation_movie_revision').on(table.movieId, table.sourceRevision),
+])
+
+export type MovieSourceObservation = InferSelectModel<typeof movieSourceObservations>
+export type NewMovieSourceObservation = InferInsertModel<typeof movieSourceObservations>
 
 /** Immutable GitHub Actions identity and bounded provider facts for one application run attempt. */
 export const crawlerRunProviderAssociations = sqliteTable('crawler_run_provider_association', {
@@ -658,6 +699,7 @@ export const movieRelations = relations(movies, ({ many, one }) => ({
   movieActors: many(movieActors),
   moviePublishers: many(moviePublishers),
   sourceState: one(movieSourceStates),
+  sourceObservations: many(movieSourceObservations),
 }))
 
 export const movieSourceStateRelations = relations(movieSourceStates, ({ one }) => ({
@@ -730,6 +772,18 @@ export const crawlerRunRelations = relations(crawlerRuns, ({ many, one }) => ({
   logs: many(crawlerRunLogs),
   providerAssociation: one(crawlerRunProviderAssociations),
   templateLease: one(crawlerTemplateLeases),
+  sourceObservations: many(movieSourceObservations),
+}))
+
+export const movieSourceObservationRelations = relations(movieSourceObservations, ({ one }) => ({
+  movie: one(movies, {
+    fields: [movieSourceObservations.movieId],
+    references: [movies.id],
+  }),
+  run: one(crawlerRuns, {
+    fields: [movieSourceObservations.runId],
+    references: [crawlerRuns.id],
+  }),
 }))
 
 export const crawlerRunProviderAssociationRelations = relations(crawlerRunProviderAssociations, ({ one }) => ({
