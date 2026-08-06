@@ -5,8 +5,8 @@ milestone_name: 播放可用性与生产自愈闭环
 current_phase: 21
 current_phase_name: Phase 21 of 5 planned phases
 status: planning
-stopped_at: Phase 20 complete, ready to plan Phase 21
-last_updated: "2026-08-05T13:37:13.631Z"
+stopped_at: Phase 21 context gathered
+last_updated: "2026-08-06T03:15:49.130Z"
 last_activity: 2026-08-05
 last_activity_desc: Phase 20 complete, transitioned to Phase 21
 progress:
@@ -86,6 +86,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-05T13:35:08.835Z
-Stopped at: Phase 20 complete, ready to plan Phase 21
-Resume file: None
+Last session: 2026-08-06T03:15:49.103Z
+Stopped at: Phase 21 context gathered
+Resume file: .planning/phases/21-source-health-and-local-repair-players-vertical-slice/21-CONTEXT.md
