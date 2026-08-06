@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { validateReceiptCandidate } from '../receipt-validation'
+import { createCrawlerTaskSnapshot } from '../template-registry'
 
 interface Row {
   id: string
@@ -25,6 +26,17 @@ interface SourceStateRow {
   repairable: number | boolean
   reason_code: string | null
   observed_at: number
+}
+
+interface ObservationRow {
+  movie_id: string
+  source_revision: number
+  source_ordinal: number
+  source_type: 'direct' | 'magnet' | 'TorrServer'
+  health: 'inactive' | 'unverified' | 'failed'
+  observed_at: number
+  reason_code: 'source_inactive' | 'source_unverified' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
+  eligible: number | boolean
 }
 
 class Statement {
@@ -67,6 +79,7 @@ function database(options: {
   comic?: Row[]
   players?: PlayerRow[]
   sourceStates?: SourceStateRow[]
+  observations?: ObservationRow[]
 }) {
   const rows = options
   return {
@@ -82,10 +95,68 @@ function database(options: {
         return new Statement(table, rows[table] ?? [], rows.players ?? [], rows.sourceStates ?? [])
       },
     },
+    query: {
+      movieSourceStates: {
+        async findFirst() {
+          const row = rows.sourceStates?.[0]
+          if (!row)
+            return undefined
+          return {
+            disposition: row.disposition,
+            observedAt: row.observed_at,
+            reasonCode: row.reason_code,
+            sourceRevision: row.source_revision,
+          }
+        },
+      },
+      movieSourceObservations: {
+        async findMany() {
+          return (rows.observations ?? []).map(row => ({
+            eligible: row.eligible,
+            health: row.health,
+            movieId: row.movie_id,
+            observedAt: row.observed_at,
+            operation: 'repair_players' as const,
+            reasonCode: row.reason_code,
+            sourceOrdinal: row.source_ordinal,
+            sourceRevision: row.source_revision,
+            sourceType: row.source_type,
+          }))
+        },
+      },
+      players: {
+        async findMany() {
+          return (rows.players ?? []).map(row => ({
+            isActive: row.is_active,
+            sourceUrl: row.source_url,
+          }))
+        },
+      },
+    },
   }
 }
 
 describe('validateReceiptCandidate', () => {
+  it('creates a server-owned repair_players snapshot bound to one movie and one revision', () => {
+    expect(createCrawlerTaskSnapshot({
+      movieId: 'movie-repair-1',
+      operation: 'repair_players',
+      reason: 'no_source',
+      sourceRevision: 9,
+      targetIntent: 'restore_playable_sources',
+    } as never)).toEqual({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-repair-1',
+      operation: 'repair_players',
+      permissionResource: 'movie',
+      reason: 'no_source',
+      sourceRevision: 9,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    })
+  })
+
   it('sUN-064 reads back zero players as no_source and repairable', async () => {
     const result = await validateReceiptCandidate({
       candidate: {
@@ -227,6 +298,154 @@ describe('validateReceiptCandidate', () => {
         updatedCount: 3,
       },
     })
+  })
+
+  it('accepts only repair receipts whose authoritative readback matches the same movie revision and observedAt', async () => {
+    const result = await validateReceiptCandidate({
+      candidate: {
+        movieId: 'movie-repair-7',
+        observedAt: 1_725_000_111,
+        operation: 'repair_players',
+        request: { token: 'request-raw-sentinel' },
+        runner: { stdout: 'runner-raw-sentinel' },
+        signature: 'signature-raw-sentinel',
+        source: { body: 'source-raw-sentinel' },
+        sourceRevision: 11,
+        sourceSummary: [
+          {
+            eligible: true,
+            health: 'unverified',
+            observedAt: 1_725_000_111,
+            reasonCode: 'source_unverified',
+            sourceType: 'direct',
+          },
+        ],
+      } as never,
+      database: database({
+        movie: [{ code: 'MOV-REPAIR-7', id: 'movie-repair-7' }],
+        observations: [{
+          eligible: 1,
+          health: 'unverified',
+          movie_id: 'movie-repair-7',
+          observed_at: 1_725_000_111,
+          reason_code: 'source_unverified',
+          source_ordinal: 0,
+          source_revision: 11,
+          source_type: 'direct',
+        }],
+        players: [{ is_active: 1, movie_id: 'movie-repair-7', source_url: 'https://source.example/raw-sentinel' }],
+        sourceStates: [{
+          disposition: 'ready',
+          eligible_count: 1,
+          movie_id: 'movie-repair-7',
+          observed_at: 1_725_000_111,
+          reason_code: null,
+          repairable: 0,
+          source_revision: 11,
+        }],
+      }) as never,
+      templateKey: 'movie',
+    } as never)
+
+    expect(result).toEqual({
+      ok: true,
+      receipt: {
+        movieId: 'movie-repair-7',
+        observedAt: 1_725_000_111,
+        operation: 'repair_players',
+        sourceRevision: 11,
+        sourceSummary: [
+          {
+            eligible: true,
+            health: 'unverified',
+            observedAt: 1_725_000_111,
+            reasonCode: 'source_unverified',
+            sourceType: 'direct',
+          },
+        ],
+      },
+    })
+    expect(JSON.stringify(result)).not.toContain('raw-sentinel')
+  })
+
+  it.each([
+    {
+      candidate: {
+        movieId: 'movie-repair-8',
+        observedAt: 1_725_000_112,
+        operation: 'movie',
+        sourceRevision: 12,
+        sourceSummary: [],
+      },
+      name: 'wrong operation',
+    },
+    {
+      candidate: {
+        movieId: 'movie-repair-8',
+        observedAt: 1_725_000_112,
+        operation: 'repair_players',
+        sourceRevision: 12,
+      },
+      name: 'missing summary',
+    },
+    {
+      candidate: {
+        movieId: 'movie-repair-8',
+        observedAt: 1_725_000_112,
+        operation: 'repair_players',
+        sourceRevision: 12,
+        sourceSummary: [
+          {
+            eligible: true,
+            health: 'unverified',
+            observedAt: 1_725_000_112,
+            reasonCode: 'source_unverified',
+            sourceType: 'direct',
+          },
+        ],
+      },
+      name: 'revision mismatch',
+      sourceRevision: 13,
+    },
+    {
+      candidate: {
+        contentIds: ['MOV-REPAIR-8'],
+        createdCount: 1,
+        sourceRevision: 12,
+        templateKey: 'movie',
+      },
+      name: 'ordinary receipt masquerading as repair',
+    },
+  ])('$name fails closed for repair validation', async ({ candidate, sourceRevision = 12 }) => {
+    const result = await validateReceiptCandidate({
+      candidate: candidate as never,
+      database: database({
+        movie: [{ code: 'MOV-REPAIR-8', id: 'movie-repair-8' }],
+        observations: [{
+          eligible: 1,
+          health: 'unverified',
+          movie_id: 'movie-repair-8',
+          observed_at: 1_725_000_112,
+          reason_code: 'source_unverified',
+          source_ordinal: 0,
+          source_revision: sourceRevision,
+          source_type: 'direct',
+        }],
+        players: [{ is_active: 1, movie_id: 'movie-repair-8', source_url: 'https://source.example/repair-8' }],
+        sourceStates: [{
+          disposition: 'ready',
+          eligible_count: 1,
+          movie_id: 'movie-repair-8',
+          observed_at: 1_725_000_112,
+          reason_code: null,
+          repairable: 0,
+          source_revision: sourceRevision,
+        }],
+      }) as never,
+      templateKey: 'movie',
+    } as never)
+
+    expect(result).toEqual({ ok: false, reason: 'receipt_missing' })
   })
 
   it.each([
