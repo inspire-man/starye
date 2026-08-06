@@ -275,6 +275,29 @@ describe('syncMovieData', () => {
       })
     })
 
+    it('uses active non-blank eligibility while ignoring inactive and blank candidates', async () => {
+      const db = createMockDb({ existingMovie: { id: 'existing-id', code: 'TEST-003' } })
+
+      const result = await syncMovieData({
+        db,
+        movies: [{
+          code: 'TEST-003',
+          title: '资格判断测试',
+          players: [
+            { sourceName: 'active', sourceUrl: 'https://source.example/active', isActive: true },
+            { sourceName: 'inactive', sourceUrl: 'https://source.example/inactive', isActive: false },
+            { sourceName: 'blank', sourceUrl: '   ', isActive: true },
+          ],
+        }],
+      })
+
+      expect(result.sourceStates[0]?.source).toMatchObject({
+        disposition: 'ready',
+        eligibleCount: 1,
+        repairable: false,
+      })
+    })
+
     it('players 未提供时不应该影响现有 players', async () => {
       const db = createMockDb({ existingMovie: { id: 'existing-id', code: 'TEST-001' } })
 
