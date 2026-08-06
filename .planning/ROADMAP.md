@@ -73,13 +73,31 @@ v1.4 将 v1.3 已验证的受控 crawler control plane 延伸到播放可用性�
 **Plans**: 7 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 21-01-PLAN.md — source health、repair operation contracts 与 Drizzle schema
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 21-02-PLAN.md — local D1 migration、observation persistence 与 authoritative readback
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 21-03-PLAN.md — operation registry、repair receipt 与 task lifecycle/CAS/retry
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 21-04-PLAN.md — admin repair command 与 signed runner callback routes
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 21-05-PLAN.md — local repair_players adapter 与 signed runner envelope
 - [ ] 21-06-PLAN.md — Dashboard confirmation/source health 与 MovieDetail handoff
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 21-07-PLAN.md — canonical Gateway local vertical proof 与全阶段 verification
+
 **UI hint**: yes
 
 ### Phase 22: Dashboard, MovieDetail And Player State Closure
