@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: 播放可用性与生产自愈闭环
 current_phase: 21
-current_phase_name: Phase 21 of 5 planned phases
+current_phase_name: Source Health And Local repair_players Vertical Slice
 status: executing
-stopped_at: Phase 21 context gathered
-last_updated: "2026-08-06T04:33:45.504Z"
-last_activity: 2026-08-05
-last_activity_desc: Phase 20 complete, transitioned to Phase 21
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-08-06T05:31:46.870Z"
+last_activity: 2026-08-06
+last_activity_desc: Phase 21 execution started
 progress:
-  total_phases: 5
+  total_phases: 2
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 10
+  completed_plans: 4
 ---
 
 # Project State: Starye — 个人内容中台
@@ -23,16 +23,16 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-08-05)
 
 **Core value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
-**Current focus:** v1.4 Phase 21 — Source Health And Local repair_players Vertical Slice
+**Current focus:** Phase 21 — Source Health And Local repair_players Vertical Slice
 
 ## Current Position
 
-Phase: 21 (2 of 5 planned phases)
-Plan: Not started
+Phase: 21 (Source Health And Local repair_players Vertical Slice) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-08-05 — Phase 20 complete, transitioned to Phase 21
+Last activity: 2026-08-06 — Phase 21 execution started
 
-Progress: ██░░░░░░░░ 20% (Phase 20: 100%)
+Progress: ██░░░░░░░░ [████░░░░░░] 40% (Phase 20: 100%)
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: ██░░░░░░░░ 20% (Phase 20: 100%)
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 20 P03 | 1h 20m | 3 tasks | 15 files |
+| Phase 21 P01 | 31m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,9 @@ Recent decisions affecting current work:
 - Production Puppeteer remains in GitHub Actions; the Dashboard exposes only server-owned repair templates and the v1.4 proof uses a fresh tuple.
 - [Phase 20]: Phase 20-03 将 metadata persisted、source readiness、receipt 和 browser playback proof 作为独立 typed projection 消费。
 - [Phase 20]: 标准 Player 只有在 server-owned ready、eligibleCount>0 且 active source 非空时进入 view tracking 与 xgplayer constructor。
+- [Phase ?]: Phase 21-01 keeps source readiness and browser playback proof independent from bounded per-source health; inactive rows remain visible but ineligible.
+- [Phase ?]: Phase 21-01 adds operation alongside templateKey for backward-compatible ordinary crawler snapshots and explicit repair_players discrimination.
+- [Phase ?]: Phase 21-01 binds append-only source observation uniqueness to canonical movie identity, source revision, operation, run, attempt, sequence, event, and source ordinal.
 
 ### Pending Todos
 
@@ -86,6 +90,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T03:15:49.103Z
-Stopped at: Phase 21 context gathered
-Resume file: .planning/phases/21-source-health-and-local-repair-players-vertical-slice/21-CONTEXT.md
+Last session: 2026-08-06T05:30:11.380Z
+Stopped at: Completed 21-01-PLAN.md
+Resume file: None
