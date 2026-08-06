@@ -70,7 +70,7 @@ v1.4 将 v1.3 已验证的受控 crawler control plane 延伸到播放可用性�
   2. 用户从已入库的 `no_source` 或 `source_failed` 电影发起修复时，只需选择受控电影身份、原因和目标意图；Dashboard 不要求也不暴露任意 URL、命令、workflow 或 secrets。
   3. 用户通过 `http://localhost:8080` 观察本地修复纵向链路时，能看到固定 `repair_players` 请求进入受控任务并返回同一电影的 source observation/readback；失败仍保留可解释的 repairable 状态和下一步动作。
 
-**Plans**: 1/7 plans executed
+**Plans**: 2/7 plans executed
 
 Plans:
 **Wave 1**
@@ -79,7 +79,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 21-02-PLAN.md — local D1 migration、observation persistence 与 authoritative readback
+- [x] 21-02-PLAN.md — local D1 migration、observation persistence 与 authoritative readback
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -149,7 +149,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Source Contract, Receipt Boundary And SUN-064 | 3/3 | Complete | 2026-08-05 |
-| 21. Source Health And Local repair_players Vertical Slice | 1/7 | In Progress|  |
+| 21. Source Health And Local repair_players Vertical Slice | 2/7 | In Progress|  |
 | 22. Dashboard, MovieDetail And Player State Closure | 0/TBD | Not started | - |
 | 23. GitHub Actions Production Repair And Reconciliation | 0/TBD | Not started | - |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | 0/TBD | Not started | - |
