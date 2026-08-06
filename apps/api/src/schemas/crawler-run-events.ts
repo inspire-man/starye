@@ -24,12 +24,49 @@ const RunnerEventFields = {
   timestamp: Timestamp,
 }
 
-export const CrawlerRunSnapshotSchema = v.strictObject({
+const RepairReceiptSchema = v.strictObject({
+  movieId: Identifier,
+  observedAt: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  operation: v.literal('repair_players'),
+  sourceRevision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  sourceSummary: v.pipe(v.array(v.strictObject({
+    eligible: v.boolean(),
+    health: v.picklist(['inactive', 'unverified', 'failed']),
+    observedAt: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    reasonCode: v.picklist([
+      'source_inactive',
+      'source_unverified',
+      'source_candidate_invalid',
+      'source_read_failed',
+      'source_write_failed',
+    ]),
+    sourceType: v.picklist(['direct', 'magnet', 'TorrServer']),
+  })), v.minLength(1), v.maxLength(50)),
+})
+
+const OrdinaryCrawlerRunSnapshotSchema = v.strictObject({
   entrypoint: v.picklist(['movie-crawler', 'manga-crawler']),
   permissionResource: v.picklist(['movie', 'comic']),
   templateKey: v.picklist(['movie', 'manga']),
   templateVersion: v.literal(1),
 })
+
+const RepairCrawlerRunSnapshotSchema = v.strictObject({
+  entrypoint: v.literal('movie-crawler'),
+  movieId: Identifier,
+  operation: v.literal('repair_players'),
+  permissionResource: v.literal('movie'),
+  reason: v.picklist(['no_source', 'source_failed']),
+  sourceRevision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  targetIntent: v.literal('restore_playable_sources'),
+  templateKey: v.literal('movie'),
+  templateVersion: v.literal(1),
+})
+
+export const CrawlerRunSnapshotSchema = v.union([
+  OrdinaryCrawlerRunSnapshotSchema,
+  RepairCrawlerRunSnapshotSchema,
+])
 
 export const CrawlerRunnerControlEnvelopeSchema = v.strictObject({
   event_id: Identifier,
@@ -115,12 +152,15 @@ export const CrawlerRunLifecycleEventSchema = v.strictObject({
   level: v.optional(v.picklist(['debug', 'info', 'warn', 'error'])),
   message: v.optional(v.pipe(v.string(), v.maxLength(16_384))),
   nonce: Identifier,
-  receipt: v.optional(v.strictObject({
-    contentIds: v.pipe(v.array(Identifier), v.minLength(1), v.maxLength(100)),
-    createdCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
-    templateKey: v.picklist(['movie', 'manga']),
-    updatedCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
-  })),
+  receipt: v.optional(v.union([
+    v.strictObject({
+      contentIds: v.pipe(v.array(Identifier), v.minLength(1), v.maxLength(100)),
+      createdCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
+      templateKey: v.picklist(['movie', 'manga']),
+      updatedCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
+    }),
+    RepairReceiptSchema,
+  ])),
   run_id: Identifier,
   sequence: Sequence,
   timestamp: Timestamp,

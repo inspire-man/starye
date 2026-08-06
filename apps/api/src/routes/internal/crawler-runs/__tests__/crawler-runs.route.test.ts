@@ -294,6 +294,35 @@ describe('signed crawler runner event route', () => {
     expect(heartbeatWithReceipt.status).toBe(400)
   })
 
+  it('accepts a bounded repair_players terminal receipt and forwards its discriminator', async () => {
+    const processor = createProcessor()
+    const response = await postEvent(createApp(processor), createEvent({
+      event_id: 'repair-terminal-event',
+      nonce: 'repair-terminal-nonce',
+      receipt: {
+        movieId: 'movie-1',
+        observedAt: 1_720_000_000,
+        operation: 'repair_players',
+        sourceRevision: 8,
+        sourceSummary: [{
+          eligible: true,
+          health: 'unverified',
+          observedAt: 1_720_000_000,
+          reasonCode: 'source_unverified',
+          sourceType: 'direct',
+        }],
+      },
+      sequence: 4,
+      type: 'succeeded',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(processor.processRunnerEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: expect.objectContaining({ type: 'runner_succeeded' }),
+      receipt: expect.objectContaining({ operation: 'repair_players', sourceRevision: 8 }),
+    }))
+  })
+
   it('accepts a signed repair source observation only for the bound repair run and returns bounded readback plus receipt candidate', async () => {
     repairSourceObservation.mockResolvedValueOnce({
       outcome: 'accepted',

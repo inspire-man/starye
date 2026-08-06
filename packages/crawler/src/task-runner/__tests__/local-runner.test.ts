@@ -9,6 +9,23 @@ const candidate: RunnerCandidate = {
   snapshot: { entrypoint: 'movie-crawler', permissionResource: 'movie', templateKey: 'movie', templateVersion: 1 },
 }
 
+const repairCandidate: RunnerCandidate = {
+  attempt: 1,
+  runId: 'repair-run-1',
+  sequence: 2,
+  snapshot: {
+    entrypoint: 'movie-crawler',
+    movieId: 'movie-1',
+    operation: 'repair_players',
+    permissionResource: 'movie',
+    reason: 'no_source',
+    sourceRevision: 7,
+    targetIntent: 'restore_playable_sources',
+    templateKey: 'movie',
+    templateVersion: 1,
+  },
+}
+
 describe('localTaskRunner', () => {
   it('keeps exactly one active run and does not poll again until terminal acknowledgement', async () => {
     const poll = vi.fn().mockResolvedValueOnce(candidate).mockResolvedValue(undefined)
@@ -65,5 +82,69 @@ describe('localTaskRunner', () => {
     await runner.runOnce()
     expect(client.cancelled).toHaveBeenCalledTimes(1)
     expect(client.succeeded).not.toHaveBeenCalled()
+  })
+
+  it('requires a dedicated repair receipt before sending a repair success event', async () => {
+    const client = {
+      cancelled: vi.fn(),
+      claim: vi.fn().mockResolvedValue({ accepted: true }),
+      failed: vi.fn(),
+      heartbeat: vi.fn().mockResolvedValue({ accepted: true }),
+      poll: vi.fn().mockResolvedValue(repairCandidate),
+      succeeded: vi.fn(),
+      succeededRepair: vi.fn(),
+    }
+    const receipt = {
+      movieId: 'movie-1',
+      observedAt: 1_720_000_000,
+      operation: 'repair_players' as const,
+      sourceRevision: 7,
+      sourceSummary: [{
+        eligible: true,
+        health: 'unverified' as const,
+        observedAt: 1_720_000_000,
+        reasonCode: 'source_unverified' as const,
+        sourceType: 'direct' as const,
+      }],
+    }
+    const runner = new LocalTaskRunner({
+      adapters: { select: () => ({
+        execute: async () => ({ contentIds: [], repairReceipt: receipt }),
+        operation: 'repair_players' as const,
+        templateKey: 'movie' as const,
+      }) },
+      client: client as never,
+    })
+
+    await runner.runOnce()
+
+    expect(client.succeededRepair).toHaveBeenCalledWith(repairCandidate, 3, receipt)
+    expect(client.succeeded).not.toHaveBeenCalled()
+    expect(client.failed).not.toHaveBeenCalled()
+  })
+
+  it('fails a repair run with a bounded receipt_missing result when readback is absent', async () => {
+    const client = {
+      cancelled: vi.fn(),
+      claim: vi.fn().mockResolvedValue({ accepted: true }),
+      failed: vi.fn(),
+      heartbeat: vi.fn().mockResolvedValue({ accepted: true }),
+      poll: vi.fn().mockResolvedValue(repairCandidate),
+      succeeded: vi.fn(),
+      succeededRepair: vi.fn(),
+    }
+    const runner = new LocalTaskRunner({
+      adapters: { select: () => ({
+        execute: async () => ({ contentIds: ['raw-runner-content-id'] }),
+        operation: 'repair_players' as const,
+        templateKey: 'movie' as const,
+      }) },
+      client: client as never,
+    })
+
+    await runner.runOnce()
+
+    expect(client.failed).toHaveBeenCalledWith(repairCandidate, 3, 'receipt_missing')
+    expect(client.succeededRepair).not.toHaveBeenCalled()
   })
 })

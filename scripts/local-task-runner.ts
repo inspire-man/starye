@@ -1,8 +1,10 @@
+import type { RepairSourceCandidate } from '../packages/crawler/src/task-runner/runner-client'
 import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { LocalTaskRunner } from '../packages/crawler/src/task-runner/local-runner'
 import { createMangaAdapter } from '../packages/crawler/src/task-runner/manga-adapter'
 import { createMovieAdapter } from '../packages/crawler/src/task-runner/movie-adapter'
+import { createRepairPlayersAdapter } from '../packages/crawler/src/task-runner/repair-adapter'
 import { RunnerClient } from '../packages/crawler/src/task-runner/runner-client'
 import { createTemplateAdapterRegistry } from '../packages/crawler/src/task-runner/template-adapters'
 
@@ -10,7 +12,11 @@ interface LocalRunnerConfig {
   readonly apiBaseUrl: string
   readonly callbackKeyId: string
   readonly callbackSecret: string
-  readonly crawler: { readonly manga: object, readonly movie: object }
+  readonly crawler: {
+    readonly manga: object
+    readonly movie: object
+    readonly repairPlayers?: { readonly sources: readonly RepairSourceCandidate[] }
+  }
 }
 
 async function loadLocalRunnerConfig(): Promise<LocalRunnerConfig> {
@@ -30,6 +36,7 @@ else {
   const adapters = createTemplateAdapterRegistry([
     createMovieAdapter(config.crawler.movie as never),
     createMangaAdapter(config.crawler.manga as never),
+    createRepairPlayersAdapter({ sources: config.crawler.repairPlayers?.sources }),
   ])
   const controller = new AbortController()
   process.once('SIGINT', () => controller.abort())

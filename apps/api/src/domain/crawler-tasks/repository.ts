@@ -1,6 +1,6 @@
 import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
-import type { CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
@@ -300,11 +300,80 @@ function toCrawlerTaskListItem(row: CrawlerTaskRow): CrawlerTaskListItem {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function parseRepairReceipt(
+  receipt: Record<string, unknown>,
+  persisted?: Pick<CrawlerRunRow, 'receipt_schema_version' | 'receipt_primary_content_id' | 'receipt_source_revision'>,
+): RepairPlayersReceipt | null {
+  const sourceSummary = receipt.sourceSummary
+  if (receipt.operation !== 'repair_players'
+    || typeof receipt.movieId !== 'string'
+    || !/^\w[\w-]{0,127}$/u.test(receipt.movieId)
+    || typeof receipt.observedAt !== 'number'
+    || !Number.isSafeInteger(receipt.observedAt)
+    || receipt.observedAt < 0
+    || receipt.observedAt > 4_000_000_000
+    || typeof receipt.sourceRevision !== 'number'
+    || !Number.isSafeInteger(receipt.sourceRevision)
+    || receipt.sourceRevision < 0
+    || receipt.sourceRevision > 1_000_000
+    || !Array.isArray(sourceSummary)
+    || sourceSummary.length < 1
+    || sourceSummary.length > 50
+    || (persisted?.receipt_schema_version !== null
+      && persisted?.receipt_schema_version !== undefined
+      && persisted.receipt_schema_version !== 2)
+    || (persisted?.receipt_primary_content_id
+      && persisted.receipt_primary_content_id !== receipt.movieId)
+    || (persisted?.receipt_source_revision !== null
+      && persisted?.receipt_source_revision !== undefined
+      && persisted.receipt_source_revision !== receipt.sourceRevision)) {
+    return null
+  }
+
+  const boundedSummary: RepairPlayersReceipt['sourceSummary'][number][] = []
+  for (const source of sourceSummary) {
+    if (!isRecord(source)
+      || typeof source.eligible !== 'boolean'
+      || (source.health !== 'inactive' && source.health !== 'unverified' && source.health !== 'failed')
+      || typeof source.observedAt !== 'number'
+      || !Number.isSafeInteger(source.observedAt)
+      || source.observedAt < 0
+      || source.observedAt > 4_000_000_000
+      || (source.reasonCode !== 'source_inactive'
+        && source.reasonCode !== 'source_unverified'
+        && source.reasonCode !== 'source_candidate_invalid'
+        && source.reasonCode !== 'source_read_failed'
+        && source.reasonCode !== 'source_write_failed')
+      || (source.sourceType !== 'direct' && source.sourceType !== 'magnet' && source.sourceType !== 'TorrServer')) {
+      return null
+    }
+    boundedSummary.push({
+      eligible: source.eligible,
+      health: source.health,
+      observedAt: source.observedAt,
+      reasonCode: source.reasonCode,
+      sourceType: source.sourceType,
+    })
+  }
+
+  return {
+    movieId: receipt.movieId,
+    observedAt: receipt.observedAt,
+    operation: 'repair_players',
+    sourceRevision: receipt.sourceRevision,
+    sourceSummary: boundedSummary,
+  }
+}
+
 function parseValidatedReceipt(
   status: CrawlerRunStatus,
   raw: string | null,
   persisted?: Pick<CrawlerRunRow, 'receipt_schema_version' | 'receipt_primary_content_id' | 'receipt_source_revision'>,
-): ValidatedCrawlerRunReceipt | null {
+): CrawlerReceiptUnion | null {
   if (status !== 'succeeded' || !raw)
     return null
   try {
@@ -312,6 +381,8 @@ function parseValidatedReceipt(
     if (!value || typeof value !== 'object' || Array.isArray(value))
       return null
     const receipt = value as Record<string, unknown>
+    if (receipt.operation === 'repair_players')
+      return parseRepairReceipt(receipt, persisted)
     if ((receipt.templateKey !== 'movie' && receipt.templateKey !== 'manga')
       || typeof receipt.primaryContentId !== 'string'
       || !/^\w[\w-]{0,127}$/u.test(receipt.primaryContentId)
@@ -621,6 +692,17 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       reason: row.disposition,
       sourceRevision: row.source_revision,
     }
+  }
+
+  async function readCurrentSourceRevision(movieId: string): Promise<number | undefined> {
+    const result = await d1.prepare(`
+      SELECT source_revision
+      FROM movie_source_state
+      WHERE movie_id = ?
+      LIMIT 1
+    `).bind(movieId).all<{ readonly source_revision: number | null }>()
+    const revision = result.results?.[0]?.source_revision
+    return typeof revision === 'number' && Number.isSafeInteger(revision) && revision >= 0 ? revision : undefined
   }
 
   function parseTaskSnapshot(raw: string, operation: CrawlerTaskOperation): CrawlerTaskSnapshotUnion {
@@ -1443,11 +1525,11 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
     if (isRepairSnapshot(snapshot) && input.event.type === 'runner_succeeded') {
       const repairReceipt = isRepairReceiptCandidate(input.receipt) ? input.receipt : undefined
-      const currentState = repairReceipt ? await readRepairTaskState(snapshot.movieId) : undefined
+      const currentRevision = repairReceipt ? await readCurrentSourceRevision(snapshot.movieId) : undefined
       const repairMatchesTask = repairReceipt
         && repairReceipt.movieId === snapshot.movieId
-        && repairReceipt.sourceRevision === snapshot.sourceRevision
-        && currentState?.sourceRevision === snapshot.sourceRevision
+        && repairReceipt.sourceRevision > snapshot.sourceRevision
+        && currentRevision === repairReceipt.sourceRevision
       if (!repairMatchesTask) {
         const outcome = { accepted: false, reason: 'repair_source_revision_conflict' }
         await recordRunnerEvent({

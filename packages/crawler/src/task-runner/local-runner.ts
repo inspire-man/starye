@@ -50,12 +50,20 @@ export class LocalTaskRunner {
         const result = await adapter.execute({
           candidate,
           checkpoint,
+          client: this.options.client,
+          nextSequence: () => sequence++,
           observe: contentId => contentIds.add(contentId),
         })
         for (const contentId of result.contentIds) contentIds.add(contentId)
 
         if (cancelled) {
           await this.options.client.cancelled(candidate, sequence++)
+        }
+        else if (candidate.snapshot.operation === 'repair_players') {
+          if (result.repairReceipt)
+            await this.options.client.succeededRepair(candidate, sequence++, result.repairReceipt)
+          else
+            await this.options.client.failed(candidate, sequence++, result.failureCode ?? 'receipt_missing')
         }
         else if (contentIds.size > 0) {
           await this.options.client.succeeded(candidate, sequence++, [...contentIds])

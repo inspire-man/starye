@@ -131,7 +131,7 @@ export interface CrawlerRunReadModel {
   readonly terminalAt: number | null
   readonly updatedAt: number
   readonly provider: ProviderAssociationSummary | null
-  readonly receipt: ValidatedCrawlerRunReceipt | null
+  readonly receipt: CrawlerReceiptUnion | null
 }
 
 export interface CrawlerTaskDetailReadModel {
@@ -168,9 +168,6 @@ export interface CrawlerRunReceiptCandidate {
   readonly updatedCount?: number
 }
 
-/** Backwards-compatible candidate name used by the state machine/event envelope. */
-export type CrawlerRunReceipt = CrawlerRunReceiptCandidate
-
 export interface ValidatedCrawlerRunReceipt {
   readonly createdCount: number
   readonly primaryContentId: string
@@ -190,6 +187,9 @@ export interface RepairPlayersReceipt {
 }
 
 export type CrawlerReceiptUnion = ValidatedCrawlerRunReceipt | RepairPlayersReceipt
+
+/** Runner terminal candidate union; API validation turns it into CrawlerReceiptUnion. */
+export type CrawlerRunReceipt = CrawlerRunReceiptCandidate | RepairPlayersReceipt
 
 export type CrawlerRunTransitionEvent
   = | { readonly actor: 'admin', readonly type: 'admin_cancel' }

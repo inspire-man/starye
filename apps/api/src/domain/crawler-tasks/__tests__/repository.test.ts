@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import { createClient } from '@libsql/client'
 import { createDb } from '@starye/db'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { readRepairSourceReadback } from '../../movies/source-reconciliation'
+import { validateReceiptCandidate } from '../receipt-validation'
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor } from '../repository'
 import {
   CRAWLER_MAX_NORMAL_LOG_ROWS,
@@ -39,6 +41,12 @@ class LibsqlStatement {
       meta: { changes: result.rowsAffected },
       results: [],
     }
+  }
+
+  async raw<T>(): Promise<T[]> {
+    const result = await this.client.execute({ args: this.values, sql: this.sql })
+    const columns = result.columns ?? []
+    return result.rows.map(row => columns.map(column => (row as Record<string, unknown>)[column])) as T[]
   }
 
   toStatement(): InStatement {
@@ -141,6 +149,7 @@ async function createTestDatabase() {
 
 describe('crawler task repository', () => {
   let client: Client
+  let database: ReturnType<typeof createDb>
   let repository: ReturnType<typeof createCrawlerTaskRepository>
   let nextId: number
   let now: Date
@@ -148,6 +157,7 @@ describe('crawler task repository', () => {
   beforeEach(async () => {
     const testDb = await createTestDatabase()
     client = testDb.client
+    database = testDb.db
     nextId = 0
     now = new Date('2026-07-30T00:00:00.000Z')
     repository = createCrawlerTaskRepository(testDb.db, {
@@ -364,6 +374,98 @@ describe('crawler task repository', () => {
     })
 
     await expect(repository.getRun(created.run.id)).resolves.toMatchObject({ status: 'running' })
+  })
+
+  it('accepts a repair terminal receipt only after the current source revision and authoritative observation readback advance', async () => {
+    await client.execute({
+      args: ['movie-repair-success', 'Repair movie success', 'repair-movie-success', 'MOV-REPAIR-SUCCESS', 0, 0],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    await client.execute({
+      args: ['movie-repair-success', 7, 'source_failed', 0, 1, 'source_write_failed', 1_725_000_320],
+      sql: 'INSERT INTO movie_source_state (movie_id, source_revision, disposition, eligible_count, repairable, reason_code, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    })
+    const created = await repository.createOrGetActiveRun({
+      movieId: 'movie-repair-success',
+      operation: 'repair_players',
+      reason: 'source_failed',
+      requestedByUserId: 'admin-1',
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    } as never)
+    if (created.kind !== 'created')
+      throw new Error('expected created repair run')
+
+    await repository.claimDispatch(created.run.id)
+    await repository.renewLease(created.run.id, 2)
+    await client.execute({
+      args: [8, 'ready', 1, 0, null, 1_725_000_321, 'movie-repair-success'],
+      sql: 'UPDATE movie_source_state SET source_revision = ?, disposition = ?, eligible_count = ?, repairable = ?, reason_code = ?, observed_at = ? WHERE movie_id = ?',
+    })
+    await client.execute({
+      args: ['observation-success', 'movie-repair-success', 'repair_players', created.run.id, 1, 3, 'repair-success-event', 8, 0, 'direct', 'unverified', 1_725_000_321, 'source_unverified', 1],
+      sql: `INSERT INTO movie_source_observation (
+        id, movie_id, operation, run_id, attempt_number, sequence, event_id,
+        source_revision, source_ordinal, source_type, health, observed_at,
+        reason_code, eligible
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    })
+
+    const receipt = {
+      movieId: 'movie-repair-success',
+      observedAt: 1_725_000_321,
+      operation: 'repair_players' as const,
+      sourceRevision: 8,
+      sourceSummary: [{
+        eligible: true,
+        health: 'unverified' as const,
+        observedAt: 1_725_000_321,
+        reasonCode: 'source_unverified' as const,
+        sourceType: 'direct' as const,
+      }],
+    }
+    const readback = await readRepairSourceReadback({ db: database as never, movieId: 'movie-repair-success', sourceRevision: 8 })
+    expect(readback).toEqual({
+      movieId: 'movie-repair-success',
+      observedAt: 1_725_000_321,
+      sourceRevision: 8,
+      sources: receipt.sourceSummary,
+      summary: { eligibleCount: 1, sourceCount: 1 },
+    })
+    await expect(validateReceiptCandidate({
+      candidate: receipt,
+      database,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        movieId: 'movie-repair-success',
+        operation: 'repair_players',
+        permissionResource: 'movie',
+        reason: 'source_failed',
+        sourceRevision: 7,
+        targetIntent: 'restore_playable_sources',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+      templateKey: 'movie',
+    })).resolves.toEqual({ ok: true, receipt })
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'repair-success-body',
+      event: { actor: 'runner', receipt, sequence: 3, type: 'runner_succeeded' },
+      eventId: 'repair-success-event',
+      keyId: 'key-current',
+      nonce: 'repair-success-nonce',
+      receipt,
+      runId: created.run.id,
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'succeeded' } })
+
+    await expect(repository.getTaskDetail(created.run.taskId)).resolves.toMatchObject({
+      runs: [expect.objectContaining({
+        receipt: expect.objectContaining({ movieId: 'movie-repair-success', sourceRevision: 8 }),
+        status: 'succeeded',
+      })],
+    })
   })
 
   it('schedules at most one automatic repair retry for transient source failures and leaves deterministic failures terminal', async () => {
