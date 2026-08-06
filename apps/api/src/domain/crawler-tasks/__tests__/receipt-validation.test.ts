@@ -415,8 +415,15 @@ describe('validateReceiptCandidate', () => {
         templateKey: 'movie',
       },
       name: 'ordinary receipt masquerading as repair',
+      snapshot: {
+        movieId: 'movie-repair-8',
+        operation: 'repair_players',
+        reason: 'source_failed',
+        sourceRevision: 12,
+        targetIntent: 'restore_playable_sources',
+      },
     },
-  ])('$name fails closed for repair validation', async ({ candidate, sourceRevision = 12 }) => {
+  ])('$name fails closed for repair validation', async ({ candidate, snapshot, sourceRevision = 12 }) => {
     const result = await validateReceiptCandidate({
       candidate: candidate as never,
       database: database({
@@ -442,6 +449,7 @@ describe('validateReceiptCandidate', () => {
           source_revision: sourceRevision,
         }],
       }) as never,
+      snapshot: snapshot ? createCrawlerTaskSnapshot(snapshot as never) : undefined,
       templateKey: 'movie',
     } as never)
 

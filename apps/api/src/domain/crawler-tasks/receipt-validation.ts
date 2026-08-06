@@ -1,18 +1,12 @@
-import type { SourceCandidate } from '../movies/source-contract'
-import type { CrawlerRunReceiptCandidate, CrawlerTaskTemplateKey, ValidatedCrawlerRunReceipt } from './types'
+import type { Database } from '@starye/db'
+import type { SourceCandidate, SourceHealthProjection } from '../movies/source-contract'
+import type { CrawlerReceiptUnion, CrawlerRunReceiptCandidate, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, RepairPlayersReceipt } from './types'
 import { deriveSourceReadiness } from '../movies/source-contract'
+import { readRepairSourceReadback } from '../movies/source-reconciliation'
+import { readCrawlerTaskSnapshot } from './template-registry'
 import { CRAWLER_RECEIPT_SCHEMA_VERSION } from './types'
 
-interface D1Statement {
-  all: <T>() => Promise<{ results?: T[] }>
-  bind: (...values: unknown[]) => D1Statement
-}
-
-interface ReceiptValidationDatabase {
-  readonly $client: {
-    prepare: (query: string) => D1Statement
-  }
-}
+type ReceiptValidationDatabase = Pick<Database, '$client' | 'query'>
 
 interface MovieReceiptRow {
   readonly code: string | null
@@ -40,7 +34,7 @@ interface ComicReceiptRow {
 
 export type ReceiptValidationResult
   = | { readonly ok: false, readonly reason: 'receipt_missing' }
-    | { readonly ok: true, readonly receipt: ValidatedCrawlerRunReceipt }
+    | { readonly ok: true, readonly receipt: CrawlerReceiptUnion }
 
 function safeCount(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 1_000_000
@@ -72,6 +66,93 @@ function hasComicAggregate(row: ComicReceiptRow): boolean {
 
 function missing(): ReceiptValidationResult {
   return { ok: false, reason: 'receipt_missing' }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isSourceHealthProjection(value: unknown): value is SourceHealthProjection {
+  return isRecord(value)
+    && typeof value.eligible === 'boolean'
+    && (value.health === 'inactive' || value.health === 'unverified' || value.health === 'failed')
+    && safeTimestamp(value.observedAt, -1) >= 0
+    && (value.reasonCode === 'source_inactive'
+      || value.reasonCode === 'source_unverified'
+      || value.reasonCode === 'source_candidate_invalid'
+      || value.reasonCode === 'source_read_failed'
+      || value.reasonCode === 'source_write_failed')
+    && (value.sourceType === 'direct' || value.sourceType === 'magnet' || value.sourceType === 'TorrServer')
+}
+
+interface RepairReceiptCandidate {
+  readonly movieId: string
+  readonly observedAt: number
+  readonly operation: 'repair_players'
+  readonly sourceRevision: number
+  readonly sourceSummary: readonly SourceHealthProjection[]
+}
+
+function asRepairReceiptCandidate(candidate: unknown): RepairReceiptCandidate | undefined {
+  if (!isRecord(candidate)
+    || candidate.operation !== 'repair_players'
+    || typeof candidate.movieId !== 'string'
+    || candidate.movieId.trim().length === 0
+    || !Number.isSafeInteger(candidate.observedAt)
+    || candidate.observedAt < 0
+    || !Number.isSafeInteger(candidate.sourceRevision)
+    || candidate.sourceRevision < 0
+    || !Array.isArray(candidate.sourceSummary)
+    || candidate.sourceSummary.length === 0
+    || !candidate.sourceSummary.every(isSourceHealthProjection)) {
+    return undefined
+  }
+
+  return {
+    movieId: candidate.movieId.trim(),
+    observedAt: candidate.observedAt,
+    operation: 'repair_players',
+    sourceRevision: candidate.sourceRevision,
+    sourceSummary: candidate.sourceSummary,
+  }
+}
+
+function repairReceiptFromReadback(candidate: RepairReceiptCandidate, readback: Awaited<ReturnType<typeof readRepairSourceReadback>>): RepairPlayersReceipt | undefined {
+  if (readback.movieId !== candidate.movieId
+    || readback.sourceRevision !== candidate.sourceRevision
+    || readback.observedAt !== candidate.observedAt
+    || readback.sources.length !== candidate.sourceSummary.length) {
+    return undefined
+  }
+
+  const summary = readback.sources.map(source => ({
+    eligible: source.eligible,
+    health: source.health,
+    observedAt: source.observedAt,
+    reasonCode: source.reasonCode,
+    sourceType: source.sourceType,
+  }))
+
+  for (let index = 0; index < summary.length; index += 1) {
+    const expected = candidate.sourceSummary[index]
+    const actual = summary[index]
+    if (!expected
+      || expected.eligible !== actual.eligible
+      || expected.health !== actual.health
+      || expected.observedAt !== actual.observedAt
+      || expected.reasonCode !== actual.reasonCode
+      || expected.sourceType !== actual.sourceType) {
+      return undefined
+    }
+  }
+
+  return {
+    movieId: readback.movieId,
+    observedAt: readback.observedAt,
+    operation: 'repair_players',
+    sourceRevision: readback.sourceRevision,
+    sourceSummary: summary,
+  }
 }
 
 async function readMovieSource(
@@ -125,10 +206,43 @@ async function readMovieSource(
 export async function validateReceiptCandidate(input: {
   readonly candidate: CrawlerRunReceiptCandidate | undefined
   readonly database: ReceiptValidationDatabase
+  readonly snapshot?: CrawlerTaskSnapshotUnion | unknown
   readonly templateKey: CrawlerTaskTemplateKey
 }): Promise<ReceiptValidationResult> {
   const candidate = input.candidate
-  if (!candidate || candidate.templateKey !== input.templateKey)
+  if (!candidate)
+    return missing()
+
+  const snapshot = input.snapshot === undefined
+    ? undefined
+    : readCrawlerTaskSnapshot(input.snapshot)
+  if (snapshot && !snapshot.ok)
+    return missing()
+
+  const repairCandidate = asRepairReceiptCandidate(candidate)
+  if (repairCandidate) {
+    if (input.templateKey !== 'movie')
+      return missing()
+    if (snapshot && snapshot.operation !== 'repair_players')
+      return missing()
+
+    try {
+      const readback = await readRepairSourceReadback({
+        db: input.database,
+        movieId: repairCandidate.movieId,
+        sourceRevision: repairCandidate.sourceRevision,
+      })
+      const receipt = repairReceiptFromReadback(repairCandidate, readback)
+      return receipt ? { ok: true, receipt } : missing()
+    }
+    catch {
+      return missing()
+    }
+  }
+
+  if (!('templateKey' in candidate) || candidate.templateKey !== input.templateKey)
+    return missing()
+  if (snapshot && snapshot.operation === 'repair_players')
     return missing()
 
   const ids = candidateIds(candidate)
