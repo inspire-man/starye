@@ -42,6 +42,10 @@ patterns-established:
 
 requirements-completed: [SRC-02, REP-01]
 
+duration: 33m
+completed: 2026-08-06
+status: complete
+
 coverage:
   - id: D1
     description: "Local D1 contains crawler operation, movie source observation facts, foreign keys, and replay indexes."
