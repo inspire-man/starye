@@ -12,6 +12,7 @@ const {
   addMagnetTaskMock,
   resolveTrustedOriginsMock,
   xgPlayerCtor,
+  playerInstances,
 } = vi.hoisted(() => ({
   routeState: {
     params: { code: 'REBD-1024' },
@@ -25,6 +26,12 @@ const {
   addMagnetTaskMock: vi.fn(),
   resolveTrustedOriginsMock: vi.fn(),
   xgPlayerCtor: vi.fn(),
+  playerInstances: [] as Array<{
+    handlers: Record<string, () => void>
+    currentTime: number
+    duration: number
+    destroy: ReturnType<typeof vi.fn>
+  }>,
 }))
 
 vi.mock('vue-router', () => ({
@@ -43,10 +50,15 @@ vi.mock('vue-router', () => ({
 vi.mock('xgplayer', () => ({
   default: function MockXgPlayer(this: any, options: unknown) {
     xgPlayerCtor(options)
-    this.on = vi.fn()
+    const handlers: Record<string, () => void> = {}
+    this.handlers = handlers
+    this.on = vi.fn((event: string, handler: () => void) => {
+      handlers[event] = handler
+    })
     this.destroy = vi.fn()
     this.currentTime = 0
     this.duration = 0
+    playerInstances.push(this)
   },
 }))
 
@@ -84,6 +96,7 @@ vi.mock('../../utils/playerSecurity', async () => {
 describe('player.vue security gates', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    playerInstances.length = 0
     routeState.params.code = 'REBD-1024'
     routeState.query = {
       streamUrl: 'http://127.0.0.1:8090/stream/video?link=magnet%3Aabc&index=0&play=',
@@ -241,5 +254,162 @@ describe('player.vue security gates', () => {
 
     expect(xgPlayerCtor).toHaveBeenCalledOnce()
     expect(trackViewMock).toHaveBeenCalledWith('REBD-1024')
+  })
+
+  it('standard Player selects the first eligible direct source in server order', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        title: 'Direct-first source fixture',
+        players: [
+          { id: 'magnet-high', sourceName: '高分磁力', sourceUrl: 'magnet:?xt=urn:btih:high', isActive: true, averageRating: 5 },
+          { id: 'inactive-direct', sourceName: '失效直连', sourceUrl: 'https://inactive.example/video', isActive: false },
+          { id: 'direct-first', sourceName: '服务端首个直连', sourceUrl: 'https://media.example/first.mp4', isActive: true },
+          { id: 'direct-second', sourceName: '服务端第二个直连', sourceUrl: 'https://media.example/second.mp4', isActive: true },
+        ],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-direct-first', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-direct-first', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 3, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 4 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+
+    expect(xgPlayerCtor).toHaveBeenCalledOnce()
+    expect(xgPlayerCtor.mock.calls[0][0]).toMatchObject({ url: 'https://media.example/first.mp4' })
+    expect(wrapper.text()).not.toContain('当前播放源不可直接播放')
+    wrapper.unmount()
+  })
+
+  it('explicit magnet player query returns to the same MovieDetail without constructing xgplayer', async () => {
+    routeState.query = { player: 'magnet-1' }
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        title: 'Magnet entry fixture',
+        players: [
+          { id: 'direct-1', sourceName: '直连', sourceUrl: 'https://media.example/video.mp4', isActive: true },
+          { id: 'magnet-1', sourceName: '磁力', sourceUrl: 'magnet:?xt=urn:btih:magnet', isActive: true },
+        ],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-magnet-entry', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-magnet-entry', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 2, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 4 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-source-state="source-invalid"]').text()).toContain('当前播放源不可直接播放')
+    expect(pushMock).toHaveBeenCalledWith('/movie/REBD-1024')
+    expect(xgPlayerCtor).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('magnet-only standard selection returns to MovieDetail instead of browser playback', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        title: 'Magnet-only fixture',
+        players: [{ id: 'magnet-only', sourceName: '磁力', sourceUrl: 'magnet:?xt=urn:btih:only', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-magnet-only', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-magnet-only', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 4 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-source-state="source-invalid"]').text()).toContain('磁力来源')
+    expect(pushMock).toHaveBeenCalledWith('/movie/REBD-1024')
+    expect(xgPlayerCtor).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('同一 source/session 最多重试两次，达到上限后只保留切换来源动作', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        title: 'Retry cap fixture',
+        players: [{ id: 'direct-retry', sourceName: '直连', sourceUrl: 'https://media.example/retry.mp4', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-retry-cap', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-retry-cap', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 4 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+
+    playerInstances[0].handlers.error()
+    await flushPromises()
+    await wrapper.get('button[title="重试当前播放源"]').trigger('click')
+    await flushPromises()
+    expect(xgPlayerCtor).toHaveBeenCalledTimes(2)
+
+    playerInstances[1].handlers.error()
+    await flushPromises()
+    await wrapper.get('button[title="重试当前播放源"]').trigger('click')
+    await flushPromises()
+    expect(xgPlayerCtor).toHaveBeenCalledTimes(3)
+
+    playerInstances[2].handlers.error()
+    await flushPromises()
+    expect(wrapper.text()).toContain('已达到 2 次重试上限')
+    expect(wrapper.find('button[title="重试当前播放源"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('切换来源')
+    wrapper.unmount()
+  })
+
+  it('同一 loading cycle 的 waiting timeout 与 xgplayer error 只产生一次可重试失败', async () => {
+    vi.useFakeTimers()
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        title: 'Waiting race fixture',
+        players: [{ id: 'direct-race', sourceName: '直连', sourceUrl: 'https://media.example/race.mp4', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-waiting-race', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-waiting-race', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 4 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+    playerInstances[0].handlers.waiting()
+    await vi.advanceTimersByTimeAsync(10000)
+    playerInstances[0].handlers.error()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('缓冲超时')
+    expect(wrapper.findAll('button[title="重试当前播放源"]').length).toBe(1)
+    wrapper.unmount()
+    vi.useRealTimers()
   })
 })

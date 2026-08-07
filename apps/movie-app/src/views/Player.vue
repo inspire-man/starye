@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { MovieDetail } from '../types'
+import type { PlaybackSourceType } from '../utils/playbackSources'
 import * as Sentry from '@sentry/vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -8,7 +9,11 @@ import { useAria2 } from '../composables/useAria2'
 import { moviePublicRuntime } from '../config/public-runtime'
 import { movieApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
-import { isMagnetLink } from '../utils/magnetLink'
+import {
+  classifyPlaybackSource,
+  isEligiblePlaybackSource,
+  selectDirectPlaybackSource,
+} from '../utils/playbackSources'
 import {
   isTrustedTorrServerStreamUrl,
   resolveTrustedTorrServerOrigins,
@@ -25,7 +30,7 @@ interface PlayerErrorState {
 }
 
 const BUFFERING_TIMEOUT_MS = 10000
-const RETRY_FAILURE_WINDOW_MS = 3000
+const MAX_SOURCE_RETRIES = 2
 const PROGRESS_SAVE_INTERVAL_SECONDS = 10
 const PROGRESS_MIN_SAVE_SECONDS = 30
 const MOVIE_COMPLETED_THRESHOLD = 0.9
@@ -44,15 +49,23 @@ const movieData = ref<MovieDetail | null>(null)
 let player: Player | null = null
 let saveProgressTimer: number | null = null
 let waitingTimeout: number | null = null
-let lastRetryAt = 0
 let lastTrackedMovieCode = ''
 let lastSavedProgressSecond = -1
+let playbackSessionToken = 0
+let loadingCycleToken = 0
+let consumedFailureCycleToken = -1
+const retryCountBySource = new Map<string, number>()
 
 const playerLoading = ref(false)
 const playerLoadingMessage = ref('')
 const errorState = ref<PlayerErrorState>(createDefaultErrorState())
 const currentSourceUrl = ref('')
+const currentSourceIdentity = ref('')
+const currentSourceType = ref<PlaybackSourceType | null>(null)
 const currentMagnetUrl = ref('')
+const sourceGuardTitle = ref('')
+const sourceGuardMessage = ref('')
+const sourceGuardIsInvalid = ref(false)
 const savedCompleted = ref(false)
 const loadedProgressDuration = ref<number | null>(null)
 
@@ -110,6 +123,63 @@ function createDefaultErrorState(): PlayerErrorState {
     kind: 'unknown',
     message: '',
     recoverable: true,
+  }
+}
+
+function beginPlaybackSession(): number {
+  playbackSessionToken += 1
+  retryCountBySource.clear()
+  loadingCycleToken = 0
+  consumedFailureCycleToken = -1
+  currentSourceIdentity.value = ''
+  currentSourceType.value = null
+  return playbackSessionToken
+}
+
+function isCurrentPlaybackSession(sessionToken: number): boolean {
+  return sessionToken === playbackSessionToken
+}
+
+function getSourceIdentity(source: Pick<PlaybackSourceTypeInput, 'source' | 'sourceUrl' | 'id'>): string {
+  if (source.id?.trim()) {
+    return source.id.trim()
+  }
+
+  const type = classifyPlaybackSource(source)
+  return `${type}:${source.sourceUrl?.trim() || ''}`
+}
+
+interface PlaybackSourceTypeInput {
+  id?: string | null
+  source?: string | null
+  sourceUrl?: string | null
+}
+
+function beginLoadingCycle() {
+  loadingCycleToken += 1
+  consumedFailureCycleToken = -1
+}
+
+function consumeFailureForCurrentCycle(): boolean {
+  if (consumedFailureCycleToken === loadingCycleToken) {
+    return false
+  }
+
+  consumedFailureCycleToken = loadingCycleToken
+  return true
+}
+
+function getCurrentSourceRetryCount(): number {
+  if (!currentSourceIdentity.value) {
+    return MAX_SOURCE_RETRIES
+  }
+
+  return retryCountBySource.get(currentSourceIdentity.value) ?? 0
+}
+
+function setSourceRetryCount(count: number) {
+  if (currentSourceIdentity.value) {
+    retryCountBySource.set(currentSourceIdentity.value, count)
   }
 }
 
@@ -185,26 +255,33 @@ function clearRecoverableError() {
 function markPlaybackRecovered() {
   stopPlayerLoading()
   clearRecoverableError()
-  lastRetryAt = 0
 }
 
 function getEscalatedRetryMessage() {
-  return '多次失败，请返回详情页切换源后再试。'
+  return '当前播放源已达到 2 次重试上限，请返回详情页切换其他播放源。'
 }
 
 function showPlayerError(kind: ErrorKind, message: string, recoverable = true) {
-  stopPlayerLoading()
-  const finalMessage = lastRetryAt > 0 && Date.now() - lastRetryAt <= RETRY_FAILURE_WINDOW_MS
-    ? getEscalatedRetryMessage()
-    : message
+  if (recoverable && !consumeFailureForCurrentCycle()) {
+    return
+  }
 
-  reportVideoFailure(kind, finalMessage, recoverable)
+  stopPlayerLoading()
+  const retriesExhausted = recoverable && getCurrentSourceRetryCount() >= MAX_SOURCE_RETRIES
+  const finalMessage = retriesExhausted ? getEscalatedRetryMessage() : message
+  const finalRecoverable = recoverable && !retriesExhausted
+
+  reportVideoFailure(kind, finalMessage, finalRecoverable)
 
   errorState.value = {
     visible: true,
     kind,
     message: finalMessage,
-    recoverable,
+    recoverable: finalRecoverable,
+  }
+
+  if (kind === 'source-invalid') {
+    goToDetail()
   }
 }
 
@@ -240,8 +317,16 @@ function getWaitingTimeoutMessage() {
 
 function scheduleWaitingTimeout() {
   clearWaitingTimeout()
+  if (!playerLoading.value) {
+    beginLoadingCycle()
+  }
   startPlayerLoading(getLoadingMessage())
+  const cycleToken = loadingCycleToken
   waitingTimeout = window.setTimeout(() => {
+    if (cycleToken !== loadingCycleToken) {
+      return
+    }
+
     showPlayerError(
       isTorrServerMode.value ? 'torrserver' : 'network',
       getWaitingTimeoutMessage(),
@@ -259,7 +344,12 @@ function getPlaybackErrorState(): PlayerErrorState {
     }
   }
 
-  if (isMagnetLink(currentSourceUrl.value)) {
+  const sourceType = currentSourceType.value ?? classifyPlaybackSource({
+    source: isTorrServerMode.value ? 'TorrServer' : undefined,
+    sourceUrl: currentSourceUrl.value,
+  })
+
+  if (sourceType === 'magnet') {
     return {
       visible: true,
       kind: 'source-invalid',
@@ -268,7 +358,7 @@ function getPlaybackErrorState(): PlayerErrorState {
     }
   }
 
-  if (isTorrServerMode.value) {
+  if (sourceType === 'TorrServer' || isTorrServerMode.value) {
     return {
       visible: true,
       kind: 'torrserver',
@@ -286,23 +376,40 @@ function getPlaybackErrorState(): PlayerErrorState {
 }
 
 function isEligiblePlayer(candidate: MovieDetail['players'][number]): boolean {
-  return candidate.isActive === true
-    && typeof candidate.sourceUrl === 'string'
-    && candidate.sourceUrl.trim().length > 0
+  return isEligiblePlaybackSource(candidate)
 }
 
 function showNoSourceGuard() {
   destroyPlayerInstance()
   resetPlayerFeedback()
   error.value = ''
+  sourceGuardTitle.value = '暂无可用播放源'
+  sourceGuardMessage.value = '当前影片的来源尚未通过可播放读回检查，请返回详情页查看状态或受控修复意图。'
+  sourceGuardIsInvalid.value = false
   sourceGuardVisible.value = true
   loading.value = false
 }
 
+function showSourceInvalidGuard(message = '当前来源不是浏览器可直接播放的地址，请返回详情页使用受控播放方式。') {
+  destroyPlayerInstance()
+  resetPlayerFeedback()
+  error.value = ''
+  sourceGuardTitle.value = '当前播放源不可直接播放'
+  sourceGuardMessage.value = message
+  sourceGuardIsInvalid.value = true
+  sourceGuardVisible.value = true
+  loading.value = false
+  goToDetail()
+}
+
 async function fetchMovieAndPlay() {
+  const sessionToken = beginPlaybackSession()
   loading.value = true
   error.value = ''
   sourceGuardVisible.value = false
+  sourceGuardTitle.value = ''
+  sourceGuardMessage.value = ''
+  sourceGuardIsInvalid.value = false
   movieData.value = null
   currentMagnetUrl.value = ''
   currentSourceUrl.value = ''
@@ -314,12 +421,17 @@ async function fetchMovieAndPlay() {
     const code = route.params.code as string
     movieCode.value = code
     let sourceUrl = ''
+    let sourceIdentity = ''
+    let sourceType: PlaybackSourceType = 'direct'
     let startTime = 0
 
     // TorrServer 模式：直接使用 streamUrl 播放
-    const streamUrl = route.query.streamUrl as string | undefined
+    const streamUrl = typeof route.query.streamUrl === 'string' ? route.query.streamUrl : undefined
     if (streamUrl) {
       const response = await movieApi.getMovieDetail(code)
+      if (!isCurrentPlaybackSession(sessionToken)) {
+        return
+      }
 
       if (!response.success || !response.data) {
         error.value = response.error || '加载失败'
@@ -328,6 +440,10 @@ async function fetchMovieAndPlay() {
       }
 
       const trustedOrigins = await resolveTrustedTorrServerOrigins()
+      if (!isCurrentPlaybackSession(sessionToken)) {
+        return
+      }
+
       if (!isTrustedTorrServerStreamUrl(streamUrl, trustedOrigins)) {
         error.value = UNTRUSTED_STREAM_URL_MESSAGE
         loading.value = false
@@ -335,15 +451,22 @@ async function fetchMovieAndPlay() {
       }
 
       sourceUrl = streamUrl
+      sourceType = 'TorrServer'
+      sourceIdentity = `TorrServer:${streamUrl}`
       movieTitle.value = response.data.title
       movieData.value = response.data
-      const magnetPlayer = response.data.players?.find(p => p.sourceUrl.startsWith('magnet:'))
+      const magnetPlayer = response.data.players?.find(p => isEligiblePlayer(p)
+        && classifyPlaybackSource(p) === 'magnet')
       if (magnetPlayer) {
-        currentMagnetUrl.value = magnetPlayer.sourceUrl
+        currentMagnetUrl.value = magnetPlayer.sourceUrl.trim()
       }
 
       if (userStore.user) {
         const progressResponse = await progressApi.getWatchingProgress(code)
+        if (!isCurrentPlaybackSession(sessionToken)) {
+          return
+        }
+
         if (progressResponse.success && progressResponse.data && !Array.isArray(progressResponse.data)) {
           savedCompleted.value = progressResponse.data.completed
           loadedProgressDuration.value = progressResponse.data.duration
@@ -356,6 +479,9 @@ async function fetchMovieAndPlay() {
     else {
       // 标准模式：从 API 获取播放源
       const response = await movieApi.getMovieDetail(code)
+      if (!isCurrentPlaybackSession(sessionToken)) {
+        return
+      }
 
       if (!response.success || !response.data) {
         error.value = response.error || '加载失败'
@@ -366,7 +492,9 @@ async function fetchMovieAndPlay() {
       const movie = response.data
       movieTitle.value = movie.title
       movieData.value = movie
-      const eligiblePlayers = (movie.players ?? []).filter(isEligiblePlayer)
+      const players = movie.players ?? []
+      const eligiblePlayers = players.filter(isEligiblePlayer)
+      const eligibleMagnetPlayer = eligiblePlayers.find(p => classifyPlaybackSource(p) === 'magnet')
 
       if (movie.readiness?.source.disposition !== 'ready'
         || movie.readiness.source.eligibleCount < 1
@@ -375,26 +503,38 @@ async function fetchMovieAndPlay() {
         return
       }
 
-      currentMagnetUrl.value = eligiblePlayers.find(p => isMagnetLink(p.sourceUrl))?.sourceUrl || ''
+      currentMagnetUrl.value = eligibleMagnetPlayer?.sourceUrl.trim() || ''
 
       const playerId = route.query.player as string | undefined
-      let selectedPlayer = eligiblePlayers[0]
+      const selectedPlayer = playerId
+        ? players.find(p => p.id === playerId)
+        : selectDirectPlaybackSource(players)
 
-      if (playerId) {
-        const found = eligiblePlayers.find(p => p.id === playerId)
-        if (found)
-          selectedPlayer = found
-      }
-
-      if (!selectedPlayer) {
-        showNoSourceGuard()
+      if (!selectedPlayer
+        || !isEligiblePlayer(selectedPlayer)
+        || classifyPlaybackSource(selectedPlayer) !== 'direct') {
+        if (playerId && players.some(p => p.id === playerId)) {
+          showSourceInvalidGuard('当前入口选择了不可由浏览器直接播放的来源，请返回详情页使用受控播放方式。')
+        }
+        else if (eligibleMagnetPlayer) {
+          showSourceInvalidGuard('当前影片只有磁力来源，请返回详情页使用 TorrServer 或添加到 Aria2。')
+        }
+        else {
+          showNoSourceGuard()
+        }
         return
       }
 
-      sourceUrl = selectedPlayer.sourceUrl
+      sourceUrl = selectedPlayer.sourceUrl.trim()
+      sourceType = classifyPlaybackSource(selectedPlayer)
+      sourceIdentity = getSourceIdentity(selectedPlayer)
 
       if (userStore.user) {
         const progressResponse = await progressApi.getWatchingProgress(code)
+        if (!isCurrentPlaybackSession(sessionToken)) {
+          return
+        }
+
         if (progressResponse.success && progressResponse.data && !Array.isArray(progressResponse.data)) {
           savedCompleted.value = progressResponse.data.completed
           loadedProgressDuration.value = progressResponse.data.duration
@@ -405,26 +545,61 @@ async function fetchMovieAndPlay() {
       }
     }
 
+    if (!isCurrentPlaybackSession(sessionToken)) {
+      return
+    }
+
     trackCurrentMovieViewOnce(code)
     loading.value = false
     await nextTick()
-    initPlayer(sourceUrl, startTime)
+    if (!isCurrentPlaybackSession(sessionToken)) {
+      return
+    }
+
+    initPlayer(sourceUrl, startTime, sourceIdentity, sourceType)
   }
   catch (err: any) {
+    if (!isCurrentPlaybackSession(sessionToken)) {
+      return
+    }
+
     destroyPlayerInstance()
     error.value = err instanceof Error ? err.message : (err.response?.data?.error || '加载影片失败')
     loading.value = false
   }
 }
 
-function initPlayer(url: string, startTime: number) {
-  currentSourceUrl.value = url
+function initPlayer(
+  url: string,
+  startTime: number,
+  sourceIdentity = '',
+  sourceType?: PlaybackSourceType,
+) {
+  const normalizedUrl = url.trim()
+  const resolvedType = sourceType ?? classifyPlaybackSource({ sourceUrl: normalizedUrl })
+  currentSourceUrl.value = normalizedUrl
+  currentSourceType.value = resolvedType
+  currentSourceIdentity.value = sourceIdentity || getSourceIdentity({
+    id: sourceIdentity,
+    source: resolvedType,
+    sourceUrl: normalizedUrl,
+  })
+
+  if (!normalizedUrl || (resolvedType !== 'direct' && resolvedType !== 'TorrServer')) {
+    showPlayerError(
+      'source-invalid',
+      '当前源不是浏览器可直接播放的视频地址，请返回详情页使用受控播放方式。',
+      false,
+    )
+    return
+  }
+
   resetPlayerFeedback()
   scheduleWaitingTimeout()
 
   player = new Player({
     id: 'player-container',
-    url,
+    url: normalizedUrl,
     autoplay: false,
     playsinline: true,
     width: '100%',
@@ -454,7 +629,6 @@ function initPlayer(url: string, startTime: number) {
 
   player.on('ended', () => {
     stopPlayerLoading()
-    lastRetryAt = 0
     void flushProgress('ended')
   })
 
@@ -576,7 +750,11 @@ function goBack() {
 }
 
 function goToDetail() {
-  router.push(`/movie/${movieCode.value}`)
+  if (!movieCode.value) {
+    return
+  }
+
+  router.push(`/movie/${encodeURIComponent(movieCode.value)}`)
 }
 
 function trackCurrentMovieView(code: string) {
@@ -595,19 +773,35 @@ function trackCurrentMovieViewOnce(code: string) {
 }
 
 async function retryCurrentSource() {
-  if (!currentSourceUrl.value) {
+  const sourceUrl = currentSourceUrl.value.trim()
+  const sourceType = currentSourceType.value
+  const sourceIdentity = currentSourceIdentity.value
+
+  if (!sourceUrl || !sourceIdentity || sourceType === 'magnet' || !sourceType) {
     showPlayerError('source-invalid', '当前没有可重试的播放源，请返回详情页切换源。', false)
     return
   }
 
+  const retryCount = getCurrentSourceRetryCount()
+  if (retryCount >= MAX_SOURCE_RETRIES) {
+    showPlayerError('network', getEscalatedRetryMessage(), false)
+    goToDetail()
+    return
+  }
+
+  const sessionToken = playbackSessionToken
   const lastTime = player ? Math.max(0, Number(player.currentTime) || 0) : 0
-  lastRetryAt = Date.now()
+  setSourceRetryCount(retryCount + 1)
   destroyPlayerInstance()
   resetPlayerFeedback()
   startPlayerLoading('正在重新加载当前播放源...')
 
   await nextTick()
-  initPlayer(currentSourceUrl.value, lastTime)
+  if (!isCurrentPlaybackSession(sessionToken)) {
+    return
+  }
+
+  initPlayer(sourceUrl, lastTime, sourceIdentity, sourceType)
 }
 
 function handlePageHide() {
@@ -676,15 +870,16 @@ onUnmounted(() => {
 
     <div
       v-else-if="sourceGuardVisible"
-      role="status"
+      :role="sourceGuardIsInvalid ? 'alert' : 'status'"
+      :data-source-state="sourceGuardIsInvalid ? 'source-invalid' : 'no-source'"
       class="flex items-center justify-center h-full px-6"
     >
       <div class="text-center max-w-lg">
         <p class="text-amber-300 text-xl mb-3">
-          暂无可用播放源
+          {{ sourceGuardTitle }}
         </p>
         <p class="text-gray-400 text-sm mb-6">
-          当前影片的来源尚未通过可播放读回检查，请返回详情页查看状态或受控修复意图。
+          {{ sourceGuardMessage }}
         </p>
         <button
           type="button"
@@ -765,7 +960,7 @@ onUnmounted(() => {
                 title="返回影片详情页后手动切换播放源"
                 @click="goToDetail"
               >
-                返回详情页
+                {{ errorState.recoverable ? '返回详情页' : '切换来源' }}
               </button>
             </div>
           </div>
