@@ -48,3 +48,12 @@
 ## Gate Result
 
 All in-scope provider capabilities are marked `INTEGRATE`. The only opt-outs are the explicitly deferred Phase 24 playback proof, v2 broader repair types, and the existing server-owned provider-control boundary. No package install or new external credential setup is part of Phase 23.
+
+## Plan 23-01 Verification Evidence
+
+| evidence | result | scope |
+|---|---|---|
+| provider-association focused suite | PASS (`7/7`) | Movie-only provider snapshot, exact dispatch contract, and redacted provider summary. |
+| GitHub Actions client focused suite | PASS (`8/8`) | Fixed workflow binding, provider readback, bounded transport retry, and deterministic failures. |
+| API type-check | PASS | `pnpm --filter api type-check` completed without errors. |
+| package and credential boundary | PASS | No package manifest changed and no new credential setup was introduced. |
