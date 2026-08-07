@@ -111,7 +111,17 @@ Plans:
   2. 用户在 Player 中能看到加载、缓冲、失效和播放错误的明确反馈；当前源重试有边界，达到上限后能切换候选源或进入现有 TorrServer/Aria2 路径。
   3. 用户选择来源时，direct、magnet、TorrServer 和 Aria2 走各自受控路径；播放器只选择 eligible source，评分或排序字段不会单独被呈现为健康或可播放证明。
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 22-01-PLAN.md — Player source policy、受控播放路径与 bounded retry
+- [ ] 22-03-PLAN.md — Dashboard repair 同步、最新任务聚焦与同电影回流
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 22-02-PLAN.md — MovieDetail readiness 状态、来源分组与 source-type actions
 **UI hint**: yes
 
 ### Phase 23: GitHub Actions Production Repair And Reconciliation
