@@ -14,8 +14,8 @@
 ### Repair Operations
 
 - [x] **REP-01**: 用户可以在 Dashboard 为已入库电影发起固定模板的 `repair_players` 任务；输入限定为受控电影身份、原因和目标意图，URL、命令、workflow 和 secrets 由服务端 registry 管理。
-- [ ] **REP-02**: 用户可以看到 repair 的 queued、running、succeeded、failed 和 retry 状态；相同请求或事件重放保持幂等，失败重试创建新 attempt，并保留旧日志、receipt 与 source observation。
-- [ ] **REP-03**: 用户可以从 `no_source` 或 `source_failed` 内容进入受控修复，并在成功后回到同一个内容身份查看更新后的 source state 与 validated receipt。
+- [x] **REP-02**: 用户可以看到 repair 的 queued、running、succeeded、failed 和 retry 状态；相同请求或事件重放保持幂等，失败重试创建新 attempt，并保留旧日志、receipt 与 source observation。
+- [x] **REP-03**: 用户可以从 `no_source` 或 `source_failed` 内容进入受控修复，并在成功后回到同一个内容身份查看更新后的 source state 与 validated receipt。
 
 ### Playback Experience
 
@@ -62,8 +62,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | SRC-02 | Phase 21 | Complete |
 | SRC-03 | Phase 20 | Complete |
 | REP-01 | Phase 21 | Complete |
-| REP-02 | Phase 23 | Pending |
-| REP-03 | Phase 23 | Pending |
+| REP-02 | Phase 23 | Complete |
+| REP-03 | Phase 23 | Complete |
 | PLAY-01 | Phase 22 | Complete |
 | PLAY-02 | Phase 22 | Complete |
 | PLAY-03 | Phase 22 | Complete |

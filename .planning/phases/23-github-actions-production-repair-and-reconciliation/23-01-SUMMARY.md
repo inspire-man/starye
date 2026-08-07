@@ -143,6 +143,7 @@ None - plan executed exactly as written.
 
 - The first RED commit invocation was rejected by commitlint because PowerShell passed literal `\\n` text in the commit body. The same staged changes were committed with separate message arguments and the normal hooks passed.
 - The existing user modifications in `AGENTS.md`, `CLAUDE.md`, and `.planning/STATE.md` were preserved and excluded from task commits.
+- The legacy STATE layout needed canonical `state.begin-phase` initialization before `state.advance-plan` could parse the plan position; the handler retained accumulated context and enabled the normal tracking updates.
 
 ## User Setup Required
 
