@@ -122,7 +122,7 @@ function sourceDispositionLabel(disposition: SourceDisposition): string {
 }
 
 function sourceReasonLabel(reasonCode: SourceReasonCode | null): string {
-  return reasonCode ? sourceReasonLabels[reasonCode] : '无'
+  return reasonCode ? `${reasonCode} · ${sourceReasonLabels[reasonCode]}` : '无'
 }
 
 function playbackStatusLabel(status: ReadinessProjection['playback']['status']): string {

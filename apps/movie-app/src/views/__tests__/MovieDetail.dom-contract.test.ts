@@ -153,10 +153,11 @@ describe('movie detail DOM tuple contract', () => {
   })
 
   it.each([
-    ['source_failed', '重试读取', '播放未验证'],
-    ['repairing', '刷新状态', '播放未验证'],
-    ['ready', '播放', '播放已验证'],
-  ] as const)('renders %s and independent playback proof labels from DTO fields', async (disposition, action, playbackLabel) => {
+    ['no_source', '查看修复意图', '播放未验证', 'no_eligible_source'],
+    ['source_failed', '重试读取', '播放未验证', 'source_read_failed'],
+    ['repairing', '刷新状态', '播放未验证', 'repair_requested'],
+    ['ready', '播放', '播放已验证', null],
+  ] as const)('renders %s and independent playback proof labels from DTO fields', async (disposition, action, playbackLabel, reasonCode) => {
     getMovieDetailMock.mockResolvedValueOnce({
       success: true,
       data: {
@@ -167,7 +168,9 @@ describe('movie detail DOM tuple contract', () => {
         isR18: false,
         players: disposition === 'ready'
           ? [{ id: 'direct-ready', movieId: `movie-${disposition}`, sourceName: 'ready direct', sourceUrl: 'https://direct.example/ready', sortOrder: 1, isActive: true }]
-          : [],
+          : disposition === 'repairing'
+            ? [{ id: 'repairing-direct', movieId: `movie-${disposition}`, sourceName: 'repairing direct', sourceUrl: 'https://direct.example/repairing', sortOrder: 1, isActive: true }]
+            : [],
         relatedMovies: [],
         readiness: {
           metadata: { contentId: `movie-${disposition}`, observedAt: 100, persisted: true },
@@ -177,7 +180,7 @@ describe('movie detail DOM tuple contract', () => {
             disposition,
             eligibleCount: disposition === 'ready' ? 1 : 0,
             observedAt: 100,
-            reasonCode: disposition === 'ready' ? null : disposition === 'repairing' ? 'repair_requested' : 'source_read_failed',
+            reasonCode,
             repairable: disposition !== 'ready',
             sourceRevision: 5,
           },
@@ -191,9 +194,14 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.get('[data-readiness-summary]').text()).toContain(disposition)
     expect(wrapper.get('[data-readiness-summary]').text()).toContain(action)
     expect(wrapper.get('[data-readiness-summary]').text()).toContain(playbackLabel)
+    if (reasonCode)
+      expect(wrapper.get('[data-readiness-summary]').text()).toContain(reasonCode)
     if (disposition === 'repairing') {
       expect(wrapper.get('[data-readiness-action="refresh"]').attributes('disabled')).toBeUndefined()
       expect(wrapper.find('[data-readiness-action="play"]').exists()).toBe(false)
+      expect(wrapper.findAll('[data-source-health-row]')).toHaveLength(1)
+      expect(wrapper.find('[data-source-card]').exists()).toBe(false)
+      expect(wrapper.get('[data-repairing-summary]').text()).toContain('server-owned source readback')
     }
     if (disposition === 'ready')
       expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/CODE-ready/play?player=direct-ready')
@@ -250,5 +258,97 @@ describe('movie detail DOM tuple contract', () => {
 
     await wrapper.get('[data-readiness-action="repair"]').trigger('click')
     expect(routerPushMock).toHaveBeenCalledWith('/dashboard/crawlers?movieId=movie-sun-064&reason=no_source')
+  })
+
+  it('groups mixed sources before score sorting and keeps controlled action boundaries', async () => {
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'movie-mixed',
+        primaryContentId: 'movie-mixed',
+        code: 'MIXED-001',
+        title: 'Mixed source fixture',
+        isR18: false,
+        players: [
+          { id: 'magnet-high', movieId: 'movie-mixed', sourceName: 'magnet high', sourceUrl: 'magnet:RAW_MAGNET_HIGH', sortOrder: 9, isActive: true, quality: '4K', averageRating: 5, ratingCount: 20 },
+          { id: 'inactive-best', movieId: 'movie-mixed', sourceName: 'inactive best', sourceUrl: 'RAW_INACTIVE_URL', sortOrder: 1, isActive: false, quality: '4K', averageRating: 5, ratingCount: 20 },
+          { id: 'direct-low', movieId: 'movie-mixed', sourceName: 'direct low', sourceUrl: 'RAW_DIRECT_LOW', sortOrder: 8, isActive: true, quality: 'SD', averageRating: 1, ratingCount: 20 },
+          { id: 'torrserver-ineligible', movieId: 'movie-mixed', source: 'TorrServer', sourceName: 'TorrServer source', sourceUrl: 'RAW_TORRSERVER_URL', sortOrder: 2, isActive: true, quality: '4K', averageRating: 5, ratingCount: 20 },
+          { id: 'direct-high', movieId: 'movie-mixed', sourceName: 'direct high', sourceUrl: 'RAW_DIRECT_HIGH', sortOrder: 7, isActive: true, quality: '4K', averageRating: 5, ratingCount: 20 },
+          { id: 'magnet-low', movieId: 'movie-mixed', sourceName: 'magnet low', sourceUrl: 'magnet:RAW_MAGNET_LOW', sortOrder: 6, isActive: true, quality: 'SD', averageRating: 1, ratingCount: 20 },
+          { id: 'blank-active', movieId: 'movie-mixed', sourceName: 'blank active', sourceUrl: ' ', sortOrder: 3, isActive: true, averageRating: 5, ratingCount: 20 },
+        ],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-mixed', observedAt: 900, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-mixed', schemaVersion: 2 },
+          source: {
+            disposition: 'ready',
+            eligibleCount: 4,
+            observedAt: 900,
+            reasonCode: null,
+            repairable: false,
+            sourceRevision: 9,
+          },
+        },
+        rawRequest: 'RAW_REQUEST_SENTINEL',
+        rawException: 'RAW_EXCEPTION_SENTINEL',
+        signature: 'RAW_SIGNATURE_SENTINEL',
+      },
+    })
+
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-source-group]').map(group => group.attributes('data-source-group'))).toEqual([
+      'eligible-direct',
+      'eligible-magnet',
+      'ineligible',
+    ])
+    expect(wrapper.findAll('[data-source-card]').map(card => card.attributes('data-source-card'))).toEqual([
+      'direct-low',
+      'direct-high',
+      'magnet-high',
+      'magnet-low',
+      'inactive-best',
+      'torrserver-ineligible',
+      'blank-active',
+    ])
+    expect(wrapper.findAll('[data-source-health-player]').map(row => row.attributes('data-source-health-player'))).toEqual([
+      'magnet-high',
+      'inactive-best',
+      'direct-low',
+      'torrserver-ineligible',
+      'direct-high',
+      'magnet-low',
+      'blank-active',
+    ])
+    expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low')
+    expect(wrapper.get('[data-source-card="direct-low"] [data-source-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low')
+
+    const magnetActions = wrapper.findAll('[data-source-card="magnet-high"] [data-source-action]').map(action => action.attributes('data-source-action'))
+    expect(magnetActions.sort()).toEqual(['aria2', 'copy', 'qrcode', 'rating', 'report', 'torrserver'])
+    expect(wrapper.findAll('[data-source-card="inactive-best"] [data-source-action]')).toHaveLength(0)
+    expect(wrapper.findAll('[data-source-card="torrserver-ineligible"] [data-source-action]')).toHaveLength(0)
+    expect(wrapper.findAll('[data-source-card="blank-active"] [data-source-action]')).toHaveLength(0)
+
+    await wrapper.get('select').setValue('rating')
+    expect(wrapper.findAll('[data-source-card]').map(card => card.attributes('data-source-card'))).toEqual([
+      'direct-high',
+      'direct-low',
+      'magnet-high',
+      'magnet-low',
+      'inactive-best',
+      'torrserver-ineligible',
+      'blank-active',
+    ])
+    expect(wrapper.html()).not.toContain('RAW_DIRECT_LOW')
+    expect(wrapper.html()).not.toContain('RAW_MAGNET_HIGH')
+    expect(wrapper.html()).not.toContain('RAW_INACTIVE_URL')
+    expect(wrapper.html()).not.toContain('RAW_TORRSERVER_URL')
+    expect(wrapper.html()).not.toContain('RAW_REQUEST_SENTINEL')
+    expect(wrapper.html()).not.toContain('RAW_EXCEPTION_SENTINEL')
+    expect(wrapper.html()).not.toContain('RAW_SIGNATURE_SENTINEL')
   })
 })
