@@ -1,32 +1,106 @@
 import type { Player } from '../../types'
 import { describe, expect, it } from 'vitest'
 import {
+  classifyPlaybackSource,
+  groupPlaybackSources,
   getQualityBadgeClass,
   getSourceTypeIcon,
+  isEligiblePlaybackSource,
   isMagnetLink,
+  selectDirectPlaybackSource,
   sortPlaybackSources,
 } from '../playbackSources'
 
 describe('playbackSources', () => {
-  describe('sortPlaybackSources', () => {
-    it('应该将磁力链接排在在线播放前面', () => {
+  describe('source policy', () => {
+    it('应只将 active 且包含非空 URL 的来源视为 eligible', () => {
+      expect(isEligiblePlaybackSource({ isActive: true, sourceUrl: 'https://direct.example/video' })).toBe(true)
+      expect(isEligiblePlaybackSource({ isActive: true, sourceUrl: 'magnet:?xt=urn:btih:active' })).toBe(true)
+      expect(isEligiblePlaybackSource({ isActive: false, sourceUrl: 'https://inactive.example/video' })).toBe(false)
+      expect(isEligiblePlaybackSource({ isActive: true, sourceUrl: '   ' })).toBe(false)
+      expect(isEligiblePlaybackSource({ isActive: true, sourceUrl: undefined })).toBe(false)
+    })
+
+    it('应优先使用 TorrServer 标记并识别磁力与其他 direct URL', () => {
+      expect(classifyPlaybackSource({ source: 'TorrServer', sourceUrl: 'https://server.example/stream' })).toBe('TorrServer')
+      expect(classifyPlaybackSource({ sourceUrl: ' magnet:?xt=urn:btih:active ' })).toBe('magnet')
+      expect(classifyPlaybackSource({ source: 'direct', sourceUrl: 'https://direct.example/video' })).toBe('direct')
+    })
+
+    it('应按 eligible direct、eligible magnet、inactive/ineligible 分组并保留服务端顺序', () => {
       const sources: Player[] = [
-        { id: '1', movieId: 'm1', sourceName: '在线播放', sourceUrl: 'https://example.com', quality: 'HD', sortOrder: 1 },
-        { id: '2', movieId: 'm1', sourceName: '磁力链接', sourceUrl: 'magnet:?xt=urn:btih:abcd1234', quality: 'HD', sortOrder: 2 },
+        { id: 'magnet-1', movieId: 'm1', sourceName: '磁力 1', sourceUrl: 'magnet:?xt=urn:btih:one', isActive: true, sortOrder: 9 },
+        { id: 'inactive-direct', movieId: 'm1', sourceName: '失效直连', sourceUrl: 'https://inactive.example/video', isActive: false, sortOrder: 1 },
+        { id: 'direct-1', movieId: 'm1', sourceName: '直连 1', sourceUrl: 'https://direct.example/one', isActive: true, sortOrder: 8 },
+        { id: 'blank', movieId: 'm1', sourceName: '空地址', sourceUrl: ' ', isActive: true, sortOrder: 2 },
+        { id: 'direct-2', movieId: 'm1', sourceName: '直连 2', sourceUrl: 'https://direct.example/two', isActive: true, sortOrder: 7 },
+        { id: 'magnet-2', movieId: 'm1', sourceName: '磁力 2', sourceUrl: 'magnet:?xt=urn:btih:two', isActive: true, sortOrder: 6 },
+      ]
+
+      const groups = groupPlaybackSources(sources)
+
+      expect(groups.eligibleDirect.map(source => source.id)).toEqual(['direct-1', 'direct-2'])
+      expect(groups.eligibleMagnet.map(source => source.id)).toEqual(['magnet-1', 'magnet-2'])
+      expect(groups.ineligible.map(source => source.id)).toEqual(['inactive-direct', 'blank'])
+      expect(sortPlaybackSources(sources).map(source => source.id)).toEqual([
+        'direct-1',
+        'direct-2',
+        'magnet-1',
+        'magnet-2',
+        'inactive-direct',
+        'blank',
+      ])
+    })
+
+    it('评分、画质和最新排序只能影响组内展示，不能改变默认 direct 候选', () => {
+      const sources: Player[] = [
+        { id: 'direct-low', movieId: 'm1', sourceName: '低分直连', sourceUrl: 'https://direct.example/low', isActive: true, quality: 'SD', averageRating: 1, sortOrder: 2 },
+        { id: 'magnet-high', movieId: 'm1', sourceName: '高分磁力', sourceUrl: 'magnet:?xt=urn:btih:high', isActive: true, quality: '4K', averageRating: 5, sortOrder: 1 },
+        { id: 'direct-high', movieId: 'm1', sourceName: '高分直连', sourceUrl: 'https://direct.example/high', isActive: true, quality: '4K', averageRating: 5, sortOrder: 3 },
+        { id: 'inactive-best', movieId: 'm1', sourceName: '失效高分', sourceUrl: 'https://inactive.example/video', isActive: false, quality: '4K', averageRating: 5, sortOrder: 0 },
+      ]
+
+      expect(selectDirectPlaybackSource(sources)?.id).toBe('direct-low')
+      expect(sortPlaybackSources(sources, 'rating').map(source => source.id)).toEqual([
+        'direct-high',
+        'direct-low',
+        'magnet-high',
+        'inactive-best',
+      ])
+      expect(sortPlaybackSources(sources, 'quality').map(source => source.id)).toEqual([
+        'direct-high',
+        'direct-low',
+        'magnet-high',
+        'inactive-best',
+      ])
+      expect(sortPlaybackSources(sources, 'latest').map(source => source.id)).toEqual([
+        'direct-high',
+        'direct-low',
+        'magnet-high',
+        'inactive-best',
+      ])
+    })
+  })
+
+  describe('sortPlaybackSources', () => {
+    it('默认应将 eligible direct 排在 eligible magnet 前面', () => {
+      const sources: Player[] = [
+        { id: '1', movieId: 'm1', sourceName: '在线播放', sourceUrl: 'https://example.com', isActive: true, quality: 'HD', sortOrder: 1 },
+        { id: '2', movieId: 'm1', sourceName: '磁力链接', sourceUrl: 'magnet:?xt=urn:btih:abcd1234', isActive: true, quality: 'HD', sortOrder: 2 },
       ]
 
       const sorted = sortPlaybackSources(sources)
 
-      expect(sorted[0].sourceName).toBe('磁力链接')
-      expect(sorted[1].sourceName).toBe('在线播放')
+      expect(sorted[0].sourceName).toBe('在线播放')
+      expect(sorted[1].sourceName).toBe('磁力链接')
     })
 
     it('应该按画质排序（4K > 1080P > 720P > SD）', () => {
       const sources: Player[] = [
-        { id: '1', movieId: 'm1', sourceName: '磁力SD', sourceUrl: 'magnet:?xt=urn:btih:sd', quality: 'SD', sortOrder: 1 },
-        { id: '2', movieId: 'm1', sourceName: '磁力4K', sourceUrl: 'magnet:?xt=urn:btih:4k', quality: '4K', sortOrder: 2 },
-        { id: '3', movieId: 'm1', sourceName: '磁力HD', sourceUrl: 'magnet:?xt=urn:btih:hd', quality: 'HD', sortOrder: 3 },
-        { id: '4', movieId: 'm1', sourceName: '磁力720P', sourceUrl: 'magnet:?xt=urn:btih:720p', quality: '720P', sortOrder: 4 },
+        { id: '1', movieId: 'm1', sourceName: '磁力SD', sourceUrl: 'magnet:?xt=urn:btih:sd', isActive: true, quality: 'SD', sortOrder: 1 },
+        { id: '2', movieId: 'm1', sourceName: '磁力4K', sourceUrl: 'magnet:?xt=urn:btih:4k', isActive: true, quality: '4K', sortOrder: 2 },
+        { id: '3', movieId: 'm1', sourceName: '磁力HD', sourceUrl: 'magnet:?xt=urn:btih:hd', isActive: true, quality: 'HD', sortOrder: 3 },
+        { id: '4', movieId: 'm1', sourceName: '磁力720P', sourceUrl: 'magnet:?xt=urn:btih:720p', isActive: true, quality: '720P', sortOrder: 4 },
       ]
 
       const sorted = sortPlaybackSources(sources)
@@ -53,8 +127,8 @@ describe('playbackSources', () => {
 
     it('不应该修改原数组', () => {
       const sources: Player[] = [
-        { id: '1', movieId: 'm1', sourceName: 'A', sourceUrl: 'https://a.com', sortOrder: 2 },
-        { id: '2', movieId: 'm1', sourceName: 'B', sourceUrl: 'https://b.com', sortOrder: 1 },
+        { id: '1', movieId: 'm1', sourceName: 'A', sourceUrl: 'https://a.com', isActive: true, sortOrder: 2 },
+        { id: '2', movieId: 'm1', sourceName: 'B', sourceUrl: 'https://b.com', isActive: true, sortOrder: 1 },
       ]
 
       const original = [...sources]
