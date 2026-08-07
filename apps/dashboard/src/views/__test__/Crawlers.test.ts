@@ -86,22 +86,36 @@ describe('crawlers local task panel', () => {
   })
 
   it('polls only while visible and clears on unmount', async () => {
+    const task = { id: 'task-poll', template_key: 'movie', latest_run_id: 'run-poll' }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{ id: 'run-poll', status: 'running', attemptNumber: 1, receipt: null }],
+    })
     const wrapper = mountCrawler()
     await flushPromises()
     const initial = api.admin.listCrawlerTasks.mock.calls.length
+    const initialDetails = api.admin.getCrawlerTask.mock.calls.length
     vi.advanceTimersByTime(5000)
     await flushPromises()
     expect(api.admin.listCrawlerTasks.mock.calls.length).toBeGreaterThan(initial)
+    expect(api.admin.getCrawlerTask.mock.calls.length).toBeGreaterThan(initialDetails)
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
     document.dispatchEvent(new Event('visibilitychange'))
     const hiddenCount = api.admin.listCrawlerTasks.mock.calls.length
+    const hiddenDetailCount = api.admin.getCrawlerTask.mock.calls.length
     vi.advanceTimersByTime(5000)
     await flushPromises()
     expect(api.admin.listCrawlerTasks.mock.calls.length).toBe(hiddenCount)
+    expect(api.admin.getCrawlerTask.mock.calls.length).toBe(hiddenDetailCount)
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
     expect(api.admin.listCrawlerTasks.mock.calls.length).toBeGreaterThan(hiddenCount)
+    expect(api.admin.getCrawlerTask.mock.calls.length).toBeGreaterThan(hiddenDetailCount)
     wrapper.unmount()
     const afterUnmount = api.admin.listCrawlerTasks.mock.calls.length
     vi.advanceTimersByTime(10000)
@@ -314,13 +328,51 @@ describe('crawlers local task panel', () => {
       task: {
         id: 'repair-task-1',
         operation: 'repair_players',
-        movie: { id: 'movie-sun-064', title: 'SUN-064' },
+        movie: { code: 'SUN-064', id: 'movie-sun-064', title: 'SUN-064' },
         reason: 'no_source',
+        sourceRevision: 4,
         targetIntent: 'restore_playable_sources',
         allowedNextAction: 'wait_for_observation',
       },
       run: { id: 'repair-run-1', status: 'queued', attemptNumber: 1 },
     })
+    api.admin.getCrawlerTask.mockImplementation((taskId: string) => Promise.resolve(taskId === 'repair-task-1'
+      ? {
+          task: {
+            allowedNextAction: 'wait_for_observation',
+            id: 'repair-task-1',
+            latestRunId: 'repair-run-1',
+            movie: { code: 'SUN-064', id: 'movie-sun-064', title: 'SUN-064' },
+            operation: 'repair_players',
+            reason: 'no_source',
+            sourceRevision: 4,
+            targetIntent: 'restore_playable_sources',
+            templateKey: 'movie',
+          },
+          runs: [{ id: 'repair-run-1', status: 'queued', attemptNumber: 1, receipt: null }],
+        }
+      : {
+          task,
+          runs: [{
+            id: 'run-sun-064',
+            status: 'succeeded',
+            attemptNumber: 1,
+            receipt: { createdCount: 0, primaryContentId: 'movie-sun-064', templateKey: 'movie', updatedCount: 0 },
+            readiness: {
+              metadata: { contentId: 'movie-sun-064', observedAt: 100, persisted: true },
+              playback: { status: 'unverified' },
+              receipt: { persisted: true, primaryContentId: 'movie-sun-064', schemaVersion: 2 },
+              source: {
+                disposition: 'no_source',
+                eligibleCount: 0,
+                observedAt: 100,
+                reasonCode: 'no_eligible_source',
+                repairable: true,
+                sourceRevision: 4,
+              },
+            },
+          }],
+        }))
 
     const wrapper = mountCrawler()
     await flushPromises()
@@ -340,10 +392,55 @@ describe('crawlers local task panel', () => {
       targetIntent: 'restore_playable_sources',
     })
     expect(api.admin.listCrawlerTasks).toHaveBeenCalled()
+    expect((wrapper.vm as any).selectedRun.task.id).toBe('repair-task-1')
+    expect((wrapper.vm as any).selectedRun.run.id).toBe('repair-run-1')
+    expect(wrapper.text()).toContain('修复原因：no_source')
+  })
+
+  it.each([
+    ['failed', 'source_read_failed'],
+    ['cancelled', 'cancelled'],
+  ] as const)('renders a same-movie link and bounded next action for repair %s terminal state', async (status, failureCode) => {
+    const task = {
+      allowedNextAction: 'create_new_task',
+      id: `repair-${status}`,
+      latest_run_id: `run-${status}`,
+      movie: { code: 'SUN-064', id: 'movie-sun-064', title: 'SUN-064' },
+      operation: 'repair_players',
+      reason: 'source_failed',
+      sourceRevision: 9,
+      template_key: 'movie',
+    }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{ id: `run-${status}`, status, attemptNumber: 2, failureCode, receipt: null }],
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+
+    expect(wrapper.get('a').attributes('href')).toBe('/movie/SUN-064')
+    expect(wrapper.text()).toContain('查看影片')
+    expect(wrapper.text()).toContain(`终态原因：${failureCode}`)
+    expect(wrapper.text()).toContain('source revision：9')
+    expect(wrapper.text()).toContain('允许创建新的修复任务')
   })
 
   it('renders bounded source health rows and excludes raw runner fields and inactive actions', async () => {
-    const task = { id: 'repair-task-1', template_key: 'movie', latest_run_id: 'repair-run-1' }
+    const task = {
+      allowedNextAction: 'none',
+      id: 'repair-task-1',
+      latest_run_id: 'repair-run-1',
+      movie: { code: 'SUN-064', id: 'movie-1', title: 'Repair Movie' },
+      operation: 'repair_players',
+      reason: 'no_source',
+      sourceRevision: 7,
+      template_key: 'movie',
+    }
     api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
       tasks: template === 'movie' ? [task] : [],
       nextCursor: null,
@@ -383,6 +480,8 @@ describe('crawlers local task panel', () => {
     expect(wrapper.text()).toContain('inactive')
     expect(wrapper.text()).toContain('200')
     expect(wrapper.text()).toContain('source_read_failed')
+    expect(wrapper.text()).toContain('下一步：暂无下一步')
+    expect(wrapper.get('a').attributes('href')).toBe('/movie/SUN-064')
     expect(wrapper.find('[data-source-row="TorrServer"] [data-source-action]').exists()).toBe(false)
     expect(wrapper.html()).not.toContain('RAW_RUNNER_SENTINEL')
     expect(wrapper.html()).not.toContain('RAW_SOURCE_SENTINEL')

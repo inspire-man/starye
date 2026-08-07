@@ -147,7 +147,9 @@ function receiptContentId(run: CrawlerRun): string | null {
   return run.receipt && !isRepairReceipt(run.receipt) ? run.receipt.primaryContentId : null
 }
 
-function managementLabel(run: CrawlerRun): string {
+function managementLabel(task: CrawlerTask, run: CrawlerRun): string {
+  if (task.operation === 'repair_players')
+    return '查看影片'
   const readiness = runReadiness(run)
   if (!readiness)
     return `管理${run.receipt && !isRepairReceipt(run.receipt) && run.receipt.templateKey === 'movie' ? '电影' : '漫画'}内容`
@@ -181,6 +183,8 @@ function latestRunFor(task: CrawlerTask): CrawlerRun | null {
 
 function selectRun(task: CrawlerTask, run: CrawlerRun | null): void {
   selectedRun.value = run ? { task, run } : null
+  if (run)
+    void loadTaskLogs(task, run)
 }
 
 async function loadTaskLogs(task: CrawlerTask, run: CrawlerRun, append = false): Promise<void> {
@@ -204,23 +208,33 @@ async function loadTaskPanel(): Promise<void> {
       const response = await api.admin.listCrawlerTasks({ template, limit: 20 })
       return [template, response] as const
     }))
+    let selectedRunChanged = false
     for (const [template, response] of responses) {
-      crawlerTasks.value[template] = response.tasks
+      const selectedTask = selectedRun.value && taskTemplate(selectedRun.value.task) === template
+        ? selectedRun.value.task
+        : null
+      const tasks = selectedTask && !response.tasks.some(task => task.id === selectedTask.id)
+        ? [selectedTask, ...response.tasks]
+        : response.tasks
+      crawlerTasks.value[template] = tasks
       taskCursors.value[template] = response.nextCursor ?? null
-      for (const task of response.tasks) {
+      for (const task of tasks) {
         const detail = await api.admin.getCrawlerTask(task.id)
         taskDetails.value[task.id] = detail
         const displayTask = detail.task ?? task
+        crawlerTasks.value[template] = crawlerTasks.value[template].map(current => current.id === task.id ? displayTask : current)
         const run = latestRunFor(displayTask)
         if (selectedRun.value?.task.id === task.id && run) {
           selectRun(displayTask, run)
+          selectedRunChanged = true
         }
         else if (!selectedRun.value && run) {
           selectRun(displayTask, run)
+          selectedRunChanged = true
         }
       }
     }
-    if (selectedRun.value) {
+    if (selectedRun.value && !selectedRunChanged) {
       const current = taskDetails.value[selectedRun.value.task.id]?.runs.find(run => run.id === selectedRun.value?.run.id)
       if (current) {
         selectedRun.value.run = current
@@ -335,6 +349,11 @@ async function confirmRetry(): Promise<void> {
 }
 
 function managementPath(task: CrawlerTask, run: CrawlerRun): string | null {
+  if (task.operation === 'repair_players') {
+    if (!task.movie?.code || !['succeeded', 'failed', 'cancelled'].includes(run.status))
+      return null
+    return `/movie/${encodeURIComponent(task.movie.code)}`
+  }
   if (run.status !== 'succeeded' || !run.receipt || isRepairReceipt(run.receipt))
     return null
   const query = new URLSearchParams({
@@ -388,12 +407,13 @@ async function confirmRepair(): Promise<void> {
     })
     success('已创建受控来源修复任务，正在等待读回。')
     await loadTaskPanel()
-    const task = crawlerTasks.value.movie.find(item => item.id === response.task.id)
-    if (task) {
-      const run = latestRunFor(task)
-      if (run)
-        selectRun(task, run)
-    }
+    const detail = await api.admin.getCrawlerTask(response.task.id)
+    const task = detail.task ?? response.task
+    taskDetails.value[task.id] = detail
+    crawlerTasks.value.movie = [task, ...crawlerTasks.value.movie.filter(item => item.id !== task.id)]
+    const run = latestRunFor(task)
+    if (run)
+      selectRun(task, run)
   }
   catch {
     taskError.value = '无法创建修复任务。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
@@ -589,6 +609,9 @@ async function executeClearFailed() {
         <p v-if="runFailureCode(selectedRun.run)" class="task-warning">
           终态原因：{{ runFailureCode(selectedRun.run) }}
         </p>
+        <p v-if="selectedRun.task.operation === 'repair_players'" class="task-warning">
+          修复原因：{{ selectedRun.task.reason }} · source revision：{{ selectedRun.task.sourceRevision }} · 下一步：{{ repairNextActionLabels[selectedRun.task.allowedNextAction ?? 'none'] }}
+        </p>
         <div v-if="selectedRun.run.status === 'failed' && runFailureCode(selectedRun.run) === 'receipt_missing'" class="task-warning">
           任务未找到可验证的入库结果，未生成内容管理链接。
         </div>
@@ -698,35 +721,49 @@ async function executeClearFailed() {
           <div v-if="!runReadiness(selectedRun.run)" class="readiness-loading" role="status">
             <RefreshCw :size="16" aria-hidden="true" />状态读取中，未推导 ready 或 playback proof。
           </div>
-          <div v-if="selectedRun.run.receipt && selectedRun.run.status === 'succeeded'" class="readiness-actions">
-            <button
-              v-if="repairReasonFor(selectedRun.run)"
-              data-repair-action="open"
-              class="task-secondary"
-              type="button"
-              :disabled="repairAction"
-              @click="askRepair(selectedRun.run)"
-            >
-              {{ repairAction ? '创建中…' : '发起来源修复' }}
-            </button>
+          <div
+            v-if="(selectedRun.run.receipt && selectedRun.run.status === 'succeeded') || managementPath(selectedRun.task, selectedRun.run) || (selectedRun.task.operation === 'repair_players' && ['queued', 'dispatching', 'running', 'cancel_requested'].includes(selectedRun.run.status))"
+            class="readiness-actions"
+          >
             <a
-              v-if="managementPath(selectedRun.task, selectedRun.run) && (!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition))"
+              v-if="managementPath(selectedRun.task, selectedRun.run) && (selectedRun.task.operation === 'repair_players' || !runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition))"
               class="task-secondary readiness-link"
               :href="managementPath(selectedRun.task, selectedRun.run)!"
             >
-              {{ managementLabel(selectedRun.run) }}
+              {{ managementLabel(selectedRun.task, selectedRun.run) }}
             </a>
+            <template v-if="selectedRun.task.operation !== 'repair_players' && selectedRun.run.receipt && selectedRun.run.status === 'succeeded'">
+              <button
+                v-if="repairReasonFor(selectedRun.run)"
+                data-repair-action="open"
+                class="task-secondary"
+                type="button"
+                :disabled="repairAction"
+                @click="askRepair(selectedRun.run)"
+              >
+                {{ repairAction ? '创建中…' : '发起来源修复' }}
+              </button>
+              <button
+                v-if="!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition)"
+                class="task-secondary"
+                type="button"
+                :disabled="taskRefreshing"
+                @click="loadTaskPanel"
+              >
+                {{ taskRefreshing ? '读取中…' : '重试读取' }}
+              </button>
+              <button
+                v-else-if="runReadiness(selectedRun.run)?.source.disposition === 'repairing'"
+                class="task-secondary"
+                type="button"
+                :disabled="taskRefreshing"
+                @click="loadTaskPanel"
+              >
+                {{ taskRefreshing ? '刷新中…' : '刷新状态' }}
+              </button>
+            </template>
             <button
-              v-if="!runReadiness(selectedRun.run) || ['no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition)"
-              class="task-secondary"
-              type="button"
-              :disabled="taskRefreshing"
-              @click="loadTaskPanel"
-            >
-              {{ taskRefreshing ? '读取中…' : '重试读取' }}
-            </button>
-            <button
-              v-else-if="runReadiness(selectedRun.run)?.source.disposition === 'repairing'"
+              v-if="selectedRun.task.operation === 'repair_players' && ['queued', 'dispatching', 'running', 'cancel_requested'].includes(selectedRun.run.status)"
               class="task-secondary"
               type="button"
               :disabled="taskRefreshing"
