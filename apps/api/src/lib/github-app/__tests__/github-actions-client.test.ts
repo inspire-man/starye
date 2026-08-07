@@ -13,7 +13,11 @@ async function createPrivateKeyPem(): Promise<string> {
   return `-----BEGIN PRIVATE KEY-----\n${encoded}\n-----END PRIVATE KEY-----`
 }
 
-async function createClient(fetch: typeof globalThis.fetch, onRetry?: (input: { readonly attempt: number, readonly code: string }) => Promise<void>) {
+async function createClient(
+  fetch: typeof globalThis.fetch,
+  onRetry?: (input: { readonly attempt: number, readonly code: string }) => Promise<void>,
+  options: { readonly maxAttempts?: number } = {},
+) {
   return createGitHubActionsClient({
     bindings: {
       appId: '12345',
@@ -24,6 +28,7 @@ async function createClient(fetch: typeof globalThis.fetch, onRetry?: (input: { 
       repository: 'starye',
     },
     fetch,
+    maxAttempts: options.maxAttempts,
     now: 1_700_000_000,
     onRetry,
   })
@@ -157,5 +162,88 @@ describe('github Actions client', () => {
       ok: false,
       retryable: true,
     })
+  })
+
+  it('rejects a forged fixed provider binding before making a provider request', async () => {
+    const snapshot = createProviderSnapshot('movie')
+    const dispatch = createProviderDispatchInput({ attempt: 1, runId: 'run-1', templateKey: 'movie' })
+    const forged = {
+      ...snapshot,
+      crawlerEntrypoint: 'crawler-comic',
+      target: 'foreign-target',
+    } as typeof snapshot
+    const client = await createClient(async () => {
+      throw new Error('should not request')
+    })
+
+    await expect(client.dispatchWorkflow({ dispatch, snapshot: forged })).resolves.toEqual({
+      code: 'github_actions_snapshot_mismatch',
+      ok: false,
+      retryable: false,
+    })
+  })
+
+  it('rejects a workflow readback that belongs to a different fixed workflow', async () => {
+    const client = await createClient(async (_input, init) => init?.method === 'POST' && String(init.body).includes('permissions')
+      ? Response.json({ token: 'installation-token-value' })
+      : Response.json({
+          conclusion: 'success',
+          head_sha: 'a'.repeat(40),
+          path: '.github/workflows/daily-manga-crawl.yml',
+          run_attempt: 1,
+          status: 'completed',
+        }))
+
+    await expect(client.getWorkflowRun({
+      providerRunId: '123',
+      snapshot: createProviderSnapshot('movie'),
+    })).resolves.toEqual({
+      code: 'github_actions_response_invalid',
+      ok: false,
+      retryable: false,
+    })
+  })
+
+  it('rejects zero provider run IDs without minting a token or retrying', async () => {
+    const client = await createClient(async () => {
+      throw new Error('should not request')
+    })
+    const snapshot = createProviderSnapshot('movie')
+
+    await expect(client.getWorkflowRun({ providerRunId: '000', snapshot })).resolves.toEqual({
+      code: 'github_actions_provider_run_invalid',
+      ok: false,
+      retryable: false,
+    })
+    await expect(client.cancelWorkflowRun({ providerRunId: '0', snapshot })).resolves.toEqual({
+      code: 'github_actions_provider_run_invalid',
+      ok: false,
+      retryable: false,
+    })
+  })
+
+  it('keeps transient provider retries bounded at the configured transport limit', async () => {
+    let actionCalls = 0
+    let retries = 0
+    const client = await createClient(async (_input, init) => {
+      if (init?.method === 'POST' && String(init.body).includes('permissions'))
+        return Response.json({ token: 'installation-token-value' })
+      actionCalls += 1
+      return new Response(null, { status: 503 })
+    }, async () => {
+      retries += 1
+    }, { maxAttempts: 2 })
+
+    await expect(client.dispatchWorkflow({
+      dispatch: createProviderDispatchInput({ attempt: 1, runId: 'run-1', templateKey: 'movie' }),
+      snapshot: createProviderSnapshot('movie'),
+    })).resolves.toEqual({
+      code: 'github_provider_unavailable',
+      ok: false,
+      retryable: true,
+      status: 503,
+    })
+    expect(actionCalls).toBe(2)
+    expect(retries).toBe(1)
   })
 })
