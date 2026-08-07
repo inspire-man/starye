@@ -69,6 +69,25 @@ describe('production Actions workflow integration contract', () => {
     }
   })
 
+  it('keeps movie repair dispatch on the shared job with only fixed binding inputs', async () => {
+    const source = await workflowText('daily-movie-crawl.yml')
+    const inputsStart = source.indexOf('    inputs:')
+    const jobsStart = source.indexOf('\njobs:', inputsStart)
+    const inputsBlock = source.slice(inputsStart, jobsStart)
+    const inputNames = [...inputsBlock.matchAll(/^ {6}([a-z_]+):$/gmu)].map(match => match[1])
+    const validation = source.indexOf('actions-event-client.ts validate-dispatch')
+    const preparation = source.indexOf('--command crawler-optimized')
+    const crawlJob = source.indexOf('\n  crawl:')
+
+    expect(inputNames).toEqual(['run_id', 'attempt', 'template', 'target'])
+    expect(source).toContain('ACTIONS_PROVIDER_WORKFLOW: .github/workflows/daily-movie-crawl.yml')
+    expect(source).toContain('run-prepared-entry --entry crawler-optimized')
+    expect(source).not.toMatch(/\b(?:operation|movieId|sourceRevision|reason|targetIntent)\b/u)
+    expect(source).not.toMatch(/\n {2}repair[^\n]*:/u)
+    expect(validation).toBeGreaterThan(crawlJob)
+    expect(preparation).toBeGreaterThan(validation)
+  })
+
   it('serializes one signed adapter sequence for dispatch binding, provider start, checkpoints, and receipt', async () => {
     const calls: Array<{ readonly body: Record<string, unknown>, readonly headers: Headers, readonly url: string }> = []
     const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
