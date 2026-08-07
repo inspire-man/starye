@@ -100,6 +100,7 @@ interface TaskAccessRow {
 }
 
 interface RepairMovieLookupRow {
+  code: string
   id: string
   source_disposition: 'ready' | 'no_source' | 'repairing' | 'source_failed' | null
   source_reason: string | null
@@ -379,7 +380,7 @@ function readRepairSnapshot(task: RepairTaskRow) {
 
 async function readRepairMovieLookup(c: any, movieId: string): Promise<RepairMovieLookupRow | undefined> {
   const row = await getD1(c).prepare(`
-    SELECT movie.id, movie.title,
+    SELECT movie.id, movie.code, movie.title,
       state.disposition AS source_disposition,
       state.reason_code AS source_reason,
       state.source_revision
@@ -394,7 +395,7 @@ async function readRepairMovieLookup(c: any, movieId: string): Promise<RepairMov
 async function readRepairTaskResponse(
   c: any,
   input: {
-    readonly movie: Pick<RepairMovieLookupRow, 'id' | 'title'>
+    readonly movie: Pick<RepairMovieLookupRow, 'code' | 'id' | 'title'>
     readonly taskId: string
   },
 ) {
@@ -563,7 +564,7 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
   }
 
   const detail = await readRepairTaskResponse(c, {
-    movie: { id: movie.id, title: movie.title },
+    movie: { code: movie.code, id: movie.id, title: movie.title },
     taskId: result.run.taskId,
   })
   return c.json({
@@ -638,7 +639,7 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
       throw new HTTPException(404, { message: 'Repair movie not found' })
     }
     return c.json(await readRepairTaskResponse(c, {
-      movie: { id: movie.id, title: movie.title },
+      movie: { code: movie.code, id: movie.id, title: movie.title },
       taskId,
     }))
   }

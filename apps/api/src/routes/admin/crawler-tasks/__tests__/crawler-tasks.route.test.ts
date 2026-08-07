@@ -469,6 +469,7 @@ describe('admin crawler task routes', () => {
       },
     })
     const { app } = createApp({}, [[{
+      code: 'SUN-064',
       id: 'movie-1',
       source_revision: 7,
       source_reason: 'no_source',
@@ -532,7 +533,7 @@ describe('admin crawler task routes', () => {
       task: {
         allowedNextAction: 'wait_for_observation',
         id: 'task-repair',
-        movie: { id: 'movie-1', title: 'Repair Movie' },
+        movie: { code: 'SUN-064', id: 'movie-1', title: 'Repair Movie' },
         operation: 'repair_players',
         reason: 'no_source',
         sourceRevision: 7,
@@ -548,5 +549,98 @@ describe('admin crawler task routes', () => {
     expect(JSON.stringify(body)).not.toContain('workflow')
     expect(JSON.stringify(body)).not.toContain('command')
     expect(JSON.stringify(body)).not.toContain('signature')
+  })
+
+  it('returns the same bounded movie identity for repair detail and preserves history', async () => {
+    const latestReceipt = JSON.stringify({
+      movieId: 'movie-1',
+      observedAt: 200,
+      operation: 'repair_players',
+      rawRunnerField: 'hidden-runner-value',
+      sourceRevision: 8,
+      sourceSummary: [{ eligible: true, health: 'unverified', observedAt: 200, reasonCode: 'source_unverified', sourceType: 'direct' }],
+    })
+    const previousReceipt = JSON.stringify({
+      movieId: 'movie-1',
+      observedAt: 150,
+      operation: 'repair_players',
+      sourceRevision: 7,
+      sourceSummary: [{ eligible: false, health: 'failed', observedAt: 150, reasonCode: 'source_read_failed', sourceType: 'direct' }],
+    })
+    const snapshot = JSON.stringify({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-1',
+      operation: 'repair_players',
+      permissionResource: 'movie',
+      reason: 'no_source',
+      sourceRevision: 8,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    })
+    const { app } = createApp({}, [[{
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+    }], [{
+      code: 'SUN-064',
+      id: 'movie-1',
+      source_disposition: 'no_source',
+      source_reason: 'no_eligible_source',
+      source_revision: 8,
+      title: 'Repair Movie',
+    }], [{
+      created_at: 200,
+      id: 'task-repair',
+      latest_run_id: 'run-repair-2',
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+      updated_at: 200,
+    }], [{
+      attempt_number: 2,
+      cancel_requested_at: null,
+      created_at: 200,
+      failure_code: null,
+      id: 'run-repair-2',
+      receipt_summary_json: latestReceipt,
+      status: 'succeeded',
+      task_id: 'task-repair',
+      terminal_at: 200,
+      updated_at: 200,
+    }, {
+      attempt_number: 1,
+      cancel_requested_at: null,
+      created_at: 150,
+      failure_code: 'source_read_failed',
+      id: 'run-repair-1',
+      receipt_summary_json: previousReceipt,
+      status: 'failed',
+      task_id: 'task-repair',
+      terminal_at: 150,
+      updated_at: 150,
+    }]])
+
+    const response = await app.request('/crawler-tasks/task-repair')
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toMatchObject({
+      run: {
+        id: 'run-repair-2',
+        receipt: { movieId: 'movie-1', sourceRevision: 8 },
+      },
+      runs: [
+        { id: 'run-repair-2', receipt: { movieId: 'movie-1', sourceRevision: 8 } },
+        { failureCode: 'source_read_failed', id: 'run-repair-1', receipt: { movieId: 'movie-1', sourceRevision: 7 } },
+      ],
+      task: {
+        id: 'task-repair',
+        movie: { code: 'SUN-064', id: 'movie-1', title: 'Repair Movie' },
+        operation: 'repair_players',
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain('rawRunnerField')
+    expect(JSON.stringify(body)).not.toContain('hidden-runner-value')
   })
 })

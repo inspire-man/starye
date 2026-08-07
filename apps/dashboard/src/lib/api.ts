@@ -284,7 +284,7 @@ export interface CrawlerRepairTask {
   createdAt?: number
   id: string
   latestRunId?: string | null
-  movie: { id: string, title: string }
+  movie: { code: string, id: string, title: string }
   operation: 'repair_players'
   reason: CrawlerRepairReason
   sourceRevision: number
@@ -352,7 +352,7 @@ export interface CrawlerRun {
 export interface CrawlerTask {
   allowedNextAction?: CrawlerRepairNextAction
   id: string
-  movie?: { id: string, title: string }
+  movie?: { code?: string, id: string, title: string }
   operation?: CrawlerTaskTemplate | 'repair_players'
   reason?: CrawlerRepairReason
   sourceRevision?: number
