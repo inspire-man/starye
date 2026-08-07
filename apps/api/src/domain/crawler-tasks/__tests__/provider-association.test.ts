@@ -102,4 +102,17 @@ describe('provider association registry', () => {
       providerRunUrl: 'https://attacker.invalid/callback',
     })).toThrow('provider_summary_invalid')
   })
+
+  it('uses the fixed repository when projecting a numeric provider run', () => {
+    expect(createProviderAssociationSummary({
+      providerRunId: '456',
+      providerStatus: 'completed',
+    })).toEqual({
+      provider: 'github-actions',
+      providerRunId: '456',
+      providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/456',
+      providerStatus: 'completed',
+      repository: 'inspire-man/starye',
+    })
+  })
 })
