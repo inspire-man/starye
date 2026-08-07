@@ -5,15 +5,15 @@ milestone_name: 播放可用性与生产自愈闭环
 current_phase: 23
 current_phase_name: GitHub Actions Production Repair And Reconciliation
 status: executing
-stopped_at: Completed 23-01-PLAN.md
-last_updated: "2026-08-07T12:25:44.356Z"
+stopped_at: Completed 23-02-PLAN.md
+last_updated: "2026-08-07T14:26:09.729Z"
 last_activity: 2026-08-07
 last_activity_desc: Phase 23 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 18
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State: Starye — 个人内容中台
@@ -28,11 +28,11 @@ See: `.planning/PROJECT.md` (updated 2026-08-05)
 ## Current Position
 
 Phase: 23 (GitHub Actions Production Repair And Reconciliation) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-08-07 — Phase 23 execution started
 
-Progress: ██████░░░░ [████████░░] 78% (Phase 20: 100%; Phase 21: 100%; Phase 22: 100%)
+Progress: ██████░░░░ [████████░░] 83% (Phase 20: 100%; Phase 21: 100%; Phase 22: 100%)
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: ██████░░░░ [████████░░] 78% (P
 | Phase 21 P6 | 32m | 2 tasks | 5 files |
 | Phase 21 P7 | unmeasured-continuation | 2 tasks | 1 files |
 | Phase 23 P01 | 23 min | 3 tasks | 6 files |
+| Phase 23 P02 | unmeasured-continuation | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,10 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 23-01 validates workflow readback against the fixed snapshot workflow and accepts only positive numeric provider run IDs.
 - [Phase ?]: Phase 23-01 keeps provider acceptance, provider observation, receipt validation, and repair success as independent fact layers.
 - [Phase ?]: Phase 23-01 reuses the existing GitHub App installation-token boundary without package or credential setup changes.
+- [Phase ?]: Keep poll and claim as strict control envelopes; provider and source-revision fields remain on lifecycle/source callbacks for Plan 04.
+- [Phase ?]: Select repair_players only from the validated claimed movie snapshot and never fall back to ordinary movie crawling.
+- [Phase ?]: Treat an accepted=false heartbeat as a bounded runner failure so a lost lease cannot reach a success callback.
+- [Phase ?]: Keep default repair source discovery as an explicit injected boundary until a canonical movie.id-to-source read contract is planned.
 
 ### Pending Todos
 
@@ -110,6 +115,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-07T12:25:44.343Z
-Stopped at: Completed 23-01-PLAN.md
+Last session: 2026-08-07T14:26:09.716Z
+Stopped at: Completed 23-02-PLAN.md
 Resume file: None
