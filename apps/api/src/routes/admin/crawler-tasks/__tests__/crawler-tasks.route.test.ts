@@ -475,6 +475,13 @@ describe('admin crawler task routes', () => {
       source_reason: 'no_source',
       source_disposition: 'no_source',
       title: 'Repair Movie',
+    }], [], [{
+      code: 'SUN-064',
+      id: 'movie-1',
+      source_revision: 7,
+      source_reason: 'no_source',
+      source_disposition: 'no_source',
+      title: 'Repair Movie',
     }], [{
       created_at: 100,
       id: 'task-repair',
@@ -642,5 +649,314 @@ describe('admin crawler task routes', () => {
     })
     expect(JSON.stringify(body)).not.toContain('rawRunnerField')
     expect(JSON.stringify(body)).not.toContain('hidden-runner-value')
+  })
+
+  it('locks an active same-movie repair and focuses its current attempt without creating a duplicate', async () => {
+    const snapshot = JSON.stringify({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-1',
+      operation: 'repair_players',
+      permissionResource: 'movie',
+      reason: 'no_source',
+      sourceRevision: 7,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    })
+    const { app } = createApp({}, [[{
+      code: 'SUN-064',
+      id: 'movie-1',
+      source_disposition: 'no_source',
+      source_reason: 'no_eligible_source',
+      source_revision: 7,
+      title: 'Repair Movie',
+    }], [{
+      created_at: 100,
+      id: 'task-repair-active',
+      latest_run_id: 'run-repair-active',
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+      updated_at: 100,
+    }], [{
+      created_at: 100,
+      id: 'task-repair-active',
+      latest_run_id: 'run-repair-active',
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+      updated_at: 100,
+    }], [{
+      attempt_number: 1,
+      cancel_requested_at: null,
+      created_at: 100,
+      failure_code: null,
+      id: 'run-repair-active',
+      receipt_summary_json: null,
+      status: 'running',
+      task_id: 'task-repair-active',
+      terminal_at: null,
+      updated_at: 100,
+    }]])
+
+    const response = await app.request('/crawler-tasks/repair-players', {
+      body: JSON.stringify({ confirmed: true, movieId: 'movie-1', reason: 'no_source', targetIntent: 'restore_playable_sources' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      currentAttempt: { id: 'run-repair-active', status: 'running' },
+      kind: 'existing_active_run',
+      task: {
+        activeDuplicateLock: { locked: true },
+        id: 'task-repair-active',
+      },
+    })
+    expect(crawlerTaskRepository.createOrGetActiveRun).not.toHaveBeenCalled()
+  })
+
+  it('rereads a terminal repair disposition before allowing a new task', async () => {
+    const { app } = createApp({}, [[{
+      code: 'SUN-064',
+      id: 'movie-1',
+      source_disposition: 'no_source',
+      source_revision: 7,
+      title: 'Repair Movie',
+    }], [], [{
+      code: 'SUN-064',
+      id: 'movie-1',
+      source_disposition: 'ready',
+      source_revision: 8,
+      title: 'Repair Movie',
+    }]])
+
+    const response = await app.request('/crawler-tasks/repair-players', {
+      body: JSON.stringify({ confirmed: true, movieId: 'movie-1', reason: 'no_source', targetIntent: 'restore_playable_sources' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(409)
+    expect(crawlerTaskRepository.createOrGetActiveRun).not.toHaveBeenCalled()
+  })
+
+  it('projects provider, lease, reconciliation, receipt, source readback, and safe cursor facts separately', async () => {
+    const receipt = JSON.stringify({
+      movieId: 'movie-1',
+      observedAt: 200,
+      operation: 'repair_players',
+      sourceRevision: 8,
+      sourceSummary: [{ eligible: true, health: 'unverified', observedAt: 200, reasonCode: 'source_unverified', sourceType: 'direct' }],
+    })
+    const snapshot = JSON.stringify({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-1',
+      operation: 'repair_players',
+      permissionResource: 'movie',
+      reason: 'no_source',
+      sourceRevision: 7,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    })
+    const { app } = createApp({}, [[{
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+    }], [{
+      code: 'SUN-064',
+      id: 'movie-1',
+      source_disposition: 'ready',
+      source_reason: null,
+      source_revision: 8,
+      title: 'Repair Movie',
+    }], [{
+      created_at: 200,
+      id: 'task-repair',
+      latest_run_id: 'run-repair',
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+      updated_at: 200,
+    }], [{
+      active_lease_expires_at: null,
+      active_lease_renewed_at: null,
+      attempt_number: 1,
+      cancel_requested_at: null,
+      created_at: 100,
+      failure_code: null,
+      id: 'run-repair',
+      last_heartbeat_at: 150,
+      provider: 'github-actions',
+      provider_conclusion: 'success',
+      provider_environment: 'starye-org',
+      provider_reconciliation_window_ends_at: 500,
+      provider_ref: 'main',
+      provider_repository: 'inspire-man/starye',
+      provider_run_attempt: 1,
+      provider_run_id: '123',
+      provider_sha: 'a'.repeat(40),
+      provider_status: 'completed',
+      provider_updated_at: 200,
+      provider_workflow: '.github/workflows/daily-movie-crawl.yml',
+      receipt_primary_content_id: 'movie-1',
+      receipt_schema_version: 2,
+      receipt_source_revision: 8,
+      receipt_summary_json: receipt,
+      state_version: 2,
+      status: 'succeeded',
+      task_id: 'task-repair',
+      terminal_at: 200,
+      updated_at: 200,
+    }], [{
+      disposition: 'ready',
+      eligible_count: 1,
+      observed_at: 200,
+      reason_code: null,
+      repairable: 0,
+      source_revision: 8,
+    }], [{
+      eligible: 1,
+      health: 'unverified',
+      observed_at: 200,
+      reason_code: 'source_unverified',
+      source_type: 'direct',
+    }], [{
+      created_at: 200,
+      reason_code: 'provider_success_pending_receipt',
+      run_id: 'run-repair',
+      safe_summary: 'hidden safe summary',
+    }], []])
+
+    const response = await app.request('/crawler-tasks/task-repair')
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toMatchObject({
+      currentAttempt: {
+        lease: { outcome: 'released' },
+        provider: {
+          providerRunId: '123',
+          providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/123',
+        },
+        receiptValidation: { identityMatch: true, readbackMatch: true, status: 'validated' },
+        reconciliation: { outcome: 'observed' },
+        repair: { status: 'validated' },
+        safeLogCursor: null,
+        sourceReadback: { movieId: 'movie-1', sourceRevision: 8 },
+      },
+      task: {
+        sameMovieIdentity: true,
+        source: { disposition: 'ready', sourceRevision: 8 },
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain('hidden safe summary')
+    expect(JSON.stringify(body)).not.toContain('safe_facts_json')
+  })
+
+  it('keeps a repair receipt failed when the current authoritative readback is incomplete', async () => {
+    const receipt = JSON.stringify({
+      movieId: 'movie-1',
+      observedAt: 200,
+      operation: 'repair_players',
+      sourceRevision: 8,
+      sourceSummary: [{ eligible: true, health: 'unverified', observedAt: 200, reasonCode: 'source_unverified', sourceType: 'direct' }],
+    })
+    const snapshot = JSON.stringify({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-1',
+      operation: 'repair_players',
+      permissionResource: 'movie',
+      reason: 'no_source',
+      sourceRevision: 7,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    })
+    const { app } = createApp({}, [[{
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+    }], [{
+      code: 'SUN-064',
+      id: 'movie-1',
+      source_disposition: 'ready',
+      source_reason: null,
+      source_revision: 8,
+      title: 'Repair Movie',
+    }], [{
+      created_at: 200,
+      id: 'task-repair',
+      latest_run_id: 'run-repair',
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+      updated_at: 200,
+    }], [{
+      attempt_number: 1,
+      cancel_requested_at: null,
+      created_at: 100,
+      failure_code: null,
+      id: 'run-repair',
+      receipt_summary_json: receipt,
+      status: 'succeeded',
+      task_id: 'task-repair',
+      terminal_at: 200,
+      updated_at: 200,
+    }], [{
+      disposition: 'ready',
+      eligible_count: 1,
+      observed_at: 200,
+      reason_code: null,
+      repairable: 0,
+      source_revision: 8,
+    }], [], [], []])
+
+    const response = await app.request('/crawler-tasks/task-repair')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      currentAttempt: {
+        receiptValidation: {
+          failureCode: 'receipt_readback_mismatch',
+          readbackMatch: false,
+          status: 'failed',
+        },
+        repair: { failureCode: 'receipt_readback_mismatch', status: 'failed' },
+      },
+      task: { sameMovieIdentity: true },
+    })
+  })
+
+  it('blocks a repair run retry when the current source disposition is no longer repairable', async () => {
+    const snapshot = JSON.stringify({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-1',
+      operation: 'repair_players',
+      permissionResource: 'movie',
+      reason: 'no_source',
+      sourceRevision: 7,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    })
+    const { app } = createApp({}, [[{
+      operation: 'repair_players',
+      request_snapshot_json: snapshot,
+      template_key: 'movie',
+    }], [{ id: 'run-repair' }], [{
+      id: 'movie-1',
+      source_disposition: 'ready',
+      source_revision: 8,
+    }]])
+
+    const response = await app.request('/crawler-tasks/task-repair/runs/run-repair/retry', {
+      body: JSON.stringify({ confirmed: true }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(409)
+    expect(crawlerTaskRepository.retryRun).not.toHaveBeenCalled()
   })
 })

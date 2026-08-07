@@ -6,7 +6,7 @@ import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { HTTPException } from 'hono/http-exception'
 import * as v from 'valibot'
-import { createProviderDispatchInput, createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
+import { createProviderAssociationSummary, createProviderDispatchInput, createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTaskCursor } from '../../../domain/crawler-tasks/repository'
 import { getCrawlerTaskTemplate, readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
@@ -124,11 +124,61 @@ interface RepairRunRow {
   created_at: number
   failure_code: string | null
   id: string
+  last_heartbeat_at: number | null
+  lease_expires_at: number | null
+  active_lease_expires_at: number | null
+  active_lease_renewed_at: number | null
+  provider: string | null
+  provider_conclusion: string | null
+  provider_run_attempt: number | null
+  provider_run_id: string | null
+  provider_status: string | null
+  provider_updated_at: number | null
+  provider_environment: string | null
+  provider_ref: string | null
+  provider_repository: string | null
+  provider_sha: string | null
+  provider_workflow: string | null
+  provider_reconciliation_window_ends_at: number | null
+  state_version: number
   receipt_summary_json: string | null
+  receipt_primary_content_id: string | null
+  receipt_schema_version: number | null
+  receipt_source_revision: number | null
   status: string
   task_id: string
   terminal_at: number | null
   updated_at: number
+}
+
+interface RepairTransitionRow {
+  created_at: number
+  reason_code: string
+  run_id: string
+  safe_summary: string | null
+}
+
+interface RepairRunnerEventRow {
+  outcome: string
+  received_at: number
+  run_id: string
+}
+
+interface RepairSourceStateRow {
+  disposition: 'ready' | 'no_source' | 'repairing' | 'source_failed'
+  eligible_count: number
+  observed_at: number
+  reason_code: string | null
+  repairable: number | boolean
+  source_revision: number
+}
+
+interface RepairSourceObservationRow {
+  eligible: number | boolean
+  health: string
+  observed_at: number
+  reason_code: string
+  source_type: string
 }
 
 const RepairPlayersCommandSchema = v.strictObject({
@@ -291,7 +341,7 @@ function projectTaskDetail(detail: { task: unknown, runs: readonly unknown[] }):
   }
 }
 
-function allowedRepairNextAction(status: unknown): 'none' | 'wait_for_observation' | 'create_new_task' {
+function allowedRepairNextAction(status: unknown, disposition?: RepairSourceProjection['disposition'] | null): 'none' | 'wait_for_observation' | 'create_new_task' {
   switch (status) {
     case 'queued':
     case 'dispatching':
@@ -300,13 +350,114 @@ function allowedRepairNextAction(status: unknown): 'none' | 'wait_for_observatio
       return 'wait_for_observation'
     case 'failed':
     case 'cancelled':
-      return 'create_new_task'
+      return disposition === undefined || disposition === null || disposition === 'no_source' || disposition === 'source_failed'
+        ? 'create_new_task'
+        : 'none'
+    case 'succeeded':
+      return disposition === 'no_source' || disposition === 'source_failed' ? 'create_new_task' : 'none'
     default:
       return 'none'
   }
 }
 
-function projectRepairReceipt(raw: unknown) {
+interface RepairSourceProjection {
+  disposition: 'ready' | 'no_source' | 'repairing' | 'source_failed'
+  eligibleCount: number
+  observedAt: number
+  reasonCode: string | null
+  repairable: boolean
+  rows: Array<{
+    eligible: boolean
+    health: 'inactive' | 'unverified' | 'failed'
+    observedAt: number
+    reasonCode: 'source_inactive' | 'source_unverified' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
+    sourceType: 'direct' | 'magnet' | 'TorrServer'
+  }>
+  sourceRevision: number
+}
+
+interface RepairSourceReadback extends RepairSourceProjection {
+  movieId: string
+  sourceCount: number
+}
+
+interface RepairLeaseProjection {
+  acquiredAt?: number
+  expiresAt?: number
+  lastHeartbeatAt?: number
+  outcome: 'pending' | 'active' | 'renewed' | 'released' | 'expired' | 'recovered'
+  recoveredAt?: number
+}
+
+interface RepairReconciliationProjection {
+  observedAt?: number
+  outcome: 'pending' | 'observed' | 'failed' | 'lost' | 'late' | 'stale' | 'ignored' | 'duplicate' | 'conflict'
+  processedAt?: number
+  windowEndsAt?: number
+  windowStatus: 'pending' | 'open' | 'closed' | 'expired'
+}
+
+interface RepairReceiptValidationProjection {
+  failureCode?: string
+  identityMatch?: boolean
+  readbackMatch?: boolean
+  status: 'pending' | 'validated' | 'failed'
+  validatedAt?: number
+}
+
+interface RepairOutcomeProjection {
+  code?: string
+  observedAt?: number
+  outcome: 'pending' | 'accepted' | 'contract_failure' | 'duplicate' | 'stale' | 'late' | 'ignored' | 'conflict' | 'receipt_failure'
+}
+
+type RepairReceiptProjection = ReturnType<typeof projectRepairReceipt>
+
+const repairSourceReasonCodes = new Set([
+  'no_eligible_source',
+  'repair_requested',
+  'source_candidate_invalid',
+  'source_read_failed',
+  'source_write_failed',
+  'source_inactive',
+  'source_unverified',
+])
+const repairSourceHealthReasonCodes = new Set([
+  'source_inactive',
+  'source_unverified',
+  'source_candidate_invalid',
+  'source_read_failed',
+  'source_write_failed',
+])
+const repairSourceTypes = new Set(['direct', 'magnet', 'TorrServer'])
+const repairSourceHealth = new Set(['inactive', 'unverified', 'failed'])
+const repairRunStatuses = new Set(['queued', 'dispatching', 'running', 'cancel_requested'])
+const repairOutcomeCodes = new Set(['accepted', 'contract_failure', 'duplicate', 'stale', 'late', 'ignored', 'conflict', 'receipt_failure'])
+
+function boundedNonNegativeInteger(value: unknown, max = 4_000_000_000): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= max ? value : undefined
+}
+
+function boundedSafeCode(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9][\w.:-]{0,63}$/u.test(value))
+    return undefined
+  return value
+}
+
+function projectRepairReceipt(raw: unknown): {
+  movieId: string
+  observedAt: number
+  operation: 'repair_players'
+  sourceRevision: number
+  sourceSummary: Array<{
+    eligible: boolean
+    health: 'inactive' | 'unverified' | 'failed'
+    observedAt: number
+    reasonCode: 'source_inactive' | 'source_unverified' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
+    sourceType: 'direct' | 'magnet' | 'TorrServer'
+  }>
+  summary: { eligibleCount: number, sourceCount: number }
+} | null {
   if (!raw)
     return null
   const value = typeof raw === 'string'
@@ -322,12 +473,13 @@ function projectRepairReceipt(raw: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     return null
   const receipt = value as Record<string, unknown>
+  const movieId = typeof receipt.movieId === 'string' && /^\w[\w-]{0,127}$/u.test(receipt.movieId) ? receipt.movieId : null
+  const observedAt = boundedNonNegativeInteger(receipt.observedAt)
+  const sourceRevision = boundedNonNegativeInteger(receipt.sourceRevision, 1_000_000)
   if (receipt.operation !== 'repair_players'
-    || typeof receipt.movieId !== 'string'
-    || typeof receipt.observedAt !== 'number'
-    || !Number.isSafeInteger(receipt.observedAt)
-    || typeof receipt.sourceRevision !== 'number'
-    || !Number.isSafeInteger(receipt.sourceRevision)
+    || !movieId
+    || observedAt === undefined
+    || sourceRevision === undefined
     || !Array.isArray(receipt.sourceSummary)) {
     return null
   }
@@ -341,29 +493,273 @@ function projectRepairReceipt(raw: unknown) {
       sourceType: source.sourceType,
     }))
     .filter(source => (
-      typeof source.observedAt === 'number'
-      && Number.isSafeInteger(source.observedAt)
-      && (source.health === 'inactive' || source.health === 'unverified' || source.health === 'failed')
-      && (source.reasonCode === 'source_inactive'
-        || source.reasonCode === 'source_unverified'
-        || source.reasonCode === 'source_candidate_invalid'
-        || source.reasonCode === 'source_read_failed'
-        || source.reasonCode === 'source_write_failed')
-      && (source.sourceType === 'direct' || source.sourceType === 'magnet' || source.sourceType === 'TorrServer')
+      boundedNonNegativeInteger(source.observedAt) !== undefined
+      && repairSourceHealth.has(source.health as string)
+      && repairSourceHealthReasonCodes.has(source.reasonCode as string)
+      && repairSourceTypes.has(source.sourceType as string)
     ))
-  if (sourceSummary.length !== receipt.sourceSummary.length)
+    .slice(0, 50)
+    .map(source => ({
+      eligible: source.eligible,
+      health: source.health as 'inactive' | 'unverified' | 'failed',
+      observedAt: source.observedAt as number,
+      reasonCode: source.reasonCode as 'source_inactive' | 'source_unverified' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed',
+      sourceType: source.sourceType as 'direct' | 'magnet' | 'TorrServer',
+    }))
+  if (sourceSummary.length !== receipt.sourceSummary.length || receipt.sourceSummary.length > 50)
     return null
   return {
-    movieId: receipt.movieId,
-    observedAt: receipt.observedAt,
+    movieId,
+    observedAt,
     operation: 'repair_players' as const,
-    sourceRevision: receipt.sourceRevision,
+    sourceRevision,
     sourceSummary,
     summary: {
       eligibleCount: sourceSummary.filter(source => source.eligible).length,
       sourceCount: sourceSummary.length,
     },
   }
+}
+
+function projectProviderAssociation(row: RepairRunRow) {
+  if (!row.provider && !row.provider_run_id && !row.provider_workflow)
+    return null
+  try {
+    return createProviderAssociationSummary({
+      environment: row.provider_environment ?? undefined,
+      providerConclusion: row.provider_conclusion ?? undefined,
+      providerRunAttempt: row.provider_run_attempt ?? undefined,
+      providerRunId: row.provider_run_id ?? undefined,
+      providerStatus: row.provider_status ?? undefined,
+      ref: row.provider_ref ?? undefined,
+      repository: row.provider_repository ?? undefined,
+      sha: row.provider_sha ?? undefined,
+      workflow: row.provider_workflow ?? undefined,
+    })
+  }
+  catch {
+    return null
+  }
+}
+
+function projectRepairSourceRow(row: RepairSourceObservationRow) {
+  const observedAt = boundedNonNegativeInteger(row.observed_at)
+  if (observedAt === undefined
+    || !repairSourceHealth.has(row.health)
+    || !repairSourceReasonCodes.has(row.reason_code)
+    || !repairSourceTypes.has(row.source_type)) {
+    return null
+  }
+  return {
+    eligible: row.eligible === true || row.eligible === 1,
+    health: row.health as RepairSourceProjection['rows'][number]['health'],
+    observedAt,
+    reasonCode: row.reason_code as RepairSourceProjection['rows'][number]['reasonCode'],
+    sourceType: row.source_type as RepairSourceProjection['rows'][number]['sourceType'],
+  }
+}
+
+async function readRepairSourceProjection(c: any, movieId: string): Promise<{ readback: RepairSourceReadback | null, source: RepairSourceProjection | null }> {
+  const stateResult = await getD1(c).prepare(`
+    SELECT disposition, eligible_count, observed_at, reason_code, repairable, source_revision
+    FROM movie_source_state
+    WHERE movie_id = ?
+    LIMIT 1
+  `).bind(movieId).all<RepairSourceStateRow>()
+  const state = stateResult.results?.[0]
+  if (!state || !['ready', 'no_source', 'repairing', 'source_failed'].includes(state.disposition))
+    return { readback: null, source: null }
+
+  const sourceRevision = boundedNonNegativeInteger(state.source_revision, 1_000_000) ?? 0
+  const observedAt = boundedNonNegativeInteger(state.observed_at) ?? 0
+  const observations = await getD1(c).prepare(`
+    SELECT eligible, health, observed_at, reason_code, source_type
+    FROM movie_source_observation
+    WHERE movie_id = ? AND source_revision = ? AND operation = 'repair_players'
+    ORDER BY source_ordinal ASC, observed_at ASC
+    LIMIT 50
+  `).bind(movieId, sourceRevision).all<RepairSourceObservationRow>()
+  const rows = (observations.results ?? [])
+    .map(projectRepairSourceRow)
+    .filter((row): row is NonNullable<ReturnType<typeof projectRepairSourceRow>> => row !== null)
+  const reasonCode = typeof state.reason_code === 'string' && repairSourceReasonCodes.has(state.reason_code)
+    ? state.reason_code
+    : null
+  const source: RepairSourceProjection = {
+    disposition: state.disposition,
+    eligibleCount: boundedNonNegativeInteger(state.eligible_count, 1_000_000) ?? rows.filter(row => row.eligible).length,
+    observedAt,
+    reasonCode,
+    repairable: state.repairable === true || state.repairable === 1,
+    rows,
+    sourceRevision,
+  }
+  return {
+    readback: {
+      ...source,
+      movieId,
+      sourceCount: rows.length,
+    },
+    source,
+  }
+}
+
+function repairOutcomeFromReason(reason: unknown): RepairOutcomeProjection['outcome'] | undefined {
+  if (typeof reason !== 'string')
+    return undefined
+  if (reason === 'receipt_missing' || reason === 'repair_source_revision_conflict' || reason === 'provider_success_required')
+    return 'receipt_failure'
+  if (reason === 'provider_mismatch' || reason === 'conflict' || reason === 'body_conflict')
+    return 'conflict'
+  if (reason === 'stale_event' || reason === 'out_of_sequence_event' || reason === 'source_stale')
+    return 'stale'
+  if (reason === 'late')
+    return 'late'
+  if (reason === 'ignored')
+    return 'ignored'
+  if (reason === 'duplicate')
+    return 'duplicate'
+  if (repairOutcomeCodes.has(reason))
+    return reason as RepairOutcomeProjection['outcome']
+  return undefined
+}
+
+function projectRepairLease(row: RepairRunRow, now: number): RepairLeaseProjection {
+  const expiresAt = boundedNonNegativeInteger(row.active_lease_expires_at)
+  const lastHeartbeatAt = boundedNonNegativeInteger(row.last_heartbeat_at)
+  if (expiresAt !== undefined) {
+    return {
+      acquiredAt: row.created_at,
+      expiresAt,
+      ...(lastHeartbeatAt !== undefined ? { lastHeartbeatAt } : {}),
+      outcome: expiresAt <= now ? 'expired' : (row.active_lease_renewed_at && row.active_lease_renewed_at > row.created_at ? 'renewed' : 'active'),
+    }
+  }
+  if (row.failure_code === 'runner_lost' || row.failure_code === 'provider_lost')
+    return { outcome: 'expired', ...(lastHeartbeatAt !== undefined ? { lastHeartbeatAt } : {}) }
+  if (repairRunStatuses.has(row.status))
+    return { outcome: 'pending', ...(lastHeartbeatAt !== undefined ? { lastHeartbeatAt } : {}) }
+  return { outcome: 'released', ...(lastHeartbeatAt !== undefined ? { lastHeartbeatAt } : {}) }
+}
+
+function projectRepairReconciliation(row: RepairRunRow, transitions: RepairTransitionRow[], now: number): RepairReconciliationProjection {
+  const latest = transitions[0]
+  let outcome: RepairReconciliationProjection['outcome'] = 'pending'
+  if (latest) {
+    const mapped = repairOutcomeFromReason(latest.reason_code)
+    if (mapped && ['conflict', 'stale', 'late', 'ignored', 'duplicate'].includes(mapped))
+      outcome = mapped as RepairReconciliationProjection['outcome']
+    else if (latest.reason_code === 'provider_lost')
+      outcome = 'lost'
+    else if (latest.reason_code === 'provider_failed')
+      outcome = 'failed'
+    else if (latest.reason_code === 'provider_success_pending_receipt')
+      outcome = 'observed'
+  }
+  if (outcome === 'pending' && row.provider_status === 'completed')
+    outcome = row.provider_conclusion && row.provider_conclusion !== 'success' ? 'failed' : 'observed'
+  const windowEndsAt = boundedNonNegativeInteger(row.provider_reconciliation_window_ends_at)
+  const windowStatus = !row.provider_run_id
+    ? 'pending'
+    : row.provider_status === 'completed'
+      ? 'closed'
+      : windowEndsAt !== undefined && windowEndsAt <= now ? 'expired' : 'open'
+  return {
+    ...(boundedNonNegativeInteger(row.provider_updated_at) !== undefined ? { observedAt: boundedNonNegativeInteger(row.provider_updated_at) } : {}),
+    outcome,
+    ...(latest && boundedNonNegativeInteger(latest.created_at) !== undefined ? { processedAt: latest.created_at } : {}),
+    ...(windowEndsAt !== undefined ? { windowEndsAt } : {}),
+    windowStatus,
+  }
+}
+
+function parseStoredRepairOutcome(value: string): { reason?: string, accepted?: boolean } | null {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      return null
+    const record = parsed as Record<string, unknown>
+    return {
+      ...(typeof record.accepted === 'boolean' ? { accepted: record.accepted } : {}),
+      ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function projectRepairOutcome(row: RepairRunRow, transitions: RepairTransitionRow[], events: RepairRunnerEventRow[]): RepairOutcomeProjection {
+  const transition = transitions.find(item => repairOutcomeFromReason(item.reason_code) !== undefined)
+  const event = events.map(item => parseStoredRepairOutcome(item.outcome)).find(item => item?.reason)
+  const outcome = repairOutcomeFromReason(transition?.reason_code) ?? repairOutcomeFromReason(event?.reason)
+    ?? (row.status === 'succeeded' ? 'accepted' : row.status === 'failed' || row.status === 'cancelled' ? 'contract_failure' : 'pending')
+  const code = boundedSafeCode(row.failure_code) ?? boundedSafeCode(transition?.reason_code) ?? boundedSafeCode(event?.reason)
+  return {
+    ...(code ? { code } : {}),
+    ...(boundedNonNegativeInteger(events[0]?.received_at) !== undefined ? { observedAt: boundedNonNegativeInteger(events[0]?.received_at) } : {}),
+    outcome,
+  }
+}
+
+function projectRepairReceiptValidation(
+  row: RepairRunRow,
+  receipt: RepairReceiptProjection,
+  movieId: string,
+  source: RepairSourceProjection | null,
+  readback: RepairSourceReadback | null,
+): RepairReceiptValidationProjection {
+  if (row.status !== 'succeeded') {
+    if (row.failure_code === 'receipt_missing' || row.failure_code === 'provider_success_required')
+      return { failureCode: row.failure_code, status: 'failed' }
+    return { status: 'pending' }
+  }
+  if (!receipt)
+    return { failureCode: 'receipt_missing', status: 'failed' }
+  const identityMatch = receipt.movieId === movieId
+  const sourceRevisionMatch = source !== null && source.sourceRevision === receipt.sourceRevision
+  const sourceProjectionMatch = sourceRevisionMatch
+    && source.observedAt === receipt.observedAt
+    && source.eligibleCount === receipt.summary.eligibleCount
+    && source.rows.length === receipt.summary.sourceCount
+  const readbackMatch = readback !== null
+    && readback.movieId === receipt.movieId
+    && readback.sourceRevision === receipt.sourceRevision
+    && readback.observedAt === receipt.observedAt
+    && readback.sourceCount === receipt.summary.sourceCount
+    && readback.eligibleCount === receipt.summary.eligibleCount
+    && readback.rows.length === receipt.sourceSummary.length
+    && receipt.sourceSummary.every((expected, index) => {
+      const actual = readback.rows[index]
+      return Boolean(actual)
+        && actual.eligible === expected.eligible
+        && actual.health === expected.health
+        && actual.observedAt === expected.observedAt
+        && actual.reasonCode === expected.reasonCode
+        && actual.sourceType === expected.sourceType
+    })
+  if (!identityMatch)
+    return { failureCode: 'receipt_identity_mismatch', identityMatch: false, readbackMatch, status: 'failed' }
+  if (!source || !readback)
+    return { failureCode: 'receipt_readback_missing', identityMatch: true, readbackMatch: false, status: 'failed' }
+  if (!sourceRevisionMatch)
+    return { failureCode: 'receipt_revision_mismatch', identityMatch: true, readbackMatch, status: 'failed' }
+  if (!sourceProjectionMatch || !readbackMatch)
+    return { failureCode: 'receipt_readback_mismatch', identityMatch: true, readbackMatch: false, status: 'failed' }
+  return {
+    identityMatch: true,
+    readbackMatch: true,
+    status: 'validated',
+    validatedAt: receipt.observedAt,
+  }
+}
+
+function projectRepairResult(validation: RepairReceiptValidationProjection, readback: RepairSourceReadback | null) {
+  if (validation.status === 'failed')
+    return { failureCode: validation.failureCode, status: 'failed' as const }
+  if (validation.status !== 'validated' || !readback)
+    return { status: 'pending' as const }
+  return { status: 'validated' as const, sourceRevision: readback.sourceRevision }
 }
 
 function readRepairSnapshot(task: RepairTaskRow) {
@@ -392,6 +788,24 @@ async function readRepairMovieLookup(c: any, movieId: string): Promise<RepairMov
   return row.results?.[0]
 }
 
+async function readActiveRepairTask(c: any, movieId: string): Promise<RepairTaskRow | undefined> {
+  const result = await getD1(c).prepare(`
+    SELECT task.id, task.template_key, task.operation, task.request_snapshot_json,
+      task.latest_run_id, task.created_at, task.updated_at
+    FROM crawler_task AS task
+    INNER JOIN crawler_run AS run ON run.id = task.latest_run_id AND run.task_id = task.id
+    WHERE task.operation = 'repair_players'
+      AND run.status IN ('queued', 'dispatching', 'running', 'cancel_requested')
+    ORDER BY task.updated_at DESC, task.id DESC
+  `).bind().all<RepairTaskRow>()
+  for (const task of result.results ?? []) {
+    const snapshot = readRepairSnapshot(task)
+    if (snapshot?.movieId === movieId)
+      return task
+  }
+  return undefined
+}
+
 async function readRepairTaskResponse(
   c: any,
   input: {
@@ -409,47 +823,146 @@ async function readRepairTaskResponse(
     `).bind(input.taskId).all<RepairTaskRow>(),
     d1.prepare(`
       SELECT id, task_id, attempt_number, status, failure_code, cancel_requested_at,
-        receipt_summary_json, created_at, updated_at, terminal_at
-      FROM crawler_run
+        last_heartbeat_at, lease_expires_at, state_version,
+        receipt_summary_json, receipt_primary_content_id, receipt_schema_version, receipt_source_revision,
+        created_at, updated_at, terminal_at,
+        provider.provider AS provider,
+        provider.provider_conclusion AS provider_conclusion,
+        provider.provider_run_attempt AS provider_run_attempt,
+        provider.provider_run_id AS provider_run_id,
+        provider.provider_status AS provider_status,
+        provider.updated_at AS provider_updated_at,
+        provider.environment AS provider_environment,
+        provider.ref AS provider_ref,
+        provider.repository AS provider_repository,
+        provider.sha AS provider_sha,
+        provider.workflow AS provider_workflow,
+        provider.reconciliation_window_ends_at AS provider_reconciliation_window_ends_at,
+        lease.expires_at AS active_lease_expires_at,
+        lease.renewed_at AS active_lease_renewed_at
+      FROM crawler_run AS run
+      LEFT JOIN crawler_run_provider_association AS provider ON provider.run_id = run.id
+      LEFT JOIN crawler_template_lease AS lease ON lease.run_id = run.id
       WHERE task_id = ?
-      ORDER BY attempt_number DESC, id DESC
-    `).bind(input.taskId).all<RepairRunRow>(),
+      ORDER BY CASE WHEN id = (SELECT latest_run_id FROM crawler_task WHERE id = ?) THEN 0 ELSE 1 END,
+        attempt_number DESC, id DESC
+      LIMIT 50
+    `).bind(input.taskId, input.taskId).all<RepairRunRow>(),
   ])
   const task = taskResult.results?.[0]
   const snapshot = task ? readRepairSnapshot(task) : null
   if (!task || !snapshot) {
     throw new HTTPException(500, { message: 'Repair task snapshot unavailable' })
   }
-  const runs = (runResult.results ?? []).map((run) => {
+  const orderedRuns = [...(runResult.results ?? [])].sort((left, right) => {
+    if (left.id === task.latest_run_id)
+      return -1
+    if (right.id === task.latest_run_id)
+      return 1
+    return right.attempt_number - left.attempt_number || right.id.localeCompare(left.id)
+  })
+  const sourceProjection = await readRepairSourceProjection(c, input.movie.id)
+  const runIds = orderedRuns.map(run => run.id)
+  const transitionRows = runIds.length
+    ? (await d1.prepare(`
+        SELECT run_id, reason_code, safe_summary, created_at
+        FROM crawler_run_transition
+        WHERE run_id IN (${runIds.map(() => '?').join(', ')})
+        ORDER BY created_at DESC, id DESC
+      `).bind(...runIds).all<RepairTransitionRow>()).results ?? []
+    : []
+  const runnerEventRows = runIds.length
+    ? (await d1.prepare(`
+        SELECT run_id, outcome, received_at
+        FROM crawler_runner_event
+        WHERE run_id IN (${runIds.map(() => '?').join(', ')})
+        ORDER BY received_at DESC, id DESC
+      `).bind(...runIds).all<RepairRunnerEventRow>()).results ?? []
+    : []
+  const transitionsByRun = new Map<string, RepairTransitionRow[]>()
+  const eventsByRun = new Map<string, RepairRunnerEventRow[]>()
+  for (const transition of transitionRows)
+    transitionsByRun.set(transition.run_id, [...(transitionsByRun.get(transition.run_id) ?? []), transition])
+  for (const event of runnerEventRows)
+    eventsByRun.set(event.run_id, [...(eventsByRun.get(event.run_id) ?? []), event])
+  const latestRawRun = orderedRuns[0]
+  const now = Math.floor(Date.now() / 1000)
+  const runs = orderedRuns.map((run) => {
     const receipt = projectRepairReceipt(run.receipt_summary_json)
+    const current = run.id === latestRawRun?.id
+    const source = current ? sourceProjection.source : null
+    const readback = current ? sourceProjection.readback : null
+    const receiptValidation = projectRepairReceiptValidation(run, receipt, input.movie.id, source, readback)
+    const transitions = transitionsByRun.get(run.id) ?? []
     return {
       attemptNumber: run.attempt_number,
       ...(run.cancel_requested_at !== null ? { cancelRequestedAt: run.cancel_requested_at } : {}),
       createdAt: run.created_at,
       failureCode: run.failure_code,
       id: run.id,
+      ...(projectProviderAssociation(run) ? { provider: projectProviderAssociation(run) } : { provider: null }),
+      lease: projectRepairLease(run, now),
+      reconciliation: projectRepairReconciliation(run, transitions, now),
+      receiptValidation,
+      repair: projectRepairResult(receiptValidation, readback),
+      outcome: projectRepairOutcome(run, transitions, eventsByRun.get(run.id) ?? []),
+      safeLogCursor: null,
       ...(receipt ? { observedAt: receipt.observedAt, receipt, sourceRevision: receipt.sourceRevision } : {}),
+      ...(current && readback ? { sourceReadback: readback } : {}),
       status: run.status,
       terminalAt: run.terminal_at,
       updatedAt: run.updated_at,
     }
   })
   const latestRun = runs[0] ?? null
+  const source = sourceProjection.source
+  const readback = sourceProjection.readback
+  const currentReceipt = latestRun?.receipt ?? null
+  const sameMovieIdentity = currentReceipt && readback
+    ? currentReceipt.movieId === input.movie.id && readback.movieId === input.movie.id
+    : null
+  const automaticRetry = transitionRows.some(transition => transition.reason_code === 'automatic_retry_created')
+  const retry = automaticRetry && latestRawRun
+    ? {
+        attemptNumber: latestRawRun.attempt_number,
+        automatic: true,
+        ...(latestRawRun.failure_code ? { failureCode: latestRawRun.failure_code } : {}),
+        maxAttempts: 2 as const,
+        status: repairRunStatuses.has(latestRawRun.status)
+          ? 'retrying' as const
+          : latestRawRun.status === 'succeeded' ? 'none' as const : 'exhausted' as const,
+      }
+    : undefined
+  const currentIsActive = Boolean(latestRawRun && repairRunStatuses.has(latestRawRun.status))
   return {
     run: latestRun,
     runs,
+    currentAttempt: latestRun,
+    history: runs.slice(1),
     task: {
-      allowedNextAction: allowedRepairNextAction(latestRun?.status),
+      allowedNextAction: allowedRepairNextAction(latestRun?.status, source?.disposition),
+      ...(currentIsActive
+        ? {
+            activeDuplicateLock: {
+              locked: true,
+              message: '当前电影已有活动修复任务，页面聚焦当前 attempt。',
+            },
+          }
+        : {}),
       createdAt: task.created_at,
       id: task.id,
       latestRunId: task.latest_run_id,
       movie: input.movie,
       operation: 'repair_players' as const,
       reason: snapshot.reason,
-      sourceRevision: snapshot.sourceRevision,
+      sourceRevision: source?.sourceRevision ?? snapshot.sourceRevision,
       targetIntent: snapshot.targetIntent,
       templateKey: task.template_key,
       updatedAt: task.updated_at,
+      ...(retry ? { retry } : {}),
+      ...(source ? { source } : {}),
+      ...(readback ? { sourceReadback: readback } : {}),
+      sameMovieIdentity,
     },
   }
 }
@@ -485,8 +998,8 @@ async function requireTaskAccess(c: any, user: SessionUser, taskId: string): Pro
   return task
 }
 
-async function requireTaskRunAccess(c: any, user: SessionUser, taskId: string, runId: string): Promise<void> {
-  await requireTaskAccess(c, user, taskId)
+async function requireTaskRunAccess(c: any, user: SessionUser, taskId: string, runId: string): Promise<TaskAccessRow> {
+  const taskAccess = await requireTaskAccess(c, user, taskId)
   const row = await getD1(c).prepare(`
     SELECT run.id
     FROM crawler_run AS run
@@ -496,6 +1009,7 @@ async function requireTaskRunAccess(c: any, user: SessionUser, taskId: string, r
   if (!row.results?.[0]) {
     throw new HTTPException(404, { message: 'Crawler run not found for task' })
   }
+  return taskAccess
 }
 
 function parseTaskCursor(value: string | undefined) {
@@ -543,11 +1057,35 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
     throw new HTTPException(400, { message: 'Repair reason is invalid' })
   }
 
+  const activeTask = await readActiveRepairTask(c, movie.id)
+  if (activeTask) {
+    const detail = await readRepairTaskResponse(c, {
+      movie: { code: movie.code, id: movie.id, title: movie.title },
+      taskId: activeTask.id,
+    })
+    return c.json({
+      currentAttempt: detail.currentAttempt,
+      history: detail.history,
+      kind: 'existing_active_run' as const,
+      run: detail.run,
+      task: detail.task,
+    })
+  }
+
+  // Re-read immediately before task creation so a terminal repair cannot submit an old disposition.
+  const currentMovie = await readRepairMovieLookup(c, command.movieId)
+  if (!currentMovie) {
+    throw new HTTPException(404, { message: 'Repair movie not found' })
+  }
+  if (currentMovie.source_disposition !== command.reason) {
+    throw new HTTPException(409, { message: 'Repair movie source disposition is stale' })
+  }
+
   const repository = createCrawlerTaskRepository(c.get('db'))
   let result: Awaited<ReturnType<CrawlerRepository['createOrGetActiveRun']>>
   try {
     result = await repository.createOrGetActiveRun({
-      movieId: movie.id,
+      movieId: currentMovie.id,
       operation: 'repair_players',
       reason: command.reason,
       requestedByUserId: user.id,
@@ -564,10 +1102,12 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
   }
 
   const detail = await readRepairTaskResponse(c, {
-    movie: { code: movie.code, id: movie.id, title: movie.title },
+    movie: { code: currentMovie.code, id: currentMovie.id, title: currentMovie.title },
     taskId: result.run.taskId,
   })
   return c.json({
+    currentAttempt: detail.currentAttempt,
+    history: detail.history,
     kind: result.kind,
     run: detail.run,
     task: detail.task,
@@ -714,7 +1254,27 @@ adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/cancel', validator('param', C
 adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/retry', validator('param', CrawlerTaskRunParamsSchema), validator('json', RetryCrawlerTaskSchema), async (c) => {
   const user = await requireSessionUser(c)
   const { taskId, runId } = c.req.valid('param')
-  await requireTaskRunAccess(c, user, taskId, runId)
+  const taskAccess = await requireTaskRunAccess(c, user, taskId, runId)
+  if (taskAccess.operation === 'repair_players') {
+    const snapshot = taskAccess.request_snapshot_json
+      ? readRepairSnapshot({
+          created_at: 0,
+          id: taskId,
+          latest_run_id: runId,
+          operation: 'repair_players',
+          request_snapshot_json: taskAccess.request_snapshot_json,
+          template_key: 'movie',
+          updated_at: 0,
+        })
+      : null
+    if (!snapshot) {
+      throw new HTTPException(500, { message: 'Repair task snapshot unavailable' })
+    }
+    const movie = await readRepairMovieLookup(c, snapshot.movieId)
+    if (!movie || movie.source_disposition !== snapshot.reason) {
+      throw new HTTPException(409, { message: 'Repair movie source disposition is stale' })
+    }
+  }
   const repository = createCrawlerTaskRepository(c.get('db'))
   const result = await repository.retryRun(runId)
   const dispatch = result.kind === 'created'

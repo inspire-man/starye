@@ -204,6 +204,11 @@ export type CrawlerSourceHealthReasonCode = 'source_inactive' | 'source_unverifi
 export type CrawlerRepairReason = 'no_source' | 'source_failed'
 export type CrawlerRepairTargetIntent = 'restore_playable_sources'
 export type CrawlerRepairNextAction = 'none' | 'wait_for_observation' | 'create_new_task'
+export type CrawlerLeaseOutcome = 'pending' | 'active' | 'renewed' | 'released' | 'expired' | 'recovered'
+export type CrawlerReconciliationWindowStatus = 'pending' | 'open' | 'closed' | 'expired'
+export type CrawlerReconciliationOutcome = 'pending' | 'observed' | 'failed' | 'lost' | 'late' | 'stale' | 'ignored' | 'duplicate' | 'conflict'
+export type CrawlerRepairFactStatus = 'pending' | 'validated' | 'failed'
+export type CrawlerAttemptOutcome = 'pending' | 'accepted' | 'contract_failure' | 'duplicate' | 'stale' | 'late' | 'ignored' | 'conflict' | 'receipt_failure'
 
 export interface MetadataProjection {
   contentId: string
@@ -279,7 +284,67 @@ export interface CrawlerRepairCommand {
   targetIntent: CrawlerRepairTargetIntent
 }
 
+export interface CrawlerTaskRetryProjection {
+  attemptNumber: number
+  automatic: boolean
+  failureCode?: string
+  maxAttempts: 2
+  status: 'none' | 'retrying' | 'exhausted'
+}
+
+export interface CrawlerLeaseProjection {
+  acquiredAt?: number
+  expiresAt?: number
+  lastHeartbeatAt?: number
+  outcome: CrawlerLeaseOutcome
+  recoveredAt?: number
+}
+
+export interface CrawlerReconciliationProjection {
+  observedAt?: number
+  outcome: CrawlerReconciliationOutcome
+  processedAt?: number
+  windowEndsAt?: number
+  windowStatus: CrawlerReconciliationWindowStatus
+}
+
+export interface CrawlerReceiptValidationProjection {
+  failureCode?: string
+  identityMatch?: boolean
+  readbackMatch?: boolean
+  status: CrawlerRepairFactStatus
+  validatedAt?: number
+}
+
+export interface CrawlerRepairResultProjection {
+  failureCode?: string
+  sourceRevision?: number
+  status: CrawlerRepairFactStatus
+}
+
+export interface CrawlerAttemptOutcomeProjection {
+  code?: string
+  observedAt?: number
+  outcome: CrawlerAttemptOutcome
+}
+
+export interface CrawlerRepairSourceProjection {
+  disposition: CrawlerSourceDisposition
+  eligibleCount: number
+  observedAt: number
+  reasonCode: string | null
+  repairable: boolean
+  rows: CrawlerSourceHealthRow[]
+  sourceRevision: number
+}
+
+export interface CrawlerRepairSourceReadback extends CrawlerRepairSourceProjection {
+  movieId: string
+  sourceCount: number
+}
+
 export interface CrawlerRepairTask {
+  activeDuplicateLock?: { locked: boolean, message: string }
   allowedNextAction: CrawlerRepairNextAction
   createdAt?: number
   id: string
@@ -287,6 +352,10 @@ export interface CrawlerRepairTask {
   movie: { code: string, id: string, title: string }
   operation: 'repair_players'
   reason: CrawlerRepairReason
+  retry?: CrawlerTaskRetryProjection
+  sameMovieIdentity?: boolean | null
+  source?: CrawlerRepairSourceProjection
+  sourceReadback?: CrawlerRepairSourceReadback
   sourceRevision: number
   targetIntent: CrawlerRepairTargetIntent
   templateKey: 'movie'
@@ -298,8 +367,16 @@ export interface CrawlerRepairRun {
   createdAt?: number
   failureCode?: string | null
   id: string
+  lease?: CrawlerLeaseProjection
+  outcome?: CrawlerAttemptOutcomeProjection
+  provider?: CrawlerProviderSummary | null
+  reconciliation?: CrawlerReconciliationProjection
+  repair?: CrawlerRepairResultProjection
   observedAt?: number
   receipt?: CrawlerRepairReceipt | null
+  receiptValidation?: CrawlerReceiptValidationProjection
+  safeLogCursor?: number | null
+  sourceReadback?: CrawlerRepairSourceReadback
   sourceRevision?: number
   status: CrawlerRunStatus
   terminalAt?: number | null
@@ -307,6 +384,8 @@ export interface CrawlerRepairRun {
 }
 
 export interface CrawlerRepairTaskResponse {
+  currentAttempt?: CrawlerRepairRun | null
+  history?: CrawlerRepairRun[]
   kind?: 'created' | 'existing_active_run'
   run: CrawlerRepairRun | null
   runs?: CrawlerRepairRun[]
@@ -344,17 +423,30 @@ export interface CrawlerRun {
   terminal_at?: string | null
   terminalAt?: number | string | null
   updatedAt?: number
+  lease?: CrawlerLeaseProjection | null
+  outcome?: CrawlerAttemptOutcomeProjection | null
   provider?: CrawlerProviderSummary | null
+  reconciliation?: CrawlerReconciliationProjection | null
+  repair?: CrawlerRepairResultProjection | null
   readiness?: ReadinessProjection | null
   receipt: CrawlerReceipt | null
+  receiptValidation?: CrawlerReceiptValidationProjection | null
+  safeLogCursor?: number | null
+  sourceRevision?: number
+  sourceReadback?: CrawlerRepairSourceReadback | null
 }
 
 export interface CrawlerTask {
+  activeDuplicateLock?: { locked: boolean, message: string }
   allowedNextAction?: CrawlerRepairNextAction
   id: string
   movie?: { code?: string, id: string, title: string }
   operation?: CrawlerTaskTemplate | 'repair_players'
   reason?: CrawlerRepairReason
+  retry?: CrawlerTaskRetryProjection
+  sameMovieIdentity?: boolean | null
+  source?: CrawlerRepairSourceProjection
+  sourceReadback?: CrawlerRepairSourceReadback
   sourceRevision?: number
   targetIntent?: CrawlerRepairTargetIntent
   template_key?: CrawlerTaskTemplate
@@ -368,6 +460,9 @@ export interface CrawlerTask {
 }
 
 export interface CrawlerTaskDetail {
+  currentAttempt?: CrawlerRun | null
+  history?: CrawlerRun[]
+  retry?: CrawlerTaskRetryProjection
   task: CrawlerTask
   runs: CrawlerRun[]
 }

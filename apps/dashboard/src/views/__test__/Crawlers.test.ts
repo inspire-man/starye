@@ -486,4 +486,158 @@ describe('crawlers local task panel', () => {
     expect(wrapper.html()).not.toContain('RAW_RUNNER_SENTINEL')
     expect(wrapper.html()).not.toContain('RAW_SOURCE_SENTINEL')
   })
+
+  it('pins the current attempt, keeps older attempts collapsed, and separates provider, repair, receipt, source, and playback facts', async () => {
+    const task = {
+      activeDuplicateLock: { locked: true, message: '当前电影已有活动修复任务，页面聚焦当前 attempt。' },
+      allowedNextAction: 'wait_for_observation',
+      id: 'repair-task-1',
+      latest_run_id: 'repair-run-2',
+      movie: { code: 'SUN-064', id: 'movie-1', title: 'Repair Movie' },
+      operation: 'repair_players',
+      reason: 'no_source',
+      source: {
+        disposition: 'repairing',
+        eligibleCount: 0,
+        observedAt: 200,
+        reasonCode: 'repair_requested',
+        repairable: true,
+        rows: [],
+        sourceRevision: 8,
+      },
+      sourceReadback: {
+        disposition: 'repairing',
+        eligibleCount: 0,
+        observedAt: 200,
+        reasonCode: 'repair_requested',
+        repairable: true,
+        rows: [],
+        movieId: 'movie-1',
+        sourceCount: 0,
+        sourceRevision: 8,
+      },
+      sourceRevision: 8,
+      template_key: 'movie',
+    }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{
+        id: 'repair-run-2',
+        status: 'running',
+        attemptNumber: 2,
+        provider: {
+          provider: 'github-actions',
+          providerRunId: '123',
+          providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/123',
+          providerStatus: 'in_progress',
+        },
+        lease: { outcome: 'renewed', lastHeartbeatAt: 190 },
+        reconciliation: { outcome: 'pending', windowStatus: 'open' },
+        repair: { status: 'pending' },
+        receiptValidation: { status: 'pending' },
+        sourceReadback: task.sourceReadback,
+        receipt: null,
+      }, {
+        id: 'repair-run-1',
+        status: 'failed',
+        attemptNumber: 1,
+        failureCode: 'provider_lost',
+        outcome: { outcome: 'stale', code: 'stale_event' },
+        provider: { provider: 'github-actions', providerStatus: 'completed', providerConclusion: 'failure' },
+        lease: { outcome: 'expired' },
+        reconciliation: { outcome: 'stale', windowStatus: 'expired' },
+        repair: { status: 'failed', failureCode: 'provider_lost' },
+        receiptValidation: { status: 'failed', failureCode: 'receipt_missing' },
+        receipt: null,
+      }],
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Repair Movie')
+    expect(wrapper.text()).toContain('当前电影已有活动修复任务')
+    expect(wrapper.text()).toContain('Provider 运行中')
+    expect(wrapper.text()).toContain('修复待校验')
+    expect(wrapper.text()).toContain('receipt 待验证')
+    expect(wrapper.text()).toContain('repairing · 修复进行中')
+    expect(wrapper.text()).toContain('Authoritative source readback')
+    expect(wrapper.text()).toContain('播放未验证')
+    expect(wrapper.text()).toContain('旧 attempt 历史（1）')
+    expect(wrapper.text()).not.toContain('stale_event')
+
+    await wrapper.get('.history-toggle').trigger('click')
+    expect(wrapper.text()).toContain('stale_event')
+    expect(wrapper.text()).toContain('Provider 已完成 · failure')
+    expect(wrapper.get('a.provider-run-link').attributes('href')).toBe('https://github.com/inspire-man/starye/actions/runs/123')
+  })
+
+  it('renders a pending identity when a task has no reported attempt', async () => {
+    const task = {
+      id: 'repair-pending',
+      latest_run_id: null,
+      movie: { code: 'SUN-064', id: 'movie-1', title: 'Pending Repair' },
+      operation: 'repair_players',
+      sourceRevision: 4,
+      template_key: 'movie',
+    }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({ tasks: template === 'movie' ? [task] : [], nextCursor: null }))
+    api.admin.getCrawlerTask.mockResolvedValue({ task, runs: [] })
+    const wrapper = mountCrawler()
+    await flushPromises()
+    await wrapper.get('.task-card').trigger('click')
+    expect(wrapper.text()).toContain('Pending Repair')
+    expect(wrapper.text()).toContain('等待 attempt 上报')
+    expect(wrapper.text()).toContain('等待 lease 对账')
+  })
+
+  it('locks the ordinary movie repair CTA when a same-movie active repair task is present', async () => {
+    const movieTask = {
+      id: 'movie-task',
+      latest_run_id: 'movie-run',
+      template_key: 'movie',
+    }
+    const repairTask = {
+      allowedNextAction: 'wait_for_observation',
+      id: 'repair-task',
+      latest_run_id: 'repair-run',
+      movie: { code: 'SUN-064', id: 'movie-1', title: 'Repair Movie' },
+      operation: 'repair_players',
+      sourceRevision: 5,
+      template_key: 'movie',
+    }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [movieTask, repairTask] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockImplementation((taskId: string) => Promise.resolve(taskId === 'movie-task'
+      ? {
+          task: movieTask,
+          runs: [{
+            id: 'movie-run',
+            status: 'succeeded',
+            attemptNumber: 1,
+            receipt: { createdCount: 0, primaryContentId: 'movie-1', templateKey: 'movie', updatedCount: 0 },
+            readiness: {
+              metadata: { contentId: 'movie-1', observedAt: 100, persisted: true },
+              playback: { status: 'unverified' },
+              receipt: { persisted: true, primaryContentId: 'movie-1', schemaVersion: 2 },
+              source: { disposition: 'no_source', eligibleCount: 0, observedAt: 100, reasonCode: 'no_eligible_source', repairable: true, sourceRevision: 5 },
+            },
+          }],
+        }
+      : {
+          task: repairTask,
+          runs: [{ id: 'repair-run', status: 'running', attemptNumber: 1, receipt: null }],
+        }))
+    const wrapper = mountCrawler()
+    await flushPromises()
+    const repairButton = wrapper.find('[data-repair-action="open"]')
+    expect(repairButton.exists()).toBe(true)
+    expect(repairButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('当前电影已有活动修复任务')
+  })
 })
