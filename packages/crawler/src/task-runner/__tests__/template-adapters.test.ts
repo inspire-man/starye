@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createControlledAdapter } from '../controlled-adapter'
 import { createRepairPlayersAdapter } from '../repair-adapter'
 import { createTemplateAdapterRegistry } from '../template-adapters'
@@ -61,6 +61,53 @@ describe('task runner template registry', () => {
       templateKey: 'movie',
       templateVersion: 1,
     })).toThrow('Unsupported runner operation')
+  })
+
+  it('rejects malformed repair snapshot contracts before adapter selection', () => {
+    const repair = createRepairPlayersAdapter({ sources: [] })
+    const registry = createTemplateAdapterRegistry([repair])
+    const snapshot = {
+      entrypoint: 'movie-crawler' as const,
+      movieId: 'movie-1',
+      operation: 'repair_players' as const,
+      permissionResource: 'movie' as const,
+      reason: 'no_source' as const,
+      sourceRevision: 4,
+      targetIntent: 'restore_playable_sources' as const,
+      templateKey: 'movie' as const,
+      templateVersion: 1 as const,
+    }
+
+    expect(() => registry.select({ ...snapshot, reason: 'unsupported' as never })).toThrow('contract')
+    expect(() => registry.select({ ...snapshot, templateVersion: 2 as never })).toThrow('contract')
+  })
+
+  it('fails before discovery when a repair adapter receives a malformed snapshot', async () => {
+    const discoverSources = vi.fn(async () => ({ sources: [] }))
+    const adapter = createRepairPlayersAdapter({ discoverSources })
+
+    await expect(adapter.execute({
+      candidate: {
+        attempt: 1,
+        runId: 'run-invalid-repair',
+        sequence: 2,
+        snapshot: {
+          entrypoint: 'movie-crawler',
+          movieId: 'movie-1',
+          operation: 'repair_players',
+          permissionResource: 'movie',
+          reason: 'unsupported',
+          sourceRevision: 4,
+          targetIntent: 'restore_playable_sources',
+          templateKey: 'movie',
+          templateVersion: 1,
+        },
+      } as never,
+      checkpoint: async () => false,
+      client: { observeRepairSource: async () => ({ accepted: false, errorCode: 'source_read_failed' }) },
+      observe: () => {},
+    })).rejects.toThrow('contract')
+    expect(discoverSources).not.toHaveBeenCalled()
   })
 
   it('returns only the bounded authoritative repair receipt from the adapter', async () => {
