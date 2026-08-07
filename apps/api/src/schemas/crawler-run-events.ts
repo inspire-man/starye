@@ -167,6 +167,34 @@ export const CrawlerRunLifecycleEventSchema = v.strictObject({
   type: v.picklist(['heartbeat', 'progress', 'log', 'succeeded', 'failed', 'cancelled']),
 })
 
+export const CrawlerRepairSourceObservationEventSchema = v.strictObject({
+  ...RunnerEventFields,
+  attempt: Attempt,
+  observed_at: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  operation: v.literal('repair_players'),
+  run_id: Identifier,
+  sequence: Sequence,
+  source_revision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  sources: v.pipe(v.array(v.strictObject({
+    health: v.optional(v.picklist(['inactive', 'unverified', 'failed'])),
+    isActive: v.optional(v.boolean()),
+    quality: v.optional(v.pipe(v.string(), v.maxLength(4096))),
+    reasonCode: v.optional(v.picklist([
+      'source_inactive',
+      'source_unverified',
+      'source_candidate_invalid',
+      'source_read_failed',
+      'source_write_failed',
+    ])),
+    sortOrder: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    sourceName: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(4096)),
+    sourceType: v.optional(v.picklist(['direct', 'magnet', 'TorrServer'])),
+    sourceUrl: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(4096)),
+  })), v.maxLength(50)),
+  timestamp: Timestamp,
+  type: v.literal('source_observation'),
+})
+
 export const CrawlerRunEventSchema = v.union([
   CrawlerRunLifecycleEventSchema,
   CrawlerScheduleRegisterEventSchema,

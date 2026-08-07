@@ -11,6 +11,7 @@ import { verifyRunnerEventSignature } from '../../../domain/crawler-tasks/runner
 import { readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
 import { acceptRepairSourceObservation } from '../../../domain/movies/source-reconciliation'
 import {
+  CrawlerRepairSourceObservationEventSchema,
   CrawlerRunClaimRequestSchema,
   CrawlerRunEventSchema,
   CrawlerRunPollRequestSchema,
@@ -162,36 +163,6 @@ interface RepairRunBinding {
   status: string
   task_id: string
 }
-
-const RepairSourceObservationSchema = v.strictObject({
-  attempt: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  event_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
-  key_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
-  nonce: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
-  observed_at: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  operation: v.literal('repair_players'),
-  run_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
-  sequence: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  source_revision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
-  sources: v.pipe(v.array(v.strictObject({
-    health: v.optional(v.picklist(['inactive', 'unverified', 'failed'])),
-    isActive: v.optional(v.boolean()),
-    quality: v.optional(v.pipe(v.string(), v.maxLength(4096))),
-    reasonCode: v.optional(v.picklist([
-      'source_inactive',
-      'source_unverified',
-      'source_candidate_invalid',
-      'source_read_failed',
-      'source_write_failed',
-    ])),
-    sortOrder: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
-    sourceName: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(4096)),
-    sourceType: v.optional(v.picklist(['direct', 'magnet', 'TorrServer'])),
-    sourceUrl: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(4096)),
-  })), v.maxLength(50)),
-  timestamp: v.pipe(v.number(), v.integer()),
-  type: v.literal('source_observation'),
-})
 
 function providerSnapshotMatches(event: Extract<v.InferOutput<typeof CrawlerRunEventSchema>, { type: 'schedule_register' | 'provider_started' | 'dispatch_validate' }>): boolean {
   try {
@@ -465,7 +436,7 @@ export function createCrawlerRunsRoutes(options: {
     const rawBody = await c.req.arrayBuffer()
     const currentNow = now()
     const signature = await verifySignedRequest(c, rawBody, currentNow)
-    const parsed = v.safeParse(RepairSourceObservationSchema, await parseRawJson(rawBody))
+    const parsed = v.safeParse(CrawlerRepairSourceObservationEventSchema, await parseRawJson(rawBody))
     if (!parsed.success) {
       throw new HTTPException(400, { message: 'Invalid repair source observation envelope' })
     }
