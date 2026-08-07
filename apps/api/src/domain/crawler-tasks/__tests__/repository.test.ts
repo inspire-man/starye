@@ -468,7 +468,7 @@ describe('crawler task repository', () => {
     })
   })
 
-  it('schedules at most one automatic repair retry for transient source failures and leaves deterministic failures terminal', async () => {
+  it('keeps source and receipt failures terminal while exposing bounded task retry state', async () => {
     await client.execute({
       args: ['movie-repair-3', 'Repair movie 3', 'repair-movie-3', 'MOV-REPAIR-3', 0, 0],
       sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
@@ -508,29 +508,15 @@ describe('crawler task repository', () => {
     })
     expect(firstRetryRows.rows).toEqual([
       expect.objectContaining({ attempt_number: 1, status: 'failed' }),
-      expect.objectContaining({ attempt_number: 2, status: 'queued' }),
     ])
-
-    const secondRunId = String(firstRetryRows.rows[1]?.id)
-    await repository.claimDispatch(secondRunId)
-    await repository.renewLease(secondRunId, 2)
-    await expect(repository.processRunnerEvent({
-      attempt: 2,
-      bodySha256: 'repair-transient-body-2',
-      event: { actor: 'runner', sequence: 3, type: 'runner_failed' },
-      eventId: 'repair-transient-event-2',
-      keyId: 'key-current',
-      nonce: 'repair-transient-nonce-2',
-      runId: secondRunId,
-      safeSummary: 'source_read_failed',
-      sequence: 3,
-    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'failed' } })
-
-    const cappedRows = await client.execute({
-      args: [created.run.taskId],
-      sql: 'SELECT attempt_number, status FROM crawler_run WHERE task_id = ? ORDER BY attempt_number',
+    await expect(repository.getTaskDetail(created.run.taskId)).resolves.toMatchObject({
+      retry: {
+        attemptNumber: 1,
+        automatic: false,
+        maxAttempts: 2,
+        status: 'none',
+      },
     })
-    expect(cappedRows.rows).toHaveLength(2)
 
     const deterministic = await repository.createOrGetActiveRun({
       movieId: 'movie-repair-3',
@@ -567,6 +553,47 @@ describe('crawler task repository', () => {
       sql: 'SELECT attempt_number FROM crawler_run WHERE task_id = ? ORDER BY attempt_number',
     })
     expect(deterministicRows.rows).toEqual([{ attempt_number: 1 }])
+  })
+
+  it('creates one immediate retry for transient provider transport and binds a fresh provider association', async () => {
+    const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    if (created.kind !== 'created')
+      throw new Error('expected created run')
+    await repository.ensureProviderAssociation({ attempt: 1, runId: created.run.id, template: 'movie' })
+
+    await expect(repository.failProviderReconciliation(created.run.id, 1, 'github_provider_unavailable'))
+      .resolves
+      .toMatchObject({ kind: 'updated', status: 'failed', retry: { status: 'retrying' } })
+
+    const runs = await client.execute({
+      args: [created.run.taskId],
+      sql: 'SELECT id, attempt_number, status FROM crawler_run WHERE task_id = ? ORDER BY attempt_number',
+    })
+    expect(runs.rows).toEqual([
+      { attempt_number: 1, id: created.run.id, status: 'failed' },
+      { attempt_number: 2, id: expect.any(String), status: 'queued' },
+    ])
+
+    const retryRunId = String((runs.rows[1] as { id: string }).id)
+    await expect(repository.getProviderAssociation(retryRunId)).resolves.toMatchObject({
+      applicationAttempt: 2,
+      runId: retryRunId,
+    })
+    await expect(repository.getTaskDetail(created.run.taskId)).resolves.toMatchObject({
+      retry: {
+        attemptNumber: 2,
+        automatic: true,
+        maxAttempts: 2,
+        status: 'retrying',
+      },
+    })
+
+    await repository.failProviderReconciliation(created.run.id, 1, 'github_provider_unavailable')
+    const bounded = await client.execute({
+      args: [created.run.taskId],
+      sql: 'SELECT COUNT(*) AS count FROM crawler_run WHERE task_id = ?',
+    })
+    expect(bounded.rows).toEqual([{ count: 2 }])
   })
 
   it('creates a new repair task for manual retry after rereading the current disposition and revision', async () => {
@@ -802,6 +829,7 @@ describe('crawler task repository', () => {
     if (created.kind !== 'created')
       throw new Error('expected created run')
     const runId = created.run.id
+    await repository.ensureProviderAssociation({ attempt: 1, runId, template: 'movie' })
     await repository.claimDispatch(runId)
     await repository.renewLease(runId, 2)
     now = new Date(now.getTime() + 10 * 60 * 1000 + 1)
@@ -811,6 +839,11 @@ describe('crawler task repository', () => {
     const failure = await client.execute({ args: [runId], sql: 'SELECT failure_code, terminal_at FROM crawler_run WHERE id = ?' })
     expect(failure.rows[0]).toMatchObject({ failure_code: 'runner_lost' })
     expect(failure.rows[0]?.terminal_at).not.toBeNull()
+    const retries = await client.execute({ args: [created.run.taskId], sql: 'SELECT attempt_number, status FROM crawler_run WHERE task_id = ? ORDER BY attempt_number' })
+    expect(retries.rows).toEqual([
+      { attempt_number: 1, status: 'failed' },
+      { attempt_number: 2, status: 'queued' },
+    ])
   })
 
   it('binds provider facts with exact snapshots, keeps schedule registration idempotent, and accepts a validated receipt while the provider runs', async () => {

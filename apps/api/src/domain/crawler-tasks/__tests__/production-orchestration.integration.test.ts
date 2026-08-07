@@ -88,7 +88,9 @@ async function createTestDatabase() {
   })
   const foundation = await readFile(new URL('../../../../../../packages/db/drizzle/0027_crawler_task_domain_foundation.sql', import.meta.url), 'utf8')
   const provider = await readFile(new URL('../../../../../../packages/db/drizzle/0028_crawler_provider_association.sql', import.meta.url), 'utf8')
-  const statements = [foundation, provider]
+  const receipt = await readFile(new URL('../../../../../../packages/db/drizzle/0029_source_contract_receipt_boundary.sql', import.meta.url), 'utf8')
+  const repair = await readFile(new URL('../../../../../../packages/db/drizzle/0030_source_health_repair.sql', import.meta.url), 'utf8')
+  const statements = [foundation, provider, receipt, repair]
     .flatMap(migration => migration.split('--> statement-breakpoint'))
     .map(statement => statement.trim())
     .filter(Boolean)
@@ -258,6 +260,19 @@ describe('production orchestration lifecycle integration', () => {
       status: 'in_progress',
     })).resolves.toMatchObject({ kind: 'provider_lost' })
     await expect(repository.getRun(first.runId)).resolves.toMatchObject({ status: 'failed' })
+    const retries = await client.execute({
+      args: [first.runId],
+      sql: 'SELECT task_id, id, attempt_number, status FROM crawler_run WHERE task_id = (SELECT task_id FROM crawler_run WHERE id = ?) ORDER BY attempt_number',
+    })
+    expect(retries.rows).toEqual([
+      { attempt_number: 1, id: first.runId, status: 'failed', task_id: expect.any(String) },
+      { attempt_number: 2, id: expect.any(String), status: 'queued', task_id: expect.any(String) },
+    ])
+    const retryRunId = String((retries.rows[1] as { id: string }).id)
+    await expect(repository.getProviderAssociation(retryRunId)).resolves.toMatchObject({
+      applicationAttempt: 2,
+      runId: retryRunId,
+    })
 
     const late = await repository.providerStarted({
       attempt: 1,
