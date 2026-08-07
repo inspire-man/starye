@@ -1,5 +1,6 @@
 import type {
   ActiveCrawlerLeaseOwner,
+  CrawlerRunFailureCode,
   CrawlerRunState,
   CrawlerRunStatus,
   CrawlerRunTransitionDecision,
@@ -7,6 +8,8 @@ import type {
   CrawlerTaskOperation,
   CrawlerTaskSnapshotUnion,
 } from './types'
+
+export type CrawlerAutomaticRetryTiming = 'immediate' | 'windowed'
 
 interface RepairReceiptLike {
   readonly movieId: string
@@ -21,6 +24,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const terminalStatuses: readonly CrawlerRunStatus[] = ['succeeded', 'failed', 'cancelled']
+
+const immediateRetryReasons = new Set([
+  'dispatch_transport_failed',
+  'github_provider_network_error',
+  'github_provider_request_timeout',
+  'github_provider_unavailable',
+  'provider_dispatch_timeout',
+  'provider_transport_failed',
+])
+
+const windowedRetryFailureCodes = new Set<CrawlerRunFailureCode>([
+  'provider_lost',
+  'runner_lost',
+])
+
+export function classifyCrawlerAutomaticRetry(input: {
+  readonly failureCode?: CrawlerRunFailureCode
+  readonly reason?: string
+}): CrawlerAutomaticRetryTiming | undefined {
+  if (input.failureCode && windowedRetryFailureCodes.has(input.failureCode))
+    return 'windowed'
+  if (input.reason && immediateRetryReasons.has(input.reason))
+    return 'immediate'
+  return undefined
+}
 
 export function isTerminalCrawlerRunStatus(status: CrawlerRunStatus): boolean {
   return terminalStatuses.includes(status)

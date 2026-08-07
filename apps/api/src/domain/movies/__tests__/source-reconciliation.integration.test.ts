@@ -183,4 +183,69 @@ describe('repair source reconciliation D1 batch integration', () => {
       { sequence: 1, reason_code: 'repair_source_observation' },
     ])
   })
+
+  it('keeps an older attempt append-only when the task has advanced to a newer current run', async () => {
+    const { client, db } = await createTestDatabase()
+    const observedAt = new Date('2026-08-06T00:00:00.000Z')
+    const first = {
+      db,
+      movieId: 'movie-1',
+      operation: 'repair_players' as const,
+      runId: 'run-1',
+      attemptNumber: 1,
+      sequence: 1,
+      expectedRunStateVersion: 0,
+      expectedLastEventSequence: 0,
+      eventId: 'event-1',
+      expectedSourceRevision: 0,
+      observedAt,
+      sources: [{ sourceName: 'direct', sourceUrl: 'https://source.example/first', sourceType: 'direct' as const, isActive: true }],
+    }
+    await expect(acceptRepairSourceObservation(first)).resolves.toMatchObject({ outcome: 'accepted', readback: { sourceRevision: 1 } })
+
+    await client.batch([
+      {
+        sql: `
+          INSERT INTO crawler_run (
+            id, task_id, attempt_number, status, state_version, last_event_sequence, created_at, updated_at
+          ) VALUES (?, ?, ?, 'running', 0, 0, ?, ?)
+        `,
+        args: ['run-2', 'task-1', 2, 2, 2],
+      },
+      {
+        sql: 'UPDATE crawler_task SET latest_run_id = ?, updated_at = ? WHERE id = ?',
+        args: ['run-2', 2, 'task-1'],
+      },
+    ], 'write')
+
+    await expect(acceptRepairSourceObservation({
+      ...first,
+      eventId: 'late-event-1',
+      expectedLastEventSequence: 1,
+      expectedRunStateVersion: 1,
+      expectedSourceRevision: 1,
+      sequence: 2,
+      sources: [{ sourceName: 'late', sourceUrl: 'https://source.example/late', sourceType: 'direct' as const, isActive: true }],
+    })).resolves.toMatchObject({ outcome: 'stale', source: { sourceRevision: 1 } })
+
+    await expect(acceptRepairSourceObservation({
+      ...first,
+      attemptNumber: 2,
+      eventId: 'event-2',
+      expectedSourceRevision: 1,
+      runId: 'run-2',
+      sources: [{ sourceName: 'current', sourceUrl: 'https://source.example/current', sourceType: 'direct' as const, isActive: true }],
+    })).resolves.toMatchObject({ outcome: 'accepted', readback: { sourceRevision: 2 } })
+
+    expect((await client.execute({ sql: 'SELECT source_revision FROM movie_source_state WHERE movie_id = ?', args: ['movie-1'] })).rows).toEqual([
+      { source_revision: 2 },
+    ])
+    expect((await client.execute({ sql: 'SELECT source_revision, run_id FROM movie_source_observation WHERE movie_id = ? ORDER BY source_revision', args: ['movie-1'] })).rows).toEqual([
+      { source_revision: 1, run_id: 'run-1' },
+      { source_revision: 2, run_id: 'run-2' },
+    ])
+    expect((await client.execute({ sql: 'SELECT state_version, last_event_sequence FROM crawler_run WHERE id = ?', args: ['run-1'] })).rows).toEqual([
+      { state_version: 1, last_event_sequence: 1 },
+    ])
+  })
 })

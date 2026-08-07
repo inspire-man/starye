@@ -1,10 +1,10 @@
 import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
-import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
-import { createManualRetryAttempt, decideCrawlerRunTransition, isTerminalCrawlerRunStatus } from './state-machine'
+import { classifyCrawlerAutomaticRetry, createManualRetryAttempt, decideCrawlerRunTransition, isTerminalCrawlerRunStatus } from './state-machine'
 import { createCrawlerTaskSnapshot, readCrawlerTaskSnapshot } from './template-registry'
 import {
   CRAWLER_LEASE_DURATION_MS,
@@ -207,8 +207,8 @@ export type ProviderObservationResult
   = | { readonly kind: 'not_found' }
     | { readonly kind: 'attempt_mismatch' }
     | { readonly kind: 'provider_mismatch', readonly reconciliationWindowEndsAt: number }
-    | { readonly kind: 'updated', readonly status: ProviderRunStatus, readonly conclusion?: string }
-    | { readonly kind: 'provider_lost', readonly reason: 'reconciliation_window_expired' }
+    | { readonly kind: 'updated', readonly status: ProviderRunStatus | 'failed', readonly conclusion?: string, readonly retry?: CrawlerTaskRetryProjection }
+    | { readonly kind: 'provider_lost', readonly reason: 'reconciliation_window_expired', readonly retry?: CrawlerTaskRetryProjection }
 
 export interface ProviderReconciliationCandidate extends ProviderAssociationRecord {
   readonly runStatus: CrawlerRunStatus
@@ -639,16 +639,54 @@ function isOrdinaryReceiptCandidate(value: ProcessCrawlerRunnerEventInput['recei
     && 'templateKey' in value
 }
 
-function shouldAutoRetryRepairFailure(input: {
-  readonly attemptNumber: number
-  readonly operation: CrawlerTaskOperation
-  readonly safeSummary?: string
+const MAX_AUTOMATIC_RETRY_ATTEMPTS = 2
+
+interface TaskRetryRunRow {
+  readonly attempt_number: number
+  readonly failure_code: string | null
+  readonly id: string
   readonly status: CrawlerRunStatus
-}): boolean {
-  return input.operation === 'repair_players'
-    && input.status === 'failed'
-    && input.attemptNumber === 1
-    && (input.safeSummary === 'source_read_failed' || input.safeSummary === 'source_write_failed')
+}
+
+async function readTaskRetryProjection(
+  d1: D1Client,
+  taskId: string,
+): Promise<CrawlerTaskRetryProjection | undefined> {
+  const result = await d1.prepare(`
+    SELECT id, attempt_number, status, failure_code
+    FROM crawler_run
+    WHERE task_id = ?
+    ORDER BY attempt_number DESC, id DESC
+  `).bind(taskId).all<TaskRetryRunRow>()
+  const runs = result.results ?? []
+  const current = runs[0]
+  if (!current)
+    return undefined
+
+  const runIds = runs.map(run => run.id)
+  const automaticRows = await d1.prepare(`
+    SELECT DISTINCT run_id
+    FROM crawler_run_transition
+    WHERE reason_code = 'automatic_retry_created'
+      AND run_id IN (${runIds.map(() => '?').join(', ')})
+  `).bind(...runIds).all<{ run_id: string }>()
+  const automatic = new Set((automaticRows.results ?? []).map(row => row.run_id)).size > 0
+  const status = automatic && current.attempt_number >= MAX_AUTOMATIC_RETRY_ATTEMPTS
+    ? (current.status === 'queued'
+      || current.status === 'dispatching'
+      || current.status === 'running'
+      || current.status === 'cancel_requested'
+        ? 'retrying'
+        : current.status === 'succeeded' ? 'none' : 'exhausted')
+    : 'none'
+
+  return {
+    attemptNumber: current.attempt_number,
+    automatic,
+    ...(current.failure_code ? { failureCode: current.failure_code as CrawlerRunFailureCode } : {}),
+    maxAttempts: MAX_AUTOMATIC_RETRY_ATTEMPTS,
+    status,
+  }
 }
 
 export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: CrawlerRepositoryOptions = {}) {
@@ -757,11 +795,18 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const hasMore = rows.length > requestedLimit
     const pageRows = rows.slice(0, requestedLimit)
     const last = pageRows.at(-1)
+    const tasks = await Promise.all(pageRows.map(async (row) => {
+      const retry = await readTaskRetryProjection(d1, row.id)
+      return {
+        ...toCrawlerTaskListItem(row),
+        ...(retry ? { retry } : {}),
+      }
+    }))
     return {
       nextCursor: hasMore && last
         ? encodeCrawlerTaskCursor({ id: last.id, updatedAt: last.updated_at })
         : null,
-      tasks: pageRows.map(toCrawlerTaskListItem),
+      tasks,
     }
   }
 
@@ -824,7 +869,15 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         updatedAt: row.updated_at,
       })
     }
-    return { runs, task: toCrawlerTaskListItem(taskRow) }
+    const retry = await readTaskRetryProjection(d1, taskId)
+    return {
+      runs,
+      ...(retry ? { retry } : {}),
+      task: {
+        ...toCrawlerTaskListItem(taskRow),
+        ...(retry ? { retry } : {}),
+      },
+    }
   }
 
   async function listRunLogs(input: {
@@ -1265,7 +1318,10 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return applyTransition(runId, { actor: 'runner', sequence, type: 'runner_heartbeat' })
   }
 
-  async function createAutomaticRetryRun(run: CrawlerRunRow, snapshot: CrawlerTaskSnapshotUnion): Promise<void> {
+  async function createAutomaticRetryRun(run: CrawlerRunRow, snapshot: CrawlerTaskSnapshotUnion): Promise<CrawlerTaskRun | undefined> {
+    if (run.attempt_number >= MAX_AUTOMATIC_RETRY_ATTEMPTS)
+      return undefined
+
     const currentNow = toUnixSeconds(now())
     const nextRunId = createId()
     const expiresAt = addMillisecondsInSeconds(currentNow, CRAWLER_LEASE_DURATION_MS)
@@ -1274,26 +1330,115 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       snapshot,
       status: 'failed',
     })
+    const provider = createProviderSnapshot(snapshot.templateKey)
 
-    await d1.batch([
+    const batchResults = await d1.batch([
       d1.prepare(`
         INSERT INTO crawler_run (
           id, task_id, attempt_number, status, state_version, last_event_sequence,
           lease_expires_at, created_at, updated_at
-        ) VALUES (?, ?, ?, 'queued', 0, 0, ?, ?, ?)
-      `).bind(nextRunId, run.task_id, retry.attemptNumber, expiresAt, currentNow, currentNow),
+        )
+        SELECT ?, ?, ?, 'queued', 0, 0, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1
+          FROM crawler_task AS task
+          INNER JOIN crawler_run AS previous ON previous.id = task.latest_run_id
+          WHERE task.id = ?
+            AND task.latest_run_id = ?
+            AND previous.id = ?
+            AND previous.status = 'failed'
+            AND previous.state_version = ?
+        )
+          AND NOT EXISTS (
+            SELECT 1 FROM crawler_run
+            WHERE task_id = ? AND attempt_number >= ?
+          )
+      `).bind(
+        nextRunId,
+        run.task_id,
+        retry.attemptNumber,
+        expiresAt,
+        currentNow,
+        currentNow,
+        run.task_id,
+        run.id,
+        run.id,
+        run.state_version + 1,
+        run.task_id,
+        retry.attemptNumber,
+      ),
+      d1.prepare(`
+        INSERT INTO crawler_run_provider_association (
+          run_id, application_attempt, provider, template_key, target, workflow,
+          repository, ref, environment, crawler_entrypoint,
+          reconciliation_window_ends_at, created_at, updated_at
+        )
+        SELECT ?, ?, 'github-actions', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1
+          FROM crawler_run
+          WHERE id = ? AND task_id = ? AND attempt_number = ? AND status = 'queued'
+        )
+      `).bind(
+        nextRunId,
+        retry.attemptNumber,
+        provider.templateKey,
+        provider.target,
+        provider.workflow,
+        provider.repository,
+        provider.ref,
+        provider.environment,
+        provider.crawlerEntrypoint,
+        addMillisecondsInSeconds(currentNow, DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS),
+        currentNow,
+        currentNow,
+        nextRunId,
+        run.task_id,
+        retry.attemptNumber,
+      ),
       d1.prepare(`
         INSERT INTO crawler_template_lease (template_key, run_id, expires_at, renewed_at)
-        VALUES (?, ?, ?, ?)
-      `).bind(snapshot.templateKey, nextRunId, expiresAt, currentNow),
+        SELECT ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1
+          FROM crawler_run
+          WHERE id = ? AND task_id = ? AND attempt_number = ? AND status = 'queued'
+        )
+      `).bind(snapshot.templateKey, nextRunId, expiresAt, currentNow, nextRunId, run.task_id, retry.attemptNumber),
       d1.prepare(`
         INSERT INTO crawler_run_transition (
           id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
-        ) VALUES (?, ?, 0, 'queued', 'queued', 'automatic_retry_created', 'automatic retry from immutable task snapshot', ?)
-      `).bind(createId(), nextRunId, currentNow),
-      d1.prepare('UPDATE crawler_task SET latest_run_id = ?, updated_at = ? WHERE id = ?')
-        .bind(nextRunId, currentNow, run.task_id),
+        )
+        SELECT ?, ?, 0, 'queued', 'queued', 'automatic_retry_created', 'automatic retry from immutable task snapshot', ?
+        WHERE EXISTS (
+          SELECT 1
+          FROM crawler_run
+          WHERE id = ? AND task_id = ? AND attempt_number = ? AND status = 'queued'
+        )
+      `).bind(createId(), nextRunId, currentNow, nextRunId, run.task_id, retry.attemptNumber),
+      d1.prepare(`
+        UPDATE crawler_task
+        SET latest_run_id = ?, updated_at = ?
+        WHERE id = ? AND latest_run_id = ?
+          AND EXISTS (
+            SELECT 1
+            FROM crawler_run
+            WHERE id = ? AND task_id = ? AND attempt_number = ? AND status = 'queued'
+          )
+      `).bind(nextRunId, currentNow, run.task_id, run.id, nextRunId, run.task_id, retry.attemptNumber),
     ])
+
+    const runInsert = batchResults[0] as { meta?: { changes?: number } } | undefined
+    if ((runInsert?.meta?.changes ?? 0) !== 1)
+      return undefined
+
+    return {
+      attemptNumber: retry.attemptNumber,
+      id: nextRunId,
+      stateVersion: 0,
+      status: 'queued',
+      taskId: run.task_id,
+    }
   }
 
   async function retryRun(runId: string): Promise<CrawlerTaskRunResult> {
@@ -1596,12 +1741,10 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     }
 
     if (decision.kind === 'transition'
-      && shouldAutoRetryRepairFailure({
-        attemptNumber: run.attempt_number,
-        operation: task.operation,
-        safeSummary,
-        status: decision.nextStatus,
-      })) {
+      && classifyCrawlerAutomaticRetry({
+        failureCode: decision.failureCode,
+        reason: safeSummary,
+      }) === 'immediate') {
       await createAutomaticRetryRun(run, snapshot)
     }
 
@@ -1900,14 +2043,25 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     if (isTerminalCrawlerRunStatus(run.status))
       return { kind: 'updated', status: association.providerStatus ?? 'completed', ...(association.providerConclusion ? { conclusion: association.providerConclusion } : {}) }
     const decision = await applyTransition(runId, { actor: 'scheduler', type: 'provider_lost' })
+    let retry: CrawlerTaskRetryProjection | undefined
     if (decision.kind === 'transition') {
       await d1.prepare(`
         INSERT OR IGNORE INTO crawler_run_transition (
           id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
         ) VALUES (?, ?, -6, ?, ?, 'provider_lost', 'provider reconciliation window expired', ?)
       `).bind(createId(), runId, run.status, decision.nextStatus, toUnixSeconds(now())).run()
+      const task = await getTaskBinding(runId)
+      if (task) {
+        const snapshot = parseTaskSnapshot(task.request_snapshot_json, task.operation)
+        await createAutomaticRetryRun(run, snapshot)
+        retry = await readTaskRetryProjection(d1, run.task_id)
+      }
     }
-    return { kind: 'provider_lost', reason: 'reconciliation_window_expired' }
+    return {
+      kind: 'provider_lost',
+      reason: 'reconciliation_window_expired',
+      ...(retry ? { retry } : {}),
+    }
   }
 
   async function failProviderReconciliation(runId: string, attempt: number, reason: string): Promise<ProviderObservationResult> {
@@ -1917,15 +2071,31 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return { kind: 'not_found' }
     if (association.applicationAttempt !== attempt)
       return { kind: 'attempt_mismatch' }
+    const retryTiming = classifyCrawlerAutomaticRetry({ reason })
+    let decision: CrawlerRunTransitionDecision | undefined
     if (!isTerminalCrawlerRunStatus(run.status)) {
       await d1.prepare(`
         INSERT OR IGNORE INTO crawler_run_transition (
           id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
         ) VALUES (?, ?, -7, ?, ?, 'provider_failed', ?, ?)
       `).bind(createId(), runId, run.status, run.status, truncateUtf8(reason, CRAWLER_MAX_SAFE_LOG_BYTES), toUnixSeconds(now())).run()
-      await applyTransition(runId, { actor: 'scheduler', type: 'provider_failed' })
+      decision = await applyTransition(runId, { actor: 'scheduler', type: 'provider_failed' })
     }
-    return { kind: 'updated', status: 'completed', conclusion: 'failure' }
+    let retry: CrawlerTaskRetryProjection | undefined
+    if (decision?.kind === 'transition' && retryTiming === 'immediate') {
+      const task = await getTaskBinding(runId)
+      if (task) {
+        const snapshot = parseTaskSnapshot(task.request_snapshot_json, task.operation)
+        await createAutomaticRetryRun(run, snapshot)
+        retry = await readTaskRetryProjection(d1, run.task_id)
+      }
+    }
+    return {
+      kind: 'updated',
+      status: 'failed',
+      conclusion: 'failure',
+      ...(retry ? { retry } : {}),
+    }
   }
 
   async function validateDispatch(input: ValidateDispatchInput): Promise<ValidateDispatchResult> {
@@ -1953,9 +2123,15 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
     const failed: string[] = []
     for (const run of expired.results ?? []) {
+      const current = await getRunRow(run.id)
+      const task = current ? await getTaskBinding(run.id) : undefined
       const decision = await applyTransition(run.id, { actor: 'scheduler', type: 'lease_expired' })
       if (decision.kind === 'transition' && decision.nextStatus === 'failed') {
         failed.push(run.id)
+        if (current && task) {
+          const snapshot = parseTaskSnapshot(task.request_snapshot_json, task.operation)
+          await createAutomaticRetryRun(current, snapshot)
+        }
       }
     }
     return failed

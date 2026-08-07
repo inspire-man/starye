@@ -458,12 +458,15 @@ export async function acceptRepairSourceObservation(
                 ${source.eligibleCount}, ${source.repairable ? 1 : 0},
                 ${source.reasonCode ?? null}, ${observedAt}
               WHERE EXISTS (
-                SELECT 1 FROM crawler_run
-                WHERE id = ${input.runId}
-                  AND attempt_number = ${input.attemptNumber}
-                  AND status IN ('dispatching', 'running', 'cancel_requested')
-                  AND state_version = ${input.expectedRunStateVersion!}
-                  AND last_event_sequence = ${input.expectedLastEventSequence!}
+                SELECT 1
+                FROM crawler_run AS current_run
+                INNER JOIN crawler_task AS current_task ON current_task.id = current_run.task_id
+                WHERE current_run.id = ${input.runId}
+                  AND current_task.latest_run_id = current_run.id
+                  AND current_run.attempt_number = ${input.attemptNumber}
+                  AND current_run.status IN ('dispatching', 'running', 'cancel_requested')
+                  AND current_run.state_version = ${input.expectedRunStateVersion!}
+                  AND current_run.last_event_sequence = ${input.expectedLastEventSequence!}
               )
               ON CONFLICT(movie_id) DO UPDATE SET
                 source_revision = excluded.source_revision,
@@ -507,6 +510,12 @@ export async function acceptRepairSourceObservation(
               AND status IN ('dispatching', 'running', 'cancel_requested')
               AND state_version = ${input.expectedRunStateVersion!}
               AND last_event_sequence = ${input.expectedLastEventSequence!}
+              AND EXISTS (
+                SELECT 1
+                FROM crawler_task
+                WHERE crawler_task.id = crawler_run.task_id
+                  AND crawler_task.latest_run_id = crawler_run.id
+              )
           `).getQuery()))
           acceptedStatementIndex = statements.length - 1
           statements.push(prepareNativeD1Statement(input.db, input.db.run(sql`
@@ -573,6 +582,12 @@ export async function acceptRepairSourceObservation(
                     WHERE id = ${input.runId}
                       AND state_version = ${input.expectedRunStateVersion! + 1}
                       AND last_event_sequence = ${input.sequence}
+                      AND EXISTS (
+                        SELECT 1
+                        FROM crawler_task
+                        WHERE crawler_task.id = crawler_run.task_id
+                          AND crawler_task.latest_run_id = crawler_run.id
+                      )
                   )`
                   : sql`1 = 1`}
             `).getQuery()))
