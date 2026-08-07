@@ -111,6 +111,105 @@ describe('registry-owned production crawler adapters', () => {
     expect(client.succeeded).toHaveBeenCalledWith(7, ['MOV-001'], { createdCount: 1 })
   })
 
+  it('claims the server snapshot before selecting the movie repair adapter', async () => {
+    const { environment } = await fixture()
+    const { client: actions } = actionsFixture()
+    const order: string[] = []
+    const candidate = {
+      attempt: 2,
+      runId: 'run-1',
+      sequence: 1,
+      snapshot: {
+        entrypoint: 'movie-crawler' as const,
+        movieId: 'movie-1',
+        operation: 'repair_players' as const,
+        permissionResource: 'movie' as const,
+        reason: 'no_source' as const,
+        sourceRevision: 7,
+        targetIntent: 'restore_playable_sources' as const,
+        templateKey: 'movie' as const,
+        templateVersion: 1 as const,
+      },
+    }
+    const sourceSummary = [{
+      eligible: true,
+      health: 'unverified' as const,
+      observedAt: 1_754_000_000,
+      reasonCode: 'source_unverified' as const,
+      sourceType: 'direct' as const,
+    }]
+    const runner = {
+      cancelled: vi.fn(async () => ({ accepted: true })),
+      claim: vi.fn(async () => {
+        order.push('claim')
+        return { accepted: true }
+      }),
+      failed: vi.fn(async () => ({ accepted: true })),
+      heartbeat: vi.fn(async () => ({ accepted: true })),
+      log: vi.fn(async () => ({ accepted: true })),
+      observeRepairSource: vi.fn(async () => ({
+        accepted: true,
+        outcome: 'accepted',
+        readback: {
+          movieId: 'movie-1',
+          observedAt: 1_754_000_000,
+          sourceRevision: 8,
+          sources: sourceSummary,
+          summary: { eligibleCount: 1, sourceCount: 1 },
+        },
+        receipt: {
+          movieId: 'movie-1',
+          observedAt: 1_754_000_000,
+          operation: 'repair_players' as const,
+          sourceRevision: 8,
+          sourceSummary,
+        },
+      })),
+      poll: vi.fn(async () => {
+        order.push('poll')
+        return candidate
+      }),
+      progress: vi.fn(async () => ({ accepted: true })),
+      succeeded: vi.fn(async () => ({ accepted: true })),
+      succeededRepair: vi.fn(async () => ({ accepted: true })),
+    }
+    const executeMovie = vi.fn(async () => ({ contentIds: ['ordinary-fallback'] }))
+
+    const result = await runTargetCrawlerMutation(environment, {
+      createActionsEventClient: () => actions,
+      createRunnerClient: () => runner,
+      discoverRepairSources: async ({ snapshot }) => {
+        order.push(`discover:${snapshot.movieId}`)
+        return {
+          observedAt: 1_754_000_000,
+          sources: [{ sourceName: 'line-1', sourceType: 'direct', sourceUrl: 'https://source.example/raw.m3u8' }],
+        }
+      },
+      executeMovie,
+    })
+
+    expect(result).toMatchObject({ operation: 'movie-production', status: 'succeeded', template: 'movie' })
+    expect(order.indexOf('claim')).toBeGreaterThan(order.indexOf('poll'))
+    expect(order.indexOf('discover:movie-1')).toBeGreaterThan(order.indexOf('claim'))
+    expect(executeMovie).not.toHaveBeenCalled()
+    expect(runner.succeeded).not.toHaveBeenCalled()
+    expect(runner.succeededRepair).toHaveBeenCalledWith(candidate, expect.any(Number), expect.objectContaining({ movieId: 'movie-1', sourceRevision: 8 }))
+    expect(runner.failed).not.toHaveBeenCalled()
+
+    runner.heartbeat.mockResolvedValueOnce({ accepted: false })
+    await expect(runTargetCrawlerMutation(environment, {
+      createActionsEventClient: () => actions,
+      createRunnerClient: () => runner,
+      discoverRepairSources: async ({ snapshot }) => ({
+        observedAt: 1_754_000_000,
+        sources: [{ sourceName: snapshot.movieId, sourceType: 'direct', sourceUrl: 'https://source.example/rejected.m3u8' }],
+      }),
+      executeMovie,
+    })).rejects.toThrow('Production crawler operation failed.')
+    expect(runner.succeededRepair).toHaveBeenCalledTimes(1)
+    expect(runner.failed).toHaveBeenCalledTimes(1)
+  })
+
   it('renews the production lease while the crawler adapter is still running', async () => {
     vi.useFakeTimers()
     try {

@@ -4,11 +4,22 @@ import { RunnerClient } from '../runner-client'
 describe('runnerClient', () => {
   it('uses one serialized payload for the signed poll request', async () => {
     const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ candidate: null }), { status: 200 }))
-    const client = new RunnerClient({ apiBaseUrl: 'http://localhost:8080', callbackKeyId: 'key-1', callbackSecret: 'secret', fetch: fetch as never })
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      applicationAttempt: 2,
+      applicationRunId: 'run-expected',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+      providerRunAttempt: 1,
+      providerRunId: '77',
+    })
     await expect(client.poll()).resolves.toBeUndefined()
     const init = fetch.mock.calls[0]![1] as RequestInit
     expect(init.headers).toMatchObject({ 'x-runner-key-id': 'key-1' })
     expect(init.body).toEqual(expect.any(String))
+    const payload = JSON.parse(String(init.body)) as Record<string, unknown>
+    expect(Object.keys(payload).sort()).toEqual(['event_id', 'key_id', 'nonce', 'timestamp'])
   })
 
   it('rejects a polled candidate that is not bound to the production run tuple', async () => {
@@ -57,6 +68,7 @@ describe('runnerClient', () => {
           },
         },
       }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ accepted: true }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         accepted: true,
         outcome: 'accepted',
@@ -89,8 +101,8 @@ describe('runnerClient', () => {
     })
     const candidate = await client.poll()
     expect(candidate?.snapshot.operation).toBe('repair_players')
+    await expect(client.claim(candidate!)).resolves.toMatchObject({ accepted: true })
     await expect(client.observeRepairSource(candidate!, 3, {
-      observedAt: 1_720_000_000,
       sources: [{ sourceName: 'line-1', sourceType: 'direct', sourceUrl: 'https://source.example/raw.m3u8' }],
     })).resolves.toMatchObject({ accepted: true })
     await client.succeededRepair(candidate!, 4, {
@@ -101,8 +113,11 @@ describe('runnerClient', () => {
       sourceSummary: [{ eligible: true, health: 'unverified', observedAt: 1_720_000_000, reasonCode: 'source_unverified', sourceType: 'direct' }],
     })
 
-    const observationBody = JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body)) as Record<string, unknown>
-    const terminalBody = JSON.parse(String((fetch.mock.calls[2]![1] as RequestInit).body)) as Record<string, unknown>
+    const claimBody = JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body)) as Record<string, unknown>
+    const observationBody = JSON.parse(String((fetch.mock.calls[2]![1] as RequestInit).body)) as Record<string, unknown>
+    const terminalBody = JSON.parse(String((fetch.mock.calls[3]![1] as RequestInit).body)) as Record<string, unknown>
+    expect(Object.keys(claimBody).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'run_id', 'sequence', 'timestamp'])
+    expect(claimBody).toMatchObject({ attempt: 1, run_id: 'run-repair-1', sequence: 2 })
     expect(observationBody).toMatchObject({
       attempt: 1,
       operation: 'repair_players',
@@ -113,6 +128,7 @@ describe('runnerClient', () => {
       source_revision: 7,
       type: 'source_observation',
     })
+    expect(observationBody.observed_at).toBe(1_754_000_000)
     expect(observationBody.event_id).toEqual(expect.any(String))
     expect(observationBody.nonce).toEqual(expect.any(String))
     expect(observationBody.timestamp).toBe(1_754_000_000_000)

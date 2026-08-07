@@ -160,6 +160,8 @@ export class ActionsEventClient {
     return createRunnerEnvelope(this.config.callbackKeyId, {
       attempt,
       ...fields,
+      ...(this.config.providerRunAttempt !== undefined ? { provider_run_attempt: this.config.providerRunAttempt } : {}),
+      ...(this.config.providerRunId ? { provider_run_id: this.config.providerRunId } : {}),
       run_id: runId,
     }, this.now())
   }

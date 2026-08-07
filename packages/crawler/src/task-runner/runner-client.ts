@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { createRunnerEventId, signRunnerBody } from './event-signer'
 
 export type RunnerOperation = 'manga' | 'movie' | 'repair_players'
@@ -97,9 +98,14 @@ export interface RunnerCandidate {
 
 export interface RunnerClientConfig {
   readonly apiBaseUrl: string
+  readonly applicationAttempt?: number
+  readonly applicationRunId?: string
   readonly callbackKeyId: string
   readonly callbackSecret: string
   readonly fetch?: typeof fetch
+  readonly now?: () => number
+  readonly providerRunAttempt?: number
+  readonly providerRunId?: string
   readonly timeoutMs?: number
 }
 
@@ -232,30 +238,58 @@ function parseRunnerSnapshot(value: unknown): RunnerSnapshot {
   }
 }
 
+function parseRunnerCandidate(value: unknown): RunnerCandidate {
+  if (!isRecord(value)
+    || typeof value.run_id !== 'string'
+    || value.run_id.trim().length === 0
+    || value.run_id.length > 128
+    || typeof value.attempt !== 'number'
+    || !Number.isSafeInteger(value.attempt)
+    || value.attempt < 1
+    || typeof value.sequence !== 'number'
+    || !Number.isSafeInteger(value.sequence)
+    || value.sequence < 1) {
+    throw new Error('Invalid runner candidate')
+  }
+
+  return {
+    attempt: value.attempt,
+    runId: value.run_id.trim(),
+    sequence: value.sequence,
+    snapshot: parseRunnerSnapshot(value.snapshot),
+  }
+}
+
 export class RunnerClient {
   private readonly fetch: typeof fetch
+  private readonly now: () => number
   private readonly timeoutMs: number
 
   constructor(private readonly config: RunnerClientConfig) {
     this.fetch = config.fetch ?? globalThis.fetch
+    this.now = config.now ?? (() => Date.now())
     this.timeoutMs = config.timeoutMs ?? 10_000
   }
 
   async poll(): Promise<RunnerCandidate | undefined> {
     const response = await this.post('/api/internal/crawler-runs/poll', this.controlEnvelope()) as {
-      candidate: { attempt: number, run_id: string, sequence: number, snapshot: unknown } | null
+      candidate: unknown
     }
-    return response.candidate
-      ? { attempt: response.candidate.attempt, runId: response.candidate.run_id, sequence: response.candidate.sequence, snapshot: parseRunnerSnapshot(response.candidate.snapshot) }
-      : undefined
+    if (response.candidate === null || response.candidate === undefined)
+      return undefined
+    const candidate = parseRunnerCandidate(response.candidate)
+    this.assertCandidateBinding(candidate)
+    return candidate
   }
 
   async claim(candidate: RunnerCandidate): Promise<EventResult> {
+    this.assertCandidateBinding(candidate)
     return this.post(`/api/internal/crawler-runs/${candidate.runId}/claim`, {
-      ...this.controlEnvelope(),
-      attempt: candidate.attempt,
-      run_id: candidate.runId,
-      sequence: candidate.sequence,
+      ...this.controlEnvelope({
+        attempt: candidate.attempt,
+        run_id: candidate.runId,
+        sequence: candidate.sequence,
+      }),
     }) as Promise<EventResult>
   }
 
@@ -265,6 +299,10 @@ export class RunnerClient {
 
   async log(candidate: RunnerCandidate, sequence: number, message: string): Promise<EventResult> {
     return this.event(candidate, sequence, 'log', { code: 'runner_progress', level: 'info', message })
+  }
+
+  async progress(candidate: RunnerCandidate, sequence: number, counts: Readonly<Record<string, number>> = {}): Promise<EventResult> {
+    return this.event(candidate, sequence, 'progress', { counts })
   }
 
   async cancelled(candidate: RunnerCandidate, sequence: number): Promise<EventResult> {
@@ -296,9 +334,10 @@ export class RunnerClient {
   ): Promise<RepairSourceObservationResponse> {
     if (!isRepairRunnerSnapshot(candidate.snapshot))
       throw new Error('Source observation requires a repair runner snapshot')
-    const observedAt = input.observedAt ?? Math.floor(Date.now() / 1000)
+    this.assertCandidateBinding(candidate)
+    const observedAt = input.observedAt ?? Math.floor(this.now() / 1000)
     return this.post(`/api/internal/crawler-runs/${encodeURIComponent(candidate.runId)}/source-observation`, {
-      ...this.controlEnvelope(),
+      ...this.boundEnvelope(),
       attempt: candidate.attempt,
       observed_at: observedAt,
       operation: 'repair_players',
@@ -318,19 +357,44 @@ export class RunnerClient {
     return this.event(candidate, sequence, 'failed', { code })
   }
 
-  private controlEnvelope() {
-    return createRunnerEnvelope(this.config.callbackKeyId)
+  private controlEnvelope(fields: Record<string, unknown> = {}) {
+    return createRunnerEnvelope(this.config.callbackKeyId, fields, this.now())
   }
 
-  private async event(candidate: RunnerCandidate, sequence: number, type: 'cancelled' | 'failed' | 'heartbeat' | 'log' | 'succeeded', extra: Record<string, unknown> = {}): Promise<EventResult> {
+  private boundEnvelope(fields: Record<string, unknown> = {}) {
+    return this.controlEnvelope({
+      ...(this.config.applicationAttempt !== undefined ? { attempt: this.config.applicationAttempt } : {}),
+      ...(this.config.applicationRunId ? { run_id: this.config.applicationRunId } : {}),
+      ...(this.config.providerRunAttempt !== undefined ? { provider_run_attempt: this.config.providerRunAttempt } : {}),
+      ...(this.config.providerRunId ? { provider_run_id: this.config.providerRunId } : {}),
+      ...fields,
+    })
+  }
+
+  private async event(candidate: RunnerCandidate, sequence: number, type: 'cancelled' | 'failed' | 'heartbeat' | 'log' | 'progress' | 'succeeded', extra: Record<string, unknown> = {}): Promise<EventResult> {
+    this.assertCandidateBinding(candidate)
     return this.post(`/api/internal/crawler-runs/${candidate.runId}/events`, {
-      ...this.controlEnvelope(),
+      ...this.boundEnvelope(),
       ...extra,
       attempt: candidate.attempt,
       run_id: candidate.runId,
       sequence,
       type,
+      ...this.repairSourceRevision(candidate),
     }) as Promise<EventResult>
+  }
+
+  private repairSourceRevision(candidate: RunnerCandidate): Record<string, number> {
+    return isRepairRunnerSnapshot(candidate.snapshot)
+      ? { source_revision: candidate.snapshot.sourceRevision }
+      : {}
+  }
+
+  private assertCandidateBinding(candidate: RunnerCandidate): void {
+    if ((this.config.applicationRunId && candidate.runId !== this.config.applicationRunId)
+      || (this.config.applicationAttempt !== undefined && candidate.attempt !== this.config.applicationAttempt)) {
+      throw new Error('Runner candidate does not match the configured run binding')
+    }
   }
 
   private async post(path: string, payload: Record<string, unknown>, options: PostOptions = {}): Promise<unknown> {
@@ -350,4 +414,30 @@ export class RunnerClient {
     }
     return response.json()
   }
+}
+
+function environmentRequired(environment: NodeJS.ProcessEnv, name: string): string {
+  const value = environment[name]?.trim()
+  if (!value)
+    throw new Error(`Missing runner environment: ${name}`)
+  return value
+}
+
+function environmentPositiveInteger(environment: NodeJS.ProcessEnv, name: string): number {
+  const value = Number(environmentRequired(environment, name))
+  if (!Number.isSafeInteger(value) || value < 1)
+    throw new Error(`Invalid runner environment: ${name}`)
+  return value
+}
+
+export function createRunnerClientFromEnvironment(environment: NodeJS.ProcessEnv = process.env): RunnerClient {
+  return new RunnerClient({
+    apiBaseUrl: environmentRequired(environment, 'ACTIONS_CALLBACK_API_BASE_URL'),
+    applicationAttempt: environmentPositiveInteger(environment, 'ACTIONS_APPLICATION_ATTEMPT'),
+    applicationRunId: environmentRequired(environment, 'ACTIONS_APPLICATION_RUN_ID'),
+    callbackKeyId: environmentRequired(environment, 'TASK_RUNNER_CALLBACK_KEY_ID_CURRENT'),
+    callbackSecret: environmentRequired(environment, 'TASK_RUNNER_CALLBACK_SECRET_CURRENT'),
+    providerRunAttempt: environmentPositiveInteger(environment, 'GITHUB_RUN_ATTEMPT'),
+    providerRunId: environmentRequired(environment, 'GITHUB_RUN_ID'),
+  })
 }
