@@ -38,8 +38,68 @@ export type CrawlerRunFailureCode
     | 'runner_failed'
     | 'cancelled_by_runner'
     | 'receipt_missing'
+    | 'provider_contract_invalid'
     | 'provider_lost'
     | 'provider_failed'
+
+export type CrawlerTaskRetryStatus = 'none' | 'retrying' | 'exhausted'
+export type CrawlerLeaseOutcome = 'pending' | 'active' | 'renewed' | 'released' | 'expired' | 'recovered'
+export type CrawlerReconciliationWindowStatus = 'pending' | 'open' | 'closed' | 'expired'
+export type CrawlerReconciliationOutcome
+  = | 'pending'
+    | 'observed'
+    | 'failed'
+    | 'lost'
+    | 'late'
+    | 'stale'
+    | 'ignored'
+    | 'duplicate'
+    | 'conflict'
+export type CrawlerBoundedOutcomeCode
+  = | 'accepted'
+    | 'contract_failure'
+    | 'duplicate'
+    | 'stale'
+    | 'late'
+    | 'ignored'
+    | 'conflict'
+    | 'receipt_failure'
+
+export interface CrawlerTaskRetryProjection {
+  readonly attemptNumber: number
+  readonly automatic: boolean
+  readonly failureCode?: CrawlerRunFailureCode
+  readonly maxAttempts: 2
+  readonly status: CrawlerTaskRetryStatus
+}
+
+export interface CrawlerLeaseProjection {
+  readonly acquiredAt?: number
+  readonly expiresAt?: number
+  readonly lastHeartbeatAt?: number
+  readonly outcome: CrawlerLeaseOutcome
+  readonly recoveredAt?: number
+}
+
+export interface CrawlerReconciliationProjection {
+  readonly observedAt?: number
+  readonly outcome: CrawlerReconciliationOutcome
+  readonly processedAt?: number
+  readonly windowEndsAt?: number
+  readonly windowStatus: CrawlerReconciliationWindowStatus
+}
+
+export interface CrawlerReceiptValidationProjection {
+  readonly failureCode?: string
+  readonly validatedAt?: number
+  readonly status: 'pending' | 'validated' | 'failed'
+}
+
+export interface CrawlerAttemptOutcomeProjection {
+  readonly code?: string
+  readonly observedAt?: number
+  readonly outcome: CrawlerBoundedOutcomeCode
+}
 
 export interface CrawlerTaskSnapshot {
   readonly entrypoint: 'movie-crawler' | 'manga-crawler'
@@ -112,6 +172,7 @@ export interface CrawlerTaskListItem {
   readonly latestRunId: string | null
   readonly templateKey: CrawlerTaskTemplateKey
   readonly updatedAt: number
+  readonly retry?: CrawlerTaskRetryProjection
 }
 
 export interface CrawlerTaskListPage {
@@ -132,11 +193,16 @@ export interface CrawlerRunReadModel {
   readonly updatedAt: number
   readonly provider: ProviderAssociationSummary | null
   readonly receipt: CrawlerReceiptUnion | null
+  readonly lease?: CrawlerLeaseProjection | null
+  readonly reconciliation?: CrawlerReconciliationProjection | null
+  readonly receiptValidation?: CrawlerReceiptValidationProjection | null
+  readonly outcome?: CrawlerAttemptOutcomeProjection | null
 }
 
 export interface CrawlerTaskDetailReadModel {
   readonly task: CrawlerTaskListItem
   readonly runs: readonly CrawlerRunReadModel[]
+  readonly retry?: CrawlerTaskRetryProjection
 }
 
 export interface CrawlerRunLogReadModel {

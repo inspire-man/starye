@@ -70,7 +70,9 @@ describe('provider association registry', () => {
       providerConclusion: 'success',
       providerRunAttempt: 3,
       providerRunId: '12345678901234567890',
+      providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/12345678901234567890',
       providerStatus: 'completed',
+      repository: 'inspire-man/starye',
       sha: 'a'.repeat(40),
     })
     expect(() => createProviderAssociationSummary({

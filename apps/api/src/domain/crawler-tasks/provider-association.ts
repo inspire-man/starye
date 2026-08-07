@@ -29,6 +29,8 @@ const providerWorkflowRegistry = Object.freeze({
   }),
 } as const satisfies Record<CrawlerTaskTemplateKey, Omit<ProviderSnapshot, 'templateKey'>>)
 
+const FIXED_PROVIDER_REPOSITORY = 'inspire-man/starye' as const
+
 const providerRunStatuses = new Set<ProviderRunStatus>([
   'completed',
   'in_progress',
@@ -80,7 +82,7 @@ function optionalProviderRunId(value: unknown): string | undefined {
   if (value === undefined)
     return undefined
 
-  if (typeof value !== 'string' || !/^\d{1,20}$/u.test(value))
+  if (typeof value !== 'string' || !/^[1-9]\d{0,19}$/u.test(value))
     throw new Error('provider_summary_invalid')
 
   return value
@@ -184,7 +186,8 @@ export function createProviderAssociationSummary(input: unknown): ProviderAssoci
   const sha = optionalSha(record.sha)
   const environment = optionalFixedMetadata(record.environment, 'starye-org', 'provider_summary_invalid')
   const ref = optionalFixedMetadata(record.ref, 'main', 'provider_summary_invalid')
-  const repository = optionalFixedMetadata(record.repository, 'inspire-man/starye', 'provider_summary_invalid')
+  const suppliedRepository = optionalFixedMetadata(record.repository, FIXED_PROVIDER_REPOSITORY, 'provider_summary_invalid')
+  const repository = suppliedRepository ?? (providerRunId ? FIXED_PROVIDER_REPOSITORY : undefined)
   const workflow = record.workflow === undefined
     ? undefined
     : (record.workflow === '.github/workflows/daily-manga-crawl.yml' || record.workflow === '.github/workflows/daily-movie-crawl.yml'
