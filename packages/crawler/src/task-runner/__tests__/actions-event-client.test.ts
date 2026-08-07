@@ -63,7 +63,20 @@ describe('actionsEventClient', () => {
 
     const progress = JSON.parse(String(((fetch.mock.calls[0] as unknown as [string, RequestInit])[1]).body)) as Record<string, unknown>
     const terminal = JSON.parse(String(((fetch.mock.calls[1] as unknown as [string, RequestInit])[1]).body)) as Record<string, unknown>
-    expect(progress).toMatchObject({ attempt: 2, run_id: 'run-1', sequence: 4, type: 'progress' })
-    expect(terminal).toMatchObject({ receipt: { contentIds: ['MOV-1'], templateKey: 'movie' }, type: 'succeeded' })
+    expect(progress).toMatchObject({
+      attempt: 2,
+      provider_run_attempt: 1,
+      provider_run_id: '77',
+      run_id: 'run-1',
+      sequence: 4,
+      type: 'progress',
+    })
+    expect(terminal).toMatchObject({
+      provider_run_attempt: 1,
+      provider_run_id: '77',
+      receipt: { contentIds: ['MOV-1'], templateKey: 'movie' },
+      run_id: 'run-1',
+      type: 'succeeded',
+    })
   })
 })

@@ -11,6 +11,32 @@ describe('runnerClient', () => {
     expect(init.body).toEqual(expect.any(String))
   })
 
+  it('rejects a polled candidate that is not bound to the production run tuple', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({
+      candidate: {
+        attempt: 1,
+        run_id: 'run-other',
+        sequence: 1,
+        snapshot: {
+          entrypoint: 'movie-crawler',
+          permissionResource: 'movie',
+          templateKey: 'movie',
+          templateVersion: 1,
+        },
+      },
+    }), { status: 200 }))
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      applicationAttempt: 2,
+      applicationRunId: 'run-expected',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+    })
+
+    await expect(client.poll()).rejects.toThrow('Runner candidate does not match the configured run binding')
+  })
+
   it('sends a signed repair observation and keeps raw source material out of the terminal receipt', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -50,7 +76,17 @@ describe('runnerClient', () => {
         },
       }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ accepted: true }), { status: 200 }))
-    const client = new RunnerClient({ apiBaseUrl: 'http://localhost:8080', callbackKeyId: 'key-1', callbackSecret: 'secret', fetch: fetch as never })
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      applicationAttempt: 1,
+      applicationRunId: 'run-repair-1',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+      now: () => 1_754_000_000_000,
+      providerRunAttempt: 1,
+      providerRunId: '77',
+    })
     const candidate = await client.poll()
     expect(candidate?.snapshot.operation).toBe('repair_players')
     await expect(client.observeRepairSource(candidate!, 3, {
@@ -67,11 +103,32 @@ describe('runnerClient', () => {
 
     const observationBody = JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body)) as Record<string, unknown>
     const terminalBody = JSON.parse(String((fetch.mock.calls[2]![1] as RequestInit).body)) as Record<string, unknown>
-    expect(observationBody).toMatchObject({ operation: 'repair_players', source_revision: 7, type: 'source_observation' })
+    expect(observationBody).toMatchObject({
+      attempt: 1,
+      operation: 'repair_players',
+      provider_run_attempt: 1,
+      provider_run_id: '77',
+      run_id: 'run-repair-1',
+      sequence: 3,
+      source_revision: 7,
+      type: 'source_observation',
+    })
+    expect(observationBody.event_id).toEqual(expect.any(String))
+    expect(observationBody.nonce).toEqual(expect.any(String))
+    expect(observationBody.timestamp).toBe(1_754_000_000_000)
     expect(JSON.stringify(observationBody)).toContain('https://source.example/raw.m3u8')
     expect(JSON.stringify(terminalBody)).not.toContain('https://source.example/raw.m3u8')
     expect(JSON.stringify(terminalBody)).not.toContain('secret')
-    expect(terminalBody).toMatchObject({ receipt: { movieId: 'movie-1', operation: 'repair_players', sourceRevision: 8 } })
+    expect(terminalBody).toMatchObject({
+      attempt: 1,
+      provider_run_attempt: 1,
+      provider_run_id: '77',
+      receipt: { movieId: 'movie-1', operation: 'repair_players', sourceRevision: 8 },
+      run_id: 'run-repair-1',
+      sequence: 4,
+      source_revision: 7,
+      type: 'succeeded',
+    })
   })
 
   it('returns bounded repair observation failures from a controlled non-2xx response', async () => {
