@@ -2,9 +2,9 @@ import type { Player } from '../../types'
 import { describe, expect, it } from 'vitest'
 import {
   classifyPlaybackSource,
-  groupPlaybackSources,
   getQualityBadgeClass,
   getSourceTypeIcon,
+  groupPlaybackSources,
   isEligiblePlaybackSource,
   isMagnetLink,
   selectDirectPlaybackSource,
@@ -74,8 +74,8 @@ describe('playbackSources', () => {
         'inactive-best',
       ])
       expect(sortPlaybackSources(sources, 'latest').map(source => source.id)).toEqual([
-        'direct-high',
         'direct-low',
+        'direct-high',
         'magnet-high',
         'inactive-best',
       ])
@@ -103,7 +103,7 @@ describe('playbackSources', () => {
         { id: '4', movieId: 'm1', sourceName: '磁力720P', sourceUrl: 'magnet:?xt=urn:btih:720p', isActive: true, quality: '720P', sortOrder: 4 },
       ]
 
-      const sorted = sortPlaybackSources(sources)
+      const sorted = sortPlaybackSources(sources, 'quality')
 
       expect(sorted[0].quality).toBe('4K')
       expect(sorted[1].quality).toBe('HD')
@@ -111,7 +111,7 @@ describe('playbackSources', () => {
       expect(sorted[3].quality).toBe('SD')
     })
 
-    it('应该在类型和画质相同时按 sortOrder 排序', () => {
+    it('默认组内相同时应保留服务端数组顺序', () => {
       const sources: Player[] = [
         { id: '1', movieId: 'm1', sourceName: '磁力3', sourceUrl: 'magnet:?xt=urn:btih:c', quality: 'HD', sortOrder: 3 },
         { id: '2', movieId: 'm1', sourceName: '磁力1', sourceUrl: 'magnet:?xt=urn:btih:a', quality: 'HD', sortOrder: 1 },
@@ -120,9 +120,7 @@ describe('playbackSources', () => {
 
       const sorted = sortPlaybackSources(sources)
 
-      expect(sorted[0].sortOrder).toBe(1)
-      expect(sorted[1].sortOrder).toBe(2)
-      expect(sorted[2].sortOrder).toBe(3)
+      expect(sorted.map(source => source.sortOrder)).toEqual([3, 1, 2])
     })
 
     it('不应该修改原数组', () => {

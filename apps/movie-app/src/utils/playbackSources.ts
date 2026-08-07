@@ -1,10 +1,84 @@
 import type { Player } from '../types'
 import { calculateAutoScore } from './ratingAlgorithm'
 
+export type PlaybackSourceType = 'direct' | 'magnet' | 'TorrServer'
+
+export interface PlaybackSourceInput {
+  readonly isActive?: boolean | null
+  readonly source?: string | null
+  readonly sourceUrl?: string | null
+}
+
+export interface PlaybackSourceGroups {
+  readonly eligibleDirect: Player[]
+  readonly eligibleMagnet: Player[]
+  readonly ineligible: Player[]
+}
+
 /**
  * 排序方式
  */
 export type SortMethod = 'default' | 'rating' | 'quality' | 'latest'
+
+/**
+ * 按服务端 source 标记和 URL 推断来源类型。
+ * TorrServer 是受控流入口，必须先于 URL 推断处理。
+ */
+export function classifyPlaybackSource(source: PlaybackSourceInput): PlaybackSourceType {
+  if (source.source === 'TorrServer') {
+    return 'TorrServer'
+  }
+
+  return isMagnetLink(source.sourceUrl) ? 'magnet' : 'direct'
+}
+
+/**
+ * 判断来源是否通过客户端可见的最小 eligibility gate。
+ * 健康、评分和排序字段不参与此决定。
+ */
+export function isEligiblePlaybackSource(source: PlaybackSourceInput): boolean {
+  return source.isActive === true
+    && typeof source.sourceUrl === 'string'
+    && source.sourceUrl.trim().length > 0
+}
+
+/**
+ * 选择服务端顺序中的首个 eligible direct 来源。
+ * magnet 和 TorrServer 只能通过各自的受控入口处理。
+ */
+export function selectDirectPlaybackSource(sources: readonly Player[]): Player | null {
+  return sources.find(source => isEligiblePlaybackSource(source)
+    && classifyPlaybackSource(source) === 'direct') ?? null
+}
+
+/**
+ * 按播放类型和 eligibility 投影默认来源组。
+ * eligible TorrServer 保留在末组，避免被浏览器 direct 播放路径消费。
+ */
+export function groupPlaybackSources(sources: readonly Player[]): PlaybackSourceGroups {
+  const groups: PlaybackSourceGroups = {
+    eligibleDirect: [],
+    eligibleMagnet: [],
+    ineligible: [],
+  }
+
+  for (const source of sources) {
+    const eligible = isEligiblePlaybackSource(source)
+    const type = classifyPlaybackSource(source)
+
+    if (eligible && type === 'direct') {
+      groups.eligibleDirect.push(source)
+    }
+    else if (eligible && type === 'magnet') {
+      groups.eligibleMagnet.push(source)
+    }
+    else {
+      groups.ineligible.push(source)
+    }
+  }
+
+  return groups
+}
 
 /**
  * 计算综合评分
@@ -50,12 +124,6 @@ export function extractFileSize(sourceName: string): number | undefined {
  * 支持多种排序方式：默认、评分、画质、最新
  */
 export function sortPlaybackSources(sources: Player[], sortMethod: SortMethod = 'default'): Player[] {
-  const typeWeight: Record<string, number> = {
-    magnet: 3,
-    online: 2,
-    other: 1,
-  }
-
   const qualityWeight: Record<string, number> = {
     '4K': 4,
     '1080P': 3,
@@ -64,85 +132,61 @@ export function sortPlaybackSources(sources: Player[], sortMethod: SortMethod = 
     'SD': 1,
   }
 
-  return [...sources].sort((a, b) => {
-    // 按综合评分排序
-    if (sortMethod === 'rating') {
-      const scoreA = calculateCombinedScore(a)
-      const scoreB = calculateCombinedScore(b)
+  const groups = groupPlaybackSources(sources)
+  if (sortMethod === 'default') {
+    return [
+      ...groups.eligibleDirect,
+      ...groups.eligibleMagnet,
+      ...groups.ineligible,
+    ]
+  }
 
-      if (scoreA !== scoreB) {
-        return scoreB - scoreA
+  const sortGroup = (group: Player[]): Player[] => group
+    .map((source, index) => ({ source, index }))
+    .sort((a, b) => {
+      let result = 0
+
+      if (sortMethod === 'rating') {
+        result = calculateCombinedScore(b.source) - calculateCombinedScore(a.source)
+        if (result === 0) {
+          result = (qualityWeight[b.source.quality || ''] || 0)
+            - (qualityWeight[a.source.quality || ''] || 0)
+        }
+      }
+      else if (sortMethod === 'quality') {
+        result = (qualityWeight[b.source.quality || ''] || 0)
+          - (qualityWeight[a.source.quality || ''] || 0)
+        if (result === 0) {
+          result = calculateCombinedScore(b.source) - calculateCombinedScore(a.source)
+        }
+      }
+      else if (sortMethod === 'latest') {
+        result = a.source.sortOrder - b.source.sortOrder
       }
 
-      // 同分时按画质排序
-      const qualityA = qualityWeight[a.quality || ''] || 0
-      const qualityB = qualityWeight[b.quality || ''] || 0
-      return qualityB - qualityA
-    }
+      return result === 0 ? a.index - b.index : result
+    })
+    .map(({ source }) => source)
 
-    // 按画质排序
-    if (sortMethod === 'quality') {
-      const qualityA = qualityWeight[a.quality || ''] || 0
-      const qualityB = qualityWeight[b.quality || ''] || 0
-
-      if (qualityA !== qualityB) {
-        return qualityB - qualityA
-      }
-
-      // 同画质按评分排序
-      return calculateCombinedScore(b) - calculateCombinedScore(a)
-    }
-
-    // 按最新排序（sortOrder 越小越新）
-    if (sortMethod === 'latest') {
-      return a.sortOrder - b.sortOrder
-    }
-
-    // 默认排序：类型 > 画质 > 评分
-    // 1. 按类型排序（磁力链接优先）
-    const typeA = a.sourceUrl?.startsWith('magnet:') || a.sourceName.includes('磁力') ? 'magnet' : 'online'
-    const typeB = b.sourceUrl?.startsWith('magnet:') || b.sourceName.includes('磁力') ? 'magnet' : 'online'
-
-    const weightA = typeWeight[typeA] || typeWeight.other
-    const weightB = typeWeight[typeB] || typeWeight.other
-
-    if (weightA !== weightB) {
-      return weightB - weightA
-    }
-
-    // 2. 按画质排序
-    const qualityA = qualityWeight[a.quality || ''] || 0
-    const qualityB = qualityWeight[b.quality || ''] || 0
-
-    if (qualityA !== qualityB) {
-      return qualityB - qualityA
-    }
-
-    // 3. 按综合评分排序
-    const scoreA = calculateCombinedScore(a)
-    const scoreB = calculateCombinedScore(b)
-
-    if (scoreA !== scoreB) {
-      return scoreB - scoreA
-    }
-
-    // 4. 按sortOrder排序（数据库中的顺序）
-    return a.sortOrder - b.sortOrder
-  })
+  return [
+    ...sortGroup(groups.eligibleDirect),
+    ...sortGroup(groups.eligibleMagnet),
+    ...sortGroup(groups.ineligible),
+  ]
 }
 
 /**
  * 判断是否为磁力链接
  */
-export function isMagnetLink(url: string): boolean {
-  return url?.startsWith('magnet:') || false
+export function isMagnetLink(url?: string | null): boolean {
+  return typeof url === 'string' && url.trim().toLowerCase().startsWith('magnet:')
 }
 
 /**
  * 获取播放源类型图标
  */
 export function getSourceTypeIcon(source: Player): string {
-  if (isMagnetLink(source.sourceUrl)) {
+  if (classifyPlaybackSource(source) === 'magnet') {
     return '🧲'
   }
   if (source.sourceName.includes('在线') || source.sourceName.includes('播放')) {
