@@ -136,7 +136,14 @@ Plans:
   2. 用户能从 Dashboard 看到固定生产 repair 的 provider、lease、attempt 和 reconciliation 结果；provider dispatch 受理、repair 成功和 receipt 校验失败不会被合并成同一个成功状态，生产浏览器执行仍发生在 GitHub Actions。
   3. 用户可以从 `no_source` 或 `source_failed` 内容进入生产受控修复，并回到同一个 content ID 查看更新后的 source state 与 validated receipt；迟到的旧 attempt 不能覆盖当前 source revision。
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 23-01-PLAN.md — Provider contract、GitHub Actions client 与 coverage audit
+- [ ] 23-02-PLAN.md — 复用 movie workflow 并接入 claim-time repair adapter
+- [ ] 23-03-PLAN.md — D1 bounded retry、reconciliation、receipt 与 source CAS
+- [ ] 23-04-PLAN.md — Signed callback、duplicate/stale/conflict 与 receipt boundary
+- [ ] 23-05-PLAN.md — Admin DTO、current-attempt Dashboard、history 与 duplicate lock
 **UI hint**: yes
 
 ### Phase 24: Fresh Production Dashboard -> Viewer -> Playback Proof
