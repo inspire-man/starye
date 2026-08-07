@@ -12,7 +12,7 @@ vi.mock('vue-router', () => ({
   RouterLink: {
     name: 'RouterLink',
     props: ['to'],
-    template: '<a><slot /></a>',
+    template: '<a :href="typeof to === \'string\' ? to : undefined"><slot /></a>',
   },
   useRoute: () => routeState,
   useRouter: () => ({ push: routerPushMock }),
@@ -155,7 +155,7 @@ describe('movie detail DOM tuple contract', () => {
   it.each([
     ['source_failed', '重试读取', '播放未验证'],
     ['repairing', '刷新状态', '播放未验证'],
-    ['ready', '查看影片', '播放已验证'],
+    ['ready', '播放', '播放已验证'],
   ] as const)('renders %s and independent playback proof labels from DTO fields', async (disposition, action, playbackLabel) => {
     getMovieDetailMock.mockResolvedValueOnce({
       success: true,
@@ -165,7 +165,9 @@ describe('movie detail DOM tuple contract', () => {
         code: `CODE-${disposition}`,
         title: 'Readiness state fixture',
         isR18: false,
-        players: [],
+        players: disposition === 'ready'
+          ? [{ id: 'direct-ready', movieId: `movie-${disposition}`, sourceName: 'ready direct', sourceUrl: 'https://direct.example/ready', sortOrder: 1, isActive: true }]
+          : [],
         relatedMovies: [],
         readiness: {
           metadata: { contentId: `movie-${disposition}`, observedAt: 100, persisted: true },
@@ -189,8 +191,12 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.get('[data-readiness-summary]').text()).toContain(disposition)
     expect(wrapper.get('[data-readiness-summary]').text()).toContain(action)
     expect(wrapper.get('[data-readiness-summary]').text()).toContain(playbackLabel)
-    if (disposition === 'repairing')
-      expect(wrapper.get('[data-readiness-action="refresh"]').attributes('disabled')).toBeDefined()
+    if (disposition === 'repairing') {
+      expect(wrapper.get('[data-readiness-action="refresh"]').attributes('disabled')).toBeUndefined()
+      expect(wrapper.find('[data-readiness-action="play"]').exists()).toBe(false)
+    }
+    if (disposition === 'ready')
+      expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/CODE-ready/play?player=direct-ready')
   })
 
   it('renders bounded per-source health and hands repairable state to Dashboard with the same movie identity', async () => {
@@ -205,7 +211,7 @@ describe('movie detail DOM tuple contract', () => {
         players: [
           { id: 'direct-1', movieId: 'movie-sun-064', sourceName: 'direct', sourceUrl: 'RAW_SOURCE_SENTINEL', sortOrder: 1, isActive: true },
           { id: 'magnet-1', movieId: 'movie-sun-064', sourceName: 'magnet', sourceUrl: 'magnet:RAW_SOURCE_SENTINEL', sortOrder: 2, isActive: true },
-          { id: 'inactive-1', movieId: 'movie-sun-064', sourceName: 'TorrServer', sourceUrl: 'https://raw.example/SENTINEL', sortOrder: 3, isActive: false },
+          { id: 'inactive-1', movieId: 'movie-sun-064', source: 'TorrServer', sourceName: 'TorrServer', sourceUrl: 'https://raw.example/SENTINEL', sortOrder: 3, isActive: false },
         ],
         relatedMovies: [],
         readiness: {

@@ -15,7 +15,15 @@ import { movieApi, ratingApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
-import { getQualityBadgeClass, getSourceTypeIcon, sortPlaybackSources } from '../utils/playbackSources'
+import {
+  classifyPlaybackSource,
+  getQualityBadgeClass,
+  getSourceTypeIcon,
+  groupPlaybackSources,
+  isEligiblePlaybackSource,
+  selectDirectPlaybackSource,
+  sortPlaybackSources,
+} from '../utils/playbackSources'
 import { formatTorrentFileSize } from '../utils/torrServerClient'
 
 const route = useRoute()
@@ -30,10 +38,12 @@ type InformationalSourceHealth = 'inactive' | 'unverified' | 'failed'
 type InformationalSourceReason = 'source_inactive' | 'source_unverified' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
 
 interface InformationalSourceHealthRow {
+  playerId: string
   eligible: boolean
   health: InformationalSourceHealth
   observedAt: number
   reasonCode: InformationalSourceReason
+  sourceRevision: number
   sourceType: InformationalSourceType
 }
 
@@ -136,9 +146,7 @@ const sourceHealthReasonLabels: Record<InformationalSourceReason, string> = {
 }
 
 function informationalSourceType(player: Player): InformationalSourceType {
-  if (player.source === 'TorrServer' || player.sourceName.includes('TorrServer'))
-    return 'TorrServer'
-  return isMagnetLink(player.sourceUrl) ? 'magnet' : 'direct'
+  return classifyPlaybackSource(player)
 }
 
 function informationalSourceHealth(player: Player): InformationalSourceHealth {
@@ -159,14 +167,16 @@ function informationalSourceReason(health: InformationalSourceHealth): Informati
 
 const sourceHealthRows = computed<InformationalSourceHealthRow[]>(() => {
   const observedAt = readiness.value?.source.observedAt ?? 0
-  const disposition = readiness.value?.source.disposition
+  const sourceRevision = readiness.value?.source.sourceRevision ?? 0
   return (movie.value?.players ?? []).map((player) => {
     const health = informationalSourceHealth(player)
     return {
-      eligible: health !== 'inactive' && disposition === 'ready',
+      playerId: player.id,
+      eligible: isEligiblePlaybackSource(player),
       health,
       observedAt,
       reasonCode: informationalSourceReason(health),
+      sourceRevision,
       sourceType: informationalSourceType(player),
     }
   })
@@ -313,14 +323,34 @@ const seriesNavigation = computed(() => {
 
 // 播放源相关逻辑
 const sortedPlayers = computed(() => {
-  if (!movie.value?.players || movie.value.players.length === 0) {
-    return []
-  }
-  return sortPlaybackSources(movie.value.players, sortMethod.value)
+  return sortPlaybackSources(movie.value?.players ?? [], sortMethod.value)
 })
 
+const sourceCardGroups = computed(() => {
+  const groups = groupPlaybackSources(sortedPlayers.value)
+  return [
+    {
+      key: 'eligible-direct',
+      label: 'eligible direct · 浏览器播放',
+      sources: groups.eligibleDirect,
+    },
+    {
+      key: 'eligible-magnet',
+      label: 'eligible magnet · 受控传输',
+      sources: groups.eligibleMagnet,
+    },
+    {
+      key: 'ineligible',
+      label: 'inactive / ineligible · 仅健康信息',
+      sources: groups.ineligible,
+    },
+  ].filter(group => group.sources.length > 0)
+})
+
+const firstEligibleDirect = computed(() => selectDirectPlaybackSource(movie.value?.players ?? []))
+
 const magnetLinks = computed(() => {
-  return sortedPlayers.value.filter(p => isMagnetLink(p.sourceUrl))
+  return groupPlaybackSources(sortedPlayers.value).eligibleMagnet
 })
 
 // 复制单个磁链
@@ -490,7 +520,9 @@ async function addToAria2(player: Player) {
     return
   }
 
-  if (!isMagnetLink(player.sourceUrl)) {
+  if (readiness.value?.source.disposition !== 'ready'
+    || !isEligiblePlaybackSource(player)
+    || classifyPlaybackSource(player) !== 'magnet') {
     showToast('只支持添加磁力链接到 Aria2', 'error')
     return
   }
@@ -511,7 +543,9 @@ async function playViaTorrServer(player: Player) {
     return
   }
 
-  if (!isMagnetLink(player.sourceUrl)) {
+  if (readiness.value?.source.disposition !== 'ready'
+    || !isEligiblePlaybackSource(player)
+    || classifyPlaybackSource(player) !== 'magnet') {
     showToast('只支持磁力链接的在线播放', 'error')
     return
   }
@@ -546,6 +580,12 @@ async function playViaTorrServer(player: Player) {
 
 // 文件选择后播放
 function selectFileAndPlay(file: TorrentFile) {
+  if (readiness.value?.source.disposition !== 'ready'
+    || !movie.value
+    || !isMagnetLink(fileSelectionModal.value.magnetUrl)) {
+    return
+  }
+
   const result = buildStreamForFile(fileSelectionModal.value.magnetUrl, file)
   fileSelectionModal.value.show = false
 
@@ -822,12 +862,12 @@ onMounted(() => {
           </p>
         </div>
         <RouterLink
-          v-if="readiness.source.disposition === 'ready'"
-          :to="`/movie/${movie.code}`"
-          data-readiness-action="view"
+          v-if="readiness.source.disposition === 'ready' && firstEligibleDirect"
+          :to="`/movie/${movie.code}/play?player=${encodeURIComponent(firstEligibleDirect.id)}`"
+          data-readiness-action="play"
           class="min-h-11 inline-flex items-center justify-center px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm rounded-lg transition-colors"
         >
-          查看影片
+          播放
         </RouterLink>
       </div>
 
@@ -871,6 +911,12 @@ onMounted(() => {
           </p>
           <p v-if="readiness.source.disposition === 'no_source'" class="mt-2 text-base text-amber-300">
             暂无可用播放源
+          </p>
+          <p v-else-if="readiness.source.disposition === 'source_failed'" class="mt-2 text-base text-red-300">
+            来源读取失败，请重试读取或查看修复意图
+          </p>
+          <p v-else-if="readiness.source.disposition === 'repairing'" data-repairing-summary class="mt-2 text-base text-amber-300">
+            修复状态：等待新的 server-owned source readback
           </p>
           <p v-if="readiness.source.repairable" class="mt-1 text-sm text-amber-300">
             可修复
@@ -923,8 +969,9 @@ onMounted(() => {
         <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
           <article
             v-for="source in sourceHealthRows"
-            :key="`${source.sourceType}-${source.health}-${source.reasonCode}`"
+            :key="source.playerId"
             :data-source-health-row="source.sourceType"
+            :data-source-health-player="source.playerId"
             class="border border-gray-700 rounded-lg p-3 text-xs text-gray-300"
           >
             <p class="font-semibold text-gray-100">
@@ -935,6 +982,9 @@ onMounted(() => {
             </p>
             <p class="mt-1">
               观察时间：{{ source.observedAt }}
+            </p>
+            <p class="mt-1">
+              source revision：{{ source.sourceRevision }}
             </p>
             <p class="mt-1 break-words">
               受控原因：{{ sourceHealthReasonLabel(source.reasonCode) }}
@@ -970,16 +1020,17 @@ onMounted(() => {
           v-else-if="readiness.source.disposition === 'repairing'"
           data-readiness-action="refresh"
           type="button"
-          disabled
-          class="min-h-11 px-4 py-2 bg-gray-700 text-gray-300 text-sm rounded-lg cursor-not-allowed opacity-60"
+          class="min-h-11 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="loading"
+          @click="refreshReadiness"
         >
-          刷新状态
+          {{ loading ? '读取中…' : '刷新状态' }}
         </button>
       </div>
     </div>
 
     <!-- 播放源区块 -->
-    <div v-if="sortedPlayers.length > 0 && (!readiness || readiness.source.disposition === 'ready')" class="bg-gray-800 rounded-lg shadow-lg p-6">
+    <div v-if="sourceCardGroups.length > 0 && (!readiness || readiness.source.disposition === 'ready')" class="bg-gray-800 rounded-lg shadow-lg p-6">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-4">
           <h2 class="text-xl font-bold text-white">
@@ -1036,154 +1087,150 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div
-          v-for="player in sortedPlayers"
-          :key="player.id"
-          class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors"
+      <div class="space-y-5">
+        <section
+          v-for="group in sourceCardGroups"
+          :key="group.key"
+          :data-source-group="group.key"
         >
-          <div class="flex items-start justify-between gap-3 mb-3">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-lg">{{ getSourceTypeIcon(player) }}</span>
-                <span class="text-white font-medium truncate">
-                  {{ player.sourceName }}
-                </span>
-                <span
-                  v-if="player.quality"
-                  class="px-2 py-0.5 text-xs font-semibold rounded"
-                  :class="getQualityBadgeClass(player.quality)"
-                >
-                  {{ player.quality }}
-                </span>
-                <!-- 推荐标签 -->
-                <span
-                  v-if="getPlayerRating(player).recommendationTag"
-                  class="px-2 py-0.5 text-xs font-semibold rounded-full"
-                  :class="getPlayerRating(player).recommendationTag === '🏆 强烈推荐'
-                    ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/50'
-                    : 'bg-green-500/20 text-green-300 border border-green-500/50'"
-                  :title="getPlayerRating(player).recommendationTag"
-                >
-                  {{ getPlayerRating(player).recommendationTag === '🏆 强烈推荐' ? '🏆 强推' : '👍 推荐' }}
-                </span>
-                <!-- 警告标签 -->
-                <span
-                  v-if="getPlayerRating(player).warningTag"
-                  class="px-2 py-0.5 text-xs font-semibold rounded-full"
-                  :class="getPlayerRating(player).warningTag?.includes('💀')
-                    ? 'bg-red-500/20 text-red-300 border border-red-500/50'
-                    : 'bg-orange-500/20 text-orange-300 border border-orange-500/50'"
-                  :title="getPlayerRating(player).warningTag"
-                >
-                  {{ getPlayerRating(player).warningTag?.includes('💀') ? '💀 低质' : '⚠️ 注意' }}
-                </span>
-              </div>
-              <div class="text-xs text-gray-400 truncate mb-2">
-                {{ isMagnetLink(player.sourceUrl) ? '磁力来源' : '直连来源' }} · {{ player.isActive === false ? 'inactive' : 'eligible' }}
-              </div>
-
-              <!-- 评分显示 -->
-              <div class="flex items-center gap-2">
-                <RatingStars
-                  :model-value="player.averageRating || 0"
-                  :show-stats="true"
-                  :count="player.ratingCount"
-                  size="small"
-                />
-              </div>
-
-              <!-- 调试信息：自动评分详情（仅调试模式） -->
-              <div v-if="debugMode" class="mt-2 p-2 bg-gray-800 rounded text-xs space-y-1">
-                <div class="text-gray-400 font-semibold">
-                  🔍 自动评分详情
-                </div>
-                <div class="text-gray-300">
-                  综合评分: <span class="text-yellow-400">{{ getPlayerRating(player).compositeScore?.toFixed(1) ?? 'N/A' }}</span>
-                </div>
-                <div class="text-gray-300">
-                  自动评分: <span class="text-blue-400">{{ getPlayerRating(player).autoScore.toFixed(1) }}</span>
-                </div>
-                <div class="text-gray-300">
-                  用户评分: <span class="text-green-400">{{ player.averageRating?.toFixed(1) || 'N/A' }}</span>
-                  ({{ player.ratingCount || 0 }} 人)
-                </div>
-                <div class="text-gray-400 text-[10px] mt-1">
-                  提示: 在浏览器控制台执行 localStorage.setItem('debugMode', 'false') 可关闭调试模式
-                </div>
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-2 shrink-0">
-              <button
-                v-if="isMagnetLink(player.sourceUrl)"
-                class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded transition-colors whitespace-nowrap"
-                @click="copyMagnetLink(player)"
-              >
-                📋 复制
-              </button>
-              <button
-                v-if="isMagnetLink(player.sourceUrl)"
-                :disabled="!aria2Connected"
-                :title="getAria2ButtonTitle(player)"
-                class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
-                :class="aria2Connected ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-600'"
-                @click="addToAria2(player)"
-              >
-                ⬇️ Aria2
-              </button>
-              <button
-                v-if="isMagnetLink(player.sourceUrl)"
-                :disabled="!torrServerConnected || torrServerLoading"
-                :title="getTorrServerButtonTitle(player)"
-                class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
-                :class="torrServerConnected && !torrServerLoading ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-600'"
-                @click="playViaTorrServer(player)"
-              >
-                {{ torrServerLoading ? '⏳ 加载中' : '▶ 在线播放' }}
-              </button>
-              <a
-                v-if="isMagnetLink(player.sourceUrl)"
-                :href="player.sourceUrl"
-                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded text-center transition-colors whitespace-nowrap"
-              >
-                🔗 打开
-              </a>
-              <button
-                v-if="isMagnetLink(player.sourceUrl)"
-                class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors whitespace-nowrap"
-                @click="showQRCode(player)"
-              >
-                📱 二维码
-              </button>
-              <a
-                v-else
-                :href="player.sourceUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded text-center transition-colors whitespace-nowrap"
-              >
-                ▶️ 播放
-              </a>
-              <button
-                class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition-colors whitespace-nowrap"
-                @click="showRatingModal(player)"
-              >
-                ⭐ 评分
-              </button>
-              <button
-                :disabled="reportedPlayerIds.has(player.id)"
-                class="px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap"
-                :class="reportedPlayerIds.has(player.id)
-                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'bg-red-700 hover:bg-red-800 text-white'"
-                @click="showReportModal(player)"
-              >
-                {{ reportedPlayerIds.has(player.id) ? '✓ 已上报' : '🚩 上报' }}
-              </button>
-            </div>
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <h3 class="text-sm font-semibold text-gray-200">
+              {{ group.label }}
+            </h3>
+            <span class="text-xs text-gray-400">{{ group.sources.length }} 个来源</span>
           </div>
-        </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <article
+              v-for="player in group.sources"
+              :key="player.id"
+              :data-source-card="player.id"
+              :data-source-type="classifyPlaybackSource(player)"
+              class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors"
+            >
+              <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-lg">{{ getSourceTypeIcon(player) }}</span>
+                    <span class="text-white font-medium truncate">
+                      {{ player.sourceName }}
+                    </span>
+                    <span
+                      v-if="player.quality && group.key !== 'ineligible'"
+                      class="px-2 py-0.5 text-xs font-semibold rounded"
+                      :class="getQualityBadgeClass(player.quality)"
+                    >
+                      {{ player.quality }}
+                    </span>
+                  </div>
+                  <div class="text-xs text-gray-300">
+                    source type：{{ classifyPlaybackSource(player) }}
+                  </div>
+                  <div class="mt-1 text-xs text-gray-400">
+                    {{ sourceHealthLabel(informationalSourceHealth(player)) }} · {{ sourceHealthReasonLabel(informationalSourceReason(informationalSourceHealth(player))) }}
+                  </div>
+                  <div class="mt-1 text-xs text-gray-400">
+                    观察时间：{{ readiness?.source.observedAt ?? 0 }} · source revision：{{ readiness?.source.sourceRevision ?? 0 }}
+                  </div>
+                  <div class="mt-1 text-xs" :class="group.key === 'ineligible' ? 'text-gray-400' : 'text-green-300'">
+                    {{ group.key === 'ineligible' ? 'ineligible · 仅保留健康信息' : 'eligible · 可进入受控路径' }}
+                  </div>
+
+                  <template v-if="group.key !== 'ineligible'">
+                    <div class="flex items-center gap-2 mt-3">
+                      <RatingStars
+                        :model-value="player.averageRating || 0"
+                        :show-stats="true"
+                        :count="player.ratingCount"
+                        size="small"
+                      />
+                    </div>
+
+                    <div v-if="debugMode" class="mt-2 p-2 bg-gray-800 rounded text-xs space-y-1">
+                      <div class="text-gray-400 font-semibold">
+                        自动评分详情
+                      </div>
+                      <div class="text-gray-300">
+                        综合评分: <span class="text-yellow-400">{{ getPlayerRating(player).compositeScore?.toFixed(1) ?? 'N/A' }}</span>
+                      </div>
+                      <div class="text-gray-300">
+                        自动评分: <span class="text-blue-400">{{ getPlayerRating(player).autoScore.toFixed(1) }}</span>
+                      </div>
+                      <div class="text-gray-300">
+                        用户评分: <span class="text-green-400">{{ player.averageRating?.toFixed(1) || 'N/A' }}</span>
+                        ({{ player.ratingCount || 0 }} 人)
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <div v-if="group.key !== 'ineligible'" class="flex flex-col gap-2 shrink-0">
+                  <RouterLink
+                    v-if="group.key === 'eligible-direct'"
+                    :to="`/movie/${movie.code}/play?player=${encodeURIComponent(player.id)}`"
+                    data-source-action="play"
+                    class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded text-center transition-colors whitespace-nowrap"
+                  >
+                    播放
+                  </RouterLink>
+                  <template v-else-if="group.key === 'eligible-magnet'">
+                    <button
+                      data-source-action="copy"
+                      class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                      @click="copyMagnetLink(player)"
+                    >
+                      复制磁链
+                    </button>
+                    <button
+                      data-source-action="aria2"
+                      :disabled="!aria2Connected"
+                      :title="getAria2ButtonTitle(player)"
+                      class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
+                      :class="aria2Connected ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-600'"
+                      @click="addToAria2(player)"
+                    >
+                      Aria2
+                    </button>
+                    <button
+                      data-source-action="torrserver"
+                      :disabled="!torrServerConnected || torrServerLoading"
+                      :title="getTorrServerButtonTitle(player)"
+                      class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
+                      :class="torrServerConnected && !torrServerLoading ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-600'"
+                      @click="playViaTorrServer(player)"
+                    >
+                      {{ torrServerLoading ? '加载中' : 'TorrServer' }}
+                    </button>
+                    <button
+                      data-source-action="qrcode"
+                      class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                      @click="showQRCode(player)"
+                    >
+                      二维码
+                    </button>
+                  </template>
+                  <button
+                    data-source-action="rating"
+                    class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                    @click="showRatingModal(player)"
+                  >
+                    评分
+                  </button>
+                  <button
+                    data-source-action="report"
+                    :disabled="reportedPlayerIds.has(player.id)"
+                    class="px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap"
+                    :class="reportedPlayerIds.has(player.id)
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-red-700 hover:bg-red-800 text-white'"
+                    @click="showReportModal(player)"
+                  >
+                    {{ reportedPlayerIds.has(player.id) ? '已上报' : '上报' }}
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
       </div>
     </div>
 
