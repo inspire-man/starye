@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "mode": "local_contract",
+  "status": "passed",
+  "target": "local-gateway",
+  "template": "movie",
+  "workflow": "local-contract",
+  "repository": "local-contract",
+  "ref": "fixture",
+  "environment": "local",
+  "taskId": "dbe46889-f5af-462a-9bcc-45718b0bc109",
+  "runId": "9706fb17-c83f-47f8-b9a5-67626a36ddbd",
+  "attempt": 1,
+  "callbackEventIds": [],
+  "callbackNonces": [],
+  "validatedReceipt": {
+    "template": "movie",
+    "primaryContentId": "1f2a2984-c014-4403-97f4-4b1185f57b75",
+    "createdCount": 1,
+    "updatedCount": 0,
+    "validated": true,
+    "source": "local_runner"
+  },
+  "gatewayUrl": "http://localhost:8080",
+  "crud": {
+    "mutation": "passed",
+    "readback": "passed",
+    "restore": "passed"
+  },
+  "command": "phase19-local-proof",
+  "timestamp": "2026-08-06T14:52:56.738Z"
+}
