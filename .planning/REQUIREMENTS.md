@@ -19,9 +19,9 @@
 
 ### Playback Experience
 
-- [ ] **PLAY-01**: 用户在 MovieDetail 中能分别看到 ready、no-source、source-failed 和 repairing 状态，并获得对应的播放、修复、刷新或切换源动作。
-- [ ] **PLAY-02**: 用户在 Player 中能看到加载、缓冲、失效和播放错误的明确反馈；当前源重试次数有边界，失败后可切换候选源或进入现有 TorrServer/Aria2 路径。
-- [ ] **PLAY-03**: Player 按 source 类型和 eligibility 选择回退顺序；direct、magnet、TorrServer 和 Aria2 走各自受控路径，评分或排序字段不单独代表健康或可播放。
+- [x] **PLAY-01**: 用户在 MovieDetail 中能分别看到 ready、no-source、source-failed 和 repairing 状态，并获得对应的播放、修复、刷新或切换源动作。
+- [x] **PLAY-02**: 用户在 Player 中能看到加载、缓冲、失效和播放错误的明确反馈；当前源重试次数有边界，失败后可切换候选源或进入现有 TorrServer/Aria2 路径。
+- [x] **PLAY-03**: Player 按 source 类型和 eligibility 选择回退顺序；direct、magnet、TorrServer 和 Aria2 走各自受控路径，评分或排序字段不单独代表健康或可播放。
 
 ### Production Evidence
 
@@ -64,9 +64,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | REP-01 | Phase 21 | Complete |
 | REP-02 | Phase 23 | Pending |
 | REP-03 | Phase 23 | Pending |
-| PLAY-01 | Phase 22 | Pending |
-| PLAY-02 | Phase 22 | Pending |
-| PLAY-03 | Phase 22 | Pending |
+| PLAY-01 | Phase 22 | Complete |
+| PLAY-02 | Phase 22 | Complete |
+| PLAY-03 | Phase 22 | Complete |
 | EVID-01 | Phase 24 | Pending |
 | EVID-02 | Phase 24 | Pending |
 | EVID-03 | Phase 24 | Pending |

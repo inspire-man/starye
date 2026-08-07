@@ -27,7 +27,7 @@ v1.4 将 v1.3 已验证的受控 crawler control plane 延伸到播放可用性�
 
 - [x] **Phase 20: Source Contract, Receipt Boundary And SUN-064** - 建立 metadata 与 playback readiness 的边界，形成 source disposition、receipt 和 SUN-064 的诚实状态。
 - [x] **Phase 21: Source Health And Local repair_players Vertical Slice** - 提供来源健康观察和本地受控修复纵向链路。
-- [ ] **Phase 22: Dashboard, MovieDetail And Player State Closure** - 将 source projection 转化为 Dashboard、MovieDetail 和 Player 的可操作状态体验。
+- [x] **Phase 22: Dashboard, MovieDetail And Player State Closure** - 将 source projection 转化为 Dashboard、MovieDetail 和 Player 的可操作状态体验。 (completed 2026-08-07)
 - [ ] **Phase 23: GitHub Actions Production Repair And Reconciliation** - 把受控修复接入生产 provider，并保持 attempt、lease、callback 和 receipt 可追溯。
 - [ ] **Phase 24: Fresh Production Dashboard -> Viewer -> Playback Proof** - 用独立 fresh production run 验收完整 Dashboard → Viewer → 实际播放证据链。
 
@@ -116,12 +116,13 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 22-01-PLAN.md — Player source policy、受控播放路径与 bounded retry
-- [ ] 22-03-PLAN.md — Dashboard repair 同步、最新任务聚焦与同电影回流
+- [x] 22-01-PLAN.md — Player source policy、受控播放路径与 bounded retry
+- [x] 22-03-PLAN.md — Dashboard repair 同步、最新任务聚焦与同电影回流
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 22-02-PLAN.md — MovieDetail readiness 状态、来源分组与 source-type actions
+- [x] 22-02-PLAN.md — MovieDetail readiness 状态、来源分组与 source-type actions
+
 **UI hint**: yes
 
 ### Phase 23: GitHub Actions Production Repair And Reconciliation
@@ -160,6 +161,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 20. Source Contract, Receipt Boundary And SUN-064 | 3/3 | Complete | 2026-08-05 |
 | 21. Source Health And Local repair_players Vertical Slice | 7/7 | Complete | 2026-08-06 |
-| 22. Dashboard, MovieDetail And Player State Closure | 0/TBD | Not started | - |
+| 22. Dashboard, MovieDetail And Player State Closure | 3/3 | Complete    | 2026-08-07 |
 | 23. GitHub Actions Production Repair And Reconciliation | 0/TBD | Not started | - |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | 0/TBD | Not started | - |
