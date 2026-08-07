@@ -33,8 +33,19 @@ function failureCode(response: RepairSourceObservationResponse): RunnerFailureCo
 }
 
 function repairSnapshot(candidate: RunnerCandidate): RepairRunnerSnapshot {
-  if (!isRepairRunnerSnapshot(candidate.snapshot))
-    throw new Error('Repair adapter requires a repair_players snapshot')
+  if (!isRepairRunnerSnapshot(candidate.snapshot)
+    || candidate.snapshot.templateVersion !== 1
+    || candidate.snapshot.templateKey !== 'movie'
+    || candidate.snapshot.entrypoint !== 'movie-crawler'
+    || candidate.snapshot.permissionResource !== 'movie'
+    || candidate.snapshot.movieId.trim().length === 0
+    || (candidate.snapshot.reason !== 'no_source' && candidate.snapshot.reason !== 'source_failed')
+    || !Number.isSafeInteger(candidate.snapshot.sourceRevision)
+    || candidate.snapshot.sourceRevision < 0
+    || candidate.snapshot.sourceRevision > 1_000_000
+    || candidate.snapshot.targetIntent !== 'restore_playable_sources') {
+    throw new Error('Repair runner snapshot contract is invalid')
+  }
   return candidate.snapshot
 }
 

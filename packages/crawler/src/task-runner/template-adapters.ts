@@ -1,4 +1,4 @@
-import type { RepairSourceObservationInput, RepairSourceObservationResponse, RunnerCandidate, RunnerFailureCode, RunnerSnapshot } from './runner-client'
+import type { RepairRunnerSnapshot, RepairSourceObservationInput, RepairSourceObservationResponse, RunnerCandidate, RunnerFailureCode, RunnerSnapshot } from './runner-client'
 
 export interface AdapterExecutionContext {
   readonly checkpoint: () => Promise<boolean>
@@ -22,21 +22,29 @@ export interface TaskRunnerAdapter {
   execute: (context: AdapterExecutionContext) => Promise<AdapterExecutionResult>
 }
 
+function isValidRepairSnapshot(snapshot: RunnerSnapshot): snapshot is RepairRunnerSnapshot {
+  return snapshot.operation === 'repair_players'
+    && snapshot.templateVersion === 1
+    && snapshot.templateKey === 'movie'
+    && snapshot.entrypoint === 'movie-crawler'
+    && snapshot.permissionResource === 'movie'
+    && typeof snapshot.movieId === 'string'
+    && snapshot.movieId.trim().length > 0
+    && (snapshot.reason === 'no_source' || snapshot.reason === 'source_failed')
+    && Number.isSafeInteger(snapshot.sourceRevision)
+    && snapshot.sourceRevision >= 0
+    && snapshot.sourceRevision <= 1_000_000
+    && snapshot.targetIntent === 'restore_playable_sources'
+}
+
 export function createTemplateAdapterRegistry(adapters: readonly TaskRunnerAdapter[]) {
   const registry = new Map(adapters.filter(adapter => !adapter.operation).map(adapter => [adapter.templateKey, adapter]))
   const repairAdapter = adapters.find(adapter => adapter.operation === 'repair_players')
   return Object.freeze({
     select(snapshot: RunnerSnapshot): TaskRunnerAdapter {
       if (snapshot.operation === 'repair_players') {
-        if (snapshot.templateKey !== 'movie'
-          || snapshot.entrypoint !== 'movie-crawler'
-          || snapshot.permissionResource !== 'movie'
-          || !snapshot.movieId.trim()
-          || !Number.isSafeInteger(snapshot.sourceRevision)
-          || snapshot.sourceRevision < 0
-          || snapshot.targetIntent !== 'restore_playable_sources') {
-          throw new Error('Repair runner snapshot does not match its operation')
-        }
+        if (!isValidRepairSnapshot(snapshot))
+          throw new Error('Repair runner snapshot contract is invalid')
         if (!repairAdapter)
           throw new Error('Unsupported runner operation: repair_players')
         return repairAdapter
