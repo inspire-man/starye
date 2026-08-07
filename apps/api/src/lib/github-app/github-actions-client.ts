@@ -101,16 +101,24 @@ function isAbortError(error: unknown): boolean {
 }
 
 function isValidProviderRunId(value: string): boolean {
-  return /^\d{1,20}$/u.test(value)
+  return /^[1-9]\d{0,19}$/u.test(value)
 }
 
 function isSnapshotBound(snapshot: ProviderSnapshot, bindings: GitHubActionsBindings): boolean {
-  return snapshot.provider === 'github-actions'
-    && snapshot.repository === `${bindings.owner}/${bindings.repository}`
+  const expected = snapshot.templateKey === 'movie'
+    ? { crawlerEntrypoint: 'crawler-optimized', workflow: '.github/workflows/daily-movie-crawl.yml' }
+    : snapshot.templateKey === 'manga'
+      ? { crawlerEntrypoint: 'crawler-comic', workflow: '.github/workflows/daily-manga-crawl.yml' }
+      : undefined
+
+  return expected !== undefined
+    && snapshot.crawlerEntrypoint === expected.crawlerEntrypoint
     && snapshot.environment === bindings.environment
+    && snapshot.provider === 'github-actions'
     && snapshot.ref === 'main'
-    && ((snapshot.templateKey === 'movie' && snapshot.workflow === '.github/workflows/daily-movie-crawl.yml')
-      || (snapshot.templateKey === 'manga' && snapshot.workflow === '.github/workflows/daily-manga-crawl.yml'))
+    && snapshot.repository === `${bindings.owner}/${bindings.repository}`
+    && snapshot.target === bindings.environment
+    && snapshot.workflow === expected.workflow
 }
 
 function isDispatchBound(dispatch: ProviderDispatchInput, snapshot: ProviderSnapshot): boolean {
@@ -129,7 +137,10 @@ function asRecord(value: unknown): Readonly<Record<string, unknown>> | undefined
   return value as Readonly<Record<string, unknown>>
 }
 
-function parseWorkflowRun(value: unknown): GitHubActionsResult<GitHubWorkflowRunSummary> {
+function parseWorkflowRun(
+  value: unknown,
+  expectedWorkflow: ProviderSnapshot['workflow'],
+): GitHubActionsResult<GitHubWorkflowRunSummary> {
   const record = asRecord(value)
   if (!record || typeof record.status !== 'string' || !providerRunStatuses.has(record.status as ProviderRunStatus))
     return failure('github_actions_response_invalid', false)
@@ -137,7 +148,7 @@ function parseWorkflowRun(value: unknown): GitHubActionsResult<GitHubWorkflowRun
   if (record.conclusion !== null && record.conclusion !== undefined && (typeof record.conclusion !== 'string' || !providerRunConclusions.has(record.conclusion as ProviderRunConclusion))) {
     return failure('github_actions_response_invalid', false)
   }
-  if (record.path !== undefined && typeof record.path !== 'string')
+  if (typeof record.path !== 'string' || record.path !== expectedWorkflow)
     return failure('github_actions_response_invalid', false)
   if (record.head_sha !== undefined && (typeof record.head_sha !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(record.head_sha))) {
     return failure('github_actions_response_invalid', false)
@@ -283,7 +294,7 @@ export function createGitHubActionsClient(input: {
         path: `/repos/${snapshot.repository}/actions/runs/${providerRunId}`,
         success: async (response) => {
           try {
-            return parseWorkflowRun(await response.json())
+            return parseWorkflowRun(await response.json(), snapshot.workflow)
           }
           catch {
             return failure('github_actions_response_invalid', false, response.status)
