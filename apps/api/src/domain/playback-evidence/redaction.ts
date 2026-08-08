@@ -104,6 +104,12 @@ export function isSafePlaybackEvidence(value: unknown): value is PlaybackEvidenc
   return findForbiddenPlaybackEvidenceMaterial(value) === undefined
 }
 
+export function assertSafePlaybackEvidence(value: unknown): asserts value is PlaybackEvidenceSummary {
+  const reason = findForbiddenPlaybackEvidenceMaterial(value)
+  if (reason)
+    throw new PlaybackEvidenceRedactionError(reason)
+}
+
 function copyTuple(tuple: PlaybackEvidenceTuple): PlaybackEvidenceTuple {
   return {
     attemptNumber: tuple.attemptNumber,
@@ -143,9 +149,7 @@ export function buildRedactedPlaybackEvidence(input: PlaybackEvidenceSummary): R
   if (!parsed.success)
     throw new PlaybackEvidenceRedactionError('playback evidence schema rejected input')
 
-  const forbidden = findForbiddenPlaybackEvidenceMaterial(input)
-  if (forbidden)
-    throw new PlaybackEvidenceRedactionError(forbidden)
+  assertSafePlaybackEvidence(input)
 
   return {
     artifact: copyArtifact(parsed.output.artifact),
@@ -243,4 +247,3 @@ export function buildPlaybackEvidencePair(input: PlaybackEvidenceSummary): Playb
 }
 
 export const redactPlaybackEvidence = buildRedactedPlaybackEvidence
-export const assertSafePlaybackEvidence = findForbiddenPlaybackEvidenceMaterial
