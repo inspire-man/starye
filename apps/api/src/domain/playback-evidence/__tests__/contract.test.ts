@@ -5,6 +5,12 @@ import {
   PlaybackEvidenceRequestSchema,
   PlaybackEvidenceSummarySchema,
 } from '../../../schemas/playback-evidence'
+import {
+  buildPlaybackEvidencePair,
+  buildRedactedPlaybackEvidence,
+  findForbiddenPlaybackEvidenceMaterial,
+  tryBuildRedactedPlaybackEvidence,
+} from '../redaction'
 
 const validRequest = {
   contentId: 'movie-24',
@@ -30,6 +36,12 @@ const validRequest = {
   sourceRevision: 7,
   tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'run-24', taskId: 'task-24' },
   viewer: { path: '/movie/movie-24', targetLabel: 'selected-production-target' },
+}
+
+const validSummary = {
+  ...validRequest,
+  artifact: { hash: 'a'.repeat(64), reference: 'phase24/task-24/run-24/attempt-1', stem: 'task-24_run-24_attempt-1' },
+  outcome: 'accepted',
 }
 
 describe('playback evidence contract', () => {
@@ -75,10 +87,38 @@ describe('playback evidence contract', () => {
 
   it('requires artifact and bounded outcome only on the response summary', () => {
     expect(v.safeParse(PlaybackEvidenceSummarySchema, validRequest).success).toBe(false)
-    expect(v.safeParse(PlaybackEvidenceSummarySchema, {
-      ...validRequest,
-      artifact: { hash: 'a'.repeat(64), reference: 'phase24/task-24/run-24/attempt-1', stem: 'task-24_run-24_attempt-1' },
-      outcome: 'accepted',
-    }).success).toBe(true)
+    expect(v.safeParse(PlaybackEvidenceSummarySchema, validSummary).success).toBe(true)
+  })
+
+  it('constructs a stable redacted JSON/Markdown pair from an allowlist', () => {
+    const first = buildPlaybackEvidencePair(validSummary)
+    const second = buildPlaybackEvidencePair(structuredClone(validSummary))
+
+    expect(first.value).toEqual(second.value)
+    expect(first.json).toBe(second.json)
+    expect(first.markdown).toBe(second.markdown)
+    expect(first.json).toContain('currentTimeDelta')
+    expect(first.json).not.toContain('sourceUrl')
+  })
+
+  it.each([
+    ['raw URL key', { sourceUrl: 'https://media.example/source' }],
+    ['signed query value', { targetLabel: 'https://media.example/video?token=secret' }],
+    ['session key', { session: 'session-value' }],
+    ['runner payload key', { runnerJson: '{}' }],
+    ['HTML value', { targetLabel: '<video src="media"></video>' }],
+    ['exception value', { targetLabel: 'network log exception stack trace' }],
+  ])('rejects %s before redaction', (_name, extra) => {
+    const candidate = { ...validSummary, ...extra }
+
+    expect(findForbiddenPlaybackEvidenceMaterial(candidate)).toBeDefined()
+    expect(() => buildRedactedPlaybackEvidence(candidate)).toThrow(/forbidden|schema rejected/u)
+    expect(tryBuildRedactedPlaybackEvidence(candidate)).toMatchObject({ ok: false, outcome: 'checkpoint' })
+  })
+
+  it('does not turn a redaction failure into accepted evidence', () => {
+    const result = tryBuildRedactedPlaybackEvidence({ ...validSummary, token: 'secret' })
+
+    expect(result).toEqual(expect.objectContaining({ ok: false, outcome: 'checkpoint' }))
   })
 })
