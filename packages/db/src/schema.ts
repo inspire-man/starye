@@ -1,6 +1,6 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
 import { relations, sql } from 'drizzle-orm'
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { foreignKey, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // --- 用户认证 (Better Auth 标准表) ---
 export const user = sqliteTable('user', {
@@ -394,12 +394,90 @@ export const crawlerRuns = sqliteTable('crawler_run', {
   terminalAt: integer('terminal_at', { mode: 'timestamp' }),
 }, table => [
   uniqueIndex('idx_crawler_run_task_attempt').on(table.taskId, table.attemptNumber),
+  uniqueIndex('idx_crawler_run_task_pair').on(table.taskId, table.id),
   index('idx_crawler_run_task_created').on(table.taskId, table.createdAt),
   index('idx_crawler_run_status_lease_expiry').on(table.status, table.leaseExpiresAt),
 ])
 
 export type CrawlerRun = InferSelectModel<typeof crawlerRuns>
 export type NewCrawlerRun = InferInsertModel<typeof crawlerRuns>
+
+/** The first valid terminal playback fact for one fresh tuple/content/revision. */
+export const playbackEvidenceSummaries = sqliteTable('playback_evidence_summary', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => crawlerTasks.id, { onDelete: 'cascade' }),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id, { onDelete: 'cascade' }),
+  attemptNumber: integer('attempt_number').notNull(),
+  provider: text('provider', { enum: ['github-actions'] }).notNull(),
+  contentId: text('content_id').notNull().references(() => movies.id, { onDelete: 'cascade' }),
+  sourceRevision: integer('source_revision').notNull(),
+  evidenceIdentity: text('evidence_identity').notNull(),
+  evidenceHash: text('evidence_hash').notNull(),
+  playbackStatus: text('playback_status', { enum: ['playback_verified'] }).notNull(),
+  summaryJson: text('summary_json', { mode: 'json' }).notNull(),
+  artifactReference: text('artifact_reference').notNull(),
+  artifactStem: text('artifact_stem').notNull(),
+  artifactHash: text('artifact_hash').notNull(),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_playback_evidence_summary_tuple').on(
+    table.taskId,
+    table.runId,
+    table.attemptNumber,
+    table.provider,
+    table.contentId,
+    table.sourceRevision,
+  ),
+  uniqueIndex('idx_playback_evidence_summary_content_revision').on(table.contentId, table.sourceRevision),
+  uniqueIndex('idx_playback_evidence_summary_identity').on(table.evidenceIdentity),
+  index('idx_playback_evidence_summary_run_observed').on(table.runId, table.observedAt),
+  foreignKey({
+    columns: [table.taskId, table.runId],
+    foreignColumns: [crawlerRuns.taskId, crawlerRuns.id],
+  }).onDelete('cascade'),
+])
+
+export type PlaybackEvidenceSummaryRow = InferSelectModel<typeof playbackEvidenceSummaries>
+export type NewPlaybackEvidenceSummaryRow = InferInsertModel<typeof playbackEvidenceSummaries>
+
+/** Append-only bounded rejection facts; raw evidence and media are never stored here. */
+export const playbackEvidenceRejections = sqliteTable('playback_evidence_rejection', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => crawlerTasks.id, { onDelete: 'cascade' }),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id, { onDelete: 'cascade' }),
+  attemptNumber: integer('attempt_number').notNull(),
+  provider: text('provider', { enum: ['github-actions'] }).notNull(),
+  contentId: text('content_id').notNull().references(() => movies.id, { onDelete: 'cascade' }),
+  sourceRevision: integer('source_revision').notNull(),
+  evidenceIdentity: text('evidence_identity').notNull(),
+  evidenceHash: text('evidence_hash').notNull(),
+  artifactReference: text('artifact_reference').notNull(),
+  artifactStem: text('artifact_stem').notNull(),
+  artifactHash: text('artifact_hash').notNull(),
+  outcome: text('outcome', { enum: ['duplicate', 'conflict', 'stale', 'late', 'ignored'] }).notNull(),
+  reasonCode: text('reason_code').notNull(),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_playback_evidence_rejection_tuple').on(
+    table.taskId,
+    table.runId,
+    table.attemptNumber,
+    table.provider,
+    table.contentId,
+    table.sourceRevision,
+  ),
+  index('idx_playback_evidence_rejection_run_created').on(table.runId, table.createdAt),
+  index('idx_playback_evidence_rejection_outcome_created').on(table.outcome, table.createdAt),
+  foreignKey({
+    columns: [table.taskId, table.runId],
+    foreignColumns: [crawlerRuns.taskId, crawlerRuns.id],
+  }).onDelete('cascade'),
+])
+
+export type PlaybackEvidenceRejectionRow = InferSelectModel<typeof playbackEvidenceRejections>
+export type NewPlaybackEvidenceRejectionRow = InferInsertModel<typeof playbackEvidenceRejections>
 
 /** Append-only, bounded per-source facts keyed by the crawler event identity. */
 export const movieSourceObservations = sqliteTable('movie_source_observation', {
@@ -700,6 +778,8 @@ export const movieRelations = relations(movies, ({ many, one }) => ({
   moviePublishers: many(moviePublishers),
   sourceState: one(movieSourceStates),
   sourceObservations: many(movieSourceObservations),
+  playbackEvidenceSummaries: many(playbackEvidenceSummaries),
+  playbackEvidenceRejections: many(playbackEvidenceRejections),
 }))
 
 export const movieSourceStateRelations = relations(movieSourceStates, ({ one }) => ({
@@ -760,6 +840,8 @@ export const crawlerTaskRelations = relations(crawlerTasks, ({ many, one }) => (
     references: [user.id],
   }),
   runs: many(crawlerRuns),
+  playbackEvidenceSummaries: many(playbackEvidenceSummaries),
+  playbackEvidenceRejections: many(playbackEvidenceRejections),
 }))
 
 export const crawlerRunRelations = relations(crawlerRuns, ({ many, one }) => ({
@@ -773,6 +855,38 @@ export const crawlerRunRelations = relations(crawlerRuns, ({ many, one }) => ({
   providerAssociation: one(crawlerRunProviderAssociations),
   templateLease: one(crawlerTemplateLeases),
   sourceObservations: many(movieSourceObservations),
+  playbackEvidenceSummaries: many(playbackEvidenceSummaries),
+  playbackEvidenceRejections: many(playbackEvidenceRejections),
+}))
+
+export const playbackEvidenceSummaryRelations = relations(playbackEvidenceSummaries, ({ one }) => ({
+  task: one(crawlerTasks, {
+    fields: [playbackEvidenceSummaries.taskId],
+    references: [crawlerTasks.id],
+  }),
+  run: one(crawlerRuns, {
+    fields: [playbackEvidenceSummaries.runId],
+    references: [crawlerRuns.id],
+  }),
+  movie: one(movies, {
+    fields: [playbackEvidenceSummaries.contentId],
+    references: [movies.id],
+  }),
+}))
+
+export const playbackEvidenceRejectionRelations = relations(playbackEvidenceRejections, ({ one }) => ({
+  task: one(crawlerTasks, {
+    fields: [playbackEvidenceRejections.taskId],
+    references: [crawlerTasks.id],
+  }),
+  run: one(crawlerRuns, {
+    fields: [playbackEvidenceRejections.runId],
+    references: [crawlerRuns.id],
+  }),
+  movie: one(movies, {
+    fields: [playbackEvidenceRejections.contentId],
+    references: [movies.id],
+  }),
 }))
 
 export const movieSourceObservationRelations = relations(movieSourceObservations, ({ one }) => ({
