@@ -5,15 +5,15 @@ milestone_name: 播放可用性与生产自愈闭环
 current_phase: 24
 current_phase_name: Fresh Production Dashboard -> Viewer -> Playback Proof
 status: executing
-stopped_at: Completed 24-03-PLAN.md
-last_updated: "2026-08-08T07:18:13.895Z"
+stopped_at: Completed 24-04-PLAN.md
+last_updated: "2026-08-08T08:30:57.698Z"
 last_activity: 2026-08-08
-last_activity_desc: Phase 24 Plan 03 completed; ready for Plan 04
+last_activity_desc: Phase 24 Plan 04 completed; ready for Plan 05
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
 ---
 
 # Project State: Starye — 个人内容中台
@@ -28,11 +28,11 @@ See: `.planning/PROJECT.md` (updated 2026-08-05)
 ## Current Position
 
 Phase: 24 (Fresh Production Dashboard -> Viewer -> Playback Proof) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
-Last activity: 2026-08-08 — Phase 24 Plan 03 completed; ready for Plan 04
+Last activity: 2026-08-08 — Phase 24 Plan 04 completed; ready for Plan 05
 
-Progress: ████████░░ [█████████░] 91% (Phase 20: 100%; Phase 21: 100%; Phase 22: 100%; Phase 23: 100%)
+Progress: ████████░░ [██████████] 96% (Phase 20: 100%; Phase 21: 100%; Phase 22: 100%; Phase 23: 100%)
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: ████████░░ [█████████░] 91% (P
 | Phase 24 P01 | 14min | 3 tasks | 8 files |
 | Phase 24 P02 | 36min | 3 tasks | 7 files |
 | Phase 24 P3 | 1h 30m | 2 tasks | 3 files |
+| Phase 24 P4 | unmeasured-continuation | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Playback evidence endpoint 以 authenticated path 的 server-owned task/run/attempt 为边界，repository 继续负责 provider、source revision、window、redaction、idempotency 与 CAS
 - [Phase ?]: Task detail 用 playbackEvidence.current 与 bounded history 分开展示 playback，不引入 provider、receipt、source、playback 的 overall success 聚合
 - [Phase ?]: D1 只保存 bounded summary、hash、reference 和 rejection facts，raw JSON/Markdown artifact 与媒体留在 production application reads 之外
+- [Phase 24]: MovieDetail uses direct-first eligible source selection and Player requires visible Play, allowlisted media events, and one-second currentTime progress before playback verification. — Keep source readiness, provider receipt, and actual playback as independent facts while preserving a server-owned same-movie route context.
 
 ### Pending Todos
 
@@ -125,6 +127,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-08T07:18:13.880Z
-Stopped at: Completed 24-03-PLAN.md
+Last session: 2026-08-08T08:30:18.295Z
+Stopped at: Completed 24-04-PLAN.md
 Resume file: None
