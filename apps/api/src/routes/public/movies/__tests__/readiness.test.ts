@@ -120,12 +120,38 @@ describe('movie readiness projection', () => {
     const verified = createServerReadinessProjection({
       contentId: 'movie-1',
       metadataObservedAt: 1,
-      playbackEvidence: { playing: true, currentTime: 12, observedAt: 2 },
+      playbackEvidence: {
+        artifact: { hash: 'a'.repeat(64), reference: 'phase24/task-24/run-24/attempt-1', stem: 'task-24_run-24_attempt-1' },
+        contentId: 'movie-1',
+        events: [
+          { event: 'canplay', observed: true, observedAt: 3 },
+          { event: 'playing', observed: true, observedAt: 4 },
+          { event: 'waiting', observed: false, observedAt: null },
+          { event: 'stalled', observed: false, observedAt: null },
+          { event: 'error', observed: false, observedAt: null },
+        ],
+        observedAt: 5,
+        outcome: 'accepted',
+        playback: {
+          canplay: true,
+          error: false,
+          playing: true,
+          progress: { currentTimeAfter: 12, currentTimeBefore: 10.5, currentTimeDelta: 1.5 },
+          status: 'playback_verified',
+        },
+        provider: { provider: 'github-actions', status: 'succeeded' },
+        repair: { sourceRevision: 4, status: 'succeeded' },
+        schemaVersion: 1,
+        source: { revision: 4, sourceType: 'direct', status: 'ready' },
+        sourceRevision: 4,
+        tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'run-24', taskId: 'task-24' },
+        viewer: { path: '/movie/movie-1', targetLabel: 'selected-production-target' },
+      },
       sourceState: makeSourceState({ disposition: 'ready', eligibleCount: 1, repairable: false, reasonCode: null }),
     })
     expect(verified.playback).toEqual({
       status: 'playback_verified',
-      evidence: { currentTime: 12, observedAt: 2 },
+      evidence: { currentTime: 12, observedAt: 5 },
     })
   })
 

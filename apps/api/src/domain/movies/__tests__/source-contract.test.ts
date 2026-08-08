@@ -16,6 +16,34 @@ import {
   SOURCE_REASON_CODES,
 } from '../source-contract'
 
+const validPlaybackEvidence = {
+  artifact: { hash: 'a'.repeat(64), reference: 'phase24/task-24/run-24/attempt-1', stem: 'task-24_run-24_attempt-1' },
+  contentId: 'movie-1',
+  events: [
+    { event: 'canplay' as const, observed: true, observedAt: 1_700_000_001 },
+    { event: 'playing' as const, observed: true, observedAt: 1_700_000_002 },
+    { event: 'waiting' as const, observed: false, observedAt: null },
+    { event: 'stalled' as const, observed: false, observedAt: null },
+    { event: 'error' as const, observed: false, observedAt: null },
+  ],
+  observedAt: 1_700_000_010,
+  outcome: 'accepted' as const,
+  playback: {
+    canplay: true,
+    error: false,
+    playing: true,
+    progress: { currentTimeAfter: 12, currentTimeBefore: 10.5, currentTimeDelta: 1.5 },
+    status: 'playback_verified' as const,
+  },
+  provider: { provider: 'github-actions' as const, status: 'succeeded' as const },
+  repair: { sourceRevision: 7, status: 'succeeded' as const },
+  schemaVersion: 1 as const,
+  source: { revision: 7, sourceType: 'direct' as const, status: 'ready' as const },
+  sourceRevision: 7,
+  tuple: { attemptNumber: 1, provider: 'github-actions' as const, runId: 'run-24', taskId: 'task-24' },
+  viewer: { path: '/movie/movie-1', targetLabel: 'selected-production-target' },
+}
+
 describe('movie source contract', () => {
   it('derives ready from one active player with a trimmed source', () => {
     const source = deriveSourceReadiness({
@@ -92,10 +120,42 @@ describe('movie source contract', () => {
     expect(derivePlaybackProof({ currentTime: 0, playing: true })).toEqual({ status: 'unverified' })
     expect(derivePlaybackProof({ currentTime: 12, playing: false })).toEqual({ status: 'unverified' })
 
-    expect(derivePlaybackProof({ currentTime: 12, observedAt: 4, playing: true })).toEqual({
-      evidence: { currentTime: 12, observedAt: 4 },
+    expect(derivePlaybackProof(validPlaybackEvidence)).toEqual({
+      evidence: { currentTime: 12, observedAt: 1_700_000_010 },
       status: 'playback_verified',
     })
+  })
+
+  it.each([
+    ['missing canplay', { event: 'canplay', observed: false, observedAt: null }],
+    ['missing playing', { event: 'playing', observed: false, observedAt: null }],
+    ['terminal error', { event: 'error', observed: true, observedAt: 1_700_000_003 }],
+  ])('requires the complete media event gate: %s', (_name, replacement) => {
+    const events = validPlaybackEvidence.events.map(event => event.event === replacement.event ? replacement : event)
+    expect(derivePlaybackProof({ ...validPlaybackEvidence, events })).toEqual({ status: 'unverified' })
+  })
+
+  it.each([
+    ['delta below one second', { currentTimeAfter: 11.4, currentTimeBefore: 10.5, currentTimeDelta: 0.9 }],
+    ['inconsistent delta', { currentTimeAfter: 12, currentTimeBefore: 10.5, currentTimeDelta: 1.2 }],
+  ])('requires honest one-second progress: %s', (_name, progress) => {
+    expect(derivePlaybackProof({
+      ...validPlaybackEvidence,
+      playback: { ...validPlaybackEvidence.playback, progress },
+    })).toEqual({ status: 'unverified' })
+  })
+
+  it('does not project tuple, content, revision, or window mismatches', () => {
+    expect(derivePlaybackProof(validPlaybackEvidence, { taskId: 'other-task' })).toEqual({ status: 'unverified' })
+    expect(derivePlaybackProof(validPlaybackEvidence, { runId: 'other-run' })).toEqual({ status: 'unverified' })
+    expect(derivePlaybackProof(validPlaybackEvidence, { attemptNumber: 2 })).toEqual({ status: 'unverified' })
+    expect(derivePlaybackProof(validPlaybackEvidence, { contentId: 'other-movie' })).toEqual({ status: 'unverified' })
+    expect(derivePlaybackProof(validPlaybackEvidence, { sourceRevision: 8 })).toEqual({ status: 'unverified' })
+    expect(derivePlaybackProof(validPlaybackEvidence, {
+      now: 1_700_000_020,
+      windowStartedAt: 1_700_000_000,
+      windowEndsAt: 1_700_000_009,
+    })).toEqual({ status: 'unverified' })
   })
 
   it('maps the projection to the movie_source_state contract and preserves identity', () => {

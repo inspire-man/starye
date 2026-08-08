@@ -1,3 +1,9 @@
+import type { PlaybackProofBinding } from '../playback-evidence/types'
+
+import * as v from 'valibot'
+import { PlaybackEvidenceSummarySchema } from '../../schemas/playback-evidence'
+import { isSafePlaybackEvidence } from '../playback-evidence/redaction'
+
 export const SOURCE_CONTRACT_VERSION = 1 as const
 
 export const SOURCE_TYPES = ['direct', 'magnet', 'TorrServer'] as const
@@ -237,22 +243,53 @@ export function deriveSourceReadiness(input: SourceReadinessInput): SourceReadin
   }
 }
 
-export function derivePlaybackProof(evidence: unknown): PlaybackProjection {
-  if (!evidence || typeof evidence !== 'object')
+export function derivePlaybackProof(evidence: unknown, binding: PlaybackProofBinding = {}): PlaybackProjection {
+  if (!isSafePlaybackEvidence(evidence))
     return { status: 'unverified' }
 
-  const candidate = evidence as { currentTime?: unknown, observedAt?: unknown, playing?: unknown }
-  if (candidate.playing !== true || typeof candidate.currentTime !== 'number' || !Number.isFinite(candidate.currentTime) || candidate.currentTime <= 0)
+  const parsed = v.safeParse(PlaybackEvidenceSummarySchema, evidence)
+  if (!parsed.success)
     return { status: 'unverified' }
 
-  const observedAt = typeof candidate.observedAt === 'number' && Number.isFinite(candidate.observedAt)
-    ? candidate.observedAt
-    : undefined
+  const candidate = parsed.output
+  const observedEvents = new Map(candidate.events.map(event => [event.event, event]))
+  const progress = candidate.playback.progress
+  const progressDelta = progress.currentTimeAfter - progress.currentTimeBefore
+  const eventGate = observedEvents.get('canplay')?.observed === true
+    && observedEvents.get('playing')?.observed === true
+    && observedEvents.get('error')?.observed === false
+  const tupleMatches = (binding.taskId === undefined || candidate.tuple.taskId === binding.taskId)
+    && (binding.runId === undefined || candidate.tuple.runId === binding.runId)
+    && (binding.attemptNumber === undefined || candidate.tuple.attemptNumber === binding.attemptNumber)
+    && (binding.provider === undefined || candidate.tuple.provider === binding.provider)
+    && (binding.contentId === undefined || candidate.contentId === binding.contentId)
+    && (binding.sourceRevision === undefined || candidate.sourceRevision === binding.sourceRevision)
+  const evidenceInWindow = (binding.now === undefined || (
+    (binding.windowStartedAt === undefined || candidate.observedAt >= binding.windowStartedAt)
+    && (binding.windowEndsAt === undefined || candidate.observedAt <= binding.windowEndsAt)
+  ))
+  const internallyConsistent = candidate.outcome === 'accepted'
+    && candidate.provider.status === 'succeeded'
+    && (candidate.repair.status === 'validated' || candidate.repair.status === 'succeeded')
+    && candidate.source.status === 'ready'
+    && candidate.source.revision === candidate.sourceRevision
+    && candidate.repair.sourceRevision === candidate.sourceRevision
+    && candidate.playback.status === 'playback_verified'
+    && candidate.playback.canplay === true
+    && candidate.playback.playing === true
+    && candidate.playback.error === false
+    && eventGate
+    && progress.currentTimeAfter >= progress.currentTimeBefore
+    && Math.abs(progress.currentTimeDelta - progressDelta) < 0.001
+    && progress.currentTimeDelta >= 1
+    && tupleMatches
+    && evidenceInWindow
+
+  if (!internallyConsistent)
+    return { status: 'unverified' }
 
   return {
-    evidence: observedAt === undefined
-      ? { currentTime: candidate.currentTime }
-      : { currentTime: candidate.currentTime, observedAt },
+    evidence: { currentTime: progress.currentTimeAfter, observedAt: candidate.observedAt },
     status: 'playback_verified',
   }
 }
@@ -264,7 +301,10 @@ export function createReadinessProjection(input: ReadinessProjectionInput): Read
       observedAt: input.metadata.observedAt,
       persisted: input.metadata.persisted,
     },
-    playback: derivePlaybackProof(input.playbackEvidence),
+    playback: derivePlaybackProof(input.playbackEvidence, {
+      contentId: input.contentId,
+      sourceRevision: input.source.sourceRevision,
+    }),
     receipt: {
       persisted: input.receipt?.persisted ?? false,
       primaryContentId: input.receipt?.primaryContentId ?? null,
@@ -321,6 +361,7 @@ export function createServerReadinessProjection(input: ServerReadinessProjection
   const primaryContentId = input.receipt?.primaryContentId === input.contentId
     ? input.contentId
     : null
+  const source = normalizedSourceState(input.sourceState, fallbackObservedAt)
 
   return {
     metadata: {
@@ -328,12 +369,15 @@ export function createServerReadinessProjection(input: ServerReadinessProjection
       observedAt: toEpochSeconds(input.metadataObservedAt),
       persisted: true,
     },
-    playback: derivePlaybackProof(input.playbackEvidence),
+    playback: derivePlaybackProof(input.playbackEvidence, {
+      contentId: input.contentId,
+      sourceRevision: source.sourceRevision,
+    }),
     receipt: {
       persisted: input.receipt?.persisted === true && primaryContentId !== null,
       primaryContentId,
       schemaVersion: primaryContentId === null ? null : (input.receipt?.schemaVersion ?? null),
     },
-    source: normalizedSourceState(input.sourceState, fallbackObservedAt),
+    source,
   }
 }
