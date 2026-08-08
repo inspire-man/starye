@@ -2,6 +2,7 @@
 import type { MovieDetail } from '../types'
 import type { PlaybackSourceType } from '../utils/playbackSources'
 import * as Sentry from '@sentry/vue'
+import { CircleAlert, CircleCheck, Clock3, Play, RefreshCw } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Player from 'xgplayer'
@@ -21,6 +22,24 @@ import {
 } from '../utils/playerSecurity'
 
 type ErrorKind = 'torrserver' | 'xgplayer' | 'network' | 'source-invalid' | 'unknown'
+type PlaybackEventName = 'canplay' | 'playing' | 'waiting' | 'stalled' | 'error'
+type PlaybackStatus = 'awaiting-play' | 'preparing' | 'ready-to-play' | 'playing' | 'progressed' | 'failed'
+const PLAYBACK_EVENT_NAMES: readonly PlaybackEventName[] = ['canplay', 'playing', 'waiting', 'stalled', 'error']
+
+interface PlaybackEventObservation {
+  event: PlaybackEventName
+  observed: boolean
+  observedAt: number | null
+  attempt: number | null
+}
+
+interface SourceAttemptObservation {
+  sourceId: string
+  sourceType: PlaybackSourceType
+  attempt: number
+  retryCount: number
+  outcome: 'pending' | 'failed' | 'progressed'
+}
 
 interface PlayerErrorState {
   visible: boolean
@@ -30,6 +49,7 @@ interface PlayerErrorState {
 }
 
 const BUFFERING_TIMEOUT_MS = 10000
+const PLAYBACK_OBSERVATION_WINDOW_MS = 15000
 const MAX_SOURCE_RETRIES = 2
 const PROGRESS_SAVE_INTERVAL_SECONDS = 10
 const PROGRESS_MIN_SAVE_SECONDS = 30
@@ -55,6 +75,7 @@ let playbackSessionToken = 0
 let loadingCycleToken = 0
 let consumedFailureCycleToken = -1
 const retryCountBySource = new Map<string, number>()
+const attemptedSourceIdentities = new Set<string>()
 
 const playerLoading = ref(false)
 const playerLoadingMessage = ref('')
@@ -68,6 +89,27 @@ const sourceGuardMessage = ref('')
 const sourceGuardIsInvalid = ref(false)
 const savedCompleted = ref(false)
 const loadedProgressDuration = ref<number | null>(null)
+const playbackStatus = ref<PlaybackStatus>('awaiting-play')
+const playbackStatusReason = ref('')
+const playbackClickCount = ref(0)
+const playbackClickRequested = ref(false)
+const playbackObservationStartedAt = ref<number | null>(null)
+const playbackObservationTimer = ref<number | null>(null)
+const playbackEvents = ref<PlaybackEventObservation[]>(createPlaybackEventObservations())
+const currentTimeBefore = ref<number | null>(null)
+const currentTimeAfter = ref<number | null>(null)
+const currentTimeDelta = computed(() => {
+  if (currentTimeBefore.value == null || currentTimeAfter.value == null)
+    return null
+  return Math.max(0, currentTimeAfter.value - currentTimeBefore.value)
+})
+const sourceAttemptHistory = ref<SourceAttemptObservation[]>([])
+const currentSourceAttempt = ref(1)
+const currentSourcePlayerId = ref('')
+const currentContentId = ref('')
+const currentSourceRevision = ref(0)
+const playbackCandidates = ref<MovieDetail['players']>([])
+const currentCandidateIndex = ref(-1)
 
 const isTorrServerMode = computed(() => !!route.query.streamUrl)
 const hasAria2Fallback = computed(() => Boolean(currentMagnetUrl.value) && aria2Connected.value)
@@ -126,9 +168,139 @@ function createDefaultErrorState(): PlayerErrorState {
   }
 }
 
+function createPlaybackEventObservations(): PlaybackEventObservation[] {
+  return PLAYBACK_EVENT_NAMES.map(event => ({
+    event,
+    observed: false,
+    observedAt: null,
+    attempt: null,
+  }))
+}
+
+function playbackStatusLabel(status: PlaybackStatus): string {
+  return {
+    'awaiting-play': '等待用户播放',
+    'preparing': '播放准备中',
+    'ready-to-play': '可开始播放',
+    'playing': '播放已开始',
+    'progressed': '播放进度已推进 · 播放已验证',
+    'failed': '播放失败',
+  }[status]
+}
+
+function clearPlaybackObservationTimer() {
+  if (playbackObservationTimer.value) {
+    clearTimeout(playbackObservationTimer.value)
+    playbackObservationTimer.value = null
+  }
+}
+
+function resetPlaybackEvidenceForAttempt(attempt: number) {
+  clearPlaybackObservationTimer()
+  playbackEvents.value = createPlaybackEventObservations()
+  currentTimeBefore.value = null
+  currentTimeAfter.value = null
+  playbackStatus.value = 'awaiting-play'
+  playbackStatusReason.value = ''
+  playbackClickRequested.value = false
+  playbackObservationStartedAt.value = null
+  currentSourceAttempt.value = attempt
+}
+
+function playbackEventElapsedMs(): number {
+  if (playbackObservationStartedAt.value == null)
+    return 0
+
+  return Math.max(0, Math.min(
+    PLAYBACK_OBSERVATION_WINDOW_MS,
+    Date.now() - playbackObservationStartedAt.value,
+  ))
+}
+
+function readCurrentPlayerTime(): number {
+  return Math.max(0, Number(player?.currentTime) || 0)
+}
+
+function recordPlaybackEvent(event: PlaybackEventName) {
+  const row = playbackEvents.value.find(item => item.event === event)
+  if (!row || row.observed)
+    return
+
+  row.observed = true
+  row.observedAt = playbackEventElapsedMs()
+  row.attempt = currentSourceAttempt.value
+
+  if (event === 'canplay' && !playbackClickRequested.value) {
+    playbackStatus.value = 'ready-to-play'
+  }
+  else if (event === 'playing'
+    && playbackClickRequested.value
+    && playbackStatus.value !== 'failed'
+    && !playbackEvents.value.find(item => item.event === 'error')?.observed) {
+    currentTimeBefore.value ??= readCurrentPlayerTime()
+    currentTimeAfter.value = currentTimeBefore.value
+    playbackStatus.value = 'playing'
+  }
+  else if ((event === 'waiting' || event === 'stalled') && playbackStatus.value !== 'failed') {
+    playbackStatus.value = playbackClickRequested.value ? 'preparing' : 'ready-to-play'
+  }
+}
+
+function updatePlaybackProgress() {
+  if (!playbackClickRequested.value || currentTimeBefore.value == null || playbackStatus.value === 'failed')
+    return
+
+  currentTimeAfter.value = Math.max(currentTimeAfter.value ?? 0, readCurrentPlayerTime())
+  const delta = currentTimeDelta.value ?? 0
+  const canplayObserved = playbackEvents.value.find(event => event.event === 'canplay')?.observed === true
+  const playingObserved = playbackEvents.value.find(event => event.event === 'playing')?.observed === true
+  if (!canplayObserved || !playingObserved || delta < 1 || playbackEvents.value.find(event => event.event === 'error')?.observed)
+    return
+
+  clearPlaybackObservationTimer()
+  playbackStatus.value = 'progressed'
+  playbackStatusReason.value = ''
+  stopPlayerLoading()
+  clearRecoverableError()
+}
+
+function startPlaybackObservationWindow() {
+  clearPlaybackObservationTimer()
+  playbackObservationStartedAt.value = Date.now()
+  playbackObservationTimer.value = window.setTimeout(() => {
+    playbackObservationTimer.value = null
+    if (playbackStatus.value === 'progressed' || playbackStatus.value === 'failed')
+      return
+
+    handleSourceFailure('network', '播放观察超时，尚未观察到至少 1 秒的 currentTime 推进。')
+  }, PLAYBACK_OBSERVATION_WINDOW_MS)
+}
+
+function rememberCurrentSourceAttempt(outcome: SourceAttemptObservation['outcome']) {
+  if (!currentSourcePlayerId.value || !currentSourceType.value)
+    return
+
+  sourceAttemptHistory.value.push({
+    sourceId: currentSourcePlayerId.value,
+    sourceType: currentSourceType.value,
+    attempt: currentSourceAttempt.value,
+    retryCount: getCurrentSourceRetryCount(),
+    outcome,
+  })
+}
+
 function beginPlaybackSession(): number {
   playbackSessionToken += 1
   retryCountBySource.clear()
+  attemptedSourceIdentities.clear()
+  sourceAttemptHistory.value = []
+  playbackCandidates.value = []
+  currentCandidateIndex.value = -1
+  playbackClickCount.value = 0
+  currentSourcePlayerId.value = ''
+  currentContentId.value = ''
+  currentSourceRevision.value = 0
+  resetPlaybackEvidenceForAttempt(1)
   loadingCycleToken = 0
   consumedFailureCycleToken = -1
   currentSourceIdentity.value = ''
@@ -213,6 +385,7 @@ function resetPlayerContainer() {
 
 function destroyPlayerInstance() {
   clearWaitingTimeout()
+  clearPlaybackObservationTimer()
 
   if (player) {
     player.destroy()
@@ -224,6 +397,7 @@ function destroyPlayerInstance() {
 
 function resetPlayerFeedback() {
   clearWaitingTimeout()
+  clearPlaybackObservationTimer()
   playerLoading.value = false
   playerLoadingMessage.value = ''
   errorState.value = createDefaultErrorState()
@@ -253,6 +427,9 @@ function clearRecoverableError() {
 }
 
 function markPlaybackRecovered() {
+  if (playbackStatus.value === 'failed')
+    return
+
   stopPlayerLoading()
   clearRecoverableError()
 }
@@ -261,8 +438,8 @@ function getEscalatedRetryMessage() {
   return '当前播放源已达到 2 次重试上限，请返回详情页切换其他播放源。'
 }
 
-function showPlayerError(kind: ErrorKind, message: string, recoverable = true) {
-  if (recoverable && !consumeFailureForCurrentCycle()) {
+function showPlayerError(kind: ErrorKind, message: string, recoverable = true, failureAlreadyConsumed = false) {
+  if (recoverable && !failureAlreadyConsumed && !consumeFailureForCurrentCycle()) {
     return
   }
 
@@ -270,6 +447,10 @@ function showPlayerError(kind: ErrorKind, message: string, recoverable = true) {
   const retriesExhausted = recoverable && getCurrentSourceRetryCount() >= MAX_SOURCE_RETRIES
   const finalMessage = retriesExhausted ? getEscalatedRetryMessage() : message
   const finalRecoverable = recoverable && !retriesExhausted
+
+  playbackStatus.value = 'failed'
+  playbackStatusReason.value = finalMessage
+  clearPlaybackObservationTimer()
 
   reportVideoFailure(kind, finalMessage, finalRecoverable)
 
@@ -327,7 +508,7 @@ function scheduleWaitingTimeout() {
       return
     }
 
-    showPlayerError(
+    handleSourceFailure(
       isTorrServerMode.value ? 'torrserver' : 'network',
       getWaitingTimeoutMessage(),
     )
@@ -375,8 +556,105 @@ function getPlaybackErrorState(): PlayerErrorState {
   }
 }
 
+function findNextPlaybackCandidate(): { player: MovieDetail['players'][number], index: number } | null {
+  for (let index = currentCandidateIndex.value + 1; index < playbackCandidates.value.length; index += 1) {
+    const candidate = playbackCandidates.value[index]
+    if (!candidate)
+      continue
+
+    const identity = getSourceIdentity(candidate)
+    if (!attemptedSourceIdentities.has(identity))
+      return { player: candidate, index }
+  }
+
+  return null
+}
+
+function switchToNextPlaybackCandidate(): boolean {
+  const next = findNextPlaybackCandidate()
+  if (!next)
+    return false
+
+  currentCandidateIndex.value = next.index
+  retryCountBySource.set(getSourceIdentity(next.player), 0)
+  destroyPlayerInstance()
+  resetPlayerFeedback()
+  startPlayerLoading('当前来源已达到重试上限，正在切换下一个可用来源...')
+
+  const sessionToken = playbackSessionToken
+  void nextTick().then(() => {
+    if (!isCurrentPlaybackSession(sessionToken))
+      return
+
+    initPlayer(
+      next.player.sourceUrl,
+      0,
+      getSourceIdentity(next.player),
+      classifyPlaybackSource(next.player),
+    )
+  })
+  return true
+}
+
+function handleSourceFailure(kind: ErrorKind, message: string) {
+  if (!consumeFailureForCurrentCycle())
+    return
+
+  playbackStatus.value = 'failed'
+  playbackStatusReason.value = message
+  rememberCurrentSourceAttempt('failed')
+
+  if (getCurrentSourceRetryCount() >= MAX_SOURCE_RETRIES && switchToNextPlaybackCandidate())
+    return
+
+  showPlayerError(kind, message, true, true)
+}
+
 function isEligiblePlayer(candidate: MovieDetail['players'][number]): boolean {
   return isEligiblePlaybackSource(candidate)
+}
+
+function serverContentId(detail: MovieDetail): string {
+  return detail.primaryContentId || detail.readiness?.metadata.contentId || detail.id || detail.code
+}
+
+function routeQueryString(value: unknown): string | undefined {
+  if (typeof value !== 'string')
+    return undefined
+
+  const normalized = value.trim()
+  return /^[\w.~-]{1,128}$/u.test(normalized) ? normalized : undefined
+}
+
+function routeQueryRevision(value: unknown): number | undefined {
+  if (typeof value !== 'string' || !/^\d{1,7}$/u.test(value))
+    return undefined
+
+  const revision = Number(value)
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : undefined
+}
+
+function validateRoutePlaybackContext(detail: MovieDetail, sourceType: PlaybackSourceType): string | null {
+  const contentId = serverContentId(detail)
+  const sourceRevision = detail.readiness?.source.sourceRevision ?? 0
+  const query = route.query ?? {}
+  const routeContentId = routeQueryString(query.contentId)
+  const routeRevision = routeQueryRevision(query.sourceRevision)
+  const routeSourceType = routeQueryString(query.sourceType)
+
+  if (query.contentId !== undefined && (!routeContentId || routeContentId !== contentId))
+    return '播放上下文 content ID 与 server-owned 影片身份不一致，已停止播放。'
+  if (query.sourceRevision !== undefined && (routeRevision == null || routeRevision !== sourceRevision))
+    return '播放上下文 source revision 已变化，已停止播放并要求重新读取影片详情。'
+  if (query.sourceType !== undefined && (!routeSourceType || routeSourceType !== sourceType))
+    return '播放上下文 source type 与当前服务端来源不一致，已停止播放。'
+
+  return null
+}
+
+function applyServerOwnedContext(detail: MovieDetail) {
+  currentContentId.value = serverContentId(detail)
+  currentSourceRevision.value = detail.readiness?.source.sourceRevision ?? 0
 }
 
 function showNoSourceGuard() {
@@ -452,9 +730,15 @@ async function fetchMovieAndPlay() {
 
       sourceUrl = streamUrl
       sourceType = 'TorrServer'
-      sourceIdentity = `TorrServer:${streamUrl}`
+      sourceIdentity = routeQueryString(route.query.player) || 'TorrServer'
       movieTitle.value = response.data.title
       movieData.value = response.data
+      applyServerOwnedContext(response.data)
+      const streamContextError = validateRoutePlaybackContext(response.data, sourceType)
+      if (streamContextError) {
+        showSourceInvalidGuard(streamContextError)
+        return
+      }
       const magnetPlayer = response.data.players?.find(p => isEligiblePlayer(p)
         && classifyPlaybackSource(p) === 'magnet')
       if (magnetPlayer) {
@@ -492,6 +776,7 @@ async function fetchMovieAndPlay() {
       const movie = response.data
       movieTitle.value = movie.title
       movieData.value = movie
+      applyServerOwnedContext(movie)
       const players = movie.players ?? []
       const eligiblePlayers = players.filter(isEligiblePlayer)
       const eligibleMagnetPlayer = eligiblePlayers.find(p => classifyPlaybackSource(p) === 'magnet')
@@ -505,7 +790,7 @@ async function fetchMovieAndPlay() {
 
       currentMagnetUrl.value = eligibleMagnetPlayer?.sourceUrl.trim() || ''
 
-      const playerId = route.query.player as string | undefined
+      const playerId = routeQueryString(route.query.player)
       const selectedPlayer = playerId
         ? players.find(p => p.id === playerId)
         : selectDirectPlaybackSource(players)
@@ -524,6 +809,16 @@ async function fetchMovieAndPlay() {
         }
         return
       }
+
+      const routeContextError = validateRoutePlaybackContext(movie, classifyPlaybackSource(selectedPlayer))
+      if (routeContextError) {
+        showSourceInvalidGuard(routeContextError)
+        return
+      }
+
+      playbackCandidates.value = players.filter(player => isEligiblePlayer(player)
+        && classifyPlaybackSource(player) === 'direct')
+      currentCandidateIndex.value = playbackCandidates.value.findIndex(player => player.id === selectedPlayer.id)
 
       sourceUrl = selectedPlayer.sourceUrl.trim()
       sourceType = classifyPlaybackSource(selectedPlayer)
@@ -577,13 +872,18 @@ function initPlayer(
 ) {
   const normalizedUrl = url.trim()
   const resolvedType = sourceType ?? classifyPlaybackSource({ sourceUrl: normalizedUrl })
-  currentSourceUrl.value = normalizedUrl
-  currentSourceType.value = resolvedType
-  currentSourceIdentity.value = sourceIdentity || getSourceIdentity({
-    id: sourceIdentity,
+  const resolvedIdentity = sourceIdentity || getSourceIdentity({
     source: resolvedType,
     sourceUrl: normalizedUrl,
   })
+  const retryCount = retryCountBySource.get(resolvedIdentity) ?? 0
+  currentSourceUrl.value = normalizedUrl
+  currentSourceType.value = resolvedType
+  currentSourceIdentity.value = resolvedIdentity
+  currentSourcePlayerId.value = /^[\w.~-]{1,128}$/u.test(resolvedIdentity) ? resolvedIdentity : resolvedType
+  currentSourceAttempt.value = retryCount + 1
+  attemptedSourceIdentities.add(resolvedIdentity)
+  resetPlaybackEvidenceForAttempt(currentSourceAttempt.value)
 
   if (!normalizedUrl || (resolvedType !== 'direct' && resolvedType !== 'TorrServer')) {
     showPlayerError(
@@ -595,7 +895,7 @@ function initPlayer(
   }
 
   resetPlayerFeedback()
-  scheduleWaitingTimeout()
+  beginLoadingCycle()
 
   player = new Player({
     id: 'player-container',
@@ -616,28 +916,46 @@ function initPlayer(
   }
 
   player.on('canplay', () => {
+    recordPlaybackEvent('canplay')
     markPlaybackRecovered()
   })
 
   player.on('playing', () => {
+    recordPlaybackEvent('playing')
     markPlaybackRecovered()
+    updatePlaybackProgress()
   })
 
   player.on('waiting', () => {
+    recordPlaybackEvent('waiting')
+    scheduleWaitingTimeout()
+  })
+
+  player.on('stalled', () => {
+    recordPlaybackEvent('stalled')
     scheduleWaitingTimeout()
   })
 
   player.on('ended', () => {
     stopPlayerLoading()
+    if (playbackClickRequested.value && playbackStatus.value !== 'progressed') {
+      handleSourceFailure('network', '媒体在 currentTime 推进 1 秒前结束，播放证据未达标。')
+      return
+    }
     void flushProgress('ended')
   })
 
   player.on('error', () => {
+    recordPlaybackEvent('error')
     const nextError = getPlaybackErrorState()
-    showPlayerError(nextError.kind, nextError.message, nextError.recoverable)
+    if (nextError.recoverable)
+      handleSourceFailure(nextError.kind, nextError.message)
+    else
+      showPlayerError(nextError.kind, nextError.message, false)
   })
 
   player.on('timeupdate', () => {
+    updatePlaybackProgress()
     if (!userStore.user || !player) {
       return
     }
@@ -660,6 +978,32 @@ function initPlayer(
   player.on('seeked', () => {
     void flushProgress('seeked')
   })
+}
+
+function handlePlayClick() {
+  if (!player || (playbackClickRequested.value && playbackStatus.value !== 'failed'))
+    return
+
+  playbackClickCount.value += 1
+  playbackClickRequested.value = true
+  playbackStatus.value = playbackEvents.value.find(event => event.event === 'canplay')?.observed
+    ? 'ready-to-play'
+    : 'preparing'
+  playbackStatusReason.value = ''
+  startPlaybackObservationWindow()
+  startPlayerLoading('正在启动播放，请等待媒体事件确认...')
+
+  try {
+    const result = player.play()
+    if (result && typeof result.then === 'function') {
+      void result.catch(() => {
+        handleSourceFailure('network', '播放策略阻止了启动，请重试当前来源或切换来源。')
+      })
+    }
+  }
+  catch {
+    handleSourceFailure('network', '播放策略阻止了启动，请重试当前来源或切换来源。')
+  }
 }
 
 function isCompletedProgress(progress: number, duration: number | null | undefined): boolean {
@@ -784,6 +1128,9 @@ async function retryCurrentSource() {
 
   const retryCount = getCurrentSourceRetryCount()
   if (retryCount >= MAX_SOURCE_RETRIES) {
+    if (switchToNextPlaybackCandidate())
+      return
+
     showPlayerError('network', getEscalatedRetryMessage(), false)
     goToDetail()
     return
@@ -814,9 +1161,20 @@ onMounted(() => {
 })
 
 watch(
-  () => [route.params.code, route.query.player, route.query.streamUrl],
-  ([newCode, newPlayer, newStreamUrl], [oldCode, oldPlayer, oldStreamUrl]) => {
-    if (newCode === oldCode && newPlayer === oldPlayer && newStreamUrl === oldStreamUrl) {
+  () => [
+    route.params.code,
+    route.query.player,
+    route.query.streamUrl,
+    route.query.contentId,
+    route.query.sourceRevision,
+    route.query.sourceType,
+    route.query.taskId,
+    route.query.runId,
+    route.query.attemptNumber,
+    route.query.provider,
+  ],
+  (newContext, oldContext) => {
+    if (newContext.every((value, index) => value === oldContext[index])) {
       return
     }
 
@@ -905,12 +1263,106 @@ onUnmounted(() => {
       v-else
       class="h-full flex items-center justify-center relative"
     >
-      <div id="player-container" class="w-full max-w-5xl" />
+      <div
+        id="player-container"
+        class="w-full max-w-5xl"
+        data-autoplay="false"
+        :data-content-id="currentContentId || undefined"
+        :data-source-revision="currentSourceRevision"
+        :data-source-type="currentSourceType || undefined"
+        :data-source-player-id="currentSourcePlayerId || undefined"
+        :data-playback-click-count="playbackClickCount"
+      />
+
+      <div class="absolute inset-x-4 bottom-4 z-10 flex flex-col items-center gap-3 pointer-events-none">
+        <section
+          data-playback-evidence
+          class="pointer-events-auto w-full max-w-5xl rounded-lg border border-gray-700 bg-black/80 p-4 text-white shadow-xl"
+          aria-live="polite"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-2">
+              <CircleCheck v-if="playbackStatus === 'progressed'" :size="18" class="text-green-300" aria-hidden="true" />
+              <CircleAlert v-else-if="playbackStatus === 'failed'" :size="18" class="text-red-300" aria-hidden="true" />
+              <Clock3 v-else :size="18" class="text-amber-300" aria-hidden="true" />
+              <span
+                data-playback-status
+                :role="playbackStatus === 'failed' ? 'alert' : 'status'"
+                class="text-sm font-semibold"
+              >
+                {{ playbackStatusLabel(playbackStatus) }}
+              </span>
+            </div>
+            <span class="text-xs text-gray-400 break-all">
+              source：{{ currentSourceType || '尚未选择' }} · source attempt：{{ currentSourceAttempt }}
+            </span>
+          </div>
+          <p v-if="playbackStatusReason" data-playback-reason class="mt-2 text-xs text-amber-200 break-words">
+            {{ playbackStatusReason }}
+          </p>
+
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-player-action="play"
+              aria-label="播放"
+              :disabled="playbackClickRequested && playbackStatus !== 'failed'"
+              class="min-h-11 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
+              title="播放"
+              @click="handlePlayClick"
+            >
+              <Play :size="18" fill="currentColor" aria-hidden="true" />
+              {{ playbackClickRequested ? '播放已请求' : '播放' }}
+            </button>
+            <span data-playback-click class="text-xs text-gray-400">
+              visible Play clicks：{{ playbackClickCount }}
+            </span>
+          </div>
+
+          <ul data-playback-event-timeline class="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
+            <li
+              v-for="event in playbackEvents"
+              :key="event.event"
+              :data-playback-event="event.event"
+              :data-observed="event.observed"
+              class="rounded border border-gray-700 bg-gray-900/70 px-2 py-2"
+            >
+              <span class="font-semibold text-gray-200">{{ event.event }}</span>
+              <span class="ml-1" :class="event.observed ? 'text-green-300' : 'text-gray-400'">
+                {{ event.observed ? '已观察' : '未观察' }}
+              </span>
+              <span class="mt-1 block text-gray-500">
+                {{ event.observedAt == null ? '时间：未观察' : `时间：${event.observedAt}ms` }}
+                · attempt {{ event.attempt ?? currentSourceAttempt }}
+              </span>
+            </li>
+          </ul>
+
+          <div data-playback-progress class="mt-3 grid grid-cols-1 gap-1 text-xs text-gray-300 sm:grid-cols-3">
+            <span :data-current-time-before="currentTimeBefore == null ? 'pending' : currentTimeBefore">currentTimeBefore：{{ currentTimeBefore ?? '尚未采样' }}</span>
+            <span :data-current-time-after="currentTimeAfter == null ? 'pending' : currentTimeAfter">currentTimeAfter：{{ currentTimeAfter ?? '尚未采样' }}</span>
+            <span :data-current-time-delta="currentTimeDelta == null ? 'pending' : currentTimeDelta">delta：{{ currentTimeDelta ?? '尚未推进' }}</span>
+          </div>
+
+          <div v-if="sourceAttemptHistory.length" data-source-attempt-history class="mt-3 border-t border-gray-700 pt-2 text-xs text-gray-400">
+            <p class="font-semibold text-gray-300">
+              已完成来源尝试
+            </p>
+            <ul class="mt-1 space-y-1">
+              <li v-for="attempt in sourceAttemptHistory" :key="`${attempt.sourceId}-${attempt.attempt}-${attempt.retryCount}`" data-source-attempt-row>
+                {{ attempt.sourceType }} · attempt {{ attempt.attempt }} · retry {{ attempt.retryCount }}/{{ MAX_SOURCE_RETRIES }} · {{ attempt.outcome === 'failed' ? '失败' : '已推进' }}
+              </li>
+            </ul>
+          </div>
+        </section>
+      </div>
 
       <!-- 统一 loading overlay -->
       <Transition name="fade">
         <div
           v-if="playerLoading && !errorState.visible"
+          role="status"
+          aria-live="polite"
           class="absolute inset-0 flex items-center justify-center bg-black/60 z-20"
         >
           <div class="text-center">
@@ -929,6 +1381,8 @@ onUnmounted(() => {
       <Transition name="fade">
         <div
           v-if="errorState.visible"
+          role="alert"
+          data-playback-failure
           class="absolute inset-0 flex items-center justify-center bg-black/80 z-20"
         >
           <div class="text-center max-w-lg px-6">
@@ -941,10 +1395,11 @@ onUnmounted(() => {
             <div class="flex flex-wrap gap-3 justify-center">
               <button
                 v-if="errorState.recoverable"
-                class="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
+                class="min-h-11 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
                 title="重试当前播放源"
                 @click="retryCurrentSource"
               >
+                <RefreshCw :size="16" aria-hidden="true" />
                 重试当前源
               </button>
               <button
@@ -956,7 +1411,7 @@ onUnmounted(() => {
                 ⬇ 添加到 Aria2
               </button>
               <button
-                class="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                class="min-h-11 px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
                 title="返回影片详情页后手动切换播放源"
                 @click="goToDetail"
               >
@@ -1013,5 +1468,16 @@ onUnmounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: none;
+  }
+
+  .animate-spin {
+    animation: none;
+  }
 }
 </style>

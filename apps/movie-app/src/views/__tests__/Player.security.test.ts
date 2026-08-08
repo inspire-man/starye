@@ -30,6 +30,7 @@ const {
     handlers: Record<string, () => void>
     currentTime: number
     duration: number
+    play: ReturnType<typeof vi.fn>
     destroy: ReturnType<typeof vi.fn>
   }>,
 }))
@@ -56,6 +57,7 @@ vi.mock('xgplayer', () => ({
       handlers[event] = handler
     })
     this.destroy = vi.fn()
+    this.play = vi.fn(() => Promise.resolve())
     this.currentTime = 0
     this.duration = 0
     playerInstances.push(this)
@@ -284,6 +286,168 @@ describe('player.vue security gates', () => {
     expect(xgPlayerCtor).toHaveBeenCalledOnce()
     expect(xgPlayerCtor.mock.calls[0][0]).toMatchObject({ url: 'https://media.example/first.mp4' })
     expect(wrapper.text()).not.toContain('当前播放源不可直接播放')
+    wrapper.unmount()
+  })
+
+  it('visible Play click gates playback proof on allowlisted events and one-second progress', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-proof',
+        primaryContentId: 'movie-proof',
+        title: 'Visible Play fixture',
+        players: [{ id: 'direct-proof', sourceName: '直连', sourceUrl: 'https://media.example/proof.mp4', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-proof', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-proof', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 8 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+
+    expect(xgPlayerCtor.mock.calls[0][0]).toMatchObject({ autoplay: false })
+    expect(wrapper.get('[data-player-action="play"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-playback-status]').text()).toContain('等待用户播放')
+
+    playerInstances[0].handlers.canplay()
+    await flushPromises()
+    expect(wrapper.get('[data-playback-status]').text()).toContain('可开始播放')
+    expect(wrapper.get('[data-playback-event="playing"]').attributes('data-observed')).toBe('false')
+
+    await wrapper.get('[data-player-action="play"]').trigger('click')
+    expect(playerInstances[0].play).toHaveBeenCalledOnce()
+    playerInstances[0].handlers.playing()
+    await flushPromises()
+    playerInstances[0].currentTime = 0.25
+    playerInstances[0].handlers.timeupdate()
+    await flushPromises()
+    expect(wrapper.get('[data-playback-status]').text()).toContain('播放已开始')
+
+    playerInstances[0].currentTime = 1.25
+    playerInstances[0].handlers.timeupdate()
+    await flushPromises()
+
+    expect(wrapper.get('[data-playback-status]').text()).toContain('播放已验证')
+    expect(wrapper.get('[data-current-time-before]').attributes('data-current-time-before')).toBe('0')
+    expect(wrapper.get('[data-current-time-after]').attributes('data-current-time-after')).toBe('1.25')
+    expect(wrapper.get('[data-current-time-delta]').attributes('data-current-time-delta')).toBe('1.25')
+    expect(wrapper.get('[data-playback-event="canplay"]').attributes('data-observed')).toBe('true')
+    expect(wrapper.get('[data-playback-event="playing"]').attributes('data-observed')).toBe('true')
+    expect(wrapper.get('[data-playback-event="waiting"]').attributes('data-observed')).toBe('false')
+    expect(wrapper.get('[data-playback-event="stalled"]').attributes('data-observed')).toBe('false')
+    expect(wrapper.get('[data-playback-event="error"]').attributes('data-observed')).toBe('false')
+    expect(wrapper.get('#player-container').attributes('data-content-id')).toBe('movie-proof')
+    expect(wrapper.get('#player-container').attributes('data-source-revision')).toBe('8')
+    wrapper.unmount()
+  })
+
+  it('terminal media error remains failed and is visible in the event timeline', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-error',
+        primaryContentId: 'movie-error',
+        title: 'Terminal error fixture',
+        players: [{ id: 'direct-error', sourceName: '直连', sourceUrl: 'https://media.example/error.mp4', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-error', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-error', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 3 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+    await wrapper.get('[data-player-action="play"]').trigger('click')
+    playerInstances[0].handlers.error()
+    await flushPromises()
+
+    expect(wrapper.get('[data-playback-status]').text()).toContain('播放失败')
+    expect(wrapper.get('[data-playback-failure]').exists()).toBe(true)
+    expect(wrapper.get('[data-playback-event="error"]').attributes('data-observed')).toBe('true')
+    expect(wrapper.get('[data-playback-event="waiting"]').attributes('data-observed')).toBe('false')
+    expect(wrapper.get('[data-current-time-delta]').attributes('data-current-time-delta')).toBe('pending')
+    wrapper.unmount()
+  })
+
+  it('current source exhausts two retries before switching to the next eligible direct source', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-fallback',
+        primaryContentId: 'movie-fallback',
+        title: 'Fallback fixture',
+        players: [
+          { id: 'direct-first', sourceName: '首个直连', sourceUrl: 'https://media.example/first.mp4', isActive: true },
+          { id: 'direct-next', sourceName: '下一个直连', sourceUrl: 'https://media.example/next.mp4', isActive: true },
+        ],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-fallback', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-fallback', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 2, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 6 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+
+    playerInstances[0].handlers.error()
+    await flushPromises()
+    await wrapper.get('button[title="重试当前播放源"]').trigger('click')
+    await flushPromises()
+    playerInstances[1].handlers.error()
+    await flushPromises()
+    await wrapper.get('button[title="重试当前播放源"]').trigger('click')
+    await flushPromises()
+    playerInstances[2].handlers.error()
+    await flushPromises()
+
+    expect(xgPlayerCtor).toHaveBeenCalledTimes(4)
+    expect(xgPlayerCtor.mock.calls[3][0]).toMatchObject({ url: 'https://media.example/next.mp4', autoplay: false })
+    expect(wrapper.get('[data-source-attempt-history]').text()).toContain('direct')
+    expect(wrapper.get('#player-container').attributes('data-source-player-id')).toBe('direct-next')
+    wrapper.unmount()
+  })
+
+  it('rejects a stale server-owned content or source revision route context before player construction', async () => {
+    routeState.query = { player: 'direct-context', contentId: 'wrong-content', sourceRevision: '99', sourceType: 'direct' }
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-context',
+        primaryContentId: 'movie-context',
+        title: 'Route context fixture',
+        players: [{ id: 'direct-context', sourceName: '直连', sourceUrl: 'https://media.example/context.mp4', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-context', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-context', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 4 },
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('server-owned 影片身份不一致')
+    expect(xgPlayerCtor).not.toHaveBeenCalled()
+    expect(pushMock).toHaveBeenCalledWith('/movie/REBD-1024')
     wrapper.unmount()
   })
 
