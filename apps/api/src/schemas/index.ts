@@ -8,6 +8,7 @@ export * from './comic'
 export * from './common'
 export * from './crawler'
 export * from './movie'
+export * from './playback-evidence'
 export * from './progress'
 export * from './publisher'
 // 响应格式 schemas
