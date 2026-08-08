@@ -10,6 +10,7 @@ import { createProviderAssociationSummary, createProviderDispatchInput, createPr
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTaskCursor } from '../../../domain/crawler-tasks/repository'
 import { getCrawlerTaskTemplate, readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
+import { createPlaybackArtifactReference, createPlaybackEvidenceRepository } from '../../../domain/playback-evidence/repository'
 import { createGitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import { canAccessCrawler } from '../../../lib/permissions'
 import {
@@ -20,6 +21,7 @@ import {
   ListCrawlerTasksQuerySchema,
   RetryCrawlerTaskSchema,
 } from '../../../schemas/crawler-tasks'
+import { PlaybackEvidenceRequestSchema } from '../../../schemas/playback-evidence'
 
 interface D1Statement {
   all: <T>() => Promise<{ results?: T[] }>
@@ -334,11 +336,51 @@ function projectRun(row: Record<string, unknown>): Record<string, unknown> {
   }
 }
 
+interface PlaybackEvidenceTaskReadModel {
+  readonly runs: readonly {
+    readonly runId: string
+    readonly summary: unknown
+    readonly rejections: readonly unknown[]
+  }[]
+}
+
+function projectPlaybackEvidence(
+  evidence: PlaybackEvidenceTaskReadModel,
+  currentRunId: string | null,
+): Record<string, unknown> {
+  const current = currentRunId
+    ? evidence.runs.find(run => run.runId === currentRunId) ?? null
+    : null
+  return {
+    current,
+    history: evidence.runs.filter(run => run.runId !== currentRunId),
+  }
+}
+
 function projectTaskDetail(detail: { task: unknown, runs: readonly unknown[] }): Record<string, unknown> {
   return {
     runs: detail.runs.map(run => projectRun(run as Record<string, unknown>)),
     task: detail.task,
   }
+}
+
+function readCurrentRunId(task: unknown, runs: readonly unknown[]): string | null {
+  if (task && typeof task === 'object' && !Array.isArray(task)) {
+    const value = task as Record<string, unknown>
+    if (typeof value.latestRunId === 'string')
+      return value.latestRunId
+    if (typeof value.latest_run_id === 'string')
+      return value.latest_run_id
+  }
+  const first = runs[0]
+  if (first && typeof first === 'object' && !Array.isArray(first)) {
+    const value = first as Record<string, unknown>
+    if (typeof value.id === 'string')
+      return value.id
+    if (typeof value.runId === 'string')
+      return value.runId
+  }
+  return null
 }
 
 function allowedRepairNextAction(status: unknown, disposition?: RepairSourceProjection['disposition'] | null): 'none' | 'wait_for_observation' | 'create_new_task' {
@@ -971,6 +1013,32 @@ function getD1(c: { get: (key: 'db') => unknown }): D1Client {
   return (c.get('db') as { $client: D1Client }).$client
 }
 
+async function withPlaybackEvidence(
+  c: any,
+  taskId: string,
+  detail: Record<string, unknown>,
+  currentRunId: string | null,
+): Promise<Record<string, unknown>> {
+  const evidence = await createPlaybackEvidenceRepository(c.get('db')).getTaskEvidence(taskId)
+  return {
+    ...detail,
+    playbackEvidence: projectPlaybackEvidence(evidence, currentRunId),
+  }
+}
+
+async function readCurrentAttemptNumber(c: any, taskId: string, runId: string): Promise<number> {
+  const result = await getD1(c).prepare(`
+    SELECT attempt_number
+    FROM crawler_run
+    WHERE task_id = ? AND id = ?
+    LIMIT 1
+  `).bind(taskId, runId).all<{ attempt_number: number }>()
+  const attemptNumber = result.results?.[0]?.attempt_number
+  if (typeof attemptNumber !== 'number' || !Number.isSafeInteger(attemptNumber) || attemptNumber < 1)
+    throw new HTTPException(404, { message: 'Crawler run attempt not found for task' })
+  return attemptNumber
+}
+
 async function requireSessionUser(c: { get: (key: 'auth') => any, req: { raw: Request } }): Promise<SessionUser> {
   const session = await c.get('auth')?.api?.getSession({ headers: c.req.raw.headers })
   if (!session?.user) {
@@ -1155,6 +1223,32 @@ adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema)
   })
 })
 
+adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/playback-evidence', validator('param', CrawlerTaskRunParamsSchema), validator('json', PlaybackEvidenceRequestSchema), async (c) => {
+  const user = await requireSessionUser(c)
+  const { taskId, runId } = c.req.valid('param')
+  await requireTaskRunAccess(c, user, taskId, runId)
+  const attemptNumber = await readCurrentAttemptNumber(c, taskId, runId)
+  const evidence = c.req.valid('json')
+  if (evidence.tuple.taskId !== taskId
+    || evidence.tuple.runId !== runId
+    || evidence.tuple.attemptNumber !== attemptNumber) {
+    throw new HTTPException(409, { message: 'Playback evidence tuple does not match the server-owned task run attempt' })
+  }
+  const artifact = await createPlaybackArtifactReference({
+    attemptNumber,
+    evidence,
+    runId,
+    taskId,
+  })
+  const result = await createPlaybackEvidenceRepository(c.get('db')).accept({
+    artifact,
+    evidence,
+    runId,
+    taskId,
+  })
+  return c.json(result)
+})
+
 adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSchema), async (c) => {
   const user = await requireSessionUser(c)
   const { taskId } = c.req.valid('param')
@@ -1178,23 +1272,30 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
     if (!movie) {
       throw new HTTPException(404, { message: 'Repair movie not found' })
     }
-    return c.json(await readRepairTaskResponse(c, {
+    const detail = await readRepairTaskResponse(c, {
       movie: { code: movie.code, id: movie.id, title: movie.title },
       taskId,
-    }))
+    })
+    return c.json(await withPlaybackEvidence(c, taskId, detail, detail.currentAttempt?.id ?? null))
   }
   const repository = createCrawlerTaskRepository(c.get('db'))
   if (repository.getTaskDetail) {
     const detail = await repository.getTaskDetail(taskId)
-    if (detail)
-      return c.json(projectTaskDetail(detail))
+    if (detail) {
+      const currentRunId = readCurrentRunId(detail.task, detail.runs)
+      return c.json(await withPlaybackEvidence(c, taskId, projectTaskDetail(detail), currentRunId))
+    }
   }
   const d1 = getD1(c)
   const [task, runs] = await Promise.all([
     d1.prepare('SELECT id, template_key, latest_run_id, created_at, updated_at FROM crawler_task WHERE id = ?').bind(taskId).all<Record<string, unknown>>(),
     d1.prepare('SELECT id, attempt_number, status, state_version, failure_code, receipt_summary_json, receipt_schema_version, receipt_primary_content_id, receipt_source_revision, created_at, terminal_at FROM crawler_run WHERE task_id = ? ORDER BY attempt_number DESC').bind(taskId).all<Record<string, unknown>>(),
   ])
-  return c.json({ runs: (runs.results ?? []).map(projectRun), task: task.results?.[0] })
+  const currentRunId = typeof task.results?.[0]?.latest_run_id === 'string' ? task.results[0].latest_run_id as string : null
+  return c.json(await withPlaybackEvidence(c, taskId, {
+    runs: (runs.results ?? []).map(projectRun),
+    task: task.results?.[0],
+  }, currentRunId))
 })
 
 adminCrawlerTasksRoutes.get('/:taskId/runs/:runId/logs', validator('param', CrawlerTaskRunParamsSchema), validator('query', CrawlerTaskLogsQuerySchema), async (c) => {

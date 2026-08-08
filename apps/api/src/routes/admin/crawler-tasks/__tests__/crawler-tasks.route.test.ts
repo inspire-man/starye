@@ -1,3 +1,4 @@
+import type { PlaybackEvidenceRequest } from '../../../../domain/playback-evidence/types'
 import type { AppEnv, SessionUser } from '../../../../types'
 import { Hono } from 'hono'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +17,11 @@ const crawlerTaskRepository = vi.hoisted(() => ({
   retryRun: vi.fn(),
 }))
 
+const playbackEvidenceRepository = vi.hoisted(() => ({
+  accept: vi.fn(),
+  getTaskEvidence: vi.fn().mockResolvedValue({ runs: [] }),
+}))
+
 const actionsClient = vi.hoisted(() => ({
   cancelWorkflowRun: vi.fn(),
   dispatchWorkflow: vi.fn(),
@@ -23,6 +29,15 @@ const actionsClient = vi.hoisted(() => ({
 
 vi.mock('../../../../domain/crawler-tasks/repository', () => ({
   createCrawlerTaskRepository: vi.fn(() => crawlerTaskRepository),
+}))
+
+vi.mock('../../../../domain/playback-evidence/repository', () => ({
+  createPlaybackArtifactReference: vi.fn(async ({ attemptNumber, runId, taskId }) => ({
+    hash: 'a'.repeat(64),
+    reference: `phase24/${taskId}/${runId}/attempt-${attemptNumber}.json`,
+    stem: `${taskId}_${runId}_attempt-${attemptNumber}`,
+  })),
+  createPlaybackEvidenceRepository: vi.fn(() => playbackEvidenceRepository),
 }))
 
 vi.mock('../../../../lib/github-app/github-actions-client', () => ({
@@ -61,11 +76,43 @@ function createApp(
   return { app, getSession, prepare }
 }
 
+function createPlaybackEvidence(overrides: Partial<PlaybackEvidenceRequest> = {}): PlaybackEvidenceRequest {
+  return {
+    contentId: 'movie-1',
+    events: [
+      { event: 'canplay', observed: true, observedAt: 101 },
+      { event: 'playing', observed: true, observedAt: 102 },
+      { event: 'waiting', observed: false, observedAt: null },
+      { event: 'stalled', observed: false, observedAt: null },
+      { event: 'error', observed: false, observedAt: null },
+    ],
+    observedAt: 110,
+    playback: {
+      canplay: true,
+      error: false,
+      playing: true,
+      progress: { currentTimeAfter: 3, currentTimeBefore: 1.5, currentTimeDelta: 1.5 },
+      status: 'playback_verified',
+    },
+    provider: { provider: 'github-actions', status: 'succeeded' },
+    repair: { sourceRevision: 7, status: 'succeeded' },
+    schemaVersion: 1,
+    source: { revision: 7, sourceType: 'direct', status: 'ready' },
+    sourceRevision: 7,
+    tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'run-movie', taskId: 'task-movie' },
+    viewer: { path: '/movie/movie-1', targetLabel: 'selected-production-target' },
+    ...overrides,
+  }
+}
+
 describe('admin crawler task routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     crawlerTaskRepository.createOrGetActiveRun.mockResolvedValue({ kind: 'created', run: { id: 'run-movie' } })
+    crawlerTaskRepository.getTaskDetail.mockReset()
     crawlerTaskRepository.getTaskDetail.mockResolvedValue(undefined)
+    playbackEvidenceRepository.accept.mockReset()
+    playbackEvidenceRepository.getTaskEvidence.mockResolvedValue({ runs: [] })
   })
 
   it('accepts only a registry template and resolves access from the session role', async () => {
@@ -958,5 +1005,103 @@ describe('admin crawler task routes', () => {
 
     expect(response.status).toBe(409)
     expect(crawlerTaskRepository.retryRun).not.toHaveBeenCalled()
+  })
+
+  it('protects playback evidence with the session and task/run ownership boundary', async () => {
+    const noSession = createApp(null)
+    const noSessionResponse = await noSession.app.request('/crawler-tasks/task-movie/runs/run-movie/playback-evidence', {
+      body: JSON.stringify(createPlaybackEvidence()),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(noSessionResponse.status).toBe(401)
+
+    const wrongRun = createApp({}, [[{ template_key: 'movie' }], []])
+    const wrongRunResponse = await wrongRun.app.request('/crawler-tasks/task-movie/runs/run-manga/playback-evidence', {
+      body: JSON.stringify(createPlaybackEvidence({ tuple: { ...createPlaybackEvidence().tuple, runId: 'run-manga' } })),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(wrongRunResponse.status).toBe(404)
+    expect(playbackEvidenceRepository.accept).not.toHaveBeenCalled()
+
+    const sensitive = createApp({}, [[{ template_key: 'movie' }], [{ id: 'run-movie' }], [{ attempt_number: 1 }]])
+    const sensitiveResponse = await sensitive.app.request('/crawler-tasks/task-movie/runs/run-movie/playback-evidence', {
+      body: JSON.stringify({
+        ...createPlaybackEvidence(),
+        command: 'pnpm run crawler',
+        environment: 'production',
+        repository: 'owner/repository',
+        secret: 'TOKEN',
+        target: 'TARGET',
+        url: 'https://example.invalid/media.m3u8',
+        workflow: 'workflow.yml',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(sensitiveResponse.status).toBeGreaterThanOrEqual(400)
+    expect(playbackEvidenceRepository.accept).not.toHaveBeenCalled()
+
+    const tupleMismatch = createApp({}, [[{ template_key: 'movie' }], [{ id: 'run-movie' }], [{ attempt_number: 1 }]])
+    const tupleMismatchResponse = await tupleMismatch.app.request('/crawler-tasks/task-movie/runs/run-movie/playback-evidence', {
+      body: JSON.stringify(createPlaybackEvidence({ tuple: { ...createPlaybackEvidence().tuple, taskId: 'task-other' } })),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+    expect(tupleMismatchResponse.status).toBe(409)
+    expect(playbackEvidenceRepository.accept).not.toHaveBeenCalled()
+  })
+
+  it('uses the server attempt identity and preserves stable playback outcomes', async () => {
+    playbackEvidenceRepository.accept
+      .mockResolvedValueOnce({ kind: 'accepted', summary: { outcome: 'accepted' } })
+      .mockResolvedValueOnce({ kind: 'duplicate', summary: { outcome: 'duplicate' } })
+      .mockResolvedValueOnce({ artifact: { reference: 'phase24/task-movie/run-movie/attempt-1.json' }, kind: 'conflict', reason: 'same_evidence_identity_hash_conflict' })
+      .mockResolvedValueOnce({ artifact: { reference: 'phase24/task-movie/run-movie/attempt-1.json' }, kind: 'rejected', outcome: 'stale', reason: 'source_revision_changed', rejection: { outcome: 'stale' } })
+
+    const makeRequest = async () => {
+      const { app } = createApp({}, [[{ template_key: 'movie' }], [{ id: 'run-movie' }], [{ attempt_number: 1 }]])
+      return app.request('/crawler-tasks/task-movie/runs/run-movie/playback-evidence', {
+        body: JSON.stringify(createPlaybackEvidence()),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      })
+    }
+
+    await expect((await makeRequest()).json()).resolves.toMatchObject({ kind: 'accepted' })
+    await expect((await makeRequest()).json()).resolves.toMatchObject({ kind: 'duplicate' })
+    await expect((await makeRequest()).json()).resolves.toMatchObject({ kind: 'conflict' })
+    await expect((await makeRequest()).json()).resolves.toMatchObject({ kind: 'rejected', outcome: 'stale' })
+    expect(playbackEvidenceRepository.accept).toHaveBeenCalledWith(expect.objectContaining({
+      artifact: expect.objectContaining({ reference: 'phase24/task-movie/run-movie/attempt-1.json' }),
+      runId: 'run-movie',
+      taskId: 'task-movie',
+    }))
+  })
+
+  it('projects current playback evidence separately from bounded attempt history', async () => {
+    crawlerTaskRepository.getTaskDetail.mockResolvedValueOnce({
+      runs: [{ id: 'run-movie', status: 'succeeded' }],
+      task: { id: 'task-movie', latestRunId: 'run-movie' },
+    })
+    playbackEvidenceRepository.getTaskEvidence.mockResolvedValueOnce({
+      runs: [
+        { runId: 'run-movie', rejections: [{ outcome: 'duplicate' }], summary: { artifact: { reference: 'phase24/current.json' }, outcome: 'accepted' } },
+        { runId: 'run-old', rejections: [{ outcome: 'stale' }], summary: null },
+      ],
+    })
+
+    const { app } = createApp({}, [[{ template_key: 'movie' }]])
+    const response = await app.request('/crawler-tasks/task-movie')
+
+    expect(response.status).toBe(200)
+    expect(crawlerTaskRepository.getTaskDetail).toHaveBeenCalledWith('task-movie')
+    await expect(response.json()).resolves.toMatchObject({
+      playbackEvidence: {
+        current: { runId: 'run-movie', summary: { outcome: 'accepted' }, rejections: [{ outcome: 'duplicate' }] },
+        history: [{ runId: 'run-old', summary: null, rejections: [{ outcome: 'stale' }] }],
+      },
+    })
   })
 })
