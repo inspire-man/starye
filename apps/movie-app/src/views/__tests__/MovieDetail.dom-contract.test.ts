@@ -204,7 +204,7 @@ describe('movie detail DOM tuple contract', () => {
       expect(wrapper.get('[data-repairing-summary]').text()).toContain('server-owned source readback')
     }
     if (disposition === 'ready')
-      expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/CODE-ready/play?player=direct-ready')
+      expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/CODE-ready/play?player=direct-ready&contentId=movie-ready&sourceRevision=5&sourceType=direct')
   })
 
   it('renders bounded per-source health and hands repairable state to Dashboard with the same movie identity', async () => {
@@ -324,8 +324,9 @@ describe('movie detail DOM tuple contract', () => {
       'magnet-low',
       'blank-active',
     ])
-    expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low')
-    expect(wrapper.get('[data-source-card="direct-low"] [data-source-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low')
+    expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low&contentId=movie-mixed&sourceRevision=9&sourceType=direct')
+    expect(wrapper.get('[data-source-card="direct-low"] [data-source-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low&contentId=movie-mixed&sourceRevision=9&sourceType=direct')
+    expect(wrapper.get('[data-source-card="direct-low"]').attributes('data-playback-context')).toBe('movie-mixed@9/direct/direct-low')
 
     const magnetActions = wrapper.findAll('[data-source-card="magnet-high"] [data-source-action]').map(action => action.attributes('data-source-action'))
     expect(magnetActions.sort()).toEqual(['aria2', 'copy', 'qrcode', 'rating', 'report', 'torrserver'])

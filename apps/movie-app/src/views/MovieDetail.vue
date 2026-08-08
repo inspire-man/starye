@@ -16,11 +16,13 @@ import { useUserStore } from '../stores/user'
 import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
 import {
+  buildPlaybackRoute,
   classifyPlaybackSource,
   getQualityBadgeClass,
   getSourceTypeIcon,
   groupPlaybackSources,
   isEligiblePlaybackSource,
+  selectControlledPlaybackSource,
   selectDirectPlaybackSource,
   sortPlaybackSources,
 } from '../utils/playbackSources'
@@ -68,10 +70,11 @@ const { isConnected: aria2Connected, addMagnetTask } = useAria2()
 // TorrServer 管理
 const { isConnected: torrServerConnected, streamMagnet, buildStreamForFile } = useTorrServer()
 const torrServerLoading = ref(false)
-const fileSelectionModal = ref<{ show: boolean, files: TorrentFile[], magnetUrl: string }>({
+const fileSelectionModal = ref<{ show: boolean, files: TorrentFile[], magnetUrl: string, playerId: string }>({
   show: false,
   files: [],
   magnetUrl: '',
+  playerId: '',
 })
 
 // 调试模式（从 localStorage 读取，可以在控制台执行 localStorage.setItem('debugMode', 'true') 开启）
@@ -348,10 +351,55 @@ const sourceCardGroups = computed(() => {
 })
 
 const firstEligibleDirect = computed(() => selectDirectPlaybackSource(movie.value?.players ?? []))
+const firstControlledFallback = computed(() => selectControlledPlaybackSource(movie.value?.players ?? []))
 
 const magnetLinks = computed(() => {
   return groupPlaybackSources(sortedPlayers.value).eligibleMagnet
 })
+
+function boundedRouteIdentifier(value: unknown): string | undefined {
+  if (typeof value !== 'string')
+    return undefined
+
+  const normalized = value.trim()
+  return /^[\w.~-]{1,128}$/u.test(normalized) ? normalized : undefined
+}
+
+function routeAttemptNumber(value: unknown): number | undefined {
+  if (typeof value !== 'string' || !/^[12]$/u.test(value))
+    return undefined
+
+  return Number(value)
+}
+
+function routeTupleReference() {
+  const query = route.query ?? {}
+  const taskId = boundedRouteIdentifier(query.taskId)
+  const runId = boundedRouteIdentifier(query.runId)
+  const attemptNumber = routeAttemptNumber(query.attemptNumber)
+  const provider = query.provider === 'github-actions' ? 'github-actions' as const : undefined
+
+  return { taskId, runId, attemptNumber, provider }
+}
+
+function playbackRouteFor(player: Player, sourceType = classifyPlaybackSource(player)): string {
+  if (!movie.value)
+    return '#'
+
+  return buildPlaybackRoute(movie.value.code, {
+    ...routeTupleReference(),
+    playerId: player.id,
+    contentId: movie.value.primaryContentId || readiness.value?.metadata.contentId || movie.value.id,
+    sourceRevision: readiness.value?.source.sourceRevision ?? 0,
+    sourceType,
+  })
+}
+
+function playbackContextLabel(player: Player, sourceType = classifyPlaybackSource(player)): string {
+  const contentId = movie.value?.primaryContentId || readiness.value?.metadata.contentId || movie.value?.id || 'unknown'
+  const sourceRevision = readiness.value?.source.sourceRevision ?? 0
+  return `${contentId}@${sourceRevision}/${sourceType}/${player.id}`
+}
 
 // 复制单个磁链
 async function copyMagnetLink(player: Player) {
@@ -559,6 +607,7 @@ async function playViaTorrServer(player: Player) {
         show: true,
         files: result.files,
         magnetUrl: result.magnetUrl,
+        playerId: player.id,
       }
       return
     }
@@ -567,7 +616,13 @@ async function playViaTorrServer(player: Player) {
     router.push({
       name: 'player',
       params: { code: movie.value!.code },
-      query: { streamUrl: streamResult.streamUrl },
+      query: {
+        streamUrl: streamResult.streamUrl,
+        contentId: movie.value!.primaryContentId,
+        sourceRevision: String(readiness.value?.source.sourceRevision ?? 0),
+        sourceType: 'TorrServer',
+        player: player.id,
+      },
     })
   }
   catch (error: any) {
@@ -592,7 +647,13 @@ function selectFileAndPlay(file: TorrentFile) {
   router.push({
     name: 'player',
     params: { code: movie.value!.code },
-    query: { streamUrl: result.streamUrl },
+    query: {
+      streamUrl: result.streamUrl,
+      contentId: movie.value.primaryContentId,
+      sourceRevision: String(readiness.value?.source.sourceRevision ?? 0),
+      sourceType: 'TorrServer',
+      player: fileSelectionModal.value.playerId,
+    },
   })
 }
 
@@ -863,12 +924,23 @@ onMounted(() => {
         </div>
         <RouterLink
           v-if="readiness.source.disposition === 'ready' && firstEligibleDirect"
-          :to="`/movie/${movie.code}/play?player=${encodeURIComponent(firstEligibleDirect.id)}`"
+          :to="playbackRouteFor(firstEligibleDirect, 'direct')"
           data-readiness-action="play"
+          :data-content-id="movie.primaryContentId"
+          :data-source-revision="readiness.source.sourceRevision"
+          data-source-type="direct"
+          :data-playback-context="playbackContextLabel(firstEligibleDirect, 'direct')"
           class="min-h-11 inline-flex items-center justify-center px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm rounded-lg transition-colors"
         >
           播放
         </RouterLink>
+        <span
+          v-else-if="readiness.source.disposition === 'ready' && firstControlledFallback"
+          data-controlled-fallback-summary
+          class="text-sm text-amber-300 break-words"
+        >
+          没有 eligible direct，优先进入 {{ classifyPlaybackSource(firstControlledFallback) }} 受控路径
+        </span>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1105,6 +1177,9 @@ onMounted(() => {
               :key="player.id"
               :data-source-card="player.id"
               :data-source-type="classifyPlaybackSource(player)"
+              :data-content-id="movie.primaryContentId"
+              :data-source-revision="readiness?.source.sourceRevision ?? 0"
+              :data-playback-context="playbackContextLabel(player)"
               class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors"
             >
               <div class="flex items-start justify-between gap-3 mb-3">
@@ -1133,6 +1208,9 @@ onMounted(() => {
                   </div>
                   <div class="mt-1 text-xs" :class="group.key === 'ineligible' ? 'text-gray-400' : 'text-green-300'">
                     {{ group.key === 'ineligible' ? 'ineligible · 仅保留健康信息' : 'eligible · 可进入受控路径' }}
+                  </div>
+                  <div class="mt-1 text-xs text-gray-500 break-all">
+                    播放上下文：{{ playbackContextLabel(player) }}
                   </div>
 
                   <template v-if="group.key !== 'ineligible'">
@@ -1166,8 +1244,12 @@ onMounted(() => {
                 <div v-if="group.key !== 'ineligible'" class="flex flex-col gap-2 shrink-0">
                   <RouterLink
                     v-if="group.key === 'eligible-direct'"
-                    :to="`/movie/${movie.code}/play?player=${encodeURIComponent(player.id)}`"
+                    :to="playbackRouteFor(player, 'direct')"
                     data-source-action="play"
+                    :data-content-id="movie.primaryContentId"
+                    :data-source-revision="readiness?.source.sourceRevision ?? 0"
+                    data-source-type="direct"
+                    :data-playback-context="playbackContextLabel(player, 'direct')"
                     class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded text-center transition-colors whitespace-nowrap"
                   >
                     播放

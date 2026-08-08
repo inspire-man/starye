@@ -1,12 +1,14 @@
 import type { Player } from '../../types'
 import { describe, expect, it } from 'vitest'
 import {
+  buildPlaybackRoute,
   classifyPlaybackSource,
   getQualityBadgeClass,
   getSourceTypeIcon,
   groupPlaybackSources,
   isEligiblePlaybackSource,
   isMagnetLink,
+  selectControlledPlaybackSource,
   selectDirectPlaybackSource,
   sortPlaybackSources,
 } from '../playbackSources'
@@ -79,6 +81,34 @@ describe('playbackSources', () => {
         'magnet-high',
         'inactive-best',
       ])
+    })
+
+    it('direct 缺失时才选择第一个受控 magnet/TorrServer 候选', () => {
+      const sources: Player[] = [
+        { id: 'inactive-direct', movieId: 'm1', sourceName: '失效直连', sourceUrl: 'https://inactive.example/video', isActive: false, sortOrder: 1 },
+        { id: 'magnet-fallback', movieId: 'm1', sourceName: '磁力回退', sourceUrl: 'magnet:?xt=urn:btih:fallback', isActive: true, sortOrder: 2 },
+        { id: 'torrserver-fallback', movieId: 'm1', sourceName: '受控流回退', source: 'TorrServer', sourceUrl: 'https://controlled.example/stream', isActive: true, sortOrder: 3 },
+      ]
+
+      expect(selectDirectPlaybackSource(sources)).toBeNull()
+      expect(selectControlledPlaybackSource(sources)?.id).toBe('magnet-fallback')
+    })
+
+    it('播放路由只携带 bounded tuple/context，不携带原始 source URL', () => {
+      const route = buildPlaybackRoute('MOVIE-001', {
+        playerId: 'direct-1',
+        contentId: 'content-1',
+        sourceRevision: 7,
+        sourceType: 'direct',
+        taskId: 'task-1',
+        runId: 'run-1',
+        attemptNumber: 2,
+        provider: 'github-actions',
+      })
+
+      expect(route).toBe('/movie/MOVIE-001/play?player=direct-1&contentId=content-1&sourceRevision=7&sourceType=direct&taskId=task-1&runId=run-1&attemptNumber=2&provider=github-actions')
+      expect(route).not.toContain('sourceUrl')
+      expect(route).not.toContain('magnet:')
     })
   })
 

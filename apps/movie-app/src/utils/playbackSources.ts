@@ -3,6 +3,20 @@ import { calculateAutoScore } from './ratingAlgorithm'
 
 export type PlaybackSourceType = 'direct' | 'magnet' | 'TorrServer'
 
+export interface PlaybackTupleReference {
+  readonly taskId?: string
+  readonly runId?: string
+  readonly attemptNumber?: number
+  readonly provider?: 'github-actions'
+}
+
+export interface PlaybackRouteContext extends PlaybackTupleReference {
+  readonly playerId: string
+  readonly contentId: string
+  readonly sourceRevision: number
+  readonly sourceType: PlaybackSourceType
+}
+
 export interface PlaybackSourceInput {
   readonly isActive?: boolean | null
   readonly source?: string | null
@@ -49,6 +63,39 @@ export function isEligiblePlaybackSource(source: PlaybackSourceInput): boolean {
 export function selectDirectPlaybackSource(sources: readonly Player[]): Player | null {
   return sources.find(source => isEligiblePlaybackSource(source)
     && classifyPlaybackSource(source) === 'direct') ?? null
+}
+
+/**
+ * 选择 direct 缺失时的第一个受控候选。
+ * magnet/TorrServer 只能由详情页的 Aria2/TorrServer action 消费，不能送进浏览器直连播放器。
+ */
+export function selectControlledPlaybackSource(sources: readonly Player[]): Player | null {
+  return sources.find(source => isEligiblePlaybackSource(source)
+    && ['magnet', 'TorrServer'].includes(classifyPlaybackSource(source))) ?? null
+}
+
+/**
+ * 生成同影片播放入口的安全上下文。
+ * 只携带服务端投影 ID、revision、source type 和可选 tuple 标识，不携带 sourceUrl。
+ */
+export function buildPlaybackRoute(movieCode: string, context: PlaybackRouteContext): string {
+  const query = new URLSearchParams({
+    player: context.playerId,
+    contentId: context.contentId,
+    sourceRevision: String(context.sourceRevision),
+    sourceType: context.sourceType,
+  })
+
+  if (context.taskId)
+    query.set('taskId', context.taskId)
+  if (context.runId)
+    query.set('runId', context.runId)
+  if (context.attemptNumber != null)
+    query.set('attemptNumber', String(context.attemptNumber))
+  if (context.provider)
+    query.set('provider', context.provider)
+
+  return `/movie/${encodeURIComponent(movieCode)}/play?${query.toString()}`
 }
 
 /**
