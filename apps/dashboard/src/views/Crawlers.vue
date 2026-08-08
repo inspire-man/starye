@@ -3,7 +3,7 @@
  * 爬虫监控页面
  */
 
-import type { CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskLog, CrawlerTaskTemplate, ReadinessProjection } from '@/lib/api'
+import type { CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskDetail, CrawlerTaskLog, CrawlerTaskTemplate, ReadinessProjection } from '@/lib/api'
 import { ConfirmDialog, info, SkeletonCard, success } from '@starye/ui'
 import { AlertTriangle, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, History, LoaderCircle, RefreshCw, Wrench } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -23,7 +23,7 @@ let refreshInterval: any = null
 
 const crawlerTasks = ref<Record<CrawlerTaskTemplate, CrawlerTask[]>>({ movie: [], manga: [] })
 const taskCursors = ref<Record<CrawlerTaskTemplate, string | null>>({ movie: null, manga: null })
-const taskDetails = ref<Record<string, { task: CrawlerTask, runs: CrawlerRun[] }>>({})
+const taskDetails = ref<Record<string, CrawlerTaskDetail>>({})
 const selectedTask = ref<CrawlerTask | null>(null)
 const selectedRun = ref<{ task: CrawlerTask, run: CrawlerRun } | null>(null)
 const taskLogs = ref<CrawlerTaskLog[]>([])
@@ -84,6 +84,14 @@ const repairNextActionLabels: Record<CrawlerRepairNextAction, string> = {
   none: '暂无下一步',
   wait_for_observation: '等待来源观察与读回',
   create_new_task: '允许创建新的修复任务',
+}
+
+const playbackEventLabels: Record<CrawlerPlaybackEventName, string> = {
+  canplay: 'canplay',
+  error: 'error',
+  playing: 'playing',
+  stalled: 'stalled',
+  waiting: 'waiting',
 }
 
 const boundedFailureCodes = new Set([
@@ -175,6 +183,9 @@ function taskRuns(task: CrawlerTask): CrawlerRun[] {
 }
 
 function latestRunFor(task: CrawlerTask): CrawlerRun | null {
+  const currentAttempt = taskDetails.value[task.id]?.currentAttempt
+  if (currentAttempt)
+    return currentAttempt
   const runs = taskRuns(task)
   if (!runs.length)
     return null
@@ -184,8 +195,54 @@ function latestRunFor(task: CrawlerTask): CrawlerRun | null {
 }
 
 function historyRunsFor(task: CrawlerTask): CrawlerRun[] {
+  const history = taskDetails.value[task.id]?.history
+  if (history)
+    return history
   const current = latestRunFor(task)
   return taskRuns(task).filter(run => run.id !== current?.id)
+}
+
+function playbackEvidenceFor(task: CrawlerTask): CrawlerTaskDetail['playbackEvidence'] | null {
+  return taskDetails.value[task.id]?.playbackEvidence ?? null
+}
+
+function playbackEntryFor(task: CrawlerTask, run: CrawlerRun): CrawlerPlaybackEvidenceEntry | null {
+  const evidence = playbackEvidenceFor(task)
+  if (!evidence)
+    return null
+  if (evidence.current?.runId === run.id)
+    return evidence.current
+  return evidence.history.find(entry => entry.runId === run.id) ?? null
+}
+
+function playbackSummaryFor(task: CrawlerTask, run: CrawlerRun): CrawlerPlaybackEvidenceSummary | null {
+  return playbackEntryFor(task, run)?.summary ?? null
+}
+
+function playbackEventLabel(event: CrawlerPlaybackEvidenceEvent): string {
+  return `${playbackEventLabels[event.event]}：${event.observed ? '已观察' : '未观察'}${event.observedAt !== null ? ` · ${event.observedAt}` : ''}`
+}
+
+function playbackStatusLabel(summary: CrawlerPlaybackEvidenceSummary | null): string {
+  if (!summary)
+    return '等待浏览器证据'
+  if (summary.playback.status === 'playback_verified')
+    return '播放已验证'
+  if (summary.playback.status === 'failed')
+    return '播放失败'
+  return 'checkpoint：前置条件或证据写入未满足'
+}
+
+function playbackOutcomeLabel(outcome: CrawlerPlaybackEvidenceOutcome): string {
+  return outcome
+}
+
+function playbackHistoryFor(task: CrawlerTask): CrawlerPlaybackEvidenceEntry[] {
+  return playbackEvidenceFor(task)?.history ?? []
+}
+
+function playbackHistoryEntriesFor(task: CrawlerTask, run: CrawlerRun): CrawlerPlaybackEvidenceEntry[] {
+  return playbackHistoryFor(task).filter(entry => entry.runId === run.id)
 }
 
 function sourceProjectionFor(task: CrawlerTask, run: CrawlerRun): CrawlerRepairSourceProjection | null {
@@ -349,8 +406,15 @@ async function loadTaskPanel(): Promise<void> {
       taskCursors.value[template] = response.nextCursor ?? null
       for (const task of tasks) {
         const detail = await api.admin.getCrawlerTask(task.id)
-        taskDetails.value[task.id] = detail
-        const displayTask = detail.task ?? task
+        const previousDetail = taskDetails.value[task.id]
+        const storedDetail: CrawlerTaskDetail = {
+          ...detail,
+          ...(detail.playbackEvidence || !previousDetail?.playbackEvidence
+            ? {}
+            : { playbackEvidence: previousDetail.playbackEvidence }),
+        }
+        taskDetails.value[task.id] = storedDetail
+        const displayTask = storedDetail.task ?? task
         crawlerTasks.value[template] = crawlerTasks.value[template].map(current => current.id === task.id ? displayTask : current)
         const run = latestRunFor(displayTask)
         if (selectedRun.value?.task.id === task.id && run) {
@@ -486,7 +550,7 @@ async function confirmRetry(): Promise<void> {
 
 function managementPath(task: CrawlerTask, run: CrawlerRun): string | null {
   if (task.operation === 'repair_players') {
-    if (!task.movie?.code || !['succeeded', 'failed', 'cancelled'].includes(run.status))
+    if (!task.movie?.code || task.sameMovieIdentity === false || task.sourceRevision == null || !['succeeded', 'failed', 'cancelled'].includes(run.status))
       return null
     return `/movie/${encodeURIComponent(task.movie.code)}`
   }
@@ -778,8 +842,13 @@ async function executeClearFailed() {
           </div>
           <div class="identity-facts">
             <code>task {{ selectedRun.task.id }}</code>
+            <code>run {{ selectedRun.run.id }}</code>
             <span>attempt #{{ selectedRun.run.attemptNumber ?? selectedRun.run.attempt_number ?? '尚未上报' }}</span>
+            <span>content ID：{{ selectedRun.task.movie?.id ?? playbackSummaryFor(selectedRun.task, selectedRun.run)?.contentId ?? '尚未上报' }}</span>
             <span>source revision：{{ selectedRun.task.sourceRevision ?? '尚未上报' }}</span>
+            <span v-if="selectedRun.run.provider?.providerRunId">provider run #{{ selectedRun.run.provider.providerRunId }}</span>
+            <span v-if="selectedRun.run.provider?.providerRunAttempt">provider attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
+            <span v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.viewer.targetLabel">target：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.viewer.targetLabel }}</span>
             <span v-if="selectedRun.task.retry" class="retry-label">任务级重试 · 当前 attempt #{{ selectedRun.task.retry.attemptNumber }}</span>
             <span v-if="selectedRun.task.sameMovieIdentity === true">同一内容身份</span>
           </div>
@@ -814,13 +883,11 @@ async function executeClearFailed() {
           <span class="timeline-step">{{ receiptFactLabel(selectedRun.run) }}</span>
         </div>
         <div class="fact-grid" data-fact-grid>
-          <section class="fact-block" :role="selectedRun.run.provider?.providerStatus === 'completed' && selectedRun.run.provider.providerConclusion !== 'success' ? 'alert' : undefined">
+          <section class="fact-block" data-evidence-block="provider" :role="selectedRun.run.provider?.providerStatus === 'completed' && selectedRun.run.provider.providerConclusion !== 'success' ? 'alert' : undefined">
             <h4>Provider</h4>
             <p class="fact-state">
               <LoaderCircle v-if="selectedRun.run.provider?.providerStatus === 'in_progress'" :size="16" aria-hidden="true" /><CircleAlert v-else-if="selectedRun.run.provider?.providerStatus === 'completed' && selectedRun.run.provider.providerConclusion !== 'success'" :size="16" aria-hidden="true" /><CheckCircle2 v-else-if="selectedRun.run.provider" :size="16" aria-hidden="true" />{{ providerLifecycleLabel(selectedRun.run) }}
             </p>
-            <span v-if="selectedRun.run.provider?.repository">repository：{{ selectedRun.run.provider.repository }}</span>
-            <span v-if="selectedRun.run.provider?.workflow">workflow：{{ selectedRun.run.provider.workflow }}</span>
             <span v-if="selectedRun.run.provider?.providerRunId">provider run #{{ selectedRun.run.provider.providerRunId }}</span>
             <span v-if="selectedRun.run.provider?.providerRunAttempt">provider attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
             <span v-if="selectedRun.run.provider?.sha">SHA：{{ selectedRun.run.provider.sha }}</span>
@@ -849,7 +916,7 @@ async function executeClearFailed() {
             <span v-if="selectedRun.run.reconciliation?.observedAt">观察时间：{{ selectedRun.run.reconciliation.observedAt }}</span>
             <span v-if="selectedRun.run.reconciliation?.processedAt">处理时间：{{ selectedRun.run.reconciliation.processedAt }}</span>
           </section>
-          <section class="fact-block" :role="selectedRun.run.receiptValidation?.status === 'failed' ? 'alert' : undefined">
+          <section class="fact-block" data-evidence-block="repair-receipt" :role="selectedRun.run.receiptValidation?.status === 'failed' ? 'alert' : undefined">
             <h4>Repair / receipt</h4>
             <p class="fact-state">
               <CheckCircle2 v-if="selectedRun.run.repair?.status === 'validated'" :size="16" aria-hidden="true" /><CircleAlert v-else-if="selectedRun.run.receiptValidation?.status === 'failed'" :size="16" aria-hidden="true" />{{ repairFactLabel(selectedRun.run) }}
@@ -881,6 +948,10 @@ async function executeClearFailed() {
                 <span>source revision：{{ run.sourceRevision ?? selectedRun.task.sourceRevision ?? '尚未上报' }}</span>
                 <span v-if="run.outcome?.code">outcome code：{{ run.outcome.code }}</span>
                 <span v-if="runFailureCode(run)">failure：{{ runFailureCode(run) }}</span>
+                <span v-if="playbackSummaryFor(selectedRun.task, run)">playback：{{ playbackStatusLabel(playbackSummaryFor(selectedRun.task, run)) }} · {{ playbackSummaryFor(selectedRun.task, run)!.outcome }}</span>
+                <span v-for="entry in playbackHistoryEntriesFor(selectedRun.task, run)" :key="`${entry.runId}-playback-history`">
+                  playback rejection：{{ entry.rejections.map(rejection => rejection.outcome).join(' · ') || '无' }}
+                </span>
               </div>
             </article>
           </div>
@@ -1016,7 +1087,7 @@ async function executeClearFailed() {
             </template>
           </div>
         </div>
-        <div v-if="selectedRun.task.operation === 'repair_players'" class="repair-source-surface" aria-live="polite">
+        <div v-if="selectedRun.task.operation === 'repair_players'" class="repair-source-surface" data-evidence-block="source" aria-live="polite">
           <div class="source-surface-heading">
             <div>
               <h4>Current source projection</h4>
@@ -1054,16 +1125,48 @@ async function executeClearFailed() {
             <span>source count：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.sourceCount }}</span>
             <span>eligible count：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.eligibleCount }}</span>
           </div>
-          <div class="playback-boundary" role="status">
-            <CircleHelp :size="16" aria-hidden="true" />播放未验证
-          </div>
+          <section
+            class="fact-block actual-playback-block"
+            data-evidence-block="actual-playback"
+            :role="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed' || playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.error ? 'alert' : 'status'"
+            aria-live="polite"
+          >
+            <h4>Actual playback</h4>
+            <p class="fact-state">
+              <CheckCircle2 v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
+              <CircleAlert v-else-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed'" :size="16" aria-hidden="true" />
+              <CircleHelp v-else :size="16" aria-hidden="true" />
+              {{ playbackStatusLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)) }}
+            </p>
+            <template v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)">
+              <span>tuple：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.taskId }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.runId }} / attempt #{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.attemptNumber }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.provider }}</span>
+              <span>content ID：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.contentId }} · source revision：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
+              <span>Viewer path：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.viewer.path }}</span>
+              <span>selected source：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.sourceType }} · {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.status }}</span>
+              <div class="evidence-event-list">
+                <span v-for="event in playbackSummaryFor(selectedRun.task, selectedRun.run)!.events" :key="event.event">{{ playbackEventLabel(event) }}</span>
+              </div>
+              <span>currentTimeBefore：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeBefore }}</span>
+              <span>currentTimeAfter：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeAfter }}</span>
+              <span>delta：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeDelta }}</span>
+              <span>evidence outcome：{{ playbackOutcomeLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)!.outcome) }}</span>
+              <span class="artifact-status">已写入脱敏 JSON/Markdown · artifact reference：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.artifact.reference }}</span>
+            </template>
+            <span v-else>等待浏览器证据</span>
+            <div v-if="playbackEntryFor(selectedRun.task, selectedRun.run)?.rejections.length" class="evidence-rejection-history">
+              <strong>rejection history</strong>
+              <span v-for="rejection in playbackEntryFor(selectedRun.task, selectedRun.run)!.rejections" :key="`${rejection.outcome}-${rejection.observedAt}`">
+                {{ rejection.outcome }} · content ID：{{ rejection.contentId }} · source revision：{{ rejection.sourceRevision }}
+              </span>
+            </div>
+          </section>
           <div class="readiness-actions">
             <a
               v-if="managementPath(selectedRun.task, selectedRun.run)"
               class="task-secondary readiness-link"
               :href="managementPath(selectedRun.task, selectedRun.run)!"
             >
-              查看影片
+              打开影片
             </a>
             <button
               v-if="repairReasonFor(selectedRun.run, selectedRun.task) && selectedRun.task.allowedNextAction === 'create_new_task'"
@@ -1375,6 +1478,11 @@ async function executeClearFailed() {
 .source-readback strong { color: hsl(var(--foreground)); }
 .source-empty { margin: 0; color: hsl(var(--muted-foreground)); }
 .playback-boundary { display: flex; align-items: center; gap: 0.4rem; color: hsl(var(--muted-foreground)); font-weight: 600; }
+.actual-playback-block { margin-top: 0.75rem; }
+.evidence-event-list,
+.evidence-rejection-history { display: grid; gap: 0.35rem; color: hsl(var(--muted-foreground)); font-size: 0.82rem; overflow-wrap: anywhere; }
+.evidence-rejection-history { border-top: 1px solid hsl(var(--border)); padding-top: 0.65rem; }
+.artifact-status { overflow-wrap: anywhere; }
 .duplicate-lock-copy { color: hsl(var(--muted-foreground)); font-size: 0.82rem; overflow-wrap: anywhere; }
 
 .task-card,

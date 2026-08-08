@@ -424,7 +424,7 @@ describe('crawlers local task panel', () => {
     await flushPromises()
 
     expect(wrapper.get('a').attributes('href')).toBe('/movie/SUN-064')
-    expect(wrapper.text()).toContain('查看影片')
+    expect(wrapper.text()).toContain('打开影片')
     expect(wrapper.text()).toContain(`终态原因：${failureCode}`)
     expect(wrapper.text()).toContain('source revision：9')
     expect(wrapper.text()).toContain('允许创建新的修复任务')
@@ -565,7 +565,7 @@ describe('crawlers local task panel', () => {
     expect(wrapper.text()).toContain('receipt 待验证')
     expect(wrapper.text()).toContain('repairing · 修复进行中')
     expect(wrapper.text()).toContain('Authoritative source readback')
-    expect(wrapper.text()).toContain('播放未验证')
+    expect(wrapper.text()).toContain('等待浏览器证据')
     expect(wrapper.text()).toContain('旧 attempt 历史（1）')
     expect(wrapper.text()).not.toContain('stale_event')
 
@@ -573,6 +573,164 @@ describe('crawlers local task panel', () => {
     expect(wrapper.text()).toContain('stale_event')
     expect(wrapper.text()).toContain('Provider 已完成 · failure')
     expect(wrapper.get('a.provider-run-link').attributes('href')).toBe('https://github.com/inspire-man/starye/actions/runs/123')
+  })
+
+  it('promotes the server-selected current attempt and renders tuple-bound playback evidence independently', async () => {
+    const task = {
+      activeDuplicateLock: { locked: true, message: '当前电影已有活动修复任务，页面聚焦当前 attempt。' },
+      allowedNextAction: 'none',
+      id: 'fresh-task-1',
+      latestRunId: 'fresh-run-2',
+      movie: { code: 'SUN-064', id: 'movie-fresh', title: 'Fresh Proof Movie' },
+      operation: 'repair_players',
+      sameMovieIdentity: true,
+      source: {
+        disposition: 'ready',
+        eligibleCount: 1,
+        observedAt: 300,
+        reasonCode: null,
+        repairable: false,
+        rows: [{ sourceType: 'direct', health: 'unverified', eligible: true, observedAt: 300, reasonCode: 'source_unverified' }],
+        sourceRevision: 12,
+      },
+      sourceRevision: 12,
+      templateKey: 'movie',
+    }
+    const currentRun = {
+      id: 'fresh-run-2',
+      attemptNumber: 2,
+      provider: {
+        provider: 'github-actions',
+        providerConclusion: 'success',
+        providerRunId: '456',
+        providerRunUrl: 'https://github.com/inspire-man/starye/actions/runs/456',
+        providerStatus: 'completed',
+      },
+      receipt: {
+        movieId: 'movie-fresh',
+        observedAt: 300,
+        operation: 'repair_players',
+        sourceRevision: 12,
+        sourceSummary: [],
+        summary: { eligibleCount: 1, sourceCount: 1 },
+      },
+      receiptValidation: { identityMatch: true, readbackMatch: true, status: 'validated' },
+      repair: { sourceRevision: 12, status: 'validated' },
+      sourceReadback: { ...task.source, movieId: 'movie-fresh', sourceCount: 1 },
+      status: 'succeeded',
+    }
+    const oldRun = { id: 'fresh-run-1', attemptNumber: 1, outcome: { code: 'late_event', outcome: 'late' }, receipt: null, status: 'failed' }
+    const playbackSummary = {
+      artifact: { hash: 'a'.repeat(64), reference: 'phase-24/fresh-proof.json', stem: 'fresh-proof' },
+      contentId: 'movie-fresh',
+      events: [
+        { event: 'canplay', observed: true, observedAt: 301 },
+        { event: 'playing', observed: true, observedAt: 302 },
+        { event: 'waiting', observed: false, observedAt: null },
+        { event: 'stalled', observed: false, observedAt: null },
+        { event: 'error', observed: false, observedAt: null },
+      ],
+      observedAt: 303,
+      outcome: 'accepted',
+      playback: { canplay: true, error: false, playing: true, progress: { currentTimeAfter: 2.5, currentTimeBefore: 1, currentTimeDelta: 1.5 }, status: 'playback_verified' },
+      provider: { provider: 'github-actions', status: 'succeeded' },
+      repair: { sourceRevision: 12, status: 'validated' },
+      schemaVersion: 1,
+      source: { revision: 12, sourceType: 'direct', status: 'ready' },
+      sourceRevision: 12,
+      tuple: { attemptNumber: 2, provider: 'github-actions', runId: 'fresh-run-2', taskId: 'fresh-task-1' },
+      viewer: { path: '/movie/SUN-064', targetLabel: 'selected-production' },
+      rawUrl: 'https://source.example/raw',
+      token: 'TOKEN_SENTINEL',
+      cookie: 'COOKIE_SENTINEL',
+      runnerPayload: 'RUNNER_SENTINEL',
+    }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({ tasks: template === 'movie' ? [task] : [], nextCursor: null }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      currentAttempt: currentRun,
+      history: [oldRun],
+      playbackEvidence: {
+        current: { runId: 'fresh-run-2', summary: playbackSummary, rejections: [{ contentId: 'movie-fresh', observedAt: 304, outcome: 'duplicate', sourceRevision: 12, tuple: playbackSummary.tuple }] },
+        history: [{ runId: 'fresh-run-1', summary: null, rejections: [{ contentId: 'movie-fresh', observedAt: 305, outcome: 'late', sourceRevision: 11, tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'fresh-run-1', taskId: 'fresh-task-1' } }] }],
+      },
+      runs: [currentRun, oldRun],
+      task,
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('run fresh-run-2')
+    expect(wrapper.text()).toContain('content ID：movie-fresh')
+    expect(wrapper.text()).toContain('target：selected-production')
+    expect(wrapper.find('[data-evidence-block="provider"]').exists()).toBe(true)
+    expect(wrapper.find('[data-evidence-block="repair-receipt"]').exists()).toBe(true)
+    expect(wrapper.find('[data-evidence-block="source"]').exists()).toBe(true)
+    expect(wrapper.find('[data-evidence-block="actual-playback"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('canplay：已观察 · 301')
+    expect(wrapper.text()).toContain('playing：已观察 · 302')
+    expect(wrapper.text()).toContain('waiting：未观察')
+    expect(wrapper.text()).toContain('currentTimeBefore：1')
+    expect(wrapper.text()).toContain('currentTimeAfter：2.5')
+    expect(wrapper.text()).toContain('delta：1.5')
+    expect(wrapper.text()).toContain('已写入脱敏 JSON/Markdown')
+    expect(wrapper.text()).toContain('duplicate · content ID：movie-fresh')
+    expect(wrapper.get('a.readiness-link').text()).toContain('打开影片')
+    expect(wrapper.get('a.readiness-link').attributes('href')).toBe('/movie/SUN-064')
+    expect(wrapper.text()).not.toContain('overall success')
+    expect(wrapper.html()).not.toContain('source.example/raw')
+    expect(wrapper.html()).not.toContain('TOKEN_SENTINEL')
+    expect(wrapper.html()).not.toContain('COOKIE_SENTINEL')
+    expect(wrapper.html()).not.toContain('RUNNER_SENTINEL')
+
+    await wrapper.get('.history-toggle').trigger('click')
+    expect(wrapper.text()).toContain('playback rejection：late')
+  })
+
+  it('keeps the last evidence projection while polling and promotes a new current attempt', async () => {
+    const task = { id: 'poll-evidence-task', latestRunId: 'poll-run-1', movie: { code: 'SUN-064', id: 'movie-poll', title: 'Polling Proof' }, operation: 'repair_players', sameMovieIdentity: true, sourceRevision: 2, templateKey: 'movie' }
+    const firstRun = { id: 'poll-run-1', attemptNumber: 1, receipt: null, status: 'running' }
+    const secondRun = { id: 'poll-run-2', attemptNumber: 2, receipt: null, status: 'running' }
+    const summary = {
+      artifact: { hash: 'b'.repeat(64), reference: 'phase-24/poll.json', stem: 'poll' },
+      contentId: 'movie-poll',
+      events: [
+        { event: 'canplay', observed: true, observedAt: 401 },
+        { event: 'playing', observed: false, observedAt: null },
+        { event: 'waiting', observed: false, observedAt: null },
+        { event: 'stalled', observed: false, observedAt: null },
+        { event: 'error', observed: false, observedAt: null },
+      ],
+      observedAt: 402,
+      outcome: 'checkpoint',
+      playback: { canplay: true, error: false, playing: false, progress: { currentTimeAfter: 0, currentTimeBefore: 0, currentTimeDelta: 0 }, status: 'checkpoint' },
+      provider: { provider: 'github-actions', status: 'pending' },
+      repair: { sourceRevision: 2, status: 'pending' },
+      schemaVersion: 1,
+      source: { revision: 2, sourceType: 'direct', status: 'checkpoint' },
+      sourceRevision: 2,
+      tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'poll-run-1', taskId: 'poll-evidence-task' },
+      viewer: { path: '/movie/SUN-064', targetLabel: 'selected-production' },
+    }
+    let details = 0
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({ tasks: template === 'movie' ? [task] : [], nextCursor: null }))
+    api.admin.getCrawlerTask.mockImplementation(() => {
+      details += 1
+      if (details === 1) {
+        return Promise.resolve({ currentAttempt: firstRun, history: [], playbackEvidence: { current: { runId: 'poll-run-1', summary, rejections: [] }, history: [] }, runs: [firstRun], task })
+      }
+      return Promise.resolve({ currentAttempt: secondRun, history: [firstRun], playbackEvidence: { current: null, history: [{ runId: 'poll-run-1', summary, rejections: [] }] }, runs: [secondRun, firstRun], task: { ...task, latestRunId: 'poll-run-2' } })
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+    expect(wrapper.text()).toContain('run poll-run-1')
+    vi.advanceTimersByTime(5000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('run poll-run-2')
+    expect(wrapper.text()).toContain('旧 attempt 历史（1）')
+    expect(wrapper.text()).toContain('Actual playback')
+    expect(wrapper.text()).toContain('暂无来源观察')
   })
 
   it('renders a pending identity when a task has no reported attempt', async () => {
