@@ -209,6 +209,15 @@ export type CrawlerReconciliationWindowStatus = 'pending' | 'open' | 'closed' | 
 export type CrawlerReconciliationOutcome = 'pending' | 'observed' | 'failed' | 'lost' | 'late' | 'stale' | 'ignored' | 'duplicate' | 'conflict'
 export type CrawlerRepairFactStatus = 'pending' | 'validated' | 'failed'
 export type CrawlerAttemptOutcome = 'pending' | 'accepted' | 'contract_failure' | 'duplicate' | 'stale' | 'late' | 'ignored' | 'conflict' | 'receipt_failure'
+export type CrawlerPlaybackEvidenceProvider = 'github-actions'
+export type CrawlerPlaybackEvidenceSourceType = 'direct' | 'TorrServer' | 'Aria2'
+export type CrawlerPlaybackEventName = 'canplay' | 'playing' | 'waiting' | 'stalled' | 'error'
+export type CrawlerPlaybackEvidenceOutcome = 'accepted' | 'checkpoint' | 'failed' | 'duplicate' | 'conflict' | 'stale' | 'late' | 'ignored'
+export type CrawlerPlaybackProviderStatus = 'pending' | 'succeeded' | 'failed' | 'checkpoint'
+export type CrawlerPlaybackRepairStatus = 'pending' | 'validated' | 'succeeded' | 'failed' | 'checkpoint'
+export type CrawlerPlaybackSourceStatus = 'ready' | 'failed' | 'checkpoint'
+export type CrawlerPlaybackStatus = 'playback_verified' | 'failed' | 'checkpoint'
+export type CrawlerPlaybackRejectionOutcome = 'duplicate' | 'conflict' | 'stale' | 'late' | 'ignored'
 
 export interface MetadataProjection {
   contentId: string
@@ -282,6 +291,81 @@ export interface CrawlerRepairCommand {
   movieId: string
   reason: CrawlerRepairReason
   targetIntent: CrawlerRepairTargetIntent
+}
+
+export interface CrawlerPlaybackEvidenceTuple {
+  attemptNumber: number
+  provider: CrawlerPlaybackEvidenceProvider
+  runId: string
+  taskId: string
+}
+
+export interface CrawlerPlaybackEvidenceEvent {
+  event: CrawlerPlaybackEventName
+  observed: boolean
+  observedAt: number | null
+}
+
+export interface CrawlerPlaybackEvidenceSummary {
+  artifact: {
+    hash: string
+    reference: string
+    stem: string
+  }
+  contentId: string
+  events: CrawlerPlaybackEvidenceEvent[]
+  observedAt: number
+  outcome: CrawlerPlaybackEvidenceOutcome
+  playback: {
+    canplay: boolean
+    error: boolean
+    playing: boolean
+    progress: {
+      currentTimeAfter: number
+      currentTimeBefore: number
+      currentTimeDelta: number
+    }
+    status: CrawlerPlaybackStatus
+  }
+  provider: {
+    provider: CrawlerPlaybackEvidenceProvider
+    status: CrawlerPlaybackProviderStatus
+  }
+  repair: {
+    sourceRevision: number
+    status: CrawlerPlaybackRepairStatus
+  }
+  schemaVersion: 1
+  source: {
+    revision: number
+    sourceType: CrawlerPlaybackEvidenceSourceType
+    status: CrawlerPlaybackSourceStatus
+  }
+  sourceRevision: number
+  tuple: CrawlerPlaybackEvidenceTuple
+  viewer: {
+    path: string
+    targetLabel: string
+  }
+}
+
+export interface CrawlerPlaybackEvidenceRejection {
+  contentId: string
+  observedAt: number
+  outcome: CrawlerPlaybackRejectionOutcome
+  sourceRevision: number
+  tuple: CrawlerPlaybackEvidenceTuple
+}
+
+export interface CrawlerPlaybackEvidenceEntry {
+  rejections: CrawlerPlaybackEvidenceRejection[]
+  runId: string
+  summary: CrawlerPlaybackEvidenceSummary | null
+}
+
+export interface CrawlerPlaybackEvidenceProjection {
+  current: CrawlerPlaybackEvidenceEntry | null
+  history: CrawlerPlaybackEvidenceEntry[]
 }
 
 export interface CrawlerTaskRetryProjection {
@@ -387,6 +471,7 @@ export interface CrawlerRepairTaskResponse {
   currentAttempt?: CrawlerRepairRun | null
   history?: CrawlerRepairRun[]
   kind?: 'created' | 'existing_active_run'
+  playbackEvidence?: CrawlerPlaybackEvidenceProjection
   run: CrawlerRepairRun | null
   runs?: CrawlerRepairRun[]
   task: CrawlerRepairTask
@@ -462,6 +547,7 @@ export interface CrawlerTask {
 export interface CrawlerTaskDetail {
   currentAttempt?: CrawlerRun | null
   history?: CrawlerRun[]
+  playbackEvidence?: CrawlerPlaybackEvidenceProjection
   retry?: CrawlerTaskRetryProjection
   task: CrawlerTask
   runs: CrawlerRun[]
