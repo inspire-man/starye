@@ -116,15 +116,15 @@ Each task was committed atomically:
 1. **Task 1: 固化 evidence-aware source handoff** - `91c7375` (feat)
 2. **Task 2: 实现 visible Play event collector 与 bounded progress UI** - `fb15dbb` (feat)
 
-**Plan metadata:** `待创建`（本摘要提交）
+**Plan metadata:** `8513d5f` (docs: complete viewer playback plan)
 
 ## Verification
 
-- `pnpm --filter @starye/movie-app exec vitest run src/utils/__tests__/playbackSources.test.ts src/views/__tests__/MovieDetail.dom-contract.test.ts src/views/__tests__/Player.security.test.ts` -> PASS, 3 files / 45 tests.
-- `pnpm --filter @starye/movie-app exec vitest run` -> PASS, 20 files / 207 tests. The suite logs non-fatal connection-refused diagnostics for the intentionally absent local services on ports 8090 and 19999, while exiting successfully.
-- `pnpm --filter @starye/movie-app exec vue-tsc -b` -> PASS.
-- `pnpm --filter api type-check` -> PASS.
-- `git diff --check` -> PASS.
+- pnpm --filter @starye/movie-app exec vitest run src/utils/__tests__/playbackSources.test.ts src/views/__tests__/MovieDetail.dom-contract.test.ts src/views/__tests__/Player.security.test.ts -> PASS, 3 files / 45 tests.
+- pnpm --filter @starye/movie-app exec vitest run -> PASS, 20 files / 207 tests. The suite logs non-fatal connection-refused diagnostics for the intentionally absent local services on ports 8090 and 19999, while exiting successfully.
+- pnpm --filter @starye/movie-app exec vue-tsc -b -> PASS.
+- pnpm --filter api type-check -> PASS.
+- git diff --check -> PASS.
 - GitNexus `detect_changes(scope=all)` completed with `HIGH` file-scope risk because Player lifecycle/retry changes touch 9 playback flows and the worktree also contains the user's existing `AGENTS.md`/`CLAUDE.md` edits; the affected flows remain within the intended Movie App playback chain.
 - Canonical authenticated Gateway browser proof remains intentionally pending for Plan 05; local tests do not claim real production media playback.
 
@@ -161,7 +161,7 @@ None - no external service configuration was added by Plan 04.
 ## Self-Check: PASSED
 
 - [x] Both production task commits exist and contain only the intended Movie App files.
-- [x] Summary will be committed before shared STATE/ROADMAP tracking updates.
+- [x] Summary is committed before shared STATE/ROADMAP tracking updates.
 - [x] Focused and full Movie App tests, Movie App type-check, API type-check, and diff checks pass.
 - [x] User-existing `AGENTS.md` and `CLAUDE.md` edits remain unstaged and untouched.
 
