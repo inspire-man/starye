@@ -4,16 +4,16 @@ milestone: v1.4
 milestone_name: 播放可用性与生产自愈闭环
 current_phase: 24
 current_phase_name: Fresh Production Dashboard -> Viewer -> Playback Proof
-status: planning
-stopped_at: Phase 24 plans created
-last_updated: "2026-08-08T04:23:20.105Z"
+status: executing
+stopped_at: Completed 24-01-PLAN.md
+last_updated: "2026-08-08T04:59:04.971Z"
 last_activity: 2026-08-08
-last_activity_desc: Phase 24 plans created; ready for wave-based execution
+last_activity_desc: Phase 24 Plan 01 completed; ready for Plan 02
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 23
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State: Starye — 个人内容中台
@@ -27,12 +27,12 @@ See: `.planning/PROJECT.md` (updated 2026-08-05)
 
 ## Current Position
 
-Phase: 24 — Fresh Production Dashboard -> Viewer -> Playback Proof
-Plan: 5 plans created
+Phase: 24 (Fresh Production Dashboard -> Viewer -> Playback Proof) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-08 — Phase 24 plans created; ready for wave-based execution
+Last activity: 2026-08-08 — Phase 24 Plan 01 completed; ready for Plan 02
 
-Progress: ████████░░ [██████████] 80% (Phase 20: 100%; Phase 21: 100%; Phase 22: 100%; Phase 23: 100%)
+Progress: ████████░░ [████████░░] 83% (Phase 20: 100%; Phase 21: 100%; Phase 22: 100%; Phase 23: 100%)
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: ████████░░ [██████████] 80% (P
 | Phase 21 P7 | unmeasured-continuation | 2 tasks | 1 files |
 | Phase 23 P01 | 23 min | 3 tasks | 6 files |
 | Phase 23 P02 | unmeasured-continuation | 3 tasks | 10 files |
+| Phase 24 P01 | 14min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Select repair_players only from the validated claimed movie snapshot and never fall back to ordinary movie crawling.
 - [Phase ?]: Treat an accepted=false heartbeat as a bounded runner failure so a lost lease cannot reach a success callback.
 - [Phase ?]: Keep default repair source discovery as an explicit injected boundary until a canonical movie.id-to-source read contract is planned.
+- [Phase ?]: Playback evidence uses one closed tuple with github-actions provider, bounded attempt number, explicit media-event observations, and finite progress samples.
+- [Phase ?]: Artifact output is built from an allowlist after schema and forbidden key/value scans; redaction failure remains checkpoint state.
+- [Phase ?]: playback_verified requires matching content/source revision, successful provider and repair readback, canplay plus playing, no terminal error, and delta >= 1 second; source and receipt projections remain independent.
 
 ### Pending Todos
 
@@ -116,6 +120,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-08T03:03:27.684Z
-Stopped at: Phase 24 plans created
-Resume file: .planning/phases/24-fresh-production-dashboard-viewer-playback-proof/24-01-PLAN.md
+Last session: 2026-08-08T04:59:04.958Z
+Stopped at: Completed 24-01-PLAN.md
+Resume file: None

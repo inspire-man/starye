@@ -25,9 +25,9 @@
 
 ### Production Evidence
 
-- [ ] **EVID-01**: 用户可以通过一个独立 fresh production run 完成 Dashboard command -> D1 task/run/attempt -> provider -> validated receipt -> source observation -> Viewer -> 实际播放的同 tuple 验收。
-- [ ] **EVID-02**: 用户可以查看脱敏的播放证据摘要；证据至少包含受控的 `canplay`、`playing`、`waiting`、`stalled`、`error` 事件和 `currentTime` 推进结果，不保存完整媒体或签名材料。
-- [ ] **EVID-03**: 用户可以从 Dashboard task detail 追溯到对应 content ID、source revision、repair receipt 和 Viewer evidence；provider success、repair success 与 actual playback 分别呈现。
+- [x] **EVID-01**: 用户可以通过一个独立 fresh production run 完成 Dashboard command -> D1 task/run/attempt -> provider -> validated receipt -> source observation -> Viewer -> 实际播放的同 tuple 验收。
+- [x] **EVID-02**: 用户可以查看脱敏的播放证据摘要；证据至少包含受控的 `canplay`、`playing`、`waiting`、`stalled`、`error` 事件和 `currentTime` 推进结果，不保存完整媒体或签名材料。
+- [x] **EVID-03**: 用户可以从 Dashboard task detail 追溯到对应 content ID、source revision、repair receipt 和 Viewer evidence；provider success、repair success 与 actual playback 分别呈现。
 
 ## v2 Requirements
 
@@ -67,9 +67,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PLAY-01 | Phase 22 | Complete |
 | PLAY-02 | Phase 22 | Complete |
 | PLAY-03 | Phase 22 | Complete |
-| EVID-01 | Phase 24 | Pending |
-| EVID-02 | Phase 24 | Pending |
-| EVID-03 | Phase 24 | Pending |
+| EVID-01 | Phase 24 | Complete |
+| EVID-02 | Phase 24 | Complete |
+| EVID-03 | Phase 24 | Complete |
 
 **Coverage:**
 
