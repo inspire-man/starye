@@ -159,12 +159,12 @@ Plans:
   2. 用户能查看脱敏的播放证据摘要，其中包含受控的 `canplay`、`playing`、`waiting`、`stalled`、`error` 事件和 `currentTime` 推进结果，且不包含完整媒体或签名材料。
   3. 用户从 Dashboard task detail 能追溯到 content ID、source revision、repair receipt 和 Viewer evidence，并能分别辨认 provider success、repair success 与 actual playback。
 
-**Plans**: 2/5 plans executed
+**Plans**: 3/5 plans executed
 Plans:
 
 - [x] 24-01-PLAN.md — 定义 playback evidence 契约、脱敏边界与 playback_verified projection
 - [x] 24-02-PLAN.md — 建立 D1/CAS persistence、authenticated evidence endpoint 与 task detail projection
-- [ ] 24-03-PLAN.md — 完成 Dashboard current-attempt 与四层 evidence trace
+- [x] 24-03-PLAN.md — 完成 Dashboard current-attempt 与四层 evidence trace
 - [ ] 24-04-PLAN.md — 完成 MovieDetail/Player visible Play、event timeline 与 bounded progress
 - [ ] 24-05-PLAN.md — 运行 artifact-first canonical Gateway fresh production proof
 
@@ -180,4 +180,4 @@ Plans:
 | 21. Source Health And Local repair_players Vertical Slice | 7/7 | Complete | 2026-08-06 |
 | 22. Dashboard, MovieDetail And Player State Closure | 3/3 | Complete    | 2026-08-07 |
 | 23. GitHub Actions Production Repair And Reconciliation | 5/5 | Complete    | 2026-08-08 |
-| 24. Fresh Production Dashboard -> Viewer -> Playback Proof | 2/5 | In Progress|  |
+| 24. Fresh Production Dashboard -> Viewer -> Playback Proof | 3/5 | In Progress|  |
