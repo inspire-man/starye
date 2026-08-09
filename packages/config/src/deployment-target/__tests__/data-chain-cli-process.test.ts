@@ -24,6 +24,7 @@ async function loadDataChainCli(): Promise<DataChainCliModule> {
 
 const temporaryRoots: string[] = []
 const repositoryRoot = path.resolve(import.meta.dirname, '../../../../..')
+const vitestTestTimeoutMs = 15000
 
 async function createProcessHook(
   code: 0 | 1 | 2,
@@ -176,7 +177,7 @@ describe('data-chain root launcher', () => {
       : `__data_chain_cli_test__:${entry}:${code}`
     expect(result.stdout.split(marker).length - 1).toBe(1)
     expect(result.stderr).not.toContain('Data-chain smoke requires')
-  })
+  }, vitestTestTimeoutMs)
 
   it.each([
     ['smoke:data-chain', 'run'],

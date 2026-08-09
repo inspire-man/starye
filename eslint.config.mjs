@@ -9,6 +9,7 @@ export default antfu({
     '**/.output',
     '**/.nuxt',
     '**/.wrangler',
+    '**/.target-wrangler.*.toml',
     '.agent/*',
     '.cursor/*',
     '.github/*',

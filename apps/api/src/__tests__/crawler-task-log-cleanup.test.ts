@@ -40,9 +40,9 @@ describe('crawler task log cleanup schedule', () => {
 
   it('configures a minute cron trigger for cleanup and provider reconciliation', async () => {
     const wrangler = await readFile(new URL('../../wrangler.toml', import.meta.url), 'utf8')
-    const cron = wrangler.match(/^crons\s*=\s*\["([^"]+)"\]/mu)?.[1]?.trim().split(/\s+/u)
+    const cron = wrangler.match(/^crons\s*=\s*\[\s*"([^"]+)"\s*\]/mu)?.[1]?.trim().split(/\s+/u)
 
-    expect(wrangler).toContain('[triggers]\ncrons = ["*/1 * * * *"]')
+    expect(wrangler).toMatch(/\[triggers\]\r?\ncrons\s*=\s*\[\s*"\*\/1 \* \* \* \*"\s*\]/u)
     expect(cron).toHaveLength(5)
     expect(cron).toEqual(['*/1', '*', '*', '*', '*'])
   })

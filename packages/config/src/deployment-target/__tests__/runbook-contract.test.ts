@@ -86,6 +86,8 @@ describe('rUNBOOK target-first operations contract', () => {
             return [resource.name]
           case 'kv':
             return [resource.id]
+          default:
+            return []
         }
       }),
       ...Object.values(profile.workers).map(worker => worker.name),

@@ -9,10 +9,18 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import {
+import * as playbackEvidenceRedactionModule from '../apps/api/src/domain/playback-evidence/redaction.ts'
+
+type PlaybackEvidenceRedactionExports = Pick<typeof playbackEvidenceRedactionModule, 'buildPlaybackEvidencePair' | 'findForbiddenPlaybackEvidenceMaterial'>
+
+const playbackEvidenceRedaction = (
+  (playbackEvidenceRedactionModule as unknown as { default?: PlaybackEvidenceRedactionExports }).default
+  ?? playbackEvidenceRedactionModule
+) as PlaybackEvidenceRedactionExports
+const {
   buildPlaybackEvidencePair,
   findForbiddenPlaybackEvidenceMaterial,
-} from '../apps/api/src/domain/playback-evidence/redaction.ts'
+} = playbackEvidenceRedaction
 
 export type Phase24TerminalOutcome = Extract<PlaybackEvidenceOutcome, 'accepted' | 'failed' | 'checkpoint'>
 
