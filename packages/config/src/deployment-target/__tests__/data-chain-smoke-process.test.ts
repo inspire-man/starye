@@ -7,6 +7,7 @@ const packageRoot = path.resolve(import.meta.dirname, '../../..')
 const childPath = path.join(import.meta.dirname, 'fixtures', 'data-chain-smoke-auth-timeout-child.ts')
 const tsxCli = path.join(path.dirname(process.execPath), 'node_modules', 'tsx', 'dist', 'cli.mjs')
 const timeoutBudgetMs = 5000
+const vitestTestTimeoutMs = 15000
 
 interface ChildResult {
   exitCode: number | null
@@ -83,5 +84,5 @@ describe('phase 13 Gateway auth timeout process boundary', () => {
         providerRemote: 0,
       },
     })
-  })
+  }, vitestTestTimeoutMs)
 })

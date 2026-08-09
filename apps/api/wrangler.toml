@@ -3,7 +3,7 @@ compatibility_date = "2024-04-01"
 compatibility_flags = [ "nodejs_compat" ]
 
 [triggers]
-crons = ["*/1 * * * *"]
+crons = [ "*/1 * * * *" ]
 
 [observability]
 

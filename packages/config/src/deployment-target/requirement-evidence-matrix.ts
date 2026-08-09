@@ -90,7 +90,7 @@ function canonicalPhase13Statuses(report: string): CanonicalPhase13Statuses {
   const afterHeading = report.slice(heading.index + heading[0].length)
   const nextHeading = afterHeading.search(/^#{1,3}\s+/m)
   const coverage = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading)
-  const rowPattern = /^\|\s*([A-Z]+-\d{2})\s*\|\s*([^|]+?)\s*\|/gm
+  const rowPattern = /^\|\s*([A-Z]+-\d{2})\s*\|([^|\r\n]*)\|/gm
 
   for (const match of coverage.matchAll(rowPattern)) {
     const id = match[1]!
