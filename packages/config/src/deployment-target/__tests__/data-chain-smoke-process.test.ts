@@ -5,9 +5,10 @@ import { describe, expect, it } from 'vitest'
 
 const packageRoot = path.resolve(import.meta.dirname, '../../..')
 const childPath = path.join(import.meta.dirname, 'fixtures', 'data-chain-smoke-auth-timeout-child.ts')
-const tsxCli = path.join(path.dirname(process.execPath), 'node_modules', 'tsx', 'dist', 'cli.mjs')
 const timeoutBudgetMs = 5000
 const vitestTestTimeoutMs = 15000
+const pnpmCommand = process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : 'pnpm'
+const pnpmPrefix = process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm.cmd'] : []
 
 interface ChildResult {
   exitCode: number | null
@@ -21,7 +22,7 @@ interface ChildResult {
 function runAuthTimeoutChild(): Promise<ChildResult> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now()
-    const child = spawn(process.execPath, [tsxCli, childPath], {
+    const child = spawn(pnpmCommand, [...pnpmPrefix, 'exec', 'tsx', childPath], {
       cwd: packageRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,

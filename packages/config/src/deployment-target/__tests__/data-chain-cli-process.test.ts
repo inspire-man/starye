@@ -25,6 +25,8 @@ async function loadDataChainCli(): Promise<DataChainCliModule> {
 const temporaryRoots: string[] = []
 const repositoryRoot = path.resolve(import.meta.dirname, '../../../../..')
 const vitestTestTimeoutMs = 15000
+const pnpmCommand = process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : 'pnpm'
+const pnpmPrefix = process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm.cmd'] : []
 
 async function createProcessHook(
   code: 0 | 1 | 2,
@@ -99,10 +101,9 @@ function runRootScript(
   preload: string,
   argv: readonly string[] = [],
 ): Promise<{ exitCode: number, stdout: string, stderr: string }> {
-  const pnpmEntry = path.join(path.dirname(process.execPath), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
   return new Promise((resolve, reject) => {
     const pnpmArgv = argv.length > 0 ? ['--', ...argv] : []
-    const child = spawn(process.execPath, [pnpmEntry, 'run', scriptName, ...pnpmArgv], {
+    const child = spawn(pnpmCommand, [...pnpmPrefix, 'run', scriptName, ...pnpmArgv], {
       cwd: repositoryRoot,
       env: {
         ...process.env,
