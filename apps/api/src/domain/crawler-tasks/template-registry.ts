@@ -1,3 +1,4 @@
+import { CRAWLER_TASK_OPERATION_VALUES } from './types'
 import type {
   CrawlerTaskOperation,
   CrawlerTaskSnapshot,
@@ -49,7 +50,7 @@ export function isCrawlerTaskTemplateKey(value: unknown): value is CrawlerTaskTe
 }
 
 export function isCrawlerTaskOperation(value: unknown): value is CrawlerTaskOperation {
-  return value === 'manga' || value === 'movie' || value === 'repair_players'
+  return typeof value === 'string' && (CRAWLER_TASK_OPERATION_VALUES as readonly string[]).includes(value)
 }
 
 export function getCrawlerTaskTemplate(templateKey: CrawlerTaskTemplateKey): CrawlerTaskTemplate {

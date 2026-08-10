@@ -8,7 +8,8 @@ export const CRAWLER_MAX_SAFE_LOG_BYTES = 4 * 1024
 export const CRAWLER_MAX_NORMAL_LOG_ROWS = 500
 
 export type CrawlerTaskTemplateKey = 'movie' | 'manga'
-export type CrawlerTaskOperation = CrawlerTaskTemplateKey | 'repair_players'
+export const CRAWLER_TASK_OPERATION_VALUES = ['movie', 'manga', 'repair_players'] as const
+export type CrawlerTaskOperation = typeof CRAWLER_TASK_OPERATION_VALUES[number]
 export type RepairPlayersReason = 'no_source' | 'source_failed'
 export type RepairPlayersTargetIntent = 'restore_playable_sources'
 export const CRAWLER_RECEIPT_SCHEMA_VERSION = 2 as const
