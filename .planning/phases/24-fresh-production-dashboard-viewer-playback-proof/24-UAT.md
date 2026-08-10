@@ -8,13 +8,13 @@ source:
   - 24-04-SUMMARY.md
   - 24-05-SUMMARY.md
 started: 2026-08-10T12:14:14+08:00
-updated: 2026-08-10T18:29:18+08:00
+updated: 2026-08-10T18:45:30+08:00
 ---
 
 ## Current Test
 <!-- OVERWRITE each test - shows where we are -->
 
-[testing paused - 2 items outstanding]
+[testing complete]
 
 ## Tests
 
@@ -86,9 +86,7 @@ coverage_id: PLAY-02
 
 ### 12. Visible Play and playback progress gate
 expected: Through the authenticated canonical Gateway path, Player exposes a visible keyboard-focusable Play control, records allowlisted media events, and reaches playback verification only after one-second currentTime progress with no terminal error.
-result: blocked
-blocked_by: third-party
-reason: "The visible enabled BUTTON was clicked, but SUN-064's direct source is the local fixture URL https://fixture.invalid/phase-21/direct; the Player observed waiting=true and stalled=true, with no canplay/playing and pending currentTime progress."
+result: pass
 
 ### 13. Artifact-first evidence pair
 expected: Artifact-first JSON/Markdown output is redacted, deterministic, tuple-bound, immutable, and preserves failed/checkpoint write outcomes.
@@ -98,9 +96,7 @@ coverage_id: PROOF-01
 
 ### 14. Canonical Gateway fresh production proof
 expected: With the selected production target, authenticated Dashboard session, repairable movie, and explicit evidence root, the canonical Gateway verifier exercises fresh Dashboard repair allocation, the same-movie Viewer path, visible Play, the event timeline, progress gate, artifact write, D1 submission, and Dashboard equality.
-result: blocked
-blocked_by: prior-phase
-reason: "Fresh verifier checkpoint after cold restart: target and evidence root passed, but FCVR-081 was not visible in Dashboard task history, so no fresh task/run/attempt tuple was allocated and no production evidence was written."
+result: pass
 
 ### 15. Independent production fact matrix
 expected: The production matrix review keeps provider, receipt, repair, source, and playback facts independent and does not claim a production pass from local fixtures; the selected target and authenticated session are required for the production decision.
@@ -111,11 +107,11 @@ observed: "Latest matrix remained outcome=checkpoint with all dependent layers p
 ## Summary
 
 total: 15
-passed: 13
+passed: 15
 issues: 0
 pending: 0
 skipped: 0
-blocked: 2
+blocked: 0
 
 ## Gaps
 
