@@ -1,82 +1,106 @@
-# Requirements: Starye v1.4 播放可用性与生产自愈闭环
+# Requirements: Starye v1.5 爬虫运管与内容可用性闭环
 
-**Defined:** 2026-08-05
+**Defined:** 2026-08-10
 **Core Value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
 
 ## v1 Requirements
 
-### Source Readiness
+### Task Operations
 
-- [x] **SRC-01**: 用户可以在任务详情和 MovieDetail 中分别看到 metadata persisted 与 playback readiness；状态至少区分 `ready`、`no_source`、`source_failed`、`repairing` 和 `playback_verified`。
-- [x] **SRC-02**: 用户可以查看每个受控播放源的 source 类型与有限健康信息；至少区分 direct、magnet、TorrServer、inactive、unverified 和 failed，并显示最近观察时间或受控失败原因。
-- [x] **SRC-03**: 每次新的受控视频抓取都会得到“存在候选源并进入健康检查”或“明确 no-source / repairable”两种终态；`SUN-064` 的 `players=0` 必须完成状态读回和修复判定。
+- [ ] **TASK-01**: 用户可以通过受控 operation registry 创建爬虫、检查或修复任务；任务快照包含目标身份、操作类型、策略版本和目标意图，workflow、URL、命令与 secrets 仍由服务端管理。
+- [ ] **TASK-02**: 用户可以分页查看任务列表和详情，并看到任务状态、目标内容、最新 run/attempt、provider、receipt、日志摘要与历史转换记录。
+- [ ] **TASK-03**: 用户可以修改任务允许修改的描述和策略意图，并可以归档任务；归档或 supersede 不删除已有 run、attempt、receipt、observation 和审计事实，活动中的不可变快照保持可追溯。
+- [ ] **TASK-04**: 用户可以取消 queued 或 running 任务，并能看到取消请求、provider 状态和最终结果；迟到的回调不能把已取消或更新后的任务写成成功。
+- [ ] **TASK-05**: 用户可以对失败或取消的任务执行有界重试；重复点击或事件重放保持幂等，新的 run/attempt 保留旧日志、receipt、source observation 和失败原因。
+- [ ] **TASK-06**: 用户可以从同一任务详情查看创建、更新、归档、取消、重试和修复操作的审计信息，包括目标、原因、时间、操作者和结果摘要。
 
-### Repair Operations
+### Video And Magnet Availability
 
-- [x] **REP-01**: 用户可以在 Dashboard 为已入库电影发起固定模板的 `repair_players` 任务；输入限定为受控电影身份、原因和目标意图，URL、命令、workflow 和 secrets 由服务端 registry 管理。
-- [x] **REP-02**: 用户可以看到 repair 的 queued、running、succeeded、failed 和 retry 状态；相同请求或事件重放保持幂等，失败重试创建新 attempt，并保留旧日志、receipt 与 source observation。
-- [x] **REP-03**: 用户可以从 `no_source` 或 `source_failed` 内容进入受控修复，并在成功后回到同一个内容身份查看更新后的 source state 与 validated receipt。
+- [ ] **VID-01**: 用户可以分别查看电影 metadata persisted、direct source、magnet source 和实际 playback readiness；metadata 抓取成功不代表 source 或播放可用。
+- [ ] **VID-02**: 系统可以对每个 direct source 执行受控的 URL、HTTP、Range 或浏览器加载检查，并区分可用、无效 URL、HTTP 失败、挑战/阻断、过期和检查不确定等结果。
+- [ ] **VID-03**: 系统可以通过受控 Aria2/TorrServer 路径检查 magnet 的 metadata、解析、peer/下载和流可用性，并区分磁链格式有效、无 metadata、无 peer、resolver 失败、无流和可播放等结果；磁链不按 HTTP URL 探测。
+- [ ] **VID-04**: 每次视频可用性检查都保存与 movie/source revision 绑定的 bounded observation 和 current projection，包含 source 类型、策略版本、观察时间、新鲜度、有限失败原因与下一步动作。
+- [ ] **VID-05**: 用户可以从 `no_source`、`source_failed`、stale 或 degraded 结果发起 revision-bound 的重查或修复；任务幂等，成功必须经过 receipt 和同一 movie/source revision 的权威读回。
 
-### Playback Experience
+### Comic Chapter Completeness
 
-- [x] **PLAY-01**: 用户在 MovieDetail 中能分别看到 ready、no-source、source-failed 和 repairing 状态，并获得对应的播放、修复、刷新或切换源动作。
-- [x] **PLAY-02**: 用户在 Player 中能看到加载、缓冲、失效和播放错误的明确反馈；当前源重试次数有边界，失败后可切换候选源或进入现有 TorrServer/Aria2 路径。
-- [x] **PLAY-03**: Player 按 source 类型和 eligibility 选择回退顺序；direct、magnet、TorrServer 和 Aria2 走各自受控路径，评分或排序字段不单独代表健康或可播放。
+- [ ] **CHAP-01**: 系统在比较漫画章节前保存受控 source chapter snapshot，记录稳定章节身份、source ordinal、章节号、slug/URL 标识和 source terminal state。
+- [ ] **CHAP-02**: 用户可以看到缺失章节和重复章节的明确诊断；诊断基于章节身份集合而非只比较总数，并保留重复 source rows 供审计。
+- [ ] **CHAP-03**: 用户可以看到章节顺序、章节号或序列异常，并能区分 source unavailable、partial、inconclusive、complete 等内容状态与 crawler execution 状态。
+- [ ] **CHAP-04**: 用户可以针对漫画或指定章节发起受控重抓/修复；任务绑定 comic/chapter identity、source revision 和 finding，具备幂等、空结果保护与非回归保护，并在读回后更新当前完整性投影。
 
-### Production Evidence
+### Chapter Image Availability
 
-- [x] **EVID-01**: 用户可以通过一个独立 fresh production run 完成 Dashboard command -> D1 task/run/attempt -> provider -> validated receipt -> source observation -> Viewer -> 实际播放的同 tuple 验收。
-- [x] **EVID-02**: 用户可以查看脱敏的播放证据摘要；证据至少包含受控的 `canplay`、`playing`、`waiting`、`stalled`、`error` 事件和 `currentTime` 推进结果，不保存完整媒体或签名材料。
-- [x] **EVID-03**: 用户可以从 Dashboard task detail 追溯到对应 content ID、source revision、repair receipt 和 Viewer evidence；provider success、repair success 与 actual playback 分别呈现。
+- [ ] **PAGE-01**: 系统可以比较章节 expected page count 与 stored page set，并校验页码、URL identity、缺页、无效 URL、重复页码和顺序异常。
+- [ ] **PAGE-02**: 系统可以对章节图片执行有界的 HEAD、Range 或浏览器加载探测，区分真实图片、HTTP 失败、HTML/challenge、错误 content type、重定向异常和检查不确定；HTTP 200 单独不构成图片可用。
+- [ ] **PAGE-03**: 用户可以查看逐页或失败样本的脱敏 observation，包含页码、host/path class、状态码、原因、观察时间和新鲜度；结果有数量上限，不保存签名 query、cookie、完整响应或媒体内容。
+- [ ] **PAGE-04**: 用户可以从章节图片异常发起指定章节或页集合的受控重查/修复，任务具备幂等和已知良好页集保护，并能通过 canonical Gateway 读回 Reader 可用性结果。
+
+### Evidence And Gateway Acceptance
+
+- [ ] **EVID-01**: 用户可以在 Dashboard 通过 canonical Gateway 查看任务、视频 source、漫画章节和章节图片的可用性 projection，并从 finding 进入对应的 bounded check、recheck 或 repair 操作。
+- [ ] **EVID-02**: 用户可以用一个 fresh task/run/attempt/provider tuple 追溯 Dashboard command、runner result、D1 observation/projection、content readback 和 Viewer/Reader 结果；provider success、任务 success、内容可用和实际消费结果分别呈现。
+- [ ] **EVID-03**: 用户可以查看脱敏、限量且具新鲜度的 evidence 摘要；证据包含 source/content revision、receipt、reason、结果计数或受控事件，但不泄露完整 URL 签名、凭据、原始媒体、cookie 或无界结果，并且缓存失效后可读回最新事实。
 
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in the current roadmap.
 
-### Broader Repair
+### Larger-Scale Operations
 
-- **FUT-01**: 用户可以为漫画、actor、publisher 和其他内容类型使用通用 repair 模板。
-- **FUT-02**: 系统提供高频、全库、无限自动重抓和时间序列 source health 平台。
+- **FUT-01**: 用户可以对全库或大批量内容执行无限制自动巡检、批量修复和时间序列 availability analytics。
+- **FUT-02**: 系统提供多用户审批、通知、协作角色和实时 WebSocket 运维工作流。
 
-### Media Infrastructure
+### New Infrastructure
 
-- **FUT-03**: 系统使用 Cloudflare Stream、R2 视频托管、转码、DRM 或新的媒体平台承载视频。
+- **FUT-03**: 系统引入新的通用队列/workflow/provider abstraction，或在 Cloudflare Worker 内运行完整浏览器和代理全部媒体。
+- **FUT-04**: 系统使用 Cloudflare Stream、R2 视频托管、转码、DRM 或新的媒体平台承载当前外部视频/图片内容。
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Dashboard 任意命令、来源 URL、密钥、workflow 或定时策略编辑 | 保留 v1.3 的受控模板、target-profile、凭据和审计边界 |
-| 在 Cloudflare Worker 内运行 Puppeteer 或代理全部视频 | 生产 crawler 继续由 GitHub Actions 执行，并遵守 Cloudflare 免费额度约束 |
-| 为 repair receipt 创建第二套 Movies 编辑器或内容平台 | 复用现有 `primaryContentId` 和 Movies CRUD，避免出现两套内容真相 |
-| 复用历史 Phase 13 carrier 作为 v1.4 production proof | 历史 carrier 已冻结；本轮使用独立 fresh production run |
-| 多用户、协作、商业化和移动端原生应用 | 与单用户个人内容中台的当前核心价值无关 |
+| Dashboard 任意命令、来源 URL、workflow、凭据或 secrets 编辑 | 继续复用 v1.3/v1.4 的服务端 registry、target-profile、签名和审计边界 |
+| 在读检查过程中直接删除并重建漫画章节或图片 | 检查必须先保存 source snapshot，并通过 revision-bound repair 保留已知良好内容 |
+| 用 crawler exit code、metadata success、章节数量相等、HTTP 200 或磁链语法有效推断内容可用 | execution、metadata、transport、content integrity 和实际消费是独立事实层 |
+| 在 D1 或长期 artifact 保存完整签名 URL、cookie、provider 响应、原始媒体或无界逐项结果 | 控制证据暴露、存储成本和重放风险，只保存 bounded redacted facts |
+| 替换现有 D1 task/run/attempt/lease/provider 控制面，另建一套可用性调度器 | 所有检查和修复必须复用同一任务身份、CAS、receipt 与 Gateway 读回链路 |
 
 ## Traceability
 
-Which phases cover which requirements. Populated during roadmap creation.
+Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SRC-01 | Phase 20 | Complete |
-| SRC-02 | Phase 21 | Complete |
-| SRC-03 | Phase 20 | Complete |
-| REP-01 | Phase 21 | Complete |
-| REP-02 | Phase 23 | Complete |
-| REP-03 | Phase 23 | Complete |
-| PLAY-01 | Phase 22 | Complete |
-| PLAY-02 | Phase 22 | Complete |
-| PLAY-03 | Phase 22 | Complete |
-| EVID-01 | Phase 24 | Complete |
-| EVID-02 | Phase 24 | Complete |
-| EVID-03 | Phase 24 | Complete |
+| TASK-01 | Phase 25 | Pending |
+| TASK-02 | Phase 25 | Pending |
+| TASK-03 | Phase 25 | Pending |
+| TASK-04 | Phase 25 | Pending |
+| TASK-05 | Phase 25 | Pending |
+| TASK-06 | Phase 25 | Pending |
+| VID-01 | Phase 26 | Pending |
+| VID-02 | Phase 26 | Pending |
+| VID-03 | Phase 26 | Pending |
+| VID-04 | Phase 26 | Pending |
+| VID-05 | Phase 26 | Pending |
+| CHAP-01 | Phase 27 | Pending |
+| CHAP-02 | Phase 27 | Pending |
+| CHAP-03 | Phase 27 | Pending |
+| CHAP-04 | Phase 27 | Pending |
+| PAGE-01 | Phase 28 | Pending |
+| PAGE-02 | Phase 28 | Pending |
+| PAGE-03 | Phase 28 | Pending |
+| PAGE-04 | Phase 28 | Pending |
+| EVID-01 | Phase 28 | Pending |
+| EVID-02 | Phase 28 | Pending |
+| EVID-03 | Phase 28 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 12 total
-- Mapped to phases: 12
+- v1 requirements: 22 total
+- Mapped to phases: 22
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-08-05*
-*Last updated: 2026-08-05 after v1.4 requirements scoping*
+*Requirements defined: 2026-08-10*
+*Last updated: 2026-08-10 after v1.5 research and scope approval*
