@@ -56,13 +56,20 @@ v1.5 将已经稳定的 crawler control plane 延伸为“任务运管 → 数�
   3. 用户在任务详情可以看到当前状态、目标、最新 run/attempt、provider、日志摘要、receipt、转换历史以及创建/更新/归档/取消/重试/修复审计事实。
   4. 可用性检查可以写入 revision-bound 的 append-only observation 和 bounded current projection，且结果包含状态、reason、policy version、observedAt、新鲜度和下一步动作，不把 runner 成功直接当作内容可用。
 
-**Plans**: 4 plans (to be detailed by `$gsd-plan-phase 25`)
+**Plans**: 4 plans across 3 waves
 
 Plans:
+**Wave 1**
 
 - [ ] 25-01-PLAN.md — 共享 operation、availability result、observation/projection、revision/CAS 和 evidence 契约
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 25-02-PLAN.md — 任务 CRUD、归档/supersede、取消、重试、幂等和审计生命周期
 - [ ] 25-03-PLAN.md — D1 schema、bounded persistence、current readback 与缓存失效边界
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 25-04-PLAN.md — Dashboard task detail、历史/审计投影和 canonical Gateway 基线验收
 
 ### Phase 26: Video Source And Magnet Availability

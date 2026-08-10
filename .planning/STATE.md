@@ -3,8 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
 status: planning
-last_updated: "2026-08-10T21:17:38+08:00"
+last_updated: "2026-08-10T23:04:51+08:00"
 last_activity: 2026-08-10
+last_activity_desc: Phase 25 plans created; ready for wave-based execution
 progress:
   total_phases: 4
   completed_phases: 0
@@ -24,10 +25,10 @@ See: `.planning/PROJECT.md` (updated 2026-08-10)
 
 ## Current Position
 
-Phase: 25 (not started; roadmap ready)
-Plan: —
-Status: Roadmap ready; awaiting approval
-Last activity: 2026-08-10 — v1.5 roadmap created
+Phase: 25 (Task Operations And Availability Contract)
+Plan: 4 plans created
+Status: Ready to execute
+Last activity: 2026-08-10 — Phase 25 plans created; ready for wave-based execution
 
 ## Performance Metrics
 
@@ -69,7 +70,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- [ ] Confirm/approve the v1.5 roadmap, then run `$gsd-plan-phase 25`.
+- [ ] Execute Phase 25 in Wave 1 -> Wave 2 -> Wave 3 order, then run canonical verification.
 
 ### Blockers/Concerns
 
@@ -90,6 +91,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-10T21:17:38+08:00
-Stopped at: v1.5 roadmap created; awaiting approval
+Last session: 2026-08-10T23:04:51+08:00
+Stopped at: Phase 25 plans created; ready for wave-based execution
 Resume file: None
