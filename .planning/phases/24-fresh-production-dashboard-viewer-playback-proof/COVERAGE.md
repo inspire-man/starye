@@ -14,12 +14,10 @@
 
 ## Automated Closure
 
-| check | result | evidence |
-|---|---|---|
-| Artifact builder and redaction pair | PASSED | `scripts/phase24-evidence.test.ts`: 6 tests |
-| Gateway verifier fail-closed matrix | PASSED | `scripts/phase24-production-proof.test.ts`: 12 tests covering preconditions, visible Play, media error, sub-second delta, fresh tuple, rejection outcomes, and Phase 13 carrier exclusion |
-| Focused TypeScript contract check | PASSED | `pnpm exec tsc --noEmit --ignoreConfig --target esnext --lib "esnext,dom" --module esnext --moduleResolution bundler --strict --skipLibCheck --types node --allowImportingTsExtensions scripts/phase24-evidence.ts scripts/phase24-production-proof.ts` |
-| Focused lint and whitespace check | PASSED | `pnpm exec eslint scripts/phase24-evidence.ts scripts/phase24-production-proof.ts`; `git diff --check` |
+- Artifact builder and redaction pair: `PASSED` - `scripts/phase24-evidence.test.ts`: 6 tests.
+- Gateway verifier fail-closed matrix: `PASSED` - `scripts/phase24-production-proof.test.ts`: 12 tests covering preconditions, visible Play, media error, sub-second delta, fresh tuple, rejection outcomes, and Phase 13 carrier exclusion.
+- Focused TypeScript contract check: `PASSED` - `pnpm exec tsc --noEmit --ignoreConfig --target esnext --lib "esnext,dom" --module esnext --moduleResolution bundler --strict --skipLibCheck --types node --allowImportingTsExtensions scripts/phase24-evidence.ts scripts/phase24-production-proof.ts`.
+- Focused lint and whitespace check: `PASSED` - `pnpm exec eslint scripts/phase24-evidence.ts scripts/phase24-production-proof.ts`; `git diff --check`.
 
 ## Human Checkpoint
 
