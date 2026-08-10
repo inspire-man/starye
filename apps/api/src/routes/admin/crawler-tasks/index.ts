@@ -13,13 +13,17 @@ import { createServerReadinessProjection } from '../../../domain/movies/source-c
 import { createPlaybackArtifactReference, createPlaybackEvidenceRepository } from '../../../domain/playback-evidence/repository'
 import { createGitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import { canAccessCrawler } from '../../../lib/permissions'
+import { createAuditLog } from '../../../middleware/audit-logger'
 import {
+  CrawlerTaskAuditQuerySchema,
   CrawlerTaskIdParamsSchema,
   CrawlerTaskLogsQuerySchema,
   CrawlerTaskRunParamsSchema,
   CreateCrawlerTaskSchema,
   ListCrawlerTasksQuerySchema,
   RetryCrawlerTaskSchema,
+  SupersedeCrawlerTaskSchema,
+  UpdateCrawlerTaskSchema,
 } from '../../../schemas/crawler-tasks'
 import { PlaybackEvidenceRequestSchema } from '../../../schemas/playback-evidence'
 
@@ -185,6 +189,7 @@ interface RepairSourceObservationRow {
 
 const RepairPlayersCommandSchema = v.strictObject({
   confirmed: v.literal(true),
+  idempotencyKey: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))),
   movieId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
   reason: v.picklist(['no_source', 'source_failed']),
   targetIntent: v.literal('restore_playable_sources'),
@@ -357,8 +362,9 @@ function projectPlaybackEvidence(
   }
 }
 
-function projectTaskDetail(detail: { task: unknown, runs: readonly unknown[] }): Record<string, unknown> {
+function projectTaskDetail(detail: { lifecycle?: unknown, task: unknown, runs: readonly unknown[] }): Record<string, unknown> {
   return {
+    ...(detail.lifecycle ? { lifecycle: detail.lifecycle } : {}),
     runs: detail.runs.map(run => projectRun(run as Record<string, unknown>)),
     task: detail.task,
   }
@@ -1095,17 +1101,55 @@ export const adminCrawlerTasksRoutes = new Hono<AppEnv>()
 
 adminCrawlerTasksRoutes.post('/', validator('json', CreateCrawlerTaskSchema), async (c) => {
   const user = await requireSessionUser(c)
-  const { template } = c.req.valid('json')
+  const input = c.req.valid('json')
+  const template = input.template ?? (input.operation === 'manga' ? 'manga' : 'movie')
   requireTemplateAccess(user, template)
+
+  const hasOperationInput = input.operation !== undefined
+    || input.target !== undefined
+    || input.idempotencyKey !== undefined
+    || input.policyReference !== undefined
+    || input.policyVersion !== undefined
+    || input.intent !== undefined
+  if (hasOperationInput && (!input.operation || !input.target || !input.idempotencyKey)) {
+    throw new HTTPException(400, { message: 'Operation creation requires target, policy and idempotency fields' })
+  }
+  const operationCommand = input.operation && input.target && input.idempotencyKey
+    ? {
+        actor: { id: user.id, kind: 'admin' as const },
+        idempotencyKey: input.idempotencyKey,
+        intent: input.intent ?? { kind: 'crawl' as const },
+        operation: input.operation,
+        policyReference: input.policyReference ?? 'crawler/default',
+        policyVersion: input.policyVersion ?? 'v1',
+        target: input.target,
+      }
+    : undefined
 
   const repository = createCrawlerTaskRepository(c.get('db'))
   const result = await repository.createOrGetActiveRun({
+    ...(operationCommand ? { operationCommand } : {}),
     requestedByUserId: user.id,
     templateKey: template,
   })
+  if (result.kind === 'conflict')
+    return c.json({ kind: result.kind, run: result.run, taskId: result.taskId }, 409)
   const dispatch = result.kind === 'created'
     ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template })
     : { kind: 'existing_active_run' }
+  await createAuditLog(c, {
+    action: result.kind === 'created' ? 'CREATE' : 'UPDATE',
+    resourceType: 'crawler_task',
+    resourceId: result.run.taskId,
+    changes: {
+      ...(input.target ? { target: input.target } : {}),
+      ...(input.operation ? { intent: input.intent?.kind ?? 'crawl' } : {}),
+      ...(result.kind === 'created' ? { attemptNumber: result.run.attemptNumber } : {}),
+      outcome: result.kind === 'created' ? 'created' : 'duplicate',
+      reason: 'admin_create',
+      runId: result.run.id,
+    },
+  })
 
   return c.json({ dispatch, kind: result.kind, run: result.run, template })
 })
@@ -1184,13 +1228,13 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
 
 adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema), async (c) => {
   const user = await requireSessionUser(c)
-  const { cursor, limit, template } = c.req.valid('query')
+  const { cursor, lifecycle, limit, template } = c.req.valid('query')
   if (template)
     requireTemplateAccess(user, template)
   const repository = createCrawlerTaskRepository(c.get('db'))
   const decodedCursor = parseTaskCursor(cursor)
   if (repository.listTasks) {
-    const page = await repository.listTasks({ cursor: decodedCursor, limit, templateKey: template })
+    const page = await repository.listTasks({ cursor: decodedCursor, lifecycle, limit, templateKey: template })
     if (page)
       return c.json(page)
   }
@@ -1221,6 +1265,103 @@ adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema)
       : null,
     tasks: visible,
   })
+})
+
+adminCrawlerTasksRoutes.patch('/:taskId', validator('param', CrawlerTaskIdParamsSchema), validator('json', UpdateCrawlerTaskSchema), async (c) => {
+  const user = await requireSessionUser(c)
+  const { taskId } = c.req.valid('param')
+  const metadata = c.req.valid('json')
+  const taskAccess = await requireTaskAccess(c, user, taskId)
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const result = await repository.updateTaskMetadata({
+    audit: {
+      action: 'UPDATE',
+      actorEmail: user.email,
+      actorId: user.id,
+      outcome: 'updated',
+      reason: 'metadata_update',
+      taskId,
+    },
+    metadata,
+    taskId,
+  })
+  if (result.kind !== 'updated')
+    throw new HTTPException(result.kind === 'not_found' ? 404 : 409, { message: result.reasonCode ?? 'Task metadata update rejected' })
+  await createAuditLog(c, {
+    action: 'UPDATE',
+    resourceType: 'crawler_task',
+    resourceId: taskId,
+    changes: { metadata, outcome: 'updated', reason: 'metadata_update' },
+  })
+  return c.json({ lifecycle: result.lifecycle, metadata, taskId, operation: taskAccess.operation })
+})
+
+adminCrawlerTasksRoutes.post('/:taskId/archive', validator('param', CrawlerTaskIdParamsSchema), async (c) => {
+  const user = await requireSessionUser(c)
+  const { taskId } = c.req.valid('param')
+  await requireTaskAccess(c, user, taskId)
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const result = await repository.archiveTask(taskId)
+  if (result.kind === 'not_found')
+    throw new HTTPException(404, { message: 'Crawler task not found' })
+  if (result.kind === 'rejected')
+    throw new HTTPException(409, { message: result.reasonCode ?? 'Crawler task archive rejected' })
+  await createAuditLog(c, {
+    action: 'DELETE',
+    resourceType: 'crawler_task',
+    resourceId: taskId,
+    changes: { lifecycle: 'archived', outcome: result.kind, reason: 'archive' },
+  })
+  return c.json({ lifecycle: result.lifecycle, taskId, kind: result.kind })
+})
+
+adminCrawlerTasksRoutes.post('/:taskId/supersede', validator('param', CrawlerTaskIdParamsSchema), validator('json', SupersedeCrawlerTaskSchema), async (c) => {
+  const user = await requireSessionUser(c)
+  const { taskId } = c.req.valid('param')
+  const command = c.req.valid('json')
+  await requireTaskAccess(c, user, taskId)
+  const template = command.target.kind === 'manga' ? 'manga' : 'movie'
+  requireTemplateAccess(user, template)
+  if (command.operation === 'repair_players' && command.intent.kind !== 'repair_players')
+    throw new HTTPException(400, { message: 'Repair supersede requires repair intent' })
+  if (command.operation !== 'repair_players' && command.intent.kind !== 'crawl')
+    throw new HTTPException(400, { message: 'Crawler supersede requires crawl intent' })
+
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const result = await repository.supersedeTask({
+    operationCommand: {
+      actor: { id: user.id, kind: 'admin' },
+      ...command,
+    },
+    requestedByUserId: user.id,
+    taskId,
+  })
+  if (result.kind === 'rejected')
+    throw new HTTPException(409, { message: result.reasonCode ?? 'Crawler task supersede rejected' })
+  const dispatch = result.task?.kind === 'created'
+    ? await dispatchCreatedRun(c, repository, { attempt: result.task.run.attemptNumber, runId: result.task.run.id, template })
+    : { kind: 'existing_active_run' }
+  await createAuditLog(c, {
+    action: 'UPDATE',
+    resourceType: 'crawler_task',
+    resourceId: taskId,
+    changes: {
+      lifecycle: 'superseded',
+      outcome: result.kind,
+      reason: 'supersede',
+      target: { id: result.task?.run.taskId ?? taskId, kind: command.target.kind },
+    },
+  })
+  return c.json({ dispatch, kind: result.kind, lifecycle: result.lifecycle, taskId, task: result.task })
+})
+
+adminCrawlerTasksRoutes.get('/:taskId/audit', validator('param', CrawlerTaskIdParamsSchema), validator('query', CrawlerTaskAuditQuerySchema), async (c) => {
+  const user = await requireSessionUser(c)
+  const { taskId } = c.req.valid('param')
+  const { cursor, limit } = c.req.valid('query')
+  await requireTaskAccess(c, user, taskId)
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  return c.json(await repository.listTaskAudit({ cursor, limit, taskId }))
 })
 
 adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/playback-evidence', validator('param', CrawlerTaskRunParamsSchema), validator('json', PlaybackEvidenceRequestSchema), async (c) => {
@@ -1349,6 +1490,17 @@ adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/cancel', validator('param', C
       provider = { kind: 'provider_not_configured' }
     }
   }
+  await createAuditLog(c, {
+    action: 'UPDATE',
+    resourceType: 'crawler_task',
+    resourceId: taskId,
+    changes: {
+      attemptNumber: await readCurrentAttemptNumber(c, taskId, runId),
+      outcome: result.kind === 'transition' ? result.nextStatus : result.kind,
+      reason: 'cancel',
+      runId,
+    },
+  })
   return c.json({ decision: result, provider })
 })
 
@@ -1381,5 +1533,16 @@ adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/retry', validator('param', Cr
   const dispatch = result.kind === 'created'
     ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template: result.snapshot.templateKey })
     : { kind: 'existing_active_run' }
+  await createAuditLog(c, {
+    action: 'UPDATE',
+    resourceType: 'crawler_task',
+    resourceId: taskId,
+    changes: {
+      attemptNumber: result.run.attemptNumber,
+      outcome: result.kind,
+      reason: 'retry',
+      runId: result.run.id,
+    },
+  })
   return c.json({ dispatch, kind: result.kind, run: result.run })
 })

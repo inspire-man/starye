@@ -6,15 +6,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { adminCrawlerTasksRoutes } from '../index'
 
 const crawlerTaskRepository = vi.hoisted(() => ({
+  archiveTask: vi.fn(),
   applyTransition: vi.fn(),
   claimDispatch: vi.fn().mockResolvedValue({ kind: 'transition', nextStatus: 'dispatching' }),
   createOrGetActiveRun: vi.fn().mockResolvedValue({ kind: 'created', run: { id: 'run-movie' } }),
   ensureProviderAssociation: vi.fn().mockResolvedValue({ applicationAttempt: 1, runId: 'run-movie' }),
   getProviderAssociation: vi.fn(),
   getTaskDetail: vi.fn(),
+  listTaskAudit: vi.fn(),
   listRunLogs: vi.fn(),
   listTasks: vi.fn(),
   retryRun: vi.fn(),
+  supersedeTask: vi.fn(),
+  updateTaskMetadata: vi.fn(),
 }))
 
 const playbackEvidenceRepository = vi.hoisted(() => ({
@@ -111,6 +115,13 @@ describe('admin crawler task routes', () => {
     crawlerTaskRepository.createOrGetActiveRun.mockResolvedValue({ kind: 'created', run: { id: 'run-movie' } })
     crawlerTaskRepository.getTaskDetail.mockReset()
     crawlerTaskRepository.getTaskDetail.mockResolvedValue(undefined)
+    crawlerTaskRepository.archiveTask.mockReset()
+    crawlerTaskRepository.archiveTask.mockResolvedValue({ kind: 'updated', lifecycle: { changedAt: 100, status: 'archived', version: 1 }, taskId: 'task-movie' })
+    crawlerTaskRepository.listTaskAudit.mockReset()
+    crawlerTaskRepository.listTaskAudit.mockResolvedValue({ audits: [], nextCursor: null })
+    crawlerTaskRepository.supersedeTask.mockReset()
+    crawlerTaskRepository.updateTaskMetadata.mockReset()
+    crawlerTaskRepository.updateTaskMetadata.mockResolvedValue({ kind: 'updated', lifecycle: { changedAt: 100, status: 'active', version: 0 }, taskId: 'task-movie' })
     playbackEvidenceRepository.accept.mockReset()
     playbackEvidenceRepository.getTaskEvidence.mockResolvedValue({ runs: [] })
   })
@@ -327,6 +338,37 @@ describe('admin crawler task routes', () => {
         { attemptNumber: 1, failureCode: 'runner_failed', provider: null },
       ],
     })
+  })
+
+  it('accepts only allowlisted metadata and exposes bounded task lifecycle audit routes', async () => {
+    const updateApp = createApp({}, [[{ template_key: 'movie', operation: 'movie' }]])
+    const updated = await updateApp.app.request('/crawler-tasks/task-movie', {
+      body: JSON.stringify({ description: 'bounded note' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(updated.status).toBe(200)
+    expect(crawlerTaskRepository.updateTaskMetadata).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: { description: 'bounded note' },
+      taskId: 'task-movie',
+    }))
+
+    const forbidden = await updateApp.app.request('/crawler-tasks/task-movie', {
+      body: JSON.stringify({ workflow: 'caller-controlled' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+    expect(forbidden.status).toBe(400)
+    expect(crawlerTaskRepository.updateTaskMetadata).toHaveBeenCalledTimes(1)
+
+    const archive = await createApp({}, [[{ template_key: 'movie' }]]).app.request('/crawler-tasks/task-movie/archive', { method: 'POST' })
+    expect(archive.status).toBe(200)
+    await expect(archive.json()).resolves.toMatchObject({ kind: 'updated', lifecycle: { status: 'archived' } })
+
+    const auditApp = createApp({}, [[{ template_key: 'movie' }]])
+    const audit = await auditApp.app.request('/crawler-tasks/task-movie/audit?limit=2', { method: 'GET' })
+    expect(audit.status).toBe(200)
+    expect(crawlerTaskRepository.listTaskAudit).toHaveBeenCalledWith({ cursor: undefined, limit: 2, taskId: 'task-movie' })
   })
 
   it('rejects malformed task history cursors before the repository query', async () => {
@@ -572,14 +614,14 @@ describe('admin crawler task routes', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(crawlerTaskRepository.createOrGetActiveRun).toHaveBeenCalledWith({
+    expect(crawlerTaskRepository.createOrGetActiveRun).toHaveBeenCalledWith(expect.objectContaining({
       movieId: 'movie-1',
       operation: 'repair_players',
       reason: 'no_source',
       requestedByUserId: 'admin-1',
       targetIntent: 'restore_playable_sources',
       templateKey: 'movie',
-    })
+    }))
 
     const body = await response.json()
     expect(body).toMatchObject({

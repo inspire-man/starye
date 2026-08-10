@@ -18,7 +18,7 @@ export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'BULK_UPDATE' | 'BULK
 /**
  * 资源类型
  */
-export type AuditResourceType = 'comic' | 'movie' | 'chapter' | 'player' | 'actor' | 'publisher' | 'user'
+export type AuditResourceType = 'comic' | 'movie' | 'chapter' | 'player' | 'actor' | 'publisher' | 'user' | 'crawler_task'
 
 /**
  * 审计日志数据
@@ -35,7 +35,45 @@ export interface AuditLogData {
 /**
  * 敏感字段列表（不记录到审计日志）
  */
-const SENSITIVE_FIELDS = ['password', 'accessToken', 'refreshToken', 'idToken', 'token']
+const SENSITIVE_FIELDS = ['password', 'accessToken', 'refreshToken', 'idToken', 'token', 'secret', 'cookie', 'signedUrl', 'rawResponse', 'media', 'command', 'workflow', 'url']
+
+const CRAWLER_TASK_AUDIT_FIELDS = new Set([
+  'after',
+  'attemptNumber',
+  'before',
+  'description',
+  'intent',
+  'lifecycle',
+  'metadata',
+  'outcome',
+  'reason',
+  'runId',
+  'snapshotFingerprint',
+  'target',
+])
+
+function sanitizeCrawlerTaskChanges(data: any): Record<string, unknown> {
+  if (!data || typeof data !== 'object' || Array.isArray(data))
+    return {}
+  const result: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (!CRAWLER_TASK_AUDIT_FIELDS.has(key))
+      continue
+    if (key === 'target' && value && typeof value === 'object' && !Array.isArray(value)) {
+      const target = value as Record<string, unknown>
+      if (typeof target.id === 'string' && typeof target.kind === 'string')
+        result.target = { id: target.id.slice(0, 128), kind: target.kind.slice(0, 32) }
+      continue
+    }
+    if (key === 'metadata' || key === 'before' || key === 'after') {
+      result[key] = sanitizeCrawlerTaskChanges(value)
+      continue
+    }
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+      result[key] = typeof value === 'string' ? value.slice(0, 256) : value
+  }
+  return result
+}
 
 /**
  * 脱敏处理：移除敏感字段
@@ -140,7 +178,9 @@ export async function createAuditLog(
       resourceId: data.resourceId || null,
       resourceIdentifier: data.resourceIdentifier || null,
       affectedCount: data.affectedCount || 1,
-      changes: data.changes ? JSON.stringify(sanitizeData(data.changes)) : null,
+      changes: data.changes
+        ? JSON.stringify(data.resourceType === 'crawler_task' ? sanitizeCrawlerTaskChanges(data.changes) : sanitizeData(data.changes))
+        : null,
       ipAddress,
       userAgent,
     })

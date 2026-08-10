@@ -1,13 +1,13 @@
 import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
-import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerOperationCommandInput } from './operation-registry'
+import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskLifecycleStatus, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
+import { buildCrawlerOperationSnapshot } from './operation-registry'
 import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
-import { classifyCrawlerAutomaticRetry, createActiveCrawlerTaskLifecycle, createManualRetryAttempt, crawlerTaskLifecycleReason, decideCrawlerRunTransition, decideCrawlerTaskLifecycle, isTerminalCrawlerRunStatus } from './state-machine'
+import { classifyCrawlerAutomaticRetry, crawlerTaskLifecycleReason, createActiveCrawlerTaskLifecycle, createManualRetryAttempt, decideCrawlerRunTransition, decideCrawlerTaskLifecycle, isTerminalCrawlerRunStatus } from './state-machine'
 import { createCrawlerTaskSnapshot, readCrawlerTaskSnapshot } from './template-registry'
-import type { CrawlerOperationCommandInput } from './operation-registry'
-import { buildCrawlerOperationSnapshot } from './operation-registry'
 import {
   CRAWLER_LEASE_DURATION_MS,
   CRAWLER_MAX_NORMAL_LOG_ROWS,
@@ -331,21 +331,6 @@ interface TaskLifecycleRow {
   reason_code: string
   run_id: string
   safe_summary: string | null
-}
-
-interface TaskAuditRow {
-  action: string
-  attempt_number: number | null
-  actor_email: string
-  actor_id: string
-  created_at: number
-  id: string
-  outcome: string | null
-  reason: string | null
-  run_id: string | null
-  snapshot_fingerprint: string | null
-  target_id: string | null
-  target_kind: string | null
 }
 
 const DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS = 5 * 60_000
@@ -943,6 +928,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
   async function listTasks(input: {
     readonly cursor?: CrawlerTaskCursor
+    readonly lifecycle?: CrawlerTaskLifecycleStatus
     readonly limit: number
     readonly templateKey?: CrawlerTaskTemplateKey
   }): Promise<CrawlerTaskListPage> {
@@ -951,12 +937,54 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       SELECT id, template_key, latest_run_id, created_at, updated_at
       FROM crawler_task
       WHERE (? IS NULL OR template_key = ?)
+        AND (
+          ? IS NULL
+          OR (? = 'active' AND NOT EXISTS (
+            SELECT 1
+            FROM crawler_run_transition AS lifecycle_transition
+            INNER JOIN crawler_run AS lifecycle_run ON lifecycle_run.id = lifecycle_transition.run_id
+            WHERE lifecycle_run.task_id = crawler_task.id
+              AND lifecycle_transition.reason_code IN ('task_archived', 'task_superseded')
+          ))
+          OR (? = 'archived' AND EXISTS (
+            SELECT 1
+            FROM crawler_run_transition AS lifecycle_transition
+            INNER JOIN crawler_run AS lifecycle_run ON lifecycle_run.id = lifecycle_transition.run_id
+            WHERE lifecycle_run.task_id = crawler_task.id AND lifecycle_transition.reason_code = 'task_archived'
+              AND NOT EXISTS (
+                SELECT 1 FROM crawler_run_transition AS newer
+                INNER JOIN crawler_run AS newer_run ON newer_run.id = newer.run_id
+                WHERE newer_run.task_id = crawler_task.id
+                  AND newer.reason_code IN ('task_archived', 'task_superseded')
+                  AND (newer.created_at > lifecycle_transition.created_at
+                    OR (newer.created_at = lifecycle_transition.created_at AND newer.id > lifecycle_transition.id))
+              )
+          ))
+          OR (? = 'superseded' AND EXISTS (
+            SELECT 1
+            FROM crawler_run_transition AS lifecycle_transition
+            INNER JOIN crawler_run AS lifecycle_run ON lifecycle_run.id = lifecycle_transition.run_id
+            WHERE lifecycle_run.task_id = crawler_task.id AND lifecycle_transition.reason_code = 'task_superseded'
+              AND NOT EXISTS (
+                SELECT 1 FROM crawler_run_transition AS newer
+                INNER JOIN crawler_run AS newer_run ON newer_run.id = newer.run_id
+                WHERE newer_run.task_id = crawler_task.id
+                  AND newer.reason_code IN ('task_archived', 'task_superseded')
+                  AND (newer.created_at > lifecycle_transition.created_at
+                    OR (newer.created_at = lifecycle_transition.created_at AND newer.id > lifecycle_transition.id))
+              )
+          ))
+        )
         AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
       ORDER BY updated_at DESC, id DESC
       LIMIT ?
     `).bind(
       input.templateKey ?? null,
       input.templateKey ?? null,
+      input.lifecycle ?? null,
+      input.lifecycle ?? null,
+      input.lifecycle ?? null,
+      input.lifecycle ?? null,
       input.cursor?.updatedAt ?? null,
       input.cursor?.updatedAt ?? null,
       input.cursor?.updatedAt ?? null,
@@ -1208,16 +1236,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const lifecycle = await readTaskLifecycle(input.taskId)
     if (lifecycle.status !== 'active')
       return { kind: 'rejected', lifecycle, reasonCode: 'task_not_active', taskId: input.taskId }
-    const recorded = await recordTaskAudit({
-      ...input.audit,
-      action: 'UPDATE',
-      metadata: input.metadata,
-      outcome: 'updated',
-      taskId: input.taskId,
-    })
-    return recorded
-      ? { kind: 'updated', lifecycle, taskId: input.taskId }
-      : { kind: 'rejected', lifecycle, reasonCode: 'audit_persistence_failed', taskId: input.taskId }
+    return { kind: 'updated', lifecycle, taskId: input.taskId }
   }
 
   async function listRunLogs(input: {
