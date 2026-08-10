@@ -881,9 +881,10 @@ interface Phase24Chromium {
 }
 
 function resolveChromium(value: unknown): Phase24Chromium {
-  if (!isRecord(value) || !isRecord(value.chromium))
+  const moduleValue = isRecord(value) && isRecord(value.default) ? value.default : value
+  if (!isRecord(moduleValue) || !isRecord(moduleValue.chromium))
     throw new Error('Playwright chromium module is unavailable')
-  return value.chromium as unknown as Phase24Chromium
+  return moduleValue.chromium as unknown as Phase24Chromium
 }
 
 async function loadChromium(): Promise<Phase24Chromium> {
