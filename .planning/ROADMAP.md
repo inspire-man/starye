@@ -29,7 +29,7 @@ v1.4 将 v1.3 已验证的受控 crawler control plane 延伸到播放可用性�
 - [x] **Phase 21: Source Health And Local repair_players Vertical Slice** - 提供来源健康观察和本地受控修复纵向链路。
 - [x] **Phase 22: Dashboard, MovieDetail And Player State Closure** - 将 source projection 转化为 Dashboard、MovieDetail 和 Player 的可操作状态体验。 (completed 2026-08-07)
 - [x] **Phase 23: GitHub Actions Production Repair And Reconciliation** - 把受控修复接入生产 provider，并保持 attempt、lease、callback 和 receipt 可追溯。 (completed 2026-08-08)
-- [ ] **Phase 24: Fresh Production Dashboard -> Viewer -> Playback Proof** - 用独立 fresh production run 验收完整 Dashboard → Viewer → 实际播放证据链。
+- [x] **Phase 24: Fresh Production Dashboard -> Viewer -> Playback Proof** - 用独立 fresh production run 验收完整 Dashboard → Viewer → 实际播放证据链。 (completed 2026-08-10)
 
 ## Phase Details
 
@@ -166,7 +166,7 @@ Plans:
 - [x] 24-02-PLAN.md — 建立 D1/CAS persistence、authenticated evidence endpoint 与 task detail projection
 - [x] 24-03-PLAN.md — 完成 Dashboard current-attempt 与四层 evidence trace
 - [x] 24-04-PLAN.md — 完成 MovieDetail/Player visible Play、event timeline 与 bounded progress
-- [ ] 24-05-PLAN.md — 运行 artifact-first canonical Gateway fresh production proof
+- [x] 24-05-PLAN.md — 运行 artifact-first canonical Gateway fresh production proof
 
 **UI hint**: yes
 
@@ -180,4 +180,4 @@ Plans:
 | 21. Source Health And Local repair_players Vertical Slice | 7/7 | Complete | 2026-08-06 |
 | 22. Dashboard, MovieDetail And Player State Closure | 3/3 | Complete    | 2026-08-07 |
 | 23. GitHub Actions Production Repair And Reconciliation | 5/5 | Complete    | 2026-08-08 |
-| 24. Fresh Production Dashboard -> Viewer -> Playback Proof | 4/5 | In Progress|  |
+| 24. Fresh Production Dashboard -> Viewer -> Playback Proof | 5/5 | Complete    | 2026-08-10 |
