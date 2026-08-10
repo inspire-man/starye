@@ -1,19 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: 播放可用性与生产自愈闭环
-current_phase: 24
-current_phase_name: Fresh Production Dashboard -> Viewer -> Playback Proof
-status: completed
-stopped_at: Phase 24 complete
-last_updated: "2026-08-10T11:15:59.397Z"
+milestone: v1.5
+milestone_name: 爬虫运管与内容可用性闭环
+status: planning
+last_updated: "2026-08-10T12:27:39.058Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 24 complete
 progress:
-  total_phases: 5
-completed_phases: 5
-  total_plans: 23
-  completed_plans: 23
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State: Starye — 个人内容中台
@@ -23,16 +20,14 @@ completed_phases: 5
 See: `.planning/PROJECT.md` (updated 2026-08-05)
 
 **Core value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
-**Current focus:** Phase 24 — Fresh Production Dashboard -> Viewer -> Playback Proof
+**Current focus:** v1.5 — 爬虫运管与内容可用性闭环
 
 ## Current Position
 
-Phase: 24 (Fresh Production Dashboard -> Viewer -> Playback Proof) — COMPLETE
-Plan: 5 of 5
-Status: All phases complete
-Last activity: 2026-08-10 — Phase 24 complete
-
-Progress: ██████████ [██████████] 100% (Phase 20: 100%; Phase 21: 100%; Phase 22: 100%; Phase 23: 100%; Phase 24: 100%)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-08-10 — Milestone v1.5 started
 
 ## Performance Metrics
 

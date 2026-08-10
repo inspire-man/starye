@@ -19,20 +19,21 @@
 - `SUN-064` metadata mutation/readback/restore passed; its production receipt currently reports `players=0`, so player availability remains a follow-up observation.
 - The unrelated `@starye/config` CI lint baseline remains tracked as non-causal technical debt.
 
-## Current Milestone: v1.4 播放可用性与生产自愈闭环
+## Current Milestone: v1.5 爬虫运管与内容可用性闭环
 
-**Goal:** 让爬虫入库结果稳定转化为可播放内容，并用 fresh production run 证明 Dashboard → Viewer → 实际播放的完整日常使用链路。
+**Goal:** 将爬虫任务运管、数据入库、磁链与漫画内容可用性检查、修复重试和 Dashboard 证据验收串成可持续迭代的完整日常使用链路。
 
 **Target features:**
 
-- 新抓取内容明确区分元数据入库与可播放源；无播放源内容进入可修复状态，并修复 `SUN-064` 的 `players=0`。
-- MovieDetail / Player 覆盖无源、失效、重试、回退和错误提示等真实播放状态。
-- 通过受控任务执行恢复播放源，并保留可审计的修复结果与运行证据。
-- 使用 fresh production run 完成 Dashboard → Viewer → 实际播放验收，保留历史冻结 carrier 的边界。
+- 爬虫任务增删改、详情、取消、重试、运行历史与审计状态形成统一运管入口。
+- 视频元数据、播放源和磁链可用性分别检查、呈现并支持受控修复或复查。
+- 漫画章节完整性覆盖缺章、重复章、顺序异常和抓取终态。
+- 章节图片可用性覆盖缺图、失效 URL、加载失败、顺序与数量异常。
+- 任务、检查结果、修复动作和脱敏证据通过 canonical Gateway 串成可验收链路。
 
 ## Current State
 
-v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations 和 receipt-backed content CRUD；v1.4 Phase 21 已完成本地 source health 与 repair_players control-plane vertical proof，后续继续闭环到播放状态与生产可验证性。
+v1.3 已交付并归档，v1.4 已完成播放可用性、生产修复与 fresh Dashboard → Viewer → playback 证据闭环。产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations、source health、repair_players 和 receipt-backed content CRUD；v1.5 继续把视频与漫画的数据可用性检查接入同一运管链路。
 
 **Latest archived milestone:** v1.3 后台爬虫任务与内容运维（2026-08-04，override closeout）
 
@@ -108,9 +109,11 @@ v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plan
 
 ### Active
 
-- [ ] 生产播放源修复与 reconciliation：生产 provider 执行恢复同一内容的播放源，并保留可追溯的 attempt、lease、callback 与 receipt。
-- [ ] 播放端状态闭环：MovieDetail / Player 对无源、失效、重试、回退和错误状态给出可操作反馈。
-- [ ] 生产链路证明：fresh production run 完成 Dashboard → Viewer → 实际播放，并产出 receipt、运行与修复证据。
+- [ ] 爬虫任务运管：用户可以增删改受控任务，查看详情、运行历史、取消、重试和审计状态，并保持 task/run/attempt 事实一致。
+- [ ] 视频数据可用性：元数据、source 和磁链分别具备检查结果、失败原因、重试/修复动作与可追溯证据。
+- [ ] 漫画章节完整性：系统能发现缺章、重复章、顺序异常和抓取终态问题，并支持受控复查。
+- [ ] 章节图片可用性：系统能发现缺图、失效 URL、加载失败、顺序/数量异常，并支持受控修复或重抓。
+- [ ] 全链路验收：从 Dashboard 任务运管到数据可用性读回、修复结果和 canonical Gateway 证据形成可重复验证链路。
 
 ### Out of Scope
 
@@ -151,11 +154,12 @@ v1.3 已交付并归档。产品当前拥有可审计的 D1 crawler control plan
 - v1.1 已通过 milestone audit：5/5 phases complete，15/15 plans complete，22/22 v1 requirements satisfied
 - v1.2 已以 override closeout 归档；其 selected-production Viewer proof 保持历史 deferred 状态
 - v1.3 已以 override closeout 归档：18/18 requirements、4/4 phases、4/4 integration flows、4/4 end-to-end flows 均通过
-- v1.4 通过 `$gsd-new-milestone` 进入需求定义，随后生成 `.planning/REQUIREMENTS.md` 和 phased roadmap
+- v1.4 已完成播放可用性、生产修复与 fresh production evidence，并归档其 phase artifacts
+- v1.5 通过 `$gsd-new-milestone` 进入需求定义，聚焦爬虫运管、视频磁链、漫画章节和章节图片的数据可用性
 - selected-production Viewer proof 的历史 Phase 13 carrier 继续冻结；v1.4 使用独立 fresh run 处理播放验收
 - 已接受的历史归档债仍主要来自 v1.0：Phase 1 无 retroactive `01-SECURITY.md`；Phase 1/2 部分 metadata 滞后；下一次真实 migration workflow 需复核 R2 backup object path
 - v1.1 已把 R2 必要资产边界、external/source image semantics、shared storage helper、policy-aware admin/script behavior 和 canonical doc ownership 一并收口
-- v1.4 将处理 `SUN-064 players=0` 的播放源修复；`@starye/config` lint baseline 继续作为独立技术债
+- v1.4 已完成 `SUN-064 players=0` 的播放源修复边界；`@starye/config` lint baseline 继续作为独立技术债
 
 **已知风险区**：见 [`.planning/codebase/CONCERNS.md`](.planning/codebase/CONCERNS.md) —— v1 Active 需求会优先覆盖里面影响"日常使用"的问题。
 
@@ -217,4 +221,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-06 after Phase 21 completion*
+*Last updated: 2026-08-10 after v1.4 completion and v1.5 kickoff*
