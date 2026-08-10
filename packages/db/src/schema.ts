@@ -402,6 +402,79 @@ export const crawlerRuns = sqliteTable('crawler_run', {
 export type CrawlerRun = InferSelectModel<typeof crawlerRuns>
 export type NewCrawlerRun = InferInsertModel<typeof crawlerRuns>
 
+/** Append-only, bounded availability facts for one task/run/attempt tuple. */
+export const crawlerAvailabilityObservations = sqliteTable('crawler_availability_observation', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => crawlerTasks.id),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id),
+  attemptNumber: integer('attempt_number').notNull(),
+  provider: text('provider', { enum: ['github-actions'] }).notNull(),
+  targetKind: text('target_kind', { enum: ['movie', 'manga', 'video', 'chapter', 'image'] }).notNull(),
+  targetId: text('target_id').notNull(),
+  contentId: text('content_id').notNull(),
+  sourceRevision: integer('source_revision').notNull(),
+  policyVersion: text('policy_version').notNull(),
+  observationIdentity: text('observation_identity').notNull(),
+  eventSequence: integer('event_sequence').notNull(),
+  freshness: text('freshness', { enum: ['fresh', 'stale', 'late'] }).notNull(),
+  status: text('status', { enum: ['available', 'unavailable', 'degraded', 'unknown'] }).notNull(),
+  reasonCode: text('reason_code').notNull(),
+  nextAction: text('next_action', { enum: ['none', 'recheck', 'repair', 'retry', 'ignore'] }).notNull(),
+  summaryJson: text('summary_json', { mode: 'json' }).notNull(),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_crawler_availability_observation_identity').on(table.observationIdentity),
+  uniqueIndex('idx_crawler_availability_observation_event').on(table.runId, table.attemptNumber, table.eventSequence),
+  index('idx_crawler_availability_observation_task_attempt').on(table.taskId, table.runId, table.attemptNumber),
+  index('idx_crawler_availability_observation_target_revision').on(table.targetKind, table.targetId, table.contentId, table.sourceRevision),
+  index('idx_crawler_availability_observation_observed').on(table.observedAt),
+  foreignKey({
+    columns: [table.taskId, table.runId],
+    foreignColumns: [crawlerRuns.taskId, crawlerRuns.id],
+  }),
+])
+
+export type CrawlerAvailabilityObservation = InferSelectModel<typeof crawlerAvailabilityObservations>
+export type NewCrawlerAvailabilityObservation = InferInsertModel<typeof crawlerAvailabilityObservations>
+
+/** One bounded current row per target/content identity; promotion is revision/policy CAS guarded by the API contract. */
+export const crawlerAvailabilityCurrent = sqliteTable('crawler_availability_current', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => crawlerTasks.id),
+  runId: text('run_id').notNull().references(() => crawlerRuns.id),
+  attemptNumber: integer('attempt_number').notNull(),
+  provider: text('provider', { enum: ['github-actions'] }).notNull(),
+  targetKind: text('target_kind', { enum: ['movie', 'manga', 'video', 'chapter', 'image'] }).notNull(),
+  targetId: text('target_id').notNull(),
+  contentId: text('content_id').notNull(),
+  sourceRevision: integer('source_revision').notNull(),
+  policyVersion: text('policy_version').notNull(),
+  observationIdentity: text('observation_identity').notNull(),
+  eventSequence: integer('event_sequence').notNull(),
+  projectionVersion: integer('projection_version').notNull().default(0),
+  freshness: text('freshness', { enum: ['fresh', 'stale', 'late'] }).notNull(),
+  status: text('status', { enum: ['available', 'unavailable', 'degraded', 'unknown'] }).notNull(),
+  reasonCode: text('reason_code').notNull(),
+  nextAction: text('next_action', { enum: ['none', 'recheck', 'repair', 'retry', 'ignore'] }).notNull(),
+  summaryJson: text('summary_json', { mode: 'json' }).notNull(),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_crawler_availability_current_target').on(table.targetKind, table.targetId, table.contentId),
+  uniqueIndex('idx_crawler_availability_current_observation').on(table.observationIdentity),
+  index('idx_crawler_availability_current_task_attempt').on(table.taskId, table.runId, table.attemptNumber),
+  index('idx_crawler_availability_current_target_revision').on(table.targetKind, table.targetId, table.contentId, table.sourceRevision),
+  index('idx_crawler_availability_current_policy_version').on(table.policyVersion, table.projectionVersion),
+  foreignKey({
+    columns: [table.taskId, table.runId],
+    foreignColumns: [crawlerRuns.taskId, crawlerRuns.id],
+  }),
+])
+
+export type CrawlerAvailabilityCurrent = InferSelectModel<typeof crawlerAvailabilityCurrent>
+export type NewCrawlerAvailabilityCurrent = InferInsertModel<typeof crawlerAvailabilityCurrent>
+
 /** The first valid terminal playback fact for one fresh tuple/content/revision. */
 export const playbackEvidenceSummaries = sqliteTable('playback_evidence_summary', {
   id: text('id').primaryKey(),
@@ -840,6 +913,8 @@ export const crawlerTaskRelations = relations(crawlerTasks, ({ many, one }) => (
     references: [user.id],
   }),
   runs: many(crawlerRuns),
+  availabilityObservations: many(crawlerAvailabilityObservations),
+  availabilityCurrent: many(crawlerAvailabilityCurrent),
   playbackEvidenceSummaries: many(playbackEvidenceSummaries),
   playbackEvidenceRejections: many(playbackEvidenceRejections),
 }))
@@ -850,6 +925,8 @@ export const crawlerRunRelations = relations(crawlerRuns, ({ many, one }) => ({
     references: [crawlerTasks.id],
   }),
   transitions: many(crawlerRunTransitions),
+  availabilityObservations: many(crawlerAvailabilityObservations),
+  availabilityCurrent: many(crawlerAvailabilityCurrent),
   runnerEvents: many(crawlerRunnerEvents),
   logs: many(crawlerRunLogs),
   providerAssociation: one(crawlerRunProviderAssociations),
@@ -857,6 +934,28 @@ export const crawlerRunRelations = relations(crawlerRuns, ({ many, one }) => ({
   sourceObservations: many(movieSourceObservations),
   playbackEvidenceSummaries: many(playbackEvidenceSummaries),
   playbackEvidenceRejections: many(playbackEvidenceRejections),
+}))
+
+export const crawlerAvailabilityObservationRelations = relations(crawlerAvailabilityObservations, ({ one }) => ({
+  task: one(crawlerTasks, {
+    fields: [crawlerAvailabilityObservations.taskId],
+    references: [crawlerTasks.id],
+  }),
+  run: one(crawlerRuns, {
+    fields: [crawlerAvailabilityObservations.runId],
+    references: [crawlerRuns.id],
+  }),
+}))
+
+export const crawlerAvailabilityCurrentRelations = relations(crawlerAvailabilityCurrent, ({ one }) => ({
+  task: one(crawlerTasks, {
+    fields: [crawlerAvailabilityCurrent.taskId],
+    references: [crawlerTasks.id],
+  }),
+  run: one(crawlerRuns, {
+    fields: [crawlerAvailabilityCurrent.runId],
+    references: [crawlerRuns.id],
+  }),
 }))
 
 export const playbackEvidenceSummaryRelations = relations(playbackEvidenceSummaries, ({ one }) => ({

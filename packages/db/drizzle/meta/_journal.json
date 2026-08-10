@@ -190,6 +190,13 @@
       "when": 1785912000000,
       "tag": "0029_source_contract_receipt_boundary",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1786376168483,
+      "tag": "20260810153608_crawler_task_availability",
+      "breakpoints": true
     }
   ]
 }
