@@ -8,11 +8,11 @@
 ### Task Operations
 
 - [x] **TASK-01**: 用户可以通过受控 operation registry 创建爬虫、检查或修复任务；任务快照包含目标身份、操作类型、策略版本和目标意图，workflow、URL、命令与 secrets 仍由服务端管理。
-- [ ] **TASK-02**: 用户可以分页查看任务列表和详情，并看到任务状态、目标内容、最新 run/attempt、provider、receipt、日志摘要与历史转换记录。
-- [ ] **TASK-03**: 用户可以修改任务允许修改的描述和策略意图，并可以归档任务；归档或 supersede 不删除已有 run、attempt、receipt、observation 和审计事实，活动中的不可变快照保持可追溯。
+- [x] **TASK-02**: 用户可以分页查看任务列表和详情，并看到任务状态、目标内容、最新 run/attempt、provider、receipt、日志摘要与历史转换记录。
+- [x] **TASK-03**: 用户可以修改任务允许修改的描述和策略意图，并可以归档任务；归档或 supersede 不删除已有 run、attempt、receipt、observation 和审计事实，活动中的不可变快照保持可追溯。
 - [x] **TASK-04**: 用户可以取消 queued 或 running 任务，并能看到取消请求、provider 状态和最终结果；迟到的回调不能把已取消或更新后的任务写成成功。
 - [x] **TASK-05**: 用户可以对失败或取消的任务执行有界重试；重复点击或事件重放保持幂等，新的 run/attempt 保留旧日志、receipt、source observation 和失败原因。
-- [ ] **TASK-06**: 用户可以从同一任务详情查看创建、更新、归档、取消、重试和修复操作的审计信息，包括目标、原因、时间、操作者和结果摘要。
+- [x] **TASK-06**: 用户可以从同一任务详情查看创建、更新、归档、取消、重试和修复操作的审计信息，包括目标、原因、时间、操作者和结果摘要。
 
 ### Video And Magnet Availability
 
@@ -73,11 +73,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | TASK-01 | Phase 25 | Complete |
-| TASK-02 | Phase 25 | Pending |
-| TASK-03 | Phase 25 | Pending |
+| TASK-02 | Phase 25 | Complete |
+| TASK-03 | Phase 25 | Complete |
 | TASK-04 | Phase 25 | Complete |
 | TASK-05 | Phase 25 | Complete |
-| TASK-06 | Phase 25 | Pending |
+| TASK-06 | Phase 25 | Complete |
 | VID-01 | Phase 26 | Pending |
 | VID-02 | Phase 26 | Pending |
 | VID-03 | Phase 26 | Pending |
