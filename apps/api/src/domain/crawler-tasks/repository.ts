@@ -1,14 +1,17 @@
 import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
-import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
-import { classifyCrawlerAutomaticRetry, createManualRetryAttempt, decideCrawlerRunTransition, isTerminalCrawlerRunStatus } from './state-machine'
+import { classifyCrawlerAutomaticRetry, createActiveCrawlerTaskLifecycle, createManualRetryAttempt, crawlerTaskLifecycleReason, decideCrawlerRunTransition, decideCrawlerTaskLifecycle, isTerminalCrawlerRunStatus } from './state-machine'
 import { createCrawlerTaskSnapshot, readCrawlerTaskSnapshot } from './template-registry'
+import type { CrawlerOperationCommandInput } from './operation-registry'
+import { buildCrawlerOperationSnapshot } from './operation-registry'
 import {
   CRAWLER_LEASE_DURATION_MS,
   CRAWLER_MAX_NORMAL_LOG_ROWS,
+  CRAWLER_MAX_RETRY_ATTEMPTS,
   CRAWLER_MAX_SAFE_LOG_BYTES,
   CRAWLER_RUN_LOG_RETENTION_MS,
 
@@ -79,6 +82,7 @@ export interface CreateCrawlerTaskRunInput {
   readonly idempotencyKey?: string
   readonly movieId?: string
   readonly operation?: CrawlerTaskOperation
+  readonly operationCommand?: CrawlerOperationCommandInput
   readonly reason?: RepairPlayersReason
   readonly requestedByUserId: string
   readonly targetIntent?: RepairPlayersTargetIntent
@@ -87,7 +91,49 @@ export interface CreateCrawlerTaskRunInput {
 
 export type CrawlerTaskRunResult
   = | { readonly kind: 'created', readonly run: CrawlerTaskRun, readonly snapshot: CrawlerTaskSnapshotUnion }
+    | { readonly kind: 'conflict', readonly run: CrawlerTaskRun, readonly taskId: string }
+    | { readonly kind: 'duplicate', readonly run: CrawlerTaskRun, readonly taskId: string }
     | { readonly kind: 'existing_active_run', readonly run: CrawlerTaskRun }
+
+export interface CrawlerTaskMetadataInput {
+  readonly description?: string
+  readonly intent?: string
+}
+
+export interface CrawlerTaskMutationResult {
+  readonly kind: 'updated' | 'idempotent' | 'not_found' | 'rejected'
+  readonly lifecycle?: CrawlerTaskLifecycleProjection
+  readonly reasonCode?: string
+  readonly taskId: string
+}
+
+export interface CrawlerTaskSupersedeResult {
+  readonly kind: 'created' | 'idempotent' | 'rejected'
+  readonly oldTaskId: string
+  readonly reasonCode?: string
+  readonly task?: CrawlerTaskRunResult
+  readonly lifecycle?: CrawlerTaskLifecycleProjection
+}
+
+export interface SupersedeCrawlerTaskInput {
+  readonly operationCommand: CrawlerOperationCommandInput
+  readonly requestedByUserId: string
+  readonly taskId: string
+}
+
+export interface TaskAuditInput {
+  readonly action: 'CREATE' | 'UPDATE' | 'DELETE'
+  readonly actorEmail: string
+  readonly actorId: string
+  readonly attemptNumber?: number
+  readonly outcome: string
+  readonly reason: string
+  readonly runId?: string
+  readonly snapshotFingerprint?: string
+  readonly target?: { readonly id: string, readonly kind: string }
+  readonly taskId: string
+  readonly metadata?: { readonly description?: string, readonly intent?: string }
+}
 
 export interface AppendCrawlerRunLogInput {
   readonly code: string
@@ -280,6 +326,28 @@ interface TaskBindingRow {
   template_key: CrawlerTaskTemplateKey
 }
 
+interface TaskLifecycleRow {
+  created_at: number
+  reason_code: string
+  run_id: string
+  safe_summary: string | null
+}
+
+interface TaskAuditRow {
+  action: string
+  attempt_number: number | null
+  actor_email: string
+  actor_id: string
+  created_at: number
+  id: string
+  outcome: string | null
+  reason: string | null
+  run_id: string | null
+  snapshot_fingerprint: string | null
+  target_id: string | null
+  target_kind: string | null
+}
+
 const DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS = 5 * 60_000
 
 function asD1Client(db: CrawlerTaskDatabase): D1Client {
@@ -290,11 +358,12 @@ function toUnixSeconds(date: Date): number {
   return Math.floor(date.getTime() / 1000)
 }
 
-function toCrawlerTaskListItem(row: CrawlerTaskRow): CrawlerTaskListItem {
+function toCrawlerTaskListItem(row: CrawlerTaskRow, lifecycle: CrawlerTaskLifecycleProjection): CrawlerTaskListItem {
   return {
     createdAt: row.created_at,
     id: row.id,
     latestRunId: row.latest_run_id,
+    lifecycle,
     templateKey: row.template_key,
     updatedAt: row.updated_at,
   }
@@ -639,7 +708,7 @@ function isOrdinaryReceiptCandidate(value: ProcessCrawlerRunnerEventInput['recei
     && 'templateKey' in value
 }
 
-const MAX_AUTOMATIC_RETRY_ATTEMPTS = 2
+const MAX_AUTOMATIC_RETRY_ATTEMPTS = CRAWLER_MAX_RETRY_ATTEMPTS
 
 interface TaskRetryRunRow {
   readonly attempt_number: number
@@ -750,6 +819,109 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return parsed.snapshot
   }
 
+  async function readTaskLifecycle(taskId: string): Promise<CrawlerTaskLifecycleProjection> {
+    try {
+      const result = await d1.prepare(`
+        SELECT transition.run_id, transition.reason_code, transition.safe_summary, transition.created_at
+        FROM crawler_run_transition AS transition
+        INNER JOIN crawler_run AS run ON run.id = transition.run_id
+        WHERE run.task_id = ?
+          AND transition.reason_code IN ('task_archived', 'task_superseded')
+        ORDER BY transition.created_at DESC, transition.id DESC
+        LIMIT 1
+      `).bind(taskId).all<TaskLifecycleRow>()
+      const row = result.results?.[0]
+      if (!row)
+        return createActiveCrawlerTaskLifecycle(0)
+      const status = row.reason_code === 'task_archived' ? 'archived' : 'superseded'
+      const supersededByTaskId = row.safe_summary?.match(/^superseded_by:([\w-]{1,128})$/u)?.[1]
+      return {
+        changedAt: row.created_at,
+        status,
+        version: 1,
+        ...(supersededByTaskId ? { supersededByTaskId } : {}),
+      }
+    }
+    catch {
+      // Legacy local fixtures may not include transition history for task lifecycle.
+      return createActiveCrawlerTaskLifecycle(0)
+    }
+  }
+
+  async function readTaskAudit(input: {
+    readonly cursor?: string
+    readonly limit: number
+    readonly taskId: string
+  }): Promise<CrawlerTaskAuditPage> {
+    const limit = Math.max(1, Math.min(50, input.limit))
+    try {
+      const cursorCreatedAt = input.cursor ? Number(input.cursor.split(':')[0]) : undefined
+      const cursorId = input.cursor?.split(':')[1]
+      const result = await d1.prepare(`
+        SELECT id, action, user_id AS actor_id, user_email AS actor_email, created_at,
+          changes
+        FROM audit_log
+        WHERE resource_type = 'crawler_task'
+          AND resource_id = ?
+          AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+      `).bind(
+        input.taskId,
+        cursorCreatedAt ?? null,
+        cursorCreatedAt ?? null,
+        cursorCreatedAt ?? null,
+        cursorId ?? null,
+        limit + 1,
+      ).all<{
+        action: string
+        actor_email: string
+        actor_id: string
+        changes: string | null
+        created_at: number
+        id: string
+      }>()
+      const rows = result.results ?? []
+      const pageRows = rows.slice(0, limit)
+      const audits = pageRows.map((row): CrawlerTaskAuditReadModel => {
+        let changes: Record<string, unknown> = {}
+        try {
+          const parsed = row.changes ? JSON.parse(row.changes) : {}
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+            changes = parsed as Record<string, unknown>
+        }
+        catch {
+          changes = {}
+        }
+        const target = changes.target
+        return {
+          action: row.action,
+          actor: { email: row.actor_email, id: row.actor_id },
+          createdAt: row.created_at,
+          id: row.id,
+          outcome: typeof changes.outcome === 'string' ? changes.outcome : 'recorded',
+          reason: typeof changes.reason === 'string' ? changes.reason : 'unspecified',
+          ...(typeof changes.runId === 'string' ? { runId: changes.runId } : {}),
+          ...(typeof changes.attemptNumber === 'number' ? { attemptNumber: changes.attemptNumber } : {}),
+          ...(target && typeof target === 'object' && !Array.isArray(target)
+            && typeof (target as Record<string, unknown>).id === 'string'
+            && typeof (target as Record<string, unknown>).kind === 'string'
+            ? { target: target as { id: string, kind: string } }
+            : {}),
+          ...(typeof changes.snapshotFingerprint === 'string' ? { snapshotFingerprint: changes.snapshotFingerprint } : {}),
+        }
+      })
+      const last = pageRows.at(-1)
+      return {
+        audits,
+        nextCursor: rows.length > limit && last ? `${last.created_at}:${last.id}` : null,
+      }
+    }
+    catch {
+      return { audits: [], nextCursor: null }
+    }
+  }
+
   async function getProviderAssociation(runId: string): Promise<ProviderAssociationRecord | undefined> {
     try {
       const result = await d1.prepare(`
@@ -797,8 +969,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const last = pageRows.at(-1)
     const tasks = await Promise.all(pageRows.map(async (row) => {
       const retry = await readTaskRetryProjection(d1, row.id)
+      const lifecycle = await readTaskLifecycle(row.id)
       return {
-        ...toCrawlerTaskListItem(row),
+        ...toCrawlerTaskListItem(row, lifecycle),
         ...(retry ? { retry } : {}),
       }
     }))
@@ -820,6 +993,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const taskRow = taskResult.results?.[0]
     if (!taskRow)
       return undefined
+    const lifecycle = await readTaskLifecycle(taskId)
 
     const runsResult = await d1.prepare(`
       SELECT id, task_id, attempt_number, status, state_version, last_event_sequence,
@@ -829,6 +1003,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       FROM crawler_run
       WHERE task_id = ?
       ORDER BY attempt_number DESC, id DESC
+      LIMIT 50
     `).bind(taskId).all<CrawlerRunRow>()
 
     const runs: CrawlerRunReadModel[] = []
@@ -874,10 +1049,175 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       runs,
       ...(retry ? { retry } : {}),
       task: {
-        ...toCrawlerTaskListItem(taskRow),
+        ...toCrawlerTaskListItem(taskRow, lifecycle),
         ...(retry ? { retry } : {}),
       },
+      lifecycle,
     }
+  }
+
+  async function transitionTaskLifecycle(
+    taskId: string,
+    event: CrawlerTaskLifecycleEvent,
+  ): Promise<CrawlerTaskMutationResult> {
+    const task = await d1.prepare(`
+      SELECT id, latest_run_id, updated_at
+      FROM crawler_task
+      WHERE id = ?
+      LIMIT 1
+    `).bind(taskId).all<{ id: string, latest_run_id: string | null, updated_at: number }>()
+    const taskRow = task.results?.[0]
+    if (!taskRow)
+      return { kind: 'not_found', taskId }
+    const current = await readTaskLifecycle(taskId)
+    const decision = decideCrawlerTaskLifecycle(current, event)
+    if (decision.kind === 'idempotent')
+      return { kind: 'idempotent', lifecycle: current, taskId }
+    if (decision.kind === 'rejected')
+      return { kind: 'rejected', lifecycle: current, reasonCode: decision.reasonCode, taskId }
+    if (!taskRow.latest_run_id)
+      return { kind: 'rejected', lifecycle: current, reasonCode: 'missing_latest_run', taskId }
+
+    const currentNow = toUnixSeconds(now())
+    const next: CrawlerTaskLifecycleProjection = {
+      ...decision.next,
+      changedAt: currentNow,
+    }
+    const reasonCode = crawlerTaskLifecycleReason(event)
+    const safeSummary = event.type === 'supersede'
+      ? `superseded_by:${event.supersededByTaskId}`
+      : 'task archived'
+    const transitionSequence = -(100 + next.version)
+    const batchResults = await d1.batch([
+      d1.prepare(`
+        INSERT OR IGNORE INTO crawler_run_transition (
+          id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+        )
+        SELECT ?, run.id, ?, run.status, run.status, ?, ?, ?
+        FROM crawler_run AS run
+        INNER JOIN crawler_task AS task ON task.id = run.task_id
+        WHERE task.id = ? AND task.latest_run_id = ? AND task.updated_at = ? AND run.id = ?
+      `).bind(
+        createId(),
+        transitionSequence,
+        reasonCode,
+        safeSummary,
+        currentNow,
+        taskId,
+        taskRow.latest_run_id,
+        taskRow.updated_at,
+        taskRow.latest_run_id,
+      ),
+      d1.prepare(`
+        UPDATE crawler_task
+        SET updated_at = ?
+        WHERE id = ? AND latest_run_id = ? AND updated_at = ?
+      `).bind(currentNow, taskId, taskRow.latest_run_id, taskRow.updated_at),
+    ])
+    const updated = batchResults[1] as { meta?: { changes?: number } } | undefined
+    if ((updated?.meta?.changes ?? 0) === 0) {
+      const latest = await readTaskLifecycle(taskId)
+      return { kind: 'rejected', lifecycle: latest, reasonCode: 'stale_task_revision', taskId }
+    }
+    return { kind: 'updated', lifecycle: next, taskId }
+  }
+
+  async function archiveTask(taskId: string): Promise<CrawlerTaskMutationResult> {
+    return transitionTaskLifecycle(taskId, { type: 'archive' })
+  }
+
+  async function supersedeTask(input: SupersedeCrawlerTaskInput): Promise<CrawlerTaskSupersedeResult> {
+    const task = await d1.prepare(`
+      SELECT latest_run_id
+      FROM crawler_task
+      WHERE id = ?
+      LIMIT 1
+    `).bind(input.taskId).all<{ latest_run_id: string | null }>()
+    const taskRow = task.results?.[0]
+    if (!taskRow)
+      return { kind: 'rejected', oldTaskId: input.taskId, reasonCode: 'task_not_found' }
+    const lifecycle = await readTaskLifecycle(input.taskId)
+    if (lifecycle.status === 'superseded')
+      return { kind: 'idempotent', oldTaskId: input.taskId, lifecycle }
+    if (lifecycle.status !== 'active')
+      return { kind: 'rejected', oldTaskId: input.taskId, lifecycle, reasonCode: 'task_not_active' }
+    if (taskRow.latest_run_id) {
+      const latestRun = await getRunRow(taskRow.latest_run_id)
+      if (latestRun && !isTerminalCrawlerRunStatus(latestRun.status))
+        return { kind: 'rejected', oldTaskId: input.taskId, lifecycle, reasonCode: 'task_has_active_run' }
+    }
+
+    const created = await createOrGetActiveRun({
+      operationCommand: input.operationCommand,
+      requestedByUserId: input.requestedByUserId,
+      templateKey: input.operationCommand.target.kind === 'manga' ? 'manga' : 'movie',
+    })
+    if (created.kind === 'conflict')
+      return { kind: 'rejected', oldTaskId: input.taskId, lifecycle, reasonCode: 'idempotency_conflict' }
+    const newTaskId = created.kind === 'created' || created.kind === 'duplicate' ? created.run.taskId : undefined
+    if (!newTaskId)
+      return { kind: 'rejected', oldTaskId: input.taskId, lifecycle, reasonCode: 'active_run_exists' }
+    const updated = await transitionTaskLifecycle(input.taskId, { supersededByTaskId: newTaskId, type: 'supersede' })
+    if (updated.kind === 'rejected')
+      return { kind: 'rejected', oldTaskId: input.taskId, lifecycle: updated.lifecycle, reasonCode: updated.reasonCode }
+    return {
+      kind: created.kind === 'duplicate' ? 'idempotent' : 'created',
+      oldTaskId: input.taskId,
+      lifecycle: updated.lifecycle,
+      task: created,
+    }
+  }
+
+  async function recordTaskAudit(input: TaskAuditInput): Promise<boolean> {
+    const changes = {
+      ...(input.attemptNumber !== undefined ? { attemptNumber: input.attemptNumber } : {}),
+      ...(input.metadata ? { metadata: input.metadata } : {}),
+      outcome: input.outcome,
+      reason: input.reason.slice(0, 256),
+      ...(input.runId ? { runId: input.runId } : {}),
+      ...(input.snapshotFingerprint ? { snapshotFingerprint: input.snapshotFingerprint } : {}),
+      ...(input.target ? { target: input.target } : {}),
+    }
+    try {
+      await d1.prepare(`
+        INSERT INTO audit_log (
+          id, user_id, user_email, action, resource_type, resource_id,
+          affected_count, changes, created_at
+        ) VALUES (?, ?, ?, ?, 'crawler_task', ?, 1, ?, ?)
+      `).bind(
+        createId(),
+        input.actorId,
+        input.actorEmail.slice(0, 256),
+        input.action,
+        input.taskId,
+        JSON.stringify(changes),
+        toUnixSeconds(now()),
+      ).run()
+      return true
+    }
+    catch {
+      return false
+    }
+  }
+
+  async function updateTaskMetadata(input: {
+    readonly audit: TaskAuditInput
+    readonly metadata: CrawlerTaskMetadataInput
+    readonly taskId: string
+  }): Promise<CrawlerTaskMutationResult> {
+    const lifecycle = await readTaskLifecycle(input.taskId)
+    if (lifecycle.status !== 'active')
+      return { kind: 'rejected', lifecycle, reasonCode: 'task_not_active', taskId: input.taskId }
+    const recorded = await recordTaskAudit({
+      ...input.audit,
+      action: 'UPDATE',
+      metadata: input.metadata,
+      outcome: 'updated',
+      taskId: input.taskId,
+    })
+    return recorded
+      ? { kind: 'updated', lifecycle, taskId: input.taskId }
+      : { kind: 'rejected', lifecycle, reasonCode: 'audit_persistence_failed', taskId: input.taskId }
   }
 
   async function listRunLogs(input: {
@@ -982,16 +1322,73 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
   async function createOrGetActiveRun(input: CreateCrawlerTaskRunInput): Promise<CrawlerTaskRunResult> {
     const currentNow = toUnixSeconds(now())
+    const operationSnapshot = input.operationCommand
+      ? buildCrawlerOperationSnapshot(input.operationCommand)
+      : undefined
+    if (operationSnapshot && operationSnapshot.actor.id !== input.requestedByUserId)
+      throw new Error('crawler operation actor does not match requester')
+
+    const requestedOperation = operationSnapshot?.operation ?? input.operation ?? input.templateKey
+    if (operationSnapshot && operationSnapshot.template.templateKey !== input.templateKey)
+      throw new Error('crawler operation template does not match task template')
+    const requestedSnapshotJson = operationSnapshot?.requestSnapshotJson
+    if (input.idempotencyKey || operationSnapshot) {
+      const identity = input.idempotencyKey ?? operationSnapshot?.idempotencyKey
+      if (identity) {
+        const existing = await d1.prepare(`
+          SELECT id, latest_run_id, request_snapshot_json
+          FROM crawler_task
+          WHERE requested_by_user_id = ? AND idempotency_key = ?
+          LIMIT 1
+        `).bind(input.requestedByUserId, identity).all<{
+          id: string
+          latest_run_id: string | null
+          request_snapshot_json: string
+        }>()
+        const existingTask = existing.results?.[0]
+        if (existingTask) {
+          if (requestedSnapshotJson && existingTask.request_snapshot_json !== requestedSnapshotJson) {
+            const conflictRun = existingTask.latest_run_id ? await getRunRow(existingTask.latest_run_id) : undefined
+            if (!conflictRun)
+              throw new Error('crawler operation conflict has no run')
+            return { kind: 'conflict', run: toCrawlerTaskRun(conflictRun), taskId: existingTask.id }
+          }
+          if (!requestedSnapshotJson && input.idempotencyKey && input.operationCommand === undefined) {
+            const currentRun = existingTask.latest_run_id ? await getRunRow(existingTask.latest_run_id) : undefined
+            if (currentRun)
+              return { kind: 'duplicate', run: toCrawlerTaskRun(currentRun), taskId: existingTask.id }
+          }
+          const currentRun = existingTask.latest_run_id ? await getRunRow(existingTask.latest_run_id) : undefined
+          if (currentRun)
+            return { kind: 'duplicate', run: toCrawlerTaskRun(currentRun), taskId: existingTask.id }
+          const conflictRun = existingTask.latest_run_id ? await getRunRow(existingTask.latest_run_id) : undefined
+          if (!conflictRun)
+            throw new Error('crawler operation conflict has no run')
+          return { kind: 'conflict', run: toCrawlerTaskRun(conflictRun), taskId: existingTask.id }
+        }
+      }
+    }
     const existing = await findActiveLease(input.templateKey, currentNow)
     if (existing) {
       return { kind: 'existing_active_run', run: existing }
     }
 
-    const operation = input.operation ?? input.templateKey
+    const operation = requestedOperation
     const taskId = createId()
     const runId = createId()
     let snapshot: CrawlerTaskSnapshotUnion
-    if (operation === 'repair_players') {
+    let requestSnapshotJson: string
+    if (operationSnapshot) {
+      snapshot = operationSnapshot.template
+      requestSnapshotJson = operationSnapshot.requestSnapshotJson
+      if (operation === 'repair_players') {
+        const intent = operationSnapshot.intent
+        const currentState = await readRepairTaskState(operationSnapshot.target.id)
+        if (!currentState || currentState.reason !== intent.reason || currentState.sourceRevision !== intent.sourceRevision)
+          throw new Error('repair task source disposition is no longer repairable')
+      }
+    }
+    else if (operation === 'repair_players') {
       if (input.templateKey !== 'movie'
         || !input.movieId
         || input.targetIntent !== 'restore_playable_sources'
@@ -1013,6 +1410,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     else {
       snapshot = createCrawlerTaskSnapshot(input.templateKey)
     }
+    requestSnapshotJson ??= JSON.stringify(snapshot)
     const leaseExpiresAt = addMillisecondsInSeconds(currentNow, CRAWLER_LEASE_DURATION_MS)
 
     try {
@@ -1028,8 +1426,8 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
           operation,
           snapshot.templateVersion,
           input.requestedByUserId,
-          JSON.stringify(snapshot),
-          input.idempotencyKey ?? null,
+          requestSnapshotJson,
+          input.idempotencyKey ?? operationSnapshot?.idempotencyKey ?? null,
           runId,
           currentNow,
           currentNow,
@@ -1119,9 +1517,12 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       throw new Error(`Crawler run ${runId} was not found`)
     }
 
-    const decision = decideCrawlerRunTransition(toCrawlerRunState(run, task), event)
     const currentNow = toUnixSeconds(now())
     const safeSummary = options.safeSummary ? truncateUtf8(options.safeSummary, CRAWLER_MAX_SAFE_LOG_BYTES) : null
+    const lifecycle = await readTaskLifecycle(task.task_id)
+    const decision: CrawlerRunTransitionDecision = lifecycle.status === 'active'
+      ? decideCrawlerRunTransition(toCrawlerRunState(run, task), event)
+      : { currentStatus: run.status, kind: 'rejected', reasonCode: 'task_inactive' }
 
     if (decision.kind !== 'transition') {
       await d1.prepare(`
@@ -1463,7 +1864,6 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         templateKey: 'movie',
       })
     }
-
     const retry = createManualRetryAttempt({
       attemptNumber: run.attempt_number,
       snapshot,
@@ -1483,8 +1883,15 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
           INSERT INTO crawler_run (
             id, task_id, attempt_number, status, state_version, last_event_sequence,
             lease_expires_at, created_at, updated_at
-          ) VALUES (?, ?, ?, 'queued', 0, 0, ?, ?, ?)
-        `).bind(nextRunId, run.task_id, retry.attemptNumber, expiresAt, currentNow, currentNow),
+          )
+          SELECT ?, ?, ?, 'queued', 0, 0, ?, ?, ?
+          WHERE EXISTS (
+            SELECT 1 FROM crawler_task AS task
+            INNER JOIN crawler_run AS previous ON previous.id = task.latest_run_id
+            WHERE task.id = ? AND task.latest_run_id = ? AND previous.status IN ('failed', 'cancelled')
+              AND previous.id = ? AND previous.attempt_number < ?
+          )
+        `).bind(nextRunId, run.task_id, retry.attemptNumber, expiresAt, currentNow, currentNow, run.task_id, run.id, run.id, CRAWLER_MAX_RETRY_ATTEMPTS),
         d1.prepare(`
           INSERT INTO crawler_template_lease (template_key, run_id, expires_at, renewed_at)
           VALUES (?, ?, ?, ?)
@@ -1494,8 +1901,10 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
             id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
           ) VALUES (?, ?, 0, 'queued', 'queued', 'manual_retry_created', 'retry from immutable task snapshot', ?)
         `).bind(createId(), nextRunId, currentNow),
-        d1.prepare('UPDATE crawler_task SET latest_run_id = ?, updated_at = ? WHERE id = ?')
-          .bind(nextRunId, currentNow, run.task_id),
+        d1.prepare(`
+          UPDATE crawler_task SET latest_run_id = ?, updated_at = ?
+          WHERE id = ? AND latest_run_id = ?
+        `).bind(nextRunId, currentNow, run.task_id, run.id),
       ])
     }
     catch (error) {
@@ -2147,6 +2556,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
   return {
     appendLog,
     applyTransition,
+    archiveTask,
     claimDispatch,
     createOrGetActiveRun,
     ensureProviderAssociation,
@@ -2157,7 +2567,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return run ? toCrawlerTaskRun(run) : undefined
     },
     getProviderAssociation,
+    getTaskLifecycle: readTaskLifecycle,
     getTaskDetail,
+    listTaskAudit: readTaskAudit,
     listRunLogs,
     listTasks,
     listProviderReconciliationCandidates,
@@ -2169,8 +2581,12 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     recordRunnerEvent,
     renewLease,
     retryRun,
+    recordTaskAudit,
     sweepExpiredRuns,
     scheduleRegister,
+    supersedeTask,
+    transitionTaskLifecycle,
+    updateTaskMetadata,
     validateDispatch,
   }
 }

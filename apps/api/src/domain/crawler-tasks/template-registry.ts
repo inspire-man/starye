@@ -113,6 +113,10 @@ export function readCrawlerTaskSnapshot(
   value: unknown,
   expectedOperation?: CrawlerTaskOperation,
 ): ReadCrawlerTaskSnapshotResult {
+  // 25-01 operation snapshots wrap the immutable crawler template. Keep the
+  // legacy flat snapshot reader as the single validation boundary.
+  if (isRecord(value) && isRecord(value.template))
+    value = value.template
   if (!isRecord(value) || !isCrawlerTaskTemplateKey(value.templateKey) || value.templateVersion !== 1)
     return { ok: false, reason: 'invalid_snapshot' }
 

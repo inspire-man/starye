@@ -1048,4 +1048,45 @@ describe('crawler task repository', () => {
     })
     expect(observation).toMatchObject({ taskId: created.run.taskId, runId: created.run.id, attemptNumber: 1 })
   })
+
+  it('persists task lifecycle separately from run status and makes operation replay deterministic', async () => {
+    const command = {
+      actor: { id: 'admin-1', kind: 'admin' as const },
+      idempotencyKey: 'lifecycle-1',
+      intent: { kind: 'crawl' as const },
+      operation: 'movie' as const,
+      policyReference: 'crawler/default',
+      policyVersion: 'v1',
+      target: { id: 'movie-lifecycle', kind: 'movie' as const },
+    }
+    const created = await repository.createOrGetActiveRun({
+      operationCommand: command,
+      requestedByUserId: 'admin-1',
+      templateKey: 'movie',
+    })
+    expect(created.kind).toBe('created')
+    if (created.kind !== 'created')
+      throw new Error('expected created operation task')
+
+    const replay = await repository.createOrGetActiveRun({
+      operationCommand: command,
+      requestedByUserId: 'admin-1',
+      templateKey: 'movie',
+    })
+    expect(replay).toMatchObject({ kind: 'duplicate', taskId: created.run.taskId, run: { id: created.run.id } })
+
+    await expect(repository.archiveTask(created.run.taskId)).resolves.toMatchObject({
+      kind: 'updated',
+      lifecycle: { status: 'archived', version: 1 },
+    })
+    await expect(repository.archiveTask(created.run.taskId)).resolves.toMatchObject({ kind: 'idempotent' })
+    await expect(repository.getTaskDetail(created.run.taskId)).resolves.toMatchObject({
+      lifecycle: { status: 'archived', version: 1 },
+      task: { lifecycle: { status: 'archived' } },
+    })
+    await expect(repository.applyTransition(created.run.id, {
+      actor: 'admin',
+      type: 'admin_cancel',
+    })).resolves.toMatchObject({ kind: 'rejected', reasonCode: 'task_inactive' })
+  })
 })

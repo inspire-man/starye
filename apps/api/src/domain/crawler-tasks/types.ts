@@ -44,6 +44,9 @@ export type CrawlerRunFailureCode
     | 'provider_failed'
 
 export type CrawlerTaskRetryStatus = 'none' | 'retrying' | 'exhausted'
+export const CRAWLER_TASK_LIFECYCLE_VALUES = ['active', 'archived', 'superseded'] as const
+export type CrawlerTaskLifecycleStatus = typeof CRAWLER_TASK_LIFECYCLE_VALUES[number]
+export const CRAWLER_MAX_RETRY_ATTEMPTS = 2 as const
 export type CrawlerLeaseOutcome = 'pending' | 'active' | 'renewed' | 'released' | 'expired' | 'recovered'
 export type CrawlerReconciliationWindowStatus = 'pending' | 'open' | 'closed' | 'expired'
 export type CrawlerReconciliationOutcome
@@ -70,8 +73,15 @@ export interface CrawlerTaskRetryProjection {
   readonly attemptNumber: number
   readonly automatic: boolean
   readonly failureCode?: CrawlerRunFailureCode
-  readonly maxAttempts: 2
+  readonly maxAttempts: typeof CRAWLER_MAX_RETRY_ATTEMPTS
   readonly status: CrawlerTaskRetryStatus
+}
+
+export interface CrawlerTaskLifecycleProjection {
+  readonly changedAt: number
+  readonly status: CrawlerTaskLifecycleStatus
+  readonly version: number
+  readonly supersededByTaskId?: string
 }
 
 export interface CrawlerLeaseProjection {
@@ -173,6 +183,7 @@ export interface CrawlerTaskListItem {
   readonly latestRunId: string | null
   readonly templateKey: CrawlerTaskTemplateKey
   readonly updatedAt: number
+  readonly lifecycle: CrawlerTaskLifecycleProjection
   readonly retry?: CrawlerTaskRetryProjection
 }
 
@@ -201,9 +212,28 @@ export interface CrawlerRunReadModel {
 }
 
 export interface CrawlerTaskDetailReadModel {
+  readonly lifecycle: CrawlerTaskLifecycleProjection
   readonly task: CrawlerTaskListItem
   readonly runs: readonly CrawlerRunReadModel[]
   readonly retry?: CrawlerTaskRetryProjection
+}
+
+export interface CrawlerTaskAuditReadModel {
+  readonly action: string
+  readonly actor: { readonly email: string, readonly id: string }
+  readonly createdAt: number
+  readonly id: string
+  readonly outcome: string
+  readonly reason: string
+  readonly runId?: string
+  readonly attemptNumber?: number
+  readonly target?: { readonly id: string, readonly kind: string }
+  readonly snapshotFingerprint?: string
+}
+
+export interface CrawlerTaskAuditPage {
+  readonly audits: readonly CrawlerTaskAuditReadModel[]
+  readonly nextCursor: string | null
 }
 
 export interface CrawlerRunLogReadModel {
@@ -292,7 +322,7 @@ export type CrawlerRunTransitionDecision
   | {
     readonly currentStatus: CrawlerRunStatus
     readonly kind: 'rejected'
-    readonly reasonCode: 'invalid_receipt' | 'invalid_transition' | 'terminal_state'
+    readonly reasonCode: 'invalid_receipt' | 'invalid_transition' | 'task_inactive' | 'terminal_state'
   }
 
 export interface ActiveCrawlerLeaseOwner {
@@ -300,3 +330,23 @@ export interface ActiveCrawlerLeaseOwner {
   readonly status: CrawlerRunStatus
   readonly templateKey: CrawlerTaskTemplateKey
 }
+
+export type CrawlerTaskLifecycleEvent
+  = | { readonly type: 'archive' }
+    | { readonly supersededByTaskId: string, readonly type: 'supersede' }
+
+export type CrawlerTaskLifecycleDecision
+  = | {
+    readonly current: CrawlerTaskLifecycleProjection
+    readonly kind: 'transition'
+    readonly next: CrawlerTaskLifecycleProjection
+  }
+  | {
+    readonly current: CrawlerTaskLifecycleProjection
+    readonly kind: 'idempotent'
+  }
+  | {
+    readonly current: CrawlerTaskLifecycleProjection
+    readonly kind: 'rejected'
+    readonly reasonCode: 'already_archived' | 'already_superseded' | 'invalid_transition'
+  }

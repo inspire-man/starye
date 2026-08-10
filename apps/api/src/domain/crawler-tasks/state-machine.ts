@@ -5,11 +5,20 @@ import type {
   CrawlerRunStatus,
   CrawlerRunTransitionDecision,
   CrawlerRunTransitionEvent,
+  CrawlerTaskLifecycleDecision,
+  CrawlerTaskLifecycleEvent,
+  CrawlerTaskLifecycleProjection,
   CrawlerTaskOperation,
   CrawlerTaskSnapshotUnion,
 } from './types'
+import { CRAWLER_MAX_RETRY_ATTEMPTS } from './types'
 
 export type CrawlerAutomaticRetryTiming = 'immediate' | 'windowed'
+
+const lifecycleReasonCodes = {
+  archive: 'task_archived',
+  supersede: 'task_superseded',
+} as const
 
 interface RepairReceiptLike {
   readonly movieId: string
@@ -76,12 +85,51 @@ export function createManualRetryAttempt(input: {
   if (input.status !== 'failed' && input.status !== 'cancelled') {
     throw new Error('Only failed or cancelled runs may be retried')
   }
+  if (input.attemptNumber >= CRAWLER_MAX_RETRY_ATTEMPTS) {
+    throw new Error('Crawler retry limit exhausted')
+  }
 
   return {
     attemptNumber: input.attemptNumber + 1,
     snapshot: input.snapshot,
     status: 'queued',
   }
+}
+
+export function createActiveCrawlerTaskLifecycle(now: number): CrawlerTaskLifecycleProjection {
+  return { changedAt: now, status: 'active', version: 0 }
+}
+
+export function decideCrawlerTaskLifecycle(
+  current: CrawlerTaskLifecycleProjection,
+  event: CrawlerTaskLifecycleEvent,
+): CrawlerTaskLifecycleDecision {
+  if (event.type === 'archive' && current.status === 'archived')
+    return { current, kind: 'idempotent' }
+  if (event.type === 'supersede' && current.status === 'superseded')
+    return { current, kind: 'idempotent' }
+  if (current.status !== 'active') {
+    return {
+      current,
+      kind: 'rejected',
+      reasonCode: current.status === 'archived' ? 'already_archived' : 'already_superseded',
+    }
+  }
+
+  return {
+    current,
+    kind: 'transition',
+    next: {
+      changedAt: current.changedAt,
+      status: event.type === 'archive' ? 'archived' : 'superseded',
+      version: current.version + 1,
+      ...(event.type === 'supersede' ? { supersededByTaskId: event.supersededByTaskId } : {}),
+    },
+  }
+}
+
+export function crawlerTaskLifecycleReason(event: CrawlerTaskLifecycleEvent): string {
+  return lifecycleReasonCodes[event.type]
 }
 
 function isRunnerEvent(event: CrawlerRunTransitionEvent): event is Extract<CrawlerRunTransitionEvent, { actor: 'runner' }> {

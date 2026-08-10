@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createActiveCrawlerTaskLifecycle,
   createManualRetryAttempt,
+  decideCrawlerTaskLifecycle,
   decideCrawlerRunTransition,
   resolveActiveCrawlerCreate,
 } from '../state-machine'
@@ -253,5 +255,26 @@ describe('crawler task state machine', () => {
       kind: 'transition',
       nextStatus: 'failed',
     })
+  })
+
+  it('keeps task lifecycle independent from run execution and makes archive/supersede CAS decisions deterministic', () => {
+    const active = createActiveCrawlerTaskLifecycle(100)
+    expect(decideCrawlerTaskLifecycle(active, { type: 'archive' })).toEqual({
+      current: active,
+      kind: 'transition',
+      next: { changedAt: 100, status: 'archived', version: 1 },
+    })
+    const archived = { ...active, changedAt: 101, status: 'archived' as const, version: 1 }
+    expect(decideCrawlerTaskLifecycle(archived, { type: 'archive' })).toEqual({ current: archived, kind: 'idempotent' })
+    expect(decideCrawlerTaskLifecycle(archived, { supersededByTaskId: 'task-2', type: 'supersede' })).toMatchObject({
+      current: archived,
+      kind: 'rejected',
+      reasonCode: 'already_archived',
+    })
+    expect(() => createManualRetryAttempt({
+      attemptNumber: 2,
+      snapshot: createCrawlerTaskSnapshot('movie'),
+      status: 'failed',
+    })).toThrow('retry limit exhausted')
   })
 })
