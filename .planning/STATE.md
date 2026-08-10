@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
-status: planning
-last_updated: "2026-08-10T23:04:51+08:00"
-last_activity: 2026-08-10
-last_activity_desc: Phase 25 plans created; ready for wave-based execution
+current_phase: 25
+current_phase_name: Task Operations And Availability Contract
+status: executing
+stopped_at: Completed 25-01-PLAN.md; ready for Wave 2
+last_updated: "2026-08-10T16:02:39.270+08:00"
+last_activity: 2026-08-11
+last_activity_desc: Phase 25 plan 25-01 complete; ready for Wave 2
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 15
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 7
 ---
 
 # Project State: Starye — 个人内容中台
@@ -21,20 +24,20 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-08-10)
 
 **Core value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
-**Current focus:** v1.5 — 爬虫运管与内容可用性闭环
+**Current focus:** Phase 25 — Task Operations And Availability Contract
 
 ## Current Position
 
-Phase: 25 (Task Operations And Availability Contract)
-Plan: 4 plans created
-Status: Ready to execute
-Last activity: 2026-08-10 — Phase 25 plans created; ready for wave-based execution
+Phase: 25 (Task Operations And Availability Contract) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute Wave 2
+Last activity: 2026-08-11 — Phase 25 plan 25-01 complete; ready for Wave 2
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 23
+- Total plans completed: 24
 - Average duration: —
 - Total execution time: —
 
@@ -47,10 +50,15 @@ Last activity: 2026-08-10 — Phase 25 plans created; ready for wave-based execu
 | 22 | 3 | 3 | — |
 | 23 | 5 | 5 | — |
 | 24 | 5 | 5 | — |
-| 25 | 0 | 4 | — |
+| 25 | 1 | 4 | 48 min |
 | 26 | 0 | 4 | — |
 | 27 | 0 | 3 | — |
 | 28 | 0 | 4 | — |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 25 P25-01 | 48 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -91,6 +99,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-10T23:04:51+08:00
-Stopped at: Phase 25 plans created; ready for wave-based execution
+Last session: 2026-08-10T16:01:57.091Z
+Stopped at: Completed 25-01-PLAN.md
 Resume file: None

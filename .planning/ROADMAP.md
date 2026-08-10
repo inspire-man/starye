@@ -56,12 +56,12 @@ v1.5 将已经稳定的 crawler control plane 延伸为“任务运管 → 数�
   3. 用户在任务详情可以看到当前状态、目标、最新 run/attempt、provider、日志摘要、receipt、转换历史以及创建/更新/归档/取消/重试/修复审计事实。
   4. 可用性检查可以写入 revision-bound 的 append-only observation 和 bounded current projection，且结果包含状态、reason、policy version、observedAt、新鲜度和下一步动作，不把 runner 成功直接当作内容可用。
 
-**Plans**: 4 plans across 3 waves
+**Plans**: 1/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 25-01-PLAN.md — 共享 operation、availability result、observation/projection、revision/CAS 和 evidence 契约
+- [x] 25-01-PLAN.md — 共享 operation、availability result、observation/projection、revision/CAS 和 evidence 契约
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -145,7 +145,7 @@ Plans:
 | 22. Dashboard, MovieDetail And Player State Closure | v1.4 | 3/3 | Complete | 2026-08-07 |
 | 23. GitHub Actions Production Repair And Reconciliation | v1.4 | 5/5 | Complete | 2026-08-08 |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | v1.4 | 5/5 | Complete | 2026-08-10 |
-| 25. Task Operations And Availability Contract | v1.5 | 0/4 | Not started | - |
+| 25. Task Operations And Availability Contract | v1.5 | 1/4 | In Progress | 2026-08-11 |
 | 26. Video Source And Magnet Availability | v1.5 | 0/4 | Not started | - |
 | 27. Comic Chapter Completeness | v1.5 | 0/3 | Not started | - |
 | 28. Chapter Image Availability And Gateway Acceptance | v1.5 | 0/4 | Not started | - |
