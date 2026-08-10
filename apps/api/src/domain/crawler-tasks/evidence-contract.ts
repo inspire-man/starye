@@ -34,8 +34,18 @@ export type AvailabilityEvidenceRedactionResult
     | { readonly ok: false, readonly rejection: AvailabilityEvidenceRejection }
 
 const SENSITIVE_KEYS = new Set([
-  'authorization', 'cookie', 'command', 'html', 'media', 'rawresponse', 'secret', 'signedurl',
-  'sourceurl', 'token', 'url', 'workflow',
+  'authorization',
+  'cookie',
+  'command',
+  'html',
+  'media',
+  'rawresponse',
+  'secret',
+  'signedurl',
+  'sourceurl',
+  'token',
+  'url',
+  'workflow',
 ])
 const SENSITIVE_VALUE = /https?:\/\/|magnet:\?|bearer\s+|cookie\s*[:=]|authorization\s*[:=]|secret\s*[:=]/iu
 

@@ -1,4 +1,3 @@
-import { CRAWLER_TASK_OPERATION_VALUES } from './types'
 import type {
   CrawlerTaskOperation,
   CrawlerTaskSnapshot,
@@ -9,6 +8,7 @@ import type {
   RepairPlayersTargetIntent,
   RepairPlayersTaskSnapshot,
 } from './types'
+import { CRAWLER_TASK_OPERATION_VALUES } from './types'
 
 export const crawlerTaskTemplates = {
   manga: {

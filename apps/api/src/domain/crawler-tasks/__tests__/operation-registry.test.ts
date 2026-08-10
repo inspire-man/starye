@@ -48,7 +48,10 @@ describe('crawler operation registry', () => {
     const fingerprint = fingerprintOperationCommand(command())
     expect(classifyIdempotentOperation({ candidate: { fingerprint, idempotencyKey: 'k' }, existing: null }).kind).toBe('new')
     expect(classifyIdempotentOperation({ candidate: { fingerprint, idempotencyKey: 'k' }, existing: { fingerprint, taskId: 'task-1' } })).toEqual({
-      kind: 'duplicate', fingerprint, idempotencyKey: 'k', taskId: 'task-1',
+      kind: 'duplicate',
+      fingerprint,
+      idempotencyKey: 'k',
+      taskId: 'task-1',
     })
     expect(classifyIdempotentOperation({ candidate: { fingerprint: 'other', idempotencyKey: 'k' }, existing: { fingerprint, taskId: 'task-1' } }).kind).toBe('conflict')
   })

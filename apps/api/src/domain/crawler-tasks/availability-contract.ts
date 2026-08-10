@@ -1,5 +1,5 @@
-import { validateBoundedAvailabilityEvidence } from './evidence-contract'
 import type { BoundedAvailabilityEvidence } from './evidence-contract'
+import { validateBoundedAvailabilityEvidence } from './evidence-contract'
 
 export const AVAILABILITY_TARGET_KIND_VALUES = ['movie', 'manga', 'video', 'chapter', 'image'] as const
 export type AvailabilityTargetKind = typeof AVAILABILITY_TARGET_KIND_VALUES[number]
@@ -68,15 +68,15 @@ export type AvailabilityRejectionCode = typeof AVAILABILITY_REJECTION_VALUES[num
 
 export type AvailabilityCasResult
   = | {
-      readonly accepted: true
-      readonly projection: AvailabilityCurrentProjection
-      readonly authoritativeReadback: AvailabilityCurrentProjection
-    }
-    | {
-      readonly accepted: false
-      readonly code: AvailabilityRejectionCode
-      readonly authoritativeReadback: AvailabilityCurrentProjection | null
-    }
+    readonly accepted: true
+    readonly projection: AvailabilityCurrentProjection
+    readonly authoritativeReadback: AvailabilityCurrentProjection
+  }
+  | {
+    readonly accepted: false
+    readonly code: AvailabilityRejectionCode
+    readonly authoritativeReadback: AvailabilityCurrentProjection | null
+  }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -131,9 +131,22 @@ export function validateAvailabilityObservation(value: unknown): AvailabilityObs
   if (!isRecord(value))
     throw new Error('availability_observation_invalid')
   exactKeys(value, [
-    'attemptNumber', 'contentId', 'eventSequence', 'freshness', 'nextAction', 'observationIdentity',
-    'observedAt', 'policyVersion', 'provider', 'reasonCode', 'runId', 'sourceRevision', 'status',
-    'summary', 'target', 'taskId',
+    'attemptNumber',
+    'contentId',
+    'eventSequence',
+    'freshness',
+    'nextAction',
+    'observationIdentity',
+    'observedAt',
+    'policyVersion',
+    'provider',
+    'reasonCode',
+    'runId',
+    'sourceRevision',
+    'status',
+    'summary',
+    'target',
+    'taskId',
   ], 'availability_observation_unknown_field')
   const tuple = validateTuple({
     attemptNumber: value.attemptNumber,

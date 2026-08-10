@@ -4,6 +4,8 @@ import { createClient } from '@libsql/client'
 import { createDb } from '@starye/db'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { readRepairSourceReadback } from '../../movies/source-reconciliation'
+import { validateAvailabilityObservation } from '../availability-contract'
+import { buildCrawlerOperationSnapshot } from '../operation-registry'
 import { validateReceiptCandidate } from '../receipt-validation'
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor } from '../repository'
 import {
@@ -1008,5 +1010,42 @@ describe('crawler task repository', () => {
     await client.execute('DROP TABLE crawler_run_provider_association')
     const legacy = await repository.getTaskDetail('task-detail')
     expect(legacy?.runs.every(run => run.provider === null)).toBe(true)
+  })
+
+  it('keeps operation snapshots and availability observations bound to the same task/run tuple', async () => {
+    const snapshot = buildCrawlerOperationSnapshot({
+      actor: { id: 'admin-1', kind: 'admin' },
+      idempotencyKey: 'tuple-1',
+      intent: { kind: 'crawl' },
+      operation: 'movie',
+      policyReference: 'availability/default',
+      policyVersion: 'v1',
+      target: { id: 'movie-1', kind: 'movie' },
+    })
+    const storedSnapshot = JSON.parse(snapshot.requestSnapshotJson) as { target: { id: string } }
+    expect(storedSnapshot.target.id).toBe('movie-1')
+
+    const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    if (created.kind !== 'created')
+      throw new Error('expected a created run')
+    const observation = validateAvailabilityObservation({
+      attemptNumber: created.run.attemptNumber,
+      contentId: 'movie-1',
+      eventSequence: 1,
+      freshness: 'fresh',
+      nextAction: 'none',
+      observationIdentity: 'tuple-observation-1',
+      observedAt: 1_700_000_000,
+      policyVersion: 'v1',
+      provider: 'github-actions',
+      reasonCode: 'available',
+      runId: created.run.id,
+      sourceRevision: 0,
+      status: 'available',
+      summary: { counts: { ready: 1 }, samples: [] },
+      target: { id: 'movie-1', kind: 'movie' },
+      taskId: created.run.taskId,
+    })
+    expect(observation).toMatchObject({ taskId: created.run.taskId, runId: created.run.id, attemptNumber: 1 })
   })
 })

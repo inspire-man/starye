@@ -1,6 +1,7 @@
 import type { GitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import type { ProviderReconciliationCandidate } from '../repository'
 import { describe, expect, it, vi } from 'vitest'
+import { validateAvailabilityObservation } from '../availability-contract'
 import { createCrawlerTaskReconciliationService } from '../reconciliation'
 
 function candidate(overrides: Partial<ProviderReconciliationCandidate> = {}): ProviderReconciliationCandidate {
@@ -90,5 +91,33 @@ describe('crawler provider reconciliation', () => {
     })
     await expect(service.reconcile()).resolves.toEqual({ failed: 1, lost: 0, observed: 0, skipped: 0 })
     expect(repository.failProviderReconciliation).toHaveBeenCalledWith('run-1', 1, 'github_provider_authorization_failed')
+  })
+
+  it('preserves the provider tuple when an observation is handed to the availability contract', () => {
+    const provider = candidate()
+    const observation = validateAvailabilityObservation({
+      attemptNumber: provider.applicationAttempt,
+      contentId: 'movie-1',
+      eventSequence: 1,
+      freshness: 'fresh',
+      nextAction: 'recheck',
+      observationIdentity: 'provider-observation-1',
+      observedAt: provider.reconciliationWindowEndsAt - 1,
+      policyVersion: 'v1',
+      provider: 'github-actions',
+      reasonCode: 'available',
+      runId: provider.runId,
+      sourceRevision: 3,
+      status: 'available',
+      summary: { counts: { provider_observed: 1 }, samples: [] },
+      target: { id: 'movie-1', kind: 'movie' },
+      taskId: 'task-1',
+    })
+    expect(observation).toMatchObject({
+      attemptNumber: provider.applicationAttempt,
+      provider: 'github-actions',
+      runId: provider.runId,
+      taskId: 'task-1',
+    })
   })
 })

@@ -76,23 +76,23 @@ export interface CrawlerOperationSnapshot extends CrawlerOperationServerSnapshot
 
 export type CrawlerOperationIdentityResult
   = | {
-      readonly kind: 'new'
-      readonly fingerprint: string
-      readonly idempotencyKey: string
-    }
-    | {
-      readonly kind: 'duplicate'
-      readonly fingerprint: string
-      readonly idempotencyKey: string
-      readonly taskId: string
-    }
-    | {
-      readonly kind: 'conflict'
-      readonly existingFingerprint: string
-      readonly fingerprint: string
-      readonly idempotencyKey: string
-      readonly taskId: string
-    }
+    readonly kind: 'new'
+    readonly fingerprint: string
+    readonly idempotencyKey: string
+  }
+  | {
+    readonly kind: 'duplicate'
+    readonly fingerprint: string
+    readonly idempotencyKey: string
+    readonly taskId: string
+  }
+  | {
+    readonly kind: 'conflict'
+    readonly existingFingerprint: string
+    readonly fingerprint: string
+    readonly idempotencyKey: string
+    readonly taskId: string
+  }
 
 export interface CrawlerOperationExistingIdentity {
   readonly fingerprint: string

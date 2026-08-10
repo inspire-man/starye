@@ -72,6 +72,11 @@ describe('availability contract', () => {
       expectedProjectionVersion: accepted.projection.projectionVersion,
       observation: observation({ observationIdentity: 'observation-4', policyVersion: 'v2' }),
     })).code).toBe('conflict')
+    expect(classifyAvailabilityCas(cas({
+      current: accepted.projection,
+      expectedProjectionVersion: accepted.projection.projectionVersion,
+      observation: observation({ attemptNumber: 2, observationIdentity: 'observation-6' }),
+    })).code).toBe('conflict')
   })
 
   it('does not mutate the accepted projection when a CAS is rejected', () => {
@@ -85,5 +90,6 @@ describe('availability contract', () => {
     }))
     expect(rejected.accepted).toBe(false)
     expect(rejected.authoritativeReadback).toEqual(current.projection)
+    expect(rejected.authoritativeReadback?.observationIdentity).toBe('observation-1')
   })
 })
