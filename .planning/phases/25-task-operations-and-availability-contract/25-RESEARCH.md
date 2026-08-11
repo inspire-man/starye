@@ -553,11 +553,11 @@ Missing dependencies with no fallback: none for focused API/D1 planning. `[VERIF
 
 ## Open Questions
 
-1. Which exact task lifecycle fields and action route shapes should be locked in CONTEXT before planning? Current code has no archive/supersede alias, so planner should choose one consistent API shape and record it as a decision.
-2. Should generic availability current projection be a new table or a typed extension of `movie_source_state` plus future adapters? The shared future target kinds favor a new contract, while Phase 21 compatibility favors an adapter; resolve before migration tasks.
-3. Does task “description/policy intent” need a separate mutable table/JSON column, or can bounded metadata columns cover the single-user Dashboard workflow? Keep it outside immutable `request_snapshot_json` either way.
-4. Should task detail include all audit facts inline or a cursor-paged `/audit` child route? Existing logs already page separately; a separate bounded audit child route reduces detail payload growth.
-5. What is the retention policy for availability observations and audit history? The locked boundary requires retaining historical facts, but a bounded retention/archival policy for old observations still needs a project decision before production migration.
+1. **RESOLVED — lifecycle and route shape:** Plan 25-02 established task lifecycle as a projection separate from run execution state, with allowlisted metadata update plus `POST /:taskId/archive` and `POST /:taskId/supersede`; archive is logical and supersede creates a new server-owned operation snapshot while preserving prior facts. This is implemented behavior, not a design choice for 25-06.
+2. **RESOLVED — availability storage:** Plans 25-01 and 25-03 established dedicated generic `crawler_availability_observation` append history and `crawler_availability_current` target-unique projection tables, with tuple/revision/policy/projection CAS guards. Plan 25-04 exposes those facts through task-scoped admin detail readback. The existing tables and ownership semantics remain authoritative.
+3. **RESOLVED — mutable task intent:** Plan 25-02 implemented bounded allowlisted `description` and `intent` metadata updates outside immutable `request_snapshot_json`; workflow, URL, command, provider routing, and secrets remain server-owned. No additional mutable table or free-form JSON contract is part of Phase 25.
+4. **RESOLVED — audit readback:** Plan 25-02 implemented the cursor-bounded `GET /:taskId/audit` child route and task-scoped redacted audit projection; Plan 25-04 consumes audit as a separate Dashboard detail fact. Task detail does not inline an unbounded audit history.
+5. **RESOLVED — historical retention boundary:** Plans 25-01 through 25-03 established append-only availability observations and task audit facts; logical archive and supersede preserve old runs, attempts, receipts, observations, and audits. Plan 25-04 bounds readback to one current projection and at most 50 validated history entries. Phase 25 introduces no destructive retention job, and 25-06 preserves this implemented history/readback contract without reopening storage design.
 
 ## Sources
 
