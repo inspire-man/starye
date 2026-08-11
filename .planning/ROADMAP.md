@@ -56,7 +56,7 @@ v1.5 将已经稳定的 crawler control plane 延伸为“任务运管 → 数�
   3. 用户在任务详情可以看到当前状态、目标、最新 run/attempt、provider、日志摘要、receipt、转换历史以及创建/更新/归档/取消/重试/修复审计事实。
   4. 可用性检查可以写入 revision-bound 的 append-only observation 和 bounded current projection，且结果包含状态、reason、policy version、observedAt、新鲜度和下一步动作，不把 runner 成功直接当作内容可用。
 
-**Plans**: 2/4 plans executed
+**Plans**: 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -66,11 +66,19 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 25-02-PLAN.md — 任务 CRUD、归档/supersede、取消、重试、幂等和审计生命周期
-- [ ] 25-03-PLAN.md — D1 schema、bounded persistence、current readback 与缓存失效边界
+- [x] 25-03-PLAN.md — D1 schema、bounded persistence、current readback 与缓存失效边界
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 25-04-PLAN.md — Dashboard task detail、历史/审计投影和 canonical Gateway 基线验收
+- [x] 25-04-PLAN.md — Dashboard task detail、历史/审计投影和 canonical Gateway 基线验收
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 25-05-PLAN.md — local-proof provider、local runner availability observation 和 fresh Gateway gap closure
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 25-06-PLAN.md — 修复 supersede 后 authoritative availability owner 跟踪并完成 canonical Gateway 证据闭环
 
 ### Phase 26: Video Source And Magnet Availability
 
@@ -145,7 +153,7 @@ Plans:
 | 22. Dashboard, MovieDetail And Player State Closure | v1.4 | 3/3 | Complete | 2026-08-07 |
 | 23. GitHub Actions Production Repair And Reconciliation | v1.4 | 5/5 | Complete | 2026-08-08 |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | v1.4 | 5/5 | Complete | 2026-08-10 |
-| 25. Task Operations And Availability Contract | v1.5 | 2/4 | In Progress | 2026-08-11 |
+| 25. Task Operations And Availability Contract | v1.5 | 4/6 | In Progress | 2026-08-11 |
 | 26. Video Source And Magnet Availability | v1.5 | 0/4 | Not started | - |
 | 27. Comic Chapter Completeness | v1.5 | 0/3 | Not started | - |
 | 28. Chapter Image Availability And Gateway Acceptance | v1.5 | 0/4 | Not started | - |

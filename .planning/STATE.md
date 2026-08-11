@@ -5,16 +5,16 @@ milestone_name: 爬虫运管与内容可用性闭环
 current_phase: 25
 current_phase_name: Task Operations And Availability Contract
 status: executing
-stopped_at: Completed 25-02-PLAN.md; ready for 25-03
-last_updated: "2026-08-11T00:03:04.542+08:00"
+stopped_at: Created 25-06-PLAN.md; ready for Phase 25 gap closure execution
+last_updated: "2026-08-11T20:40:49+08:00"
 last_activity: 2026-08-11
-last_activity_desc: Phase 25 plan 25-02 complete; ready for 25-03
+last_activity_desc: Phase 25 plan 25-06 created to close UAT gap G-25-1
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 15
-  completed_plans: 2
-  percent: 13
+  total_plans: 17
+  completed_plans: 4
+  percent: 24
 ---
 
 # Project State: Starye — 个人内容中台
@@ -29,15 +29,15 @@ See: `.planning/PROJECT.md` (updated 2026-08-10)
 ## Current Position
 
 Phase: 25 (Task Operations And Availability Contract) — EXECUTING
-Plan: 3 of 4
-Status: Ready to execute 25-03
-Last activity: 2026-08-11 — Phase 25 plan 25-02 complete; ready for 25-03
+Plan: 6 of 6
+Status: Needs review gap closure; ready to execute 25-06
+Last activity: 2026-08-11 — Phase 25 plan 25-06 created for UAT gap G-25-1
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 25
+- Total plans completed: 26
 - Average duration: —
 - Total execution time: —
 
@@ -50,7 +50,7 @@ Last activity: 2026-08-11 — Phase 25 plan 25-02 complete; ready for 25-03
 | 22 | 3 | 3 | — |
 | 23 | 5 | 5 | — |
 | 24 | 5 | 5 | — |
-| 25 | 2 | 4 | 53 min |
+| 25 | 4 | 6 | ~59 min |
 | 26 | 0 | 4 | — |
 | 27 | 0 | 3 | — |
 | 28 | 0 | 4 | — |
@@ -60,6 +60,8 @@ Last activity: 2026-08-11 — Phase 25 plan 25-02 complete; ready for 25-03
 |------|----------|-------|-------|
 | Phase 25 P25-01 | 48 min | 3 tasks | 15 files |
 | Phase 25 P25-02 | 58 min | 3 tasks | 10 files |
+| Phase 25 P25-03 | ~50 min | 3 tasks | 7 files |
+| Phase 25 P25-04 | ~62 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -76,10 +78,12 @@ Recent decisions affecting current work:
 - Image checks retain source page identity and bounded redacted samples; HTTP 200 alone is not image availability, and signed query material, cookies, raw responses and media remain outside long-lived evidence.
 - Repair and recheck commands are revision-bound, idempotent, CAS-protected and must return a receipt plus same-content authoritative readback before promoting a projection.
 - Canonical local acceptance uses `http://localhost:8080/...`; production browser execution remains in GitHub Actions, and fresh task/run/attempt/provider tuples are required for evidence.
+- Availability persistence is append-first and revision/policy/projection CAS-protected; accepted state requires authoritative D1 readback before existing cache invalidation.
+- Signed availability observations reuse the crawler-run HMAC/replay boundary and reject sensitive or unbounded evidence before the repository is called.
 
 ### Pending Todos
 
-- [ ] Execute Phase 25 in Wave 1 -> Wave 2 -> Wave 3 order, then run canonical verification.
+- [ ] Provide an authenticated Dashboard browser/CDP session, rerun the Phase 25 canonical proof, then complete verification and UAT.
 
 ### Blockers/Concerns
 
@@ -100,6 +104,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-10T17:04:51.150Z
-Stopped at: Completed 25-02-PLAN.md; ready for 25-03
+Last session: 2026-08-11T11:25:58+08:00
+Stopped at: Created 25-06-PLAN.md; ready to execute the ownership-aware Gateway proof gap closure
 Resume file: None
