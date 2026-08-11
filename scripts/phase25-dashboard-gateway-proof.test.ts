@@ -165,14 +165,14 @@ class FakeApi implements Phase25ApiRequestContext {
       if (this.environment.supersedeEvidence === 'missing')
         return new FakeResponse(200, { kind: 'created', task: { run: {} } })
       if (this.environment.supersedeEvidence === 'conflicting')
-        return new FakeResponse(200, { kind: 'created', task: { run: { taskId } }, taskId: 'conflicting-owner' })
+        return new FakeResponse(200, { kind: 'created', task: { id: 'conflicting-owner', run: { taskId } } })
       return new FakeResponse(200, { kind: 'created', task: { run: { taskId } } })
     }
     const kind = url.includes('/archive')
       ? 'archived'
       : url.includes('/cancel')
-          ? 'cancel_requested'
-          : 'existing_active_run'
+        ? 'cancel_requested'
+        : 'existing_active_run'
     return new FakeResponse(200, { kind, taskId: url.match(/\/api\/admin\/crawler-tasks\/([^/]+)/u)?.[1] ?? this.environment.taskId })
   }
 }
@@ -243,6 +243,8 @@ describe('phase25 Dashboard Gateway proof', () => {
     expect(classifyPhase25ActionOutcome(409, { kind: 'stale' })).toBe('passed')
     expect(classifyPhase25ActionOutcome(409, { kind: 'late' })).toBe('passed')
     expect(() => assertPhase25Redacted({ signed_url: 'https://TARGET', raw_response: 'TARGET' })).toThrow('phase25_forbidden_field')
+    expect(() => assertPhase25Redacted({ authorization: 'Bearer TOKEN', browserSession: 'SESSION', cookie: 'COOKIE' })).toThrow('phase25_forbidden_field')
+    expect(() => assertPhase25Redacted({ payload: 'x'.repeat(513) })).toThrow('phase25_forbidden_or_unbounded_value')
   })
 
   it('checkpoints before opening a non-canonical direct origin', async () => {
@@ -308,6 +310,18 @@ describe('phase25 Dashboard Gateway proof', () => {
     expect(result.outcome).toBe('checkpoint')
     expect(result.cleanup).toMatchObject({ action: 'cancelled', runStatus: 'cancelled', status: 'passed', taskId: 'running-task' })
     expect(environment.cancelCalls).toBe(1)
+  })
+
+  it('retains failed authoritative evidence and still runs original-task cleanup', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'phase25-dashboard-failed-'))
+    roots.push(root)
+    const environment = environmentFor({ runStatus: 'failed' })
+
+    const result = await runPhase25DashboardGatewayProof(input(root), { browserFactory: async () => sessionFor(environment) })
+
+    expect(result.outcome).toBe('failed')
+    expect(result.cleanup).toMatchObject({ action: 'already_terminal', runStatus: 'failed', status: 'passed', taskId: 'fresh-task' })
+    expect(environment.cleanupDetailTaskIds).toContain('fresh-task')
   })
 
   it('returns a checkpoint when the authoritative detail has no availability projection', async () => {
