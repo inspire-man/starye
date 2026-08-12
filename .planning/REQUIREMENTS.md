@@ -16,11 +16,11 @@
 
 ### Video And Magnet Availability
 
-- [ ] **VID-01**: 用户可以分别查看电影 metadata persisted、direct source、magnet source 和实际 playback readiness；metadata 抓取成功不代表 source 或播放可用。
-- [ ] **VID-02**: 系统可以对每个 direct source 执行受控的 URL、HTTP、Range 或浏览器加载检查，并区分可用、无效 URL、HTTP 失败、挑战/阻断、过期和检查不确定等结果。
-- [ ] **VID-03**: 系统可以通过受控 Aria2/TorrServer 路径检查 magnet 的 metadata、解析、peer/下载和流可用性，并区分磁链格式有效、无 metadata、无 peer、resolver 失败、无流和可播放等结果；磁链不按 HTTP URL 探测。
-- [ ] **VID-04**: 每次视频可用性检查都保存与 movie/source revision 绑定的 bounded observation 和 current projection，包含 source 类型、策略版本、观察时间、新鲜度、有限失败原因与下一步动作。
-- [ ] **VID-05**: 用户可以从 `no_source`、`source_failed`、stale 或 degraded 结果发起 revision-bound 的重查或修复；任务幂等，成功必须经过 receipt 和同一 movie/source revision 的权威读回。
+- [x] **VID-01**: 用户可以分别查看电影 metadata persisted、direct source、magnet source 和实际 playback readiness；metadata 抓取成功不代表 source 或播放可用。
+- [x] **VID-02**: 系统可以对每个 direct source 执行受控的 URL、HTTP、Range 或浏览器加载检查，并区分可用、无效 URL、HTTP 失败、挑战/阻断、过期和检查不确定等结果。
+- [x] **VID-03**: 系统可以通过受控 Aria2/TorrServer 路径检查 magnet 的 metadata、解析、peer/下载和流可用性，并区分磁链格式有效、无 metadata、无 peer、resolver 失败、无流和可播放等结果；磁链不按 HTTP URL 探测。
+- [x] **VID-04**: 每次视频可用性检查都保存与 movie/source revision 绑定的 bounded observation 和 current projection，包含 source 类型、策略版本、观察时间、新鲜度、有限失败原因与下一步动作。
+- [x] **VID-05**: 用户可以从 `no_source`、`source_failed`、stale 或 degraded 结果发起 revision-bound 的重查或修复；任务幂等，成功必须经过 receipt 和同一 movie/source revision 的权威读回。
 
 ### Comic Chapter Completeness
 
@@ -78,11 +78,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TASK-04 | Phase 25 | Complete |
 | TASK-05 | Phase 25 | Complete |
 | TASK-06 | Phase 25 | Complete |
-| VID-01 | Phase 26 | Pending |
-| VID-02 | Phase 26 | Pending |
-| VID-03 | Phase 26 | Pending |
-| VID-04 | Phase 26 | Pending |
-| VID-05 | Phase 26 | Pending |
+| VID-01 | Phase 26 | Complete |
+| VID-02 | Phase 26 | Complete |
+| VID-03 | Phase 26 | Complete |
+| VID-04 | Phase 26 | Complete |
+| VID-05 | Phase 26 | Complete |
 | CHAP-01 | Phase 27 | Pending |
 | CHAP-02 | Phase 27 | Pending |
 | CHAP-03 | Phase 27 | Pending |
