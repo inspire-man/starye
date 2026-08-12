@@ -39,9 +39,14 @@ function isValidRepairSnapshot(snapshot: RunnerSnapshot): snapshot is RepairRunn
     && snapshot.targetIntent === 'restore_playable_sources'
 }
 
+const directVideoReasons = new Set(['direct_blocked', 'direct_transport_failed', 'direct_content_invalid', 'browser_inconclusive'])
+const magnetVideoReasons = new Set(['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed'])
+
 export function createTemplateAdapterRegistry(adapters: readonly TaskRunnerAdapter[]) {
   const registry = new Map(adapters.filter(adapter => !adapter.operation).map(adapter => [adapter.templateKey, adapter]))
   const repairAdapter = adapters.find(adapter => adapter.operation === 'repair_players')
+  const directVideoAdapter = adapters.find(adapter => adapter.operation === 'video_direct')
+  const magnetVideoAdapter = adapters.find(adapter => adapter.operation === 'video_magnet')
   const proofAdapters = new Map(adapters.filter(adapter => adapter.proofProfile).map(adapter => [adapter.proofProfile!, adapter]))
   return Object.freeze({
     select(snapshot: RunnerSnapshot, proofProfile?: RunnerCandidate['proofProfile']): TaskRunnerAdapter {
@@ -57,6 +62,21 @@ export function createTemplateAdapterRegistry(adapters: readonly TaskRunnerAdapt
         if (!repairAdapter)
           throw new Error('Unsupported runner operation: repair_players')
         return repairAdapter
+      }
+      if (snapshot.operation === 'check_video_source'
+        || snapshot.operation === 'recheck_video_source'
+        || snapshot.operation === 'repair_video_source') {
+        if (magnetVideoReasons.has(snapshot.reason)) {
+          if (!magnetVideoAdapter)
+            throw new Error('Unsupported runner operation: video_magnet')
+          return magnetVideoAdapter
+        }
+        if (directVideoReasons.has(snapshot.reason)) {
+          if (!directVideoAdapter)
+            throw new Error('Unsupported runner source kind: video_direct')
+          return directVideoAdapter
+        }
+        throw new Error(`Unsupported runner video source kind: ${snapshot.reason}`)
       }
 
       if (('movieId' in snapshot) || ('sourceRevision' in snapshot) || ('targetIntent' in snapshot)) {

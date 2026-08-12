@@ -82,7 +82,7 @@ describe('task runner template registry', () => {
 
     expect(registry.select(snapshot)).toBe(magnet)
     expect(registry.select({ entrypoint: 'movie-crawler', permissionResource: 'movie', templateKey: 'movie', templateVersion: 1 })).toBe(movie)
-    expect(() => registry.select({ ...snapshot, reason: 'direct_blocked' })).toThrow('source kind')
+    expect(() => registry.select({ ...snapshot, reason: 'direct_blocked' } as never)).toThrow('source kind')
   })
 
   it('rejects malformed repair snapshot contracts before adapter selection', () => {
