@@ -7,6 +7,9 @@ import type {
   RepairPlayersReason,
   RepairPlayersTargetIntent,
   RepairPlayersTaskSnapshot,
+  VideoSourceFindingReason,
+  VideoSourceTaskOperation,
+  VideoSourceTaskSnapshot,
 } from './types'
 import { CRAWLER_TASK_OPERATION_VALUES } from './types'
 
@@ -31,6 +34,15 @@ export interface RepairPlayersSnapshotInput {
   readonly reason: RepairPlayersReason
   readonly sourceRevision: number
   readonly targetIntent: RepairPlayersTargetIntent
+}
+
+export interface VideoSourceSnapshotInput {
+  readonly movieId: string
+  readonly movieRevision: number
+  readonly operation: VideoSourceTaskOperation
+  readonly policyVersion: string
+  readonly reason: VideoSourceFindingReason
+  readonly sourceRevision: number
 }
 
 export type ReadCrawlerTaskSnapshotResult
@@ -68,6 +80,10 @@ function validSourceRevision(value: unknown): value is number {
     && value <= 1_000_000
 }
 
+function validPolicyVersion(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 128
+}
+
 function ordinarySnapshot(templateKey: CrawlerTaskTemplateKey): CrawlerTaskSnapshot {
   return Object.freeze({ ...getCrawlerTaskTemplate(templateKey) })
 }
@@ -85,11 +101,63 @@ function repairPlayersSnapshot(input: RepairPlayersSnapshotInput): RepairPlayers
   })
 }
 
+function videoSourceSnapshot(input: VideoSourceSnapshotInput): VideoSourceTaskSnapshot {
+  const template = getCrawlerTaskTemplate('movie')
+  return Object.freeze({
+    ...template,
+    movieId: input.movieId.trim(),
+    movieRevision: input.movieRevision,
+    operation: input.operation,
+    policyVersion: input.policyVersion.trim(),
+    reason: input.reason,
+    sourceRevision: input.sourceRevision,
+    templateKey: 'movie',
+  })
+}
+
+function isVideoSourceOperation(value: unknown): value is VideoSourceTaskOperation {
+  return value === 'check_video_source' || value === 'recheck_video_source' || value === 'repair_video_source'
+}
+
+function isVideoSourceReason(value: unknown): value is VideoSourceFindingReason {
+  return typeof value === 'string' && [
+    'no_source',
+    'source_failed',
+    'stale',
+    'direct_blocked',
+    'direct_transport_failed',
+    'direct_content_invalid',
+    'browser_inconclusive',
+    'provider_unconfigured',
+    'provider_failed',
+    'metadata_unresolved',
+    'no_peer',
+    'stalled',
+    'stream_missing',
+    'stream_failed',
+    'playback_unverified',
+    'playback_failed',
+  ].includes(value)
+}
+
 export function createCrawlerTaskSnapshot(templateKey: CrawlerTaskTemplateKey): CrawlerTaskSnapshot
 export function createCrawlerTaskSnapshot(input: RepairPlayersSnapshotInput): RepairPlayersTaskSnapshot
-export function createCrawlerTaskSnapshot(input: CrawlerTaskTemplateKey | RepairPlayersSnapshotInput): CrawlerTaskSnapshotUnion {
+export function createCrawlerTaskSnapshot(input: VideoSourceSnapshotInput): VideoSourceTaskSnapshot
+export function createCrawlerTaskSnapshot(input: CrawlerTaskTemplateKey | RepairPlayersSnapshotInput | VideoSourceSnapshotInput): CrawlerTaskSnapshotUnion {
   if (typeof input === 'string')
     return ordinarySnapshot(input)
+
+  if (isVideoSourceOperation(input.operation)) {
+    const videoInput = input as VideoSourceSnapshotInput
+    if (!validIdentifier(videoInput.movieId)
+      || !validSourceRevision(videoInput.movieRevision)
+      || !validSourceRevision(videoInput.sourceRevision)
+      || !validPolicyVersion(videoInput.policyVersion)
+      || !isVideoSourceReason(videoInput.reason)) {
+      throw new Error('video source snapshot is invalid')
+    }
+    return videoSourceSnapshot(videoInput)
+  }
 
   if (input.operation !== 'repair_players')
     throw new Error('repair snapshot requires repair_players operation')
@@ -161,6 +229,30 @@ export function readCrawlerTaskSnapshot(
         reason: value.reason,
         sourceRevision: value.sourceRevision,
         targetIntent: 'restore_playable_sources',
+      }),
+      template,
+    }
+  }
+
+  if (isVideoSourceOperation(operation)) {
+    if (value.templateKey !== 'movie'
+      || !validIdentifier(value.movieId)
+      || !validSourceRevision(value.movieRevision)
+      || !validSourceRevision(value.sourceRevision)
+      || !validPolicyVersion(value.policyVersion)
+      || !isVideoSourceReason(value.reason)) {
+      return { ok: false, reason: 'invalid_snapshot' }
+    }
+    return {
+      ok: true,
+      operation,
+      snapshot: videoSourceSnapshot({
+        movieId: value.movieId,
+        movieRevision: value.movieRevision,
+        operation,
+        policyVersion: value.policyVersion,
+        reason: value.reason,
+        sourceRevision: value.sourceRevision,
       }),
       template,
     }

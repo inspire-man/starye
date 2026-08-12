@@ -8,10 +8,35 @@ export const CRAWLER_MAX_SAFE_LOG_BYTES = 4 * 1024
 export const CRAWLER_MAX_NORMAL_LOG_ROWS = 500
 
 export type CrawlerTaskTemplateKey = 'movie' | 'manga'
-export const CRAWLER_TASK_OPERATION_VALUES = ['movie', 'manga', 'repair_players'] as const
+export const CRAWLER_TASK_OPERATION_VALUES = [
+  'movie',
+  'manga',
+  'repair_players',
+  'check_video_source',
+  'recheck_video_source',
+  'repair_video_source',
+] as const
 export type CrawlerTaskOperation = typeof CRAWLER_TASK_OPERATION_VALUES[number]
 export type RepairPlayersReason = 'no_source' | 'source_failed'
 export type RepairPlayersTargetIntent = 'restore_playable_sources'
+export type VideoSourceTaskOperation = 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
+export type VideoSourceFindingReason
+  = | 'no_source'
+    | 'source_failed'
+    | 'stale'
+    | 'direct_blocked'
+    | 'direct_transport_failed'
+    | 'direct_content_invalid'
+    | 'browser_inconclusive'
+    | 'provider_unconfigured'
+    | 'provider_failed'
+    | 'metadata_unresolved'
+    | 'no_peer'
+    | 'stalled'
+    | 'stream_missing'
+    | 'stream_failed'
+    | 'playback_unverified'
+    | 'playback_failed'
 export const CRAWLER_RECEIPT_SCHEMA_VERSION = 2 as const
 export type CrawlerPermissionResource = Extract<Resource, 'comic' | 'movie'>
 export type ProviderName = 'github-actions' | 'local-proof'
@@ -128,7 +153,17 @@ export interface RepairPlayersTaskSnapshot extends CrawlerTaskSnapshot {
   readonly templateKey: 'movie'
 }
 
-export type CrawlerTaskSnapshotUnion = CrawlerTaskSnapshot | RepairPlayersTaskSnapshot
+export interface VideoSourceTaskSnapshot extends CrawlerTaskSnapshot {
+  readonly movieId: string
+  readonly movieRevision: number
+  readonly operation: VideoSourceTaskOperation
+  readonly policyVersion: string
+  readonly reason: VideoSourceFindingReason
+  readonly sourceRevision: number
+  readonly templateKey: 'movie'
+}
+
+export type CrawlerTaskSnapshotUnion = CrawlerTaskSnapshot | RepairPlayersTaskSnapshot | VideoSourceTaskSnapshot
 
 export interface CrawlerTaskTemplate {
   readonly entrypoint: CrawlerTaskSnapshot['entrypoint']

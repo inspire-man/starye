@@ -6,6 +6,8 @@ import type {
   CrawlerTaskTemplateKey,
   ProviderSnapshot,
   RepairPlayersReason,
+  VideoSourceFindingReason,
+  VideoSourceTaskOperation,
 } from './types'
 import { createProviderSnapshot } from './provider-association'
 import { createCrawlerTaskSnapshot, getCrawlerTaskTemplate, isCrawlerTaskOperation, readCrawlerTaskSnapshot } from './template-registry'
@@ -15,7 +17,7 @@ const MAX_POLICY_LENGTH = 128
 const MAX_REFERENCE_LENGTH = 256
 const MAX_JSON_BYTES = 16 * 1024
 
-export const CRAWLER_OPERATION_INTENT_VALUES = ['crawl', 'repair_players'] as const
+export const CRAWLER_OPERATION_INTENT_VALUES = ['crawl', 'repair_players', 'check_video_source', 'recheck_video_source', 'repair_video_source'] as const
 export type CrawlerOperationIntentKind = typeof CRAWLER_OPERATION_INTENT_VALUES[number]
 export type CrawlerOperationTargetKind = 'movie' | 'manga'
 
@@ -26,9 +28,11 @@ export interface CrawlerOperationTarget {
 
 export interface CrawlerOperationIntent {
   readonly kind: CrawlerOperationIntentKind
-  readonly reason?: RepairPlayersReason
+  readonly reason?: RepairPlayersReason | VideoSourceFindingReason
   readonly sourceRevision?: number
   readonly targetIntent?: 'restore_playable_sources'
+  readonly movieRevision?: number
+  readonly policyVersion?: string
 }
 
 export interface CrawlerOperationActor {
@@ -96,9 +100,80 @@ const operationRegistry: CrawlerOperationRegistry = Object.freeze({
     template: Object.freeze(getCrawlerTaskTemplate('movie')),
     provider: createProviderSnapshot('movie'),
   }),
+  check_video_source: Object.freeze({
+    operation: 'check_video_source',
+    permissionResource: 'movie',
+    targetKind: 'movie',
+    template: Object.freeze(getCrawlerTaskTemplate('movie')),
+    provider: createProviderSnapshot('movie'),
+  }),
+  recheck_video_source: Object.freeze({
+    operation: 'recheck_video_source',
+    permissionResource: 'movie',
+    targetKind: 'movie',
+    template: Object.freeze(getCrawlerTaskTemplate('movie')),
+    provider: createProviderSnapshot('movie'),
+  }),
+  repair_video_source: Object.freeze({
+    operation: 'repair_video_source',
+    permissionResource: 'movie',
+    targetKind: 'movie',
+    template: Object.freeze(getCrawlerTaskTemplate('movie')),
+    provider: createProviderSnapshot('movie'),
+  }),
 })
 
 export const crawlerOperationRegistry: CrawlerOperationRegistry = operationRegistry
+
+function isVideoSourceOperation(value: unknown): value is VideoSourceTaskOperation {
+  return value === 'check_video_source' || value === 'recheck_video_source' || value === 'repair_video_source'
+}
+
+function isVideoSourceReason(value: unknown): value is VideoSourceFindingReason {
+  return typeof value === 'string' && [
+    'no_source',
+    'source_failed',
+    'stale',
+    'direct_blocked',
+    'direct_transport_failed',
+    'direct_content_invalid',
+    'browser_inconclusive',
+    'provider_unconfigured',
+    'provider_failed',
+    'metadata_unresolved',
+    'no_peer',
+    'stalled',
+    'stream_missing',
+    'stream_failed',
+    'playback_unverified',
+    'playback_failed',
+  ].includes(value)
+}
+
+function validVideoOperationReason(operation: VideoSourceTaskOperation, reason: VideoSourceFindingReason): boolean {
+  switch (operation) {
+    case 'check_video_source':
+      return reason === 'stale' || reason === 'browser_inconclusive'
+    case 'recheck_video_source':
+      return reason === 'stale'
+        || reason === 'direct_transport_failed'
+        || reason === 'browser_inconclusive'
+        || reason === 'metadata_unresolved'
+        || reason === 'no_peer'
+        || reason === 'stalled'
+        || reason === 'stream_missing'
+        || reason === 'stream_failed'
+        || reason === 'playback_unverified'
+        || reason === 'playback_failed'
+    case 'repair_video_source':
+      return reason === 'no_source'
+        || reason === 'source_failed'
+        || reason === 'direct_blocked'
+        || reason === 'direct_content_invalid'
+        || reason === 'provider_unconfigured'
+        || reason === 'provider_failed'
+  }
+}
 
 /** Reads the immutable server snapshot stored in a task without trusting provider fields from a runner. */
 export function readCrawlerOperationServerSnapshot(value: unknown): CrawlerOperationServerSnapshot | undefined {
@@ -153,6 +228,25 @@ export function readCrawlerOperationServerSnapshot(value: unknown): CrawlerOpera
       return undefined
     }
   }
+  else if (isVideoSourceOperation(intent.kind)) {
+    if (Object.keys(intent).some(key => !['kind', 'movieRevision', 'policyVersion', 'reason', 'sourceRevision'].includes(key))
+      || !isVideoSourceReason(intent.reason)
+      || !validVideoOperationReason(intent.kind, intent.reason)
+      || typeof intent.movieRevision !== 'number'
+      || !Number.isSafeInteger(intent.movieRevision)
+      || intent.movieRevision < 0
+      || intent.movieRevision > 1_000_000
+      || typeof intent.sourceRevision !== 'number'
+      || !Number.isSafeInteger(intent.sourceRevision)
+      || intent.sourceRevision < 0
+      || intent.sourceRevision > 1_000_000
+      || typeof intent.policyVersion !== 'string'
+      || intent.policyVersion.trim().length === 0
+      || intent.policyVersion.length > MAX_POLICY_LENGTH
+      || intent.policyVersion.trim() !== value.policyVersion.trim()) {
+      return undefined
+    }
+  }
   else {
     return undefined
   }
@@ -166,7 +260,15 @@ export function readCrawlerOperationServerSnapshot(value: unknown): CrawlerOpera
           sourceRevision: intent.sourceRevision,
           targetIntent: 'restore_playable_sources',
         }
-      : { kind: 'crawl' },
+      : isVideoSourceOperation(intent.kind)
+        ? {
+            kind: intent.kind,
+            movieRevision: intent.movieRevision as number,
+            policyVersion: (intent.policyVersion as string).trim(),
+            reason: intent.reason as VideoSourceFindingReason,
+            sourceRevision: intent.sourceRevision as number,
+          }
+        : { kind: 'crawl' },
     operation: value.operation,
     policyReference: value.policyReference.trim(),
     policyVersion: value.policyVersion.trim(),
@@ -300,6 +402,19 @@ function parseCommand(value: unknown): CrawlerOperationCommandInput {
       throw new Error('crawler_operation_intent_invalid')
     boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid')
   }
+  else if (isVideoSourceOperation(intentKind)) {
+    exactKeys(value.intent, ['kind', 'movieRevision', 'policyVersion', 'reason', 'sourceRevision'], 'crawler_operation_intent_unknown_field')
+    if (!isVideoSourceReason(value.intent.reason)
+      || !validVideoOperationReason(intentKind, value.intent.reason)) {
+      throw new Error('crawler_operation_intent_invalid')
+    }
+    boundedRevision(value.intent.movieRevision, 'crawler_operation_intent_invalid')
+    boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid')
+    if (boundedString(value.intent.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_intent_invalid')
+      !== boundedString(value.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_policy_invalid')) {
+      throw new Error('crawler_operation_intent_invalid')
+    }
+  }
   else {
     throw new Error('crawler_operation_intent_invalid')
   }
@@ -312,12 +427,20 @@ function parseCommand(value: unknown): CrawlerOperationCommandInput {
     idempotencyKey: boundedString(value.idempotencyKey, MAX_ID_LENGTH, 'crawler_operation_idempotency_invalid'),
     intent: intentKind === 'crawl'
       ? { kind: 'crawl' }
-      : {
-          kind: 'repair_players',
-          reason: value.intent.reason as RepairPlayersReason,
-          sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
-          targetIntent: 'restore_playable_sources',
-        },
+      : intentKind === 'repair_players'
+        ? {
+            kind: 'repair_players',
+            reason: value.intent.reason as RepairPlayersReason,
+            sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
+            targetIntent: 'restore_playable_sources',
+          }
+        : {
+            kind: intentKind as VideoSourceTaskOperation,
+            movieRevision: boundedRevision(value.intent.movieRevision, 'crawler_operation_intent_invalid'),
+            policyVersion: boundedString(value.intent.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_intent_invalid'),
+            reason: value.intent.reason as VideoSourceFindingReason,
+            sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
+          },
     operation: value.operation,
     policyReference: boundedString(value.policyReference, MAX_REFERENCE_LENGTH, 'crawler_operation_policy_invalid'),
     policyVersion: boundedString(value.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_policy_invalid'),
@@ -332,7 +455,9 @@ function parseCommand(value: unknown): CrawlerOperationCommandInput {
     throw new Error('crawler_operation_target_mismatch')
   if (command.operation === 'repair_players' && command.intent.kind !== 'repair_players')
     throw new Error('crawler_operation_intent_mismatch')
-  if (command.operation !== 'repair_players' && command.intent.kind !== 'crawl')
+  if (isVideoSourceOperation(command.operation) && command.intent.kind !== command.operation)
+    throw new Error('crawler_operation_intent_mismatch')
+  if (command.operation !== 'repair_players' && !isVideoSourceOperation(command.operation) && command.intent.kind !== 'crawl')
     throw new Error('crawler_operation_intent_mismatch')
   return deepFreeze(command)
 }
@@ -353,11 +478,20 @@ export function buildCrawlerOperationSnapshot(value: unknown): CrawlerOperationS
     ? createCrawlerTaskSnapshot({
         movieId: command.target.id,
         operation: 'repair_players',
-        reason: command.intent.reason!,
+        reason: command.intent.reason as RepairPlayersReason,
         sourceRevision: command.intent.sourceRevision!,
         targetIntent: 'restore_playable_sources',
       })
-    : createCrawlerTaskSnapshot(command.operation as CrawlerTaskTemplateKey)
+    : isVideoSourceOperation(command.operation)
+      ? createCrawlerTaskSnapshot({
+          movieId: command.target.id,
+          movieRevision: command.intent.movieRevision!,
+          operation: command.operation,
+          policyVersion: command.intent.policyVersion!,
+          reason: command.intent.reason as VideoSourceFindingReason,
+          sourceRevision: command.intent.sourceRevision!,
+        })
+      : createCrawlerTaskSnapshot(command.operation as CrawlerTaskTemplateKey)
   const serverSnapshot: CrawlerOperationServerSnapshot = {
     actor: command.actor,
     idempotencyKey: command.idempotencyKey,
