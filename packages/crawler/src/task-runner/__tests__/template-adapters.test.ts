@@ -63,6 +63,28 @@ describe('task runner template registry', () => {
     })).toThrow('Unsupported runner operation')
   })
 
+  it('selects magnet video operations without changing legacy fallback', () => {
+    const movie = { execute: async () => ({ contentIds: [] }), templateKey: 'movie' as const }
+    const magnet = { execute: async () => ({ contentIds: [] }), operation: 'video_magnet' as const, templateKey: 'movie' as const }
+    const registry = createTemplateAdapterRegistry([movie, magnet])
+    const snapshot = {
+      entrypoint: 'movie-crawler' as const,
+      movieId: 'movie-1',
+      movieRevision: 4,
+      operation: 'recheck_video_source' as const,
+      permissionResource: 'movie' as const,
+      policyVersion: 'video-source-probe/v1',
+      reason: 'no_peer' as const,
+      sourceRevision: 7,
+      templateKey: 'movie' as const,
+      templateVersion: 1 as const,
+    }
+
+    expect(registry.select(snapshot)).toBe(magnet)
+    expect(registry.select({ entrypoint: 'movie-crawler', permissionResource: 'movie', templateKey: 'movie', templateVersion: 1 })).toBe(movie)
+    expect(() => registry.select({ ...snapshot, reason: 'direct_blocked' })).toThrow('source kind')
+  })
+
   it('rejects malformed repair snapshot contracts before adapter selection', () => {
     const repair = createRepairPlayersAdapter({ sources: [] })
     const registry = createTemplateAdapterRegistry([repair])
