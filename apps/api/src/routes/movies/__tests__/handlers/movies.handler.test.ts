@@ -141,6 +141,23 @@ describe('movies handlers', () => {
       expect(res.status).toBe(404)
     })
 
+    it('accepts the public :code parameter through the shared detail handler', async () => {
+      const mockGetMovie = vi.spyOn(movieService, 'getMovieByIdentifier').mockResolvedValue(createMockMovie({ id: '1' }))
+      vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(true)
+      const app = new Hono<AppEnv>()
+      const mockDb = createMockDb()
+      app.use('*', async (c, next) => {
+        c.set('db', mockDb)
+        await next()
+      })
+      app.get('/public/:code', getMovieDetail)
+
+      const response = await app.request('/public/TEST-001')
+
+      expect(response.status).toBe(200)
+      expect(mockGetMovie).toHaveBeenCalledWith(expect.objectContaining({ identifier: 'TEST-001' }))
+    })
+
     it('应该正确传递 isAdult 参数到 service', async () => {
       const mockGetMovie = vi.spyOn(movieService, 'getMovieByIdentifier').mockResolvedValue(createMockMovie({ id: '1' }))
       vi.spyOn(authService, 'checkUserAdultStatus').mockReturnValue(false)

@@ -101,9 +101,17 @@ describe('movie readiness projection', () => {
     ])
     const result = await getMovieByIdentifier({ db: makeDb(movie), identifier: 'TEST-001', isAdult: true })
 
-    expect(result?.readiness.metadata).toMatchObject({ contentId: 'movie-1', persisted: true })
+    expect(result?.readiness.metadata).toMatchObject({ contentId: 'movie-1', persisted: false })
     expect(result?.readiness.source).toMatchObject({ disposition, reasonCode })
     expect(result?.readiness.source.eligibleCount).toBe(0)
+  })
+
+  it('does not synthesize metadata persistence from movie timestamps or source success', async () => {
+    const movie = makeMovie(makeSourceState({ disposition: 'ready', eligibleCount: 1, repairable: false, reasonCode: null }))
+    const result = await getMovieByIdentifier({ db: makeDb(movie), identifier: 'TEST-001', isAdult: true })
+
+    expect(movie.updatedAt).toBeInstanceOf(Date)
+    expect(result?.readiness.metadata).toEqual({ contentId: 'movie-1', observedAt: null, persisted: false })
   })
 
   it('keeps ready playback unverified and accepts verified playback only with explicit evidence', async () => {
