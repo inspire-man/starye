@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MovieDetail } from '../types'
+import type { MovieDetail, PlaybackEvidenceRequest, PlaybackEvidenceTuple } from '../types'
 import type { PlaybackSourceType } from '../utils/playbackSources'
 import * as Sentry from '@sentry/vue'
 import { CircleAlert, CircleCheck, Clock3, Play, RefreshCw } from 'lucide-vue-next'
@@ -48,6 +48,16 @@ interface PlayerErrorState {
   recoverable: boolean
 }
 
+interface ActivePlaybackEvidenceIdentity {
+  contentId: string
+  key: string
+  movieCode: string
+  sessionToken: number
+  sourceRevision: number
+  sourceType: 'direct' | 'TorrServer'
+  tuple: PlaybackEvidenceTuple
+}
+
 const BUFFERING_TIMEOUT_MS = 10000
 const PLAYBACK_OBSERVATION_WINDOW_MS = 15000
 const MAX_SOURCE_RETRIES = 2
@@ -74,6 +84,8 @@ let lastSavedProgressSecond = -1
 let playbackSessionToken = 0
 let loadingCycleToken = 0
 let consumedFailureCycleToken = -1
+let activePlaybackEvidenceIdentity: ActivePlaybackEvidenceIdentity | null = null
+const submittedPlaybackEvidenceIdentities = new Set<string>()
 const retryCountBySource = new Map<string, number>()
 const attemptedSourceIdentities = new Set<string>()
 
@@ -207,6 +219,81 @@ function resetPlaybackEvidenceForAttempt(attempt: number) {
   currentSourceAttempt.value = attempt
 }
 
+function invalidatePlaybackEvidenceIdentity() {
+  activePlaybackEvidenceIdentity = null
+}
+
+function createActivePlaybackEvidenceIdentity(sourceType: PlaybackSourceType): ActivePlaybackEvidenceIdentity | null {
+  const tuple = movieData.value?.availability?.current.playback.tuple
+  const contentId = currentContentId.value
+  const sourceRevision = currentSourceRevision.value
+  const code = movieCode.value.trim()
+  if (!tuple || !contentId || !/^[\w.~-]{1,128}$/u.test(code)
+    || tuple.provider !== 'github-actions'
+    || (sourceType !== 'direct' && sourceType !== 'TorrServer')) {
+    return null
+  }
+
+  return {
+    contentId,
+    key: [playbackSessionToken, currentSourceIdentity.value, currentSourceAttempt.value, contentId, sourceRevision, tuple.taskId, tuple.runId, tuple.attemptNumber, sourceType].join(':'),
+    movieCode: code,
+    sessionToken: playbackSessionToken,
+    sourceRevision,
+    sourceType,
+    tuple: { ...tuple },
+  }
+}
+
+function isActivePlaybackEvidenceIdentity(identity: ActivePlaybackEvidenceIdentity | null): identity is ActivePlaybackEvidenceIdentity {
+  return identity !== null
+    && activePlaybackEvidenceIdentity?.key === identity.key
+    && identity.sessionToken === playbackSessionToken
+    && identity.contentId === currentContentId.value
+    && identity.sourceRevision === currentSourceRevision.value
+}
+
+function submitCurrentPlaybackEvidence(identity: ActivePlaybackEvidenceIdentity | null) {
+  if (!isActivePlaybackEvidenceIdentity(identity) || submittedPlaybackEvidenceIdentities.has(identity.key))
+    return
+
+  const before = currentTimeBefore.value
+  const after = currentTimeAfter.value
+  const delta = currentTimeDelta.value
+  if (before == null || after == null || delta == null || delta < 1)
+    return
+
+  const eventObserved = (event: PlaybackEventName) => playbackEvents.value.find(item => item.event === event)?.observed === true
+  const evidence: PlaybackEvidenceRequest = {
+    contentId: identity.contentId,
+    events: playbackEvents.value.map(event => ({
+      event: event.event,
+      observed: event.observed,
+      observedAt: event.observedAt,
+    })),
+    observedAt: Math.floor(Date.now() / 1000),
+    playback: {
+      canplay: eventObserved('canplay'),
+      error: eventObserved('error'),
+      playing: eventObserved('playing'),
+      progress: { currentTimeAfter: after, currentTimeBefore: before, currentTimeDelta: delta },
+      status: 'playback_verified',
+    },
+    provider: { provider: identity.tuple.provider, status: 'succeeded' },
+    repair: { sourceRevision: identity.sourceRevision, status: 'succeeded' },
+    schemaVersion: 1,
+    source: { revision: identity.sourceRevision, sourceType: identity.sourceType, status: 'ready' },
+    sourceRevision: identity.sourceRevision,
+    tuple: identity.tuple,
+    viewer: { path: `/movie/${identity.movieCode}`, targetLabel: `movie-${identity.movieCode}` },
+  }
+
+  submittedPlaybackEvidenceIdentities.add(identity.key)
+  void movieApi.submitPlaybackEvidence(identity.tuple.taskId, identity.tuple.runId, evidence).catch(() => {
+    // Evidence is advisory; playback remains available when the authenticated write fails.
+  })
+}
+
 function playbackEventElapsedMs(): number {
   if (playbackObservationStartedAt.value == null)
     return 0
@@ -246,7 +333,9 @@ function recordPlaybackEvent(event: PlaybackEventName) {
   }
 }
 
-function updatePlaybackProgress() {
+function updatePlaybackProgress(identity = activePlaybackEvidenceIdentity) {
+  if (identity && !isActivePlaybackEvidenceIdentity(identity))
+    return
   if (!playbackClickRequested.value || currentTimeBefore.value == null || playbackStatus.value === 'failed')
     return
 
@@ -262,6 +351,7 @@ function updatePlaybackProgress() {
   playbackStatusReason.value = ''
   stopPlayerLoading()
   clearRecoverableError()
+  submitCurrentPlaybackEvidence(identity)
 }
 
 function startPlaybackObservationWindow() {
@@ -291,6 +381,8 @@ function rememberCurrentSourceAttempt(outcome: SourceAttemptObservation['outcome
 
 function beginPlaybackSession(): number {
   playbackSessionToken += 1
+  invalidatePlaybackEvidenceIdentity()
+  submittedPlaybackEvidenceIdentities.clear()
   retryCountBySource.clear()
   attemptedSourceIdentities.clear()
   sourceAttemptHistory.value = []
@@ -384,6 +476,7 @@ function resetPlayerContainer() {
 }
 
 function destroyPlayerInstance() {
+  invalidatePlaybackEvidenceIdentity()
   clearWaitingTimeout()
   clearPlaybackObservationTimer()
 
@@ -870,6 +963,7 @@ function initPlayer(
   sourceIdentity = '',
   sourceType?: PlaybackSourceType,
 ) {
+  invalidatePlaybackEvidenceIdentity()
   const normalizedUrl = url.trim()
   const resolvedType = sourceType ?? classifyPlaybackSource({ sourceUrl: normalizedUrl })
   const resolvedIdentity = sourceIdentity || getSourceIdentity({
@@ -884,6 +978,8 @@ function initPlayer(
   currentSourceAttempt.value = retryCount + 1
   attemptedSourceIdentities.add(resolvedIdentity)
   resetPlaybackEvidenceForAttempt(currentSourceAttempt.value)
+  activePlaybackEvidenceIdentity = createActivePlaybackEvidenceIdentity(resolvedType)
+  const evidenceIdentity = activePlaybackEvidenceIdentity
 
   if (!normalizedUrl || (resolvedType !== 'direct' && resolvedType !== 'TorrServer')) {
     showPlayerError(
@@ -916,27 +1012,37 @@ function initPlayer(
   }
 
   player.on('canplay', () => {
+    if (evidenceIdentity && !isActivePlaybackEvidenceIdentity(evidenceIdentity))
+      return
     recordPlaybackEvent('canplay')
     markPlaybackRecovered()
   })
 
   player.on('playing', () => {
+    if (evidenceIdentity && !isActivePlaybackEvidenceIdentity(evidenceIdentity))
+      return
     recordPlaybackEvent('playing')
     markPlaybackRecovered()
-    updatePlaybackProgress()
+    updatePlaybackProgress(evidenceIdentity)
   })
 
   player.on('waiting', () => {
+    if (evidenceIdentity && !isActivePlaybackEvidenceIdentity(evidenceIdentity))
+      return
     recordPlaybackEvent('waiting')
     scheduleWaitingTimeout()
   })
 
   player.on('stalled', () => {
+    if (evidenceIdentity && !isActivePlaybackEvidenceIdentity(evidenceIdentity))
+      return
     recordPlaybackEvent('stalled')
     scheduleWaitingTimeout()
   })
 
   player.on('ended', () => {
+    if (evidenceIdentity && !isActivePlaybackEvidenceIdentity(evidenceIdentity))
+      return
     stopPlayerLoading()
     if (playbackClickRequested.value && playbackStatus.value !== 'progressed') {
       handleSourceFailure('network', '媒体在 currentTime 推进 1 秒前结束，播放证据未达标。')
@@ -946,6 +1052,8 @@ function initPlayer(
   })
 
   player.on('error', () => {
+    if (evidenceIdentity && !isActivePlaybackEvidenceIdentity(evidenceIdentity))
+      return
     recordPlaybackEvent('error')
     const nextError = getPlaybackErrorState()
     if (nextError.recoverable)
@@ -955,7 +1063,9 @@ function initPlayer(
   })
 
   player.on('timeupdate', () => {
-    updatePlaybackProgress()
+    if (evidenceIdentity && !isActivePlaybackEvidenceIdentity(evidenceIdentity))
+      return
+    updatePlaybackProgress(evidenceIdentity)
     if (!userStore.user || !player) {
       return
     }

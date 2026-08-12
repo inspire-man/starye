@@ -17,6 +17,7 @@ import type {
   Movie,
   MovieDetail,
   PaginatedResponse,
+  PlaybackEvidenceRequest,
   Publisher,
   PublisherDetail,
   SeriesDetail,
@@ -92,11 +93,18 @@ export const movieApi = {
     const res = await client.api.public.movies[':code'].$get({
       param: { code },
     })
-    const data = await res.json()
-    if (!data.success) {
-      throw new Error(data.error)
+    if (!res.ok) {
+      throw new Error(`Failed to fetch movie detail: ${res.status}`)
     }
+    const data = await res.json()
     return { success: true, data: data.data as unknown as MovieDetail }
+  },
+
+  async submitPlaybackEvidence(taskId: string, runId: string, evidence: PlaybackEvidenceRequest): Promise<unknown> {
+    return apiFetch(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/runs/${encodeURIComponent(runId)}/playback-evidence`, {
+      method: 'POST',
+      body: JSON.stringify(evidence),
+    })
   },
 
   async getRecommended(): Promise<{ success: boolean, data: Movie[], meta: { strategy: string } }> {

@@ -142,6 +142,58 @@ export interface ReadinessProjection {
   source: SourceReadinessProjection
 }
 
+export interface PlaybackEvidenceTuple {
+  attemptNumber: number
+  provider: 'github-actions'
+  runId: string
+  taskId: string
+}
+
+export interface MovieAvailabilityReadback {
+  current: {
+    direct: unknown | null
+    magnet: unknown | null
+    metadata: {
+      observedAt: number | null
+      persisted: boolean
+      sourceRevision: number
+    }
+    playback: {
+      status: PlaybackProofStatus
+      tuple: PlaybackEvidenceTuple | null
+    }
+  }
+  history: unknown[]
+}
+
+export interface PlaybackEvidenceRequest {
+  contentId: string
+  events: Array<{
+    event: 'canplay' | 'playing' | 'waiting' | 'stalled' | 'error'
+    observed: boolean
+    observedAt: number | null
+  }>
+  observedAt: number
+  playback: {
+    canplay: boolean
+    error: boolean
+    playing: boolean
+    progress: {
+      currentTimeAfter: number
+      currentTimeBefore: number
+      currentTimeDelta: number
+    }
+    status: 'playback_verified'
+  }
+  provider: { provider: 'github-actions', status: 'succeeded' }
+  repair: { sourceRevision: number, status: 'succeeded' }
+  schemaVersion: 1
+  source: { revision: number, sourceType: 'direct' | 'TorrServer', status: 'ready' }
+  sourceRevision: number
+  tuple: PlaybackEvidenceTuple
+  viewer: { path: string, targetLabel: string }
+}
+
 export interface MovieDetail extends Movie {
   actors: ActorSummary[]
   publishers: PublisherSummary[]
@@ -149,6 +201,7 @@ export interface MovieDetail extends Movie {
   relatedMovies: Movie[]
   primaryContentId: string
   readiness: ReadinessProjection
+  availability?: MovieAvailabilityReadback
 }
 
 export interface WatchingProgress {

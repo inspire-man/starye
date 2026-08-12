@@ -356,6 +356,21 @@ describe('player.vue security gates', () => {
     expect(wrapper.get('[data-playback-event="stalled"]').attributes('data-observed')).toBe('false')
     expect(wrapper.get('[data-playback-event="error"]').attributes('data-observed')).toBe('false')
     expect(submitPlaybackEvidenceMock).toHaveBeenCalledTimes(1)
+    const submittedPayload = submitPlaybackEvidenceMock.mock.calls[0][2]
+    expect(submittedPayload).toMatchObject({
+      events: [
+        { event: 'canplay', observed: true },
+        { event: 'playing', observed: true },
+        { event: 'waiting', observed: false },
+        { event: 'stalled', observed: false },
+        { event: 'error', observed: false },
+      ],
+      provider: { provider: 'github-actions', status: 'succeeded' },
+      repair: { sourceRevision: 8, status: 'succeeded' },
+      source: { revision: 8, sourceType: 'direct', status: 'ready' },
+      viewer: { path: '/movie/REBD-1024', targetLabel: 'movie-REBD-1024' },
+    })
+    expect(JSON.stringify(submittedPayload)).not.toMatch(/streamUrl|sourceUrl|token|cookie|endpoint|providerConfig/u)
     expect(submitPlaybackEvidenceMock).toHaveBeenCalledWith('task-proof', 'run-proof', expect.objectContaining({
       contentId: 'movie-proof',
       sourceRevision: 8,
@@ -368,6 +383,145 @@ describe('player.vue security gates', () => {
     expect(submitPlaybackEvidenceMock).toHaveBeenCalledTimes(1)
     expect(wrapper.get('#player-container').attributes('data-content-id')).toBe('movie-proof')
     expect(wrapper.get('#player-container').attributes('data-source-revision')).toBe('8')
+    wrapper.unmount()
+  })
+
+  it('does not submit without a server-owned playback tuple or positive progress', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-no-tuple',
+        primaryContentId: 'movie-no-tuple',
+        title: 'No tuple fixture',
+        players: [{ id: 'direct-no-tuple', sourceName: '直连', sourceUrl: 'https://media.example/no-tuple.mp4', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-no-tuple', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-no-tuple', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 2 },
+        },
+        availability: {
+          current: {
+            direct: null,
+            magnet: null,
+            metadata: { observedAt: 100, persisted: true, sourceRevision: 2 },
+            playback: { status: 'unverified', tuple: null },
+          },
+          history: [],
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+    playerInstances[0].handlers.canplay()
+    await wrapper.get('[data-player-action="play"]').trigger('click')
+    playerInstances[0].handlers.playing()
+    playerInstances[0].currentTime = 2
+    playerInstances[0].handlers.timeupdate()
+    await flushPromises()
+
+    expect(wrapper.get('[data-playback-status]').text()).toContain('播放已验证')
+    expect(submitPlaybackEvidenceMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('submits TorrServer as browser evidence without exposing its local stream URL', async () => {
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-torr',
+        primaryContentId: 'movie-torr',
+        title: 'TorrServer fixture',
+        players: [{ id: 'magnet-torr', sourceUrl: 'magnet:?xt=urn:btih:123', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-torr', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-torr', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 5 },
+        },
+        availability: {
+          current: {
+            direct: null,
+            magnet: null,
+            metadata: { observedAt: 100, persisted: true, sourceRevision: 5 },
+            playback: { status: 'unverified', tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'run-torr', taskId: 'task-torr' } },
+          },
+          history: [],
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+    playerInstances[0].handlers.canplay()
+    await wrapper.get('[data-player-action="play"]').trigger('click')
+    playerInstances[0].handlers.playing()
+    playerInstances[0].currentTime = 1.5
+    playerInstances[0].handlers.timeupdate()
+    await flushPromises()
+
+    const payload = submitPlaybackEvidenceMock.mock.calls[0][2]
+    expect(payload.source).toEqual({ revision: 5, sourceType: 'TorrServer', status: 'ready' })
+    expect(JSON.stringify(payload)).not.toContain('127.0.0.1')
+    expect(JSON.stringify(payload)).not.toContain('magnet:')
+    wrapper.unmount()
+  })
+
+  it('ignores late media events from the previous player instance after retry', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-retry-evidence',
+        primaryContentId: 'movie-retry-evidence',
+        title: 'Retry evidence fixture',
+        players: [{ id: 'direct-retry-evidence', sourceName: '直连', sourceUrl: 'https://media.example/retry-evidence.mp4', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-retry-evidence', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-retry-evidence', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 6 },
+        },
+        availability: {
+          current: {
+            direct: null,
+            magnet: null,
+            metadata: { observedAt: 100, persisted: true, sourceRevision: 6 },
+            playback: { status: 'unverified', tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'run-retry-evidence', taskId: 'task-retry-evidence' } },
+          },
+          history: [],
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+    const oldPlayer = playerInstances[0]
+    oldPlayer.handlers.error()
+    await flushPromises()
+    await wrapper.get('button[title="重试当前播放源"]').trigger('click')
+    await flushPromises()
+
+    oldPlayer.handlers.canplay()
+    oldPlayer.handlers.playing()
+    oldPlayer.currentTime = 3
+    oldPlayer.handlers.timeupdate()
+    await flushPromises()
+    expect(submitPlaybackEvidenceMock).not.toHaveBeenCalled()
+
+    const currentPlayer = playerInstances[1]
+    currentPlayer.handlers.canplay()
+    await wrapper.get('[data-player-action="play"]').trigger('click')
+    currentPlayer.handlers.playing()
+    currentPlayer.currentTime = 1.25
+    currentPlayer.handlers.timeupdate()
+    await flushPromises()
+    expect(submitPlaybackEvidenceMock).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
 
