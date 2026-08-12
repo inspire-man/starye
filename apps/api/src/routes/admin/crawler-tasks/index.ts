@@ -1,6 +1,7 @@
 import type { AvailabilityCurrentProjection, AvailabilityObservation } from '../../../domain/crawler-tasks/availability-contract'
 import type { CrawlerTaskTemplateKey, ProviderName } from '../../../domain/crawler-tasks/types'
 import type { SourceReadinessProjection } from '../../../domain/movies/source-contract'
+import type { PlaybackEvidenceSummary } from '../../../domain/playback-evidence/types'
 import type { GitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import type { AppEnv, SessionUser } from '../../../types'
 import { Hono } from 'hono'
@@ -26,6 +27,7 @@ import {
   RetryCrawlerTaskSchema,
   SupersedeCrawlerTaskSchema,
   UpdateCrawlerTaskSchema,
+  VideoAvailabilityCommandSchema,
 } from '../../../schemas/crawler-tasks'
 import { PlaybackEvidenceRequestSchema } from '../../../schemas/playback-evidence'
 
@@ -145,7 +147,7 @@ async function dispatchCreatedRun(
 }
 
 interface TaskAccessRow {
-  operation?: 'movie' | 'manga' | 'repair_players'
+  operation?: 'movie' | 'manga' | 'repair_players' | 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
   request_snapshot_json?: string
   template_key: CrawlerTaskTemplateKey
 }
@@ -439,7 +441,7 @@ function projectRun(row: Record<string, unknown>): Record<string, unknown> {
 interface PlaybackEvidenceTaskReadModel {
   readonly runs: readonly {
     readonly runId: string
-    readonly summary: unknown
+    readonly summary: PlaybackEvidenceSummary | null
     readonly rejections: readonly unknown[]
   }[]
 }
@@ -1291,11 +1293,121 @@ function getD1(c: { get: (key: 'db') => unknown }): D1Client {
   return (c.get('db') as { $client: D1Client }).$client
 }
 
+type VideoLayerName = 'metadata' | 'direct' | 'magnet' | 'playback'
+
+interface VideoLayerFact {
+  readonly freshness: 'fresh' | 'stale' | 'late'
+  readonly layer: VideoLayerName
+  readonly observedAt: number
+  readonly policyVersion: string
+  readonly reason: string | null
+  readonly sourceRevision: number
+  readonly status: 'available' | 'unavailable' | 'degraded' | 'unknown'
+  readonly summary: AvailabilityObservation['summary']
+}
+
+function videoSnapshot(taskAccess: TaskAccessRow | undefined) {
+  if (!taskAccess?.request_snapshot_json
+    || (taskAccess.operation !== 'check_video_source'
+      && taskAccess.operation !== 'recheck_video_source'
+      && taskAccess.operation !== 'repair_video_source')) {
+    return null
+  }
+  try {
+    const parsed = readCrawlerTaskSnapshot(JSON.parse(taskAccess.request_snapshot_json), taskAccess.operation)
+    return parsed.ok && 'operation' in parsed.snapshot
+      && (parsed.snapshot.operation === 'check_video_source'
+        || parsed.snapshot.operation === 'recheck_video_source'
+        || parsed.snapshot.operation === 'repair_video_source')
+      ? parsed.snapshot
+      : null
+  }
+  catch {
+    return null
+  }
+}
+
+function observationFact(layer: 'direct' | 'magnet', observation: AvailabilityObservation, reason: string): VideoLayerFact {
+  return {
+    freshness: observation.freshness,
+    layer,
+    observedAt: observation.observedAt,
+    policyVersion: observation.policyVersion,
+    reason: observation.status === 'available' ? null : reason,
+    sourceRevision: observation.sourceRevision,
+    status: observation.status,
+    summary: observation.summary,
+  }
+}
+
+function projectVideoAvailabilityLayers(
+  detail: Record<string, unknown>,
+  availability: { current: AvailabilityCurrentProjection | null, history: AvailabilityHistoryEntry[] },
+  evidence: PlaybackEvidenceTaskReadModel,
+  currentRunId: string | null,
+  taskAccess?: TaskAccessRow,
+): Record<VideoLayerName, { current: VideoLayerFact | null, history: readonly VideoLayerFact[] }> {
+  const snapshot = videoSnapshot(taskAccess)
+  const magnetReasons = new Set(['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed'])
+  const sourceLayer = snapshot && magnetReasons.has(snapshot.reason) ? 'magnet' : snapshot ? 'direct' : null
+  const current = sourceLayer && availability.current && snapshot
+    && availability.current.sourceRevision === snapshot.sourceRevision
+    && availability.current.policyVersion === snapshot.policyVersion
+    ? observationFact(sourceLayer, availability.current, snapshot.reason)
+    : null
+  const sourceHistory = sourceLayer && snapshot
+    ? availability.history.flatMap(entry => entry.observation ? [observationFact(sourceLayer, entry.observation, snapshot.reason)] : [])
+    : []
+  const runs = Array.isArray(detail.runs) ? detail.runs as readonly Record<string, unknown>[] : []
+  const readiness = runs.find(run => run.id === currentRunId)?.readiness
+  const metadata = readiness && typeof readiness === 'object' && !Array.isArray(readiness)
+    ? (readiness as Record<string, unknown>).metadata
+    : null
+  const metadataValue = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : null
+  const metadataCurrent: VideoLayerFact | null = snapshot
+    ? {
+        freshness: 'fresh',
+        layer: 'metadata',
+        observedAt: metadataValue && typeof metadataValue.observedAt === 'number' ? metadataValue.observedAt : 0,
+        policyVersion: snapshot.policyVersion,
+        reason: metadataValue?.persisted === true ? null : 'metadata_unresolved',
+        sourceRevision: snapshot.sourceRevision,
+        status: metadataValue?.persisted === true ? 'available' : 'unknown',
+        summary: { counts: { persisted: metadataValue?.persisted === true ? 1 : 0 }, samples: [] },
+      }
+    : null
+  const playbackRun = currentRunId ? evidence.runs.find(run => run.runId === currentRunId) : undefined
+  const playbackSummary = playbackRun?.summary ?? null
+  const playbackVerified = playbackSummary?.playback?.status === 'playback_verified'
+    && playbackSummary.sourceRevision === snapshot?.sourceRevision
+  const playbackCurrent: VideoLayerFact | null = snapshot && playbackRun
+    ? {
+        freshness: 'fresh',
+        layer: 'playback',
+        observedAt: playbackSummary?.observedAt ?? 0,
+        policyVersion: snapshot.policyVersion,
+        reason: playbackVerified ? null : 'playback_unverified',
+        sourceRevision: snapshot.sourceRevision,
+        status: playbackVerified ? 'available' : 'unknown',
+        summary: { counts: { evidence: 1 }, samples: [] },
+      }
+    : null
+  return {
+    direct: { current: sourceLayer === 'direct' ? current : null, history: sourceLayer === 'direct' ? sourceHistory : [] },
+    magnet: { current: sourceLayer === 'magnet' ? current : null, history: sourceLayer === 'magnet' ? sourceHistory : [] },
+    metadata: { current: metadataCurrent, history: [] },
+    playback: { current: playbackCurrent, history: [] },
+  }
+}
+
 async function withPlaybackEvidence(
   c: any,
   taskId: string,
   detail: Record<string, unknown>,
   currentRunId: string | null,
+  taskAccess?: TaskAccessRow,
 ): Promise<Record<string, unknown>> {
   const [evidence, availability] = await Promise.all([
     createPlaybackEvidenceRepository(c.get('db')).getTaskEvidence(taskId),
@@ -1303,7 +1415,10 @@ async function withPlaybackEvidence(
   ])
   return {
     ...detail,
-    availability,
+    availability: {
+      ...availability,
+      layers: projectVideoAvailabilityLayers(detail, availability, evidence, currentRunId, taskAccess),
+    },
     playbackEvidence: projectPlaybackEvidence(evidence, currentRunId),
   }
 }
@@ -1534,6 +1649,40 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
   })
 })
 
+adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvailabilityCommandSchema), async (c) => {
+  const user = await requireSessionUser(c)
+  requireTemplateAccess(user, 'movie')
+  const command = c.req.valid('json')
+  const repairReasons = new Set(['no_source', 'source_failed', 'direct_blocked', 'direct_content_invalid'])
+  const operation = repairReasons.has(command.reason) ? 'repair_video_source' as const : 'recheck_video_source' as const
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const result = await repository.createOrGetActiveRun({
+    operationCommand: {
+      actor: { id: user.id, kind: 'admin' },
+      idempotencyKey: command.idempotencyKey,
+      intent: {
+        kind: operation,
+        movieRevision: command.movieRevision,
+        policyVersion: command.policyVersion,
+        reason: command.reason,
+        sourceRevision: command.sourceRevision,
+      },
+      operation,
+      policyReference: 'availability/video-source-probe',
+      policyVersion: command.policyVersion,
+      target: { id: command.movieId, kind: 'movie' },
+    },
+    requestedByUserId: user.id,
+    templateKey: 'movie',
+  })
+  if (result.kind === 'conflict')
+    throw new HTTPException(409, { message: 'Video availability command conflicts with an existing identity' })
+  const dispatch = result.kind === 'created'
+    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template: 'movie' })
+    : { kind: 'existing_active_run' }
+  return c.json({ dispatch, kind: result.kind, run: result.run })
+})
+
 adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema), async (c) => {
   const user = await requireSessionUser(c)
   const { cursor, lifecycle, limit, template } = c.req.valid('query')
@@ -1727,14 +1876,14 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
       movie: { code: movie.code, id: movie.id, title: movie.title },
       taskId,
     })
-    return c.json(await withPlaybackEvidence(c, taskId, detail, detail.currentAttempt?.id ?? null))
+    return c.json(await withPlaybackEvidence(c, taskId, detail, detail.currentAttempt?.id ?? null, taskAccess))
   }
   const repository = createCrawlerTaskRepository(c.get('db'))
   if (repository.getTaskDetail) {
     const detail = await repository.getTaskDetail(taskId)
     if (detail) {
       const currentRunId = readCurrentRunId(detail.task, detail.runs)
-      return c.json(await withPlaybackEvidence(c, taskId, projectTaskDetail(detail), currentRunId))
+      return c.json(await withPlaybackEvidence(c, taskId, projectTaskDetail(detail), currentRunId, taskAccess))
     }
   }
   const d1 = getD1(c)
@@ -1746,7 +1895,7 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
   return c.json(await withPlaybackEvidence(c, taskId, {
     runs: (runs.results ?? []).map(projectRun),
     task: task.results?.[0],
-  }, currentRunId))
+  }, currentRunId, taskAccess))
 })
 
 adminCrawlerTasksRoutes.get('/:taskId/runs/:runId/logs', validator('param', CrawlerTaskRunParamsSchema), validator('query', CrawlerTaskLogsQuerySchema), async (c) => {
