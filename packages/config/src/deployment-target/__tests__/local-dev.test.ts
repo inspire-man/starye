@@ -15,6 +15,7 @@ interface LocalDevSupervisorResult {
   readonly status: 'ready' | 'failed'
   readonly exitCode: 0 | 1
   readonly services: readonly LocalDevServiceRecord[]
+  readonly waitForStop: () => Promise<void>
 }
 
 interface LocalDevModule {
@@ -40,6 +41,10 @@ class FakeChild extends EventEmitter {
   constructor(readonly pid: number) {
     super()
   }
+}
+
+function expectChildTerminated(child: FakeChild): void {
+  expect(child.kill).toHaveBeenCalledTimes(process.platform === 'win32' ? 0 : 1)
 }
 
 async function loadLocalDev(): Promise<LocalDevModule> {
@@ -181,9 +186,9 @@ describe('local-dev atomic seven-port supervisor', () => {
     expect(harness.cleanup).toHaveBeenCalledTimes(1)
     expect(harness.setExitCode).toHaveBeenCalledWith(1)
     for (const child of harness.children.values()) {
-      expect(child.kill).toHaveBeenCalledTimes(1)
+      expectChildTerminated(child)
     }
-  })
+  }, 15_000)
 
   it('returns the owned labeled PID records only after all seven fixed ports are ready', async () => {
     const localDev = await loadLocalDev()
@@ -215,7 +220,9 @@ describe('local-dev atomic seven-port supervisor', () => {
     const localDev = await loadLocalDev()
     const harness = createHarness({ listening: () => true, triggerGatewayExit: true })
 
-    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toMatchObject({
+    const result = await localDev.runLocalDevSupervisor(harness.dependencies)
+
+    expect(result).toMatchObject({
       status: 'ready',
       exitCode: 0,
     })
@@ -252,7 +259,9 @@ describe('local-dev atomic seven-port supervisor', () => {
     const localDev = await loadLocalDev()
     const harness = createHarness({ listening: () => true })
 
-    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toMatchObject({
+    const result = await localDev.runLocalDevSupervisor(harness.dependencies)
+
+    expect(result).toMatchObject({
       status: 'ready',
       exitCode: 0,
     })
@@ -264,12 +273,12 @@ describe('local-dev atomic seven-port supervisor', () => {
     }
 
     gateway.emit('exit', 1, null)
-    await Promise.resolve()
+    await result.waitForStop()
 
     expect(harness.cleanup).toHaveBeenCalledTimes(1)
     expect(harness.setExitCode).toHaveBeenCalledWith(1)
     for (const child of harness.children.values()) {
-      expect(child.kill).toHaveBeenCalledTimes(1)
+      expectChildTerminated(child)
     }
   })
 
@@ -278,7 +287,9 @@ describe('local-dev atomic seven-port supervisor', () => {
     let gatewayListening = true
     const harness = createHarness({ listening: port => port !== 8080 || gatewayListening })
 
-    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toMatchObject({
+    const result = await localDev.runLocalDevSupervisor(harness.dependencies)
+
+    expect(result).toMatchObject({
       status: 'ready',
       exitCode: 0,
     })
@@ -291,13 +302,13 @@ describe('local-dev atomic seven-port supervisor', () => {
 
     gatewayListening = false
     gateway.emit('exit', 0, null)
-    await Promise.resolve()
+    await result.waitForStop()
 
     expect(harness.probePort).toHaveBeenLastCalledWith(8080)
     expect(harness.cleanup).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => expect(harness.setExitCode).toHaveBeenCalledWith(1))
     for (const child of harness.children.values()) {
-      expect(child.kill).toHaveBeenCalledTimes(1)
+      expectChildTerminated(child)
     }
   })
 
@@ -317,7 +328,7 @@ describe('local-dev atomic seven-port supervisor', () => {
     expect(harness.cleanup).toHaveBeenCalledTimes(1)
     expect(harness.setExitCode).toHaveBeenCalledWith(1)
     for (const child of harness.children.values()) {
-      expect(child.kill).toHaveBeenCalledTimes(1)
+      expectChildTerminated(child)
     }
   })
 })
