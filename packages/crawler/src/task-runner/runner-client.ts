@@ -1,7 +1,13 @@
 import process from 'node:process'
 import { createRunnerEventId, signRunnerBody } from './event-signer'
 
-export type RunnerOperation = 'manga' | 'movie' | 'repair_players'
+export type RunnerOperation = 'manga' | 'movie' | 'repair_players' | VideoRunnerOperation
+export type VideoRunnerOperation = 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
+export type VideoRunnerReason
+  = | 'no_source' | 'source_failed' | 'stale' | 'direct_blocked' | 'direct_transport_failed'
+    | 'direct_content_invalid' | 'browser_inconclusive' | 'provider_unconfigured' | 'provider_failed'
+    | 'metadata_unresolved' | 'no_peer' | 'stalled' | 'stream_missing' | 'stream_failed'
+    | 'playback_unverified' | 'playback_failed'
 export type RunnerProvider = 'github-actions' | 'local-proof'
 export type RunnerSourceType = 'direct' | 'magnet' | 'TorrServer'
 export type RunnerSourceHealth = 'inactive' | 'unverified' | 'failed'
@@ -38,6 +44,10 @@ export interface RunnerAvailabilityObservationInput {
   readonly reasonCode: RunnerAvailabilityReasonCode
   readonly status: RunnerAvailabilityStatus
   readonly summary: RunnerAvailabilitySummary
+}
+
+export interface RunnerVideoAvailabilityObservationInput extends RunnerAvailabilityObservationInput {
+  readonly sourceKind: 'direct' | 'magnet'
 }
 
 export interface RunnerAvailabilityObservationResponse {
@@ -113,10 +123,26 @@ export interface RepairRunnerSnapshot extends Omit<OrdinaryRunnerSnapshot, 'oper
   readonly templateKey: 'movie'
 }
 
-export type RunnerSnapshot = OrdinaryRunnerSnapshot | RepairRunnerSnapshot
+export interface VideoRunnerSnapshot extends Omit<OrdinaryRunnerSnapshot, 'operation' | 'templateKey'> {
+  readonly movieId: string
+  readonly movieRevision: number
+  readonly operation: VideoRunnerOperation
+  readonly policyVersion: string
+  readonly reason: VideoRunnerReason
+  readonly sourceRevision: number
+  readonly templateKey: 'movie'
+}
+
+export type RunnerSnapshot = OrdinaryRunnerSnapshot | RepairRunnerSnapshot | VideoRunnerSnapshot
 
 export function isRepairRunnerSnapshot(snapshot: RunnerSnapshot): snapshot is RepairRunnerSnapshot {
   return snapshot.operation === 'repair_players'
+}
+
+export function isVideoRunnerSnapshot(snapshot: RunnerSnapshot): snapshot is VideoRunnerSnapshot {
+  return snapshot.operation === 'check_video_source'
+    || snapshot.operation === 'recheck_video_source'
+    || snapshot.operation === 'repair_video_source'
 }
 
 export interface RunnerCandidate {
@@ -171,6 +197,32 @@ interface PostOptions {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value).sort()
+  return actual.length === keys.length && actual.every((key, index) => key === [...keys].sort()[index])
+}
+
+function isVideoRunnerReason(value: unknown): value is VideoRunnerReason {
+  return typeof value === 'string' && [
+    'no_source',
+    'source_failed',
+    'stale',
+    'direct_blocked',
+    'direct_transport_failed',
+    'direct_content_invalid',
+    'browser_inconclusive',
+    'provider_unconfigured',
+    'provider_failed',
+    'metadata_unresolved',
+    'no_peer',
+    'stalled',
+    'stream_missing',
+    'stream_failed',
+    'playback_unverified',
+    'playback_failed',
+  ].includes(value)
 }
 
 function isRepairReceipt(value: unknown): value is RepairPlayersReceipt {
@@ -257,6 +309,50 @@ function parseRunnerSnapshot(value: unknown): RunnerSnapshot {
       reason: value.reason,
       sourceRevision: value.sourceRevision,
       targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    }
+  }
+
+  if (value.operation === 'check_video_source' || value.operation === 'recheck_video_source' || value.operation === 'repair_video_source') {
+    if (!hasExactKeys(value, [
+      'entrypoint',
+      'movieId',
+      'movieRevision',
+      'operation',
+      'permissionResource',
+      'policyVersion',
+      'reason',
+      'sourceRevision',
+      'templateKey',
+      'templateVersion',
+    ])
+    || value.templateKey !== 'movie'
+    || value.entrypoint !== 'movie-crawler'
+    || value.permissionResource !== 'movie'
+    || typeof value.movieId !== 'string'
+    || value.movieId.trim().length === 0
+    || typeof value.movieRevision !== 'number'
+    || !Number.isSafeInteger(value.movieRevision)
+    || value.movieRevision < 0
+    || typeof value.sourceRevision !== 'number'
+    || !Number.isSafeInteger(value.sourceRevision)
+    || value.sourceRevision < 0
+    || typeof value.policyVersion !== 'string'
+    || value.policyVersion.trim().length === 0
+    || value.policyVersion.length > 128
+    || !isVideoRunnerReason(value.reason)) {
+      throw new Error('Invalid video runner snapshot')
+    }
+    return {
+      entrypoint: 'movie-crawler',
+      movieId: value.movieId.trim(),
+      movieRevision: value.movieRevision,
+      operation: value.operation,
+      permissionResource: 'movie',
+      policyVersion: value.policyVersion.trim(),
+      reason: value.reason,
+      sourceRevision: value.sourceRevision,
       templateKey: 'movie',
       templateVersion: 1,
     }
@@ -358,6 +454,16 @@ function parseRunnerCandidate(value: unknown): RunnerCandidate {
     throw new Error('Local proof runner candidate binding is incomplete')
   }
 
+  const snapshot = parseRunnerSnapshot(value.snapshot)
+  if (isVideoRunnerSnapshot(snapshot)
+    && (sourceRevision !== snapshot.sourceRevision
+      || policyVersion !== snapshot.policyVersion
+      || contentId !== snapshot.movieId
+      || target?.kind !== 'movie'
+      || target.id !== snapshot.movieId)) {
+    throw new Error('Runner video snapshot binding does not match the candidate')
+  }
+
   return {
     attempt: value.attempt,
     ...(contentId ? { contentId } : {}),
@@ -369,7 +475,7 @@ function parseRunnerCandidate(value: unknown): RunnerCandidate {
     runId: value.run_id.trim(),
     sequence: value.sequence,
     ...(sourceRevision !== undefined ? { sourceRevision } : {}),
-    snapshot: parseRunnerSnapshot(value.snapshot),
+    snapshot,
     ...(target ? { target } : {}),
     ...(taskId ? { taskId } : {}),
   }
@@ -502,6 +608,22 @@ export class RunnerClient {
       timestamp: this.now(),
       type: 'availability_observation',
     }, { allowNonOk: true }) as Promise<RunnerAvailabilityObservationResponse>
+  }
+
+  async observeVideoAvailability(
+    candidate: RunnerCandidate,
+    sequence: number,
+    input: RunnerVideoAvailabilityObservationInput,
+  ): Promise<RunnerAvailabilityObservationResponse> {
+    if (!isVideoRunnerSnapshot(candidate.snapshot))
+      throw new Error('Video observation requires a video runner snapshot')
+    const directReasons: readonly VideoRunnerReason[] = ['direct_blocked', 'direct_transport_failed', 'direct_content_invalid', 'browser_inconclusive']
+    const magnetReasons: readonly VideoRunnerReason[] = ['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed']
+    if ((input.sourceKind === 'direct' && magnetReasons.includes(candidate.snapshot.reason))
+      || (input.sourceKind === 'magnet' && directReasons.includes(candidate.snapshot.reason))) {
+      throw new Error('Runner video source variant does not match its snapshot')
+    }
+    return this.observeAvailability(candidate, sequence, input)
   }
 
   async failed(candidate: RunnerCandidate, sequence: number, code: string): Promise<EventResult> {
