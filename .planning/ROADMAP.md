@@ -92,7 +92,7 @@ Plans:
   3. magnet 检查只经过受控 Aria2/TorrServer 路径，并能区分 metadata、解析、peer/下载、流和播放各层结果；磁链语法有效或 resolver 接受不单独构成可用。
   4. 用户可以从 no-source、source-failed、stale 或 degraded finding 发起幂等 recheck/repair；成功必须绑定同一 movie/source revision，经 receipt 和权威读回后才更新 projection。
 
-**Plans**: 4/10 plans executed
+**Plans**: 5/10 plans executed
 
 Plans:
 **Wave 1**
@@ -110,7 +110,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 26-05-PLAN.md — authoritative metadata/source persistence、readback 与 API actions
+- [x] 26-05-PLAN.md — authoritative metadata/source persistence、readback 与 API actions
 - [ ] 26-09-PLAN.md — local/production real runner direct+magnet adapter construction wiring
 
 **Wave 5** *(blocked on Wave 4 completion)*
@@ -179,6 +179,6 @@ Plans:
 | 23. GitHub Actions Production Repair And Reconciliation | v1.4 | 5/5 | Complete | 2026-08-08 |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | v1.4 | 5/5 | Complete | 2026-08-10 |
 | 25. Task Operations And Availability Contract | v1.5 | 6/6 | Complete    | 2026-08-11 |
-| 26. Video Source And Magnet Availability | v1.5 | 4/10 | In Progress | - |
+| 26. Video Source And Magnet Availability | v1.5 | 5/10 | In Progress | - |
 | 27. Comic Chapter Completeness | v1.5 | 0/3 | Not started | - |
 | 28. Chapter Image Availability And Gateway Acceptance | v1.5 | 0/4 | Not started | - |
