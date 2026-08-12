@@ -275,7 +275,26 @@ export interface CrawlerAvailabilityHistoryEntry {
 export interface CrawlerAvailabilityTaskProjection {
   current: CrawlerAvailabilityProjection | null
   history: CrawlerAvailabilityHistoryEntry[]
+  layers?: Record<CrawlerVideoLayerName, CrawlerVideoLayerProjection>
   observations?: CrawlerAvailabilityObservation[]
+}
+
+export type CrawlerVideoLayerName = 'metadata' | 'direct' | 'magnet' | 'playback'
+
+export interface CrawlerVideoLayerFact {
+  freshness: CrawlerAvailabilityFreshness
+  layer: CrawlerVideoLayerName
+  observedAt: number
+  policyVersion: string
+  reason: string | null
+  sourceRevision: number
+  status: CrawlerAvailabilityStatus
+  summary: CrawlerAvailabilityEvidence
+}
+
+export interface CrawlerVideoLayerProjection {
+  current: CrawlerVideoLayerFact | null
+  history: CrawlerVideoLayerFact[]
 }
 
 export interface CrawlerTaskAudit {

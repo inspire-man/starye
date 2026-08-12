@@ -3,7 +3,7 @@
  * 爬虫监控页面
  */
 
-import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, ReadinessProjection } from '@/lib/api'
+import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, CrawlerVideoLayerFact, CrawlerVideoLayerName, ReadinessProjection } from '@/lib/api'
 import { ConfirmDialog, info, SkeletonCard, success } from '@starye/ui'
 import { AlertTriangle, Archive, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, GitBranch, History, LoaderCircle, Pencil, RefreshCw, Save, Wrench } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -125,6 +125,32 @@ const availabilityOutcomeLabels: Record<CrawlerAvailabilityOutcome, string> = {
   stale: 'stale · 过期',
 }
 
+const videoLayerNames: readonly CrawlerVideoLayerName[] = ['metadata', 'direct', 'magnet', 'playback']
+const videoLayerLabels: Record<CrawlerVideoLayerName, string> = {
+  metadata: 'Metadata',
+  direct: 'Direct source',
+  magnet: 'Magnet / TorrServer',
+  playback: 'Playback',
+}
+const videoReasonActionLabels: Record<string, string> = {
+  browser_inconclusive: '重新检查',
+  direct_blocked: '修复来源',
+  direct_content_invalid: '修复来源',
+  direct_transport_failed: '重新检查',
+  metadata_unresolved: '重新检查',
+  no_peer: '重新检查',
+  no_source: '修复来源',
+  playback_failed: '重新检查',
+  playback_unverified: '重新检查',
+  provider_failed: '配置 provider',
+  provider_unconfigured: '配置 provider',
+  source_failed: '修复来源',
+  stale: '重新检查',
+  stalled: '重新检查',
+  stream_failed: '重新检查',
+  stream_missing: '重新检查',
+}
+
 const playbackEventLabels: Record<CrawlerPlaybackEventName, string> = {
   canplay: 'canplay',
   error: 'error',
@@ -235,6 +261,22 @@ function availabilityCurrentFor(task: CrawlerTask): CrawlerAvailabilityProjectio
 
 function availabilityHistoryFor(task: CrawlerTask): CrawlerAvailabilityHistoryEntry[] {
   return taskAvailabilityFor(task)?.history ?? []
+}
+
+function videoLayerFor(task: CrawlerTask, layer: CrawlerVideoLayerName) {
+  return taskAvailabilityFor(task)?.layers?.[layer] ?? { current: null, history: [] }
+}
+
+function videoLayerCount(fact: CrawlerVideoLayerFact, name: string): number {
+  return fact.summary.counts[name] ?? 0
+}
+
+function videoLayerAction(fact: CrawlerVideoLayerFact): string {
+  if (fact.freshness !== 'fresh')
+    return '重新检查'
+  if (!fact.reason)
+    return '无需操作'
+  return videoReasonActionLabels[fact.reason] ?? '重新检查'
 }
 
 function availabilityReasonLabel(reasonCode: CrawlerAvailabilityReasonCode): string {
@@ -1239,6 +1281,31 @@ async function executeClearFailed() {
               <span v-if="entry.observation">observedAt：{{ entry.observation.observedAt }} · revision：{{ entry.observation.sourceRevision }}</span>
             </article>
           </div>
+          <div v-if="taskAvailabilityFor(selectedRun.task)?.layers" class="video-layer-list" aria-label="视频四层可用性">
+            <section v-for="layer in videoLayerNames" :key="layer" class="video-layer-row" :data-video-layer="layer">
+              <div class="video-layer-heading">
+                <strong>{{ videoLayerLabels[layer] }}</strong>
+                <span v-if="videoLayerFor(selectedRun.task, layer).current" class="status-label">
+                  {{ availabilityStatusLabels[videoLayerFor(selectedRun.task, layer).current!.status] }}
+                </span>
+              </div>
+              <template v-if="videoLayerFor(selectedRun.task, layer).current">
+                <span>reason：{{ videoLayerFor(selectedRun.task, layer).current!.reason ?? 'available' }}</span>
+                <span>revision {{ videoLayerFor(selectedRun.task, layer).current!.sourceRevision }} · {{ videoLayerFor(selectedRun.task, layer).current!.freshness }}</span>
+                <span>available：{{ videoLayerCount(videoLayerFor(selectedRun.task, layer).current!, 'available') }} · abnormal：{{ videoLayerCount(videoLayerFor(selectedRun.task, layer).current!, 'abnormal') }}</span>
+                <span>下一步：{{ videoLayerAction(videoLayerFor(selectedRun.task, layer).current!) }}</span>
+                <span v-for="sample in videoLayerFor(selectedRun.task, layer).current!.summary.samples" :key="`${sample.code}-${sample.label ?? ''}`">
+                  {{ sample.code }}<template v-if="sample.count !== undefined">：{{ sample.count }}</template><template v-if="sample.label"> · {{ sample.label }}</template>
+                </span>
+              </template>
+              <span v-else class="fact-muted">暂无 current fact</span>
+              <div v-if="videoLayerFor(selectedRun.task, layer).history.length" class="video-layer-history" data-video-history>
+                <span v-for="fact in videoLayerFor(selectedRun.task, layer).history" :key="`${fact.sourceRevision}-${fact.observedAt}`">
+                  history · revision {{ fact.sourceRevision }} · {{ fact.status }} · {{ fact.freshness }}
+                </span>
+              </div>
+            </section>
+          </div>
         </section>
         <section class="audit-surface" data-evidence-section="audit" aria-labelledby="audit-title">
           <div class="section-heading">
@@ -1794,6 +1861,13 @@ async function executeClearFailed() {
 .availability-history-row span,
 .audit-row span { overflow-wrap: anywhere; }
 .availability-history { border-top: 1px solid hsl(var(--border)); padding-top: 0.75rem; }
+.video-layer-list { display: grid; gap: 0; min-width: 0; border-top: 1px solid hsl(var(--border)); }
+.video-layer-row { display: grid; gap: 0.35rem; min-width: 0; padding: 0.75rem 0; border-bottom: 1px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); font-size: 0.82rem; }
+.video-layer-row:last-child { border-bottom: 0; }
+.video-layer-row > span,
+.video-layer-history span { overflow-wrap: anywhere; }
+.video-layer-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; color: hsl(var(--foreground)); }
+.video-layer-history { display: grid; gap: 0.25rem; border-left: 2px solid hsl(var(--border)); padding-left: 0.65rem; }
 .availability-history-row,
 .audit-row { display: grid; gap: 0.35rem; min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 0.25rem; background: hsl(var(--muted)); padding: 0.65rem; color: hsl(var(--muted-foreground)); font-size: 0.82rem; }
 .availability-history-row > span:first-child,
