@@ -5,15 +5,15 @@ milestone_name: 爬虫运管与内容可用性闭环
 current_phase: 26
 current_phase_name: Video Source And Magnet Availability
 status: executing
-stopped_at: Completed Wave 5 (26-07 and 26-10)
-last_updated: "2026-08-13T03:25:00.000Z"
+stopped_at: Completed 26-06-PLAN.md
+last_updated: "2026-08-13T04:05:00.000Z"
 last_activity: 2026-08-13
-last_activity_desc: Completed Wave 5 (26-07 and 26-10)
+last_activity_desc: Completed 26-06-PLAN.md
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State: Starye — 个人内容中台
@@ -28,15 +28,15 @@ See: `.planning/PROJECT.md` (updated 2026-08-10)
 ## Current Position
 
 Phase: 26 — Video Source And Magnet Availability
-Plan: 8/10 plans complete
-Status: Wave 5 complete; ready for Wave 6
-Last activity: 2026-08-13 — Completed 26-07 and 26-10
+Plan: 9/10 plans complete
+Status: Wave 6 complete; ready for Wave 7 checkpoint
+Last activity: 2026-08-13 — Completed 26-06-PLAN.md
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 31
+- Total plans completed: 32
 - Average duration: —
 - Total execution time: —
 
@@ -50,7 +50,7 @@ Last activity: 2026-08-13 — Completed 26-07 and 26-10
 | 23 | 5 | 5 | — |
 | 24 | 5 | 5 | — |
 | 25 | 6 | 6 | ~49 min |
-| 26 | 8 | 10 | — |
+| 26 | 9 | 10 | — |
 | 27 | 0 | 3 | — |
 | 28 | 0 | 4 | — |
 **Per-Plan Metrics:**
@@ -69,6 +69,7 @@ Last activity: 2026-08-13 — Completed 26-07 and 26-10
 | Phase 26 P09 | ~35 min | 2 tasks | 8 files |
 | Phase 26 P07 | ~25 min | 2 tasks | 4 files |
 | Phase 26 P10 | ~30 min | 2 tasks | 5 files |
+| Phase 26 P06 | ~35 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,7 @@ Recent decisions affecting current work:
 - [Phase 26]: Magnet stream readiness remains playback-unverified; real runner construction is owned by Plan 26-09.
 - [Phase 26]: Public movie detail exposes authoritative same-revision metadata/direct/magnet/playback layers and only a bounded server-owned playback tuple.
 - [Phase 26]: Player playback evidence requires explicit play, canplay, playing and at least one second of positive currentTime progress for the active media instance.
+- [Phase 26]: Dashboard and MovieDetail render the same four authoritative layers while retaining their admin-task and public-movie API ownership boundaries.
 
 ### Pending Todos
 
@@ -116,6 +118,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-13T11:25:00+08:00
-Stopped at: Completed Wave 5 (26-07 and 26-10)
+Last session: 2026-08-13T12:05:00+08:00
+Stopped at: Completed 26-06-PLAN.md
 Resume file: None

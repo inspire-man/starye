@@ -120,7 +120,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 26-06-PLAN.md — Dashboard 与 typed public MovieDetail 四层 projection/actions
+- [x] 26-06-PLAN.md — Dashboard 与 typed public MovieDetail 四层 projection/actions
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -179,6 +179,6 @@ Plans:
 | 23. GitHub Actions Production Repair And Reconciliation | v1.4 | 5/5 | Complete | 2026-08-08 |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | v1.4 | 5/5 | Complete | 2026-08-10 |
 | 25. Task Operations And Availability Contract | v1.5 | 6/6 | Complete    | 2026-08-11 |
-| 26. Video Source And Magnet Availability | v1.5 | 8/10 | In Progress | - |
+| 26. Video Source And Magnet Availability | v1.5 | 9/10 | In Progress | - |
 | 27. Comic Chapter Completeness | v1.5 | 0/3 | Not started | - |
 | 28. Chapter Image Availability And Gateway Acceptance | v1.5 | 0/4 | Not started | - |
