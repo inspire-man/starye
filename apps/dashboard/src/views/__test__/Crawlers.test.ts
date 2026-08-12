@@ -20,6 +20,7 @@ const { api } = vi.hoisted(() => ({
       updateCrawlerTask: vi.fn(),
       archiveCrawlerTask: vi.fn(),
       supersedeCrawlerTask: vi.fn(),
+      submitVideoAvailabilityCommand: vi.fn(),
     },
   },
 }))
@@ -243,6 +244,15 @@ describe('crawlers local task panel', () => {
       target: { id: 'task-actions', kind: 'movie' },
     }))
     expect(api.admin.getCrawlerTask).toHaveBeenCalled()
+  })
+
+  it('keeps the video availability command on the typed admin boundary', async () => {
+    const command = { idempotencyKey: 'video:movie-1:7:stale', movieId: 'movie-1', movieRevision: 3, policyVersion: 'video-source-probe/v1', reason: 'stale' as const, sourceRevision: 7 }
+    api.admin.submitVideoAvailabilityCommand.mockResolvedValue({ kind: 'duplicate', run: { id: 'run-1' } })
+
+    await api.admin.submitVideoAvailabilityCommand(command)
+
+    expect(api.admin.submitVideoAvailabilityCommand).toHaveBeenCalledWith(command)
   })
 
   it('renders only validated succeeded receipts and appends older safe logs', async () => {

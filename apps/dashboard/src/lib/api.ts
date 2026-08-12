@@ -224,6 +224,16 @@ export type CrawlerAvailabilityStatus = 'available' | 'unavailable' | 'degraded'
 export type CrawlerAvailabilityNextAction = 'none' | 'recheck' | 'repair' | 'retry' | 'ignore'
 export type CrawlerAvailabilityReasonCode = 'available' | 'no_source' | 'source_failed' | 'transport_failed' | 'content_missing' | 'policy_mismatch' | 'cancelled' | 'provider_failed' | 'observation_invalid'
 export type CrawlerAvailabilityOutcome = 'accepted' | 'duplicate' | 'stale' | 'late' | 'conflict' | 'rejected'
+export type CrawlerVideoAvailabilityReason = 'no_source' | 'source_failed' | 'stale' | 'direct_blocked' | 'direct_transport_failed' | 'direct_content_invalid' | 'browser_inconclusive' | 'metadata_unresolved' | 'no_peer' | 'stalled' | 'stream_missing' | 'stream_failed' | 'playback_unverified' | 'playback_failed'
+
+export interface CrawlerVideoAvailabilityCommand {
+  idempotencyKey: string
+  movieId: string
+  movieRevision: number
+  policyVersion: string
+  reason: CrawlerVideoAvailabilityReason
+  sourceRevision: number
+}
 
 export interface CrawlerTaskLifecycleProjection {
   changedAt: number
@@ -897,6 +907,12 @@ export const api = {
 
     repairPlayers: (command: CrawlerRepairCommand) =>
       apiFetch<CrawlerRepairTaskResponse>('/admin/crawler-tasks/repair-players', {
+        method: 'POST',
+        body: JSON.stringify(command),
+      }),
+
+    submitVideoAvailabilityCommand: (command: CrawlerVideoAvailabilityCommand) =>
+      apiFetch<{ kind: string, run: CrawlerRun }>('/admin/crawler-tasks/video-availability', {
         method: 'POST',
         body: JSON.stringify(command),
       }),
