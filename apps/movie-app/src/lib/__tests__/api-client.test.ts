@@ -3,6 +3,8 @@
  * 覆盖 genreApi.getGenres()、progressApi.getWatchingHistory()、movieApi.trackView()
  */
 
+import { readFileSync } from 'node:fs'
+import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { genreApi, movieApi, progressApi } from '../api-client'
 
@@ -144,6 +146,14 @@ describe('progressApi', () => {
 describe('movieApi', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('uses the typed public movie detail RPC without a broad double cast', () => {
+    const source = readFileSync(`${process.cwd()}/src/lib/api-client.ts`, 'utf8')
+    const getMovieDetail = source.slice(source.indexOf('async getMovieDetail'), source.indexOf('async submitPlaybackEvidence'))
+    expect(getMovieDetail).toContain('client.api.public.movies[\':code\'].$get')
+    expect(getMovieDetail).not.toContain('as unknown as MovieDetail')
+    expect(getMovieDetail).not.toContain('/admin/crawler-tasks')
   })
 
   describe('trackView', () => {

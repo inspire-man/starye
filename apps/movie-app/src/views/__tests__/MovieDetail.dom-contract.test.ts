@@ -91,6 +91,62 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.get('[data-phase13-item-code="TEST-001"][data-phase13-item-id="movie-uuid-1"]').text()).toBe('TEST-001')
   })
 
+  it('renders authoritative four-layer current and bounded old-revision history', async () => {
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'movie-availability',
+        code: 'AVAILABLE-001',
+        title: 'Availability fixture',
+        isR18: false,
+        players: [],
+        relatedMovies: [],
+        primaryContentId: 'movie-availability',
+        readiness: {
+          metadata: { contentId: 'movie-availability', observedAt: null, persisted: false },
+          playback: { status: 'unverified' },
+          receipt: { persisted: false, primaryContentId: 'movie-availability', schemaVersion: null },
+          source: { disposition: 'source_failed', eligibleCount: 0, observedAt: 300, reasonCode: 'source_read_failed', repairable: true, sourceRevision: 7 },
+        },
+        availability: {
+          current: {
+            metadata: { observedAt: null, persisted: false, sourceRevision: 7 },
+            direct: { freshness: 'fresh', observedAt: 301, policyVersion: 'video-source-probe/v1', reasonCode: 'direct_transport_failed', sourceRevision: 7, status: 'degraded', summary: { counts: { available: 1, abnormal: 2 }, samples: [{ code: 'range_failed', count: 2 }] } },
+            magnet: { freshness: 'fresh', observedAt: 302, policyVersion: 'video-source-probe/v1', reasonCode: 'provider_unconfigured', sourceRevision: 7, status: 'unknown', summary: { counts: { checked: 1 }, samples: [] } },
+            playback: { status: 'unverified', tuple: null },
+          },
+          history: [{
+            layer: 'direct',
+            fact: {
+              freshness: 'stale',
+              observedAt: 200,
+              policyVersion: 'video-source-probe/v1',
+              reasonCode: 'available',
+              sourceRevision: 6,
+              status: 'available',
+              summary: { counts: { available: 1 }, samples: [] },
+            },
+          }],
+        },
+        rawRequest: 'RAW_REQUEST_SENTINEL',
+        token: 'TOKEN_SENTINEL',
+      },
+    })
+
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+    expect(wrapper.findAll('[data-video-layer]').map(row => row.attributes('data-video-layer'))).toEqual(['metadata', 'direct', 'magnet', 'playback'])
+    expect(wrapper.get('[data-video-layer="metadata"]').text()).toContain('未持久化')
+    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('direct_transport_failed')
+    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('available：1')
+    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('重新检查')
+    expect(wrapper.get('[data-video-layer="direct"] [data-video-history]').text()).toContain('revision 6')
+    expect(wrapper.get('[data-video-layer="magnet"]').text()).toContain('配置 provider')
+    expect(wrapper.get('[data-video-layer="playback"]').text()).toContain('播放未验证')
+    expect(wrapper.text()).not.toContain('RAW_REQUEST_SENTINEL')
+    expect(wrapper.text()).not.toContain('TOKEN_SENTINEL')
+  })
+
   it('does not manufacture an identity marker while loading or after a detail error', async () => {
     getMovieDetailMock.mockImplementation(() => new Promise(() => {}))
     const loadingWrapper = mount(MovieDetail)
