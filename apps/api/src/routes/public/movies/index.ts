@@ -491,7 +491,7 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
 
         const readiness = createServerReadinessProjection({
           contentId: movie.id,
-          metadataObservedAt: movie.updatedAt,
+          metadata: { observedAt: movie.updatedAt, persisted: true },
           sourceState: movie.sourceState,
         })
 

@@ -405,7 +405,7 @@ function projectReadiness(row: Record<string, unknown>, receipt: SafeCrawlerRece
   }
   return createServerReadinessProjection({
     contentId: receipt.primaryContentId,
-    metadataObservedAt: observedAt as number | null | undefined,
+    metadata: { observedAt: observedAt as number | null | undefined, persisted: true },
     receipt: {
       persisted: true,
       primaryContentId: receipt.primaryContentId,

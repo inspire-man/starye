@@ -295,7 +295,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
 
   const readiness = createServerReadinessProjection({
     contentId: movie.id,
-    metadataObservedAt: movie.updatedAt,
+    metadata: { observedAt: movie.updatedAt, persisted: true },
     sourceState: movie.sourceState,
   })
 

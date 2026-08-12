@@ -76,6 +76,14 @@ export interface PersistAvailabilityObservationInput {
   readonly expectedTuple: unknown
 }
 
+export interface ReadAuthoritativeAvailabilityInput {
+  readonly contentId: string
+  readonly historyLimit?: number
+  readonly policyVersion: string
+  readonly sourceRevision: number
+  readonly target: AvailabilityTuple['target']
+}
+
 export type AvailabilityRepositoryResult
   = | {
     readonly accepted: true
@@ -246,6 +254,38 @@ export function createAvailabilityRepository(
       observation.eventSequence,
     ).all<ObservationRow>()
     return rows.results?.[0]
+  }
+
+  async function readAuthoritative(input: ReadAuthoritativeAvailabilityInput): Promise<{
+    readonly current: AvailabilityCurrentProjection | null
+    readonly history: readonly AvailabilityObservation[]
+  }> {
+    const historyLimit = Math.min(Math.max(input.historyLimit ?? 20, 1), 50)
+    const [currentRows, historyRows] = await Promise.all([
+      d1.prepare(`${currentSelect}
+        WHERE target_kind = ? AND target_id = ? AND content_id = ?
+          AND source_revision = ? AND policy_version = ?
+        LIMIT 1
+      `).bind(
+        input.target.kind,
+        input.target.id,
+        input.contentId,
+        input.sourceRevision,
+        input.policyVersion,
+      ).all<CurrentRow>(),
+      d1.prepare(`${observationSelect}
+        WHERE target_kind = ? AND target_id = ? AND content_id = ?
+        ORDER BY observed_at DESC, event_sequence DESC
+        LIMIT ?
+      `).bind(input.target.kind, input.target.id, input.contentId, historyLimit + 1).all<ObservationRow>(),
+    ])
+    const currentRow = currentRows.results?.[0]
+    const current = currentRow ? projectionFromRow(currentRow) : null
+    const history = (historyRows.results ?? [])
+      .map(observationFromRow)
+      .filter(observation => observation.observationIdentity !== current?.observationIdentity)
+      .slice(0, historyLimit)
+    return { current, history }
   }
 
   function appendStatement(observation: AvailabilityObservation, binding: BindingRow): D1Statement {
@@ -590,5 +630,5 @@ export function createAvailabilityRepository(
     }
   }
 
-  return { persist }
+  return { persist, readAuthoritative }
 }

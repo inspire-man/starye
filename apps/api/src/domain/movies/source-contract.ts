@@ -126,7 +126,10 @@ export interface ServerSourceState {
 
 export interface ServerReadinessProjectionInput {
   readonly contentId: string
-  readonly metadataObservedAt: Date | number | null | undefined
+  readonly metadata: {
+    readonly observedAt: Date | number | null | undefined
+    readonly persisted: boolean
+  }
   readonly playbackEvidence?: unknown
   readonly receipt?: Partial<ReceiptProjection>
   readonly sourceState?: ServerSourceState | null
@@ -357,7 +360,8 @@ function normalizedSourceState(
 
 /** Projects persisted API facts without deriving readiness from player rows. */
 export function createServerReadinessProjection(input: ServerReadinessProjectionInput): ReadinessProjection {
-  const fallbackObservedAt = toEpochSeconds(input.metadataObservedAt) ?? Math.floor(Date.now() / 1000)
+  const metadataObservedAt = toEpochSeconds(input.metadata.observedAt)
+  const fallbackObservedAt = metadataObservedAt ?? Math.floor(Date.now() / 1000)
   const primaryContentId = input.receipt?.primaryContentId === input.contentId
     ? input.contentId
     : null
@@ -366,8 +370,8 @@ export function createServerReadinessProjection(input: ServerReadinessProjection
   return {
     metadata: {
       contentId: input.contentId,
-      observedAt: toEpochSeconds(input.metadataObservedAt),
-      persisted: true,
+      observedAt: metadataObservedAt,
+      persisted: input.metadata.persisted === true,
     },
     playback: derivePlaybackProof(input.playbackEvidence, {
       contentId: input.contentId,

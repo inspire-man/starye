@@ -119,7 +119,7 @@ describe('movie readiness projection', () => {
 
     const verified = createServerReadinessProjection({
       contentId: 'movie-1',
-      metadataObservedAt: 1,
+      metadata: { observedAt: 1, persisted: true },
       playbackEvidence: {
         artifact: { hash: 'a'.repeat(64), reference: 'phase24/task-24/run-24/attempt-1', stem: 'task-24_run-24_attempt-1' },
         contentId: 'movie-1',
