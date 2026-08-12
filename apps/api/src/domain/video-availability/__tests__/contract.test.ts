@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  aggregateVideoLayer,
+  classifyVideoAction,
+  validateActionBinding,
+} from '../aggregate'
+import {
   shouldEscalateToBrowser,
   VIDEO_PROBE_POLICY_V1,
 } from '../probe-policy'
 import {
   createVideoFinding,
   validateVideoEvidence,
+  VIDEO_AVAILABILITY_REASON_VALUES,
 } from '../types'
 
 describe('video availability contracts', () => {
@@ -88,5 +94,68 @@ describe('video availability contracts', () => {
     expect(() => validateVideoEvidence({ detail: 'https://media.example/video?token=secret', rows: [], samples: [] })).toThrow('video_evidence_forbidden')
     expect(() => validateVideoEvidence({ detail: 'too many rows', rows: Array.from({ length: 21 }).fill('row'), samples: [] })).toThrow('video_evidence_rows_invalid')
     expect(() => validateVideoEvidence({ detail: 'too many samples', rows: [], samples: Array.from({ length: 6 }).fill('sample') })).toThrow('video_evidence_samples_invalid')
+  })
+
+  it.each(VIDEO_AVAILABILITY_REASON_VALUES)('maps %s to a revision-bound action', (reason) => {
+    const action = classifyVideoAction({
+      movieRevision: 11,
+      policyVersion: VIDEO_PROBE_POLICY_V1.version,
+      reason,
+      sourceRevision: 7,
+    })
+
+    expect(action.reason).toBe(reason)
+    expect(action.movieRevision).toBe(11)
+    expect(action.sourceRevision).toBe(7)
+    expect(action.policyVersion).toBe(VIDEO_PROBE_POLICY_V1.version)
+    expect(action.kind).toMatch(/^(recheck|repair|configure_provider)$/)
+  })
+
+  it('rejects action reuse across revisions or policies', () => {
+    const action = classifyVideoAction({
+      movieRevision: 11,
+      policyVersion: VIDEO_PROBE_POLICY_V1.version,
+      reason: 'stale',
+      sourceRevision: 7,
+    })
+
+    expect(() => validateActionBinding(action, { movieRevision: 12, policyVersion: VIDEO_PROBE_POLICY_V1.version, sourceRevision: 7 })).toThrow('video_action_revision_mismatch')
+    expect(() => validateActionBinding(action, { movieRevision: 11, policyVersion: 'video-source-probe/v2', sourceRevision: 7 })).toThrow('video_action_policy_mismatch')
+  })
+
+  it('preserves detail and determinate status while marking an expired layer stale', () => {
+    const findings = [
+      createVideoFinding({
+        evidence: { detail: 'healthy source', rows: [], samples: [] },
+        layer: 'direct',
+        observedAt: 1_000,
+        policyVersion: VIDEO_PROBE_POLICY_V1.version,
+        reason: null,
+        sourceId: 'direct-1',
+        sourceRevision: 7,
+        status: 'available',
+      }),
+      createVideoFinding({
+        evidence: { detail: 'blocked source', rows: [], samples: [] },
+        layer: 'direct',
+        observedAt: 900,
+        policyVersion: VIDEO_PROBE_POLICY_V1.version,
+        reason: 'direct_blocked',
+        sourceId: 'direct-2',
+        sourceRevision: 7,
+        status: 'degraded',
+      }),
+    ]
+
+    const summary = aggregateVideoLayer('direct', findings, 1_000 + VIDEO_PROBE_POLICY_V1.directTtlMs + 1)
+    expect(summary).toMatchObject({
+      abnormalCount: 1,
+      availableCount: 1,
+      bestStatus: 'available',
+      freshness: 'stale',
+      layer: 'direct',
+    })
+    expect(summary.findings).toHaveLength(2)
+    expect(summary.primaryAction?.kind).toBe('recheck')
   })
 })
