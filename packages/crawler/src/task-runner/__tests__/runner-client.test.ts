@@ -216,4 +216,103 @@ describe('runnerClient', () => {
     const body = JSON.parse(String((fetch.mock.calls[0]![1] as RequestInit).body)) as Record<string, unknown>
     expect(body.summary).toEqual({ counts: { available: 1 }, samples: [{ code: 'movie-1' }] })
   })
+
+  it('round-trips an exact revision-bound video snapshot from poll', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({
+      candidate: {
+        attempt: 1,
+        contentId: 'movie-1',
+        expectedProjectionVersion: 0,
+        policyReference: 'availability/video-source-probe',
+        policyVersion: 'video-source-probe/v1',
+        provider: 'github-actions',
+        run_id: 'run-video-1',
+        sequence: 1,
+        snapshot: {
+          entrypoint: 'movie-crawler',
+          movieId: 'movie-1',
+          movieRevision: 11,
+          operation: 'recheck_video_source',
+          permissionResource: 'movie',
+          policyVersion: 'video-source-probe/v1',
+          reason: 'no_peer',
+          sourceRevision: 7,
+          templateKey: 'movie',
+          templateVersion: 1,
+        },
+        sourceRevision: 7,
+        target: { id: 'movie-1', kind: 'movie' },
+        taskId: 'task-video-1',
+      },
+    }), { status: 200 }))
+    const client = new RunnerClient({ apiBaseUrl: 'http://localhost:8080', callbackKeyId: 'key-1', callbackSecret: 'secret', fetch: fetch as never })
+
+    await expect(client.poll()).resolves.toMatchObject({
+      policyVersion: 'video-source-probe/v1',
+      snapshot: { movieRevision: 11, operation: 'recheck_video_source', reason: 'no_peer', sourceRevision: 7 },
+      sourceRevision: 7,
+    })
+  })
+
+  it('rejects unknown video snapshot keys and binding mismatches', async () => {
+    const base = {
+      attempt: 1,
+      contentId: 'movie-1',
+      expectedProjectionVersion: 0,
+      policyReference: 'availability/video-source-probe',
+      policyVersion: 'video-source-probe/v2',
+      provider: 'github-actions',
+      run_id: 'run-video-1',
+      sequence: 1,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        movieId: 'movie-1',
+        movieRevision: 11,
+        operation: 'recheck_video_source',
+        permissionResource: 'movie',
+        policyVersion: 'video-source-probe/v1',
+        reason: 'no_peer',
+        sourceRevision: 7,
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+      sourceRevision: 7,
+      target: { id: 'movie-1', kind: 'movie' },
+      taskId: 'task-video-1',
+    }
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ candidate: base }), { status: 200 }))
+    const client = new RunnerClient({ apiBaseUrl: 'http://localhost:8080', callbackKeyId: 'key-1', callbackSecret: 'secret', fetch: fetch as never })
+    await expect(client.poll()).rejects.toThrow('video snapshot binding')
+
+    fetch.mockImplementationOnce(async () => new Response(JSON.stringify({ candidate: { ...base, policyVersion: 'video-source-probe/v1', snapshot: { ...base.snapshot, endpoint: 'http://provider' } } }), { status: 200 }))
+    await expect(client.poll()).rejects.toThrow('Invalid video runner snapshot')
+  })
+
+  it('keeps direct and magnet signed observations from crossing variants', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ accepted: true }), { status: 200 }))
+    const client = new RunnerClient({ apiBaseUrl: 'http://localhost:8080', callbackKeyId: 'key-1', callbackSecret: 'secret', fetch: fetch as never })
+    const candidate = {
+      attempt: 1,
+      contentId: 'movie-1',
+      expectedProjectionVersion: 0,
+      policyReference: 'availability/video-source-probe',
+      policyVersion: 'video-source-probe/v1',
+      provider: 'github-actions' as const,
+      runId: 'run-video-1',
+      sequence: 1,
+      snapshot: { entrypoint: 'movie-crawler' as const, movieId: 'movie-1', movieRevision: 11, operation: 'recheck_video_source' as const, permissionResource: 'movie' as const, policyVersion: 'video-source-probe/v1', reason: 'no_peer' as const, sourceRevision: 7, templateKey: 'movie' as const, templateVersion: 1 as const },
+      sourceRevision: 7,
+      target: { id: 'movie-1', kind: 'movie' as const },
+      taskId: 'task-video-1',
+    }
+    await expect(client.observeVideoAvailability(candidate, 2, {
+      freshness: 'fresh',
+      nextAction: 'recheck',
+      reasonCode: 'provider_failed',
+      sourceKind: 'direct',
+      status: 'unknown',
+      summary: { samples: ['bounded'] },
+    })).rejects.toThrow('video source variant')
+    expect(fetch).not.toHaveBeenCalled()
+  })
 })
