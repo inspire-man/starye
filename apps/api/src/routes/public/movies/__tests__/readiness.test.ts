@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import { createServerReadinessProjection } from '../../../../domain/movies/source-contract'
-import { ReadinessProjectionSchema } from '../../../../schemas/movie'
+import { MovieAvailabilityReadbackSchema, ReadinessProjectionSchema } from '../../../../schemas/movie'
 import { getMovieByIdentifier } from '../../../movies/services/movie.service'
 import { publicMoviesRoutes } from '../index'
 
@@ -62,6 +62,79 @@ function makeDb(movie: ReturnType<typeof makeMovie>, players: unknown[] = movie.
   } as any
 }
 
+function makeAuthoritativeDb(movie: ReturnType<typeof makeMovie>) {
+  const current = {
+    attempt_number: 2,
+    content_id: 'movie-1',
+    event_sequence: 4,
+    freshness: 'fresh',
+    id: 'current-1',
+    next_action: 'none',
+    observation_identity: 'availability-current-1',
+    observed_at: 1_786_000_010,
+    policy_version: 'video-source-probe/v1',
+    projection_version: 3,
+    provider: 'github-actions',
+    reason_code: 'available',
+    run_id: 'run-2',
+    source_revision: 4,
+    status: 'available',
+    summary_json: JSON.stringify({ counts: { available: 1, checked: 1 }, samples: [] }),
+    target_id: 'movie-1',
+    target_kind: 'movie',
+    task_id: 'task-2',
+    updated_at: 1_786_000_010,
+  }
+  const old = {
+    ...current,
+    event_sequence: 3,
+    freshness: 'stale',
+    next_action: 'recheck',
+    observation_identity: 'availability-old-1',
+    observed_at: 1_785_000_000,
+    reason_code: 'content_missing',
+    run_id: 'run-1',
+    source_revision: 3,
+    status: 'degraded',
+    summary_json: JSON.stringify({ counts: { available: 0, checked: 1 }, samples: [{ code: 'content_missing' }] }),
+    task_id: 'task-1',
+  }
+  const db = makeDb(movie) as any
+  db.$client = {
+    prepare: (sql: string) => {
+      const statement = {
+        all: async () => {
+          if (sql.includes('FROM crawler_task AS task')) {
+            return { results: [{
+              attempt_number: 2,
+              provider: 'github-actions',
+              receipt_schema_version: 2,
+              receipt_summary_json: JSON.stringify({ movieId: 'movie-1', observedAt: 1_786_000_000, sourceRevision: 4 }),
+              request_snapshot_json: JSON.stringify({
+                intent: { policyVersion: 'video-source-probe/v1', reason: 'direct_transport_failed', sourceRevision: 4 },
+                policyVersion: 'video-source-probe/v1',
+                target: { id: 'movie-1', kind: 'movie' },
+              }),
+              run_id: 'run-2',
+              task_id: 'task-2',
+            }] }
+          }
+          if (sql.includes('FROM crawler_availability_current'))
+            return { results: [current] }
+          if (sql.includes('FROM crawler_availability_observation'))
+            return { results: [current, old] }
+          if (sql.includes('FROM playback_evidence_summary') || sql.includes('FROM playback_evidence_rejection'))
+            return { results: [] }
+          return { results: [] }
+        },
+        bind: () => statement,
+      }
+      return statement
+    },
+  }
+  return db
+}
+
 function makePublicApp(db: any) {
   const app = new Hono<AppEnv>()
   app.use('*', async (c, next) => {
@@ -87,6 +160,14 @@ describe('movie readiness projection', () => {
 
     expect(publicResponse.status).toBe(200)
     expect(publicBody.data.primaryContentId).toBe('movie-1')
+    expect(v.parse(MovieAvailabilityReadbackSchema, publicBody.data.availability)).toEqual(publicBody.data.availability)
+    expect(Object.keys(publicBody.data.availability.current).sort()).toEqual(['direct', 'magnet', 'metadata', 'playback'])
+    expect(publicBody.data.availability.current).toMatchObject({
+      direct: null,
+      magnet: null,
+      metadata: { persisted: false, sourceRevision: 4 },
+      playback: { status: 'unverified', tuple: null },
+    })
     expect(serviceMovie?.primaryContentId).toBe('movie-1')
     expect(serviceMovie?.readiness).toEqual(publicBody.data.readiness)
   })
@@ -112,6 +193,24 @@ describe('movie readiness projection', () => {
 
     expect(movie.updatedAt).toBeInstanceOf(Date)
     expect(result?.readiness.metadata).toEqual({ contentId: 'movie-1', observedAt: null, persisted: false })
+  })
+
+  it('returns same-revision current and bounded old-revision history from authoritative D1 facts', async () => {
+    const movie = makeMovie(makeSourceState({ disposition: 'ready', eligibleCount: 1, repairable: false, reasonCode: null }))
+    const result = await getMovieByIdentifier({ db: makeAuthoritativeDb(movie), identifier: 'TEST-001', isAdult: true })
+
+    expect(result?.availability.current.metadata).toEqual({ observedAt: 1_786_000_000, persisted: true, sourceRevision: 4 })
+    expect(result?.availability.current.direct).toMatchObject({ sourceRevision: 4, status: 'available' })
+    expect(result?.availability.current.magnet).toBeNull()
+    expect(result?.availability.current.playback).toEqual({
+      status: 'unverified',
+      tuple: { attemptNumber: 2, provider: 'github-actions', runId: 'run-2', taskId: 'task-2' },
+    })
+    expect(result?.availability.history).toEqual([
+      expect.objectContaining({ layer: 'direct', fact: expect.objectContaining({ freshness: 'stale', sourceRevision: 3 }) }),
+    ])
+    expect(result?.readiness.metadata.persisted).toBe(true)
+    expect(JSON.stringify(result?.availability)).not.toMatch(/request_snapshot|receipt_summary|sourceUrl|secret|token/u)
   })
 
   it('keeps ready playback unverified and accepts verified playback only with explicit evidence', async () => {
@@ -175,5 +274,7 @@ describe('movie readiness projection', () => {
     expect(JSON.stringify(readiness)).not.toContain('workflow')
     expect(JSON.stringify(readiness)).not.toContain('token')
     expect(JSON.stringify(readiness)).not.toContain('signed')
+    const serializedAvailability = JSON.stringify(body.data.availability)
+    expect(serializedAvailability).not.toMatch(/sourceUrl|rpcUrl|secret|token|cookie|Authorization|workflow/u)
   })
 })

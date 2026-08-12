@@ -37,7 +37,9 @@ export async function getMovieList(c: Context<AppEnv>) {
 export async function getMovieDetail(c: Context<AppEnv>) {
   const db = c.get('db')
   const user = c.get('user')
-  const identifier = c.req.param('identifier')!
+  const identifier = c.req.param('identifier') ?? c.req.param('code')
+  if (!identifier)
+    throw new HTTPException(400, { message: 'Movie identifier is required' })
 
   const isAdult = checkUserAdultStatus(user)
   const userId = user?.id
@@ -53,7 +55,7 @@ export async function getMovieDetail(c: Context<AppEnv>) {
     throw new HTTPException(404, { message: 'Movie not found' })
   }
 
-  return c.json({ data: movie })
+  return c.json({ success: true, data: movie })
 }
 
 export async function getHotMoviesList(c: Context<AppEnv>) {

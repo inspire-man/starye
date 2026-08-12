@@ -1,14 +1,14 @@
 import type { SQL } from 'drizzle-orm'
 import type { AppEnv } from '../../../types'
-import { actors, movieActors, moviePublishers, movies, players, progress, publishers } from '@starye/db/schema'
-import { and, count, desc, eq, getTableColumns, gte, inArray, like, lte, ne, notInArray, or, sql } from 'drizzle-orm'
+import { actors, movieActors, moviePublishers, movies, progress, publishers } from '@starye/db/schema'
+import { and, count, desc, eq, gte, inArray, like, lte, notInArray, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import * as v from 'valibot'
-import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MovieItemSchema, MoviesListDataSchema } from '../../../schemas/movie'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
 import { buildAdultVisibilityCondition } from '../../../services/adult-filter'
+import { getMovieDetail } from '../../movies/handlers/movies.handler'
 
 /**
  * 公开影片路由 — 使用方法链以支持 Hono RPC 类型推导
@@ -445,207 +445,7 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
       },
     }),
     validator('param', GetMovieParamSchema),
-    async (c) => {
-      const db = c.get('db')
-      const user = c.get('user')
-      const { code } = c.req.param()
-
-      try {
-        // 通过关联表查询影片详情（含演员和厂商）
-        const movie = await db.query.movies.findFirst({
-          where: eq(movies.code, code),
-          with: {
-            movieActors: {
-              with: { actor: true },
-              orderBy: (ma, { asc }) => [asc(ma.sortOrder)],
-            },
-            moviePublishers: {
-              with: { publisher: true },
-              orderBy: (mp, { asc }) => [asc(mp.sortOrder)],
-            },
-            sourceState: {
-              columns: {
-                disposition: true,
-                eligibleCount: true,
-                observedAt: true,
-                reasonCode: true,
-                repairable: true,
-                sourceRevision: true,
-              },
-            },
-          },
-        })
-
-        if (!movie) {
-          return c.json({ success: false, error: '影片不存在' }, 404)
-        }
-
-        if (movie.isR18 && !user?.isR18Verified) {
-          return c.json({ success: false, error: '需要 R18 访问权限' }, 403)
-        }
-
-        const playerList = await db.query.players.findMany({
-          where: eq(players.movieId, movie.id),
-          orderBy: (players, { asc }) => [asc(players.sortOrder)],
-        })
-
-        const readiness = createServerReadinessProjection({
-          contentId: movie.id,
-          metadata: { observedAt: movie.updatedAt, persisted: true },
-          sourceState: movie.sourceState,
-        })
-
-        // 结构化演员和厂商数据
-        const movieActorsList = movie.movieActors.map(ma => ({
-          id: ma.actor.id,
-          name: ma.actor.name,
-          slug: ma.actor.slug,
-          avatar: ma.actor.avatar,
-        }))
-
-        const moviePublishersList = movie.moviePublishers.map(mp => ({
-          id: mp.publisher.id,
-          name: mp.publisher.name,
-          slug: mp.publisher.slug,
-          logo: mp.publisher.logo,
-        }))
-
-        // 基于关联表查询相关影片（共同演员 + 同系列）
-        let relatedMovies: (typeof movies.$inferSelect)[] = []
-
-        try {
-          const actorIds = movie.movieActors.map(ma => ma.actorId)
-          const relatedFromActors: (typeof movies.$inferSelect & { shared_actors: number })[] = []
-          const relatedFromSeries: (typeof movies.$inferSelect)[] = []
-
-          // 共同演员推荐：查找与当前影片共享演员最多的其他影片
-          if (actorIds.length > 0) {
-            const movieCols = getTableColumns(movies)
-            const sharedCountExpr = sql<number>`count(distinct ${movieActors.actorId})`
-
-            const actorConditions: SQL[] = [
-              inArray(movieActors.actorId, actorIds),
-              ne(movies.id, movie.id),
-            ]
-            const adultCondActor = buildAdultVisibilityCondition(user, movies)
-            if (adultCondActor)
-              actorConditions.push(adultCondActor)
-
-            const sharedResult = await db
-              .select({
-                ...movieCols,
-                shared_actors: sharedCountExpr.as('shared_actors'),
-              })
-              .from(movies)
-              .innerJoin(movieActors, eq(movieActors.movieId, movies.id))
-              .where(and(...actorConditions))
-              .groupBy(movies.id)
-              .orderBy(desc(sharedCountExpr))
-              .limit(8)
-
-            relatedFromActors.push(...sharedResult)
-          }
-
-          // 同系列推荐（limit 提升至 8，确保系列导航有足够数据推导位置）
-          if (movie.series) {
-            const seriesConditions: SQL[] = [
-              eq(movies.series, movie.series),
-              ne(movies.id, movie.id),
-            ]
-            const adultCondSeries = buildAdultVisibilityCondition(user, movies)
-            if (adultCondSeries)
-              seriesConditions.push(adultCondSeries)
-
-            const seriesResult = await db
-              .select()
-              .from(movies)
-              .where(and(...seriesConditions))
-              .limit(8)
-
-            relatedFromSeries.push(...seriesResult)
-          }
-
-          // 合并去重（共同演员优先）
-          const seenIds = new Set<string>()
-          const merged: (typeof movies.$inferSelect)[] = []
-          for (const m of [...relatedFromActors, ...relatedFromSeries]) {
-            if (!seenIds.has(m.id)) {
-              seenIds.add(m.id)
-              merged.push(m)
-            }
-          }
-
-          // genre fallback：当演员+系列结果 < 4 时，用同 genre 热门影片补足至 6 条
-          if (merged.length < 4) {
-            const rawGenres = movie.genres as string[] | null
-            const firstGenre = Array.isArray(rawGenres)
-              ? rawGenres.find(g => g && g.trim() !== '')
-              : null
-
-            if (firstGenre) {
-              const existingIds = [movie.id, ...merged.map(m => m.id)]
-              const genreConditions: SQL[] = [
-                sql`EXISTS (
-                  SELECT 1 FROM json_each(${movies.genres})
-                  WHERE json_each.value = ${firstGenre}
-                )`,
-                notInArray(movies.id, existingIds),
-              ]
-              const adultCondGenre = buildAdultVisibilityCondition(user, movies)
-              if (adultCondGenre)
-                genreConditions.push(adultCondGenre)
-
-              try {
-                const genreResult = await db
-                  .select()
-                  .from(movies)
-                  .where(and(...genreConditions))
-                  .orderBy(desc(movies.viewCount))
-                  .limit(6 - merged.length)
-
-                for (const m of genreResult) {
-                  if (!seenIds.has(m.id)) {
-                    seenIds.add(m.id)
-                    merged.push(m)
-                  }
-                }
-              }
-              catch {
-                // genre fallback 失败时静默忽略，返回现有结果
-              }
-            }
-          }
-
-          relatedMovies = merged.slice(0, 6)
-        }
-        catch (error) {
-          console.error('[PublicMovies] Failed to fetch related movies:', error)
-        }
-
-        // 构建响应：用关联表的结构化数据覆盖老的 JSON 文本字段
-        const { movieActors: _ma, moviePublishers: _mp, sourceState: _sourceState, ...movieData } = movie
-
-        return c.json({
-          success: true,
-          data: {
-            ...movieData,
-            primaryContentId: movie.id,
-            actors: movieActorsList,
-            publishers: moviePublishersList,
-            players: playerList,
-            readiness,
-            relatedMovies,
-          },
-        })
-      }
-      catch (error) {
-        console.error(`[PublicMovies] Failed to fetch movie ${code}:`, error)
-        return c.json({
-          success: false,
-          error: '查询影片详情失败',
-        }, 500)
-      }
-    },
+    getMovieDetail,
   )
   // 上报影片观看（埋点，匿名可用，fire-and-forget 设计）
   .post(

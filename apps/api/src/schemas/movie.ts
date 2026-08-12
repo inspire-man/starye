@@ -72,6 +72,50 @@ export const ReadinessProjectionSchema = v.pipe(
 
 export type ReadinessProjection = v.InferOutput<typeof ReadinessProjectionSchema>
 
+const AvailabilitySummarySchema = v.strictObject({
+  counts: v.record(v.string(), v.pipe(v.number(), v.integer(), v.minValue(0))),
+  samples: v.pipe(v.array(v.strictObject({
+    code: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+    count: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    label: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  })), v.maxLength(20)),
+})
+
+const VideoLayerFactSchema = v.strictObject({
+  freshness: v.picklist(['fresh', 'stale', 'late']),
+  observedAt: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  policyVersion: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  reasonCode: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  sourceRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  status: v.picklist(['available', 'unavailable', 'degraded', 'unknown']),
+  summary: AvailabilitySummarySchema,
+})
+
+export const MovieAvailabilityReadbackSchema = v.strictObject({
+  current: v.strictObject({
+    direct: v.nullable(VideoLayerFactSchema),
+    magnet: v.nullable(VideoLayerFactSchema),
+    metadata: v.strictObject({
+      observedAt: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      persisted: v.boolean(),
+      sourceRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    }),
+    playback: v.strictObject({
+      status: PlaybackProofStatusSchema,
+      tuple: v.nullable(v.strictObject({
+        attemptNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
+        provider: v.literal('github-actions'),
+        runId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+        taskId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+      })),
+    }),
+  }),
+  history: v.pipe(v.array(v.strictObject({
+    fact: VideoLayerFactSchema,
+    layer: v.picklist(['direct', 'magnet']),
+  })), v.maxLength(20)),
+})
+
 /**
  * 播放源 Schema
  */
@@ -132,6 +176,7 @@ export type MovieItem = v.InferOutput<typeof MovieItemSchema>
 export const MovieDetailSchema = v.pipe(
   v.object({
     id: v.string(),
+    availability: MovieAvailabilityReadbackSchema,
     primaryContentId: v.string(),
     code: v.string(),
     title: v.string(),

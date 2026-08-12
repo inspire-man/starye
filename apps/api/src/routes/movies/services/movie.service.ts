@@ -2,7 +2,10 @@ import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
 import { movies as moviesTable } from '@starye/db/schema'
 import { count, desc, eq } from 'drizzle-orm'
+import { createAvailabilityRepository } from '../../../domain/crawler-tasks/availability-repository'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
+import { createPlaybackEvidenceRepository } from '../../../domain/playback-evidence/repository'
+import { VIDEO_PROBE_POLICY_V1 } from '../../../domain/video-availability/probe-policy'
 import { FilterBuilder } from '../../../services/query-builder'
 
 // 使用 Drizzle 推导的基础类型
@@ -32,6 +35,7 @@ interface MovieListItem {
 }
 
 interface MovieDetailResult extends Omit<Movie, 'actors' | 'publishers'> {
+  availability: MovieAvailabilityReadback
   primaryContentId: string
   readiness: ReturnType<typeof createServerReadinessProjection>
   actors: Array<{
@@ -64,6 +68,168 @@ interface MovieDetailResult extends Omit<Movie, 'actors' | 'publishers'> {
     coverImage: string | null
     isR18: boolean
   }>
+}
+
+interface VideoLayerFact {
+  readonly freshness: 'fresh' | 'stale' | 'late'
+  readonly observedAt: number
+  readonly policyVersion: string
+  readonly reasonCode: string
+  readonly sourceRevision: number
+  readonly status: 'available' | 'unavailable' | 'degraded' | 'unknown'
+  readonly summary: { readonly counts: Readonly<Record<string, number>>, readonly samples: readonly string[] }
+}
+
+interface AvailabilityBinding {
+  readonly attemptNumber: number
+  readonly metadataObservedAt: number | null
+  readonly policyVersion: string
+  readonly provider: 'github-actions'
+  readonly reason: string
+  readonly runId: string
+  readonly sourceRevision: number
+  readonly taskId: string
+  readonly playbackEvidence?: unknown
+}
+
+export interface MovieAvailabilityReadback {
+  readonly current: {
+    readonly direct: VideoLayerFact | null
+    readonly magnet: VideoLayerFact | null
+    readonly metadata: { readonly observedAt: number | null, readonly persisted: boolean, readonly sourceRevision: number }
+    readonly playback: {
+      readonly status: 'playback_verified' | 'unverified'
+      readonly tuple: { readonly attemptNumber: number, readonly provider: 'github-actions', readonly runId: string, readonly taskId: string } | null
+    }
+  }
+  readonly history: readonly ({ readonly layer: 'direct' | 'magnet', readonly fact: VideoLayerFact })[]
+}
+
+function emptyAvailability(sourceRevision: number): MovieAvailabilityReadback {
+  return {
+    current: {
+      direct: null,
+      magnet: null,
+      metadata: { observedAt: null, persisted: false, sourceRevision },
+      playback: { status: 'unverified', tuple: null },
+    },
+    history: [],
+  }
+}
+
+function asVideoFact(observation: any): VideoLayerFact {
+  return {
+    freshness: observation.freshness,
+    observedAt: observation.observedAt,
+    policyVersion: observation.policyVersion,
+    reasonCode: observation.reasonCode,
+    sourceRevision: observation.sourceRevision,
+    status: observation.status,
+    summary: observation.summary,
+  }
+}
+
+async function readAvailabilityBinding(db: Database, contentId: string, sourceRevision: number): Promise<AvailabilityBinding | null> {
+  const client = (db as any).$client
+  if (!client?.prepare)
+    return null
+  const rows = await client.prepare(`
+    SELECT task.id AS task_id, task.request_snapshot_json, run.id AS run_id,
+      run.attempt_number, run.receipt_schema_version, run.receipt_summary_json,
+      provider.provider
+    FROM crawler_task AS task
+    INNER JOIN crawler_run AS run ON run.id = task.latest_run_id
+    INNER JOIN crawler_run_provider_association AS provider
+      ON provider.run_id = run.id AND provider.application_attempt = run.attempt_number
+    WHERE run.receipt_primary_content_id = ? AND run.receipt_source_revision = ?
+      AND run.status = 'succeeded' AND provider.provider = 'github-actions'
+    ORDER BY run.created_at DESC
+    LIMIT 1
+  `).bind(contentId, sourceRevision).all() as { readonly results?: readonly {
+    readonly attempt_number: number
+    readonly provider: string
+    readonly receipt_schema_version: number | null
+    readonly receipt_summary_json: string | null
+    readonly request_snapshot_json: string
+    readonly run_id: string
+    readonly task_id: string
+  }[] }
+  const row = rows.results?.[0]
+  if (!row)
+    return null
+  try {
+    const snapshot = JSON.parse(row.request_snapshot_json) as Record<string, unknown>
+    const intent = snapshot.intent && typeof snapshot.intent === 'object' && !Array.isArray(snapshot.intent)
+      ? snapshot.intent as Record<string, unknown>
+      : snapshot
+    const target = snapshot.target && typeof snapshot.target === 'object' && !Array.isArray(snapshot.target)
+      ? snapshot.target as Record<string, unknown>
+      : { id: snapshot.movieId, kind: 'movie' }
+    const policyVersion = typeof snapshot.policyVersion === 'string' ? snapshot.policyVersion : intent.policyVersion
+    if (intent.sourceRevision !== sourceRevision
+      || typeof policyVersion !== 'string'
+      || typeof intent.reason !== 'string'
+      || target.id !== contentId
+      || target.kind !== 'movie') {
+      return null
+    }
+    const receipt = row.receipt_summary_json ? JSON.parse(row.receipt_summary_json) as Record<string, unknown> : null
+    const metadataObservedAt = row.receipt_schema_version !== null
+      && receipt
+      && receipt.sourceRevision === sourceRevision
+      && (receipt.movieId === contentId || receipt.primaryContentId === contentId)
+      && typeof receipt.observedAt === 'number'
+      && Number.isSafeInteger(receipt.observedAt)
+      && receipt.observedAt >= 0
+      ? receipt.observedAt
+      : null
+    return {
+      attemptNumber: row.attempt_number,
+      metadataObservedAt,
+      policyVersion,
+      provider: 'github-actions',
+      reason: intent.reason,
+      runId: row.run_id,
+      sourceRevision,
+      taskId: row.task_id,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+async function readMovieAvailability(db: Database, contentId: string, sourceRevision: number): Promise<MovieAvailabilityReadback> {
+  const binding = await readAvailabilityBinding(db, contentId, sourceRevision)
+  if (!binding)
+    return emptyAvailability(sourceRevision)
+  const [availability, evidence] = await Promise.all([
+    createAvailabilityRepository(db).readAuthoritative({
+      contentId,
+      historyLimit: 20,
+      policyVersion: binding.policyVersion || VIDEO_PROBE_POLICY_V1.version,
+      sourceRevision,
+      target: { id: contentId, kind: 'movie' },
+    }),
+    createPlaybackEvidenceRepository(db).getTaskEvidence(binding.taskId),
+  ])
+  const magnetReasons = new Set(['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed'])
+  const layer = magnetReasons.has(binding.reason) ? 'magnet' : 'direct'
+  const currentFact = availability.current ? asVideoFact(availability.current) : null
+  const playback = evidence.runs.find(run => run.runId === binding.runId)?.summary ?? null
+  const playbackVerified = playback?.sourceRevision === sourceRevision && playback.playback.status === 'playback_verified'
+  return {
+    current: {
+      direct: layer === 'direct' ? currentFact : null,
+      magnet: layer === 'magnet' ? currentFact : null,
+      metadata: { observedAt: binding.metadataObservedAt, persisted: binding.metadataObservedAt !== null, sourceRevision },
+      playback: {
+        status: playbackVerified ? 'playback_verified' : 'unverified',
+        tuple: { attemptNumber: binding.attemptNumber, provider: binding.provider, runId: binding.runId, taskId: binding.taskId },
+      },
+    },
+    history: availability.history.map(observation => ({ fact: asVideoFact(observation), layer })),
+  }
 }
 
 export interface GetMoviesOptions {
@@ -293,9 +459,16 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     return null
   }
 
+  const sourceRevision = movie.sourceState?.sourceRevision ?? 0
+  const availability = await readMovieAvailability(db, movie.id, sourceRevision)
+  const playbackTuple = availability.current.playback.tuple
+  const playbackEvidence = playbackTuple
+    ? (await createPlaybackEvidenceRepository(db).getTaskEvidence(playbackTuple.taskId)).runs.find(run => run.runId === playbackTuple.runId)?.summary
+    : undefined
   const readiness = createServerReadinessProjection({
     contentId: movie.id,
-    metadata: { observedAt: movie.updatedAt, persisted: true },
+    metadata: availability.current.metadata,
+    playbackEvidence,
     sourceState: movie.sourceState,
   })
 
@@ -413,6 +586,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     const { sourceState: _sourceState, ...movieData } = movie
     return {
       ...movieData,
+      availability,
       primaryContentId: movie.id,
       readiness,
       coverImage: null,
@@ -426,6 +600,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
   const { sourceState: _sourceState, ...movieData } = movie
   return {
     ...movieData,
+    availability,
     primaryContentId: movie.id,
     readiness,
     players: playersWithRatings ?? [],
