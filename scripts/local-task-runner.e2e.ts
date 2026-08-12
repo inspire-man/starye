@@ -1,21 +1,15 @@
+import type { LocalRunnerConfig } from './local-task-runner'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { LocalTaskRunner } from '../packages/crawler/src/task-runner/local-runner'
-import { createRepairPlayersAdapter } from '../packages/crawler/src/task-runner/repair-adapter'
 import { RunnerClient } from '../packages/crawler/src/task-runner/runner-client'
+import { createLocalRunnerAdapterRegistry } from './local-task-runner'
 import { writePhase19EvidencePair } from './phase19-evidence'
 
 const LOCAL_GATEWAY_ORIGIN = 'http://localhost:8080'
 
 type TemplateKey = 'manga' | 'movie'
 type RunStatus = 'cancelled' | 'cancel_requested' | 'dispatching' | 'failed' | 'queued' | 'running' | 'succeeded'
-
-interface LocalRunnerConfig {
-  readonly apiBaseUrl: string
-  readonly callbackKeyId: string
-  readonly callbackSecret: string
-  readonly crawler: { readonly manga: object, readonly movie: object }
-}
 
 interface LocalTaskRunnerE2eConfig {
   readonly runnerConfigPath: string
@@ -402,17 +396,9 @@ async function runTemplate(
   template: TemplateKey,
   receiptFixture: { readonly contentId: string } | undefined,
 ): Promise<E2eEvidence['runs'][number]> {
-  const [{ createMangaAdapter }, { createMovieAdapter }, { createTemplateAdapterRegistry }] = await Promise.all([
-    import('../packages/crawler/src/task-runner/manga-adapter'),
-    import('../packages/crawler/src/task-runner/movie-adapter'),
-    import('../packages/crawler/src/task-runner/template-adapters'),
-  ])
   const created = await createTask(session, template)
   const client = gatewayRunnerClient(config)
-  const adapters = createTemplateAdapterRegistry([
-    createMovieAdapter(config.crawler.movie as never),
-    createMangaAdapter(config.crawler.manga as never),
-  ])
+  const adapters = createLocalRunnerAdapterRegistry(config)
   await new LocalTaskRunner({ adapters, client }).runOnce()
   const realRun = await readRun(session, created.taskId, created.runId)
   if (realRun.status === 'succeeded' && realRun.receipt && realRun.receipt.templateKey === template) {
@@ -502,17 +488,11 @@ async function driveRepairTask(
   sources: readonly RepairSourceFixture[],
   observation: { value?: RepairObservationResponse },
 ): Promise<RepairTaskDetail> {
-  const [{ createMangaAdapter }, { createMovieAdapter }, { createTemplateAdapterRegistry }] = await Promise.all([
-    import('../packages/crawler/src/task-runner/manga-adapter'),
-    import('../packages/crawler/src/task-runner/movie-adapter'),
-    import('../packages/crawler/src/task-runner/template-adapters'),
-  ])
   const client = gatewayRunnerClient(config, observation)
-  const adapters = createTemplateAdapterRegistry([
-    createMovieAdapter(config.crawler.movie as never),
-    createMangaAdapter(config.crawler.manga as never),
-    createRepairPlayersAdapter({ sources }),
-  ])
+  const adapters = createLocalRunnerAdapterRegistry({
+    ...config,
+    crawler: { ...config.crawler, repairPlayers: { sources: sources as never } },
+  })
   const runner = new LocalTaskRunner({ adapters, client })
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const detail = await readRepairTask(session, taskId)

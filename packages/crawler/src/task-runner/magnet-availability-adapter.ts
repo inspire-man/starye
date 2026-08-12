@@ -4,6 +4,8 @@ import type { TaskRunnerAdapter } from './template-adapters'
 import { probeMagnetAvailability } from '../video-availability/magnet-probe'
 import { isVideoRunnerSnapshot } from './runner-client'
 
+const magnetReasons = new Set(['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed'])
+
 export function createMagnetAvailabilityAdapter(input: {
   readonly magnet: string
   readonly provider: MagnetProviderClient
@@ -13,7 +15,7 @@ export function createMagnetAvailabilityAdapter(input: {
     templateKey: 'movie',
     async execute(context) {
       const { candidate } = context
-      if (!isVideoRunnerSnapshot(candidate.snapshot))
+      if (!isVideoRunnerSnapshot(candidate.snapshot) || !magnetReasons.has(candidate.snapshot.reason))
         throw new Error('Magnet adapter requires a video runner snapshot')
       if ((candidate.sourceRevision !== undefined && candidate.sourceRevision !== candidate.snapshot.sourceRevision)
         || (candidate.policyVersion !== undefined && candidate.policyVersion !== candidate.snapshot.policyVersion)) {

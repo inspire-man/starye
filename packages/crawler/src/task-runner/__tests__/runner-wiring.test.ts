@@ -1,5 +1,6 @@
 import type { VideoRunnerSnapshot } from '../runner-client'
 import { describe, expect, it, vi } from 'vitest'
+import { createLocalRunnerAdapterRegistry } from '../../../../../scripts/local-task-runner'
 import { createServerVideoAvailabilityAdapters } from '../video-runner-wiring'
 
 const directSnapshot = {
@@ -18,6 +19,35 @@ const directSnapshot = {
 const magnetSnapshot = { ...directSnapshot, reason: 'no_peer' as const }
 
 describe('real runner video adapter wiring', () => {
+  it('keeps legacy local adapters while selecting both Phase 26 source kinds', () => {
+    const registry = createLocalRunnerAdapterRegistry({
+      apiBaseUrl: 'http://localhost:8080',
+      callbackKeyId: 'key',
+      callbackSecret: 'secret',
+      crawler: { manga: {}, movie: {}, repairPlayers: { sources: [] } },
+      videoAvailability: {
+        direct: { sources: [] },
+        magnet: { source: 'magnet:?xt=urn:btih:fixture' },
+      },
+    })
+
+    expect(registry.select(directSnapshot).operation).toBe('video_direct')
+    expect(registry.select(magnetSnapshot).operation).toBe('video_magnet')
+    expect(registry.select({ entrypoint: 'movie-crawler', permissionResource: 'movie', templateKey: 'movie', templateVersion: 1 }).templateKey).toBe('movie')
+    expect(registry.select({ entrypoint: 'manga-crawler', permissionResource: 'comic', templateKey: 'manga', templateVersion: 1 }).templateKey).toBe('manga')
+    expect(registry.select({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-1',
+      operation: 'repair_players',
+      permissionResource: 'movie',
+      reason: 'no_source',
+      sourceRevision: 7,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    }).operation).toBe('repair_players')
+  })
+
   it('constructs matching direct and magnet adapters from server-owned config', async () => {
     const fetch = vi.fn(async () => new Response('#EXTM3U', {
       headers: { 'content-type': 'application/vnd.apple.mpegurl' },
@@ -68,7 +98,7 @@ describe('real runner video adapter wiring', () => {
     const direct = adapters.find(adapter => adapter.operation === 'video_direct')!
     const magnet = adapters.find(adapter => adapter.operation === 'video_magnet')!
     await expect(direct.execute({ candidate: { attempt: 1, runId: 'run-1', sequence: 1, snapshot: magnetSnapshot }, checkpoint: async () => false, observe: () => {} })).rejects.toThrow('direct')
-    await expect(magnet.execute({ candidate: { attempt: 1, runId: 'run-2', sequence: 1, snapshot: directSnapshot }, checkpoint: async () => false, observe: () => {} })).rejects.toThrow('magnet')
+    await expect(magnet.execute({ candidate: { attempt: 1, runId: 'run-2', sequence: 1, snapshot: directSnapshot }, checkpoint: async () => false, observe: () => {} })).rejects.toThrow(/magnet/iu)
     expect(fetch).not.toHaveBeenCalled()
     expect(providerAdd).not.toHaveBeenCalled()
   })
@@ -79,7 +109,7 @@ describe('real runner video adapter wiring', () => {
       resolve: async () => [],
     })
     const magnet = adapters.find(adapter => adapter.operation === 'video_magnet')!
-    const result = await magnet.execute({ candidate: { attempt: 1, runId: 'run-1', sequence: 1, snapshot: { ...magnetSnapshot, reason: 'provider_unconfigured' } }, checkpoint: async () => false, observe: () => {} })
+    const result = await magnet.execute({ candidate: { attempt: 1, runId: 'run-1', sequence: 1, snapshot: { ...magnetSnapshot, reason: 'provider_unconfigured' as const } }, checkpoint: async () => false, observe: () => {} })
 
     expect(result.availabilityObservation).toMatchObject({ nextAction: 'retry', reasonCode: 'provider_failed', status: 'unknown' })
     expect(JSON.stringify(result)).not.toContain('magnet:?')

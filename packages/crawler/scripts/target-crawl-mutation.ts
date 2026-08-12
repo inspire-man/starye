@@ -2,8 +2,9 @@
 
 import type { JavBusCrawlerConfig } from '../src/crawlers/javbus'
 import type { CrawlerConfig } from '../src/lib/base-crawler'
-import type { RepairPlayersReceipt, RepairRunnerSnapshot, RepairSourceObservationInput, RepairSourceObservationResponse, RunnerCandidate } from '../src/task-runner/runner-client'
+import type { RepairPlayersReceipt, RepairRunnerSnapshot, RepairSourceObservationInput, RepairSourceObservationResponse, RunnerAvailabilityObservationInput, RunnerCandidate } from '../src/task-runner/runner-client'
 import type { AdapterExecutionContext, AdapterExecutionResult } from '../src/task-runner/template-adapters'
+import type { ServerVideoAvailabilityConfig } from '../src/task-runner/video-runner-wiring'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -15,6 +16,7 @@ import { createMovieAdapter } from '../src/task-runner/movie-adapter'
 import { createRepairPlayersAdapter } from '../src/task-runner/repair-adapter'
 import { createRunnerClientFromEnvironment } from '../src/task-runner/runner-client'
 import { createTemplateAdapterRegistry } from '../src/task-runner/template-adapters'
+import { createServerVideoAvailabilityAdapters } from '../src/task-runner/video-runner-wiring'
 import { GITHUB_ACTIONS_CONFIG } from '../src/types/config'
 import { ApiClient } from '../src/utils/api-client'
 
@@ -72,6 +74,7 @@ interface ProductionRunnerClient {
   heartbeat: (candidate: RunnerCandidate, sequence: number) => Promise<{ readonly accepted: boolean, readonly cancel_requested?: boolean }>
   log: (candidate: RunnerCandidate, sequence: number, message: string) => Promise<{ readonly accepted: boolean, readonly cancel_requested?: boolean }>
   observeRepairSource: (candidate: RunnerCandidate, sequence: number, input: RepairSourceObservationInput) => Promise<RepairSourceObservationResponse>
+  observeAvailability: (candidate: RunnerCandidate, sequence: number, input: RunnerAvailabilityObservationInput) => Promise<{ readonly accepted: boolean }>
   poll: () => Promise<RunnerCandidate | undefined>
   progress: (candidate: RunnerCandidate, sequence: number, counts: Readonly<Record<string, number>>) => Promise<{ readonly accepted: boolean, readonly cancel_requested?: boolean }>
   succeeded: (candidate: RunnerCandidate, sequence: number, contentIds: readonly string[]) => Promise<{ readonly accepted: boolean, readonly cancel_requested?: boolean }>
@@ -95,6 +98,10 @@ export const productionCrawlerEnvironmentKeys = [
   'R2_ACCESS_KEY_ID',
   'R2_PUBLIC_URL',
   'R2_SECRET_ACCESS_KEY',
+  'STARYE_VIDEO_DIRECT_SOURCES',
+  'STARYE_VIDEO_MAGNET_PROVIDER_RPC_URL',
+  'STARYE_VIDEO_MAGNET_PROVIDER_SECRET',
+  'STARYE_VIDEO_MAGNET_SOURCE',
   'TASK_RUNNER_CALLBACK_KEY_ID_CURRENT',
   'TASK_RUNNER_CALLBACK_SECRET_CURRENT',
 ] as const
@@ -129,6 +136,32 @@ export interface TargetCrawlerMutationDependencies {
   readonly discoverRepairSources?: (context: AdapterExecutionContext & { readonly snapshot: RepairRunnerSnapshot }) => Promise<RepairSourceObservationInput>
   readonly executeManga?: (context: AdapterExecutionContext) => Promise<AdapterExecutionResult>
   readonly executeMovie?: (context: AdapterExecutionContext) => Promise<AdapterExecutionResult>
+  readonly videoAvailabilityConfig?: (environment: NodeJS.ProcessEnv, candidate: RunnerCandidate) => ServerVideoAvailabilityConfig
+}
+
+function productionVideoAvailabilityConfig(environment: NodeJS.ProcessEnv): ServerVideoAvailabilityConfig {
+  let directSources: readonly string[] = []
+  if (environment.STARYE_VIDEO_DIRECT_SOURCES) {
+    try {
+      const parsed = JSON.parse(environment.STARYE_VIDEO_DIRECT_SOURCES) as unknown
+      if (Array.isArray(parsed) && parsed.every(value => typeof value === 'string'))
+        directSources = parsed
+    }
+    catch {
+      throw new Error('target-crawl-mutation rejected invalid server video source configuration.')
+    }
+  }
+  return {
+    direct: { sources: directSources },
+    magnet: environment.STARYE_VIDEO_MAGNET_SOURCE
+      ? {
+          provider: environment.STARYE_VIDEO_MAGNET_PROVIDER_RPC_URL
+            ? { rpcUrl: environment.STARYE_VIDEO_MAGNET_PROVIDER_RPC_URL, secret: environment.STARYE_VIDEO_MAGNET_PROVIDER_SECRET }
+            : undefined,
+          source: environment.STARYE_VIDEO_MAGNET_SOURCE,
+        }
+      : undefined,
+  }
 }
 
 function redactedDiagnostic(environment: NodeJS.ProcessEnv): {
@@ -316,6 +349,7 @@ async function runClaimedProductionCrawlerMutation(
     createMovieAdapter({ ...GITHUB_ACTIONS_CONFIG, ...config } as JavBusCrawlerConfig, dependencies.executeMovie),
     createMangaAdapter(config, dependencies.executeManga),
     repairAdapter,
+    ...createServerVideoAvailabilityAdapters((dependencies.videoAvailabilityConfig ?? productionVideoAvailabilityConfig)(environment, candidate)),
   ])
 
   try {
@@ -356,7 +390,7 @@ async function runClaimedProductionCrawlerMutation(
     if (heartbeatFailure)
       throw heartbeatFailure
 
-    if (candidate.snapshot.operation !== 'repair_players') {
+    if (candidate.snapshot.operation !== 'repair_players' && !result.availabilityObservation) {
       for (const contentId of result.contentIds) observeContentId(contentId)
     }
     const progress = await runner.progress(candidate, sequence++, { observed: contentIds.size })
@@ -383,6 +417,31 @@ async function runClaimedProductionCrawlerMutation(
         attempt: binding.attempt,
         contentIds: [],
         itemCount: 0,
+        operation: production.operation,
+        providerRunId: binding.providerRunId,
+        runId: binding.runId,
+        status: 'succeeded',
+        template: production.template,
+      }
+    }
+
+    if (result.availabilityObservation) {
+      const observation = await runner.observeAvailability(candidate, sequence++, result.availabilityObservation)
+      if (!observation.accepted)
+        throw new Error('target-crawl-mutation rejected an unvalidated availability observation.')
+      if (!candidate.contentId) {
+        await runner.failed(candidate, sequence++, 'receipt_missing')
+        terminalEmitted = true
+        throw new Error('target-crawl-mutation rejected an empty availability receipt.')
+      }
+      const terminal = await runner.succeeded(candidate, sequence++, [candidate.contentId])
+      if (!terminal.accepted)
+        throw new Error('target-crawl-mutation rejected an unvalidated availability receipt.')
+      terminalEmitted = true
+      return {
+        attempt: binding.attempt,
+        contentIds: [candidate.contentId],
+        itemCount: 1,
         operation: production.operation,
         providerRunId: binding.providerRunId,
         runId: binding.runId,

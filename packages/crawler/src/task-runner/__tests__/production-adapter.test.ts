@@ -147,6 +147,7 @@ describe('registry-owned production crawler adapters', () => {
       failed: vi.fn(async () => ({ accepted: true })),
       heartbeat: vi.fn(async () => ({ accepted: true })),
       log: vi.fn(async () => ({ accepted: true })),
+      observeAvailability: vi.fn(async () => ({ accepted: true })),
       observeRepairSource: vi.fn(async () => ({
         accepted: true,
         outcome: 'accepted',
@@ -208,6 +209,56 @@ describe('registry-owned production crawler adapters', () => {
     })).rejects.toThrow('Production crawler operation failed.')
     expect(runner.succeededRepair).toHaveBeenCalledTimes(1)
     expect(runner.failed).toHaveBeenCalledTimes(1)
+  })
+
+  it('claims and executes a direct availability snapshot through the production registry', async () => {
+    const { environment } = await fixture()
+    const { client: actions } = actionsFixture()
+    const candidate = {
+      attempt: 2,
+      contentId: 'movie-1',
+      runId: 'run-1',
+      sequence: 1,
+      snapshot: {
+        entrypoint: 'movie-crawler' as const,
+        movieId: 'movie-1',
+        movieRevision: 4,
+        operation: 'recheck_video_source' as const,
+        permissionResource: 'movie' as const,
+        policyVersion: 'video-source-probe/v1',
+        reason: 'direct_transport_failed' as const,
+        sourceRevision: 7,
+        templateKey: 'movie' as const,
+        templateVersion: 1 as const,
+      },
+    }
+    const runner = {
+      cancelled: vi.fn(async () => ({ accepted: true })),
+      claim: vi.fn(async () => ({ accepted: true })),
+      failed: vi.fn(async () => ({ accepted: true })),
+      heartbeat: vi.fn(async () => ({ accepted: true })),
+      log: vi.fn(async () => ({ accepted: true })),
+      observeAvailability: vi.fn(async () => ({ accepted: true })),
+      observeRepairSource: vi.fn(),
+      poll: vi.fn(async () => candidate),
+      progress: vi.fn(async () => ({ accepted: true })),
+      succeeded: vi.fn(async () => ({ accepted: true })),
+      succeededRepair: vi.fn(async () => ({ accepted: true })),
+    }
+    const executeMovie = vi.fn()
+
+    const result = await runTargetCrawlerMutation(environment, {
+      createActionsEventClient: () => actions,
+      createRunnerClient: () => runner,
+      executeMovie,
+      videoAvailabilityConfig: () => ({ direct: { sources: [] } }),
+    })
+
+    expect(result).toMatchObject({ contentIds: ['movie-1'], status: 'succeeded' })
+    expect(executeMovie).not.toHaveBeenCalled()
+    expect(runner.observeAvailability).toHaveBeenCalledWith(candidate, expect.any(Number), expect.objectContaining({ reasonCode: 'no_source', status: 'unavailable' }))
+    expect(runner.succeeded).toHaveBeenCalledWith(candidate, expect.any(Number), ['movie-1'])
+    expect(JSON.stringify(runner.observeAvailability.mock.calls)).not.toMatch(/rpcUrl|secret|Authorization/u)
   })
 
   it('renews the production lease while the crawler adapter is still running', async () => {

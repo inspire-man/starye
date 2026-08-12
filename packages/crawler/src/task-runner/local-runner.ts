@@ -87,6 +87,20 @@ export class LocalTaskRunner {
           else
             await this.options.client.failed(candidate, terminalSequence(), result.failureCode ?? 'receipt_missing')
         }
+        else if (result.availabilityObservation && contentIds.size === 0) {
+          const observationSequence = issueSequence()
+          const observation = await this.options.client.observeAvailability(candidate, observationSequence, result.availabilityObservation)
+          completeSequence(observationSequence)
+          if (!observation.accepted) {
+            await this.options.client.failed(candidate, terminalSequence(), 'runner_failed')
+          }
+          else if (candidate.contentId) {
+            await this.options.client.succeeded(candidate, terminalSequence(), [candidate.contentId])
+          }
+          else {
+            await this.options.client.failed(candidate, terminalSequence(), 'receipt_missing')
+          }
+        }
         else if (contentIds.size > 0) {
           const terminal = await this.options.client.succeeded(candidate, terminalSequence(), [...contentIds])
           if (result.availabilityObservation && (terminal?.accepted ?? true)) {
