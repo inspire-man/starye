@@ -18,7 +18,7 @@ export interface AdapterExecutionResult {
 }
 
 export interface TaskRunnerAdapter {
-  readonly operation?: 'repair_players'
+  readonly operation?: 'repair_players' | 'video_direct' | 'video_magnet'
   readonly proofProfile?: RunnerCandidate['proofProfile']
   readonly templateKey: RunnerCandidate['snapshot']['templateKey']
   execute: (context: AdapterExecutionContext) => Promise<AdapterExecutionResult>
