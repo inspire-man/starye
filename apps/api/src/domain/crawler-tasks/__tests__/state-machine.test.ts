@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   createActiveCrawlerTaskLifecycle,
   createManualRetryAttempt,
-  decideCrawlerTaskLifecycle,
   decideCrawlerRunTransition,
+  decideCrawlerTaskLifecycle,
   resolveActiveCrawlerCreate,
 } from '../state-machine'
 import {
