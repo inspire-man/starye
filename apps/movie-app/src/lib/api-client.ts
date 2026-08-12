@@ -97,7 +97,7 @@ export const movieApi = {
       throw new Error(`Failed to fetch movie detail: ${res.status}`)
     }
     const data = await res.json()
-    return { success: true, data: data.data as unknown as MovieDetail }
+    return { success: true, data: data.data }
   },
 
   async submitPlaybackEvidence(taskId: string, runId: string, evidence: PlaybackEvidenceRequest): Promise<unknown> {

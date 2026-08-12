@@ -35,6 +35,126 @@ const error = ref('')
 const movie = ref<MovieDetail | null>(null)
 const readiness = computed<ReadinessProjection | null>(() => movie.value?.readiness ?? null)
 
+type VideoLayerName = 'metadata' | 'direct' | 'magnet' | 'playback'
+
+interface VideoLayerDisplay {
+  action: string
+  counts: Readonly<Record<string, number>>
+  freshness: 'fresh' | 'stale' | 'late'
+  history: readonly { freshness: string, sourceRevision: number, status: string }[]
+  key: VideoLayerName
+  label: string
+  reason: string
+  samples: readonly string[]
+  sourceRevision: number
+  status: string
+}
+
+const videoLayerLabels: Record<VideoLayerName, string> = {
+  metadata: 'Metadata',
+  direct: 'Direct source',
+  magnet: 'Magnet / TorrServer',
+  playback: 'Playback',
+}
+
+const videoReasonActionLabels: Record<string, string> = {
+  browser_inconclusive: '重新检查',
+  direct_blocked: '修复来源',
+  direct_content_invalid: '修复来源',
+  direct_transport_failed: '重新检查',
+  metadata_unresolved: '重新检查',
+  no_peer: '重新检查',
+  no_source: '修复来源',
+  playback_failed: '重新检查',
+  playback_unverified: '重新检查',
+  provider_failed: '配置 provider',
+  provider_unconfigured: '配置 provider',
+  source_failed: '修复来源',
+  stale: '重新检查',
+  stalled: '重新检查',
+  stream_failed: '重新检查',
+  stream_missing: '重新检查',
+}
+
+function videoLayerAction(reason: string, freshness: VideoLayerDisplay['freshness']): string {
+  if (freshness !== 'fresh')
+    return '重新检查'
+  if (reason === 'available')
+    return '无需操作'
+  return videoReasonActionLabels[reason] ?? '重新检查'
+}
+
+const videoAvailabilityLayers = computed<VideoLayerDisplay[]>(() => {
+  const availability = movie.value?.availability
+  if (!availability)
+    return []
+
+  const revision = availability.current.metadata.sourceRevision
+  const facts = availability.current
+  return (['metadata', 'direct', 'magnet', 'playback'] as const).map((key): VideoLayerDisplay => {
+    if (key === 'metadata') {
+      const reason = facts.metadata.persisted ? 'available' : 'metadata_unresolved'
+      return {
+        action: videoLayerAction(reason, 'fresh'),
+        counts: { persisted: facts.metadata.persisted ? 1 : 0 },
+        freshness: 'fresh',
+        history: [],
+        key,
+        label: videoLayerLabels[key],
+        reason,
+        samples: [],
+        sourceRevision: facts.metadata.sourceRevision,
+        status: facts.metadata.persisted ? '已持久化' : '未持久化',
+      }
+    }
+    if (key === 'playback') {
+      const verified = facts.playback.status === 'playback_verified'
+      const reason = verified ? 'available' : 'playback_unverified'
+      return {
+        action: videoLayerAction(reason, 'fresh'),
+        counts: { evidence: verified ? 1 : 0 },
+        freshness: 'fresh',
+        history: [],
+        key,
+        label: videoLayerLabels[key],
+        reason,
+        samples: [],
+        sourceRevision: revision,
+        status: verified ? '播放已验证' : '播放未验证',
+      }
+    }
+
+    const fact = facts[key]
+    const history = availability.history
+      .filter(entry => entry.layer === key)
+      .map(entry => ({ freshness: entry.fact.freshness, sourceRevision: entry.fact.sourceRevision, status: entry.fact.status }))
+    const reason = fact?.reasonCode ?? 'no_source'
+    const freshness = fact?.freshness ?? 'fresh'
+    return {
+      action: videoLayerAction(reason, freshness),
+      counts: fact?.summary.counts ?? {},
+      freshness,
+      history,
+      key,
+      label: videoLayerLabels[key],
+      reason,
+      samples: fact?.summary.samples ?? [],
+      sourceRevision: fact?.sourceRevision ?? revision,
+      status: fact?.status ?? 'unknown',
+    }
+  })
+})
+
+function releaseDateValue(value: number | string | null | undefined): number | null {
+  if (typeof value === 'number')
+    return value
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+  return null
+}
+
 type InformationalSourceType = 'direct' | 'magnet' | 'TorrServer'
 type InformationalSourceHealth = 'inactive' | 'unverified' | 'failed'
 type InformationalSourceReason = 'source_inactive' | 'source_unverified' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
@@ -232,8 +352,8 @@ function getTorrServerButtonTitle(player: Player) {
   return torrServerLoading.value ? 'TorrServer 正在准备当前播放流' : '通过 TorrServer 在线播放'
 }
 
-function formatDate(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleDateString('zh-CN')
+function formatDate(timestamp: number | string): string {
+  return new Date(typeof timestamp === 'number' ? timestamp * 1000 : timestamp).toLocaleDateString('zh-CN')
 }
 
 /**
@@ -246,16 +366,19 @@ const genreList = computed<string[]>(() => {
     return []
   let arr: string[]
   if (Array.isArray(raw)) {
-    arr = raw as string[]
+    arr = raw.filter((value): value is string => typeof value === 'string')
   }
-  else {
+  else if (typeof raw === 'string') {
     try {
-      const parsed = JSON.parse(raw as unknown as string)
+      const parsed = JSON.parse(raw)
       arr = Array.isArray(parsed) ? parsed : [String(raw)]
     }
     catch {
-      arr = (raw as unknown as string).split(',')
+      arr = raw.split(',')
     }
+  }
+  else {
+    return []
   }
   return arr.map(g => g.replace(/^\*+|\*+$/g, '').trim()).filter(Boolean)
 })
@@ -302,11 +425,13 @@ const seriesNavigation = computed(() => {
 
   // 按 releaseDate ASC 排序，无 releaseDate 则按 code ASC 兜底
   allInSeries.sort((a, b) => {
-    if (a.releaseDate && b.releaseDate)
-      return a.releaseDate - b.releaseDate
-    if (a.releaseDate)
+    const leftDate = releaseDateValue(a.releaseDate)
+    const rightDate = releaseDateValue(b.releaseDate)
+    if (leftDate != null && rightDate != null)
+      return leftDate - rightDate
+    if (leftDate != null)
       return -1
-    if (b.releaseDate)
+    if (rightDate != null)
       return 1
     return a.code.localeCompare(b.code)
   })
@@ -942,6 +1067,33 @@ onMounted(() => {
           没有 eligible direct，优先进入 {{ classifyPlaybackSource(firstControlledFallback) }} 受控路径
         </span>
       </div>
+
+      <section v-if="videoAvailabilityLayers.length" class="border-y border-gray-700" aria-labelledby="video-availability-title">
+        <h3 id="video-availability-title" class="py-3 text-sm font-semibold text-gray-200">
+          Authoritative current / history
+        </h3>
+        <article
+          v-for="layer in videoAvailabilityLayers"
+          :key="layer.key"
+          :data-video-layer="layer.key"
+          class="grid min-w-0 gap-1 border-t border-gray-700 py-3 text-xs text-gray-300"
+        >
+          <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <strong class="text-sm text-gray-100">{{ layer.label }}</strong>
+            <span class="break-words">{{ layer.status }}</span>
+          </div>
+          <span class="break-words">reason：{{ layer.reason }}</span>
+          <span>revision {{ layer.sourceRevision }} · {{ layer.freshness }}</span>
+          <span>available：{{ layer.counts.available ?? 0 }} · abnormal：{{ layer.counts.abnormal ?? 0 }}</span>
+          <span>下一步：{{ layer.action }}</span>
+          <span v-for="sample in layer.samples" :key="sample" class="break-words">{{ sample }}</span>
+          <div v-if="layer.history.length" class="grid gap-1 border-l-2 border-gray-700 pl-3" data-video-history>
+            <span v-for="fact in layer.history" :key="`${fact.sourceRevision}-${fact.status}`">
+              history · revision {{ fact.sourceRevision }} · {{ fact.status }} · {{ fact.freshness }}
+            </span>
+          </div>
+        </article>
+      </section>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <section class="border border-gray-700 rounded-lg p-4">

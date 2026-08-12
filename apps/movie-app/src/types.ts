@@ -3,26 +3,26 @@ export interface Movie {
   code: string
   title: string
   slug: string
-  coverImage?: string
-  description?: string
-  releaseDate?: number
-  duration?: number
-  rating?: number
+  coverImage?: string | null
+  description?: string | null
+  releaseDate?: number | string | null
+  duration?: number | null
+  rating?: number | null
   isR18: boolean
   actors?: ActorSummary[]
   publishers?: PublisherSummary[]
-  genres?: string[]
-  series?: string
-  sourceUrl: string
-  createdAt: Date
-  updatedAt: Date
+  genres?: unknown
+  series?: string | null
+  sourceUrl?: string | null
+  createdAt?: Date | string | null
+  updatedAt?: Date | string | null
 }
 
 export interface ActorSummary {
   id: string
   name: string
   slug: string
-  avatar?: string
+  avatar?: string | null
 }
 
 export interface Actor extends ActorSummary {
@@ -58,7 +58,7 @@ export interface PublisherSummary {
   id: string
   name: string
   slug: string
-  logo?: string
+  logo?: string | null
 }
 
 export interface Publisher extends PublisherSummary {
@@ -86,11 +86,11 @@ export interface PublisherDetail extends Publisher {
 
 export interface Player {
   id: string
-  movieId: string
+  movieId?: string
   sourceName: string
   sourceUrl: string
   source?: string
-  quality?: string
+  quality?: string | null
   sortOrder: number
   magnetLink?: string
   // 评分相关字段
@@ -151,8 +151,8 @@ export interface PlaybackEvidenceTuple {
 
 export interface MovieAvailabilityReadback {
   current: {
-    direct: unknown | null
-    magnet: unknown | null
+    direct: MovieVideoLayerFact | null
+    magnet: MovieVideoLayerFact | null
     metadata: {
       observedAt: number | null
       persisted: boolean
@@ -163,7 +163,20 @@ export interface MovieAvailabilityReadback {
       tuple: PlaybackEvidenceTuple | null
     }
   }
-  history: unknown[]
+  history: readonly { fact: MovieVideoLayerFact, layer: 'direct' | 'magnet' }[]
+}
+
+export interface MovieVideoLayerFact {
+  freshness: 'fresh' | 'stale' | 'late'
+  observedAt: number
+  policyVersion: string
+  reasonCode: string
+  sourceRevision: number
+  status: 'available' | 'unavailable' | 'degraded' | 'unknown'
+  summary: {
+    counts: Readonly<Record<string, number>>
+    samples: readonly string[]
+  }
 }
 
 export interface PlaybackEvidenceRequest {
@@ -197,8 +210,17 @@ export interface PlaybackEvidenceRequest {
 export interface MovieDetail extends Movie {
   actors: ActorSummary[]
   publishers: PublisherSummary[]
-  players: Player[]
-  relatedMovies: Movie[]
+  players?: Player[]
+  relatedMovies: Array<{
+    id: string
+    code: string
+    title: string
+    slug: string
+    coverImage: string | null
+    isR18: boolean
+    releaseDate?: number
+    series?: string
+  }>
   primaryContentId: string
   readiness: ReadinessProjection
   availability?: MovieAvailabilityReadback

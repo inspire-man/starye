@@ -48,6 +48,16 @@ interface PlayerErrorState {
   recoverable: boolean
 }
 
+function releaseDateValue(value: number | string | null | undefined): number | null {
+  if (typeof value === 'number')
+    return value
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+  return null
+}
+
 interface ActivePlaybackEvidenceIdentity {
   contentId: string
   key: string
@@ -120,7 +130,7 @@ const currentSourceAttempt = ref(1)
 const currentSourcePlayerId = ref('')
 const currentContentId = ref('')
 const currentSourceRevision = ref(0)
-const playbackCandidates = ref<MovieDetail['players']>([])
+const playbackCandidates = ref<NonNullable<MovieDetail['players']>>([])
 const currentCandidateIndex = ref(-1)
 
 const isTorrServerMode = computed(() => !!route.query.streamUrl)
@@ -149,11 +159,13 @@ const seriesNavigation = computed(() => {
   ]
 
   allInSeries.sort((a, b) => {
-    if (a.releaseDate && b.releaseDate)
-      return a.releaseDate - b.releaseDate
-    if (a.releaseDate)
+    const leftDate = releaseDateValue(a.releaseDate)
+    const rightDate = releaseDateValue(b.releaseDate)
+    if (leftDate != null && rightDate != null)
+      return leftDate - rightDate
+    if (leftDate != null)
       return -1
-    if (b.releaseDate)
+    if (rightDate != null)
       return 1
     return a.code.localeCompare(b.code)
   })
@@ -649,7 +661,7 @@ function getPlaybackErrorState(): PlayerErrorState {
   }
 }
 
-function findNextPlaybackCandidate(): { player: MovieDetail['players'][number], index: number } | null {
+function findNextPlaybackCandidate(): { player: NonNullable<MovieDetail['players']>[number], index: number } | null {
   for (let index = currentCandidateIndex.value + 1; index < playbackCandidates.value.length; index += 1) {
     const candidate = playbackCandidates.value[index]
     if (!candidate)
@@ -703,7 +715,7 @@ function handleSourceFailure(kind: ErrorKind, message: string) {
   showPlayerError(kind, message, true, true)
 }
 
-function isEligiblePlayer(candidate: MovieDetail['players'][number]): boolean {
+function isEligiblePlayer(candidate: NonNullable<MovieDetail['players']>[number]): boolean {
   return isEligiblePlaybackSource(candidate)
 }
 

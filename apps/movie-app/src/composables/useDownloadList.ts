@@ -89,7 +89,7 @@ export function useDownloadList() {
       movieId: movie.id,
       movieCode: movie.code,
       title: movie.title,
-      coverImage: movie.coverImage,
+      coverImage: movie.coverImage ?? undefined,
       magnetLink,
       status: 'planned',
       addedAt: Date.now(),
