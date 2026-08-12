@@ -8,6 +8,7 @@ const {
   backMock,
   getMovieDetailMock,
   getWatchingProgressMock,
+  submitPlaybackEvidenceMock,
   trackViewMock,
   addMagnetTaskMock,
   resolveTrustedOriginsMock,
@@ -22,6 +23,7 @@ const {
   backMock: vi.fn(),
   getMovieDetailMock: vi.fn(),
   getWatchingProgressMock: vi.fn(),
+  submitPlaybackEvidenceMock: vi.fn(),
   trackViewMock: vi.fn(),
   addMagnetTaskMock: vi.fn(),
   resolveTrustedOriginsMock: vi.fn(),
@@ -74,6 +76,7 @@ vi.mock('../../composables/useAria2', () => ({
 vi.mock('../../lib/api-client', () => ({
   movieApi: {
     getMovieDetail: getMovieDetailMock,
+    submitPlaybackEvidence: submitPlaybackEvidenceMock,
     trackView: trackViewMock,
   },
   progressApi: {
@@ -105,6 +108,7 @@ describe('player.vue security gates', () => {
     }
     resolveTrustedOriginsMock.mockResolvedValue(['http://127.0.0.1:8090'])
     getWatchingProgressMock.mockResolvedValue({ success: true, data: null })
+    submitPlaybackEvidenceMock.mockResolvedValue({ kind: 'accepted' })
   })
 
   it('详情接口拒绝访问时，不应初始化播放器或上报 view', async () => {
@@ -305,6 +309,15 @@ describe('player.vue security gates', () => {
           receipt: { persisted: true, primaryContentId: 'movie-proof', schemaVersion: 2 },
           source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 8 },
         },
+        availability: {
+          current: {
+            direct: null,
+            magnet: null,
+            metadata: { observedAt: 100, persisted: true, sourceRevision: 8 },
+            playback: { status: 'unverified', tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'run-proof', taskId: 'task-proof' } },
+          },
+          history: [],
+        },
       },
     })
 
@@ -342,6 +355,17 @@ describe('player.vue security gates', () => {
     expect(wrapper.get('[data-playback-event="waiting"]').attributes('data-observed')).toBe('false')
     expect(wrapper.get('[data-playback-event="stalled"]').attributes('data-observed')).toBe('false')
     expect(wrapper.get('[data-playback-event="error"]').attributes('data-observed')).toBe('false')
+    expect(submitPlaybackEvidenceMock).toHaveBeenCalledTimes(1)
+    expect(submitPlaybackEvidenceMock).toHaveBeenCalledWith('task-proof', 'run-proof', expect.objectContaining({
+      contentId: 'movie-proof',
+      sourceRevision: 8,
+      tuple: { attemptNumber: 1, provider: 'github-actions', runId: 'run-proof', taskId: 'task-proof' },
+      playback: expect.objectContaining({ status: 'playback_verified' }),
+    }))
+    playerInstances[0].currentTime = 2.5
+    playerInstances[0].handlers.timeupdate()
+    await flushPromises()
+    expect(submitPlaybackEvidenceMock).toHaveBeenCalledTimes(1)
     expect(wrapper.get('#player-container').attributes('data-content-id')).toBe('movie-proof')
     expect(wrapper.get('#player-container').attributes('data-source-revision')).toBe('8')
     wrapper.unmount()
