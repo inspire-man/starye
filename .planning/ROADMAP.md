@@ -111,7 +111,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 26-05-PLAN.md — authoritative metadata/source persistence、readback 与 API actions
-- [ ] 26-09-PLAN.md — local/production real runner direct+magnet adapter construction wiring
+- [x] 26-09-PLAN.md — local/production real runner direct+magnet adapter construction wiring
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -179,6 +179,6 @@ Plans:
 | 23. GitHub Actions Production Repair And Reconciliation | v1.4 | 5/5 | Complete | 2026-08-08 |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | v1.4 | 5/5 | Complete | 2026-08-10 |
 | 25. Task Operations And Availability Contract | v1.5 | 6/6 | Complete    | 2026-08-11 |
-| 26. Video Source And Magnet Availability | v1.5 | 5/10 | In Progress | - |
+| 26. Video Source And Magnet Availability | v1.5 | 6/10 | In Progress | - |
 | 27. Comic Chapter Completeness | v1.5 | 0/3 | Not started | - |
 | 28. Chapter Image Availability And Gateway Acceptance | v1.5 | 0/4 | Not started | - |
