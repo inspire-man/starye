@@ -1,10 +1,10 @@
 import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
 import type { CrawlerOperationCommandInput } from './operation-registry'
-import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskLifecycleStatus, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskLifecycleStatus, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderName, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { buildCrawlerOperationSnapshot } from './operation-registry'
-import { createProviderAssociationSummary, createProviderSnapshot } from './provider-association'
+import { createLocalProofProviderSnapshot, createProviderAssociationSummary, createProviderSnapshot, LOCAL_PROOF_POLICY_REFERENCE, LOCAL_PROOF_POLICY_VERSION } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
 import { classifyCrawlerAutomaticRetry, crawlerTaskLifecycleReason, createActiveCrawlerTaskLifecycle, createManualRetryAttempt, decideCrawlerRunTransition, decideCrawlerTaskLifecycle, isTerminalCrawlerRunStatus } from './state-machine'
 import { createCrawlerTaskSnapshot, readCrawlerTaskSnapshot } from './template-registry'
@@ -217,6 +217,7 @@ export interface ProviderAssociationRecord {
   readonly applicationAttempt: number
   readonly environment: string
   readonly providerConclusion?: string
+  readonly provider: ProviderName
   readonly providerRunAttempt?: number
   readonly providerRunId?: string
   readonly providerStatus?: ProviderRunStatus
@@ -234,6 +235,7 @@ export interface ProviderAssociationRecord {
 export interface EnsureProviderAssociationInput {
   readonly runId: string
   readonly attempt: number
+  readonly provider?: ProviderName
   readonly template: CrawlerTaskTemplateKey
   readonly scheduleBucket?: string
 }
@@ -293,9 +295,18 @@ export interface ClaimCrawlerRunInput {
 
 export interface CrawlerRunDispatchCandidate {
   readonly attempt: number
+  readonly contentId?: string
+  readonly expectedProjectionVersion?: number
+  readonly policyReference?: string
+  readonly policyVersion?: string
+  readonly provider?: ProviderName
+  readonly proofProfile?: 'phase25-movie-availability-v1'
   readonly runId: string
   readonly sequence: number
+  readonly sourceRevision?: number
   readonly snapshot: CrawlerTaskSnapshotUnion
+  readonly target?: { readonly id: string, readonly kind: 'movie' | 'manga' }
+  readonly taskId?: string
 }
 
 export type ClaimCrawlerRunResult
@@ -356,6 +367,51 @@ function toCrawlerTaskListItem(row: CrawlerTaskRow, lifecycle: CrawlerTaskLifecy
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+interface DispatchSnapshotBinding {
+  readonly operation: CrawlerTaskOperation
+  readonly policyReference: string
+  readonly policyVersion: string
+  readonly sourceRevision: number
+  readonly target: { readonly id: string, readonly kind: 'movie' | 'manga' }
+}
+
+function parseDispatchSnapshotBinding(raw: string, operation: CrawlerTaskOperation): DispatchSnapshotBinding | undefined {
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (!isRecord(value) || value.operation !== operation || !isRecord(value.target))
+      return undefined
+    const target = value.target
+    if ((target.kind !== 'movie' && target.kind !== 'manga')
+      || typeof target.id !== 'string'
+      || !/^\w[\w-]{0,127}$/u.test(target.id)
+      || typeof value.policyReference !== 'string'
+      || value.policyReference.trim().length === 0
+      || value.policyReference.length > 256
+      || typeof value.policyVersion !== 'string'
+      || value.policyVersion.trim().length === 0
+      || value.policyVersion.length > 128) {
+      return undefined
+    }
+    const intent = isRecord(value.intent) ? value.intent : undefined
+    const sourceRevision = intent?.sourceRevision
+    return {
+      operation,
+      policyReference: value.policyReference.trim(),
+      policyVersion: value.policyVersion.trim(),
+      sourceRevision: typeof sourceRevision === 'number'
+        && Number.isSafeInteger(sourceRevision)
+        && sourceRevision >= 0
+        && sourceRevision <= 1_000_000
+        ? sourceRevision
+        : 0,
+      target: { id: target.id.trim(), kind: target.kind },
+    }
+  }
+  catch {
+    return undefined
+  }
 }
 
 function parseRepairReceipt(
@@ -582,6 +638,7 @@ function toCrawlerTaskRun(row: CrawlerRunRow): CrawlerTaskRun {
 interface CrawlerProviderRow {
   application_attempt: number
   environment: string
+  provider: ProviderName
   provider_conclusion: string | null
   provider_run_attempt: number | null
   provider_run_id: string | null
@@ -605,6 +662,7 @@ function toProviderAssociationRecord(row: CrawlerProviderRow): ProviderAssociati
     ...(row.provider_run_attempt ? { providerRunAttempt: row.provider_run_attempt } : {}),
     ...(row.provider_run_id ? { providerRunId: row.provider_run_id } : {}),
     ...(row.provider_status ? { providerStatus: row.provider_status } : {}),
+    provider: row.provider,
     ...(row.reconciliation_window_ends_at === null ? {} : { reconciliationWindowEndsAt: row.reconciliation_window_ends_at }),
     ref: row.ref,
     repository: row.repository,
@@ -910,7 +968,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
   async function getProviderAssociation(runId: string): Promise<ProviderAssociationRecord | undefined> {
     try {
       const result = await d1.prepare(`
-        SELECT run_id, application_attempt, template_key, target, workflow, repository, ref,
+        SELECT run_id, application_attempt, provider, template_key, target, workflow, repository, ref,
           environment, provider_run_id, provider_run_attempt, sha, provider_status,
           provider_conclusion, reconciliation_window_ends_at, schedule_bucket
         FROM crawler_run_provider_association
@@ -1042,6 +1100,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         try {
           provider = createProviderAssociationSummary({
             environment: association.environment,
+            provider: association.provider,
             providerConclusion: association.providerConclusion,
             providerRunAttempt: association.providerRunAttempt,
             providerRunId: association.providerRunId,
@@ -1174,6 +1233,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       if (latestRun && !isTerminalCrawlerRunStatus(latestRun.status))
         return { kind: 'rejected', oldTaskId: input.taskId, lifecycle, reasonCode: 'task_has_active_run' }
     }
+    const previousProvider = taskRow.latest_run_id
+      ? await getProviderAssociation(taskRow.latest_run_id)
+      : undefined
 
     const created = await createOrGetActiveRun({
       operationCommand: input.operationCommand,
@@ -1185,6 +1247,14 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const newTaskId = created.kind === 'created' || created.kind === 'duplicate' ? created.run.taskId : undefined
     if (!newTaskId)
       return { kind: 'rejected', oldTaskId: input.taskId, lifecycle, reasonCode: 'active_run_exists' }
+    if (created.kind === 'created') {
+      await ensureProviderAssociation({
+        attempt: created.run.attemptNumber,
+        provider: previousProvider?.provider,
+        runId: created.run.id,
+        template: created.snapshot.templateKey,
+      })
+    }
     const updated = await transitionTaskLifecycle(input.taskId, { supersededByTaskId: newTaskId, type: 'supersede' })
     if (updated.kind === 'rejected')
       return { kind: 'rejected', oldTaskId: input.taskId, lifecycle: updated.lifecycle, reasonCode: updated.reasonCode }
@@ -1273,7 +1343,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
   async function listProviderReconciliationCandidates(): Promise<readonly ProviderReconciliationCandidate[]> {
     try {
       const result = await d1.prepare(`
-        SELECT association.run_id, association.application_attempt, association.template_key,
+        SELECT association.run_id, association.application_attempt, association.provider, association.template_key,
           association.target, association.workflow, association.repository, association.ref,
           association.environment, association.provider_run_id, association.provider_run_attempt,
           association.sha, association.provider_status, association.provider_conclusion,
@@ -1281,7 +1351,8 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
           run.status AS run_status
         FROM crawler_run_provider_association AS association
         INNER JOIN crawler_run AS run ON run.id = association.run_id
-        WHERE association.provider_run_id IS NOT NULL
+        WHERE association.provider = 'github-actions'
+          AND association.provider_run_id IS NOT NULL
           AND (
             run.status IN ('dispatching', 'running', 'cancel_requested')
             OR (run.status = 'succeeded' AND (association.provider_status IS NULL OR association.provider_status <> 'completed'))
@@ -1297,9 +1368,11 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
   async function pollDispatch(): Promise<CrawlerRunDispatchCandidate | undefined> {
     const result = await d1.prepare(`
-      SELECT run.id, run.attempt_number, run.last_event_sequence, task.operation, task.request_snapshot_json
+      SELECT run.id, run.task_id, run.attempt_number, run.last_event_sequence,
+        task.operation, task.request_snapshot_json, provider.provider
       FROM crawler_run AS run
       INNER JOIN crawler_task AS task ON task.id = run.task_id
+      INNER JOIN crawler_run_provider_association AS provider ON provider.run_id = run.id
       WHERE run.status = 'queued'
       ORDER BY run.created_at ASC, run.id ASC
       LIMIT 1
@@ -1308,7 +1381,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       id: string
       last_event_sequence: number
       operation: CrawlerTaskOperation
+      provider: ProviderName
       request_snapshot_json: string
+      task_id: string
     }>()
     const row = result.results?.[0]
     if (!row) {
@@ -1316,8 +1391,48 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     }
 
     const snapshot = parseTaskSnapshot(row.request_snapshot_json, row.operation)
+    const binding = parseDispatchSnapshotBinding(row.request_snapshot_json, row.operation)
+    if (row.provider === 'local-proof' && !binding)
+      return undefined
+    const movieBinding = binding?.target.kind === 'movie'
+      ? (await d1.prepare(`
+          SELECT movie.id AS content_id, COALESCE(state.source_revision, 0) AS source_revision
+          FROM movie
+          LEFT JOIN movie_source_state AS state ON state.movie_id = movie.id
+          WHERE movie.id = ? OR movie.code = ?
+          LIMIT 1
+        `).bind(binding.target.id, binding.target.id).all<{ content_id: string, source_revision: number }>()).results?.[0]
+      : undefined
+    const sourceRevision = movieBinding?.source_revision ?? binding?.sourceRevision
+    const contentId = movieBinding?.content_id
+    const currentProjection = row.provider === 'local-proof' && binding?.target && contentId
+      ? (await d1.prepare(`
+          SELECT projection_version
+          FROM crawler_availability_current
+          WHERE target_kind = ? AND target_id = ? AND content_id = ?
+          LIMIT 1
+        `).bind(binding.target.kind, binding.target.id, contentId).all<{ projection_version: number }>()).results?.[0]?.projection_version ?? 0
+      : undefined
     return {
       attempt: row.attempt_number,
+      ...(binding
+        ? {
+            policyReference: binding.policyReference,
+            policyVersion: binding.policyVersion,
+            sourceRevision,
+            target: binding.target,
+            taskId: row.task_id,
+          }
+        : { taskId: row.task_id }),
+      ...(row.provider === 'local-proof' && contentId ? { contentId } : {}),
+      ...(row.provider === 'local-proof' && currentProjection !== undefined ? { expectedProjectionVersion: currentProjection } : {}),
+      provider: row.provider,
+      ...(row.provider === 'local-proof'
+        && binding?.operation === 'movie'
+        && binding.policyReference === LOCAL_PROOF_POLICY_REFERENCE
+        && binding.policyVersion === LOCAL_PROOF_POLICY_VERSION
+        ? { proofProfile: 'phase25-movie-availability-v1' as const }
+        : {}),
       runId: row.id,
       sequence: row.last_event_sequence + 1,
       snapshot,
@@ -1490,22 +1605,51 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
   }
 
   async function ensureProviderAssociation(input: EnsureProviderAssociationInput): Promise<ProviderAssociationRecord | undefined> {
-    const snapshot = createProviderSnapshot(input.template)
+    const provider = input.provider ?? 'github-actions'
+    const existing = await getProviderAssociation(input.runId)
+    if (existing && existing.provider !== provider)
+      return existing
+
+    const snapshot = provider === 'local-proof'
+      ? createLocalProofProviderSnapshot(input.template)
+      : createProviderSnapshot(input.template)
+    if (provider === 'local-proof') {
+      const task = await getTaskBinding(input.runId)
+      const binding = task ? parseDispatchSnapshotBinding(task.request_snapshot_json, task.operation) : undefined
+      if (!binding
+        || binding.operation !== 'movie'
+        || binding.target.kind !== 'movie'
+        || binding.policyReference !== LOCAL_PROOF_POLICY_REFERENCE
+        || binding.policyVersion !== LOCAL_PROOF_POLICY_VERSION) {
+        return undefined
+      }
+      const target = await d1.prepare(`
+        SELECT movie.id
+        FROM movie
+        WHERE movie.id = ? OR movie.code = ?
+        LIMIT 1
+      `).bind(binding.target.id, binding.target.id).all<{ id: string }>()
+      if (!target.results?.[0]?.id)
+        return undefined
+    }
     const currentNow = toUnixSeconds(now())
     const windowEndsAt = addMillisecondsInSeconds(currentNow, DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS)
+    const localProviderRunId = provider === 'local-proof' ? `local-${input.runId}` : null
     try {
       await d1.prepare(`
         INSERT INTO crawler_run_provider_association (
           run_id, application_attempt, provider, template_key, target, workflow,
-          repository, ref, environment, crawler_entrypoint, reconciliation_window_ends_at,
+          repository, ref, environment, crawler_entrypoint, provider_run_id,
+          provider_run_attempt, provider_status, reconciliation_window_ends_at,
           schedule_bucket, created_at, updated_at
-        ) VALUES (?, ?, 'github-actions', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(run_id) DO UPDATE SET
           application_attempt = excluded.application_attempt,
           updated_at = excluded.updated_at
       `).bind(
         input.runId,
         input.attempt,
+        provider,
         snapshot.templateKey,
         snapshot.target,
         snapshot.workflow,
@@ -1513,7 +1657,10 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         snapshot.ref,
         snapshot.environment,
         snapshot.crawlerEntrypoint,
-        windowEndsAt,
+        localProviderRunId,
+        provider === 'local-proof' ? input.attempt : null,
+        provider === 'local-proof' ? 'queued' : null,
+        provider === 'local-proof' ? null : windowEndsAt,
         input.scheduleBucket ?? null,
         currentNow,
         currentNow,
@@ -1711,6 +1858,8 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
           reasonCode: 'stale_event' as const,
           sequence: input.sequence,
         }
+    if (decision.kind === 'transition')
+      await updateLocalProviderState(input.runId, input.attempt, 'dispatch_claim')
     const outcome = transitionOutcome(decision)
     const recorded = await recordRunnerEvent({
       bodySha256: input.bodySha256,
@@ -1738,6 +1887,25 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return applyTransition(runId, { actor: 'runner', sequence, type: 'runner_heartbeat' })
   }
 
+  async function updateLocalProviderState(
+    runId: string,
+    attempt: number,
+    event: CrawlerRunTransitionEvent['type'],
+  ): Promise<void> {
+    const state = event === 'runner_succeeded'
+      ? { conclusion: 'success', status: 'completed' }
+      : event === 'runner_failed'
+        ? { conclusion: 'failure', status: 'completed' }
+        : event === 'runner_cancelled'
+          ? { conclusion: 'cancelled', status: 'completed' }
+          : { conclusion: null, status: 'in_progress' }
+    await d1.prepare(`
+      UPDATE crawler_run_provider_association
+      SET provider_status = ?, provider_conclusion = ?, updated_at = ?
+      WHERE run_id = ? AND application_attempt = ? AND provider = 'local-proof'
+    `).bind(state.status, state.conclusion, toUnixSeconds(now()), runId, attempt).run()
+  }
+
   async function createAutomaticRetryRun(run: CrawlerRunRow, snapshot: CrawlerTaskSnapshotUnion): Promise<CrawlerTaskRun | undefined> {
     if (run.attempt_number >= MAX_AUTOMATIC_RETRY_ATTEMPTS)
       return undefined
@@ -1750,7 +1918,12 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       snapshot,
       status: 'failed',
     })
-    const provider = createProviderSnapshot(snapshot.templateKey)
+    const previousProvider = await getProviderAssociation(run.id)
+    const providerName = previousProvider?.provider ?? 'github-actions'
+    const provider = providerName === 'local-proof'
+      ? createLocalProofProviderSnapshot(snapshot.templateKey)
+      : createProviderSnapshot(snapshot.templateKey)
+    const localProviderRunId = providerName === 'local-proof' ? `local-${nextRunId}` : null
 
     const batchResults = await d1.batch([
       d1.prepare(`
@@ -1791,9 +1964,10 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         INSERT INTO crawler_run_provider_association (
           run_id, application_attempt, provider, template_key, target, workflow,
           repository, ref, environment, crawler_entrypoint,
+          provider_run_id, provider_run_attempt, provider_status,
           reconciliation_window_ends_at, created_at, updated_at
         )
-        SELECT ?, ?, 'github-actions', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         WHERE EXISTS (
           SELECT 1
           FROM crawler_run
@@ -1802,6 +1976,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       `).bind(
         nextRunId,
         retry.attemptNumber,
+        providerName,
         provider.templateKey,
         provider.target,
         provider.workflow,
@@ -1809,7 +1984,10 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         provider.ref,
         provider.environment,
         provider.crawlerEntrypoint,
-        addMillisecondsInSeconds(currentNow, DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS),
+        localProviderRunId,
+        providerName === 'local-proof' ? retry.attemptNumber : null,
+        providerName === 'local-proof' ? 'queued' : null,
+        providerName === 'local-proof' ? null : addMillisecondsInSeconds(currentNow, DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS),
         currentNow,
         currentNow,
         nextRunId,
@@ -1869,12 +2047,13 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     }
 
     const snapshot = parseTaskSnapshot(task.request_snapshot_json, task.operation)
+    const previousProvider = await getProviderAssociation(runId)
     if (isRepairSnapshot(snapshot)) {
       const currentState = await readRepairTaskState(snapshot.movieId)
       if (!currentState) {
         throw new Error('repair task source disposition is no longer repairable')
       }
-      return createOrGetActiveRun({
+      const retried = await createOrGetActiveRun({
         movieId: snapshot.movieId,
         operation: 'repair_players',
         reason: currentState.reason,
@@ -1882,6 +2061,15 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         targetIntent: snapshot.targetIntent,
         templateKey: 'movie',
       })
+      if (retried.kind === 'created') {
+        await ensureProviderAssociation({
+          attempt: retried.run.attemptNumber,
+          provider: previousProvider?.provider,
+          runId: retried.run.id,
+          template: retried.snapshot.templateKey,
+        })
+      }
+      return retried
     }
     const retry = createManualRetryAttempt({
       attemptNumber: run.attempt_number,
@@ -1936,6 +2124,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
     await ensureProviderAssociation({
       attempt: retry.attemptNumber,
+      provider: previousProvider?.provider,
       runId: nextRunId,
       template: task.template_key,
     })

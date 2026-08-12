@@ -195,11 +195,51 @@ export const CrawlerRepairSourceObservationEventSchema = v.strictObject({
   type: v.literal('source_observation'),
 })
 
+export const CrawlerAvailabilityObservationEventSchema = v.strictObject({
+  attempt: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(1_000_000)),
+  content_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  event_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
+  expected_projection_version: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000_000)),
+  freshness: v.picklist(['fresh', 'stale', 'late']),
+  key_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
+  next_action: v.picklist(['none', 'recheck', 'repair', 'retry', 'ignore']),
+  nonce: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
+  observation_identity: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
+  observed_at: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(4_102_444_800)),
+  policy_reference: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256))),
+  policy_version: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  provider: v.picklist(['github-actions', 'local-proof']),
+  reason_code: v.picklist([
+    'available',
+    'no_source',
+    'source_failed',
+    'transport_failed',
+    'content_missing',
+    'policy_mismatch',
+    'cancelled',
+    'provider_failed',
+    'observation_invalid',
+  ]),
+  run_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  sequence: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(1_000_000_000)),
+  source_revision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  status: v.picklist(['available', 'unavailable', 'degraded', 'unknown']),
+  summary: v.unknown(),
+  target: v.strictObject({
+    id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+    kind: v.picklist(['movie', 'manga', 'video', 'chapter', 'image']),
+  }),
+  task_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  timestamp: v.pipe(v.number(), v.integer()),
+  type: v.literal('availability_observation'),
+})
+
 export const CrawlerRunEventSchema = v.union([
   CrawlerRunLifecycleEventSchema,
   CrawlerScheduleRegisterEventSchema,
   CrawlerProviderStartedEventSchema,
   CrawlerDispatchValidationEventSchema,
+  CrawlerAvailabilityObservationEventSchema,
 ])
 
 export type CrawlerRunEvent = v.InferOutput<typeof CrawlerRunEventSchema>

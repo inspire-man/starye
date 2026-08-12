@@ -519,12 +519,25 @@ async function selectDashboardCandidate(page: Phase24Page, input: Phase24ProofIn
   if (isLoginPath(page.url()))
     throw new Phase24ProofCheckpointError('authenticated Dashboard session is missing')
   const panel = page.locator('.local-task-panel')
-  if (!await panel.isVisible({ timeout: Math.min(input.timeoutMs ?? PHASE24_DEFAULT_TIMEOUT_MS, 10000) }))
+  const panelDeadline = now() + Math.min(input.timeoutMs ?? PHASE24_DEFAULT_TIMEOUT_MS, 30000)
+  let panelVisible = await panel.isVisible()
+  while (!panelVisible && now() <= panelDeadline) {
+    await page.waitForTimeout(Math.min(input.pollIntervalMs ?? PHASE24_DEFAULT_POLL_INTERVAL_MS, 1000))
+    panelVisible = await panel.isVisible()
+  }
+  if (!panelVisible)
     throw new Phase24ProofCheckpointError('Dashboard crawler task panel is not visible')
 
   const cards = page.locator('.task-card')
+  const cardsDeadline = now() + Math.min(input.timeoutMs ?? PHASE24_DEFAULT_TIMEOUT_MS, 30000)
+  let count = await cards.count()
+  while (count === 0 && now() <= cardsDeadline) {
+    await page.waitForTimeout(Math.min(input.pollIntervalMs ?? PHASE24_DEFAULT_POLL_INTERVAL_MS, 1000))
+    count = await cards.count()
+  }
+  if (count === 0)
+    throw new Phase24ProofCheckpointError('Dashboard task history did not load within the bounded wait window')
   const initialTaskIds = await collectTaskIds(page)
-  const count = await cards.count()
   for (let index = 0; index < count; index += 1) {
     const card = cards.nth(index)
     await card.click({ timeout: input.timeoutMs })

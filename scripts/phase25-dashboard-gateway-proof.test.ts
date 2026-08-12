@@ -25,6 +25,9 @@ interface FakeProofEnvironment {
   auditTaskIds: string[]
   cleanupDetailTaskIds: string[]
   createdTaskCount: number
+  dashboardVisibilityChecks: number
+  dashboardVisibleAfterChecks: number
+  dashboardWaitCalls: number
   refreshed: boolean
   readonly taskId: string
   readonly runId: string
@@ -101,6 +104,9 @@ function environmentFor(overrides: Partial<FakeProofEnvironment> = {}): FakeProo
     cancellationTaskId: 'cancel-task',
     cleanupDetailTaskIds: [],
     createdTaskCount: 0,
+    dashboardVisibilityChecks: 0,
+    dashboardVisibleAfterChecks: 0,
+    dashboardWaitCalls: 0,
     ownerRunId: 'owner-run',
     ownerTaskId: 'owner-task',
     ownershipTransferred: false,
@@ -185,7 +191,13 @@ class FakeLocator implements Phase24Locator {
   readonly filter = (): Phase24Locator => this
   readonly first = (): Phase24Locator => this
   readonly getAttribute = async (): Promise<string | null> => null
-  readonly isVisible = async (): Promise<boolean> => true
+  readonly isVisible = async (): Promise<boolean> => {
+    if (!this.selector.includes('data-current-attempt-focal'))
+      return true
+    this.environment.dashboardVisibilityChecks += 1
+    return this.environment.dashboardVisibilityChecks > this.environment.dashboardVisibleAfterChecks
+  }
+
   readonly locator = (selector: string): Phase24Locator => new FakeLocator(this.environment, selector)
   readonly nth = (): Phase24Locator => this
   readonly textContent = async (): Promise<string> => {
@@ -216,7 +228,7 @@ class FakePage implements Phase24Page {
   readonly reload = async (): Promise<void> => { this.environment.refreshed = true }
   readonly url = (): string => this.currentUrl
   readonly waitForLoadState = async (): Promise<void> => undefined
-  readonly waitForTimeout = async (): Promise<void> => undefined
+  readonly waitForTimeout = async (): Promise<void> => { this.environment.dashboardWaitCalls += 1 }
 }
 
 function input(root: string): Phase25ProofInput {
@@ -286,6 +298,17 @@ describe('phase25 Dashboard Gateway proof', () => {
     const artifact = JSON.parse(await readFile(result.matrixPath!, 'utf8')) as Record<string, unknown>
     expect(artifact).not.toHaveProperty('signed_url')
     expect(artifact).not.toHaveProperty('raw_response')
+  })
+
+  it('waits for bounded Dashboard evidence to converge after reload', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'phase25-dashboard-proof-'))
+    roots.push(root)
+    const environment = environmentFor({ dashboardVisibleAfterChecks: 2 })
+    const result = await runPhase25DashboardGatewayProof({ ...input(root), timeoutMs: 1_000 }, { browserFactory: async () => sessionFor(environment) })
+
+    expect(result.outcome).toBe('passed')
+    expect(result.checks.dashboardTrace).toBe('passed')
+    expect(environment.dashboardWaitCalls).toBe(2)
   })
 
   it('keeps local-proof and production GitHub provider identities distinct at tuple readback', () => {

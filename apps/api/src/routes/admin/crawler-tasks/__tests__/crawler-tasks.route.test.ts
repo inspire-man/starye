@@ -1049,6 +1049,79 @@ describe('admin crawler task routes', () => {
     expect(crawlerTaskRepository.retryRun).not.toHaveBeenCalled()
   })
 
+  it('reads authoritative availability current and bounded history on task detail', async () => {
+    const currentObservation = {
+      attemptNumber: 1,
+      contentId: 'content-1',
+      eventSequence: 2,
+      freshness: 'fresh',
+      nextAction: 'none',
+      observationIdentity: 'availability-current',
+      observedAt: 200,
+      policyVersion: 'v1',
+      provider: 'github-actions',
+      reasonCode: 'available',
+      runId: 'run-availability',
+      sourceRevision: 1,
+      status: 'available',
+      summary: { counts: { ready: 1 }, samples: [] },
+      target: { id: 'movie-1', kind: 'movie' },
+      taskId: 'task-availability',
+    }
+    crawlerTaskRepository.getTaskDetail.mockResolvedValueOnce({
+      lifecycle: { changedAt: 100, status: 'active', version: 0 },
+      runs: [{ id: 'run-availability', status: 'succeeded', attemptNumber: 1 }],
+      task: { id: 'task-availability', latestRunId: 'run-availability' },
+    })
+    const currentRow = {
+      attempt_number: currentObservation.attemptNumber,
+      content_id: currentObservation.contentId,
+      event_sequence: currentObservation.eventSequence,
+      freshness: currentObservation.freshness,
+      next_action: currentObservation.nextAction,
+      observation_identity: currentObservation.observationIdentity,
+      observed_at: currentObservation.observedAt,
+      policy_version: currentObservation.policyVersion,
+      provider: currentObservation.provider,
+      reason_code: currentObservation.reasonCode,
+      run_id: currentObservation.runId,
+      source_revision: currentObservation.sourceRevision,
+      status: currentObservation.status,
+      summary_json: JSON.stringify(currentObservation.summary),
+      target_id: currentObservation.target.id,
+      target_kind: currentObservation.target.kind,
+      task_id: currentObservation.taskId,
+    }
+    const { app } = createApp({}, [
+      [{ template_key: 'movie' }],
+      [{ ...currentRow, projection_version: 2 }],
+      [
+        { ...currentRow, event_sequence: 1, freshness: 'stale', observation_identity: 'availability-stale', observed_at: 100, source_revision: 0, status: 'unknown', reason_code: 'content_missing', summary_json: JSON.stringify({ counts: { missing: 1 }, samples: [] }) },
+        { ...currentRow, event_sequence: 3, observation_identity: 'invalid-sensitive', summary_json: JSON.stringify({ signed_url: 'https://TARGET' }) },
+      ],
+      [
+        { received_at: 300, run_id: 'run-availability', sequence: 3, outcome: JSON.stringify({ accepted: false, current: currentObservation, kind: 'duplicate', observation: currentObservation, reason: 'exact_replay' }) },
+        { received_at: 200, run_id: 'run-availability', sequence: 2, outcome: JSON.stringify({ accepted: true, current: currentObservation, kind: 'accepted', observation: currentObservation }) },
+      ],
+    ])
+
+    const response = await app.request('/crawler-tasks/task-availability')
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toMatchObject({
+      availability: {
+        current: { observationIdentity: 'availability-current', projectionVersion: 2, status: 'available' },
+        history: [
+          { kind: 'duplicate', reason: 'exact_replay' },
+          { kind: 'stale', observation: { observationIdentity: 'availability-stale' } },
+        ],
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain('signed_url')
+    expect(JSON.stringify(body)).not.toContain('https://TARGET')
+  })
+
   it('protects playback evidence with the session and task/run ownership boundary', async () => {
     const noSession = createApp(null)
     const noSessionResponse = await noSession.app.request('/crawler-tasks/task-movie/runs/run-movie/playback-evidence', {

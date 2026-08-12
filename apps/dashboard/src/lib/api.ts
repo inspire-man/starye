@@ -218,6 +218,97 @@ export type CrawlerPlaybackRepairStatus = 'pending' | 'validated' | 'succeeded' 
 export type CrawlerPlaybackSourceStatus = 'ready' | 'failed' | 'checkpoint'
 export type CrawlerPlaybackStatus = 'playback_verified' | 'failed' | 'checkpoint'
 export type CrawlerPlaybackRejectionOutcome = 'duplicate' | 'conflict' | 'stale' | 'late' | 'ignored'
+export type CrawlerTaskLifecycleStatus = 'active' | 'archived' | 'superseded'
+export type CrawlerAvailabilityFreshness = 'fresh' | 'stale' | 'late'
+export type CrawlerAvailabilityStatus = 'available' | 'unavailable' | 'degraded' | 'unknown'
+export type CrawlerAvailabilityNextAction = 'none' | 'recheck' | 'repair' | 'retry' | 'ignore'
+export type CrawlerAvailabilityReasonCode = 'available' | 'no_source' | 'source_failed' | 'transport_failed' | 'content_missing' | 'policy_mismatch' | 'cancelled' | 'provider_failed' | 'observation_invalid'
+export type CrawlerAvailabilityOutcome = 'accepted' | 'duplicate' | 'stale' | 'late' | 'conflict' | 'rejected'
+
+export interface CrawlerTaskLifecycleProjection {
+  changedAt: number
+  status: CrawlerTaskLifecycleStatus
+  supersededByTaskId?: string
+  version: number
+}
+
+export interface CrawlerAvailabilityEvidenceSample {
+  code: string
+  count?: number
+  label?: string
+}
+
+export interface CrawlerAvailabilityEvidence {
+  counts: Record<string, number>
+  samples: CrawlerAvailabilityEvidenceSample[]
+}
+
+export interface CrawlerAvailabilityObservation {
+  attemptNumber: number
+  contentId: string
+  eventSequence: number
+  freshness: CrawlerAvailabilityFreshness
+  nextAction: CrawlerAvailabilityNextAction
+  observationIdentity: string
+  observedAt: number
+  policyVersion: string
+  provider: CrawlerPlaybackEvidenceProvider
+  reasonCode: CrawlerAvailabilityReasonCode
+  runId: string
+  sourceRevision: number
+  status: CrawlerAvailabilityStatus
+  summary: CrawlerAvailabilityEvidence
+  target: { id: string, kind: 'chapter' | 'image' | 'manga' | 'movie' | 'video' }
+  taskId: string
+}
+
+export interface CrawlerAvailabilityProjection extends CrawlerAvailabilityObservation {
+  projectionVersion: number
+}
+
+export interface CrawlerAvailabilityHistoryEntry {
+  kind: CrawlerAvailabilityOutcome
+  observation: CrawlerAvailabilityObservation | null
+  reason?: string
+}
+
+export interface CrawlerAvailabilityTaskProjection {
+  current: CrawlerAvailabilityProjection | null
+  history: CrawlerAvailabilityHistoryEntry[]
+  observations?: CrawlerAvailabilityObservation[]
+}
+
+export interface CrawlerTaskAudit {
+  action: string
+  actor: { email: string, id: string }
+  attemptNumber?: number
+  createdAt: number
+  id: string
+  outcome: string
+  reason: string
+  runId?: string
+  snapshotFingerprint?: string
+  target?: { id: string, kind: string }
+}
+
+export interface CrawlerTaskAuditPage {
+  audits: CrawlerTaskAudit[]
+  nextCursor: string | null
+}
+
+export interface CrawlerTaskMetadataUpdate {
+  description?: string
+  intent?: string
+}
+
+export interface CrawlerTaskSupersedeCommand {
+  idempotencyKey: string
+  intent: { kind: 'crawl' } | { kind: 'repair_players', reason: CrawlerRepairReason, sourceRevision: number, targetIntent: CrawlerRepairTargetIntent }
+  operation: CrawlerTaskTemplate | 'repair_players'
+  policyReference: string
+  policyVersion: string
+  target: { id: string, kind: CrawlerTaskTemplate }
+}
 
 export interface MetadataProjection {
   contentId: string
@@ -525,6 +616,7 @@ export interface CrawlerTask {
   activeDuplicateLock?: { locked: boolean, message: string }
   allowedNextAction?: CrawlerRepairNextAction
   id: string
+  lifecycle?: CrawlerTaskLifecycleProjection
   movie?: { code?: string, id: string, title: string }
   operation?: CrawlerTaskTemplate | 'repair_players'
   reason?: CrawlerRepairReason
@@ -545,8 +637,10 @@ export interface CrawlerTask {
 }
 
 export interface CrawlerTaskDetail {
+  availability?: CrawlerAvailabilityTaskProjection
   currentAttempt?: CrawlerRun | null
   history?: CrawlerRun[]
+  lifecycle?: CrawlerTaskLifecycleProjection
   playbackEvidence?: CrawlerPlaybackEvidenceProjection
   retry?: CrawlerTaskRetryProjection
   task: CrawlerTask
@@ -788,8 +882,10 @@ export const api = {
         body: JSON.stringify(command),
       }),
 
-    listCrawlerTasks: (params?: { template?: CrawlerTaskTemplate, cursor?: string, limit?: number }) => {
+    listCrawlerTasks: (params?: { lifecycle?: CrawlerTaskLifecycleStatus, template?: CrawlerTaskTemplate, cursor?: string, limit?: number }) => {
       const query = new URLSearchParams()
+      if (params?.lifecycle)
+        query.set('lifecycle', params.lifecycle)
       if (params?.template)
         query.set('template', params.template)
       if (params?.cursor)
@@ -801,6 +897,33 @@ export const api = {
 
     getCrawlerTask: (taskId: string) =>
       apiFetch<CrawlerTaskDetail>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}`),
+
+    updateCrawlerTask: (taskId: string, metadata: CrawlerTaskMetadataUpdate) =>
+      apiFetch<{ lifecycle: CrawlerTaskLifecycleProjection, metadata: CrawlerTaskMetadataUpdate, operation: CrawlerTaskTemplate | 'repair_players', taskId: string }>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}`, {
+        body: JSON.stringify(metadata),
+        method: 'PATCH',
+      }),
+
+    archiveCrawlerTask: (taskId: string) =>
+      apiFetch<{ kind: 'archived' | 'idempotent', lifecycle: CrawlerTaskLifecycleProjection, taskId: string }>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/archive`, {
+        method: 'POST',
+      }),
+
+    supersedeCrawlerTask: (taskId: string, command: CrawlerTaskSupersedeCommand) =>
+      apiFetch<{ dispatch?: Record<string, unknown>, kind: 'created' | 'idempotent', lifecycle: CrawlerTaskLifecycleProjection, task?: { run: CrawlerRun, taskId: string }, taskId: string }>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/supersede`, {
+        body: JSON.stringify(command),
+        method: 'POST',
+      }),
+
+    getCrawlerTaskAudit: (taskId: string, cursor?: string, limit?: number) => {
+      const queryParams = new URLSearchParams()
+      if (cursor)
+        queryParams.set('cursor', cursor)
+      if (limit != null)
+        queryParams.set('limit', String(limit))
+      const query = queryParams.toString() ? `?${queryParams}` : ''
+      return apiFetch<CrawlerTaskAuditPage>(`/admin/crawler-tasks/${encodeURIComponent(taskId)}/audit${query}`)
+    },
 
     getCrawlerTaskLogs: (taskId: string, runId: string, cursor?: number, limit?: number) => {
       const queryParams = new URLSearchParams()

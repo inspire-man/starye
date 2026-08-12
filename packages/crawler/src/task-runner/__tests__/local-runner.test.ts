@@ -1,5 +1,6 @@
 import type { RunnerCandidate } from '../runner-client'
 import { describe, expect, it, vi } from 'vitest'
+import { createLocalProofAdapter } from '../local-proof-adapter'
 import { LocalTaskRunner } from '../local-runner'
 
 const candidate: RunnerCandidate = {
@@ -118,7 +119,7 @@ describe('localTaskRunner', () => {
 
     await runner.runOnce()
 
-    expect(client.succeededRepair).toHaveBeenCalledWith(repairCandidate, 3, receipt)
+    expect(client.succeededRepair).toHaveBeenCalledWith(repairCandidate, 4, receipt)
     expect(client.succeeded).not.toHaveBeenCalled()
     expect(client.failed).not.toHaveBeenCalled()
   })
@@ -144,8 +145,55 @@ describe('localTaskRunner', () => {
 
     await runner.runOnce()
 
-    expect(client.failed).toHaveBeenCalledWith(repairCandidate, 3, 'receipt_missing')
+    expect(client.failed).toHaveBeenCalledWith(repairCandidate, 4, 'receipt_missing')
     expect(client.succeededRepair).not.toHaveBeenCalled()
+  })
+
+  it('sends a bounded local-proof availability observation after the ordinary receipt', async () => {
+    const localCandidate: RunnerCandidate = {
+      attempt: 1,
+      contentId: 'movie-1',
+      expectedProjectionVersion: 0,
+      policyReference: 'dashboard/phase25-gateway-proof',
+      policyVersion: 'v1',
+      proofProfile: 'phase25-movie-availability-v1',
+      provider: 'local-proof',
+      runId: 'local-run-1',
+      sequence: 1,
+      snapshot: { entrypoint: 'movie-crawler', permissionResource: 'movie', templateKey: 'movie', templateVersion: 1 },
+      sourceRevision: 0,
+      target: { id: 'movie-1', kind: 'movie' },
+      taskId: 'task-1',
+    }
+    const client = {
+      claim: vi.fn().mockResolvedValue({ accepted: true }),
+      failed: vi.fn(),
+      heartbeat: vi.fn().mockResolvedValue({ accepted: true }),
+      observeAvailability: vi.fn().mockResolvedValue({ accepted: true }),
+      poll: vi.fn().mockResolvedValue(localCandidate),
+      succeeded: vi.fn().mockResolvedValue({ accepted: true }),
+    }
+    const runner = new LocalTaskRunner({
+      adapters: { select: () => createLocalProofAdapter({ now: () => 1_720_000_000_000 }) },
+      client: client as never,
+    })
+
+    await runner.runOnce()
+
+    expect(client.succeeded).toHaveBeenCalledWith(localCandidate, 4, ['movie-1'])
+    expect(client.observeAvailability).toHaveBeenCalledTimes(5)
+    expect(client.observeAvailability).toHaveBeenNthCalledWith(1, localCandidate, 5, expect.objectContaining({
+      observationIdentity: 'local-proof:local-run-1:accepted',
+      reasonCode: 'available',
+      status: 'available',
+    }))
+    expect(client.observeAvailability).toHaveBeenNthCalledWith(2, localCandidate, 5, expect.objectContaining({
+      observationIdentity: 'local-proof:local-run-1:accepted',
+      reasonCode: 'available',
+      status: 'available',
+    }))
+    expect(client.observeAvailability.mock.calls.at(-1)?.[1]).toBe(localCandidate.sequence)
+    expect(client.failed).not.toHaveBeenCalled()
   })
 
   it('uses the pending adapter sequence when a repair observation fails before terminal acknowledgement', async () => {

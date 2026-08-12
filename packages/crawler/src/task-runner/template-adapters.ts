@@ -1,4 +1,4 @@
-import type { RepairRunnerSnapshot, RepairSourceObservationInput, RepairSourceObservationResponse, RunnerCandidate, RunnerFailureCode, RunnerSnapshot } from './runner-client'
+import type { RepairRunnerSnapshot, RepairSourceObservationInput, RepairSourceObservationResponse, RunnerAvailabilityObservationInput, RunnerCandidate, RunnerFailureCode, RunnerSnapshot } from './runner-client'
 
 export interface AdapterExecutionContext {
   readonly checkpoint: () => Promise<boolean>
@@ -11,6 +11,7 @@ export interface AdapterExecutionContext {
 }
 
 export interface AdapterExecutionResult {
+  readonly availabilityObservation?: RunnerAvailabilityObservationInput
   readonly contentIds: readonly string[]
   readonly failureCode?: RunnerFailureCode
   readonly repairReceipt?: import('./runner-client').RepairPlayersReceipt
@@ -18,6 +19,7 @@ export interface AdapterExecutionResult {
 
 export interface TaskRunnerAdapter {
   readonly operation?: 'repair_players'
+  readonly proofProfile?: RunnerCandidate['proofProfile']
   readonly templateKey: RunnerCandidate['snapshot']['templateKey']
   execute: (context: AdapterExecutionContext) => Promise<AdapterExecutionResult>
 }
@@ -40,8 +42,15 @@ function isValidRepairSnapshot(snapshot: RunnerSnapshot): snapshot is RepairRunn
 export function createTemplateAdapterRegistry(adapters: readonly TaskRunnerAdapter[]) {
   const registry = new Map(adapters.filter(adapter => !adapter.operation).map(adapter => [adapter.templateKey, adapter]))
   const repairAdapter = adapters.find(adapter => adapter.operation === 'repair_players')
+  const proofAdapters = new Map(adapters.filter(adapter => adapter.proofProfile).map(adapter => [adapter.proofProfile!, adapter]))
   return Object.freeze({
-    select(snapshot: RunnerSnapshot): TaskRunnerAdapter {
+    select(snapshot: RunnerSnapshot, proofProfile?: RunnerCandidate['proofProfile']): TaskRunnerAdapter {
+      if (proofProfile) {
+        const adapter = proofAdapters.get(proofProfile)
+        if (!adapter || adapter.templateKey !== snapshot.templateKey)
+          throw new Error(`Unsupported runner proof profile: ${proofProfile}`)
+        return adapter
+      }
       if (snapshot.operation === 'repair_players') {
         if (!isValidRepairSnapshot(snapshot))
           throw new Error('Repair runner snapshot contract is invalid')

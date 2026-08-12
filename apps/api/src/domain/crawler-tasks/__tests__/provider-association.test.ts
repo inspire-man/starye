@@ -81,6 +81,26 @@ describe('provider association registry', () => {
     })).toThrow('provider_summary_invalid')
   })
 
+  it('projects local-proof identity while omitting its fixed internal metadata', () => {
+    expect(createProviderAssociationSummary({
+      environment: 'local',
+      provider: 'local-proof',
+      providerConclusion: 'success',
+      providerRunAttempt: 1,
+      providerRunId: 'local-run-25',
+      providerStatus: 'completed',
+      ref: 'local',
+      repository: 'local',
+      workflow: 'local-proof',
+    })).toEqual({
+      provider: 'local-proof',
+      providerConclusion: 'success',
+      providerRunAttempt: 1,
+      providerRunId: 'local-run-25',
+      providerStatus: 'completed',
+    })
+  })
+
   it('derives a server-owned provider URL from the fixed repository metadata', () => {
     expect(createProviderAssociationSummary({
       environment: 'starye-org',

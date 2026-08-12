@@ -21,7 +21,7 @@ export const AVAILABILITY_REASON_VALUES = [
 export type AvailabilityReasonCode = typeof AVAILABILITY_REASON_VALUES[number]
 export const AVAILABILITY_NEXT_ACTION_VALUES = ['none', 'recheck', 'repair', 'retry', 'ignore'] as const
 export type AvailabilityNextAction = typeof AVAILABILITY_NEXT_ACTION_VALUES[number]
-export type AvailabilityProvider = 'github-actions'
+export type AvailabilityProvider = 'github-actions' | 'local-proof'
 
 export interface AvailabilityTarget {
   readonly kind: AvailabilityTargetKind
@@ -115,12 +115,12 @@ function validateTuple(value: unknown): AvailabilityTuple {
   if (!isRecord(value))
     throw new Error('availability_tuple_invalid')
   exactKeys(value, ['attemptNumber', 'contentId', 'provider', 'runId', 'target', 'taskId'], 'availability_tuple_unknown_field')
-  if (value.provider !== 'github-actions')
+  if (value.provider !== 'github-actions' && value.provider !== 'local-proof')
     throw new Error('availability_tuple_invalid')
   return Object.freeze({
     attemptNumber: boundedInteger(value.attemptNumber, 1, 1_000_000, 'availability_tuple_invalid'),
     contentId: boundedString(value.contentId, 128, 'availability_tuple_invalid'),
-    provider: 'github-actions',
+    provider: value.provider,
     runId: boundedString(value.runId, 128, 'availability_tuple_invalid'),
     target: validateTarget(value.target),
     taskId: boundedString(value.taskId, 128, 'availability_tuple_invalid'),
@@ -199,9 +199,6 @@ export function classifyAvailabilityCas(input: AvailabilityCasInput): Availabili
     return { accepted: false, authoritativeReadback: current, code: 'duplicate' }
   }
   if (!sameTuple(observation, expectedTuple)) {
-    return { accepted: false, authoritativeReadback: current, code: 'conflict' }
-  }
-  if (current && !sameTuple(current, expectedTuple)) {
     return { accepted: false, authoritativeReadback: current, code: 'conflict' }
   }
   if (observation.freshness === 'late' || (current && observation.observedAt < current.observedAt)) {

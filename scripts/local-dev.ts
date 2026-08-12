@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import type { MaterializedTargetDeployConfig, TargetPagesSurface } from '../packages/config/src/deployment-target/index.ts'
 import { spawn } from 'node:child_process'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createConnection } from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
@@ -42,12 +43,21 @@ export interface LocalDevServiceRecord {
 
 interface LocalDevServiceSpec {
   readonly label: string
-  readonly port: number
+  readonly port?: number
   readonly args: readonly string[]
   readonly environment?: NodeJS.ProcessEnv
 }
 
-interface StartedProcess extends LocalDevServiceRecord {
+interface LocalDevRunnerSpec {
+  readonly args: readonly string[]
+  readonly environment: NodeJS.ProcessEnv
+  readonly label: 'local-task-runner'
+}
+
+interface StartedProcess {
+  readonly label: string
+  readonly pid: number | undefined
+  readonly port?: number
   readonly process: ChildProcess
 }
 
@@ -55,19 +65,28 @@ interface MaterializedLocalInputs {
   readonly apiConfigPath: string
   readonly gatewayConfigPath: string
   readonly pageEnvironment: (surface: TargetPagesSurface) => NodeJS.ProcessEnv
+  readonly runnerConfigPath?: string
   readonly cleanup: () => Promise<void>
+}
+
+export interface LocalDevManagedProcessRecord {
+  readonly label: string
+  readonly pid: number | undefined
 }
 
 export interface LocalDevSupervisorResult {
   readonly status: 'ready' | 'failed'
   readonly exitCode: 0 | 1
+  readonly managed: readonly LocalDevManagedProcessRecord[]
   readonly services: readonly LocalDevServiceRecord[]
   readonly stop: (exitCode: 0 | 1) => Promise<void>
+  readonly waitForStop: () => Promise<void>
 }
 
 export interface LocalDevSupervisorDependencies {
   readonly materializeInputs?: () => Promise<MaterializedLocalInputs>
   readonly startService?: (service: LocalDevServiceSpec) => ChildProcess
+  readonly startRunner?: (runner: LocalDevRunnerSpec) => ChildProcess
   readonly isPortListening?: (port: number) => Promise<boolean>
   readonly sleep?: (milliseconds: number) => Promise<void>
   readonly readinessAttempts?: number
@@ -83,6 +102,20 @@ function startPnpm(service: LocalDevServiceSpec): ChildProcess {
     env: service.environment ?? process.env,
     shell: false,
     stdio: 'inherit',
+  })
+}
+
+async function terminateProcessTree(child: ChildProcess): Promise<void> {
+  if (child.pid === undefined)
+    return
+  if (process.platform !== 'win32') {
+    child.kill()
+    return
+  }
+  await new Promise<void>((resolve) => {
+    const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+    killer.once('error', () => resolve())
+    killer.once('close', () => resolve())
   })
 }
 
@@ -126,9 +159,27 @@ async function materializeLocalInputs(): Promise<MaterializedLocalInputs> {
     throw new Error('Local dashboard runtime input is unavailable.')
   }
 
+  const apiVars = await readLocalEnvValues(path.join(root, 'apps', 'api', '.dev.vars'))
+  const callbackKeyId = process.env.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT?.trim() ?? apiVars.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT
+  const callbackSecret = process.env.TASK_RUNNER_CALLBACK_SECRET_CURRENT?.trim() ?? apiVars.TASK_RUNNER_CALLBACK_SECRET_CURRENT
+  let runnerConfigPath: string | undefined
+  if (callbackKeyId && callbackSecret) {
+    const runDirectory = path.resolve(root, '.target-runs')
+    runnerConfigPath = path.join(runDirectory, `local-task-runner.${process.pid}.json`)
+    await mkdir(runDirectory, { recursive: true })
+    await writeFile(runnerConfigPath, JSON.stringify({
+      apiBaseUrl: LOCAL_GATEWAY_ORIGIN,
+      callbackKeyId,
+      callbackSecret,
+      crawler: { manga: {}, movie: {} },
+      providerMode: 'local-proof',
+    }), { encoding: 'utf8', flag: 'w' })
+  }
+
   return {
     apiConfigPath: apiAndGateway.apiConfigPath,
     gatewayConfigPath: apiAndGateway.gatewayConfigPath,
+    ...(runnerConfigPath ? { runnerConfigPath } : {}),
     pageEnvironment: (surface) => {
       const buildEnvPath = materialized.get(surface)?.pages?.buildEnvPath
       if (!buildEnvPath) {
@@ -137,6 +188,8 @@ async function materializeLocalInputs(): Promise<MaterializedLocalInputs> {
       return { ...process.env, STARYE_PAGES_BUILD_ENV_PATH: buildEnvPath }
     },
     cleanup: async () => {
+      if (runnerConfigPath)
+        await rm(runnerConfigPath, { force: true })
       await Promise.all([...materialized.values()].map(entry => entry.cleanup()))
     },
   }
@@ -158,6 +211,8 @@ function localDevServiceSpecs(inputs: MaterializedLocalInputs): readonly LocalDe
         '--config',
         inputs.apiConfigPath,
         ...localApiOrigins.flatMap(([key, origin]) => ['--var', `${key}:${origin}`]),
+        '--var',
+        'CRAWLER_LOCAL_PROOF_ENABLED:true',
       ],
     },
     {
@@ -207,6 +262,41 @@ function localDevServiceSpecs(inputs: MaterializedLocalInputs): readonly LocalDe
   ]
 }
 
+async function readLocalEnvValues(pathname: string): Promise<Record<string, string>> {
+  try {
+    const values: Record<string, string> = {}
+    for (const line of await readFile(pathname, 'utf8').then(value => value.split(/\r?\n/u))) {
+      const separator = line.indexOf('=')
+      if (separator <= 0)
+        continue
+      const key = line.slice(0, separator).trim()
+      let value = line.slice(separator + 1).trim()
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\'')))
+        value = value.slice(1, -1)
+      if (/^[A-Z_][A-Z0-9_]*$/u.test(key) && value)
+        values[key] = value
+    }
+    return values
+  }
+  catch {
+    return {}
+  }
+}
+
+function localTaskRunnerSpec(inputs: MaterializedLocalInputs): LocalDevRunnerSpec | undefined {
+  if (!inputs.runnerConfigPath)
+    return undefined
+  return {
+    args: ['--filter', '@starye/crawler', 'exec', 'tsx', '../../scripts/local-task-runner.ts'],
+    environment: {
+      ...process.env,
+      CRAWLER_LOCAL_PROOF_ENABLED: 'true',
+      TASK_RUNNER_LOCAL_CONFIG: inputs.runnerConfigPath,
+    },
+    label: 'local-task-runner',
+  }
+}
+
 function defaultIsPortListening(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = createConnection({ host: '127.0.0.1', port })
@@ -237,6 +327,7 @@ function registerProcessSignalHandlers(stop: (exitCode: 0 | 1) => Promise<void>)
 export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDependencies = {}): Promise<LocalDevSupervisorResult> {
   const materializeInputs = dependencies.materializeInputs ?? materializeLocalInputs
   const startService = dependencies.startService ?? startPnpm
+  const startRunner = dependencies.startRunner ?? (spec => startPnpm({ ...spec }))
   const isPortListening = dependencies.isPortListening ?? defaultIsPortListening
   const sleep = dependencies.sleep ?? defaultSleep
   const attempts = dependencies.readinessAttempts ?? readinessAttempts
@@ -249,8 +340,15 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
   let ready = false
   let stopping = false
   let stopped: Promise<void> | undefined
+  let resolveStopped: (() => void) | undefined
+  const stoppedSignal = new Promise<void>((resolve) => {
+    resolveStopped = resolve
+  })
 
-  const serviceRecords = (): readonly LocalDevServiceRecord[] => started.map(({ label, port, pid }) => ({ label, port, pid }))
+  const serviceRecords = (): readonly LocalDevServiceRecord[] => started
+    .filter((child): child is StartedProcess & { readonly port: number } => child.port !== undefined)
+    .map(({ label, port, pid }) => ({ label, port, pid }))
+  const managedRecords = (): readonly LocalDevManagedProcessRecord[] => started.map(({ label, pid }) => ({ label, pid }))
   const stop = async (exitCode: 0 | 1): Promise<void> => {
     if (stopped) {
       return stopped
@@ -259,7 +357,7 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
     stopped = (async () => {
       for (const child of started) {
         try {
-          child.process.kill()
+          await terminateProcessTree(child.process)
         }
         catch {
           // The child may have already exited; no process outside this invocation is targeted.
@@ -268,15 +366,18 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
       if (materialized) {
         await materialized.cleanup()
       }
+      resolveStopped?.()
       setExitCode(exitCode)
     })()
     return stopped
   }
   const failed = (): LocalDevSupervisorResult => ({
+    managed: managedRecords(),
     status: 'failed',
     exitCode: 1,
     services: serviceRecords(),
     stop,
+    waitForStop: () => stoppedSignal,
   })
   const watchChild = (child: StartedProcess): void => {
     const stopAfterReadiness = (): void => {
@@ -290,7 +391,7 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
       if (stopping || !ready) {
         return
       }
-      if (code === 0 && signal === null) {
+      if (child.port !== undefined && code === 0 && signal === null) {
         try {
           if (await isPortListening(child.port)) {
             return
@@ -341,18 +442,35 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
   }
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const readiness = await Promise.all(started.map(child => isPortListening(child.port)))
+    const portChildren = started.filter((child): child is StartedProcess & { readonly port: number } => child.port !== undefined)
+    const readiness = await Promise.all(portChildren.map(child => isPortListening(child.port)))
     if (stopping) {
       await stopped
       return failed()
     }
     if (readiness.every(Boolean)) {
       ready = true
+      const runner = localTaskRunnerSpec(materialized)
+      if (runner) {
+        try {
+          const child = startRunner(runner)
+          const startedChild = { label: runner.label, pid: child.pid, process: child }
+          started.push(startedChild)
+          watchChild(startedChild)
+        }
+        catch (error) {
+          await stop(1)
+          console.error(error instanceof Error ? error.message : String(error))
+          return failed()
+        }
+      }
       return {
+        managed: managedRecords(),
         status: 'ready',
         exitCode: 0,
         services: serviceRecords(),
         stop,
+        waitForStop: () => stoppedSignal,
       }
     }
     if (attempt < attempts - 1) {
@@ -372,6 +490,7 @@ async function main(): Promise<void> {
   const result = await runLocalDevSupervisor()
   if (result.status === 'ready') {
     console.log('Local services starting through Gateway at http://localhost:8080')
+    await result.waitForStop()
   }
 }
 

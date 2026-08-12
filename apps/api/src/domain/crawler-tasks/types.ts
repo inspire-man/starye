@@ -14,7 +14,7 @@ export type RepairPlayersReason = 'no_source' | 'source_failed'
 export type RepairPlayersTargetIntent = 'restore_playable_sources'
 export const CRAWLER_RECEIPT_SCHEMA_VERSION = 2 as const
 export type CrawlerPermissionResource = Extract<Resource, 'comic' | 'movie'>
-export type ProviderName = 'github-actions'
+export type ProviderName = 'github-actions' | 'local-proof'
 export type ProviderRunStatus = 'completed' | 'in_progress' | 'pending' | 'queued' | 'requested' | 'waiting'
 export type ProviderRunConclusion
   = | 'action_required'
@@ -140,13 +140,14 @@ export interface CrawlerTaskTemplate {
 /** Immutable, server-owned identity for a GitHub Actions crawler execution. */
 export interface ProviderSnapshot {
   readonly crawlerEntrypoint: 'crawler-comic' | 'crawler-optimized'
-  readonly environment: 'starye-org'
+  readonly environment: 'local' | 'starye-org'
   readonly provider: ProviderName
-  readonly ref: 'main'
-  readonly repository: 'inspire-man/starye'
-  readonly target: 'starye-org'
+  readonly proofProfile?: 'phase25-movie-availability-v1'
+  readonly ref: 'local' | 'main'
+  readonly repository: 'inspire-man/starye' | 'local'
+  readonly target: 'local-proof' | 'starye-org'
   readonly templateKey: CrawlerTaskTemplateKey
-  readonly workflow: '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml'
+  readonly workflow: '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml' | 'local-proof'
 }
 
 /** The only server-to-workflow dispatch envelope; caller-controlled provider fields are excluded. */
@@ -159,17 +160,17 @@ export interface ProviderDispatchInput {
 
 /** Redacted provider state that is safe to expose in task/run read models and audit facts. */
 export interface ProviderAssociationSummary {
-  readonly environment?: 'starye-org'
+  readonly environment?: 'local' | 'starye-org'
   readonly providerRunUrl?: string
   readonly provider: ProviderName
   readonly providerConclusion?: ProviderRunConclusion
   readonly providerRunAttempt?: number
   readonly providerRunId?: string
   readonly providerStatus?: ProviderRunStatus
-  readonly ref?: 'main'
-  readonly repository?: 'inspire-man/starye'
+  readonly ref?: 'local' | 'main'
+  readonly repository?: 'inspire-man/starye' | 'local'
   readonly sha?: string
-  readonly workflow?: '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml'
+  readonly workflow?: '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml' | 'local-proof'
 }
 
 export interface CrawlerTaskCursor {

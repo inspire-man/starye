@@ -1,4 +1,5 @@
-import type { CrawlerTaskTemplateKey } from '../../../domain/crawler-tasks/types'
+import type { AvailabilityCurrentProjection, AvailabilityObservation } from '../../../domain/crawler-tasks/availability-contract'
+import type { CrawlerTaskTemplateKey, ProviderName } from '../../../domain/crawler-tasks/types'
 import type { SourceReadinessProjection } from '../../../domain/movies/source-contract'
 import type { GitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import type { AppEnv, SessionUser } from '../../../types'
@@ -6,7 +7,8 @@ import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { HTTPException } from 'hono/http-exception'
 import * as v from 'valibot'
-import { createProviderAssociationSummary, createProviderDispatchInput, createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
+import { validateAvailabilityObservation } from '../../../domain/crawler-tasks/availability-contract'
+import { createProviderAssociationSummary, createProviderDispatchInput, createProviderSnapshot, LOCAL_PROOF_POLICY_REFERENCE, LOCAL_PROOF_POLICY_VERSION } from '../../../domain/crawler-tasks/provider-association'
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTaskCursor } from '../../../domain/crawler-tasks/repository'
 import { getCrawlerTaskTemplate, readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
@@ -57,6 +59,25 @@ function createProviderClient(env: AppEnv['Bindings']): GitHubActionsClient | un
   })
 }
 
+function localProofRuntimeReady(env: AppEnv['Bindings']): boolean {
+  return env?.CRAWLER_LOCAL_PROOF_ENABLED === 'true'
+    && Boolean(env.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT?.trim())
+    && Boolean(env.TASK_RUNNER_CALLBACK_SECRET_CURRENT?.trim())
+}
+
+function isLocalProofOperation(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return false
+  const command = value as Record<string, unknown>
+  const target = command.target
+  const intent = command.intent
+  return command.operation === 'movie'
+    && command.policyReference === LOCAL_PROOF_POLICY_REFERENCE
+    && command.policyVersion === LOCAL_PROOF_POLICY_VERSION
+    && Boolean(target && typeof target === 'object' && !Array.isArray(target) && (target as Record<string, unknown>).kind === 'movie')
+    && Boolean(intent && typeof intent === 'object' && !Array.isArray(intent) && (intent as Record<string, unknown>).kind === 'crawl')
+}
+
 function projectProviderResult(result: unknown): Record<string, unknown> {
   if (!result || typeof result !== 'object' || Array.isArray(result))
     return { kind: 'provider_unavailable' }
@@ -74,7 +95,31 @@ async function dispatchCreatedRun(
   c: any,
   repository: CrawlerRepository,
   input: { readonly runId: string, readonly attempt: number, readonly template: CrawlerTaskTemplateKey },
+  options: { readonly localProofRequested?: boolean, readonly provider?: ProviderName } = {},
 ): Promise<Record<string, unknown>> {
+  const wantsLocalProof = options.provider === 'local-proof' || options.localProofRequested === true
+  if (wantsLocalProof) {
+    if (!localProofRuntimeReady(c.env as AppEnv['Bindings'])) {
+      return { kind: 'provider_not_configured' }
+    }
+    const association = await repository.ensureProviderAssociation?.({
+      attempt: input.attempt,
+      provider: 'local-proof',
+      runId: input.runId,
+      template: input.template,
+    })
+    if (!association || association.provider !== 'local-proof')
+      return { kind: 'provider_not_configured' }
+    return {
+      association: {
+        applicationAttempt: association.applicationAttempt,
+        provider: 'local-proof',
+        providerRunId: association.providerRunId,
+        runId: association.runId,
+      },
+      provider: { accepted: true, kind: 'local-proof_queued' },
+    }
+  }
   const provider = createProviderClient(c.env as AppEnv['Bindings'])
   if (!provider)
     return { kind: 'provider_not_configured' }
@@ -169,6 +214,56 @@ interface RepairRunnerEventRow {
   received_at: number
   run_id: string
 }
+
+interface AvailabilityObservationRow {
+  attempt_number: number
+  content_id: string
+  event_sequence: number
+  freshness: string
+  next_action: string
+  observation_identity: string
+  observed_at: number
+  policy_version: string
+  provider: string
+  reason_code: string
+  run_id: string
+  source_revision: number
+  status: string
+  summary_json: string
+  target_id: string
+  target_kind: string
+  task_id: string
+}
+
+interface AvailabilityCurrentRow extends AvailabilityObservationRow {
+  projection_version: number
+}
+
+interface AvailabilityRunnerEventRow {
+  outcome: string
+  received_at: number
+  run_id: string
+  sequence: number
+}
+
+type AvailabilityHistoryKind = 'accepted' | 'conflict' | 'duplicate' | 'late' | 'rejected' | 'stale'
+
+interface AvailabilityHistoryEntry {
+  kind: AvailabilityHistoryKind
+  observation: AvailabilityObservation | null
+  reason?: string
+}
+
+const availabilityHistoryKinds = new Set<AvailabilityHistoryKind>([
+  'accepted',
+  'conflict',
+  'duplicate',
+  'late',
+  'rejected',
+  'stale',
+])
+const MAX_AVAILABILITY_HISTORY = 50
+const MAX_AVAILABILITY_JSON_BYTES = 32_768
 
 interface RepairSourceStateRow {
   disposition: 'ready' | 'no_source' | 'repairing' | 'source_failed'
@@ -367,6 +462,177 @@ function projectTaskDetail(detail: { lifecycle?: unknown, task: unknown, runs: r
     ...(detail.lifecycle ? { lifecycle: detail.lifecycle } : {}),
     runs: detail.runs.map(run => projectRun(run as Record<string, unknown>)),
     task: detail.task,
+  }
+}
+
+function availabilityObservationValue(value: unknown): AvailabilityObservation | null {
+  try {
+    return validateAvailabilityObservation(value)
+  }
+  catch {
+    return null
+  }
+}
+
+function projectAvailabilityObservationRow(row: AvailabilityObservationRow): AvailabilityObservation | null {
+  if (typeof row.summary_json !== 'string' || row.summary_json.length > MAX_AVAILABILITY_JSON_BYTES)
+    return null
+  try {
+    return availabilityObservationValue({
+      attemptNumber: row.attempt_number,
+      contentId: row.content_id,
+      eventSequence: row.event_sequence,
+      freshness: row.freshness,
+      nextAction: row.next_action,
+      observationIdentity: row.observation_identity,
+      observedAt: row.observed_at,
+      policyVersion: row.policy_version,
+      provider: row.provider,
+      reasonCode: row.reason_code,
+      runId: row.run_id,
+      sourceRevision: row.source_revision,
+      status: row.status,
+      summary: JSON.parse(row.summary_json),
+      target: { id: row.target_id, kind: row.target_kind },
+      taskId: row.task_id,
+    })
+  }
+  catch {
+    return null
+  }
+}
+
+function projectAvailabilityCurrentRow(row: AvailabilityCurrentRow): AvailabilityCurrentProjection | null {
+  const observation = projectAvailabilityObservationRow(row)
+  const projectionVersion = boundedNonNegativeInteger(row.projection_version, 1_000_000_000)
+  return observation && projectionVersion !== undefined
+    ? { ...observation, projectionVersion }
+    : null
+}
+
+function projectAvailabilityEvent(row: AvailabilityRunnerEventRow): { entry: AvailabilityHistoryEntry, key: string, order: number } | null {
+  if (typeof row.outcome !== 'string' || row.outcome.length > MAX_AVAILABILITY_JSON_BYTES)
+    return null
+  try {
+    const parsed: unknown = JSON.parse(row.outcome)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      return null
+    const value = parsed as Record<string, unknown>
+    if (typeof value.kind !== 'string' || !availabilityHistoryKinds.has(value.kind as AvailabilityHistoryKind))
+      return null
+    const observation = value.observation === null || value.observation === undefined
+      ? null
+      : availabilityObservationValue(value.observation)
+    const reason = typeof value.reason === 'string' && value.reason.length <= 256 ? value.reason : undefined
+    return {
+      entry: {
+        kind: value.kind as AvailabilityHistoryKind,
+        observation,
+        ...(reason ? { reason } : {}),
+      },
+      key: `${row.run_id}:${row.sequence}`,
+      order: row.received_at,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function availabilityFallbackKind(
+  observation: AvailabilityObservation,
+  current: AvailabilityCurrentProjection | null,
+): AvailabilityHistoryKind {
+  if (observation.freshness === 'late')
+    return 'late'
+  if (current && observation.sourceRevision < current.sourceRevision)
+    return 'stale'
+  if (current && observation.observedAt < current.observedAt)
+    return 'late'
+  return 'accepted'
+}
+
+async function readTaskAvailability(c: any, taskId: string): Promise<{ current: AvailabilityCurrentProjection | null, history: AvailabilityHistoryEntry[] }> {
+  const d1 = getD1(c)
+  const [currentResult, observationsResult, eventsResult] = await Promise.all([
+    d1.prepare(`
+      SELECT task_id, run_id, attempt_number, provider, target_kind, target_id,
+        content_id, source_revision, policy_version, observation_identity,
+        event_sequence, projection_version, freshness, status, reason_code,
+        next_action, summary_json, observed_at
+      FROM crawler_availability_current
+      WHERE task_id = ?
+      ORDER BY observed_at DESC, projection_version DESC
+      LIMIT 1
+    `).bind(taskId).all<AvailabilityCurrentRow>().catch(() => ({ results: [] as AvailabilityCurrentRow[] })),
+    d1.prepare(`
+      SELECT task_id, run_id, attempt_number, provider, target_kind, target_id,
+        content_id, source_revision, policy_version, observation_identity,
+        event_sequence, freshness, status, reason_code, next_action,
+        summary_json, observed_at
+      FROM crawler_availability_observation
+      WHERE task_id = ?
+      ORDER BY observed_at DESC, event_sequence DESC
+      LIMIT ?
+    `).bind(taskId, MAX_AVAILABILITY_HISTORY).all<AvailabilityObservationRow>().catch(() => ({ results: [] as AvailabilityObservationRow[] })),
+    d1.prepare(`
+      SELECT event.run_id, event.sequence, event.outcome, event.received_at
+      FROM crawler_runner_event AS event
+      INNER JOIN crawler_run AS run ON run.id = event.run_id
+      WHERE run.task_id = ?
+      ORDER BY event.received_at DESC, event.sequence DESC
+      LIMIT ?
+    `).bind(taskId, MAX_AVAILABILITY_HISTORY).all<AvailabilityRunnerEventRow>().catch(() => ({ results: [] as AvailabilityRunnerEventRow[] })),
+  ])
+
+  const current = (currentResult.results ?? [])
+    .map(projectAvailabilityCurrentRow)
+    .find((row): row is AvailabilityCurrentProjection => row !== null) ?? null
+  const observations = (observationsResult.results ?? [])
+    .map(row => ({ key: `${row.run_id}:${row.event_sequence}`, observation: projectAvailabilityObservationRow(row) }))
+    .filter((row): row is { key: string, observation: AvailabilityObservation } => row.observation !== null)
+  const observationByEvent = new Map(observations.map(row => [row.key, row.observation]))
+  const history: Array<{ entry: AvailabilityHistoryEntry, order: number, sequence: number, key: string }> = []
+  const seenEventKeys = new Set<string>()
+
+  for (const row of eventsResult.results ?? []) {
+    const projected = projectAvailabilityEvent(row)
+    if (!projected)
+      continue
+    const observation = projected.entry.observation ?? observationByEvent.get(projected.key) ?? null
+    if (projected.entry.kind === 'accepted' && observation?.observationIdentity === current?.observationIdentity) {
+      seenEventKeys.add(projected.key)
+      continue
+    }
+    history.push({
+      entry: { ...projected.entry, ...(observation ? { observation } : {}) },
+      key: projected.key,
+      order: projected.order,
+      sequence: Number(row.sequence) || 0,
+    })
+    seenEventKeys.add(projected.key)
+  }
+
+  for (const row of observations) {
+    if (seenEventKeys.has(row.key) || row.observation.observationIdentity === current?.observationIdentity)
+      continue
+    history.push({
+      entry: {
+        kind: availabilityFallbackKind(row.observation, current),
+        observation: row.observation,
+      },
+      key: row.key,
+      order: row.observation.observedAt,
+      sequence: row.observation.eventSequence,
+    })
+  }
+
+  return {
+    current,
+    history: history
+      .sort((left, right) => right.order - left.order || right.sequence - left.sequence || right.key.localeCompare(left.key))
+      .slice(0, MAX_AVAILABILITY_HISTORY)
+      .map(item => item.entry),
   }
 }
 
@@ -575,6 +841,7 @@ function projectProviderAssociation(row: RepairRunRow) {
   try {
     return createProviderAssociationSummary({
       environment: row.provider_environment ?? undefined,
+      provider: row.provider ?? undefined,
       providerConclusion: row.provider_conclusion ?? undefined,
       providerRunAttempt: row.provider_run_attempt ?? undefined,
       providerRunId: row.provider_run_id ?? undefined,
@@ -870,10 +1137,15 @@ async function readRepairTaskResponse(
       LIMIT 1
     `).bind(input.taskId).all<RepairTaskRow>(),
     d1.prepare(`
-      SELECT id, task_id, attempt_number, status, failure_code, cancel_requested_at,
-        last_heartbeat_at, lease_expires_at, state_version,
-        receipt_summary_json, receipt_primary_content_id, receipt_schema_version, receipt_source_revision,
-        created_at, updated_at, terminal_at,
+      SELECT run.id AS id, run.task_id AS task_id, run.attempt_number AS attempt_number,
+        run.status AS status, run.failure_code AS failure_code, run.cancel_requested_at AS cancel_requested_at,
+        run.last_heartbeat_at AS last_heartbeat_at, run.lease_expires_at AS lease_expires_at,
+        run.state_version AS state_version,
+        run.receipt_summary_json AS receipt_summary_json,
+        run.receipt_primary_content_id AS receipt_primary_content_id,
+        run.receipt_schema_version AS receipt_schema_version,
+        run.receipt_source_revision AS receipt_source_revision,
+        run.created_at AS created_at, run.updated_at AS updated_at, run.terminal_at AS terminal_at,
         provider.provider AS provider,
         provider.provider_conclusion AS provider_conclusion,
         provider.provider_run_attempt AS provider_run_attempt,
@@ -891,9 +1163,9 @@ async function readRepairTaskResponse(
       FROM crawler_run AS run
       LEFT JOIN crawler_run_provider_association AS provider ON provider.run_id = run.id
       LEFT JOIN crawler_template_lease AS lease ON lease.run_id = run.id
-      WHERE task_id = ?
-      ORDER BY CASE WHEN id = (SELECT latest_run_id FROM crawler_task WHERE id = ?) THEN 0 ELSE 1 END,
-        attempt_number DESC, id DESC
+      WHERE run.task_id = ?
+      ORDER BY CASE WHEN run.id = (SELECT latest_run_id FROM crawler_task WHERE id = ?) THEN 0 ELSE 1 END,
+        run.attempt_number DESC, run.id DESC
       LIMIT 50
     `).bind(input.taskId, input.taskId).all<RepairRunRow>(),
   ])
@@ -1025,9 +1297,13 @@ async function withPlaybackEvidence(
   detail: Record<string, unknown>,
   currentRunId: string | null,
 ): Promise<Record<string, unknown>> {
-  const evidence = await createPlaybackEvidenceRepository(c.get('db')).getTaskEvidence(taskId)
+  const [evidence, availability] = await Promise.all([
+    createPlaybackEvidenceRepository(c.get('db')).getTaskEvidence(taskId),
+    readTaskAvailability(c, taskId),
+  ])
   return {
     ...detail,
+    availability,
     playbackEvidence: projectPlaybackEvidence(evidence, currentRunId),
   }
 }
@@ -1135,7 +1411,9 @@ adminCrawlerTasksRoutes.post('/', validator('json', CreateCrawlerTaskSchema), as
   if (result.kind === 'conflict')
     return c.json({ kind: result.kind, run: result.run, taskId: result.taskId }, 409)
   const dispatch = result.kind === 'created'
-    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template })
+    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template }, {
+        localProofRequested: isLocalProofOperation(operationCommand),
+      })
     : { kind: 'existing_active_run' }
   await createAuditLog(c, {
     action: result.kind === 'created' ? 'CREATE' : 'UPDATE',
@@ -1197,6 +1475,20 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
   let result: Awaited<ReturnType<CrawlerRepository['createOrGetActiveRun']>>
   try {
     result = await repository.createOrGetActiveRun({
+      operationCommand: {
+        actor: { id: user.id, kind: 'admin' },
+        idempotencyKey: command.idempotencyKey ?? `repair:${currentMovie.id}:${currentMovie.source_revision ?? 0}`,
+        intent: {
+          kind: 'repair_players',
+          reason: command.reason,
+          sourceRevision: currentMovie.source_revision ?? 0,
+          targetIntent: 'restore_playable_sources',
+        },
+        operation: 'repair_players',
+        policyReference: 'movies/repair_players',
+        policyVersion: 'v1',
+        target: { id: currentMovie.id, kind: 'movie' },
+      },
       movieId: currentMovie.id,
       operation: 'repair_players',
       reason: command.reason,
@@ -1213,9 +1505,25 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
     throw error
   }
 
+  if (result.kind === 'conflict') {
+    throw new HTTPException(409, { message: `Repair operation conflicts with task ${result.taskId}` })
+  }
+
   const detail = await readRepairTaskResponse(c, {
     movie: { code: currentMovie.code, id: currentMovie.id, title: currentMovie.title },
     taskId: result.run.taskId,
+  })
+  await createAuditLog(c, {
+    action: result.kind === 'created' ? 'CREATE' : 'UPDATE',
+    resourceType: 'crawler_task',
+    resourceId: result.run.taskId,
+    changes: {
+      attemptNumber: result.run.attemptNumber,
+      outcome: result.kind === 'created' ? 'created' : 'duplicate',
+      reason: 'repair_players',
+      runId: result.run.id,
+      target: { id: currentMovie.id, kind: 'movie' },
+    },
   })
   return c.json({
     currentAttempt: detail.currentAttempt,
@@ -1339,7 +1647,9 @@ adminCrawlerTasksRoutes.post('/:taskId/supersede', validator('param', CrawlerTas
   if (result.kind === 'rejected')
     throw new HTTPException(409, { message: result.reasonCode ?? 'Crawler task supersede rejected' })
   const dispatch = result.task?.kind === 'created'
-    ? await dispatchCreatedRun(c, repository, { attempt: result.task.run.attemptNumber, runId: result.task.run.id, template })
+    ? await dispatchCreatedRun(c, repository, { attempt: result.task.run.attemptNumber, runId: result.task.run.id, template }, {
+        localProofRequested: isLocalProofOperation(command),
+      })
     : { kind: 'existing_active_run' }
   await createAuditLog(c, {
     action: 'UPDATE',
@@ -1477,7 +1787,10 @@ adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/cancel', validator('param', C
   if (result.kind === 'transition' && result.nextStatus === 'cancel_requested') {
     const association = await repository.getProviderAssociation?.(runId)
     const client = createProviderClient(c.env as AppEnv['Bindings'])
-    if (association?.providerRunId && client) {
+    if (association?.provider === 'local-proof') {
+      provider = { accepted: true, kind: 'local-proof_cancel_requested' }
+    }
+    else if (association?.providerRunId && client) {
       provider = projectProviderResult(await client.cancelWorkflowRun({
         providerRunId: association.providerRunId,
         snapshot: createProviderSnapshot(association.template),
@@ -1529,9 +1842,12 @@ adminCrawlerTasksRoutes.post('/:taskId/runs/:runId/retry', validator('param', Cr
     }
   }
   const repository = createCrawlerTaskRepository(c.get('db'))
+  const previousProvider = await repository.getProviderAssociation?.(runId)
   const result = await repository.retryRun(runId)
   const dispatch = result.kind === 'created'
-    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template: result.snapshot.templateKey })
+    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template: result.snapshot.templateKey }, {
+        provider: previousProvider?.provider,
+      })
     : { kind: 'existing_active_run' }
   await createAuditLog(c, {
     action: 'UPDATE',

@@ -3,9 +3,9 @@
  * 爬虫监控页面
  */
 
-import type { CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskDetail, CrawlerTaskLog, CrawlerTaskTemplate, ReadinessProjection } from '@/lib/api'
+import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, ReadinessProjection } from '@/lib/api'
 import { ConfirmDialog, info, SkeletonCard, success } from '@starye/ui'
-import { AlertTriangle, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, History, LoaderCircle, RefreshCw, Wrench } from 'lucide-vue-next'
+import { AlertTriangle, Archive, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, GitBranch, History, LoaderCircle, Pencil, RefreshCw, Save, Wrench } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { useResourceGuard } from '@/composables/useResourceGuard'
@@ -34,11 +34,20 @@ const taskError = ref('')
 const taskAction = ref<CrawlerTaskTemplate | null>(null)
 const cancelConfirmOpen = ref(false)
 const retryConfirmOpen = ref(false)
+const archiveConfirmOpen = ref(false)
+const supersedeConfirmOpen = ref(false)
 const pendingAction = ref<{ task: CrawlerTask, run: CrawlerRun } | null>(null)
+const pendingTaskMutation = ref<CrawlerTask | null>(null)
+const taskMutation = ref<'archive' | 'metadata' | 'supersede' | null>(null)
+const metadataEditOpen = ref(false)
+const metadataDescription = ref('')
+const metadataIntent = ref('')
 const repairConfirmOpen = ref(false)
 const pendingRepair = ref<{ movieId: string, movieTitle: string, reason: CrawlerRepairReason } | null>(null)
 const repairAction = ref(false)
 const expandedHistory = ref<Record<string, boolean>>({})
+const taskAudits = ref<Record<string, CrawlerTaskAudit[]>>({})
+const taskAuditCursors = ref<Record<string, string | null>>({})
 let taskRefreshInterval: ReturnType<typeof setInterval> | null = null
 
 const taskStatusLabels: Record<CrawlerRun['status'], string> = {
@@ -84,6 +93,36 @@ const repairNextActionLabels: Record<CrawlerRepairNextAction, string> = {
   none: '暂无下一步',
   wait_for_observation: '等待来源观察与读回',
   create_new_task: '允许创建新的修复任务',
+}
+
+const lifecycleLabels: Record<CrawlerTaskLifecycleProjection['status'], string> = {
+  active: 'active · 可运维',
+  archived: 'archived · 已归档',
+  superseded: 'superseded · 已被新任务替代',
+}
+
+const availabilityStatusLabels: Record<CrawlerAvailabilityStatus, string> = {
+  available: 'available · 可用',
+  degraded: 'degraded · 降级',
+  unavailable: 'unavailable · 不可用',
+  unknown: 'unknown · 未确定',
+}
+
+const availabilityNextActionLabels: Record<CrawlerAvailabilityNextAction, string> = {
+  ignore: 'ignore · 忽略',
+  none: 'none · 无下一步',
+  recheck: 'recheck · 重新检查',
+  repair: 'repair · 修复',
+  retry: 'retry · 重试',
+}
+
+const availabilityOutcomeLabels: Record<CrawlerAvailabilityOutcome, string> = {
+  accepted: 'accepted · 已接受',
+  conflict: 'conflict · 冲突',
+  duplicate: 'duplicate · 重放',
+  late: 'late · 迟到',
+  rejected: 'rejected · 已拒绝',
+  stale: 'stale · 过期',
 }
 
 const playbackEventLabels: Record<CrawlerPlaybackEventName, string> = {
@@ -180,6 +219,26 @@ function taskLatestRunId(task: CrawlerTask): string | null {
 
 function taskRuns(task: CrawlerTask): CrawlerRun[] {
   return taskDetails.value[task.id]?.runs ?? []
+}
+
+function taskLifecycleFor(task: CrawlerTask): CrawlerTaskLifecycleProjection {
+  return taskDetails.value[task.id]?.lifecycle ?? task.lifecycle ?? { changedAt: 0, status: 'active', version: 0 }
+}
+
+function taskAvailabilityFor(task: CrawlerTask) {
+  return taskDetails.value[task.id]?.availability ?? null
+}
+
+function availabilityCurrentFor(task: CrawlerTask): CrawlerAvailabilityProjection | null {
+  return taskAvailabilityFor(task)?.current ?? null
+}
+
+function availabilityHistoryFor(task: CrawlerTask): CrawlerAvailabilityHistoryEntry[] {
+  return taskAvailabilityFor(task)?.history ?? []
+}
+
+function availabilityReasonLabel(reasonCode: CrawlerAvailabilityReasonCode): string {
+  return reasonCode
 }
 
 function latestRunFor(task: CrawlerTask): CrawlerRun | null {
@@ -362,12 +421,24 @@ function toggleHistory(taskId: string): void {
 function selectRun(task: CrawlerTask, run: CrawlerRun | null): void {
   selectedTask.value = task
   selectedRun.value = run ? { task, run } : null
+  void loadTaskAudit(task.id)
   if (run) {
     void loadTaskLogs(task, run)
   }
   else {
     taskLogs.value = []
     taskLogCursor.value = null
+  }
+}
+
+async function loadTaskAudit(taskId: string, append = false): Promise<void> {
+  try {
+    const page = await api.admin.getCrawlerTaskAudit(taskId, append ? taskAuditCursors.value[taskId] ?? undefined : undefined, 50)
+    taskAudits.value[taskId] = append ? [...(taskAudits.value[taskId] ?? []), ...page.audits] : page.audits
+    taskAuditCursors.value[taskId] = page.nextCursor
+  }
+  catch {
+    taskError.value = '无法加载任务审计。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
   }
 }
 
@@ -499,6 +570,122 @@ async function createTask(template: CrawlerTaskTemplate): Promise<void> {
   }
   finally {
     taskAction.value = null
+  }
+}
+
+function askArchive(task: CrawlerTask): void {
+  pendingTaskMutation.value = task
+  archiveConfirmOpen.value = true
+}
+
+function askSupersede(task: CrawlerTask): void {
+  pendingTaskMutation.value = task
+  supersedeConfirmOpen.value = true
+}
+
+function openMetadataEdit(task: CrawlerTask): void {
+  pendingTaskMutation.value = task
+  metadataDescription.value = ''
+  metadataIntent.value = task.operation ?? taskTemplate(task)
+  metadataEditOpen.value = true
+}
+
+function supersedeCommand(task: CrawlerTask): CrawlerTaskSupersedeCommand | null {
+  const template = taskTemplate(task)
+  const targetId = task.movie?.id ?? task.id
+  if (task.operation === 'repair_players') {
+    if (!task.movie?.id || task.reason === undefined || task.sourceRevision === undefined)
+      return null
+    return {
+      idempotencyKey: `dashboard:supersede:${task.id}`,
+      intent: {
+        kind: 'repair_players',
+        reason: task.reason,
+        sourceRevision: task.sourceRevision,
+        targetIntent: 'restore_playable_sources',
+      },
+      operation: 'repair_players',
+      policyReference: 'dashboard/crawler-task-supersede',
+      policyVersion: 'v1',
+      target: { id: task.movie.id, kind: 'movie' },
+    }
+  }
+  return {
+    idempotencyKey: `dashboard:supersede:${task.id}`,
+    intent: { kind: 'crawl' },
+    operation: template,
+    policyReference: 'dashboard/crawler-task-supersede',
+    policyVersion: 'v1',
+    target: { id: targetId, kind: template },
+  }
+}
+
+async function saveMetadata(): Promise<void> {
+  const task = pendingTaskMutation.value
+  if (!task || taskMutation.value)
+    return
+  const metadata: CrawlerTaskMetadataUpdate = {
+    ...(metadataDescription.value.trim() ? { description: metadataDescription.value.trim() } : {}),
+    ...(metadataIntent.value.trim() ? { intent: metadataIntent.value.trim() } : {}),
+  }
+  if (!metadata.description && !metadata.intent) {
+    taskError.value = '至少填写一项任务元数据。'
+    return
+  }
+  taskMutation.value = 'metadata'
+  try {
+    await api.admin.updateCrawlerTask(task.id, metadata)
+    success('任务元数据已提交，正在读取权威状态。')
+    metadataEditOpen.value = false
+    await loadTaskPanel()
+    await loadTaskAudit(task.id)
+  }
+  catch {
+    taskError.value = '任务元数据更新被拒绝。请刷新后重试。'
+  }
+  finally {
+    taskMutation.value = null
+  }
+}
+
+async function confirmArchive(): Promise<void> {
+  const task = pendingTaskMutation.value
+  if (!task || taskMutation.value)
+    return
+  taskMutation.value = 'archive'
+  try {
+    await api.admin.archiveCrawlerTask(task.id)
+    success('任务已归档，历史 run、observation 和 audit 仍保留。')
+    await loadTaskPanel()
+    await loadTaskAudit(task.id)
+  }
+  catch {
+    taskError.value = '任务归档被拒绝。请刷新后重试。'
+  }
+  finally {
+    pendingTaskMutation.value = null
+    taskMutation.value = null
+  }
+}
+
+async function confirmSupersede(): Promise<void> {
+  const task = pendingTaskMutation.value
+  const command = task ? supersedeCommand(task) : null
+  if (!task || !command || taskMutation.value)
+    return
+  taskMutation.value = 'supersede'
+  try {
+    await api.admin.supersedeCrawlerTask(task.id, command)
+    success('任务已生成新快照，正在读取历史与最新状态。')
+    await loadTaskPanel()
+    await loadTaskAudit(task.id)
+  }
+  catch {
+    taskError.value = '任务 supersede 被拒绝。请检查当前任务是否仍为 active。'
+  }
+  finally {
+    pendingTaskMutation.value = null
+    taskMutation.value = null
   }
 }
 
@@ -773,6 +960,7 @@ async function executeClearFailed() {
               <div class="task-card-heading">
                 <h4>{{ task.id }}</h4>
                 <span v-if="task.operation === 'repair_players'" class="operation-label">repair_players</span>
+                <span class="lifecycle-label" data-task-lifecycle>{{ lifecycleLabels[taskLifecycleFor(task).status] }}</span>
                 <span v-if="latestRunFor(task)" class="status-label">{{ taskStatusLabels[latestRunFor(task)!.status] }}</span>
                 <span v-else class="status-label">尚未上报</span>
               </div>
@@ -867,6 +1055,67 @@ async function executeClearFailed() {
         <p v-if="selectedRun.task.operation === 'repair_players'" class="task-warning">
           修复原因：{{ selectedRun.task.reason }} · source revision：{{ selectedRun.task.sourceRevision }} · 下一步：{{ repairNextActionLabels[selectedRun.task.allowedNextAction ?? 'none'] }}
         </p>
+        <section class="task-lifecycle-surface" data-section="task-lifecycle" aria-labelledby="task-lifecycle-title">
+          <div class="section-heading">
+            <div>
+              <h4 id="task-lifecycle-title">
+                <GitBranch :size="16" aria-hidden="true" /> 任务生命周期
+              </h4>
+              <span class="fact-muted">与 run execution 独立 · version {{ taskLifecycleFor(selectedRun.task).version }}</span>
+            </div>
+            <span class="lifecycle-label">{{ lifecycleLabels[taskLifecycleFor(selectedRun.task).status] }}</span>
+          </div>
+          <div class="task-actions">
+            <button
+              v-if="taskLifecycleFor(selectedRun.task).status === 'active'"
+              class="task-secondary"
+              data-task-action="metadata"
+              type="button"
+              :disabled="taskMutation !== null"
+              @click="openMetadataEdit(selectedRun.task)"
+            >
+              <Pencil :size="15" aria-hidden="true" /> 编辑元数据
+            </button>
+            <button
+              v-if="taskLifecycleFor(selectedRun.task).status === 'active'"
+              class="task-secondary task-danger"
+              data-task-action="archive"
+              type="button"
+              :disabled="taskMutation !== null"
+              @click="askArchive(selectedRun.task)"
+            >
+              <Archive :size="15" aria-hidden="true" /> 归档任务
+            </button>
+            <button
+              v-if="taskLifecycleFor(selectedRun.task).status === 'active' && !isActiveRun(selectedRun.run)"
+              class="task-secondary"
+              data-task-action="supersede"
+              type="button"
+              :disabled="taskMutation !== null || !supersedeCommand(selectedRun.task)"
+              @click="askSupersede(selectedRun.task)"
+            >
+              <GitBranch :size="15" aria-hidden="true" /> 生成新快照
+            </button>
+          </div>
+          <form v-if="metadataEditOpen && pendingTaskMutation?.id === selectedRun.task.id" class="metadata-editor" data-task-metadata-editor @submit.prevent="saveMetadata">
+            <label>
+              说明
+              <input v-model="metadataDescription" maxlength="256" name="description" type="text">
+            </label>
+            <label>
+              安全意图标签
+              <input v-model="metadataIntent" maxlength="128" name="intent" type="text">
+            </label>
+            <div class="task-actions">
+              <button class="task-primary" data-task-action="metadata-save" type="submit" :disabled="taskMutation === 'metadata'">
+                <Save :size="15" aria-hidden="true" /> {{ taskMutation === 'metadata' ? '保存中…' : '保存元数据' }}
+              </button>
+              <button class="task-secondary" type="button" :disabled="taskMutation !== null" @click="metadataEditOpen = false">
+                返回
+              </button>
+            </div>
+          </form>
+        </section>
         <div v-if="selectedRun.run.status === 'failed' && runFailureCode(selectedRun.run) === 'receipt_missing'" class="task-warning">
           任务未找到可验证的入库结果，未生成内容管理链接。
         </div>
@@ -956,6 +1205,65 @@ async function executeClearFailed() {
             </article>
           </div>
         </div>
+        <section class="availability-surface" data-evidence-section="availability" aria-labelledby="availability-title">
+          <div class="section-heading">
+            <div>
+              <h4 id="availability-title">
+                Availability current
+              </h4>
+              <span class="fact-muted">内容可用性与 runner execution 独立计算</span>
+            </div>
+            <span v-if="availabilityCurrentFor(selectedRun.task)" class="status-label">
+              {{ availabilityStatusLabels[availabilityCurrentFor(selectedRun.task)!.status] }}
+            </span>
+          </div>
+          <div v-if="availabilityCurrentFor(selectedRun.task)" class="availability-current" data-availability-current>
+            <span>reason：{{ availabilityReasonLabel(availabilityCurrentFor(selectedRun.task)!.reasonCode) }}</span>
+            <span>policy：{{ availabilityCurrentFor(selectedRun.task)!.policyVersion }}</span>
+            <span>observedAt：{{ availabilityCurrentFor(selectedRun.task)!.observedAt }}</span>
+            <span>freshness：{{ availabilityCurrentFor(selectedRun.task)!.freshness }}</span>
+            <span>next action：{{ availabilityNextActionLabels[availabilityCurrentFor(selectedRun.task)!.nextAction] }}</span>
+            <span>projection version：{{ availabilityCurrentFor(selectedRun.task)!.projectionVersion }}</span>
+            <span>observation：{{ availabilityCurrentFor(selectedRun.task)!.observationIdentity }}</span>
+            <span>target：{{ availabilityCurrentFor(selectedRun.task)!.target.kind }} / {{ availabilityCurrentFor(selectedRun.task)!.target.id }}</span>
+          </div>
+          <p v-else class="source-empty">
+            暂无 availability current projection。
+          </p>
+          <div v-if="availabilityHistoryFor(selectedRun.task).length" class="availability-history" data-availability-history>
+            <strong>Observation / rejection history</strong>
+            <article v-for="entry in availabilityHistoryFor(selectedRun.task)" :key="`${entry.kind}-${entry.observation?.observationIdentity ?? entry.reason ?? 'empty'}`" class="availability-history-row">
+              <span>{{ availabilityOutcomeLabels[entry.kind] }}</span>
+              <span v-if="entry.reason">reason：{{ entry.reason }}</span>
+              <span v-if="entry.observation">observation：{{ entry.observation.observationIdentity }} · {{ entry.observation.status }} · {{ entry.observation.freshness }}</span>
+              <span v-if="entry.observation">observedAt：{{ entry.observation.observedAt }} · revision：{{ entry.observation.sourceRevision }}</span>
+            </article>
+          </div>
+        </section>
+        <section class="audit-surface" data-evidence-section="audit" aria-labelledby="audit-title">
+          <div class="section-heading">
+            <div>
+              <h4 id="audit-title">
+                Task audit
+              </h4>
+              <span class="fact-muted">创建、更新、归档、supersede、取消、重试和修复均保留摘要</span>
+            </div>
+          </div>
+          <div v-if="taskAudits[selectedRun.task.id]?.length" class="audit-list">
+            <article v-for="audit in taskAudits[selectedRun.task.id]" :key="audit.id" class="audit-row">
+              <strong>{{ audit.action }} · {{ audit.outcome }}</strong>
+              <span>{{ audit.reason }} · {{ audit.createdAt }}</span>
+              <span v-if="audit.actor?.id">actor：{{ audit.actor.id }}</span>
+              <span v-if="audit.runId">run：{{ audit.runId }}<template v-if="audit.attemptNumber"> · attempt #{{ audit.attemptNumber }}</template></span>
+            </article>
+            <button v-if="taskAuditCursors[selectedRun.task.id]" class="task-secondary load-more" data-task-action="audit-more" type="button" @click="loadTaskAudit(selectedRun.task.id, true)">
+              加载更早审计
+            </button>
+          </div>
+          <p v-else class="source-empty">
+            暂无任务审计摘要。
+          </p>
+        </section>
         <div v-if="selectedRun.task.operation !== 'repair_players'" class="readiness-detail" aria-live="polite">
           <div class="readiness-identity">
             <strong>内容身份</strong>
@@ -1356,6 +1664,23 @@ async function executeClearFailed() {
     @confirm="confirmRetry"
   />
   <ConfirmDialog
+    v-model:open="archiveConfirmOpen"
+    title="确认归档任务"
+    message="归档只改变任务生命周期；run、attempt、availability observation 和审计历史继续保留。"
+    confirm-text="确认归档"
+    cancel-text="返回任务"
+    variant="danger"
+    @confirm="confirmArchive"
+  />
+  <ConfirmDialog
+    v-model:open="supersedeConfirmOpen"
+    title="确认生成新快照"
+    message="将保留当前任务历史，并使用服务端允许的固定 operation、policy 和 target 生成新任务快照。"
+    confirm-text="生成新快照"
+    cancel-text="返回任务"
+    @confirm="confirmSupersede"
+  />
+  <ConfirmDialog
     v-model:open="repairConfirmOpen"
     title="确认来源修复"
     :message="repairConfirmationMessage"
@@ -1441,6 +1766,7 @@ async function executeClearFailed() {
 .provider-summary { margin-bottom: 1rem; color: hsl(var(--muted-foreground)); font-size: 0.875rem; }
 .operation-label,
 .retry-label,
+.lifecycle-label,
 .history-outcome { color: hsl(var(--primary)); font-size: 0.8rem; overflow-wrap: anywhere; }
 .identity-strip { display: grid; gap: 0.5rem; margin-bottom: 1rem; border: 2px solid hsl(var(--primary)); border-radius: 0.375rem; background: hsl(var(--card)); padding: 1rem; overflow-wrap: anywhere; }
 .identity-title,
@@ -1450,6 +1776,29 @@ async function executeClearFailed() {
 .identity-facts span { overflow-wrap: anywhere; }
 .current-attempt-pending .identity-strip { border-style: dashed; }
 .duplicate-lock { border-left: 3px solid hsl(var(--primary)); }
+.task-lifecycle-surface,
+.availability-surface,
+.audit-surface { display: grid; gap: 0.75rem; margin-bottom: 1rem; border: 1px solid hsl(var(--border)); border-radius: 0.375rem; background: hsl(var(--card)); padding: 1rem; }
+.task-lifecycle-surface h4,
+.availability-surface h4,
+.audit-surface h4 { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.95rem; }
+.fact-muted { color: hsl(var(--muted-foreground)); font-size: 0.82rem; overflow-wrap: anywhere; }
+.metadata-editor { display: grid; gap: 0.75rem; border-top: 1px solid hsl(var(--border)); padding-top: 0.75rem; }
+.metadata-editor label { display: grid; gap: 0.35rem; color: hsl(var(--muted-foreground)); font-size: 0.82rem; }
+.metadata-editor input { min-height: 40px; border: 1px solid hsl(var(--border)); border-radius: 0.25rem; background: hsl(var(--background)); padding: 0.5rem 0.65rem; color: hsl(var(--foreground)); }
+.availability-current,
+.availability-history,
+.audit-list { display: grid; gap: 0.5rem; min-width: 0; }
+.availability-current { grid-template-columns: repeat(2, minmax(0, 1fr)); color: hsl(var(--muted-foreground)); font-size: 0.82rem; }
+.availability-current span,
+.availability-history-row span,
+.audit-row span { overflow-wrap: anywhere; }
+.availability-history { border-top: 1px solid hsl(var(--border)); padding-top: 0.75rem; }
+.availability-history-row,
+.audit-row { display: grid; gap: 0.35rem; min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 0.25rem; background: hsl(var(--muted)); padding: 0.65rem; color: hsl(var(--muted-foreground)); font-size: 0.82rem; }
+.availability-history-row > span:first-child,
+.audit-row > strong { color: hsl(var(--foreground)); }
+.audit-list { max-height: 20rem; overflow: auto; }
 .attempt-timeline { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 1rem; color: hsl(var(--muted-foreground)); font-size: 0.85rem; }
 .timeline-step { min-height: 32px; border: 1px solid hsl(var(--border)); border-radius: 0.25rem; padding: 0.35rem 0.5rem; overflow-wrap: anywhere; }
 .timeline-step-current { border-color: hsl(var(--primary)); color: hsl(var(--foreground)); font-weight: 600; }
@@ -1555,7 +1904,8 @@ async function executeClearFailed() {
   .task-history-grid,
   .fact-grid,
   .readiness-grid,
-  .source-health-grid { grid-template-columns: 1fr; }
+  .source-health-grid,
+  .availability-current { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

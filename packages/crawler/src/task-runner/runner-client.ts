@@ -2,6 +2,7 @@ import process from 'node:process'
 import { createRunnerEventId, signRunnerBody } from './event-signer'
 
 export type RunnerOperation = 'manga' | 'movie' | 'repair_players'
+export type RunnerProvider = 'github-actions' | 'local-proof'
 export type RunnerSourceType = 'direct' | 'magnet' | 'TorrServer'
 export type RunnerSourceHealth = 'inactive' | 'unverified' | 'failed'
 export type RunnerSourceReasonCode
@@ -17,6 +18,35 @@ export type RunnerFailureCode
     | 'source_read_failed'
     | 'source_write_failed'
 export type RepairObservationErrorCode = 'source_stale' | 'source_read_failed' | 'source_write_failed'
+
+export type RunnerAvailabilityFreshness = 'fresh' | 'stale' | 'late'
+export type RunnerAvailabilityStatus = 'available' | 'unavailable' | 'degraded' | 'unknown'
+export type RunnerAvailabilityReasonCode = 'available' | 'no_source' | 'source_failed' | 'transport_failed' | 'content_missing' | 'policy_mismatch' | 'cancelled' | 'provider_failed' | 'observation_invalid'
+export type RunnerAvailabilityNextAction = 'none' | 'recheck' | 'repair' | 'retry' | 'ignore'
+
+export interface RunnerAvailabilitySummary {
+  readonly counts?: Readonly<Record<string, number>>
+  readonly samples?: readonly string[]
+}
+
+export interface RunnerAvailabilityObservationInput {
+  readonly expectedProjectionVersion?: number
+  readonly freshness: RunnerAvailabilityFreshness
+  readonly nextAction: RunnerAvailabilityNextAction
+  readonly observationIdentity?: string
+  readonly observedAt?: number
+  readonly reasonCode: RunnerAvailabilityReasonCode
+  readonly status: RunnerAvailabilityStatus
+  readonly summary: RunnerAvailabilitySummary
+}
+
+export interface RunnerAvailabilityObservationResponse {
+  readonly accepted: boolean
+  readonly current?: unknown
+  readonly kind?: string
+  readonly observation?: unknown
+  readonly reason?: string
+}
 
 export interface RunnerSourceCandidate {
   readonly health?: RunnerSourceHealth
@@ -91,9 +121,18 @@ export function isRepairRunnerSnapshot(snapshot: RunnerSnapshot): snapshot is Re
 
 export interface RunnerCandidate {
   readonly attempt: number
+  readonly contentId?: string
+  readonly expectedProjectionVersion?: number
+  readonly policyReference?: string
+  readonly policyVersion?: string
+  readonly proofProfile?: 'phase25-movie-availability-v1'
+  readonly provider?: RunnerProvider
   readonly runId: string
   readonly sequence: number
+  readonly sourceRevision?: number
   readonly snapshot: RunnerSnapshot
+  readonly target?: { readonly id: string, readonly kind: 'movie' | 'manga' }
+  readonly taskId?: string
 }
 
 export interface RunnerClientConfig {
@@ -103,6 +142,7 @@ export interface RunnerClientConfig {
   readonly callbackKeyId: string
   readonly callbackSecret: string
   readonly fetch?: typeof fetch
+  readonly providerMode?: RunnerProvider
   readonly now?: () => number
   readonly providerRunAttempt?: number
   readonly providerRunId?: string
@@ -252,11 +292,86 @@ function parseRunnerCandidate(value: unknown): RunnerCandidate {
     throw new Error('Invalid runner candidate')
   }
 
+  const provider = value.provider === undefined
+    ? undefined
+    : value.provider === 'github-actions' || value.provider === 'local-proof'
+      ? value.provider
+      : undefined
+  if (value.provider !== undefined && provider === undefined)
+    throw new Error('Invalid runner candidate provider')
+
+  const target: RunnerCandidate['target'] = isRecord(value.target)
+    && (value.target.kind === 'movie' || value.target.kind === 'manga')
+    && typeof value.target.id === 'string'
+    && /^[A-Za-z0-9][\w-]{0,127}$/u.test(value.target.id)
+    ? { id: value.target.id.trim(), kind: value.target.kind === 'movie' ? 'movie' : 'manga' }
+    : undefined
+  if (value.target !== undefined && !target)
+    throw new Error('Invalid runner candidate target')
+
+  const optionalInteger = (candidate: unknown, max: number): number | undefined => {
+    if (candidate === undefined)
+      return undefined
+    if (typeof candidate !== 'number' || !Number.isSafeInteger(candidate) || candidate < 0 || candidate > max)
+      throw new Error('Invalid runner candidate binding')
+    return candidate
+  }
+  const contentId = value.contentId === undefined
+    ? undefined
+    : typeof value.contentId === 'string' && /^[A-Za-z0-9][\w-]{0,127}$/u.test(value.contentId)
+      ? value.contentId.trim()
+      : undefined
+  if (value.contentId !== undefined && !contentId)
+    throw new Error('Invalid runner candidate content binding')
+  const policyReference = value.policyReference === undefined
+    ? undefined
+    : typeof value.policyReference === 'string' && value.policyReference.trim().length > 0 && value.policyReference.length <= 256
+      ? value.policyReference.trim()
+      : undefined
+  const policyVersion = value.policyVersion === undefined
+    ? undefined
+    : typeof value.policyVersion === 'string' && value.policyVersion.trim().length > 0 && value.policyVersion.length <= 128
+      ? value.policyVersion.trim()
+      : undefined
+  if ((value.policyReference !== undefined && !policyReference) || (value.policyVersion !== undefined && !policyVersion))
+    throw new Error('Invalid runner candidate policy binding')
+  const proofProfile = value.proofProfile === undefined
+    ? undefined
+    : value.proofProfile === 'phase25-movie-availability-v1'
+      ? value.proofProfile
+      : undefined
+  if (value.proofProfile !== undefined && !proofProfile)
+    throw new Error('Invalid runner candidate proof profile')
+  const taskId = value.taskId === undefined
+    ? undefined
+    : typeof value.taskId === 'string' && /^[A-Za-z0-9][\w-]{0,127}$/u.test(value.taskId)
+      ? value.taskId.trim()
+      : undefined
+  if (value.taskId !== undefined && !taskId)
+    throw new Error('Invalid runner candidate task binding')
+
+  const sourceRevision = optionalInteger(value.sourceRevision, 1_000_000)
+  const expectedProjectionVersion = optionalInteger(value.expectedProjectionVersion, 1_000_000_000)
+  if (provider === 'local-proof'
+    && (!taskId || !target || !contentId || sourceRevision === undefined || expectedProjectionVersion === undefined
+      || !policyReference || !policyVersion || proofProfile !== 'phase25-movie-availability-v1')) {
+    throw new Error('Local proof runner candidate binding is incomplete')
+  }
+
   return {
     attempt: value.attempt,
+    ...(contentId ? { contentId } : {}),
+    ...(expectedProjectionVersion !== undefined ? { expectedProjectionVersion } : {}),
+    ...(policyReference ? { policyReference } : {}),
+    ...(policyVersion ? { policyVersion } : {}),
+    ...(proofProfile ? { proofProfile } : {}),
+    ...(provider ? { provider } : {}),
     runId: value.run_id.trim(),
     sequence: value.sequence,
+    ...(sourceRevision !== undefined ? { sourceRevision } : {}),
     snapshot: parseRunnerSnapshot(value.snapshot),
+    ...(target ? { target } : {}),
+    ...(taskId ? { taskId } : {}),
   }
 }
 
@@ -353,6 +468,42 @@ export class RunnerClient {
     return this.observeRepairSource(candidate, sequence, input)
   }
 
+  async observeAvailability(
+    candidate: RunnerCandidate,
+    sequence: number,
+    input: RunnerAvailabilityObservationInput,
+  ): Promise<RunnerAvailabilityObservationResponse> {
+    this.assertCandidateBinding(candidate)
+    const binding = this.availabilityBinding(candidate)
+    const observedAt = input.observedAt ?? Math.floor(this.now() / 1000)
+    const expectedProjectionVersion = input.expectedProjectionVersion ?? binding.expectedProjectionVersion
+    const observationIdentity = input.observationIdentity ?? `availability-${createRunnerEventId()}`
+    const summary = boundedAvailabilitySummary(input.summary)
+    return this.post(`/api/internal/crawler-runs/${encodeURIComponent(candidate.runId)}/availability-observation`, {
+      ...this.boundEnvelope(),
+      attempt: candidate.attempt,
+      content_id: binding.contentId,
+      expected_projection_version: expectedProjectionVersion,
+      freshness: input.freshness,
+      next_action: input.nextAction,
+      observation_identity: observationIdentity,
+      observed_at: observedAt,
+      policy_reference: binding.policyReference,
+      policy_version: binding.policyVersion,
+      provider: binding.provider,
+      reason_code: input.reasonCode,
+      run_id: candidate.runId,
+      sequence,
+      source_revision: binding.sourceRevision,
+      status: input.status,
+      summary,
+      target: binding.target,
+      task_id: binding.taskId,
+      timestamp: this.now(),
+      type: 'availability_observation',
+    }, { allowNonOk: true }) as Promise<RunnerAvailabilityObservationResponse>
+  }
+
   async failed(candidate: RunnerCandidate, sequence: number, code: string): Promise<EventResult> {
     return this.event(candidate, sequence, 'failed', { code })
   }
@@ -394,6 +545,37 @@ export class RunnerClient {
     if ((this.config.applicationRunId && candidate.runId !== this.config.applicationRunId)
       || (this.config.applicationAttempt !== undefined && candidate.attempt !== this.config.applicationAttempt)) {
       throw new Error('Runner candidate does not match the configured run binding')
+    }
+    if (candidate.provider === 'local-proof' && this.config.providerMode !== 'local-proof')
+      throw new Error('Local proof runner mode is not enabled')
+    if (this.config.providerMode === 'local-proof' && candidate.provider !== 'local-proof')
+      throw new Error('Runner candidate provider does not match local proof mode')
+  }
+
+  private availabilityBinding(candidate: RunnerCandidate): {
+    readonly contentId: string
+    readonly expectedProjectionVersion: number
+    readonly policyReference: string
+    readonly policyVersion: string
+    readonly provider: RunnerProvider
+    readonly sourceRevision: number
+    readonly target: { readonly id: string, readonly kind: 'movie' | 'manga' }
+    readonly taskId: string
+  } {
+    if (!candidate.provider || !candidate.taskId || !candidate.target || !candidate.contentId
+      || candidate.expectedProjectionVersion === undefined || !candidate.policyReference || !candidate.policyVersion
+      || candidate.sourceRevision === undefined) {
+      throw new Error('Runner candidate availability binding is incomplete')
+    }
+    return {
+      contentId: candidate.contentId,
+      expectedProjectionVersion: candidate.expectedProjectionVersion,
+      policyReference: candidate.policyReference,
+      policyVersion: candidate.policyVersion,
+      provider: candidate.provider,
+      sourceRevision: candidate.sourceRevision,
+      target: candidate.target,
+      taskId: candidate.taskId,
     }
   }
 
@@ -437,7 +619,36 @@ export function createRunnerClientFromEnvironment(environment: NodeJS.ProcessEnv
     applicationRunId: environmentRequired(environment, 'ACTIONS_APPLICATION_RUN_ID'),
     callbackKeyId: environmentRequired(environment, 'TASK_RUNNER_CALLBACK_KEY_ID_CURRENT'),
     callbackSecret: environmentRequired(environment, 'TASK_RUNNER_CALLBACK_SECRET_CURRENT'),
+    ...(environment.CRAWLER_LOCAL_PROOF_ENABLED === 'true' ? { providerMode: 'local-proof' as const } : {}),
     providerRunAttempt: environmentPositiveInteger(environment, 'GITHUB_RUN_ATTEMPT'),
     providerRunId: environmentRequired(environment, 'GITHUB_RUN_ID'),
   })
+}
+
+interface BoundedRunnerAvailabilitySummary {
+  readonly counts?: Readonly<Record<string, number>>
+  readonly samples?: readonly { readonly code: string }[]
+}
+
+function boundedAvailabilitySummary(summary: RunnerAvailabilitySummary): BoundedRunnerAvailabilitySummary {
+  if (!summary || typeof summary !== 'object' || Array.isArray(summary))
+    throw new Error('Availability summary is invalid')
+  const counts = summary.counts === undefined
+    ? undefined
+    : Object.fromEntries(Object.entries(summary.counts).slice(0, 20).map(([key, value]) => {
+        if (!/^[\w.:-]{1,64}$/u.test(key) || typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > 1_000_000)
+          throw new Error('Availability summary counts are invalid')
+        return [key, value]
+      }))
+  const samples = summary.samples === undefined
+    ? undefined
+    : summary.samples.slice(0, 20).map((sample) => {
+        if (typeof sample !== 'string' || sample.length === 0 || sample.length > 128 || /https?:\/\/|magnet:\?/iu.test(sample))
+          throw new Error('Availability summary samples are invalid')
+        return { code: sample }
+      })
+  return {
+    ...(counts ? { counts } : {}),
+    ...(samples ? { samples } : {}),
+  }
 }

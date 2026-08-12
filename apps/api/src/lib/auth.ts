@@ -42,6 +42,7 @@ export interface Env {
   TASK_RUNNER_CALLBACK_SECRET_PREVIOUS?: string
   TASK_RUNNER_CALLBACK_KEY_ID_PREVIOUS?: string
   TASK_RUNNER_CALLBACK_PREVIOUS_ROTATED_AT?: string
+  CRAWLER_LOCAL_PROOF_ENABLED?: string
   GITHUB_CLIENT_ID: string
   GITHUB_CLIENT_SECRET: string
   // GitHub App provider bindings are optional until production orchestration is configured.

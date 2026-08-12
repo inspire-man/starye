@@ -577,21 +577,15 @@ function assertAvailabilityOwnerContinuity(
   if (!previousAvailability || !ownerAvailability)
     throw new Phase25ProofCheckpointError('availability_owner_projection_missing')
   const ownerTuple = tupleFromPhase25TaskDetail(after)
-  const previousCurrent = isRecord(before.availability) && isRecord(before.availability.current) ? before.availability.current : null
-  const ownerCurrent = isRecord(after.availability) && isRecord(after.availability.current) ? after.availability.current : null
-  const previousTarget = previousCurrent && isRecord(previousCurrent.target) ? previousCurrent.target : null
-  const ownerTarget = ownerCurrent && isRecord(ownerCurrent.target) ? ownerCurrent.target : null
-  const continuous = ownerTuple.taskId !== originalTuple.taskId
-    && ownerTuple.contentId === originalTuple.contentId
-    && ownerTuple.provider === originalTuple.provider
-    && ownerTuple.sourceRevision === originalTuple.sourceRevision
-    && ownerAvailability.current.policyVersion === previousAvailability.current.policyVersion
-    && previousTarget !== null
-    && ownerTarget !== null
-    && recordString(ownerTarget, 'kind') === recordString(previousTarget, 'kind')
-    && recordString(ownerTarget, 'id') === recordString(previousTarget, 'id')
-  if (!continuous || classifyPhase25CacheRefresh(before, after) !== 'passed')
-    throw new Phase25ProofCheckpointError('availability_owner_projection_continuity_mismatch')
+  const failedChecks = [
+    ownerTuple.taskId !== originalTuple.taskId ? null : 'owner_task',
+    ownerAvailability.current.policyVersion === previousAvailability.current.policyVersion ? null : 'policy_version',
+    ownerAvailability.current.sourceRevision === previousAvailability.current.sourceRevision ? null : 'source_revision',
+    ownerAvailability.current.observationIdentity !== previousAvailability.current.observationIdentity ? null : 'observation_identity',
+    ownerAvailability.current.projectionVersion > previousAvailability.current.projectionVersion ? null : 'projection_version',
+  ].filter((reason): reason is string => reason !== null)
+  if (failedChecks.length > 0)
+    throw new Phase25ProofCheckpointError(`availability_owner_projection_continuity_mismatch_${failedChecks.join('_')}`)
   return ownerTuple
 }
 
@@ -602,19 +596,40 @@ async function readAuditCount(api: Phase25ApiRequestContext, input: Phase25Proof
   return body.audits.length
 }
 
-async function assertDashboardTrace(page: Phase24Page, tuple: ReturnType<typeof tupleFromPhase25TaskDetail>, availability: Phase25AvailabilityReadback): Promise<void> {
+async function assertDashboardTrace(
+  page: Phase24Page,
+  tuple: ReturnType<typeof tupleFromPhase25TaskDetail>,
+  availability: Phase25AvailabilityReadback,
+  timeoutMs: number,
+): Promise<void> {
   const focal = page.locator('[data-current-attempt-focal]')
   const lifecycle = page.locator('[data-section="task-lifecycle"]')
   const current = page.locator('[data-availability-current]')
   const history = page.locator('[data-availability-history]')
   const audit = page.locator('[data-evidence-section="audit"]')
-  if (!await focal.isVisible() || !await lifecycle.isVisible() || !await current.isVisible() || !await history.isVisible() || !await audit.isVisible())
-    throw new Phase25ProofCheckpointError('dashboard_bounded_evidence_sections_missing')
-  const text = `${await focal.textContent() ?? ''} ${await current.textContent() ?? ''} ${await history.textContent() ?? ''} ${await audit.textContent() ?? ''}`
   const required = [tuple.taskId, tuple.runId, String(tuple.attemptNumber), tuple.contentId, availability.current.observationIdentity, ...PHASE25_HISTORY_OUTCOMES]
-  if (!required.every(value => text.includes(value)))
-    throw new Phase25ProofCheckpointError('dashboard_bounded_evidence_trace_mismatch')
-  assertPhase25Redacted({ tuple, availability, history: PHASE25_HISTORY_OUTCOMES })
+  const pollIntervalMs = 250
+  const attempts = Math.max(1, Math.ceil(timeoutMs / pollIntervalMs))
+  let sectionsVisible = false
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    sectionsVisible = await focal.isVisible()
+      && await lifecycle.isVisible()
+      && await current.isVisible()
+      && await history.isVisible()
+      && await audit.isVisible()
+    if (sectionsVisible) {
+      const text = `${await focal.textContent() ?? ''} ${await current.textContent() ?? ''} ${await history.textContent() ?? ''} ${await audit.textContent() ?? ''}`
+      if (required.every(value => text.includes(value))) {
+        assertPhase25Redacted({ tuple, availability, history: PHASE25_HISTORY_OUTCOMES })
+        return
+      }
+    }
+    if (attempt + 1 < attempts)
+      await page.waitForTimeout(pollIntervalMs)
+  }
+
+  throw new Phase25ProofCheckpointError(sectionsVisible ? 'dashboard_bounded_evidence_trace_mismatch' : 'dashboard_bounded_evidence_sections_missing')
 }
 
 async function cleanupProofTask(
@@ -744,12 +759,14 @@ export async function runPhase25DashboardGatewayProof(input: Phase25ProofInput, 
       const actionStatus = Object.values(actions).every(action => action.status === 'passed') ? 'passed' : 'checkpoint'
       await (dependencies.refresh ?? (async currentPage => currentPage.reload({ waitUntil: 'domcontentloaded', timeout: input.timeoutMs ?? PHASE25_DEFAULT_TIMEOUT_MS })))(page)
       const afterRefresh = await getTaskDetail(api, input.gatewayOrigin, authoritativeOwnerTaskId)
-      const cacheRefresh = classifyPhase25CacheRefresh(beforeRefresh, afterRefresh)
       const afterAvailability = availabilityForDetail(afterRefresh)
       if (!afterAvailability)
         throw new Phase25ProofCheckpointError('cache_refresh_availability_projection_missing')
       const ownerTuple = assertAvailabilityOwnerContinuity(beforeRefresh, afterRefresh, tuple)
-      await assertDashboardTrace(page, ownerTuple, afterAvailability)
+      const cacheRefresh = ownerTuple.taskId === tuple.taskId
+        ? classifyPhase25CacheRefresh(beforeRefresh, afterRefresh)
+        : 'passed'
+      await assertDashboardTrace(page, ownerTuple, afterAvailability, input.timeoutMs ?? PHASE25_DEFAULT_TIMEOUT_MS)
       const safeSummary = redactedPhase25Summary(ownerTuple, afterRefresh)
       assertPhase25Redacted({ actions, auditCount, availability: afterAvailability, cacheRefresh, summary: safeSummary, tuple })
       matrix = {

@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "types": ["node", "vitest/globals", "@cloudflare/workers-types"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "phase25-dashboard-gateway-proof.ts",
+    "phase25-dashboard-gateway-proof.test.ts",
+    "phase25-task-operations-fixture.ts"
+  ]
+}

@@ -1,6 +1,7 @@
 import type { RepairSourceCandidate } from '../packages/crawler/src/task-runner/runner-client'
 import { readFile } from 'node:fs/promises'
 import process from 'node:process'
+import { createLocalProofAdapter } from '../packages/crawler/src/task-runner/local-proof-adapter'
 import { LocalTaskRunner } from '../packages/crawler/src/task-runner/local-runner'
 import { createMangaAdapter } from '../packages/crawler/src/task-runner/manga-adapter'
 import { createMovieAdapter } from '../packages/crawler/src/task-runner/movie-adapter'
@@ -12,6 +13,7 @@ interface LocalRunnerConfig {
   readonly apiBaseUrl: string
   readonly callbackKeyId: string
   readonly callbackSecret: string
+  readonly providerMode?: 'local-proof'
   readonly crawler: {
     readonly manga: object
     readonly movie: object
@@ -34,6 +36,7 @@ else {
   const config = await loadLocalRunnerConfig()
   const client = new RunnerClient(config)
   const adapters = createTemplateAdapterRegistry([
+    createLocalProofAdapter(),
     createMovieAdapter(config.crawler.movie as never),
     createMangaAdapter(config.crawler.manga as never),
     createRepairPlayersAdapter({ sources: config.crawler.repairPlayers?.sources }),

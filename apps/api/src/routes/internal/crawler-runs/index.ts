@@ -1,16 +1,22 @@
 import type { Context } from 'hono'
+import type { AvailabilityCurrentProjection } from '../../../domain/crawler-tasks/availability-contract'
+import type { AvailabilityRepositoryOptions, AvailabilityRepositoryResult } from '../../../domain/crawler-tasks/availability-repository'
 import type { RepairPlayersTaskSnapshot } from '../../../domain/crawler-tasks/types'
 import type { AppEnv } from '../../../types'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import * as v from 'valibot'
+import { createAvailabilityRepository as createAvailabilityRepositoryAdapter } from '../../../domain/crawler-tasks/availability-repository'
+import { validateBoundedAvailabilityEvidence } from '../../../domain/crawler-tasks/evidence-contract'
 import { normalizeRunnerEventForStorage } from '../../../domain/crawler-tasks/log-redaction'
-import { createProviderSnapshot } from '../../../domain/crawler-tasks/provider-association'
+import { createProviderSnapshot, LOCAL_PROOF_POLICY_REFERENCE } from '../../../domain/crawler-tasks/provider-association'
 import { createCrawlerTaskRepository } from '../../../domain/crawler-tasks/repository'
 import { verifyRunnerEventSignature } from '../../../domain/crawler-tasks/runner-event-auth'
 import { readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
 import { acceptRepairSourceObservation } from '../../../domain/movies/source-reconciliation'
+import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
 import {
+  CrawlerAvailabilityObservationEventSchema,
   CrawlerRepairSourceObservationEventSchema,
   CrawlerRunClaimRequestSchema,
   CrawlerRunEventSchema,
@@ -18,6 +24,7 @@ import {
 } from '../../../schemas/crawler-run-events'
 
 const MAX_EVENT_AGE_MS = 5 * 60_000
+const MAX_AVAILABILITY_BODY_BYTES = 32 * 1024
 
 function previousValidity(env: AppEnv['Bindings']): number | undefined {
   if (!env.TASK_RUNNER_CALLBACK_SECRET_PREVIOUS || !env.TASK_RUNNER_CALLBACK_KEY_ID_PREVIOUS || !env.TASK_RUNNER_CALLBACK_PREVIOUS_ROTATED_AT)
@@ -60,6 +67,12 @@ function claimResponse(outcome: Readonly<Record<string, unknown>>): { accepted: 
 
 function observationStatus(outcome: Readonly<Record<string, unknown>>): 200 | 409 {
   return outcome.accepted === true ? 200 : 409
+}
+
+function availabilityObservationStatus(outcome: Readonly<Record<string, unknown>>): 200 | 404 | 409 {
+  if (outcome.accepted === true)
+    return 200
+  return outcome.reason === 'run_not_found' ? 404 : 409
 }
 
 function parseStoredOutcome(raw: string): Readonly<Record<string, unknown>> {
@@ -137,6 +150,8 @@ interface RunnerEventRepository {
   readonly scheduleRegister?: (input: Record<string, unknown>) => Promise<ScheduleRegisterResult>
 }
 
+type AvailabilityRepository = ReturnType<typeof createAvailabilityRepositoryAdapter>
+
 interface D1Statement {
   all: <T>() => Promise<{ results?: T[] }>
   bind: (...values: unknown[]) => D1Statement
@@ -179,10 +194,14 @@ function providerSnapshotMatches(event: Extract<v.InferOutput<typeof CrawlerRunE
 }
 
 export function createCrawlerRunsRoutes(options: {
+  readonly createAvailabilityRepository?: (database: AppEnv['Variables']['db'], options: AvailabilityRepositoryOptions) => AvailabilityRepository
   readonly createRepository?: (database: AppEnv['Variables']['db']) => RunnerEventRepository
+  readonly invalidateAvailabilityCache?: (projection: AvailabilityCurrentProjection) => Promise<void>
   readonly now?: () => number
 } = {}) {
   const createRepository = options.createRepository ?? (database => createCrawlerTaskRepository(database) as unknown as RunnerEventRepository)
+  const createAvailability = options.createAvailabilityRepository
+    ?? ((database, repositoryOptions) => createAvailabilityRepositoryAdapter(database, repositoryOptions))
   const now = options.now ?? (() => Date.now())
   const crawlerRunsRoutes = new Hono<AppEnv>()
 
@@ -277,9 +296,18 @@ export function createCrawlerRunsRoutes(options: {
       candidate: candidate
         ? {
             attempt: candidate.attempt,
+            ...(candidate.contentId ? { contentId: candidate.contentId } : {}),
+            ...(candidate.expectedProjectionVersion !== undefined ? { expectedProjectionVersion: candidate.expectedProjectionVersion } : {}),
+            ...(candidate.policyReference ? { policyReference: candidate.policyReference } : {}),
+            ...(candidate.policyVersion ? { policyVersion: candidate.policyVersion } : {}),
+            ...(candidate.proofProfile ? { proofProfile: candidate.proofProfile } : {}),
+            ...(candidate.provider ? { provider: candidate.provider } : {}),
             run_id: candidate.runId,
             sequence: candidate.sequence,
+            ...(candidate.sourceRevision !== undefined ? { sourceRevision: candidate.sourceRevision } : {}),
             snapshot: candidate.snapshot,
+            ...(candidate.target ? { target: candidate.target } : {}),
+            ...(candidate.taskId ? { taskId: candidate.taskId } : {}),
           }
         : null,
     })
@@ -532,6 +560,94 @@ export function createCrawlerRunsRoutes(options: {
     return c.json(outcome, observationStatus(outcome))
   })
 
+  crawlerRunsRoutes.post('/:runId/availability-observation', async (c) => {
+    const rawBody = await c.req.arrayBuffer()
+    const currentNow = now()
+    if (rawBody.byteLength > MAX_AVAILABILITY_BODY_BYTES)
+      throw new HTTPException(400, { message: 'Availability observation payload is too large' })
+    const signature = await verifySignedRequest(c, rawBody, currentNow)
+    const parsed = v.safeParse(CrawlerAvailabilityObservationEventSchema, await parseRawJson(rawBody))
+    if (!parsed.success)
+      throw new HTTPException(400, { message: 'Invalid availability observation envelope' })
+    const event = parsed.output
+    if (event.key_id !== signature.keyId || event.run_id !== c.req.param('runId'))
+      throw new HTTPException(400, { message: 'Availability observation identity mismatch' })
+    if (Math.abs(currentNow - event.timestamp) > MAX_EVENT_AGE_MS)
+      throw new HTTPException(400, { message: 'Availability observation timestamp expired' })
+    if (event.provider === 'local-proof' && event.policy_reference !== LOCAL_PROOF_POLICY_REFERENCE)
+      throw new HTTPException(400, { message: 'Local proof policy reference mismatch' })
+
+    const bodySha256 = await sha256Hex(rawBody)
+    const existing = await readRecordedRepairEvent(c, event.run_id, event.event_id, event.nonce)
+    if (existing) {
+      if (existing.event_id !== event.event_id || existing.nonce !== event.nonce || existing.body_sha256 !== bodySha256) {
+        throw new HTTPException(409, { message: 'Conflicting availability observation replay' })
+      }
+      const outcome = parseStoredOutcome(existing.outcome)
+      return c.json(outcome, availabilityObservationStatus(outcome))
+    }
+
+    let boundedSummary
+    try {
+      boundedSummary = validateBoundedAvailabilityEvidence(event.summary)
+    }
+    catch {
+      throw new HTTPException(400, { message: 'Availability observation evidence is not bounded' })
+    }
+
+    const observation = {
+      attemptNumber: event.attempt,
+      contentId: event.content_id,
+      eventSequence: event.sequence,
+      freshness: event.freshness,
+      nextAction: event.next_action,
+      observationIdentity: event.observation_identity,
+      observedAt: event.observed_at,
+      policyVersion: event.policy_version,
+      provider: event.provider,
+      reasonCode: event.reason_code,
+      runId: event.run_id,
+      sourceRevision: event.source_revision,
+      status: event.status,
+      summary: boundedSummary,
+      target: event.target,
+      taskId: event.task_id,
+    }
+    const expectedTuple = {
+      attemptNumber: event.attempt,
+      contentId: event.content_id,
+      provider: event.provider,
+      runId: event.run_id,
+      target: event.target,
+      taskId: event.task_id,
+    }
+    const repositoryOptions: AvailabilityRepositoryOptions = {
+      invalidateCache: options.invalidateAvailabilityCache ?? (async (projection) => {
+        if (projection.target.kind === 'movie' || projection.target.kind === 'video')
+          await clearGatewayCacheGroup(c.env.CACHE, 'movies')
+      }),
+    }
+    const result = await createAvailability(c.get('db'), repositoryOptions).persist({
+      expectedPolicyVersion: event.policy_version,
+      expectedPolicyReference: event.policy_reference,
+      expectedProjectionVersion: event.expected_projection_version,
+      expectedSourceRevision: event.source_revision,
+      expectedTuple,
+      observation,
+    })
+    const outcome = projectAvailabilityObservation(result)
+    await storeRepairOutcome(c, {
+      bodySha256,
+      eventId: event.event_id,
+      keyId: event.key_id,
+      nonce: event.nonce,
+      outcome,
+      runId: event.run_id,
+      sequence: event.sequence,
+    })
+    return c.json(outcome, availabilityObservationStatus(outcome))
+  })
+
   crawlerRunsRoutes.post('/:runId/events', async (c) => {
     const rawBody = await c.req.arrayBuffer()
     const currentNow = now()
@@ -586,6 +702,16 @@ export function createCrawlerRunsRoutes(options: {
   })
 
   return crawlerRunsRoutes
+}
+
+function projectAvailabilityObservation(result: AvailabilityRepositoryResult) {
+  return {
+    accepted: result.accepted,
+    kind: result.kind,
+    ...(result.accepted || !result.reason ? {} : { reason: result.reason }),
+    current: result.authoritativeReadback,
+    observation: result.authoritativeObservation ?? null,
+  } as const
 }
 
 export const crawlerRunsRoutes = createCrawlerRunsRoutes()

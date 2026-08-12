@@ -30,6 +30,18 @@ const providerWorkflowRegistry = Object.freeze({
 } as const satisfies Record<CrawlerTaskTemplateKey, Omit<ProviderSnapshot, 'templateKey'>>)
 
 const FIXED_PROVIDER_REPOSITORY = 'inspire-man/starye' as const
+export const LOCAL_PROOF_PROFILE = 'phase25-movie-availability-v1' as const
+export const LOCAL_PROOF_POLICY_REFERENCE = 'dashboard/phase25-gateway-proof' as const
+export const LOCAL_PROOF_POLICY_VERSION = 'v1' as const
+
+const localProofProviderRegistry = Object.freeze({
+  environment: 'local',
+  provider: 'local-proof',
+  ref: 'local',
+  repository: 'local',
+  target: 'local-proof',
+  workflow: 'local-proof',
+} as const)
 
 const providerRunStatuses = new Set<ProviderRunStatus>([
   'completed',
@@ -85,6 +97,14 @@ function optionalProviderRunId(value: unknown): string | undefined {
   if (typeof value !== 'string' || !/^[1-9]\d{0,19}$/u.test(value))
     throw new Error('provider_summary_invalid')
 
+  return value
+}
+
+function optionalLocalProviderRunId(value: unknown): string | undefined {
+  if (value === undefined)
+    return undefined
+  if (typeof value !== 'string' || !/^local-[A-Za-z0-9][\w-]{0,127}$/u.test(value))
+    throw new Error('provider_summary_invalid')
   return value
 }
 
@@ -146,6 +166,17 @@ export function createProviderSnapshot(templateKey: unknown): ProviderSnapshot {
   })
 }
 
+export function createLocalProofProviderSnapshot(templateKey: unknown): ProviderSnapshot {
+  if (templateKey !== 'movie')
+    throw new Error('local_proof_template_invalid')
+  return Object.freeze({
+    ...localProofProviderRegistry,
+    crawlerEntrypoint: 'crawler-optimized',
+    proofProfile: LOCAL_PROOF_PROFILE,
+    templateKey: 'movie',
+  })
+}
+
 /** Builds the exact workflow_dispatch inputs and rejects all caller-supplied provider controls. */
 export function createProviderDispatchInput(input: unknown): ProviderDispatchInput {
   const record = asRecord(input, 'provider_dispatch_input_invalid')
@@ -167,6 +198,7 @@ export function createProviderAssociationSummary(input: unknown): ProviderAssoci
     record,
     [
       'environment',
+      'provider',
       'providerConclusion',
       'providerRunAttempt',
       'providerRunId',
@@ -179,11 +211,34 @@ export function createProviderAssociationSummary(input: unknown): ProviderAssoci
     'provider_summary_invalid',
   )
 
-  const providerRunId = optionalProviderRunId(record.providerRunId)
+  const provider = record.provider === undefined ? 'github-actions' : record.provider
+  if (provider !== 'github-actions' && provider !== 'local-proof')
+    throw new Error('provider_summary_invalid')
+  const providerRunId = provider === 'local-proof'
+    ? optionalLocalProviderRunId(record.providerRunId)
+    : optionalProviderRunId(record.providerRunId)
   const providerRunAttempt = optionalProviderRunAttempt(record.providerRunAttempt)
   const providerStatus = optionalProviderStatus(record.providerStatus)
   const providerConclusion = optionalProviderConclusion(record.providerConclusion)
   const sha = optionalSha(record.sha)
+  if (provider === 'local-proof') {
+    if ((record.environment !== undefined && record.environment !== localProofProviderRegistry.environment)
+      || (record.ref !== undefined && record.ref !== localProofProviderRegistry.ref)
+      || (record.repository !== undefined && record.repository !== localProofProviderRegistry.repository)
+      || (record.workflow !== undefined && record.workflow !== localProofProviderRegistry.workflow)
+      || record.providerRunUrl !== undefined
+      || (record.sha !== undefined && record.sha !== null)) {
+      throw new Error('provider_summary_invalid')
+    }
+    return Object.freeze({
+      provider,
+      ...(providerRunId ? { providerRunId } : {}),
+      ...(providerRunAttempt ? { providerRunAttempt } : {}),
+      ...(providerStatus ? { providerStatus } : {}),
+      ...(providerConclusion ? { providerConclusion } : {}),
+    })
+  }
+
   const environment = optionalFixedMetadata(record.environment, 'starye-org', 'provider_summary_invalid')
   const ref = optionalFixedMetadata(record.ref, 'main', 'provider_summary_invalid')
   const suppliedRepository = optionalFixedMetadata(record.repository, FIXED_PROVIDER_REPOSITORY, 'provider_summary_invalid')

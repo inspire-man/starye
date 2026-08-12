@@ -12,10 +12,14 @@ const { api } = vi.hoisted(() => ({
       listCrawlerTasks: vi.fn(),
       getCrawlerTask: vi.fn(),
       getCrawlerTaskLogs: vi.fn(),
+      getCrawlerTaskAudit: vi.fn(),
       createCrawlerTask: vi.fn(),
       repairPlayers: vi.fn(),
       cancelCrawlerRun: vi.fn(),
       retryCrawlerRun: vi.fn(),
+      updateCrawlerTask: vi.fn(),
+      archiveCrawlerTask: vi.fn(),
+      supersedeCrawlerTask: vi.fn(),
     },
   },
 }))
@@ -46,6 +50,7 @@ describe('crawlers local task panel', () => {
     api.admin.listCrawlerTasks.mockResolvedValue({ tasks: [] })
     api.admin.getCrawlerTask.mockResolvedValue({ task: null, runs: [] })
     api.admin.getCrawlerTaskLogs.mockResolvedValue({ logs: [], nextCursor: null })
+    api.admin.getCrawlerTaskAudit.mockResolvedValue({ audits: [], nextCursor: null })
     canAccessCrawler.mockReturnValue(true)
   })
 
@@ -138,6 +143,91 @@ describe('crawlers local task panel', () => {
     await wrapper.get('button.task-secondary').trigger('click')
     await (wrapper.vm as any).confirmRetry()
     expect(api.admin.retryCrawlerRun).toHaveBeenCalledWith('task-1', 'run-1')
+  })
+
+  it('keeps lifecycle separate from execution and renders bounded availability, history and audit facts', async () => {
+    const task = {
+      id: 'task-availability',
+      lifecycle: { changedAt: 100, status: 'active', version: 0 },
+      latestRunId: 'run-availability',
+      templateKey: 'movie',
+    }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      lifecycle: task.lifecycle,
+      availability: {
+        current: {
+          attemptNumber: 1,
+          contentId: 'content-1',
+          eventSequence: 2,
+          freshness: 'fresh',
+          nextAction: 'none',
+          observationIdentity: 'availability-current',
+          observedAt: 200,
+          policyVersion: 'v1',
+          projectionVersion: 2,
+          provider: 'github-actions',
+          reasonCode: 'available',
+          runId: 'run-availability',
+          sourceRevision: 3,
+          status: 'available',
+          summary: { counts: { ready: 1 }, samples: [{ code: 'transport_ok', count: 1 }] },
+          target: { id: 'movie-1', kind: 'movie' },
+          taskId: 'task-availability',
+        },
+        history: [
+          { kind: 'duplicate', observation: null, reason: 'exact_replay' },
+          { kind: 'late', observation: { observationIdentity: 'late-1', observedAt: 150, sourceRevision: 2, status: 'unknown', freshness: 'late' }, reason: 'run_is_late_or_cancelled' },
+        ],
+      },
+      task,
+      runs: [{ id: 'run-availability', status: 'succeeded', attemptNumber: 1, receipt: null }],
+    })
+    api.admin.getCrawlerTaskAudit.mockResolvedValue({
+      audits: [{ action: 'UPDATE', actor: { email: 'admin@example.test', id: 'admin-1' }, createdAt: 220, id: 'audit-1', outcome: 'updated', reason: 'metadata_update', runId: 'run-availability' }],
+      nextCursor: null,
+    })
+    const wrapper = mountCrawler()
+    await flushPromises()
+
+    expect(wrapper.find('[data-section="task-lifecycle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-evidence-section="availability"]').exists()).toBe(true)
+    expect(wrapper.find('[data-availability-current]').text()).toContain('available')
+    expect(wrapper.find('[data-availability-history]').text()).toContain('duplicate')
+    expect(wrapper.find('[data-evidence-section="audit"]').text()).toContain('metadata_update')
+    expect(wrapper.find('[data-section="task-lifecycle"]').text()).toContain('active')
+    expect(wrapper.text()).not.toContain('signed_url')
+    expect(wrapper.text()).not.toContain('rawresponse')
+  })
+
+  it('posts allowlisted metadata and lifecycle actions, then reloads authoritative detail', async () => {
+    const task = { id: 'task-actions', latestRunId: 'run-actions', templateKey: 'movie', lifecycle: { changedAt: 100, status: 'active', version: 0 } }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({ tasks: template === 'movie' ? [task] : [], nextCursor: null }))
+    api.admin.getCrawlerTask.mockResolvedValue({ lifecycle: task.lifecycle, task, runs: [{ id: 'run-actions', status: 'succeeded', attemptNumber: 1, receipt: null }] })
+    const wrapper = mountCrawler()
+    await flushPromises()
+
+    await (wrapper.vm as any).openMetadataEdit(task)
+    await (wrapper.vm as any).saveMetadata()
+    expect(api.admin.updateCrawlerTask).toHaveBeenCalledWith('task-actions', { intent: 'movie' })
+
+    await (wrapper.vm as any).askArchive(task)
+    await (wrapper.vm as any).confirmArchive()
+    expect(api.admin.archiveCrawlerTask).toHaveBeenCalledWith('task-actions')
+
+    await (wrapper.vm as any).askSupersede(task)
+    await (wrapper.vm as any).confirmSupersede()
+    expect(api.admin.supersedeCrawlerTask).toHaveBeenCalledWith('task-actions', expect.objectContaining({
+      idempotencyKey: 'dashboard:supersede:task-actions',
+      operation: 'movie',
+      policyReference: 'dashboard/crawler-task-supersede',
+      policyVersion: 'v1',
+      target: { id: 'task-actions', kind: 'movie' },
+    }))
+    expect(api.admin.getCrawlerTask).toHaveBeenCalled()
   })
 
   it('renders only validated succeeded receipts and appends older safe logs', async () => {

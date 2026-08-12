@@ -3,18 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
 current_phase: 25
-current_phase_name: Task Operations And Availability Contract
+current_phase_name: task-operations-and-availability-contract
 status: executing
 stopped_at: Created 25-06-PLAN.md; ready for Phase 25 gap closure execution
-last_updated: "2026-08-11T20:40:49+08:00"
+last_updated: "2026-08-11T12:48:55.176Z"
 last_activity: 2026-08-11
-last_activity_desc: Phase 25 plan 25-06 created to close UAT gap G-25-1
+last_activity_desc: Phase 25 execution started
 progress:
-  total_phases: 4
+  total_phases: 1
   completed_phases: 0
-  total_plans: 17
-  completed_plans: 4
-  percent: 24
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State: Starye — 个人内容中台
@@ -24,14 +23,14 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-08-10)
 
 **Core value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
-**Current focus:** Phase 25 — Task Operations And Availability Contract
+**Current focus:** Phase 25 — task-operations-and-availability-contract
 
 ## Current Position
 
-Phase: 25 (Task Operations And Availability Contract) — EXECUTING
-Plan: 6 of 6
-Status: Needs review gap closure; ready to execute 25-06
-Last activity: 2026-08-11 — Phase 25 plan 25-06 created for UAT gap G-25-1
+Phase: 25 (task-operations-and-availability-contract) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 25
+Last activity: 2026-08-11 — Phase 25 execution started
 
 ## Performance Metrics
 

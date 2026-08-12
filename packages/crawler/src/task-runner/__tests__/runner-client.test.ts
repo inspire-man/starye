@@ -178,4 +178,42 @@ describe('runnerClient', () => {
       outcome: 'source_failed',
     })
   })
+
+  it('serializes availability samples to the API evidence shape', async () => {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ accepted: true }), { status: 200 }))
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+      providerMode: 'local-proof',
+      now: () => 1_754_000_000_000,
+    })
+    const candidate: Parameters<RunnerClient['observeAvailability']>[0] = {
+      attempt: 1,
+      contentId: 'movie-1',
+      expectedProjectionVersion: 0,
+      policyReference: 'dashboard/phase25-gateway-proof',
+      policyVersion: 'v1',
+      proofProfile: 'phase25-movie-availability-v1',
+      provider: 'local-proof',
+      runId: 'run-availability-1',
+      sequence: 1,
+      snapshot: { entrypoint: 'movie-crawler', permissionResource: 'movie', templateKey: 'movie', templateVersion: 1 },
+      sourceRevision: 0,
+      target: { id: 'movie-1', kind: 'movie' },
+      taskId: 'task-availability-1',
+    }
+
+    await expect(client.observeAvailability(candidate, 2, {
+      freshness: 'fresh',
+      nextAction: 'none',
+      reasonCode: 'available',
+      status: 'available',
+      summary: { counts: { available: 1 }, samples: ['movie-1'] },
+    })).resolves.toMatchObject({ accepted: true })
+
+    const body = JSON.parse(String((fetch.mock.calls[0]![1] as RequestInit).body)) as Record<string, unknown>
+    expect(body.summary).toEqual({ counts: { available: 1 }, samples: [{ code: 'movie-1' }] })
+  })
 })

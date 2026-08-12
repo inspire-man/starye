@@ -79,6 +79,42 @@ describe('availability contract', () => {
     })).code).toBe('conflict')
   })
 
+  it('allows a newest run to replace an older current tuple at the expected projection version', () => {
+    const first = classifyAvailabilityCas(cas())
+    if (!first.accepted)
+      throw new Error('expected initial projection')
+
+    const next = classifyAvailabilityCas(cas({
+      current: first.projection,
+      expectedProjectionVersion: first.projection.projectionVersion,
+      expectedTuple: {
+        attemptNumber: 2,
+        contentId: first.projection.contentId,
+        provider: 'local-proof',
+        runId: 'run-2',
+        target: first.projection.target,
+        taskId: first.projection.taskId,
+      },
+      observation: observation({
+        attemptNumber: 2,
+        observationIdentity: 'observation-2',
+        observedAt: first.projection.observedAt + 1,
+        provider: 'local-proof',
+        runId: 'run-2',
+      }),
+    }))
+
+    expect(next).toMatchObject({
+      accepted: true,
+      projection: {
+        attemptNumber: 2,
+        projectionVersion: 2,
+        provider: 'local-proof',
+        runId: 'run-2',
+      },
+    })
+  })
+
   it('does not mutate the accepted projection when a CAS is rejected', () => {
     const current = classifyAvailabilityCas(cas())
     if (!current.accepted)

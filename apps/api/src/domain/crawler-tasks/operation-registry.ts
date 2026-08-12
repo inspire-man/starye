@@ -8,7 +8,7 @@ import type {
   RepairPlayersReason,
 } from './types'
 import { createProviderSnapshot } from './provider-association'
-import { createCrawlerTaskSnapshot, getCrawlerTaskTemplate, isCrawlerTaskOperation } from './template-registry'
+import { createCrawlerTaskSnapshot, getCrawlerTaskTemplate, isCrawlerTaskOperation, readCrawlerTaskSnapshot } from './template-registry'
 
 const MAX_ID_LENGTH = 128
 const MAX_POLICY_LENGTH = 128
@@ -74,6 +74,108 @@ export interface CrawlerOperationSnapshot extends CrawlerOperationServerSnapshot
   readonly requestSnapshotJson: string
 }
 
+const operationRegistry: CrawlerOperationRegistry = Object.freeze({
+  manga: Object.freeze({
+    operation: 'manga',
+    permissionResource: 'comic',
+    targetKind: 'manga',
+    template: Object.freeze(getCrawlerTaskTemplate('manga')),
+    provider: createProviderSnapshot('manga'),
+  }),
+  movie: Object.freeze({
+    operation: 'movie',
+    permissionResource: 'movie',
+    targetKind: 'movie',
+    template: Object.freeze(getCrawlerTaskTemplate('movie')),
+    provider: createProviderSnapshot('movie'),
+  }),
+  repair_players: Object.freeze({
+    operation: 'repair_players',
+    permissionResource: 'movie',
+    targetKind: 'movie',
+    template: Object.freeze(getCrawlerTaskTemplate('movie')),
+    provider: createProviderSnapshot('movie'),
+  }),
+})
+
+export const crawlerOperationRegistry: CrawlerOperationRegistry = operationRegistry
+
+/** Reads the immutable server snapshot stored in a task without trusting provider fields from a runner. */
+export function readCrawlerOperationServerSnapshot(value: unknown): CrawlerOperationServerSnapshot | undefined {
+  if (!isRecord(value) || !isRecord(value.template) || !isRecord(value.target) || !isRecord(value.actor) || !isRecord(value.intent))
+    return undefined
+  if (!isCrawlerTaskOperation(value.operation)
+    || typeof value.policyReference !== 'string'
+    || value.policyReference.trim().length === 0
+    || value.policyReference.length > MAX_REFERENCE_LENGTH
+    || typeof value.policyVersion !== 'string'
+    || value.policyVersion.trim().length === 0
+    || value.policyVersion.length > MAX_POLICY_LENGTH
+    || typeof value.idempotencyKey !== 'string'
+    || value.idempotencyKey.trim().length === 0
+    || value.idempotencyKey.length > MAX_ID_LENGTH
+    || (value.actor.kind !== 'admin' && value.actor.kind !== 'system' && value.actor.kind !== 'runner')
+    || typeof value.actor.id !== 'string'
+    || value.actor.id.trim().length === 0
+    || value.actor.id.length > MAX_ID_LENGTH
+    || (value.target.kind !== 'movie' && value.target.kind !== 'manga')
+    || typeof value.target.id !== 'string'
+    || value.target.id.trim().length === 0
+    || value.target.id.length > MAX_ID_LENGTH) {
+    return undefined
+  }
+  const parsedTemplate = readCrawlerTaskSnapshot(value.template, value.operation)
+  if (!parsedTemplate.ok)
+    return undefined
+  const definition = operationRegistry[value.operation]
+  if (definition.targetKind !== value.target.kind)
+    return undefined
+  if (value.provider && typeof value.provider === 'object' && !Array.isArray(value.provider)) {
+    const provider = value.provider as Record<string, unknown>
+    if (provider.provider !== definition.provider.provider
+      || provider.templateKey !== definition.provider.templateKey) {
+      return undefined
+    }
+  }
+  const intent = value.intent as Record<string, unknown>
+  if (intent.kind === 'crawl') {
+    if (Object.keys(intent).some(key => key !== 'kind'))
+      return undefined
+  }
+  else if (intent.kind === 'repair_players') {
+    if (intent.reason !== 'no_source' && intent.reason !== 'source_failed')
+      return undefined
+    if (intent.targetIntent !== 'restore_playable_sources'
+      || typeof intent.sourceRevision !== 'number'
+      || !Number.isSafeInteger(intent.sourceRevision)
+      || intent.sourceRevision < 0
+      || intent.sourceRevision > 1_000_000) {
+      return undefined
+    }
+  }
+  else {
+    return undefined
+  }
+  return deepFreeze({
+    actor: { id: value.actor.id.trim(), kind: value.actor.kind },
+    idempotencyKey: value.idempotencyKey.trim(),
+    intent: intent.kind === 'repair_players'
+      ? {
+          kind: 'repair_players',
+          reason: intent.reason,
+          sourceRevision: intent.sourceRevision,
+          targetIntent: 'restore_playable_sources',
+        }
+      : { kind: 'crawl' },
+    operation: value.operation,
+    policyReference: value.policyReference.trim(),
+    policyVersion: value.policyVersion.trim(),
+    provider: definition.provider,
+    target: { id: value.target.id.trim(), kind: value.target.kind },
+    template: parsedTemplate.snapshot,
+  }) as CrawlerOperationServerSnapshot
+}
+
 export type CrawlerOperationIdentityResult
   = | {
     readonly kind: 'new'
@@ -103,32 +205,6 @@ export interface CrawlerOperationIdentityInput {
   readonly candidate: Pick<CrawlerOperationSnapshot, 'fingerprint' | 'idempotencyKey'>
   readonly existing: CrawlerOperationExistingIdentity | null
 }
-
-const operationRegistry: CrawlerOperationRegistry = Object.freeze({
-  manga: Object.freeze({
-    operation: 'manga',
-    permissionResource: 'comic',
-    targetKind: 'manga',
-    template: Object.freeze(getCrawlerTaskTemplate('manga')),
-    provider: createProviderSnapshot('manga'),
-  }),
-  movie: Object.freeze({
-    operation: 'movie',
-    permissionResource: 'movie',
-    targetKind: 'movie',
-    template: Object.freeze(getCrawlerTaskTemplate('movie')),
-    provider: createProviderSnapshot('movie'),
-  }),
-  repair_players: Object.freeze({
-    operation: 'repair_players',
-    permissionResource: 'movie',
-    targetKind: 'movie',
-    template: Object.freeze(getCrawlerTaskTemplate('movie')),
-    provider: createProviderSnapshot('movie'),
-  }),
-})
-
-export const crawlerOperationRegistry: CrawlerOperationRegistry = operationRegistry
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
