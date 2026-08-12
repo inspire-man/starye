@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
-current_phase: 25
-current_phase_name: task-operations-and-availability-contract
-status: executing
-stopped_at: Created 25-06-PLAN.md; ready for Phase 25 gap closure execution
-last_updated: "2026-08-11T12:48:55.176Z"
-last_activity: 2026-08-11
-last_activity_desc: Phase 25 execution started
+current_phase: 26
+current_phase_name: Video Source And Magnet Availability
+status: planning
+stopped_at: Phase 25 complete; ready to discuss Phase 26
+last_updated: "2026-08-12T04:27:26.219Z"
+last_activity: 2026-08-12
+last_activity_desc: Phase 25 complete, transitioned to Phase 26
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State: Starye — 个人内容中台
@@ -23,20 +23,20 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-08-10)
 
 **Core value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
-**Current focus:** Phase 25 — task-operations-and-availability-contract
+**Current focus:** Phase 26 — Video Source And Magnet Availability
 
 ## Current Position
 
-Phase: 25 (task-operations-and-availability-contract) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 25
-Last activity: 2026-08-11 — Phase 25 execution started
+Phase: 26 — Video Source And Magnet Availability
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-12 — Phase 25 complete, transitioned to Phase 26
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 26
+- Total plans completed: 29
 - Average duration: —
 - Total execution time: —
 
@@ -49,7 +49,7 @@ Last activity: 2026-08-11 — Phase 25 execution started
 | 22 | 3 | 3 | — |
 | 23 | 5 | 5 | — |
 | 24 | 5 | 5 | — |
-| 25 | 4 | 6 | ~59 min |
+| 25 | 6 | 6 | ~49 min |
 | 26 | 0 | 4 | — |
 | 27 | 0 | 3 | — |
 | 28 | 0 | 4 | — |
@@ -82,14 +82,13 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- [ ] Provide an authenticated Dashboard browser/CDP session, rerun the Phase 25 canonical proof, then complete verification and UAT.
+- [ ] Discuss Phase 26 video source and magnet availability boundaries.
 
 ### Blockers/Concerns
 
 - Magnet truth depends on the configured Aria2/TorrServer observation path and must define bounded metadata, peer, stream and playback states during Phase 26 planning.
 - Comic sources may represent special chapters, missing numbers, duplicates and pagination differently; Phase 27 must select stable identity and terminal-state semantics before implementation.
 - Image hosts may differ for HEAD, Range, redirects, anti-hotlink challenges and browser loading; Phase 28 needs representative fixtures and bounded fan-out.
-- D1 projection granularity, observation retention and task archive semantics must be finalized in Phase 25 without growing unbounded result blobs or deleting audit history.
 
 ## Deferred Items
 
@@ -103,6 +102,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-11T11:25:58+08:00
-Stopped at: Created 25-06-PLAN.md; ready to execute the ownership-aware Gateway proof gap closure
+Last session: 2026-08-12T12:27:00+08:00
+Stopped at: Phase 25 complete; ready to discuss Phase 26
 Resume file: None

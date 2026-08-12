@@ -1,10 +1,10 @@
 ---
 phase: 25-task-operations-and-availability-contract
-verified: 2026-08-12T11:15:18+08:00
+verified: 2026-08-12T12:27:00+08:00
 status: passed
 score: 4/4 must-haves verified
 behavior_unverified: 0
-verification_mode: goal-backward, source, focused tests, and authenticated live Gateway proof
+verification_mode: goal-backward, source, refreshed focused tests after 25-06 summary recovery, and authenticated live Gateway proof
 ---
 
 # Phase 25: Task Operations And Availability Contract Verification Report
@@ -83,5 +83,5 @@ Complete through the authenticated application browser. No manual checkpoint rem
 No code, automated-test, or live Gateway gap remains. The mixed dirty worktree remains intentionally uncommitted; no broad commit was attempted.
 
 ---
-_Verified: 2026-08-12T11:15:18+08:00_
+_Verified: 2026-08-12T12:27:00+08:00_
 _Verifier: Codex goal-backward review plus authenticated live Gateway UAT_
