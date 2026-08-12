@@ -182,6 +182,12 @@ describe('crawlers local task panel', () => {
           { kind: 'duplicate', observation: null, reason: 'exact_replay' },
           { kind: 'late', observation: { observationIdentity: 'late-1', observedAt: 150, sourceRevision: 2, status: 'unknown', freshness: 'late' }, reason: 'run_is_late_or_cancelled' },
         ],
+        layers: {
+          metadata: { current: { layer: 'metadata', status: 'available', reason: null, freshness: 'fresh', observedAt: 200, policyVersion: 'video-source-probe/v1', sourceRevision: 3, summary: { counts: { persisted: 1 }, samples: [] } }, history: [] },
+          direct: { current: { layer: 'direct', status: 'degraded', reason: 'direct_transport_failed', freshness: 'fresh', observedAt: 201, policyVersion: 'video-source-probe/v1', sourceRevision: 3, summary: { counts: { available: 1, abnormal: 2 }, samples: [{ code: 'range_failed', count: 2 }] } }, history: [{ layer: 'direct', status: 'available', reason: null, freshness: 'stale', observedAt: 150, policyVersion: 'video-source-probe/v1', sourceRevision: 2, summary: { counts: { available: 1 }, samples: [] } }] },
+          magnet: { current: { layer: 'magnet', status: 'degraded', reason: 'provider_unconfigured', freshness: 'fresh', observedAt: 202, policyVersion: 'video-source-probe/v1', sourceRevision: 3, summary: { counts: { checked: 1 }, samples: [] } }, history: [] },
+          playback: { current: { layer: 'playback', status: 'unknown', reason: 'playback_unverified', freshness: 'fresh', observedAt: 203, policyVersion: 'video-source-probe/v1', sourceRevision: 3, summary: { counts: { evidence: 1 }, samples: [] } }, history: [] },
+        },
       },
       task,
       runs: [{ id: 'run-availability', status: 'succeeded', attemptNumber: 1, receipt: null }],
@@ -197,6 +203,15 @@ describe('crawlers local task panel', () => {
     expect(wrapper.find('[data-evidence-section="availability"]').exists()).toBe(true)
     expect(wrapper.find('[data-availability-current]').text()).toContain('available')
     expect(wrapper.find('[data-availability-history]').text()).toContain('duplicate')
+    expect(wrapper.findAll('[data-video-layer]').map(row => row.attributes('data-video-layer'))).toEqual(['metadata', 'direct', 'magnet', 'playback'])
+    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('available：1')
+    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('abnormal：2')
+    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('direct_transport_failed')
+    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('重新检查')
+    expect(wrapper.get('[data-video-layer="direct"] [data-video-history]').text()).toContain('revision 2')
+    expect(wrapper.get('[data-video-layer="magnet"]').text()).toContain('配置 provider')
+    expect(wrapper.get('[data-video-layer="playback"]').text()).toContain('playback_unverified')
+    expect(wrapper.get('[data-video-layer="playback"]').text()).toContain('重新检查')
     expect(wrapper.find('[data-evidence-section="audit"]').text()).toContain('metadata_update')
     expect(wrapper.find('[data-section="task-lifecycle"]').text()).toContain('active')
     expect(wrapper.text()).not.toContain('signed_url')
