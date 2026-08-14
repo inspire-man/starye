@@ -119,6 +119,18 @@
 - [Getting Started | Guide](/guide.md)
 - [Features | Guide](/guide/features.md)
 
+### Learn
+
+- [Writing Tests | Guide](/guide/learn/writing-tests.md)
+- [Using Matchers | Guide](/guide/learn/matchers.md)
+- [Testing Asynchronous Code | Guide](/guide/learn/async.md)
+- [Setup and Teardown | Guide](/guide/learn/setup-teardown.md)
+- [Mock Functions | Guide](/guide/learn/mock-functions.md)
+- [Snapshot Testing | Guide](/guide/learn/snapshots.md)
+- [Testing in Practice | Guide](/guide/learn/testing-in-practice.md)
+- [Debugging Failing Tests | Guide](/guide/learn/debugging-tests.md)
+- [Writing Tests with AI | Guide](/guide/learn/writing-tests-with-ai.md)
+
 ### Browser Mode
 
 - [Why Browser Mode | Browser Mode](/guide/browser/why.md)
@@ -127,6 +139,7 @@
 - [Component Testing | Guide](/guide/browser/component-testing.md)
 - [Visual Regression Testing](/guide/browser/visual-regression-testing.md)
 - [Trace View](/guide/browser/trace-view.md)
+- [ARIA Snapshots | Guide](/guide/browser/aria-snapshots.md)
 
 ### Guides
 

@@ -1,6 +1,8 @@
 # Valibot
 
-The modular and type safe schema library for validating structural data.
+> The modular and type safe schema library for validating structural data.
+
+Every link below points to the Markdown version of a documentation page. The same page is served as HTML at the same URL without the `.md` extension. The whole documentation is also available as a single file at [llms-full.txt](https://valibot.dev/llms-full.txt), the guides at [llms-guides.txt](https://valibot.dev/llms-guides.txt), the API reference at [llms-api.txt](https://valibot.dev/llms-api.txt) and the blog posts at [llms-blog.txt](https://valibot.dev/llms-blog.txt). An MCP server with tools to search and read this documentation is available at https://valibot.dev/mcp (see [server card](https://valibot.dev/.well-known/mcp/server-card.json) and [coding agents guide](https://valibot.dev/guides/coding-agents.md)).
 
 ## Guides
 
@@ -8,11 +10,11 @@ The modular and type safe schema library for validating structural data.
 
 - [Introduction](https://valibot.dev/guides/introduction.md)
 - [Installation](https://valibot.dev/guides/installation.md)
+- [Coding agents](https://valibot.dev/guides/coding-agents.md)
 - [Quick start](https://valibot.dev/guides/quick-start.md)
 - [Use cases](https://valibot.dev/guides/use-cases.md)
 - [Comparison](https://valibot.dev/guides/comparison.md)
 - [Ecosystem](https://valibot.dev/guides/ecosystem.md)
-- [LLMs.txt](https://valibot.dev/guides/llms-txt.md)
 
 ### Main concepts
 
@@ -48,6 +50,12 @@ The modular and type safe schema library for validating structural data.
 
 - [To v0.31.0](https://valibot.dev/guides/migrate-to-v0.31.0.md)
 - [From Zod](https://valibot.dev/guides/migrate-from-zod.md)
+- [From TypeBox](https://valibot.dev/guides/migrate-from-typebox.md)
+- [From Joi](https://valibot.dev/guides/migrate-from-joi.md)
+- [From Yup](https://valibot.dev/guides/migrate-from-yup.md)
+- [From class-validator](https://valibot.dev/guides/migrate-from-class-validator.md)
+- [From Superstruct](https://valibot.dev/guides/migrate-from-superstruct.md)
+- [From io-ts](https://valibot.dev/guides/migrate-from-io-ts.md)
 
 ## API reference
 
@@ -140,6 +148,7 @@ The modular and type safe schema library for validating structural data.
 - [bytes](https://valibot.dev/api/bytes.md)
 - [check](https://valibot.dev/api/check.md)
 - [checkItems](https://valibot.dev/api/checkItems.md)
+- [codePoints](https://valibot.dev/api/codePoints.md)
 - [creditCard](https://valibot.dev/api/creditCard.md)
 - [cuid2](https://valibot.dev/api/cuid2.md)
 - [decimal](https://valibot.dev/api/decimal.md)
@@ -174,18 +183,21 @@ The modular and type safe schema library for validating structural data.
 - [isrc](https://valibot.dev/api/isrc.md)
 - [isoDate](https://valibot.dev/api/isoDate.md)
 - [isoDateTime](https://valibot.dev/api/isoDateTime.md)
+- [isoDateTimeSecond](https://valibot.dev/api/isoDateTimeSecond.md)
 - [isoTime](https://valibot.dev/api/isoTime.md)
 - [isoTimeSecond](https://valibot.dev/api/isoTimeSecond.md)
 - [isoTimestamp](https://valibot.dev/api/isoTimestamp.md)
 - [isoWeek](https://valibot.dev/api/isoWeek.md)
 - [jwsCompact](https://valibot.dev/api/jwsCompact.md)
+- [ksuid](https://valibot.dev/api/ksuid.md)
 - [length](https://valibot.dev/api/length.md)
-- [ltValue](/api/ltValue)
+- [ltValue](https://valibot.dev/api/ltValue.md)
 - [mac](https://valibot.dev/api/mac.md)
 - [mac48](https://valibot.dev/api/mac48.md)
 - [mac64](https://valibot.dev/api/mac64.md)
 - [mapItems](https://valibot.dev/api/mapItems.md)
 - [maxBytes](https://valibot.dev/api/maxBytes.md)
+- [maxCodePoints](https://valibot.dev/api/maxCodePoints.md)
 - [maxEntries](https://valibot.dev/api/maxEntries.md)
 - [maxGraphemes](https://valibot.dev/api/maxGraphemes.md)
 - [maxLength](https://valibot.dev/api/maxLength.md)
@@ -195,6 +207,7 @@ The modular and type safe schema library for validating structural data.
 - [metadata](https://valibot.dev/api/metadata.md)
 - [mimeType](https://valibot.dev/api/mimeType.md)
 - [minBytes](https://valibot.dev/api/minBytes.md)
+- [minCodePoints](https://valibot.dev/api/minCodePoints.md)
 - [minEntries](https://valibot.dev/api/minEntries.md)
 - [minGraphemes](https://valibot.dev/api/minGraphemes.md)
 - [minLength](https://valibot.dev/api/minLength.md)
@@ -206,6 +219,7 @@ The modular and type safe schema library for validating structural data.
 - [nonEmpty](https://valibot.dev/api/nonEmpty.md)
 - [normalize](https://valibot.dev/api/normalize.md)
 - [notBytes](https://valibot.dev/api/notBytes.md)
+- [notCodePoints](https://valibot.dev/api/notCodePoints.md)
 - [notEntries](https://valibot.dev/api/notEntries.md)
 - [notGraphemes](https://valibot.dev/api/notGraphemes.md)
 - [notLength](https://valibot.dev/api/notLength.md)
@@ -234,11 +248,15 @@ The modular and type safe schema library for validating structural data.
 - [title](https://valibot.dev/api/title.md)
 - [toBigint](https://valibot.dev/api/toBigint.md)
 - [toBoolean](https://valibot.dev/api/toBoolean.md)
+- [toCamelCase](https://valibot.dev/api/toCamelCase.md)
 - [toDate](https://valibot.dev/api/toDate.md)
+- [toKebabCase](https://valibot.dev/api/toKebabCase.md)
 - [toLowerCase](https://valibot.dev/api/toLowerCase.md)
 - [toMaxValue](https://valibot.dev/api/toMaxValue.md)
 - [toMinValue](https://valibot.dev/api/toMinValue.md)
 - [toNumber](https://valibot.dev/api/toNumber.md)
+- [toPascalCase](https://valibot.dev/api/toPascalCase.md)
+- [toSnakeCase](https://valibot.dev/api/toSnakeCase.md)
 - [toString](https://valibot.dev/api/toString.md)
 - [toUpperCase](https://valibot.dev/api/toUpperCase.md)
 - [transform](https://valibot.dev/api/transform.md)
@@ -371,6 +389,8 @@ The modular and type safe schema library for validating structural data.
 - [CheckItemsActionAsync](https://valibot.dev/api/CheckItemsActionAsync.md)
 - [CheckItemsIssue](https://valibot.dev/api/CheckItemsIssue.md)
 - [Class](https://valibot.dev/api/Class.md)
+- [CodePointsAction](https://valibot.dev/api/CodePointsAction.md)
+- [CodePointsIssue](https://valibot.dev/api/CodePointsIssue.md)
 - [Config](https://valibot.dev/api/Config.md)
 - [ContentInput](https://valibot.dev/api/ContentInput.md)
 - [ContentRequirement](https://valibot.dev/api/ContentRequirement.md)
@@ -523,6 +543,8 @@ The modular and type safe schema library for validating structural data.
 - [IsoDateIssue](https://valibot.dev/api/IsoDateIssue.md)
 - [IsoDateTimeAction](https://valibot.dev/api/IsoDateTimeAction.md)
 - [IsoDateTimeIssue](https://valibot.dev/api/IsoDateTimeIssue.md)
+- [IsoDateTimeSecondAction](https://valibot.dev/api/IsoDateTimeSecondAction.md)
+- [IsoDateTimeSecondIssue](https://valibot.dev/api/IsoDateTimeSecondIssue.md)
 - [IsoTimeAction](https://valibot.dev/api/IsoTimeAction.md)
 - [IsoTimeIssue](https://valibot.dev/api/IsoTimeIssue.md)
 - [IsoTimeSecondAction](https://valibot.dev/api/IsoTimeSecondAction.md)
@@ -535,6 +557,9 @@ The modular and type safe schema library for validating structural data.
 - [IssuePathItem](https://valibot.dev/api/IssuePathItem.md)
 - [JwsCompactAction](https://valibot.dev/api/JwsCompactAction.md)
 - [JwsCompactIssue](https://valibot.dev/api/JwsCompactIssue.md)
+- [KsuidAction](https://valibot.dev/api/KsuidAction.md)
+- [KsuidIssue](https://valibot.dev/api/KsuidIssue.md)
+- [LastTupleItem](https://valibot.dev/api/LastTupleItem.md)
 - [LazySchema](https://valibot.dev/api/LazySchema.md)
 - [LazySchemaAsync](https://valibot.dev/api/LazySchemaAsync.md)
 - [LengthAction](https://valibot.dev/api/LengthAction.md)
@@ -564,6 +589,8 @@ The modular and type safe schema library for validating structural data.
 - [MapSchemaAsync](https://valibot.dev/api/MapSchemaAsync.md)
 - [MaxBytesAction](https://valibot.dev/api/MaxBytesAction.md)
 - [MaxBytesIssue](https://valibot.dev/api/MaxBytesIssue.md)
+- [MaxCodePointsAction](https://valibot.dev/api/MaxCodePointsAction.md)
+- [MaxCodePointsIssue](https://valibot.dev/api/MaxCodePointsIssue.md)
 - [MaxEntriesAction](https://valibot.dev/api/MaxEntriesAction.md)
 - [MaxEntriesIssue](https://valibot.dev/api/MaxEntriesIssue.md)
 - [MaxGraphemesAction](https://valibot.dev/api/MaxGraphemesAction.md)
@@ -583,6 +610,8 @@ The modular and type safe schema library for validating structural data.
 - [MimeTypeIssue](https://valibot.dev/api/MimeTypeIssue.md)
 - [MinBytesAction](https://valibot.dev/api/MinBytesAction.md)
 - [MinBytesIssue](https://valibot.dev/api/MinBytesIssue.md)
+- [MinCodePointsAction](https://valibot.dev/api/MinCodePointsAction.md)
+- [MinCodePointsIssue](https://valibot.dev/api/MinCodePointsIssue.md)
 - [MinEntriesAction](https://valibot.dev/api/MinEntriesAction.md)
 - [MinEntriesIssue](https://valibot.dev/api/MinEntriesIssue.md)
 - [MinGraphemesAction](https://valibot.dev/api/MinGraphemesAction.md)
@@ -619,6 +648,8 @@ The modular and type safe schema library for validating structural data.
 - [NormalizeForm](https://valibot.dev/api/NormalizeForm.md)
 - [NotBytesAction](https://valibot.dev/api/NotBytesAction.md)
 - [NotBytesIssue](https://valibot.dev/api/NotBytesIssue.md)
+- [NotCodePointsAction](https://valibot.dev/api/NotCodePointsAction.md)
+- [NotCodePointsIssue](https://valibot.dev/api/NotCodePointsIssue.md)
 - [NotEntriesAction](https://valibot.dev/api/NotEntriesAction.md)
 - [NotEntriesIssue](https://valibot.dev/api/NotEntriesIssue.md)
 - [NotGraphemesAction](https://valibot.dev/api/NotGraphemesAction.md)
@@ -696,6 +727,7 @@ The modular and type safe schema library for validating structural data.
 - [RecordSchema](https://valibot.dev/api/RecordSchema.md)
 - [RecordSchemaAsync](https://valibot.dev/api/RecordSchemaAsync.md)
 - [ReduceItemsAction](https://valibot.dev/api/ReduceItemsAction.md)
+- [Reference](https://valibot.dev/api/Reference.md)
 - [RegexAction](https://valibot.dev/api/RegexAction.md)
 - [RegexIssue](https://valibot.dev/api/RegexIssue.md)
 - [RequiredPath](https://valibot.dev/api/RequiredPath.md)
@@ -759,13 +791,17 @@ The modular and type safe schema library for validating structural data.
 - [ToBigintAction](https://valibot.dev/api/ToBigintAction.md)
 - [ToBigintIssue](https://valibot.dev/api/ToBigintIssue.md)
 - [ToBooleanAction](https://valibot.dev/api/ToBooleanAction.md)
+- [ToCamelCaseAction](https://valibot.dev/api/ToCamelCaseAction.md)
 - [ToDateAction](https://valibot.dev/api/ToDateAction.md)
 - [ToDateIssue](https://valibot.dev/api/ToDateIssue.md)
+- [ToKebabCaseAction](https://valibot.dev/api/ToKebabCaseAction.md)
 - [ToLowerCaseAction](https://valibot.dev/api/ToLowerCaseAction.md)
 - [ToMaxValueAction](https://valibot.dev/api/ToMaxValueAction.md)
 - [ToMinValueAction](https://valibot.dev/api/ToMinValueAction.md)
 - [ToNumberAction](https://valibot.dev/api/ToNumberAction.md)
 - [ToNumberIssue](https://valibot.dev/api/ToNumberIssue.md)
+- [ToPascalCaseAction](https://valibot.dev/api/ToPascalCaseAction.md)
+- [ToSnakeCaseAction](https://valibot.dev/api/ToSnakeCaseAction.md)
 - [ToStringAction](https://valibot.dev/api/ToStringAction.md)
 - [ToStringIssue](https://valibot.dev/api/ToStringIssue.md)
 - [ToUpperCaseAction](https://valibot.dev/api/ToUpperCaseAction.md)
@@ -806,6 +842,8 @@ The modular and type safe schema library for validating structural data.
 - [ValueIssue](https://valibot.dev/api/ValueIssue.md)
 - [ValuesIssue](https://valibot.dev/api/ValuesIssue.md)
 - [VariantIssue](https://valibot.dev/api/VariantIssue.md)
+- [VariantOption](https://valibot.dev/api/VariantOption.md)
+- [VariantOptionAsync](https://valibot.dev/api/VariantOptionAsync.md)
 - [VariantOptions](https://valibot.dev/api/VariantOptions.md)
 - [VariantOptionsAsync](https://valibot.dev/api/VariantOptionsAsync.md)
 - [VariantSchema](https://valibot.dev/api/VariantSchema.md)
@@ -814,3 +852,31 @@ The modular and type safe schema library for validating structural data.
 - [VoidSchema](https://valibot.dev/api/VoidSchema.md)
 - [WordsAction](https://valibot.dev/api/WordsAction.md)
 - [WordsIssue](https://valibot.dev/api/WordsIssue.md)
+
+## Blog
+
+### Posts of 2026
+
+- [Making Valibot easier for coding agents to use](https://valibot.dev/blog/making-valibot-easier-for-coding-agents.md) (August 11, 2026)
+- [One Model, Many Views: Type-Safe Transforms with Valibot and doba](https://valibot.dev/blog/same-data-different-shapes.md) (June 3, 2026)
+- [How Dependency Size Impacts Cold Starts in Edge JavaScript Runtimes](https://valibot.dev/blog/dependency-size-and-cold-starts.md) (May 26, 2026)
+- [Valibot v1.4: String case transforms, local timestamps, and perf improvements](https://valibot.dev/blog/valibot-v1.4-release-notes.md) (May 5, 2026)
+- [Why migrate to Valibot?](https://valibot.dev/blog/why-migrate-to-valibot.md) (March 23, 2026)
+- [Valibot v1.3: Smarter pipelines, result caching, and new validators](https://valibot.dev/blog/valibot-v1.3-release-notes.md) (March 17, 2026)
+- [Introducing Open Circle](https://valibot.dev/blog/introducing-open-circle.md) (January 27, 2026)
+
+### Posts of 2025
+
+- [Valibot v1.2: Type coercion, AI metadata, and ISBN validation](https://valibot.dev/blog/valibot-v1.2-release-notes.md) (November 24, 2025)
+- [JSON Schema package upgrade](https://valibot.dev/blog/json-schema-package-upgrade.md) (June 1, 2025)
+- [Valibot v1.1 release notes](https://valibot.dev/blog/valibot-v1.1-release-notes.md) (May 7, 2025)
+- [Valibot v1 - The 1 kB schema library](https://valibot.dev/blog/valibot-v1-the-1-kb-schema-library.md) (March 19, 2025)
+- [Valibot v1 RC is now available](https://valibot.dev/blog/valibot-v1-rc-is-available.md) (February 10, 2025)
+- [Should we change the object schema?](https://valibot.dev/blog/should-we-change-the-object-schema.md) (January 18, 2025)
+
+### Posts of 2024
+
+- [How Valibot has evolved this year](https://valibot.dev/blog/how-valibot-has-evolved-this-year.md) (June 19, 2024)
+- [Valibot v0.31.0 is finally available](https://valibot.dev/blog/valibot-v0.31.0-is-finally-available.md) (June 6, 2024)
+- [First draft of the new pipe function](https://valibot.dev/blog/first-draft-of-the-new-pipe-function.md) (April 2, 2024)
+- [Should we change Valibot's API?](https://valibot.dev/blog/should-we-change-valibots-api.md) (February 29, 2024)

@@ -14,12 +14,14 @@
 - [Emails](https://zod.dev/api?id=emails)
 - [UUIDs](https://zod.dev/api?id=uuids)
 - [URLs](https://zod.dev/api?id=urls)
+- [Phone numbers](https://zod.dev/api?id=phone-numbers)
 - [ISO datetimes](https://zod.dev/api?id=iso-datetimes)
 - [ISO dates](https://zod.dev/api?id=iso-dates)
 - [ISO times](https://zod.dev/api?id=iso-times)
 - [IP addresses](https://zod.dev/api?id=ip-addresses)
 - [IP blocks (CIDR)](https://zod.dev/api?id=ip-blocks-cidr)
 - [MAC Addresses](https://zod.dev/api?id=mac-addresses)
+- [Credit card numbers](https://zod.dev/api?id=credit-card-numbers)
 - [JWTs](https://zod.dev/api?id=jwts)
 - [Hashes](https://zod.dev/api?id=hashes)
 - [Custom formats](https://zod.dev/api?id=custom-formats)
@@ -105,6 +107,7 @@
 
 - [Codecs](https://zod.dev/codecs): Bidirectional transformations with encode and decode
 
+- [Inverting codecs](https://zod.dev/codecs?id=inverting-codecs)
 - [Composability](https://zod.dev/codecs?id=composability)
 - [Type-safe inputs](https://zod.dev/codecs?id=type-safe-inputs)
 - [Async and safe variants](https://zod.dev/codecs?id=async-and-safe-variants)
@@ -211,9 +214,8 @@
 
 - [Do I need to depend on Zod?](https://zod.dev/library-authors?id=do-i-need-to-depend-on-zod)
 - [How to configure peer dependencies?](https://zod.dev/library-authors?id=how-to-configure-peer-dependencies)
-- [How to support Zod 4?](https://zod.dev/library-authors?id=how-to-support-zod-4)
-- [Do I need to publish a new major version?](https://zod.dev/library-authors?id=do-i-need-to-publish-a-new-major-version)
-- [How to support Zod 3 and Zod 4 simultaneously?](https://zod.dev/library-authors?id=how-to-support-zod-3-and-zod-4-simultaneously)
+- [Which subpaths should I import from?](https://zod.dev/library-authors?id=which-subpaths-should-i-import-from)
+- [How to support Zod 3 alongside Zod 4?](https://zod.dev/library-authors?id=how-to-support-zod-3-alongside-zod-4)
 - [How to support Zod and Zod Mini simultaneously?](https://zod.dev/library-authors?id=how-to-support-zod-and-zod-mini-simultaneously)
 - [How to accept user-defined schemas?](https://zod.dev/library-authors?id=how-to-accept-user-defined-schemas)
 
@@ -286,6 +288,7 @@
 - [deprecates .format()](https://zod.dev/v4/changelog?id=deprecates-format)
 - [deprecates .flatten()](https://zod.dev/v4/changelog?id=deprecates-flatten)
 - [drops .formErrors](https://zod.dev/v4/changelog?id=drops-formerrors)
+- [drops .errors](https://zod.dev/v4/changelog?id=drops-errors)
 - [deprecates .addIssue() and .addIssues()](https://zod.dev/v4/changelog?id=deprecates-addissue-and-addissues)
 - [z.number()](https://zod.dev/v4/changelog?id=znumber)
 - [no infinite values](https://zod.dev/v4/changelog?id=no-infinite-values)

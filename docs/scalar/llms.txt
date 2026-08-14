@@ -1,147 +1,234 @@
-- [Pricing](https://scalar.com/pricing.md): Transparent pricing for developer documentation, SDKs, and API tools. Start free and scale as you grow.
-- [Introduction](https://scalar.com/index.md): Industry leading Developer Docs, SDKs, API Client & Registry that your APIs deserve.
-- [Privacy](https://scalar.com/products/docs/privacy.md)
-- [Getting Started](https://scalar.com/products/docs/getting-started.md): Learn how to create and publish stunning developer documentation with Docs in minutes.
-- [Starter Kit](https://scalar.com/products/docs/configuration/starter-kit.md)
-- [Automatic Deployment](https://scalar.com/products/docs/deployment/automatic-deployment.md)
-- [Assets](https://scalar.com/products/docs/content/assets.md)
-- [Navigation](https://scalar.com/products/docs/configuration/navigation.md)
-- [Site Config](https://scalar.com/products/docs/configuration/site-config.md)
-- [Migrate from 1.0](https://scalar.com/products/docs/configuration/migration.md)
-- [Redirects](https://scalar.com/products/docs/configuration/redirects.md)
-- [Domains](https://scalar.com/products/docs/configuration/domains.md)
-- [CLI](https://scalar.com/products/docs/deployment/cli.md)
-- [Preview Deployments](https://scalar.com/products/docs/deployment/preview-deployments.md)
-- [Build Failures](https://scalar.com/products/docs/deployment/build-failures.md)
-- [scalar.config.json](https://scalar.com/products/docs/configuration/scalar.config.json.md): Complete configuration reference for scalar.config.json including routing, navigation, and site settings.
-- [Private Docs](https://scalar.com/products/docs/configuration/private-docs.md): Control access to your documentation with password protection, SSO, and team-based permissions.
-- [GitHub Actions](https://scalar.com/products/docs/deployment/github-actions.md): Automate documentation deployment with GitHub Actions workflows for continuous delivery and preview environments.
-- [Themes](https://scalar.com/products/docs/configuration/themes.md): Customize your documentation appearance with themes, colors, fonts, and CSS variables for perfect brand alignment.
-- [HTML/CSS/JS](https://scalar.com/products/docs/content/html-css-js.md)
-- [MDX](https://scalar.com/products/docs/content/mdx.md)
-- [Markdown Support](https://scalar.com/products/docs/components/markdown-support.md): Full markdown syntax reference including tables, lists, links, images, and GitHub-flavored markdown features.
-- [Buttons](https://scalar.com/products/docs/components/buttons.md)
-- [Callouts](https://scalar.com/products/docs/components/callouts.md)
-- [Math](https://scalar.com/products/docs/components/math.md)
-- [Getting Started](https://scalar.com/products/sdks/getting-started.md): Automatically generate type-safe SDKs from OpenAPI specifications in multiple programming languages.
-- [TypeScript](https://scalar.com/products/sdks/configuration/typescript.md)
-- [Embeds](https://scalar.com/products/docs/components/embeds.md)
-- [Code Blocks](https://scalar.com/products/docs/components/code-blocks.md): Syntax highlighting for 100+ programming languages with line numbers, highlighting, and copy-to-clipboard functionality.
-- [Images](https://scalar.com/products/docs/components/images.md)
-- [Icons](https://scalar.com/products/docs/components/icons.md)
-- [Steps](https://scalar.com/products/docs/components/steps.md)
-- [Tabs](https://scalar.com/products/docs/components/tabs.md)
-- [Details](https://scalar.com/products/docs/components/details.md)
-- [Row](https://scalar.com/products/docs/components/row.md)
-- [Page Link](https://scalar.com/products/docs/components/page-link.md)
-- [Cards](https://scalar.com/products/docs/components/cards.md)
-- [Publishing](https://scalar.com/products/sdks/publishing.md)
-- [Python](https://scalar.com/products/sdks/configuration/python.md)
-- [Go](https://scalar.com/products/sdks/configuration/go.md)
-- [Java](https://scalar.com/products/sdks/configuration/java.md)
-- [C#](https://scalar.com/products/sdks/configuration/csharp.md)
-- [PHP](https://scalar.com/products/sdks/configuration/php.md)
-- [Getting Started](https://scalar.com/products/registry/getting-started.md): Store, version, and manage your OpenAPI specifications in a centralized registry with automated CI/CD workflows.
-- [Ruby](https://scalar.com/products/sdks/configuration/ruby.md)
-- [Swift](https://scalar.com/products/sdks/configuration/swift.md)
-- [Getting Started](https://scalar.com/products/api-references/getting-started.md): Create stunning API documentation from OpenAPI specs with a modern, customizable interface and built-in request testing.
-- [Upload](https://scalar.com/products/registry/upload.md)
-- [Rules](https://scalar.com/products/registry/rules.md)
-- [Schemas](https://scalar.com/products/registry/schemas.md)
-- [CLI](https://scalar.com/products/registry/cli.md)
-- [GitHub Actions](https://scalar.com/products/registry/github-actions.md)
-- [GitLab CI/CD](https://scalar.com/products/registry/gitlab-ci.md)
-- [Configuration](https://scalar.com/products/api-references/configuration.md): Configure API references with custom layouts, authentication, server URLs, and request customization options.
-- [Plugins](https://scalar.com/products/api-references/plugins.md)
-- [Themes](https://scalar.com/products/api-references/themes.md): Customize API reference appearance with built-in themes, dark mode, and custom CSS for perfect brand matching.
-- [OpenAPI](https://scalar.com/products/api-references/openapi.md): Learn how Scalar handles OpenAPI 3.0 and 3.1 specifications including schemas, operations, and extensions.
-- [AsyncAPI](https://scalar.com/products/api-references/asyncapi.md)
-- [Markdown](https://scalar.com/products/api-references/markdown.md)
-- [Changelog](https://scalar.com/products/api-references/changelog.md)
-- [HTML/JS](https://scalar.com/products/api-references/integrations/html-js.md)
-- [Integration](https://scalar.com/products/api-references/integrations/aspnetcore/integration.md)
-- [.NET Aspire](https://scalar.com/products/api-references/integrations/aspire.md)
-- [Build-Time Generation](https://scalar.com/products/api-references/integrations/aspnetcore/build-time-generation.md)
-- [OpenAPI Extensions](https://scalar.com/products/api-references/integrations/aspnetcore/openapi-extensions.md)
-- [Legacy Integration](https://scalar.com/products/api-references/integrations/aspnetcore/legacy-integration.md)
-- [AdonisJS](https://scalar.com/products/api-references/integrations/adonisjs.md)
-- [Astro](https://scalar.com/products/api-references/integrations/astro.md)
-- [Django](https://scalar.com/products/api-references/integrations/django.md)
-- [Django Ninja](https://scalar.com/products/api-references/integrations/django-ninja.md)
-- [Docker](https://scalar.com/products/api-references/integrations/docker.md)
-- [Docusaurus](https://scalar.com/products/api-references/integrations/docusaurus.md)
-- [Effect](https://scalar.com/products/api-references/integrations/effect.md)
-- [Elixir](https://scalar.com/products/api-references/integrations/elixir.md)
-- [ElysiaJS](https://scalar.com/products/api-references/integrations/elysiajs.md)
-- [Express](https://scalar.com/products/api-references/integrations/express.md): Add Scalar API references to Express.js applications with a simple middleware for instant documentation.
-- [FastAPI](https://scalar.com/products/api-references/integrations/fastapi.md): Replace Swagger UI with Scalar in your FastAPI application for modern, beautiful API documentation.
-- [Fastify](https://scalar.com/products/api-references/integrations/fastify.md)
-- [Flask](https://scalar.com/products/api-references/integrations/flask.md)
-- [Go](https://scalar.com/products/api-references/integrations/go.md)
-- [Hapi](https://scalar.com/products/api-references/integrations/hapi.md)
-- [Hono](https://scalar.com/products/api-references/integrations/hono.md)
-- [Java](https://scalar.com/products/api-references/integrations/java.md)
-- [Laravel Scribe](https://scalar.com/products/api-references/integrations/laravel-scribe.md)
-- [Laravel](https://scalar.com/products/api-references/integrations/laravel.md)
-- [Axum](https://scalar.com/products/api-references/integrations/rust/axum.md)
-- [Micronaut](https://scalar.com/products/api-references/integrations/micronaut.md)
-- [Next.js](https://scalar.com/products/api-references/integrations/nextjs.md): Add beautiful API references to your Next.js application with automatic OpenAPI generation and React components.
-- [NestJS](https://scalar.com/products/api-references/integrations/nestjs.md)
-- [Nitro](https://scalar.com/products/api-references/integrations/nitro.md)
-- [Nuxt](https://scalar.com/products/api-references/integrations/nuxt.md)
-- [Platformatic](https://scalar.com/products/api-references/integrations/platformatic.md)
-- [Python](https://scalar.com/products/api-references/integrations/python.md)
-- [React](https://scalar.com/products/api-references/integrations/react.md): Embed Scalar API references in React applications with a native component for interactive API documentation.
-- [Ruby on Rails](https://scalar.com/products/api-references/integrations/ruby-on-rails.md)
-- [Rust](https://scalar.com/products/api-references/integrations/rust.md)
-- [Actix-web](https://scalar.com/products/api-references/integrations/rust/actix-web.md)
-- [Warp](https://scalar.com/products/api-references/integrations/rust/warp.md)
-- [Aide](https://scalar.com/products/api-references/integrations/rust/aide.md)
-- [Spring Boot](https://scalar.com/products/api-references/integrations/spring-boot.md)
-- [SvelteKit](https://scalar.com/products/api-references/integrations/sveltekit.md)
-- [Ts.ED](https://scalar.com/products/api-references/integrations/tsed.md)
-- [Getting Started](https://scalar.com/products/agent/getting-started.md): Deploy an AI assistant that provides instant, accurate answers based on your API documentation and specs.
-- [Vue.js](https://scalar.com/products/api-references/integrations/vue.md)
-- [Getting Started](https://scalar.com/products/api-client/getting-started.md): Download and start testing APIs with the most beautiful API client built for developers who love great tools.
-- [Getting Started](https://scalar.com/products/mock-server/getting-started.md): Spin up realistic mock API servers instantly from OpenAPI specs with custom handlers and data seeding.
-- [MCP](https://scalar.com/products/agent/mcp.md)
-- [Pricing](https://scalar.com/products/agent/pricing.md)
-- [SDK](https://scalar.com/products/agent/sdk.md)
-- [Docker](https://scalar.com/products/mock-server/docker.md)
-- [Data Seeding](https://scalar.com/products/mock-server/data-seeding.md)
-- [Changelog](https://scalar.com/products/mock-server/changelog.md)
-- [Key](https://scalar.com/products/agent/key.md)
-- [Custom Request Handlers](https://scalar.com/products/mock-server/custom-request-handler.md)
-- [Getting Started](https://scalar.com/tools/cli/getting-started.md): Install and use the Scalar CLI to validate, bundle, and deploy OpenAPI specifications from your terminal.
-- [Getting Started](https://scalar.com/tools/openapi-upgrader/getting-started.md): Migrate legacy Swagger 2.0 specs to modern OpenAPI 3.x formats automatically with our free conversion tool.
-- [Commands](https://scalar.com/tools/cli/commands.md)
-- [Changelog](https://scalar.com/tools/openapi-upgrader/changelog.md)
-- [API Hub](https://scalar.com/guides/migration/api-hub.md)
-- [Getting Started](https://scalar.com/guides/sso/getting-started.md): Set up SSO and SAML authentication for Scalar with enterprise identity providers and secure team access.
-- [Auth0](https://scalar.com/guides/sso/providers/auth0.md)
-- [Swagger UI](https://scalar.com/guides/migration/swagger-ui.md): Complete guide to migrating from Swagger UI to API References with modern features and better UX.
-- [Bump.sh](https://scalar.com/guides/migration/bump.md)
-- [Zuplo](https://scalar.com/guides/migration/zuplo.md)
-- [Google](https://scalar.com/guides/sso/providers/google.md)
-- [Use your API in Cursor](https://scalar.com/blog/posts/2026-03-17-agent-mcp.md)
-- [Stoplight](https://scalar.com/guides/migration/stoplight.md)
-- [Okta](https://scalar.com/guides/sso/providers/okta.md)
-- [Microsoft Entra ID](https://scalar.com/guides/sso/providers/microsoft-entra-id.md)
-- [OneLogin](https://scalar.com/guides/sso/providers/onelogin.md)
-- [Ping Identity](https://scalar.com/guides/sso/providers/ping-identity.md)
-- [Overview](https://scalar.com/blog/index.md)
-- [Introducing Agent](https://scalar.com/blog/posts/2026-03-05-agent-scalar.md)
-- [How to set up an OpenAPI mock server](https://scalar.com/blog/posts/2025-08-19-how-to-set-up-an-openapi-mock-server.md)
-- [How to do OpenAPI validation (and why it matters)](https://scalar.com/blog/posts/2025-07-07-how-to-do-openapi-validation-and.md)
-- [How we created an animated, responsive README](https://scalar.com/blog/posts/2025-05-28-how-we-created-an-animated-responsive.md)
-- [How Scalar themes work](https://scalar.com/blog/posts/2025-05-07-how-scalar-themes-work.md)
-- [How Cloudinary’s API docs create a great developer experience](https://scalar.com/blog/posts/2025-04-28-how-cloudinarys-api-docs-create-a.md)
-- [An introduction to OpenAPI variables](https://scalar.com/blog/posts/2025-04-23-an-introduction-to-openapi-variables.md)
-- [How we extended the OpenAPI specification](https://scalar.com/blog/posts/2025-04-06-how-we-extended-the-openapi-specification.md)
-- [A guide to OpenAPI security (and how we handle it in Scalar)](https://scalar.com/blog/posts/2025-03-26-a-guide-to-openapi-security-and-how.md)
-- [How we sped up our API docs 25x](https://scalar.com/blog/posts/2025-03-12-how-we-sped-up-our-api-docs-25x.md)
-- [The hidden complexity of building drag and drop](https://scalar.com/blog/posts/2025-03-19-the-hidden-complexity-of-building.md)
-- [How .NET 9 and Scalar solve the problem of under-documented APIs](https://scalar.com/blog/posts/2025-03-05-how-net-9-and-scalar-solve-the-problem.md)
-- [Terms and Conditions](https://scalar.com/legal/terms-and-conditions.md)
-- [Scalar Joins the Open-Source Pledge](https://scalar.com/blog/posts/2024-09-01-oss-pledge.md)
-- [Privacy Policy](https://scalar.com/legal/privacy-policy.md)
+- [Introduction](https://scalar.com/index.md): Create beautiful docs, SDKs and secure MCP servers from your API. Scalar keeps every interface in sync as your API evolves.
+- [Customers](https://scalar.com/customers/index.md): Trusted by the world's best API teams.
+- [Company](https://scalar.com/company/index.md): Learn about Scalar, the API platform built for developers and agents.
+- [Security](https://scalar.com/security/index.md): Learn how Scalar approaches security, privacy, identity, access controls, and responsible disclosure.
+- [Pricing](https://scalar.com/pricing/index.md): Transparent pricing for developer documentation, SDKs, and API tools. Start free and scale as you grow.
+- [Scalar Docs](https://scalar.com/products/docs/index.md): Build beautiful, version-controlled developer documentation with Markdown, MDX, and powerful components.
+- [Getting Started](https://scalar.com/products/docs/getting-started/index.md): Create and publish your first documentation site with Scalar Docs in minutes.
+- [Starter Kit](https://scalar.com/products/docs/configuration/starter-kit/index.md): Scaffold a documentation site in minutes with the Scalar Docs starter kit: example pages, scalar.config.json, and GitHub deployment.
+- [scalar.config.json](https://scalar.com/products/docs/configuration/scalar.config.json/index.md): Complete configuration reference for scalar.config.json including routing, navigation, and site settings.
+- [Versions](https://scalar.com/products/docs/configuration/versions/index.md): Publish multiple documentation versions with a version selector using the versions key in scalar.config.json.
+- [Themes](https://scalar.com/products/docs/configuration/themes/index.md): Customize your documentation appearance with themes, colors, fonts, and CSS variables for perfect brand alignment.
+- [Domains](https://scalar.com/products/docs/configuration/domains/index.md): Publish Scalar Docs on a free apidocumentation.com subdomain or connect a custom domain with a simple CNAME record.
+- [Private Docs](https://scalar.com/products/docs/configuration/private-docs/index.md): Control access to your documentation with password protection, SSO, and team-based permissions.
+- [Automatic Deployment](https://scalar.com/products/docs/deployment/automatic-deployment/index.md): Publish Scalar Docs automatically on every merge with GitHub sync and automatic deployments.
+- [GitHub Actions](https://scalar.com/products/docs/deployment/github-actions/index.md): Automate documentation deployment with GitHub Actions workflows for continuous delivery and preview environments.
+- [Build Failures](https://scalar.com/products/docs/deployment/build-failures/index.md): Diagnose and fix Scalar Docs build failures: common causes, error messages, and debugging steps.
+- [HTML/CSS/JS](https://scalar.com/products/docs/content/html-css-js/index.md): Use custom HTML, CSS, and JavaScript in Scalar Docs pages for full control over your documentation.
+- [GitHub](https://scalar.com/products/docs/integrations/github/index.md): Sync your documentation with GitHub: connect a repository, publish on merge, and preview pull requests.
+- [Icons](https://scalar.com/products/docs/components/icons/index.md): Use thousands of built-in Phosphor icons in your Scalar Docs pages.
+- [Code Blocks](https://scalar.com/products/docs/components/code-blocks/index.md): Syntax highlighting for 100+ programming languages with line numbers, highlighting, and copy-to-clipboard functionality.
+- [Cards](https://scalar.com/products/docs/components/cards/index.md): Link related pages and highlight content with card components in Scalar Docs.
+- [Math](https://scalar.com/products/docs/components/math/index.md): Render LaTeX math equations in your Scalar Docs pages.
+- [Buttons](https://scalar.com/products/docs/components/buttons/index.md): Add styled button links to your Scalar Docs pages with the button component.
+- [Tables](https://scalar.com/products/docs/components/tables/index.md): Present structured data in your documentation with Markdown and HTML tables.
+- [Page Link](https://scalar.com/products/docs/components/page-link/index.md): Link to other documentation pages with rich page-link previews.
+- [Row (Deprecated)](https://scalar.com/products/docs/components/row/index.md): The deprecated row component for horizontal layouts. Use the grid component instead.
+- [Getting Started](https://scalar.com/products/agent/getting-started/index.md): Turn OpenAPI into MCP servers and connect APIs to LLMs with minimal context usage, delegated auth, and the Agent SDK or chat UI.
+- [Private Access for Customers](https://scalar.com/products/agent/authentication/customer-access/index.md): Share an MCP server with users outside your Scalar team using access groups, OAuth login, and login portals.
+- [Agent SDK](https://scalar.com/products/agent/integration/sdk/index.md): Build AI agents on your API with the Scalar Agent SDK: chat, tool calls, and OpenAPI-backed context.
+- [Overview](https://scalar.com/products/agent/authentication/index.md): The two layers of MCP auth—who can connect and how the server calls your API—plus recipes for the common setups.
+- [SDK Generator](https://scalar.com/products/sdk-generator/index.md): Generate idiomatic, type-safe SDKs and CLIs from your OpenAPI document. TypeScript, Python, Go, and CLI targets are generally available, with Java, Kotlin, Ruby, C#, PHP, Rust, Swift, Dart, and C++ also supported.
+- [Agent Keys](https://scalar.com/products/agent/integration/agent-keys/index.md): Create an Agent key in the Registry to enable the Agent chat in your API reference in production.
+- [Managing Your SDK](https://scalar.com/products/sdk-generator/managing/index.md): Build, version, download, and manage your SDK from the Scalar dashboard.
+- [Billing Sweep](https://scalar.com/products/agent/examples/billing-sweep/index.md): Example: build a billing sweep agent with Scalar Agent connected to your APIs.
+- [Revenue Dashboard](https://scalar.com/products/agent/examples/revenue-dashboard/index.md): Example: build a revenue dashboard agent with Scalar Agent connected to your APIs.
+- [Pricing](https://scalar.com/products/agent/pricing/index.md): Scalar Agent pricing: what is free, what is metered, and how usage is billed.
+- [GitHub Repositories](https://scalar.com/products/sdk-generator/publishing/github/index.md): Link a GitHub repository to each target so every build syncs as a pull request.
+- [TypeScript](https://scalar.com/products/sdk-generator/publishing/typescript/index.md): Publish the TypeScript SDK to npm with OIDC trusted publishing or an npm token.
+- [Go](https://scalar.com/products/sdk-generator/publishing/go/index.md): Publish the Go module by tagging a version. No registry account or secrets needed.
+- [Java and Kotlin](https://scalar.com/products/sdk-generator/publishing/java/index.md): Publish the Java or Kotlin SDK to Maven Central with a Central Portal token and GPG signing.
+- [Ruby](https://scalar.com/products/sdk-generator/publishing/ruby/index.md): Publish the Ruby gem to RubyGems with an API key.
+- [Swift](https://scalar.com/products/sdk-generator/publishing/swift/index.md): Publish the Swift package by tagging a version. No registry account or secrets needed.
+- [CLI](https://scalar.com/products/sdk-generator/publishing/cli/index.md): Publish the CLI to npm, and optionally through a GitHub Release and a Homebrew tap.
+- [TypeScript](https://scalar.com/products/sdk-generator/configuration/typescript/index.md): Configuration reference for the TypeScript SDK target: package metadata, naming, and generation options.
+- [Java (Experimental)](https://scalar.com/products/sdk-generator/configuration/java/index.md): Configuration reference for the experimental Java SDK target: package metadata, naming, and generation options.
+- [Swift (Experimental)](https://scalar.com/products/sdk-generator/configuration/swift/index.md): Configuration reference for the experimental Swift SDK target: package metadata, naming, and generation options.
+- [PHP (Experimental)](https://scalar.com/products/sdk-generator/configuration/php/index.md): Configuration reference for the experimental PHP SDK target: package metadata, naming, and generation options.
+- [CLI](https://scalar.com/products/sdk-generator/configuration/cli/index.md): Configuration reference for generating a CLI from your OpenAPI document with Scalar.
+- [Kotlin (Experimental)](https://scalar.com/products/sdk-generator/configuration/kotlin/index.md): Configuration reference for the experimental Kotlin SDK target: package metadata, naming, and generation options.
+- [C++ (Experimental)](https://scalar.com/products/sdk-generator/configuration/cpp/index.md): Configuration reference for the experimental C++ SDK target: naming and generation options.
+- [Registry](https://scalar.com/products/registry/index.md): Centralized API registry for managing OpenAPI specifications with versioning, validation, and automated workflows.
+- [Upload](https://scalar.com/products/registry/upload/index.md): Upload OpenAPI documents to the Scalar Registry from the dashboard, CLI, or CI.
+- [GitHub Actions](https://scalar.com/products/registry/github-actions/index.md): Push OpenAPI documents to the Scalar Registry automatically with GitHub Actions.
+- [API References](https://scalar.com/products/api-references/index.md): Generate beautiful, interactive API documentation from OpenAPI and AsyncAPI specifications with customizable themes.
+- [Rules](https://scalar.com/products/registry/rules/index.md): Enforce API standards by linting OpenAPI documents in the Scalar Registry with rules.
+- [Configuration](https://scalar.com/products/api-references/configuration/index.md): Configure API references with custom layouts, authentication, server URLs, and request customization options.
+- [OpenAPI](https://scalar.com/products/api-references/openapi/index.md): Learn how Scalar handles OpenAPI 3.0 and 3.1 specifications including schemas, operations, and extensions.
+- [Release notes](https://scalar.com/products/api-references/changelog/index.md)
+- [Getting Started](https://scalar.com/products/api-references/blocks/getting-started/index.md): Compose API documentation from individual blocks: render operations, schemas, and code examples anywhere.
+- [Themes](https://scalar.com/products/api-references/themes/index.md): Customize API reference appearance with built-in themes, dark mode, and custom CSS for perfect brand matching.
+- [Markdown](https://scalar.com/products/api-references/markdown/index.md): Use Markdown in your OpenAPI descriptions: supported syntax and rendering in Scalar API References.
+- [Aspire](https://scalar.com/products/api-references/integrations/aspire/index.md): Add a Scalar API reference to your .NET Aspire application for interactive, beautiful API documentation.
+- [Build-Time Generation](https://scalar.com/products/api-references/integrations/aspnetcore/build-time-generation/index.md): Generate OpenAPI documents for ASP.NET Core at build time and render them as a Scalar API reference.
+- [Legacy Integration](https://scalar.com/products/api-references/integrations/aspnetcore/legacy-integration/index.md): Integrate a Scalar API reference with legacy .NET applications and earlier ASP.NET Core versions.
+- [Docusaurus](https://scalar.com/products/api-references/integrations/docusaurus/index.md): Add interactive Scalar API references to your Docusaurus site with the official plugin.
+- [Astro](https://scalar.com/products/api-references/integrations/astro/index.md): Embed a Scalar API reference in your Astro site to publish interactive OpenAPI documentation.
+- [Django Ninja](https://scalar.com/products/api-references/integrations/django-ninja/index.md): Replace the default Django Ninja docs with a Scalar API reference for modern, interactive OpenAPI documentation.
+- [Elixir](https://scalar.com/products/api-references/integrations/elixir/index.md): Add a Scalar API reference to your Elixir Phoenix application for interactive OpenAPI documentation.
+- [Express](https://scalar.com/products/api-references/integrations/express/index.md): Add Scalar API references to Express.js applications with a simple middleware for instant documentation.
+- [Fastify](https://scalar.com/products/api-references/integrations/fastify/index.md): Add a Scalar API reference to Fastify with the official @scalar/fastify-api-reference plugin.
+- [Go](https://scalar.com/products/api-references/integrations/go/index.md): Add a Scalar API reference to your Go HTTP server for modern, interactive OpenAPI documentation.
+- [Laravel](https://scalar.com/products/api-references/integrations/laravel/index.md): Add a Scalar API reference to your Laravel application with the official package. A modern Swagger UI alternative for PHP.
+- [Hono](https://scalar.com/products/api-references/integrations/hono/index.md): Add a Scalar API reference to Hono with the official @scalar/hono-api-reference middleware.
+- [Micronaut](https://scalar.com/products/api-references/integrations/micronaut/index.md): Add a Scalar API reference to your Micronaut application for interactive OpenAPI documentation.
+- [NestJS](https://scalar.com/products/api-references/integrations/nestjs/index.md): Add a Scalar API reference to NestJS with @scalar/nestjs-api-reference. A modern Swagger UI alternative for Node.js.
+- [Nuxt](https://scalar.com/products/api-references/integrations/nuxt/index.md): Add a Scalar API reference to your Nuxt application with the official module for interactive OpenAPI documentation.
+- [Axum](https://scalar.com/products/api-references/integrations/rust/axum/index.md): Add a Scalar API reference to your Axum application for interactive OpenAPI documentation in Rust.
+- [Python](https://scalar.com/products/api-references/integrations/python/index.md): Add a Scalar API reference to any Python web framework for modern, interactive OpenAPI documentation.
+- [Warp](https://scalar.com/products/api-references/integrations/rust/warp/index.md): Add a Scalar API reference to your Warp application for interactive OpenAPI documentation in Rust.
+- [Ruby on Rails](https://scalar.com/products/api-references/integrations/ruby-on-rails/index.md): Add a Scalar API reference to your Ruby on Rails application for interactive OpenAPI documentation.
+- [Spring Boot](https://scalar.com/products/api-references/integrations/spring-boot/index.md): Add a Scalar API reference to Spring Boot with springdoc-openapi. A modern Swagger UI alternative for Java.
+- [SvelteKit](https://scalar.com/products/api-references/integrations/sveltekit/index.md): Add a Scalar API reference to your SvelteKit application for interactive OpenAPI documentation.
+- [Vue.js](https://scalar.com/products/api-references/integrations/vue/index.md): Embed a Scalar API reference in your Vue.js application with the official component for interactive OpenAPI documentation.
+- [Release notes](https://scalar.com/products/api-client/release-notes/index.md): What is new in recent Scalar desktop app releases.
+- [Environments](https://scalar.com/products/api-client/environments/index.md): Store reusable variables in environments to switch between development, staging, and production without editing each request.
+- [Getting Started](https://scalar.com/products/api-client/getting-started/index.md): A modern, open-source API client built on the OpenAPI standard with offline-first design and cross-platform support.
+- [Testing](https://scalar.com/products/api-client/testing/index.md): Write post-response scripts to automatically validate API responses with Postman-compatible syntax.
+- [Authentication](https://scalar.com/products/api-client/authentication/index.md): Configure HTTP Basic, Bearer, API Key, OAuth 2.0, and OpenID Connect authentication for your API requests.
+- [Keyboard Shortcuts](https://scalar.com/products/api-client/keyboard-shortcuts/index.md): Keyboard shortcuts for the Scalar API Client on macOS, Windows, and Linux.
+- [Getting Started](https://scalar.com/tools/cli/getting-started/index.md): Install and use the Scalar CLI to validate, bundle, and deploy OpenAPI specifications from your terminal.
+- [Commands](https://scalar.com/tools/cli/commands/index.md): Full command reference for the Scalar CLI: projects, registry, OpenAPI validation, bundling, and mocking.
+- [Docker](https://scalar.com/tools/mock-server/docker/index.md): Run the Scalar Mock Server in Docker to mock any OpenAPI document in containers and CI.
+- [Release notes](https://scalar.com/tools/mock-server/changelog/index.md)
+- [Agent Skills](https://scalar.com/tools/mock-server/agent-skills/index.md): Use Agent Skills to help AI coding agents build and configure Scalar Mock Server setups.
+- [Changelog](https://scalar.com/tools/openapi-upgrader/changelog/index.md): Changelog for @scalar/openapi-upgrader releases.
+- [How PAR Modernized Its Developer Experience With Scalar](https://scalar.com/customers/partech/index.md): How PAR Technology modernized its developer experience with Scalar, a modern, open-standards API platform.
+- [Enterprise](https://scalar.com/enterprise/index.md): Enterprise-grade API platform: one OpenAPI system of record for docs, SDKs, governance, and MCP servers with SSO and enterprise support.
+- [Mintlify](https://scalar.com/resources/compare/mintlify/index.md): Compare Scalar and Mintlify for API documentation: licensing, self-hosting, customization, framework integrations, and pricing.
+- [API Documentation for Developer Tools Companies](https://scalar.com/solutions/api-documentation-for-developer-tools-companies/index.md): How developer tools companies keep API docs, SDK code samples, and an interactive API client in sync with one OpenAPI document using Scalar.
+- [ReadMe](https://scalar.com/resources/compare/readme/index.md): Compare Scalar and ReadMe for developer portals and API documentation: licensing, self-hosting, API analytics, SDK generation, and pricing.
+- [Postman](https://scalar.com/resources/compare/postman/index.md): Compare Scalar and Postman for API clients and documentation: licensing, offline use, OpenAPI support, vendor lock-in, and pricing.
+- [Stoplight](https://scalar.com/resources/migration/stoplight/index.md): Step-by-step guide to migrating your API documentation from Stoplight to Scalar.
+- [Stainless](https://scalar.com/resources/migration/stainless/index.md): Migrate from Stainless to Scalar: import your existing stainless.yml so SDK namespaces, method names, and pagination carry over.
+- [Bump.sh](https://scalar.com/resources/migration/bump/index.md): Compare Bump.sh with Scalar and migrate your OpenAPI documentation step by step.
+- [Migration](https://scalar.com/resources/migration/index.md): Step-by-step guides for migrating your API documentation and SDKs to Scalar.
+- [Okta](https://scalar.com/resources/sso/providers/okta/index.md): Configure SAML single sign-on for Scalar with Okta: step-by-step IdP setup, metadata, and claims.
+- [Google](https://scalar.com/resources/sso/providers/google/index.md): Configure SAML single sign-on for Scalar with Google Workspace: step-by-step IdP setup, metadata, and claims.
+- [Getting Started](https://scalar.com/resources/sso/getting-started/index.md): Set up SSO and SAML authentication for Scalar with enterprise identity providers and secure team access.
+- [Mock Server](https://scalar.com/resources/changelog/mock-server/index.md): Release notes for the Scalar Mock Server.
+- [API Reference](https://scalar.com/resources/changelog/api-reference/index.md): Release notes for the Scalar API Reference.
+- [Ping Identity](https://scalar.com/resources/sso/providers/ping-identity/index.md): Configure SAML single sign-on for Scalar with Ping Identity: step-by-step IdP setup, metadata, and claims.
+- [Blog](https://scalar.com/resources/blog/index.md): News and engineering stories from the Scalar team on OpenAPI, API documentation, and developer experience.
+- [Too Long; Didn't Read; Used MCP](https://scalar.com/blog/posts/2026-03-25-scalar-mcp-oauth/index.md): How OAuth works with Scalar MCP servers: authenticate agents against your API with delegated user permissions.
+- [Introducing Agent](https://scalar.com/blog/posts/2026-03-05-agent-scalar/index.md): Introducing Scalar Agent: connect LLMs to your API using a fraction of the context window instead of pasting your whole OpenAPI document.
+- [How Scalar themes work](https://scalar.com/blog/posts/2025-05-07-how-scalar-themes-work/index.md): How Scalar themes work: the CSS variable system that lets you restyle an entire API reference.
+- [How to do OpenAPI validation (and why it matters)](https://scalar.com/blog/posts/2025-07-07-how-to-do-openapi-validation-and/index.md): How to validate OpenAPI documents with the Scalar CLI, and why validation matters for your API workflow.
+- [An introduction to OpenAPI variables](https://scalar.com/blog/posts/2025-04-23-an-introduction-to-openapi-variables/index.md): An introduction to OpenAPI variables: the different types and how to use them in your API documentation.
+- [A guide to OpenAPI security (and how we handle it in Scalar)](https://scalar.com/blog/posts/2025-03-26-a-guide-to-openapi-security-and-how/index.md): A practical guide to defining authentication and authorization in OpenAPI, and how Scalar renders security schemes.
+- [Scalar Joins the Open-Source Pledge](https://scalar.com/blog/posts/2024-09-01-oss-pledge/index.md): Scalar joins the Open Source Pledge, committing at least $2,000 per developer per year to open source maintainers.
+- [How we sped up our API docs 25x](https://scalar.com/blog/posts/2025-03-12-how-we-sped-up-our-api-docs-25x/index.md): The structural and rendering changes that made our API documentation 25x faster.
+- [Terms and Conditions](https://scalar.com/legal/terms-and-conditions/index.md): The terms and conditions for using Scalar products and services.
+- [Agent Skills](https://scalar.com/products/docs/configuration/agent-skills/index.md): Add Agent Skills to your repository so AI coding agents can write and update Scalar Docs content and configuration.
+- [Navigation](https://scalar.com/products/docs/configuration/navigation/index.md): Structure your documentation with navigation routes: pages, groups, tabs, links, and OpenAPI references.
+- [CLI](https://scalar.com/products/docs/deployment/cli/index.md): Deploy Scalar Docs from your terminal or any CI provider with the Scalar CLI.
+- [Ask AI](https://scalar.com/products/docs/configuration/ask-ai/index.md): AI-powered assistant that answers questions using your documentation content, with MCP integration for LLMs.
+- [Assets](https://scalar.com/products/docs/content/assets/index.md): Serve images, fonts, and other static assets in Scalar Docs with the assetsDir configuration.
+- [Markdown Support](https://scalar.com/products/docs/components/markdown-support/index.md): Full markdown syntax reference including tables, lists, links, images, and GitHub-flavored markdown features.
+- [Embeds](https://scalar.com/products/docs/components/embeds/index.md): Embed videos and external content like YouTube in your documentation pages.
+- [Tabs](https://scalar.com/products/docs/components/tabs/index.md): Organize alternative content like multi-language code examples with tab components.
+- [MCP & Agent](https://scalar.com/products/agent/index.md): OpenAPI-backed MCP servers and SDKs that connect your APIs to LLMs with just-in-time tools and delegated authentication.
+- [Public MCP with Passthrough](https://scalar.com/products/agent/authentication/public-passthrough/index.md): Make the MCP server public and let each user authenticate with their own API credentials via a passthrough header such as Authorization.
+- [Details](https://scalar.com/products/docs/components/details/index.md): Add collapsible sections to your documentation with the details component.
+- [Agent in API Reference](https://scalar.com/products/agent/integration/api-reference/index.md): Add the Scalar Agent chat to your API reference so developers can ask questions and try your API with AI.
+- [Meeting Scheduler](https://scalar.com/products/agent/examples/meeting-scheduler/index.md): Example: build a meeting scheduling agent with Scalar Agent connected to your APIs.
+- [Release Notes](https://scalar.com/products/agent/release-notes/index.md)
+- [Overview](https://scalar.com/products/sdk-generator/publishing/overview/index.md): Publish generated SDKs to their package registries automatically with config-driven GitHub Actions workflows.
+- [Python](https://scalar.com/products/sdk-generator/publishing/python/index.md): Publish the Python SDK to PyPI with OIDC trusted publishing or a PyPI token.
+- [C#](https://scalar.com/products/sdk-generator/publishing/csharp/index.md): Publish the C# SDK to NuGet with OIDC trusted publishing or a NuGet API key.
+- [Dart](https://scalar.com/products/sdk-generator/publishing/dart/index.md): Publish the Dart package to pub.dev with OIDC automated publishing or a token.
+- [Python](https://scalar.com/products/sdk-generator/configuration/python/index.md): Configuration reference for the Python SDK target: package metadata, naming, and generation options.
+- [C# (Experimental)](https://scalar.com/products/sdk-generator/configuration/csharp/index.md): Configuration reference for the experimental C# SDK target: package metadata, naming, and generation options.
+- [Rust (Experimental)](https://scalar.com/products/sdk-generator/configuration/rust/index.md): Configuration reference for the experimental Rust SDK target: crate metadata, naming, and generation options.
+- [Schemas](https://scalar.com/products/registry/schemas/index.md): Work with schemas in the Scalar Registry: store, version, and share your API data models.
+- [Custom Code](https://scalar.com/products/sdk-generator/custom-code/index.md): Customize generated SDKs and keep your changes across regenerations with a three-way merge.
+- [GitLab CI/CD](https://scalar.com/products/registry/gitlab-ci/index.md): Push OpenAPI documents to the Scalar Registry automatically with GitLab CI/CD.
+- [Localization](https://scalar.com/products/api-references/localization/index.md): Localize the API Reference UI with built-in locales, custom label overrides, and right-to-left (RTL) support.
+- [Code Example](https://scalar.com/products/api-references/blocks/code-example/index.md): Render standalone code examples for any operation with the Scalar code example block.
+- [Server-Side Rendering](https://scalar.com/products/api-references/server-side-rendering/index.md): Server-side render Scalar API References in Node.js for faster loads and better SEO.
+- [Integration](https://scalar.com/products/api-references/integrations/aspnetcore/integration/index.md): Add a Scalar API reference to ASP.NET Core with the Scalar.AspNetCore package. A modern Swagger UI alternative for .NET.
+- [Docker](https://scalar.com/products/api-references/integrations/docker/index.md): Serve a Scalar API reference from any OpenAPI document with the official Docker image. No code required.
+- [AdonisJS](https://scalar.com/products/api-references/integrations/adonisjs/index.md): Add a Scalar API reference to your AdonisJS application for interactive OpenAPI documentation.
+- [ElysiaJS](https://scalar.com/products/api-references/integrations/elysiajs/index.md): Add a Scalar API reference to your ElysiaJS app with the built-in swagger plugin for interactive OpenAPI documentation.
+- [Flask](https://scalar.com/products/api-references/integrations/flask/index.md): Add a Scalar API reference to your Flask application. A modern Swagger UI alternative for Python APIs.
+- [Next.js](https://scalar.com/products/api-references/integrations/nextjs/index.md): Add beautiful API references to your Next.js application with automatic OpenAPI generation and React components.
+- [Platformatic](https://scalar.com/products/api-references/integrations/platformatic/index.md): Platformatic ships with Scalar built in. Serve a modern, interactive API reference out of the box.
+- [Rust](https://scalar.com/products/api-references/integrations/rust/index.md): Add a Scalar API reference to your Rust web application for modern, interactive OpenAPI documentation.
+- [Java](https://scalar.com/products/api-references/integrations/java/index.md): Add a Scalar API reference to your Java application for modern, interactive OpenAPI documentation.
+- [Aide](https://scalar.com/products/api-references/integrations/rust/aide/index.md): Add a Scalar API reference to your Aide application for interactive OpenAPI documentation in Rust.
+- [Ts.ED](https://scalar.com/products/api-references/integrations/tsed/index.md): Add a Scalar API reference to your Ts.ED application for interactive OpenAPI documentation.
+- [Download](https://scalar.com/products/api-client/download/index.md): Download the Scalar API Client for Windows, macOS, or Linux, or use it in the browser.
+- [Code Generation](https://scalar.com/products/api-client/code-generation/index.md): Generate ready-to-copy code snippets for your requests in 40+ HTTP clients across 21 languages.
+- [Dynamic Variables](https://scalar.com/products/api-client/dynamic-variables/index.md): Use Postman-compatible dynamic variables like {{$guid}}, {{$timestamp}}, and {{$randomEmail}} to generate fresh values on every request.
+- [Authentication](https://scalar.com/tools/cli/authentication/index.md): Authenticate the Scalar CLI with your Scalar account using login, tokens, and CI environment variables.
+- [Custom Request Handlers](https://scalar.com/tools/mock-server/custom-request-handler/index.md): Customize mock responses with x-handler: write JavaScript request handlers for any operation.
+- [Getting Started](https://scalar.com/tools/openapi-upgrader/getting-started/index.md): Migrate legacy Swagger 2.0 specs to modern OpenAPI 3.x formats automatically with our free conversion tool.
+- [OpenAPI Documentation](https://scalar.com/solutions/openapi-documentation/index.md): Turn an OpenAPI document into an interactive API reference, API client, SDKs, and MCP server. OpenAPI 3.0/3.1 support, Swagger 2.0 upgraded on load, MIT-licensed renderer.
+- [Brand](https://scalar.com/brand/index.md): Scalar brand guidelines, logos, wordmark, icon, and color palette. Download official brand assets.
+- [Redocly](https://scalar.com/resources/compare/redocly/index.md): Compare Scalar and Redocly for OpenAPI documentation: licensing, the try-it console, API governance, framework integrations, SDK generation, and pricing.
+- [Swagger UI](https://scalar.com/resources/migration/swagger-ui/index.md): Complete guide to migrating from Swagger UI to API References with modern features and better UX.
+- [Zuplo](https://scalar.com/resources/migration/zuplo/index.md): Compare Zuplo docs with Scalar and migrate your API reference step by step.
+- [Auth0](https://scalar.com/resources/sso/providers/auth0/index.md): Configure SAML single sign-on for Scalar with Auth0: step-by-step IdP setup, metadata, and claims.
+- [OneLogin](https://scalar.com/resources/sso/providers/onelogin/index.md): Configure SAML single sign-on for Scalar with OneLogin: step-by-step IdP setup, metadata, and claims.
+- [Agent](https://scalar.com/resources/changelog/agent/index.md): Release notes for Scalar Agent and MCP servers.
+- [Scalar's 2025 Open Source Pledge](https://scalar.com/blog/posts/2026-04-11-oss-pledge/index.md): Scalar renews its Open Source Pledge for 2025, continuing to fund the open source maintainers we depend on.
+- [How Cloudinary’s API docs create a great developer experience](https://scalar.com/blog/posts/2025-04-28-how-cloudinarys-api-docs-create-a/index.md): What Cloudinary API docs get right, and what API-first companies can learn from their developer experience.
+- [How to set up an OpenAPI mock server](https://scalar.com/blog/posts/2025-08-19-how-to-set-up-an-openapi-mock-server/index.md): How to set up an OpenAPI mock server with the Scalar CLI in a few commands.
+- [Privacy](https://scalar.com/products/docs/privacy/index.md): How Scalar Docs handles privacy: no analytics and no tracking scripts on your documentation by default.
+- [The hidden complexity of building drag and drop](https://scalar.com/blog/posts/2025-03-19-the-hidden-complexity-of-building/index.md): Why drag and drop is deceptively hard to build, and how we implemented it in the Scalar API Client.
+- [Redirects](https://scalar.com/products/docs/configuration/redirects/index.md): Keep old URLs working with redirects in Scalar Docs, including wildcard and path pattern support.
+- [Preview Deployments](https://scalar.com/products/docs/deployment/preview-deployments/index.md): Review documentation changes before they go live with a preview deployment for every pull request.
+- [Steps](https://scalar.com/products/docs/components/steps/index.md): Guide readers through sequential instructions with step components.
+- [Callouts](https://scalar.com/products/docs/components/callouts/index.md): Highlight notes, warnings, and tips in your documentation with callout components.
+- [MCP Servers](https://scalar.com/products/agent/mcp/index.md): Generate secure MCP servers from your OpenAPI documents so LLMs can call your API with just-in-time tools and delegated auth.
+- [Incident Monitor](https://scalar.com/products/agent/examples/incident-monitor/index.md): Example: build an incident monitoring agent with Scalar Agent connected to your APIs.
+- [Configuration](https://scalar.com/products/sdk-generator/configuration/overview/index.md): Configure Scalar SDK generation targets, environments, resources, client settings, pagination, and publishing.
+- [Ruby (Experimental)](https://scalar.com/products/sdk-generator/configuration/ruby/index.md): Configuration reference for the experimental Ruby SDK target: gem metadata, naming, and generation options.
+- [Rust](https://scalar.com/products/sdk-generator/publishing/rust/index.md): Publish the Rust crate to crates.io with OIDC trusted publishing or a crates.io token.
+- [Getting Started](https://scalar.com/products/sdk-generator/getting-started/index.md): Automatically generate type-safe SDKs from OpenAPI specifications in multiple programming languages.
+- [Getting Started](https://scalar.com/products/registry/getting-started/index.md): Store, version, and manage your OpenAPI specifications in a centralized registry with automated CI/CD workflows.
+- [AsyncAPI](https://scalar.com/products/api-references/asyncapi/index.md): Render AsyncAPI documents with Scalar for beautiful event-driven API documentation.
+- [Getting Started](https://scalar.com/products/api-references/getting-started/index.md): Create stunning API documentation from OpenAPI specs with a modern, customizable interface and built-in request testing.
+- [Hapi](https://scalar.com/products/api-references/integrations/hapi/index.md): Add a Scalar API reference to your Hapi application for interactive OpenAPI documentation.
+- [Effect](https://scalar.com/products/api-references/integrations/effect/index.md): Add a Scalar API reference to your Effect HttpApi application for interactive OpenAPI documentation.
+- [Nitro](https://scalar.com/products/api-references/integrations/nitro/index.md): Add a Scalar API reference to your Nitro server for interactive OpenAPI documentation.
+- [OpenAPI Extensions](https://scalar.com/products/api-references/integrations/aspnetcore/openapi-extensions/index.md): Use Scalar OpenAPI extensions in ASP.NET Core to customize authentication, code samples, and more in your API reference.
+- [API Client](https://scalar.com/products/api-client/index.md): Modern, open-source API testing client with OpenAPI integration, collections, and a beautiful interface.
+- [Getting Started](https://scalar.com/tools/mock-server/getting-started/index.md): Spin up realistic mock API servers instantly from OpenAPI specs with custom handlers and data seeding.
+- [Scripts](https://scalar.com/products/api-client/scripts/index.md): Write pre-request scripts to set variables, modify headers, and prepare authentication before sending API requests.
+- [Actix-web](https://scalar.com/products/api-references/integrations/rust/actix-web/index.md): Add a Scalar API reference to your Actix-web application for interactive OpenAPI documentation in Rust.
+- [Fern](https://scalar.com/resources/compare/fern/index.md): Compare Scalar and Fern for API documentation and SDK generation: licensing, self-hosting, generated code, framework integrations, and pricing.
+- [Microsoft Entra ID](https://scalar.com/resources/sso/providers/microsoft-entra-id/index.md): Configure SAML single sign-on for Scalar with Microsoft Entra ID (formerly Azure AD).
+- [Changelog](https://scalar.com/resources/changelog/index.md): Curated release notes for Scalar API Client, API Reference, Agent, and Mock Server.
+- [API Hub](https://scalar.com/resources/migration/api-hub/index.md): How to migrate from Smartbear API Hub (formerly SwaggerHub) to Scalar for docs, registry, and API references.
+- [How we created an animated, responsive README](https://scalar.com/blog/posts/2025-05-28-how-we-created-an-animated-responsive/index.md): How we built an animated, responsive README for the Scalar GitHub repository with GitHub-flavored Markdown.
+- [How .NET 9 and Scalar solve the problem of under-documented APIs](https://scalar.com/blog/posts/2025-03-05-how-net-9-and-scalar-solve-the-problem/index.md): How .NET 9 OpenAPI document generation and Scalar work together to keep your APIs documented.
+- [Site Config](https://scalar.com/products/docs/configuration/site-config/index.md): Configure site-wide settings for Scalar Docs: branding, logo, theme, custom head tags, footer, and routing rules.
+- [MDX](https://scalar.com/products/docs/content/mdx/index.md): Write documentation with MDX in Scalar Docs: use components, expressions, and imports inside Markdown.
+- [PHP](https://scalar.com/products/sdk-generator/publishing/php/index.md): Publish the PHP SDK to Packagist by tagging a version and connecting the repository.
+- [Stakeholder Digest](https://scalar.com/products/agent/examples/stakeholder-digest/index.md): Example: build a stakeholder digest agent with Scalar Agent connected to your APIs.
+- [Grid](https://scalar.com/products/docs/components/grid/index.md): Lay out cards and content in responsive grids in your Scalar Docs pages.
+- [Dart (Experimental)](https://scalar.com/products/sdk-generator/configuration/dart/index.md): Configuration reference for the experimental Dart SDK target: package metadata, naming, and generation options.
+- [Plugins](https://scalar.com/products/api-references/plugins/index.md): Extend Scalar API References with plugins to customize rendering and behavior.
+- [Community](https://scalar.com/products/api-client/community/index.md): Join the Scalar community on Discord and GitHub. The API Client is fully open-source.
+- [Spry](https://scalar.com/products/api-references/integrations/spry/index.md): Add a Scalar API reference to your Spry application for interactive OpenAPI documentation.
+- [Laravel Scribe](https://scalar.com/products/api-references/integrations/laravel-scribe/index.md): Use Scalar as the documentation UI for Laravel Scribe to get a modern, interactive API reference.
+- [Django](https://scalar.com/products/api-references/integrations/django/index.md): Add a Scalar API reference to your Django application for modern, interactive OpenAPI documentation.
+- [API Client](https://scalar.com/resources/changelog/api-client/index.md): Release notes for the Scalar API Client desktop and web app.
+- [Compare](https://scalar.com/resources/compare/index.md): Honest comparisons of Scalar against other API documentation and SDK generation platforms.
+- [How we extended the OpenAPI specification](https://scalar.com/blog/posts/2025-04-06-how-we-extended-the-openapi-specification/index.md): The extensions we added to the OpenAPI specification and how we process them under the hood.
+- [Migrate from 1.0](https://scalar.com/products/docs/configuration/migration/index.md): Upgrade your documentation from Scalar Docs 1.0 to 2.0 by converting guides and references to navigation routes.
+- [Go](https://scalar.com/products/sdk-generator/configuration/go/index.md): Configuration reference for the Go SDK target: module metadata, naming, and generation options.
+- [One Shared Key](https://scalar.com/products/agent/authentication/shared-key/index.md): Store a single credential on the installation with global auth so callers never handle a key.
+- [HTML/JS](https://scalar.com/products/api-references/integrations/html-js/index.md): Render a Scalar API reference from any OpenAPI document with a single HTML file or CDN script tag. No build step required.
+- [Data Seeding](https://scalar.com/tools/mock-server/data-seeding/index.md): Seed realistic mock data with x-seed to get consistent, related responses from your mock API.
+- [React](https://scalar.com/products/api-references/integrations/react/index.md): Embed Scalar API references in React applications with a native component for interactive API documentation.
+- [Developer Portals](https://scalar.com/solutions/developer-portal/index.md): Build a developer portal on Scalar: API reference from OpenAPI, guides in Markdown and MDX, a built-in API client, generated SDKs, and hosted MCP servers that stay in sync from one document.
+- [Use your API in Cursor](https://scalar.com/blog/posts/2026-03-17-agent-mcp/index.md): Expose your OpenAPI document as an MCP server and use your API directly in Cursor or any MCP-compatible tool.
+- [CLI](https://scalar.com/products/registry/cli/index.md): Manage the Scalar Registry from your terminal: upload, version, and validate OpenAPI documents with the CLI.
+- [Import](https://scalar.com/products/api-client/import/index.md): Import API collections from OpenAPI, Swagger 2.0, Postman, or cURL into the Scalar API Client.
+- [Images](https://scalar.com/products/docs/components/images/index.md): Add images with captions and dark mode variants to your documentation.
+- [User Management](https://scalar.com/resources/user-management/index.md): Manage your Scalar team: invite members, assign Owner, Admin and Editor roles, and control who can join.
+- [Package Registries](https://scalar.com/products/sdk-generator/publishing/registries/index.md): Set up trusted publishing or secrets for npm, PyPI, Maven Central, and every supported registry.
+- [Privacy Policy](https://scalar.com/legal/privacy-policy/index.md): How Scalar collects, uses, and protects your data.
+- [FastAPI](https://scalar.com/products/api-references/integrations/fastapi/index.md): Replace Swagger UI with Scalar in your FastAPI application for modern, beautiful API documentation.
