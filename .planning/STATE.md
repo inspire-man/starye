@@ -6,9 +6,9 @@ current_phase: 26
 current_phase_name: Video Source And Magnet Availability
 status: executing
 stopped_at: Completed 26-06-PLAN.md
-last_updated: "2026-08-14T04:30:00.000Z"
-last_activity: 2026-08-14
-last_activity_desc: Completed quick task 260814-h13: Manga/Movie crawler 10-item batch and Gateway verification
+last_updated: "2026-08-13T04:05:00.000Z"
+last_activity: 2026-08-13
+last_activity_desc: Completed 26-06-PLAN.md
 progress:
   total_phases: 2
   completed_phases: 1
@@ -30,7 +30,7 @@ See: `.planning/PROJECT.md` (updated 2026-08-10)
 Phase: 26 — Video Source And Magnet Availability
 Plan: 9/10 plans complete
 Status: Wave 6 complete; ready for Wave 7 checkpoint
-Last activity: 2026-08-14 — Completed quick task 260814-h13: Manga/Movie crawler 10-item batch and Gateway verification
+Last activity: 2026-08-13 — Completed 26-06-PLAN.md
 
 ## Performance Metrics
 
@@ -105,12 +105,6 @@ Recent decisions affecting current work:
 - Magnet truth depends on the configured Aria2/TorrServer observation path and must define bounded metadata, peer, stream and playback states during Phase 26 planning.
 - Comic sources may represent special chapters, missing numbers, duplicates and pagination differently; Phase 27 must select stable identity and terminal-state semantics before implementation.
 - Image hosts may differ for HEAD, Range, redirects, anti-hotlink challenges and browser loading; Phase 28 needs representative fixtures and bounded fan-out.
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260814-h13 | Manga/Movie crawler 10-item batch and Gateway verification | 2026-08-14 | 2ec1f73 | [260814-h13-manga-movie-crawler-10-gateway](./quick/260814-h13-manga-movie-crawler-10-gateway/) |
 
 ## Deferred Items
 

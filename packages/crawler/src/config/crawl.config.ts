@@ -181,9 +181,9 @@ const DEFAULT_CONFIG: CrawlConfig = {
     imageBatch: 10, // 保守：每批 10 张图片
   },
   limits: {
-    maxMangasPerRun: 10, // 每次最多 10 个漫画
-    maxChaptersPerNew: 10, // 新漫画限制 10 章
-    maxChaptersPerUpdate: 10, // 更新时限制 10 章
+    maxMangasPerRun: 15, // 每次最多 15 个漫画
+    maxChaptersPerNew: 5, // 新漫画限制 5 章
+    maxChaptersPerUpdate: 20, // 更新时限制 20 章
     timeoutMinutes: 300, // 5 小时软超时（留 1 小时缓冲）
   },
   incremental: {

@@ -83,8 +83,8 @@ export const DEFAULT_DELAY: DelayConfig = {
 }
 
 export const DEFAULT_LIMITS: CrawlerLimits = {
-  maxMovies: 10, // 默认每次最多处理 10 部影片
-  maxPages: 10, // 默认每次最多处理 10 页
+  maxMovies: 0, // 0 = 无限制
+  maxPages: 0, // 0 = 无限制
 }
 
 export const DEFAULT_OPTIONS: CrawlerOptions = {
@@ -108,7 +108,7 @@ export const GITHUB_ACTIONS_CONFIG: Partial<OptimizedCrawlerConfig> = {
     api: 1000,
   },
   limits: {
-    maxMovies: 10,
-    maxPages: 10,
+    maxMovies: 50,
+    maxPages: 5,
   },
 }
