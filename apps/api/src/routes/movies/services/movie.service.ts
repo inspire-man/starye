@@ -1,7 +1,7 @@
 import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
 import { movies as moviesTable } from '@starye/db/schema'
-import { count, desc, eq } from 'drizzle-orm'
+import { and, count, desc, eq, notInArray, sql } from 'drizzle-orm'
 import { createAvailabilityRepository } from '../../../domain/crawler-tasks/availability-repository'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { createPlaybackEvidenceRepository } from '../../../domain/playback-evidence/repository'
@@ -542,6 +542,61 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     const movieData = 'movie' in result ? result.movie : result
     if (movieData && !relatedMoviesMap.has(movieData.id)) {
       relatedMoviesMap.set(movieData.id, movieData)
+    }
+  }
+
+  // Keep recommendations useful when actor/series relations produce too few results.
+  if (relatedMoviesMap.size < 4) {
+    const rawGenres = Array.isArray(movie.genres)
+      ? movie.genres
+      : typeof movie.genres === 'string'
+        ? (() => {
+            try {
+              const parsed = JSON.parse(movie.genres)
+              return Array.isArray(parsed) ? parsed : []
+            }
+            catch {
+              return []
+            }
+          })()
+        : []
+    const firstGenre = rawGenres.find((genre): genre is string => typeof genre === 'string' && genre.trim().length > 0)
+
+    if (firstGenre) {
+      const excludedIds = [movie.id, ...relatedMoviesMap.keys()]
+      const genreConditions = [
+        sql`EXISTS (
+          SELECT 1 FROM json_each(${moviesTable.genres})
+          WHERE json_each.value = ${firstGenre}
+        )`,
+        notInArray(moviesTable.id, excludedIds),
+      ]
+      if (!isAdult)
+        genreConditions.push(eq(moviesTable.isR18, false))
+
+      try {
+        const genreResults = await db
+          .select({
+            id: moviesTable.id,
+            code: moviesTable.code,
+            title: moviesTable.title,
+            slug: moviesTable.slug,
+            coverImage: moviesTable.coverImage,
+            isR18: moviesTable.isR18,
+          })
+          .from(moviesTable)
+          .where(and(...genreConditions))
+          .orderBy(desc(moviesTable.viewCount))
+          .limit(Math.max(0, 6 - relatedMoviesMap.size))
+
+        for (const genreMovie of genreResults) {
+          if (!relatedMoviesMap.has(genreMovie.id))
+            relatedMoviesMap.set(genreMovie.id, genreMovie)
+        }
+      }
+      catch {
+        // A failed fallback should not make the detail endpoint fail.
+      }
     }
   }
 

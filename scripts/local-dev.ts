@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import type { MaterializedTargetDeployConfig, TargetPagesSurface } from '../packages/config/src/deployment-target/index.ts'
+import type { ServerVideoAvailabilityConfig } from '../packages/crawler/src/task-runner/video-runner-wiring.ts'
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createConnection } from 'node:net'
@@ -63,6 +64,8 @@ interface StartedProcess {
 
 interface MaterializedLocalInputs {
   readonly apiConfigPath: string
+  readonly callbackKeyId?: string
+  readonly callbackSecret?: string
   readonly gatewayConfigPath: string
   readonly pageEnvironment: (surface: TargetPagesSurface) => NodeJS.ProcessEnv
   readonly runnerConfigPath?: string
@@ -162,6 +165,7 @@ async function materializeLocalInputs(): Promise<MaterializedLocalInputs> {
   const apiVars = await readLocalEnvValues(path.join(root, 'apps', 'api', '.dev.vars'))
   const callbackKeyId = process.env.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT?.trim() ?? apiVars.TASK_RUNNER_CALLBACK_KEY_ID_CURRENT
   const callbackSecret = process.env.TASK_RUNNER_CALLBACK_SECRET_CURRENT?.trim() ?? apiVars.TASK_RUNNER_CALLBACK_SECRET_CURRENT
+  const videoAvailability = await readLocalVideoAvailabilityConfig()
   let runnerConfigPath: string | undefined
   if (callbackKeyId && callbackSecret) {
     const runDirectory = path.resolve(root, '.target-runs')
@@ -173,11 +177,13 @@ async function materializeLocalInputs(): Promise<MaterializedLocalInputs> {
       callbackSecret,
       crawler: { manga: {}, movie: {} },
       providerMode: 'local-proof',
+      ...(videoAvailability ? { videoAvailability } : {}),
     }), { encoding: 'utf8', flag: 'w' })
   }
 
   return {
     apiConfigPath: apiAndGateway.apiConfigPath,
+    ...(runnerConfigPath ? { callbackKeyId, callbackSecret } : {}),
     gatewayConfigPath: apiAndGateway.gatewayConfigPath,
     ...(runnerConfigPath ? { runnerConfigPath } : {}),
     pageEnvironment: (surface) => {
@@ -211,8 +217,16 @@ function localDevServiceSpecs(inputs: MaterializedLocalInputs): readonly LocalDe
         '--config',
         inputs.apiConfigPath,
         ...localApiOrigins.flatMap(([key, origin]) => ['--var', `${key}:${origin}`]),
-        '--var',
-        'CRAWLER_LOCAL_PROOF_ENABLED:true',
+        ...(inputs.callbackKeyId && inputs.callbackSecret
+          ? [
+              '--var',
+              'CRAWLER_LOCAL_PROOF_ENABLED:true',
+              '--var',
+              `TASK_RUNNER_CALLBACK_KEY_ID_CURRENT:${inputs.callbackKeyId}`,
+              '--var',
+              `TASK_RUNNER_CALLBACK_SECRET_CURRENT:${inputs.callbackSecret}`,
+            ]
+          : []),
       ],
     },
     {
@@ -281,6 +295,14 @@ async function readLocalEnvValues(pathname: string): Promise<Record<string, stri
   catch {
     return {}
   }
+}
+
+export async function readLocalVideoAvailabilityConfig(
+  pathname = process.env.TASK_RUNNER_VIDEO_AVAILABILITY_CONFIG,
+): Promise<ServerVideoAvailabilityConfig | undefined> {
+  if (!pathname)
+    return undefined
+  return JSON.parse(await readFile(pathname, 'utf8')) as ServerVideoAvailabilityConfig
 }
 
 function localTaskRunnerSpec(inputs: MaterializedLocalInputs): LocalDevRunnerSpec | undefined {
@@ -355,14 +377,14 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
     }
     stopping = true
     stopped = (async () => {
-      for (const child of started) {
+      await Promise.all(started.map(async (child) => {
         try {
           await terminateProcessTree(child.process)
         }
         catch {
           // The child may have already exited; no process outside this invocation is targeted.
         }
-      }
+      }))
       if (materialized) {
         await materialized.cleanup()
       }

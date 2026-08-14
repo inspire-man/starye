@@ -1,70 +1,12 @@
-name: Daily Actor Crawl
+name: Retired Daily Actor Crawl
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
-    inputs:
-      target:
-        description: Selected tracked deployment target
-        required: true
-        type: string
-      max_actors:
-        description: Optional actor count for a future targeted run
-        required: false
-        default: '150'
-        type: string
 
 jobs:
-  resolve-target:
+  retired:
     runs-on: ubuntu-latest
-    outputs:
-      target: ${{ steps.resolve.outputs.target }}
-      github_environment: ${{ steps.resolve.outputs.github_environment }}
-    env:
-      STARYE_TARGET_ID: starye-org
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v4
-        with: { version: 10.33.0 }
-      - uses: actions/setup-node@v6.3.0
-        with: { node-version: 24, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - id: resolve
-        shell: bash
-        env:
-          INPUT_TARGET: ${{ inputs.target || '' }}
+      - name: Report retired workflow
         run: |
-          set -euo pipefail
-          target="${INPUT_TARGET:-$STARYE_TARGET_ID}"
-          test -n "$target"
-          output="$(pnpm target-profile validate --target "$target")"
-          github_environment="$(printf '%s\n' "$output" | sed -n 's/^CI GitHub environment: //p')"
-          test -n "$github_environment"
-          echo "target=$target" >> "$GITHUB_OUTPUT"
-          echo "github_environment=$github_environment" >> "$GITHUB_OUTPUT"
-
-  crawl:
-    needs: resolve-target
-    runs-on: ubuntu-latest
-    environment: ${{ needs.resolve-target.outputs.github_environment }}
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v4
-        with: { version: 10.33.0 }
-      - uses: actions/setup-node@v6.3.0
-        with: { node-version: 24, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - id: prepare
-        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command crawler-actor --github-output "$GITHUB_OUTPUT"
-      - name: Run selected actor entry
-        run: pnpm target-profile run-prepared-entry --entry crawler-actor --prepared-context "${{ steps.prepare.outputs.prepared_context_path }}"
-      - name: Remove generated target files
-        if: always()
-        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
+          echo "Actor crawl is retired; the production registry supports only Manga and Movie templates."

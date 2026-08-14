@@ -192,6 +192,22 @@ describe('crawler task repository', () => {
     expect([tasks.rows.length, runs.rows.length, leases.rows.length, transitions.rows.length]).toEqual([1, 1, 1, 1])
   })
 
+  it('reclaims an expired template lease before creating a fresh run', async () => {
+    const first = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    expect(first.kind).toBe('created')
+
+    await client.execute({
+      args: [0, 0],
+      sql: 'UPDATE crawler_template_lease SET expires_at = ?, renewed_at = ?',
+    })
+
+    const fresh = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+
+    expect(fresh).toMatchObject({ kind: 'created', run: { attemptNumber: 1, status: 'queued' } })
+    const leases = await client.execute('SELECT template_key, run_id FROM crawler_template_lease')
+    expect(leases.rows).toEqual([{ template_key: 'movie', run_id: (fresh as { run: { id: string } }).run.id }])
+  })
+
   it('uses version-and-sequence CAS, keeps stale events from replacing the current run, and records a stale audit', async () => {
     const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
     if (created.kind !== 'created')
@@ -915,6 +931,46 @@ describe('crawler task repository', () => {
       runId: created.run.id,
       status: 'completed',
     })).resolves.toMatchObject({ kind: 'updated', status: 'completed' })
+  })
+
+  it('binds a registered video availability operation to the local proof provider', async () => {
+    await client.execute({
+      args: ['movie-video-1', 'Video One', 'video-one', 'VIDEO-001', 0, 0],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    const created = await repository.createOrGetActiveRun({
+      operationCommand: {
+        actor: { id: 'admin-1', kind: 'admin' },
+        idempotencyKey: 'video:movie-video-1:4:no_peer',
+        intent: {
+          kind: 'recheck_video_source',
+          movieRevision: 4,
+          policyVersion: 'video-source-probe/v1',
+          reason: 'no_peer',
+          sourceRevision: 4,
+        },
+        operation: 'recheck_video_source',
+        policyReference: 'availability/video-source-probe',
+        policyVersion: 'video-source-probe/v1',
+        target: { id: 'movie-video-1', kind: 'movie' },
+      },
+      requestedByUserId: 'admin-1',
+      templateKey: 'movie',
+    })
+    if (created.kind !== 'created')
+      throw new Error('expected video availability run')
+
+    await expect(repository.ensureProviderAssociation({
+      attempt: 1,
+      provider: 'local-proof',
+      runId: created.run.id,
+      template: 'movie',
+    })).resolves.toMatchObject({
+      applicationAttempt: 1,
+      provider: 'local-proof',
+      providerRunId: `local-${created.run.id}`,
+      runId: created.run.id,
+    })
   })
 
   it('caps safe messages at 4 KiB, records one truncation marker after 500 normal logs, and only purges expired detail logs', async () => {

@@ -6,14 +6,14 @@ import { describe, expect, it } from 'vitest'
 
 const root = path.resolve(import.meta.dirname, '../../../../..')
 
-type WorkflowKind = 'worker' | 'pages' | 'prepared-entry' | 'rollback'
+type WorkflowKind = 'retired' | 'worker' | 'pages' | 'prepared-entry' | 'rollback'
 
 interface WorkflowFixture {
   readonly file: string
   readonly kind: WorkflowKind
   readonly surface?: 'dashboard' | 'auth' | 'blog' | 'movie' | 'comic'
   readonly workerConfig?: 'api_config_path' | 'gateway_config_path'
-  readonly entry?: 'd1-migrate' | 'crawler-comic' | 'crawler-optimized' | 'crawler-actor' | 'crawler-publisher' | 'monthly-cleanup'
+  readonly entry?: 'd1-migrate' | 'crawler-comic' | 'crawler-optimized' | 'monthly-cleanup'
 }
 
 const workflows: readonly WorkflowFixture[] = [
@@ -28,8 +28,8 @@ const workflows: readonly WorkflowFixture[] = [
   { file: 'deploy-migrations.yml', kind: 'prepared-entry', entry: 'd1-migrate' },
   { file: 'daily-manga-crawl.yml', kind: 'prepared-entry', entry: 'crawler-comic' },
   { file: 'daily-movie-crawl.yml', kind: 'prepared-entry', entry: 'crawler-optimized' },
-  { file: 'daily-actor-crawl.yml', kind: 'prepared-entry', entry: 'crawler-actor' },
-  { file: 'daily-publisher-crawl.yml', kind: 'prepared-entry', entry: 'crawler-publisher' },
+  { file: 'daily-actor-crawl.yml', kind: 'retired' },
+  { file: 'daily-publisher-crawl.yml', kind: 'retired' },
   { file: 'rollback.yml', kind: 'rollback' },
   { file: 'monthly-cleanup.yml', kind: 'prepared-entry', entry: 'monthly-cleanup' },
 ]
@@ -50,7 +50,7 @@ describe('phase 12 workflow target contract', () => {
   it('keeps the full remote-mutation inventory explicit and resolver-gated', async () => {
     expect(workflows).toHaveLength(15)
 
-    for (const workflow of workflows) {
+    for (const workflow of workflows.filter(item => item.kind !== 'retired')) {
       const source = await workflowText(workflow.file)
 
       expect(source, workflow.file).toMatch(/resolve-target:/)
@@ -145,6 +145,19 @@ describe('phase 12 workflow target contract', () => {
       expect(source, workflow.file).not.toMatch(/wrangler\s+(?:d1|r2)\b/)
       expect(source, workflow.file).not.toMatch(/\brun\s+crawl:/)
       expect(source, workflow.file).not.toMatch(/\bAPI_URL:|\bR2_BUCKET_NAME:|\bD1_DB_NAME:/)
+    }
+  })
+
+  it('keeps legacy Actor and Publisher crawls closed instead of remapping them to a supported entry', async () => {
+    for (const file of ['daily-actor-crawl.yml', 'daily-publisher-crawl.yml']) {
+      const source = await workflowText(file)
+
+      expect(source, file).toContain('Retired Daily')
+      expect(source, file).toContain('workflow_dispatch:')
+      expect(source, file).not.toContain('schedule:')
+      expect(source, file).not.toContain('prepare-mutation')
+      expect(source, file).not.toContain('run-prepared-entry')
+      expect(source, file).not.toMatch(/crawler-(?:actor|publisher|comic|optimized)/u)
     }
   })
 

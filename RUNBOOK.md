@@ -302,8 +302,13 @@ Worker `beforeSend` 第一轮过滤目标：
 
 - `daily-movie-crawl.yml`
 - `daily-manga-crawl.yml`
-- `daily-actor-crawl.yml`
-- `daily-publisher-crawl.yml`
+
+已退役的 legacy workflows：
+
+- `daily-actor-crawl.yml`：仅保留手动退役提示，不再按 schedule 运行
+- `daily-publisher-crawl.yml`：仅保留手动退役提示，不再按 schedule 运行
+
+当前生产 registry 只为 Manga/Movie 提供受控 provider 绑定。Actor/Publisher 如需恢复，先补齐对应的 registry、control-plane 和 provider workflow 契约，再重新启用 schedule。
 
 运维动作：
 

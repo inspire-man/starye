@@ -57,6 +57,10 @@ coverage/
 .eslintcache/
 *.tsbuildinfo
 
+# Local GSD planning scratch files and run logs
+/.planning/tmp/
+/.gsd/
+
 # TypeScript declaration files (generated)
 *.d.ts
 *.d.ts.map

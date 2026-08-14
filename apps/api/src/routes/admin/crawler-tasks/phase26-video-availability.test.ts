@@ -140,6 +140,42 @@ describe('phase 26 admin video availability boundary', () => {
     await expect(response.json()).resolves.toMatchObject({ kind: 'duplicate', run: { id: 'run-1' } })
   })
 
+  it('associates a created availability command with the enabled local runner', async () => {
+    repository.createOrGetActiveRun.mockResolvedValueOnce({
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'run-1', taskId: 'task-1' },
+    })
+    repository.ensureProviderAssociation.mockResolvedValueOnce({
+      applicationAttempt: 1,
+      provider: 'local-proof',
+      providerRunId: 'local-run-1',
+      runId: 'run-1',
+    })
+    const app = createApp()
+
+    const response = await app.request('/crawler-tasks/video-availability', {
+      body: JSON.stringify(command),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }, {
+      CRAWLER_LOCAL_PROOF_ENABLED: 'true',
+      TASK_RUNNER_CALLBACK_KEY_ID_CURRENT: 'local-test-key',
+      TASK_RUNNER_CALLBACK_SECRET_CURRENT: 'local-test-secret',
+    })
+
+    expect(response.status).toBe(200)
+    expect(repository.ensureProviderAssociation).toHaveBeenCalledWith({
+      attempt: 1,
+      provider: 'local-proof',
+      runId: 'run-1',
+      template: 'movie',
+    })
+    await expect(response.json()).resolves.toMatchObject({
+      dispatch: { provider: { accepted: true, kind: 'local-proof_queued' } },
+      kind: 'created',
+    })
+  })
+
   it('rejects reason/action mismatches and caller-controlled provider material', async () => {
     for (const body of [
       { ...command, reason: 'no_source', operation: 'recheck_video_source' },

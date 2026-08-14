@@ -448,13 +448,15 @@ function parseRunnerCandidate(value: unknown): RunnerCandidate {
 
   const sourceRevision = optionalInteger(value.sourceRevision, 1_000_000)
   const expectedProjectionVersion = optionalInteger(value.expectedProjectionVersion, 1_000_000_000)
+  const snapshot = parseRunnerSnapshot(value.snapshot)
   if (provider === 'local-proof'
     && (!taskId || !target || !contentId || sourceRevision === undefined || expectedProjectionVersion === undefined
-      || !policyReference || !policyVersion || proofProfile !== 'phase25-movie-availability-v1')) {
+      || !policyReference || !policyVersion
+      || (!isVideoRunnerSnapshot(snapshot) && proofProfile !== 'phase25-movie-availability-v1')
+      || (isVideoRunnerSnapshot(snapshot) && proofProfile !== undefined))) {
     throw new Error('Local proof runner candidate binding is incomplete')
   }
 
-  const snapshot = parseRunnerSnapshot(value.snapshot)
   if (isVideoRunnerSnapshot(snapshot)
     && (sourceRevision !== snapshot.sourceRevision
       || policyVersion !== snapshot.policyVersion

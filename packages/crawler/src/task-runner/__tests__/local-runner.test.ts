@@ -196,6 +196,73 @@ describe('localTaskRunner', () => {
     expect(client.failed).not.toHaveBeenCalled()
   })
 
+  it('sends a video availability receipt before its observation when the adapter has no content ids', async () => {
+    const videoCandidate: RunnerCandidate = {
+      attempt: 1,
+      contentId: 'movie-video-1',
+      expectedProjectionVersion: 0,
+      policyReference: 'availability/video-source-probe',
+      policyVersion: 'video-source-probe/v1',
+      provider: 'local-proof',
+      runId: 'video-run-1',
+      sequence: 1,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        movieId: 'movie-video-1',
+        movieRevision: 4,
+        operation: 'recheck_video_source',
+        permissionResource: 'movie',
+        policyVersion: 'video-source-probe/v1',
+        reason: 'no_peer',
+        sourceRevision: 4,
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+      sourceRevision: 4,
+      target: { id: 'movie-video-1', kind: 'movie' },
+      taskId: 'video-task-1',
+    }
+    const order: string[] = []
+    const client = {
+      claim: vi.fn().mockResolvedValue({ accepted: true }),
+      failed: vi.fn(),
+      heartbeat: vi.fn().mockResolvedValue({ accepted: true }),
+      observeAvailability: vi.fn(async () => {
+        order.push('observation')
+        return { accepted: true }
+      }),
+      poll: vi.fn().mockResolvedValue(videoCandidate),
+      succeeded: vi.fn(async () => {
+        order.push('receipt')
+        return { accepted: true }
+      }),
+    }
+    const runner = new LocalTaskRunner({
+      adapters: { select: () => ({
+        execute: async () => ({
+          availabilityObservation: {
+            freshness: 'fresh',
+            nextAction: 'recheck',
+            observationIdentity: 'video-run-1:magnet',
+            reasonCode: 'content_missing',
+            status: 'unknown',
+            summary: { counts: { checked: 1 }, samples: ['stream_missing'] },
+          },
+          contentIds: [],
+        }),
+        operation: 'video_magnet' as const,
+        templateKey: 'movie' as const,
+      }) },
+      client: client as never,
+    })
+
+    await runner.runOnce()
+
+    expect(order.slice(0, 2)).toEqual(['receipt', 'observation'])
+    expect(client.succeeded).toHaveBeenCalledWith(videoCandidate, 3, ['movie-video-1'])
+    expect(client.failed).not.toHaveBeenCalled()
+  })
+
   it('uses the pending adapter sequence when a repair observation fails before terminal acknowledgement', async () => {
     const client = {
       cancelled: vi.fn(),

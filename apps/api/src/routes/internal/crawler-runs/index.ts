@@ -25,6 +25,7 @@ import {
 
 const MAX_EVENT_AGE_MS = 5 * 60_000
 const MAX_AVAILABILITY_BODY_BYTES = 32 * 1024
+const VIDEO_AVAILABILITY_POLICY_REFERENCE = 'availability/video-source-probe'
 
 function previousValidity(env: AppEnv['Bindings']): number | undefined {
   if (!env.TASK_RUNNER_CALLBACK_SECRET_PREVIOUS || !env.TASK_RUNNER_CALLBACK_KEY_ID_PREVIOUS || !env.TASK_RUNNER_CALLBACK_PREVIOUS_ROTATED_AT)
@@ -574,8 +575,11 @@ export function createCrawlerRunsRoutes(options: {
       throw new HTTPException(400, { message: 'Availability observation identity mismatch' })
     if (Math.abs(currentNow - event.timestamp) > MAX_EVENT_AGE_MS)
       throw new HTTPException(400, { message: 'Availability observation timestamp expired' })
-    if (event.provider === 'local-proof' && event.policy_reference !== LOCAL_PROOF_POLICY_REFERENCE)
+    if (event.provider === 'local-proof'
+      && event.policy_reference !== LOCAL_PROOF_POLICY_REFERENCE
+      && event.policy_reference !== VIDEO_AVAILABILITY_POLICY_REFERENCE) {
       throw new HTTPException(400, { message: 'Local proof policy reference mismatch' })
+    }
 
     const bodySha256 = await sha256Hex(rawBody)
     const existing = await readRecordedRepairEvent(c, event.run_id, event.event_id, event.nonce)

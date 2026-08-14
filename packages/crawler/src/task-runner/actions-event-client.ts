@@ -213,29 +213,41 @@ function envPositiveInteger(environment: NodeJS.ProcessEnv, name: string): numbe
   return value
 }
 
-export function createActionsEventClientFromEnvironment(environment: NodeJS.ProcessEnv = process.env): ActionsEventClient {
-  return new ActionsEventClient({
+function createBaseActionsEventClientConfig(environment: NodeJS.ProcessEnv) {
+  return {
     apiBaseUrl: envRequired(environment, 'ACTIONS_CALLBACK_API_BASE_URL'),
-    attempt: envPositiveInteger(environment, 'ACTIONS_APPLICATION_ATTEMPT'),
     callbackKeyId: envRequired(environment, 'TASK_RUNNER_CALLBACK_KEY_ID_CURRENT'),
     callbackSecret: envRequired(environment, 'TASK_RUNNER_CALLBACK_SECRET_CURRENT'),
     environment: envRequired(environment, 'ACTIONS_PROVIDER_ENVIRONMENT') as 'starye-org',
-    providerRunAttempt: envPositiveInteger(environment, 'GITHUB_RUN_ATTEMPT'),
-    providerRunId: envRequired(environment, 'GITHUB_RUN_ID'),
     ref: envRequired(environment, 'ACTIONS_PROVIDER_REF') as 'main',
     repository: envRequired(environment, 'ACTIONS_PROVIDER_REPOSITORY') as 'inspire-man/starye',
-    runId: envRequired(environment, 'ACTIONS_APPLICATION_RUN_ID'),
-    sha: envRequired(environment, 'GITHUB_SHA'),
     target: envRequired(environment, 'ACTIONS_PROVIDER_TARGET') as 'starye-org',
     template: envRequired(environment, 'ACTIONS_PROVIDER_TEMPLATE') as 'movie' | 'manga',
     workflow: envRequired(environment, 'ACTIONS_PROVIDER_WORKFLOW') as '.github/workflows/daily-manga-crawl.yml' | '.github/workflows/daily-movie-crawl.yml',
+  }
+}
+
+export function createScheduleRegisterActionsEventClientFromEnvironment(environment: NodeJS.ProcessEnv = process.env): ActionsEventClient {
+  return new ActionsEventClient(createBaseActionsEventClientConfig(environment))
+}
+
+export function createActionsEventClientFromEnvironment(environment: NodeJS.ProcessEnv = process.env): ActionsEventClient {
+  return new ActionsEventClient({
+    ...createBaseActionsEventClientConfig(environment),
+    attempt: envPositiveInteger(environment, 'ACTIONS_APPLICATION_ATTEMPT'),
+    providerRunAttempt: envPositiveInteger(environment, 'GITHUB_RUN_ATTEMPT'),
+    providerRunId: envRequired(environment, 'GITHUB_RUN_ID'),
+    runId: envRequired(environment, 'ACTIONS_APPLICATION_RUN_ID'),
+    sha: envRequired(environment, 'GITHUB_SHA'),
   })
 }
 
 async function runCli(): Promise<void> {
   const environment = process.env
-  const client = createActionsEventClientFromEnvironment(environment)
   const [command, ...args] = process.argv.slice(2)
+  const client = command === 'schedule-register'
+    ? createScheduleRegisterActionsEventClientFromEnvironment(environment)
+    : createActionsEventClientFromEnvironment(environment)
   let result: ActionsEventResponse
   switch (command) {
     case 'schedule-register':

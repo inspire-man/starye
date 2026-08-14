@@ -107,18 +107,8 @@ function createMockDb(options: {
 
   const movie = makeMovie(movieOverrides)
 
-  // 按调用顺序分配 selectChain：
-  // - actorRelated 有效时第 1 次为演员查询
-  // - 第 2 次（或第 1 次，若无演员）为 genre fallback
-  const chains = [
-    makeSelectChain(actorRelated),
-    makeSelectChain(genreFallback),
-    makeSelectChain([]),
-  ]
-  let chainIdx = 0
-
   return {
-    select: vi.fn(() => chains[Math.min(chainIdx++, chains.length - 1)]),
+    select: vi.fn(() => makeSelectChain(genreFallback)),
     query: {
       movies: {
         findFirst: vi.fn().mockResolvedValue({
@@ -126,6 +116,10 @@ function createMockDb(options: {
           movieActors,
           moviePublishers: [],
         }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      movieActors: {
+        findMany: vi.fn().mockResolvedValue(actorRelated.map(movie => ({ movie }))),
       },
       players: {
         findMany: vi.fn().mockResolvedValue([]),

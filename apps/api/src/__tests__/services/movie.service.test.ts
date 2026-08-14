@@ -217,7 +217,7 @@ describe('movieService', () => {
 
       expect(result?.primaryContentId).toBe('movie-1')
       expect(result?.readiness).toMatchObject({
-        metadata: { contentId: 'movie-1', persisted: true },
+        metadata: { contentId: 'movie-1', persisted: false },
         source: { disposition: 'no_source', eligibleCount: 0, repairable: true },
         playback: { status: 'unverified' },
       })

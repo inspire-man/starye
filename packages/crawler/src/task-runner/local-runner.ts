@@ -87,25 +87,24 @@ export class LocalTaskRunner {
           else
             await this.options.client.failed(candidate, terminalSequence(), result.failureCode ?? 'receipt_missing')
         }
-        else if (result.availabilityObservation && contentIds.size === 0) {
-          const observationSequence = issueSequence()
-          const observation = await this.options.client.observeAvailability(candidate, observationSequence, result.availabilityObservation)
-          completeSequence(observationSequence)
-          if (!observation.accepted) {
-            await this.options.client.failed(candidate, terminalSequence(), 'runner_failed')
-          }
-          else if (candidate.contentId) {
-            await this.options.client.succeeded(candidate, terminalSequence(), [candidate.contentId])
+        else if (result.availabilityObservation) {
+          const receiptContentIds = contentIds.size > 0
+            ? [...contentIds]
+            : candidate.contentId
+              ? [candidate.contentId]
+              : []
+          if (receiptContentIds.length === 0) {
+            await this.options.client.failed(candidate, terminalSequence(), 'receipt_missing')
           }
           else {
-            await this.options.client.failed(candidate, terminalSequence(), 'receipt_missing')
+            const terminal = await this.options.client.succeeded(candidate, terminalSequence(), receiptContentIds)
+            if (terminal?.accepted ?? true) {
+              await this.observeAvailabilityHistory(candidate, result.availabilityObservation, issueSequence, completeSequence)
+            }
           }
         }
         else if (contentIds.size > 0) {
-          const terminal = await this.options.client.succeeded(candidate, terminalSequence(), [...contentIds])
-          if (result.availabilityObservation && (terminal?.accepted ?? true)) {
-            await this.observeAvailabilityHistory(candidate, result.availabilityObservation, issueSequence, completeSequence)
-          }
+          await this.options.client.succeeded(candidate, terminalSequence(), [...contentIds])
         }
         else {
           await this.options.client.failed(candidate, terminalSequence(), 'receipt_missing')

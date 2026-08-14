@@ -1678,7 +1678,9 @@ adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvail
   if (result.kind === 'conflict')
     throw new HTTPException(409, { message: 'Video availability command conflicts with an existing identity' })
   const dispatch = result.kind === 'created'
-    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template: 'movie' })
+    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template: 'movie' }, {
+        localProofRequested: true,
+      })
     : { kind: 'existing_active_run' }
   return c.json({ dispatch, kind: result.kind, run: result.run })
 })

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ActionsEventClient } from '../actions-event-client'
+import {
+  ActionsEventClient,
+  createActionsEventClientFromEnvironment,
+  createScheduleRegisterActionsEventClientFromEnvironment,
+} from '../actions-event-client'
 
 const baseConfig = {
   apiBaseUrl: 'https://gateway.example.test',
@@ -18,7 +22,24 @@ function response(status: number, body: unknown = { accepted: true }) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }
 
+const scheduleEnvironment: NodeJS.ProcessEnv = {
+  ACTIONS_CALLBACK_API_BASE_URL: 'https://gateway.example.test',
+  ACTIONS_PROVIDER_ENVIRONMENT: 'starye-org',
+  ACTIONS_PROVIDER_REF: 'main',
+  ACTIONS_PROVIDER_REPOSITORY: 'inspire-man/starye',
+  ACTIONS_PROVIDER_TARGET: 'starye-org',
+  ACTIONS_PROVIDER_TEMPLATE: 'movie',
+  ACTIONS_PROVIDER_WORKFLOW: '.github/workflows/daily-movie-crawl.yml',
+  TASK_RUNNER_CALLBACK_KEY_ID_CURRENT: 'actions-key',
+  TASK_RUNNER_CALLBACK_SECRET_CURRENT: 'actions-secret',
+}
+
 describe('actionsEventClient', () => {
+  it('loads schedule registration credentials before the control plane allocates an application binding', () => {
+    expect(() => createScheduleRegisterActionsEventClientFromEnvironment(scheduleEnvironment)).not.toThrow()
+    expect(() => createActionsEventClientFromEnvironment(scheduleEnvironment)).toThrow('Missing Actions callback environment: ACTIONS_APPLICATION_ATTEMPT')
+  })
+
   it('serializes a deterministic signed schedule envelope with fixed provider identity', async () => {
     const fetch = vi.fn(async () => response(200, { accepted: true, run_id: 'run-1', attempt: 1 }))
     const client = new ActionsEventClient({ ...baseConfig, fetch })

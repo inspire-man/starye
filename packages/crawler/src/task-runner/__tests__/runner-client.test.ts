@@ -225,7 +225,7 @@ describe('runnerClient', () => {
         expectedProjectionVersion: 0,
         policyReference: 'availability/video-source-probe',
         policyVersion: 'video-source-probe/v1',
-        provider: 'github-actions',
+        provider: 'local-proof',
         run_id: 'run-video-1',
         sequence: 1,
         snapshot: {
@@ -245,7 +245,7 @@ describe('runnerClient', () => {
         taskId: 'task-video-1',
       },
     }), { status: 200 }))
-    const client = new RunnerClient({ apiBaseUrl: 'http://localhost:8080', callbackKeyId: 'key-1', callbackSecret: 'secret', fetch: fetch as never })
+    const client = new RunnerClient({ apiBaseUrl: 'http://localhost:8080', callbackKeyId: 'key-1', callbackSecret: 'secret', fetch: fetch as never, providerMode: 'local-proof' })
 
     await expect(client.poll()).resolves.toMatchObject({
       policyVersion: 'video-source-probe/v1',

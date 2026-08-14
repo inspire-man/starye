@@ -171,6 +171,19 @@ describe('signed crawler availability observation route', () => {
     await expect(duplicate.json()).resolves.toMatchObject({ accepted: true, kind: 'accepted' })
   })
 
+  it('accepts the registered video availability policy for local proof observations', async () => {
+    const persist = vi.fn(async () => acceptedResult())
+    const appState = createApp({ persist })
+    const response = await postObservation(appState.app, createEvent({
+      policy_reference: 'availability/video-source-probe',
+      policy_version: 'video-source-probe/v1',
+      provider: 'local-proof',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(persist).toHaveBeenCalledOnce()
+  })
+
   it('rejects forbidden or sensitive input before persistence and maps stale to bounded 409', async () => {
     const persist = vi.fn(async () => ({
       accepted: false,

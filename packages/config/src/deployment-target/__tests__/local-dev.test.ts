@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { isAbsolute, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
@@ -19,6 +20,7 @@ interface LocalDevSupervisorResult {
 }
 
 interface LocalDevModule {
+  readLocalVideoAvailabilityConfig: (pathname?: string) => Promise<unknown>
   runLocalDevSupervisor: (dependencies: unknown) => Promise<LocalDevSupervisorResult>
 }
 
@@ -31,6 +33,7 @@ interface LocalDevEntryModule {
 }
 
 interface FakeService {
+  readonly args: readonly string[]
   readonly label: string
   readonly port: number
 }
@@ -67,11 +70,13 @@ function createHarness(options: {
 }): {
   readonly dependencies: object
   readonly children: Map<string, FakeChild>
+  readonly serviceSpecs: Map<string, FakeService>
   readonly cleanup: ReturnType<typeof vi.fn>
   readonly setExitCode: ReturnType<typeof vi.fn>
   readonly probePort: ReturnType<typeof vi.fn>
 } {
   const children = new Map<string, FakeChild>()
+  const serviceSpecs = new Map<string, FakeService>()
   const cleanup = vi.fn(async () => {})
   const setExitCode = vi.fn()
   const probePort = vi.fn(async (port: number) => options.listening(port))
@@ -81,6 +86,8 @@ function createHarness(options: {
     dependencies: {
       materializeInputs: async () => ({
         apiConfigPath: 'fake-api-config.toml',
+        callbackKeyId: 'local-test-key',
+        callbackSecret: 'local-test-secret',
         gatewayConfigPath: 'fake-gateway-config.toml',
         pageEnvironment: () => ({}),
         cleanup,
@@ -88,6 +95,7 @@ function createHarness(options: {
       startService: (service: FakeService) => {
         const child = new FakeChild(nextPid++)
         children.set(service.label, child)
+        serviceSpecs.set(service.label, service)
         if (options.triggerGatewayError && service.label === 'gateway') {
           queueMicrotask(() => child.emit('error', new Error('Gateway process failed before binding.')))
         }
@@ -104,6 +112,7 @@ function createHarness(options: {
       registerSignalHandlers: () => {},
     },
     children,
+    serviceSpecs,
     cleanup,
     setExitCode,
     probePort,
@@ -111,6 +120,23 @@ function createHarness(options: {
 }
 
 describe('local-dev atomic seven-port supervisor', () => {
+  it('loads runner-owned video provider input only from an explicit local config file', async () => {
+    const localDev = await loadLocalDev()
+    const directory = await mkdtemp(join(tmpdir(), 'starye-video-provider-'))
+    const pathname = join(directory, 'video-availability.json')
+    await writeFile(pathname, JSON.stringify({
+      direct: { sources: ['https://media.example/video.m3u8'] },
+      magnet: { provider: { rpcUrl: 'http://127.0.0.1:6800/jsonrpc' }, source: 'magnet:?xt=urn:btih:fixture' },
+    }))
+
+    await expect(localDev.readLocalVideoAvailabilityConfig(pathname)).resolves.toEqual({
+      direct: { sources: ['https://media.example/video.m3u8'] },
+      magnet: { provider: { rpcUrl: 'http://127.0.0.1:6800/jsonrpc' }, source: 'magnet:?xt=urn:btih:fixture' },
+    })
+    await expect(localDev.readLocalVideoAvailabilityConfig()).resolves.toBeUndefined()
+    await rm(directory, { force: true, recursive: true })
+  })
+
   it('declares one direct root tsx entry command without entering its CLI main path', async () => {
     const manifest = JSON.parse(await readFile(rootPackageManifest, 'utf8')) as {
       readonly devDependencies?: Readonly<Record<string, string>>
@@ -209,6 +235,11 @@ describe('local-dev atomic seven-port supervisor', () => {
       { label: 'movie', port: 3001, pid: 10_005 },
       { label: 'comic', port: 3000, pid: 10_006 },
     ])
+    expect(harness.serviceSpecs.get('api')?.args).toEqual(expect.arrayContaining([
+      'CRAWLER_LOCAL_PROOF_ENABLED:true',
+      'TASK_RUNNER_CALLBACK_KEY_ID_CURRENT:local-test-key',
+      'TASK_RUNNER_CALLBACK_SECRET_CURRENT:local-test-secret',
+    ]))
 
     expect(harness.cleanup).not.toHaveBeenCalled()
     for (const child of harness.children.values()) {

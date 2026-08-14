@@ -426,9 +426,6 @@ async function runClaimedProductionCrawlerMutation(
     }
 
     if (result.availabilityObservation) {
-      const observation = await runner.observeAvailability(candidate, sequence++, result.availabilityObservation)
-      if (!observation.accepted)
-        throw new Error('target-crawl-mutation rejected an unvalidated availability observation.')
       if (!candidate.contentId) {
         await runner.failed(candidate, sequence++, 'receipt_missing')
         terminalEmitted = true
@@ -438,6 +435,9 @@ async function runClaimedProductionCrawlerMutation(
       if (!terminal.accepted)
         throw new Error('target-crawl-mutation rejected an unvalidated availability receipt.')
       terminalEmitted = true
+      const observation = await runner.observeAvailability(candidate, sequence++, result.availabilityObservation)
+      if (!observation.accepted)
+        throw new Error('target-crawl-mutation rejected an unvalidated availability observation.')
       return {
         attempt: binding.attempt,
         contentIds: [candidate.contentId],

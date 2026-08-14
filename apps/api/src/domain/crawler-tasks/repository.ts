@@ -345,6 +345,8 @@ interface TaskLifecycleRow {
 }
 
 const DEFAULT_PROVIDER_RECONCILIATION_WINDOW_MS = 5 * 60_000
+const VIDEO_AVAILABILITY_POLICY_REFERENCE = 'availability/video-source-probe'
+const VIDEO_AVAILABILITY_POLICY_VERSION = 'video-source-probe/v1'
 
 function asD1Client(db: CrawlerTaskDatabase): D1Client {
   return db.$client as unknown as D1Client
@@ -412,6 +414,20 @@ function parseDispatchSnapshotBinding(raw: string, operation: CrawlerTaskOperati
   catch {
     return undefined
   }
+}
+
+function isLocalProofDispatchBinding(binding: DispatchSnapshotBinding): boolean {
+  if (binding.target.kind !== 'movie')
+    return false
+  if (binding.operation === 'movie') {
+    return binding.policyReference === LOCAL_PROOF_POLICY_REFERENCE
+      && binding.policyVersion === LOCAL_PROOF_POLICY_VERSION
+  }
+  return (binding.operation === 'check_video_source'
+    || binding.operation === 'recheck_video_source'
+    || binding.operation === 'repair_video_source')
+  && binding.policyReference === VIDEO_AVAILABILITY_POLICY_REFERENCE
+  && binding.policyVersion === VIDEO_AVAILABILITY_POLICY_VERSION
 }
 
 function parseRepairReceipt(
@@ -1550,6 +1566,18 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     try {
       await d1.batch([
         d1.prepare(`
+          DELETE FROM crawler_template_lease
+          WHERE template_key = ?
+            AND (
+              expires_at <= ?
+              OR run_id IN (
+                SELECT id
+                FROM crawler_run
+                WHERE status NOT IN ('queued', 'dispatching', 'running', 'cancel_requested')
+              )
+            )
+        `).bind(input.templateKey, currentNow),
+        d1.prepare(`
           INSERT INTO crawler_task (
             id, template_key, operation, template_version, requested_by_user_id,
             request_snapshot_json, idempotency_key, latest_run_id, created_at, updated_at
@@ -1616,11 +1644,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     if (provider === 'local-proof') {
       const task = await getTaskBinding(input.runId)
       const binding = task ? parseDispatchSnapshotBinding(task.request_snapshot_json, task.operation) : undefined
-      if (!binding
-        || binding.operation !== 'movie'
-        || binding.target.kind !== 'movie'
-        || binding.policyReference !== LOCAL_PROOF_POLICY_REFERENCE
-        || binding.policyVersion !== LOCAL_PROOF_POLICY_VERSION) {
+      if (!binding || !isLocalProofDispatchBinding(binding)) {
         return undefined
       }
       const target = await d1.prepare(`
