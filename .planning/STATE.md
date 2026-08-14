@@ -110,7 +110,7 @@ Recent decisions affecting current work:
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 260814-h13 | Manga/Movie crawler 10-item batch and Gateway verification | 2026-08-14 | 2ec1f73 | [260814-h13-manga-movie-crawler-10-gateway](./quick/260814-h13-manga-movie-crawler-10-gateway/) |
+| 260814-h13 | Manga/Movie crawler 10-item batch and Gateway verification | 2026-08-14 | a210ec4 | [260814-h13-manga-movie-crawler-10-gateway](./quick/260814-h13-manga-movie-crawler-10-gateway/) |
 
 ## Deferred Items
 
