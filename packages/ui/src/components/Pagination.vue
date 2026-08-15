@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 interface Props {
@@ -149,9 +150,7 @@ function handleJump(): void {
           aria-label="上一页"
           @click="handlePageChange(currentPage - 1)"
         >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+          <ChevronLeft :size="16" aria-hidden="true" />
         </button>
 
         <!-- Pager -->
@@ -189,9 +188,7 @@ function handleJump(): void {
           aria-label="下一页"
           @click="handlePageChange(currentPage + 1)"
         >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          <ChevronRight :size="16" aria-hidden="true" />
         </button>
 
         <!-- Jumper -->
@@ -219,10 +216,10 @@ function handleJump(): void {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
   border-top: 1px solid hsl(var(--border));
-  padding: 0.75rem 0.25rem 0;
+  padding: 0.625rem 0.125rem 0;
 }
 
 .pagination-nav :is(button, select, input) {

@@ -15,10 +15,20 @@
   --dashboard-accent-foreground: 239 48% 34%;
   --dashboard-destructive: 0 72% 51%;
   --dashboard-destructive-foreground: 0 0% 100%;
+  --dashboard-success: 142 70% 32%;
+  --dashboard-success-soft: 142 76% 94%;
+  --dashboard-warning: 32 86% 38%;
+  --dashboard-warning-soft: 36 100% 95%;
+  --dashboard-info: 217 75% 45%;
+  --dashboard-info-soft: 214 100% 96%;
+  --dashboard-danger: 0 72% 44%;
+  --dashboard-danger-soft: 0 86% 96%;
+  --dashboard-neutral: 220 10% 42%;
+  --dashboard-neutral-soft: 220 16% 95%;
   --dashboard-border: 220 16% 88%;
   --dashboard-input: 220 16% 85%;
   --dashboard-ring: 239 68% 58%;
-  --dashboard-radius: 0.75rem;
+  --dashboard-radius: 0.5rem;
   --dashboard-drawer-z-index: 1200;
   --dashboard-drawer-inset: 1rem;
 }
@@ -40,6 +50,16 @@
   --accent-foreground: var(--dashboard-accent-foreground);
   --destructive: var(--dashboard-destructive);
   --destructive-foreground: var(--dashboard-destructive-foreground);
+  --status-success: var(--dashboard-success);
+  --status-success-soft: var(--dashboard-success-soft);
+  --status-warning: var(--dashboard-warning);
+  --status-warning-soft: var(--dashboard-warning-soft);
+  --status-info: var(--dashboard-info);
+  --status-info-soft: var(--dashboard-info-soft);
+  --status-danger: var(--dashboard-danger);
+  --status-danger-soft: var(--dashboard-danger-soft);
+  --status-neutral: var(--dashboard-neutral);
+  --status-neutral-soft: var(--dashboard-neutral-soft);
   --border: var(--dashboard-border);
   --input: var(--dashboard-input);
   --ring: var(--dashboard-ring);
@@ -51,11 +71,12 @@
   --ui-space-5: 1.25rem;
   --ui-control-height-sm: 2rem;
   --ui-control-height-md: 2.25rem;
-  --ui-radius-sm: 0.375rem;
-  --ui-radius-md: 0.5rem;
-  --ui-radius-lg: 0.75rem;
-  --ui-table-cell-x: 1rem;
-  --ui-table-cell-y: 0.75rem;
+  --ui-radius-sm: 0.25rem;
+  --ui-radius-md: 0.375rem;
+  --ui-radius-lg: 0.5rem;
+  --ui-table-max-height: min(62vh, 44rem);
+  --ui-table-cell-x: 0.875rem;
+  --ui-table-cell-y: 0.625rem;
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -136,17 +157,28 @@ body:has(.dashboard-shell) .detail-drawer-overlay {
   --accent-foreground: var(--dashboard-accent-foreground);
   --destructive: var(--dashboard-destructive);
   --destructive-foreground: var(--dashboard-destructive-foreground);
+  --status-success: var(--dashboard-success);
+  --status-success-soft: var(--dashboard-success-soft);
+  --status-warning: var(--dashboard-warning);
+  --status-warning-soft: var(--dashboard-warning-soft);
+  --status-info: var(--dashboard-info);
+  --status-info-soft: var(--dashboard-info-soft);
+  --status-danger: var(--dashboard-danger);
+  --status-danger-soft: var(--dashboard-danger-soft);
+  --status-neutral: var(--dashboard-neutral);
+  --status-neutral-soft: var(--dashboard-neutral-soft);
   --border: var(--dashboard-border);
   --input: var(--dashboard-input);
   --ring: var(--dashboard-ring);
   --radius: var(--dashboard-radius);
   --ui-control-height-sm: 2rem;
   --ui-control-height-md: 2.25rem;
-  --ui-radius-sm: 0.375rem;
-  --ui-radius-md: 0.5rem;
-  --ui-radius-lg: 0.75rem;
-  --ui-table-cell-x: 1rem;
-  --ui-table-cell-y: 0.75rem;
+  --ui-radius-sm: 0.25rem;
+  --ui-radius-md: 0.375rem;
+  --ui-radius-lg: 0.5rem;
+  --ui-table-max-height: min(62vh, 44rem);
+  --ui-table-cell-x: 0.875rem;
+  --ui-table-cell-y: 0.625rem;
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -320,6 +352,122 @@ body:has(.dashboard-shell) .detail-drawer-overlay {
 
 .dashboard-shell table tbody tr:hover {
   background: hsl(var(--accent) / 0.52);
+}
+
+/* Compact semantic tags shared by list columns and detail drawers. */
+.dashboard-shell .ui-status-tag,
+body:has(.dashboard-shell) .ui-status-tag {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  padding: 0.1875rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.dashboard-shell .ui-status-success,
+body:has(.dashboard-shell) .ui-status-success {
+  border-color: hsl(var(--status-success) / 0.2);
+  background: hsl(var(--status-success-soft));
+  color: hsl(var(--status-success));
+}
+
+.dashboard-shell .ui-status-warning,
+body:has(.dashboard-shell) .ui-status-warning {
+  border-color: hsl(var(--status-warning) / 0.22);
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
+}
+
+.dashboard-shell .ui-status-info,
+body:has(.dashboard-shell) .ui-status-info {
+  border-color: hsl(var(--status-info) / 0.2);
+  background: hsl(var(--status-info-soft));
+  color: hsl(var(--status-info));
+}
+
+.dashboard-shell .ui-status-danger,
+body:has(.dashboard-shell) .ui-status-danger {
+  border-color: hsl(var(--status-danger) / 0.2);
+  background: hsl(var(--status-danger-soft));
+  color: hsl(var(--status-danger));
+}
+
+.dashboard-shell .ui-status-neutral,
+body:has(.dashboard-shell) .ui-status-neutral {
+  border-color: hsl(var(--status-neutral) / 0.16);
+  background: hsl(var(--status-neutral-soft));
+  color: hsl(var(--status-neutral));
+}
+
+.dashboard-shell .ui-status-tag[class*="ui-status-succeeded"],
+.dashboard-shell .ui-status-tag[class*="ui-status-complete"],
+.dashboard-shell .ui-status-tag[class*="ui-status-available"],
+.dashboard-shell .ui-status-tag[class*="ui-status-validated"],
+.dashboard-shell .ui-status-tag[class*="ui-status-connected"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-succeeded"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-complete"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-available"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-validated"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-connected"] {
+  border-color: hsl(var(--status-success) / 0.2);
+  background: hsl(var(--status-success-soft));
+  color: hsl(var(--status-success));
+}
+
+.dashboard-shell .ui-status-tag[class*="ui-status-queued"],
+.dashboard-shell .ui-status-tag[class*="ui-status-cancel_requested"],
+.dashboard-shell .ui-status-tag[class*="ui-status-degraded"],
+.dashboard-shell .ui-status-tag[class*="ui-status-partial"],
+.dashboard-shell .ui-status-tag[class*="ui-status-pending"],
+.dashboard-shell .ui-status-tag[class*="ui-status-active"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-queued"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-cancel_requested"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-degraded"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-partial"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-pending"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-active"] {
+  border-color: hsl(var(--status-warning) / 0.22);
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
+}
+
+.dashboard-shell .ui-status-tag[class*="ui-status-running"],
+.dashboard-shell .ui-status-tag[class*="ui-status-dispatching"],
+.dashboard-shell .ui-status-tag[class*="ui-status-serializing"],
+.dashboard-shell .ui-status-tag[class*="ui-status-update"],
+.dashboard-shell .ui-status-tag[class*="ui-status-bulk_update"],
+.dashboard-shell .ui-status-tag[class*="ui-status-superseded"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-running"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-dispatching"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-serializing"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-update"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-bulk_update"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-superseded"] {
+  border-color: hsl(var(--status-info) / 0.2);
+  background: hsl(var(--status-info-soft));
+  color: hsl(var(--status-info));
+}
+
+.dashboard-shell .ui-status-tag[class*="ui-status-failed"],
+.dashboard-shell .ui-status-tag[class*="ui-status-cancelled"],
+.dashboard-shell .ui-status-tag[class*="ui-status-unavailable"],
+.dashboard-shell .ui-status-tag[class*="ui-status-delete"],
+.dashboard-shell .ui-status-tag[class*="ui-status-bulk_delete"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-failed"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-cancelled"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-unavailable"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-delete"],
+body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-bulk_delete"] {
+  border-color: hsl(var(--status-danger) / 0.2);
+  background: hsl(var(--status-danger-soft));
+  color: hsl(var(--status-danger));
 }
 
 .dashboard-shell .filter-panel {

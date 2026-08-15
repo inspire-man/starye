@@ -1058,11 +1058,11 @@ async function executeClearFailed() {
                 {{ item.operation === 'repair_players' ? '播放源修复' : template === 'movie' ? '视频抓取' : '漫画抓取' }}
               </template>
               <template #cell-lifecycle="{ item }">
-                <span class="lifecycle-label" data-task-lifecycle>{{ lifecycleLabels[taskLifecycleFor(item).status] }}</span>
+                <span class="ui-status-tag" :class="`ui-status-${taskLifecycleFor(item).status}`" data-task-lifecycle>{{ lifecycleLabels[taskLifecycleFor(item).status] }}</span>
               </template>
               <template #cell-status="{ item }">
-                <span v-if="latestRunFor(item)" class="status-label">{{ taskStatusLabels[latestRunFor(item)!.status] }}</span>
-                <span v-else class="status-label">尚未上报</span>
+                <span v-if="latestRunFor(item)" class="ui-status-tag" :class="`ui-status-${latestRunFor(item)!.status}`">{{ taskStatusLabels[latestRunFor(item)!.status] }}</span>
+                <span v-else class="ui-status-tag ui-status-neutral">尚未上报</span>
               </template>
               <template #cell-updatedAt="{ item }">
                 {{ taskUpdatedAt(item) }}
@@ -1128,7 +1128,7 @@ async function executeClearFailed() {
         <div v-if="selectedTask && !selectedRun" class="task-detail current-attempt-pending" aria-live="polite">
           <div class="section-heading">
             <h3>任务执行详情</h3>
-            <span class="status-label">等待 attempt 上报</span>
+            <span class="ui-status-tag ui-status-neutral">等待 attempt 上报</span>
           </div>
           <div class="identity-strip">
             <strong>{{ selectedTask.movie?.title ?? selectedTask.id }}</strong>
@@ -1177,7 +1177,7 @@ async function executeClearFailed() {
           </div>
           <div class="section-heading">
             <h3>任务执行详情</h3>
-            <span>{{ taskStatusLabels[selectedRun.run.status] }}</span>
+            <span class="ui-status-tag" :class="`ui-status-${selectedRun.run.status}`">{{ taskStatusLabels[selectedRun.run.status] }}</span>
           </div>
           <p>模板：{{ taskTemplate(selectedRun.task) === 'movie' ? '视频' : '漫画' }} · attempt {{ selectedRun.run.attemptNumber ?? selectedRun.run.attempt_number ?? '尚未上报' }}</p>
           <p v-if="runFailureCode(selectedRun.run)" class="task-warning">
@@ -1194,7 +1194,7 @@ async function executeClearFailed() {
                 </h4>
                 <span class="fact-muted">与 run execution 独立 · version {{ taskLifecycleFor(selectedRun.task).version }}</span>
               </div>
-              <span class="lifecycle-label">{{ lifecycleLabels[taskLifecycleFor(selectedRun.task).status] }}</span>
+              <span class="ui-status-tag" :class="`ui-status-${taskLifecycleFor(selectedRun.task).status}`">{{ lifecycleLabels[taskLifecycleFor(selectedRun.task).status] }}</span>
             </div>
             <div class="task-actions">
               <button
@@ -1254,7 +1254,7 @@ async function executeClearFailed() {
             已请求取消，等待 runner 在安全检查点确认。
           </div>
           <div class="attempt-timeline" aria-label="当前 attempt 状态时间线">
-            <span class="timeline-step timeline-step-current">{{ taskStatusLabels[selectedRun.run.status] }}</span>
+            <span class="timeline-step timeline-step-current ui-status-tag" :class="`ui-status-${selectedRun.run.status}`">{{ taskStatusLabels[selectedRun.run.status] }}</span>
             <span class="timeline-arrow" aria-hidden="true">→</span>
             <span class="timeline-step">{{ providerLifecycleLabel(selectedRun.run) }}</span>
             <span class="timeline-arrow" aria-hidden="true">→</span>
@@ -1317,7 +1317,7 @@ async function executeClearFailed() {
                 <div class="history-row-heading">
                   <strong>attempt #{{ run.attemptNumber ?? run.attempt_number }}</strong>
                   <code>{{ run.id }}</code>
-                  <span class="status-label">{{ taskStatusLabels[run.status] }}</span>
+                  <span class="ui-status-tag" :class="`ui-status-${run.status}`">{{ taskStatusLabels[run.status] }}</span>
                   <span class="history-outcome">{{ historyOutcomeLabel(run) }}</span>
                 </div>
                 <div class="history-facts">
@@ -1344,7 +1344,7 @@ async function executeClearFailed() {
                 </h4>
                 <span class="fact-muted">内容可用性与 runner execution 独立计算</span>
               </div>
-              <span v-if="availabilityCurrentFor(selectedRun.task)" class="status-label">
+              <span v-if="availabilityCurrentFor(selectedRun.task)" class="ui-status-tag" :class="`ui-status-${availabilityCurrentFor(selectedRun.task)!.status}`">
                 {{ availabilityStatusLabels[availabilityCurrentFor(selectedRun.task)!.status] }}
               </span>
             </div>
@@ -1374,7 +1374,7 @@ async function executeClearFailed() {
               <section v-for="layer in videoLayerNames" :key="layer" class="video-layer-row" :data-video-layer="layer">
                 <div class="video-layer-heading">
                   <strong>{{ videoLayerLabels[layer] }}</strong>
-                  <span v-if="videoLayerFor(selectedRun.task, layer).current" class="status-label">
+                  <span v-if="videoLayerFor(selectedRun.task, layer).current" class="ui-status-tag" :class="`ui-status-${videoLayerFor(selectedRun.task, layer).current!.status}`">
                     {{ availabilityStatusLabels[videoLayerFor(selectedRun.task, layer).current!.status] }}
                   </span>
                 </div>

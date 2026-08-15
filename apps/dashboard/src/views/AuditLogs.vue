@@ -205,12 +205,12 @@ onMounted(loadLogs)
         {{ formatDate(item.createdAt) }}
       </template>
       <template #cell-action="{ item }">
-        <span class="action-badge" :class="[`action-${item.action}`]">
+        <span class="ui-status-tag action-badge" :class="[`action-${item.action}`]">
           {{ item.action }}
         </span>
       </template>
       <template #cell-resourceType="{ item }">
-        <span class="resource-badge">
+        <span class="ui-status-tag resource-badge ui-status-neutral">
           {{ item.resourceType }}
         </span>
       </template>
@@ -260,13 +260,13 @@ onMounted(loadLogs)
             </div>
             <div class="detail-item">
               <label>操作类型</label>
-              <span class="action-badge" :class="[`action-${selectedLog.action}`]">
+              <span class="ui-status-tag action-badge" :class="[`action-${selectedLog.action}`]">
                 {{ selectedLog.action }}
               </span>
             </div>
             <div class="detail-item">
               <label>资源类型</label>
-              <span class="resource-badge">{{ selectedLog.resourceType }}</span>
+              <span class="ui-status-tag resource-badge ui-status-neutral">{{ selectedLog.resourceType }}</span>
             </div>
             <div class="detail-item">
               <label>资源 ID</label>
@@ -380,40 +380,36 @@ onMounted(loadLogs)
 }
 
 .action-badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 500;
+  max-width: 100%;
 }
 
 .action-create {
-  background: #d1fae5;
-  color: #065f46;
+  border-color: hsl(var(--status-success) / 0.2);
+  background: hsl(var(--status-success-soft));
+  color: hsl(var(--status-success));
 }
 
 .action-update {
-  background: #dbeafe;
-  color: #1e40af;
+  border-color: hsl(var(--status-info) / 0.2);
+  background: hsl(var(--status-info-soft));
+  color: hsl(var(--status-info));
 }
 
 .action-delete,
 .action-bulk_delete {
-  background: #fee2e2;
-  color: #991b1b;
+  border-color: hsl(var(--status-danger) / 0.2);
+  background: hsl(var(--status-danger-soft));
+  color: hsl(var(--status-danger));
 }
 
 .action-bulk_update {
-  background: #fef3c7;
-  color: #92400e;
+  border-color: hsl(var(--status-warning) / 0.22);
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
 }
 
 .resource-badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background: #f3f4f6;
-  color: #374151;
+  max-width: 100%;
 }
 
 .modal-overlay {

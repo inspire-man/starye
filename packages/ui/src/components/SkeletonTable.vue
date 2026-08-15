@@ -6,6 +6,8 @@ interface Props {
   columns?: number
   widths?: string[]
   selectable?: boolean
+  minWidth?: string
+  maxHeight?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -13,6 +15,8 @@ const props = withDefaults(defineProps<Props>(), {
   columns: 4,
   widths: () => [],
   selectable: false,
+  minWidth: '800px',
+  maxHeight: 'min(62vh, 44rem)',
 })
 
 const columnWidths = computed(() => {
@@ -28,8 +32,8 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
 
 <template>
   <div class="data-table-skeleton-shell w-full overflow-hidden border border-border bg-card">
-    <div class="data-table-scroll">
-      <table class="data-table-skeleton-table w-full">
+    <div class="data-table-skeleton-scroll data-table-scroll" :style="{ maxHeight }">
+      <table class="data-table-skeleton-table w-full" :style="{ minWidth }">
         <thead>
           <tr>
             <th v-if="selectable" class="skeleton-table-cell skeleton-table-select-cell skeleton-table-head-cell">
@@ -39,6 +43,7 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
               v-for="(width, idx) in columnWidths"
               :key="idx"
               class="skeleton-table-cell skeleton-table-head-cell text-left"
+              :class="idx === columnWidths.length - 1 ? 'skeleton-table-action-cell text-right' : ''"
             >
               <div
                 class="skeleton-shimmer ui-skeleton h-3.5 rounded"
@@ -57,6 +62,7 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
               v-for="(width, colIdx) in columnWidths"
               :key="colIdx"
               class="skeleton-table-cell"
+              :class="colIdx === columnWidths.length - 1 ? 'skeleton-table-action-cell text-right' : ''"
             >
               <div
                 class="skeleton-shimmer ui-skeleton h-3.5 rounded"
@@ -76,11 +82,15 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
   box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
 }
 
-.data-table-scroll {
+.data-table-skeleton-scroll {
+  width: 100%;
   min-width: 0;
-  overflow-x: auto;
+  max-height: var(--ui-table-max-height, min(62vh, 44rem));
+  overflow: auto;
   overscroll-behavior-inline: contain;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  background: hsl(var(--card));
 }
 
 .data-table-skeleton-table {
@@ -100,7 +110,24 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
 }
 
 .skeleton-table-head-cell {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: hsl(var(--muted) / 0.58);
+}
+
+.skeleton-table-action-cell {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  min-width: 5rem;
+  background: hsl(var(--card));
+  box-shadow: -1px 0 0 hsl(var(--border)), -0.5rem 0 1rem -0.75rem hsl(var(--foreground) / 0.18);
+}
+
+.skeleton-table-head-cell.skeleton-table-action-cell {
+  z-index: 3;
+  background: hsl(var(--muted) / 0.92);
 }
 
 tbody tr:last-child .skeleton-table-cell {
@@ -118,6 +145,10 @@ tbody tr:last-child .skeleton-table-cell {
 
   .skeleton-table-select-cell {
     padding-inline: 0.625rem;
+  }
+
+  .data-table-skeleton-scroll {
+    max-height: min(58vh, 34rem);
   }
 }
 </style>

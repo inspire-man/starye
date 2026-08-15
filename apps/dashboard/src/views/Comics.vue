@@ -594,17 +594,17 @@ async function executeBatchOperation() {
         </div>
       </template>
       <template #cell-isR18="{ item }">
-        <span class="comic-badge" :class="(item as Comic).isR18 ? 'badge-r18' : 'badge-safe'">
+        <span class="ui-status-tag" :class="(item as Comic).isR18 ? 'ui-status-danger' : 'ui-status-neutral'">
           {{ (item as Comic).isR18 ? 'R18' : '一般' }}
         </span>
       </template>
       <template #cell-status="{ item }">
-        <span class="comic-badge badge-status">
+        <span class="ui-status-tag" :class="(item as Comic).status === 'completed' ? 'ui-status-success' : (item as Comic).status === 'serializing' ? 'ui-status-info' : 'ui-status-neutral'">
           {{ (item as Comic).status === 'serializing' ? '连载中' : (item as Comic).status === 'completed' ? '已完结' : '-' }}
         </span>
       </template>
       <template #cell-crawlStatus="{ item }">
-        <span class="comic-badge" :class="(item as any).crawlStatus === 'complete' ? 'badge-complete' : 'badge-pending'">
+        <span class="ui-status-tag" :class="(item as any).crawlStatus === 'complete' ? 'ui-status-success' : (item as any).crawlStatus === 'partial' ? 'ui-status-warning' : 'ui-status-neutral'">
           {{ (item as any).crawlStatus === 'complete' ? '完成' : (item as any).crawlStatus === 'pending' ? '等待' : '部分' }}
         </span>
       </template>
@@ -1082,28 +1082,15 @@ async function executeBatchOperation() {
   color: #9ca3af;
 }
 
-.comic-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.badge-r18 { background: #fee2e2; color: #dc2626; }
-.badge-safe { background: #f3f4f6; color: #6b7280; }
-.badge-status { background: #eff6ff; color: #2563eb; }
-.badge-complete { background: #d1fae5; color: #065f46; }
-.badge-pending { background: #fef3c7; color: #92400e; }
-
 .action-btn-link {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   padding: 3px 8px;
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-  border-radius: 4px;
+  background: hsl(var(--status-info-soft));
+  color: hsl(var(--status-info));
+  border: 1px solid hsl(var(--status-info) / 0.2);
+  border-radius: var(--ui-radius-sm);
   font-size: 0.75rem;
   font-weight: 500;
   text-decoration: none;
@@ -1111,6 +1098,6 @@ async function executeBatchOperation() {
 }
 
 .action-btn-link:hover {
-  background: #dbeafe;
+  background: hsl(var(--status-info) / 0.14);
 }
 </style>

@@ -69,7 +69,7 @@ onBeforeUnmount(() => {
     <Transition name="detail-drawer">
       <div
         v-if="open"
-        class="detail-drawer-overlay fixed inset-0 z-[1000] flex justify-end bg-background/70 backdrop-blur-sm"
+        class="detail-drawer-overlay fixed inset-0 z-[1200] flex justify-end bg-background/70 backdrop-blur-sm"
         data-detail-drawer
         @click.self="close"
       >
@@ -145,8 +145,9 @@ onBeforeUnmount(() => {
 .detail-drawer-panel {
   width: min(100%, var(--detail-drawer-max-width, 42rem));
   max-width: var(--detail-drawer-max-width, 42rem);
+  height: 100%;
   min-width: 0;
-  max-height: 100%;
+  max-height: calc(100dvh - (var(--dashboard-drawer-inset, 1rem) * 2));
   overflow: hidden;
   border-radius: var(--ui-radius-lg, 0.75rem);
   background: hsl(var(--card));
@@ -166,17 +167,18 @@ onBeforeUnmount(() => {
 }
 
 .detail-drawer-header {
-  padding: 1rem 1.25rem;
+  padding: 0.875rem 1rem;
 }
 
 .detail-drawer-body {
-  padding: 1.25rem;
+  padding: 1rem;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
 }
 
 .detail-drawer-footer {
-  padding: 0.875rem 1.25rem;
+  padding: 0.75rem 1rem;
 }
 
 .detail-drawer-skeleton-title {
@@ -194,7 +196,7 @@ onBeforeUnmount(() => {
 
 .detail-drawer-skeleton-content {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .detail-drawer-skeleton-summary {
@@ -204,10 +206,10 @@ onBeforeUnmount(() => {
 
 .detail-drawer-skeleton-group {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.625rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-md, 0.5rem);
-  padding: 0.875rem 1rem;
+  padding: 0.75rem 0.875rem;
 }
 
 .detail-drawer-skeleton-row {
@@ -277,15 +279,15 @@ onBeforeUnmount(() => {
   }
 
   .detail-drawer-header {
-    padding: 0.875rem 1rem;
+    padding: 0.75rem 0.875rem;
   }
 
   .detail-drawer-body {
-    padding: 1rem;
+    padding: 0.875rem;
   }
 
   .detail-drawer-footer {
-    padding: 0.75rem 1rem;
+    padding: 0.625rem 0.875rem;
   }
 
   .detail-drawer-enter-active aside,

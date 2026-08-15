@@ -399,7 +399,6 @@ onMounted(() => {
       v-if="loading && actors.length === 0"
       :rows="20"
       :columns="8"
-      :selectable="true"
     />
 
     <DataTable

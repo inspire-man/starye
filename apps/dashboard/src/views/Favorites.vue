@@ -205,7 +205,7 @@ function closeFavoriteDetails() {
         </div>
       </template>
       <template #cell-entityType="{ item }">
-        <span class="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium">{{ getEntityTypeName(item.entityType) }}</span>
+        <span class="ui-status-tag ui-status-neutral">{{ getEntityTypeName(item.entityType) }}</span>
       </template>
       <template #cell-movieCount="{ item }">
         <span class="text-sm text-muted-foreground">{{ getEntityDetails(item.entityId)?.movieCount ?? '-' }}</span>

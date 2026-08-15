@@ -103,8 +103,22 @@ describe('skeletonTable.vue', () => {
         },
       })
 
-      expect(wrapper.find('.data-table-scroll').exists()).toBe(true)
-      expect(wrapper.find('.data-table-scroll table').exists()).toBe(true)
+      expect(wrapper.find('.data-table-skeleton-scroll').exists()).toBe(true)
+      expect(wrapper.find('.data-table-skeleton-scroll table').exists()).toBe(true)
+    })
+
+    it('应该限制滚动高度并固定骨架操作列', () => {
+      const wrapper = mount(SkeletonTable, {
+        props: {
+          rows: 2,
+          columns: 3,
+          maxHeight: '28rem',
+        },
+      })
+
+      expect(wrapper.find('.data-table-skeleton-scroll').attributes('style')).toContain('max-height: 28rem')
+      expect(wrapper.find('thead th.skeleton-table-action-cell').exists()).toBe(true)
+      expect(wrapper.find('tbody td.skeleton-table-action-cell').exists()).toBe(true)
     })
   })
 

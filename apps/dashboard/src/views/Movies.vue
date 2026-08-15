@@ -609,7 +609,7 @@ const tableColumns = [
     <SkeletonTable
       v-if="loading && movies.length === 0"
       :rows="20"
-      :columns="7"
+      :columns="12"
       :selectable="true"
     />
 
@@ -656,14 +656,14 @@ const tableColumns = [
       </template>
 
       <template #cell-isR18="{ item }">
-        <span :class="item.isR18 ? 'badge-r18' : 'badge-general'">
+        <span class="ui-status-tag" :class="item.isR18 ? 'ui-status-danger' : 'ui-status-neutral'">
           {{ item.isR18 ? 'R18' : '一般' }}
         </span>
       </template>
 
       <template #cell-metadataLocked="{ item }">
-        <span v-if="item.metadataLocked" class="badge-locked">🔒</span>
-        <span v-else class="badge-unlocked">🔓</span>
+        <span v-if="item.metadataLocked" class="ui-status-tag ui-status-warning" title="元数据已锁定">🔒 锁定</span>
+        <span v-else class="ui-status-tag ui-status-neutral" title="元数据未锁定">未锁定</span>
       </template>
 
       <template #cell-crawlStatus="{ item }">
@@ -1301,28 +1301,6 @@ const tableColumns = [
   color: #6b7280;
   border-radius: 12px;
   font-size: 0.75rem;
-}
-
-.badge-r18 {
-  padding: 2px 8px;
-  background: #fee2e2;
-  color: #dc2626;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.badge-general {
-  padding: 2px 8px;
-  background: #f3f4f6;
-  color: #6b7280;
-  border-radius: 4px;
-  font-size: 0.75rem;
-}
-
-.badge-locked,
-.badge-unlocked {
-  font-size: 1rem;
 }
 
 .action-btns {

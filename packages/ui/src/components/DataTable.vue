@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends { id: string }">
 import type { Column } from '../types/datatable'
+import { ArrowDownUp } from 'lucide-vue-next'
 import { computed } from 'vue'
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
   emptyMessage?: string
   /** 表格最小宽度，默认 800px */
   minWidth?: string
+  /** 表格滚动区域的最大高度 */
+  maxHeight?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -19,6 +22,7 @@ const props = withDefaults(defineProps<Props>(), {
   selectedIds: () => new Set(),
   emptyMessage: '暂无数据',
   minWidth: '800px',
+  maxHeight: 'min(62vh, 44rem)',
 })
 
 const emit = defineEmits<{
@@ -58,13 +62,13 @@ function getCellValue(item: T, column: Column<T>): string {
 }
 
 function isActionColumn(column: Column<T>): boolean {
-  return column.key === 'actions' || column.label === '操作'
+  return column.key === 'actions'
 }
 </script>
 
 <template>
   <div class="data-table-shell w-full overflow-hidden border border-border bg-card" :aria-busy="loading">
-    <div v-if="loading" class="data-table-loading data-table-scroll" aria-live="polite" aria-label="加载中">
+    <div v-if="loading" class="data-table-loading data-table-scroll" :style="{ maxHeight }" aria-live="polite" aria-label="加载中">
       <table class="data-table w-full" :style="{ minWidth }">
         <thead>
           <tr>
@@ -76,7 +80,7 @@ function isActionColumn(column: Column<T>): boolean {
               :key="column.key"
               :style="{ width: column.width, minWidth: column.minWidth }"
               class="data-table-cell data-table-head-cell"
-              :class="isActionColumn(column) ? 'text-right' : ''"
+              :class="isActionColumn(column) ? 'data-table-action-cell text-right' : ''"
             >
               <div
                 class="ui-skeleton data-table-skeleton-line"
@@ -95,7 +99,7 @@ function isActionColumn(column: Column<T>): boolean {
               :key="column.key"
               :style="{ width: column.width, minWidth: column.minWidth }"
               class="data-table-cell data-table-body-cell"
-              :class="isActionColumn(column) ? 'text-right' : ''"
+              :class="isActionColumn(column) ? 'data-table-action-cell text-right' : ''"
             >
               <div
                 class="ui-skeleton data-table-skeleton-line"
@@ -107,11 +111,11 @@ function isActionColumn(column: Column<T>): boolean {
       </table>
     </div>
 
-    <div v-else-if="data.length === 0" class="flex min-h-56 flex-col items-center justify-center p-12 text-muted-foreground">
+    <div v-else-if="data.length === 0" class="flex min-h-48 flex-col items-center justify-center p-8 text-muted-foreground">
       <p>{{ emptyMessage }}</p>
     </div>
 
-    <div v-else class="data-table-scroll">
+    <div v-else class="data-table-scroll" :style="{ maxHeight }">
       <table class="data-table w-full bg-card" :style="{ minWidth }">
         <thead>
           <tr>
@@ -130,12 +134,12 @@ function isActionColumn(column: Column<T>): boolean {
               class="data-table-cell data-table-head-cell text-left"
               :class="[
                 { 'cursor-pointer select-none hover:bg-muted': column.sortable },
-                isActionColumn(column) ? 'text-right' : '',
+                isActionColumn(column) ? 'data-table-action-cell text-right' : '',
               ]"
               @click="column.sortable && handleSort(column.key)"
             >
               <span>{{ column.label }}</span>
-              <span v-if="column.sortable" class="ml-1 opacity-50">↕</span>
+              <ArrowDownUp v-if="column.sortable" :size="14" class="ml-1 inline-block opacity-50" aria-hidden="true" />
             </th>
           </tr>
         </thead>
@@ -159,7 +163,7 @@ function isActionColumn(column: Column<T>): boolean {
               :key="column.key"
               :style="{ width: column.width, minWidth: column.minWidth }"
               class="data-table-cell data-table-body-cell"
-              :class="isActionColumn(column) ? 'text-right' : ''"
+              :class="isActionColumn(column) ? 'data-table-action-cell text-right' : ''"
             >
               <slot :name="`cell-${column.key}`" :item="item" :value="getCellValue(item, column)">
                 {{ getCellValue(item, column) }}
@@ -179,10 +183,14 @@ function isActionColumn(column: Column<T>): boolean {
 }
 
 .data-table-scroll {
+  width: 100%;
   min-width: 0;
-  overflow-x: auto;
+  max-height: var(--ui-table-max-height, min(62vh, 44rem));
+  overflow: auto;
   overscroll-behavior-inline: contain;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  background: hsl(var(--card));
 }
 
 .data-table {
@@ -202,6 +210,9 @@ function isActionColumn(column: Column<T>): boolean {
 }
 
 .data-table-head-cell {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: hsl(var(--muted) / 0.58);
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
@@ -218,8 +229,27 @@ function isActionColumn(column: Column<T>): boolean {
   vertical-align: middle;
 }
 
+.data-table-action-cell {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  min-width: 5rem;
+  white-space: nowrap;
+  background: hsl(var(--card));
+  box-shadow: -1px 0 0 hsl(var(--border)), -0.5rem 0 1rem -0.75rem hsl(var(--foreground) / 0.18);
+}
+
+.data-table-head-cell.data-table-action-cell {
+  z-index: 3;
+  background: hsl(var(--muted) / 0.92);
+}
+
 .data-table-row:hover {
   background: hsl(var(--accent) / 0.52);
+}
+
+.data-table-row:hover .data-table-action-cell {
+  background: hsl(var(--accent) / 0.88);
 }
 
 .data-table tbody tr:last-child .data-table-cell {
@@ -266,6 +296,10 @@ function isActionColumn(column: Column<T>): boolean {
 
   .data-table-select-cell {
     padding-inline: 0.625rem;
+  }
+
+  .data-table-scroll {
+    max-height: min(58vh, 34rem);
   }
 }
 </style>

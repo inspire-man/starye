@@ -46,25 +46,30 @@ const config = computed(() => statusConfig[props.status])
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.25rem 0.75rem;
+  border: 1px solid transparent;
+  padding: 0.1875rem 0.5rem;
   border-radius: 9999px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1rem;
 }
 
 .status-badge.orange {
-  background: #fed7aa;
-  color: #c2410c;
+  border-color: hsl(var(--status-warning) / 0.22);
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
 }
 
 .status-badge.yellow {
-  background: #fef08a;
-  color: #a16207;
+  border-color: hsl(var(--status-warning) / 0.22);
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
 }
 
 .status-badge.green {
-  background: #bbf7d0;
-  color: #15803d;
+  border-color: hsl(var(--status-success) / 0.2);
+  background: hsl(var(--status-success-soft));
+  color: hsl(var(--status-success));
 }
 
 .label {

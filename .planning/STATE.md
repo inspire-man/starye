@@ -124,6 +124,7 @@ Items acknowledged and carried forward from previous milestone close:
 | `260814-okh-200-ui` | 2026-08-15 | 生产非 200 封面与孤儿女优/厂商清理、关系重同步、全列表分页/高级筛选/抽屉视觉统一完成；lint、构建、类型检查与定向测试通过 |
 | `260815-hm9-stabilize-cloudflare-live-resource-prefl` | 2026-08-15 | Cloudflare 只读资源预检增加 3 次瞬时失败重试、脱敏诊断与回归覆盖；config 全量测试、类型检查和 lint 通过 |
 | `260815-i3i-dashboard-token` | 2026-08-15 | Dashboard 表格/抽屉间距、semantic theme token、元素级 Skeleton 与移动端溢出修复；测试、类型检查、lint、构建和 Gateway 浏览器检查通过 |
+| `260815-kzr-dashboard` | 2026-08-15 | 表格滚动白边、最大高度、sticky 操作列、骨架列结构、抽屉层级、筛选密度和状态标签统一完成；全量测试、类型检查、lint、构建与 GitNexus 检查通过 |
 
 ## Session Continuity
 

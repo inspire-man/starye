@@ -317,7 +317,7 @@ function toggleAdvanced() {
 
 <style scoped>
 .filter-panel {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-lg, 0.75rem);
@@ -326,18 +326,18 @@ function toggleAdvanced() {
 }
 
 .filter-panel-skeleton {
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1rem;
 }
 
 .filter-skeleton-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .filter-skeleton-field {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
 .filter-skeleton-label {
@@ -357,7 +357,7 @@ function toggleAdvanced() {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: 1rem;
+  margin-top: 0.75rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-md, 0.5rem);
   padding: 0.625rem 0.75rem;
@@ -381,7 +381,7 @@ function toggleAdvanced() {
   gap: 0.5rem;
   margin-top: 1rem;
   border-top: 1px solid hsl(var(--border));
-  padding-top: 1rem;
+  padding-top: 0.75rem;
 }
 
 .filter-skeleton-button {
@@ -406,7 +406,7 @@ function toggleAdvanced() {
   min-height: 3rem;
   border: 0;
   background: transparent;
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 0.875rem;
   cursor: pointer;
 }
 
@@ -456,7 +456,7 @@ function toggleAdvanced() {
 /* 内容区：移动端默认收起，展开时显示 */
 .filter-body {
   display: none;
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1rem;
 }
 
 .filter-body.expanded {
@@ -467,13 +467,13 @@ function toggleAdvanced() {
 .filter-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .filter-field {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
 .filter-label {
@@ -503,11 +503,12 @@ function toggleAdvanced() {
 
 .advanced-toggle {
   display: inline-flex;
+  width: 100%;
   min-height: 2.25rem;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0.75rem 0;
+  margin: 0.625rem 0;
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-md, 0.5rem);
   background: hsl(var(--muted) / 0.45);
@@ -571,7 +572,7 @@ function toggleAdvanced() {
 .filter-checkboxes {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.625rem;
 }
 
 .filter-checkbox-label {
@@ -605,8 +606,8 @@ function toggleAdvanced() {
   justify-content: flex-end;
   gap: 0.5rem;
   border-top: 1px solid hsl(var(--border));
-  margin-top: 1rem;
-  padding-top: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
 }
 
 .filter-btn-reset {
@@ -651,7 +652,7 @@ function toggleAdvanced() {
 
   .filter-body {
     display: block;
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1rem;
   }
 
   .filter-grid {

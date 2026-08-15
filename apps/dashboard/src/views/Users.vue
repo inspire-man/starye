@@ -145,12 +145,12 @@ watch([currentPage, pageSize], loadUsers, { immediate: true })
         </div>
       </template>
       <template #cell-role="{ item }">
-        <span class="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium capitalize">
+        <span class="ui-status-tag ui-status-neutral capitalize">
           {{ item.role === 'super_admin' ? 'Super Admin' : item.role === 'comic_admin' ? 'Comic Admin' : item.role === 'admin' ? 'Admin' : t('dashboard.user') }}
         </span>
       </template>
       <template #cell-status="{ item }">
-        <span v-if="item.isAdult" class="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">18+</span>
+        <span v-if="item.isAdult" class="ui-status-tag ui-status-danger">18+</span>
         <span v-else class="text-xs text-muted-foreground">{{ t('dashboard.standard') }}</span>
       </template>
       <template #cell-createdAt="{ item }">

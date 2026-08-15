@@ -199,8 +199,8 @@ watch([currentPage, pageSize], fetchPosts, { immediate: true })
       </template>
       <template #cell-published="{ item }">
         <span
-          class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium"
-          :class="item.published ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'"
+          class="ui-status-tag"
+          :class="item.published ? 'ui-status-success' : 'ui-status-neutral'"
         >
           {{ item.published ? t('dashboard.published') : t('dashboard.draft') }}
         </span>
@@ -247,8 +247,8 @@ watch([currentPage, pageSize], fetchPosts, { immediate: true })
               文章状态
             </p>
             <span
-              class="mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium"
-              :class="selectedPost.published ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'"
+              class="ui-status-tag mt-2"
+              :class="selectedPost.published ? 'ui-status-success' : 'ui-status-neutral'"
             >
               {{ selectedPost.published ? t('dashboard.published') : t('dashboard.draft') }}
             </span>
