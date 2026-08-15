@@ -276,4 +276,3 @@ function handleJump(): void {
   }
 }
 </style>
-

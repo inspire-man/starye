@@ -121,4 +121,3 @@ tbody tr:last-child .skeleton-table-cell {
   }
 }
 </style>
-

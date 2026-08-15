@@ -269,4 +269,3 @@ function isActionColumn(column: Column<T>): boolean {
   }
 }
 </style>
-
