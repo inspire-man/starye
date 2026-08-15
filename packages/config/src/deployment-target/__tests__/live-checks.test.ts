@@ -84,6 +84,29 @@ describe('live resource checks', () => {
     expect(issues).toEqual([])
   })
 
+  it('retries a transient read-check failure before allowing the preflight to pass', () => {
+    const attempts = new Map<string, number>()
+    const execute = vi.fn((argv: readonly string[]) => {
+      const resource = argv[0] ?? 'unknown'
+      const count = (attempts.get(resource) ?? 0) + 1
+      attempts.set(resource, count)
+
+      if (resource === 'r2' && count < 3) {
+        return { exitCode: 1, stderr: 'temporary Cloudflare API response' }
+      }
+
+      return {
+        exitCode: 0,
+        stdout: resource === 'kv' ? 'acf49df06ae0447b82a092cf238714d8' : argv.at(-1),
+      }
+    })
+
+    const issues = runLiveResourceChecks(resolveTargetProfile('starye-org'), { execute })
+
+    expect(issues).toEqual([])
+    expect(attempts.get('r2')).toBe(3)
+  })
+
   it.each(['migrate', 'deploy'] as const)('allows the first %s to validate account resources before Workers exist', (command) => {
     const execute = vi.fn((argv: readonly string[]) => ({
       exitCode: argv[0] === 'versions' ? 1 : 0,
@@ -192,6 +215,23 @@ describe('live resource checks', () => {
     expect(r2Issue?.message).toContain('starye-org')
     expect(r2Issue?.message).toContain('starye-media')
     expect(r2Issue?.message).not.toContain('executor-output-must-not-appear')
+  })
+
+  it('reports the exhausted attempt count and redacts diagnostic secrets', () => {
+    const issues = runLiveResourceChecks(resolveTargetProfile('starye-org'), {
+      execute: argv => ({
+        exitCode: argv[0] === 'r2' ? 1 : 0,
+        stderr: argv[0] === 'r2' ? 'CLOUDFLARE_API_TOKEN=token-must-not-appear temporary failure' : '',
+        stdout: argv[0] === 'kv' ? 'acf49df06ae0447b82a092cf238714d8' : argv.at(-1),
+      }),
+    })
+    const r2Issue = issues.find(issue => issue.code === 'remote-resource-check-failed')
+
+    expect(r2Issue?.message).toContain('starye-media')
+    expect(r2Issue?.message).toContain('after 3 attempts')
+    expect(r2Issue?.message).toContain('temporary failure')
+    expect(r2Issue?.message).not.toContain('token-must-not-appear')
+    expect(r2Issue?.message).not.toContain('CLOUDFLARE_API_TOKEN')
   })
 
   it('identifies a missing KV namespace without echoing token-like output', () => {

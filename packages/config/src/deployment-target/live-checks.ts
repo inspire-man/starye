@@ -6,6 +6,7 @@ export type LiveResourceKind = 'd1' | 'r2' | 'kv' | 'api-worker' | 'gateway-work
 export interface WranglerCommandResult {
   exitCode: number
   stdout?: string
+  stderr?: string
 }
 
 export interface WranglerCommandExecutor {
@@ -26,6 +27,8 @@ export interface LiveResourceCheckIssue {
   code: LiveResourceCheckIssueCode
   message: string
 }
+
+const liveResourceCheckAttempts = 3
 
 export function buildLiveResourceChecks(
   resolution: TargetResolution,
@@ -103,6 +106,37 @@ function describeCheck(resolution: TargetResolution, check: LiveResourceCheck): 
   return `Target ${resolution.id}: read-only ${check.resource} resource check for ${identity}`
 }
 
+function sanitizeDiagnostic(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const normalized = value.replace(/\s+/gu, ' ').trim()
+  if (!normalized) {
+    return undefined
+  }
+
+  return normalized
+    .replace(/(?:CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_KEY|CLOUDFLARE_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY)\s*(?:=|:)\s*\S+/giu, '[redacted]')
+    .replace(/Authorization\s*:\s*Bearer\s+\S+/giu, 'Authorization: Bearer [redacted]')
+    .slice(0, 240)
+}
+
+function describeFailedCheck(
+  resolution: TargetResolution,
+  check: LiveResourceCheck,
+  attempts: number,
+  exitCode: number | undefined,
+  diagnostic: string | undefined,
+): string {
+  const attemptLabel = attempts === 1
+    ? `${attempts} attempt`
+    : `${attempts} attempts`
+  const exitLabel = exitCode === undefined ? 'without an exit code' : `with exit code ${exitCode}`
+  const diagnosticLabel = diagnostic ? ` Diagnostic: ${diagnostic}` : ''
+  return `${describeCheck(resolution, check)} failed after ${attemptLabel} ${exitLabel}.${diagnosticLabel}`
+}
+
 export function runLiveResourceChecks(
   resolution: TargetResolution,
   executor: WranglerCommandExecutor,
@@ -112,31 +146,52 @@ export function runLiveResourceChecks(
   const issues: LiveResourceCheckIssue[] = []
 
   for (const check of buildLiveResourceChecks(resolution, pagesSurface, includeWorkers)) {
-    let result: WranglerCommandResult
+    let failure: {
+      attempts: number
+      exitCode?: number
+      diagnostic?: string
+    } | undefined
 
-    try {
-      result = executor.execute(check.argv)
+    for (let attempt = 1; attempt <= liveResourceCheckAttempts; attempt += 1) {
+      try {
+        const result: WranglerCommandResult = executor.execute(check.argv)
+        if (result.exitCode === 0) {
+          if (check.expectedOutput && !result.stdout?.includes(check.expectedOutput)) {
+            issues.push({
+              code: 'remote-resource-missing',
+              message: `${describeCheck(resolution, check)} did not find the selected target resource.`,
+            })
+          }
+          failure = undefined
+          break
+        }
+
+        const diagnostic = sanitizeDiagnostic(result.stderr)
+        failure = {
+          attempts: attempt,
+          exitCode: result.exitCode,
+          ...(diagnostic ? { diagnostic } : {}),
+        }
+      }
+      catch (error) {
+        const diagnostic = sanitizeDiagnostic(error instanceof Error ? error.message : error)
+        failure = {
+          attempts: attempt,
+          ...(diagnostic ? { diagnostic } : {}),
+        }
+      }
     }
-    catch {
+
+    if (failure) {
       issues.push({
         code: 'remote-resource-check-failed',
-        message: `${describeCheck(resolution, check)} could not run.`,
-      })
-      continue
-    }
-
-    if (result.exitCode !== 0) {
-      issues.push({
-        code: 'remote-resource-check-failed',
-        message: `${describeCheck(resolution, check)} failed.`,
-      })
-      continue
-    }
-
-    if (check.expectedOutput && !result.stdout?.includes(check.expectedOutput)) {
-      issues.push({
-        code: 'remote-resource-missing',
-        message: `${describeCheck(resolution, check)} did not find the selected target resource.`,
+        message: describeFailedCheck(
+          resolution,
+          check,
+          failure.attempts,
+          failure.exitCode,
+          failure.diagnostic,
+        ),
       })
     }
   }

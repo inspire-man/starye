@@ -489,6 +489,7 @@ function createWranglerExecutor(environment: NodeJS.ProcessEnv = process.env): W
       return {
         exitCode: result.status ?? 1,
         stdout: result.stdout ?? '',
+        stderr: result.stderr ?? result.error?.message ?? '',
       }
     },
   }
