@@ -7,11 +7,13 @@ interface Props {
   title: string
   description?: string
   width?: 'sm' | 'md' | 'lg'
+  loading?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   description: '',
   width: 'md',
+  loading: false,
 })
 
 const emit = defineEmits<{
@@ -24,9 +26,9 @@ const previousActiveElement = ref<HTMLElement | null>(null)
 const previousBodyOverflow = ref('')
 
 const widthClasses: Record<NonNullable<Props['width']>, string> = {
-  sm: 'max-w-md',
-  md: 'max-w-2xl',
-  lg: 'max-w-4xl',
+  sm: 'detail-drawer-width-sm',
+  md: 'detail-drawer-width-md',
+  lg: 'detail-drawer-width-lg',
 }
 
 function close(): void {
@@ -72,22 +74,29 @@ onBeforeUnmount(() => {
         @click.self="close"
       >
         <aside
-          class="detail-drawer-panel flex h-full w-full flex-col rounded-l-2xl border-l border-border bg-background shadow-2xl shadow-black/15"
+          class="detail-drawer-panel flex h-full w-full flex-col border border-border bg-card shadow-2xl shadow-black/15"
           :class="widthClasses[width]"
           role="dialog"
           aria-modal="true"
           :aria-label="title"
+          :aria-busy="loading"
           data-detail-drawer-panel
           @click.stop
         >
-          <header class="detail-drawer-header flex shrink-0 items-start justify-between gap-4 border-b border-border bg-card/80 px-6 py-5 backdrop-blur">
+          <header class="detail-drawer-header flex shrink-0 items-start justify-between gap-4 border-b border-border bg-card/80 backdrop-blur">
             <div class="min-w-0">
-              <h2 class="truncate text-lg font-semibold text-foreground">
-                {{ title }}
-              </h2>
-              <p v-if="description" class="mt-1 text-sm text-muted-foreground">
-                {{ description }}
-              </p>
+              <template v-if="loading">
+                <div class="ui-skeleton detail-drawer-skeleton-title" />
+                <div class="ui-skeleton detail-drawer-skeleton-description" />
+              </template>
+              <template v-else>
+                <h2 class="truncate text-lg font-semibold text-foreground">
+                  {{ title }}
+                </h2>
+                <p v-if="description" class="mt-1 text-sm text-muted-foreground">
+                  {{ description }}
+                </p>
+              </template>
             </div>
             <button
               ref="closeButton"
@@ -101,11 +110,24 @@ onBeforeUnmount(() => {
             </button>
           </header>
 
-          <div class="detail-drawer-body min-h-0 flex-1 overflow-y-auto px-6 py-5">
-            <slot />
+          <div class="detail-drawer-body min-h-0 flex-1 overflow-y-auto">
+            <div v-if="loading" class="detail-drawer-skeleton-content" role="status" aria-label="加载中">
+              <div class="ui-skeleton detail-drawer-skeleton-summary" />
+              <div class="detail-drawer-skeleton-group">
+                <div v-for="row in 4" :key="row" class="detail-drawer-skeleton-row">
+                  <div class="ui-skeleton detail-drawer-skeleton-label" />
+                  <div class="ui-skeleton detail-drawer-skeleton-value" />
+                </div>
+              </div>
+              <div class="detail-drawer-skeleton-group">
+                <div class="ui-skeleton detail-drawer-skeleton-section-title" />
+                <div v-for="row in 3" :key="row" class="ui-skeleton detail-drawer-skeleton-line" />
+              </div>
+            </div>
+            <slot v-else />
           </div>
 
-          <footer v-if="$slots.footer" class="detail-drawer-footer shrink-0 border-t border-border bg-card/70 px-6 py-4">
+          <footer v-if="$slots.footer && !loading" class="detail-drawer-footer shrink-0 border-t border-border bg-card/70">
             <slot name="footer" />
           </footer>
         </aside>
@@ -116,16 +138,107 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detail-drawer-overlay {
-  z-index: 1100;
-  padding: 0.75rem;
+  z-index: var(--dashboard-drawer-z-index, 1200);
+  padding: var(--dashboard-drawer-inset, 1rem);
 }
 
 .detail-drawer-panel {
-  width: min(100%, 56rem);
-  max-width: 56rem;
+  width: min(100%, var(--detail-drawer-max-width, 42rem));
+  max-width: var(--detail-drawer-max-width, 42rem);
   min-width: 0;
+  max-height: 100%;
   overflow: hidden;
-  border-radius: 1rem;
+  border-radius: var(--ui-radius-lg, 0.75rem);
+  background: hsl(var(--card));
+  box-shadow: 0 20px 45px hsl(var(--foreground) / 0.18);
+}
+
+.detail-drawer-width-sm {
+  --detail-drawer-max-width: 28rem;
+}
+
+.detail-drawer-width-md {
+  --detail-drawer-max-width: 42rem;
+}
+
+.detail-drawer-width-lg {
+  --detail-drawer-max-width: 56rem;
+}
+
+.detail-drawer-header {
+  padding: 1rem 1.25rem;
+}
+
+.detail-drawer-body {
+  padding: 1.25rem;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.detail-drawer-footer {
+  padding: 0.875rem 1.25rem;
+}
+
+.detail-drawer-skeleton-title {
+  width: min(15rem, 72vw);
+  height: 1.25rem;
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+.detail-drawer-skeleton-description {
+  width: min(10rem, 52vw);
+  height: 0.875rem;
+  margin-top: 0.625rem;
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+.detail-drawer-skeleton-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-drawer-skeleton-summary {
+  height: 4.5rem;
+  border-radius: var(--ui-radius-md, 0.5rem);
+}
+
+.detail-drawer-skeleton-group {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.5rem);
+  padding: 0.875rem 1rem;
+}
+
+.detail-drawer-skeleton-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.detail-drawer-skeleton-label {
+  width: 28%;
+  height: 0.875rem;
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+.detail-drawer-skeleton-value {
+  width: 46%;
+  height: 0.875rem;
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+.detail-drawer-skeleton-section-title {
+  width: 34%;
+  height: 1rem;
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+.detail-drawer-skeleton-line {
+  width: 100%;
+  height: 0.875rem;
+  border-radius: var(--ui-radius-sm, 0.375rem);
 }
 
 .detail-drawer-enter-active,
@@ -157,15 +270,27 @@ onBeforeUnmount(() => {
   .detail-drawer-panel {
     width: 100%;
     max-width: none;
-    height: 92%;
+    height: min(92%, 48rem);
     border-left: 0;
     border-top: 1px solid hsl(var(--border));
-    border-radius: 1rem;
+    border-radius: var(--ui-radius-lg, 0.75rem);
+  }
+
+  .detail-drawer-header {
+    padding: 0.875rem 1rem;
+  }
+
+  .detail-drawer-body {
+    padding: 1rem;
+  }
+
+  .detail-drawer-footer {
+    padding: 0.75rem 1rem;
   }
 
   .detail-drawer-enter-active aside,
   .detail-drawer-leave-active aside {
-    height: 92%;
+    height: min(92%, 48rem);
   }
 
   .detail-drawer-enter-from aside,
@@ -174,3 +299,4 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+

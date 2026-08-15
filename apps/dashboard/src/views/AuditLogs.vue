@@ -182,6 +182,7 @@ onMounted(loadLogs)
     <FilterPanel
       v-model="filters"
       :fields="filterFields"
+      :loading="loading"
       @apply="loadLogs"
       @reset="filtersComposable.resetFilters(); loadLogs()"
     />
@@ -223,10 +224,11 @@ onMounted(loadLogs)
     </DataTable>
 
     <Pagination
-      v-if="totalItems > 0"
+      v-if="loading || totalItems > 0"
       :current-page="currentPage"
       :total-pages="totalPages"
       :total="totalItems"
+      :loading="loading"
       :page-size="pageSize"
       :page-sizes="[10, 20, 50, 100]"
       layout="total, sizes, prev, pager, next, jumper"
@@ -591,3 +593,4 @@ onMounted(loadLogs)
   background: #e5e7eb;
 }
 </style>
+

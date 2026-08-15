@@ -318,6 +318,7 @@ onMounted(() => {
     <FilterPanel
       v-model="filters"
       :fields="filterFields"
+      :loading="loading"
       @apply="applyFilters"
       @reset="resetFilters"
     />
@@ -386,10 +387,11 @@ onMounted(() => {
 
     <!-- 分页器 -->
     <Pagination
-      v-if="totalPages > 1"
+      v-if="loading || totalPages > 1"
       :current-page="currentPage"
       :total-pages="totalPages"
       :total="totalItems"
+      :loading="loading"
       :page-size="pageSize"
       :page-sizes="[10, 20, 50, 100]"
       layout="total, sizes, prev, pager, next, jumper"
@@ -403,6 +405,7 @@ onMounted(() => {
       :title="editingPublisher?.name ?? '编辑厂商'"
       :description="editingPublisher?.slug ?? ''"
       width="md"
+      :loading="loadingMovies"
       @update:open="isEditModalOpen = $event"
     >
       <div class="drawer-content">
@@ -809,3 +812,4 @@ onMounted(() => {
   background: #e5e7eb;
 }
 </style>
+

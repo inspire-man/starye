@@ -27,71 +27,98 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-lg border border-border">
-    <table class="w-full">
-      <thead class="border-b border-border bg-muted/50">
-        <tr>
-          <th v-if="selectable" class="w-12 p-3">
-            <div class="skeleton-shimmer h-4 w-4 rounded" />
-          </th>
-          <th
-            v-for="(width, idx) in columnWidths"
-            :key="idx"
-            class="p-3 text-left"
-          >
-            <div
-              class="skeleton-shimmer h-4 rounded"
-              :class="width === 'flex-1' ? 'w-full' : width"
-            />
-          </th>
-        </tr>
-      </thead>
+  <div class="data-table-skeleton-shell w-full overflow-hidden border border-border bg-card">
+    <div class="data-table-scroll">
+      <table class="data-table-skeleton-table w-full">
+        <thead>
+          <tr>
+            <th v-if="selectable" class="skeleton-table-cell skeleton-table-select-cell skeleton-table-head-cell">
+              <div class="skeleton-shimmer ui-skeleton h-4 w-4 rounded" />
+            </th>
+            <th
+              v-for="(width, idx) in columnWidths"
+              :key="idx"
+              class="skeleton-table-cell skeleton-table-head-cell text-left"
+            >
+              <div
+                class="skeleton-shimmer ui-skeleton h-3.5 rounded"
+                :class="width === 'flex-1' ? 'w-full' : width"
+              />
+            </th>
+          </tr>
+        </thead>
 
-      <tbody class="divide-y divide-border">
-        <tr v-for="(_, rowIdx) in rowArray" :key="rowIdx">
-          <td v-if="selectable" class="p-3">
-            <div class="skeleton-shimmer h-4 w-4 rounded" />
-          </td>
-          <td
-            v-for="(width, colIdx) in columnWidths"
-            :key="colIdx"
-            class="p-3"
-          >
-            <div
-              class="skeleton-shimmer h-4 rounded"
-              :class="width === 'flex-1' ? 'w-full' : width"
-            />
-          </td>
-        </tr>
-      </tbody>
-    </table>
+        <tbody>
+          <tr v-for="(_, rowIdx) in rowArray" :key="rowIdx">
+            <td v-if="selectable" class="skeleton-table-cell skeleton-table-select-cell">
+              <div class="skeleton-shimmer ui-skeleton h-4 w-4 rounded" />
+            </td>
+            <td
+              v-for="(width, colIdx) in columnWidths"
+              :key="colIdx"
+              class="skeleton-table-cell"
+            >
+              <div
+                class="skeleton-shimmer ui-skeleton h-3.5 rounded"
+                :class="width === 'flex-1' ? 'w-full' : width"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.data-table-skeleton-shell {
+  border-radius: var(--ui-radius-lg, 0.75rem);
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
+}
+
+.data-table-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.data-table-skeleton-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.skeleton-table-cell {
+  border-bottom: 1px solid hsl(var(--border));
+  padding: var(--ui-table-cell-y, 0.75rem) var(--ui-table-cell-x, 1rem);
+}
+
+.skeleton-table-select-cell {
+  width: 2.5rem;
+  padding-inline: 0.75rem;
+  text-align: center;
+}
+
+.skeleton-table-head-cell {
+  background: hsl(var(--muted) / 0.58);
+}
+
+tbody tr:last-child .skeleton-table-cell {
+  border-bottom: 0;
+}
+
 .skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    hsl(var(--muted)) 0%,
-    hsl(var(--muted-foreground) / 0.1) 50%,
-    hsl(var(--muted)) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  display: block;
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-shimmer {
-    animation: pulse 2s infinite;
+@media (max-width: 640px) {
+  .skeleton-table-cell {
+    padding-inline: 0.75rem;
   }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+  .skeleton-table-select-cell {
+    padding-inline: 0.625rem;
   }
 }
 </style>
+

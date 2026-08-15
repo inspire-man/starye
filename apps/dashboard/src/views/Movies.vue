@@ -567,6 +567,7 @@ const tableColumns = [
     <FilterPanel
       v-model="filters"
       :fields="filterFields"
+      :loading="loading"
       @apply="applyFilters"
       @reset="resetFilters"
     />
@@ -700,10 +701,11 @@ const tableColumns = [
 
     <!-- 分页器 -->
     <Pagination
-      v-if="totalPages > 1"
+      v-if="loading || totalPages > 1"
       :current-page="currentPage"
       :total-pages="totalPages"
       :total="total"
+      :loading="loading"
       :page-size="limit"
       :page-sizes="[10, 20, 50, 100]"
       layout="total, sizes, prev, pager, next, jumper"
@@ -962,7 +964,7 @@ const tableColumns = [
 
 <style scoped>
 .movies-page {
-  padding: 2rem;
+  padding: 0;
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -1506,3 +1508,4 @@ const tableColumns = [
   white-space: nowrap;
 }
 </style>
+

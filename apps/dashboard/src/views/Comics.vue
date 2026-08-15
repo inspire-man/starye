@@ -463,13 +463,14 @@ async function executeBatchOperation() {
     <FilterPanel
       v-model="filters"
       :fields="filterFields"
+      :loading="loading"
       @apply="applyFilters"
       @reset="resetFilters"
     />
 
     <!-- 工具栏：排序 + 批量操作 -->
-    <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2 text-sm">
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="flex min-w-0 flex-wrap items-center gap-2 text-sm">
         <label class="text-neutral-500">排序:</label>
         <select
           :value="sortBy"
@@ -518,7 +519,7 @@ async function executeBatchOperation() {
       </button>
 
       <!-- 视图切换 -->
-      <div class="ml-auto flex items-center gap-1 rounded-lg border border-neutral-200 dark:border-neutral-700 p-1">
+      <div class="ml-auto flex shrink-0 items-center gap-1 rounded-lg border border-neutral-200 dark:border-neutral-700 p-1">
         <button
           class="view-toggle-btn"
           :class="viewMode === 'card' ? 'view-toggle-active' : ''"
@@ -711,10 +712,11 @@ async function executeBatchOperation() {
 
     <!-- 分页 -->
     <Pagination
-      v-if="totalPages > 1"
+      v-if="loading || totalPages > 1"
       :current-page="currentPage"
       :total-pages="totalPages"
       :total="total"
+      :loading="loading"
       :page-size="limit"
       :page-sizes="[10, 18, 30, 50]"
       layout="total, sizes, prev, pager, next, jumper"
@@ -731,73 +733,64 @@ async function executeBatchOperation() {
       width="lg"
       @update:open="isEditModalOpen = $event"
     >
-      <div v-if="editingComic" class="drawer-content flex min-h-full flex-col">
-        <!-- Header -->
-        <div class="p-6 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between shrink-0">
-          <div class="flex items-center gap-4">
-            <h3 class="text-xl font-bold">
+      <div v-if="editingComic" class="drawer-content flex min-h-full flex-col gap-4">
+        <!-- Section header -->
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+          <div class="flex min-w-0 items-center gap-3">
+            <h3 class="text-base font-semibold text-foreground">
               {{ t('dashboard.edit_comic') }}
             </h3>
             <!-- Tabs -->
-            <div class="flex bg-neutral-100 dark:bg-neutral-800 rounded-lg p-1">
+            <div class="flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted p-1">
               <button
-                class="px-3 py-1 text-xs font-bold rounded-md transition-all"
-                :class="activeTab === 'metadata' ? 'bg-white dark:bg-neutral-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'"
+                class="h-8 rounded-sm px-3 text-xs font-medium transition-colors"
+                :class="activeTab === 'metadata' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:bg-card/70 hover:text-foreground'"
                 @click="activeTab = 'metadata'"
               >
                 Metadata
               </button>
               <button
-                class="px-3 py-1 text-xs font-bold rounded-md transition-all"
-                :class="activeTab === 'chapters' ? 'bg-white dark:bg-neutral-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'"
+                class="h-8 rounded-sm px-3 text-xs font-medium transition-colors"
+                :class="activeTab === 'chapters' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:bg-card/70 hover:text-foreground'"
                 @click="activeTab = 'chapters'"
               >
                 Chapters ({{ chapters.length }})
               </button>
             </div>
           </div>
-          <button
-            class="text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
-            @click="isEditModalOpen = false"
-          >
-            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
         </div>
 
-        <!-- Content (Scrollable) -->
-        <div class="p-8 overflow-y-auto flex-1">
+        <!-- Content -->
+        <div class="flex-1">
           <!-- Metadata Tab -->
-          <div v-if="activeTab === 'metadata'" class="space-y-5">
+          <div v-if="activeTab === 'metadata'" class="space-y-4">
             <!-- Lock Metadata Toggle -->
             <div
-              class="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-900/50"
+              class="flex items-center justify-between gap-4 rounded-md border border-primary/20 bg-primary/5 p-4"
             >
               <div>
-                <p class="font-bold text-sm text-amber-700 dark:text-amber-500">
+                <p class="text-sm font-semibold text-primary">
                   Lock Metadata
                 </p>
-                <p class="text-[10px] text-amber-600/80 dark:text-amber-500/80">
+                <p class="mt-1 text-xs text-muted-foreground">
                   Prevent crawler from overwriting title, tags, and description.
                 </p>
               </div>
               <input
                 v-model="editingComic.metadataLocked" type="checkbox"
-                class="w-5 h-5 accent-amber-600 cursor-pointer"
+                class="h-4 w-4 cursor-pointer accent-primary"
               >
             </div>
 
             <!-- Cover Image -->
-            <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.cover_image') }}</label>
-              <div class="flex items-center gap-4">
+            <div class="space-y-2.5">
+              <label class="text-sm font-medium text-foreground">{{ t('dashboard.cover_image') }}</label>
+              <div class="flex items-start gap-4">
                 <div
-                  class="w-16 h-24 bg-neutral-100 dark:bg-neutral-800 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 relative group"
+                  class="relative h-24 w-16 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
                 >
                   <img v-if="editingComic.coverImage" :src="editingComic.coverImage" class="w-full h-full object-cover">
-                  <div v-if="uploadLoading" class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <div v-if="uploadLoading" class="absolute inset-0 flex items-center justify-center bg-foreground/55">
                     <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -807,11 +800,11 @@ async function executeBatchOperation() {
                 <div class="flex-1">
                   <input
                     v-model="editingComic.coverImage" type="text"
-                    class="w-full px-3 py-2 text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-transparent mb-2"
+                    class="mb-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/15"
                     placeholder="https://..."
                   >
                   <label
-                    class="inline-flex items-center px-3 py-2 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-xs font-bold rounded-lg cursor-pointer transition-colors"
+                    class="inline-flex h-8 items-center rounded-md border border-border bg-muted px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
                     <svg class="w-3 h-3 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -826,37 +819,37 @@ async function executeBatchOperation() {
             </div>
 
             <!-- Title -->
-            <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.comic_title') }}</label>
+            <div class="space-y-2.5">
+              <label class="text-sm font-medium text-foreground">{{ t('dashboard.comic_title') }}</label>
               <input
                 v-model="editingComic.title"
-                class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none"
+                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/15"
               >
             </div>
 
             <!-- Author -->
-            <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.author') }}</label>
+            <div class="space-y-2.5">
+              <label class="text-sm font-medium text-foreground">{{ t('dashboard.author') }}</label>
               <input
                 v-model="editingComic.author"
-                class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none"
+                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/15"
               >
             </div>
 
             <!-- Region + Status -->
             <div class="grid grid-cols-2 gap-4">
-              <div class="space-y-2">
-                <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.region') }}</label>
+              <div class="space-y-2.5">
+                <label class="text-sm font-medium text-foreground">{{ t('dashboard.region') }}</label>
                 <input
                   v-model="editingComic.region"
-                  class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm"
+                  class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/15"
                 >
               </div>
-              <div class="space-y-2">
-                <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.status') }}</label>
+              <div class="space-y-2.5">
+                <label class="text-sm font-medium text-foreground">{{ t('dashboard.status') }}</label>
                 <select
                   v-model="editingComic.status"
-                  class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm appearance-none"
+                  class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/15"
                 >
                   <option value="serializing">
                     {{ t('dashboard.serializing') }}
@@ -869,109 +862,109 @@ async function executeBatchOperation() {
             </div>
 
             <!-- Genres -->
-            <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.genres') }}</label>
+            <div class="space-y-2.5">
+              <label class="text-sm font-medium text-foreground">{{ t('dashboard.genres') }}</label>
               <input
                 :value="Array.isArray(editingComic.genres) ? editingComic.genres.join(', ') : editingComic.genres"
-                class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm"
+                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/15"
                 @input="e => editingComic!.genres = (e.target as HTMLInputElement).value.split(',').map(s => s.trim())"
               >
             </div>
 
             <!-- Description -->
-            <div class="space-y-2">
-              <label class="text-xs font-black uppercase tracking-widest text-neutral-500">{{ t('dashboard.description') }}</label>
+            <div class="space-y-2.5">
+              <label class="text-sm font-medium text-foreground">{{ t('dashboard.description') }}</label>
               <textarea
                 v-model="editingComic.description" rows="3"
-                class="w-full px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-transparent focus:ring-2 ring-primary transition-all outline-none text-sm resize-none"
+                class="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/15"
               />
             </div>
 
             <!-- R18 Toggle -->
             <div
-              class="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-2xl border border-neutral-100 dark:border-neutral-800"
+              class="flex items-center justify-between gap-4 rounded-md border border-destructive/20 bg-destructive/5 p-4"
             >
               <div>
-                <p class="font-bold text-sm text-red-600">
+                <p class="text-sm font-semibold text-destructive">
                   {{ t('dashboard.r18_content') }}
                 </p>
-                <p class="text-[10px] text-neutral-500">
+                <p class="mt-1 text-xs text-muted-foreground">
                   {{ t('dashboard.enables_age_verification') }}
                 </p>
               </div>
-              <input v-model="editingComic.isR18" type="checkbox" class="w-5 h-5 accent-red-600 cursor-pointer">
+              <input v-model="editingComic.isR18" type="checkbox" class="h-4 w-4 cursor-pointer accent-destructive">
             </div>
           </div>
 
           <!-- Chapters Tab -->
           <div v-else class="space-y-4">
-            <div v-if="chaptersLoading" class="text-center py-8 text-neutral-500">
+            <div v-if="chaptersLoading" class="rounded-md border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
               加载章节中...
             </div>
-            <div v-else-if="chapters.length === 0" class="text-center py-8 text-neutral-500">
+            <div v-else-if="chapters.length === 0" class="rounded-md border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
               暂无章节数据
             </div>
             <div v-else>
               <!-- 全选 + 批量删除按钮 -->
-              <div class="flex items-center justify-between mb-3">
-                <label class="flex items-center gap-2 text-xs text-neutral-500 cursor-pointer">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <label class="flex items-center gap-2 text-sm text-muted-foreground">
                   <input
                     type="checkbox"
                     :checked="selectedChapterIds.size === chapters.length && chapters.length > 0"
-                    class="w-4 h-4 accent-blue-600"
+                    class="h-4 w-4 accent-primary"
                     @change="toggleAllChapters"
                   >
                   全选（{{ selectedChapterIds.size }}/{{ chapters.length }}）
                 </label>
                 <button
                   v-if="selectedChapterIds.size > 0"
-                  class="text-xs font-bold px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  class="inline-flex h-8 items-center rounded-md border border-destructive/25 bg-destructive/5 px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
                   @click="chapterBatchDeleteOpen = true"
                 >
                   批量删除 {{ selectedChapterIds.size }} 个章节
                 </button>
               </div>
 
-              <div class="border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">
-                <table class="w-full text-sm text-left">
-                  <thead class="bg-neutral-50 dark:bg-neutral-800 text-xs uppercase text-neutral-500 font-bold">
+              <div class="overflow-x-auto rounded-md border border-border">
+                <table class="min-w-full text-left text-sm">
+                  <thead class="bg-muted text-xs font-medium text-muted-foreground">
                     <tr>
-                      <th class="px-3 py-3 w-10" />
-                      <th class="px-4 py-3">
+                      <th class="w-10 px-3 py-2.5" />
+                      <th class="px-4 py-2.5">
                         #
                       </th>
-                      <th class="px-4 py-3">
+                      <th class="px-4 py-2.5">
                         标题
                       </th>
-                      <th class="px-4 py-3 text-right">
+                      <th class="px-4 py-2.5 text-right">
                         操作
                       </th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
+                  <tbody>
                     <tr
                       v-for="chapter in chapters" :key="chapter.id"
-                      class="hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-                      :class="{ 'bg-blue-50 dark:bg-blue-900/10': selectedChapterIds.has(chapter.id) }"
+                      class="border-b border-border transition-colors last:border-b-0 hover:bg-accent/60"
+                      :class="{ 'bg-primary/5': selectedChapterIds.has(chapter.id) }"
                     >
-                      <td class="px-3 py-3">
+                      <td class="px-3 py-2.5">
                         <input
                           type="checkbox"
                           :checked="selectedChapterIds.has(chapter.id)"
-                          class="w-4 h-4 accent-blue-600 cursor-pointer"
+                          class="h-4 w-4 cursor-pointer accent-primary"
                           @change="toggleChapter(chapter.id)"
                         >
                       </td>
-                      <td class="px-4 py-3 text-neutral-500">
+                      <td class="px-4 py-2.5 text-muted-foreground">
                         {{ chapter.sortOrder }}
                       </td>
-                      <td class="px-4 py-3 font-medium">
+                      <td class="px-4 py-2.5 font-medium text-foreground">
                         {{ chapter.title }}
-                        <span v-if="chapter.slug" class="ml-2 text-[10px] text-neutral-400 font-mono">{{ chapter.slug }}</span>
+                        <span v-if="chapter.slug" class="ml-2 font-mono text-[10px] text-muted-foreground">{{ chapter.slug }}</span>
                       </td>
-                      <td class="px-4 py-3 text-right">
+                      <td class="px-4 py-2.5 text-right">
                         <button
-                          class="text-red-600 hover:text-red-700 font-bold text-xs"
+                          class="text-xs font-medium text-destructive transition-colors hover:text-destructive/80"
                           @click="deleteSingleChapter(chapter.id)"
                         >
                           删除
@@ -984,13 +977,12 @@ async function executeBatchOperation() {
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Footer -->
-        <div
-          class="p-6 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-100 dark:border-neutral-800 flex gap-3 shrink-0"
-        >
+      <template #footer>
+        <div v-if="editingComic" class="flex w-full gap-3">
           <button
-            class="flex-1 px-4 py-3 rounded-xl font-bold text-sm hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-all"
+            class="inline-flex h-10 flex-1 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             @click="isEditModalOpen = false"
           >
             {{ t('dashboard.cancel') }}
@@ -998,13 +990,13 @@ async function executeBatchOperation() {
           <button
             v-if="activeTab === 'metadata'"
             :disabled="updateLoading"
-            class="flex-1 px-4 py-3 bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white rounded-xl font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-all"
+            class="inline-flex h-10 flex-1 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             @click="handleUpdate"
           >
             {{ updateLoading ? t('dashboard.saving') : t('dashboard.save_changes') }}
           </button>
         </div>
-      </div>
+      </template>
     </DetailDrawer>
 
     <!-- 漫画批量操作确认对话框 -->
@@ -1122,3 +1114,4 @@ async function executeBatchOperation() {
   background: #dbeafe;
 }
 </style>
+

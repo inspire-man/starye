@@ -10,6 +10,7 @@ interface Props {
   layout?: string
   background?: boolean
   small?: boolean
+  loading?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -18,6 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   layout: 'total, sizes, prev, pager, next, jumper',
   background: true,
   small: false,
+  loading: false,
 })
 
 const emit = defineEmits<{
@@ -101,101 +103,177 @@ function handleJump(): void {
 
 <template>
   <nav
-    v-if="total > 0 || totalPages > 1"
-    class="flex flex-wrap items-center justify-between gap-3 border-t border-border px-1 py-4"
+    v-if="loading || total > 0 || totalPages > 1"
+    class="pagination-nav"
     :class="{ 'text-sm': small }"
+    :aria-busy="loading"
     aria-label="分页"
   >
-    <!-- Total -->
-    <div class="flex min-h-8 items-center gap-2 text-sm text-muted-foreground">
-      <span v-if="layoutItems.includes('total')">
-        共 <strong class="font-semibold text-foreground">{{ total }}</strong> 条
-      </span>
-
-      <!-- Sizes -->
-      <select
-        v-if="layoutItems.includes('sizes')"
-        class="h-8 cursor-pointer rounded-md border border-border bg-background px-2.5 text-sm text-foreground transition-colors hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
-        :value="pageSize"
-        aria-label="每页条数"
-        @change="handleSizeChange(Number(($event.target as HTMLSelectElement).value))"
-      >
-        <option v-for="size in pageSizes" :key="size" :value="size">
-          {{ size }} 条/页
-        </option>
-      </select>
+    <div v-if="loading" class="pagination-skeleton" aria-hidden="true">
+      <div class="ui-skeleton pagination-skeleton-total" />
+      <div class="ui-skeleton pagination-skeleton-size" />
+      <div class="pagination-skeleton-pages">
+        <div v-for="page in 4" :key="page" class="ui-skeleton pagination-skeleton-page" />
+      </div>
     </div>
 
-    <div class="flex flex-wrap items-center justify-end gap-1.5">
-      <!-- Prev -->
-      <button
-        v-if="layoutItems.includes('prev')"
-        type="button"
-        class="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 text-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-        :class="background ? 'bg-muted/40' : 'bg-background'"
-        :disabled="currentPage === 1"
-        aria-label="上一页"
-        @click="handlePageChange(currentPage - 1)"
-      >
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
-      </button>
+    <template v-else>
+      <!-- Total -->
+      <div class="flex min-h-8 items-center gap-2 text-sm text-muted-foreground">
+        <span v-if="layoutItems.includes('total')">
+          共 <strong class="font-semibold text-foreground">{{ total }}</strong> 条
+        </span>
 
-      <!-- Pager -->
-      <div v-if="layoutItems.includes('pager')" class="flex gap-1">
-        <button
-          v-for="(page, index) in pagerList"
-          :key="index"
-          type="button"
-          class="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm transition-colors"
-          :class="[
-            page === currentPage
-              ? (background
-                ? 'bg-primary font-semibold text-primary-foreground shadow-sm'
-                : 'border border-primary bg-primary/10 font-semibold text-primary')
-              : (background
-                ? 'bg-muted/40 text-foreground hover:bg-primary/10 hover:text-primary'
-                : 'border border-border bg-background text-foreground hover:border-primary hover:text-primary'),
-            page === '...' ? 'cursor-default' : 'cursor-pointer',
-          ]"
-          :disabled="page === '...'"
-          :aria-current="page === currentPage ? 'page' : undefined"
-          @click="typeof page === 'number' && handlePageChange(page)"
+        <!-- Sizes -->
+        <select
+          v-if="layoutItems.includes('sizes')"
+          class="h-8 cursor-pointer rounded-md border border-border bg-background px-2.5 text-sm text-foreground transition-colors hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
+          :value="pageSize"
+          aria-label="每页条数"
+          @change="handleSizeChange(Number(($event.target as HTMLSelectElement).value))"
         >
-          {{ page }}
-        </button>
+          <option v-for="size in pageSizes" :key="size" :value="size">
+            {{ size }} 条/页
+          </option>
+        </select>
       </div>
 
-      <!-- Next -->
-      <button
-        v-if="layoutItems.includes('next')"
-        type="button"
-        class="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 text-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-        :class="background ? 'bg-muted/40' : 'bg-background'"
-        :disabled="currentPage === safeTotalPages"
-        aria-label="下一页"
-        @click="handlePageChange(currentPage + 1)"
-      >
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-      </button>
-
-      <!-- Jumper -->
-      <label v-if="layoutItems.includes('jumper')" class="ml-2 flex items-center gap-2 text-sm text-muted-foreground">
-        <span>前往</span>
-        <input
-          v-model.number="jumperValue"
-          type="number"
-          min="1"
-          :max="safeTotalPages"
-          class="h-8 w-14 rounded-md border border-border bg-background px-2 text-center text-sm text-foreground transition-colors [appearance:textfield] hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-          aria-label="跳转页码"
-          @keyup.enter="handleJump"
+      <div class="flex flex-wrap items-center justify-end gap-1.5">
+        <!-- Prev -->
+        <button
+          v-if="layoutItems.includes('prev')"
+          type="button"
+          class="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 text-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          :class="background ? 'bg-muted/40' : 'bg-background'"
+          :disabled="currentPage === 1"
+          aria-label="上一页"
+          @click="handlePageChange(currentPage - 1)"
         >
-        <span>页</span>
-      </label>
-    </div>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+
+        <!-- Pager -->
+        <div v-if="layoutItems.includes('pager')" class="flex gap-1">
+          <button
+            v-for="(page, index) in pagerList"
+            :key="index"
+            type="button"
+            class="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm transition-colors"
+            :class="[
+              page === currentPage
+                ? (background
+                  ? 'bg-primary font-semibold text-primary-foreground shadow-sm'
+                  : 'border border-primary bg-primary/10 font-semibold text-primary')
+                : (background
+                  ? 'bg-muted/40 text-foreground hover:bg-primary/10 hover:text-primary'
+                  : 'border border-border bg-background text-foreground hover:border-primary hover:text-primary'),
+              page === '...' ? 'cursor-default' : 'cursor-pointer',
+            ]"
+            :disabled="page === '...'"
+            :aria-current="page === currentPage ? 'page' : undefined"
+            @click="typeof page === 'number' && handlePageChange(page)"
+          >
+            {{ page }}
+          </button>
+        </div>
+
+        <!-- Next -->
+        <button
+          v-if="layoutItems.includes('next')"
+          type="button"
+          class="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 text-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          :class="background ? 'bg-muted/40' : 'bg-background'"
+          :disabled="currentPage === safeTotalPages"
+          aria-label="下一页"
+          @click="handlePageChange(currentPage + 1)"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+
+        <!-- Jumper -->
+        <label v-if="layoutItems.includes('jumper')" class="ml-2 flex items-center gap-2 text-sm text-muted-foreground">
+          <span>前往</span>
+          <input
+            v-model.number="jumperValue"
+            type="number"
+            min="1"
+            :max="safeTotalPages"
+            class="h-8 w-14 rounded-md border border-border bg-background px-2 text-center text-sm text-foreground transition-colors [appearance:textfield] hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            aria-label="跳转页码"
+            @keyup.enter="handleJump"
+          >
+          <span>页</span>
+        </label>
+      </div>
+    </template>
   </nav>
 </template>
+
+<style scoped>
+.pagination-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid hsl(var(--border));
+  padding: 0.75rem 0.25rem 0;
+}
+
+.pagination-nav :is(button, select, input) {
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+.pagination-skeleton {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pagination-skeleton-total {
+  width: 5rem;
+  height: 0.875rem;
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+.pagination-skeleton-size {
+  width: 5.5rem;
+  height: var(--ui-control-height-sm, 2rem);
+  margin-right: auto;
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+.pagination-skeleton-pages {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.pagination-skeleton-page {
+  width: var(--ui-control-height-sm, 2rem);
+  height: var(--ui-control-height-sm, 2rem);
+  border-radius: var(--ui-radius-sm, 0.375rem);
+}
+
+@media (max-width: 640px) {
+  .pagination-nav {
+    align-items: stretch;
+  }
+
+  .pagination-nav > :not(.pagination-skeleton) {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .pagination-nav .pagination-skeleton {
+    flex-wrap: wrap;
+  }
+}
+</style>
+

@@ -168,10 +168,11 @@ onMounted(loadWhitelist)
     </DataTable>
 
     <Pagination
-      v-if="total > 0"
+      v-if="loading || total > 0"
       :current-page="currentPage"
       :total-pages="totalPages"
       :total="total"
+      :loading="loading"
       :page-size="pageSize"
       :page-sizes="[10, 20, 50, 100]"
       layout="total, sizes, prev, pager, next, jumper"
@@ -267,3 +268,4 @@ onMounted(loadWhitelist)
     </div>
   </div>
 </template>
+

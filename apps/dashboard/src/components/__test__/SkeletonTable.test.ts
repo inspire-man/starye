@@ -94,6 +94,18 @@ describe('skeletonTable.vue', () => {
       expect(wrapper.find('thead').exists()).toBe(true)
       expect(wrapper.find('tbody').exists()).toBe(true)
     })
+
+    it('应该使用独立的横向滚动容器', () => {
+      const wrapper = mount(SkeletonTable, {
+        props: {
+          rows: 2,
+          columns: 3,
+        },
+      })
+
+      expect(wrapper.find('.data-table-scroll').exists()).toBe(true)
+      expect(wrapper.find('.data-table-scroll table').exists()).toBe(true)
+    })
   })
 
   describe('单元格填充', () => {
@@ -106,7 +118,7 @@ describe('skeletonTable.vue', () => {
       })
 
       const headerCell = wrapper.find('thead th')
-      expect(headerCell.classes()).toContain('p-3')
+      expect(headerCell.classes()).toContain('skeleton-table-cell')
     })
 
     it('表格行应该有填充', () => {
@@ -118,7 +130,8 @@ describe('skeletonTable.vue', () => {
       })
 
       const bodyCell = wrapper.find('tbody td')
-      expect(bodyCell.classes()).toContain('p-3')
+      expect(bodyCell.classes()).toContain('skeleton-table-cell')
     })
   })
 })
+

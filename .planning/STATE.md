@@ -123,9 +123,11 @@ Items acknowledged and carried forward from previous milestone close:
 | `260814-jrk-crawler-monitor-drawer-relations` | 2026-08-14 | D1 无封面 fixture 清理、厂商关联入库覆盖、Dashboard 共享详情抽屉、爬虫 tabs/table/归档操作完成；测试与类型检查通过 |
 | `260814-okh-200-ui` | 2026-08-15 | 生产非 200 封面与孤儿女优/厂商清理、关系重同步、全列表分页/高级筛选/抽屉视觉统一完成；lint、构建、类型检查与定向测试通过 |
 | `260815-hm9-stabilize-cloudflare-live-resource-prefl` | 2026-08-15 | Cloudflare 只读资源预检增加 3 次瞬时失败重试、脱敏诊断与回归覆盖；config 全量测试、类型检查和 lint 通过 |
+| `260815-i3i-dashboard-token` | 2026-08-15 | Dashboard 表格/抽屉间距、semantic theme token、元素级 Skeleton 与移动端溢出修复；测试、类型检查、lint、构建和 Gateway 浏览器检查通过 |
 
 ## Session Continuity
 
 Last session: 2026-08-15T00:48:20+08:00
 Stopped at: Completed quick task 260814-okh-200-ui
 Resume file: None
+

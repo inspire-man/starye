@@ -1,33 +1,80 @@
 @import "@starye/ui/globals.css";
 
-/*
- * Dashboard visual system
- *
- * Keep the admin console's palette local to this shell so shared UI packages
- * retain their defaults while every dashboard list uses the same surfaces,
- * spacing rhythm, borders, and focus treatment.
- */
+/* Dashboard visual system. Values are shared with Teleport-mounted drawers. */
+:root {
+  --dashboard-background: 220 24% 97%;
+  --dashboard-foreground: 222 35% 16%;
+  --dashboard-card: 0 0% 100%;
+  --dashboard-primary: 239 68% 58%;
+  --dashboard-primary-foreground: 0 0% 100%;
+  --dashboard-secondary: 238 28% 95%;
+  --dashboard-secondary-foreground: 239 32% 30%;
+  --dashboard-muted: 220 20% 94%;
+  --dashboard-muted-foreground: 220 12% 45%;
+  --dashboard-accent: 239 88% 96%;
+  --dashboard-accent-foreground: 239 48% 34%;
+  --dashboard-destructive: 0 72% 51%;
+  --dashboard-destructive-foreground: 0 0% 100%;
+  --dashboard-border: 220 16% 88%;
+  --dashboard-input: 220 16% 85%;
+  --dashboard-ring: 239 68% 58%;
+  --dashboard-radius: 0.75rem;
+  --dashboard-drawer-z-index: 1200;
+  --dashboard-drawer-inset: 1rem;
+}
+
 .dashboard-shell {
-  --background: 220 24% 97%;
-  --foreground: 222 35% 16%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 35% 16%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 35% 16%;
-  --primary: 239 68% 58%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 238 28% 95%;
-  --secondary-foreground: 239 32% 30%;
-  --muted: 220 20% 94%;
-  --muted-foreground: 220 12% 45%;
-  --accent: 239 88% 96%;
-  --accent-foreground: 239 48% 34%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 220 16% 88%;
-  --input: 220 16% 85%;
-  --ring: 239 68% 58%;
-  --radius: 0.75rem;
+  --background: var(--dashboard-background);
+  --foreground: var(--dashboard-foreground);
+  --card: var(--dashboard-card);
+  --card-foreground: var(--dashboard-foreground);
+  --popover: var(--dashboard-card);
+  --popover-foreground: var(--dashboard-foreground);
+  --primary: var(--dashboard-primary);
+  --primary-foreground: var(--dashboard-primary-foreground);
+  --secondary: var(--dashboard-secondary);
+  --secondary-foreground: var(--dashboard-secondary-foreground);
+  --muted: var(--dashboard-muted);
+  --muted-foreground: var(--dashboard-muted-foreground);
+  --accent: var(--dashboard-accent);
+  --accent-foreground: var(--dashboard-accent-foreground);
+  --destructive: var(--dashboard-destructive);
+  --destructive-foreground: var(--dashboard-destructive-foreground);
+  --border: var(--dashboard-border);
+  --input: var(--dashboard-input);
+  --ring: var(--dashboard-ring);
+  --radius: var(--dashboard-radius);
+  --ui-space-1: 0.25rem;
+  --ui-space-2: 0.5rem;
+  --ui-space-3: 0.75rem;
+  --ui-space-4: 1rem;
+  --ui-space-5: 1.25rem;
+  --ui-control-height-sm: 2rem;
+  --ui-control-height-md: 2.25rem;
+  --ui-radius-sm: 0.375rem;
+  --ui-radius-md: 0.5rem;
+  --ui-radius-lg: 0.75rem;
+  --ui-table-cell-x: 1rem;
+  --ui-table-cell-y: 0.75rem;
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
   color: hsl(var(--foreground));
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -69,6 +116,56 @@
 .dashboard-shell .border-neutral-700,
 .dashboard-shell .border-neutral-800 {
   border-color: hsl(var(--border));
+}
+
+/* DetailDrawer is teleported to body, so mirror the shell tokens on its layer. */
+body:has(.dashboard-shell) .detail-drawer-overlay {
+  --background: var(--dashboard-background);
+  --foreground: var(--dashboard-foreground);
+  --card: var(--dashboard-card);
+  --card-foreground: var(--dashboard-foreground);
+  --popover: var(--dashboard-card);
+  --popover-foreground: var(--dashboard-foreground);
+  --primary: var(--dashboard-primary);
+  --primary-foreground: var(--dashboard-primary-foreground);
+  --secondary: var(--dashboard-secondary);
+  --secondary-foreground: var(--dashboard-secondary-foreground);
+  --muted: var(--dashboard-muted);
+  --muted-foreground: var(--dashboard-muted-foreground);
+  --accent: var(--dashboard-accent);
+  --accent-foreground: var(--dashboard-accent-foreground);
+  --destructive: var(--dashboard-destructive);
+  --destructive-foreground: var(--dashboard-destructive-foreground);
+  --border: var(--dashboard-border);
+  --input: var(--dashboard-input);
+  --ring: var(--dashboard-ring);
+  --radius: var(--dashboard-radius);
+  --ui-control-height-sm: 2rem;
+  --ui-control-height-md: 2.25rem;
+  --ui-radius-sm: 0.375rem;
+  --ui-radius-md: 0.5rem;
+  --ui-radius-lg: 0.75rem;
+  --ui-table-cell-x: 1rem;
+  --ui-table-cell-y: 0.75rem;
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
 }
 
 .dashboard-shell .dashboard-sidebar {
@@ -162,6 +259,7 @@
 
 .dashboard-main {
   min-width: 0;
+  padding: 1.5rem 2rem 2rem;
   background: hsl(var(--background) / 0.78);
 }
 
@@ -227,7 +325,31 @@
 .dashboard-shell .filter-panel {
   border-color: hsl(var(--border));
   background: hsl(var(--card));
-  box-shadow: 0 10px 28px hsl(var(--foreground) / 0.045);
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
+}
+
+.dashboard-shell .page-title,
+.dashboard-shell .page-header h1,
+.dashboard-shell .dashboard-content-title {
+  color: hsl(var(--foreground));
+}
+
+.dashboard-shell .page-subtitle,
+.dashboard-shell .filter-info {
+  color: hsl(var(--muted-foreground));
+}
+
+.dashboard-shell .stat-card {
+  border-color: hsl(var(--border));
+  background: hsl(var(--card));
+  border-radius: var(--ui-radius-md);
+}
+
+.dashboard-shell .error-message,
+.dashboard-shell .receipt-error {
+  border-color: hsl(var(--destructive) / 0.24);
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--destructive));
 }
 
 @media (max-width: 768px) {
@@ -248,3 +370,4 @@
     padding-left: 0.375rem;
   }
 }
+

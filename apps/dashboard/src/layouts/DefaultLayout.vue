@@ -374,7 +374,7 @@ async function handleLogout() {
 
     <!-- Content -->
     <main
-      class="dashboard-main flex-1 p-4 md:p-8 transition-all duration-300"
+      class="dashboard-main flex-1 transition-all duration-300"
       :class="isMobile ? 'ml-0' : (sidebarCollapsed ? 'ml-16' : 'ml-64')"
     >
       <div class="dashboard-content-header mb-6 md:mb-8 flex items-center justify-between gap-4">
@@ -408,3 +408,4 @@ async function handleLogout() {
     <ToastContainer />
   </div>
 </template>
+
