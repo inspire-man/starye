@@ -1,12 +1,34 @@
 <script setup lang="ts">
-import { ToastContainer } from '@starye/ui'
+import type { Component } from 'vue'
+import { Breadcrumbs, ToastContainer } from '@starye/ui'
+import {
+  Activity,
+  BookOpen,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  FileText,
+  Film,
+  Globe2,
+  Home,
+  LogOut,
+  Menu,
+  Settings,
+  ShieldAlert,
+  Theater,
+  Users,
+} from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useResourceGuard } from '@/composables/useResourceGuard'
 import { signOut, useSession } from '@/lib/auth-client'
 
 const { t, locale } = useI18n()
 const session = useSession()
+const route = useRoute()
+const router = useRouter()
 const { canAccessComics, canAccessMovies, canAccessGlobal } = useResourceGuard()
 
 // 移动端检测
@@ -32,22 +54,22 @@ const mobileDrawerOpen = ref(false)
 // 菜单展开状态
 const expandedMenus = ref<Set<string>>(new Set(['movies', 'comics']))
 
-const iconMap: Record<string, string> = {
-  'home': '🏠',
-  'book': '📚',
-  'film': '🎬',
-  'activity': '📊',
-  'users': '👥',
-  'building': '🏢',
-  'clipboard': '📋',
-  'file-text': '📄',
-  'shield': '🔞',
-  'settings': '⚙️',
-  'tavern': '🎭',
+const iconMap: Record<string, Component> = {
+  'home': Home,
+  'book': BookOpen,
+  'film': Film,
+  'activity': Activity,
+  'users': Users,
+  'building': Building2,
+  'clipboard': ClipboardList,
+  'file-text': FileText,
+  'shield': ShieldAlert,
+  'settings': Settings,
+  'tavern': Theater,
 }
 
-function getIcon(iconName: string) {
-  return iconMap[iconName] || '•'
+function getIcon(iconName: string): Component {
+  return iconMap[iconName] || Home
 }
 
 function toggleMenu(menuKey: string) {
@@ -131,7 +153,7 @@ const menuItems = computed(() => [
     children: [
       {
         path: '/crawlers',
-        label: '爬虫列表',
+        label: '爬虫监控',
         show: canAccessComics.value || canAccessMovies.value,
       },
       {
@@ -221,6 +243,40 @@ const menuItems = computed(() => [
   },
 ].filter(item => item.show))
 
+const breadcrumbItems = computed(() => {
+  const currentPath = route.path.replace(/\/$/, '') || '/'
+  if (currentPath === '/')
+    return [{ label: t('dashboard.overview') }]
+
+  const parent = menuItems.value.find(item => item.children?.some(child => currentPath === child.path || currentPath.startsWith(`${child.path}/`)))
+  const child = parent?.children?.find(item => currentPath === item.path || currentPath.startsWith(`${item.path}/`))
+
+  if (child) {
+    const items = [{ label: t('dashboard.overview'), to: '/' }, { label: child.label }]
+    if (currentPath !== child.path) {
+      items[1] = { label: child.label, to: child.path }
+      items.push({ label: currentPath.startsWith('/posts/') ? '文章编辑' : currentPath.startsWith('/actors/') ? '演员详情' : currentPath.startsWith('/publishers/') ? '厂商详情' : '详情' })
+    }
+    return items
+  }
+
+  const routeLabels: Record<string, string> = {
+    '/favorites': '我的收藏',
+  }
+  return [{ label: t('dashboard.overview'), to: '/' }, { label: routeLabels[currentPath] ?? t('dashboard.dashboard') }]
+})
+
+const pageTitle = computed(() => breadcrumbItems.value.at(-1)?.label ?? t('dashboard.dashboard'))
+
+function navigateBreadcrumb(to: string): void {
+  router.push(to)
+}
+
+function navigateBreadcrumbBack(): void {
+  const fallback = breadcrumbItems.value.at(-2)?.to ?? '/'
+  router.push(fallback)
+}
+
 function toggleLocale() {
   const newLocale = locale.value === 'zh' ? 'en' : 'zh'
   locale.value = newLocale
@@ -265,16 +321,12 @@ async function handleLogout() {
           :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
           @click="toggleSidebar"
         >
-          <svg
-            class="w-5 h-5 transition-transform"
+          <ChevronLeft
+            :size="20"
+            class="transition-transform"
             :class="{ 'rotate-180': sidebarCollapsed }"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+            aria-hidden="true"
+          />
         </button>
       </div>
 
@@ -288,21 +340,15 @@ async function handleLogout() {
               :title="sidebarCollapsed ? item.label : ''"
               @click="toggleMenu(item.key)"
             >
-              <span class="text-lg shrink-0">
-                {{ getIcon(item.icon) }}
-              </span>
+              <component :is="getIcon(item.icon)" :size="18" class="shrink-0" aria-hidden="true" />
               <span v-if="!sidebarCollapsed" class="flex-1 text-left">{{ item.label }}</span>
-              <svg
+              <ChevronRight
                 v-if="!sidebarCollapsed"
-                class="w-4 h-4 transition-transform shrink-0"
+                :size="16"
+                class="transition-transform shrink-0"
                 :class="{ 'rotate-90': expandedMenus.has(item.key) }"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
+                aria-hidden="true"
+              />
             </button>
 
             <!-- 子菜单 -->
@@ -342,9 +388,7 @@ async function handleLogout() {
             :title="sidebarCollapsed ? item.label : ''"
             @click="!item.isExternal ? handleMenuItemClick() : undefined"
           >
-            <span class="text-lg shrink-0">
-              {{ getIcon(item.icon) }}
-            </span>
+            <component :is="getIcon(item.icon)" :size="18" class="shrink-0" aria-hidden="true" />
             <span v-if="!sidebarCollapsed">{{ item.label }}</span>
           </component>
         </template>
@@ -357,7 +401,7 @@ async function handleLogout() {
           :title="sidebarCollapsed ? (locale === 'zh' ? 'English' : '简体中文') : ''"
           @click="toggleLocale"
         >
-          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+          <Globe2 :size="16" class="shrink-0" aria-hidden="true" />
           <span v-if="!sidebarCollapsed">{{ locale === 'zh' ? 'English' : '简体中文' }}</span>
         </button>
         <button
@@ -366,7 +410,7 @@ async function handleLogout() {
           :title="sidebarCollapsed ? t('dashboard.sign_out') : ''"
           @click="handleLogout"
         >
-          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+          <LogOut :size="16" class="shrink-0" aria-hidden="true" />
           <span v-if="!sidebarCollapsed">{{ t('dashboard.sign_out') }}</span>
         </button>
       </div>
@@ -382,18 +426,24 @@ async function handleLogout() {
         <button
           v-if="isMobile"
           class="dashboard-mobile-menu p-2 rounded-lg hover:bg-muted transition-colors"
+          type="button"
+          aria-label="打开菜单"
+          title="打开菜单"
           @click="toggleSidebar"
         >
-          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
+          <Menu :size="22" aria-hidden="true" />
         </button>
 
-        <h1 class="dashboard-content-title text-xl md:text-2xl font-bold tracking-tight">
-          {{ t('dashboard.dashboard') }}
-        </h1>
+        <div class="dashboard-header-copy min-w-0 flex-1">
+          <Breadcrumbs
+            :items="breadcrumbItems"
+            @navigate="navigateBreadcrumb"
+            @back="navigateBreadcrumbBack"
+          />
+          <h1 class="dashboard-content-title mt-1 truncate text-xl font-bold tracking-tight md:text-2xl">
+            {{ pageTitle }}
+          </h1>
+        </div>
 
         <div v-if="session.data" class="dashboard-user flex items-center gap-2">
           <span class="dashboard-user-welcome text-sm text-muted-foreground hidden md:inline">{{ t('dashboard.welcome') }}, {{ session.data.user.name }}</span>

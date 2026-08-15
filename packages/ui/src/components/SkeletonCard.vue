@@ -9,14 +9,14 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-  <div class="rounded-lg border border-border p-6">
+  <div class="skeleton-card rounded-lg border border-border" :class="`skeleton-card-${variant}`">
     <!-- Stat 变体 -->
     <div v-if="variant === 'stat'" class="space-y-3">
       <div class="flex items-center justify-between">
-        <div class="skeleton-shimmer h-8 w-8 rounded-lg" />
-        <div class="skeleton-shimmer h-6 w-16 rounded" />
+        <div class="skeleton-shimmer h-4 w-20 rounded" />
+        <div class="skeleton-shimmer h-8 w-8 rounded-full" />
       </div>
-      <div class="skeleton-shimmer h-10 w-24 rounded" />
+      <div class="skeleton-shimmer h-8 w-24 rounded" />
       <div class="skeleton-shimmer h-4 w-32 rounded" />
     </div>
 
@@ -43,6 +43,25 @@ withDefaults(defineProps<Props>(), {
 </template>
 
 <style scoped>
+.skeleton-card {
+  background: hsl(var(--card));
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
+}
+
+.skeleton-card-stat {
+  min-height: 8.75rem;
+  border-radius: var(--ui-radius-lg, 0.5rem);
+  padding: 1rem 1.125rem;
+}
+
+.skeleton-card-content {
+  padding: 1rem 1.125rem;
+}
+
+.skeleton-card-image {
+  padding: 1rem 1.125rem;
+}
+
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,

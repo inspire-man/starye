@@ -615,7 +615,7 @@ async function executeBatchOperation() {
         {{ (item as any).chapterCount ?? '-' }}
       </template>
       <template #cell-actions="{ item }">
-        <div style="display:flex;gap:4px;align-items:center" @click.stop>
+        <div class="table-actions" @click.stop>
           <a
             :href="`/comic/${(item as Comic).slug}`"
             target="_blank"
@@ -1086,11 +1086,8 @@ async function executeBatchOperation() {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 3px 8px;
-  background: hsl(var(--status-info-soft));
   color: hsl(var(--status-info));
-  border: 1px solid hsl(var(--status-info) / 0.2);
-  border-radius: var(--ui-radius-sm);
+  padding: 3px 4px;
   font-size: 0.75rem;
   font-weight: 500;
   text-decoration: none;
@@ -1098,6 +1095,6 @@ async function executeBatchOperation() {
 }
 
 .action-btn-link:hover {
-  background: hsl(var(--status-info) / 0.14);
+  color: hsl(var(--status-info));
 }
 </style>

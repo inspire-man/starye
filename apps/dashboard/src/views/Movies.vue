@@ -1313,11 +1313,8 @@ const tableColumns = [
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 3px 8px;
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-  border-radius: 4px;
+  padding: 3px 4px;
+  color: hsl(var(--primary));
   font-size: 0.75rem;
   font-weight: 500;
   text-decoration: none;
@@ -1326,7 +1323,7 @@ const tableColumns = [
 }
 
 .action-btn-view:hover {
-  background: #dbeafe;
+  color: hsl(var(--primary));
 }
 
 .action-icon {

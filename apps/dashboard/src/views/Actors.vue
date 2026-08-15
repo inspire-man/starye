@@ -444,7 +444,7 @@ onMounted(() => {
         {{ formatDateTime(item.createdAt) }}
       </template>
       <template #cell-actions="{ item }">
-        <div style="display:flex;gap:4px;align-items:center" @click.stop>
+        <div class="table-actions" @click.stop>
           <router-link :to="`/actors/${item.id}`" class="action-link">
             详情
           </router-link>
@@ -454,7 +454,6 @@ onMounted(() => {
             target="_blank"
             rel="noopener noreferrer"
             class="action-link"
-            style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;"
             title="在客户端查看"
           >
             客户端
@@ -897,7 +896,7 @@ onMounted(() => {
 }
 
 .action-link {
-  color: #3b82f6;
+  color: hsl(var(--primary));
   text-decoration: none;
   font-size: 0.875rem;
   font-weight: 500;
@@ -905,7 +904,7 @@ onMounted(() => {
 }
 
 .action-link:hover {
-  color: #2563eb;
+  color: hsl(var(--primary));
   text-decoration: underline;
 }
 

@@ -78,11 +78,11 @@ function toggleAdvanced() {
           <div class="ui-skeleton filter-skeleton-input" />
         </div>
       </div>
-      <div v-if="hasAdvancedFields" class="filter-skeleton-advanced">
-        <div class="ui-skeleton filter-skeleton-advanced-label" />
-        <div class="ui-skeleton filter-skeleton-advanced-icon" />
-      </div>
       <div class="filter-skeleton-actions">
+        <div v-if="hasAdvancedFields" class="filter-skeleton-advanced">
+          <div class="ui-skeleton filter-skeleton-advanced-label" />
+          <div class="ui-skeleton filter-skeleton-advanced-icon" />
+        </div>
         <div class="ui-skeleton filter-skeleton-button filter-skeleton-button-secondary" />
         <div class="ui-skeleton filter-skeleton-button filter-skeleton-button-primary" />
       </div>
@@ -195,30 +195,6 @@ function toggleAdvanced() {
           </div>
         </div>
 
-        <button
-          v-if="hasAdvancedFields"
-          type="button"
-          class="advanced-toggle"
-          :aria-expanded="showAdvanced"
-          @click="toggleAdvanced"
-        >
-          <span class="advanced-toggle-label">
-            <span>高级筛选</span>
-            <span class="advanced-count">{{ advancedFields.length }} 项</span>
-          </span>
-          <svg
-            class="advanced-chevron"
-            :class="{ rotated: showAdvanced }"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
-
         <Transition name="filter-advanced">
           <div v-if="hasAdvancedFields && showAdvanced" class="filter-advanced">
             <div class="filter-grid">
@@ -303,12 +279,37 @@ function toggleAdvanced() {
         </Transition>
 
         <div class="filter-actions">
-          <button type="button" class="filter-btn-reset" @click="handleReset">
-            重置
+          <button
+            v-if="hasAdvancedFields"
+            type="button"
+            class="advanced-toggle"
+            :aria-expanded="showAdvanced"
+            @click="toggleAdvanced"
+          >
+            <span class="advanced-toggle-label">
+              <span>高级筛选</span>
+              <span class="advanced-count">{{ advancedFields.length }} 项</span>
+            </span>
+            <svg
+              class="advanced-chevron"
+              :class="{ rotated: showAdvanced }"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+            </svg>
           </button>
-          <button type="button" class="filter-btn-apply" @click="handleApply">
-            应用筛选
-          </button>
+          <div class="filter-action-buttons">
+            <button type="button" class="filter-btn-reset" @click="handleReset">
+              重置
+            </button>
+            <button type="button" class="filter-btn-apply" @click="handleApply">
+              应用筛选
+            </button>
+          </div>
         </div>
       </div>
     </template>
@@ -354,10 +355,12 @@ function toggleAdvanced() {
 
 .filter-skeleton-advanced {
   display: flex;
+  min-height: 2.25rem;
+  flex: 1;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: 0.75rem;
+  margin: 0;
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-md, 0.5rem);
   padding: 0.625rem 0.75rem;
@@ -377,7 +380,8 @@ function toggleAdvanced() {
 
 .filter-skeleton-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
   margin-top: 1rem;
   border-top: 1px solid hsl(var(--border));
@@ -503,12 +507,12 @@ function toggleAdvanced() {
 
 .advanced-toggle {
   display: inline-flex;
-  width: 100%;
+  min-width: 9rem;
   min-height: 2.25rem;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0.625rem 0;
+  margin: 0;
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-md, 0.5rem);
   background: hsl(var(--muted) / 0.45);
@@ -603,11 +607,18 @@ function toggleAdvanced() {
 .filter-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 0.5rem;
   border-top: 1px solid hsl(var(--border));
   margin-top: 0.75rem;
   padding-top: 0.75rem;
+}
+
+.filter-action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 
 .filter-btn-reset {
@@ -669,6 +680,26 @@ function toggleAdvanced() {
 
   .col-span-3 {
     grid-column: span 3;
+  }
+}
+
+@media (max-width: 767px) {
+  .filter-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .filter-actions,
+  .filter-action-buttons {
+    width: 100%;
+  }
+
+  .filter-action-buttons {
+    justify-content: flex-end;
+  }
+
+  .advanced-toggle {
+    flex: 1 1 100%;
   }
 }
 </style>

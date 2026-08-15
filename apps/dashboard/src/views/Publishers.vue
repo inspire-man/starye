@@ -369,14 +369,13 @@ onMounted(() => {
         {{ formatDateTime(item.createdAt) }}
       </template>
       <template #cell-actions="{ item }">
-        <div style="display:flex;gap:4px;align-items:center" @click.stop>
+        <div class="table-actions" @click.stop>
           <a
             v-if="item.slug"
             :href="`/publishers/${item.slug}`"
             target="_blank"
             rel="noopener noreferrer"
             class="action-link"
-            style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;"
             title="在客户端查看"
           >
             客户端
@@ -796,11 +795,8 @@ onMounted(() => {
 .action-link {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
+  padding: 3px 4px;
+  color: hsl(var(--primary));
   font-size: 0.75rem;
   font-weight: 500;
   text-decoration: none;
@@ -809,6 +805,6 @@ onMounted(() => {
 }
 
 .action-link:hover {
-  background: #e5e7eb;
+  color: hsl(var(--primary));
 }
 </style>

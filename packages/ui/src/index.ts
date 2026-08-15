@@ -1,4 +1,5 @@
 // 组件
+export { default as Breadcrumbs } from './components/Breadcrumbs.vue'
 export { default as ComicCard } from './components/ComicCard.vue'
 export { default as ConfirmDialog } from './components/ConfirmDialog.vue'
 export { default as DataTable } from './components/DataTable.vue'
@@ -10,6 +11,7 @@ export { default as Pagination } from './components/Pagination.vue'
 export { default as PostCard } from './components/PostCard.vue'
 export { default as SkeletonCard } from './components/SkeletonCard.vue'
 export { default as SkeletonTable } from './components/SkeletonTable.vue'
+export { default as StatisticCard } from './components/StatisticCard.vue'
 export { default as Toast } from './components/Toast.vue'
 export { default as ToastContainer } from './components/ToastContainer.vue'
 
