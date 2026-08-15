@@ -354,6 +354,97 @@ body:has(.dashboard-shell) .detail-drawer-overlay {
   background: hsl(var(--accent) / 0.52);
 }
 
+/* Keep every scroll surface quiet and readable across the dashboard. */
+html,
+body,
+.dashboard-shell,
+.dashboard-shell * {
+  scrollbar-color: hsl(var(--dashboard-muted-foreground) / 0.34) transparent;
+  scrollbar-width: thin;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.dashboard-shell *::-webkit-scrollbar {
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+.dashboard-shell *::-webkit-scrollbar-track {
+  background: hsl(var(--dashboard-muted) / 0.3);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+.dashboard-shell *::-webkit-scrollbar-thumb {
+  border: 0.2rem solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+  background-color: hsl(var(--dashboard-muted-foreground) / 0.34);
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
+.dashboard-shell *::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--dashboard-primary) / 0.64);
+}
+
+/* Action columns use quiet text actions; color carries the meaning. */
+.dashboard-shell .data-table-action-cell :is(button, a) {
+  display: inline-flex;
+  min-height: var(--ui-control-height-sm, 2rem);
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 0 !important;
+  border-radius: var(--ui-radius-sm, 0.375rem);
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.25rem 0.4rem;
+  color: hsl(var(--primary)) !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+  text-decoration: none;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.dashboard-shell .data-table-action-cell :is(button, a):hover,
+.dashboard-shell .data-table-action-cell :is(button, a):focus-visible {
+  background: hsl(var(--primary) / 0.08) !important;
+  color: hsl(var(--primary)) !important;
+  outline: none;
+}
+
+.dashboard-shell .data-table-action-cell :is(button, a).task-danger,
+.dashboard-shell .data-table-action-cell :is(button, a).btn-danger,
+.dashboard-shell .data-table-action-cell :is(button, a)[class*="destructive"] {
+  color: hsl(var(--destructive)) !important;
+}
+
+.dashboard-shell .data-table-action-cell :is(button, a).task-danger:hover,
+.dashboard-shell .data-table-action-cell :is(button, a).task-danger:focus-visible,
+.dashboard-shell .data-table-action-cell :is(button, a).btn-danger:hover,
+.dashboard-shell .data-table-action-cell :is(button, a).btn-danger:focus-visible,
+.dashboard-shell .data-table-action-cell :is(button, a)[class*="destructive"]:hover,
+.dashboard-shell .data-table-action-cell :is(button, a)[class*="destructive"]:focus-visible {
+  background: hsl(var(--destructive) / 0.08) !important;
+  color: hsl(var(--destructive)) !important;
+}
+
+.dashboard-shell .data-table-action-cell > div {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 /* Compact semantic tags shared by list columns and detail drawers. */
 .dashboard-shell .ui-status-tag,
 body:has(.dashboard-shell) .ui-status-tag {

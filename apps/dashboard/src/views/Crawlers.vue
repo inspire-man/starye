@@ -156,12 +156,12 @@ const videoReasonActionLabels: Record<string, string> = {
 }
 
 const taskTableColumns = [
-  { key: 'id', label: '任务', minWidth: '220px', sortable: false },
-  { key: 'operation', label: '类型', width: '130px', minWidth: '110px', sortable: false },
-  { key: 'lifecycle', label: '生命周期', width: '130px', minWidth: '110px', sortable: false },
-  { key: 'status', label: '最新状态', width: '180px', minWidth: '160px', sortable: false },
-  { key: 'updatedAt', label: '最近执行', width: '170px', minWidth: '150px', sortable: false },
-  { key: 'actions', label: '操作', width: '116px', minWidth: '116px', sortable: false },
+  { key: 'id', label: '任务', minWidth: '160px', sortable: false },
+  { key: 'operation', label: '类型', width: '100px', minWidth: '88px', sortable: false },
+  { key: 'lifecycle', label: '生命周期', width: '116px', minWidth: '104px', sortable: false },
+  { key: 'status', label: '最新状态', width: '132px', minWidth: '120px', sortable: false },
+  { key: 'updatedAt', label: '最近执行', width: '140px', minWidth: '128px', sortable: false },
+  { key: 'actions', label: '操作', width: '96px', minWidth: '96px', sortable: false },
 ]
 
 const playbackEventLabels: Record<CrawlerPlaybackEventName, string> = {
@@ -968,14 +968,24 @@ async function executeClearFailed() {
 <template>
   <div class="crawlers-page">
     <div class="page-header">
-      <h1>爬虫监控</h1>
+      <div class="page-heading">
+        <p class="page-kicker">
+          CRAWL CENTER
+        </p>
+        <h1>爬虫监控</h1>
+        <p class="page-subtitle">
+          任务、运行记录与失败恢复
+        </p>
+      </div>
       <div class="header-actions">
         <label class="auto-refresh">
           <input v-model="autoRefresh" type="checkbox">
-          自动刷新 (30s)
+          <span>自动刷新</span>
+          <small>30s</small>
         </label>
-        <button class="btn-refresh" @click="refresh">
-          🔄 刷新
+        <button class="btn-refresh" type="button" @click="refresh">
+          <RefreshCw :size="15" aria-hidden="true" />
+          刷新
         </button>
       </div>
     </div>
@@ -1044,7 +1054,7 @@ async function executeClearFailed() {
               :data="crawlerTasks[template]"
               :columns="taskTableColumns"
               :loading="false"
-              min-width="900px"
+              min-width="100%"
               empty-message="尚未创建"
               @row-click="(task) => selectRun(task, latestRunFor(task))"
             >
@@ -1849,11 +1859,12 @@ async function executeClearFailed() {
 
 <style scoped>
 .local-task-panel {
-  margin-bottom: 2rem;
-  padding: 1.5rem;
+  margin-bottom: 0;
   border: 1px solid hsl(var(--border));
-  border-radius: 0.5rem;
-  background: hsl(var(--background));
+  border-radius: var(--ui-radius-lg, 0.5rem);
+  background: hsl(var(--card));
+  padding: 1rem 1.125rem;
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
 }
 
 .section-heading,
@@ -1897,6 +1908,21 @@ async function executeClearFailed() {
 }
 
 .task-history-panel { display: grid; gap: 1rem; }
+.task-history-panel :deep(.data-table) { min-width: 100%; table-layout: fixed; }
+.task-history-panel :deep(.data-table-cell) { min-width: 0; }
+.task-history-panel :deep(.data-table-body-cell) { overflow-wrap: anywhere; }
+.task-history-panel :deep(.data-table-action-cell) { width: 6rem; min-width: 6rem; }
+.task-history-panel :deep(.data-table-scroll) {
+  max-width: 100%;
+  scrollbar-color: hsl(var(--primary) / 0.42) hsl(var(--muted) / 0.32);
+}
+.task-history-panel :deep(.data-table-scroll::-webkit-scrollbar-track) { background: hsl(var(--muted) / 0.32); }
+.task-history-panel :deep(.data-table-scroll::-webkit-scrollbar-thumb) {
+  border: 0.2rem solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+  background-color: hsl(var(--primary) / 0.42);
+}
 .task-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid hsl(var(--border)); }
 .task-tab { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.5rem 0.75rem; color: hsl(var(--muted-foreground)); cursor: pointer; font-weight: 600; }
 .task-tab:hover,
@@ -1905,10 +1931,11 @@ async function executeClearFailed() {
 .task-table-id { display: grid; gap: 0.25rem; min-width: 0; }
 .task-table-id strong { overflow-wrap: anywhere; }
 .task-table-id span { color: hsl(var(--muted-foreground)); font-size: 0.75rem; }
-.task-table-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.25rem; }
-.task-icon-button { display: inline-flex; min-height: 36px; min-width: 36px; align-items: center; justify-content: center; border: 1px solid hsl(var(--border)); border-radius: 0.375rem; background: hsl(var(--secondary)); color: hsl(var(--foreground)); cursor: pointer; transition: background 150ms ease, color 150ms ease; }
-.task-icon-button:hover { background: hsl(var(--muted)); }
-.task-icon-button.task-danger:hover { background: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); }
+.task-table-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+.task-icon-button { display: inline-flex; min-height: 32px; min-width: 32px; align-items: center; justify-content: center; border: 0; border-radius: var(--ui-radius-sm, 0.375rem); background: transparent; color: hsl(var(--primary)); cursor: pointer; transition: background 150ms ease, color 150ms ease; }
+.task-icon-button:hover { background: hsl(var(--primary) / 0.08); }
+.task-icon-button.task-danger { color: hsl(var(--destructive)); }
+.task-icon-button.task-danger:hover { background: hsl(var(--destructive) / 0.08); color: hsl(var(--destructive)); }
 
 .task-group {
   display: grid;
@@ -2083,50 +2110,100 @@ async function executeClearFailed() {
 }
 
 .crawlers-page {
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
 }
 
 .page-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0;
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.25rem 0 1.125rem;
+}
+
+.page-heading {
+  min-width: 0;
+}
+
+.page-kicker {
+  margin: 0;
+  color: hsl(var(--primary));
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1rem;
 }
 
 .page-header h1 {
-  font-size: 1.875rem;
+  margin: 0.3rem 0 0;
+  color: hsl(var(--foreground));
+  font-size: 1.5rem;
   font-weight: 700;
-  color: #111827;
+  letter-spacing: -0.02em;
+  line-height: 2rem;
+}
+
+.page-header .page-subtitle {
+  margin: 0.25rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.625rem;
 }
 
 .auto-refresh {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  min-height: 2.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.5rem);
+  background: hsl(var(--card));
+  padding: 0.375rem 0.625rem;
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
   cursor: pointer;
+}
+
+.auto-refresh input {
+  accent-color: hsl(var(--primary));
+}
+
+.auto-refresh small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
 }
 
 .btn-refresh {
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  display: inline-flex;
+  min-height: var(--ui-control-height-md, 2.25rem);
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid hsl(var(--primary));
+  border-radius: var(--ui-radius-md, 0.5rem);
+  background: hsl(var(--primary));
+  padding: 0.375rem 0.75rem;
+  color: hsl(var(--primary-foreground));
+  font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
 }
 
 .btn-refresh:hover {
-  background: #2563eb;
+  border-color: hsl(var(--primary) / 0.86);
+  background: hsl(var(--primary) / 0.86);
 }
 
 .loading-state {
@@ -2135,14 +2212,14 @@ async function executeClearFailed() {
   align-items: center;
   justify-content: center;
   padding: 3rem;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
 }
 
 .spinner {
   width: 2rem;
   height: 2rem;
-  border: 3px solid #e5e7eb;
-  border-top-color: #3b82f6;
+  border: 3px solid hsl(var(--muted));
+  border-top-color: hsl(var(--primary));
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -2153,71 +2230,80 @@ async function executeClearFailed() {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
 }
 
 .stat-card {
-  background: white;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-lg, 0.5rem);
+  background: hsl(var(--card));
+  padding: 1rem 1.125rem;
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
 }
 
 .stat-card h3 {
-  font-size: 1.125rem;
+  margin: 0 0 0.75rem;
+  color: hsl(var(--foreground));
+  font-size: 0.9375rem;
   font-weight: 600;
-  margin-bottom: 1rem;
 }
 
 .stat-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid hsl(var(--border));
   padding: 0.5rem 0;
+  color: hsl(var(--muted-foreground));
   font-size: 0.875rem;
 }
 
 .text-orange {
-  color: #ea580c;
+  color: hsl(var(--status-warning));
 }
 
 .text-yellow {
-  color: #ca8a04;
+  color: hsl(var(--status-warning));
 }
 
 .text-green {
-  color: #16a34a;
+  color: hsl(var(--status-success));
 }
 
 .failed-tasks-section {
-  background: white;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-lg, 0.5rem);
+  background: hsl(var(--card));
+  padding: 1rem 1.125rem;
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
 }
 
 .failed-tasks-section > h2 {
-  font-size: 1.25rem;
+  margin: 0 0 1rem;
+  color: hsl(var(--foreground));
+  font-size: 1rem;
   font-weight: 600;
-  margin-bottom: 1.5rem;
 }
 
 .failed-group {
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
 }
 
 .group-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 .group-header h3 {
-  font-size: 1rem;
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -2228,36 +2314,38 @@ async function executeClearFailed() {
 
 .btn-secondary,
 .btn-danger {
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  min-height: var(--ui-control-height-sm, 2rem);
+  border-radius: var(--ui-radius-sm, 0.375rem);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  border: 1px solid hsl(var(--border));
+  background: transparent;
+  color: hsl(var(--foreground));
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
+  background: hsl(var(--muted));
 }
 
 .btn-danger {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  border: 1px solid transparent;
+  background: transparent;
+  color: hsl(var(--destructive));
 }
 
 .btn-danger:hover {
-  background: #fee2e2;
+  background: hsl(var(--destructive) / 0.08);
 }
 
 .empty-state {
   text-align: center;
-  padding: 2rem;
-  color: #6b7280;
+  padding: 1.5rem;
+  color: hsl(var(--muted-foreground));
 }
 
 .error-groups {
@@ -2267,10 +2355,10 @@ async function executeClearFailed() {
 }
 
 .error-group {
-  padding: 1rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 0.375rem;
+  border: 1px solid hsl(var(--status-danger) / 0.2);
+  border-radius: var(--ui-radius-md, 0.5rem);
+  background: hsl(var(--status-danger-soft));
+  padding: 0.75rem;
 }
 
 .error-header {
@@ -2280,11 +2368,29 @@ async function executeClearFailed() {
 }
 
 .count-badge {
-  padding: 0.25rem 0.75rem;
-  background: #dc2626;
-  color: white;
+  min-width: 1.5rem;
   border-radius: 9999px;
+  background: hsl(var(--status-danger));
+  padding: 0.2rem 0.45rem;
+  color: hsl(var(--primary-foreground));
+  text-align: center;
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
