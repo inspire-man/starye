@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Movie, Publisher } from '@/lib/api'
-import { ConfirmDialog, DataTable, FilterPanel, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
+import { ConfirmDialog, DataTable, DetailDrawer, FilterPanel, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import CrawlStatusTag from '@/components/CrawlStatusTag.vue'
 import ImageUpload from '@/components/ImageUpload.vue'
@@ -398,76 +398,73 @@ onMounted(() => {
       @update:page-size="updatePageSize"
     />
 
-    <Teleport to="body">
-      <div v-if="isEditModalOpen" class="modal-overlay" @click.self="isEditModalOpen = false">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>编辑厂商</h3>
-            <button class="modal-close" @click="isEditModalOpen = false">
-              ×
-            </button>
+    <DetailDrawer
+      :open="isEditModalOpen && !!editingPublisher"
+      :title="editingPublisher?.name ?? '编辑厂商'"
+      :description="editingPublisher?.slug ?? ''"
+      width="md"
+      @update:open="isEditModalOpen = $event"
+    >
+      <div class="drawer-content">
+        <div class="modal-body">
+          <div class="form-field">
+            <label>名称</label>
+            <input
+              v-model="editingPublisher!.name"
+              type="text"
+              class="input"
+            >
           </div>
 
-          <div class="modal-body">
-            <div class="form-field">
-              <label>名称</label>
-              <input
-                v-model="editingPublisher!.name"
-                type="text"
-                class="input"
+          <div class="form-field">
+            <label>标志</label>
+            <ImageUpload
+              v-model="editingPublisher!.logo"
+            />
+          </div>
+
+          <div class="form-field">
+            <label>相关作品 ({{ relatedMovies.length }})</label>
+            <div v-if="loadingMovies" class="loading">
+              加载中...
+            </div>
+            <div v-else class="movie-list">
+              <div
+                v-for="movie in relatedMovies"
+                :key="movie.id"
+                class="movie-item"
               >
-            </div>
-
-            <div class="form-field">
-              <label>标志</label>
-              <ImageUpload
-                v-model="editingPublisher!.logo"
-              />
-            </div>
-
-            <div class="form-field">
-              <label>相关作品 ({{ relatedMovies.length }})</label>
-              <div v-if="loadingMovies" class="loading">
-                加载中...
-              </div>
-              <div v-else class="movie-list">
-                <div
-                  v-for="movie in relatedMovies"
-                  :key="movie.id"
-                  class="movie-item"
+                <img
+                  v-if="movie.coverImage"
+                  :src="movie.coverImage"
+                  :alt="movie.title"
+                  class="movie-cover"
                 >
-                  <img
-                    v-if="movie.coverImage"
-                    :src="movie.coverImage"
-                    :alt="movie.title"
-                    class="movie-cover"
-                  >
-                  <span>{{ movie.title }}</span>
-                </div>
+                <span>{{ movie.title }}</span>
               </div>
-            </div>
-
-            <div class="form-actions">
-              <button
-                class="btn-danger"
-                @click="openMergeDialog(editingPublisher!.id)"
-              >
-                合并重复
-              </button>
             </div>
           </div>
 
-          <div class="modal-footer">
-            <button class="btn-secondary" @click="isEditModalOpen = false">
-              取消
-            </button>
-            <button class="btn-primary" @click="handleUpdate">
-              保存
+          <div class="form-actions">
+            <button
+              class="btn-danger"
+              @click="openMergeDialog(editingPublisher!.id)"
+            >
+              合并重复
             </button>
           </div>
         </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="isEditModalOpen = false">
+            取消
+          </button>
+          <button class="btn-primary" @click="handleUpdate">
+            保存
+          </button>
+        </div>
       </div>
-    </Teleport>
+    </DetailDrawer>
 
     <ConfirmDialog
       :open="isMergeDialogOpen"

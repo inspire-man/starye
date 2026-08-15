@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import type { Post } from '@starye/db/schema'
-import { SkeletonTable, success } from '@starye/ui'
-import { onMounted, ref } from 'vue'
+import { DataTable, DetailDrawer, Pagination, success, usePagination } from '@starye/ui'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { handleError } from '@/composables/useErrorHandler'
 
-// API 返回的 Post 类型（包含 author 关系）
 interface PostWithAuthor extends Pick<Post, 'id' | 'title' | 'slug' | 'published' | 'createdAt' | 'updatedAt'> {
   author?: {
     name: string
@@ -14,26 +13,54 @@ interface PostWithAuthor extends Pick<Post, 'id' | 'title' | 'slug' | 'published
   } | null
 }
 
+interface PostsResponse {
+  data?: PostWithAuthor[]
+  meta?: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+  }
+}
+
 const router = useRouter()
 const { t } = useI18n()
 const posts = ref<PostWithAuthor[]>([])
 const loading = ref(false)
 const deleteConfirmId = ref<string | null>(null)
+const selectedPost = ref<PostWithAuthor | null>(null)
+const postDrawerOpen = ref(false)
+const { currentPage, limit: pageSize, totalPages, total, setMeta, goToPage, updatePageSize } = usePagination(20)
+
+const tableColumns = [
+  { key: 'title', label: '标题', minWidth: '260px' },
+  { key: 'slug', label: 'Slug', minWidth: '180px' },
+  { key: 'published', label: '状态', width: '110px' },
+  { key: 'createdAt', label: '创建时间', width: '150px' },
+  { key: 'actions', label: '操作', width: '150px' },
+]
 
 async function fetchPosts() {
   loading.value = true
   try {
-    // Admin request to get all posts including drafts
-    const response = await fetch('/api/posts?draft=true&limit=50', {
-      credentials: 'include',
+    const params = new URLSearchParams({
+      draft: 'true',
+      page: String(currentPage.value),
+      limit: String(pageSize.value),
     })
+    const response = await fetch(`/api/posts?${params.toString()}`, { credentials: 'include' })
 
-    if (!response.ok) {
+    if (!response.ok)
       throw new Error(`HTTP error! status: ${response.status}`)
-    }
 
-    const result = await response.json() as { data?: any[] }
+    const result = await response.json() as PostsResponse
     posts.value = result.data || []
+    if (result.meta) {
+      setMeta({ total: result.meta.total, totalPages: result.meta.totalPages })
+    }
+    else {
+      setMeta({ total: posts.value.length, totalPages: posts.value.length ? 1 : 0 })
+    }
   }
   catch (e: unknown) {
     handleError(e, '加载文章列表失败')
@@ -46,15 +73,25 @@ async function fetchPosts() {
 function formatDate(date: Date | string | null) {
   if (!date)
     return ''
-  return new Date(date).toLocaleDateString()
+  return new Date(date).toLocaleDateString('zh-CN')
 }
 
 function editPost(id: string) {
   router.push(`/posts/${id}`)
 }
 
-async function createPost() {
+function createPost() {
   router.push('/posts/new')
+}
+
+function openPostDetails(post: PostWithAuthor) {
+  selectedPost.value = post
+  postDrawerOpen.value = true
+}
+
+function closePostDetails() {
+  postDrawerOpen.value = false
+  selectedPost.value = null
 }
 
 function requestDelete(id: string) {
@@ -78,61 +115,59 @@ async function confirmDelete() {
       credentials: 'include',
     })
 
-    if (!response.ok) {
+    if (!response.ok)
       throw new Error(`HTTP error! status: ${response.status}`)
-    }
 
-    posts.value = posts.value.filter(p => p.id !== id)
     success('文章已删除')
+    await fetchPosts()
   }
   catch (e: unknown) {
     handleError(e, '删除文章失败')
   }
 }
 
-onMounted(() => {
-  fetchPosts()
-})
+watch([currentPage, pageSize], fetchPosts, { immediate: true })
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h1 class="text-3xl font-bold tracking-tight">
           {{ t('dashboard.blog_posts') }}
         </h1>
-        <p class="text-muted-foreground">
+        <p class="mt-1 text-muted-foreground">
           {{ t('dashboard.manage_blog') }}
         </p>
       </div>
       <button
-        class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+        class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        type="button"
         @click="createPost"
       >
         {{ t('dashboard.new_post') }}
       </button>
     </div>
 
-    <SkeletonTable v-if="loading" :rows="10" :columns="5" />
-
-    <div v-if="deleteConfirmId" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="rounded-md border bg-card p-6 shadow-lg max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold mb-2">
-          {{ t('dashboard.confirm_delete') || 'Confirm Delete' }}
+    <div v-if="deleteConfirmId" class="fixed inset-0 z-[1100] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+      <div class="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+        <h3 class="text-lg font-semibold">
+          {{ t('dashboard.confirm_delete') || '确认删除' }}
         </h3>
-        <p class="text-muted-foreground mb-4">
+        <p class="mt-2 text-sm text-muted-foreground">
           {{ t('dashboard.delete_confirm') }}
         </p>
-        <div class="flex justify-end gap-2">
+        <div class="mt-6 flex justify-end gap-2">
           <button
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+            class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+            type="button"
             @click="cancelDelete"
           >
-            {{ t('dashboard.cancel') || 'Cancel' }}
+            {{ t('dashboard.cancel') || '取消' }}
           </button>
           <button
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-destructive text-destructive-foreground hover:bg-destructive/90 h-10 px-4 py-2"
+            class="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
+            type="button"
             @click="confirmDelete"
           >
             {{ t('dashboard.delete') }}
@@ -141,61 +176,136 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-else class="rounded-md border bg-card">
-      <div class="relative w-full overflow-auto">
-        <table class="w-full caption-bottom text-sm">
-          <thead class="[&_tr]:border-b">
-            <tr class="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                {{ t('dashboard.title') }}
-              </th>
-              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                {{ t('dashboard.slug') }}
-              </th>
-              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                {{ t('dashboard.status') }}
-              </th>
-              <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                {{ t('dashboard.date') }}
-              </th>
-              <th class="h-12 px-4 text-right align-middle font-medium text-muted-foreground">
-                {{ t('dashboard.actions') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody class="[&_tr:last-child]:border-0">
-            <tr v-for="post in posts" :key="post.id" class="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-              <td class="p-4 align-middle font-medium">
-                {{ post.title }}
-              </td>
-              <td class="p-4 align-middle text-muted-foreground">
-                {{ post.slug }}
-              </td>
-              <td class="p-4 align-middle">
-                <span
-                  class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  :class="post.published ? 'border-transparent bg-primary text-primary-foreground hover:bg-primary/80' : 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80'"
-                >
-                  {{ post.published ? t('dashboard.published') : t('dashboard.draft') }}
-                </span>
-              </td>
-              <td class="p-4 align-middle text-muted-foreground">
-                {{ formatDate(post.createdAt) }}
-              </td>
-              <td class="p-4 align-middle text-right">
-                <div class="flex justify-end gap-2">
-                  <button class="text-sm font-medium hover:underline" @click="editPost(post.id)">
-                    {{ t('dashboard.edit') }}
-                  </button>
-                  <button class="text-sm font-medium text-destructive hover:underline" @click="requestDelete(post.id)">
-                    {{ t('dashboard.delete') }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <DataTable
+      :data="posts"
+      :columns="tableColumns"
+      :loading="loading"
+      min-width="820px"
+      :empty-message="t('dashboard.no_data')"
+      @row-click="openPostDetails"
+    >
+      <template #cell-title="{ item }">
+        <div class="min-w-0">
+          <div class="truncate font-medium text-foreground">
+            {{ item.title }}
+          </div>
+          <div v-if="item.author?.name" class="mt-0.5 text-xs text-muted-foreground">
+            {{ item.author.name }}
+          </div>
+        </div>
+      </template>
+      <template #cell-slug="{ item }">
+        <span class="font-mono text-xs text-muted-foreground">{{ item.slug }}</span>
+      </template>
+      <template #cell-published="{ item }">
+        <span
+          class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium"
+          :class="item.published ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'"
+        >
+          {{ item.published ? t('dashboard.published') : t('dashboard.draft') }}
+        </span>
+      </template>
+      <template #cell-createdAt="{ item }">
+        <span class="text-sm text-muted-foreground">{{ formatDate(item.createdAt) }}</span>
+      </template>
+      <template #cell-actions="{ item }">
+        <div class="flex justify-end gap-1.5" @click.stop>
+          <button class="inline-flex h-8 items-center rounded-md border border-border px-2.5 text-xs font-medium transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary" type="button" @click="editPost(item.id)">
+            {{ t('dashboard.edit') }}
+          </button>
+          <button class="inline-flex h-8 items-center rounded-md border border-destructive/25 px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10" type="button" @click="requestDelete(item.id)">
+            {{ t('dashboard.delete') }}
+          </button>
+        </div>
+      </template>
+    </DataTable>
+
+    <Pagination
+      v-if="total > 0"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total="total"
+      :page-size="pageSize"
+      :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next, jumper"
+      @update:current-page="goToPage"
+      @update:page-size="updatePageSize"
+    />
+
+    <DetailDrawer
+      :open="postDrawerOpen && !!selectedPost"
+      :title="selectedPost?.title || '文章详情'"
+      :description="selectedPost?.slug || ''"
+      width="md"
+      @update:open="$event ? undefined : closePostDetails()"
+    >
+      <div v-if="selectedPost" class="space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4">
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              文章状态
+            </p>
+            <span
+              class="mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium"
+              :class="selectedPost.published ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'"
+            >
+              {{ selectedPost.published ? t('dashboard.published') : t('dashboard.draft') }}
+            </span>
+          </div>
+          <div class="text-right text-sm text-muted-foreground">
+            <p>作者</p>
+            <p class="mt-1 font-medium text-foreground">
+              {{ selectedPost.author?.name || '未填写' }}
+            </p>
+          </div>
+        </div>
+
+        <dl class="divide-y divide-border rounded-xl border border-border">
+          <div class="flex items-start justify-between gap-4 px-4 py-3">
+            <dt class="text-sm text-muted-foreground">
+              Slug
+            </dt>
+            <dd class="break-all text-right font-mono text-xs">
+              {{ selectedPost.slug }}
+            </dd>
+          </div>
+          <div class="flex items-center justify-between gap-4 px-4 py-3">
+            <dt class="text-sm text-muted-foreground">
+              创建时间
+            </dt>
+            <dd class="text-sm">
+              {{ formatDate(selectedPost.createdAt) }}
+            </dd>
+          </div>
+          <div class="flex items-center justify-between gap-4 px-4 py-3">
+            <dt class="text-sm text-muted-foreground">
+              更新时间
+            </dt>
+            <dd class="text-sm">
+              {{ formatDate(selectedPost.updatedAt) }}
+            </dd>
+          </div>
+        </dl>
       </div>
-    </div>
+
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <button
+            class="inline-flex h-9 items-center justify-center rounded-md border border-destructive/25 px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+            type="button"
+            @click.stop="requestDelete(selectedPost!.id)"
+          >
+            {{ t('dashboard.delete') }}
+          </button>
+          <button
+            class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            type="button"
+            @click.stop="editPost(selectedPost!.id)"
+          >
+            {{ t('dashboard.edit') }}
+          </button>
+        </div>
+      </template>
+    </DetailDrawer>
   </div>
 </template>

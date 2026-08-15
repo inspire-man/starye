@@ -10,6 +10,7 @@ import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getActorBySlug } from '../../../actors/services/actor.service'
+import { getPublisherBySlug } from '../../../publishers/services/publisher.service'
 
 import { syncMovieData } from '../../services/sync.service'
 
@@ -88,6 +89,45 @@ CREATE TABLE IF NOT EXISTS movie_actor (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_movie_actor ON movie_actor(movie_id, actor_id);
 CREATE INDEX IF NOT EXISTS idx_movie_actor_actor_id ON movie_actor(actor_id);
 
+CREATE TABLE IF NOT EXISTS publisher (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  logo TEXT,
+  website TEXT,
+  description TEXT,
+  founded_year INTEGER,
+  country TEXT,
+  twitter TEXT,
+  instagram TEXT,
+  wiki_url TEXT,
+  parent_publisher TEXT,
+  brand_series TEXT,
+  movie_count INTEGER NOT NULL DEFAULT 0,
+  is_r18 INTEGER NOT NULL DEFAULT 1,
+  source TEXT NOT NULL DEFAULT 'javbus',
+  source_id TEXT NOT NULL DEFAULT '',
+  source_url TEXT,
+  has_details_crawled INTEGER DEFAULT 0,
+  crawl_failure_count INTEGER DEFAULT 0,
+  last_crawl_attempt INTEGER,
+  created_at INTEGER DEFAULT (strftime('%s', 'now')),
+  updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_publisher_slug ON publisher(slug);
+
+CREATE TABLE IF NOT EXISTS movie_publisher (
+  id TEXT PRIMARY KEY,
+  movie_id TEXT NOT NULL REFERENCES movie(id) ON DELETE CASCADE,
+  publisher_id TEXT NOT NULL REFERENCES publisher(id) ON DELETE CASCADE,
+  sort_order INTEGER DEFAULT 0,
+  created_at INTEGER DEFAULT (strftime('%s', 'now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_movie_pub ON movie_publisher(movie_id, publisher_id);
+CREATE INDEX IF NOT EXISTS idx_movie_pub_publisher_id ON movie_publisher(publisher_id);
+
 CREATE TABLE IF NOT EXISTS player (
   id TEXT PRIMARY KEY,
   movie_id TEXT NOT NULL REFERENCES movie(id) ON DELETE CASCADE,
@@ -154,6 +194,7 @@ describe('syncMovieData + getActorBySlug 端到端集成', () => {
         where: (m: any, { eq }: any) => eq(m.code, 'SDAB-333'),
       })
       expect(movie).toBeDefined()
+      expect(movie!.actors).toEqual(['雄川ひより'])
 
       const link = await db.query.movieActors.findFirst({
         where: (ma: any, { and, eq }: any) => and(
@@ -310,6 +351,59 @@ describe('syncMovieData + getActorBySlug 端到端集成', () => {
 
       expect(result!.relatedMovies).toHaveLength(1)
       expect(result!.relatedMovies[0].code).toBe('R18-MOVIE')
+    })
+  })
+
+  describe('场景 6：厂商关联同步与幂等', () => {
+    const publisherName = '测试厂商 / STUDIO'
+    const movieCode = 'PUB-REL-001'
+
+    beforeAll(async () => {
+      await syncMovieData({
+        db: db as any,
+        movies: [{ code: movieCode, title: '厂商关联测试影片', publisher: publisherName, isR18: true }],
+      })
+      await syncMovieData({
+        db: db as any,
+        movies: [{ code: movieCode, title: '厂商关联测试影片', publisher: publisherName, isR18: true }],
+      })
+    })
+
+    it('同步后厂商应存在且 movieCount 正确', async () => {
+      const publisher = await db.query.publishers.findFirst({
+        where: (p: any, { eq }: any) => eq(p.slug, publisherName),
+      })
+
+      expect(publisher).toBeDefined()
+      expect(publisher!.name).toBe(publisherName)
+      expect(publisher!.slug).toBe(publisherName)
+      expect(publisher!.movieCount).toBe(1)
+    })
+
+    it('movie_publisher 关联只保留一条且能反查影片', async () => {
+      const publisher = await db.query.publishers.findFirst({
+        where: (p: any, { eq }: any) => eq(p.slug, publisherName),
+      })
+      const movie = await db.query.movies.findFirst({
+        where: (m: any, { eq }: any) => eq(m.code, movieCode),
+      })
+
+      const links = await db.query.moviePublishers.findMany({
+        where: (mp: any, { and, eq }: any) => and(
+          eq(mp.movieId, movie!.id),
+          eq(mp.publisherId, publisher!.id),
+        ),
+      })
+      expect(links).toHaveLength(1)
+
+      const result = await getPublisherBySlug({
+        db: db as any,
+        slug: publisherName,
+        isR18Verified: true,
+      })
+      expect(result).not.toBeNull()
+      expect(result!.relatedMovies).toHaveLength(1)
+      expect(result!.relatedMovies[0].code).toBe(movieCode)
     })
   })
 })

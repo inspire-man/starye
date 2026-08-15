@@ -87,6 +87,7 @@ export default {
   dismiss: '忽略',
   edit_post: '编辑文章',
   create_post: '创建文章',
+  no_data: '暂无文章',
   excerpt: '摘要',
   content_markdown: '内容 (Markdown)',
   back: '返回',

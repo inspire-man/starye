@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '@/lib/api'
-import { ConfirmDialog, DataTable, FilterPanel, Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
+import { ConfirmDialog, DataTable, DetailDrawer, FilterPanel, Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -723,14 +723,15 @@ async function executeBatchOperation() {
       @update:page-size="updatePageSize"
     />
 
-    <!-- Edit Modal -->
-    <div
-      v-if="isEditModalOpen && editingComic"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    <!-- Detail drawer -->
+    <DetailDrawer
+      :open="isEditModalOpen && !!editingComic"
+      :title="editingComic?.title ?? '编辑漫画'"
+      :description="editingComic?.slug ?? ''"
+      width="lg"
+      @update:open="isEditModalOpen = $event"
     >
-      <div
-        class="w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl overflow-hidden border border-neutral-200 dark:border-neutral-800 animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]"
-      >
+      <div v-if="editingComic" class="drawer-content flex min-h-full flex-col">
         <!-- Header -->
         <div class="p-6 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-4">
@@ -1004,7 +1005,7 @@ async function executeBatchOperation() {
           </button>
         </div>
       </div>
-    </div>
+    </DetailDrawer>
 
     <!-- 漫画批量操作确认对话框 -->
     <ConfirmDialog

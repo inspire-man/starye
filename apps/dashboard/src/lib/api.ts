@@ -722,7 +722,10 @@ export const api = {
       return apiFetch<Paginated<Comic>>(`/admin/comics${query ? `?${query}` : ''}`)
     },
 
-    getUsers: () => apiFetch<any[]>('/admin/users'),
+    getUsers: (params?: Record<string, any>) => {
+      const query = new URLSearchParams(params).toString()
+      return apiFetch<any>(`/admin/users${query ? `?${query}` : ''}`)
+    },
 
     updateUserRole: (email: string, role: string) =>
       apiFetch(`/admin/users/${email}/role`, {

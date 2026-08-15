@@ -1,1 +1,250 @@
 @import "@starye/ui/globals.css";
+
+/*
+ * Dashboard visual system
+ *
+ * Keep the admin console's palette local to this shell so shared UI packages
+ * retain their defaults while every dashboard list uses the same surfaces,
+ * spacing rhythm, borders, and focus treatment.
+ */
+.dashboard-shell {
+  --background: 220 24% 97%;
+  --foreground: 222 35% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 35% 16%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 35% 16%;
+  --primary: 239 68% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 238 28% 95%;
+  --secondary-foreground: 239 32% 30%;
+  --muted: 220 20% 94%;
+  --muted-foreground: 220 12% 45%;
+  --accent: 239 88% 96%;
+  --accent-foreground: 239 48% 34%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 16% 88%;
+  --input: 220 16% 85%;
+  --ring: 239 68% 58%;
+  --radius: 0.75rem;
+  color: hsl(var(--foreground));
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.dashboard-shell,
+.dashboard-shell .bg-background {
+  background-color: hsl(var(--background));
+}
+
+.dashboard-shell .bg-card,
+.dashboard-shell .bg-white {
+  background-color: hsl(var(--card));
+}
+
+.dashboard-shell .bg-muted\/40,
+.dashboard-shell .bg-neutral-50,
+.dashboard-shell .bg-neutral-100 {
+  background-color: hsl(var(--muted) / 0.62);
+}
+
+.dashboard-shell .bg-neutral-200 {
+  background-color: hsl(var(--muted));
+}
+
+.dashboard-shell .text-neutral-900,
+.dashboard-shell .text-slate-900 {
+  color: hsl(var(--foreground));
+}
+
+.dashboard-shell .text-neutral-500,
+.dashboard-shell .text-neutral-400,
+.dashboard-shell .text-slate-500 {
+  color: hsl(var(--muted-foreground));
+}
+
+.dashboard-shell .border-neutral-100,
+.dashboard-shell .border-neutral-200,
+.dashboard-shell .border-neutral-700,
+.dashboard-shell .border-neutral-800 {
+  border-color: hsl(var(--border));
+}
+
+.dashboard-shell .dashboard-sidebar {
+  z-index: 30;
+  border-color: hsl(var(--border));
+  background: hsl(var(--card) / 0.96);
+  box-shadow: 10px 0 28px hsl(var(--foreground) / 0.04);
+  backdrop-filter: blur(16px);
+}
+
+.dashboard-sidebar-header {
+  min-height: 4rem;
+  border-color: hsl(var(--border));
+  background: hsl(var(--card) / 0.82);
+}
+
+.dashboard-sidebar-header > span {
+  color: hsl(var(--foreground));
+  letter-spacing: -0.02em;
+}
+
+.dashboard-sidebar-toggle,
+.dashboard-mobile-menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+  transition: color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.dashboard-sidebar-toggle:hover,
+.dashboard-mobile-menu:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+}
+
+.dashboard-sidebar-nav {
+  padding: 1rem 0.75rem;
+}
+
+.dashboard-menu-group,
+.dashboard-menu-link,
+.dashboard-sidebar-action {
+  min-height: 2.625rem;
+  border: 1px solid transparent;
+  color: hsl(var(--muted-foreground));
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.dashboard-menu-group {
+  color: hsl(var(--foreground) / 0.78);
+}
+
+.dashboard-menu-group:hover,
+.dashboard-menu-link:hover,
+.dashboard-sidebar-action:hover {
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted) / 0.72);
+  color: hsl(var(--foreground));
+}
+
+.dashboard-menu-link.text-primary,
+.dashboard-menu-link[aria-current="page"] {
+  border-color: hsl(var(--primary) / 0.16);
+  background: hsl(var(--accent));
+  color: hsl(var(--primary));
+  box-shadow: inset 3px 0 0 hsl(var(--primary));
+}
+
+.dashboard-submenu {
+  margin: 0.125rem 0 0.375rem 0.75rem;
+  border-left: 1px solid hsl(var(--border));
+  padding-left: 0.625rem;
+}
+
+.dashboard-sidebar-footer {
+  border-color: hsl(var(--border));
+  background: hsl(var(--card) / 0.68);
+  padding: 0.75rem;
+}
+
+.dashboard-sidebar-action-danger {
+  color: hsl(var(--destructive));
+}
+
+.dashboard-sidebar-action-danger:hover {
+  border-color: hsl(var(--destructive) / 0.16);
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--destructive));
+}
+
+.dashboard-main {
+  min-width: 0;
+  background: hsl(var(--background) / 0.78);
+}
+
+.dashboard-content-header {
+  min-height: 3.5rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.86);
+  padding-bottom: 1rem;
+}
+
+.dashboard-content-title {
+  color: hsl(var(--foreground));
+  letter-spacing: -0.025em;
+}
+
+.dashboard-user {
+  min-height: 2.625rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 9999px;
+  background: hsl(var(--card) / 0.82);
+  padding: 0.25rem 0.375rem 0.25rem 0.75rem;
+  box-shadow: 0 4px 14px hsl(var(--foreground) / 0.04);
+}
+
+.dashboard-user-welcome {
+  color: hsl(var(--muted-foreground));
+}
+
+.dashboard-user-avatar {
+  border-color: hsl(var(--border));
+  box-shadow: 0 0 0 2px hsl(var(--card));
+}
+
+.dashboard-mobile-backdrop {
+  z-index: 40;
+  background: hsl(var(--foreground) / 0.36);
+  backdrop-filter: blur(3px);
+}
+
+.dashboard-shell input:not([type="checkbox"]):not([type="radio"]),
+.dashboard-shell select,
+.dashboard-shell textarea {
+  border-color: hsl(var(--input));
+  background-color: hsl(var(--card) / 0.86);
+  color: hsl(var(--foreground));
+}
+
+.dashboard-shell input:not([type="checkbox"]):not([type="radio"]):focus,
+.dashboard-shell select:focus,
+.dashboard-shell textarea:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.14);
+  outline: none;
+}
+
+.dashboard-shell table thead {
+  background: hsl(var(--muted) / 0.62);
+}
+
+.dashboard-shell table tbody tr:hover {
+  background: hsl(var(--accent) / 0.52);
+}
+
+.dashboard-shell .filter-panel {
+  border-color: hsl(var(--border));
+  background: hsl(var(--card));
+  box-shadow: 0 10px 28px hsl(var(--foreground) / 0.045);
+}
+
+@media (max-width: 768px) {
+  .dashboard-shell .dashboard-sidebar {
+    z-index: 50;
+  }
+
+  .dashboard-main {
+    padding: 1rem;
+  }
+
+  .dashboard-content-header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.875rem;
+  }
+
+  .dashboard-user {
+    padding-left: 0.375rem;
+  }
+}

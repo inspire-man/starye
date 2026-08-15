@@ -25,9 +25,12 @@ export function useFilters<T extends Record<string, any>>(initialFilters: T) {
       }
     })
 
+    const nextQuery = { ...route.query } as Record<string, any>
+    Object.keys(initialFilters).forEach(key => delete nextQuery[key])
+
     router.push({
       query: {
-        ...route.query,
+        ...nextQuery,
         ...cleanFilters,
         page: '1',
       },

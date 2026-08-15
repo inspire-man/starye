@@ -197,6 +197,13 @@
       "when": 1786376168483,
       "tag": "20260810153608_crawler_task_availability",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1786694236131,
+      "tag": "0028_relation_integrity",
+      "breakpoints": true
     }
   ]
 }

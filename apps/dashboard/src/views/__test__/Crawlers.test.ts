@@ -43,6 +43,26 @@ describe('crawlers local task panel', () => {
     return wrapper
   }
 
+  const openTaskDetails = async (wrapper: any, taskId?: string) => {
+    const rows = wrapper.findAll('tbody tr')
+    const row = taskId
+      ? rows.find((candidate: any) => candidate.text().includes(taskId))
+      : rows[0]
+    expect(row).toBeDefined()
+    await row.trigger('click')
+    await flushPromises()
+  }
+
+  const bodyText = () => document.body.textContent ?? ''
+  const bodyQuery = <T extends Element = Element>(selector: string) => document.body.querySelector<T>(selector)
+  const bodyQueryAll = (selector: string) => Array.from(document.body.querySelectorAll(selector))
+  const clickBody = async (selector: string) => {
+    const element = bodyQuery<HTMLElement>(selector)
+    expect(element).not.toBeNull()
+    element!.click()
+    await flushPromises()
+  }
+
   beforeEach(() => {
     vi.useFakeTimers()
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
@@ -66,6 +86,7 @@ describe('crawlers local task panel', () => {
     const wrapper = mountCrawler()
     await flushPromises()
     expect(wrapper.text()).toContain('创建视频任务')
+    await wrapper.get('button.task-tab:not(.task-tab-active)').trigger('click')
     expect(wrapper.text()).toContain('创建漫画任务')
     expect(wrapper.find('input[type="url"]').exists()).toBe(false)
     expect(wrapper.find('textarea').exists()).toBe(false)
@@ -134,14 +155,14 @@ describe('crawlers local task panel', () => {
     api.admin.getCrawlerTask.mockResolvedValue({ task, runs: [{ id: 'run-1', status: 'running', attemptNumber: 1, receipt: null }] })
     const wrapper = mountCrawler()
     await flushPromises()
-    await wrapper.get('button.task-danger').trigger('click')
+    await wrapper.get('button[title="取消任务"]').trigger('click')
     await (wrapper.vm as any).confirmCancel()
     expect(api.admin.cancelCrawlerRun).toHaveBeenCalledWith('task-1', 'run-1')
 
     api.admin.getCrawlerTask.mockResolvedValue({ task, runs: [{ id: 'run-1', status: 'cancelled', attemptNumber: 1, receipt: null }] })
     await (wrapper.vm as any).loadTaskPanel()
     await flushPromises()
-    await wrapper.get('button.task-secondary').trigger('click')
+    await wrapper.get('button[title="重试任务"]').trigger('click')
     await (wrapper.vm as any).confirmRetry()
     expect(api.admin.retryCrawlerRun).toHaveBeenCalledWith('task-1', 'run-1')
   })
@@ -199,24 +220,25 @@ describe('crawlers local task panel', () => {
     })
     const wrapper = mountCrawler()
     await flushPromises()
+    await openTaskDetails(wrapper)
 
-    expect(wrapper.find('[data-section="task-lifecycle"]').exists()).toBe(true)
-    expect(wrapper.find('[data-evidence-section="availability"]').exists()).toBe(true)
-    expect(wrapper.find('[data-availability-current]').text()).toContain('available')
-    expect(wrapper.find('[data-availability-history]').text()).toContain('duplicate')
-    expect(wrapper.findAll('[data-video-layer]').map(row => row.attributes('data-video-layer'))).toEqual(['metadata', 'direct', 'magnet', 'playback'])
-    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('available：1')
-    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('abnormal：2')
-    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('direct_transport_failed')
-    expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('重新检查')
-    expect(wrapper.get('[data-video-layer="direct"] [data-video-history]').text()).toContain('revision 2')
-    expect(wrapper.get('[data-video-layer="magnet"]').text()).toContain('配置 provider')
-    expect(wrapper.get('[data-video-layer="playback"]').text()).toContain('playback_unverified')
-    expect(wrapper.get('[data-video-layer="playback"]').text()).toContain('重新检查')
-    expect(wrapper.find('[data-evidence-section="audit"]').text()).toContain('metadata_update')
-    expect(wrapper.find('[data-section="task-lifecycle"]').text()).toContain('active')
-    expect(wrapper.text()).not.toContain('signed_url')
-    expect(wrapper.text()).not.toContain('rawresponse')
+    expect(bodyQuery('[data-section="task-lifecycle"]')).not.toBeNull()
+    expect(bodyQuery('[data-evidence-section="availability"]')).not.toBeNull()
+    expect(bodyQuery('[data-availability-current]')?.textContent).toContain('available')
+    expect(bodyQuery('[data-availability-history]')?.textContent).toContain('duplicate')
+    expect(bodyQueryAll('[data-video-layer]').map(row => row.getAttribute('data-video-layer'))).toEqual(['metadata', 'direct', 'magnet', 'playback'])
+    expect(bodyQuery('[data-video-layer="direct"]')?.textContent).toContain('available：1')
+    expect(bodyQuery('[data-video-layer="direct"]')?.textContent).toContain('abnormal：2')
+    expect(bodyQuery('[data-video-layer="direct"]')?.textContent).toContain('direct_transport_failed')
+    expect(bodyQuery('[data-video-layer="direct"]')?.textContent).toContain('重新检查')
+    expect(bodyQuery('[data-video-layer="direct"] [data-video-history]')?.textContent).toContain('revision 2')
+    expect(bodyQuery('[data-video-layer="magnet"]')?.textContent).toContain('配置 provider')
+    expect(bodyQuery('[data-video-layer="playback"]')?.textContent).toContain('playback_unverified')
+    expect(bodyQuery('[data-video-layer="playback"]')?.textContent).toContain('重新检查')
+    expect(bodyQuery('[data-evidence-section="audit"]')?.textContent).toContain('metadata_update')
+    expect(bodyQuery('[data-section="task-lifecycle"]')?.textContent).toContain('active')
+    expect(bodyText()).not.toContain('signed_url')
+    expect(bodyText()).not.toContain('rawresponse')
   })
 
   it('posts allowlisted metadata and lifecycle actions, then reloads authoritative detail', async () => {
@@ -246,6 +268,28 @@ describe('crawlers local task panel', () => {
     expect(api.admin.getCrawlerTask).toHaveBeenCalled()
   })
 
+  it('shows an archive icon for terminal tasks and archives from the table action column', async () => {
+    const task = { id: 'terminal-task', latestRunId: 'terminal-run', templateKey: 'movie', lifecycle: { changedAt: 100, status: 'active', version: 0 } }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{ id: 'terminal-run', status: 'succeeded', attemptNumber: 1, receipt: null }],
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+
+    const archiveButton = wrapper.get('button[title="删除任务（归档）"]')
+    expect(archiveButton.find('svg').exists()).toBe(true)
+    await archiveButton.trigger('click')
+    await (wrapper.vm as any).confirmArchive()
+
+    expect(api.admin.archiveCrawlerTask).toHaveBeenCalledWith('terminal-task')
+  })
+
   it('keeps the video availability command on the typed admin boundary', async () => {
     const command = { idempotencyKey: 'video:movie-1:7:stale', movieId: 'movie-1', movieRevision: 3, policyVersion: 'video-source-probe/v1', reason: 'stale' as const, sourceRevision: 7 }
     api.admin.submitVideoAvailabilityCommand.mockResolvedValue({ kind: 'duplicate', run: { id: 'run-1' } })
@@ -272,12 +316,13 @@ describe('crawlers local task panel', () => {
       .mockResolvedValueOnce({ logs: [{ sequence: 2, level: 'info', code: 'started', safe_message: '开始', created_at: '2026-07-31T00:00:00Z' }], nextCursor: null })
     const wrapper = mountCrawler()
     await flushPromises()
-    expect(wrapper.text()).toContain('管理电影内容')
-    expect(wrapper.get('a').attributes('href')).toBe('/dashboard/movies?receipt=movie-1&sourceAttempt=1&sourceRun=run-1&sourceTask=task-1')
-    await wrapper.get('button.load-more').trigger('click')
+    await openTaskDetails(wrapper)
+    expect(bodyText()).toContain('管理电影内容')
+    expect(bodyQuery<HTMLAnchorElement>('a')?.getAttribute('href')).toBe('/dashboard/movies?receipt=movie-1&sourceAttempt=1&sourceRun=run-1&sourceTask=task-1')
+    bodyQuery<HTMLButtonElement>('button.load-more')?.click()
     await flushPromises()
-    expect(wrapper.text()).toContain('完成')
-    expect(wrapper.text()).toContain('开始')
+    expect(bodyText()).toContain('完成')
+    expect(bodyText()).toContain('开始')
   })
 
   it('renders complete template history, stable task cursor, attempts and safe provider summary', async () => {
@@ -301,10 +346,11 @@ describe('crawlers local task panel', () => {
       : { task: secondTask, runs: [{ id: 'run-3', status: 'cancelled', attemptNumber: 1, receipt: null }] }))
     const wrapper = mountCrawler()
     await flushPromises()
-    expect(wrapper.text()).toContain('任务历史')
-    expect(wrapper.text()).toContain('Provider 摘要')
-    expect(wrapper.text()).toContain('全部 attempt')
-    await wrapper.get('button.load-more').trigger('click')
+    await openTaskDetails(wrapper)
+    expect(bodyText()).toContain('旧 attempt 历史')
+    expect(bodyText()).toContain('Provider 摘要')
+    expect(bodyText()).toContain('全部 attempt')
+    await wrapper.get('button[aria-label="下一页"]').trigger('click')
     await flushPromises()
     expect(api.admin.listCrawlerTasks).toHaveBeenCalledWith({ template: 'movie', cursor: 'cursor-1', limit: 20 })
     expect(wrapper.text()).toContain('task-2')
@@ -347,7 +393,8 @@ describe('crawlers local task panel', () => {
 
     const wrapper = mountCrawler()
     await flushPromises()
-    const rendered = wrapper.text()
+    await openTaskDetails(wrapper)
+    const rendered = bodyText()
 
     expect(rendered).toContain('内容身份')
     expect(rendered).toContain('movie-sun-064')
@@ -402,12 +449,13 @@ describe('crawlers local task panel', () => {
 
     const wrapper = mountCrawler()
     await flushPromises()
+    await openTaskDetails(wrapper)
 
-    expect(wrapper.text()).toContain(label)
-    expect(wrapper.text()).toContain(action)
-    expect(wrapper.text()).toContain('受控原因')
+    expect(bodyText()).toContain(label)
+    expect(bodyText()).toContain(action)
+    expect(bodyText()).toContain('受控原因')
     if (disposition === 'repairing')
-      expect(wrapper.text()).not.toContain('查看修复意图')
+      expect(bodyText()).not.toContain('查看修复意图')
   })
 
   it('requires confirmation before posting the fixed repair command and refreshes the task readback', async () => {
@@ -491,10 +539,11 @@ describe('crawlers local task panel', () => {
 
     const wrapper = mountCrawler()
     await flushPromises()
-    await wrapper.get('[data-repair-action="open"]').trigger('click')
+    await openTaskDetails(wrapper)
+    await clickBody('[data-repair-action="open"]')
 
     expect(api.admin.repairPlayers).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('movie-sun-064')
+    expect(bodyText()).toContain('movie-sun-064')
     expect(document.body.textContent).toContain('恢复可播放源')
 
     await (wrapper.vm as any).confirmRepair()
@@ -509,7 +558,7 @@ describe('crawlers local task panel', () => {
     expect(api.admin.listCrawlerTasks).toHaveBeenCalled()
     expect((wrapper.vm as any).selectedRun.task.id).toBe('repair-task-1')
     expect((wrapper.vm as any).selectedRun.run.id).toBe('repair-run-1')
-    expect(wrapper.text()).toContain('修复原因：no_source')
+    expect(bodyText()).toContain('修复原因：no_source')
   })
 
   it.each([
@@ -537,12 +586,13 @@ describe('crawlers local task panel', () => {
 
     const wrapper = mountCrawler()
     await flushPromises()
+    await openTaskDetails(wrapper)
 
-    expect(wrapper.get('a').attributes('href')).toBe('/movie/SUN-064')
-    expect(wrapper.text()).toContain('打开影片')
-    expect(wrapper.text()).toContain(`终态原因：${failureCode}`)
-    expect(wrapper.text()).toContain('source revision：9')
-    expect(wrapper.text()).toContain('允许创建新的修复任务')
+    expect(bodyQuery<HTMLAnchorElement>('a')?.getAttribute('href')).toBe('/movie/SUN-064')
+    expect(bodyText()).toContain('打开影片')
+    expect(bodyText()).toContain(`终态原因：${failureCode}`)
+    expect(bodyText()).toContain('source revision：9')
+    expect(bodyText()).toContain('允许创建新的修复任务')
   })
 
   it('renders bounded source health rows and excludes raw runner fields and inactive actions', async () => {
@@ -585,21 +635,22 @@ describe('crawlers local task panel', () => {
 
     const wrapper = mountCrawler()
     await flushPromises()
+    await openTaskDetails(wrapper)
 
-    expect(wrapper.findAll('[data-source-row]')).toHaveLength(3)
-    expect(wrapper.text()).toContain('direct')
-    expect(wrapper.text()).toContain('magnet')
-    expect(wrapper.text()).toContain('TorrServer')
-    expect(wrapper.text()).toContain('unverified')
-    expect(wrapper.text()).toContain('failed')
-    expect(wrapper.text()).toContain('inactive')
-    expect(wrapper.text()).toContain('200')
-    expect(wrapper.text()).toContain('source_read_failed')
-    expect(wrapper.text()).toContain('下一步：暂无下一步')
-    expect(wrapper.get('a').attributes('href')).toBe('/movie/SUN-064')
-    expect(wrapper.find('[data-source-row="TorrServer"] [data-source-action]').exists()).toBe(false)
-    expect(wrapper.html()).not.toContain('RAW_RUNNER_SENTINEL')
-    expect(wrapper.html()).not.toContain('RAW_SOURCE_SENTINEL')
+    expect(bodyQueryAll('[data-source-row]')).toHaveLength(3)
+    expect(bodyText()).toContain('direct')
+    expect(bodyText()).toContain('magnet')
+    expect(bodyText()).toContain('TorrServer')
+    expect(bodyText()).toContain('unverified')
+    expect(bodyText()).toContain('failed')
+    expect(bodyText()).toContain('inactive')
+    expect(bodyText()).toContain('200')
+    expect(bodyText()).toContain('source_read_failed')
+    expect(bodyText()).toContain('下一步：暂无下一步')
+    expect(bodyQuery<HTMLAnchorElement>('a')?.getAttribute('href')).toBe('/movie/SUN-064')
+    expect(bodyQuery('[data-source-row="TorrServer"] [data-source-action]')).toBeNull()
+    expect(document.body.innerHTML).not.toContain('RAW_RUNNER_SENTINEL')
+    expect(document.body.innerHTML).not.toContain('RAW_SOURCE_SENTINEL')
   })
 
   it('pins the current attempt, keeps older attempts collapsed, and separates provider, repair, receipt, source, and playback facts', async () => {
@@ -673,21 +724,22 @@ describe('crawlers local task panel', () => {
 
     const wrapper = mountCrawler()
     await flushPromises()
-    expect(wrapper.text()).toContain('Repair Movie')
-    expect(wrapper.text()).toContain('当前电影已有活动修复任务')
-    expect(wrapper.text()).toContain('Provider 运行中')
-    expect(wrapper.text()).toContain('修复待校验')
-    expect(wrapper.text()).toContain('receipt 待验证')
-    expect(wrapper.text()).toContain('repairing · 修复进行中')
-    expect(wrapper.text()).toContain('Authoritative source readback')
-    expect(wrapper.text()).toContain('等待浏览器证据')
-    expect(wrapper.text()).toContain('旧 attempt 历史（1）')
-    expect(wrapper.text()).not.toContain('stale_event')
+    await openTaskDetails(wrapper)
+    expect(bodyText()).toContain('Repair Movie')
+    expect(bodyText()).toContain('当前电影已有活动修复任务')
+    expect(bodyText()).toContain('Provider 运行中')
+    expect(bodyText()).toContain('修复待校验')
+    expect(bodyText()).toContain('receipt 待验证')
+    expect(bodyText()).toContain('repairing · 修复进行中')
+    expect(bodyText()).toContain('Authoritative source readback')
+    expect(bodyText()).toContain('等待浏览器证据')
+    expect(bodyText()).toContain('旧 attempt 历史（1）')
+    expect(bodyText()).not.toContain('stale_event')
 
-    await wrapper.get('.history-toggle').trigger('click')
-    expect(wrapper.text()).toContain('stale_event')
-    expect(wrapper.text()).toContain('Provider 已完成 · failure')
-    expect(wrapper.get('a.provider-run-link').attributes('href')).toBe('https://github.com/inspire-man/starye/actions/runs/123')
+    await clickBody('.history-toggle')
+    expect(bodyText()).toContain('stale_event')
+    expect(bodyText()).toContain('Provider 已完成 · failure')
+    expect(bodyQuery<HTMLAnchorElement>('a.provider-run-link')?.getAttribute('href')).toBe('https://github.com/inspire-man/starye/actions/runs/123')
   })
 
   it('promotes the server-selected current attempt and renders tuple-bound playback evidence independently', async () => {
@@ -774,32 +826,33 @@ describe('crawlers local task panel', () => {
 
     const wrapper = mountCrawler()
     await flushPromises()
+    await openTaskDetails(wrapper)
 
-    expect(wrapper.text()).toContain('run fresh-run-2')
-    expect(wrapper.text()).toContain('content ID：movie-fresh')
-    expect(wrapper.text()).toContain('target：selected-production')
-    expect(wrapper.find('[data-evidence-block="provider"]').exists()).toBe(true)
-    expect(wrapper.find('[data-evidence-block="repair-receipt"]').exists()).toBe(true)
-    expect(wrapper.find('[data-evidence-block="source"]').exists()).toBe(true)
-    expect(wrapper.find('[data-evidence-block="actual-playback"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('canplay：已观察 · 301')
-    expect(wrapper.text()).toContain('playing：已观察 · 302')
-    expect(wrapper.text()).toContain('waiting：未观察')
-    expect(wrapper.text()).toContain('currentTimeBefore：1')
-    expect(wrapper.text()).toContain('currentTimeAfter：2.5')
-    expect(wrapper.text()).toContain('delta：1.5')
-    expect(wrapper.text()).toContain('已写入脱敏 JSON/Markdown')
-    expect(wrapper.text()).toContain('duplicate · content ID：movie-fresh')
-    expect(wrapper.get('a.readiness-link').text()).toContain('打开影片')
-    expect(wrapper.get('a.readiness-link').attributes('href')).toBe('/movie/SUN-064')
-    expect(wrapper.text()).not.toContain('overall success')
-    expect(wrapper.html()).not.toContain('source.example/raw')
-    expect(wrapper.html()).not.toContain('TOKEN_SENTINEL')
-    expect(wrapper.html()).not.toContain('COOKIE_SENTINEL')
-    expect(wrapper.html()).not.toContain('RUNNER_SENTINEL')
+    expect(bodyText()).toContain('run fresh-run-2')
+    expect(bodyText()).toContain('content ID：movie-fresh')
+    expect(bodyText()).toContain('target：selected-production')
+    expect(bodyQuery('[data-evidence-block="provider"]')).not.toBeNull()
+    expect(bodyQuery('[data-evidence-block="repair-receipt"]')).not.toBeNull()
+    expect(bodyQuery('[data-evidence-block="source"]')).not.toBeNull()
+    expect(bodyQuery('[data-evidence-block="actual-playback"]')).not.toBeNull()
+    expect(bodyText()).toContain('canplay：已观察 · 301')
+    expect(bodyText()).toContain('playing：已观察 · 302')
+    expect(bodyText()).toContain('waiting：未观察')
+    expect(bodyText()).toContain('currentTimeBefore：1')
+    expect(bodyText()).toContain('currentTimeAfter：2.5')
+    expect(bodyText()).toContain('delta：1.5')
+    expect(bodyText()).toContain('已写入脱敏 JSON/Markdown')
+    expect(bodyText()).toContain('duplicate · content ID：movie-fresh')
+    expect(bodyQuery<HTMLAnchorElement>('a.readiness-link')?.textContent).toContain('打开影片')
+    expect(bodyQuery<HTMLAnchorElement>('a.readiness-link')?.getAttribute('href')).toBe('/movie/SUN-064')
+    expect(bodyText()).not.toContain('overall success')
+    expect(document.body.innerHTML).not.toContain('source.example/raw')
+    expect(document.body.innerHTML).not.toContain('TOKEN_SENTINEL')
+    expect(document.body.innerHTML).not.toContain('COOKIE_SENTINEL')
+    expect(document.body.innerHTML).not.toContain('RUNNER_SENTINEL')
 
-    await wrapper.get('.history-toggle').trigger('click')
-    expect(wrapper.text()).toContain('playback rejection：late')
+    await clickBody('.history-toggle')
+    expect(bodyText()).toContain('playback rejection：late')
   })
 
   it('keeps the last evidence projection while polling and promotes a new current attempt', async () => {
@@ -839,13 +892,14 @@ describe('crawlers local task panel', () => {
 
     const wrapper = mountCrawler()
     await flushPromises()
-    expect(wrapper.text()).toContain('run poll-run-1')
+    await openTaskDetails(wrapper)
+    expect(bodyText()).toContain('run poll-run-1')
     vi.advanceTimersByTime(5000)
     await flushPromises()
-    expect(wrapper.text()).toContain('run poll-run-2')
-    expect(wrapper.text()).toContain('旧 attempt 历史（1）')
-    expect(wrapper.text()).toContain('Actual playback')
-    expect(wrapper.text()).toContain('暂无来源观察')
+    expect(bodyText()).toContain('run poll-run-2')
+    expect(bodyText()).toContain('旧 attempt 历史（1）')
+    expect(bodyText()).toContain('Actual playback')
+    expect(bodyText()).toContain('暂无来源观察')
   })
 
   it('renders a pending identity when a task has no reported attempt', async () => {
@@ -861,10 +915,10 @@ describe('crawlers local task panel', () => {
     api.admin.getCrawlerTask.mockResolvedValue({ task, runs: [] })
     const wrapper = mountCrawler()
     await flushPromises()
-    await wrapper.get('.task-card').trigger('click')
-    expect(wrapper.text()).toContain('Pending Repair')
-    expect(wrapper.text()).toContain('等待 attempt 上报')
-    expect(wrapper.text()).toContain('等待 lease 对账')
+    await openTaskDetails(wrapper)
+    expect(bodyText()).toContain('Pending Repair')
+    expect(bodyText()).toContain('等待 attempt 上报')
+    expect(bodyText()).toContain('等待 lease 对账')
   })
 
   it('locks the ordinary movie repair CTA when a same-movie active repair task is present', async () => {
@@ -908,9 +962,10 @@ describe('crawlers local task panel', () => {
         }))
     const wrapper = mountCrawler()
     await flushPromises()
-    const repairButton = wrapper.find('[data-repair-action="open"]')
-    expect(repairButton.exists()).toBe(true)
-    expect(repairButton.attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('当前电影已有活动修复任务')
+    await openTaskDetails(wrapper, 'movie-task')
+    const repairButton = bodyQuery<HTMLButtonElement>('[data-repair-action="open"]')
+    expect(repairButton).not.toBeNull()
+    expect(repairButton?.disabled).toBe(true)
+    expect(bodyText()).toContain('当前电影已有活动修复任务')
   })
 })
