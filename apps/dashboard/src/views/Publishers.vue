@@ -303,6 +303,7 @@ onMounted(() => {
       v-if="loading && publishers.length === 0"
       :rows="20"
       :columns="7"
+      action-width="80px"
     />
 
     <DataTable

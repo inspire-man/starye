@@ -165,7 +165,7 @@ function isActionColumn(column: Column<T>): boolean {
             <td
               v-for="column in columns"
               :key="column.key"
-              :style="{ width: column.width, minWidth: column.minWidth }"
+              :style="{ width: column.width, minWidth: column.minWidth, maxWidth: isActionColumn(column) ? column.width : undefined }"
               class="data-table-cell data-table-body-cell"
               :class="isActionColumn(column) ? 'data-table-action-cell text-right' : ''"
             >
@@ -210,6 +210,7 @@ function isActionColumn(column: Column<T>): boolean {
   border-bottom: 1px solid hsl(var(--border));
   padding: var(--ui-table-cell-y, 0.75rem) var(--ui-table-cell-x, 1rem);
   min-width: 0;
+  overflow: hidden;
 }
 
 .data-table-cell-content {
@@ -222,16 +223,19 @@ function isActionColumn(column: Column<T>): boolean {
 
 .data-table-action-content {
   display: flex;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--ui-space-2, 0.5rem);
   overflow: hidden;
 }
 
 .data-table-action-content > :deep(*) {
   display: inline-flex;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   flex: 0 1 auto;
@@ -247,7 +251,9 @@ function isActionColumn(column: Column<T>): boolean {
 .data-table-action-content > :deep(a) {
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  text-overflow: ellipsis;
   white-space: normal;
 }
 
@@ -284,8 +290,11 @@ function isActionColumn(column: Column<T>): boolean {
   width: var(--data-table-action-width, 7rem);
   min-width: var(--data-table-action-min-width, 6rem);
   max-width: var(--data-table-action-width, 7rem);
+  overflow: hidden;
   white-space: nowrap;
   background: hsl(var(--card));
+  background-clip: padding-box;
+  isolation: isolate;
   box-shadow: -1px 0 0 hsl(var(--border)), -0.5rem 0 1rem -0.75rem hsl(var(--foreground) / 0.18);
 }
 

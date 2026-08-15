@@ -113,12 +113,15 @@ describe('skeletonTable.vue', () => {
           rows: 2,
           columns: 3,
           maxHeight: '28rem',
+          actionWidth: '100px',
         },
       })
 
       expect(wrapper.find('.data-table-skeleton-scroll').attributes('style')).toContain('max-height: 28rem')
       expect(wrapper.find('thead th.skeleton-table-action-cell').exists()).toBe(true)
       expect(wrapper.find('tbody td.skeleton-table-action-cell').exists()).toBe(true)
+      expect(wrapper.find('thead th.skeleton-table-action-cell').attributes('style')).toContain('width: 100px')
+      expect(wrapper.find('.skeleton-table-action-line').exists()).toBe(true)
     })
   })
 

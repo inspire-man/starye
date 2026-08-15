@@ -340,7 +340,7 @@ function isInlineField(field: FilterField): boolean {
 }
 
 .filter-panel-skeleton {
-  padding: 0.75rem 1rem;
+  padding: 0.875rem 1rem 1rem;
 }
 
 .filter-skeleton-grid {
@@ -486,7 +486,8 @@ function isInlineField(field: FilterField): boolean {
 .filter-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem 1.25rem;
+  column-gap: 1rem;
+  row-gap: 1.125rem;
 }
 
 .filter-field {
@@ -498,9 +499,9 @@ function isInlineField(field: FilterField): boolean {
 
 .filter-field-inline {
   display: grid;
-  grid-template-columns: minmax(5rem, 6.5rem) minmax(0, 1fr);
+  grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr);
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.625rem;
 }
 
 .filter-label {
@@ -516,9 +517,9 @@ function isInlineField(field: FilterField): boolean {
 
 .filter-input {
   min-height: var(--ui-control-height-md, 2.25rem);
-  border-radius: var(--ui-radius-sm, 0.375rem);
+  border-radius: var(--ui-radius-md, 0.375rem);
   border: 1px solid hsl(var(--border));
-  background-color: hsl(var(--background) / 0.8);
+  background-color: hsl(var(--card));
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   color: hsl(var(--foreground));
@@ -535,14 +536,20 @@ function isInlineField(field: FilterField): boolean {
 .filter-select-control .filter-input {
   appearance: none;
   border-color: hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.375rem);
   background: hsl(var(--muted) / 0.45);
   padding-right: 2.25rem;
   font-weight: 500;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
 }
 
 .filter-select-control .filter-input:hover {
   border-color: hsl(var(--primary) / 0.55);
   background: hsl(var(--muted) / 0.7);
+}
+
+.filter-select-control .filter-input:focus {
+  background: hsl(var(--card));
 }
 
 .filter-select-icon {
@@ -661,6 +668,7 @@ function isInlineField(field: FilterField): boolean {
 
 .filter-actions {
   display: flex;
+  min-height: var(--ui-control-height-md, 2.25rem);
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
@@ -718,7 +726,7 @@ function isInlineField(field: FilterField): boolean {
 
   .filter-body {
     display: block;
-    padding: 0.75rem 1rem;
+    padding: 0.875rem 1rem 1rem;
   }
 
   .filter-grid {
@@ -738,7 +746,7 @@ function isInlineField(field: FilterField): boolean {
   }
 
   .filter-field-inline {
-    grid-template-columns: minmax(5rem, 6.5rem) minmax(0, 1fr);
+    grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr);
   }
 }
 

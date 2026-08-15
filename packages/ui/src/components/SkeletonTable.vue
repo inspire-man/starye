@@ -8,6 +8,8 @@ interface Props {
   selectable?: boolean
   minWidth?: string
   maxHeight?: string
+  /** 操作列宽度，与 DataTable 的 actions 列保持一致 */
+  actionWidth?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -17,6 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   selectable: false,
   minWidth: '800px',
   maxHeight: 'min(62vh, 44rem)',
+  actionWidth: '7rem',
 })
 
 const columnWidths = computed(() => {
@@ -44,10 +47,11 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
               :key="idx"
               class="skeleton-table-cell skeleton-table-head-cell text-left"
               :class="idx === columnWidths.length - 1 ? 'skeleton-table-action-cell text-right' : ''"
+              :style="idx === columnWidths.length - 1 ? { width: actionWidth, minWidth: actionWidth, maxWidth: actionWidth } : undefined"
             >
               <div
                 class="skeleton-shimmer ui-skeleton h-3.5 rounded"
-                :class="width === 'flex-1' ? 'w-full' : width"
+                :class="[width === 'flex-1' ? 'w-full' : width, idx === columnWidths.length - 1 ? 'skeleton-table-action-line' : '']"
               />
             </th>
           </tr>
@@ -63,10 +67,11 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
               :key="colIdx"
               class="skeleton-table-cell"
               :class="colIdx === columnWidths.length - 1 ? 'skeleton-table-action-cell text-right' : ''"
+              :style="colIdx === columnWidths.length - 1 ? { width: actionWidth, minWidth: actionWidth, maxWidth: actionWidth } : undefined"
             >
               <div
                 class="skeleton-shimmer ui-skeleton h-3.5 rounded"
-                :class="width === 'flex-1' ? 'w-full' : width"
+                :class="[width === 'flex-1' ? 'w-full' : width, colIdx === columnWidths.length - 1 ? 'skeleton-table-action-line' : '']"
               />
             </td>
           </tr>
@@ -96,11 +101,15 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
 .data-table-skeleton-table {
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
 }
 
 .skeleton-table-cell {
+  box-sizing: border-box;
   border-bottom: 1px solid hsl(var(--border));
   padding: var(--ui-table-cell-y, 0.75rem) var(--ui-table-cell-x, 1rem);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .skeleton-table-select-cell {
@@ -120,8 +129,14 @@ const rowArray = computed(() => Array.from({ length: props.rows }))
   position: sticky;
   right: 0;
   z-index: 1;
+  width: var(--data-table-action-width, 7rem);
   min-width: 5rem;
+  max-width: var(--data-table-action-width, 7rem);
+  overflow: hidden;
+  white-space: nowrap;
   background: hsl(var(--card));
+  background-clip: padding-box;
+  isolation: isolate;
   box-shadow: -1px 0 0 hsl(var(--border)), -0.5rem 0 1rem -0.75rem hsl(var(--foreground) / 0.18);
 }
 
@@ -136,6 +151,11 @@ tbody tr:last-child .skeleton-table-cell {
 
 .skeleton-shimmer {
   display: block;
+}
+
+.skeleton-table-action-line {
+  width: min(4.5rem, 100%);
+  margin-left: auto;
 }
 
 @media (max-width: 640px) {

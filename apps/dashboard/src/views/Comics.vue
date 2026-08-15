@@ -452,10 +452,10 @@ async function executeBatchOperation() {
     <!-- 工具栏：排序 + 批量操作 -->
     <div class="list-toolbar flex flex-wrap items-center gap-3">
       <div class="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-        <label class="text-neutral-500">排序:</label>
+        <label class="list-toolbar-label">排序:</label>
         <select
           :value="sortBy"
-          class="px-3 py-1.5 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-900"
+          class="list-toolbar-select"
           @change="updateSort(($event.target as HTMLSelectElement).value)"
         >
           <option value="updatedAt">
@@ -473,7 +473,7 @@ async function executeBatchOperation() {
         </select>
         <select
           :value="sortOrder"
-          class="px-3 py-1.5 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-900"
+          class="list-toolbar-select"
           @change="updateSort(sortBy, ($event.target as HTMLSelectElement).value as 'asc' | 'desc')"
         >
           <option value="desc">

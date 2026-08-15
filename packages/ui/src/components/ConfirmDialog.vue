@@ -59,35 +59,35 @@ const canConfirm = computed(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="confirm-dialog-overlay fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
+      class="confirm-dialog-overlay fixed inset-0 z-[3000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
       role="presentation"
       @click="handleCancel"
     >
       <div
-        class="confirm-dialog-panel w-full max-w-[28rem] overflow-hidden rounded-lg border border-border bg-background shadow-2xl"
+        class="confirm-dialog-panel w-full max-w-[24rem] overflow-hidden rounded-md border border-border bg-background shadow-2xl"
         role="dialog"
         aria-modal="true"
         :aria-label="title"
         @click.stop
       >
         <!-- Header -->
-        <div class="confirm-dialog-header border-b border-border px-5 py-4">
+        <div class="confirm-dialog-header border-b border-border px-4 py-3.5">
           <h3 class="text-base font-semibold text-foreground">
             {{ title }}
           </h3>
         </div>
 
         <!-- Body -->
-        <div class="confirm-dialog-body max-h-[min(65vh,28rem)] overflow-y-auto px-5 py-4">
-          <p class="mb-3 text-sm leading-6 text-foreground">
+        <div class="confirm-dialog-body min-w-0 max-h-[min(65vh,24rem)] overflow-y-auto px-4 py-3.5">
+          <p class="mb-3 break-words text-sm leading-6 text-foreground">
             {{ message }}
           </p>
 
-          <div v-if="previewItems.length > 0" class="my-3 rounded-md border border-border bg-muted/55 p-3">
+          <div v-if="previewItems.length > 0" class="my-3 min-w-0 rounded-md border border-border bg-muted/55 p-3">
             <p class="mb-2 text-xs font-medium text-muted-foreground">
               预览（共 {{ previewItems.length }} 项）:
             </p>
-            <ul class="list-disc pl-5 text-sm leading-5 text-foreground">
+            <ul class="list-disc break-words pl-5 text-sm leading-5 text-foreground">
               <li v-for="(item, index) in previewItems.slice(0, 5)" :key="index" class="mb-1 last:mb-0">
                 {{ item }}
               </li>
@@ -115,7 +115,7 @@ const canConfirm = computed(() => {
         </div>
 
         <!-- Footer -->
-        <div class="confirm-dialog-footer flex justify-end gap-2 border-t border-border px-5 py-3.5">
+        <div class="confirm-dialog-footer flex justify-end gap-2 border-t border-border px-4 py-3">
           <button
             class="inline-flex min-h-9 cursor-pointer items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             @click="handleCancel"
@@ -135,3 +135,15 @@ const canConfirm = computed(() => {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.confirm-dialog-overlay {
+  z-index: var(--dashboard-modal-z-index, 3000);
+}
+
+.confirm-dialog-panel {
+  width: min(24rem, calc(100vw - 2rem));
+  max-width: 24rem;
+  max-height: min(90dvh, 34rem);
+}
+</style>

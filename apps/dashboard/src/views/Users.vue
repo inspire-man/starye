@@ -114,7 +114,7 @@ watch([currentPage, pageSize], loadUsers, { immediate: true })
       </button>
     </div>
 
-    <SkeletonTable v-if="loading" :rows="10" :columns="5" />
+    <SkeletonTable v-if="loading" :rows="10" :columns="5" action-width="100px" />
 
     <DataTable
       v-else

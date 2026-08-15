@@ -570,8 +570,8 @@ const tableColumns = [
 
     <div class="toolbar list-toolbar">
       <div class="sort-controls">
-        <label>排序:</label>
-        <select :value="sortBy" @change="updateSort(($event.target as HTMLSelectElement).value)">
+        <label class="list-toolbar-label">排序</label>
+        <select class="list-toolbar-select" :value="sortBy" @change="updateSort(($event.target as HTMLSelectElement).value)">
           <option value="updatedAt">
             更新时间
           </option>
@@ -585,7 +585,7 @@ const tableColumns = [
             人工排序
           </option>
         </select>
-        <select :value="sortOrder" @change="updateSort(sortBy, ($event.target as HTMLSelectElement).value as any)">
+        <select class="list-toolbar-select" :value="sortOrder" @change="updateSort(sortBy, ($event.target as HTMLSelectElement).value as any)">
           <option value="desc">
             降序
           </option>
@@ -607,6 +607,7 @@ const tableColumns = [
       :rows="20"
       :columns="12"
       :selectable="true"
+      action-width="100px"
     />
 
     <DataTable
@@ -991,29 +992,13 @@ const tableColumns = [
 }
 
 .toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
+  margin: 0;
 }
 
 .sort-controls {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-}
-
-.sort-controls label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
-}
-
-.sort-controls select {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
 }
 
 .modal-overlay {

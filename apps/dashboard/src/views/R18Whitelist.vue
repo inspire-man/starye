@@ -134,7 +134,7 @@ onMounted(loadWhitelist)
       </div>
     </div>
 
-    <SkeletonTable v-if="loading" :rows="10" :columns="4" />
+    <SkeletonTable v-if="loading" :rows="10" :columns="4" action-width="100px" />
 
     <DataTable
       v-else

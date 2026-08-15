@@ -30,7 +30,7 @@
   --dashboard-ring: 239 68% 58%;
   --dashboard-radius: 0.5rem;
   --dashboard-drawer-z-index: 1200;
-  --dashboard-modal-z-index: 2000;
+  --dashboard-modal-z-index: 3000;
   --dashboard-drawer-inset: 1rem;
 }
 
@@ -300,11 +300,11 @@ body:has(.dashboard-shell) .detail-drawer-overlay {
   position: sticky;
   top: 0;
   z-index: 20;
-  min-height: 3.25rem;
-  margin: -1.5rem -2rem 1rem;
+  min-height: 3rem;
+  margin: -1.5rem -2rem 0.875rem;
   border-bottom: 1px solid hsl(var(--border) / 0.86);
-  background: hsl(var(--background) / 0.94);
-  padding: 0.75rem 2rem 0.625rem;
+  background: hsl(var(--background) / 0.96);
+  padding: 0.625rem 2rem 0.5rem;
   box-shadow: 0 4px 14px hsl(var(--foreground) / 0.035);
   backdrop-filter: blur(14px);
 }
@@ -344,7 +344,7 @@ body:has(.dashboard-shell) .detail-drawer-overlay {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.625rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-md, 0.375rem);
   background: hsl(var(--card) / 0.72);
@@ -356,7 +356,7 @@ body:has(.dashboard-shell) .detail-drawer-overlay {
   min-width: 0;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.625rem;
+  gap: 0.75rem;
 }
 
 .list-toolbar-label {
@@ -375,7 +375,7 @@ body:has(.dashboard-shell) .detail-drawer-overlay {
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-md, 0.375rem);
   background: hsl(var(--muted) / 0.45);
-  padding: 0.375rem 0.75rem;
+  padding: 0.375rem 0.625rem;
   color: hsl(var(--foreground));
   font-size: 0.8125rem;
   font-weight: 500;
@@ -535,6 +535,7 @@ body::-webkit-scrollbar-thumb:hover,
 /* Action columns use quiet text actions; color carries the meaning. */
 .dashboard-shell .data-table-action-cell :is(button, a) {
   display: inline-flex;
+  max-width: 100%;
   min-height: var(--ui-control-height-sm, 2rem);
   align-items: center;
   justify-content: center;
@@ -544,11 +545,15 @@ body::-webkit-scrollbar-thumb:hover,
   background: transparent !important;
   box-shadow: none !important;
   padding: 0.25rem 0.4rem;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   color: hsl(var(--primary)) !important;
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1rem;
   text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: normal;
   transition: color 150ms ease, background-color 150ms ease;
 }
 
@@ -579,7 +584,8 @@ body::-webkit-scrollbar-thumb:hover,
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 0.625rem;
+  flex-wrap: wrap;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -741,8 +747,8 @@ body:has(.dashboard-shell) .ui-status-tag[class*="ui-status-bulk_delete"] {
   }
 
   .dashboard-content-header {
-    margin: -1rem -1rem 0.875rem;
-    padding: 0.625rem 1rem 0.5rem;
+    margin: -1rem -1rem 0.75rem;
+    padding: 0.5rem 1rem 0.375rem;
   }
 
   .dashboard-user {
