@@ -145,3 +145,6 @@ test-*.txt
 # Locally generated Wrangler target configs
 /apps/*/.target-wrangler.local-dev-*.toml
 /apps/*/.target-wrangler.ci-*.toml
+/apps/*/.target-wrangler.local-migration-*.toml
+
+.playwright-mcp
