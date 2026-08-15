@@ -227,4 +227,3 @@ watch([currentPage, pageSize], loadUsers, { immediate: true })
     </DetailDrawer>
   </div>
 </template>
-

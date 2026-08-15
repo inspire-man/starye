@@ -299,4 +299,3 @@ function closeFavoriteDetails() {
     </DetailDrawer>
   </div>
 </template>
-

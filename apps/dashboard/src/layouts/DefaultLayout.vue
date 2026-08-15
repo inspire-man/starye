@@ -408,4 +408,3 @@ async function handleLogout() {
     <ToastContainer />
   </div>
 </template>
-

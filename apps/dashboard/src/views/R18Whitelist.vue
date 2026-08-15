@@ -268,4 +268,3 @@ onMounted(loadWhitelist)
     </div>
   </div>
 </template>
-

@@ -1114,4 +1114,3 @@ async function executeBatchOperation() {
   background: #dbeafe;
 }
 </style>
-

@@ -1508,4 +1508,3 @@ const tableColumns = [
   white-space: nowrap;
 }
 </style>
-

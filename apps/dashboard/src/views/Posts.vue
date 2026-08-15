@@ -310,4 +310,3 @@ watch([currentPage, pageSize], fetchPosts, { immediate: true })
     </DetailDrawer>
   </div>
 </template>
-

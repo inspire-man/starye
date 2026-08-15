@@ -593,4 +593,3 @@ onMounted(loadLogs)
   background: #e5e7eb;
 }
 </style>
-
