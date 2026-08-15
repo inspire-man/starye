@@ -1,18 +1,40 @@
 <script setup lang="ts">
 import type { User } from 'better-auth'
-import { SkeletonTable, success, warning } from '@starye/ui'
-import { onMounted, ref } from 'vue'
+import { DataTable, DetailDrawer, Pagination, SkeletonTable, success, usePagination, useToast } from '@starye/ui'
+import { computed, onMounted, ref, watch } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { api } from '@/lib/api'
 
+const { warning: toastWarning } = useToast()
 const users = ref<User[]>([])
-const allUsers = ref<User[]>([])
 const loading = ref(true)
+const selectedUser = ref<User | null>(null)
+const userDrawerOpen = ref(false)
+const { currentPage, limit: pageSize, totalPages, total, setMeta, goToPage, updatePageSize } = usePagination(20)
+
+const pagedUsers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return users.value.slice(start, start + pageSize.value)
+})
+
+const tableColumns = [
+  { key: 'user', label: '用户', minWidth: '260px' },
+  { key: 'email', label: '邮箱', minWidth: '220px' },
+  { key: 'updatedAt', label: '授权时间', width: '180px' },
+  { key: 'actions', label: '操作', width: '100px' },
+]
 
 // Add to whitelist dialog
 const showAddDialog = ref(false)
 const addForm = ref({ email: '' })
 const adding = ref(false)
+
+function syncMeta() {
+  const pages = Math.max(1, Math.ceil(users.value.length / pageSize.value))
+  setMeta({ total: users.value.length, totalPages: pages })
+  if (currentPage.value > pages)
+    goToPage(pages)
+}
 
 async function loadWhitelist() {
   loading.value = true
@@ -20,6 +42,7 @@ async function loadWhitelist() {
     const response = await api.admin.getR18Whitelist()
     if (response.success) {
       users.value = response.data
+      syncMeta()
     }
   }
   catch (e: unknown) {
@@ -30,18 +53,19 @@ async function loadWhitelist() {
   }
 }
 
-async function loadAllUsers() {
-  try {
-    allUsers.value = await api.admin.getUsers()
-  }
-  catch (e) {
-    handleError(e, '加载用户列表失败')
-  }
-}
-
 function openAddDialog() {
   showAddDialog.value = true
   addForm.value.email = ''
+}
+
+function openUserDetails(user: User) {
+  selectedUser.value = user
+  userDrawerOpen.value = true
+}
+
+function closeUserDetails() {
+  userDrawerOpen.value = false
+  selectedUser.value = null
 }
 
 function closeAddDialog() {
@@ -51,7 +75,7 @@ function closeAddDialog() {
 
 async function addUser() {
   if (!addForm.value.email) {
-    warning('请输入用户邮箱')
+    toastWarning('请输入用户邮箱')
     return
   }
 
@@ -72,9 +96,8 @@ async function addUser() {
 
 async function removeUser(userId: string, userName: string) {
   // eslint-disable-next-line no-alert
-  if (!confirm(`确定要移除 "${userName}" 的 R18 访问权限吗？`)) {
+  if (!confirm(`确定要移除 "${userName}" 的 R18 访问权限吗？`))
     return
-  }
 
   try {
     await api.admin.removeFromR18Whitelist(userId)
@@ -86,149 +109,158 @@ async function removeUser(userId: string, userName: string) {
   }
 }
 
-onMounted(() => {
-  loadWhitelist()
-  loadAllUsers()
-})
+watch(pageSize, syncMeta)
+onMounted(loadWhitelist)
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-6">
+  <div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <h2 class="text-xl font-bold">
+        <h2 class="text-2xl font-bold tracking-tight">
           R18 白名单管理
         </h2>
-        <p class="text-sm text-muted-foreground mt-1">
+        <p class="mt-1 text-sm text-muted-foreground">
           管理用户的 R18 内容访问权限
         </p>
       </div>
-      <div class="flex gap-3">
-        <button class="p-2 hover:bg-muted rounded-lg" @click="loadWhitelist">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
+      <div class="flex items-center gap-2">
+        <button class="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted" type="button" @click="loadWhitelist">
+          刷新
         </button>
-        <button
-          class="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90"
-          @click="openAddDialog"
-        >
-          ➕ 添加用户
+        <button class="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90" type="button" @click="openAddDialog">
+          添加用户
         </button>
       </div>
     </div>
 
     <SkeletonTable v-if="loading" :rows="10" :columns="4" />
 
-    <div v-else-if="users.length === 0" class="p-12 text-center text-muted-foreground">
-      <div class="text-4xl mb-4">
-        🔞
-      </div>
-      <p class="text-lg font-medium mb-1">
-        暂无白名单用户
-      </p>
-      <p class="text-sm">
-        点击 "添加用户" 按钮来授予 R18 内容访问权限
-      </p>
-    </div>
+    <DataTable
+      v-else
+      :data="pagedUsers"
+      :columns="tableColumns"
+      min-width="760px"
+      empty-message="暂无白名单用户"
+      @row-click="openUserDetails"
+    >
+      <template #cell-user="{ item }">
+        <div class="flex items-center gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-semibold text-primary">
+            18+
+          </div>
+          <span class="font-medium">{{ item.name }}</span>
+        </div>
+      </template>
+      <template #cell-email="{ item }">
+        <span class="font-mono text-xs text-muted-foreground">{{ item.email }}</span>
+      </template>
+      <template #cell-updatedAt="{ item }">
+        <span class="text-xs text-muted-foreground">{{ new Date(item.updatedAt).toLocaleString('zh-CN') }}</span>
+      </template>
+      <template #cell-actions="{ item }">
+        <div class="flex justify-end" @click.stop>
+          <button class="inline-flex h-8 items-center rounded-md border border-destructive/25 px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10" type="button" @click="removeUser(item.id, item.name)">
+            移除
+          </button>
+        </div>
+      </template>
+    </DataTable>
 
-    <div v-else class="bg-card border rounded-xl overflow-hidden shadow-sm">
-      <table class="w-full text-sm text-left">
-        <thead class="bg-muted/30 border-b">
-          <tr>
-            <th class="px-6 py-3 font-medium text-muted-foreground">
-              用户
-            </th>
-            <th class="px-6 py-3 font-medium text-muted-foreground">
-              邮箱
-            </th>
-            <th class="px-6 py-3 font-medium text-muted-foreground">
+    <Pagination
+      v-if="total > 0"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total="total"
+      :page-size="pageSize"
+      :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next, jumper"
+      @update:current-page="goToPage"
+      @update:page-size="updatePageSize"
+    />
+
+    <DetailDrawer
+      :open="userDrawerOpen && !!selectedUser"
+      :title="selectedUser?.name || '用户详情'"
+      :description="selectedUser?.email || ''"
+      width="sm"
+      @update:open="$event ? undefined : closeUserDetails()"
+    >
+      <div v-if="selectedUser" class="space-y-5">
+        <div class="flex items-center gap-4 rounded-xl border border-border bg-muted/30 p-4">
+          <div class="flex h-14 w-14 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-lg font-semibold text-primary">
+            18+
+          </div>
+          <div class="min-w-0">
+            <p class="truncate font-semibold">
+              {{ selectedUser.name }}
+            </p>
+            <p class="mt-1 truncate text-sm text-muted-foreground">
+              {{ selectedUser.email }}
+            </p>
+          </div>
+        </div>
+
+        <dl class="divide-y divide-border rounded-xl border border-border">
+          <div class="flex items-center justify-between gap-4 px-4 py-3">
+            <dt class="text-sm text-muted-foreground">
+              用户 ID
+            </dt>
+            <dd class="break-all text-right font-mono text-xs">
+              {{ selectedUser.id }}
+            </dd>
+          </div>
+          <div class="flex items-center justify-between gap-4 px-4 py-3">
+            <dt class="text-sm text-muted-foreground">
               授权时间
-            </th>
-            <th class="px-6 py-3 font-medium text-muted-foreground text-right">
-              操作
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in users" :key="user.id" class="border-b last:border-0 hover:bg-muted/5">
-            <td class="px-6 py-4">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold text-lg">
-                  🔞
-                </div>
-                <div class="font-medium">
-                  {{ user.name }}
-                </div>
-              </div>
-            </td>
-            <td class="px-6 py-4 text-muted-foreground font-mono text-xs">
-              {{ user.email }}
-            </td>
-            <td class="px-6 py-4 text-muted-foreground text-xs">
-              {{ new Date(user.updatedAt).toLocaleString('zh-CN') }}
-            </td>
-            <td class="px-6 py-4 text-right">
-              <button
-                class="text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
-                @click="removeUser(user.id, user.name)"
-              >
-                移除
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            </dt>
+            <dd class="text-sm">
+              {{ new Date(selectedUser.updatedAt).toLocaleString('zh-CN') }}
+            </dd>
+          </div>
+        </dl>
+      </div>
 
-    <!-- Add User Dialog -->
-    <div v-if="showAddDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div class="bg-background rounded-xl shadow-lg max-w-md w-full p-6 space-y-6 animate-in fade-in zoom-in duration-200">
-        <h3 class="text-lg font-bold">
+      <template #footer>
+        <div class="flex justify-end">
+          <button
+            v-if="selectedUser"
+            class="inline-flex h-9 items-center justify-center rounded-md border border-destructive/25 px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+            type="button"
+            @click.stop="removeUser(selectedUser.id, selectedUser.name)"
+          >
+            移除白名单
+          </button>
+        </div>
+      </template>
+    </DetailDrawer>
+
+    <div v-if="showAddDialog" class="fixed inset-0 z-[1100] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+      <div class="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+        <h3 class="text-lg font-semibold">
           添加到 R18 白名单
         </h3>
 
-        <div class="space-y-4">
+        <div class="mt-5 space-y-4">
           <div class="space-y-2">
             <label class="text-sm font-medium">用户邮箱</label>
-            <input
-              v-model="addForm.email"
-              type="email"
-              placeholder="user@example.com"
-              class="w-full p-2 border rounded-lg bg-background"
-              @keyup.enter="addUser"
-            >
+            <input v-model="addForm.email" type="email" placeholder="user@example.com" class="h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" @keyup.enter="addUser">
             <p class="text-xs text-muted-foreground">
               输入要授予 R18 访问权限的用户邮箱地址
             </p>
           </div>
 
-          <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <div class="flex items-start gap-2">
-              <span class="text-lg shrink-0">⚠️</span>
-              <div class="text-xs text-amber-900">
-                <p class="font-medium mb-1">
-                  重要提示
-                </p>
-                <p class="text-amber-800">
-                  授予 R18 权限后，用户将能够浏览和访问所有成人内容。请确保用户已满 18 周岁。
-                </p>
-              </div>
-            </div>
+          <div class="rounded-lg border border-amber-200/70 bg-amber-50/70 p-3 text-xs text-amber-900">
+            授予权限后，该用户可以浏览和访问成人内容，请确认其符合站点规则。
           </div>
         </div>
 
-        <div class="flex justify-end gap-3">
-          <button
-            class="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg"
-            @click="closeAddDialog"
-          >
+        <div class="mt-6 flex justify-end gap-2">
+          <button class="inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-muted" type="button" @click="closeAddDialog">
             取消
           </button>
-          <button
-            :disabled="adding || !addForm.email"
-            class="px-4 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            @click="addUser"
-          >
-            {{ adding ? '添加中...' : '🔞 授予权限' }}
+          <button :disabled="adding || !addForm.email" class="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50" type="button" @click="addUser">
+            {{ adding ? '添加中...' : '授予权限' }}
           </button>
         </div>
       </div>

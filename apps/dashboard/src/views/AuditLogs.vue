@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AuditLog } from '@/lib/api'
-import { DataTable, FilterPanel, success, useFilters, usePagination } from '@starye/ui'
-import { onMounted, ref } from 'vue'
+import { DataTable, DetailDrawer, FilterPanel, Pagination, success, useFilters, usePagination } from '@starye/ui'
+import { onMounted, ref, watch } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { useSorting } from '@/composables/useSorting'
 import { api } from '@/lib/api'
@@ -23,7 +23,7 @@ const filtersComposable = useFilters({
 
 const filters = filtersComposable.filters
 
-const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage } = usePagination()
+const { currentPage, limit: pageSize, totalPages, total: totalItems, setMeta, goToPage, updatePageSize } = usePagination()
 
 const { sortBy: sortField, sortOrder, updateSort } = useSorting('createdAt', 'desc')
 
@@ -39,6 +39,7 @@ const tableColumns = [
   { key: 'resourceType', label: '资源类型', sortable: true },
   { key: 'resourceIdentifier', label: '资源标识', sortable: false },
   { key: 'affectedCount', label: '影响数量', sortable: true },
+  { key: 'actions', label: '操作', width: '100px', sortable: false },
 ]
 
 const filterFields = [
@@ -153,6 +154,7 @@ async function handleExport(format: 'json' | 'csv') {
   }
 }
 
+watch([currentPage, pageSize], loadLogs)
 onMounted(loadLogs)
 </script>
 
@@ -181,7 +183,7 @@ onMounted(loadLogs)
       v-model="filters"
       :fields="filterFields"
       @apply="loadLogs"
-      @reset="loadLogs"
+      @reset="filtersComposable.resetFilters(); loadLogs()"
     />
 
     <div class="filter-info">
@@ -192,14 +194,11 @@ onMounted(loadLogs)
       :data="logs"
       :columns="tableColumns"
       :loading="loading"
-      :current-page="currentPage"
-      :total-pages="totalPages"
       :sort-field="sortField"
       :sort-order="sortOrder"
       empty-message="暂无审计日志"
       @row-click="openDetailModal"
       @sort="toggleSort"
-      @page-change="(page: number) => { goToPage(page); loadLogs() }"
     >
       <template #cell-createdAt="{ item }">
         {{ formatDate(item.createdAt) }}
@@ -214,107 +213,123 @@ onMounted(loadLogs)
           {{ item.resourceType }}
         </span>
       </template>
+      <template #cell-actions="{ item }">
+        <div class="flex justify-end" @click.stop>
+          <button class="inline-flex h-8 items-center rounded-md border border-border px-2.5 text-xs font-medium transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary" type="button" @click="openDetailModal(item)">
+            查看详情
+          </button>
+        </div>
+      </template>
     </DataTable>
 
-    <Teleport to="body">
-      <div v-if="isDetailModalOpen && selectedLog" class="modal-overlay" @click.self="isDetailModalOpen = false">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>审计日志详情</h3>
-            <button class="modal-close" @click="isDetailModalOpen = false">
-              ×
-            </button>
-          </div>
+    <Pagination
+      v-if="totalItems > 0"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total="totalItems"
+      :page-size="pageSize"
+      :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next, jumper"
+      @update:current-page="goToPage"
+      @update:page-size="updatePageSize"
+    />
 
-          <div class="modal-body">
-            <div class="detail-grid">
-              <div class="detail-item">
-                <label>操作时间</label>
-                <span>{{ formatDate(selectedLog.createdAt) }}</span>
-              </div>
-              <div class="detail-item">
-                <label>操作用户</label>
-                <span>{{ selectedLog.userEmail }}</span>
-              </div>
-              <div class="detail-item">
-                <label>用户 ID</label>
-                <span>{{ selectedLog.userId }}</span>
-              </div>
-              <div class="detail-item">
-                <label>操作类型</label>
-                <span class="action-badge" :class="[`action-${selectedLog.action}`]">
-                  {{ selectedLog.action }}
-                </span>
-              </div>
-              <div class="detail-item">
-                <label>资源类型</label>
-                <span class="resource-badge">{{ selectedLog.resourceType }}</span>
-              </div>
-              <div class="detail-item">
-                <label>资源 ID</label>
-                <span>{{ selectedLog.resourceId || '-' }}</span>
-              </div>
-              <div class="detail-item">
-                <label>资源标识</label>
-                <span>{{ selectedLog.resourceIdentifier || '-' }}</span>
-              </div>
-              <div class="detail-item">
-                <label>影响数量</label>
-                <span>{{ selectedLog.affectedCount }}</span>
-              </div>
-              <div class="detail-item">
-                <label>IP 地址</label>
-                <span>{{ selectedLog.ipAddress || '-' }}</span>
-              </div>
-              <div class="detail-item full-width">
-                <label>User Agent</label>
-                <span class="mono">{{ selectedLog.userAgent || '-' }}</span>
-              </div>
-              <div v-if="selectedLog.changes" class="detail-item full-width">
-                <label>变更详情</label>
-                <!-- diff 视图：当 changes 包含 before/after 时显示字段对比 -->
-                <template v-if="selectedLog.changes && typeof selectedLog.changes === 'object' && 'before' in selectedLog.changes && 'after' in selectedLog.changes">
-                  <table class="diff-table">
-                    <thead>
-                      <tr>
-                        <th>字段</th>
-                        <th>修改前</th>
-                        <th>修改后</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="key in Object.keys((selectedLog.changes as any).after || {})"
-                        :key="key"
-                        :class="JSON.stringify((selectedLog.changes as any).before?.[key]) !== JSON.stringify((selectedLog.changes as any).after?.[key]) ? 'changed-row' : ''"
-                      >
-                        <td class="field-name">
-                          {{ key }}
-                        </td>
-                        <td class="before-value">
-                          {{ (selectedLog.changes as any).before?.[key] !== undefined ? JSON.stringify((selectedLog.changes as any).before[key]) : '-' }}
-                        </td>
-                        <td class="after-value">
-                          {{ JSON.stringify((selectedLog.changes as any).after[key]) }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </template>
-                <!-- 降级：非 before/after 结构时展示原始 JSON -->
-                <pre v-else class="changes-json">{{ JSON.stringify(selectedLog.changes, null, 2) }}</pre>
-              </div>
+    <DetailDrawer
+      :open="isDetailModalOpen && !!selectedLog"
+      title="审计日志详情"
+      :description="selectedLog ? formatDate(selectedLog.createdAt) : ''"
+      width="lg"
+      @update:open="isDetailModalOpen = $event"
+    >
+      <div v-if="selectedLog" class="drawer-content">
+        <div class="modal-body">
+          <div class="detail-grid">
+            <div class="detail-item">
+              <label>操作时间</label>
+              <span>{{ formatDate(selectedLog.createdAt) }}</span>
+            </div>
+            <div class="detail-item">
+              <label>操作用户</label>
+              <span>{{ selectedLog.userEmail }}</span>
+            </div>
+            <div class="detail-item">
+              <label>用户 ID</label>
+              <span>{{ selectedLog.userId }}</span>
+            </div>
+            <div class="detail-item">
+              <label>操作类型</label>
+              <span class="action-badge" :class="[`action-${selectedLog.action}`]">
+                {{ selectedLog.action }}
+              </span>
+            </div>
+            <div class="detail-item">
+              <label>资源类型</label>
+              <span class="resource-badge">{{ selectedLog.resourceType }}</span>
+            </div>
+            <div class="detail-item">
+              <label>资源 ID</label>
+              <span>{{ selectedLog.resourceId || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label>资源标识</label>
+              <span>{{ selectedLog.resourceIdentifier || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label>影响数量</label>
+              <span>{{ selectedLog.affectedCount }}</span>
+            </div>
+            <div class="detail-item">
+              <label>IP 地址</label>
+              <span>{{ selectedLog.ipAddress || '-' }}</span>
+            </div>
+            <div class="detail-item full-width">
+              <label>User Agent</label>
+              <span class="mono">{{ selectedLog.userAgent || '-' }}</span>
+            </div>
+            <div v-if="selectedLog.changes" class="detail-item full-width">
+              <label>变更详情</label>
+              <!-- diff 视图：当 changes 包含 before/after 时显示字段对比 -->
+              <template v-if="selectedLog.changes && typeof selectedLog.changes === 'object' && 'before' in selectedLog.changes && 'after' in selectedLog.changes">
+                <table class="diff-table">
+                  <thead>
+                    <tr>
+                      <th>字段</th>
+                      <th>修改前</th>
+                      <th>修改后</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="key in Object.keys((selectedLog.changes as any).after || {})"
+                      :key="key"
+                      :class="JSON.stringify((selectedLog.changes as any).before?.[key]) !== JSON.stringify((selectedLog.changes as any).after?.[key]) ? 'changed-row' : ''"
+                    >
+                      <td class="field-name">
+                        {{ key }}
+                      </td>
+                      <td class="before-value">
+                        {{ (selectedLog.changes as any).before?.[key] !== undefined ? JSON.stringify((selectedLog.changes as any).before[key]) : '-' }}
+                      </td>
+                      <td class="after-value">
+                        {{ JSON.stringify((selectedLog.changes as any).after[key]) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </template>
+              <!-- 降级：非 before/after 结构时展示原始 JSON -->
+              <pre v-else class="changes-json">{{ JSON.stringify(selectedLog.changes, null, 2) }}</pre>
             </div>
           </div>
+        </div>
 
-          <div class="modal-footer">
-            <button class="btn-secondary" @click="isDetailModalOpen = false">
-              关闭
-            </button>
-          </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="isDetailModalOpen = false">
+            关闭
+          </button>
         </div>
       </div>
-    </Teleport>
+    </DetailDrawer>
   </div>
 </template>
 

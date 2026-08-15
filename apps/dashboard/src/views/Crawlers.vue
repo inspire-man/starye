@@ -4,8 +4,8 @@
  */
 
 import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, CrawlerVideoLayerFact, CrawlerVideoLayerName, ReadinessProjection } from '@/lib/api'
-import { ConfirmDialog, info, SkeletonCard, success } from '@starye/ui'
-import { AlertTriangle, Archive, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, GitBranch, History, LoaderCircle, Pencil, RefreshCw, Save, Wrench } from 'lucide-vue-next'
+import { ConfirmDialog, DataTable, DetailDrawer, info, Pagination, SkeletonCard, success } from '@starye/ui'
+import { AlertTriangle, Archive, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, GitBranch, History, LoaderCircle, Pencil, RefreshCw, Save, Trash2, Wrench } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { useResourceGuard } from '@/composables/useResourceGuard'
@@ -22,10 +22,14 @@ const autoRefresh = ref(true)
 let refreshInterval: any = null
 
 const crawlerTasks = ref<Record<CrawlerTaskTemplate, CrawlerTask[]>>({ movie: [], manga: [] })
-const taskCursors = ref<Record<CrawlerTaskTemplate, string | null>>({ movie: null, manga: null })
+const taskPages = ref<Record<CrawlerTaskTemplate, number>>({ movie: 1, manga: 1 })
+const taskPageCursors = ref<Record<CrawlerTaskTemplate, Array<string | null>>>({ movie: [], manga: [] })
+const taskHasNext = ref<Record<CrawlerTaskTemplate, boolean>>({ movie: false, manga: false })
+const activeTaskTab = ref<CrawlerTaskTemplate>('movie')
 const taskDetails = ref<Record<string, CrawlerTaskDetail>>({})
 const selectedTask = ref<CrawlerTask | null>(null)
 const selectedRun = ref<{ task: CrawlerTask, run: CrawlerRun } | null>(null)
+const taskDrawerOpen = ref(false)
 const taskLogs = ref<CrawlerTaskLog[]>([])
 const taskLogCursor = ref<number | null>(null)
 const taskLoading = ref(true)
@@ -150,6 +154,15 @@ const videoReasonActionLabels: Record<string, string> = {
   stream_failed: '重新检查',
   stream_missing: '重新检查',
 }
+
+const taskTableColumns = [
+  { key: 'id', label: '任务', minWidth: '220px', sortable: false },
+  { key: 'operation', label: '类型', width: '130px', minWidth: '110px', sortable: false },
+  { key: 'lifecycle', label: '生命周期', width: '130px', minWidth: '110px', sortable: false },
+  { key: 'status', label: '最新状态', width: '180px', minWidth: '160px', sortable: false },
+  { key: 'updatedAt', label: '最近执行', width: '170px', minWidth: '150px', sortable: false },
+  { key: 'actions', label: '操作', width: '116px', minWidth: '116px', sortable: false },
+]
 
 const playbackEventLabels: Record<CrawlerPlaybackEventName, string> = {
   canplay: 'canplay',
@@ -456,6 +469,16 @@ function historyOutcomeLabel(run: CrawlerRun): string {
   return outcome
 }
 
+function isTerminalTask(task: CrawlerTask): boolean {
+  const run = latestRunFor(task)
+  return Boolean(run && ['succeeded', 'failed', 'cancelled'].includes(run.status))
+}
+
+function taskUpdatedAt(task: CrawlerTask): string {
+  const run = latestRunFor(task)
+  return run ? String(runTimestamp(run) ?? '尚未上报') : '尚未上报'
+}
+
 function toggleHistory(taskId: string): void {
   expandedHistory.value[taskId] = !expandedHistory.value[taskId]
 }
@@ -463,6 +486,7 @@ function toggleHistory(taskId: string): void {
 function selectRun(task: CrawlerTask, run: CrawlerRun | null): void {
   selectedTask.value = task
   selectedRun.value = run ? { task, run } : null
+  taskDrawerOpen.value = true
   void loadTaskAudit(task.id)
   if (run) {
     void loadTaskLogs(task, run)
@@ -471,6 +495,14 @@ function selectRun(task: CrawlerTask, run: CrawlerRun | null): void {
     taskLogs.value = []
     taskLogCursor.value = null
   }
+}
+
+function closeTaskDrawer(): void {
+  taskDrawerOpen.value = false
+  selectedTask.value = null
+  selectedRun.value = null
+  taskLogs.value = []
+  taskLogCursor.value = null
 }
 
 async function loadTaskAudit(taskId: string, append = false): Promise<void> {
@@ -516,7 +548,9 @@ async function loadTaskPanel(): Promise<void> {
         ? [selectedTaskForTemplate, ...response.tasks]
         : response.tasks
       crawlerTasks.value[template] = tasks
-      taskCursors.value[template] = response.nextCursor ?? null
+      taskPages.value[template] = 1
+      taskPageCursors.value[template] = [response.nextCursor ?? null]
+      taskHasNext.value[template] = Boolean(response.nextCursor)
       for (const task of tasks) {
         const detail = await api.admin.getCrawlerTask(task.id)
         const previousDetail = taskDetails.value[task.id]
@@ -541,10 +575,6 @@ async function loadTaskPanel(): Promise<void> {
             selectedRunChanged = true
           }
         }
-        else if (!selectedRun.value && run) {
-          selectRun(displayTask, run)
-          selectedRunChanged = true
-        }
       }
     }
     if (selectedRun.value && !selectedRunChanged) {
@@ -564,13 +594,15 @@ async function loadTaskPanel(): Promise<void> {
   }
 }
 
-async function loadMoreTasks(template: CrawlerTaskTemplate): Promise<void> {
-  const cursor = taskCursors.value[template]
-  if (!cursor)
+async function loadTaskPage(template: CrawlerTaskTemplate, page: number): Promise<void> {
+  const cursor = page <= 1 ? undefined : taskPageCursors.value[template][page - 2] ?? undefined
+  if (page > 1 && !cursor)
     return
   const response = await api.admin.listCrawlerTasks({ template, cursor, limit: 20 })
-  crawlerTasks.value[template] = [...crawlerTasks.value[template], ...response.tasks]
-  taskCursors.value[template] = response.nextCursor ?? null
+  crawlerTasks.value[template] = response.tasks
+  taskPages.value[template] = page
+  taskPageCursors.value[template][page - 1] = response.nextCursor ?? null
+  taskHasNext.value[template] = Boolean(response.nextCursor)
   for (const task of response.tasks)
     taskDetails.value[task.id] = await api.admin.getCrawlerTask(task.id)
 }
@@ -972,9 +1004,26 @@ async function executeClearFailed() {
       <div v-else-if="!crawlerTasks.movie.length && !crawlerTasks.manga.length && !canAccessTemplate('movie') && !canAccessTemplate('manga')" class="task-empty">
         <strong>暂无本地任务</strong>
       </div>
-      <div v-else class="task-history-grid">
+      <div v-else class="task-history-panel">
+        <div class="task-tabs" role="tablist" aria-label="任务历史类型">
+          <button
+            v-for="template in (['movie', 'manga'] as const)"
+            v-show="canAccessTemplate(template)"
+            :key="template"
+            class="task-tab"
+            :class="{ 'task-tab-active': activeTaskTab === template }"
+            type="button"
+            role="tab"
+            :aria-selected="activeTaskTab === template"
+            @click="activeTaskTab = template"
+          >
+            {{ template === 'movie' ? '视频任务历史' : '漫画任务历史' }}
+            <span class="task-tab-count">{{ crawlerTasks[template].length }}</span>
+          </button>
+        </div>
+
         <template v-for="template in (['movie', 'manga'] as const)" :key="template">
-          <section v-if="canAccessTemplate(template)" class="task-group" :aria-labelledby="`${template}-task-title`">
+          <section v-if="canAccessTemplate(template) && activeTaskTab === template" class="task-group" :aria-labelledby="`${template}-task-title`" role="tabpanel">
             <div class="task-group-heading">
               <h3 :id="`${template}-task-title`">
                 {{ template === 'movie' ? '视频' : '漫画' }}任务历史
@@ -990,598 +1039,639 @@ async function executeClearFailed() {
             <p v-else-if="!crawlerTasks[template].length" class="task-empty">
               尚未创建
             </p>
-            <article
-              v-for="task in crawlerTasks[template]"
-              :key="task.id"
-              class="task-card"
-              :class="{ 'task-card-selected': selectedRun?.task.id === task.id }"
-              tabindex="0"
-              @click="selectRun(task, latestRunFor(task))"
-              @keydown.enter="selectRun(task, latestRunFor(task))"
+            <DataTable
+              v-else
+              :data="crawlerTasks[template]"
+              :columns="taskTableColumns"
+              :loading="false"
+              min-width="900px"
+              empty-message="尚未创建"
+              @row-click="(task) => selectRun(task, latestRunFor(task))"
             >
-              <div class="task-card-heading">
-                <h4>{{ task.id }}</h4>
-                <span v-if="task.operation === 'repair_players'" class="operation-label">repair_players</span>
-                <span class="lifecycle-label" data-task-lifecycle>{{ lifecycleLabels[taskLifecycleFor(task).status] }}</span>
-                <span v-if="latestRunFor(task)" class="status-label">{{ taskStatusLabels[latestRunFor(task)!.status] }}</span>
+              <template #cell-id="{ item }">
+                <div class="task-table-id">
+                  <strong>{{ item.id }}</strong>
+                  <span v-if="latestRunFor(item)">attempt #{{ latestRunFor(item)!.attemptNumber ?? latestRunFor(item)!.attempt_number ?? '尚未上报' }}</span>
+                </div>
+              </template>
+              <template #cell-operation="{ item }">
+                {{ item.operation === 'repair_players' ? '播放源修复' : template === 'movie' ? '视频抓取' : '漫画抓取' }}
+              </template>
+              <template #cell-lifecycle="{ item }">
+                <span class="lifecycle-label" data-task-lifecycle>{{ lifecycleLabels[taskLifecycleFor(item).status] }}</span>
+              </template>
+              <template #cell-status="{ item }">
+                <span v-if="latestRunFor(item)" class="status-label">{{ taskStatusLabels[latestRunFor(item)!.status] }}</span>
                 <span v-else class="status-label">尚未上报</span>
-              </div>
-              <div v-if="latestRunFor(task)" class="task-meta">
-                <span>attempt {{ latestRunFor(task)!.attemptNumber ?? latestRunFor(task)!.attempt_number ?? '尚未上报' }}</span>
-                <span>{{ runTimestamp(latestRunFor(task)!) ?? '尚未上报' }}</span>
-              </div>
-              <div class="task-actions">
-                <button
-                  v-if="latestRunFor(task) && ['queued', 'dispatching', 'running'].includes(latestRunFor(task)!.status)"
-                  class="task-secondary task-danger"
-                  type="button"
-                  @click.stop="askCancel(task, latestRunFor(task)!)"
-                >
-                  取消任务
-                </button>
-                <button
-                  v-if="latestRunFor(task) && ['failed', 'cancelled'].includes(latestRunFor(task)!.status)"
-                  class="task-secondary"
-                  type="button"
-                  @click.stop="askRetry(task, latestRunFor(task)!)"
-                >
-                  重试任务
-                </button>
-              </div>
-            </article>
-            <button v-if="taskCursors[template]" class="task-secondary load-more" type="button" @click="loadMoreTasks(template)">
-              加载更多任务
-            </button>
+              </template>
+              <template #cell-updatedAt="{ item }">
+                {{ taskUpdatedAt(item) }}
+              </template>
+              <template #cell-actions="{ item }">
+                <div class="task-table-actions" @click.stop>
+                  <button class="task-icon-button" type="button" title="查看任务详情" aria-label="查看任务详情" @click="selectRun(item, latestRunFor(item))">
+                    <History :size="15" aria-hidden="true" />
+                  </button>
+                  <button
+                    v-if="latestRunFor(item) && ['queued', 'dispatching', 'running'].includes(latestRunFor(item)!.status)"
+                    class="task-icon-button task-danger"
+                    type="button"
+                    title="取消任务"
+                    aria-label="取消任务"
+                    @click="askCancel(item, latestRunFor(item)!)"
+                  >
+                    <CircleAlert :size="15" aria-hidden="true" />
+                  </button>
+                  <button
+                    v-if="latestRunFor(item) && ['failed', 'cancelled'].includes(latestRunFor(item)!.status)"
+                    class="task-icon-button"
+                    type="button"
+                    title="重试任务"
+                    aria-label="重试任务"
+                    @click="askRetry(item, latestRunFor(item)!)"
+                  >
+                    <RefreshCw :size="15" aria-hidden="true" />
+                  </button>
+                  <button
+                    v-if="isTerminalTask(item) && taskLifecycleFor(item).status === 'active'"
+                    class="task-icon-button task-danger"
+                    type="button"
+                    title="删除任务（归档）"
+                    aria-label="删除任务（归档）"
+                    @click="askArchive(item)"
+                  >
+                    <Trash2 :size="15" aria-hidden="true" />
+                  </button>
+                </div>
+              </template>
+            </DataTable>
+            <Pagination
+              v-if="taskPages[template] > 1 || taskHasNext[template]"
+              :current-page="taskPages[template]"
+              :total-pages="taskPages[template] + (taskHasNext[template] ? 1 : 0)"
+              :total="1"
+              layout="prev, pager, next"
+              @update:current-page="loadTaskPage(template, $event)"
+            />
           </section>
         </template>
       </div>
 
-      <div v-if="selectedTask && !selectedRun" class="task-detail current-attempt-pending" aria-live="polite">
-        <div class="section-heading">
-          <h3>任务执行详情</h3>
-          <span class="status-label">等待 attempt 上报</span>
-        </div>
-        <div class="identity-strip">
-          <strong>{{ selectedTask.movie?.title ?? selectedTask.id }}</strong>
-          <span v-if="selectedTask.movie">movie {{ selectedTask.movie.id }} · {{ selectedTask.movie.code }}</span>
-          <code>{{ selectedTask.id }}</code>
-          <span v-if="selectedTask.operation === 'repair_players'">repair_players</span>
-          <span>source revision：{{ selectedTask.sourceRevision ?? '尚未上报' }}</span>
-        </div>
-        <div class="fact-grid">
-          <section class="fact-block">
-            <h4>Provider</h4><p>尚未上报</p>
-          </section>
-          <section class="fact-block">
-            <h4>Lease</h4><p>等待 lease 对账</p>
-          </section>
-          <section class="fact-block">
-            <h4>Reconciliation</h4><p>等待对账</p>
-          </section>
-          <section class="fact-block">
-            <h4>Receipt / repair</h4><p>receipt 待验证 · 修复待校验</p>
-          </section>
-        </div>
-      </div>
-      <div v-if="selectedRun" class="task-detail">
-        <div class="identity-strip" data-current-attempt-focal aria-live="polite">
-          <div class="identity-title">
-            <strong>{{ selectedRun.task.movie?.title ?? selectedRun.task.id }}</strong>
-            <span v-if="selectedRun.task.movie">movie {{ selectedRun.task.movie.id }} · {{ selectedRun.task.movie.code }}</span>
-            <span v-if="selectedRun.task.operation === 'repair_players'">repair_players</span>
-          </div>
-          <div class="identity-facts">
-            <code>task {{ selectedRun.task.id }}</code>
-            <code>run {{ selectedRun.run.id }}</code>
-            <span>attempt #{{ selectedRun.run.attemptNumber ?? selectedRun.run.attempt_number ?? '尚未上报' }}</span>
-            <span>content ID：{{ selectedRun.task.movie?.id ?? playbackSummaryFor(selectedRun.task, selectedRun.run)?.contentId ?? '尚未上报' }}</span>
-            <span>source revision：{{ selectedRun.task.sourceRevision ?? '尚未上报' }}</span>
-            <span v-if="selectedRun.run.provider?.providerRunId">provider run #{{ selectedRun.run.provider.providerRunId }}</span>
-            <span v-if="selectedRun.run.provider?.providerRunAttempt">provider attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
-            <span v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.viewer.targetLabel">target：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.viewer.targetLabel }}</span>
-            <span v-if="selectedRun.task.retry" class="retry-label">任务级重试 · 当前 attempt #{{ selectedRun.task.retry.attemptNumber }}</span>
-            <span v-if="selectedRun.task.sameMovieIdentity === true">同一内容身份</span>
-          </div>
-        </div>
-        <div v-if="selectedRun.task.activeDuplicateLock?.locked" class="task-warning duplicate-lock" role="status">
-          {{ selectedRun.task.activeDuplicateLock.message }}
-        </div>
-        <div class="section-heading">
-          <h3>任务执行详情</h3>
-          <span>{{ taskStatusLabels[selectedRun.run.status] }}</span>
-        </div>
-        <p>模板：{{ taskTemplate(selectedRun.task) === 'movie' ? '视频' : '漫画' }} · attempt {{ selectedRun.run.attemptNumber ?? selectedRun.run.attempt_number ?? '尚未上报' }}</p>
-        <p v-if="runFailureCode(selectedRun.run)" class="task-warning">
-          终态原因：{{ runFailureCode(selectedRun.run) }}
-        </p>
-        <p v-if="selectedRun.task.operation === 'repair_players'" class="task-warning">
-          修复原因：{{ selectedRun.task.reason }} · source revision：{{ selectedRun.task.sourceRevision }} · 下一步：{{ repairNextActionLabels[selectedRun.task.allowedNextAction ?? 'none'] }}
-        </p>
-        <section class="task-lifecycle-surface" data-section="task-lifecycle" aria-labelledby="task-lifecycle-title">
+      <DetailDrawer
+        :open="taskDrawerOpen && !!selectedTask"
+        :title="selectedTask?.movie?.title ?? selectedTask?.id ?? '任务执行详情'"
+        :description="selectedRun ? `${taskTemplate(selectedRun.task) === 'movie' ? '视频' : '漫画'}任务 · ${taskStatusLabels[selectedRun.run.status]}` : '等待 attempt 上报'"
+        width="lg"
+        @update:open="taskDrawerOpen = $event"
+        @close="closeTaskDrawer"
+      >
+        <div v-if="selectedTask && !selectedRun" class="task-detail current-attempt-pending" aria-live="polite">
           <div class="section-heading">
-            <div>
-              <h4 id="task-lifecycle-title">
-                <GitBranch :size="16" aria-hidden="true" /> 任务生命周期
-              </h4>
-              <span class="fact-muted">与 run execution 独立 · version {{ taskLifecycleFor(selectedRun.task).version }}</span>
+            <h3>任务执行详情</h3>
+            <span class="status-label">等待 attempt 上报</span>
+          </div>
+          <div class="identity-strip">
+            <strong>{{ selectedTask.movie?.title ?? selectedTask.id }}</strong>
+            <span v-if="selectedTask.movie">movie {{ selectedTask.movie.id }} · {{ selectedTask.movie.code }}</span>
+            <code>{{ selectedTask.id }}</code>
+            <span v-if="selectedTask.operation === 'repair_players'">repair_players</span>
+            <span>source revision：{{ selectedTask.sourceRevision ?? '尚未上报' }}</span>
+          </div>
+          <div class="fact-grid">
+            <section class="fact-block">
+              <h4>Provider</h4><p>尚未上报</p>
+            </section>
+            <section class="fact-block">
+              <h4>Lease</h4><p>等待 lease 对账</p>
+            </section>
+            <section class="fact-block">
+              <h4>Reconciliation</h4><p>等待对账</p>
+            </section>
+            <section class="fact-block">
+              <h4>Receipt / repair</h4><p>receipt 待验证 · 修复待校验</p>
+            </section>
+          </div>
+        </div>
+        <div v-if="selectedRun" class="task-detail">
+          <div class="identity-strip" data-current-attempt-focal aria-live="polite">
+            <div class="identity-title">
+              <strong>{{ selectedRun.task.movie?.title ?? selectedRun.task.id }}</strong>
+              <span v-if="selectedRun.task.movie">movie {{ selectedRun.task.movie.id }} · {{ selectedRun.task.movie.code }}</span>
+              <span v-if="selectedRun.task.operation === 'repair_players'">repair_players</span>
             </div>
-            <span class="lifecycle-label">{{ lifecycleLabels[taskLifecycleFor(selectedRun.task).status] }}</span>
-          </div>
-          <div class="task-actions">
-            <button
-              v-if="taskLifecycleFor(selectedRun.task).status === 'active'"
-              class="task-secondary"
-              data-task-action="metadata"
-              type="button"
-              :disabled="taskMutation !== null"
-              @click="openMetadataEdit(selectedRun.task)"
-            >
-              <Pencil :size="15" aria-hidden="true" /> 编辑元数据
-            </button>
-            <button
-              v-if="taskLifecycleFor(selectedRun.task).status === 'active'"
-              class="task-secondary task-danger"
-              data-task-action="archive"
-              type="button"
-              :disabled="taskMutation !== null"
-              @click="askArchive(selectedRun.task)"
-            >
-              <Archive :size="15" aria-hidden="true" /> 归档任务
-            </button>
-            <button
-              v-if="taskLifecycleFor(selectedRun.task).status === 'active' && !isActiveRun(selectedRun.run)"
-              class="task-secondary"
-              data-task-action="supersede"
-              type="button"
-              :disabled="taskMutation !== null || !supersedeCommand(selectedRun.task)"
-              @click="askSupersede(selectedRun.task)"
-            >
-              <GitBranch :size="15" aria-hidden="true" /> 生成新快照
-            </button>
-          </div>
-          <form v-if="metadataEditOpen && pendingTaskMutation?.id === selectedRun.task.id" class="metadata-editor" data-task-metadata-editor @submit.prevent="saveMetadata">
-            <label>
-              说明
-              <input v-model="metadataDescription" maxlength="256" name="description" type="text">
-            </label>
-            <label>
-              安全意图标签
-              <input v-model="metadataIntent" maxlength="128" name="intent" type="text">
-            </label>
-            <div class="task-actions">
-              <button class="task-primary" data-task-action="metadata-save" type="submit" :disabled="taskMutation === 'metadata'">
-                <Save :size="15" aria-hidden="true" /> {{ taskMutation === 'metadata' ? '保存中…' : '保存元数据' }}
-              </button>
-              <button class="task-secondary" type="button" :disabled="taskMutation !== null" @click="metadataEditOpen = false">
-                返回
-              </button>
+            <div class="identity-facts">
+              <code>task {{ selectedRun.task.id }}</code>
+              <code>run {{ selectedRun.run.id }}</code>
+              <span>attempt #{{ selectedRun.run.attemptNumber ?? selectedRun.run.attempt_number ?? '尚未上报' }}</span>
+              <span>content ID：{{ selectedRun.task.movie?.id ?? playbackSummaryFor(selectedRun.task, selectedRun.run)?.contentId ?? '尚未上报' }}</span>
+              <span>source revision：{{ selectedRun.task.sourceRevision ?? '尚未上报' }}</span>
+              <span v-if="selectedRun.run.provider?.providerRunId">provider run #{{ selectedRun.run.provider.providerRunId }}</span>
+              <span v-if="selectedRun.run.provider?.providerRunAttempt">provider attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
+              <span v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.viewer.targetLabel">target：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.viewer.targetLabel }}</span>
+              <span v-if="selectedRun.task.retry" class="retry-label">任务级重试 · 当前 attempt #{{ selectedRun.task.retry.attemptNumber }}</span>
+              <span v-if="selectedRun.task.sameMovieIdentity === true">同一内容身份</span>
             </div>
-          </form>
-        </section>
-        <div v-if="selectedRun.run.status === 'failed' && runFailureCode(selectedRun.run) === 'receipt_missing'" class="task-warning">
-          任务未找到可验证的入库结果，未生成内容管理链接。
-        </div>
-        <div v-if="selectedRun.run.status === 'cancel_requested'" class="task-warning">
-          已请求取消，等待 runner 在安全检查点确认。
-        </div>
-        <div class="attempt-timeline" aria-label="当前 attempt 状态时间线">
-          <span class="timeline-step timeline-step-current">{{ taskStatusLabels[selectedRun.run.status] }}</span>
-          <span class="timeline-arrow" aria-hidden="true">→</span>
-          <span class="timeline-step">{{ providerLifecycleLabel(selectedRun.run) }}</span>
-          <span class="timeline-arrow" aria-hidden="true">→</span>
-          <span class="timeline-step">{{ reconciliationLabel(selectedRun.run) }}</span>
-          <span class="timeline-arrow" aria-hidden="true">→</span>
-          <span class="timeline-step">{{ receiptFactLabel(selectedRun.run) }}</span>
-        </div>
-        <div class="fact-grid" data-fact-grid>
-          <section class="fact-block" data-evidence-block="provider" :role="selectedRun.run.provider?.providerStatus === 'completed' && selectedRun.run.provider.providerConclusion !== 'success' ? 'alert' : undefined">
-            <h4>Provider</h4>
-            <p class="fact-state">
-              <LoaderCircle v-if="selectedRun.run.provider?.providerStatus === 'in_progress'" :size="16" aria-hidden="true" /><CircleAlert v-else-if="selectedRun.run.provider?.providerStatus === 'completed' && selectedRun.run.provider.providerConclusion !== 'success'" :size="16" aria-hidden="true" /><CheckCircle2 v-else-if="selectedRun.run.provider" :size="16" aria-hidden="true" />{{ providerLifecycleLabel(selectedRun.run) }}
-            </p>
-            <span v-if="selectedRun.run.provider?.providerRunId">provider run #{{ selectedRun.run.provider.providerRunId }}</span>
-            <span v-if="selectedRun.run.provider?.providerRunAttempt">provider attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
-            <span v-if="selectedRun.run.provider?.sha">SHA：{{ selectedRun.run.provider.sha }}</span>
-            <a
-              v-if="selectedRun.run.provider?.providerRunUrl"
-              class="provider-run-link"
-              :href="selectedRun.run.provider.providerRunUrl"
-              rel="noreferrer"
-              target="_blank"
-            ><ExternalLink :size="14" aria-hidden="true" />打开 provider run #{{ selectedRun.run.provider.providerRunId }}</a>
-          </section>
-          <section class="fact-block">
-            <h4>Lease</h4>
-            <p class="fact-state">
-              {{ leaseLabel(selectedRun.run) }}
-            </p>
-            <span v-if="selectedRun.run.lease?.expiresAt">expiresAt：{{ selectedRun.run.lease.expiresAt }}</span>
-            <span v-if="selectedRun.run.lease?.lastHeartbeatAt">heartbeat：{{ selectedRun.run.lease.lastHeartbeatAt }}</span>
-          </section>
-          <section class="fact-block" :role="['failed', 'lost', 'conflict', 'stale'].includes(selectedRun.run.reconciliation?.outcome ?? '') ? 'alert' : undefined">
-            <h4>Reconciliation</h4>
-            <p class="fact-state">
-              <History :size="16" aria-hidden="true" />{{ reconciliationLabel(selectedRun.run) }}
-            </p>
-            <span v-if="selectedRun.run.reconciliation?.windowStatus">窗口：{{ selectedRun.run.reconciliation.windowStatus }}</span>
-            <span v-if="selectedRun.run.reconciliation?.observedAt">观察时间：{{ selectedRun.run.reconciliation.observedAt }}</span>
-            <span v-if="selectedRun.run.reconciliation?.processedAt">处理时间：{{ selectedRun.run.reconciliation.processedAt }}</span>
-          </section>
-          <section class="fact-block" data-evidence-block="repair-receipt" :role="selectedRun.run.receiptValidation?.status === 'failed' ? 'alert' : undefined">
-            <h4>Repair / receipt</h4>
-            <p class="fact-state">
-              <CheckCircle2 v-if="selectedRun.run.repair?.status === 'validated'" :size="16" aria-hidden="true" /><CircleAlert v-else-if="selectedRun.run.receiptValidation?.status === 'failed'" :size="16" aria-hidden="true" />{{ repairFactLabel(selectedRun.run) }}
-            </p>
-            <span>{{ receiptFactLabel(selectedRun.run) }}</span>
-            <span v-if="isRepairReceipt(selectedRun.run.receipt)">receipt observedAt：{{ selectedRun.run.receipt.observedAt }}</span>
-            <span v-if="isRepairReceipt(selectedRun.run.receipt)">receipt source revision：{{ selectedRun.run.receipt.sourceRevision }}</span>
-            <span v-if="selectedRun.run.receiptValidation?.identityMatch !== undefined">same identity：{{ selectedRun.run.receiptValidation.identityMatch ? '是' : '否' }}</span>
-            <span v-if="selectedRun.run.receiptValidation?.readbackMatch !== undefined">readback：{{ selectedRun.run.receiptValidation.readbackMatch ? '是' : '否' }}</span>
-          </section>
-        </div>
-        <div v-if="historyRunsFor(selectedRun.task).length" class="attempt-history" :class="{ 'attempt-history-expanded': expandedHistory[selectedRun.task.id] }">
-          <button class="history-toggle" type="button" :aria-expanded="expandedHistory[selectedRun.task.id] ? 'true' : 'false'" @click="toggleHistory(selectedRun.task.id)">
-            <History :size="16" aria-hidden="true" />旧 attempt 历史（{{ historyRunsFor(selectedRun.task).length }}） · 全部 attempt
-          </button>
-          <div v-if="expandedHistory[selectedRun.task.id]" class="history-list">
-            <article v-for="run in historyRunsFor(selectedRun.task)" :key="run.id" class="history-row">
-              <div class="history-row-heading">
-                <strong>attempt #{{ run.attemptNumber ?? run.attempt_number }}</strong>
-                <code>{{ run.id }}</code>
-                <span class="status-label">{{ taskStatusLabels[run.status] }}</span>
-                <span class="history-outcome">{{ historyOutcomeLabel(run) }}</span>
-              </div>
-              <div class="history-facts">
-                <span>provider：{{ providerLifecycleLabel(run) }}</span>
-                <span>lease：{{ leaseLabel(run) }}</span>
-                <span>reconciliation：{{ reconciliationLabel(run) }}</span>
-                <span>{{ receiptFactLabel(run) }}</span>
-                <span>source revision：{{ run.sourceRevision ?? selectedRun.task.sourceRevision ?? '尚未上报' }}</span>
-                <span v-if="run.outcome?.code">outcome code：{{ run.outcome.code }}</span>
-                <span v-if="runFailureCode(run)">failure：{{ runFailureCode(run) }}</span>
-                <span v-if="playbackSummaryFor(selectedRun.task, run)">playback：{{ playbackStatusLabel(playbackSummaryFor(selectedRun.task, run)) }} · {{ playbackSummaryFor(selectedRun.task, run)!.outcome }}</span>
-                <span v-for="entry in playbackHistoryEntriesFor(selectedRun.task, run)" :key="`${entry.runId}-playback-history`">
-                  playback rejection：{{ entry.rejections.map(rejection => rejection.outcome).join(' · ') || '无' }}
-                </span>
-              </div>
-            </article>
           </div>
-        </div>
-        <section class="availability-surface" data-evidence-section="availability" aria-labelledby="availability-title">
+          <div v-if="selectedRun.task.activeDuplicateLock?.locked" class="task-warning duplicate-lock" role="status">
+            {{ selectedRun.task.activeDuplicateLock.message }}
+          </div>
           <div class="section-heading">
-            <div>
-              <h4 id="availability-title">
-                Availability current
-              </h4>
-              <span class="fact-muted">内容可用性与 runner execution 独立计算</span>
-            </div>
-            <span v-if="availabilityCurrentFor(selectedRun.task)" class="status-label">
-              {{ availabilityStatusLabels[availabilityCurrentFor(selectedRun.task)!.status] }}
-            </span>
+            <h3>任务执行详情</h3>
+            <span>{{ taskStatusLabels[selectedRun.run.status] }}</span>
           </div>
-          <div v-if="availabilityCurrentFor(selectedRun.task)" class="availability-current" data-availability-current>
-            <span>reason：{{ availabilityReasonLabel(availabilityCurrentFor(selectedRun.task)!.reasonCode) }}</span>
-            <span>policy：{{ availabilityCurrentFor(selectedRun.task)!.policyVersion }}</span>
-            <span>observedAt：{{ availabilityCurrentFor(selectedRun.task)!.observedAt }}</span>
-            <span>freshness：{{ availabilityCurrentFor(selectedRun.task)!.freshness }}</span>
-            <span>next action：{{ availabilityNextActionLabels[availabilityCurrentFor(selectedRun.task)!.nextAction] }}</span>
-            <span>projection version：{{ availabilityCurrentFor(selectedRun.task)!.projectionVersion }}</span>
-            <span>observation：{{ availabilityCurrentFor(selectedRun.task)!.observationIdentity }}</span>
-            <span>target：{{ availabilityCurrentFor(selectedRun.task)!.target.kind }} / {{ availabilityCurrentFor(selectedRun.task)!.target.id }}</span>
-          </div>
-          <p v-else class="source-empty">
-            暂无 availability current projection。
+          <p>模板：{{ taskTemplate(selectedRun.task) === 'movie' ? '视频' : '漫画' }} · attempt {{ selectedRun.run.attemptNumber ?? selectedRun.run.attempt_number ?? '尚未上报' }}</p>
+          <p v-if="runFailureCode(selectedRun.run)" class="task-warning">
+            终态原因：{{ runFailureCode(selectedRun.run) }}
           </p>
-          <div v-if="availabilityHistoryFor(selectedRun.task).length" class="availability-history" data-availability-history>
-            <strong>Observation / rejection history</strong>
-            <article v-for="entry in availabilityHistoryFor(selectedRun.task)" :key="`${entry.kind}-${entry.observation?.observationIdentity ?? entry.reason ?? 'empty'}`" class="availability-history-row">
-              <span>{{ availabilityOutcomeLabels[entry.kind] }}</span>
-              <span v-if="entry.reason">reason：{{ entry.reason }}</span>
-              <span v-if="entry.observation">observation：{{ entry.observation.observationIdentity }} · {{ entry.observation.status }} · {{ entry.observation.freshness }}</span>
-              <span v-if="entry.observation">observedAt：{{ entry.observation.observedAt }} · revision：{{ entry.observation.sourceRevision }}</span>
-            </article>
-          </div>
-          <div v-if="taskAvailabilityFor(selectedRun.task)?.layers" class="video-layer-list" aria-label="视频四层可用性">
-            <section v-for="layer in videoLayerNames" :key="layer" class="video-layer-row" :data-video-layer="layer">
-              <div class="video-layer-heading">
-                <strong>{{ videoLayerLabels[layer] }}</strong>
-                <span v-if="videoLayerFor(selectedRun.task, layer).current" class="status-label">
-                  {{ availabilityStatusLabels[videoLayerFor(selectedRun.task, layer).current!.status] }}
-                </span>
-              </div>
-              <template v-if="videoLayerFor(selectedRun.task, layer).current">
-                <span>reason：{{ videoLayerFor(selectedRun.task, layer).current!.reason ?? 'available' }}</span>
-                <span>revision {{ videoLayerFor(selectedRun.task, layer).current!.sourceRevision }} · {{ videoLayerFor(selectedRun.task, layer).current!.freshness }}</span>
-                <span>available：{{ videoLayerCount(videoLayerFor(selectedRun.task, layer).current!, 'available') }} · abnormal：{{ videoLayerCount(videoLayerFor(selectedRun.task, layer).current!, 'abnormal') }}</span>
-                <span>下一步：{{ videoLayerAction(videoLayerFor(selectedRun.task, layer).current!) }}</span>
-                <span v-for="sample in videoLayerFor(selectedRun.task, layer).current!.summary.samples" :key="`${sample.code}-${sample.label ?? ''}`">
-                  {{ sample.code }}<template v-if="sample.count !== undefined">：{{ sample.count }}</template><template v-if="sample.label"> · {{ sample.label }}</template>
-                </span>
-              </template>
-              <span v-else class="fact-muted">暂无 current fact</span>
-              <div v-if="videoLayerFor(selectedRun.task, layer).history.length" class="video-layer-history" data-video-history>
-                <span v-for="fact in videoLayerFor(selectedRun.task, layer).history" :key="`${fact.sourceRevision}-${fact.observedAt}`">
-                  history · revision {{ fact.sourceRevision }} · {{ fact.status }} · {{ fact.freshness }}
-                </span>
-              </div>
-            </section>
-          </div>
-        </section>
-        <section class="audit-surface" data-evidence-section="audit" aria-labelledby="audit-title">
-          <div class="section-heading">
-            <div>
-              <h4 id="audit-title">
-                Task audit
-              </h4>
-              <span class="fact-muted">创建、更新、归档、supersede、取消、重试和修复均保留摘要</span>
-            </div>
-          </div>
-          <div v-if="taskAudits[selectedRun.task.id]?.length" class="audit-list">
-            <article v-for="audit in taskAudits[selectedRun.task.id]" :key="audit.id" class="audit-row">
-              <strong>{{ audit.action }} · {{ audit.outcome }}</strong>
-              <span>{{ audit.reason }} · {{ audit.createdAt }}</span>
-              <span v-if="audit.actor?.id">actor：{{ audit.actor.id }}</span>
-              <span v-if="audit.runId">run：{{ audit.runId }}<template v-if="audit.attemptNumber"> · attempt #{{ audit.attemptNumber }}</template></span>
-            </article>
-            <button v-if="taskAuditCursors[selectedRun.task.id]" class="task-secondary load-more" data-task-action="audit-more" type="button" @click="loadTaskAudit(selectedRun.task.id, true)">
-              加载更早审计
-            </button>
-          </div>
-          <p v-else class="source-empty">
-            暂无任务审计摘要。
+          <p v-if="selectedRun.task.operation === 'repair_players'" class="task-warning">
+            修复原因：{{ selectedRun.task.reason }} · source revision：{{ selectedRun.task.sourceRevision }} · 下一步：{{ repairNextActionLabels[selectedRun.task.allowedNextAction ?? 'none'] }}
           </p>
-        </section>
-        <div v-if="selectedRun.task.operation !== 'repair_players'" class="readiness-detail" aria-live="polite">
-          <div class="readiness-identity">
-            <strong>内容身份</strong>
-            <span v-if="runReadiness(selectedRun.run)">primaryContentId：{{ runReadiness(selectedRun.run)!.metadata.contentId }}</span>
-            <span v-else-if="receiptContentId(selectedRun.run)">primaryContentId：{{ receiptContentId(selectedRun.run) }}</span>
-            <span v-else>状态读取中</span>
-          </div>
-          <div v-if="runReadiness(selectedRun.run)" class="readiness-grid">
-            <section class="readiness-block">
-              <h4>Metadata persisted</h4>
-              <p class="readiness-state readiness-state-success">
-                <CheckCircle2 :size="16" aria-hidden="true" />
-                已持久化
-              </p>
-              <span>content ID：{{ runReadiness(selectedRun.run)!.metadata.contentId }}</span>
-              <span>观察时间：{{ runReadiness(selectedRun.run)!.metadata.observedAt ?? '尚未上报' }}</span>
-            </section>
-            <section
-              class="readiness-block"
-              :class="`readiness-${runReadiness(selectedRun.run)!.source.disposition}`"
-              :role="runReadiness(selectedRun.run)!.source.disposition === 'source_failed' ? 'alert' : runReadiness(selectedRun.run)!.source.disposition === 'repairing' ? 'status' : undefined"
-            >
-              <h4>Source readiness</h4>
-              <p class="readiness-state">
-                <CheckCircle2 v-if="runReadiness(selectedRun.run)!.source.disposition === 'ready'" :size="16" aria-hidden="true" />
-                <AlertTriangle v-else-if="runReadiness(selectedRun.run)!.source.disposition === 'source_failed'" :size="16" aria-hidden="true" />
-                <Wrench v-else-if="runReadiness(selectedRun.run)!.source.disposition === 'repairing'" :size="16" aria-hidden="true" />
-                <CircleHelp v-else :size="16" aria-hidden="true" />
-                <span>{{ sourceDispositionLabel(runReadiness(selectedRun.run)!.source.disposition) }}</span>
-              </p>
-              <span>eligible count：{{ runReadiness(selectedRun.run)!.source.eligibleCount }}</span>
-              <span>source revision：{{ runReadiness(selectedRun.run)!.source.sourceRevision }}</span>
-              <span>受控原因：{{ sourceReasonLabel(runReadiness(selectedRun.run)!.source.reasonCode) }}</span>
-              <strong v-if="runReadiness(selectedRun.run)!.source.repairable">可修复</strong>
-            </section>
-            <section class="readiness-block">
-              <h4>Playback proof</h4>
-              <p class="readiness-state">
-                <CheckCircle2 v-if="runReadiness(selectedRun.run)!.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
-                <CircleHelp v-else :size="16" aria-hidden="true" />
-                <span>{{ runReadiness(selectedRun.run)!.playback.status === 'playback_verified' ? '播放已验证' : '播放未验证' }}</span>
-              </p>
-              <span v-if="runReadiness(selectedRun.run)!.playback.evidence">独立证据：playing · currentTime {{ runReadiness(selectedRun.run)!.playback.evidence!.currentTime }}</span>
-              <span v-else>ready/receipt 不等于浏览器播放证据</span>
-            </section>
-            <section class="readiness-block">
-              <h4>Receipt/source summary</h4>
-              <p class="readiness-state readiness-state-success">
-                <CheckCircle2 :size="16" aria-hidden="true" />
-                {{ runReadiness(selectedRun.run)!.receipt.persisted ? 'receipt 已持久化' : 'receipt 未持久化' }}
-              </p>
-              <span>content identity matched：{{ runReadiness(selectedRun.run)!.receipt.primaryContentId === runReadiness(selectedRun.run)!.metadata.contentId ? '是' : '否' }}</span>
-              <span>source revision：{{ runReadiness(selectedRun.run)!.source.sourceRevision }}</span>
-              <span>candidate count：{{ runReadiness(selectedRun.run)!.source.eligibleCount }} · disposition：{{ runReadiness(selectedRun.run)!.source.disposition }}</span>
-              <span v-if="selectedRun.run.receipt && !isRepairReceipt(selectedRun.run.receipt)">新增 {{ selectedRun.run.receipt.createdCount }} · 更新 {{ selectedRun.run.receipt.updatedCount }}</span>
-            </section>
-          </div>
-          <section v-if="sourceHealthRows(selectedRun.run).length" class="source-health-block" aria-labelledby="source-health-title">
-            <div class="source-health-heading">
+          <section class="task-lifecycle-surface" data-section="task-lifecycle" aria-labelledby="task-lifecycle-title">
+            <div class="section-heading">
               <div>
-                <h4 id="source-health-title">
-                  Source health
+                <h4 id="task-lifecycle-title">
+                  <GitBranch :size="16" aria-hidden="true" /> 任务生命周期
                 </h4>
-                <span v-if="isRepairReceipt(selectedRun.run.receipt)">观察时间：{{ selectedRun.run.receipt.observedAt }} · revision：{{ selectedRun.run.receipt.sourceRevision }}</span>
+                <span class="fact-muted">与 run execution 独立 · version {{ taskLifecycleFor(selectedRun.task).version }}</span>
               </div>
+              <span class="lifecycle-label">{{ lifecycleLabels[taskLifecycleFor(selectedRun.task).status] }}</span>
             </div>
-            <div class="source-health-grid">
-              <article
-                v-for="source in sourceHealthRows(selectedRun.run)"
-                :key="`${source.sourceType}-${source.observedAt}-${source.reasonCode}`"
-                :data-source-row="source.sourceType"
-                class="source-health-row"
+            <div class="task-actions">
+              <button
+                v-if="taskLifecycleFor(selectedRun.task).status === 'active'"
+                class="task-secondary"
+                data-task-action="metadata"
+                type="button"
+                :disabled="taskMutation !== null"
+                @click="openMetadataEdit(selectedRun.task)"
               >
-                <strong>{{ sourceTypeLabel(source.sourceType) }}</strong>
-                <span>{{ sourceHealthLabel(source.health) }}</span>
-                <span>观察时间：{{ source.observedAt }}</span>
-                <span>受控原因：{{ sourceHealthReasonLabel(source.reasonCode) }}</span>
-                <span>{{ source.eligible ? 'eligible · 可作为候选' : 'ineligible · 不作为候选' }}</span>
-                <button v-if="source.eligible" data-source-action type="button" class="task-secondary" disabled>
-                  当前候选
+                <Pencil :size="15" aria-hidden="true" /> 编辑元数据
+              </button>
+              <button
+                v-if="taskLifecycleFor(selectedRun.task).status === 'active'"
+                class="task-secondary task-danger"
+                data-task-action="archive"
+                type="button"
+                :disabled="taskMutation !== null"
+                @click="askArchive(selectedRun.task)"
+              >
+                <Archive :size="15" aria-hidden="true" /> 归档任务
+              </button>
+              <button
+                v-if="taskLifecycleFor(selectedRun.task).status === 'active' && !isActiveRun(selectedRun.run)"
+                class="task-secondary"
+                data-task-action="supersede"
+                type="button"
+                :disabled="taskMutation !== null || !supersedeCommand(selectedRun.task)"
+                @click="askSupersede(selectedRun.task)"
+              >
+                <GitBranch :size="15" aria-hidden="true" /> 生成新快照
+              </button>
+            </div>
+            <form v-if="metadataEditOpen && pendingTaskMutation?.id === selectedRun.task.id" class="metadata-editor" data-task-metadata-editor @submit.prevent="saveMetadata">
+              <label>
+                说明
+                <input v-model="metadataDescription" maxlength="256" name="description" type="text">
+              </label>
+              <label>
+                安全意图标签
+                <input v-model="metadataIntent" maxlength="128" name="intent" type="text">
+              </label>
+              <div class="task-actions">
+                <button class="task-primary" data-task-action="metadata-save" type="submit" :disabled="taskMutation === 'metadata'">
+                  <Save :size="15" aria-hidden="true" /> {{ taskMutation === 'metadata' ? '保存中…' : '保存元数据' }}
                 </button>
+                <button class="task-secondary" type="button" :disabled="taskMutation !== null" @click="metadataEditOpen = false">
+                  返回
+                </button>
+              </div>
+            </form>
+          </section>
+          <div v-if="selectedRun.run.status === 'failed' && runFailureCode(selectedRun.run) === 'receipt_missing'" class="task-warning">
+            任务未找到可验证的入库结果，未生成内容管理链接。
+          </div>
+          <div v-if="selectedRun.run.status === 'cancel_requested'" class="task-warning">
+            已请求取消，等待 runner 在安全检查点确认。
+          </div>
+          <div class="attempt-timeline" aria-label="当前 attempt 状态时间线">
+            <span class="timeline-step timeline-step-current">{{ taskStatusLabels[selectedRun.run.status] }}</span>
+            <span class="timeline-arrow" aria-hidden="true">→</span>
+            <span class="timeline-step">{{ providerLifecycleLabel(selectedRun.run) }}</span>
+            <span class="timeline-arrow" aria-hidden="true">→</span>
+            <span class="timeline-step">{{ reconciliationLabel(selectedRun.run) }}</span>
+            <span class="timeline-arrow" aria-hidden="true">→</span>
+            <span class="timeline-step">{{ receiptFactLabel(selectedRun.run) }}</span>
+          </div>
+          <div class="fact-grid" data-fact-grid>
+            <section class="fact-block" data-evidence-block="provider" :role="selectedRun.run.provider?.providerStatus === 'completed' && selectedRun.run.provider.providerConclusion !== 'success' ? 'alert' : undefined">
+              <h4>Provider</h4>
+              <p class="fact-state">
+                <LoaderCircle v-if="selectedRun.run.provider?.providerStatus === 'in_progress'" :size="16" aria-hidden="true" /><CircleAlert v-else-if="selectedRun.run.provider?.providerStatus === 'completed' && selectedRun.run.provider.providerConclusion !== 'success'" :size="16" aria-hidden="true" /><CheckCircle2 v-else-if="selectedRun.run.provider" :size="16" aria-hidden="true" />{{ providerLifecycleLabel(selectedRun.run) }}
+              </p>
+              <span v-if="selectedRun.run.provider?.providerRunId">provider run #{{ selectedRun.run.provider.providerRunId }}</span>
+              <span v-if="selectedRun.run.provider?.providerRunAttempt">provider attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
+              <span v-if="selectedRun.run.provider?.sha">SHA：{{ selectedRun.run.provider.sha }}</span>
+              <a
+                v-if="selectedRun.run.provider?.providerRunUrl"
+                class="provider-run-link"
+                :href="selectedRun.run.provider.providerRunUrl"
+                rel="noreferrer"
+                target="_blank"
+              ><ExternalLink :size="14" aria-hidden="true" />打开 provider run #{{ selectedRun.run.provider.providerRunId }}</a>
+            </section>
+            <section class="fact-block">
+              <h4>Lease</h4>
+              <p class="fact-state">
+                {{ leaseLabel(selectedRun.run) }}
+              </p>
+              <span v-if="selectedRun.run.lease?.expiresAt">expiresAt：{{ selectedRun.run.lease.expiresAt }}</span>
+              <span v-if="selectedRun.run.lease?.lastHeartbeatAt">heartbeat：{{ selectedRun.run.lease.lastHeartbeatAt }}</span>
+            </section>
+            <section class="fact-block" :role="['failed', 'lost', 'conflict', 'stale'].includes(selectedRun.run.reconciliation?.outcome ?? '') ? 'alert' : undefined">
+              <h4>Reconciliation</h4>
+              <p class="fact-state">
+                <History :size="16" aria-hidden="true" />{{ reconciliationLabel(selectedRun.run) }}
+              </p>
+              <span v-if="selectedRun.run.reconciliation?.windowStatus">窗口：{{ selectedRun.run.reconciliation.windowStatus }}</span>
+              <span v-if="selectedRun.run.reconciliation?.observedAt">观察时间：{{ selectedRun.run.reconciliation.observedAt }}</span>
+              <span v-if="selectedRun.run.reconciliation?.processedAt">处理时间：{{ selectedRun.run.reconciliation.processedAt }}</span>
+            </section>
+            <section class="fact-block" data-evidence-block="repair-receipt" :role="selectedRun.run.receiptValidation?.status === 'failed' ? 'alert' : undefined">
+              <h4>Repair / receipt</h4>
+              <p class="fact-state">
+                <CheckCircle2 v-if="selectedRun.run.repair?.status === 'validated'" :size="16" aria-hidden="true" /><CircleAlert v-else-if="selectedRun.run.receiptValidation?.status === 'failed'" :size="16" aria-hidden="true" />{{ repairFactLabel(selectedRun.run) }}
+              </p>
+              <span>{{ receiptFactLabel(selectedRun.run) }}</span>
+              <span v-if="isRepairReceipt(selectedRun.run.receipt)">receipt observedAt：{{ selectedRun.run.receipt.observedAt }}</span>
+              <span v-if="isRepairReceipt(selectedRun.run.receipt)">receipt source revision：{{ selectedRun.run.receipt.sourceRevision }}</span>
+              <span v-if="selectedRun.run.receiptValidation?.identityMatch !== undefined">same identity：{{ selectedRun.run.receiptValidation.identityMatch ? '是' : '否' }}</span>
+              <span v-if="selectedRun.run.receiptValidation?.readbackMatch !== undefined">readback：{{ selectedRun.run.receiptValidation.readbackMatch ? '是' : '否' }}</span>
+            </section>
+          </div>
+          <div v-if="historyRunsFor(selectedRun.task).length" class="attempt-history" :class="{ 'attempt-history-expanded': expandedHistory[selectedRun.task.id] }">
+            <button class="history-toggle" type="button" :aria-expanded="expandedHistory[selectedRun.task.id] ? 'true' : 'false'" @click="toggleHistory(selectedRun.task.id)">
+              <History :size="16" aria-hidden="true" />旧 attempt 历史（{{ historyRunsFor(selectedRun.task).length }}） · 全部 attempt
+            </button>
+            <div v-if="expandedHistory[selectedRun.task.id]" class="history-list">
+              <article v-for="run in historyRunsFor(selectedRun.task)" :key="run.id" class="history-row">
+                <div class="history-row-heading">
+                  <strong>attempt #{{ run.attemptNumber ?? run.attempt_number }}</strong>
+                  <code>{{ run.id }}</code>
+                  <span class="status-label">{{ taskStatusLabels[run.status] }}</span>
+                  <span class="history-outcome">{{ historyOutcomeLabel(run) }}</span>
+                </div>
+                <div class="history-facts">
+                  <span>provider：{{ providerLifecycleLabel(run) }}</span>
+                  <span>lease：{{ leaseLabel(run) }}</span>
+                  <span>reconciliation：{{ reconciliationLabel(run) }}</span>
+                  <span>{{ receiptFactLabel(run) }}</span>
+                  <span>source revision：{{ run.sourceRevision ?? selectedRun.task.sourceRevision ?? '尚未上报' }}</span>
+                  <span v-if="run.outcome?.code">outcome code：{{ run.outcome.code }}</span>
+                  <span v-if="runFailureCode(run)">failure：{{ runFailureCode(run) }}</span>
+                  <span v-if="playbackSummaryFor(selectedRun.task, run)">playback：{{ playbackStatusLabel(playbackSummaryFor(selectedRun.task, run)) }} · {{ playbackSummaryFor(selectedRun.task, run)!.outcome }}</span>
+                  <span v-for="entry in playbackHistoryEntriesFor(selectedRun.task, run)" :key="`${entry.runId}-playback-history`">
+                    playback rejection：{{ entry.rejections.map(rejection => rejection.outcome).join(' · ') || '无' }}
+                  </span>
+                </div>
               </article>
             </div>
-          </section>
-          <div v-if="!runReadiness(selectedRun.run)" class="readiness-loading" role="status">
-            <RefreshCw :size="16" aria-hidden="true" />状态读取中，未推导 ready 或 playback proof。
           </div>
-          <div
-            v-if="(selectedRun.run.receipt && selectedRun.run.status === 'succeeded') || managementPath(selectedRun.task, selectedRun.run)"
-            class="readiness-actions"
-          >
-            <a
-              v-if="managementPath(selectedRun.task, selectedRun.run) && (!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition))"
-              class="task-secondary readiness-link"
-              :href="managementPath(selectedRun.task, selectedRun.run)!"
+          <section class="availability-surface" data-evidence-section="availability" aria-labelledby="availability-title">
+            <div class="section-heading">
+              <div>
+                <h4 id="availability-title">
+                  Availability current
+                </h4>
+                <span class="fact-muted">内容可用性与 runner execution 独立计算</span>
+              </div>
+              <span v-if="availabilityCurrentFor(selectedRun.task)" class="status-label">
+                {{ availabilityStatusLabels[availabilityCurrentFor(selectedRun.task)!.status] }}
+              </span>
+            </div>
+            <div v-if="availabilityCurrentFor(selectedRun.task)" class="availability-current" data-availability-current>
+              <span>reason：{{ availabilityReasonLabel(availabilityCurrentFor(selectedRun.task)!.reasonCode) }}</span>
+              <span>policy：{{ availabilityCurrentFor(selectedRun.task)!.policyVersion }}</span>
+              <span>observedAt：{{ availabilityCurrentFor(selectedRun.task)!.observedAt }}</span>
+              <span>freshness：{{ availabilityCurrentFor(selectedRun.task)!.freshness }}</span>
+              <span>next action：{{ availabilityNextActionLabels[availabilityCurrentFor(selectedRun.task)!.nextAction] }}</span>
+              <span>projection version：{{ availabilityCurrentFor(selectedRun.task)!.projectionVersion }}</span>
+              <span>observation：{{ availabilityCurrentFor(selectedRun.task)!.observationIdentity }}</span>
+              <span>target：{{ availabilityCurrentFor(selectedRun.task)!.target.kind }} / {{ availabilityCurrentFor(selectedRun.task)!.target.id }}</span>
+            </div>
+            <p v-else class="source-empty">
+              暂无 availability current projection。
+            </p>
+            <div v-if="availabilityHistoryFor(selectedRun.task).length" class="availability-history" data-availability-history>
+              <strong>Observation / rejection history</strong>
+              <article v-for="entry in availabilityHistoryFor(selectedRun.task)" :key="`${entry.kind}-${entry.observation?.observationIdentity ?? entry.reason ?? 'empty'}`" class="availability-history-row">
+                <span>{{ availabilityOutcomeLabels[entry.kind] }}</span>
+                <span v-if="entry.reason">reason：{{ entry.reason }}</span>
+                <span v-if="entry.observation">observation：{{ entry.observation.observationIdentity }} · {{ entry.observation.status }} · {{ entry.observation.freshness }}</span>
+                <span v-if="entry.observation">observedAt：{{ entry.observation.observedAt }} · revision：{{ entry.observation.sourceRevision }}</span>
+              </article>
+            </div>
+            <div v-if="taskAvailabilityFor(selectedRun.task)?.layers" class="video-layer-list" aria-label="视频四层可用性">
+              <section v-for="layer in videoLayerNames" :key="layer" class="video-layer-row" :data-video-layer="layer">
+                <div class="video-layer-heading">
+                  <strong>{{ videoLayerLabels[layer] }}</strong>
+                  <span v-if="videoLayerFor(selectedRun.task, layer).current" class="status-label">
+                    {{ availabilityStatusLabels[videoLayerFor(selectedRun.task, layer).current!.status] }}
+                  </span>
+                </div>
+                <template v-if="videoLayerFor(selectedRun.task, layer).current">
+                  <span>reason：{{ videoLayerFor(selectedRun.task, layer).current!.reason ?? 'available' }}</span>
+                  <span>revision {{ videoLayerFor(selectedRun.task, layer).current!.sourceRevision }} · {{ videoLayerFor(selectedRun.task, layer).current!.freshness }}</span>
+                  <span>available：{{ videoLayerCount(videoLayerFor(selectedRun.task, layer).current!, 'available') }} · abnormal：{{ videoLayerCount(videoLayerFor(selectedRun.task, layer).current!, 'abnormal') }}</span>
+                  <span>下一步：{{ videoLayerAction(videoLayerFor(selectedRun.task, layer).current!) }}</span>
+                  <span v-for="sample in videoLayerFor(selectedRun.task, layer).current!.summary.samples" :key="`${sample.code}-${sample.label ?? ''}`">
+                    {{ sample.code }}<template v-if="sample.count !== undefined">：{{ sample.count }}</template><template v-if="sample.label"> · {{ sample.label }}</template>
+                  </span>
+                </template>
+                <span v-else class="fact-muted">暂无 current fact</span>
+                <div v-if="videoLayerFor(selectedRun.task, layer).history.length" class="video-layer-history" data-video-history>
+                  <span v-for="fact in videoLayerFor(selectedRun.task, layer).history" :key="`${fact.sourceRevision}-${fact.observedAt}`">
+                    history · revision {{ fact.sourceRevision }} · {{ fact.status }} · {{ fact.freshness }}
+                  </span>
+                </div>
+              </section>
+            </div>
+          </section>
+          <section class="audit-surface" data-evidence-section="audit" aria-labelledby="audit-title">
+            <div class="section-heading">
+              <div>
+                <h4 id="audit-title">
+                  Task audit
+                </h4>
+                <span class="fact-muted">创建、更新、归档、supersede、取消、重试和修复均保留摘要</span>
+              </div>
+            </div>
+            <div v-if="taskAudits[selectedRun.task.id]?.length" class="audit-list">
+              <article v-for="audit in taskAudits[selectedRun.task.id]" :key="audit.id" class="audit-row">
+                <strong>{{ audit.action }} · {{ audit.outcome }}</strong>
+                <span>{{ audit.reason }} · {{ audit.createdAt }}</span>
+                <span v-if="audit.actor?.id">actor：{{ audit.actor.id }}</span>
+                <span v-if="audit.runId">run：{{ audit.runId }}<template v-if="audit.attemptNumber"> · attempt #{{ audit.attemptNumber }}</template></span>
+              </article>
+              <button v-if="taskAuditCursors[selectedRun.task.id]" class="task-secondary load-more" data-task-action="audit-more" type="button" @click="loadTaskAudit(selectedRun.task.id, true)">
+                加载更早审计
+              </button>
+            </div>
+            <p v-else class="source-empty">
+              暂无任务审计摘要。
+            </p>
+          </section>
+          <div v-if="selectedRun.task.operation !== 'repair_players'" class="readiness-detail" aria-live="polite">
+            <div class="readiness-identity">
+              <strong>内容身份</strong>
+              <span v-if="runReadiness(selectedRun.run)">primaryContentId：{{ runReadiness(selectedRun.run)!.metadata.contentId }}</span>
+              <span v-else-if="receiptContentId(selectedRun.run)">primaryContentId：{{ receiptContentId(selectedRun.run) }}</span>
+              <span v-else>状态读取中</span>
+            </div>
+            <div v-if="runReadiness(selectedRun.run)" class="readiness-grid">
+              <section class="readiness-block">
+                <h4>Metadata persisted</h4>
+                <p class="readiness-state readiness-state-success">
+                  <CheckCircle2 :size="16" aria-hidden="true" />
+                  已持久化
+                </p>
+                <span>content ID：{{ runReadiness(selectedRun.run)!.metadata.contentId }}</span>
+                <span>观察时间：{{ runReadiness(selectedRun.run)!.metadata.observedAt ?? '尚未上报' }}</span>
+              </section>
+              <section
+                class="readiness-block"
+                :class="`readiness-${runReadiness(selectedRun.run)!.source.disposition}`"
+                :role="runReadiness(selectedRun.run)!.source.disposition === 'source_failed' ? 'alert' : runReadiness(selectedRun.run)!.source.disposition === 'repairing' ? 'status' : undefined"
+              >
+                <h4>Source readiness</h4>
+                <p class="readiness-state">
+                  <CheckCircle2 v-if="runReadiness(selectedRun.run)!.source.disposition === 'ready'" :size="16" aria-hidden="true" />
+                  <AlertTriangle v-else-if="runReadiness(selectedRun.run)!.source.disposition === 'source_failed'" :size="16" aria-hidden="true" />
+                  <Wrench v-else-if="runReadiness(selectedRun.run)!.source.disposition === 'repairing'" :size="16" aria-hidden="true" />
+                  <CircleHelp v-else :size="16" aria-hidden="true" />
+                  <span>{{ sourceDispositionLabel(runReadiness(selectedRun.run)!.source.disposition) }}</span>
+                </p>
+                <span>eligible count：{{ runReadiness(selectedRun.run)!.source.eligibleCount }}</span>
+                <span>source revision：{{ runReadiness(selectedRun.run)!.source.sourceRevision }}</span>
+                <span>受控原因：{{ sourceReasonLabel(runReadiness(selectedRun.run)!.source.reasonCode) }}</span>
+                <strong v-if="runReadiness(selectedRun.run)!.source.repairable">可修复</strong>
+              </section>
+              <section class="readiness-block">
+                <h4>Playback proof</h4>
+                <p class="readiness-state">
+                  <CheckCircle2 v-if="runReadiness(selectedRun.run)!.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
+                  <CircleHelp v-else :size="16" aria-hidden="true" />
+                  <span>{{ runReadiness(selectedRun.run)!.playback.status === 'playback_verified' ? '播放已验证' : '播放未验证' }}</span>
+                </p>
+                <span v-if="runReadiness(selectedRun.run)!.playback.evidence">独立证据：playing · currentTime {{ runReadiness(selectedRun.run)!.playback.evidence!.currentTime }}</span>
+                <span v-else>ready/receipt 不等于浏览器播放证据</span>
+              </section>
+              <section class="readiness-block">
+                <h4>Receipt/source summary</h4>
+                <p class="readiness-state readiness-state-success">
+                  <CheckCircle2 :size="16" aria-hidden="true" />
+                  {{ runReadiness(selectedRun.run)!.receipt.persisted ? 'receipt 已持久化' : 'receipt 未持久化' }}
+                </p>
+                <span>content identity matched：{{ runReadiness(selectedRun.run)!.receipt.primaryContentId === runReadiness(selectedRun.run)!.metadata.contentId ? '是' : '否' }}</span>
+                <span>source revision：{{ runReadiness(selectedRun.run)!.source.sourceRevision }}</span>
+                <span>candidate count：{{ runReadiness(selectedRun.run)!.source.eligibleCount }} · disposition：{{ runReadiness(selectedRun.run)!.source.disposition }}</span>
+                <span v-if="selectedRun.run.receipt && !isRepairReceipt(selectedRun.run.receipt)">新增 {{ selectedRun.run.receipt.createdCount }} · 更新 {{ selectedRun.run.receipt.updatedCount }}</span>
+              </section>
+            </div>
+            <section v-if="sourceHealthRows(selectedRun.run).length" class="source-health-block" aria-labelledby="source-health-title">
+              <div class="source-health-heading">
+                <div>
+                  <h4 id="source-health-title">
+                    Source health
+                  </h4>
+                  <span v-if="isRepairReceipt(selectedRun.run.receipt)">观察时间：{{ selectedRun.run.receipt.observedAt }} · revision：{{ selectedRun.run.receipt.sourceRevision }}</span>
+                </div>
+              </div>
+              <div class="source-health-grid">
+                <article
+                  v-for="source in sourceHealthRows(selectedRun.run)"
+                  :key="`${source.sourceType}-${source.observedAt}-${source.reasonCode}`"
+                  :data-source-row="source.sourceType"
+                  class="source-health-row"
+                >
+                  <strong>{{ sourceTypeLabel(source.sourceType) }}</strong>
+                  <span>{{ sourceHealthLabel(source.health) }}</span>
+                  <span>观察时间：{{ source.observedAt }}</span>
+                  <span>受控原因：{{ sourceHealthReasonLabel(source.reasonCode) }}</span>
+                  <span>{{ source.eligible ? 'eligible · 可作为候选' : 'ineligible · 不作为候选' }}</span>
+                  <button v-if="source.eligible" data-source-action type="button" class="task-secondary" disabled>
+                    当前候选
+                  </button>
+                </article>
+              </div>
+            </section>
+            <div v-if="!runReadiness(selectedRun.run)" class="readiness-loading" role="status">
+              <RefreshCw :size="16" aria-hidden="true" />状态读取中，未推导 ready 或 playback proof。
+            </div>
+            <div
+              v-if="(selectedRun.run.receipt && selectedRun.run.status === 'succeeded') || managementPath(selectedRun.task, selectedRun.run)"
+              class="readiness-actions"
             >
-              {{ managementLabel(selectedRun.task, selectedRun.run) }}
-            </a>
-            <template v-if="selectedRun.run.receipt && selectedRun.run.status === 'succeeded'">
+              <a
+                v-if="managementPath(selectedRun.task, selectedRun.run) && (!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition))"
+                class="task-secondary readiness-link"
+                :href="managementPath(selectedRun.task, selectedRun.run)!"
+              >
+                {{ managementLabel(selectedRun.task, selectedRun.run) }}
+              </a>
+              <template v-if="selectedRun.run.receipt && selectedRun.run.status === 'succeeded'">
+                <button
+                  v-if="repairReasonFor(selectedRun.run, selectedRun.task)"
+                  data-repair-action="open"
+                  class="task-secondary"
+                  type="button"
+                  :disabled="repairAction || repairActionLocked(selectedRun.run)"
+                  @click="askRepair(selectedRun.run)"
+                >
+                  {{ repairAction ? '创建中…' : repairActionLocked(selectedRun.run) ? '当前电影已有活动修复任务' : '发起生产修复' }}
+                </button>
+                <span v-if="repairActionLocked(selectedRun.run)" class="duplicate-lock-copy">当前电影已有活动修复任务，页面聚焦当前 attempt。</span>
+                <button
+                  v-if="!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition)"
+                  class="task-secondary"
+                  type="button"
+                  :disabled="taskRefreshing"
+                  @click="loadTaskPanel"
+                >
+                  {{ taskRefreshing ? '读取中…' : '重试读取' }}
+                </button>
+                <button
+                  v-else-if="runReadiness(selectedRun.run)?.source.disposition === 'repairing'"
+                  class="task-secondary"
+                  type="button"
+                  :disabled="taskRefreshing"
+                  @click="loadTaskPanel"
+                >
+                  {{ taskRefreshing ? '刷新中…' : '刷新状态' }}
+                </button>
+              </template>
+            </div>
+          </div>
+          <div v-if="selectedRun.task.operation === 'repair_players'" class="repair-source-surface" data-evidence-block="source" aria-live="polite">
+            <div class="source-surface-heading">
+              <div>
+                <h4>Current source projection</h4>
+                <span>{{ sourceFactLabel(sourceProjectionFor(selectedRun.task, selectedRun.run)) }}</span>
+              </div>
+              <span v-if="selectedRun.task.allowedNextAction">下一步：{{ repairNextActionLabels[selectedRun.task.allowedNextAction] }}</span>
+            </div>
+            <template v-if="sourceProjectionFor(selectedRun.task, selectedRun.run)">
+              <div class="source-projection-facts">
+                <span>source revision：{{ sourceProjectionFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
+                <span>observedAt：{{ sourceProjectionFor(selectedRun.task, selectedRun.run)!.observedAt }}</span>
+                <span>eligible count：{{ sourceProjectionFor(selectedRun.task, selectedRun.run)!.eligibleCount }}</span>
+                <span>受控原因：{{ sourceProjectionFor(selectedRun.task, selectedRun.run)!.reasonCode ?? '无' }}</span>
+              </div>
+              <div v-if="sourceProjectionFor(selectedRun.task, selectedRun.run)!.rows.length" class="source-health-grid">
+                <article v-for="source in sourceProjectionFor(selectedRun.task, selectedRun.run)!.rows" :key="`${source.sourceType}-${source.observedAt}-${source.reasonCode}`" data-source-row class="source-health-row">
+                  <strong>{{ source.sourceType }}</strong>
+                  <span>{{ source.health }}</span>
+                  <span>观察时间：{{ source.observedAt }}</span>
+                  <span>受控原因：{{ source.reasonCode }}</span>
+                  <span>{{ source.eligible ? 'eligible · 可作为候选' : 'ineligible · 不作为候选' }}</span>
+                </article>
+              </div>
+              <p v-else class="source-empty">
+                暂无来源观察
+              </p>
+            </template>
+            <p v-else class="source-empty">
+              暂无来源观察 · 当前 source projection 尚未上报
+            </p>
+            <div v-if="sourceReadbackFor(selectedRun.task, selectedRun.run)" class="source-readback">
+              <strong>Authoritative source readback</strong>
+              <span>movieId：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.movieId }}</span>
+              <span>revision：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
+              <span>source count：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.sourceCount }}</span>
+              <span>eligible count：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.eligibleCount }}</span>
+            </div>
+            <section
+              class="fact-block actual-playback-block"
+              data-evidence-block="actual-playback"
+              :role="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed' || playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.error ? 'alert' : 'status'"
+              aria-live="polite"
+            >
+              <h4>Actual playback</h4>
+              <p class="fact-state">
+                <CheckCircle2 v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
+                <CircleAlert v-else-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed'" :size="16" aria-hidden="true" />
+                <CircleHelp v-else :size="16" aria-hidden="true" />
+                {{ playbackStatusLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)) }}
+              </p>
+              <template v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)">
+                <span>tuple：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.taskId }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.runId }} / attempt #{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.attemptNumber }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.provider }}</span>
+                <span>content ID：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.contentId }} · source revision：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
+                <span>Viewer path：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.viewer.path }}</span>
+                <span>selected source：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.sourceType }} · {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.status }}</span>
+                <div class="evidence-event-list">
+                  <span v-for="event in playbackSummaryFor(selectedRun.task, selectedRun.run)!.events" :key="event.event">{{ playbackEventLabel(event) }}</span>
+                </div>
+                <span>currentTimeBefore：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeBefore }}</span>
+                <span>currentTimeAfter：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeAfter }}</span>
+                <span>delta：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeDelta }}</span>
+                <span>evidence outcome：{{ playbackOutcomeLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)!.outcome) }}</span>
+                <span class="artifact-status">已写入脱敏 JSON/Markdown · artifact reference：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.artifact.reference }}</span>
+              </template>
+              <span v-else>等待浏览器证据</span>
+              <div v-if="playbackEntryFor(selectedRun.task, selectedRun.run)?.rejections.length" class="evidence-rejection-history">
+                <strong>rejection history</strong>
+                <span v-for="rejection in playbackEntryFor(selectedRun.task, selectedRun.run)!.rejections" :key="`${rejection.outcome}-${rejection.observedAt}`">
+                  {{ rejection.outcome }} · content ID：{{ rejection.contentId }} · source revision：{{ rejection.sourceRevision }}
+                </span>
+              </div>
+            </section>
+            <div class="readiness-actions">
+              <a
+                v-if="managementPath(selectedRun.task, selectedRun.run)"
+                class="task-secondary readiness-link"
+                :href="managementPath(selectedRun.task, selectedRun.run)!"
+              >
+                打开影片
+              </a>
               <button
-                v-if="repairReasonFor(selectedRun.run, selectedRun.task)"
+                v-if="repairReasonFor(selectedRun.run, selectedRun.task) && selectedRun.task.allowedNextAction === 'create_new_task'"
                 data-repair-action="open"
-                class="task-secondary"
+                class="task-primary"
                 type="button"
                 :disabled="repairAction || repairActionLocked(selectedRun.run)"
                 @click="askRepair(selectedRun.run)"
               >
-                {{ repairAction ? '创建中…' : repairActionLocked(selectedRun.run) ? '当前电影已有活动修复任务' : '发起生产修复' }}
+                {{ repairAction ? '提交中…' : repairActionLocked(selectedRun.run) ? '当前电影已有活动修复任务' : '发起生产修复' }}
               </button>
-              <span v-if="repairActionLocked(selectedRun.run)" class="duplicate-lock-copy">当前电影已有活动修复任务，页面聚焦当前 attempt。</span>
-              <button
-                v-if="!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition)"
-                class="task-secondary"
-                type="button"
-                :disabled="taskRefreshing"
-                @click="loadTaskPanel"
-              >
-                {{ taskRefreshing ? '读取中…' : '重试读取' }}
-              </button>
-              <button
-                v-else-if="runReadiness(selectedRun.run)?.source.disposition === 'repairing'"
-                class="task-secondary"
-                type="button"
-                :disabled="taskRefreshing"
-                @click="loadTaskPanel"
-              >
-                {{ taskRefreshing ? '刷新中…' : '刷新状态' }}
-              </button>
-            </template>
+            </div>
           </div>
-        </div>
-        <div v-if="selectedRun.task.operation === 'repair_players'" class="repair-source-surface" data-evidence-block="source" aria-live="polite">
-          <div class="source-surface-heading">
-            <div>
-              <h4>Current source projection</h4>
-              <span>{{ sourceFactLabel(sourceProjectionFor(selectedRun.task, selectedRun.run)) }}</span>
-            </div>
-            <span v-if="selectedRun.task.allowedNextAction">下一步：{{ repairNextActionLabels[selectedRun.task.allowedNextAction] }}</span>
+          <div v-if="selectedRun.run.provider" class="provider-summary">
+            <strong>Provider 摘要</strong>
+            <span>{{ selectedRun.run.provider.provider ?? 'provider' }}</span>
+            <span v-if="selectedRun.run.provider.providerStatus">状态：{{ selectedRun.run.provider.providerStatus }}</span>
+            <span v-if="selectedRun.run.provider.providerConclusion">结论：{{ selectedRun.run.provider.providerConclusion }}</span>
+            <span v-if="selectedRun.run.provider.providerRunAttempt">attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
+            <span v-if="selectedRun.run.provider.sha">SHA：{{ selectedRun.run.provider.sha }}</span>
           </div>
-          <template v-if="sourceProjectionFor(selectedRun.task, selectedRun.run)">
-            <div class="source-projection-facts">
-              <span>source revision：{{ sourceProjectionFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
-              <span>observedAt：{{ sourceProjectionFor(selectedRun.task, selectedRun.run)!.observedAt }}</span>
-              <span>eligible count：{{ sourceProjectionFor(selectedRun.task, selectedRun.run)!.eligibleCount }}</span>
-              <span>受控原因：{{ sourceProjectionFor(selectedRun.task, selectedRun.run)!.reasonCode ?? '无' }}</span>
-            </div>
-            <div v-if="sourceProjectionFor(selectedRun.task, selectedRun.run)!.rows.length" class="source-health-grid">
-              <article v-for="source in sourceProjectionFor(selectedRun.task, selectedRun.run)!.rows" :key="`${source.sourceType}-${source.observedAt}-${source.reasonCode}`" data-source-row class="source-health-row">
-                <strong>{{ source.sourceType }}</strong>
-                <span>{{ source.health }}</span>
-                <span>观察时间：{{ source.observedAt }}</span>
-                <span>受控原因：{{ source.reasonCode }}</span>
-                <span>{{ source.eligible ? 'eligible · 可作为候选' : 'ineligible · 不作为候选' }}</span>
-              </article>
-            </div>
-            <p v-else class="source-empty">
-              暂无来源观察
+          <div class="safe-log-scroller">
+            <p v-if="taskLogs.length === 0">
+              此运行尚未产生可显示的结构化日志；页面可见时会每 5 秒刷新。
             </p>
-          </template>
-          <p v-else class="source-empty">
-            暂无来源观察 · 当前 source projection 尚未上报
-          </p>
-          <div v-if="sourceReadbackFor(selectedRun.task, selectedRun.run)" class="source-readback">
-            <strong>Authoritative source readback</strong>
-            <span>movieId：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.movieId }}</span>
-            <span>revision：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
-            <span>source count：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.sourceCount }}</span>
-            <span>eligible count：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.eligibleCount }}</span>
-          </div>
-          <section
-            class="fact-block actual-playback-block"
-            data-evidence-block="actual-playback"
-            :role="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed' || playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.error ? 'alert' : 'status'"
-            aria-live="polite"
-          >
-            <h4>Actual playback</h4>
-            <p class="fact-state">
-              <CheckCircle2 v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
-              <CircleAlert v-else-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed'" :size="16" aria-hidden="true" />
-              <CircleHelp v-else :size="16" aria-hidden="true" />
-              {{ playbackStatusLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)) }}
-            </p>
-            <template v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)">
-              <span>tuple：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.taskId }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.runId }} / attempt #{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.attemptNumber }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.provider }}</span>
-              <span>content ID：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.contentId }} · source revision：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
-              <span>Viewer path：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.viewer.path }}</span>
-              <span>selected source：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.sourceType }} · {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.status }}</span>
-              <div class="evidence-event-list">
-                <span v-for="event in playbackSummaryFor(selectedRun.task, selectedRun.run)!.events" :key="event.event">{{ playbackEventLabel(event) }}</span>
-              </div>
-              <span>currentTimeBefore：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeBefore }}</span>
-              <span>currentTimeAfter：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeAfter }}</span>
-              <span>delta：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeDelta }}</span>
-              <span>evidence outcome：{{ playbackOutcomeLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)!.outcome) }}</span>
-              <span class="artifact-status">已写入脱敏 JSON/Markdown · artifact reference：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.artifact.reference }}</span>
-            </template>
-            <span v-else>等待浏览器证据</span>
-            <div v-if="playbackEntryFor(selectedRun.task, selectedRun.run)?.rejections.length" class="evidence-rejection-history">
-              <strong>rejection history</strong>
-              <span v-for="rejection in playbackEntryFor(selectedRun.task, selectedRun.run)!.rejections" :key="`${rejection.outcome}-${rejection.observedAt}`">
-                {{ rejection.outcome }} · content ID：{{ rejection.contentId }} · source revision：{{ rejection.sourceRevision }}
-              </span>
+            <div v-for="log in taskLogs" :key="`${log.sequence}-${log.created_at}`" class="safe-log-row">
+              <code :title="String(log.sequence)">#{{ log.sequence }}</code>
+              <time>{{ logTimestamp(log) }}</time>
+              <strong>{{ log.level }}</strong>
+              <code :title="log.code">{{ log.code }}</code>
+              <span>{{ logMessage(log) }}</span>
             </div>
-          </section>
-          <div class="readiness-actions">
-            <a
-              v-if="managementPath(selectedRun.task, selectedRun.run)"
-              class="task-secondary readiness-link"
-              :href="managementPath(selectedRun.task, selectedRun.run)!"
-            >
-              打开影片
-            </a>
-            <button
-              v-if="repairReasonFor(selectedRun.run, selectedRun.task) && selectedRun.task.allowedNextAction === 'create_new_task'"
-              data-repair-action="open"
-              class="task-primary"
-              type="button"
-              :disabled="repairAction || repairActionLocked(selectedRun.run)"
-              @click="askRepair(selectedRun.run)"
-            >
-              {{ repairAction ? '提交中…' : repairActionLocked(selectedRun.run) ? '当前电影已有活动修复任务' : '发起生产修复' }}
+            <button v-if="taskLogCursor !== null" class="task-secondary load-more" type="button" @click="selectedRun && loadTaskLogs(selectedRun.task, selectedRun.run, true)">
+              加载更早日志
             </button>
           </div>
         </div>
-        <div v-if="selectedRun.run.provider" class="provider-summary">
-          <strong>Provider 摘要</strong>
-          <span>{{ selectedRun.run.provider.provider ?? 'provider' }}</span>
-          <span v-if="selectedRun.run.provider.providerStatus">状态：{{ selectedRun.run.provider.providerStatus }}</span>
-          <span v-if="selectedRun.run.provider.providerConclusion">结论：{{ selectedRun.run.provider.providerConclusion }}</span>
-          <span v-if="selectedRun.run.provider.providerRunAttempt">attempt：{{ selectedRun.run.provider.providerRunAttempt }}</span>
-          <span v-if="selectedRun.run.provider.sha">SHA：{{ selectedRun.run.provider.sha }}</span>
+        <div v-else class="task-empty">
+          选择一个最新任务以查看状态、入库结果和结构化日志。
         </div>
-        <div class="safe-log-scroller">
-          <p v-if="taskLogs.length === 0">
-            此运行尚未产生可显示的结构化日志；页面可见时会每 5 秒刷新。
-          </p>
-          <div v-for="log in taskLogs" :key="`${log.sequence}-${log.created_at}`" class="safe-log-row">
-            <code :title="String(log.sequence)">#{{ log.sequence }}</code>
-            <time>{{ logTimestamp(log) }}</time>
-            <strong>{{ log.level }}</strong>
-            <code :title="log.code">{{ log.code }}</code>
-            <span>{{ logMessage(log) }}</span>
-          </div>
-          <button v-if="taskLogCursor !== null" class="task-secondary load-more" type="button" @click="selectedRun && loadTaskLogs(selectedRun.task, selectedRun.run, true)">
-            加载更早日志
-          </button>
-        </div>
-      </div>
-      <div v-else class="task-empty">
-        选择一个最新任务以查看状态、入库结果和结构化日志。
-      </div>
+      </DetailDrawer>
     </section>
 
     <div v-if="loading && !stats.comics && !stats.movies" class="stats-grid">
@@ -1806,12 +1896,19 @@ async function executeClearFailed() {
   gap: 1rem;
 }
 
-.task-history-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  align-items: start;
-}
+.task-history-panel { display: grid; gap: 1rem; }
+.task-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid hsl(var(--border)); }
+.task-tab { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.5rem 0.75rem; color: hsl(var(--muted-foreground)); cursor: pointer; font-weight: 600; }
+.task-tab:hover,
+.task-tab-active { border-bottom-color: hsl(var(--primary)); color: hsl(var(--foreground)); }
+.task-tab-count { min-width: 1.5rem; border-radius: 9999px; background: hsl(var(--secondary)); padding: 0.1rem 0.4rem; font-size: 0.75rem; text-align: center; }
+.task-table-id { display: grid; gap: 0.25rem; min-width: 0; }
+.task-table-id strong { overflow-wrap: anywhere; }
+.task-table-id span { color: hsl(var(--muted-foreground)); font-size: 0.75rem; }
+.task-table-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.25rem; }
+.task-icon-button { display: inline-flex; min-height: 36px; min-width: 36px; align-items: center; justify-content: center; border: 1px solid hsl(var(--border)); border-radius: 0.375rem; background: hsl(var(--secondary)); color: hsl(var(--foreground)); cursor: pointer; transition: background 150ms ease, color 150ms ease; }
+.task-icon-button:hover { background: hsl(var(--muted)); }
+.task-icon-button.task-danger:hover { background: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); }
 
 .task-group {
   display: grid;
@@ -1975,7 +2072,6 @@ async function executeClearFailed() {
 
 @media (max-width: 1023px) {
   .task-grid,
-  .task-history-grid,
   .fact-grid,
   .readiness-grid,
   .source-health-grid,

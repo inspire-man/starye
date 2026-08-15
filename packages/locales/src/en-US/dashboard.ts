@@ -87,6 +87,7 @@ export default {
   dismiss: 'Dismiss',
   edit_post: 'Edit Post',
   create_post: 'Create Post',
+  no_data: 'No posts yet',
   excerpt: 'Excerpt',
   content_markdown: 'Content (Markdown)',
   back: 'Back',

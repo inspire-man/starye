@@ -74,6 +74,24 @@ export interface ParsedError {
   action?: string
 }
 
+type Translate = (key: string) => string
+
+const fallbackTranslations: Record<string, string> = {
+  'errors.network': '网络连接失败，请检查网络设置',
+  'errors.unauthorized': '未授权，请重新登录',
+  'errors.forbidden': '权限不足，请联系管理员',
+  'errors.validation': '输入数据不合法，请检查',
+  'errors.server': '服务器错误，请稍后重试',
+  'errors.unknown': '未知错误',
+  'errors.actions.retry': '请重试',
+  'errors.actions.login': '请重新登录',
+  'errors.actions.contact_support': '联系支持',
+  'errors.actions.check_input': '检查输入',
+  'errors.actions.go_back': '返回',
+}
+
+const fallbackTranslate: Translate = key => fallbackTranslations[key] || key
+
 /**
  * 解析错误对象，识别错误类型
  *
@@ -136,7 +154,7 @@ export function parseError(error: unknown): ParsedError {
 /**
  * 获取用户友好的错误消息
  */
-export function getErrorMessage(parsedError: ParsedError, t: (key: string) => string): string {
+export function getErrorMessage(parsedError: ParsedError, t: Translate): string {
   const { type, statusCode } = parsedError
 
   switch (type) {
@@ -158,7 +176,7 @@ export function getErrorMessage(parsedError: ParsedError, t: (key: string) => st
 /**
  * 获取操作建议
  */
-export function getErrorAction(parsedError: ParsedError, t: (key: string) => string): string {
+export function getErrorAction(parsedError: ParsedError, t: Translate): string {
   const { type } = parsedError
 
   switch (type) {
@@ -175,11 +193,7 @@ export function getErrorAction(parsedError: ParsedError, t: (key: string) => str
   }
 }
 
-/**
- * 统一错误处理方法（集成 Toast 显示）
- */
-export function handleError(error: unknown, customMessage?: string): void {
-  const { t } = useI18n()
+function showHandledError(error: unknown, customMessage: string | undefined, t: Translate): void {
   const parsedError = parseError(error)
 
   // 使用自定义消息或默认消息
@@ -199,6 +213,15 @@ export function handleError(error: unknown, customMessage?: string): void {
 }
 
 /**
+ * 统一错误处理方法（集成 Toast 显示）
+ *
+ * 该导出也会被全局异常监听器调用，因此不能依赖 Vue setup 上下文。
+ */
+export function handleError(error: unknown, customMessage?: string): void {
+  showHandledError(error, customMessage, fallbackTranslate)
+}
+
+/**
  * useErrorHandler Composable
  */
 export function useErrorHandler() {
@@ -208,6 +231,6 @@ export function useErrorHandler() {
     parseError,
     getErrorMessage: (error: ParsedError) => getErrorMessage(error, t),
     getErrorAction: (error: ParsedError) => getErrorAction(error, t),
-    handleError,
+    handleError: (error: unknown, customMessage?: string) => showHandledError(error, customMessage, t),
   }
 }

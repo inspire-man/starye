@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FilterField } from '../types/filterpanel'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 interface Props {
   fields: FilterField[]
@@ -17,6 +17,23 @@ const emit = defineEmits<{
 
 /** 移动端折叠状态 */
 const isExpanded = ref(false)
+/** 桌面端高级筛选状态：前三项作为常用筛选，其余默认收起 */
+const showAdvanced = ref(false)
+
+const primaryFields = computed(() => props.fields.slice(0, 3))
+const advancedFields = computed(() => props.fields.slice(3))
+const hasAdvancedFields = computed(() => advancedFields.value.length > 0)
+const activeAdvancedCount = computed(() => advancedFields.value.filter((field) => {
+  if (field.type === 'dateRange')
+    return props.modelValue[`${field.key}From`] || props.modelValue[`${field.key}To`]
+  const value = props.modelValue[field.key]
+  return Array.isArray(value) ? value.length > 0 : Boolean(value)
+}).length)
+
+watch(activeAdvancedCount, (count) => {
+  if (count > 0)
+    showAdvanced.value = true
+}, { immediate: true })
 
 /** 已激活的筛选项数量 */
 const activeCount = computed(() => {
@@ -42,6 +59,10 @@ function handleApply() {
 
 function handleReset() {
   emit('reset')
+}
+
+function toggleAdvanced() {
+  showAdvanced.value = !showAdvanced.value
 }
 </script>
 
@@ -76,7 +97,7 @@ function handleReset() {
     <div class="filter-body" :class="{ expanded: isExpanded }">
       <div class="filter-grid">
         <div
-          v-for="field in fields"
+          v-for="field in primaryFields"
           :key="field.key"
           class="filter-field"
           :class="{
@@ -153,6 +174,113 @@ function handleReset() {
         </div>
       </div>
 
+      <button
+        v-if="hasAdvancedFields"
+        type="button"
+        class="advanced-toggle"
+        :aria-expanded="showAdvanced"
+        @click="toggleAdvanced"
+      >
+        <span class="advanced-toggle-label">
+          <span>高级筛选</span>
+          <span class="advanced-count">{{ advancedFields.length }} 项</span>
+        </span>
+        <svg
+          class="advanced-chevron"
+          :class="{ rotated: showAdvanced }"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+
+      <Transition name="filter-advanced">
+        <div v-if="hasAdvancedFields && showAdvanced" class="filter-advanced">
+          <div class="filter-grid">
+            <div
+              v-for="field in advancedFields"
+              :key="field.key"
+              class="filter-field"
+              :class="{
+                'col-span-2': field.colSpan === 2,
+                'col-span-3': field.colSpan === 3,
+              }"
+            >
+              <label class="filter-label">{{ field.label }}</label>
+
+              <input
+                v-if="field.type === 'text'"
+                type="text"
+                :value="modelValue[field.key] || ''"
+                :placeholder="field.placeholder"
+                class="filter-input"
+                @input="updateField(field.key, ($event.target as HTMLInputElement).value)"
+              >
+
+              <select
+                v-else-if="field.type === 'select'"
+                :value="modelValue[field.key] || ''"
+                class="filter-input"
+                @change="updateField(field.key, ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">
+                  全部
+                </option>
+                <option
+                  v-for="opt in field.options"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </option>
+              </select>
+
+              <div v-else-if="field.type === 'checkbox'" class="filter-checkboxes">
+                <label
+                  v-for="opt in field.options"
+                  :key="opt.value"
+                  class="filter-checkbox-label"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="(modelValue[field.key] || []).includes(opt.value)"
+                    @change="(e) => {
+                      const checked = (e.target as HTMLInputElement).checked
+                      const current = modelValue[field.key] || []
+                      const updated = checked
+                        ? [...current, opt.value]
+                        : current.filter((v: string) => v !== opt.value)
+                      updateField(field.key, updated)
+                    }"
+                  >
+                  {{ opt.label }}
+                </label>
+              </div>
+
+              <div v-else-if="field.type === 'dateRange'" class="filter-date-range">
+                <input
+                  type="date"
+                  :value="modelValue[`${field.key}From`] || ''"
+                  class="filter-input"
+                  @input="updateField(`${field.key}From`, ($event.target as HTMLInputElement).value)"
+                >
+                <span class="filter-date-sep">至</span>
+                <input
+                  type="date"
+                  :value="modelValue[`${field.key}To`] || ''"
+                  class="filter-input"
+                  @input="updateField(`${field.key}To`, ($event.target as HTMLInputElement).value)"
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
       <div class="filter-actions">
         <button type="button" class="filter-btn-reset" @click="handleReset">
           重置
@@ -168,10 +296,11 @@ function handleReset() {
 <style scoped>
 .filter-panel {
   margin-bottom: 1.5rem;
-  border-radius: 0.5rem;
-  background-color: hsl(var(--background));
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  outline: 1px solid hsl(var(--border));
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  background-color: hsl(var(--card));
+  box-shadow: 0 6px 20px hsl(var(--foreground) / 0.04);
 }
 
 /* 移动端折叠按钮：默认显示，桌面端隐藏 */
@@ -180,6 +309,9 @@ function handleReset() {
   width: 100%;
   align-items: center;
   justify-content: space-between;
+  min-height: 3rem;
+  border: 0;
+  background: transparent;
   padding: 0.75rem 1rem;
   cursor: pointer;
 }
@@ -230,7 +362,7 @@ function handleReset() {
 /* 内容区：移动端默认收起，展开时显示 */
 .filter-body {
   display: none;
-  padding: 1rem;
+  padding: 1.125rem;
 }
 
 .filter-body.expanded {
@@ -241,8 +373,7 @@ function handleReset() {
 .filter-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.875rem;
 }
 
 .filter-field {
@@ -258,9 +389,10 @@ function handleReset() {
 }
 
 .filter-input {
-  border-radius: 0.375rem;
+  min-height: 2.5rem;
+  border-radius: 0.5rem;
   border: 1px solid hsl(var(--border));
-  background-color: hsl(var(--background));
+  background-color: hsl(var(--background) / 0.8);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   color: hsl(var(--foreground));
@@ -272,7 +404,74 @@ function handleReset() {
 .filter-input:focus {
   outline: none;
   border-color: hsl(var(--primary));
-  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.1);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+}
+
+.advanced-toggle {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--muted) / 0.45);
+  padding: 0.5rem 0.75rem;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.advanced-toggle:hover {
+  border-color: hsl(var(--primary) / 0.55);
+  background: hsl(var(--muted));
+}
+
+.advanced-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.advanced-count {
+  border-radius: 9999px;
+  background: hsl(var(--background));
+  padding: 0.125rem 0.45rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.advanced-chevron {
+  width: 1rem;
+  height: 1rem;
+  color: hsl(var(--muted-foreground));
+  transition: transform 180ms ease;
+}
+
+.advanced-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.filter-advanced-enter-active,
+.filter-advanced-leave-active {
+  overflow: hidden;
+  transition: max-height 180ms ease, opacity 180ms ease;
+}
+
+.filter-advanced-enter-from,
+.filter-advanced-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+.filter-advanced-enter-to,
+.filter-advanced-leave-from {
+  max-height: 30rem;
+  opacity: 1;
 }
 
 .filter-checkboxes {
@@ -308,14 +507,17 @@ function handleReset() {
 
 .filter-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
   border-top: 1px solid hsl(var(--border));
-  padding-top: 1rem;
+  margin-top: 1.125rem;
+  padding-top: 1.125rem;
 }
 
 .filter-btn-reset {
-  border-radius: 0.375rem;
+  min-height: 2.5rem;
+  border-radius: 0.5rem;
   border: 1px solid hsl(var(--border));
   background-color: hsl(var(--background));
   padding: 0.5rem 1rem;
@@ -331,7 +533,9 @@ function handleReset() {
 }
 
 .filter-btn-apply {
-  border-radius: 0.375rem;
+  min-height: 2.5rem;
+  border: 1px solid hsl(var(--primary));
+  border-radius: 0.5rem;
   background-color: hsl(var(--primary));
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
@@ -353,7 +557,7 @@ function handleReset() {
 
   .filter-body {
     display: block;
-    padding: 1.5rem;
+    padding: 1.25rem;
   }
 
   .filter-grid {

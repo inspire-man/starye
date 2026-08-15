@@ -2,6 +2,7 @@
 export { default as ComicCard } from './components/ComicCard.vue'
 export { default as ConfirmDialog } from './components/ConfirmDialog.vue'
 export { default as DataTable } from './components/DataTable.vue'
+export { default as DetailDrawer } from './components/DetailDrawer.vue'
 export { default as ErrorDisplay } from './components/ErrorDisplay.vue'
 export { default as FilterPanel } from './components/FilterPanel.vue'
 export { default as MovieCard } from './components/MovieCard.vue'

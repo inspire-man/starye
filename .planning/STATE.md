@@ -6,9 +6,9 @@ current_phase: 26
 current_phase_name: Video Source And Magnet Availability
 status: executing
 stopped_at: Completed 26-06-PLAN.md
-last_updated: "2026-08-13T04:05:00.000Z"
-last_activity: 2026-08-13
-last_activity_desc: Completed 26-06-PLAN.md
+last_updated: "2026-08-15T00:48:20.000+08:00"
+last_activity: 2026-08-15
+last_activity_desc: Completed quick task 260814-okh-200-ui
 progress:
   total_phases: 2
   completed_phases: 1
@@ -116,8 +116,15 @@ Items acknowledged and carried forward from previous milestone close:
 | artifact_audit | Eight historical v1.3 artifact-audit items | deferred; not v1.4 success evidence | v1.3 closeout |
 | technical_debt | `@starye/config` CI lint baseline | non-causal; separate follow-up | v1.3 closeout |
 
+### Quick Tasks Completed
+
+| Quick | Date | Outcome |
+|-------|------|---------|
+| `260814-jrk-crawler-monitor-drawer-relations` | 2026-08-14 | D1 无封面 fixture 清理、厂商关联入库覆盖、Dashboard 共享详情抽屉、爬虫 tabs/table/归档操作完成；测试与类型检查通过 |
+| `260814-okh-200-ui` | 2026-08-15 | 生产非 200 封面与孤儿女优/厂商清理、关系重同步、全列表分页/高级筛选/抽屉视觉统一完成；lint、构建、类型检查与定向测试通过 |
+
 ## Session Continuity
 
-Last session: 2026-08-13T12:05:00+08:00
-Stopped at: Completed 26-06-PLAN.md
+Last session: 2026-08-15T00:48:20+08:00
+Stopped at: Completed quick task 260814-okh-200-ui
 Resume file: None

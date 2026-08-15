@@ -217,12 +217,12 @@ describe('comics.vue 集成测试', () => {
     mockRoute.query = { receipt: 'comic-uuid-1' }
     mockGetComic.mockResolvedValue({ data: { id: 'comic-uuid-1', title: 'Receipt Comic', isR18: false, metadataLocked: false } })
 
-    const wrapper = mount(Comics)
+    mount(Comics)
     await flushPromises()
 
     expect(mockGetComic).toHaveBeenCalledOnce()
     expect(mockGetComic).toHaveBeenCalledWith('comic-uuid-1')
-    expect(wrapper.findAll('input').some(input => (input.element as HTMLInputElement).value === 'Receipt Comic')).toBe(true)
+    expect([...document.body.querySelectorAll('input')].some(input => (input as HTMLInputElement).value === 'Receipt Comic')).toBe(true)
   })
 
   it('忽略不符合主内容 ID 格式的 receipt 查询', async () => {
@@ -437,21 +437,22 @@ describe('comics.vue 集成测试', () => {
       await editButton!.trigger('click')
       await flushPromises()
 
-      const fileInput = wrapper.find('input[type="file"]')
+      const fileInput = document.body.querySelector('input[type="file"]') as HTMLInputElement | null
+      expect(fileInput).not.toBeNull()
       const file = new File(['cover'], 'cover.png', { type: 'image/png' })
 
-      Object.defineProperty(fileInput.element, 'files', {
+      Object.defineProperty(fileInput!, 'files', {
         value: [file],
         configurable: true,
       })
 
-      await fileInput.trigger('change')
+      fileInput!.dispatchEvent(new Event('change', { bubbles: true }))
       await flushPromises()
 
       expect(mockUploadImage).toHaveBeenCalledWith(file, 'cover')
 
-      const coverUrlInput = wrapper.find('input[placeholder="https://..."]')
-      expect((coverUrlInput.element as HTMLInputElement).value).toBe('https://cdn.example.com/covers/manual/cover-preview.webp')
+      const coverUrlInput = document.body.querySelector<HTMLInputElement>('input[placeholder="https://..."]')
+      expect(coverUrlInput?.value).toBe('https://cdn.example.com/covers/manual/cover-preview.webp')
     })
   })
 })

@@ -10,7 +10,7 @@
  */
 
 import type { Movie, Player } from '@/lib/api'
-import { ConfirmDialog, DataTable, FilterPanel, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
+import { ConfirmDialog, DataTable, DetailDrawer, FilterPanel, Pagination, SkeletonTable, useFilters, usePagination, useToast } from '@starye/ui'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ActorSelector from '@/components/ActorSelector.vue'
@@ -712,244 +712,241 @@ const tableColumns = [
       @update:page-size="updatePageSize"
     />
 
-    <Teleport to="body">
-      <div v-if="isEditModalOpen" class="modal-overlay" @click="isEditModalOpen = false">
-        <div class="modal-container" @click.stop>
-          <div class="modal-header">
-            <h2>编辑电影</h2>
-            <button class="close-btn" @click="isEditModalOpen = false">
-              ✕
-            </button>
-          </div>
+    <DetailDrawer
+      :open="isEditModalOpen && !!editingMovie"
+      title="编辑电影"
+      :description="editingMovie?.code ?? ''"
+      width="lg"
+      @update:open="isEditModalOpen = $event"
+    >
+      <div class="drawer-content">
+        <div class="tabs">
+          <button
+            class="tab" :class="[activeTab === 'metadata' && 'active']"
+            @click="activeTab = 'metadata'"
+          >
+            元数据
+          </button>
+          <button
+            class="tab" :class="[activeTab === 'players' && 'active']"
+            @click="activeTab = 'players'"
+          >
+            播放源 ({{ players.length }})
+          </button>
+        </div>
 
-          <div class="tabs">
-            <button
-              class="tab" :class="[activeTab === 'metadata' && 'active']"
-              @click="activeTab = 'metadata'"
-            >
-              元数据
-            </button>
-            <button
-              class="tab" :class="[activeTab === 'players' && 'active']"
-              @click="activeTab = 'players'"
-            >
-              播放源 ({{ players.length }})
-            </button>
-          </div>
+        <div v-if="activeTab === 'metadata'" class="modal-body">
+          <div v-if="editingMovie" class="form">
+            <div class="form-row">
+              <ImageUpload
+                v-model="editingMovie.coverImage as string"
+              />
+            </div>
 
-          <div v-if="activeTab === 'metadata'" class="modal-body">
-            <div v-if="editingMovie" class="form">
-              <div class="form-row">
-                <ImageUpload
-                  v-model="editingMovie.coverImage as string"
-                />
-              </div>
+            <div class="form-row">
+              <label>番号</label>
+              <input v-model="editingMovie.code" type="text" disabled>
+            </div>
 
-              <div class="form-row">
-                <label>番号</label>
-                <input v-model="editingMovie.code" type="text" disabled>
-              </div>
+            <div class="form-row">
+              <label>标题</label>
+              <input v-model="editingMovie.title" type="text">
+            </div>
 
-              <div class="form-row">
-                <label>标题</label>
-                <input v-model="editingMovie.title" type="text">
-              </div>
+            <div class="form-row">
+              <label>简介</label>
+              <textarea v-model="editingMovie.description" rows="4" />
+            </div>
 
-              <div class="form-row">
-                <label>简介</label>
-                <textarea v-model="editingMovie.description" rows="4" />
-              </div>
+            <div class="form-row">
+              <label>系列</label>
+              <input v-model="editingMovie.series" type="text" placeholder="如：SODSTAR, ROCKET">
+            </div>
 
-              <div class="form-row">
-                <label>系列</label>
-                <input v-model="editingMovie.series" type="text" placeholder="如：SODSTAR, ROCKET">
-              </div>
+            <div class="form-row">
+              <label>厂商</label>
+              <input v-model="editingMovie.publisher" type="text" placeholder="如：SODクリエイト">
+            </div>
 
-              <div class="form-row">
-                <label>厂商</label>
-                <input v-model="editingMovie.publisher" type="text" placeholder="如：SODクリエイト">
-              </div>
+            <div class="form-row">
+              <ActorSelector v-model="selectedActors" />
+            </div>
 
-              <div class="form-row">
-                <ActorSelector v-model="selectedActors" />
-              </div>
+            <div class="form-row">
+              <PublisherSelector v-model="selectedPublishers" />
+            </div>
 
-              <div class="form-row">
-                <PublisherSelector v-model="selectedPublishers" />
-              </div>
+            <div class="form-row-inline">
+              <label>
+                <input v-model="editingMovie.isR18" type="checkbox">
+                R18 内容
+              </label>
+              <label>
+                <input v-model="editingMovie.metadataLocked" type="checkbox">
+                锁定元数据
+              </label>
+            </div>
 
-              <div class="form-row-inline">
-                <label>
-                  <input v-model="editingMovie.isR18" type="checkbox">
-                  R18 内容
-                </label>
-                <label>
-                  <input v-model="editingMovie.metadataLocked" type="checkbox">
-                  锁定元数据
-                </label>
-              </div>
-
-              <div class="form-row">
-                <label>排序权重</label>
-                <input v-model.number="editingMovie.sortOrder" type="number">
-                <p class="hint">
-                  值越大越靠前
-                </p>
-              </div>
+            <div class="form-row">
+              <label>排序权重</label>
+              <input v-model.number="editingMovie.sortOrder" type="number">
+              <p class="hint">
+                值越大越靠前
+              </p>
             </div>
           </div>
+        </div>
 
-          <div v-else-if="activeTab === 'players'" class="modal-body">
-            <div v-if="playersLoading" class="loading-state">
-              加载中...
+        <div v-else-if="activeTab === 'players'" class="modal-body">
+          <div v-if="playersLoading" class="loading-state">
+            加载中...
+          </div>
+          <div v-else class="players-list">
+            <!-- 顶部工具栏 -->
+            <div class="players-toolbar">
+              <button class="btn-add-player" @click="showAddForm = !showAddForm">
+                + 添加播放源
+              </button>
             </div>
-            <div v-else class="players-list">
-              <!-- 顶部工具栏 -->
-              <div class="players-toolbar">
-                <button class="btn-add-player" @click="showAddForm = !showAddForm">
-                  + 添加播放源
+
+            <!-- 内联新增表单 -->
+            <div v-if="showAddForm" class="player-item player-add-form">
+              <div class="player-inline-fields">
+                <input
+                  v-model="newPlayerData.sourceName"
+                  type="text"
+                  placeholder="源名称（必填）"
+                  class="player-input"
+                >
+                <input
+                  v-model="newPlayerData.sourceUrl"
+                  type="text"
+                  placeholder="播放地址（必填）"
+                  class="player-input player-input-url"
+                >
+                <input
+                  v-model="newPlayerData.quality"
+                  type="text"
+                  placeholder="画质（如 HD）"
+                  class="player-input player-input-quality"
+                >
+              </div>
+              <div class="player-actions">
+                <button
+                  class="btn-player-save"
+                  :disabled="addPlayerLoading || !newPlayerData.sourceName || !newPlayerData.sourceUrl"
+                  @click="handleAddPlayer"
+                >
+                  {{ addPlayerLoading ? '添加中...' : '确认' }}
+                </button>
+                <button class="btn-player-cancel" @click="showAddForm = false; newPlayerData = { sourceName: '', sourceUrl: '', quality: '' }">
+                  取消
                 </button>
               </div>
+            </div>
 
-              <!-- 内联新增表单 -->
-              <div v-if="showAddForm" class="player-item player-add-form">
+            <div v-if="players.length === 0 && !showAddForm" class="empty-state">
+              暂无播放源
+            </div>
+
+            <!-- 播放源列表 -->
+            <div
+              v-for="player in players"
+              :key="player.id"
+              class="player-item"
+            >
+              <!-- 编辑态 -->
+              <template v-if="editingPlayerId === player.id">
                 <div class="player-inline-fields">
                   <input
-                    v-model="newPlayerData.sourceName"
+                    v-model="editingPlayerData.sourceName"
                     type="text"
-                    placeholder="源名称（必填）"
+                    placeholder="源名称"
                     class="player-input"
                   >
                   <input
-                    v-model="newPlayerData.sourceUrl"
+                    v-model="editingPlayerData.sourceUrl"
                     type="text"
-                    placeholder="播放地址（必填）"
+                    placeholder="播放地址"
                     class="player-input player-input-url"
                   >
                   <input
-                    v-model="newPlayerData.quality"
+                    v-model="editingPlayerData.quality"
                     type="text"
-                    placeholder="画质（如 HD）"
+                    placeholder="画质"
                     class="player-input player-input-quality"
                   >
                 </div>
                 <div class="player-actions">
                   <button
                     class="btn-player-save"
-                    :disabled="addPlayerLoading || !newPlayerData.sourceName || !newPlayerData.sourceUrl"
-                    @click="handleAddPlayer"
+                    :disabled="savePlayerLoading"
+                    @click="handleSavePlayer"
                   >
-                    {{ addPlayerLoading ? '添加中...' : '确认' }}
+                    {{ savePlayerLoading ? '保存中...' : '保存' }}
                   </button>
-                  <button class="btn-player-cancel" @click="showAddForm = false; newPlayerData = { sourceName: '', sourceUrl: '', quality: '' }">
+                  <button class="btn-player-cancel" @click="cancelEditPlayer">
                     取消
                   </button>
                 </div>
-              </div>
+              </template>
 
-              <div v-if="players.length === 0 && !showAddForm" class="empty-state">
-                暂无播放源
-              </div>
+              <!-- 删除确认态 -->
+              <template v-else-if="deletingPlayerId === player.id">
+                <div class="player-info">
+                  <strong>{{ player.sourceName }}</strong>
+                  <span class="player-url">{{ player.sourceUrl }}</span>
+                </div>
+                <div class="player-actions player-delete-confirm">
+                  <span class="delete-confirm-text">确认删除？</span>
+                  <button
+                    class="btn-player-delete-confirm"
+                    :disabled="deletePlayerLoading"
+                    @click="handleDeletePlayer"
+                  >
+                    {{ deletePlayerLoading ? '删除中...' : '确认' }}
+                  </button>
+                  <button class="btn-player-cancel" @click="cancelDeletePlayer">
+                    取消
+                  </button>
+                </div>
+              </template>
 
-              <!-- 播放源列表 -->
-              <div
-                v-for="player in players"
-                :key="player.id"
-                class="player-item"
-              >
-                <!-- 编辑态 -->
-                <template v-if="editingPlayerId === player.id">
-                  <div class="player-inline-fields">
-                    <input
-                      v-model="editingPlayerData.sourceName"
-                      type="text"
-                      placeholder="源名称"
-                      class="player-input"
-                    >
-                    <input
-                      v-model="editingPlayerData.sourceUrl"
-                      type="text"
-                      placeholder="播放地址"
-                      class="player-input player-input-url"
-                    >
-                    <input
-                      v-model="editingPlayerData.quality"
-                      type="text"
-                      placeholder="画质"
-                      class="player-input player-input-quality"
-                    >
-                  </div>
-                  <div class="player-actions">
-                    <button
-                      class="btn-player-save"
-                      :disabled="savePlayerLoading"
-                      @click="handleSavePlayer"
-                    >
-                      {{ savePlayerLoading ? '保存中...' : '保存' }}
-                    </button>
-                    <button class="btn-player-cancel" @click="cancelEditPlayer">
-                      取消
-                    </button>
-                  </div>
-                </template>
-
-                <!-- 删除确认态 -->
-                <template v-else-if="deletingPlayerId === player.id">
-                  <div class="player-info">
-                    <strong>{{ player.sourceName }}</strong>
-                    <span class="player-url">{{ player.sourceUrl }}</span>
-                  </div>
-                  <div class="player-actions player-delete-confirm">
-                    <span class="delete-confirm-text">确认删除？</span>
-                    <button
-                      class="btn-player-delete-confirm"
-                      :disabled="deletePlayerLoading"
-                      @click="handleDeletePlayer"
-                    >
-                      {{ deletePlayerLoading ? '删除中...' : '确认' }}
-                    </button>
-                    <button class="btn-player-cancel" @click="cancelDeletePlayer">
-                      取消
-                    </button>
-                  </div>
-                </template>
-
-                <!-- 只读态 -->
-                <template v-else>
-                  <div class="player-info">
-                    <strong>{{ player.sourceName }}</strong>
-                    <span class="player-url">{{ player.sourceUrl }}</span>
-                    <span v-if="player.quality" class="quality-badge">{{ player.quality }}</span>
-                  </div>
-                  <div class="player-actions">
-                    <button class="btn-player-edit" @click="startEditPlayer(player)">
-                      编辑
-                    </button>
-                    <button class="btn-player-delete" @click="startDeletePlayer(player.id)">
-                      删除
-                    </button>
-                  </div>
-                </template>
-              </div>
+              <!-- 只读态 -->
+              <template v-else>
+                <div class="player-info">
+                  <strong>{{ player.sourceName }}</strong>
+                  <span class="player-url">{{ player.sourceUrl }}</span>
+                  <span v-if="player.quality" class="quality-badge">{{ player.quality }}</span>
+                </div>
+                <div class="player-actions">
+                  <button class="btn-player-edit" @click="startEditPlayer(player)">
+                    编辑
+                  </button>
+                  <button class="btn-player-delete" @click="startDeletePlayer(player.id)">
+                    删除
+                  </button>
+                </div>
+              </template>
             </div>
           </div>
+        </div>
 
-          <div class="modal-footer">
-            <button class="btn-secondary" @click="isEditModalOpen = false">
-              取消
-            </button>
-            <button
-              v-if="activeTab === 'metadata'"
-              class="btn-primary"
-              :disabled="updateLoading"
-              @click="handleUpdate"
-            >
-              {{ updateLoading ? '保存中...' : '保存' }}
-            </button>
-          </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="isEditModalOpen = false">
+            取消
+          </button>
+          <button
+            v-if="activeTab === 'metadata'"
+            class="btn-primary"
+            :disabled="updateLoading"
+            @click="handleUpdate"
+          >
+            {{ updateLoading ? '保存中...' : '保存' }}
+          </button>
         </div>
       </div>
-    </Teleport>
+    </DetailDrawer>
 
     <ConfirmDialog
       v-model:open="confirmDialogOpen"

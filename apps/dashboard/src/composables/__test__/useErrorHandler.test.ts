@@ -2,8 +2,12 @@
  * useErrorHandler composable 单元测试
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getErrorAction, getErrorMessage, handleError, parseError } from '../useErrorHandler'
+
+const { useI18nMock } = vi.hoisted(() => ({
+  useI18nMock: vi.fn(),
+}))
 
 // Mock useToast from @starye/ui
 vi.mock('@starye/ui', () => ({
@@ -12,7 +16,12 @@ vi.mock('@starye/ui', () => ({
 
 // Mock vue-i18n
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({
+  useI18n: useI18nMock,
+}))
+
+beforeEach(() => {
+  useI18nMock.mockClear()
+  useI18nMock.mockReturnValue({
     t: (key: string) => {
       const translations: Record<string, string> = {
         'errors.network': '网络连接失败，请检查网络设置',
@@ -30,8 +39,8 @@ vi.mock('vue-i18n', () => ({
       }
       return translations[key] || key
     },
-  }),
-}))
+  })
+})
 
 describe('useErrorHandler', () => {
   describe('parseError', () => {
@@ -201,6 +210,11 @@ describe('useErrorHandler', () => {
   })
 
   describe('handleError', () => {
+    it('全局错误处理不依赖 Vue setup 上下文', () => {
+      expect(() => handleError(new Error('Global error'))).not.toThrow()
+      expect(useI18nMock).not.toHaveBeenCalled()
+    })
+
     it('应该调用 Toast 显示错误', async () => {
       const { error: showErrorToast } = await import('@starye/ui')
 

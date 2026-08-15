@@ -9,7 +9,8 @@
  * - 删除错误映射
  */
 
-import { computed, onMounted, ref } from 'vue'
+import { DetailDrawer, Pagination } from '@starye/ui'
+import { computed, onMounted, ref, watch } from 'vue'
 import { fetchApi } from '@/lib/api'
 
 interface UnmappedActor {
@@ -41,6 +42,12 @@ const searchQuery = ref('')
 const sortBy = ref<'name' | 'movieCount'>('movieCount')
 const sortOrder = ref<'asc' | 'desc'>('desc')
 const minMovieCount = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalPages = ref(1)
+const totalItems = ref(0)
+const selectedMapping = ref<UnmappedActor | null>(null)
+const mappingDrawerOpen = ref(false)
 
 // 计算过滤后的列表
 const filteredUnmapped = computed(() => {
@@ -75,6 +82,42 @@ const filteredUnmapped = computed(() => {
 
   return filtered
 })
+
+const pagedUnmapped = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredUnmapped.value.slice(start, start + pageSize.value)
+})
+
+function syncPagination() {
+  totalItems.value = filteredUnmapped.value.length
+  totalPages.value = Math.max(1, Math.ceil(totalItems.value / pageSize.value))
+  if (currentPage.value > totalPages.value)
+    currentPage.value = totalPages.value
+}
+
+function resetToFirstPage() {
+  currentPage.value = 1
+  syncPagination()
+}
+
+function openMappingDetails(item: UnmappedActor) {
+  selectedMapping.value = item
+  mappingDrawerOpen.value = true
+}
+
+function closeMappingDetails() {
+  mappingDrawerOpen.value = false
+  selectedMapping.value = null
+}
+
+function prepareMapping(item: UnmappedActor) {
+  addForm.value.javbusName = item.name
+  showAddForm.value = true
+  closeMappingDetails()
+}
+
+watch([filteredUnmapped, pageSize], syncPagination, { immediate: true })
+watch([activeTab, searchQuery, minMovieCount, sortBy, sortOrder], resetToFirstPage)
 
 async function loadUnmappedData() {
   loading.value = true
@@ -159,13 +202,13 @@ function getPriorityBadge(movieCount?: number) {
   return 'P3'
 }
 
-function getPriorityColor(movieCount?: number) {
+function getPriorityClass(movieCount?: number) {
   const priority = getPriorityBadge(movieCount)
   switch (priority) {
-    case 'P0': return '#dc2626' // red
-    case 'P1': return '#f59e0b' // amber
-    case 'P2': return '#3b82f6' // blue
-    default: return '#6b7280' // gray
+    case 'P0': return 'priority-p0'
+    case 'P1': return 'priority-p1'
+    case 'P2': return 'priority-p2'
+    default: return 'priority-p3'
   }
 }
 
@@ -336,11 +379,18 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in filteredUnmapped" :key="item.name">
+              <tr
+                v-for="item in pagedUnmapped"
+                :key="item.name"
+                class="cursor-pointer transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                tabindex="0"
+                @click="openMappingDetails(item)"
+                @keydown.enter="openMappingDetails(item)"
+              >
                 <td>
                   <span
                     class="priority-badge"
-                    :style="{ background: getPriorityColor(item.movieCount) }"
+                    :class="getPriorityClass(item.movieCount)"
                   >
                     {{ getPriorityBadge(item.movieCount) }}
                   </span>
@@ -364,7 +414,7 @@ onMounted(() => {
                 <td>
                   <button
                     class="btn-link"
-                    @click="addForm.javbusName = item.name; showAddForm = true"
+                    @click.stop="prepareMapping(item)"
                   >
                     添加映射
                   </button>
@@ -374,13 +424,97 @@ onMounted(() => {
           </table>
         </div>
       </div>
+
+      <Pagination
+        v-if="totalItems > 0"
+        :current-page="currentPage"
+        :total-pages="totalPages"
+        :total="totalItems"
+        :page-size="pageSize"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @update:current-page="currentPage = $event"
+        @update:page-size="pageSize = $event"
+      />
+
+      <DetailDrawer
+        :open="mappingDrawerOpen && !!selectedMapping"
+        :title="selectedMapping?.name || '映射详情'"
+        :description="activeTab === 'actors' ? '女优未匹配记录' : '厂商未匹配记录'"
+        width="sm"
+        @update:open="$event ? undefined : closeMappingDetails()"
+      >
+        <div v-if="selectedMapping" class="space-y-5">
+          <div class="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-4">
+            <div>
+              <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                匹配优先级
+              </p>
+              <span class="mt-2 inline-flex rounded-md px-2.5 py-1 text-xs font-semibold text-primary-foreground" :class="getPriorityClass(selectedMapping.movieCount)">
+                {{ getPriorityBadge(selectedMapping.movieCount) }}
+              </span>
+            </div>
+            <div class="text-right">
+              <p class="text-xs text-muted-foreground">
+                关联作品
+              </p>
+              <p class="mt-1 text-xl font-semibold">
+                {{ selectedMapping.movieCount || 0 }}
+              </p>
+            </div>
+          </div>
+
+          <dl class="divide-y divide-border rounded-xl border border-border">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <dt class="text-sm text-muted-foreground">
+                名称
+              </dt>
+              <dd class="break-all text-right text-sm font-medium">
+                {{ selectedMapping.name }}
+              </dd>
+            </div>
+            <div class="flex items-start justify-between gap-4 px-4 py-3">
+              <dt class="shrink-0 text-sm text-muted-foreground">
+                尝试方式
+              </dt>
+              <dd class="flex flex-wrap justify-end gap-1.5 text-right">
+                <span v-for="attempt in selectedMapping.attempts" :key="attempt" class="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                  {{ attempt }}
+                </span>
+                <span v-if="!selectedMapping.attempts?.length" class="text-sm text-muted-foreground">暂无记录</span>
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <dt class="text-sm text-muted-foreground">
+                最后尝试
+              </dt>
+              <dd class="text-sm">
+                {{ formatDate(selectedMapping.lastAttempt) }}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end">
+            <button
+              v-if="selectedMapping"
+              class="btn-primary"
+              type="button"
+              @click.stop="prepareMapping(selectedMapping)"
+            >
+              添加映射
+            </button>
+          </div>
+        </template>
+      </DetailDrawer>
     </div>
   </div>
 </template>
 
 <style scoped>
 .name-mapping-management {
-  padding: 24px;
+  padding: 1.5rem;
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -399,11 +533,12 @@ onMounted(() => {
 }
 
 .btn-primary {
-  padding: 10px 24px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: 1px solid hsl(var(--primary));
+  border-radius: 0.5rem;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -411,7 +546,7 @@ onMounted(() => {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: hsl(var(--primary) / 0.9);
 }
 
 .btn-primary:disabled {
@@ -420,11 +555,12 @@ onMounted(() => {
 }
 
 .btn-secondary {
-  padding: 10px 24px;
-  background: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -432,28 +568,28 @@ onMounted(() => {
 }
 
 .btn-secondary:hover {
-  background: #f3f4f6;
+  background: hsl(var(--muted));
 }
 
 .btn-link {
   padding: 0;
   background: none;
   border: none;
-  color: #3b82f6;
+  color: hsl(var(--primary));
   cursor: pointer;
   font-size: 14px;
   text-decoration: underline;
 }
 
 .btn-link:hover {
-  color: #2563eb;
+  color: hsl(var(--primary) / 0.8);
 }
 
 .add-form-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 24px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 1.25rem;
   margin-bottom: 24px;
 }
 
@@ -484,15 +620,18 @@ onMounted(() => {
 .form-group label {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: hsl(var(--muted-foreground));
 }
 
 .form-input,
 .select,
 .search-input {
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
   font-size: 14px;
   transition: border-color 0.2s;
 }
@@ -501,7 +640,8 @@ onMounted(() => {
 .select:focus,
 .search-input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
 }
 
 .form-actions {
@@ -511,10 +651,10 @@ onMounted(() => {
 
 .error-message {
   padding: 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  color: #dc2626;
+  background: hsl(var(--destructive) / 0.06);
+  border: 1px solid hsl(var(--destructive) / 0.25);
+  border-radius: 0.5rem;
+  color: hsl(var(--destructive));
   font-size: 14px;
 }
 
@@ -522,7 +662,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   margin-bottom: 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 .tab {
@@ -533,13 +673,13 @@ onMounted(() => {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   transition: all 0.2s;
 }
 
 .tab.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--primary));
 }
 
 .toolbar {
@@ -548,9 +688,9 @@ onMounted(() => {
   align-items: flex-end;
   margin-bottom: 24px;
   padding: 16px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
 }
 
 .search-input {
@@ -566,29 +706,29 @@ onMounted(() => {
 .error {
   padding: 48px;
   text-align: center;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
 }
 
 .error {
-  color: #dc2626;
+  color: hsl(var(--destructive));
 }
 
 .error-hint {
   margin-top: 12px;
   font-size: 13px;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
 }
 
 .empty-state {
   padding: 48px;
   text-align: center;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
 }
 
 .empty-state .hint {
   margin-top: 8px;
   font-size: 14px;
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground) / 0.75);
 }
 
 .content {
@@ -598,9 +738,9 @@ onMounted(() => {
 }
 
 .card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
   overflow: hidden;
 }
 
@@ -609,8 +749,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.35);
 }
 
 .card-header h2 {
@@ -621,8 +761,8 @@ onMounted(() => {
 
 .badge {
   padding: 4px 12px;
-  background: #e0e7ff;
-  color: #4338ca;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
@@ -641,23 +781,28 @@ onMounted(() => {
 .data-table td {
   padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 .data-table th {
-  background: #f9fafb;
+  background: hsl(var(--muted) / 0.35);
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: hsl(var(--muted-foreground));
 }
 
 .data-table td {
   font-size: 14px;
-  color: #111827;
+  color: hsl(var(--foreground));
+}
+
+.data-table th:last-child,
+.data-table td:last-child {
+  text-align: right;
 }
 
 .data-table tbody tr:hover {
-  background: #f9fafb;
+  background: hsl(var(--muted) / 0.35);
 }
 
 .name-cell {
@@ -667,11 +812,16 @@ onMounted(() => {
 .priority-badge {
   display: inline-block;
   padding: 4px 8px;
-  color: white;
-  border-radius: 4px;
+  color: hsl(var(--primary-foreground));
+  border-radius: 0.375rem;
   font-size: 12px;
   font-weight: 600;
 }
+
+.priority-p0 { background: hsl(var(--destructive)); }
+.priority-p1 { background: hsl(var(--primary)); }
+.priority-p2 { background: hsl(var(--secondary-foreground)); }
+.priority-p3 { background: hsl(var(--muted-foreground)); }
 
 .attempts {
   display: flex;
@@ -681,9 +831,9 @@ onMounted(() => {
 
 .attempt-tag {
   padding: 2px 8px;
-  background: #f3f4f6;
-  color: #6b7280;
-  border-radius: 4px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  border-radius: 0.375rem;
   font-size: 12px;
 }
 

@@ -311,13 +311,10 @@ export const movieActors = sqliteTable('movie_actor', {
   actorId: text('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
   sortOrder: integer('sort_order').default(0), // 保持原站顺序
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-})
-
-// 电影-女优关联表索引
-export const movieActorsIndexes = {
-  uniqueMovieActor: uniqueIndex('idx_movie_actor').on(movieActors.movieId, movieActors.actorId),
-  actorIdx: index('idx_movie_actor_actor_id').on(movieActors.actorId), // 反向查询索引（普通索引）
-}
+}, table => [
+  uniqueIndex('idx_movie_actor').on(table.movieId, table.actorId),
+  index('idx_movie_actor_actor_id').on(table.actorId),
+])
 
 export type MovieActor = InferSelectModel<typeof movieActors>
 export type NewMovieActor = InferInsertModel<typeof movieActors>
@@ -329,13 +326,10 @@ export const moviePublishers = sqliteTable('movie_publisher', {
   publisherId: text('publisher_id').notNull().references(() => publishers.id, { onDelete: 'cascade' }),
   sortOrder: integer('sort_order').default(0),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
-})
-
-// 电影-厂商关联表索引
-export const moviePublishersIndexes = {
-  uniqueMoviePublisher: uniqueIndex('idx_movie_pub').on(moviePublishers.movieId, moviePublishers.publisherId),
-  publisherIdx: index('idx_movie_pub_publisher_id').on(moviePublishers.publisherId), // 反向查询索引（普通索引）
-}
+}, table => [
+  uniqueIndex('idx_movie_pub').on(table.movieId, table.publisherId),
+  index('idx_movie_pub_publisher_id').on(table.publisherId),
+])
 
 export type MoviePublisher = InferSelectModel<typeof moviePublishers>
 export type NewMoviePublisher = InferInsertModel<typeof moviePublishers>

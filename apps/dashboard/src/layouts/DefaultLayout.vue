@@ -239,29 +239,29 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-muted/40">
+  <div class="dashboard-shell flex min-h-screen bg-muted/40">
     <!-- 移动端遮罩 -->
     <div
       v-if="isMobile && mobileDrawerOpen"
-      class="fixed inset-0 bg-black/50 z-40 transition-opacity"
+      class="dashboard-mobile-backdrop fixed inset-0 bg-black/50 z-40 transition-opacity"
       @click="closeMobileDrawer"
     />
 
     <!-- Sidebar（桌面端固定，移动端抽屉） -->
     <aside
-      class="bg-background border-r flex flex-col transition-all duration-300"
+      class="dashboard-sidebar bg-background border-r flex flex-col transition-all duration-300"
       :class="[
         isMobile
           ? ['fixed inset-y-0 left-0 z-50 w-64', mobileDrawerOpen ? 'translate-x-0' : '-translate-x-full']
           : ['fixed inset-y-0 z-10', sidebarCollapsed ? 'w-16' : 'w-64'],
       ]"
     >
-      <div class="h-14 flex items-center justify-between px-4 border-b">
+      <div class="dashboard-sidebar-header h-14 flex items-center justify-between px-4 border-b">
         <span v-if="!sidebarCollapsed" class="font-bold tracking-tight text-lg">
           {{ t('dashboard.admin_console') }}
         </span>
         <button
-          class="p-1 rounded-lg hover:bg-muted transition-colors"
+          class="dashboard-sidebar-toggle p-1 rounded-lg hover:bg-muted transition-colors"
           :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
           @click="toggleSidebar"
         >
@@ -278,12 +278,12 @@ async function handleLogout() {
         </button>
       </div>
 
-      <nav class="flex-1 p-2 space-y-1 overflow-y-auto">
+      <nav class="dashboard-sidebar-nav flex-1 p-2 space-y-1 overflow-y-auto">
         <template v-for="item in menuItems" :key="item.key">
           <!-- 有子菜单的项 -->
           <div v-if="item.children" class="space-y-1">
             <button
-              class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+              class="dashboard-menu-group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium hover:bg-muted transition-colors"
               :class="{ 'justify-center': sidebarCollapsed }"
               :title="sidebarCollapsed ? item.label : ''"
               @click="toggleMenu(item.key)"
@@ -309,13 +309,13 @@ async function handleLogout() {
             <div
               v-if="!sidebarCollapsed"
               v-show="expandedMenus.has(item.key)"
-              class="space-y-1 pl-4"
+              class="dashboard-submenu space-y-1 pl-4"
             >
               <RouterLink
                 v-for="child in item.children.filter(c => c.show)"
                 :key="child.path"
                 :to="child.path"
-                class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
+                class="dashboard-menu-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
                 active-class=""
                 :exact-active-class="child.path === '/' ? 'bg-muted text-primary' : ''"
                 :class="{ 'bg-muted text-primary': child.path !== '/' && $route.path.startsWith(child.path) }"
@@ -335,7 +335,7 @@ async function handleLogout() {
             :href="item.isExternal ? item.path : undefined"
             :target="item.isExternal ? '_blank' : undefined"
             rel="noopener noreferrer"
-            class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
+            class="dashboard-menu-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted"
             :class="{ 'justify-center': sidebarCollapsed }"
             active-class=""
             :exact-active-class="!item.isExternal && item.path === '/' ? 'bg-muted text-primary' : ''"
@@ -350,9 +350,9 @@ async function handleLogout() {
         </template>
       </nav>
 
-      <div class="p-2 space-y-1 border-t">
+      <div class="dashboard-sidebar-footer p-2 space-y-1 border-t">
         <button
-          class="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+          class="dashboard-sidebar-action flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium hover:bg-muted transition-colors"
           :class="{ 'justify-center': sidebarCollapsed }"
           :title="sidebarCollapsed ? (locale === 'zh' ? 'English' : '简体中文') : ''"
           @click="toggleLocale"
@@ -361,7 +361,7 @@ async function handleLogout() {
           <span v-if="!sidebarCollapsed">{{ locale === 'zh' ? 'English' : '简体中文' }}</span>
         </button>
         <button
-          class="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          class="dashboard-sidebar-action dashboard-sidebar-action-danger flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
           :class="{ 'justify-center': sidebarCollapsed }"
           :title="sidebarCollapsed ? t('dashboard.sign_out') : ''"
           @click="handleLogout"
@@ -374,14 +374,14 @@ async function handleLogout() {
 
     <!-- Content -->
     <main
-      class="flex-1 p-4 md:p-8 transition-all duration-300"
+      class="dashboard-main flex-1 p-4 md:p-8 transition-all duration-300"
       :class="isMobile ? 'ml-0' : (sidebarCollapsed ? 'ml-16' : 'ml-64')"
     >
-      <div class="mb-6 md:mb-8 flex items-center justify-between gap-4">
+      <div class="dashboard-content-header mb-6 md:mb-8 flex items-center justify-between gap-4">
         <!-- 移动端汉堡菜单 -->
         <button
           v-if="isMobile"
-          class="p-2 rounded-lg hover:bg-muted transition-colors"
+          class="dashboard-mobile-menu p-2 rounded-lg hover:bg-muted transition-colors"
           @click="toggleSidebar"
         >
           <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -391,13 +391,13 @@ async function handleLogout() {
           </svg>
         </button>
 
-        <h1 class="text-xl md:text-2xl font-bold tracking-tight">
+        <h1 class="dashboard-content-title text-xl md:text-2xl font-bold tracking-tight">
           {{ t('dashboard.dashboard') }}
         </h1>
 
-        <div v-if="session.data" class="flex items-center gap-2">
-          <span class="text-sm text-muted-foreground hidden md:inline">{{ t('dashboard.welcome') }}, {{ session.data.user.name }}</span>
-          <img :src="session.data.user.image || `https://ui-avatars.com/api/?name=${session.data.user.name}`" class="w-8 h-8 rounded-full border bg-background">
+        <div v-if="session.data" class="dashboard-user flex items-center gap-2">
+          <span class="dashboard-user-welcome text-sm text-muted-foreground hidden md:inline">{{ t('dashboard.welcome') }}, {{ session.data.user.name }}</span>
+          <img :src="session.data.user.image || `https://ui-avatars.com/api/?name=${session.data.user.name}`" class="dashboard-user-avatar w-8 h-8 rounded-full border bg-background">
         </div>
       </div>
 
