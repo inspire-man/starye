@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '@/lib/api'
 import { ConfirmDialog, DataTable, DetailDrawer, FilterPanel, Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
+import { RefreshCw } from 'lucide-vue-next'
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -433,30 +434,10 @@ async function executeBatchOperation() {
 </script>
 
 <template>
-  <div class="space-y-6 relative">
+  <div class="comics-page dashboard-list-page relative">
     <div v-if="receiptError" class="receipt-error" role="alert">
       <span>{{ receiptError }}</span>
       <a v-if="receiptReturnPath" :href="receiptReturnPath">返回任务详情</a>
-    </div>
-    <!-- 页面标题 -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-          {{ t('dashboard.comic_library') }}
-        </h2>
-        <p class="text-neutral-500 mt-1">
-          共 {{ total }} 部漫画
-        </p>
-      </div>
-      <button
-        class="p-2 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg transition-colors"
-        @click="loadComics"
-      >
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-          <path d="M21 3v5h-5" />
-        </svg>
-      </button>
     </div>
 
     <!-- FilterPanel -->
@@ -469,7 +450,7 @@ async function executeBatchOperation() {
     />
 
     <!-- 工具栏：排序 + 批量操作 -->
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="list-toolbar flex flex-wrap items-center gap-3">
       <div class="flex min-w-0 flex-wrap items-center gap-2 text-sm">
         <label class="text-neutral-500">排序:</label>
         <select
@@ -518,8 +499,19 @@ async function executeBatchOperation() {
         取消选择
       </button>
 
+      <button
+        class="list-toolbar-secondary ml-auto"
+        type="button"
+        :disabled="loading"
+        aria-label="刷新漫画列表"
+        title="刷新漫画列表"
+        @click="loadComics"
+      >
+        <RefreshCw :size="16" aria-hidden="true" />
+      </button>
+
       <!-- 视图切换 -->
-      <div class="ml-auto flex shrink-0 items-center gap-1 rounded-lg border border-neutral-200 dark:border-neutral-700 p-1">
+      <div class="flex shrink-0 items-center gap-1 rounded-lg border border-neutral-200 dark:border-neutral-700 p-1">
         <button
           class="view-toggle-btn"
           :class="viewMode === 'card' ? 'view-toggle-active' : ''"

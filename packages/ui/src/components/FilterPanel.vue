@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import type { FilterField } from '../types/filterpanel'
+import { ChevronDown } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 interface Props {
   fields: FilterField[]
   modelValue: Record<string, any>
   loading?: boolean
+  labelPosition?: 'top' | 'inline'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
+  labelPosition: 'inline',
 })
 
 const emit = defineEmits<{
@@ -66,6 +69,10 @@ function handleReset() {
 
 function toggleAdvanced() {
   showAdvanced.value = !showAdvanced.value
+}
+
+function isInlineField(field: FilterField): boolean {
+  return (field.labelPosition ?? props.labelPosition) === 'inline'
 }
 </script>
 
@@ -124,6 +131,7 @@ function toggleAdvanced() {
             :class="{
               'col-span-2': field.colSpan === 2,
               'col-span-3': field.colSpan === 3,
+              'filter-field-inline': isInlineField(field),
             }"
           >
             <label class="filter-label">{{ field.label }}</label>
@@ -137,23 +145,25 @@ function toggleAdvanced() {
               @input="updateField(field.key, ($event.target as HTMLInputElement).value)"
             >
 
-            <select
-              v-else-if="field.type === 'select'"
-              :value="modelValue[field.key] || ''"
-              class="filter-input"
-              @change="updateField(field.key, ($event.target as HTMLSelectElement).value)"
-            >
-              <option value="">
-                全部
-              </option>
-              <option
-                v-for="opt in field.options"
-                :key="opt.value"
-                :value="opt.value"
+            <div v-else-if="field.type === 'select'" class="filter-select-control">
+              <select
+                :value="modelValue[field.key] || ''"
+                class="filter-input"
+                @change="updateField(field.key, ($event.target as HTMLSelectElement).value)"
               >
-                {{ opt.label }}
-              </option>
-            </select>
+                <option value="">
+                  全部
+                </option>
+                <option
+                  v-for="opt in field.options"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </option>
+              </select>
+              <ChevronDown class="filter-select-icon" :size="16" aria-hidden="true" />
+            </div>
 
             <div v-else-if="field.type === 'checkbox'" class="filter-checkboxes">
               <label
@@ -205,6 +215,7 @@ function toggleAdvanced() {
                 :class="{
                   'col-span-2': field.colSpan === 2,
                   'col-span-3': field.colSpan === 3,
+                  'filter-field-inline': isInlineField(field),
                 }"
               >
                 <label class="filter-label">{{ field.label }}</label>
@@ -218,23 +229,25 @@ function toggleAdvanced() {
                   @input="updateField(field.key, ($event.target as HTMLInputElement).value)"
                 >
 
-                <select
-                  v-else-if="field.type === 'select'"
-                  :value="modelValue[field.key] || ''"
-                  class="filter-input"
-                  @change="updateField(field.key, ($event.target as HTMLSelectElement).value)"
-                >
-                  <option value="">
-                    全部
-                  </option>
-                  <option
-                    v-for="opt in field.options"
-                    :key="opt.value"
-                    :value="opt.value"
+                <div v-else-if="field.type === 'select'" class="filter-select-control">
+                  <select
+                    :value="modelValue[field.key] || ''"
+                    class="filter-input"
+                    @change="updateField(field.key, ($event.target as HTMLSelectElement).value)"
                   >
-                    {{ opt.label }}
-                  </option>
-                </select>
+                    <option value="">
+                      全部
+                    </option>
+                    <option
+                      v-for="opt in field.options"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                  <ChevronDown class="filter-select-icon" :size="16" aria-hidden="true" />
+                </div>
 
                 <div v-else-if="field.type === 'checkbox'" class="filter-checkboxes">
                   <label
@@ -318,7 +331,7 @@ function toggleAdvanced() {
 
 <style scoped>
 .filter-panel {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-lg, 0.75rem);
@@ -338,7 +351,9 @@ function toggleAdvanced() {
 
 .filter-skeleton-field {
   display: grid;
-  gap: 0.375rem;
+  grid-template-columns: minmax(5rem, 6.5rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .filter-skeleton-label {
@@ -471,19 +486,32 @@ function toggleAdvanced() {
 .filter-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.75rem;
+  gap: 1rem 1.25rem;
 }
 
 .filter-field {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
+  min-width: 0;
+}
+
+.filter-field-inline {
+  display: grid;
+  grid-template-columns: minmax(5rem, 6.5rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .filter-label {
   font-size: 0.875rem;
   font-weight: 500;
   color: hsl(var(--foreground));
+}
+
+.filter-field-inline .filter-label {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .filter-input {
@@ -497,6 +525,33 @@ function toggleAdvanced() {
   width: 100%;
   box-sizing: border-box;
   cursor: pointer;
+}
+
+.filter-select-control {
+  position: relative;
+  min-width: 0;
+}
+
+.filter-select-control .filter-input {
+  appearance: none;
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted) / 0.45);
+  padding-right: 2.25rem;
+  font-weight: 500;
+}
+
+.filter-select-control .filter-input:hover {
+  border-color: hsl(var(--primary) / 0.55);
+  background: hsl(var(--muted) / 0.7);
+}
+
+.filter-select-icon {
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  pointer-events: none;
+  color: hsl(var(--muted-foreground));
+  transform: translateY(-50%);
 }
 
 .filter-input:focus {
@@ -608,7 +663,7 @@ function toggleAdvanced() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.75rem;
   border-top: 1px solid hsl(var(--border));
   margin-top: 0.75rem;
   padding-top: 0.75rem;
@@ -617,7 +672,7 @@ function toggleAdvanced() {
 .filter-action-buttons {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
   margin-left: auto;
 }
 
@@ -681,6 +736,10 @@ function toggleAdvanced() {
   .col-span-3 {
     grid-column: span 3;
   }
+
+  .filter-field-inline {
+    grid-template-columns: minmax(5rem, 6.5rem) minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 767px) {
@@ -700,6 +759,16 @@ function toggleAdvanced() {
 
   .advanced-toggle {
     flex: 1 1 100%;
+  }
+
+  .filter-field-inline {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 0.375rem;
+  }
+
+  .filter-field-inline .filter-label {
+    text-align: left;
   }
 }
 </style>

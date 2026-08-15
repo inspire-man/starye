@@ -69,7 +69,7 @@ onBeforeUnmount(() => {
     <Transition name="detail-drawer">
       <div
         v-if="open"
-        class="detail-drawer-overlay fixed inset-0 z-[1200] flex justify-end bg-background/70 backdrop-blur-sm"
+        class="detail-drawer-overlay fixed inset-0 z-[1400] flex justify-end bg-background/70 backdrop-blur-sm"
         data-detail-drawer
         @click.self="close"
       >
@@ -138,7 +138,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detail-drawer-overlay {
-  z-index: var(--dashboard-drawer-z-index, 1200);
+  z-index: var(--dashboard-drawer-z-index, 1400);
   padding: var(--dashboard-drawer-inset, 1rem);
 }
 

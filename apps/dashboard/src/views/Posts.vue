@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Post } from '@starye/db/schema'
-import { DataTable, DetailDrawer, Pagination, success, usePagination } from '@starye/ui'
+import { ConfirmDialog, DataTable, DetailDrawer, Pagination, success, usePagination } from '@starye/ui'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -130,50 +130,23 @@ watch([currentPage, pageSize], fetchPosts, { immediate: true })
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-bold tracking-tight">
-          {{ t('dashboard.blog_posts') }}
-        </h1>
-        <p class="mt-1 text-muted-foreground">
-          {{ t('dashboard.manage_blog') }}
-        </p>
-      </div>
-      <button
-        class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        type="button"
-        @click="createPost"
-      >
+  <div class="posts-page dashboard-list-page">
+    <ConfirmDialog
+      :open="!!deleteConfirmId"
+      :title="t('dashboard.confirm_delete') || '确认删除'"
+      :message="t('dashboard.delete_confirm')"
+      :confirm-text="t('dashboard.delete')"
+      :cancel-text="t('dashboard.cancel') || '取消'"
+      variant="danger"
+      @update:open="!$event && cancelDelete()"
+      @confirm="confirmDelete"
+    />
+
+    <div class="list-toolbar">
+      <span class="list-toolbar-text">{{ t('dashboard.manage_blog') }}</span>
+      <button class="list-toolbar-primary" type="button" @click="createPost">
         {{ t('dashboard.new_post') }}
       </button>
-    </div>
-
-    <div v-if="deleteConfirmId" class="fixed inset-0 z-[1100] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-      <div class="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
-        <h3 class="text-lg font-semibold">
-          {{ t('dashboard.confirm_delete') || '确认删除' }}
-        </h3>
-        <p class="mt-2 text-sm text-muted-foreground">
-          {{ t('dashboard.delete_confirm') }}
-        </p>
-        <div class="mt-6 flex justify-end gap-2">
-          <button
-            class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-            type="button"
-            @click="cancelDelete"
-          >
-            {{ t('dashboard.cancel') || '取消' }}
-          </button>
-          <button
-            class="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
-            type="button"
-            @click="confirmDelete"
-          >
-            {{ t('dashboard.delete') }}
-          </button>
-        </div>
-      </div>
     </div>
 
     <DataTable

@@ -59,7 +59,7 @@ async function setupCrawlersPage(page: any) {
 test.describe('Crawlers 页面 - ConfirmDialog 替换（任务 7.3）', () => {
   test.beforeEach(async ({ page }) => {
     await setupCrawlersPage(page)
-    await page.goto('/crawlers')
+    await page.goto('/dashboard/crawlers')
     await page.waitForTimeout(1000)
   })
 

@@ -966,44 +966,8 @@ async function executeClearFailed() {
 </script>
 
 <template>
-  <div class="crawlers-page">
-    <div class="page-header">
-      <div class="page-heading">
-        <p class="page-kicker">
-          CRAWL CENTER
-        </p>
-        <h1>爬虫监控</h1>
-        <p class="page-subtitle">
-          任务、运行记录与失败恢复
-        </p>
-      </div>
-      <div class="header-actions">
-        <label class="auto-refresh">
-          <input v-model="autoRefresh" type="checkbox">
-          <span>自动刷新</span>
-          <small>30s</small>
-        </label>
-        <button class="btn-refresh" type="button" @click="refresh">
-          <RefreshCw :size="15" aria-hidden="true" />
-          刷新
-        </button>
-      </div>
-    </div>
-
+  <div class="crawlers-page dashboard-list-page">
     <section class="local-task-panel" aria-labelledby="local-task-title">
-      <div class="section-heading">
-        <div>
-          <h2 id="local-task-title">
-            本地任务
-          </h2>
-          <p v-if="taskRefreshing" class="refresh-note">
-            正在更新
-          </p>
-        </div>
-        <button class="task-refresh-button" type="button" @click="loadTaskPanel">
-          刷新
-        </button>
-      </div>
       <p v-if="taskError" class="task-error" role="alert">
         {{ taskError }}
       </p>
@@ -1032,12 +996,26 @@ async function executeClearFailed() {
           </button>
         </div>
 
+        <div class="list-toolbar task-list-toolbar">
+          <span id="local-task-title" class="list-toolbar-text">
+            {{ taskRefreshing ? '正在更新任务' : '任务历史' }}
+          </span>
+          <div class="list-toolbar-group">
+            <label class="auto-refresh">
+              <input v-model="autoRefresh" type="checkbox">
+              <span>自动刷新</span>
+              <small>30s</small>
+            </label>
+            <button class="btn-refresh" type="button" @click="refresh">
+              <RefreshCw :size="15" aria-hidden="true" />
+              刷新
+            </button>
+          </div>
+        </div>
+
         <template v-for="template in (['movie', 'manga'] as const)" :key="template">
-          <section v-if="canAccessTemplate(template) && activeTaskTab === template" class="task-group" :aria-labelledby="`${template}-task-title`" role="tabpanel">
+          <section v-if="canAccessTemplate(template) && activeTaskTab === template" class="task-group" :aria-label="template === 'movie' ? '视频任务历史' : '漫画任务历史'" role="tabpanel">
             <div class="task-group-heading">
-              <h3 :id="`${template}-task-title`">
-                {{ template === 'movie' ? '视频' : '漫画' }}任务历史
-              </h3>
               <button class="task-primary" type="button" :disabled="taskAction === template" @click="createTask(template)">
                 {{ taskAction === template ? '创建中…' : template === 'movie' ? '创建视频任务' : '创建漫画任务' }}
               </button>
@@ -1859,12 +1837,7 @@ async function executeClearFailed() {
 
 <style scoped>
 .local-task-panel {
-  margin-bottom: 0;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--ui-radius-lg, 0.5rem);
-  background: hsl(var(--card));
-  padding: 1rem 1.125rem;
-  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
+  min-width: 0;
 }
 
 .section-heading,
@@ -1949,6 +1922,10 @@ async function executeClearFailed() {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.task-group-heading {
+  justify-content: flex-end;
 }
 
 .task-group-heading h3 { margin: 0; flex: 1; }

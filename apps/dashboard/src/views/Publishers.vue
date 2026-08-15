@@ -268,52 +268,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="publishers-page">
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">
-          厂商管理
-        </h2>
-        <p class="page-subtitle">
-          管理电影制作厂商信息
-        </p>
-      </div>
-    </div>
-
-    <!-- 统计卡片 -->
-    <div class="stats-cards">
-      <div class="stat-card">
-        <div class="stat-label">
-          总厂商数
-        </div>
-        <div class="stat-value">
-          {{ stats.total }}
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">
-          已爬取详情
-        </div>
-        <div class="stat-value text-green">
-          {{ stats.crawled }}
-        </div>
-        <div class="stat-subtitle">
-          {{ stats.crawledPercentage }}%
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">
-          待爬取详情
-        </div>
-        <div class="stat-value text-orange">
-          {{ stats.pending }}
-        </div>
-        <div class="stat-subtitle">
-          其中 {{ stats.withSourceUrl }} 个有详情页链接
-        </div>
-      </div>
-    </div>
-
+  <div class="publishers-page dashboard-list-page">
     <!-- FilterPanel -->
     <FilterPanel
       v-model="filters"
@@ -322,6 +277,23 @@ onMounted(() => {
       @apply="applyFilters"
       @reset="resetFilters"
     />
+
+    <div class="list-toolbar list-summary-toolbar">
+      <div class="list-toolbar-group">
+        <span class="list-toolbar-text">共 {{ stats.total }} 家厂商</span>
+        <span class="list-toolbar-stat">
+          已爬取 <strong>{{ stats.crawled }}</strong>（{{ stats.crawledPercentage }}%）
+        </span>
+        <span class="list-toolbar-stat list-toolbar-stat-warning">
+          待爬取 <strong>{{ stats.pending }}</strong>
+        </span>
+      </div>
+      <div class="list-toolbar-group">
+        <button class="list-toolbar-secondary" type="button" :disabled="loading" @click="loadPublishers">
+          刷新
+        </button>
+      </div>
+    </div>
 
     <div v-if="error" class="error-message">
       {{ error }}
@@ -501,8 +473,8 @@ onMounted(() => {
 
 <style scoped>
 .publishers-page {
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 .page-header {
@@ -787,8 +759,8 @@ onMounted(() => {
 /* 响应式设计：最小宽度 1280px */
 @media (max-width: 1280px) {
   .publishers-page {
-    max-width: 100%;
-    padding: 0 1rem;
+    max-width: none;
+    padding: 0;
   }
 }
 

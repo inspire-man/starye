@@ -9,6 +9,11 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import {
+  productionCrawlerEnvironmentKeys as configuredProductionCrawlerEnvironmentKeys,
+  productionCrawlerRequiredEnvironmentKeys as configuredProductionCrawlerRequiredEnvironmentKeys,
+  productionCrawlerOptionalEnvironmentKeys,
+} from '@starye/config/deployment-target'
 import { createDataChainFixture, runDataChainFixture } from '../src/smoke/data-chain-fixture'
 import { createActionsEventClientFromEnvironment } from '../src/task-runner/actions-event-client'
 import { createMangaAdapter } from '../src/task-runner/manga-adapter'
@@ -81,30 +86,8 @@ interface ProductionRunnerClient {
   succeededRepair: (candidate: RunnerCandidate, sequence: number, receipt: RepairPlayersReceipt) => Promise<{ readonly accepted: boolean, readonly cancel_requested?: boolean }>
 }
 
-export const productionCrawlerEnvironmentKeys = [
-  'ACTIONS_APPLICATION_ATTEMPT',
-  'ACTIONS_APPLICATION_RUN_ID',
-  'ACTIONS_CALLBACK_API_BASE_URL',
-  'ACTIONS_PROVIDER_ENVIRONMENT',
-  'ACTIONS_PROVIDER_REF',
-  'ACTIONS_PROVIDER_REPOSITORY',
-  'ACTIONS_PROVIDER_TARGET',
-  'ACTIONS_PROVIDER_TEMPLATE',
-  'ACTIONS_PROVIDER_WORKFLOW',
-  'CRAWLER_SECRET',
-  'GITHUB_RUN_ATTEMPT',
-  'GITHUB_RUN_ID',
-  'GITHUB_SHA',
-  'R2_ACCESS_KEY_ID',
-  'R2_PUBLIC_URL',
-  'R2_SECRET_ACCESS_KEY',
-  'STARYE_VIDEO_DIRECT_SOURCES',
-  'STARYE_VIDEO_MAGNET_PROVIDER_RPC_URL',
-  'STARYE_VIDEO_MAGNET_PROVIDER_SECRET',
-  'STARYE_VIDEO_MAGNET_SOURCE',
-  'TASK_RUNNER_CALLBACK_KEY_ID_CURRENT',
-  'TASK_RUNNER_CALLBACK_SECRET_CURRENT',
-] as const
+export const productionCrawlerEnvironmentKeys = configuredProductionCrawlerEnvironmentKeys
+export const productionCrawlerRequiredEnvironmentKeys = configuredProductionCrawlerRequiredEnvironmentKeys
 
 const productionOperations = {
   'crawler-comic': {
@@ -249,8 +232,15 @@ function assertProductionBinding(
   production: { readonly template: ProductionTemplate, readonly workflow: string },
 ): ProductionBinding {
   const declared = environment.STARYE_PREPARED_SECRET_KEYS?.split(',').filter(Boolean) ?? []
-  if (declared.length !== productionCrawlerEnvironmentKeys.length || declared.some((key, index) => key !== productionCrawlerEnvironmentKeys[index]))
+  const declaredOptional = environment.STARYE_PREPARED_OPTIONAL_ENVIRONMENT_KEYS?.split(',').filter(Boolean) ?? []
+  const actualOptional = productionCrawlerOptionalEnvironmentKeys.filter(key => Boolean(environment[key]))
+  if (declared.length !== productionCrawlerEnvironmentKeys.length - productionCrawlerOptionalEnvironmentKeys.length
+    || declared.some((key, index) => key !== productionCrawlerEnvironmentKeys[index])
+    || declaredOptional.some((key, index) => key !== actualOptional[index])
+    || declaredOptional.length !== actualOptional.length
+    || declaredOptional.some(key => !productionCrawlerOptionalEnvironmentKeys.includes(key as typeof productionCrawlerOptionalEnvironmentKeys[number]))) {
     throw new Error('target-crawl-mutation rejected the declared production credential boundary.')
+  }
   const binding = {
     attempt: requirePositiveInteger(environment, 'ACTIONS_APPLICATION_ATTEMPT'),
     providerRunAttempt: requirePositiveInteger(environment, 'GITHUB_RUN_ATTEMPT'),

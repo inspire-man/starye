@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  productionCrawlerEnvironmentKeys,
+  productionCrawlerRequiredEnvironmentKeys,
   runTargetCrawlerMutation,
 } from '../../../scripts/target-crawl-mutation'
 import { ActionsEventClient } from '../actions-event-client'
@@ -50,7 +50,7 @@ async function fixture(overrides: Record<string, string> = {}) {
     STARYE_PREPARED_CONTEXT_PATH: contextPath,
     STARYE_PREPARED_ENTRY: 'crawler-optimized',
     STARYE_PREPARED_OPERATION: 'movie-production',
-    STARYE_PREPARED_SECRET_KEYS: productionCrawlerEnvironmentKeys.join(','),
+    STARYE_PREPARED_SECRET_KEYS: productionCrawlerRequiredEnvironmentKeys.join(','),
     TASK_RUNNER_CALLBACK_KEY_ID_CURRENT: 'callback-key',
     TASK_RUNNER_CALLBACK_SECRET_CURRENT: 'callback-secret-fixture',
     ...overrides,

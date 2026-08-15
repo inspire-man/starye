@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { User } from 'better-auth'
-import { DataTable, DetailDrawer, Pagination, SkeletonTable, success, usePagination, useToast } from '@starye/ui'
+import { ConfirmDialog, DataTable, DetailDrawer, Pagination, SkeletonTable, success, usePagination, useToast } from '@starye/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { api } from '@/lib/api'
@@ -10,6 +10,7 @@ const users = ref<User[]>([])
 const loading = ref(true)
 const selectedUser = ref<User | null>(null)
 const userDrawerOpen = ref(false)
+const removeConfirmUser = ref<{ id: string, name: string } | null>(null)
 const { currentPage, limit: pageSize, totalPages, total, setMeta, goToPage, updatePageSize } = usePagination(20)
 
 const pagedUsers = computed(() => {
@@ -95,9 +96,15 @@ async function addUser() {
 }
 
 async function removeUser(userId: string, userName: string) {
-  // eslint-disable-next-line no-alert
-  if (!confirm(`确定要移除 "${userName}" 的 R18 访问权限吗？`))
+  removeConfirmUser.value = { id: userId, name: userName }
+}
+
+async function confirmRemoveUser() {
+  if (!removeConfirmUser.value)
     return
+
+  const { id: userId, name: userName } = removeConfirmUser.value
+  removeConfirmUser.value = null
 
   try {
     await api.admin.removeFromR18Whitelist(userId)
@@ -114,21 +121,14 @@ onMounted(loadWhitelist)
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h2 class="text-2xl font-bold tracking-tight">
-          R18 白名单管理
-        </h2>
-        <p class="mt-1 text-sm text-muted-foreground">
-          管理用户的 R18 内容访问权限
-        </p>
-      </div>
-      <div class="flex items-center gap-2">
-        <button class="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted" type="button" @click="loadWhitelist">
+  <div class="r18-whitelist-page dashboard-list-page">
+    <div class="list-toolbar">
+      <span class="list-toolbar-text">管理用户的 R18 内容访问权限</span>
+      <div class="list-toolbar-group">
+        <button class="list-toolbar-secondary" type="button" @click="loadWhitelist">
           刷新
         </button>
-        <button class="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90" type="button" @click="openAddDialog">
+        <button class="list-toolbar-primary" type="button" @click="openAddDialog">
           添加用户
         </button>
       </div>
@@ -178,6 +178,17 @@ onMounted(loadWhitelist)
       layout="total, sizes, prev, pager, next, jumper"
       @update:current-page="goToPage"
       @update:page-size="updatePageSize"
+    />
+
+    <ConfirmDialog
+      :open="!!removeConfirmUser"
+      title="移除 R18 白名单"
+      :message="removeConfirmUser ? `确定要移除「${removeConfirmUser.name}」的 R18 访问权限吗？` : ''"
+      confirm-text="确认移除"
+      cancel-text="取消"
+      variant="danger"
+      @update:open="!$event && (removeConfirmUser = null)"
+      @confirm="confirmRemoveUser"
     />
 
     <DetailDrawer

@@ -62,6 +62,18 @@ export const productionCrawlerRequiredEnvironmentKeys = [
   'TASK_RUNNER_CALLBACK_SECRET_CURRENT',
 ] as const
 
+export const productionCrawlerOptionalEnvironmentKeys = [
+  'STARYE_VIDEO_DIRECT_SOURCES',
+  'STARYE_VIDEO_MAGNET_PROVIDER_RPC_URL',
+  'STARYE_VIDEO_MAGNET_PROVIDER_SECRET',
+  'STARYE_VIDEO_MAGNET_SOURCE',
+] as const
+
+export const productionCrawlerEnvironmentKeys = [
+  ...productionCrawlerRequiredEnvironmentKeys,
+  ...productionCrawlerOptionalEnvironmentKeys,
+] as const
+
 export interface TargetRemoteEntryDefinition {
   readonly id: TargetRemoteEntry
   readonly family: TargetRemoteEntryFamily
@@ -70,6 +82,7 @@ export interface TargetRemoteEntryDefinition {
   readonly childOperation: string
   readonly allowedOptions: readonly string[]
   readonly requiredSecretKeys: readonly string[]
+  readonly optionalEnvironmentKeys: readonly string[]
 }
 
 function dbEntry(id: TargetRemoteEntry, childOperation: string, mode: TargetRemoteEntryMode = 'mutation'): TargetRemoteEntryDefinition {
@@ -81,6 +94,7 @@ function dbEntry(id: TargetRemoteEntry, childOperation: string, mode: TargetRemo
     childOperation,
     allowedOptions: [],
     requiredSecretKeys: ['CLOUDFLARE_API_TOKEN'],
+    optionalEnvironmentKeys: [],
   }
 }
 
@@ -90,6 +104,7 @@ function crawlerEntry(
   mode: TargetRemoteEntryMode = 'mutation',
   allowedOptions: readonly string[] = [],
   requiredSecretKeys: readonly string[] = ['CRAWLER_SECRET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'],
+  optionalEnvironmentKeys: readonly string[] = [],
 ): TargetRemoteEntryDefinition {
   return {
     id,
@@ -99,6 +114,7 @@ function crawlerEntry(
     childOperation,
     allowedOptions,
     requiredSecretKeys,
+    optionalEnvironmentKeys,
   }
 }
 
@@ -108,8 +124,8 @@ export const targetRemoteEntryDefinitions = [
   dbEntry('d1-cleanup-backup-preview', 'cleanup-backup-preview', 'read-only'),
   dbEntry('d1-cleanup-backup-execute', 'cleanup-backup-execute'),
   dbEntry('d1-cleanup-invalid-covers', 'cleanup-invalid-covers'),
-  crawlerEntry('crawler-comic', 'manga-production', 'mutation', [], productionCrawlerRequiredEnvironmentKeys),
-  crawlerEntry('crawler-optimized', 'movie-production', 'mutation', [], productionCrawlerRequiredEnvironmentKeys),
+  crawlerEntry('crawler-comic', 'manga-production', 'mutation', [], productionCrawlerRequiredEnvironmentKeys, productionCrawlerOptionalEnvironmentKeys),
+  crawlerEntry('crawler-optimized', 'movie-production', 'mutation', [], productionCrawlerRequiredEnvironmentKeys, productionCrawlerOptionalEnvironmentKeys),
   crawlerEntry('crawler-actor', 'actor', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-publisher', 'publisher', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-search-index', 'search-index'),
@@ -129,6 +145,7 @@ export const targetRemoteEntryDefinitions = [
     childOperation: 'monthly-cleanup',
     allowedOptions: [],
     requiredSecretKeys: ['CLOUDFLARE_API_TOKEN'],
+    optionalEnvironmentKeys: [],
   },
 ] as const satisfies readonly TargetRemoteEntryDefinition[]
 
@@ -491,6 +508,15 @@ function buildPreparedChildEnvironment(
     }
     forwardedSecrets[key] = value
   }
+  const forwardedOptionalEnvironment: NodeJS.ProcessEnv = {}
+  const forwardedOptionalKeys: string[] = []
+  for (const key of definition.optionalEnvironmentKeys) {
+    const value = authorizedEnvironment[key]
+    if (!isNonEmptyText(value))
+      continue
+    forwardedOptionalEnvironment[key] = value
+    forwardedOptionalKeys.push(key)
+  }
 
   return {
     PATH: process.env.PATH,
@@ -501,7 +527,9 @@ function buildPreparedChildEnvironment(
     STARYE_PREPARED_ENTRY: definition.id,
     STARYE_PREPARED_OPERATION: definition.childOperation,
     STARYE_PREPARED_SECRET_KEYS: definition.requiredSecretKeys.join(','),
+    STARYE_PREPARED_OPTIONAL_ENVIRONMENT_KEYS: forwardedOptionalKeys.join(','),
     ...forwardedSecrets,
+    ...forwardedOptionalEnvironment,
   }
 }
 
@@ -531,7 +559,7 @@ export async function runPreparedTargetMutation(request: PreparedMutationExecuti
   const exitCode = isPreparedChildExecutionResult(execution) ? execution.exitCode : execution
   if (exitCode !== 0) {
     const diagnostic = isPreparedChildExecutionResult(execution)
-      ? redactPreparedChildDiagnostic(execution.stderr, definition.requiredSecretKeys, environment)
+      ? redactPreparedChildDiagnostic(execution.stderr, [...definition.requiredSecretKeys, ...definition.optionalEnvironmentKeys], environment)
       : undefined
     throw new Error(`Prepared target entry failed: ${request.entry}.${diagnostic ? ` ${diagnostic}` : ''}`)
   }

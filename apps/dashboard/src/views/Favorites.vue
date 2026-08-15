@@ -142,19 +142,11 @@ function closeFavoriteDetails() {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h2 class="text-2xl font-bold tracking-tight">
-          我的收藏
-        </h2>
-        <p class="mt-1 text-sm text-muted-foreground">
-          管理您收藏的演员、厂商和内容
-        </p>
-      </div>
-      <div class="flex items-center gap-3">
-        <label class="sr-only" for="favorite-type-filter">收藏类型</label>
-        <select id="favorite-type-filter" v-model="filters.entityType" class="h-9 rounded-md border border-border bg-background px-3 text-sm transition-colors hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" @change="applyFilters">
+  <div class="favorites-page dashboard-list-page">
+    <div class="list-toolbar">
+      <div class="list-toolbar-group">
+        <label class="list-toolbar-label" for="favorite-type-filter">收藏类型</label>
+        <select id="favorite-type-filter" v-model="filters.entityType" @change="applyFilters">
           <option value="">
             全部类型
           </option>
@@ -171,7 +163,7 @@ function closeFavoriteDetails() {
             漫画
           </option>
         </select>
-        <span class="text-sm text-muted-foreground">共 {{ totalItems }} 个收藏</span>
+        <span class="list-toolbar-text">共 {{ totalItems }} 个收藏</span>
       </div>
     </div>
 

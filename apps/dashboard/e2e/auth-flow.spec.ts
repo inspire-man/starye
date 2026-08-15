@@ -23,7 +23,7 @@ async function mockSession(page: any, session: any) {
 
 /** 拦截外部跳转（到 /auth/login 等页面），避免真实导航失败 */
 async function interceptExternalRedirects(page: any) {
-  await page.route('**/auth/**', (route: any) =>
+  await page.route('**/auth/login**', (route: any) =>
     route.fulfill({
       status: 200,
       contentType: 'text/html',
@@ -44,7 +44,7 @@ test.describe('未登录用户', () => {
       timeout: 10000,
     })
 
-    await page.goto('/')
+    await page.goto('/dashboard/')
 
     // 应该跳转到 auth 登录页
     await navPromise
@@ -59,7 +59,7 @@ test.describe('未登录用户', () => {
       timeout: 10000,
     })
 
-    await page.goto('/movies')
+    await page.goto('/dashboard/movies')
     await navPromise
 
     const url = new URL(page.url())
@@ -74,7 +74,7 @@ test.describe('未登录用户', () => {
       body: JSON.stringify(null),
     }))
 
-    await page.goto('/login')
+    await page.goto('/dashboard/login')
     // 不应跳转到外部 auth 登录页
     expect(page.url()).not.toContain('/auth/login')
   })
@@ -96,7 +96,7 @@ test.describe('权限不足用户（普通用户）', () => {
       timeout: 10000,
     })
 
-    await page.goto('/')
+    await page.goto('/dashboard/')
     await navPromise
 
     const url = new URL(page.url())
@@ -124,7 +124,7 @@ test.describe('资源级权限检查', () => {
         body: JSON.stringify({ data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } }),
       }))
 
-    await page.goto('/movies')
+    await page.goto('/dashboard/movies')
 
     // 应被路由守卫重定向到 /unauthorized
     await page.waitForURL('**/unauthorized', { timeout: 10000 })
@@ -144,7 +144,7 @@ test.describe('资源级权限检查', () => {
         body: JSON.stringify({ data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } }),
       }))
 
-    await page.goto('/comics')
+    await page.goto('/dashboard/comics')
     await page.waitForURL('**/unauthorized', { timeout: 10000 })
     expect(page.url()).toContain('/unauthorized')
   })
@@ -163,7 +163,7 @@ test.describe('资源级权限检查', () => {
         body: JSON.stringify({ data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } }),
       }))
 
-    await page.goto('/movies')
+    await page.goto('/dashboard/movies')
 
     // 不应被重定向（等待页面加载完成）
     await page.waitForLoadState('networkidle')
@@ -185,7 +185,7 @@ test.describe('资源级权限检查', () => {
         body: JSON.stringify({ data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } }),
       }))
 
-    await page.goto('/audit-logs')
+    await page.goto('/dashboard/audit-logs')
     await page.waitForLoadState('networkidle')
     expect(page.url()).not.toContain('/unauthorized')
     expect(page.url()).not.toContain('/auth/login')
@@ -204,7 +204,7 @@ test.describe('资源级权限检查', () => {
         body: JSON.stringify({ data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } }),
       }))
 
-    await page.goto('/audit-logs')
+    await page.goto('/dashboard/audit-logs')
     await page.waitForURL('**/unauthorized', { timeout: 10000 })
     expect(page.url()).toContain('/unauthorized')
   })

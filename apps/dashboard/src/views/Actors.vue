@@ -319,52 +319,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="actors-page">
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">
-          演员管理
-        </h2>
-        <p class="page-subtitle">
-          管理电影演员信息
-        </p>
-      </div>
-    </div>
-
-    <!-- 统计卡片 -->
-    <div class="stats-cards">
-      <div class="stat-card">
-        <div class="stat-label">
-          总女优数
-        </div>
-        <div class="stat-value">
-          {{ stats.total }}
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">
-          已爬取详情
-        </div>
-        <div class="stat-value text-green">
-          {{ stats.crawled }}
-        </div>
-        <div class="stat-subtitle">
-          {{ stats.crawledPercentage }}%
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">
-          待爬取详情
-        </div>
-        <div class="stat-value text-orange">
-          {{ stats.pending }}
-        </div>
-        <div class="stat-subtitle">
-          其中 {{ stats.withSourceUrl }} 个有详情页链接
-        </div>
-      </div>
-    </div>
-
+  <div class="actors-page dashboard-list-page">
     <!-- FilterPanel -->
     <FilterPanel
       v-model="filters"
@@ -374,21 +329,33 @@ onMounted(() => {
       @reset="resetFilters"
     />
 
-    <div v-if="hasSelection" class="batch-actions">
-      <span class="batch-info">已选择 {{ selectedActors.size }} 个演员</span>
-      <button
-        class="btn-primary"
-        :disabled="isBatchOperating"
-        @click="handleBatchRecrawl"
-      >
-        {{ isBatchOperating ? '处理中...' : '重新爬取详情' }}
-      </button>
-      <button class="btn-secondary" @click="toggleSelectAll">
-        {{ selectedActors.size === actors.length ? '取消全选' : '全选当前页' }}
-      </button>
-      <button class="btn-secondary" @click="selectedActors.clear()">
-        取消选择
-      </button>
+    <div class="list-toolbar list-summary-toolbar">
+      <div class="list-toolbar-group">
+        <span class="list-toolbar-text">共 {{ stats.total }} 位女优</span>
+        <span class="list-toolbar-stat">
+          已爬取 <strong>{{ stats.crawled }}</strong>（{{ stats.crawledPercentage }}%）
+        </span>
+        <span class="list-toolbar-stat list-toolbar-stat-warning">
+          待爬取 <strong>{{ stats.pending }}</strong>
+        </span>
+      </div>
+      <div class="list-toolbar-group">
+        <span v-if="hasSelection" class="list-toolbar-text">已选择 {{ selectedActors.size }} 个</span>
+        <button class="list-toolbar-secondary" type="button" :disabled="loading" @click="loadActors">
+          刷新
+        </button>
+        <template v-if="hasSelection">
+          <button class="list-toolbar-primary" type="button" :disabled="isBatchOperating" @click="handleBatchRecrawl">
+            {{ isBatchOperating ? '处理中...' : '重新爬取详情' }}
+          </button>
+          <button class="list-toolbar-secondary" type="button" @click="toggleSelectAll">
+            {{ selectedActors.size === actors.length ? '取消全选' : '全选当前页' }}
+          </button>
+          <button class="list-toolbar-secondary" type="button" @click="selectedActors.clear()">
+            取消选择
+          </button>
+        </template>
+      </div>
     </div>
 
     <div v-if="error" class="error-message">
@@ -587,8 +554,8 @@ onMounted(() => {
 
 <style scoped>
 .actors-page {
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 .page-header {
@@ -911,8 +878,8 @@ onMounted(() => {
 /* 响应式设计：最小宽度 1280px */
 @media (max-width: 1280px) {
   .actors-page {
-    max-width: 100%;
-    padding: 0 1rem;
+    max-width: none;
+    padding: 0;
   }
 }
 </style>

@@ -104,7 +104,7 @@ async function setupComicsPage(page: any) {
 test.describe('Comics 管理页面', () => {
   test.beforeEach(async ({ page }) => {
     await setupComicsPage(page)
-    await page.goto('/comics')
+    await page.goto('/dashboard/comics')
     // 等待漫画卡片渲染
     await page.waitForSelector('text=测试漫画 Alpha', { timeout: 10000 })
   })
@@ -115,7 +115,8 @@ test.describe('Comics 管理页面', () => {
     // FilterPanel 有 "应用筛选" 按钮
     await expect(page.getByRole('button', { name: '应用筛选' })).toBeVisible()
 
-    // 含爬取状态标签
+    // 高级字段默认收起，展开后应显示爬取状态
+    await page.getByRole('button', { name: /高级筛选/ }).click()
     await expect(page.getByText('爬取状态')).toBeVisible()
 
     // 旧的裸 HTML filter-bar 不存在
@@ -138,7 +139,7 @@ test.describe('Comics 管理页面', () => {
     )
 
     // 切换 sortBy 为 "标题"
-    const sortBySelect = page.locator('select').first()
+    const sortBySelect = page.locator('select').filter({ has: page.locator('option[value="title"]') }).first()
     await sortBySelect.selectOption('title')
 
     // 等待带 sortBy=title 的请求发出
@@ -252,7 +253,7 @@ test.describe('Comics API 过滤参数', () => {
       })
     })
 
-    await page.goto('/comics')
+    await page.goto('/dashboard/comics')
     await page.waitForTimeout(1000)
 
     // 选择爬取状态为 "部分完成"

@@ -266,8 +266,6 @@ const breadcrumbItems = computed(() => {
   return [{ label: t('dashboard.overview'), to: '/' }, { label: routeLabels[currentPath] ?? t('dashboard.dashboard') }]
 })
 
-const pageTitle = computed(() => breadcrumbItems.value.at(-1)?.label ?? t('dashboard.dashboard'))
-
 function navigateBreadcrumb(to: string): void {
   router.push(to)
 }
@@ -421,7 +419,7 @@ async function handleLogout() {
       class="dashboard-main flex-1 transition-all duration-300"
       :class="isMobile ? 'ml-0' : (sidebarCollapsed ? 'ml-16' : 'ml-64')"
     >
-      <div class="dashboard-content-header mb-6 md:mb-8 flex items-center justify-between gap-4">
+      <div class="dashboard-content-header flex items-center justify-between gap-4">
         <!-- 移动端汉堡菜单 -->
         <button
           v-if="isMobile"
@@ -434,15 +432,12 @@ async function handleLogout() {
           <Menu :size="22" aria-hidden="true" />
         </button>
 
-        <div class="dashboard-header-copy min-w-0 flex-1">
+        <div class="page-heading min-w-0 flex-1">
           <Breadcrumbs
             :items="breadcrumbItems"
             @navigate="navigateBreadcrumb"
             @back="navigateBreadcrumbBack"
           />
-          <h1 class="dashboard-content-title mt-1 truncate text-xl font-bold tracking-tight md:text-2xl">
-            {{ pageTitle }}
-          </h1>
         </div>
 
         <div v-if="session.data" class="dashboard-user flex items-center gap-2">

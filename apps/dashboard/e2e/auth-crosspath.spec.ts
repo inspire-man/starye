@@ -23,7 +23,7 @@ async function mockSession(page: any, session: any) {
 }
 
 async function interceptExternalRedirects(page: any) {
-  await page.route('**/auth/**', (route: any) =>
+  await page.route('**/auth/login**', (route: any) =>
     route.fulfill({
       status: 200,
       contentType: 'text/html',
@@ -57,7 +57,7 @@ test.describe('AUTH-01: 登录后跨子路径 session 共享', () => {
       })
     })
 
-    await page.goto('/')
+    await page.goto('/dashboard/')
     await page.waitForLoadState('networkidle')
 
     // 核心断言 1：SPA 至少打过一次 /api/auth/get-session（Better Auth 客户端消费 session）

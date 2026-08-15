@@ -218,22 +218,75 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="name-mapping-management">
-    <!-- 头部 -->
-    <div class="header">
-      <h1 class="title">
-        名字映射管理
-      </h1>
+  <div class="name-mapping-management dashboard-list-page">
+    <!-- Tab 切换 -->
+    <div class="tabs tabs-order">
       <button
-        class="btn-primary"
+        class="tab" :class="[{ active: activeTab === 'actors' }]"
+        @click="activeTab = 'actors'"
+      >
+        女优 ({{ unmappedActors.length }})
+      </button>
+      <button
+        class="tab" :class="[{ active: activeTab === 'publishers' }]"
+        @click="activeTab = 'publishers'"
+      >
+        厂商 ({{ unmappedPublishers.length }})
+      </button>
+    </div>
+
+    <!-- 筛选工具栏 -->
+    <div class="toolbar list-toolbar toolbar-order">
+      <input
+        v-model="searchQuery"
+        type="text"
+        class="search-input"
+        placeholder="搜索名字..."
+      >
+
+      <select v-model="sortBy" class="select">
+        <option value="movieCount">
+          作品数量
+        </option>
+        <option value="name">
+          名字
+        </option>
+      </select>
+
+      <select v-model="sortOrder" class="select">
+        <option value="desc">
+          降序
+        </option>
+        <option value="asc">
+          升序
+        </option>
+      </select>
+
+      <div class="form-group">
+        <label>最少作品数</label>
+        <input
+          v-model.number="minMovieCount"
+          type="number"
+          min="0"
+          class="form-input"
+          style="width: 100px;"
+        >
+      </div>
+
+      <button class="btn-secondary" @click="loadUnmappedData">
+        刷新
+      </button>
+      <button
+        class="list-toolbar-primary"
+        type="button"
         @click="showAddForm = !showAddForm"
       >
-        {{ showAddForm ? '取消添加' : '+ 添加映射' }}
+        {{ showAddForm ? '取消添加' : '添加映射' }}
       </button>
     </div>
 
     <!-- 添加映射表单 -->
-    <div v-if="showAddForm" class="add-form-card">
+    <div v-if="showAddForm" class="add-form-card add-form-order">
       <h3>添加新映射</h3>
       <div class="form">
         <div class="form-row">
@@ -279,65 +332,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Tab 切换 -->
-    <div class="tabs">
-      <button
-        class="tab" :class="[{ active: activeTab === 'actors' }]"
-        @click="activeTab = 'actors'"
-      >
-        女优 ({{ unmappedActors.length }})
-      </button>
-      <button
-        class="tab" :class="[{ active: activeTab === 'publishers' }]"
-        @click="activeTab = 'publishers'"
-      >
-        厂商 ({{ unmappedPublishers.length }})
-      </button>
-    </div>
-
-    <!-- 筛选工具栏 -->
-    <div class="toolbar">
-      <input
-        v-model="searchQuery"
-        type="text"
-        class="search-input"
-        placeholder="搜索名字..."
-      >
-
-      <select v-model="sortBy" class="select">
-        <option value="movieCount">
-          作品数量
-        </option>
-        <option value="name">
-          名字
-        </option>
-      </select>
-
-      <select v-model="sortOrder" class="select">
-        <option value="desc">
-          降序
-        </option>
-        <option value="asc">
-          升序
-        </option>
-      </select>
-
-      <div class="form-group">
-        <label>最少作品数</label>
-        <input
-          v-model.number="minMovieCount"
-          type="number"
-          min="0"
-          class="form-input"
-          style="width: 100px;"
-        >
-      </div>
-
-      <button class="btn-secondary" @click="loadUnmappedData">
-        刷新
-      </button>
-    </div>
-
     <!-- 加载状态 -->
     <div v-if="loading" class="loading">
       加载中...
@@ -352,7 +346,7 @@ onMounted(() => {
     </div>
 
     <!-- 未匹配列表 -->
-    <div v-else class="content">
+    <template v-else>
       <div v-if="filteredUnmapped.length === 0" class="empty-state">
         <p>{{ searchQuery || minMovieCount > 0 ? '没有符合条件的结果' : '暂无未匹配数据' }}</p>
         <p class="hint">
@@ -360,12 +354,11 @@ onMounted(() => {
         </p>
       </div>
 
-      <div v-else class="card">
-        <div class="card-header">
-          <h2>未匹配清单</h2>
-          <span class="badge">{{ filteredUnmapped.length }} 项</span>
+      <template v-else>
+        <div class="list-toolbar mapping-table-summary">
+          <span class="list-toolbar-text">未匹配清单</span>
+          <span class="list-toolbar-stat"><strong>{{ filteredUnmapped.length }}</strong> 项</span>
         </div>
-
         <div class="table-container">
           <table class="data-table">
             <thead>
@@ -423,7 +416,7 @@ onMounted(() => {
             </tbody>
           </table>
         </div>
-      </div>
+      </template>
 
       <Pagination
         v-if="loading || totalItems > 0"
@@ -509,16 +502,25 @@ onMounted(() => {
           </div>
         </template>
       </DetailDrawer>
-    </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .name-mapping-management {
-  padding: 1.5rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+  max-width: none;
+  margin: 0;
 }
+
+.tabs-order { order: 1; margin-bottom: 0; }
+.toolbar-order { order: 2; margin-bottom: 0; }
+.add-form-order { order: 3; }
+.name-mapping-management > .loading,
+.name-mapping-management > .error,
+.name-mapping-management > .content { order: 4; }
 
 .header {
   display: flex;
@@ -770,19 +772,30 @@ onMounted(() => {
 }
 
 .table-container {
+  max-height: var(--ui-table-max-height, min(62vh, 44rem));
   overflow-x: auto;
+  overflow-y: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-lg, 0.5rem);
+  background: hsl(var(--card));
+  scrollbar-color: hsl(var(--primary) / 0.42) hsl(var(--muted) / 0.32);
+  scrollbar-width: thin;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 760px;
 }
 
 .data-table th,
 .data-table td {
+  min-width: 0;
   padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid hsl(var(--border));
+  overflow-wrap: anywhere;
 }
 
 .data-table th {
@@ -799,11 +812,27 @@ onMounted(() => {
 
 .data-table th:last-child,
 .data-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  width: 7rem;
+  min-width: 7rem;
   text-align: right;
+  background: hsl(var(--card));
+  box-shadow: -1px 0 0 hsl(var(--border)), -0.5rem 0 1rem -0.75rem hsl(var(--foreground) / 0.18);
+}
+
+.data-table th:last-child {
+  z-index: 2;
+  background: hsl(var(--muted) / 0.92);
 }
 
 .data-table tbody tr:hover {
   background: hsl(var(--muted) / 0.35);
+}
+
+.data-table tbody tr:hover td:last-child {
+  background: hsl(var(--accent) / 0.88);
 }
 
 .name-cell {

@@ -6,6 +6,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   prepareTargetMutation,
+  productionCrawlerOptionalEnvironmentKeys,
   productionCrawlerRequiredEnvironmentKeys,
   runPreparedTargetMutation,
   targetRemoteEntryDefinitions,
@@ -108,10 +109,65 @@ describe('production target/workflow integration boundary', () => {
       STARYE_PREPARED_ENTRY: 'crawler-optimized',
       STARYE_PREPARED_OPERATION: 'movie-production',
       CRAWLER_SECRET: productionSecrets().CRAWLER_SECRET,
+      STARYE_PREPARED_SECRET_KEYS: productionCrawlerRequiredEnvironmentKeys.join(','),
+      STARYE_PREPARED_OPTIONAL_ENVIRONMENT_KEYS: '',
     }))
     expect(execute.mock.calls[0]?.[2]).not.toHaveProperty('target_url')
     expect(execute.mock.calls[0]?.[2]).not.toHaveProperty('COMMAND')
     expect(execute.mock.calls[0]?.[2]).not.toHaveProperty('CLOUDFLARE_API_TOKEN')
+  })
+
+  it('forwards declared optional video configuration without making it a required credential', async () => {
+    const root = await createRoot()
+    const runDirectory = path.join(root, 'run')
+    const materialize = vi.fn(async () => {
+      await mkdir(runDirectory, { recursive: true })
+      return {
+        apiConfigPath: path.join(root, 'api', '.target-wrangler.ci-production.toml'),
+        gatewayConfigPath: path.join(root, 'gateway', '.target-wrangler.ci-production.toml'),
+        cleanup: async () => {},
+      }
+    })
+    const prepared = await prepareTargetMutation({
+      target: 'starye-org',
+      scope: 'ci',
+      command: 'crawler-comic',
+      ciEnvironment: 'starye-org',
+      environment: {
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
+        CLOUDFLARE_API_TOKEN: 'fixture-cloudflare-token',
+        ...productionSecrets(),
+        STARYE_VIDEO_DIRECT_SOURCES: '["https://video.example.test/direct"]',
+      },
+      githubOutput: path.join(root, 'github-output'),
+      runId: 'production-optional-fixture-run',
+      appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
+      runDirectory,
+    }, {
+      executeReadOnly: readOnlyExecutor,
+      materialize,
+    })
+
+    const execute = vi.fn((_command: string, _args: readonly string[], _environment: NodeJS.ProcessEnv) => ({
+      exitCode: 0,
+      stdout: 'production child completed',
+    }))
+    const authorizedEnvironment = {
+      ...productionSecrets(),
+      STARYE_VIDEO_DIRECT_SOURCES: '["https://video.example.test/direct"]',
+    }
+    await expect(runPreparedTargetMutation({
+      entry: 'crawler-comic',
+      preparedContextPath: prepared.preparedContextPath,
+      authorizedEnvironment,
+      execute,
+    })).resolves.toEqual({})
+
+    expect(execute.mock.calls[0]?.[2]).toEqual(expect.objectContaining({
+      STARYE_PREPARED_SECRET_KEYS: productionCrawlerRequiredEnvironmentKeys.join(','),
+      STARYE_PREPARED_OPTIONAL_ENVIRONMENT_KEYS: productionCrawlerOptionalEnvironmentKeys[0],
+      STARYE_VIDEO_DIRECT_SOURCES: '["https://video.example.test/direct"]',
+    }))
   })
 
   it('keeps production operation registry closed and rejects environment drift before materialization', async () => {

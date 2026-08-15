@@ -554,11 +554,7 @@ const tableColumns = [
 </script>
 
 <template>
-  <div class="movies-page">
-    <div class="page-header">
-      <h1>电影管理</h1>
-    </div>
-
+  <div class="movies-page dashboard-list-page">
     <div v-if="receiptError" class="receipt-error" role="alert">
       <span>{{ receiptError }}</span>
       <a v-if="receiptReturnPath" :href="receiptReturnPath">返回任务详情</a>
@@ -572,7 +568,7 @@ const tableColumns = [
       @reset="resetFilters"
     />
 
-    <div class="toolbar">
+    <div class="toolbar list-toolbar">
       <div class="sort-controls">
         <label>排序:</label>
         <select :value="sortBy" @change="updateSort(($event.target as HTMLSelectElement).value)">
@@ -965,8 +961,8 @@ const tableColumns = [
 <style scoped>
 .movies-page {
   padding: 0;
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 .page-header {

@@ -159,26 +159,7 @@ onMounted(loadLogs)
 </script>
 
 <template>
-  <div class="audit-logs-page">
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">
-          审计日志
-        </h2>
-        <p class="page-subtitle">
-          查看系统操作记录
-        </p>
-      </div>
-      <div class="export-buttons">
-        <button class="btn-secondary" @click="handleExport('json')">
-          导出 JSON
-        </button>
-        <button class="btn-secondary" @click="handleExport('csv')">
-          导出 CSV
-        </button>
-      </div>
-    </div>
-
+  <div class="audit-logs-page dashboard-list-page">
     <FilterPanel
       v-model="filters"
       :fields="filterFields"
@@ -187,8 +168,16 @@ onMounted(loadLogs)
       @reset="filtersComposable.resetFilters(); loadLogs()"
     />
 
-    <div class="filter-info">
-      共 {{ totalItems }} 条记录
+    <div class="list-toolbar">
+      <span class="list-toolbar-text">共 {{ totalItems }} 条记录</span>
+      <div class="list-toolbar-group export-buttons">
+        <button class="list-toolbar-secondary" @click="handleExport('json')">
+          导出 JSON
+        </button>
+        <button class="list-toolbar-secondary" @click="handleExport('csv')">
+          导出 CSV
+        </button>
+      </div>
     </div>
 
     <DataTable
@@ -337,8 +326,8 @@ onMounted(loadLogs)
 
 <style scoped>
 .audit-logs-page {
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 .page-header {

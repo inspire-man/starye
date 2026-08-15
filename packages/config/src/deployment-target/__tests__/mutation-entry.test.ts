@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   prepareTargetMutation,
+  productionCrawlerOptionalEnvironmentKeys,
   productionCrawlerRequiredEnvironmentKeys,
   runPreparedTargetMutation,
   targetRemoteEntryDefinitions,
@@ -39,12 +40,14 @@ describe('target mutation preparation', () => {
         childOperation: 'manga-production',
         allowedOptions: [],
         requiredSecretKeys: productionCrawlerRequiredEnvironmentKeys,
+        optionalEnvironmentKeys: productionCrawlerOptionalEnvironmentKeys,
       }),
       expect.objectContaining({
         id: 'crawler-optimized',
         childOperation: 'movie-production',
         allowedOptions: [],
         requiredSecretKeys: productionCrawlerRequiredEnvironmentKeys,
+        optionalEnvironmentKeys: productionCrawlerOptionalEnvironmentKeys,
       }),
     ])
     expect(productionCrawlerRequiredEnvironmentKeys).not.toContain('target_url')

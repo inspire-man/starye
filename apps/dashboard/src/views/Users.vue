@@ -105,17 +105,10 @@ watch([currentPage, pageSize], loadUsers, { immediate: true })
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h2 class="text-2xl font-bold tracking-tight">
-          {{ t('dashboard.user_management') }}
-        </h2>
-        <p class="mt-1 text-sm text-muted-foreground">
-          管理账号角色与内容访问状态
-        </p>
-      </div>
-      <button class="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted" type="button" aria-label="刷新用户列表" @click="loadUsers">
+  <div class="users-page dashboard-list-page">
+    <div class="list-toolbar">
+      <span class="list-toolbar-text">管理账号角色与内容访问状态</span>
+      <button class="list-toolbar-secondary" type="button" aria-label="刷新用户列表" @click="loadUsers">
         <svg class="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
         刷新
       </button>

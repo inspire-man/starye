@@ -78,14 +78,16 @@ function isActionColumn(column: Column<T>): boolean {
             <th
               v-for="(column, columnIndex) in columns"
               :key="column.key"
-              :style="{ width: column.width, minWidth: column.minWidth }"
+              :style="{ width: column.width, minWidth: column.minWidth, maxWidth: isActionColumn(column) ? column.width : undefined }"
               class="data-table-cell data-table-head-cell"
               :class="isActionColumn(column) ? 'data-table-action-cell text-right' : ''"
             >
-              <div
-                class="ui-skeleton data-table-skeleton-line"
-                :class="isActionColumn(column) ? 'data-table-skeleton-line--action' : columnIndex === 0 ? 'data-table-skeleton-line--title' : 'data-table-skeleton-line--header'"
-              />
+              <div :class="isActionColumn(column) ? 'data-table-action-content' : 'data-table-cell-content'">
+                <div
+                  class="ui-skeleton data-table-skeleton-line"
+                  :class="isActionColumn(column) ? 'data-table-skeleton-line--action' : columnIndex === 0 ? 'data-table-skeleton-line--title' : 'data-table-skeleton-line--header'"
+                />
+              </div>
             </th>
           </tr>
         </thead>
@@ -97,14 +99,16 @@ function isActionColumn(column: Column<T>): boolean {
             <td
               v-for="(column, columnIndex) in columns"
               :key="column.key"
-              :style="{ width: column.width, minWidth: column.minWidth }"
+              :style="{ width: column.width, minWidth: column.minWidth, maxWidth: isActionColumn(column) ? column.width : undefined }"
               class="data-table-cell data-table-body-cell"
               :class="isActionColumn(column) ? 'data-table-action-cell text-right' : ''"
             >
-              <div
-                class="ui-skeleton data-table-skeleton-line"
-                :class="isActionColumn(column) ? 'data-table-skeleton-line--action' : columnIndex === 0 ? 'data-table-skeleton-line--title' : 'data-table-skeleton-line--body'"
-              />
+              <div :class="isActionColumn(column) ? 'data-table-action-content' : 'data-table-cell-content'">
+                <div
+                  class="ui-skeleton data-table-skeleton-line"
+                  :class="isActionColumn(column) ? 'data-table-skeleton-line--action' : columnIndex === 0 ? 'data-table-skeleton-line--title' : 'data-table-skeleton-line--body'"
+                />
+              </div>
             </td>
           </tr>
         </tbody>
@@ -130,7 +134,7 @@ function isActionColumn(column: Column<T>): boolean {
             <th
               v-for="column in columns"
               :key="column.key"
-              :style="{ width: column.width, minWidth: column.minWidth }"
+              :style="{ width: column.width, minWidth: column.minWidth, maxWidth: isActionColumn(column) ? column.width : undefined }"
               class="data-table-cell data-table-head-cell text-left"
               :class="[
                 { 'cursor-pointer select-none hover:bg-muted': column.sortable },
@@ -165,9 +169,11 @@ function isActionColumn(column: Column<T>): boolean {
               class="data-table-cell data-table-body-cell"
               :class="isActionColumn(column) ? 'data-table-action-cell text-right' : ''"
             >
-              <slot :name="`cell-${column.key}`" :item="item" :value="getCellValue(item, column)">
-                {{ getCellValue(item, column) }}
-              </slot>
+              <div :class="isActionColumn(column) ? 'data-table-action-content' : 'data-table-cell-content'">
+                <slot :name="`cell-${column.key}`" :item="item" :value="getCellValue(item, column)">
+                  {{ getCellValue(item, column) }}
+                </slot>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -196,11 +202,53 @@ function isActionColumn(column: Column<T>): boolean {
 .data-table {
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
 }
 
 .data-table-cell {
+  box-sizing: border-box;
   border-bottom: 1px solid hsl(var(--border));
   padding: var(--ui-table-cell-y, 0.75rem) var(--ui-table-cell-x, 1rem);
+  min-width: 0;
+}
+
+.data-table-cell-content {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.data-table-action-content {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ui-space-2, 0.5rem);
+  overflow: hidden;
+}
+
+.data-table-action-content > :deep(*) {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--ui-space-2, 0.5rem);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.data-table-action-content > :deep(button),
+.data-table-action-content > :deep(a) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .data-table-select-cell {
@@ -233,7 +281,9 @@ function isActionColumn(column: Column<T>): boolean {
   position: sticky;
   right: 0;
   z-index: 1;
-  min-width: 5rem;
+  width: var(--data-table-action-width, 7rem);
+  min-width: var(--data-table-action-min-width, 6rem);
+  max-width: var(--data-table-action-width, 7rem);
   white-space: nowrap;
   background: hsl(var(--card));
   box-shadow: -1px 0 0 hsl(var(--border)), -0.5rem 0 1rem -0.75rem hsl(var(--foreground) / 0.18);
