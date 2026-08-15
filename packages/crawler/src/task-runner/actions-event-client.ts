@@ -66,15 +66,17 @@ export class ActionsEventClient {
 
   async scheduleRegister(input: ScheduleRegisterInput): Promise<ActionsEventResponse> {
     return this.request('/api/internal/crawler-runs/schedule-register', {
-      environment: this.config.environment,
-      ref: this.config.ref,
-      repository: this.config.repository,
-      schedule_bucket: input.scheduleBucket,
-      scheduled_at: input.scheduledAt,
-      target: this.config.target,
-      template: this.config.template,
-      type: 'schedule_register',
-      workflow: this.config.workflow,
+      ...createRunnerEnvelope(this.config.callbackKeyId, {
+        environment: this.config.environment,
+        ref: this.config.ref,
+        repository: this.config.repository,
+        schedule_bucket: input.scheduleBucket,
+        scheduled_at: input.scheduledAt,
+        target: this.config.target,
+        template: this.config.template,
+        type: 'schedule_register',
+        workflow: this.config.workflow,
+      }, this.now()),
     }, true)
   }
 

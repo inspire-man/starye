@@ -2,7 +2,7 @@
 status: awaiting_human_verify
 trigger: "GitHub Actions Daily Actor Crawl, Daily Manga Crawl, Daily Movie Crawl, and Daily Publisher Crawl fail on scheduled runs"
 created: 2026-08-14
-updated: 2026-08-14
+updated: 2026-08-15
 ---
 
 # Debug: GitHub Actions Daily Crawls
@@ -18,9 +18,9 @@ updated: 2026-08-14
 ## Current Focus
 
 - hypothesis: `runCli` eagerly loads application run/attempt bindings for `schedule-register`, although schedule registration needs only immutable provider credentials; independent stale Actor/Publisher workflows still invoke entries excluded from the closed production registry.
-- hypothesis: confirmed. The CLI's eager full-binding client construction caused Manga/Movie schedule registration to require unavailable application bindings; independently, stale Actor/Publisher schedules invoked entries outside the closed production registry.
-- test: self-verification has passed; verify fresh Manga/Movie scheduled or manually dispatched production workflows after this repair is delivered.
-- expecting: Manga/Movie complete their register/resolve/crawl path, while Actor/Publisher produce no scheduled mutation run and remain explicit retired manual entries.
+- hypothesis: confirmed. The CLI's eager full-binding client construction caused Manga/Movie schedule registration to require unavailable application bindings; independently, stale Actor/Publisher schedules invoked entries outside the closed production registry. A follow-up inspection found the remaining 400s were caused by a missing signed envelope and an hour-truncated `scheduled_at` value.
+- test: focused client, workflow contract, API callback route, and crawler type-check verification has passed; verify fresh Manga/Movie scheduled or manually dispatched production workflows after this repair is delivered.
+- expecting: Manga/Movie complete their register/resolve/crawl path with a schema-valid, fresh schedule callback, while Actor/Publisher produce no scheduled mutation run and remain explicit retired manual entries.
 - next_action: obtain human confirmation from a fresh GitHub Actions run after the repair is delivered.
 
 reasoning_checkpoint:
@@ -72,23 +72,38 @@ reasoning_checkpoint:
 - timestamp: 2026-08-14
   source: scoped revert-and-reconfirm
   finding: reversing only `actions-event-client.ts` and the two legacy workflows makes exactly the two new regressions fail (10 passing, 2 failing); reapplying the exact repair makes all 12 focused tests pass again.
+- timestamp: 2026-08-15
+  source: `gh run view 31831004428 --log-failed` and `gh run view 31821218389 --log-failed`
+  finding: both scheduled jobs reach `schedule-register` and receive HTTP 400; their workflows start about 50–56 minutes after the cron hour while generating `scheduled_at` at the hour boundary.
+- timestamp: 2026-08-15
+  source: API schema and client source inspection
+  finding: `CrawlerScheduleRegisterEventSchema` requires `event_id`, `key_id`, `nonce`, and `timestamp`, but `ActionsEventClient.scheduleRegister()` sent only provider fields; the API also rejects `scheduled_at` older than five minutes.
+- timestamp: 2026-08-15
+  source: focused post-fix verification
+  finding: actions client/workflow contract tests pass (12 tests), crawler callback route tests pass (18 tests), crawler type-check passes, and `git diff --check` passes.
 
 ## Resolution
 
-root_cause: `runCli` eagerly constructed a fully application-bound Actions client before selecting `schedule-register`, although schedule registration runs before an application run/attempt exists; independently, the stale Actor/Publisher schedules invoked prepared entries excluded from the closed production registry.
-fix: Added a schedule-registration-specific Actions client factory that loads only callback and immutable provider environment values, while preserving strict application bindings for all other commands. Replaced stale Actor/Publisher scheduled mutation workflows with explicit manual retirement notices and added contract coverage.
+root_cause: `runCli` eagerly constructed a fully application-bound Actions client before selecting `schedule-register`, although schedule registration runs before an application run/attempt exists; independently, the stale Actor/Publisher schedules invoked prepared entries excluded from the closed production registry. The remaining Manga/Movie 400s came from an incomplete schedule callback envelope and an hour-truncated `scheduled_at` that violated the API's five-minute freshness bound.
+fix: Added a schedule-registration-specific Actions client factory that loads only callback and immutable provider environment values, preserves the required signed event envelope, and uses the actual workflow execution time for `scheduled_at` while retaining the hour bucket for idempotency. Replaced stale Actor/Publisher scheduled mutation workflows with explicit manual retirement notices and added contract coverage.
 oracle_type: specified
 verification:
   target_test: { result: pass, suites_run: ["actions-event-client.test.ts", "workflow-contract.test.ts"], tests: 12 }
   mutation_check: { result: skipped, reason_if_skipped: "No Stryker configuration or package dependency exists in the repository." }
   no_op_deletion: { result: pass, deletion_justified_by_rca: true, rationale: "Removed Actor/Publisher prepared mutation paths are unsupported by the closed production registry; replacement workflows report explicit retirement and tests prohibit remapping." }
-  adjacent_tests: { result: pass, suites_run: ["production-workflow.integration.test.ts (crawler)", "production-workflow.integration.test.ts (config)", "mutation-entry.test.ts"], tests: 17, type_check: "pnpm --filter @starye/crawler type-check" }
+  adjacent_tests: { result: pass, suites_run: ["production-workflow.integration.test.ts (crawler)", "production-workflow.integration.test.ts (config)", "mutation-entry.test.ts", "crawler-runs.route.test.ts", "production-events.integration.test.ts"], tests: 35, type_check: "pnpm --filter @starye/crawler type-check" }
   revert_and_reconfirm: { result: pass, bug_returned_on_revert: true, fixed_on_reapply: true }
   guardrail_verdict: accepted
   manual_cli: "schedule-register without ACTIONS_APPLICATION_RUN_ID/ACTIONS_APPLICATION_ATTEMPT reached the callback request and failed only at the deliberately unreachable endpoint"
 files_changed:
   - .github/workflows/daily-actor-crawl.yml
   - .github/workflows/daily-publisher-crawl.yml
+  - packages/config/src/deployment-target/__tests__/workflow-contract.test.ts
+  - packages/crawler/src/task-runner/__tests__/actions-event-client.test.ts
+  - packages/crawler/src/task-runner/actions-event-client.ts
+follow_up_files_changed:
+  - .github/workflows/daily-manga-crawl.yml
+  - .github/workflows/daily-movie-crawl.yml
   - packages/config/src/deployment-target/__tests__/workflow-contract.test.ts
   - packages/crawler/src/task-runner/__tests__/actions-event-client.test.ts
   - packages/crawler/src/task-runner/actions-event-client.ts

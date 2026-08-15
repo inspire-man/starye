@@ -49,15 +49,34 @@ describe('actionsEventClient', () => {
     const request = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
     const payload = JSON.parse(String(request.body)) as Record<string, unknown>
     expect(payload).toMatchObject({
+      event_id: expect.any(String),
       environment: 'starye-org',
+      key_id: 'actions-key',
+      nonce: expect.any(String),
       ref: 'main',
       repository: 'inspire-man/starye',
       schedule_bucket: '2026-07-30T00:00Z',
+      timestamp: 1_754_000_000_000,
       target: 'starye-org',
       template: 'movie',
       type: 'schedule_register',
       workflow: '.github/workflows/daily-movie-crawl.yml',
     })
+    expect(Object.keys(payload).sort()).toEqual([
+      'environment',
+      'event_id',
+      'key_id',
+      'nonce',
+      'ref',
+      'repository',
+      'schedule_bucket',
+      'scheduled_at',
+      'target',
+      'template',
+      'timestamp',
+      'type',
+      'workflow',
+    ].sort())
     expect(request.headers).toMatchObject({
       'x-runner-key-id': 'actions-key',
     })

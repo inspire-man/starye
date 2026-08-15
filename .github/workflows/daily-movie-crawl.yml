@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          scheduled_at="$(date -u +%Y-%m-%dT%H:00:00.000Z)"
+          scheduled_at="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
           schedule_bucket="${scheduled_at:0:13}:00Z"
           ACTIONS_SCHEDULED_AT="$scheduled_at" ACTIONS_SCHEDULE_BUCKET="$schedule_bucket" \
             pnpm exec tsx packages/crawler/src/task-runner/actions-event-client.ts schedule-register
