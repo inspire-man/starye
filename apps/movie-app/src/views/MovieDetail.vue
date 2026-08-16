@@ -804,7 +804,7 @@ async function fetchMovieDetail() {
     }
   }
   catch (err: any) {
-    error.value = err.response?.data?.error || '加载影片详情失败'
+    error.value = err instanceof Error ? err.message : err.response?.data?.error || '加载影片详情失败'
   }
   finally {
     loading.value = false
@@ -895,865 +895,867 @@ onMounted(() => {
 </script>
 
 <template>
-  <div v-if="loading" class="animate-pulse">
-    <div class="bg-gray-800 h-64 rounded-lg mb-4" />
-    <div class="bg-gray-800 h-8 rounded w-1/2 mb-2" />
-    <div class="bg-gray-800 h-4 rounded w-1/3" />
-  </div>
-
-  <div v-else-if="error" class="text-center py-12">
-    <p class="text-red-500 mb-4">
-      {{ error }}
-    </p>
-    <RouterLink to="/" class="text-primary-400 hover:underline">
-      返回首页
-    </RouterLink>
-  </div>
-
-  <div v-else-if="movie" class="space-y-6">
-    <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-      <div class="flex flex-col md:flex-row gap-6">
-        <!-- 封面：完整展示横版原图（400:267） -->
-        <div class="shrink-0 w-full md:w-auto">
-          <img
-            v-if="movie.coverImage"
-            :src="movie.coverImage"
-            :alt="movie.title"
-            class="w-full md:w-80 h-auto rounded-lg shadow-md object-cover"
-          >
-          <div
-            v-else
-            class="w-full md:w-80 bg-gray-700 rounded-lg flex items-center justify-center"
-            style="aspect-ratio: 400/267"
-          >
-            <span class="text-gray-500">暂无封面</span>
-          </div>
-        </div>
-
-        <div class="flex-1">
-          <div class="flex items-start justify-between mb-4">
-            <div>
-              <h1 class="text-3xl font-bold text-white mb-3">
-                {{ movie.title }}
-              </h1>
-              <div class="flex flex-wrap items-center gap-2">
-                <span
-                  :data-phase13-item-code="movie.code"
-                  :data-phase13-item-id="movie.id"
-                  class="bg-gray-700/80 text-primary-400 font-mono text-sm px-3 py-1.5 rounded-md border border-gray-600"
-                >
-                  {{ movie.code }}
-                </span>
-                <RouterLink
-                  v-if="movie.series"
-                  :to="`/series/${encodeURIComponent(movie.series)}`"
-                  class="bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600/30 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  <span class="mr-1">📂</span>
-                  {{ movie.series }}
-                </RouterLink>
-              </div>
-            </div>
-            <span
-              v-if="movie.isR18"
-              class="bg-red-600 text-white text-sm px-3 py-1 rounded"
-            >
-              R18
-            </span>
-          </div>
-
-          <div class="space-y-3">
-            <div v-if="movie.releaseDate" class="flex items-center text-sm">
-              <span class="text-gray-300 w-24 font-medium">发行日期：</span>
-              <span class="text-white">{{ formatDate(movie.releaseDate) }}</span>
-            </div>
-
-            <div v-if="movie.duration" class="flex items-center text-sm">
-              <span class="text-gray-300 w-24 font-medium">时长：</span>
-              <span class="text-white">{{ Math.floor(movie.duration / 60) }} 分钟</span>
-            </div>
-
-            <div class="flex items-start text-sm">
-              <span class="text-gray-300 w-24 shrink-0 font-medium">演员：</span>
-              <div v-if="actorList.length > 0" class="flex flex-wrap gap-2">
-                <RouterLink
-                  v-for="(actor, index) in actorList"
-                  :key="typeof actor === 'object' ? (actor.id || actor.slug || `actor-${index}`) : `actor-str-${index}`"
-                  :to="typeof actor === 'object' && actor.slug ? `/actors/${actor.slug}` : '#'"
-                  class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200"
-                  :class="typeof actor === 'object' && actor.slug
-                    ? 'bg-primary-600 hover:bg-primary-500 text-white cursor-pointer'
-                    : 'bg-gray-600 text-gray-300 cursor-not-allowed'"
-                  @click.prevent="typeof actor !== 'object' || !actor.slug ? null : undefined"
-                >
-                  {{ typeof actor === 'object' ? actor.name : actor }}
-                </RouterLink>
-              </div>
-              <span v-else class="text-gray-400 text-xs">暂无数据</span>
-            </div>
-
-            <div v-if="genreList.length > 0" class="flex items-start text-sm">
-              <span class="text-gray-300 w-24 shrink-0 font-medium">标签：</span>
-              <div class="flex flex-wrap gap-2">
-                <RouterLink
-                  v-for="genre in genreList"
-                  :key="genre"
-                  :to="{ path: '/', query: { genre } }"
-                  class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-2 py-1 rounded text-xs hover:bg-purple-500/30 transition-colors cursor-pointer"
-                >
-                  {{ genre }}
-                </RouterLink>
-              </div>
-            </div>
-
-            <div class="flex items-start text-sm">
-              <span class="text-gray-300 w-24 shrink-0 font-medium">制作商：</span>
-              <div v-if="publisherList.length > 0" class="flex flex-wrap gap-2">
-                <RouterLink
-                  v-for="publisher in publisherList"
-                  :key="publisher.id || publisher.slug"
-                  :to="publisher.slug ? `/publishers/${publisher.slug}` : '#'"
-                  class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200 bg-green-700 hover:bg-green-600 text-white cursor-pointer"
-                >
-                  {{ publisher.name }}
-                </RouterLink>
-              </div>
-              <span v-else class="text-gray-400 text-xs">暂无数据</span>
-            </div>
-
-            <div v-if="movie.description" class="flex items-start text-sm pt-2">
-              <span class="text-gray-300 w-24 shrink-0 font-medium">简介：</span>
-              <p class="text-gray-200 flex-1 leading-relaxed">
-                {{ movie.description }}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+  <div class="ui-public-page movie-detail-page">
+    <div v-if="loading" class="animate-pulse">
+      <div class="bg-gray-800 h-64 rounded-lg mb-4" />
+      <div class="bg-gray-800 h-8 rounded w-1/2 mb-2" />
+      <div class="bg-gray-800 h-4 rounded w-1/3" />
     </div>
 
-    <div
-      v-if="readiness"
-      data-readiness-summary
-      class="bg-gray-800 rounded-lg shadow-lg p-6 space-y-4"
-      aria-live="polite"
-    >
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 class="text-xl font-bold text-white">
-            播放可用性
-          </h2>
-          <p class="text-sm text-gray-300 mt-1">
-            内容身份：{{ movie.id }} / {{ movie.primaryContentId }}
-          </p>
-        </div>
-        <RouterLink
-          v-if="readiness.source.disposition === 'ready' && firstEligibleDirect"
-          :to="playbackRouteFor(firstEligibleDirect, 'direct')"
-          data-readiness-action="play"
-          :data-content-id="movie.primaryContentId"
-          :data-source-revision="readiness.source.sourceRevision"
-          data-source-type="direct"
-          :data-playback-context="playbackContextLabel(firstEligibleDirect, 'direct')"
-          class="min-h-11 inline-flex items-center justify-center px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm rounded-lg transition-colors"
-        >
-          播放
-        </RouterLink>
-        <span
-          v-else-if="readiness.source.disposition === 'ready' && firstControlledFallback"
-          data-controlled-fallback-summary
-          class="text-sm text-amber-300 break-words"
-        >
-          没有 eligible direct，优先进入 {{ classifyPlaybackSource(firstControlledFallback) }} 受控路径
-        </span>
-      </div>
-
-      <section v-if="videoAvailabilityLayers.length" class="border-y border-gray-700" aria-labelledby="video-availability-title">
-        <h3 id="video-availability-title" class="py-3 text-sm font-semibold text-gray-200">
-          Authoritative current / history
-        </h3>
-        <article
-          v-for="layer in videoAvailabilityLayers"
-          :key="layer.key"
-          :data-video-layer="layer.key"
-          class="grid min-w-0 gap-1 border-t border-gray-700 py-3 text-xs text-gray-300"
-        >
-          <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
-            <strong class="text-sm text-gray-100">{{ layer.label }}</strong>
-            <span class="break-words">{{ layer.status }}</span>
-          </div>
-          <span class="break-words">reason：{{ layer.reason }}</span>
-          <span>revision {{ layer.sourceRevision }} · {{ layer.freshness }}</span>
-          <span>available：{{ layer.counts.available ?? 0 }} · abnormal：{{ layer.counts.abnormal ?? 0 }}</span>
-          <span>下一步：{{ layer.action }}</span>
-          <span v-for="sample in layer.samples" :key="sample" class="break-words">{{ sample }}</span>
-          <div v-if="layer.history.length" class="grid gap-1 border-l-2 border-gray-700 pl-3" data-video-history>
-            <span v-for="fact in layer.history" :key="`${fact.sourceRevision}-${fact.status}`">
-              history · revision {{ fact.sourceRevision }} · {{ fact.status }} · {{ fact.freshness }}
-            </span>
-          </div>
-        </article>
-      </section>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <section class="border border-gray-700 rounded-lg p-4">
-          <h3 class="text-sm font-semibold text-gray-200">
-            Metadata persisted
-          </h3>
-          <p class="mt-2 text-sm text-green-300">
-            <span aria-hidden="true">✓</span>
-            {{ readiness.metadata.persisted ? '已持久化' : '未持久化' }}
-          </p>
-          <p class="mt-1 text-xs text-gray-400 break-words">
-            content ID：{{ readiness.metadata.contentId }}
-          </p>
-          <p class="mt-1 text-xs text-gray-400">
-            最近持久化：{{ readiness.metadata.observedAt ?? '尚未上报' }}
-          </p>
-        </section>
-
-        <section
-          class="border border-gray-700 rounded-lg p-4"
-          :class="`readiness-${readiness.source.disposition}`"
-          :role="readiness.source.disposition === 'source_failed' ? 'alert' : readiness.source.disposition === 'repairing' ? 'status' : undefined"
-        >
-          <h3 class="text-sm font-semibold text-gray-200">
-            Source readiness
-          </h3>
-          <p class="mt-2 text-sm text-white">
-            <span aria-hidden="true">{{ readiness.source.disposition === 'ready' ? '✓' : readiness.source.disposition === 'source_failed' ? '!' : readiness.source.disposition === 'repairing' ? '↻' : '?' }}</span>
-            {{ sourceDispositionLabel(readiness.source.disposition) }}
-          </p>
-          <p class="mt-1 text-sm text-gray-300">
-            eligible count：{{ readiness.source.eligibleCount }}
-          </p>
-          <p class="mt-1 text-xs text-gray-400">
-            source revision：{{ readiness.source.sourceRevision }} · 最近读回：{{ readiness.source.observedAt }}
-          </p>
-          <p class="mt-1 text-xs text-gray-300 break-words">
-            受控原因：{{ sourceReasonLabel(readiness.source.reasonCode) }}
-          </p>
-          <p v-if="readiness.source.disposition === 'no_source'" class="mt-2 text-base text-amber-300">
-            暂无可用播放源
-          </p>
-          <p v-else-if="readiness.source.disposition === 'source_failed'" class="mt-2 text-base text-red-300">
-            来源读取失败，请重试读取或查看修复意图
-          </p>
-          <p v-else-if="readiness.source.disposition === 'repairing'" data-repairing-summary class="mt-2 text-base text-amber-300">
-            修复状态：等待新的 server-owned source readback
-          </p>
-          <p v-if="readiness.source.repairable" class="mt-1 text-sm text-amber-300">
-            可修复
-          </p>
-        </section>
-
-        <section class="border border-gray-700 rounded-lg p-4">
-          <h3 class="text-sm font-semibold text-gray-200">
-            Playback proof
-          </h3>
-          <p class="mt-2 text-sm text-white">
-            <span aria-hidden="true">{{ readiness.playback.status === 'playback_verified' ? '✓' : '?' }}</span>
-            {{ playbackStatusLabel(readiness.playback.status) }}
-          </p>
-          <p v-if="readiness.playback.evidence" class="mt-1 text-xs text-gray-300">
-            独立证据：playing · currentTime {{ readiness.playback.evidence.currentTime }}<span v-if="readiness.playback.evidence.observedAt"> · {{ readiness.playback.evidence.observedAt }}</span>
-          </p>
-          <p v-else class="mt-1 text-xs text-gray-400">
-            ready/receipt 不等于浏览器播放证据
-          </p>
-        </section>
-
-        <section class="border border-gray-700 rounded-lg p-4">
-          <h3 class="text-sm font-semibold text-gray-200">
-            Receipt/source summary
-          </h3>
-          <p class="mt-2 text-sm text-gray-300">
-            <span aria-hidden="true">{{ readiness.receipt.persisted ? '✓' : '?' }}</span>
-            {{ readiness.receipt.persisted ? 'receipt 已持久化' : 'receipt 未持久化' }}
-          </p>
-          <p class="mt-1 text-xs text-gray-400">
-            content identity matched：{{ readiness.receipt.primaryContentId === readiness.metadata.contentId ? '是' : '否' }}
-          </p>
-          <p class="mt-1 text-xs text-gray-400">
-            schema version：{{ readiness.receipt.schemaVersion ?? '未提供' }} · source revision：{{ readiness.source.sourceRevision }}
-          </p>
-          <p class="mt-1 text-xs text-gray-400">
-            candidate count：{{ readiness.source.eligibleCount }} · disposition：{{ readiness.source.disposition }}
-          </p>
-        </section>
-      </div>
-
-      <section v-if="sourceHealthRows.length" data-source-health-summary class="mt-3 border border-gray-700 rounded-lg p-4" aria-labelledby="source-health-title">
-        <div class="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 id="source-health-title" class="text-sm font-semibold text-gray-200">
-            Source health
-          </h3>
-          <span class="text-xs text-gray-400">最近观察：{{ readiness.source.observedAt }}</span>
-        </div>
-        <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <article
-            v-for="source in sourceHealthRows"
-            :key="source.playerId"
-            :data-source-health-row="source.sourceType"
-            :data-source-health-player="source.playerId"
-            class="border border-gray-700 rounded-lg p-3 text-xs text-gray-300"
-          >
-            <p class="font-semibold text-gray-100">
-              {{ source.sourceType }}
-            </p>
-            <p class="mt-1">
-              {{ sourceHealthLabel(source.health) }}
-            </p>
-            <p class="mt-1">
-              观察时间：{{ source.observedAt }}
-            </p>
-            <p class="mt-1">
-              source revision：{{ source.sourceRevision }}
-            </p>
-            <p class="mt-1 break-words">
-              受控原因：{{ sourceHealthReasonLabel(source.reasonCode) }}
-            </p>
-            <p class="mt-1" :class="source.eligible ? 'text-green-300' : 'text-gray-400'">
-              {{ source.eligible ? 'eligible · 可作为候选' : 'ineligible · 不作为候选' }}
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <div class="flex flex-wrap gap-2" aria-label="受控 readiness 操作">
-        <button
-          v-if="['no_source', 'source_failed'].includes(readiness.source.disposition)"
-          data-readiness-action="repair"
-          type="button"
-          class="min-h-11 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg transition-colors"
-          @click="showRepairIntent"
-        >
-          查看修复意图
-        </button>
-        <button
-          v-if="['no_source', 'source_failed'].includes(readiness.source.disposition)"
-          data-readiness-action="refresh"
-          type="button"
-          class="min-h-11 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="loading"
-          @click="refreshReadiness"
-        >
-          {{ loading ? '读取中…' : '重试读取' }}
-        </button>
-        <button
-          v-else-if="readiness.source.disposition === 'repairing'"
-          data-readiness-action="refresh"
-          type="button"
-          class="min-h-11 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="loading"
-          @click="refreshReadiness"
-        >
-          {{ loading ? '读取中…' : '刷新状态' }}
-        </button>
-      </div>
+    <div v-else-if="error" class="text-center py-12">
+      <p class="text-red-500 mb-4">
+        {{ error }}
+      </p>
+      <RouterLink to="/" class="text-primary-400 hover:underline">
+        返回首页
+      </RouterLink>
     </div>
 
-    <!-- 播放源区块 -->
-    <div v-if="sourceCardGroups.length > 0 && (!readiness || readiness.source.disposition === 'ready')" class="bg-gray-800 rounded-lg shadow-lg p-6">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-4">
-          <h2 class="text-xl font-bold text-white">
-            播放源
-          </h2>
-          <!-- 排序选择器 -->
-          <select
-            v-model="sortMethod"
-            class="px-3 py-1.5 bg-gray-700 text-white text-sm rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
-          >
-            <option value="default">
-              默认排序
-            </option>
-            <option value="rating">
-              按评分
-            </option>
-            <option value="quality">
-              按画质
-            </option>
-            <option value="latest">
-              按最新
-            </option>
-          </select>
-        </div>
-        <div class="flex gap-2 flex-wrap">
-          <button
-            v-if="magnetLinks.length > 0"
-            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-            @click="copyAllMagnetLinks"
-          >
-            📋 复制全部磁链
-          </button>
-          <button
-            :disabled="isInDownloadList(movie.id)"
-            class="px-4 py-2 text-sm rounded-lg transition-colors"
-            :class="isInDownloadList(movie.id)
-              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 text-white'"
-            @click="addToList"
-          >
-            {{ isInDownloadList(movie.id) ? '✓ 已在列表' : '➕ 添加到下载列表' }}
-          </button>
-          <button
-            :disabled="favoritingLoading"
-            class="px-4 py-2 text-sm rounded-lg transition-colors"
-            :class="isFavorited
-              ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-              : 'bg-gray-700 hover:bg-gray-600 text-white'"
-            @click="toggleFavorite"
-          >
-            <span v-if="favoritingLoading">⟳</span>
-            <span v-else>{{ isFavorited ? '⭐ 已收藏' : '☆ 收藏' }}</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="space-y-5">
-        <section
-          v-for="group in sourceCardGroups"
-          :key="group.key"
-          :data-source-group="group.key"
-        >
-          <div class="flex items-center justify-between gap-3 mb-2">
-            <h3 class="text-sm font-semibold text-gray-200">
-              {{ group.label }}
-            </h3>
-            <span class="text-xs text-gray-400">{{ group.sources.length }} 个来源</span>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <article
-              v-for="player in group.sources"
-              :key="player.id"
-              :data-source-card="player.id"
-              :data-source-type="classifyPlaybackSource(player)"
-              :data-content-id="movie.primaryContentId"
-              :data-source-revision="readiness?.source.sourceRevision ?? 0"
-              :data-playback-context="playbackContextLabel(player)"
-              class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors"
+    <div v-else-if="movie" class="space-y-6">
+      <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+        <div class="flex flex-col md:flex-row gap-6">
+          <!-- 封面：完整展示横版原图（400:267） -->
+          <div class="shrink-0 w-full md:w-auto">
+            <img
+              v-if="movie.coverImage"
+              :src="movie.coverImage"
+              :alt="movie.title"
+              class="w-full md:w-80 h-auto rounded-lg shadow-md object-cover"
             >
-              <div class="flex items-start justify-between gap-3 mb-3">
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 mb-2">
-                    <span class="text-lg">{{ getSourceTypeIcon(player) }}</span>
-                    <span class="text-white font-medium truncate">
-                      {{ player.sourceName }}
-                    </span>
-                    <span
-                      v-if="player.quality && group.key !== 'ineligible'"
-                      class="px-2 py-0.5 text-xs font-semibold rounded"
-                      :class="getQualityBadgeClass(player.quality)"
-                    >
-                      {{ player.quality }}
-                    </span>
-                  </div>
-                  <div class="text-xs text-gray-300">
-                    source type：{{ classifyPlaybackSource(player) }}
-                  </div>
-                  <div class="mt-1 text-xs text-gray-400">
-                    {{ sourceHealthLabel(informationalSourceHealth(player)) }} · {{ sourceHealthReasonLabel(informationalSourceReason(informationalSourceHealth(player))) }}
-                  </div>
-                  <div class="mt-1 text-xs text-gray-400">
-                    观察时间：{{ readiness?.source.observedAt ?? 0 }} · source revision：{{ readiness?.source.sourceRevision ?? 0 }}
-                  </div>
-                  <div class="mt-1 text-xs" :class="group.key === 'ineligible' ? 'text-gray-400' : 'text-green-300'">
-                    {{ group.key === 'ineligible' ? 'ineligible · 仅保留健康信息' : 'eligible · 可进入受控路径' }}
-                  </div>
-                  <div class="mt-1 text-xs text-gray-500 break-all">
-                    播放上下文：{{ playbackContextLabel(player) }}
-                  </div>
+            <div
+              v-else
+              class="w-full md:w-80 bg-gray-700 rounded-lg flex items-center justify-center"
+              style="aspect-ratio: 400/267"
+            >
+              <span class="text-gray-500">暂无封面</span>
+            </div>
+          </div>
 
-                  <template v-if="group.key !== 'ineligible'">
-                    <div class="flex items-center gap-2 mt-3">
-                      <RatingStars
-                        :model-value="player.averageRating || 0"
-                        :show-stats="true"
-                        :count="player.ratingCount"
-                        size="small"
-                      />
-                    </div>
-
-                    <div v-if="debugMode" class="mt-2 p-2 bg-gray-800 rounded text-xs space-y-1">
-                      <div class="text-gray-400 font-semibold">
-                        自动评分详情
-                      </div>
-                      <div class="text-gray-300">
-                        综合评分: <span class="text-yellow-400">{{ getPlayerRating(player).compositeScore?.toFixed(1) ?? 'N/A' }}</span>
-                      </div>
-                      <div class="text-gray-300">
-                        自动评分: <span class="text-blue-400">{{ getPlayerRating(player).autoScore.toFixed(1) }}</span>
-                      </div>
-                      <div class="text-gray-300">
-                        用户评分: <span class="text-green-400">{{ player.averageRating?.toFixed(1) || 'N/A' }}</span>
-                        ({{ player.ratingCount || 0 }} 人)
-                      </div>
-                    </div>
-                  </template>
-                </div>
-
-                <div v-if="group.key !== 'ineligible'" class="flex flex-col gap-2 shrink-0">
+          <div class="flex-1">
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h1 class="text-3xl font-bold text-white mb-3">
+                  {{ movie.title }}
+                </h1>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span
+                    :data-phase13-item-code="movie.code"
+                    :data-phase13-item-id="movie.id"
+                    class="bg-gray-700/80 text-primary-400 font-mono text-sm px-3 py-1.5 rounded-md border border-gray-600"
+                  >
+                    {{ movie.code }}
+                  </span>
                   <RouterLink
-                    v-if="group.key === 'eligible-direct'"
-                    :to="playbackRouteFor(player, 'direct')"
-                    data-source-action="play"
-                    :data-content-id="movie.primaryContentId"
-                    :data-source-revision="readiness?.source.sourceRevision ?? 0"
-                    data-source-type="direct"
-                    :data-playback-context="playbackContextLabel(player, 'direct')"
-                    class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded text-center transition-colors whitespace-nowrap"
+                    v-if="movie.series"
+                    :to="`/series/${encodeURIComponent(movie.series)}`"
+                    class="bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600/30 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200"
                   >
-                    播放
+                    <span class="mr-1">📂</span>
+                    {{ movie.series }}
                   </RouterLink>
-                  <template v-else-if="group.key === 'eligible-magnet'">
-                    <button
-                      data-source-action="copy"
-                      class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded transition-colors whitespace-nowrap"
-                      @click="copyMagnetLink(player)"
-                    >
-                      复制磁链
-                    </button>
-                    <button
-                      data-source-action="aria2"
-                      :disabled="!aria2Connected"
-                      :title="getAria2ButtonTitle(player)"
-                      class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
-                      :class="aria2Connected ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-600'"
-                      @click="addToAria2(player)"
-                    >
-                      Aria2
-                    </button>
-                    <button
-                      data-source-action="torrserver"
-                      :disabled="!torrServerConnected || torrServerLoading"
-                      :title="getTorrServerButtonTitle(player)"
-                      class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
-                      :class="torrServerConnected && !torrServerLoading ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-600'"
-                      @click="playViaTorrServer(player)"
-                    >
-                      {{ torrServerLoading ? '加载中' : 'TorrServer' }}
-                    </button>
-                    <button
-                      data-source-action="qrcode"
-                      class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors whitespace-nowrap"
-                      @click="showQRCode(player)"
-                    >
-                      二维码
-                    </button>
-                  </template>
-                  <button
-                    data-source-action="rating"
-                    class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition-colors whitespace-nowrap"
-                    @click="showRatingModal(player)"
-                  >
-                    评分
-                  </button>
-                  <button
-                    data-source-action="report"
-                    :disabled="reportedPlayerIds.has(player.id)"
-                    class="px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap"
-                    :class="reportedPlayerIds.has(player.id)
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : 'bg-red-700 hover:bg-red-800 text-white'"
-                    @click="showReportModal(player)"
-                  >
-                    {{ reportedPlayerIds.has(player.id) ? '已上报' : '上报' }}
-                  </button>
                 </div>
               </div>
+              <span
+                v-if="movie.isR18"
+                class="bg-red-600 text-white text-sm px-3 py-1 rounded"
+              >
+                R18
+              </span>
+            </div>
+
+            <div class="space-y-3">
+              <div v-if="movie.releaseDate" class="flex items-center text-sm">
+                <span class="text-gray-300 w-24 font-medium">发行日期：</span>
+                <span class="text-white">{{ formatDate(movie.releaseDate) }}</span>
+              </div>
+
+              <div v-if="movie.duration" class="flex items-center text-sm">
+                <span class="text-gray-300 w-24 font-medium">时长：</span>
+                <span class="text-white">{{ Math.floor(movie.duration / 60) }} 分钟</span>
+              </div>
+
+              <div class="flex items-start text-sm">
+                <span class="text-gray-300 w-24 shrink-0 font-medium">演员：</span>
+                <div v-if="actorList.length > 0" class="flex flex-wrap gap-2">
+                  <RouterLink
+                    v-for="(actor, index) in actorList"
+                    :key="typeof actor === 'object' ? (actor.id || actor.slug || `actor-${index}`) : `actor-str-${index}`"
+                    :to="typeof actor === 'object' && actor.slug ? `/actors/${actor.slug}` : '#'"
+                    class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200"
+                    :class="typeof actor === 'object' && actor.slug
+                      ? 'bg-primary-600 hover:bg-primary-500 text-white cursor-pointer'
+                      : 'bg-gray-600 text-gray-300 cursor-not-allowed'"
+                    @click.prevent="typeof actor !== 'object' || !actor.slug ? null : undefined"
+                  >
+                    {{ typeof actor === 'object' ? actor.name : actor }}
+                  </RouterLink>
+                </div>
+                <span v-else class="text-gray-400 text-xs">暂无数据</span>
+              </div>
+
+              <div v-if="genreList.length > 0" class="flex items-start text-sm">
+                <span class="text-gray-300 w-24 shrink-0 font-medium">标签：</span>
+                <div class="flex flex-wrap gap-2">
+                  <RouterLink
+                    v-for="genre in genreList"
+                    :key="genre"
+                    :to="{ path: '/', query: { genre } }"
+                    class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-2 py-1 rounded text-xs hover:bg-purple-500/30 transition-colors cursor-pointer"
+                  >
+                    {{ genre }}
+                  </RouterLink>
+                </div>
+              </div>
+
+              <div class="flex items-start text-sm">
+                <span class="text-gray-300 w-24 shrink-0 font-medium">制作商：</span>
+                <div v-if="publisherList.length > 0" class="flex flex-wrap gap-2">
+                  <RouterLink
+                    v-for="publisher in publisherList"
+                    :key="publisher.id || publisher.slug"
+                    :to="publisher.slug ? `/publishers/${publisher.slug}` : '#'"
+                    class="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200 bg-green-700 hover:bg-green-600 text-white cursor-pointer"
+                  >
+                    {{ publisher.name }}
+                  </RouterLink>
+                </div>
+                <span v-else class="text-gray-400 text-xs">暂无数据</span>
+              </div>
+
+              <div v-if="movie.description" class="flex items-start text-sm pt-2">
+                <span class="text-gray-300 w-24 shrink-0 font-medium">简介：</span>
+                <p class="text-gray-200 flex-1 leading-relaxed">
+                  {{ movie.description }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-if="readiness"
+        data-readiness-summary
+        class="bg-gray-800 rounded-lg shadow-lg p-6 space-y-4"
+        aria-live="polite"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-bold text-white">
+              播放可用性
+            </h2>
+            <p class="text-sm text-gray-300 mt-1">
+              内容身份：{{ movie.id }} / {{ movie.primaryContentId }}
+            </p>
+          </div>
+          <RouterLink
+            v-if="readiness.source.disposition === 'ready' && firstEligibleDirect"
+            :to="playbackRouteFor(firstEligibleDirect, 'direct')"
+            data-readiness-action="play"
+            :data-content-id="movie.primaryContentId"
+            :data-source-revision="readiness.source.sourceRevision"
+            data-source-type="direct"
+            :data-playback-context="playbackContextLabel(firstEligibleDirect, 'direct')"
+            class="min-h-11 inline-flex items-center justify-center px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm rounded-lg transition-colors"
+          >
+            播放
+          </RouterLink>
+          <span
+            v-else-if="readiness.source.disposition === 'ready' && firstControlledFallback"
+            data-controlled-fallback-summary
+            class="text-sm text-amber-300 break-words"
+          >
+            没有 eligible direct，优先进入 {{ classifyPlaybackSource(firstControlledFallback) }} 受控路径
+          </span>
+        </div>
+
+        <section v-if="videoAvailabilityLayers.length" class="border-y border-gray-700" aria-labelledby="video-availability-title">
+          <h3 id="video-availability-title" class="py-3 text-sm font-semibold text-gray-200">
+            Authoritative current / history
+          </h3>
+          <article
+            v-for="layer in videoAvailabilityLayers"
+            :key="layer.key"
+            :data-video-layer="layer.key"
+            class="grid min-w-0 gap-1 border-t border-gray-700 py-3 text-xs text-gray-300"
+          >
+            <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
+              <strong class="text-sm text-gray-100">{{ layer.label }}</strong>
+              <span class="break-words">{{ layer.status }}</span>
+            </div>
+            <span class="break-words">reason：{{ layer.reason }}</span>
+            <span>revision {{ layer.sourceRevision }} · {{ layer.freshness }}</span>
+            <span>available：{{ layer.counts.available ?? 0 }} · abnormal：{{ layer.counts.abnormal ?? 0 }}</span>
+            <span>下一步：{{ layer.action }}</span>
+            <span v-for="sample in layer.samples" :key="sample" class="break-words">{{ sample }}</span>
+            <div v-if="layer.history.length" class="grid gap-1 border-l-2 border-gray-700 pl-3" data-video-history>
+              <span v-for="fact in layer.history" :key="`${fact.sourceRevision}-${fact.status}`">
+                history · revision {{ fact.sourceRevision }} · {{ fact.status }} · {{ fact.freshness }}
+              </span>
+            </div>
+          </article>
+        </section>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <section class="border border-gray-700 rounded-lg p-4">
+            <h3 class="text-sm font-semibold text-gray-200">
+              Metadata persisted
+            </h3>
+            <p class="mt-2 text-sm text-green-300">
+              <span aria-hidden="true">✓</span>
+              {{ readiness.metadata.persisted ? '已持久化' : '未持久化' }}
+            </p>
+            <p class="mt-1 text-xs text-gray-400 break-words">
+              content ID：{{ readiness.metadata.contentId }}
+            </p>
+            <p class="mt-1 text-xs text-gray-400">
+              最近持久化：{{ readiness.metadata.observedAt ?? '尚未上报' }}
+            </p>
+          </section>
+
+          <section
+            class="border border-gray-700 rounded-lg p-4"
+            :class="`readiness-${readiness.source.disposition}`"
+            :role="readiness.source.disposition === 'source_failed' ? 'alert' : readiness.source.disposition === 'repairing' ? 'status' : undefined"
+          >
+            <h3 class="text-sm font-semibold text-gray-200">
+              Source readiness
+            </h3>
+            <p class="mt-2 text-sm text-white">
+              <span aria-hidden="true">{{ readiness.source.disposition === 'ready' ? '✓' : readiness.source.disposition === 'source_failed' ? '!' : readiness.source.disposition === 'repairing' ? '↻' : '?' }}</span>
+              {{ sourceDispositionLabel(readiness.source.disposition) }}
+            </p>
+            <p class="mt-1 text-sm text-gray-300">
+              eligible count：{{ readiness.source.eligibleCount }}
+            </p>
+            <p class="mt-1 text-xs text-gray-400">
+              source revision：{{ readiness.source.sourceRevision }} · 最近读回：{{ readiness.source.observedAt }}
+            </p>
+            <p class="mt-1 text-xs text-gray-300 break-words">
+              受控原因：{{ sourceReasonLabel(readiness.source.reasonCode) }}
+            </p>
+            <p v-if="readiness.source.disposition === 'no_source'" class="mt-2 text-base text-amber-300">
+              暂无可用播放源
+            </p>
+            <p v-else-if="readiness.source.disposition === 'source_failed'" class="mt-2 text-base text-red-300">
+              来源读取失败，请重试读取或查看修复意图
+            </p>
+            <p v-else-if="readiness.source.disposition === 'repairing'" data-repairing-summary class="mt-2 text-base text-amber-300">
+              修复状态：等待新的 server-owned source readback
+            </p>
+            <p v-if="readiness.source.repairable" class="mt-1 text-sm text-amber-300">
+              可修复
+            </p>
+          </section>
+
+          <section class="border border-gray-700 rounded-lg p-4">
+            <h3 class="text-sm font-semibold text-gray-200">
+              Playback proof
+            </h3>
+            <p class="mt-2 text-sm text-white">
+              <span aria-hidden="true">{{ readiness.playback.status === 'playback_verified' ? '✓' : '?' }}</span>
+              {{ playbackStatusLabel(readiness.playback.status) }}
+            </p>
+            <p v-if="readiness.playback.evidence" class="mt-1 text-xs text-gray-300">
+              独立证据：playing · currentTime {{ readiness.playback.evidence.currentTime }}<span v-if="readiness.playback.evidence.observedAt"> · {{ readiness.playback.evidence.observedAt }}</span>
+            </p>
+            <p v-else class="mt-1 text-xs text-gray-400">
+              ready/receipt 不等于浏览器播放证据
+            </p>
+          </section>
+
+          <section class="border border-gray-700 rounded-lg p-4">
+            <h3 class="text-sm font-semibold text-gray-200">
+              Receipt/source summary
+            </h3>
+            <p class="mt-2 text-sm text-gray-300">
+              <span aria-hidden="true">{{ readiness.receipt.persisted ? '✓' : '?' }}</span>
+              {{ readiness.receipt.persisted ? 'receipt 已持久化' : 'receipt 未持久化' }}
+            </p>
+            <p class="mt-1 text-xs text-gray-400">
+              content identity matched：{{ readiness.receipt.primaryContentId === readiness.metadata.contentId ? '是' : '否' }}
+            </p>
+            <p class="mt-1 text-xs text-gray-400">
+              schema version：{{ readiness.receipt.schemaVersion ?? '未提供' }} · source revision：{{ readiness.source.sourceRevision }}
+            </p>
+            <p class="mt-1 text-xs text-gray-400">
+              candidate count：{{ readiness.source.eligibleCount }} · disposition：{{ readiness.source.disposition }}
+            </p>
+          </section>
+        </div>
+
+        <section v-if="sourceHealthRows.length" data-source-health-summary class="mt-3 border border-gray-700 rounded-lg p-4" aria-labelledby="source-health-title">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 id="source-health-title" class="text-sm font-semibold text-gray-200">
+              Source health
+            </h3>
+            <span class="text-xs text-gray-400">最近观察：{{ readiness.source.observedAt }}</span>
+          </div>
+          <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <article
+              v-for="source in sourceHealthRows"
+              :key="source.playerId"
+              :data-source-health-row="source.sourceType"
+              :data-source-health-player="source.playerId"
+              class="border border-gray-700 rounded-lg p-3 text-xs text-gray-300"
+            >
+              <p class="font-semibold text-gray-100">
+                {{ source.sourceType }}
+              </p>
+              <p class="mt-1">
+                {{ sourceHealthLabel(source.health) }}
+              </p>
+              <p class="mt-1">
+                观察时间：{{ source.observedAt }}
+              </p>
+              <p class="mt-1">
+                source revision：{{ source.sourceRevision }}
+              </p>
+              <p class="mt-1 break-words">
+                受控原因：{{ sourceHealthReasonLabel(source.reasonCode) }}
+              </p>
+              <p class="mt-1" :class="source.eligible ? 'text-green-300' : 'text-gray-400'">
+                {{ source.eligible ? 'eligible · 可作为候选' : 'ineligible · 不作为候选' }}
+              </p>
             </article>
           </div>
         </section>
-      </div>
-    </div>
 
-    <!-- 无播放源提示 -->
-    <div v-else-if="!loading && movie" class="bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 class="text-xl font-bold text-white mb-4">
-        播放源
-      </h2>
-      <div v-if="readiness?.source.disposition === 'source_failed'" role="alert" class="text-center py-8 text-red-300">
-        <p class="text-lg mb-2">
-          来源失败
-        </p>
-        <p class="text-sm">
-          受控原因：{{ sourceReasonLabel(readiness.source.reasonCode) }}
-        </p>
-      </div>
-      <div v-else-if="readiness?.source.disposition === 'repairing'" role="status" class="text-center py-8 text-amber-300">
-        <p class="text-lg mb-2">
-          来源修复中
-        </p>
-        <p class="text-sm">
-          当前状态尚未完成读回确认，请刷新状态。
-        </p>
-      </div>
-      <div v-else-if="readiness?.source.disposition === 'no_source'" class="text-center py-8 text-gray-400">
-        <p class="text-lg mb-2">
-          暂无可用播放源
-        </p>
-        <p class="text-sm">
-          eligible count：{{ readiness.source.eligibleCount }}，当前状态可修复。
-        </p>
-      </div>
-      <div v-else class="text-center py-8 text-gray-400">
-        <p class="text-lg mb-2">
-          暂无播放源
-        </p>
-        <p class="text-sm">
-          该影片尚未添加播放源信息
-        </p>
-      </div>
-    </div>
-
-    <!-- Toast 提示 -->
-    <Transition name="toast">
-      <div
-        v-if="toast.show"
-        class="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm"
-        :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'"
-      >
-        {{ toast.message }}
-      </div>
-    </Transition>
-
-    <!-- 二维码 Modal -->
-    <Transition name="modal">
-      <div
-        v-if="qrcodeModal.show"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-        @click.self="closeQRCode"
-      >
-        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-sm w-full p-6 relative">
+        <div class="flex flex-wrap gap-2" aria-label="受控 readiness 操作">
           <button
-            class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-            @click="closeQRCode"
+            v-if="['no_source', 'source_failed'].includes(readiness.source.disposition)"
+            data-readiness-action="repair"
+            type="button"
+            class="min-h-11 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg transition-colors"
+            @click="showRepairIntent"
           >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            查看修复意图
           </button>
+          <button
+            v-if="['no_source', 'source_failed'].includes(readiness.source.disposition)"
+            data-readiness-action="refresh"
+            type="button"
+            class="min-h-11 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="loading"
+            @click="refreshReadiness"
+          >
+            {{ loading ? '读取中…' : '重试读取' }}
+          </button>
+          <button
+            v-else-if="readiness.source.disposition === 'repairing'"
+            data-readiness-action="refresh"
+            type="button"
+            class="min-h-11 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="loading"
+            @click="refreshReadiness"
+          >
+            {{ loading ? '读取中…' : '刷新状态' }}
+          </button>
+        </div>
+      </div>
 
-          <h3 class="text-lg font-bold text-white mb-4">
-            {{ qrcodeModal.title }}
-          </h3>
-
-          <div class="bg-white p-4 rounded-lg flex items-center justify-center mb-4">
-            <QrcodeVue
-              :value="qrcodeModal.content"
-              :size="240"
-              level="H"
-              render-as="svg"
-            />
+      <!-- 播放源区块 -->
+      <div v-if="sourceCardGroups.length > 0 && (!readiness || readiness.source.disposition === 'ready')" class="bg-gray-800 rounded-lg shadow-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-4">
+            <h2 class="text-xl font-bold text-white">
+              播放源
+            </h2>
+            <!-- 排序选择器 -->
+            <select
+              v-model="sortMethod"
+              class="px-3 py-1.5 bg-gray-700 text-white text-sm rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
+            >
+              <option value="default">
+                默认排序
+              </option>
+              <option value="rating">
+                按评分
+              </option>
+              <option value="quality">
+                按画质
+              </option>
+              <option value="latest">
+                按最新
+              </option>
+            </select>
           </div>
+          <div class="flex gap-2 flex-wrap">
+            <button
+              v-if="magnetLinks.length > 0"
+              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+              @click="copyAllMagnetLinks"
+            >
+              📋 复制全部磁链
+            </button>
+            <button
+              :disabled="isInDownloadList(movie.id)"
+              class="px-4 py-2 text-sm rounded-lg transition-colors"
+              :class="isInDownloadList(movie.id)
+                ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700 text-white'"
+              @click="addToList"
+            >
+              {{ isInDownloadList(movie.id) ? '✓ 已在列表' : '➕ 添加到下载列表' }}
+            </button>
+            <button
+              :disabled="favoritingLoading"
+              class="px-4 py-2 text-sm rounded-lg transition-colors"
+              :class="isFavorited
+                ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                : 'bg-gray-700 hover:bg-gray-600 text-white'"
+              @click="toggleFavorite"
+            >
+              <span v-if="favoritingLoading">⟳</span>
+              <span v-else>{{ isFavorited ? '⭐ 已收藏' : '☆ 收藏' }}</span>
+            </button>
+          </div>
+        </div>
 
-          <p class="text-xs text-gray-400 text-center">
-            使用手机扫描二维码获取磁力链接
+        <div class="space-y-5">
+          <section
+            v-for="group in sourceCardGroups"
+            :key="group.key"
+            :data-source-group="group.key"
+          >
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <h3 class="text-sm font-semibold text-gray-200">
+                {{ group.label }}
+              </h3>
+              <span class="text-xs text-gray-400">{{ group.sources.length }} 个来源</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <article
+                v-for="player in group.sources"
+                :key="player.id"
+                :data-source-card="player.id"
+                :data-source-type="classifyPlaybackSource(player)"
+                :data-content-id="movie.primaryContentId"
+                :data-source-revision="readiness?.source.sourceRevision ?? 0"
+                :data-playback-context="playbackContextLabel(player)"
+                class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors"
+              >
+                <div class="flex items-start justify-between gap-3 mb-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="text-lg">{{ getSourceTypeIcon(player) }}</span>
+                      <span class="text-white font-medium truncate">
+                        {{ player.sourceName }}
+                      </span>
+                      <span
+                        v-if="player.quality && group.key !== 'ineligible'"
+                        class="px-2 py-0.5 text-xs font-semibold rounded"
+                        :class="getQualityBadgeClass(player.quality)"
+                      >
+                        {{ player.quality }}
+                      </span>
+                    </div>
+                    <div class="text-xs text-gray-300">
+                      source type：{{ classifyPlaybackSource(player) }}
+                    </div>
+                    <div class="mt-1 text-xs text-gray-400">
+                      {{ sourceHealthLabel(informationalSourceHealth(player)) }} · {{ sourceHealthReasonLabel(informationalSourceReason(informationalSourceHealth(player))) }}
+                    </div>
+                    <div class="mt-1 text-xs text-gray-400">
+                      观察时间：{{ readiness?.source.observedAt ?? 0 }} · source revision：{{ readiness?.source.sourceRevision ?? 0 }}
+                    </div>
+                    <div class="mt-1 text-xs" :class="group.key === 'ineligible' ? 'text-gray-400' : 'text-green-300'">
+                      {{ group.key === 'ineligible' ? 'ineligible · 仅保留健康信息' : 'eligible · 可进入受控路径' }}
+                    </div>
+                    <div class="mt-1 text-xs text-gray-500 break-all">
+                      播放上下文：{{ playbackContextLabel(player) }}
+                    </div>
+
+                    <template v-if="group.key !== 'ineligible'">
+                      <div class="flex items-center gap-2 mt-3">
+                        <RatingStars
+                          :model-value="player.averageRating || 0"
+                          :show-stats="true"
+                          :count="player.ratingCount"
+                          size="small"
+                        />
+                      </div>
+
+                      <div v-if="debugMode" class="mt-2 p-2 bg-gray-800 rounded text-xs space-y-1">
+                        <div class="text-gray-400 font-semibold">
+                          自动评分详情
+                        </div>
+                        <div class="text-gray-300">
+                          综合评分: <span class="text-yellow-400">{{ getPlayerRating(player).compositeScore?.toFixed(1) ?? 'N/A' }}</span>
+                        </div>
+                        <div class="text-gray-300">
+                          自动评分: <span class="text-blue-400">{{ getPlayerRating(player).autoScore.toFixed(1) }}</span>
+                        </div>
+                        <div class="text-gray-300">
+                          用户评分: <span class="text-green-400">{{ player.averageRating?.toFixed(1) || 'N/A' }}</span>
+                          ({{ player.ratingCount || 0 }} 人)
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+
+                  <div v-if="group.key !== 'ineligible'" class="flex flex-col gap-2 shrink-0">
+                    <RouterLink
+                      v-if="group.key === 'eligible-direct'"
+                      :to="playbackRouteFor(player, 'direct')"
+                      data-source-action="play"
+                      :data-content-id="movie.primaryContentId"
+                      :data-source-revision="readiness?.source.sourceRevision ?? 0"
+                      data-source-type="direct"
+                      :data-playback-context="playbackContextLabel(player, 'direct')"
+                      class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded text-center transition-colors whitespace-nowrap"
+                    >
+                      播放
+                    </RouterLink>
+                    <template v-else-if="group.key === 'eligible-magnet'">
+                      <button
+                        data-source-action="copy"
+                        class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                        @click="copyMagnetLink(player)"
+                      >
+                        复制磁链
+                      </button>
+                      <button
+                        data-source-action="aria2"
+                        :disabled="!aria2Connected"
+                        :title="getAria2ButtonTitle(player)"
+                        class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
+                        :class="aria2Connected ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-600'"
+                        @click="addToAria2(player)"
+                      >
+                        Aria2
+                      </button>
+                      <button
+                        data-source-action="torrserver"
+                        :disabled="!torrServerConnected || torrServerLoading"
+                        :title="getTorrServerButtonTitle(player)"
+                        class="px-3 py-1.5 text-white text-xs rounded transition-colors whitespace-nowrap disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
+                        :class="torrServerConnected && !torrServerLoading ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-600'"
+                        @click="playViaTorrServer(player)"
+                      >
+                        {{ torrServerLoading ? '加载中' : 'TorrServer' }}
+                      </button>
+                      <button
+                        data-source-action="qrcode"
+                        class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                        @click="showQRCode(player)"
+                      >
+                        二维码
+                      </button>
+                    </template>
+                    <button
+                      data-source-action="rating"
+                      class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                      @click="showRatingModal(player)"
+                    >
+                      评分
+                    </button>
+                    <button
+                      data-source-action="report"
+                      :disabled="reportedPlayerIds.has(player.id)"
+                      class="px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap"
+                      :class="reportedPlayerIds.has(player.id)
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-700 hover:bg-red-800 text-white'"
+                      @click="showReportModal(player)"
+                    >
+                      {{ reportedPlayerIds.has(player.id) ? '已上报' : '上报' }}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- 无播放源提示 -->
+      <div v-else-if="!loading && movie" class="bg-gray-800 rounded-lg shadow-lg p-6">
+        <h2 class="text-xl font-bold text-white mb-4">
+          播放源
+        </h2>
+        <div v-if="readiness?.source.disposition === 'source_failed'" role="alert" class="text-center py-8 text-red-300">
+          <p class="text-lg mb-2">
+            来源失败
+          </p>
+          <p class="text-sm">
+            受控原因：{{ sourceReasonLabel(readiness.source.reasonCode) }}
+          </p>
+        </div>
+        <div v-else-if="readiness?.source.disposition === 'repairing'" role="status" class="text-center py-8 text-amber-300">
+          <p class="text-lg mb-2">
+            来源修复中
+          </p>
+          <p class="text-sm">
+            当前状态尚未完成读回确认，请刷新状态。
+          </p>
+        </div>
+        <div v-else-if="readiness?.source.disposition === 'no_source'" class="text-center py-8 text-gray-400">
+          <p class="text-lg mb-2">
+            暂无可用播放源
+          </p>
+          <p class="text-sm">
+            eligible count：{{ readiness.source.eligibleCount }}，当前状态可修复。
+          </p>
+        </div>
+        <div v-else class="text-center py-8 text-gray-400">
+          <p class="text-lg mb-2">
+            暂无播放源
+          </p>
+          <p class="text-sm">
+            该影片尚未添加播放源信息
           </p>
         </div>
       </div>
-    </Transition>
 
-    <!-- 评分 Modal -->
-    <Transition name="modal">
-      <div
-        v-if="ratingModal.show && ratingModal.player"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-        @click.self="closeRatingModal"
-      >
-        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 relative">
-          <button
-            class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-            @click="closeRatingModal"
-          >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+      <!-- Toast 提示 -->
+      <Transition name="toast">
+        <div
+          v-if="toast.show"
+          class="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm"
+          :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'"
+        >
+          {{ toast.message }}
+        </div>
+      </Transition>
 
-          <h3 class="text-lg font-bold text-white mb-4">
-            评分播放源
-          </h3>
+      <!-- 二维码 Modal -->
+      <Transition name="modal">
+        <div
+          v-if="qrcodeModal.show"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          @click.self="closeQRCode"
+        >
+          <div class="bg-gray-800 rounded-xl shadow-2xl max-w-sm w-full p-6 relative">
+            <button
+              class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+              @click="closeQRCode"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
 
-          <div class="mb-4">
-            <p class="text-gray-300 text-sm mb-2">
-              {{ ratingModal.player.sourceName }}
-              <span v-if="ratingModal.player.quality" class="text-primary-400">
-                [{{ ratingModal.player.quality }}]
-              </span>
-            </p>
-          </div>
+            <h3 class="text-lg font-bold text-white mb-4">
+              {{ qrcodeModal.title }}
+            </h3>
 
-          <div class="mb-6">
-            <p class="text-gray-400 text-sm mb-3">
-              请为该播放源评分（1-5 星）
-            </p>
-            <div class="flex justify-center">
-              <RatingStars
-                :model-value="ratingModal.player.userScore || 0"
-                :interactive="!ratingModal.submitting"
-                size="large"
-                @change="handleSubmitRating"
+            <div class="bg-white p-4 rounded-lg flex items-center justify-center mb-4">
+              <QrcodeVue
+                :value="qrcodeModal.content"
+                :size="240"
+                level="H"
+                render-as="svg"
               />
             </div>
-            <p v-if="ratingModal.submitting" class="text-center text-gray-400 text-xs mt-3">
-              提交中...
-            </p>
-          </div>
 
-          <div v-if="ratingModal.player.averageRating" class="text-center text-sm text-gray-400">
-            <p>
-              当前平均评分: {{ (ratingModal.player.averageRating / 20).toFixed(1) }} 星
-              ({{ ratingModal.player.ratingCount }} 人评价)
+            <p class="text-xs text-gray-400 text-center">
+              使用手机扫描二维码获取磁力链接
             </p>
           </div>
         </div>
-      </div>
-    </Transition>
+      </Transition>
 
-    <!-- 上报确认 Modal -->
-    <Transition name="modal">
-      <div
-        v-if="reportModal.show && reportModal.player"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-        @click.self="closeReportModal"
-      >
-        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-sm w-full p-6 relative">
-          <h3 class="text-lg font-bold text-white mb-3">
-            🚩 上报播放源失效
-          </h3>
-          <p class="text-gray-300 text-sm mb-1">
-            {{ reportModal.player.sourceName }}
-            <span v-if="reportModal.player.quality" class="text-gray-400">
-              [{{ reportModal.player.quality }}]
-            </span>
-          </p>
-          <p class="text-gray-400 text-sm mb-6">
-            确认上报此播放源为失效？上报数量超过阈值后将自动标记为待审核。
-          </p>
-          <div class="flex gap-3 justify-end">
+      <!-- 评分 Modal -->
+      <Transition name="modal">
+        <div
+          v-if="ratingModal.show && ratingModal.player"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          @click.self="closeRatingModal"
+        >
+          <div class="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 relative">
             <button
-              class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
-              @click="closeReportModal"
+              class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+              @click="closeRatingModal"
             >
-              取消
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
-            <button
-              :disabled="reportModal.submitting"
-              class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-900 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
-              @click="handleConfirmReport"
-            >
-              {{ reportModal.submitting ? '上报中...' : '确认上报' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
 
-    <!-- 文件选择 Modal (TorrServer) -->
-    <Transition name="modal">
-      <div
-        v-if="fileSelectionModal.show"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-        @click.self="closeFileSelection"
-      >
-        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 relative">
-          <button
-            class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-            @click="closeFileSelection"
-          >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+            <h3 class="text-lg font-bold text-white mb-4">
+              评分播放源
+            </h3>
 
-          <h3 class="text-lg font-bold text-white mb-4">
-            选择播放文件
-          </h3>
-          <p class="text-gray-400 text-sm mb-4">
-            该种子包含多个视频文件，请选择要播放的文件：
-          </p>
-
-          <div class="space-y-2 max-h-80 overflow-y-auto">
-            <button
-              v-for="file in fileSelectionModal.files"
-              :key="file.id"
-              class="w-full text-left px-4 py-3 bg-gray-700/50 hover:bg-gray-700 rounded-lg transition-colors"
-              @click="selectFileAndPlay(file)"
-            >
-              <p class="text-white text-sm font-medium truncate">
-                {{ file.path.split('/').pop() || file.path }}
+            <div class="mb-4">
+              <p class="text-gray-300 text-sm mb-2">
+                {{ ratingModal.player.sourceName }}
+                <span v-if="ratingModal.player.quality" class="text-primary-400">
+                  [{{ ratingModal.player.quality }}]
+                </span>
               </p>
-              <p class="text-gray-400 text-xs mt-1">
-                {{ formatTorrentFileSize(file.length) }}
+            </div>
+
+            <div class="mb-6">
+              <p class="text-gray-400 text-sm mb-3">
+                请为该播放源评分（1-5 星）
               </p>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
+              <div class="flex justify-center">
+                <RatingStars
+                  :model-value="ratingModal.player.userScore || 0"
+                  :interactive="!ratingModal.submitting"
+                  size="large"
+                  @change="handleSubmitRating"
+                />
+              </div>
+              <p v-if="ratingModal.submitting" class="text-center text-gray-400 text-xs mt-3">
+                提交中...
+              </p>
+            </div>
 
-    <!-- 系列导航 -->
-    <div v-if="seriesNavigation" class="bg-gray-800 rounded-lg shadow-lg p-4">
-      <div class="flex items-center justify-between gap-4">
-        <RouterLink
-          v-if="seriesNavigation.prev"
-          :to="`/movie/${seriesNavigation.prev.code}`"
-          class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-white transition min-w-0 max-w-[38%]"
-        >
-          <span class="shrink-0">←</span>
-          <span class="truncate text-gray-300">{{ seriesNavigation.prev.title }}</span>
-        </RouterLink>
-        <span v-else class="w-[38%]" />
-
-        <div class="text-center shrink-0">
-          <div class="text-xs text-gray-400 mb-0.5">
-            {{ seriesNavigation.series }}
-          </div>
-          <div class="text-sm font-semibold text-white">
-            第 {{ seriesNavigation.position }} 部 / 共 {{ seriesNavigation.total }} 部
-          </div>
-        </div>
-
-        <RouterLink
-          v-if="seriesNavigation.next"
-          :to="`/movie/${seriesNavigation.next.code}`"
-          class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-white transition min-w-0 max-w-[38%] justify-end"
-        >
-          <span class="truncate text-gray-300">{{ seriesNavigation.next.title }}</span>
-          <span class="shrink-0">→</span>
-        </RouterLink>
-        <span v-else class="w-[38%]" />
-      </div>
-    </div>
-
-    <div v-if="movie.relatedMovies && movie.relatedMovies.length > 0" class="bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 class="text-xl font-bold text-white mb-4">
-        相关影片
-      </h2>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <RouterLink
-          v-for="related in movie.relatedMovies"
-          :key="related.id"
-          :to="`/movie/${related.code}`"
-          class="group cursor-pointer"
-        >
-          <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
-            <div class="aspect-3/4 bg-gray-700">
-              <img
-                v-if="related.coverImage"
-                :src="related.coverImage"
-                :alt="related.title"
-                class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              >
+            <div v-if="ratingModal.player.averageRating" class="text-center text-sm text-gray-400">
+              <p>
+                当前平均评分: {{ (ratingModal.player.averageRating / 20).toFixed(1) }} 星
+                ({{ ratingModal.player.ratingCount }} 人评价)
+              </p>
             </div>
           </div>
-          <p class="mt-2 text-sm text-white line-clamp-2 group-hover:text-primary-400 transition">
-            {{ related.title }}
-          </p>
-        </RouterLink>
+        </div>
+      </Transition>
+
+      <!-- 上报确认 Modal -->
+      <Transition name="modal">
+        <div
+          v-if="reportModal.show && reportModal.player"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          @click.self="closeReportModal"
+        >
+          <div class="bg-gray-800 rounded-xl shadow-2xl max-w-sm w-full p-6 relative">
+            <h3 class="text-lg font-bold text-white mb-3">
+              🚩 上报播放源失效
+            </h3>
+            <p class="text-gray-300 text-sm mb-1">
+              {{ reportModal.player.sourceName }}
+              <span v-if="reportModal.player.quality" class="text-gray-400">
+                [{{ reportModal.player.quality }}]
+              </span>
+            </p>
+            <p class="text-gray-400 text-sm mb-6">
+              确认上报此播放源为失效？上报数量超过阈值后将自动标记为待审核。
+            </p>
+            <div class="flex gap-3 justify-end">
+              <button
+                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                @click="closeReportModal"
+              >
+                取消
+              </button>
+              <button
+                :disabled="reportModal.submitting"
+                class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-900 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+                @click="handleConfirmReport"
+              >
+                {{ reportModal.submitting ? '上报中...' : '确认上报' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- 文件选择 Modal (TorrServer) -->
+      <Transition name="modal">
+        <div
+          v-if="fileSelectionModal.show"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          @click.self="closeFileSelection"
+        >
+          <div class="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+            <button
+              class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+              @click="closeFileSelection"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 class="text-lg font-bold text-white mb-4">
+              选择播放文件
+            </h3>
+            <p class="text-gray-400 text-sm mb-4">
+              该种子包含多个视频文件，请选择要播放的文件：
+            </p>
+
+            <div class="space-y-2 max-h-80 overflow-y-auto">
+              <button
+                v-for="file in fileSelectionModal.files"
+                :key="file.id"
+                class="w-full text-left px-4 py-3 bg-gray-700/50 hover:bg-gray-700 rounded-lg transition-colors"
+                @click="selectFileAndPlay(file)"
+              >
+                <p class="text-white text-sm font-medium truncate">
+                  {{ file.path.split('/').pop() || file.path }}
+                </p>
+                <p class="text-gray-400 text-xs mt-1">
+                  {{ formatTorrentFileSize(file.length) }}
+                </p>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- 系列导航 -->
+      <div v-if="seriesNavigation" class="bg-gray-800 rounded-lg shadow-lg p-4">
+        <div class="flex items-center justify-between gap-4">
+          <RouterLink
+            v-if="seriesNavigation.prev"
+            :to="`/movie/${seriesNavigation.prev.code}`"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-white transition min-w-0 max-w-[38%]"
+          >
+            <span class="shrink-0">←</span>
+            <span class="truncate text-gray-300">{{ seriesNavigation.prev.title }}</span>
+          </RouterLink>
+          <span v-else class="w-[38%]" />
+
+          <div class="text-center shrink-0">
+            <div class="text-xs text-gray-400 mb-0.5">
+              {{ seriesNavigation.series }}
+            </div>
+            <div class="text-sm font-semibold text-white">
+              第 {{ seriesNavigation.position }} 部 / 共 {{ seriesNavigation.total }} 部
+            </div>
+          </div>
+
+          <RouterLink
+            v-if="seriesNavigation.next"
+            :to="`/movie/${seriesNavigation.next.code}`"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-white transition min-w-0 max-w-[38%] justify-end"
+          >
+            <span class="truncate text-gray-300">{{ seriesNavigation.next.title }}</span>
+            <span class="shrink-0">→</span>
+          </RouterLink>
+          <span v-else class="w-[38%]" />
+        </div>
+      </div>
+
+      <div v-if="movie.relatedMovies && movie.relatedMovies.length > 0" class="bg-gray-800 rounded-lg shadow-lg p-6">
+        <h2 class="text-xl font-bold text-white mb-4">
+          相关影片
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <RouterLink
+            v-for="related in movie.relatedMovies"
+            :key="related.id"
+            :to="`/movie/${related.code}`"
+            class="group cursor-pointer"
+          >
+            <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
+              <div class="aspect-3/4 bg-gray-700">
+                <img
+                  v-if="related.coverImage"
+                  :src="related.coverImage"
+                  :alt="related.title"
+                  class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                >
+              </div>
+            </div>
+            <p class="mt-2 text-sm text-white line-clamp-2 group-hover:text-primary-400 transition">
+              {{ related.title }}
+            </p>
+          </RouterLink>
+        </div>
       </div>
     </div>
   </div>
@@ -1800,5 +1802,90 @@ onMounted(() => {
 .modal-leave-to > div {
   transform: scale(0.9);
   opacity: 0;
+}
+</style>
+
+<style scoped>
+.movie-detail-page {
+  display: grid;
+  gap: var(--ui-section-gap);
+}
+
+.movie-detail-page :deep([class~="bg-gray-800"]) {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-lg);
+  background: hsl(var(--card));
+  box-shadow: var(--ui-surface-shadow);
+}
+
+.movie-detail-page :deep([class~="bg-gray-700"]),
+.movie-detail-page :deep([class~="bg-gray-700/50"]),
+.movie-detail-page :deep([class~="bg-gray-700/80"]) {
+  background: hsl(var(--muted));
+}
+
+.movie-detail-page :deep([class~="border-gray-700"]),
+.movie-detail-page :deep([class~="border-gray-600"]) {
+  border-color: hsl(var(--border));
+}
+
+.movie-detail-page :deep([class~="text-white"]),
+.movie-detail-page :deep([class~="text-gray-100"]),
+.movie-detail-page :deep([class~="text-gray-200"]) {
+  color: hsl(var(--foreground));
+}
+
+.movie-detail-page :deep([class~="text-gray-300"]),
+.movie-detail-page :deep([class~="text-gray-400"]),
+.movie-detail-page :deep([class~="text-gray-500"]) {
+  color: hsl(var(--muted-foreground));
+}
+
+.movie-detail-page :deep([class~="text-red-300"]),
+.movie-detail-page :deep([class~="text-red-400"]),
+.movie-detail-page :deep([class~="text-red-500"]) {
+  color: hsl(var(--status-danger));
+}
+
+.movie-detail-page :deep([class~="text-green-300"]),
+.movie-detail-page :deep([class~="text-green-400"]) {
+  color: hsl(var(--status-success));
+}
+
+.movie-detail-page :deep([class~="text-amber-300"]) {
+  color: hsl(var(--status-warning));
+}
+
+.movie-detail-page :deep([class~="bg-purple-600/20"]),
+.movie-detail-page :deep([class~="bg-purple-600/30"]) {
+  border-color: hsl(var(--primary) / 0.28);
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+
+.movie-detail-page :deep([class~="border-purple-500/30"]) {
+  border-color: hsl(var(--primary) / 0.28);
+}
+
+.movie-detail-page :deep([class~="bg-green-700"]),
+.movie-detail-page :deep([class~="bg-green-600"]),
+.movie-detail-page :deep([class~="bg-teal-600"]),
+.movie-detail-page :deep([class~="bg-orange-600"]) {
+  background: hsl(var(--primary));
+}
+
+.movie-detail-page :deep([class~="bg-red-600"]),
+.movie-detail-page :deep([class~="bg-red-700"]) {
+  background: hsl(var(--status-danger));
+}
+
+.movie-detail-page :deep([class~="z-50"]) {
+  z-index: 1200;
+}
+
+@media (max-width: 640px) {
+  .movie-detail-page {
+    padding-inline: var(--ui-space-4);
+  }
 }
 </style>

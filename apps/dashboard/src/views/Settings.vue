@@ -6,13 +6,14 @@ import { api } from '@/lib/api'
 
 const { t } = useI18n()
 const token = ref('')
+const DEFAULT_TORRSERVER_URL = 'http://localhost:8090'
 
 function save() {
   success('配置已保存')
 }
 
 // TorrServer 系统默认地址配置
-const torrServerUrl = ref('')
+const torrServerUrl = ref(DEFAULT_TORRSERVER_URL)
 const torrServerSaving = ref(false)
 const torrServerTesting = ref(false)
 const torrServerStatus = ref<'idle' | 'connected' | 'failed'>('idle')
@@ -22,8 +23,8 @@ onMounted(async () => {
   try {
     const res = await api.admin.getSettings()
     const row = res.data?.find(s => s.key === 'torrserver.default_url')
-    if (row)
-      torrServerUrl.value = row.value
+    if (row?.value?.trim())
+      torrServerUrl.value = row.value.trim()
   }
   catch {
     // 读取失败不影响页面

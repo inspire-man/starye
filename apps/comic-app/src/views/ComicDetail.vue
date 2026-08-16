@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Chapter, Comic } from '../types'
+import { SkeletonCard } from '@starye/ui'
 import { onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useFavorites } from '../composables/useFavorites'
@@ -13,7 +14,7 @@ const error = ref('')
 const comic = ref<Comic | null>(null)
 const chapters = ref<Chapter[]>([])
 
-const { fetchFavorites, toggleFavorite, isFavorite } = useFavorites()
+const { checkFavorite, toggleFavorite, isFavorite } = useFavorites()
 
 async function fetchComicDetail() {
   loading.value = true
@@ -41,31 +42,40 @@ async function fetchComicDetail() {
 
 onMounted(async () => {
   await fetchComicDetail()
-  if (userStore.user) {
-    await fetchFavorites()
+  if (userStore.user && comic.value) {
+    await checkFavorite(comic.value.id)
   }
 })
 </script>
 
 <template>
-  <div v-if="loading" class="animate-pulse space-y-4">
-    <div class="bg-muted h-56 sm:h-64 rounded-xl" />
-    <div class="bg-muted h-8 rounded w-1/2" />
-    <div class="bg-muted h-4 rounded w-1/3" />
+  <div v-if="loading" class="ui-public-page space-y-5">
+    <div class="ui-public-surface flex flex-col gap-4 p-4 sm:flex-row sm:p-6">
+      <SkeletonCard variant="poster" class="w-full sm:w-48" />
+      <SkeletonCard variant="content" class="min-w-0 flex-1" />
+    </div>
+    <SkeletonCard variant="content" />
   </div>
 
-  <div v-else-if="error" class="text-center py-16">
-    <p class="text-destructive mb-4">
-      {{ error }}
-    </p>
-    <RouterLink to="/" class="text-primary hover:underline text-sm">
-      返回首页
-    </RouterLink>
+  <div v-else-if="error" class="ui-public-page">
+    <div class="ui-public-empty">
+      <p class="text-[hsl(var(--status-danger))]">
+        {{ error }}
+      </p>
+      <div class="ui-public-actions-group">
+        <button class="ui-public-button ui-public-button-primary" @click="fetchComicDetail">
+          重试
+        </button>
+        <RouterLink to="/" class="ui-public-button ui-public-button-ghost">
+          返回首页
+        </RouterLink>
+      </div>
+    </div>
   </div>
 
-  <div v-else-if="comic" class="space-y-4 sm:space-y-6">
+  <div v-else-if="comic" class="ui-public-page space-y-5 sm:space-y-6">
     <!-- 漫画信息卡 -->
-    <div class="bg-card rounded-xl border shadow-sm p-4 sm:p-6">
+    <div class="ui-public-surface p-4 sm:p-6">
       <div class="flex flex-col sm:flex-row gap-4 sm:gap-6">
         <!-- 封面 -->
         <div class="shrink-0 mx-auto sm:mx-0">
@@ -83,7 +93,7 @@ onMounted(async () => {
         <!-- 详情 -->
         <div class="flex-1 min-w-0">
           <!-- 标题行 -->
-          <div class="flex items-start justify-between mb-4 gap-3">
+          <div class="mb-4 flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-1.5 leading-snug">
                 {{ comic.title }}
@@ -93,15 +103,15 @@ onMounted(async () => {
               </p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-              <span v-if="comic.isR18" class="bg-red-600 text-white text-xs px-2 py-1 rounded font-medium">
+              <span v-if="comic.isR18" class="ui-status-tag ui-status-danger">
                 R18
               </span>
               <button
                 v-if="userStore.user"
-                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors"
+                class="ui-public-button"
                 :class="isFavorite(comic.id)
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-background border-border hover:border-primary hover:text-primary'"
+                  ? 'ui-public-button-primary'
+                  : 'ui-public-button-ghost'"
                 @click="toggleFavorite(comic.id, comic.title)"
               >
                 <svg class="w-4 h-4 shrink-0" :fill="isFavorite(comic.id) ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -117,10 +127,10 @@ onMounted(async () => {
             <div class="flex items-center gap-3">
               <span class="text-muted-foreground shrink-0">状态</span>
               <span
-                class="px-2 py-0.5 rounded-full text-xs font-medium"
+                class="ui-status-tag"
                 :class="comic.status === 'serializing'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-muted text-muted-foreground'"
+                  ? 'ui-status-info'
+                  : 'ui-status-success'"
               >
                 {{ comic.status === 'serializing' ? '连载中' : '已完结' }}
               </span>
@@ -132,7 +142,7 @@ onMounted(async () => {
                 <span
                   v-for="genre in comic.genres"
                   :key="genre"
-                  class="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium"
+                  class="ui-status-tag ui-status-info"
                 >
                   {{ genre }}
                 </span>
@@ -151,22 +161,22 @@ onMounted(async () => {
     </div>
 
     <!-- 章节列表卡 -->
-    <div class="bg-card rounded-xl border shadow-sm p-4 sm:p-6">
-      <h2 class="text-lg sm:text-xl font-bold mb-4">
+    <div class="ui-public-surface p-4 sm:p-6">
+      <h2 class="mb-4 text-lg font-bold sm:text-xl">
         章节列表
         <span class="text-sm font-normal text-muted-foreground ml-2">共 {{ chapters.length }} 话</span>
       </h2>
 
-      <div v-if="chapters.length === 0" class="text-center py-8 text-muted-foreground">
+      <div v-if="chapters.length === 0" class="ui-public-empty min-h-0">
         暂无章节
       </div>
 
-      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
+      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
         <RouterLink
           v-for="chapter in chapters"
           :key="chapter.id"
-          :to="`/comic/${comic.slug}/read/${chapter.id.split('-').pop()}`"
-          class="border rounded-lg p-2.5 text-center text-sm hover:border-primary hover:bg-primary/5 hover:text-primary transition-colors"
+          :to="`/${comic.slug}/read/${chapter.id.split('-').pop()}`"
+          class="rounded-[var(--ui-radius-md)] border border-border p-2.5 text-center text-sm transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
         >
           <p class="font-medium line-clamp-2 leading-snug">
             {{ chapter.title }}

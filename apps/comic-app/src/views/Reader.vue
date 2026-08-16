@@ -320,11 +320,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 bg-black">
-    <div class="absolute left-0 right-0 top-0 z-10 bg-gradient-to-b from-black/80 to-transparent p-4">
-      <div class="container mx-auto flex items-center justify-between gap-4">
+  <div class="reader-shell fixed inset-0 z-50">
+    <div class="reader-topbar absolute left-0 right-0 top-0 z-10 p-4">
+      <div class="mx-auto flex max-w-[96rem] items-center justify-between gap-4">
         <button
-          class="flex items-center gap-2 text-white transition hover:text-primary-400"
+          class="ui-reader-button"
           @click="goBack"
         >
           <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -333,11 +333,11 @@ onUnmounted(() => {
           返回
         </button>
 
-        <div class="text-center text-white">
+        <div class="reader-title text-center">
           <h2 class="text-lg font-medium">
             {{ chapterTitle || '漫画阅读器' }}
           </h2>
-          <p class="text-sm text-gray-400" data-page-counter>
+          <p class="reader-muted text-sm" data-page-counter>
             {{ displayCurrentPage }} / {{ totalPages }}
           </p>
         </div>
@@ -346,14 +346,14 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="flex h-full items-center justify-center">
-      <div class="text-lg text-white">
+    <div v-if="loading" class="reader-state flex h-full items-center justify-center">
+      <div class="text-lg">
         加载中...
       </div>
     </div>
 
-    <div v-else-if="error" class="flex h-full items-center justify-center">
-      <div class="text-lg text-red-500">
+    <div v-else-if="error" class="reader-state reader-state-error flex h-full items-center justify-center">
+      <div class="text-lg">
         {{ error }}
       </div>
     </div>
@@ -362,27 +362,27 @@ onUnmounted(() => {
       v-else
       ref="scrollContainer"
       data-scroll-container
-      class="h-full overflow-y-auto scrollbar-hide"
+      class="reader-scroll h-full overflow-y-auto scrollbar-hide"
       @scroll="handleScroll"
     >
       <div class="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-20">
         <div
           v-if="chapterRenderState === 'partial_failed'"
           data-partial-failure
-          class="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-100"
+          class="reader-alert reader-alert-warning rounded-[var(--ui-radius-lg)] border p-4"
         >
           <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p class="text-base font-medium">
                 {{ failedCount }} 页加载失败，阅读仍可继续
               </p>
-              <p class="text-sm text-amber-200/80">
+              <p class="reader-muted text-sm">
                 失败页会保留页码和原图入口，进度保存只会在至少有一页成功加载时允许标记为已读完。
               </p>
             </div>
             <button
               data-retry-failed
-              class="rounded-full border border-amber-300/60 px-4 py-2 text-sm font-medium text-amber-50 transition hover:bg-amber-300/10"
+              class="ui-reader-button"
               @click="retryFailedPages"
             >
               重试失败页
@@ -393,31 +393,31 @@ onUnmounted(() => {
         <div
           v-if="chapterRenderState === 'all_failed' || chapterRenderState === 'empty'"
           data-chapter-failure
-          class="rounded-3xl border border-red-500/30 bg-red-500/10 p-8 text-center text-red-50"
+          class="reader-alert reader-alert-danger rounded-[var(--ui-radius-lg)] border p-8 text-center"
         >
           <h3 class="text-2xl font-semibold">
             {{ chapterRenderState === 'empty' ? '本章暂时没有可显示的图片' : '整章图片均加载失败' }}
           </h3>
-          <p class="mt-3 text-sm text-red-100/80">
+          <p class="reader-muted mt-3 text-sm">
             {{ chapterRenderState === 'empty' ? '接口返回了 0 张图片，请稍后重试本章。' : `已尝试加载 ${totalPages} 张图片，但当前没有任何成功页。` }}
           </p>
           <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button
-              class="rounded-full border border-white/30 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+              class="ui-reader-button"
               @click="goBack"
             >
               返回目录
             </button>
             <button
               data-retry-chapter
-              class="rounded-full border border-red-200/50 px-4 py-2 text-sm font-medium text-red-50 transition hover:bg-red-200/10"
+              class="ui-reader-button"
               @click="retryChapter"
             >
               重试本章
             </button>
             <button
               data-open-first-original
-              class="rounded-full border border-red-200/50 px-4 py-2 text-sm font-medium text-red-50 transition hover:bg-red-200/10 disabled:cursor-not-allowed disabled:opacity-50"
+              class="ui-reader-button"
               :disabled="!firstOriginalUrl"
               @click="openOriginal(firstOriginalUrl)"
             >
@@ -430,7 +430,7 @@ onUnmounted(() => {
           <article
             v-for="page in readerPages"
             :key="page.pageNumber"
-            class="reader-page overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
+            class="reader-page overflow-hidden rounded-[var(--ui-radius-lg)] border"
             :data-reader-page="page.pageNumber"
           >
             <img
@@ -447,28 +447,28 @@ onUnmounted(() => {
 
             <div
               v-else
-              class="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-6 py-10 text-center text-white"
+              class="reader-page-error flex min-h-[40vh] flex-col items-center justify-center gap-4 px-6 py-10 text-center"
               :data-page-error="page.pageNumber"
             >
               <div class="space-y-2">
                 <p class="text-lg font-semibold">
                   第 {{ page.pageNumber }} 页加载失败
                 </p>
-                <p class="mx-auto max-w-2xl break-all text-sm text-gray-300">
+                <p class="reader-muted mx-auto max-w-2xl break-all text-sm">
                   {{ page.originalUrl }}
                 </p>
               </div>
 
               <div class="flex flex-wrap items-center justify-center gap-3">
                 <button
-                  class="rounded-full border border-white/30 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                  class="ui-reader-button"
                   :data-retry-page="page.pageNumber"
                   @click="retryPage(page.pageNumber)"
                 >
                   重试此页
                 </button>
                 <button
-                  class="rounded-full border border-red-300/50 px-4 py-2 text-sm font-medium text-red-100 transition hover:bg-red-300/10"
+                  class="ui-reader-button"
                   :data-open-page="page.pageNumber"
                   @click="openOriginal(page.originalUrl)"
                 >
@@ -482,3 +482,86 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.reader-shell {
+  --background: 220 15% 8%;
+  --foreground: 0 0% 98%;
+  --card: 220 13% 13%;
+  --card-foreground: 0 0% 98%;
+  --popover: 220 13% 13%;
+  --popover-foreground: 0 0% 98%;
+  --muted: 220 12% 17%;
+  --muted-foreground: 220 9% 68%;
+  --accent: 220 12% 20%;
+  --accent-foreground: 0 0% 98%;
+  --border: 220 10% 28%;
+  --input: 220 10% 28%;
+  --primary: 25 95% 53%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 25 95% 53%;
+  --status-danger: 0 72% 58%;
+  --status-danger-soft: 0 50% 17%;
+  --status-warning: 36 90% 60%;
+  --status-warning-soft: 36 50% 17%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.reader-topbar {
+  background: hsl(var(--background) / 0.88);
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  backdrop-filter: blur(14px);
+}
+
+.reader-title {
+  color: hsl(var(--foreground));
+}
+
+.reader-muted {
+  color: hsl(var(--muted-foreground));
+}
+
+.reader-state {
+  color: hsl(var(--foreground));
+}
+
+.reader-state-error {
+  color: hsl(var(--status-danger));
+}
+
+.reader-alert-warning {
+  border-color: hsl(var(--status-warning) / 0.42);
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
+}
+
+.reader-alert-danger {
+  border-color: hsl(var(--status-danger) / 0.42);
+  background: hsl(var(--status-danger-soft));
+  color: hsl(var(--status-danger));
+}
+
+.reader-page {
+  border-color: hsl(var(--border) / 0.72);
+  background: hsl(var(--card));
+  box-shadow: 0 20px 60px hsl(0 0% 0% / 0.35);
+}
+
+.reader-page-error {
+  color: hsl(var(--foreground));
+}
+
+@media (max-width: 640px) {
+  .reader-topbar {
+    padding: var(--ui-space-3);
+  }
+
+  .reader-title h2 {
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+</style>

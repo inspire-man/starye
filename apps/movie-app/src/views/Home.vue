@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import type { SelectOption } from '../components/Select.vue'
+import type { SelectOption } from '@starye/ui'
 import type { GenreItem, Movie, WatchingHistoryItem } from '../types'
-import { Pagination } from '@starye/ui'
+import { MovieCard, Pagination, Select, SkeletonCard, useListQuery } from '@starye/ui'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import Select from '../components/Select.vue'
 import { useAuthGuard } from '../composables/useAuthGuard'
 import { genreApi, movieApi, progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
@@ -14,14 +13,8 @@ const router = useRouter()
 const { requireLogin } = useAuthGuard()
 
 const userStore = useUserStore()
-const loading = ref(true)
 const movies = ref<Movie[]>([])
-const pagination = reactive({
-  page: 1,
-  limit: 20,
-  total: 0,
-  totalPages: 0,
-})
+const { page, limit, total, totalPages, loading, error, execute, goToPage, updatePageSize } = useListQuery(20)
 
 const activeGenre = ref('')
 
@@ -60,22 +53,22 @@ const durationOptions = [
 ] as const
 
 // 将当前状态同步到 URL query，用 replace 避免污染浏览器历史
-function syncUrl() {
-  router.replace({
+async function syncUrl(pageNumber = page.value): Promise<void> {
+  await router.replace({
     query: {
-      ...(pagination.page > 1 && { page: String(pagination.page) }),
-      ...(filters.sortBy !== 'releaseDate' && { sortBy: filters.sortBy }),
-      ...(filters.search && { search: filters.search }),
-      ...(activeGenre.value && { genre: activeGenre.value }),
-      ...(filters.yearFrom && { yearFrom: String(filters.yearFrom) }),
-      ...(filters.yearTo && { yearTo: String(filters.yearTo) }),
-      ...(filters.duration && { duration: filters.duration }),
+      ...route.query,
+      ...(pageNumber > 1 ? { page: String(pageNumber) } : { page: undefined }),
+      sortBy: filters.sortBy !== 'releaseDate' ? filters.sortBy : undefined,
+      search: filters.search || undefined,
+      genre: activeGenre.value || undefined,
+      yearFrom: filters.yearFrom ? String(filters.yearFrom) : undefined,
+      yearTo: filters.yearTo ? String(filters.yearTo) : undefined,
+      duration: filters.duration || undefined,
     },
   })
 }
 
 async function fetchMovies() {
-  loading.value = true
   let durationMin: number | undefined
   let durationMax: number | undefined
   if (filters.duration === 'short') {
@@ -89,31 +82,24 @@ async function fetchMovies() {
     durationMin = 121
   }
 
-  try {
-    const response = await movieApi.getMovies({
-      page: pagination.page,
-      limit: pagination.limit,
-      search: filters.search || undefined,
-      genre: activeGenre.value || undefined,
-      sortBy: filters.sortBy,
-      sortOrder: filters.sortOrder,
-      yearFrom: filters.yearFrom || undefined,
-      yearTo: filters.yearTo || undefined,
-      durationMin,
-      durationMax,
-    })
-
-    if (response.success) {
-      movies.value = response.data
-      Object.assign(pagination, response.pagination)
-    }
-  }
-  catch (error) {
-    console.error('Failed to fetch movies:', error)
-  }
-  finally {
-    loading.value = false
-  }
+  const data = await execute(({ page, limit }) => movieApi.getMovies({
+    page,
+    limit,
+    search: filters.search || undefined,
+    genre: activeGenre.value || undefined,
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
+    yearFrom: filters.yearFrom || undefined,
+    yearTo: filters.yearTo || undefined,
+    durationMin,
+    durationMax,
+  }).then((response) => {
+    if (!response.success)
+      throw new Error('加载影片失败')
+    return response
+  }), '加载影片失败')
+  if (data)
+    movies.value = data
 }
 
 async function fetchGenres() {
@@ -166,40 +152,41 @@ async function fetchRecommended() {
   }
 }
 
+async function applyFilters(): Promise<void> {
+  await syncUrl(1)
+  await fetchMovies()
+}
+
 function setGenre(genre: string) {
   if (activeGenre.value === genre) {
     return
   }
   activeGenre.value = genre
-  pagination.page = 1
-  syncUrl()
-  fetchMovies()
+  void applyFilters()
 }
 
-function changePage(page: number) {
-  pagination.page = page
-  syncUrl()
-  fetchMovies()
+async function changePage(page: number): Promise<void> {
+  await goToPage(page)
+  await fetchMovies()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-function searchMovies() {
-  pagination.page = 1
-  syncUrl()
-  fetchMovies()
+async function changePageSize(size: number): Promise<void> {
+  await updatePageSize(size)
+  await fetchMovies()
+}
+
+function searchMovies(): void {
+  void applyFilters()
 }
 
 watch(() => filters.sortBy, () => {
-  pagination.page = 1
-  syncUrl()
-  fetchMovies()
+  void applyFilters()
 })
 
 function clearGenreFilter() {
   activeGenre.value = ''
-  pagination.page = 1
-  syncUrl()
-  fetchMovies()
+  void applyFilters()
 }
 
 // 监听外部（如标签页点击）触发的 genre query 变化
@@ -207,8 +194,7 @@ watch(() => route.query.genre, (val) => {
   const genre = typeof val === 'string' ? val : ''
   if (genre !== activeGenre.value) {
     activeGenre.value = genre
-    pagination.page = 1
-    fetchMovies()
+    void applyFilters()
   }
 })
 
@@ -228,7 +214,6 @@ function goToHistory() {
 
 onMounted(() => {
   // 从 URL query 恢复状态
-  pagination.page = Number(route.query.page) || 1
   filters.sortBy = (route.query.sortBy as typeof filters.sortBy) || 'releaseDate'
   filters.search = (typeof route.query.search === 'string' ? route.query.search : '')
   activeGenre.value = (typeof route.query.genre === 'string' ? route.query.genre : '')
@@ -245,16 +230,16 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="ui-public-page">
     <!-- R18 Status Banner (if logged in and not verified) -->
-    <div v-if="userStore.user && !userStore.user.isR18Verified" class="bg-amber-900/20 border border-amber-700 rounded-lg px-4 py-3 mb-6">
+    <div v-if="userStore.user && !userStore.user.isR18Verified" class="ui-public-surface ui-status-warning mb-5 px-4 py-3">
       <div class="flex items-center gap-3">
         <span class="text-2xl shrink-0">🔒</span>
         <div class="text-sm flex-1">
-          <p class="font-medium text-amber-300">
+          <p class="font-medium">
             部分 R18 内容已隐藏
           </p>
-          <p class="text-amber-400 text-xs mt-0.5">
+          <p class="mt-0.5 text-xs text-muted-foreground">
             当前账号未获得 R18 内容访问权限。如需访问，请联系管理员申请。
           </p>
         </div>
@@ -348,29 +333,31 @@ onMounted(() => {
     </section>
 
     <!-- Genre 筛选标签提示 -->
-    <div v-if="activeGenre" class="flex items-center gap-2 mb-4 bg-purple-600/10 border border-purple-500/30 rounded-lg px-4 py-2">
-      <span class="text-purple-300 text-sm">
+    <div v-if="activeGenre" class="ui-status-info mb-4 flex items-center gap-2 rounded-[var(--ui-radius-md)] border px-4 py-2">
+      <span class="text-sm">
         当前筛选标签：<strong>{{ activeGenre }}</strong>
       </span>
       <button
-        class="ml-auto text-purple-400 hover:text-white text-sm transition-colors"
+        class="ml-auto text-sm transition-colors hover:text-primary"
         @click="clearGenreFilter"
       >
         清除筛选
       </button>
     </div>
 
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold text-white mb-4">
-        {{ activeGenre ? `标签：${activeGenre}` : '热门影片' }}
-      </h1>
+    <div class="mb-5">
+      <div class="ui-public-page-header mb-4">
+        <h1 class="ui-public-page-title">
+          {{ activeGenre ? `标签：${activeGenre}` : '热门影片' }}
+        </h1>
+      </div>
 
-      <div class="flex items-center gap-3 mb-4">
+      <div class="ui-public-actions mb-4">
         <input
           v-model="filters.search"
           type="text"
           placeholder="搜索番号或标题..."
-          class="flex-1 min-w-[180px] max-w-xs px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+          class="ui-public-input w-full max-w-sm"
           @keyup.enter="searchMovies"
         >
         <Select
@@ -382,7 +369,7 @@ onMounted(() => {
         />
         <button
           v-if="filters.search"
-          class="w-100px cursor-pointer px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+          class="ui-public-button ui-public-button-ghost"
           @click="filters.search = ''; searchMovies()"
         >
           清除
@@ -411,107 +398,99 @@ onMounted(() => {
       </div>
 
       <!-- 高级筛选 -->
-      <div class="filter-panel mt-2 flex flex-wrap items-center gap-4 bg-gray-800/50 p-3 rounded-lg border border-gray-700/50">
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-400">年份:</span>
-          <input
-            v-model.number="filters.yearFrom"
-            type="number"
-            min="2000"
-            :max="new Date().getFullYear()"
-            placeholder="2000"
-            class="w-20 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-white focus:ring-1 focus:ring-primary-500"
-            @change="pagination.page = 1; syncUrl(); fetchMovies()"
-          >
-          <span class="text-xs text-gray-500">-</span>
-          <input
-            v-model.number="filters.yearTo"
-            type="number"
-            min="2000"
-            :max="new Date().getFullYear()"
-            placeholder="2025"
-            class="w-20 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-white focus:ring-1 focus:ring-primary-500"
-            @change="pagination.page = 1; syncUrl(); fetchMovies()"
-          >
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-400">时长:</span>
-          <div class="flex rounded-md shadow-sm" role="group">
-            <button
-              v-for="opt in durationOptions"
-              :key="opt.value"
-              type="button"
-              class="px-3 py-1 text-xs font-medium border border-gray-700 hover:bg-gray-700 hover:text-white transition-colors"
-              :class="[
-                filters.duration === opt.value ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-900 text-gray-300',
-                opt.value === '' ? 'rounded-l-md font-normal' : opt.value === 'long' ? 'rounded-r-md font-normal' : 'font-normal',
-              ]"
-              @click="filters.duration = (filters.duration === opt.value && opt.value !== '') ? '' : opt.value; pagination.page = 1; syncUrl(); fetchMovies()"
+      <details class="ui-public-surface ui-public-filter mt-3">
+        <summary class="cursor-pointer list-none text-sm font-semibold text-foreground">
+          高级筛选
+        </summary>
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">年份:</span>
+            <input
+              v-model.number="filters.yearFrom"
+              type="number"
+              min="2000"
+              :max="new Date().getFullYear()"
+              placeholder="2000"
+              class="ui-public-input w-20 text-xs"
+              @change="applyFilters"
             >
-              {{ opt.label }}
-            </button>
+            <span class="text-xs text-gray-500">-</span>
+            <input
+              v-model.number="filters.yearTo"
+              type="number"
+              min="2000"
+              :max="new Date().getFullYear()"
+              placeholder="2025"
+              class="ui-public-input w-20 text-xs"
+              @change="applyFilters"
+            >
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">时长:</span>
+            <div class="flex rounded-md shadow-sm" role="group">
+              <button
+                v-for="opt in durationOptions"
+                :key="opt.value"
+                type="button"
+                class="min-h-8 border border-border px-3 py-1 text-xs font-medium transition-colors hover:border-primary hover:text-primary"
+                :class="[
+                  filters.duration === opt.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground',
+                  opt.value === '' ? 'rounded-l-md font-normal' : opt.value === 'long' ? 'rounded-r-md font-normal' : 'font-normal',
+                ]"
+                @click="filters.duration = (filters.duration === opt.value && opt.value !== '') ? '' : opt.value; applyFilters()"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </details>
     </div>
 
-    <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-      <div v-for="i in 10" :key="i" class="animate-pulse">
-        <div class="bg-gray-800 aspect-3/4 rounded-lg mb-2" />
-        <div class="bg-gray-800 h-4 rounded mb-1" />
-        <div class="bg-gray-800 h-3 rounded w-2/3" />
-      </div>
+    <div v-if="loading" class="ui-public-grid">
+      <SkeletonCard v-for="i in 10" :key="i" variant="poster" />
     </div>
 
-    <div v-else-if="movies.length === 0" class="text-center py-12">
-      <p class="text-gray-400">
+    <div v-else-if="error" class="ui-public-empty">
+      <span class="text-3xl text-[hsl(var(--status-danger))]">!</span>
+      <p>{{ error }}</p>
+      <button class="ui-public-button ui-public-button-ghost" @click="fetchMovies">
+        重试
+      </button>
+    </div>
+
+    <div v-else-if="movies.length === 0" class="ui-public-empty">
+      <span class="text-3xl">🎬</span>
+      <p class="text-muted-foreground">
         暂无影片
       </p>
     </div>
 
     <div v-else>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <RouterLink
+      <div class="ui-public-grid">
+        <MovieCard
           v-for="movie in movies"
           :key="movie.id"
-          :to="`/movie/${movie.code}`"
-          class="group cursor-pointer"
-        >
-          <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
-            <div class="aspect-3/4 bg-gray-800">
-              <img
-                v-if="movie.coverImage"
-                :src="movie.coverImage"
-                :alt="movie.title"
-                class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              >
-            </div>
-            <div
-              v-if="movie.isR18"
-              class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded"
-            >
-              R18
-            </div>
-          </div>
-          <h3 class="mt-2 font-medium text-white line-clamp-2 group-hover:text-primary-400 transition">
-            {{ movie.title }}
-          </h3>
-          <p class="text-sm text-gray-400 line-clamp-1">
-            {{ movie.code }}
-          </p>
-        </RouterLink>
+          :title="movie.title"
+          :href="`/movie/${movie.code}`"
+          :code="movie.code"
+          :cover="movie.coverImage"
+          :release-date="movie.releaseDate ? new Date(movie.releaseDate) : null"
+          :is-r18="movie.isR18"
+          label-missing-cover="暂无封面"
+        />
       </div>
 
       <Pagination
-        v-if="pagination.totalPages > 1"
-        :current-page="pagination.page"
-        :total-pages="pagination.totalPages"
-        :total="pagination.total"
-        :page-size="pagination.limit"
+        v-if="totalPages > 1"
+        :current-page="page"
+        :total-pages="totalPages"
+        :total="total"
+        :page-size="limit"
         layout="total, prev, pager, next, jumper"
         class="mt-8 pb-8"
         @update:current-page="changePage"
+        @size-change="changePageSize"
       />
     </div>
   </div>
@@ -550,7 +529,7 @@ onMounted(() => {
   height: 100px;
   border-radius: 0.5rem;
   overflow: hidden;
-  background: #1f2937;
+  background: hsl(var(--card));
   position: relative;
 }
 
@@ -566,7 +545,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -577,7 +556,7 @@ onMounted(() => {
 
 .continue-title {
   font-size: 0.75rem;
-  color: #e5e7eb;
+  color: hsl(var(--foreground));
   line-height: 1.3;
   overflow: hidden;
   display: -webkit-box;
@@ -588,7 +567,7 @@ onMounted(() => {
 
 .progress-track {
   height: 3px;
-  background: #374151;
+  background: hsl(var(--border));
   border-radius: 2px;
   overflow: hidden;
   margin-bottom: 0.25rem;
@@ -596,14 +575,14 @@ onMounted(() => {
 
 .progress-fill {
   height: 100%;
-  background: #7c3aed;
+  background: hsl(var(--primary));
   border-radius: 2px;
   transition: width 0.3s;
 }
 
 .progress-label {
   font-size: 0.625rem;
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
 }
 
 /* ── Genre 标签栏 ─────────────────────────────────────────── */
@@ -627,9 +606,9 @@ onMounted(() => {
   gap: 0.25rem;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
-  border: 1px solid #374151;
+  border: 1px solid hsl(var(--border));
   background: transparent;
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
   font-size: 0.8125rem;
   cursor: pointer;
   white-space: nowrap;
@@ -637,14 +616,14 @@ onMounted(() => {
 }
 
 .genre-tag:hover {
-  border-color: #7c3aed;
-  color: #e5e7eb;
+  border-color: hsl(var(--primary));
+  color: hsl(var(--foreground));
 }
 
 .genre-tag.active {
-  background: #7c3aed;
-  border-color: #7c3aed;
-  color: #fff;
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
 }
 
 .genre-count {

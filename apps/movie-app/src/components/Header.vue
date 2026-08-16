@@ -26,15 +26,15 @@ function handleSearchClick() {
 </script>
 
 <template>
-  <header class="sticky top-0 z-50 bg-gray-800 shadow-lg border-b border-gray-700">
-    <div class="container mx-auto px-4 max-w-7xl">
-      <div class="flex items-center justify-between h-16">
+  <header class="sticky top-0 z-50 border-b border-border bg-background/92 shadow-sm backdrop-blur supports-backdrop-filter:bg-background/78">
+    <div class="mx-auto w-full max-w-[96rem] px-4 sm:px-6">
+      <div class="flex h-16 items-center justify-between gap-4">
         <!-- 左侧：汉堡菜单 + Logo + 桌面端导航 -->
-        <div class="flex items-center space-x-4 md:space-x-8">
+        <div class="flex min-w-0 items-center gap-3 md:gap-7">
           <!-- 移动端汉堡菜单 -->
           <button
             v-if="isMobile"
-            class="text-gray-300 hover:text-white p-2 rounded-md transition-colors"
+            class="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="打开菜单"
             @click="handleMenuClick"
           >
@@ -43,29 +43,29 @@ function handleSearchClick() {
             </svg>
           </button>
 
-          <RouterLink to="/" class="text-2xl font-bold text-primary-400 hover:text-primary-300 transition">
+          <RouterLink to="/" class="shrink-0 text-xl font-bold tracking-tight text-primary transition hover:text-primary/80 sm:text-2xl">
             影库
           </RouterLink>
 
           <!-- 桌面端导航 -->
-          <nav class="hidden md:flex space-x-2">
-            <RouterLink to="/" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+          <nav class="hidden items-center gap-1 md:flex">
+            <RouterLink to="/" class="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="bg-muted text-foreground" exact>
               首页
             </RouterLink>
-            <RouterLink to="/actors" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+            <RouterLink to="/actors" class="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="bg-muted text-foreground">
               女优
             </RouterLink>
-            <RouterLink to="/publishers" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+            <RouterLink to="/publishers" class="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="bg-muted text-foreground">
               厂商
             </RouterLink>
-            <RouterLink to="/profile" class="text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+            <RouterLink to="/profile" class="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="bg-muted text-foreground">
               我的
             </RouterLink>
           </nav>
         </div>
 
         <!-- 右侧：搜索 + 用户信息 -->
-        <div class="flex items-center space-x-2 md:space-x-4">
+        <div class="flex shrink-0 items-center gap-2 md:gap-4">
           <!-- 桌面端搜索框 -->
           <div class="hidden md:block w-64">
             <SearchBar />
@@ -74,7 +74,7 @@ function handleSearchClick() {
           <!-- 移动端搜索按钮 -->
           <button
             v-if="isMobile"
-            class="text-gray-300 hover:text-white p-2 rounded-md transition-colors"
+            class="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="搜索"
             @click="handleSearchClick"
           >
@@ -86,7 +86,7 @@ function handleSearchClick() {
           <!-- 用户信息 -->
           <button
             v-if="!userStore.user"
-            class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md text-sm font-medium transition"
+            class="ui-public-button ui-public-button-primary"
             @click="userStore.signIn"
           >
             登录
@@ -108,14 +108,14 @@ function handleSearchClick() {
                 :alt="userStore.user.name"
                 class="w-8 h-8 rounded-full"
               >
-              <div v-else class="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-medium">
+              <div v-else class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
                 {{ userStore.user.name[0].toUpperCase() }}
               </div>
-              <span class="text-sm font-medium text-gray-300 hidden md:inline">{{ userStore.user.name }}</span>
+              <span class="hidden text-sm font-medium text-muted-foreground md:inline">{{ userStore.user.name }}</span>
             </RouterLink>
 
             <button
-              class="hidden md:inline-flex text-gray-300 hover:text-red-400 px-3 py-2 rounded-md text-sm font-medium transition"
+              class="hidden rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive md:inline-flex"
               @click="userStore.signOut"
             >
               退出

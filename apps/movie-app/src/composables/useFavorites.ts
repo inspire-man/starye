@@ -1,14 +1,15 @@
+import type { MaybeRef } from 'vue'
 import type { Favorite } from '../types'
-import { computed, ref } from 'vue'
+import { computed, ref, unref } from 'vue'
 import { favoritesApi } from '../lib/api-client'
 
 interface UseFavoritesOptions {
-  entityType?: 'actor' | 'publisher' | 'movie' | 'comic'
+  entityType?: MaybeRef<'actor' | 'publisher' | 'movie' | 'comic' | undefined>
   autoLoad?: boolean
 }
 
 export function useFavorites(options: UseFavoritesOptions = {}) {
-  const { entityType, autoLoad = false } = options
+  const { entityType: entityTypeRef, autoLoad = false } = options
 
   // 状态
   const favorites = ref<Favorite[]>([])
@@ -24,7 +25,7 @@ export function useFavorites(options: UseFavoritesOptions = {}) {
   const isEmpty = computed(() => favorites.value.length === 0 && !loading.value)
 
   // 获取收藏列表
-  async function fetchFavorites(page = 1) {
+  async function fetchFavorites(page = 1, append = false) {
     loading.value = true
     error.value = null
 
@@ -32,11 +33,11 @@ export function useFavorites(options: UseFavoritesOptions = {}) {
       const result = await favoritesApi.getFavorites({
         page,
         limit: pageSize.value,
-        entityType,
+        entityType: unref(entityTypeRef),
       })
 
       if (result.success && result.data && result.pagination) {
-        favorites.value = page === 1 ? result.data : [...favorites.value, ...result.data]
+        favorites.value = append ? [...favorites.value, ...result.data] : result.data
         total.value = result.pagination.total
         currentPage.value = result.pagination.page
       }
@@ -56,7 +57,7 @@ export function useFavorites(options: UseFavoritesOptions = {}) {
       const result = await favoritesApi.addFavorite(type, id)
       if (result.success) {
         // 如果没有指定类型或匹配当前类型，重新加载列表
-        if (!entityType || entityType === type) {
+        if (!unref(entityTypeRef) || unref(entityTypeRef) === type) {
           await fetchFavorites(1)
         }
         return { success: true, alreadyExists: result.data?.alreadyExists || false }
@@ -109,7 +110,7 @@ export function useFavorites(options: UseFavoritesOptions = {}) {
     if (!hasMore.value || loading.value)
       return
 
-    await fetchFavorites(currentPage.value + 1)
+    await fetchFavorites(currentPage.value + 1, true)
   }
 
   // 自动加载

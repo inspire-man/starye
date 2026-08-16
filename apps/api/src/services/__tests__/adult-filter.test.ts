@@ -26,16 +26,16 @@ describe('buildAdultVisibilityCondition', () => {
     expect(cond).toBeUndefined()
   })
 
-  it('admin 角色返回 undefined（无过滤，与 checkUserAdultStatus 对齐）', () => {
+  it('admin 角色但未完成 R18 验证时仍返回过滤条件', () => {
     const user = { isR18Verified: false, role: 'admin' } as any
     const cond = buildAdultVisibilityCondition(user, mockTable)
-    expect(cond).toBeUndefined()
+    expect(cond).toBeDefined()
   })
 
-  it('super_admin 角色返回 undefined（无过滤）', () => {
+  it('super_admin 角色但未完成 R18 验证时仍返回过滤条件', () => {
     const user = { isR18Verified: false, role: 'super_admin' } as any
     const cond = buildAdultVisibilityCondition(user, mockTable)
-    expect(cond).toBeUndefined()
+    expect(cond).toBeDefined()
   })
 
   it('返回的条件可以 push 进 conditions 数组', () => {

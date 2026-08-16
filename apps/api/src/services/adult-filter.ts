@@ -7,7 +7,7 @@ interface TableWithR18 { isR18: any }
 
 /**
  * 构造成人内容可见性 WHERE 条件。
- * 与 checkUserAdultStatus 语义对齐：admin/super_admin 角色或 isR18Verified=true 可见全部。
+ * 公开内容访问只由账号的成人内容验证状态决定，管理角色不自动获得 R18 内容可见性。
  *
  * @param user 当前用户（undefined 表示匿名）
  * @param table 含 isR18 列的 Drizzle 表对象
@@ -17,8 +17,7 @@ export function buildAdultVisibilityCondition(
   user: SessionUser | undefined,
   table: TableWithR18,
 ) {
-  // 对齐 checkUserAdultStatus：admin/super_admin 角色也可见 R18（D-07）
-  if (user?.isR18Verified || user?.role === 'admin' || user?.role === 'super_admin') {
+  if (user?.isR18Verified) {
     return undefined
   }
   return eq(table.isR18, false)

@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import * as v from 'valibot'
 import { requireAuth } from '../../middleware/guard'
-import { AddFavoriteBodySchema, DeleteFavoriteParamSchema, FavoritesListDataSchema, GetFavoritesQuerySchema } from '../../schemas/favorite'
+import { AddFavoriteBodySchema, DeleteFavoriteParamSchema, FavoritesListResponseSchema, GetFavoritesQuerySchema } from '../../schemas/favorite'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../schemas/responses'
 import { addFavoriteHandler, checkFavoriteHandler, deleteFavoriteHandler, getFavoriteList } from './handlers/favorite.handler'
 
@@ -36,32 +36,32 @@ export const favoritesRoutes = new Hono<AppEnv>()
           description: '成功返回收藏列表',
           content: {
             'application/json': {
-              schema: resolver(SuccessResponseSchema(FavoritesListDataSchema, '成功返回收藏列表')),
+              schema: resolver(FavoritesListResponseSchema),
               example: {
                 success: true,
-                data: {
-                  data: [
-                    {
-                      id: 'fav_abc123',
-                      userId: 'user_xyz789',
-                      entityType: 'movie',
-                      entityId: 'movie_001',
-                      createdAt: 1711872000000,
-                    },
-                    {
-                      id: 'fav_def456',
-                      userId: 'user_xyz789',
-                      entityType: 'actor',
-                      entityId: 'actor_001',
-                      createdAt: 1711858400000,
-                    },
-                  ],
-                  pagination: {
-                    page: 1,
-                    limit: 24,
-                    total: 42,
-                    totalPages: 2,
+                data: [
+                  {
+                    id: 'fav_abc123',
+                    userId: 'user_xyz789',
+                    entityType: 'movie',
+                    entityId: 'movie_001',
+                    createdAt: 1711872000000,
+                    entity: null,
                   },
+                  {
+                    id: 'fav_def456',
+                    userId: 'user_xyz789',
+                    entityType: 'actor',
+                    entityId: 'actor_001',
+                    createdAt: 1711858400000,
+                    entity: null,
+                  },
+                ],
+                meta: {
+                  page: 1,
+                  limit: 24,
+                  total: 42,
+                  totalPages: 2,
                 },
                 message: '成功返回收藏列表',
               },

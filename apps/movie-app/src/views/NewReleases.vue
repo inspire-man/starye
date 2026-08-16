@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { Movie } from '../types'
-import { Pagination } from '@starye/ui'
-import { computed, onMounted, reactive, ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { MovieCard, Pagination, SkeletonCard, useListQuery } from '@starye/ui'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { movieApi } from '../lib/api-client'
 
 const route = useRoute()
@@ -10,15 +10,8 @@ const router = useRouter()
 
 const currentYear = new Date().getFullYear()
 const activeYear = ref(Number(route.query.year) || currentYear)
-const loading = ref(true)
 const movies = ref<Movie[]>([])
-
-const pagination = reactive({
-  page: Number(route.query.page) || 1,
-  limit: 20,
-  total: 0,
-  totalPages: 0,
-})
+const { page, limit, total, totalPages, loading, error, execute, goToPage, updatePageSize } = useListQuery(20)
 
 const yearTabs = computed(() => {
   const tabs = []
@@ -28,54 +21,49 @@ const yearTabs = computed(() => {
   return tabs
 })
 
-function syncUrl() {
-  router.replace({
+async function syncUrl(pageNumber = page.value): Promise<void> {
+  await router.replace({
     query: {
-      ...(pagination.page > 1 && { page: String(pagination.page) }),
-      ...(activeYear.value !== currentYear && { year: String(activeYear.value) }),
+      ...route.query,
+      ...(pageNumber > 1 ? { page: String(pageNumber) } : { page: undefined }),
+      year: activeYear.value !== currentYear ? String(activeYear.value) : undefined,
     },
   })
 }
 
 async function fetchMovies() {
-  loading.value = true
-  try {
-    const response = await movieApi.getMovies({
-      page: pagination.page,
-      limit: pagination.limit,
-      yearFrom: activeYear.value,
-      yearTo: activeYear.value,
-      sortBy: 'releaseDate',
-      sortOrder: 'desc',
-    })
-
-    if (response.success) {
-      movies.value = response.data
-      Object.assign(pagination, response.pagination)
-    }
-  }
-  catch (error) {
-    console.error('Failed to fetch new releases:', error)
-  }
-  finally {
-    loading.value = false
-  }
+  const data = await execute(({ page, limit }) => movieApi.getMovies({
+    page,
+    limit,
+    yearFrom: activeYear.value,
+    yearTo: activeYear.value,
+    sortBy: 'releaseDate',
+    sortOrder: 'desc',
+  }).then((response) => {
+    if (!response.success)
+      throw new Error('加载最新发布失败')
+    return response
+  }), '加载最新发布失败')
+  if (data)
+    movies.value = data
 }
 
 function setYear(year: number) {
   if (activeYear.value === year)
     return
   activeYear.value = year
-  pagination.page = 1
-  syncUrl()
-  fetchMovies()
+  void syncUrl(1).then(fetchMovies)
 }
 
-function changePage(page: number) {
-  pagination.page = page
-  syncUrl()
-  fetchMovies()
+async function changePage(page: number): Promise<void> {
+  await goToPage(page)
+  await fetchMovies()
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function changePageSize(size: number): Promise<void> {
+  await updatePageSize(size)
+  await fetchMovies()
 }
 
 const groupedByMonth = computed(() => {
@@ -114,42 +102,46 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="pb-16 sm:pb-0">
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold text-white mb-4">
+  <div class="ui-public-page pb-16 sm:pb-0">
+    <div class="ui-public-page-header">
+      <h1 class="ui-public-page-title">
         最新发布
       </h1>
-
-      <!-- 年份 Tab -->
-      <div class="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
-        <button
-          v-for="year in yearTabs"
-          :key="year"
-          class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap border"
-          :class="[
-            activeYear === year
-              ? 'bg-primary-600 text-white border-primary-600'
-              : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-primary-500 hover:text-white',
-          ]"
-          @click="setYear(year)"
-        >
-          {{ year }} 年
-        </button>
-      </div>
     </div>
 
+    <!-- 年份 Tab -->
+    <div class="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <button
+        v-for="year in yearTabs"
+        :key="year"
+        class="ui-public-button whitespace-nowrap rounded-full border"
+        :class="[
+          activeYear === year
+            ? 'ui-public-button-primary'
+            : 'ui-public-button-ghost',
+        ]"
+        @click="setYear(year)"
+      >
+        {{ year }} 年
+      </button>
+    </div>
     <!-- 加载状态 -->
-    <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-      <div v-for="i in 10" :key="i" class="animate-pulse">
-        <div class="bg-gray-800 aspect-[3/4] rounded-lg mb-2" />
-        <div class="bg-gray-800 h-4 rounded mb-1" />
-        <div class="bg-gray-800 h-3 rounded w-2/3" />
-      </div>
+    <div v-if="loading" class="ui-public-grid">
+      <SkeletonCard v-for="i in 10" :key="i" variant="poster" />
     </div>
 
     <!-- 无数据空状态 -->
-    <div v-else-if="movies.length === 0" class="text-center py-12">
-      <p class="text-gray-400">
+    <div v-else-if="error" class="ui-public-empty">
+      <span class="text-3xl text-[hsl(var(--status-danger))]">!</span>
+      <p>{{ error }}</p>
+      <button class="ui-public-button ui-public-button-ghost" @click="fetchMovies">
+        重试
+      </button>
+    </div>
+
+    <div v-else-if="movies.length === 0" class="ui-public-empty">
+      <span class="text-3xl">🎬</span>
+      <p class="text-muted-foreground">
         该年份暂无发布日期数据
       </p>
     </div>
@@ -157,54 +149,36 @@ onMounted(() => {
     <!-- 影片列表分组 -->
     <div v-else class="space-y-8">
       <div v-for="group in groupedByMonth" :key="group.key">
-        <h2 class="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-2">
+        <h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
           <span>{{ group.title }}</span>
-          <span class="text-sm font-normal text-gray-500 bg-gray-800 px-2 py-0.5 rounded-md">{{ group.movies.length }} 部</span>
+          <span class="ui-status-tag ui-status-neutral">{{ group.movies.length }} 部</span>
         </h2>
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          <RouterLink
+        <div class="ui-public-grid">
+          <MovieCard
             v-for="movie in group.movies"
             :key="movie.id"
-            :to="`/movie/${movie.code}`"
-            class="group cursor-pointer block"
-          >
-            <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
-              <div class="aspect-[3/4] bg-gray-800">
-                <img
-                  v-if="movie.coverImage"
-                  :src="movie.coverImage"
-                  :alt="movie.title"
-                  class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                >
-              </div>
-              <div
-                v-if="movie.isR18"
-                class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded"
-              >
-                R18
-              </div>
-            </div>
-            <h3 class="mt-2 text-sm font-medium text-white line-clamp-2 group-hover:text-primary-400 transition" :title="movie.title">
-              {{ movie.title }}
-            </h3>
-            <p class="text-xs text-gray-400 mt-1">
-              {{ movie.code }}
-            </p>
-          </RouterLink>
+            :title="movie.title"
+            :href="`/movie/${movie.code}`"
+            :code="movie.code"
+            :cover="movie.coverImage"
+            :release-date="movie.releaseDate ? new Date(movie.releaseDate) : null"
+            :is-r18="movie.isR18"
+            label-missing-cover="暂无封面"
+          />
         </div>
       </div>
 
       <Pagination
-        v-if="pagination.totalPages > 1"
-        :current-page="pagination.page"
-        :total-pages="pagination.totalPages"
-        :total="pagination.total"
-        :page-size="pagination.limit"
+        v-if="totalPages > 1"
+        :current-page="page"
+        :total-pages="totalPages"
+        :total="total"
+        :page-size="limit"
         layout="total, prev, pager, next, jumper"
         class="mt-8 pb-8"
         @update:current-page="changePage"
+        @size-change="changePageSize"
       />
     </div>
   </div>

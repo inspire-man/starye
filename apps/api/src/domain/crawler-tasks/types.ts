@@ -217,10 +217,25 @@ export interface CrawlerTaskListItem {
   readonly createdAt: number
   readonly id: string
   readonly latestRunId: string | null
+  readonly latestRun?: CrawlerTaskRunSummary | null
+  /** Safe task identity used by list consumers without loading task details. */
+  readonly operation?: CrawlerTaskOperation
+  readonly target?: { readonly id: string, readonly kind: 'movie' | 'manga' }
   readonly templateKey: CrawlerTaskTemplateKey
   readonly updatedAt: number
   readonly lifecycle: CrawlerTaskLifecycleProjection
   readonly retry?: CrawlerTaskRetryProjection
+}
+
+/** Lightweight execution state used by task lists without loading full detail. */
+export interface CrawlerTaskRunSummary {
+  readonly attemptNumber: number
+  readonly createdAt: number
+  readonly failureCode: CrawlerRunFailureCode | null
+  readonly id: string
+  readonly status: CrawlerRunStatus
+  readonly terminalAt: number | null
+  readonly updatedAt: number
 }
 
 export interface CrawlerTaskListPage {

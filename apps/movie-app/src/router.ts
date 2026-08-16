@@ -86,7 +86,7 @@ const router = createRouter({
 })
 
 // 路由守卫：保护需要登录的页面
-router.beforeEach(async (to, _from, next) => {
+router.beforeEach(async (to) => {
   if (to.meta.requiresAuth) {
     const userStore = useUserStore()
 
@@ -105,12 +105,11 @@ router.beforeEach(async (to, _from, next) => {
     if (!userStore.user) {
       const { requireLogin } = useAuthGuard()
       requireLogin(`/movie${to.fullPath}`)
-      next(false)
-      return
+      return false
     }
   }
 
-  next()
+  return true
 })
 
 export default router

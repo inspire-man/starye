@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { WatchingHistoryItem } from '../types'
+import { Pagination, SkeletonCard } from '@starye/ui'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { progressApi } from '../lib/api-client'
@@ -8,6 +9,7 @@ const loading = ref(true)
 const historyItems = ref<WatchingHistoryItem[]>([])
 const currentPage = ref(1)
 const PAGE_SIZE = 10
+const pageSize = ref(PAGE_SIZE)
 
 /** 观看状态 tab：all / watching / watched */
 type StatusFilter = 'all' | 'watching' | 'watched'
@@ -25,15 +27,25 @@ const filteredItems = computed(() => {
   return historyItems.value
 })
 
-const totalPages = computed(() => Math.ceil(filteredItems.value.length / PAGE_SIZE))
+const totalPages = computed(() => Math.ceil(filteredItems.value.length / pageSize.value))
 
 const pagedItems = computed(() => {
-  const start = (currentPage.value - 1) * PAGE_SIZE
-  return filteredItems.value.slice(start, start + PAGE_SIZE)
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredItems.value.slice(start, start + pageSize.value)
 })
 
 function setStatusFilter(val: StatusFilter) {
   statusFilter.value = val
+  currentPage.value = 1
+}
+
+function changePage(page: number) {
+  currentPage.value = page
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function changePageSize(size: number) {
+  pageSize.value = size
   currentPage.value = 1
 }
 
@@ -96,26 +108,24 @@ onMounted(loadHistory)
 </script>
 
 <template>
-  <div class="history-page">
-    <div class="page-header">
-      <h1 class="page-title">
-        观看历史
-      </h1>
-      <RouterLink to="/" class="back-link">
+  <div class="ui-public-page history-page">
+    <div class="ui-public-page-header">
+      <div>
+        <h1 class="ui-public-page-title">
+          观看历史
+        </h1>
+        <p class="ui-public-page-description">
+          按观看状态筛选最近记录
+        </p>
+      </div>
+      <RouterLink to="/" class="ui-public-button ui-public-button-ghost">
         ← 返回首页
       </RouterLink>
     </div>
 
     <!-- 加载中 -->
     <div v-if="loading" class="skeleton-list">
-      <div v-for="i in 5" :key="i" class="skeleton-item animate-pulse">
-        <div class="skeleton-cover" />
-        <div class="skeleton-info">
-          <div class="skeleton-title" />
-          <div class="skeleton-bar" />
-          <div class="skeleton-meta" />
-        </div>
-      </div>
+      <SkeletonCard v-for="i in 5" :key="i" variant="row" />
     </div>
 
     <!-- 空状态 -->
@@ -156,7 +166,7 @@ onMounted(loadHistory)
       </div>
 
       <!-- 筛选后空状态 -->
-      <div v-if="filteredItems.length === 0" class="empty-state">
+      <div v-if="filteredItems.length === 0" class="ui-public-empty">
         <p class="empty-icon">
           📺
         </p>
@@ -235,23 +245,16 @@ onMounted(loadHistory)
       </div>
 
       <!-- 分页 -->
-      <div v-if="totalPages > 1" class="pagination">
-        <button
-          :disabled="currentPage === 1"
-          class="page-btn"
-          @click="currentPage--"
-        >
-          上一页
-        </button>
-        <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
-        <button
-          :disabled="currentPage === totalPages"
-          class="page-btn"
-          @click="currentPage++"
-        >
-          下一页
-        </button>
-      </div>
+      <Pagination
+        v-if="totalPages > 1"
+        :current-page="currentPage"
+        :total-pages="totalPages"
+        :total="filteredItems.length"
+        :page-size="pageSize"
+        layout="total, prev, pager, next, jumper"
+        @page-change="changePage"
+        @size-change="changePageSize"
+      />
     </div>
   </div>
 </template>
@@ -262,77 +265,11 @@ onMounted(loadHistory)
   margin: 0 auto;
 }
 
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
-}
-
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #fff;
-}
-
-.back-link {
-  font-size: 0.875rem;
-  color: #9ca3af;
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.back-link:hover {
-  color: #e5e7eb;
-}
-
 /* ── Skeleton ─────────────────────────────────────────────── */
 .skeleton-list {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.skeleton-item {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-}
-
-.skeleton-cover {
-  width: 80px;
-  height: 56px;
-  background: #1f2937;
-  border-radius: 0.5rem;
-  flex-shrink: 0;
-}
-
-.skeleton-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding-top: 0.25rem;
-}
-
-.skeleton-title {
-  height: 1rem;
-  background: #1f2937;
-  border-radius: 4px;
-  width: 70%;
-}
-
-.skeleton-bar {
-  height: 4px;
-  background: #1f2937;
-  border-radius: 4px;
-}
-
-.skeleton-meta {
-  height: 0.75rem;
-  background: #1f2937;
-  border-radius: 4px;
-  width: 30%;
 }
 
 /* ── 空状态 ───────────────────────────────────────────────── */
@@ -347,23 +284,23 @@ onMounted(loadHistory)
 }
 
 .empty-text {
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   margin-bottom: 1.5rem;
 }
 
 .empty-cta {
   display: inline-block;
   padding: 0.5rem 1.25rem;
-  background: #7c3aed;
-  color: #fff;
-  border-radius: 0.375rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: var(--ui-radius-md);
   text-decoration: none;
   font-size: 0.875rem;
   transition: background 0.15s;
 }
 
 .empty-cta:hover {
-  background: #6d28d9;
+  background: hsl(var(--primary) / 0.88);
 }
 
 /* ── 历史列表 ─────────────────────────────────────────────── */
@@ -378,14 +315,14 @@ onMounted(loadHistory)
   align-items: center;
   gap: 1rem;
   padding: 0.75rem;
-  background: #111827;
-  border: 1px solid #1f2937;
-  border-radius: 0.5rem;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md);
   transition: border-color 0.15s;
 }
 
 .history-item:hover {
-  border-color: #374151;
+  border-color: hsl(var(--primary) / 0.45);
 }
 
 .item-cover-link {
@@ -397,7 +334,7 @@ onMounted(loadHistory)
   height: 56px;
   border-radius: 0.375rem;
   overflow: hidden;
-  background: #1f2937;
+  background: hsl(var(--muted));
   position: relative;
 }
 
@@ -413,7 +350,7 @@ onMounted(loadHistory)
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   font-size: 0.6875rem;
   font-weight: 600;
 }
@@ -421,11 +358,11 @@ onMounted(loadHistory)
 .play-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: hsl(var(--background) / 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: hsl(var(--foreground));
   font-size: 1rem;
   opacity: 0;
   transition: opacity 0.15s;
@@ -444,7 +381,7 @@ onMounted(loadHistory)
   display: block;
   font-size: 0.9375rem;
   font-weight: 500;
-  color: #e5e7eb;
+  color: hsl(var(--foreground));
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -454,12 +391,12 @@ onMounted(loadHistory)
 }
 
 .item-title:hover {
-  color: #a78bfa;
+  color: hsl(var(--primary));
 }
 
 .item-code {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   margin-bottom: 0.375rem;
 }
 
@@ -469,7 +406,7 @@ onMounted(loadHistory)
 
 .progress-track {
   height: 3px;
-  background: #374151;
+  background: hsl(var(--muted-foreground) / 0.35);
   border-radius: 2px;
   overflow: hidden;
   margin-bottom: 0.25rem;
@@ -477,31 +414,31 @@ onMounted(loadHistory)
 
 .progress-fill {
   height: 100%;
-  background: #7c3aed;
+  background: hsl(var(--primary));
   border-radius: 2px;
 }
 
 .progress-text {
   font-size: 0.6875rem;
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
 }
 
 .progress-pct {
   margin-left: 0.25rem;
-  color: #a78bfa;
+  color: hsl(var(--primary));
 }
 
 .item-meta {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
 }
 
 .continue-btn {
   flex-shrink: 0;
   padding: 0.375rem 0.875rem;
-  background: #7c3aed;
-  color: #fff;
-  border-radius: 0.375rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: var(--ui-radius-sm);
   text-decoration: none;
   font-size: 0.8125rem;
   white-space: nowrap;
@@ -509,43 +446,7 @@ onMounted(loadHistory)
 }
 
 .continue-btn:hover {
-  background: #6d28d9;
-}
-
-/* ── 分页 ─────────────────────────────────────────────────── */
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  padding-bottom: 2rem;
-}
-
-.page-btn {
-  padding: 0.375rem 0.875rem;
-  border: 1px solid #374151;
-  background: transparent;
-  color: #9ca3af;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.page-btn:hover:not(:disabled) {
-  border-color: #7c3aed;
-  color: #e5e7eb;
-}
-
-.page-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 0.875rem;
-  color: #9ca3af;
+  background: hsl(var(--primary) / 0.88);
 }
 
 /* ── 状态筛选 tab ─────────────────────────────────────────── */
@@ -553,30 +454,30 @@ onMounted(loadHistory)
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid #1f2937;
+  border-bottom: 1px solid hsl(var(--border));
   padding-bottom: 0.75rem;
 }
 
 .tab-btn {
   padding: 0.375rem 0.875rem;
-  border: 1px solid #374151;
+  border: 1px solid hsl(var(--border));
   background: transparent;
-  color: #9ca3af;
-  border-radius: 0.375rem;
+  color: hsl(var(--muted-foreground));
+  border-radius: var(--ui-radius-sm);
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .tab-btn:hover {
-  border-color: #7c3aed;
-  color: #e5e7eb;
+  border-color: hsl(var(--primary));
+  color: hsl(var(--foreground));
 }
 
 .tab-active {
-  border-color: #7c3aed !important;
-  background: #7c3aed;
-  color: #fff !important;
+  border-color: hsl(var(--primary)) !important;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground)) !important;
 }
 
 .tab-count {
@@ -590,10 +491,10 @@ onMounted(loadHistory)
   display: inline-flex;
   align-items: center;
   padding: 0.125rem 0.5rem;
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 0.25rem;
+  background: hsl(var(--status-success-soft));
+  color: hsl(var(--status-success));
+  border: 1px solid hsl(var(--status-success) / 0.3);
+  border-radius: var(--ui-radius-sm);
   font-size: 0.6875rem;
   font-weight: 600;
 }

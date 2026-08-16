@@ -30,10 +30,12 @@ const emit = defineEmits<{
   'sizeChange': [size: number]
 }>()
 
+const safeTotalPages = computed(() => Math.max(1, props.totalPages))
+
 // 计算显示的页码列表
 const pagerList = computed(() => {
   const pages: (number | string)[] = []
-  const total = props.totalPages
+  const total = safeTotalPages.value
   const current = props.currentPage
 
   if (total <= 7) {
@@ -71,7 +73,6 @@ const pagerList = computed(() => {
 })
 
 const layoutItems = computed(() => props.layout.split(',').map(item => item.trim()))
-const safeTotalPages = computed(() => Math.max(1, props.totalPages))
 const jumpPage = ref(props.currentPage)
 
 watch(() => props.currentPage, (page) => {
@@ -86,8 +87,14 @@ function handlePageChange(page: number) {
 }
 
 function handleSizeChange(size: number) {
+  if (size === props.pageSize)
+    return
   emit('update:pageSize', size)
   emit('sizeChange', size)
+  if (props.currentPage !== 1) {
+    emit('update:currentPage', 1)
+    emit('pageChange', 1)
+  }
 }
 
 const jumperValue = computed({

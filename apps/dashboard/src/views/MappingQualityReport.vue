@@ -32,6 +32,16 @@ const error = ref('')
 const metrics = ref<QualityMetrics | null>(null)
 const refreshing = ref(false)
 
+const hasData = computed(() => {
+  const current = metrics.value
+  return Boolean(current && (
+    current.totalActors > 0
+    || current.totalPublishers > 0
+    || current.actorMappingCount > 0
+    || current.publisherMappingCount > 0
+  ))
+})
+
 // 计算覆盖率
 const actorCoverage = computed(() => {
   if (!metrics.value || metrics.value.totalActors === 0)
@@ -97,26 +107,6 @@ async function loadMetrics() {
   catch (e: any) {
     error.value = e.message || '加载失败'
     console.error('Failed to load quality metrics:', e)
-
-    // 如果 API 不存在，显示模拟数据
-    if (e.message?.includes('404')) {
-      error.value = 'API 端点未实现。显示模拟数据以供预览。'
-
-      // 模拟数据
-      metrics.value = {
-        totalActors: 5000,
-        mappedActors: 4500,
-        unmappedActors: 500,
-        totalPublishers: 126,
-        mappedPublishers: 15,
-        unmappedPublishers: 111,
-        actorMappingCount: 15000,
-        publisherMappingCount: 126,
-        conflictCount: 5,
-        invalidMappingCount: 20,
-        highPriorityUnmapped: 50,
-      }
-    }
   }
   finally {
     loading.value = false
@@ -164,8 +154,8 @@ onMounted(() => {
     </div>
 
     <!-- 报告内容 -->
-    <div v-else-if="metrics" class="content">
-      <!-- 错误提示（但有模拟数据） -->
+    <div v-else-if="metrics && hasData" class="content">
+      <!-- 错误提示 -->
       <div v-if="error" class="warning-banner">
         <p>⚠️ {{ error }}</p>
       </div>
@@ -367,12 +357,21 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <div v-else class="empty-state">
+      <strong>暂无映射数据</strong>
+      <span>当前没有可用于计算质量指标的女优或厂商映射记录。</span>
+      <button class="btn-secondary" type="button" @click="loadMetrics">
+        重新读取
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .mapping-quality-report {
-  padding: 24px;
+  min-width: 0;
+  padding: var(--ui-page-padding, 1.5rem);
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -391,11 +390,12 @@ onMounted(() => {
 }
 
 .btn-primary {
-  padding: 10px 24px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
+  min-height: var(--ui-control-height-md, 2.25rem);
+  padding: 0 0.875rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: 1px solid hsl(var(--primary));
+  border-radius: var(--ui-radius-md, 0.375rem);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -405,7 +405,7 @@ onMounted(() => {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: hsl(var(--primary) / 0.88);
 }
 
 .btn-primary:disabled {
@@ -414,11 +414,12 @@ onMounted(() => {
 }
 
 .btn-secondary {
-  padding: 10px 24px;
-  background: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  min-height: var(--ui-control-height-md, 2.25rem);
+  padding: 0 0.875rem;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.375rem);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -428,18 +429,34 @@ onMounted(() => {
 }
 
 .btn-secondary:hover {
-  background: #f3f4f6;
+  background: hsl(var(--muted));
 }
 
 .loading,
 .error {
   padding: 48px;
   text-align: center;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
 }
 
 .error {
-  color: #dc2626;
+  color: hsl(var(--status-danger));
+}
+
+.empty-state {
+  display: grid;
+  min-height: 14rem;
+  place-items: center;
+  gap: 0.625rem;
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--ui-radius-lg, 0.5rem);
+  padding: 2rem;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+}
+
+.empty-state strong {
+  color: hsl(var(--foreground));
 }
 
 .warning-banner {
@@ -706,6 +723,15 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .mapping-quality-report {
+    padding: 1rem;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .stats-grid {
     grid-template-columns: 1fr;
   }

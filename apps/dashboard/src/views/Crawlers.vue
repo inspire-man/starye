@@ -6,13 +6,13 @@
 import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, CrawlerVideoLayerFact, CrawlerVideoLayerName, ReadinessProjection } from '@/lib/api'
 import { ConfirmDialog, DataTable, DetailDrawer, info, Pagination, SkeletonCard, success } from '@starye/ui'
 import { AlertTriangle, Archive, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, GitBranch, History, LoaderCircle, Pencil, RefreshCw, Save, Trash2, Wrench } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { handleError } from '@/composables/useErrorHandler'
 import { useResourceGuard } from '@/composables/useResourceGuard'
 import { api } from '@/lib/api'
 import { useSession } from '@/lib/auth-client'
 
-useSession()
+const session = useSession()
 const { canAccessCrawler } = useResourceGuard()
 
 const stats = ref<any>({})
@@ -33,6 +33,7 @@ const taskDrawerOpen = ref(false)
 const taskLogs = ref<CrawlerTaskLog[]>([])
 const taskLogCursor = ref<number | null>(null)
 const taskLoading = ref(true)
+const taskDetailLoading = ref(false)
 const taskRefreshing = ref(false)
 const taskError = ref('')
 const taskAction = ref<CrawlerTaskTemplate | null>(null)
@@ -53,6 +54,10 @@ const expandedHistory = ref<Record<string, boolean>>({})
 const taskAudits = ref<Record<string, CrawlerTaskAudit[]>>({})
 const taskAuditCursors = ref<Record<string, string | null>>({})
 let taskRefreshInterval: ReturnType<typeof setInterval> | null = null
+let taskPanelRequestId = 0
+let taskDetailRequestId = 0
+
+const sessionPending = computed(() => session.value.isPending)
 
 const taskStatusLabels: Record<CrawlerRun['status'], string> = {
   queued: '排队中 · 等待本地 runner',
@@ -156,12 +161,12 @@ const videoReasonActionLabels: Record<string, string> = {
 }
 
 const taskTableColumns = [
-  { key: 'id', label: '任务', minWidth: '160px', sortable: false },
+  { key: 'id', label: '任务', width: '180px', minWidth: '160px', sortable: false },
   { key: 'operation', label: '类型', width: '100px', minWidth: '88px', sortable: false },
   { key: 'lifecycle', label: '生命周期', width: '116px', minWidth: '104px', sortable: false },
   { key: 'status', label: '最新状态', width: '132px', minWidth: '120px', sortable: false },
   { key: 'updatedAt', label: '最近执行', width: '140px', minWidth: '128px', sortable: false },
-  { key: 'actions', label: '操作', width: '136px', minWidth: '136px', sortable: false },
+  { key: 'actions', label: '操作', width: '160px', minWidth: '160px', sortable: false },
 ]
 
 const playbackEventLabels: Record<CrawlerPlaybackEventName, string> = {
@@ -297,9 +302,25 @@ function availabilityReasonLabel(reasonCode: CrawlerAvailabilityReasonCode): str
 }
 
 function latestRunFor(task: CrawlerTask): CrawlerRun | null {
-  const currentAttempt = taskDetails.value[task.id]?.currentAttempt
+  const detail = taskDetails.value[task.id]
+  const currentAttempt = selectedTask.value?.id === task.id ? detail?.currentAttempt : null
   if (currentAttempt)
     return currentAttempt
+  if (task.latestRun) {
+    return {
+      attemptNumber: task.latestRun.attemptNumber,
+      createdAt: task.latestRun.createdAt,
+      failureCode: task.latestRun.failureCode ?? null,
+      id: task.latestRun.id,
+      receipt: null,
+      status: task.latestRun.status,
+      taskId: task.id,
+      terminalAt: task.latestRun.terminalAt ?? null,
+      updatedAt: task.latestRun.updatedAt,
+    }
+  }
+  if (detail?.currentAttempt)
+    return detail.currentAttempt
   const runs = taskRuns(task)
   if (!runs.length)
     return null
@@ -396,7 +417,8 @@ function isActiveRun(run: CrawlerRun | null | undefined): boolean {
 
 function activeRepairTaskForMovie(movieId: string): CrawlerTask | null {
   return crawlerTasks.value.movie.find((task) => {
-    if (task.operation !== 'repair_players' || task.movie?.id !== movieId)
+    const targetMovieId = task.target?.kind === 'movie' ? task.target.id : task.movie?.id
+    if (task.operation !== 'repair_players' || targetMovieId !== movieId)
       return false
     return isActiveRun(latestRunFor(task))
   }) ?? null
@@ -485,22 +507,26 @@ function toggleHistory(taskId: string): void {
 
 function selectRun(task: CrawlerTask, run: CrawlerRun | null): void {
   selectedTask.value = task
-  selectedRun.value = run ? { task, run } : null
+  selectedRun.value = taskDetails.value[task.id] && run ? { task, run } : null
   taskDrawerOpen.value = true
+  taskDetailLoading.value = true
   void loadTaskAudit(task.id)
-  if (run) {
-    void loadTaskLogs(task, run)
+  if (selectedRun.value) {
+    void loadTaskLogs(task, selectedRun.value.run)
   }
   else {
     taskLogs.value = []
     taskLogCursor.value = null
   }
+  void loadTaskDetail(task.id)
 }
 
 function closeTaskDrawer(): void {
   taskDrawerOpen.value = false
   selectedTask.value = null
   selectedRun.value = null
+  taskDetailRequestId += 1
+  taskDetailLoading.value = false
   taskLogs.value = []
   taskLogCursor.value = null
 }
@@ -529,6 +555,13 @@ async function loadTaskLogs(task: CrawlerTask, run: CrawlerRun, append = false):
 }
 
 async function loadTaskPanel(): Promise<void> {
+  if (sessionPending.value) {
+    taskLoading.value = true
+    taskRefreshing.value = false
+    return
+  }
+
+  const requestId = ++taskPanelRequestId
   taskRefreshing.value = !taskLoading.value
   taskError.value = ''
   try {
@@ -537,7 +570,8 @@ async function loadTaskPanel(): Promise<void> {
       const response = await api.admin.listCrawlerTasks({ template, limit: 20 })
       return [template, response] as const
     }))
-    let selectedRunChanged = false
+    if (requestId !== taskPanelRequestId)
+      return
     for (const [template, response] of responses) {
       const selectedTaskForTemplate = selectedRun.value && taskTemplate(selectedRun.value.task) === template
         ? selectedRun.value.task
@@ -551,46 +585,69 @@ async function loadTaskPanel(): Promise<void> {
       taskPages.value[template] = 1
       taskPageCursors.value[template] = [response.nextCursor ?? null]
       taskHasNext.value[template] = Boolean(response.nextCursor)
-      for (const task of tasks) {
-        const detail = await api.admin.getCrawlerTask(task.id)
-        const previousDetail = taskDetails.value[task.id]
-        const storedDetail: CrawlerTaskDetail = {
-          ...detail,
-          ...(detail.playbackEvidence || !previousDetail?.playbackEvidence
-            ? {}
-            : { playbackEvidence: previousDetail.playbackEvidence }),
-        }
-        taskDetails.value[task.id] = storedDetail
-        const displayTask = storedDetail.task ?? task
-        crawlerTasks.value[template] = crawlerTasks.value[template].map(current => current.id === task.id ? displayTask : current)
-        const run = latestRunFor(displayTask)
-        if (selectedRun.value?.task.id === task.id && run) {
-          selectRun(displayTask, run)
-          selectedRunChanged = true
-        }
-        else if (selectedTask.value?.id === task.id) {
-          selectedTask.value = displayTask
-          if (run) {
-            selectRun(displayTask, run)
-            selectedRunChanged = true
-          }
-        }
-      }
     }
-    if (selectedRun.value && !selectedRunChanged) {
-      const current = taskDetails.value[selectedRun.value.task.id]?.runs.find(run => run.id === selectedRun.value?.run.id)
-      if (current) {
-        selectedRun.value.run = current
-        await loadTaskLogs(selectedRun.value.task, current)
-      }
-    }
+    if (selectedTask.value)
+      await loadTaskDetail(selectedTask.value.id)
   }
   catch {
     taskError.value = '无法加载任务数据。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
   }
   finally {
-    taskLoading.value = false
-    taskRefreshing.value = false
+    if (requestId === taskPanelRequestId) {
+      taskLoading.value = false
+      taskRefreshing.value = false
+    }
+  }
+}
+
+async function loadTaskDetail(taskId: string): Promise<CrawlerTaskDetail | null> {
+  const requestId = ++taskDetailRequestId
+  taskDetailLoading.value = true
+  try {
+    const detail = await api.admin.getCrawlerTask(taskId)
+    if (requestId !== taskDetailRequestId)
+      return null
+
+    const previousDetail = taskDetails.value[taskId]
+    const storedDetail: CrawlerTaskDetail = {
+      ...detail,
+      ...(detail.playbackEvidence || !previousDetail?.playbackEvidence
+        ? {}
+        : { playbackEvidence: previousDetail.playbackEvidence }),
+    }
+    taskDetails.value[taskId] = storedDetail
+
+    if (storedDetail.task) {
+      const template = taskTemplate(storedDetail.task)
+      const current = crawlerTasks.value[template].find(item => item.id === taskId)
+      const displayTask = {
+        ...current,
+        ...storedDetail.task,
+        latestRun: current?.latestRun ?? storedDetail.task.latestRun,
+        operation: current?.operation ?? storedDetail.task.operation,
+        target: current?.target ?? storedDetail.task.target,
+      }
+      crawlerTasks.value[template] = crawlerTasks.value[template].map(item => item.id === taskId ? displayTask : item)
+      if (selectedTask.value?.id === taskId) {
+        selectedTask.value = displayTask
+        const run = storedDetail.currentAttempt
+          ?? storedDetail.runs?.find(item => item.id === taskLatestRunId(displayTask))
+          ?? storedDetail.runs?.[0]
+          ?? null
+        selectedRun.value = run ? { task: displayTask, run } : null
+        if (run)
+          void loadTaskLogs(displayTask, run)
+      }
+    }
+    return storedDetail
+  }
+  catch {
+    taskError.value = '无法加载任务详情。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
+    return null
+  }
+  finally {
+    if (requestId === taskDetailRequestId)
+      taskDetailLoading.value = false
   }
 }
 
@@ -603,8 +660,8 @@ async function loadTaskPage(template: CrawlerTaskTemplate, page: number): Promis
   taskPages.value[template] = page
   taskPageCursors.value[template][page - 1] = response.nextCursor ?? null
   taskHasNext.value[template] = Boolean(response.nextCursor)
-  for (const task of response.tasks)
-    taskDetails.value[task.id] = await api.admin.getCrawlerTask(task.id)
+  if (selectedTask.value && response.tasks.some(task => task.id === selectedTask.value?.id))
+    await loadTaskDetail(selectedTask.value.id)
 }
 
 function startTaskPolling(): void {
@@ -627,6 +684,14 @@ function handleVisibilityChange(): void {
     startTaskPolling()
   else stopTaskPolling()
 }
+
+watch(
+  () => session.value.isPending,
+  (isPending) => {
+    if (!isPending && document.visibilityState === 'visible')
+      void loadTaskPanel()
+  },
+)
 
 async function createTask(template: CrawlerTaskTemplate): Promise<void> {
   taskAction.value = template
@@ -971,8 +1036,8 @@ async function executeClearFailed() {
       {{ taskError }}
     </p>
     <div v-if="taskLoading" class="task-grid">
-      <SkeletonCard v-if="canAccessTemplate('movie')" variant="stat" />
-      <SkeletonCard v-if="canAccessTemplate('manga')" variant="stat" />
+      <SkeletonCard v-if="sessionPending || canAccessTemplate('movie')" variant="stat" />
+      <SkeletonCard v-if="sessionPending || canAccessTemplate('manga')" variant="stat" />
     </div>
     <div v-else-if="!crawlerTasks.movie.length && !crawlerTasks.manga.length && !canAccessTemplate('movie') && !canAccessTemplate('manga')" class="task-empty">
       <strong>暂无本地任务</strong>
@@ -1014,18 +1079,17 @@ async function executeClearFailed() {
 
       <template v-for="template in (['movie', 'manga'] as const)" :key="template">
         <section v-if="canAccessTemplate(template) && activeTaskTab === template" class="task-group" :aria-label="template === 'movie' ? '视频任务历史' : '漫画任务历史'" role="tabpanel">
-          <p v-if="template === 'movie' && !crawlerTasks[template].length" class="task-empty repair-empty">
+          <p v-if="!taskLoading && !taskRefreshing && template === 'movie' && !crawlerTasks[template].length" class="task-empty repair-empty">
             <strong>暂无生产修复任务</strong>
             <span>从 no_source 或 source_failed 的影片发起生产修复，当前任务会在本页显示。</span>
           </p>
-          <p v-else-if="!crawlerTasks[template].length" class="task-empty">
+          <p v-else-if="!taskLoading && !taskRefreshing && !crawlerTasks[template].length" class="task-empty">
             尚未创建
           </p>
           <DataTable
-            v-else
             :data="crawlerTasks[template]"
             :columns="taskTableColumns"
-            :loading="false"
+            :loading="taskLoading || (taskRefreshing && !crawlerTasks[template].length)"
             min-width="100%"
             empty-message="尚未创建"
             @row-click="(task) => selectRun(task, latestRunFor(task))"
@@ -1107,6 +1171,12 @@ async function executeClearFailed() {
       @update:open="taskDrawerOpen = $event"
       @close="closeTaskDrawer"
     >
+      <div v-if="taskDetailLoading" class="task-detail-loading" role="status" aria-live="polite">
+        <div class="ui-skeleton h-5 w-2/5 rounded-md" />
+        <div class="ui-skeleton h-4 w-3/5 rounded-md" />
+        <div class="ui-skeleton h-24 w-full rounded-lg" />
+        <span class="sr-only">正在加载任务详情</span>
+      </div>
       <div v-if="selectedTask && !selectedRun" class="task-detail current-attempt-pending" aria-live="polite">
         <div class="section-heading">
           <h3>任务执行详情</h3>
@@ -1878,7 +1948,7 @@ async function executeClearFailed() {
 .crawlers-page :deep(.data-table) { min-width: 100%; table-layout: fixed; }
 .crawlers-page :deep(.data-table-cell) { min-width: 0; }
 .crawlers-page :deep(.data-table-body-cell) { overflow-wrap: anywhere; }
-.crawlers-page :deep(.data-table-action-cell) { width: 8.5rem; min-width: 8.5rem; max-width: 8.5rem; }
+.crawlers-page :deep(.data-table-action-cell) { width: 10rem; min-width: 10rem; max-width: 10rem; }
 .crawlers-page :deep(.data-table-scroll) {
   max-width: 100%;
   scrollbar-color: hsl(var(--primary) / 0.42) hsl(var(--muted) / 0.32);
@@ -1896,10 +1966,11 @@ async function executeClearFailed() {
 .task-tab-active { border-bottom-color: hsl(var(--primary)); color: hsl(var(--foreground)); }
 .task-tab-count { min-width: 1.5rem; border-radius: 9999px; background: hsl(var(--secondary)); padding: 0.1rem 0.4rem; font-size: 0.75rem; text-align: center; }
 .task-table-id { display: grid; gap: 0.25rem; min-width: 0; }
-.task-table-id strong { overflow-wrap: anywhere; }
+.task-table-id strong { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-table-id span { color: hsl(var(--muted-foreground)); font-size: 0.75rem; }
 .task-group-heading-tools { display: inline-flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 0.625rem; }
-.task-table-actions { display: inline-flex; max-width: 100%; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 0.625rem; }
+.task-table-actions { display: inline-flex; width: auto; max-width: 100%; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: 0.375rem; white-space: nowrap; }
+.task-table-actions .task-icon-button { flex: 0 0 2rem; }
 .task-icon-button { display: inline-flex; min-height: 32px; min-width: 32px; align-items: center; justify-content: center; border: 0; border-radius: var(--ui-radius-sm, 0.375rem); background: transparent; color: hsl(var(--primary)); cursor: pointer; transition: background 150ms ease, color 150ms ease; }
 .task-icon-button:hover { background: hsl(var(--primary) / 0.08); }
 .task-icon-button.task-danger { color: hsl(var(--destructive)); }
@@ -2010,6 +2081,7 @@ async function executeClearFailed() {
 .duplicate-lock-copy { color: hsl(var(--muted-foreground)); font-size: 0.82rem; overflow-wrap: anywhere; }
 
 .task-card,
+.task-detail-loading { display: grid; gap: 0.75rem; margin-top: 1rem; }
 .task-detail,
 .receipt-card {
   border: 1px solid hsl(var(--border));

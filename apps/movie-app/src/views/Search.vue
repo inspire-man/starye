@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SearchResult } from '../lib/api-client'
+import { MovieCard, SkeletonCard } from '@starye/ui'
 import { ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { searchApi } from '../lib/api-client'
@@ -66,22 +67,22 @@ function hasResults() {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto">
-    <h1 class="text-3xl font-bold text-white mb-6">
+  <div class="ui-public-page">
+    <h1 class="ui-public-page-title mb-5">
       搜索
     </h1>
 
     <!-- 搜索框 -->
-    <div class="bg-gray-800 rounded-lg p-4 mb-8 flex gap-3">
+    <div class="ui-public-surface ui-public-actions mb-8 p-4">
       <input
         v-model="keyword"
         type="text"
         placeholder="输入番号、影片标题、演员名或厂商名..."
-        class="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-base"
+        class="ui-public-input flex-1"
         @keydown="handleKeydown"
       >
       <button
-        class="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-md font-medium transition-colors"
+        class="ui-public-button ui-public-button-primary"
         :disabled="loading"
         @click="doSearch"
       >
@@ -91,17 +92,16 @@ function hasResults() {
     </div>
 
     <!-- 加载中 -->
-    <div v-if="loading" class="text-center py-16 text-gray-400">
-      <div class="inline-block w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mb-3" />
-      <p>正在搜索...</p>
+    <div v-if="loading" class="ui-public-surface p-6">
+      <SkeletonCard variant="content" />
     </div>
 
     <!-- 无结果 -->
-    <div v-else-if="searched && !hasResults()" class="text-center py-16">
-      <p class="text-gray-400 text-lg">
-        未找到与「<span class="text-white">{{ searchResult?.q }}</span>」相关的内容
+    <div v-else-if="searched && !hasResults()" class="ui-public-empty">
+      <p class="text-lg">
+        未找到与「<span class="font-semibold text-foreground">{{ searchResult?.q }}</span>」相关的内容
       </p>
-      <p class="text-gray-500 text-sm mt-2">
+      <p class="mt-2 text-sm text-muted-foreground">
         请尝试更换关键词，或检查番号格式（如 ABP-001）
       </p>
     </div>
@@ -110,45 +110,22 @@ function hasResults() {
     <div v-else-if="searchResult && hasResults()" class="space-y-10">
       <!-- 影片结果 -->
       <section v-if="searchResult.results.movies?.length">
-        <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+        <h2 class="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground">
           <span>🎬</span>
           <span>影片</span>
-          <span class="text-sm font-normal text-gray-400">（{{ searchResult.results.movies.length }} 条）</span>
+          <span class="text-sm font-normal text-muted-foreground">（{{ searchResult.results.movies.length }} 条）</span>
         </h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          <RouterLink
+        <div class="ui-public-grid">
+          <MovieCard
             v-for="movie in searchResult.results.movies"
             :key="movie.id"
-            :to="`/movie/${movie.code}`"
-            class="group"
-          >
-            <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
-              <div class="aspect-3/4 bg-gray-800">
-                <img
-                  v-if="movie.coverImage"
-                  :src="movie.coverImage"
-                  :alt="movie.title"
-                  class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                >
-                <div v-else class="w-full h-full flex items-center justify-center text-gray-600 text-4xl">
-                  🎬
-                </div>
-              </div>
-              <div
-                v-if="movie.isR18"
-                class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded"
-              >
-                R18
-              </div>
-            </div>
-            <p class="mt-2 text-sm font-medium text-primary-400">
-              {{ movie.code }}
-            </p>
-            <p class="text-sm text-gray-300 line-clamp-2 group-hover:text-white transition">
-              {{ movie.title }}
-            </p>
-          </RouterLink>
+            :title="movie.title"
+            :href="`/movie/${movie.code}`"
+            :code="movie.code"
+            :cover="movie.coverImage"
+            :is-r18="movie.isR18"
+            label-missing-cover="暂无封面"
+          />
         </div>
       </section>
 

@@ -1024,6 +1024,37 @@ describe('crawler task repository', () => {
     expect(second.nextCursor).toBeNull()
   })
 
+  it('projects safe operation and target identity into the lightweight task list', async () => {
+    const snapshot = JSON.stringify({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-repair-list',
+      operation: 'repair_players',
+      permissionResource: 'movie',
+      reason: 'no_source',
+      sourceRevision: 4,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+      templateVersion: 1,
+    })
+    await client.execute({
+      args: ['repair-list-task', 'movie', 'repair_players', 1, 'admin-1', snapshot, null, 'repair-list-run', 100, 101],
+      sql: 'INSERT INTO crawler_task (id, template_key, operation, template_version, requested_by_user_id, request_snapshot_json, idempotency_key, latest_run_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    })
+    await client.execute({
+      args: ['repair-list-run', 'repair-list-task', 1, 'running', 1, 0, null, null, null, null, null, 100, 101, null],
+      sql: 'INSERT INTO crawler_run (id, task_id, attempt_number, status, state_version, last_event_sequence, lease_expires_at, last_heartbeat_at, cancel_requested_at, failure_code, receipt_summary_json, created_at, updated_at, terminal_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    })
+
+    const page = await repository.listTasks({ limit: 10, templateKey: 'movie' })
+
+    expect(page.tasks).toContainEqual(expect.objectContaining({
+      id: 'repair-list-task',
+      latestRun: expect.objectContaining({ id: 'repair-list-run', status: 'running' }),
+      operation: 'repair_players',
+      target: { id: 'movie-repair-list', kind: 'movie' },
+    }))
+  })
+
   it('returns every attempt with safe receipt/provider projections and tolerates legacy provider schemas', async () => {
     await client.execute({
       args: ['task-detail', 'movie', 1, 'admin-1', '{}', null, 'run-2', 1, 2],

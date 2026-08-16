@@ -195,6 +195,7 @@ export interface Paginated<T> {
 }
 
 export type CrawlerTaskTemplate = 'movie' | 'manga'
+export type CrawlerTaskOperation = CrawlerTaskTemplate | 'repair_players' | 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
 export type CrawlerRunStatus = 'queued' | 'dispatching' | 'running' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled'
 export type CrawlerSourceDisposition = 'ready' | 'no_source' | 'source_failed' | 'repairing'
 export type CrawlerSourceReasonCode = 'no_eligible_source' | 'repair_requested' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
@@ -647,7 +648,7 @@ export interface CrawlerTask {
   id: string
   lifecycle?: CrawlerTaskLifecycleProjection
   movie?: { code?: string, id: string, title: string }
-  operation?: CrawlerTaskTemplate | 'repair_players'
+  operation?: CrawlerTaskOperation
   reason?: CrawlerRepairReason
   retry?: CrawlerTaskRetryProjection
   sameMovieIdentity?: boolean | null
@@ -659,10 +660,22 @@ export interface CrawlerTask {
   templateKey?: CrawlerTaskTemplate
   latest_run_id?: string | null
   latestRunId?: string | null
+  latestRun?: CrawlerTaskRunSummary | null
+  target?: { id: string, kind: 'movie' | 'manga' }
   created_at?: string
   createdAt?: number | string
   updated_at?: string
   updatedAt?: number | string
+}
+
+export interface CrawlerTaskRunSummary {
+  attemptNumber: number
+  createdAt: number
+  failureCode?: string | null
+  id: string
+  status: CrawlerRunStatus
+  terminalAt?: number | null
+  updatedAt: number
 }
 
 export interface CrawlerTaskDetail {

@@ -1,18 +1,14 @@
 /**
  * Comic App API 客户端 - Hono RPC
  *
- * 使用 hc<AppType>() 获得类型安全的 API 调用：
- * - URL 路径名 / 路径参数名 / query 参数名均在编译期校验
+ * 公开读取与非 RPC 操作统一经过原生 fetch：
+ * - 保持 Gateway 下的 /api 前缀与鉴权 cookie 行为一致
  * - 局部类型转换 (as unknown as LocalType) 仅在 api-client 边界使用，
  *   不向视图层透传 any
  */
 
-import type { AppType } from '@starye/api-types'
-import type { ApiResponse, Chapter, ChapterDetail, Comic, PaginatedResponse, ReadingProgress } from '../types'
-import { hc } from 'hono/client'
-
-/** Hono RPC 客户端 */
-const client = hc<AppType>('/')
+import type { FavoriteListResponse } from '@starye/api-types'
+import type { ApiResponse, Chapter, ChapterDetail, Comic, Favorite, PaginatedResponse, ReadingProgress } from '../types'
 
 /** 非 RPC 路由（mutation、auth、progress）使用原生 fetch */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -40,49 +36,55 @@ export const comicApi = {
     sortBy?: 'title' | 'createdAt' | 'updatedAt'
     sortOrder?: 'asc' | 'desc'
   }): Promise<PaginatedResponse<Comic>> {
-    const res = await client.api.public.comics.$get({
-      query: {
-        page: params?.page?.toString(),
-        limit: params?.limit?.toString(),
-        category: params?.category,
-        status: params?.status,
-        search: params?.search,
-        sortBy: params?.sortBy,
-        sortOrder: params?.sortOrder,
-      },
-    })
-    const data = await res.json()
-    if (!data.success) {
-      throw new Error('Failed to fetch comics')
+    const query = new URLSearchParams()
+    if (params?.page !== undefined)
+      query.set('page', String(params.page))
+    if (params?.limit !== undefined)
+      query.set('limit', String(params.limit))
+    if (params?.category)
+      query.set('category', params.category)
+    if (params?.status)
+      query.set('status', params.status)
+    if (params?.search)
+      query.set('search', params.search)
+    if (params?.sortBy)
+      query.set('sortBy', params.sortBy)
+    if (params?.sortOrder)
+      query.set('sortOrder', params.sortOrder)
+
+    const result = await apiFetch<{
+      success: boolean
+      data?: {
+        data: Comic[]
+        pagination: PaginatedResponse<Comic>['pagination']
+      }
+      error?: string
+    }>(`/public/comics${query.toString() ? `?${query.toString()}` : ''}`)
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Failed to fetch comics')
     }
-    const inner = data.data
+
     return {
       success: true,
-      data: inner.data as unknown as Comic[],
-      pagination: inner.pagination,
+      data: result.data.data,
+      pagination: result.data.pagination,
     }
   },
 
   async getComicDetail(slug: string): Promise<ApiResponse<Comic & { chapters: Chapter[] }>> {
-    const res = await client.api.public.comics[':slug'].$get({
-      param: { slug },
-    })
-    const data = await res.json()
-    if (!data.success) {
-      throw new Error(data.error)
+    const result = await apiFetch<{ success: boolean, data?: Comic & { chapters: Chapter[] }, error?: string }>(`/public/comics/${encodeURIComponent(slug)}`)
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Failed to fetch comic detail')
     }
-    return { success: true, data: data.data as unknown as Comic & { chapters: Chapter[] } }
+    return { success: true, data: result.data }
   },
 
   async getChapterDetail(slug: string, chapterId: string): Promise<ApiResponse<ChapterDetail>> {
-    const res = await client.api.public.comics[':slug'].chapters[':chapterId'].$get({
-      param: { slug, chapterId },
-    })
-    const data = await res.json()
-    if (!data.success) {
-      throw new Error(data.error)
+    const result = await apiFetch<{ success: boolean, data?: ChapterDetail, error?: string }>(`/public/comics/${encodeURIComponent(slug)}/chapters/${encodeURIComponent(chapterId)}`)
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Failed to fetch chapter detail')
     }
-    return { success: true, data: data.data as unknown as ChapterDetail }
+    return { success: true, data: result.data }
   },
 }
 
@@ -110,28 +112,51 @@ export const progressApi = {
 // ─── Favorites API ─────────────────────────────────────────────────────────
 
 export const favoritesApi = {
-  async getFavorites(): Promise<ApiResponse<{ comicId: string, comic?: Comic }[]>> {
-    return apiFetch('/favorites')
-  },
-
-  async addFavorite(comicId: string): Promise<ApiResponse<void>> {
-    return apiFetch('/favorites', {
-      method: 'POST',
-      body: JSON.stringify({ comicId }),
+  async getFavorites(params?: { page?: number, limit?: number }): Promise<PaginatedResponse<Favorite>> {
+    const query = new URLSearchParams({
+      page: String(params?.page ?? 1),
+      limit: String(params?.limit ?? 20),
+      entityType: 'comic',
     })
+    const result = await apiFetch<FavoriteListResponse>(`/favorites?${query.toString()}`)
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch favorites')
+    }
+    return {
+      success: true,
+      data: result.data,
+      pagination: result.meta,
+    }
   },
 
-  async removeFavorite(comicId: string): Promise<ApiResponse<void>> {
-    return apiFetch(`/favorites/${comicId}`, { method: 'DELETE' })
+  async addFavorite(comicId: string): Promise<ApiResponse<{ id: string, alreadyExists: boolean }>> {
+    const result = await apiFetch<{ success: boolean, id?: string, alreadyExists?: boolean, error?: string }>('/favorites', {
+      method: 'POST',
+      body: JSON.stringify({ entityType: 'comic', entityId: comicId }),
+    })
+    return {
+      success: result.success,
+      data: result.id
+        ? { id: result.id, alreadyExists: result.alreadyExists ?? false }
+        : undefined,
+      error: result.error,
+    }
   },
 
-  async isFavorite(comicId: string): Promise<boolean> {
+  async removeFavorite(favoriteId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return apiFetch(`/favorites/${encodeURIComponent(favoriteId)}`, { method: 'DELETE' })
+  },
+
+  async isFavorite(comicId: string): Promise<{ isFavorited: boolean, favoriteId: string | null }> {
     try {
-      const res = await apiFetch<ApiResponse<{ isFavorite: boolean }>>(`/favorites/${comicId}/check`)
-      return res.data?.isFavorite ?? false
+      const res = await apiFetch<ApiResponse<{ isFavorited: boolean, favoriteId: string | null }>>(`/favorites/check/comic/${encodeURIComponent(comicId)}`)
+      return {
+        isFavorited: res.data?.isFavorited ?? false,
+        favoriteId: res.data?.favoriteId ?? null,
+      }
     }
     catch {
-      return false
+      return { isFavorited: false, favoriteId: null }
     }
   },
 }

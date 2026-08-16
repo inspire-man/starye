@@ -103,7 +103,7 @@ export type GetFavoritesQuery = v.InferOutput<typeof GetFavoritesQuerySchema>
 export const FavoritesListDataSchema = v.pipe(
   v.object({
     data: v.array(FavoriteItemSchema),
-    pagination: v.object({
+    meta: v.object({
       page: v.pipe(v.number(), v.integer(), v.minValue(1)),
       limit: v.pipe(v.number(), v.integer(), v.minValue(1)),
       total: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -114,3 +114,20 @@ export const FavoritesListDataSchema = v.pipe(
 )
 
 export type FavoritesListData = v.InferOutput<typeof FavoritesListDataSchema>
+
+/** 收藏列表实际运行时响应：data 与 meta 位于顶层。 */
+export const FavoritesListResponseSchema = v.pipe(
+  v.object({
+    success: v.literal(true),
+    data: v.array(FavoriteItemSchema),
+    meta: v.object({
+      page: v.pipe(v.number(), v.integer(), v.minValue(1)),
+      limit: v.pipe(v.number(), v.integer(), v.minValue(1)),
+      total: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      totalPages: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    }),
+  }),
+  v.metadata({ ref: 'FavoritesListResponse' }),
+)
+
+export type FavoritesListResponse = v.InferOutput<typeof FavoritesListResponseSchema>

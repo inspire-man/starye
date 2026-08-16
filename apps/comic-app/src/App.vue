@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { ToastContainer } from '@starye/ui'
 import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
-import { ToastContainer } from '@starye/ui'
 import Header from './components/Header.vue'
 import { useUserStore } from './stores/user'
 
@@ -13,9 +13,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background">
+  <div class="ui-app-shell min-h-screen bg-background text-foreground">
     <Header />
-    <main class="container mx-auto px-4 py-6 max-w-7xl">
+    <main class="mx-auto w-full max-w-[96rem]">
       <RouterView />
     </main>
     <ToastContainer />
