@@ -23,7 +23,6 @@ const OperationIntentSchema = v.union([CrawlIntentSchema, RepairIntentSchema])
 const IdempotencyKeySchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))
 const PolicyReferenceSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256))
 const PolicyVersionSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))
-const RevisionSchema = v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))
 
 export const CreateCrawlerTaskSchema = v.pipe(
   v.strictObject({
@@ -50,8 +49,6 @@ export const CreateRepairPlayersTaskSchema = v.strictObject({
 export const VideoAvailabilityCommandSchema = v.strictObject({
   idempotencyKey: IdempotencyKeySchema,
   movieId: MovieIdSchema,
-  movieRevision: RevisionSchema,
-  policyVersion: PolicyVersionSchema,
   reason: v.picklist([
     'no_source',
     'source_failed',
@@ -68,7 +65,6 @@ export const VideoAvailabilityCommandSchema = v.strictObject({
     'playback_unverified',
     'playback_failed',
   ]),
-  sourceRevision: RevisionSchema,
 })
 
 export const UpdateCrawlerTaskSchema = v.pipe(

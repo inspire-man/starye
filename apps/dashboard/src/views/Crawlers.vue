@@ -3,7 +3,7 @@
  * 爬虫监控页面
  */
 
-import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, CrawlerVideoLayerFact, CrawlerVideoLayerName, ReadinessProjection } from '@/lib/api'
+import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, CrawlerVideoAvailabilityReason, CrawlerVideoLayerFact, CrawlerVideoLayerName, ReadinessProjection } from '@/lib/api'
 import { ConfirmDialog, DataTable, DetailDrawer, info, Pagination, SkeletonCard, success } from '@starye/ui'
 import { AlertTriangle, Archive, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, GitBranch, History, LoaderCircle, Pencil, RefreshCw, Save, Trash2, Wrench } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -52,6 +52,9 @@ const metadataIntent = ref('')
 const repairConfirmOpen = ref(false)
 const pendingRepair = ref<{ movieId: string, movieTitle: string, reason: CrawlerRepairReason } | null>(null)
 const repairAction = ref(false)
+const videoAvailabilityConfirmOpen = ref(false)
+const pendingVideoAvailability = ref<{ action: 'recheck' | 'repair', layer: CrawlerVideoLayerName, movieId: string, movieTitle: string, reason: CrawlerVideoAvailabilityReason, sourceRevision: number } | null>(null)
+const videoAvailabilityAction = ref(false)
 const expandedHistory = ref<Record<string, boolean>>({})
 const taskAudits = ref<Record<string, CrawlerTaskAudit[]>>({})
 const taskAuditCursors = ref<Record<string, string | null>>({})
@@ -197,6 +200,14 @@ const repairConfirmationMessage = computed(() => {
   return `确认对 ${target.movieTitle} 发起 ${target.reason}，固定意图 restore_playable_sources（恢复可播放源）？`
 })
 
+const videoAvailabilityConfirmationMessage = computed(() => {
+  const target = pendingVideoAvailability.value
+  if (!target)
+    return ''
+  const action = target.action === 'repair' ? '修复' : '重新检查'
+  return `将对「${target.movieTitle}」的 ${videoLayerLabels[target.layer]} 发起${action}任务。服务端会读取当前 source revision，并使用 canonical policy；当前页面 revision ${target.sourceRevision} 仅用于确认范围。`
+})
+
 function runReadiness(run: CrawlerRun): ReadinessProjection | null {
   return run.readiness ?? null
 }
@@ -297,6 +308,51 @@ function videoLayerAction(fact: CrawlerVideoLayerFact): string {
   if (!fact.reason)
     return '无需操作'
   return videoReasonActionLabels[fact.reason] ?? '重新检查'
+}
+
+type CrawlerVideoLayerReason = CrawlerVideoAvailabilityReason | 'provider_unconfigured' | 'provider_failed'
+
+function isCrawlerVideoAvailabilityReason(reason: CrawlerVideoLayerReason | null): reason is CrawlerVideoAvailabilityReason {
+  return reason !== null && reason !== 'provider_unconfigured' && reason !== 'provider_failed'
+}
+
+function videoLayerReason(fact: CrawlerVideoLayerFact): CrawlerVideoLayerReason | null {
+  if (fact.freshness !== 'fresh')
+    return 'stale'
+  if (!fact.reason || fact.reason === 'available')
+    return null
+  const reasons: readonly CrawlerVideoLayerReason[] = [
+    'no_source',
+    'source_failed',
+    'stale',
+    'direct_blocked',
+    'direct_transport_failed',
+    'direct_content_invalid',
+    'browser_inconclusive',
+    'provider_unconfigured',
+    'provider_failed',
+    'metadata_unresolved',
+    'no_peer',
+    'stalled',
+    'stream_missing',
+    'stream_failed',
+    'playback_unverified',
+    'playback_failed',
+  ]
+  return reasons.includes(fact.reason as CrawlerVideoLayerReason)
+    ? fact.reason as CrawlerVideoLayerReason
+    : 'stale'
+}
+
+function videoLayerActionKind(fact: CrawlerVideoLayerFact): 'none' | 'recheck' | 'repair' | 'configure_provider' {
+  const reason = videoLayerReason(fact)
+  if (!reason)
+    return 'none'
+  if (reason === 'provider_unconfigured' || reason === 'provider_failed')
+    return 'configure_provider'
+  if (reason === 'no_source' || reason === 'source_failed' || reason === 'direct_blocked' || reason === 'direct_content_invalid')
+    return 'repair'
+  return 'recheck'
 }
 
 function availabilityReasonLabel(reasonCode: CrawlerAvailabilityReasonCode): string {
@@ -977,6 +1033,68 @@ async function confirmRepair(): Promise<void> {
   }
 }
 
+function askVideoAvailabilityAction(task: CrawlerTask, layer: CrawlerVideoLayerName): void {
+  const fact = videoLayerFor(task, layer).current
+  if (!fact)
+    return
+  const action = videoLayerActionKind(fact)
+  const reason = videoLayerReason(fact)
+  if (action === 'none' || action === 'configure_provider' || !isCrawlerVideoAvailabilityReason(reason))
+    return
+  const movieId = task.movie?.id ?? (task.target?.kind === 'movie' ? task.target.id : undefined)
+  if (!movieId) {
+    taskError.value = '当前任务缺少影片身份，未提交视频来源操作。'
+    return
+  }
+  pendingVideoAvailability.value = {
+    action,
+    layer,
+    movieId,
+    movieTitle: task.movie?.title ?? movieId,
+    reason,
+    sourceRevision: fact.sourceRevision,
+  }
+  videoAvailabilityConfirmOpen.value = true
+}
+
+async function confirmVideoAvailabilityAction(): Promise<void> {
+  const target = pendingVideoAvailability.value
+  if (!target || videoAvailabilityAction.value)
+    return
+  videoAvailabilityAction.value = true
+  let completed = false
+  try {
+    const response = await api.admin.submitVideoAvailabilityCommand({
+      idempotencyKey: `dashboard:video-availability:${target.movieId}:${target.sourceRevision}:${target.reason}`,
+      movieId: target.movieId,
+      reason: target.reason,
+    })
+    if (response.kind === 'existing_active_run' || response.kind === 'duplicate')
+      info('当前影片已有同一来源操作，已聚焦现有任务。')
+    else
+      success('视频来源操作已排队，正在等待读回。')
+    videoAvailabilityConfirmOpen.value = false
+    completed = true
+    await loadTaskPanel()
+    const taskId = response.run.taskId
+    const task = taskId ? crawlerTasks.value.movie.find(item => item.id === taskId) : undefined
+    if (task) {
+      const detail = await loadTaskDetail(task.id)
+      const displayTask = detail?.task ?? task
+      const run = detail?.currentAttempt ?? response.run
+      selectRun(displayTask, run)
+    }
+  }
+  catch {
+    taskError.value = '视频来源操作未提交。请刷新后重试，并确认当前账号有影片运维权限。'
+  }
+  finally {
+    if (completed)
+      pendingVideoAvailability.value = null
+    videoAvailabilityAction.value = false
+  }
+}
+
 async function loadStats() {
   try {
     stats.value = await api.admin.getCrawlerStats()
@@ -1465,7 +1583,20 @@ async function executeClearFailed() {
                 <span>reason：{{ videoLayerFor(selectedRun.task, layer).current!.reason ?? 'available' }}</span>
                 <span>revision {{ videoLayerFor(selectedRun.task, layer).current!.sourceRevision }} · {{ videoLayerFor(selectedRun.task, layer).current!.freshness }}</span>
                 <span>available：{{ videoLayerCount(videoLayerFor(selectedRun.task, layer).current!, 'available') }} · abnormal：{{ videoLayerCount(videoLayerFor(selectedRun.task, layer).current!, 'abnormal') }}</span>
-                <span>下一步：{{ videoLayerAction(videoLayerFor(selectedRun.task, layer).current!) }}</span>
+                <div class="video-layer-action-row">
+                  <span>下一步：{{ videoLayerAction(videoLayerFor(selectedRun.task, layer).current!) }}</span>
+                  <button
+                    v-if="['recheck', 'repair'].includes(videoLayerActionKind(videoLayerFor(selectedRun.task, layer).current!))"
+                    class="task-secondary"
+                    data-video-availability-action
+                    :data-video-action="videoLayerActionKind(videoLayerFor(selectedRun.task, layer).current!)"
+                    type="button"
+                    :disabled="videoAvailabilityAction"
+                    @click="askVideoAvailabilityAction(selectedRun.task, layer)"
+                  >
+                    {{ videoAvailabilityAction ? '提交中…' : videoLayerAction(videoLayerFor(selectedRun.task, layer).current!) }}
+                  </button>
+                </div>
                 <span v-for="sample in videoLayerFor(selectedRun.task, layer).current!.summary.samples" :key="`${sample.code}-${sample.label ?? ''}`">
                   {{ sample.code }}<template v-if="sample.count !== undefined">：{{ sample.count }}</template><template v-if="sample.label"> · {{ sample.label }}</template>
                 </span>
@@ -1935,6 +2066,15 @@ async function executeClearFailed() {
     :loading="repairAction"
     @confirm="confirmRepair"
   />
+  <ConfirmDialog
+    v-model:open="videoAvailabilityConfirmOpen"
+    title="确认视频来源操作"
+    :message="videoAvailabilityConfirmationMessage"
+    confirm-text="提交操作"
+    cancel-text="返回任务"
+    :loading="videoAvailabilityAction"
+    @confirm="confirmVideoAvailabilityAction"
+  />
 </template>
 
 <style scoped>
@@ -2078,6 +2218,7 @@ async function executeClearFailed() {
 .video-layer-row > span,
 .video-layer-history span { overflow-wrap: anywhere; }
 .video-layer-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; color: hsl(var(--foreground)); }
+.video-layer-action-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .video-layer-history { display: grid; gap: 0.25rem; border-left: 2px solid hsl(var(--border)); padding-left: 0.65rem; }
 .availability-history-row,
 .audit-row { display: grid; gap: 0.35rem; min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 0.25rem; background: hsl(var(--muted)); padding: 0.65rem; color: hsl(var(--muted-foreground)); font-size: 0.82rem; }

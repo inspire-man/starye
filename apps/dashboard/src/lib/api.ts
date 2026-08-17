@@ -230,10 +230,21 @@ export type CrawlerVideoAvailabilityReason = 'no_source' | 'source_failed' | 'st
 export interface CrawlerVideoAvailabilityCommand {
   idempotencyKey: string
   movieId: string
+  reason: CrawlerVideoAvailabilityReason
+}
+
+export interface CrawlerVideoAvailabilityBinding {
+  movieId: string
   movieRevision: number
   policyVersion: string
-  reason: CrawlerVideoAvailabilityReason
   sourceRevision: number
+}
+
+export interface CrawlerVideoAvailabilityResponse {
+  binding: CrawlerVideoAvailabilityBinding
+  dispatch?: Record<string, unknown>
+  kind: 'created' | 'duplicate' | 'existing_active_run'
+  run: CrawlerRun
 }
 
 export interface CrawlerTaskLifecycleProjection {
@@ -928,7 +939,7 @@ export const api = {
       }),
 
     submitVideoAvailabilityCommand: (command: CrawlerVideoAvailabilityCommand) =>
-      apiFetch<{ kind: string, run: CrawlerRun }>('/admin/crawler-tasks/video-availability', {
+      apiFetch<CrawlerVideoAvailabilityResponse>('/admin/crawler-tasks/video-availability', {
         method: 'POST',
         body: JSON.stringify(command),
       }),

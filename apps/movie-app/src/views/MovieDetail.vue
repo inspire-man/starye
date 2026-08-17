@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { MovieDetail, Player, ReadinessProjection, SourceDisposition, SourceReasonCode } from '../types'
+import type { MovieAvailabilityCommandReason, MovieDetail, Player, ReadinessProjection, SourceDisposition, SourceReasonCode } from '../types'
 import type { TorrentFile } from '../utils/torrServerClient'
+import { ConfirmDialog } from '@starye/ui'
 import QrcodeVue from 'qrcode.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -40,13 +41,14 @@ const readiness = computed<ReadinessProjection | null>(() => movie.value?.readin
 type VideoLayerName = 'metadata' | 'direct' | 'magnet' | 'playback'
 
 interface VideoLayerDisplay {
+  actionKind: 'none' | 'recheck' | 'repair' | 'configure_provider'
   action: string
   counts: Readonly<Record<string, number>>
   freshness: 'fresh' | 'stale' | 'late'
   history: readonly { freshness: string, sourceRevision: number, status: string }[]
   key: VideoLayerName
   label: string
-  reason: string
+  reason: MovieAvailabilityCommandReason | 'available' | 'provider_unconfigured' | 'provider_failed'
   samples: readonly string[]
   sourceRevision: number
   status: string
@@ -78,12 +80,57 @@ const videoReasonActionLabels: Record<string, string> = {
   stream_missing: '重新检查',
 }
 
+const movieAvailabilityCommandReasons: readonly MovieAvailabilityCommandReason[] = [
+  'no_source',
+  'source_failed',
+  'stale',
+  'direct_blocked',
+  'direct_transport_failed',
+  'direct_content_invalid',
+  'browser_inconclusive',
+  'metadata_unresolved',
+  'no_peer',
+  'stalled',
+  'stream_missing',
+  'stream_failed',
+  'playback_unverified',
+  'playback_failed',
+]
+
+function normalizeVideoLayerReason(reason: string | null | undefined, freshness: VideoLayerDisplay['freshness']): VideoLayerDisplay['reason'] {
+  if (freshness !== 'fresh')
+    return 'stale'
+  if (reason === 'available' || reason === 'provider_unconfigured' || reason === 'provider_failed')
+    return reason
+  return movieAvailabilityCommandReasons.includes(reason as MovieAvailabilityCommandReason)
+    ? reason as MovieAvailabilityCommandReason
+    : 'stale'
+}
+
+function isMovieAvailabilityCommandReason(reason: VideoLayerDisplay['reason']): reason is MovieAvailabilityCommandReason {
+  return movieAvailabilityCommandReasons.includes(reason as MovieAvailabilityCommandReason)
+}
+
 function videoLayerAction(reason: string, freshness: VideoLayerDisplay['freshness']): string {
   if (freshness !== 'fresh')
     return '重新检查'
   if (reason === 'available')
     return '无需操作'
   return videoReasonActionLabels[reason] ?? '重新检查'
+}
+
+type MovieVideoLayerReason = MovieAvailabilityCommandReason | 'available' | 'provider_unconfigured' | 'provider_failed'
+
+function videoLayerActionKind(reason: MovieVideoLayerReason, freshness: VideoLayerDisplay['freshness']): VideoLayerDisplay['actionKind'] {
+  if (freshness !== 'fresh')
+    return 'recheck'
+  if (reason === 'available')
+    return 'none'
+  if (reason === 'provider_unconfigured' || reason === 'provider_failed')
+    return 'configure_provider'
+  if (reason === 'no_source' || reason === 'source_failed' || reason === 'direct_blocked' || reason === 'direct_content_invalid')
+    return 'repair'
+  return 'recheck'
 }
 
 const videoAvailabilityLayers = computed<VideoLayerDisplay[]>(() => {
@@ -97,6 +144,7 @@ const videoAvailabilityLayers = computed<VideoLayerDisplay[]>(() => {
     if (key === 'metadata') {
       const reason = facts.metadata.persisted ? 'available' : 'metadata_unresolved'
       return {
+        actionKind: videoLayerActionKind(reason, 'fresh'),
         action: videoLayerAction(reason, 'fresh'),
         counts: { persisted: facts.metadata.persisted ? 1 : 0 },
         freshness: 'fresh',
@@ -113,6 +161,7 @@ const videoAvailabilityLayers = computed<VideoLayerDisplay[]>(() => {
       const verified = facts.playback.status === 'playback_verified'
       const reason = verified ? 'available' : 'playback_unverified'
       return {
+        actionKind: videoLayerActionKind(reason, 'fresh'),
         action: videoLayerAction(reason, 'fresh'),
         counts: { evidence: verified ? 1 : 0 },
         freshness: 'fresh',
@@ -130,9 +179,10 @@ const videoAvailabilityLayers = computed<VideoLayerDisplay[]>(() => {
     const history = availability.history
       .filter(entry => entry.layer === key)
       .map(entry => ({ freshness: entry.fact.freshness, sourceRevision: entry.fact.sourceRevision, status: entry.fact.status }))
-    const reason = fact?.reasonCode ?? 'no_source'
     const freshness = fact?.freshness ?? 'fresh'
+    const reason = normalizeVideoLayerReason(fact?.reasonCode, freshness)
     return {
+      actionKind: videoLayerActionKind(reason, freshness),
       action: videoLayerAction(reason, freshness),
       counts: fact?.summary.counts ?? {},
       freshness,
@@ -207,6 +257,16 @@ const sortMethod = ref<import('../utils/playbackSources').SortMethod>('default')
 
 // 二维码弹窗
 const qrcodeModal = ref({ show: false, content: '', title: '' })
+
+const videoAvailabilityConfirmOpen = ref(false)
+const pendingVideoAvailability = ref<{
+  action: 'recheck' | 'repair'
+  layer: VideoLayerName
+  movieId: string
+  reason: MovieAvailabilityCommandReason
+  sourceRevision: number
+} | null>(null)
+const videoAvailabilityAction = ref(false)
 
 // 评分弹窗
 const ratingModal = ref({ show: false, player: null as Player | null, submitting: false })
@@ -305,21 +365,77 @@ function sourceHealthReasonLabel(reasonCode: InformationalSourceReason): string 
   return `${reasonCode} · ${sourceHealthReasonLabels[reasonCode]}`
 }
 
-function showRepairIntent() {
-  const source = readiness.value?.source
-  const movieId = movie.value?.id
-  if (!source?.repairable || !movieId || !['no_source', 'source_failed'].includes(source.disposition))
-    return
+const videoAvailabilityConfirmationMessage = computed(() => {
+  const target = pendingVideoAvailability.value
+  if (!target || !movie.value)
+    return ''
+  const action = target.action === 'repair' ? '修复' : '重新检查'
+  return `将对「${movie.value.title}」的 ${videoLayerLabels[target.layer]} 发起${action}任务。服务端会读取当前 source revision，并使用 canonical policy；当前页面 revision ${target.sourceRevision} 仅用于确认范围。`
+})
 
-  const reason = source.disposition
-  router.push(`/dashboard/crawlers?movieId=${encodeURIComponent(movieId)}&reason=${reason}`)
+function openVideoAvailabilityAction(action: 'recheck' | 'repair', layer: VideoLayerName, reason: MovieAvailabilityCommandReason, sourceRevision: number): void {
+  const movieId = movie.value?.id
+  if (!movieId)
+    return
+  pendingVideoAvailability.value = { action, layer, movieId, reason, sourceRevision }
+  videoAvailabilityConfirmOpen.value = true
 }
 
-async function refreshReadiness() {
+function requestVideoLayerAction(layer: VideoLayerDisplay): void {
+  if (layer.actionKind === 'none')
+    return
+  if (layer.actionKind === 'configure_provider') {
+    showToast('当前 provider 尚未就绪，请到爬虫管理页检查 Aria2/TorrServer 配置', 'info')
+    return
+  }
+  if (!isMovieAvailabilityCommandReason(layer.reason))
+    return
+  openVideoAvailabilityAction(layer.actionKind, layer.key, layer.reason, layer.sourceRevision)
+}
+
+function showRepairIntent() {
+  const source = readiness.value?.source
+  if (!source?.repairable || (source.disposition !== 'no_source' && source.disposition !== 'source_failed'))
+    return
+
+  openVideoAvailabilityAction('repair', 'direct', source.disposition, source.sourceRevision)
+}
+
+function refreshReadiness() {
   if (loading.value)
     return
 
-  await fetchMovieDetail()
+  const sourceRevision = readiness.value?.source.sourceRevision ?? movie.value?.availability?.current.metadata.sourceRevision ?? 0
+  openVideoAvailabilityAction('recheck', 'direct', 'stale', sourceRevision)
+}
+
+async function confirmVideoAvailabilityAction(): Promise<void> {
+  const target = pendingVideoAvailability.value
+  if (!target || videoAvailabilityAction.value)
+    return
+  videoAvailabilityAction.value = true
+  let completed = false
+  try {
+    const response = await movieApi.submitVideoAvailabilityCommand({
+      idempotencyKey: `movie-detail:video-availability:${target.movieId}:${target.sourceRevision}:${target.reason}`,
+      movieId: target.movieId,
+      reason: target.reason,
+    })
+    showToast(response.kind === 'existing_active_run' || response.kind === 'duplicate'
+      ? '当前影片已有同一来源操作，已保留现有任务并刷新状态'
+      : '视频来源操作已排队，正在等待读回')
+    videoAvailabilityConfirmOpen.value = false
+    completed = true
+    await fetchMovieDetail()
+  }
+  catch (error) {
+    showToast(error instanceof Error ? error.message : '视频来源操作提交失败，请稍后重试', 'error')
+  }
+  finally {
+    if (completed)
+      pendingVideoAvailability.value = null
+    videoAvailabilityAction.value = false
+  }
 }
 
 function getAria2ButtonTitle(player: Player) {
@@ -1187,7 +1303,20 @@ onMounted(() => {
                 <span class="break-words">reason：{{ layer.reason }}</span>
                 <span>revision {{ layer.sourceRevision }} · {{ layer.freshness }}</span>
                 <span>available：{{ layer.counts.available ?? 0 }} · abnormal：{{ layer.counts.abnormal ?? 0 }}</span>
-                <span>下一步：{{ layer.action }}</span>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <span>下一步：{{ layer.action }}</span>
+                  <button
+                    v-if="layer.actionKind !== 'none'"
+                    type="button"
+                    data-video-availability-action
+                    :data-video-action="layer.actionKind"
+                    class="movie-detail-secondary-action inline-flex min-h-9 items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="videoAvailabilityAction"
+                    @click="requestVideoLayerAction(layer)"
+                  >
+                    {{ videoAvailabilityAction ? '提交中…' : layer.action }}
+                  </button>
+                </div>
                 <span v-for="sample in layer.samples" :key="sample" class="break-words">{{ sample }}</span>
                 <div v-if="layer.history.length" class="grid gap-1 border-l-2 border-gray-700 pl-3" data-video-history>
                   <span v-for="fact in layer.history" :key="`${fact.sourceRevision}-${fact.status}`">
@@ -1854,6 +1983,16 @@ onMounted(() => {
           </div>
         </div>
       </Transition>
+
+      <ConfirmDialog
+        v-model:open="videoAvailabilityConfirmOpen"
+        title="确认视频来源操作"
+        :message="videoAvailabilityConfirmationMessage"
+        confirm-text="提交操作"
+        cancel-text="返回影片"
+        :loading="videoAvailabilityAction"
+        @confirm="confirmVideoAvailabilityAction"
+      />
 
       <!-- 系列导航 -->
       <div v-if="seriesNavigation" class="bg-gray-800 rounded-lg shadow-lg p-4">

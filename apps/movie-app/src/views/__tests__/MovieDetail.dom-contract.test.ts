@@ -2,10 +2,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MovieDetail from '../MovieDetail.vue'
 
-const { getMovieDetailMock, routeState, routerPushMock } = vi.hoisted(() => ({
+const { getMovieDetailMock, routeState, routerPushMock, submitVideoAvailabilityCommandMock } = vi.hoisted(() => ({
   getMovieDetailMock: vi.fn(),
   routeState: { params: { code: 'TEST-001' } },
   routerPushMock: vi.fn(),
+  submitVideoAvailabilityCommandMock: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -27,7 +28,7 @@ vi.mock('../../components/RatingStars.vue', () => ({
 }))
 
 vi.mock('../../lib/api-client', () => ({
-  movieApi: { getMovieDetail: getMovieDetailMock },
+  movieApi: { getMovieDetail: getMovieDetailMock, submitVideoAvailabilityCommand: submitVideoAvailabilityCommandMock },
   ratingApi: { submitPlayerRating: vi.fn() },
 }))
 
@@ -70,6 +71,11 @@ vi.mock('../../composables/useAuthGuard', () => ({
 describe('movie detail DOM tuple contract', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    submitVideoAvailabilityCommandMock.mockResolvedValue({
+      binding: { movieId: 'movie-uuid-1', movieRevision: 1, policyVersion: 'video-source-probe/v1', sourceRevision: 0 },
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'run-1', status: 'queued', taskId: 'task-1' },
+    })
     getMovieDetailMock.mockResolvedValue({
       success: true,
       data: {
@@ -269,7 +275,7 @@ describe('movie detail DOM tuple contract', () => {
     }
   })
 
-  it('renders bounded per-source health and hands repairable state to Dashboard with the same movie identity', async () => {
+  it('renders bounded per-source health and submits a repair task with the same movie identity', async () => {
     getMovieDetailMock.mockResolvedValueOnce({
       success: true,
       data: {
@@ -319,7 +325,19 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.text()).not.toContain('RAW_SIGNATURE_SENTINEL')
 
     await wrapper.get('[data-readiness-action="repair"]').trigger('click')
-    expect(routerPushMock).toHaveBeenCalledWith('/dashboard/crawlers?movieId=movie-sun-064&reason=no_source')
+    const dialog = document.querySelector<HTMLElement>('[data-confirm-dialog-panel]')
+    expect(dialog?.textContent).toContain('确认视频来源操作')
+    expect(dialog?.textContent).toContain('SUN-064')
+    dialog?.querySelector<HTMLButtonElement>('.confirm-dialog-confirm')?.click()
+    await flushPromises()
+
+    expect(submitVideoAvailabilityCommandMock).toHaveBeenCalledWith({
+      idempotencyKey: 'movie-detail:video-availability:movie-sun-064:4:no_source',
+      movieId: 'movie-sun-064',
+      reason: 'no_source',
+    })
+    expect(routerPushMock).not.toHaveBeenCalled()
+    expect(getMovieDetailMock).toHaveBeenCalledTimes(2)
   })
 
   it('groups mixed sources before score sorting and keeps controlled action boundaries', async () => {

@@ -33,10 +33,7 @@ function createApp(results: Array<unknown[]> = []) {
 const command = {
   idempotencyKey: 'video:movie-1:7:stale',
   movieId: 'movie-1',
-  movieRevision: 3,
-  policyVersion: 'video-source-probe/v1',
   reason: 'stale',
-  sourceRevision: 7,
 }
 
 describe('phase 26 admin video availability boundary', () => {
@@ -119,7 +116,7 @@ describe('phase 26 admin video availability boundary', () => {
   })
 
   it('derives a revision-bound recheck operation and returns an existing identity', async () => {
-    const response = await createApp().request('/crawler-tasks/video-availability', {
+    const response = await createApp([[{ id: 'movie-1', source_revision: 7 }]]).request('/crawler-tasks/video-availability', {
       body: JSON.stringify(command),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
@@ -129,7 +126,7 @@ describe('phase 26 admin video availability boundary', () => {
     expect(repository.createOrGetActiveRun).toHaveBeenCalledWith(expect.objectContaining({
       operationCommand: expect.objectContaining({
         idempotencyKey: command.idempotencyKey,
-        intent: expect.objectContaining({ kind: 'recheck_video_source', movieRevision: 3, reason: 'stale', sourceRevision: 7 }),
+        intent: expect.objectContaining({ kind: 'recheck_video_source', movieRevision: 7, reason: 'stale', sourceRevision: 7 }),
         operation: 'recheck_video_source',
         policyVersion: 'video-source-probe/v1',
         target: { id: 'movie-1', kind: 'movie' },
@@ -137,7 +134,11 @@ describe('phase 26 admin video availability boundary', () => {
       requestedByUserId: 'admin-1',
       templateKey: 'movie',
     }))
-    await expect(response.json()).resolves.toMatchObject({ kind: 'duplicate', run: { id: 'run-1' } })
+    await expect(response.json()).resolves.toMatchObject({
+      binding: { movieId: 'movie-1', movieRevision: 7, policyVersion: 'video-source-probe/v1', sourceRevision: 7 },
+      kind: 'duplicate',
+      run: { id: 'run-1' },
+    })
   })
 
   it('associates a created availability command with the enabled local runner', async () => {
@@ -151,7 +152,7 @@ describe('phase 26 admin video availability boundary', () => {
       providerRunId: 'local-run-1',
       runId: 'run-1',
     })
-    const app = createApp()
+    const app = createApp([[{ id: 'movie-1', source_revision: 7 }]])
 
     const response = await app.request('/crawler-tasks/video-availability', {
       body: JSON.stringify(command),
@@ -171,9 +172,21 @@ describe('phase 26 admin video availability boundary', () => {
       template: 'movie',
     })
     await expect(response.json()).resolves.toMatchObject({
+      binding: { movieId: 'movie-1', movieRevision: 7, policyVersion: 'video-source-probe/v1', sourceRevision: 7 },
       dispatch: { provider: { accepted: true, kind: 'local-proof_queued' } },
       kind: 'created',
     })
+  })
+
+  it('rejects a command when the target movie no longer exists', async () => {
+    const response = await createApp([[]]).request('/crawler-tasks/video-availability', {
+      body: JSON.stringify(command),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(404)
+    expect(repository.createOrGetActiveRun).not.toHaveBeenCalled()
   })
 
   it('rejects reason/action mismatches and caller-controlled provider material', async () => {

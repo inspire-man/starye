@@ -150,10 +150,35 @@ describe('movieApi', () => {
 
   it('uses the typed public movie detail RPC without a broad double cast', () => {
     const source = readFileSync(`${process.cwd()}/src/lib/api-client.ts`, 'utf8')
-    const getMovieDetail = source.slice(source.indexOf('async getMovieDetail'), source.indexOf('async submitPlaybackEvidence'))
+    const getMovieDetail = source.slice(source.indexOf('async getMovieDetail'), source.indexOf('async submitVideoAvailabilityCommand'))
     expect(getMovieDetail).toContain('client.api.public.movies[\':code\'].$get')
     expect(getMovieDetail).not.toContain('as unknown as MovieDetail')
     expect(getMovieDetail).not.toContain('/admin/crawler-tasks')
+  })
+
+  it('submits the minimal video availability command and returns the server binding', async () => {
+    const fetchMock = mockFetchOk({
+      binding: { movieId: 'movie-1', movieRevision: 4, policyVersion: 'video-source-probe/v1', sourceRevision: 9 },
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'run-1', status: 'queued', taskId: 'task-1' },
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await movieApi.submitVideoAvailabilityCommand({
+      idempotencyKey: 'movie-detail:video-availability:movie-1:9:stale',
+      movieId: 'movie-1',
+      reason: 'stale',
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/crawler-tasks/video-availability')
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      idempotencyKey: 'movie-detail:video-availability:movie-1:9:stale',
+      movieId: 'movie-1',
+      reason: 'stale',
+    })
+    expect(result.binding).toEqual({ movieId: 'movie-1', movieRevision: 4, policyVersion: 'video-source-probe/v1', sourceRevision: 9 })
   })
 
   describe('trackView', () => {

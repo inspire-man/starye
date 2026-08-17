@@ -166,6 +166,45 @@ export interface MovieAvailabilityReadback {
   history: readonly { fact: MovieVideoLayerFact, layer: 'direct' | 'magnet' }[]
 }
 
+export type MovieAvailabilityCommandReason
+  = | 'no_source'
+    | 'source_failed'
+    | 'stale'
+    | 'direct_blocked'
+    | 'direct_transport_failed'
+    | 'direct_content_invalid'
+    | 'browser_inconclusive'
+    | 'metadata_unresolved'
+    | 'no_peer'
+    | 'stalled'
+    | 'stream_missing'
+    | 'stream_failed'
+    | 'playback_unverified'
+    | 'playback_failed'
+
+export interface MovieAvailabilityCommand {
+  idempotencyKey: string
+  movieId: string
+  reason: MovieAvailabilityCommandReason
+}
+
+export interface MovieAvailabilityCommandResponse {
+  binding: {
+    movieId: string
+    movieRevision: number
+    policyVersion: string
+    sourceRevision: number
+  }
+  dispatch?: Record<string, unknown>
+  kind: 'created' | 'duplicate' | 'existing_active_run'
+  run: {
+    attemptNumber: number
+    id: string
+    status: 'queued' | 'dispatching' | 'running' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled'
+    taskId: string
+  }
+}
+
 export interface MovieVideoLayerFact {
   freshness: 'fresh' | 'stale' | 'late'
   observedAt: number
