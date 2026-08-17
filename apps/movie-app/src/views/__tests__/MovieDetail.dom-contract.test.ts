@@ -195,16 +195,19 @@ describe('movie detail DOM tuple contract', () => {
 
     expect(summary.text()).toContain('内容身份')
     expect(summary.text()).toContain('movie-sun-064')
-    expect(summary.text()).toContain('Metadata persisted')
+    expect(summary.text()).toContain('影片信息保存状态')
     expect(summary.text()).toContain('no_source')
     expect(summary.text()).toContain('暂无可用播放源')
     expect(summary.text()).toContain('eligible count：0')
     expect(summary.text()).toContain('可修复')
-    expect(summary.text()).toContain('Playback proof')
+    expect(summary.text()).toContain('实际播放验证')
     expect(summary.text()).toContain('播放未验证')
-    expect(summary.text()).toContain('Receipt/source summary')
+    expect(summary.text()).toContain('同步记录')
     expect(summary.text()).toContain('查看修复意图')
     expect(summary.text()).toContain('重试读取')
+    expect(wrapper.get('[data-readiness-action="repair-primary"]').text()).toContain('查看修复建议')
+    expect(wrapper.get('[data-readiness-action="refresh-primary"]').text()).toContain('重新检查')
+    expect(wrapper.get('.movie-detail-technical-details').attributes('open')).toBeUndefined()
     expect(wrapper.text()).not.toContain('▶️ 播放')
   })
 
@@ -259,8 +262,11 @@ describe('movie detail DOM tuple contract', () => {
       expect(wrapper.find('[data-source-card]').exists()).toBe(false)
       expect(wrapper.get('[data-repairing-summary]').text()).toContain('server-owned source readback')
     }
-    if (disposition === 'ready')
+    if (disposition === 'ready') {
       expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/CODE-ready/play?player=direct-ready&contentId=movie-ready&sourceRevision=5&sourceType=direct')
+      expect(wrapper.get('[data-hero-action="play"]').text()).toContain('立即播放')
+      expect(wrapper.get('[data-usage-guide]').text()).toContain('选择适合你的播放方式')
+    }
   })
 
   it('renders bounded per-source health and hands repairable state to Dashboard with the same movie identity', async () => {
@@ -383,9 +389,14 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low&contentId=movie-mixed&sourceRevision=9&sourceType=direct')
     expect(wrapper.get('[data-source-card="direct-low"] [data-source-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low&contentId=movie-mixed&sourceRevision=9&sourceType=direct')
     expect(wrapper.get('[data-source-card="direct-low"]').attributes('data-playback-context')).toBe('movie-mixed@9/direct/direct-low')
+    expect(wrapper.get('[data-hero-action="play"]').text()).toContain('立即播放')
+    expect(wrapper.get('[data-usage-guide]').text()).toContain('TorrServer')
 
     const magnetActions = wrapper.findAll('[data-source-card="magnet-high"] [data-source-action]').map(action => action.attributes('data-source-action'))
     expect(magnetActions.sort()).toEqual(['aria2', 'copy', 'qrcode', 'rating', 'report', 'torrserver'])
+    expect(wrapper.get('[data-source-card="magnet-high"] [data-source-action="torrserver"]').text()).toContain('在线播放')
+    expect(wrapper.get('[data-source-card="magnet-high"] [data-source-action="aria2"]').text()).toContain('添加到 Aria2')
+    expect(wrapper.get('[data-source-card="magnet-high"] .movie-source-more').text()).toContain('更多操作')
     expect(wrapper.findAll('[data-source-card="inactive-best"] [data-source-action]')).toHaveLength(0)
     expect(wrapper.findAll('[data-source-card="torrserver-ineligible"] [data-source-action]')).toHaveLength(0)
     expect(wrapper.findAll('[data-source-card="blank-active"] [data-source-action]')).toHaveLength(0)
