@@ -148,7 +148,7 @@ export class ActionsEventClient {
     if (!this.config.runId || !this.config.attempt)
       throw new Error('Actions callback run binding missing')
     return this.request(`/api/internal/crawler-runs/${encodeURIComponent(this.config.runId)}/events`, {
-      ...this.providerEnvelope(this.config.runId, this.config.attempt, {
+      ...this.lifecycleEnvelope(this.config.runId, this.config.attempt, {
         ...extra,
         attempt: this.config.attempt,
         run_id: this.config.runId,
@@ -156,6 +156,14 @@ export class ActionsEventClient {
         type,
       }),
     }, false)
+  }
+
+  private lifecycleEnvelope(runId: string, attempt: number, fields: Record<string, unknown>): Record<string, unknown> {
+    return createRunnerEnvelope(this.config.callbackKeyId, {
+      attempt,
+      ...fields,
+      run_id: runId,
+    }, this.now())
   }
 
   private providerEnvelope(runId: string, attempt: number, fields: Record<string, unknown>): Record<string, unknown> {

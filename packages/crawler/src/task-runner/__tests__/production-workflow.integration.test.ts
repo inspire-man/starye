@@ -145,6 +145,11 @@ describe('production Actions workflow integration contract', () => {
       sequence: 5,
       type: 'succeeded',
     })
+    expect(Object.keys(calls[2]?.body ?? {}).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'run_id', 'sequence', 'timestamp', 'type'])
+    expect(calls[2]?.body).not.toHaveProperty('provider_run_attempt')
+    expect(calls[2]?.body).not.toHaveProperty('provider_run_id')
+    expect(calls[5]?.body).not.toHaveProperty('provider_run_attempt')
+    expect(calls[5]?.body).not.toHaveProperty('provider_run_id')
     for (const call of calls) {
       expect(call.headers.get('x-runner-key-id')).toBe('actions-key')
       expect(call.headers.get('x-runner-signature')).not.toContain('actions-secret')

@@ -94,7 +94,7 @@ describe('actionsEventClient', () => {
     expect(fetch).toHaveBeenCalledTimes(3)
   })
 
-  it('propagates cancel_requested from heartbeat/progress and signs terminal receipt events', async () => {
+  it('propagates cancel_requested and keeps provider identity out of lifecycle events', async () => {
     const fetch = vi.fn(async () => response(200, { accepted: true, cancel_requested: true }))
     const client = new ActionsEventClient({ ...baseConfig, fetch, runId: 'run-1', attempt: 2, providerRunId: '77', providerRunAttempt: 1, sha: 'a'.repeat(40) })
 
@@ -103,20 +103,22 @@ describe('actionsEventClient', () => {
 
     const progress = JSON.parse(String(((fetch.mock.calls[0] as unknown as [string, RequestInit])[1]).body)) as Record<string, unknown>
     const terminal = JSON.parse(String(((fetch.mock.calls[1] as unknown as [string, RequestInit])[1]).body)) as Record<string, unknown>
+    expect(Object.keys(progress).sort()).toEqual(['attempt', 'counts', 'event_id', 'key_id', 'nonce', 'run_id', 'sequence', 'timestamp', 'type'])
     expect(progress).toMatchObject({
       attempt: 2,
-      provider_run_attempt: 1,
-      provider_run_id: '77',
       run_id: 'run-1',
       sequence: 4,
       type: 'progress',
     })
+    expect(progress).not.toHaveProperty('provider_run_attempt')
+    expect(progress).not.toHaveProperty('provider_run_id')
+    expect(Object.keys(terminal).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'receipt', 'run_id', 'sequence', 'timestamp', 'type'])
     expect(terminal).toMatchObject({
-      provider_run_attempt: 1,
-      provider_run_id: '77',
       receipt: { contentIds: ['MOV-1'], templateKey: 'movie' },
       run_id: 'run-1',
       type: 'succeeded',
     })
+    expect(terminal).not.toHaveProperty('provider_run_attempt')
+    expect(terminal).not.toHaveProperty('provider_run_id')
   })
 })

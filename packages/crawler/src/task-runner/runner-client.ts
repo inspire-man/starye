@@ -643,8 +643,6 @@ export class RunnerClient {
     return this.controlEnvelope({
       ...(this.config.applicationAttempt !== undefined ? { attempt: this.config.applicationAttempt } : {}),
       ...(this.config.applicationRunId ? { run_id: this.config.applicationRunId } : {}),
-      ...(this.config.providerRunAttempt !== undefined ? { provider_run_attempt: this.config.providerRunAttempt } : {}),
-      ...(this.config.providerRunId ? { provider_run_id: this.config.providerRunId } : {}),
       ...fields,
     })
   }

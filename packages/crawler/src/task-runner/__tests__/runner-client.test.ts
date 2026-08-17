@@ -23,6 +23,38 @@ describe('runnerClient', () => {
     expect(payload).toMatchObject({ attempt: 2, run_id: 'run-expected' })
   })
 
+  it('serializes strict lifecycle events without provider identity fields', async () => {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ accepted: true }), { status: 200 }))
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      applicationAttempt: 1,
+      applicationRunId: 'run-1',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+      providerRunAttempt: 1,
+      providerRunId: '77',
+    })
+    const candidate: Parameters<RunnerClient['heartbeat']>[0] = {
+      attempt: 1,
+      runId: 'run-1',
+      sequence: 2,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        permissionResource: 'movie',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+    }
+
+    await expect(client.heartbeat(candidate, 3)).resolves.toMatchObject({ accepted: true })
+
+    const body = JSON.parse(String((fetch.mock.calls[0]![1] as RequestInit).body)) as Record<string, unknown>
+    expect(Object.keys(body).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'run_id', 'sequence', 'timestamp', 'type'])
+    expect(body).not.toHaveProperty('provider_run_attempt')
+    expect(body).not.toHaveProperty('provider_run_id')
+  })
+
   it('rejects a polled candidate that is not bound to the production run tuple', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({
       candidate: {
@@ -119,16 +151,17 @@ describe('runnerClient', () => {
     const terminalBody = JSON.parse(String((fetch.mock.calls[3]![1] as RequestInit).body)) as Record<string, unknown>
     expect(Object.keys(claimBody).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'run_id', 'sequence', 'timestamp'])
     expect(claimBody).toMatchObject({ attempt: 1, run_id: 'run-repair-1', sequence: 2 })
+    expect(Object.keys(observationBody).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'observed_at', 'operation', 'run_id', 'sequence', 'source_revision', 'sources', 'timestamp', 'type'])
     expect(observationBody).toMatchObject({
       attempt: 1,
       operation: 'repair_players',
-      provider_run_attempt: 1,
-      provider_run_id: '77',
       run_id: 'run-repair-1',
       sequence: 3,
       source_revision: 7,
       type: 'source_observation',
     })
+    expect(observationBody).not.toHaveProperty('provider_run_attempt')
+    expect(observationBody).not.toHaveProperty('provider_run_id')
     expect(observationBody.observed_at).toBe(1_754_000_000)
     expect(observationBody.event_id).toEqual(expect.any(String))
     expect(observationBody.nonce).toEqual(expect.any(String))
@@ -136,16 +169,17 @@ describe('runnerClient', () => {
     expect(JSON.stringify(observationBody)).toContain('https://source.example/raw.m3u8')
     expect(JSON.stringify(terminalBody)).not.toContain('https://source.example/raw.m3u8')
     expect(JSON.stringify(terminalBody)).not.toContain('secret')
+    expect(Object.keys(terminalBody).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'receipt', 'run_id', 'sequence', 'source_revision', 'timestamp', 'type'])
     expect(terminalBody).toMatchObject({
       attempt: 1,
-      provider_run_attempt: 1,
-      provider_run_id: '77',
       receipt: { movieId: 'movie-1', operation: 'repair_players', sourceRevision: 8 },
       run_id: 'run-repair-1',
       sequence: 4,
       source_revision: 7,
       type: 'succeeded',
     })
+    expect(terminalBody).not.toHaveProperty('provider_run_attempt')
+    expect(terminalBody).not.toHaveProperty('provider_run_id')
   })
 
   it('returns bounded repair observation failures from a controlled non-2xx response', async () => {
