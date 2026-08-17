@@ -6,9 +6,9 @@ current_phase: 26
 current_phase_name: Video Source And Magnet Availability
 status: executing
 stopped_at: Completed 26-06-PLAN.md
-last_updated: "2026-08-15T00:48:20.000+08:00"
-last_activity: 2026-08-15
-last_activity_desc: Completed quick task 260814-okh-200-ui
+last_updated: "2026-08-17T14:43:08.891+08:00"
+last_activity: 2026-08-17
+last_activity_desc: Completed quick task 260817-manga-source-top
 progress:
   total_phases: 2
   completed_phases: 1
@@ -125,6 +125,7 @@ Items acknowledged and carried forward from previous milestone close:
 | `260815-hm9-stabilize-cloudflare-live-resource-prefl` | 2026-08-15 | Cloudflare 只读资源预检增加 3 次瞬时失败重试、脱敏诊断与回归覆盖；config 全量测试、类型检查和 lint 通过 |
 | `260815-i3i-dashboard-token` | 2026-08-15 | Dashboard 表格/抽屉间距、semantic theme token、元素级 Skeleton 与移动端溢出修复；测试、类型检查、lint、构建和 Gateway 浏览器检查通过 |
 | `260815-kzr-dashboard` | 2026-08-15 | 表格滚动白边、最大高度、sticky 操作列、骨架列结构、抽屉层级、筛选密度和状态标签统一完成；全量测试、类型检查、lint、构建与 GitNexus 检查通过 |
+| `260817-manga-source-top` | 2026-08-17 | 漫画来源切换到 92hm.top；生产 Actions 32001485318 成功，漫画内容 1012 持久化；修正漫画详情误显示视频 source_failed 的投影边界 |
 
 ## Session Continuity
 

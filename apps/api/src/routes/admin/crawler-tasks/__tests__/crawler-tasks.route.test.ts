@@ -290,6 +290,35 @@ describe('admin crawler task routes', () => {
     expect(logsApp.prepare.mock.calls.at(-1)?.[0]).toContain('ORDER BY log.sequence DESC')
   })
 
+  it('does not project video source readiness for a succeeded manga receipt', async () => {
+    const { app } = createApp({ role: 'comic_admin' }, [
+      [{ template_key: 'manga' }],
+      [{
+        attempt_number: 1,
+        created_at: 0,
+        id: 'run-manga',
+        receipt_primary_content_id: '1012',
+        receipt_schema_version: null,
+        receipt_source_revision: null,
+        receipt_summary_json: JSON.stringify({
+          createdCount: 1,
+          primaryContentId: '1012',
+          templateKey: 'manga',
+          updatedCount: 0,
+        }),
+        state_version: 1,
+        status: 'succeeded',
+        terminal_at: 100,
+        updated_at: 100,
+      }],
+    ])
+
+    const response = await app.request('/crawler-tasks/task-manga')
+    expect(response.status).toBe(200)
+    const body = await response.json() as { runs: Array<{ readiness?: unknown }> }
+    expect(body.runs[0]?.readiness).toBeUndefined()
+  })
+
   it('returns an opaque updated-at/id cursor and complete attempt/provider projections', async () => {
     crawlerTaskRepository.listTasks.mockResolvedValueOnce({
       nextCursor: 'eyJ1cGRhdGVkQXQiOjEwMCwiaWQiOiJ0YXNrLTIifQ',

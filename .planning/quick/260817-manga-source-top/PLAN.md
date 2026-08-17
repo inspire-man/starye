@@ -1,7 +1,7 @@
 ---
 quick: 260817-manga-source-top
 date: 2026-08-17
-status: in-progress
+status: complete
 ---
 
 # 更换漫画爬虫来源

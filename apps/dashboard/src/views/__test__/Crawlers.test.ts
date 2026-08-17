@@ -442,6 +442,32 @@ describe('crawlers local task panel', () => {
     expect(rendered).not.toContain('https://source.example')
   })
 
+  it('does not show video source readiness for a manga task', async () => {
+    const task = { id: 'task-manga', latest_run_id: 'run-manga', template_key: 'manga' }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'manga' ? [task] : [],
+      nextCursor: null,
+    }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      task,
+      runs: [{
+        id: 'run-manga',
+        receipt: { createdCount: 1, primaryContentId: '1012', templateKey: 'manga', updatedCount: 0 },
+        status: 'succeeded',
+      }],
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+    await wrapper.get('button.task-tab:not(.task-tab-active)').trigger('click')
+    await flushPromises()
+    await openTaskDetails(wrapper)
+
+    expect(bodyText()).toContain('1012')
+    expect(bodyText()).not.toContain('Source readiness')
+    expect(bodyText()).not.toContain('状态读取中')
+  })
+
   it.each([
     ['source_failed', 'source_failed', '重试读取'],
     ['repairing', 'repairing', '刷新状态'],

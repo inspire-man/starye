@@ -1479,7 +1479,7 @@ async function executeClearFailed() {
             <span v-else-if="receiptContentId(selectedRun.run)">primaryContentId：{{ receiptContentId(selectedRun.run) }}</span>
             <span v-else>状态读取中</span>
           </div>
-          <div v-if="runReadiness(selectedRun.run)" class="readiness-grid">
+          <div v-if="taskTemplate(selectedRun.task) === 'movie' && runReadiness(selectedRun.run)" class="readiness-grid">
             <section class="readiness-block">
               <h4>Metadata persisted</h4>
               <p class="readiness-state readiness-state-success">
@@ -1556,7 +1556,7 @@ async function executeClearFailed() {
               </article>
             </div>
           </section>
-          <div v-if="!runReadiness(selectedRun.run)" class="readiness-loading" role="status">
+          <div v-if="taskTemplate(selectedRun.task) === 'movie' && !runReadiness(selectedRun.run)" class="readiness-loading" role="status">
             <RefreshCw :size="16" aria-hidden="true" />状态读取中，未推导 ready 或 playback proof。
           </div>
           <div
@@ -1583,7 +1583,7 @@ async function executeClearFailed() {
               </button>
               <span v-if="repairActionLocked(selectedRun.run)" class="duplicate-lock-copy">当前电影已有活动修复任务，页面聚焦当前 attempt。</span>
               <button
-                v-if="!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition)"
+                v-if="taskTemplate(selectedRun.task) === 'movie' && (!runReadiness(selectedRun.run) || ['ready', 'no_source', 'source_failed'].includes(runReadiness(selectedRun.run)!.source.disposition))"
                 class="task-secondary"
                 type="button"
                 :disabled="taskRefreshing"

@@ -392,7 +392,7 @@ function projectReceipt(status: unknown, raw: unknown, persisted: PersistedRecei
 }
 
 function projectReadiness(row: Record<string, unknown>, receipt: SafeCrawlerReceipt | null): ReturnType<typeof createServerReadinessProjection> | null {
-  if (!receipt)
+  if (!receipt || receipt.templateKey !== 'movie')
     return null
   const observedAt = row.terminal_at ?? row.terminalAt ?? row.updated_at ?? row.updatedAt ?? row.created_at ?? row.createdAt
   const source = receipt.source ?? {
