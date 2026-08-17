@@ -228,6 +228,28 @@ describe('target-profile CLI parser', () => {
     expect(error.mock.calls.flat().join('\n')).not.toContain('missing-projection-file')
   })
 
+  it('forwards a selected Pages surface to CI preflight validation', async () => {
+    const { runTargetProfileCli } = await loadTargetProfileCli()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    await expect(runTargetProfileCli({
+      commandName: 'preflight',
+      target: 'starye-org',
+      scope: 'ci',
+      command: 'pages-deploy',
+      ciEnvironment: 'starye-org',
+      pagesSurface: 'auth',
+      check: false,
+      write: false,
+      live: false,
+      help: false,
+    })).rejects.toThrow('Target preflight failed')
+
+    const output = error.mock.calls.flat().join('\n')
+    expect(output).toContain('missing-live-resource-check')
+    expect(output).not.toContain('invalid-pages-surface')
+  })
+
   it.each([
     ['missing projection file', async (root: string) => {
       const { fs, path } = await loadNodeTestRuntime()
@@ -257,3 +279,4 @@ describe('target-profile CLI parser', () => {
     expect(error.mock.calls.flat().join('\n')).not.toContain(fixtureSecret)
   })
 })
+

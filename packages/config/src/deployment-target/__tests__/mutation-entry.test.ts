@@ -275,6 +275,35 @@ describe('target mutation preparation', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
+  it('preserves the selected resource in a failed remote preflight diagnostic', async () => {
+    const root = await createRoot()
+    const materialize = vi.fn(async () => ({
+      apiConfigPath: path.join(root, 'api', '.target-wrangler.diagnostic.toml'),
+      gatewayConfigPath: path.join(root, 'gateway', '.target-wrangler.diagnostic.toml'),
+      cleanup: async () => {},
+    }))
+
+    await expect(prepareTargetMutation({
+      target: 'starye-org',
+      scope: 'ci',
+      command: 'worker-deploy',
+      ciEnvironment: 'starye-org',
+      environment: {
+        CLOUDFLARE_API_TOKEN: 'cloudflare-token',
+        CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
+      },
+      githubOutput: path.join(root, 'github-output'),
+      runId: 'diagnostic-run',
+      appDirectories: { api: path.join(root, 'api'), gateway: path.join(root, 'gateway') },
+      runDirectory: path.join(root, 'run'),
+    }, {
+      executeReadOnly: () => ({ exitCode: 1, stderr: 'temporary Cloudflare response' }),
+      materialize,
+    })).rejects.toThrow(/Target mutation preflight failed.*starye-db.*temporary Cloudflare response/)
+
+    expect(materialize).not.toHaveBeenCalled()
+  })
+
   it('allows only the two fixed smoke entries, forwards declared secrets without serializing them, and returns allowlisted child observations', async () => {
     const root = await createRoot()
     const crawlerSecret = 'crawler-service-secret'
@@ -466,3 +495,4 @@ describe('target mutation preparation', () => {
     await expect(failure).rejects.not.toThrow('cloudflare-token')
   })
 })
+

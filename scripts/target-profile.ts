@@ -546,6 +546,7 @@ async function runPreflight(options: TargetProfileCliOptions): Promise<void> {
     projectionIssues,
     environment: localEnvironment,
     live: options.live,
+    ...(options.pagesSurface ? { pagesSurface: options.pagesSurface } : {}),
     ...(options.live ? { liveCheckExecutor: createWranglerExecutor(localEnvironment) } : {}),
   })
 
@@ -607,3 +608,4 @@ const isDirectExecution = process.argv[1]
 if (isDirectExecution) {
   void main()
 }
+
