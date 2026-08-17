@@ -303,7 +303,7 @@ export async function prepareTargetMutation(
     ...(request.pagesSurface ? { pagesSurface: request.pagesSurface } : {}),
   })
   if (!preflight.ok) {
-    throw new Error(`Target mutation preflight failed: ${preflight.issues.map(issue => issue.code).join(', ')}`)
+    throw new Error(`Target mutation preflight failed: ${preflight.issues.map(issue => `${issue.code}: ${issue.message}`).join(' ')}`)
   }
 
   const materialize = dependencies.materialize ?? materializeTargetDeployConfig
