@@ -19,7 +19,8 @@ describe('runnerClient', () => {
     expect(init.headers).toMatchObject({ 'x-runner-key-id': 'key-1' })
     expect(init.body).toEqual(expect.any(String))
     const payload = JSON.parse(String(init.body)) as Record<string, unknown>
-    expect(Object.keys(payload).sort()).toEqual(['event_id', 'key_id', 'nonce', 'timestamp'])
+    expect(Object.keys(payload).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'run_id', 'timestamp'])
+    expect(payload).toMatchObject({ attempt: 2, run_id: 'run-expected' })
   })
 
   it('rejects a polled candidate that is not bound to the production run tuple', async () => {

@@ -115,6 +115,49 @@ async function createRepositoryFixture() {
 }
 
 describe('production orchestration lifecycle integration', () => {
+  it('polls the application-bound queued run when another queued run is older', async () => {
+    const { repository } = await createRepositoryFixture()
+    const movie = await repository.scheduleRegister({
+      bodySha256: 'movie-schedule-body',
+      environment: 'starye-org',
+      eventId: 'movie-schedule-event',
+      keyId: 'key-current',
+      nonce: 'movie-schedule-nonce',
+      ref: 'main',
+      repository: 'inspire-man/starye',
+      scheduleBucket: '2026-07-30T00:00Z',
+      scheduledAt: '2026-07-30T00:00:00.000Z',
+      target: 'starye-org',
+      template: 'movie',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    })
+    const manga = await repository.scheduleRegister({
+      bodySha256: 'manga-schedule-body',
+      environment: 'starye-org',
+      eventId: 'manga-schedule-event',
+      keyId: 'key-current',
+      nonce: 'manga-schedule-nonce',
+      ref: 'main',
+      repository: 'inspire-man/starye',
+      scheduleBucket: '2026-07-30T01:00Z',
+      scheduledAt: '2026-07-30T01:00:00.000Z',
+      target: 'starye-org',
+      template: 'manga',
+      workflow: '.github/workflows/daily-manga-crawl.yml',
+    })
+
+    expect(movie.accepted).toBe(true)
+    expect(manga.accepted).toBe(true)
+    await expect(repository.pollDispatch({ attempt: manga.attempt, runId: manga.runId })).resolves.toMatchObject({
+      runId: manga.runId,
+      snapshot: { templateKey: 'manga' },
+    })
+    await expect(repository.pollDispatch({ attempt: movie.attempt, runId: movie.runId })).resolves.toMatchObject({
+      runId: movie.runId,
+      snapshot: { templateKey: 'movie' },
+    })
+  })
+
   it('replays manual dispatch through provider_started, poll compensation, and a validated receipt', async () => {
     const { client, repository } = await createRepositoryFixture()
 

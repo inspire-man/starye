@@ -495,7 +495,10 @@ export class RunnerClient {
   }
 
   async poll(): Promise<RunnerCandidate | undefined> {
-    const response = await this.post('/api/internal/crawler-runs/poll', this.controlEnvelope()) as {
+    const response = await this.post('/api/internal/crawler-runs/poll', this.controlEnvelope({
+      ...(this.config.applicationAttempt !== undefined ? { attempt: this.config.applicationAttempt } : {}),
+      ...(this.config.applicationRunId ? { run_id: this.config.applicationRunId } : {}),
+    })) as {
       candidate: unknown
     }
     if (response.candidate === null || response.candidate === undefined)

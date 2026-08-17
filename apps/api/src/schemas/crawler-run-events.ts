@@ -75,7 +75,14 @@ export const CrawlerRunnerControlEnvelopeSchema = v.strictObject({
   timestamp: Timestamp,
 })
 
-export const CrawlerRunPollRequestSchema = CrawlerRunnerControlEnvelopeSchema
+export const CrawlerRunPollRequestSchema = v.pipe(
+  v.strictObject({
+    ...RunnerEventFields,
+    attempt: v.optional(Attempt),
+    run_id: v.optional(Identifier),
+  }),
+  v.check(value => (value.attempt === undefined) === (value.run_id === undefined), 'application binding must include run_id and attempt together'),
+)
 
 export const CrawlerRunClaimRequestSchema = v.strictObject({
   attempt: Attempt,

@@ -292,7 +292,10 @@ export function createCrawlerRunsRoutes(options: {
       throw new HTTPException(400, { message: 'Invalid runner poll envelope' })
     }
 
-    const candidate = await createRepository(c.get('db')).pollDispatch()
+    const repository = createRepository(c.get('db'))
+    const candidate = parsed.output.attempt !== undefined && parsed.output.run_id !== undefined
+      ? await repository.pollDispatch({ attempt: parsed.output.attempt, runId: parsed.output.run_id })
+      : await repository.pollDispatch()
     return c.json({
       candidate: candidate
         ? {

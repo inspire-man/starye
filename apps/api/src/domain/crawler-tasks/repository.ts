@@ -304,6 +304,11 @@ export interface ClaimCrawlerRunInput {
   readonly sequence: number
 }
 
+export interface PollCrawlerRunInput {
+  readonly attempt: number
+  readonly runId: string
+}
+
 export interface CrawlerRunDispatchCandidate {
   readonly attempt: number
   readonly contentId?: string
@@ -1439,7 +1444,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     }
   }
 
-  async function pollDispatch(): Promise<CrawlerRunDispatchCandidate | undefined> {
+  async function pollDispatch(input?: PollCrawlerRunInput): Promise<CrawlerRunDispatchCandidate | undefined> {
     const result = await d1.prepare(`
       SELECT run.id, run.task_id, run.attempt_number, run.last_event_sequence,
         task.operation, task.request_snapshot_json, provider.provider
@@ -1447,9 +1452,10 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       INNER JOIN crawler_task AS task ON task.id = run.task_id
       INNER JOIN crawler_run_provider_association AS provider ON provider.run_id = run.id
       WHERE run.status = 'queued'
+        AND (? IS NULL OR (run.id = ? AND run.attempt_number = ?))
       ORDER BY run.created_at ASC, run.id ASC
       LIMIT 1
-    `).all<{
+    `).bind(input?.runId ?? null, input?.runId ?? null, input?.attempt ?? null).all<{
       attempt_number: number
       id: string
       last_event_sequence: number

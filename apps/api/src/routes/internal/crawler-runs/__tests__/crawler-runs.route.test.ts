@@ -547,6 +547,31 @@ describe('signed crawler runner poll and claim routes', () => {
     expect(processor.pollDispatch).toHaveBeenCalledTimes(1)
   })
 
+  it('passes a production application binding to the repository poll', async () => {
+    const processor = createProcessor()
+    const response = await postSigned(createApp(processor), '/crawler-runs/poll', JSON.stringify(createControlEnvelope({
+      attempt: 2,
+      event_id: 'control-event-bound',
+      nonce: 'control-nonce-bound',
+      run_id: 'run-bound',
+    })))
+
+    expect(response.status).toBe(200)
+    expect(processor.pollDispatch).toHaveBeenCalledWith({ attempt: 2, runId: 'run-bound' })
+  })
+
+  it('rejects a poll request with only half of the application binding', async () => {
+    const processor = createProcessor()
+    const response = await postSigned(createApp(processor), '/crawler-runs/poll', JSON.stringify(createControlEnvelope({
+      attempt: 2,
+      event_id: 'control-event-partial',
+      nonce: 'control-nonce-partial',
+    })))
+
+    expect(response.status).toBe(400)
+    expect(processor.pollDispatch).not.toHaveBeenCalled()
+  })
+
   it('binds a signed claim to API run/attempt/sequence and returns the actual CAS decision', async () => {
     const processor = createProcessor()
     processor.claimDispatch.mockResolvedValueOnce({
