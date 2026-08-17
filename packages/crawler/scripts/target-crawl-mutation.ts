@@ -279,17 +279,18 @@ async function runClaimedProductionCrawlerMutation(
     throw new Error('target-crawl-mutation rejected a candidate outside the prepared production binding.')
   }
 
+  let sequence = candidate.sequence
   if (candidate.sequence === 1) {
     const claim = await runner.claim(candidate)
     if (!claim.accepted)
       throw new Error('target-crawl-mutation rejected an unclaimed production run.')
+    sequence += 1
   }
 
   const started = await actions.providerStarted(binding)
   if (!started.accepted)
     throw new Error('target-crawl-mutation rejected an unbound production provider.')
 
-  let sequence = candidate.sequence + 1
   const contentIds = new Set<string>()
   const observeContentId = (value: string) => {
     if (typeof value !== 'string' || value.trim().length === 0 || value.trim().length > 128)

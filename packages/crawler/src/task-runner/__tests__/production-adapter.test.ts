@@ -150,7 +150,7 @@ describe('registry-owned production crawler adapters', () => {
 
     expect(result).toMatchObject({ contentIds: ['MOV-MANUAL-DISPATCH'], status: 'succeeded' })
     expect(runner.claim).not.toHaveBeenCalled()
-    expect(runner.heartbeat).toHaveBeenCalledWith(candidate, 3)
+    expect(runner.heartbeat).toHaveBeenCalledWith(candidate, 2)
   })
 
   it('claims the server snapshot before selecting the movie repair adapter', async () => {
