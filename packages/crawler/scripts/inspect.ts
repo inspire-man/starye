@@ -2,7 +2,7 @@ import process from 'node:process'
 import puppeteer from 'puppeteer-core'
 import 'dotenv/config'
 
-const TARGET_URL = process.argv[2] || 'https://www.92hm.life/'
+const TARGET_URL = process.argv[2] || 'https://www.92hm.top/'
 
 async function inspect() {
   console.log(`🔍 Inspecting: ${TARGET_URL}`)

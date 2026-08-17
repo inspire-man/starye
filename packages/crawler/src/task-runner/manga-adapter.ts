@@ -1,9 +1,7 @@
 import type { CrawlerConfig } from '../lib/base-crawler'
 import type { AdapterExecutionContext, AdapterExecutionResult, TaskRunnerAdapter } from './template-adapters'
 import { ComicCrawler } from '../crawlers/comic-crawler'
-import { Site92Hm } from '../strategies/site-92hm'
-
-const MANGA_ENTRYPOINT = 'https://www.92hm.life'
+import { MANGA_SOURCE_URL, Site92Hm } from '../strategies/site-92hm'
 
 export function createMangaAdapter(config: CrawlerConfig, execute?: (context: AdapterExecutionContext) => Promise<AdapterExecutionResult>): TaskRunnerAdapter {
   return {
@@ -22,7 +20,7 @@ export function createMangaAdapter(config: CrawlerConfig, execute?: (context: Ad
           context.observe(slug)
         }
       }
-      await new ObservedComicCrawler(config, new Site92Hm(), MANGA_ENTRYPOINT).run()
+      await new ObservedComicCrawler(config, new Site92Hm(), MANGA_SOURCE_URL).run()
       return { contentIds: [...contentIds] }
     },
   }

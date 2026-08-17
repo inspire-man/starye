@@ -5,7 +5,7 @@ import process from 'node:process'
 import puppeteer from 'puppeteer-core'
 
 // 从命令行参数获取 URL，如果没有则使用指定的默认值
-const TARGET_URL = process.argv[2] || 'https://www.92hm.life/book/826'
+const TARGET_URL = process.argv[2] || 'https://www.92hm.top/book/826'
 const OUTPUT_FILENAME = process.argv[3] || 'page_content.html'
 
 async function dumpHtml() {

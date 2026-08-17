@@ -8,6 +8,8 @@ import { DEFAULT_MANGA_ANTI_DETECTION } from '../config/crawl.config'
 import { CrawlerSession, DelayStrategy, ErrorClassifier, SuccessRateMonitor } from '../lib/anti-detection'
 import { parseChapterContent, parseMangaInfo, parseMangaList } from './site-92hm-parser'
 
+export const MANGA_SOURCE_URL = 'https://www.92hm.top'
+
 function normalizeHttpUrl(rawUrl: string, baseUrl: string): string | null {
   const trimmedUrl = rawUrl.trim()
   if (!trimmedUrl)
@@ -42,7 +44,7 @@ export function normalizeChapterImages(baseUrl: string, images: string[]): strin
 
 export class Site92Hm implements CrawlStrategy {
   name = '92hm'
-  baseUrl = 'https://www.92hm.life'
+  baseUrl = MANGA_SOURCE_URL
 
   private session: CrawlerSession
   private monitor: SuccessRateMonitor
@@ -64,7 +66,7 @@ export class Site92Hm implements CrawlStrategy {
   }
 
   match(url: string): boolean {
-    return url.includes('92hm.life') || url.includes('92hm.net')
+    return url.includes('92hm.top') || url.includes('92hm.life') || url.includes('92hm.net')
   }
 
   /**

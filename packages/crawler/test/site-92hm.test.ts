@@ -17,7 +17,7 @@ describe('site92Hm Parser', () => {
     // 3. Call Pure Parser
     // Note: We cast to `any` or `Document` because happy-dom types might slighty differ from standard DOM lib types
     // but at runtime they are compatible.
-    const info = parseMangaInfo(document as unknown as Document, 'https://www.92hm.life/book/123')
+    const info = parseMangaInfo(document as unknown as Document, 'https://www.92hm.top/book/123')
 
     // 4. Assert
     expect(info.title).toBe('My Test Manga Title')

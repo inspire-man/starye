@@ -27,7 +27,7 @@ describe('92hm Parser Enhanced', () => {
     const document = window.document
     document.write(html)
 
-    const result = parseMangaInfo(document as unknown as Document, 'https://www.92hm.life/book/123')
+    const result = parseMangaInfo(document as unknown as Document, 'https://www.92hm.top/book/123')
 
     expect(result.title).toBe('我的漫画标题')
     expect(result.author).toBe('老王')
@@ -55,7 +55,7 @@ describe('92hm Parser Enhanced', () => {
     const document = window.document
     document.write(html)
 
-    const result = parseMangaInfo(document as unknown as Document, 'https://www.92hm.life/book/456')
+    const result = parseMangaInfo(document as unknown as Document, 'https://www.92hm.top/book/456')
 
     expect(result.author).toBe('Jane Doe')
     expect(result.status).toBe('completed')

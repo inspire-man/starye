@@ -117,7 +117,7 @@ export interface CrawlConfig {
  * - 最多重试 3 次，应对网络波动
  * - 启用会话管理和请求头轮换
  *
- * 适用于目标网站：92hm.life
+ * 适用于目标网站：92hm.top
  *
  * @constant
  * @type {AntiDetectionConfig}
