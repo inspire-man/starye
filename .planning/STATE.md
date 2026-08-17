@@ -6,9 +6,9 @@ current_phase: 26
 current_phase_name: Video Source And Magnet Availability
 status: executing
 stopped_at: Completed 26-06-PLAN.md
-last_updated: "2026-08-17T17:31:00.000+08:00"
+last_updated: "2026-08-17T20:00:51.275+08:00"
 last_activity: 2026-08-17
-last_activity_desc: Completed quick task 260817-movie-detail-ia
+last_activity_desc: Completed quick task 260817-expand-movie-crawl-range
 progress:
   total_phases: 2
   completed_phases: 1
@@ -129,6 +129,7 @@ Items acknowledged and carried forward from previous milestone close:
 | `260817-kys-dashboard` | 2026-08-17 | 共享二次确认弹窗与 Dashboard 异步确认交互完成；类型检查、lint、66 项定向测试和 GitNexus 检查通过 |
 | `260817-toast-feedback` | 2026-08-17 | 统一 Dashboard、Comic App、Movie App 的共享 Toast 反馈；补齐语义 token、无障碍、进度/action、移动端适配与 Movie App 兼容入口；类型检查、lint、构建和全量/定向测试通过 |
 | `260817-movie-detail-ia` | 2026-08-17 | 影片详情首屏操作、使用引导、播放源分组、技术详情折叠和移动端布局完成；Movie App 全量测试、lint、构建、Gateway 边界与 GitNexus 检查通过 |
+| `260817-expand-movie-crawl-range` | 2026-08-17 | 生产电影爬取范围扩大到 100 部/10 页；真实 MUDR-392 下载源浏览器播放通过；临时影片、媒体服务、Aria2 GID 与本地载体已清理；crawler 全量测试、类型检查、lint 与 GitNexus 检查通过 |
 
 ## Session Continuity
 
