@@ -57,6 +57,23 @@ export interface PaginatedResponse<T> {
   }
 }
 
+export type FavoriteEntityType = 'actor' | 'publisher' | 'movie' | 'comic'
+
+export interface FavoriteEntity {
+  name: string
+  cover: string | null
+  slug: string
+}
+
+export interface Favorite {
+  id: string
+  userId: string
+  entityType: FavoriteEntityType
+  entityId: string
+  createdAt: number
+  entity?: FavoriteEntity | null
+}
+
 export interface User {
   id: string
   email: string

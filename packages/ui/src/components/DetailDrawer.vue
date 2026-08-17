@@ -172,9 +172,17 @@ onBeforeUnmount(() => {
 
 .detail-drawer-body {
   padding: 1rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: auto;
   scrollbar-width: thin;
+}
+
+.detail-drawer-body > :deep(*) {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .detail-drawer-footer {

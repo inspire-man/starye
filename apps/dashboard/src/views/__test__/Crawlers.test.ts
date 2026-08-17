@@ -113,7 +113,12 @@ describe('crawlers local task panel', () => {
   })
 
   it('polls only while visible and clears on unmount', async () => {
-    const task = { id: 'task-poll', template_key: 'movie', latest_run_id: 'run-poll' }
+    const task = {
+      id: 'task-poll',
+      latest_run_id: 'run-poll',
+      latestRun: { attemptNumber: 1, createdAt: 100, failureCode: null, id: 'run-poll', status: 'running', terminalAt: null, updatedAt: 100 },
+      template_key: 'movie',
+    }
     api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
       tasks: template === 'movie' ? [task] : [],
       nextCursor: null,
@@ -129,7 +134,7 @@ describe('crawlers local task panel', () => {
     vi.advanceTimersByTime(5000)
     await flushPromises()
     expect(api.admin.listCrawlerTasks.mock.calls.length).toBeGreaterThan(initial)
-    expect(api.admin.getCrawlerTask.mock.calls.length).toBeGreaterThan(initialDetails)
+    expect(api.admin.getCrawlerTask.mock.calls.length).toBe(initialDetails)
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
     document.dispatchEvent(new Event('visibilitychange'))
     const hiddenCount = api.admin.listCrawlerTasks.mock.calls.length
@@ -142,7 +147,7 @@ describe('crawlers local task panel', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
     expect(api.admin.listCrawlerTasks.mock.calls.length).toBeGreaterThan(hiddenCount)
-    expect(api.admin.getCrawlerTask.mock.calls.length).toBeGreaterThan(hiddenDetailCount)
+    expect(api.admin.getCrawlerTask.mock.calls.length).toBe(hiddenDetailCount)
     wrapper.unmount()
     const afterUnmount = api.admin.listCrawlerTasks.mock.calls.length
     vi.advanceTimersByTime(10000)
@@ -150,16 +155,25 @@ describe('crawlers local task panel', () => {
   })
 
   it('keeps server status until confirmed cancel and retry responses refresh it', async () => {
+    let runStatus: 'running' | 'cancelled' = 'running'
     const task = { id: 'task-1', template_key: 'movie', latest_run_id: 'run-1' }
-    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({ tasks: template === 'movie' ? [task] : [] }))
-    api.admin.getCrawlerTask.mockResolvedValue({ task, runs: [{ id: 'run-1', status: 'running', attemptNumber: 1, receipt: null }] })
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
+      tasks: template === 'movie'
+        ? [{
+            ...task,
+            latestRun: { attemptNumber: 1, createdAt: 100, failureCode: null, id: 'run-1', status: runStatus, terminalAt: runStatus === 'cancelled' ? 200 : null, updatedAt: 100 },
+          }]
+        : [],
+    }))
+    api.admin.cancelCrawlerRun.mockImplementation(async () => {
+      runStatus = 'cancelled'
+    })
     const wrapper = mountCrawler()
     await flushPromises()
     await wrapper.get('button[title="取消任务"]').trigger('click')
     await (wrapper.vm as any).confirmCancel()
     expect(api.admin.cancelCrawlerRun).toHaveBeenCalledWith('task-1', 'run-1')
 
-    api.admin.getCrawlerTask.mockResolvedValue({ task, runs: [{ id: 'run-1', status: 'cancelled', attemptNumber: 1, receipt: null }] })
     await (wrapper.vm as any).loadTaskPanel()
     await flushPromises()
     await wrapper.get('button[title="重试任务"]').trigger('click')
@@ -242,11 +256,18 @@ describe('crawlers local task panel', () => {
   })
 
   it('posts allowlisted metadata and lifecycle actions, then reloads authoritative detail', async () => {
-    const task = { id: 'task-actions', latestRunId: 'run-actions', templateKey: 'movie', lifecycle: { changedAt: 100, status: 'active', version: 0 } }
+    const task = {
+      id: 'task-actions',
+      latestRunId: 'run-actions',
+      latestRun: { attemptNumber: 1, createdAt: 100, failureCode: null, id: 'run-actions', status: 'succeeded', terminalAt: 200, updatedAt: 200 },
+      templateKey: 'movie',
+      lifecycle: { changedAt: 100, status: 'active', version: 0 },
+    }
     api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({ tasks: template === 'movie' ? [task] : [], nextCursor: null }))
     api.admin.getCrawlerTask.mockResolvedValue({ lifecycle: task.lifecycle, task, runs: [{ id: 'run-actions', status: 'succeeded', attemptNumber: 1, receipt: null }] })
     const wrapper = mountCrawler()
     await flushPromises()
+    await openTaskDetails(wrapper)
 
     await (wrapper.vm as any).openMetadataEdit(task)
     await (wrapper.vm as any).saveMetadata()
@@ -269,7 +290,13 @@ describe('crawlers local task panel', () => {
   })
 
   it('shows an archive icon for terminal tasks and archives from the table action column', async () => {
-    const task = { id: 'terminal-task', latestRunId: 'terminal-run', templateKey: 'movie', lifecycle: { changedAt: 100, status: 'active', version: 0 } }
+    const task = {
+      id: 'terminal-task',
+      latestRunId: 'terminal-run',
+      latestRun: { attemptNumber: 1, createdAt: 100, failureCode: null, id: 'terminal-run', status: 'succeeded', terminalAt: 200, updatedAt: 200 },
+      templateKey: 'movie',
+      lifecycle: { changedAt: 100, status: 'active', version: 0 },
+    }
     api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
       tasks: template === 'movie' ? [task] : [],
       nextCursor: null,
@@ -925,15 +952,18 @@ describe('crawlers local task panel', () => {
     const movieTask = {
       id: 'movie-task',
       latest_run_id: 'movie-run',
+      latestRun: { attemptNumber: 1, createdAt: 100, failureCode: null, id: 'movie-run', status: 'succeeded', terminalAt: 200, updatedAt: 200 },
       template_key: 'movie',
     }
     const repairTask = {
       allowedNextAction: 'wait_for_observation',
       id: 'repair-task',
       latest_run_id: 'repair-run',
+      latestRun: { attemptNumber: 1, createdAt: 100, failureCode: null, id: 'repair-run', status: 'running', terminalAt: null, updatedAt: 100 },
       movie: { code: 'SUN-064', id: 'movie-1', title: 'Repair Movie' },
       operation: 'repair_players',
       sourceRevision: 5,
+      target: { id: 'movie-1', kind: 'movie' },
       template_key: 'movie',
     }
     api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({

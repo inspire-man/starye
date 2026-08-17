@@ -52,7 +52,7 @@ const sidebarCollapsed = ref(false)
 const mobileDrawerOpen = ref(false)
 
 // 菜单展开状态
-const expandedMenus = ref<Set<string>>(new Set(['movies', 'comics']))
+const expandedMenus = ref<Set<string>>(new Set(['movies', 'comics', 'crawlers']))
 
 const iconMap: Record<string, Component> = {
   'home': Home,

@@ -445,17 +445,23 @@ onMounted(loadLogs)
 }
 
 .modal-body {
-  padding: 1.5rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 1.25rem;
 }
 
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .detail-item {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   flex-direction: column;
   gap: 0.5rem;
 }
@@ -472,28 +478,37 @@ onMounted(loadLogs)
 }
 
 .detail-item span {
+  min-width: 0;
+  max-width: 100%;
   font-size: 0.875rem;
-  color: #111827;
+  color: hsl(var(--foreground));
+  overflow-wrap: anywhere;
 }
 
 .mono {
   font-family: monospace;
   font-size: 0.75rem;
+  white-space: pre-wrap;
 }
 
 .changes-json {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  max-width: 100%;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
   border-radius: 0.375rem;
   padding: 1rem;
   font-family: monospace;
   font-size: 0.75rem;
   overflow-x: auto;
+  overflow-wrap: anywhere;
   max-height: 400px;
 }
 
 .diff-table {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.75rem;
   font-family: monospace;
@@ -503,41 +518,42 @@ onMounted(loadLogs)
 }
 
 .diff-table th {
-  background: #f3f4f6;
+  background: hsl(var(--muted));
   padding: 0.5rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  color: #374151;
-  border-bottom: 1px solid #e5e7eb;
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+  overflow-wrap: anywhere;
 }
 
 .diff-table td {
   padding: 0.4rem 0.75rem;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid hsl(var(--border));
   vertical-align: top;
-  word-break: break-all;
-  max-width: 280px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .diff-table .field-name {
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   font-weight: 500;
 }
 
 .diff-table .changed-row {
-  background: #fffbeb;
+  background: hsl(var(--status-warning-soft));
 }
 
 .diff-table .changed-row .before-value {
-  color: #dc2626;
-  background: #fee2e2;
+  color: hsl(var(--status-danger));
+  background: hsl(var(--status-danger-soft));
   border-radius: 2px;
   padding: 0.1rem 0.3rem;
 }
 
 .diff-table .changed-row .after-value {
-  color: #16a34a;
-  background: #dcfce7;
+  color: hsl(var(--status-success));
+  background: hsl(var(--status-success-soft));
   border-radius: 2px;
   padding: 0.1rem 0.3rem;
 }
@@ -546,8 +562,8 @@ onMounted(loadLogs)
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
-  padding: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .btn-primary,
@@ -570,11 +586,25 @@ onMounted(loadLogs)
 }
 
 .btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
+  background: hsl(var(--muted));
+}
+
+@media (max-width: 640px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detail-item.full-width {
+    grid-column: auto;
+  }
+
+  .modal-body {
+    padding: 1rem;
+  }
 }
 </style>

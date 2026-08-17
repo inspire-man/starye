@@ -1,19 +1,13 @@
 <script setup lang="ts">
+import type { SelectOption } from '@starye/ui'
 import type { Comic } from '../types'
-import { Pagination } from '@starye/ui'
+import { ComicCard, Pagination, Select, SkeletonCard, useListQuery } from '@starye/ui'
 import { reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { comicApi } from '../lib/api-client'
 
-const loading = ref(false)
 const searched = ref(false)
 const comics = ref<Comic[]>([])
-const pagination = reactive({
-  page: 1,
-  limit: 20,
-  total: 0,
-  totalPages: 0,
-})
+const { page, limit, total, totalPages, loading, error, execute, goToPage, updatePageSize, cancel, resetMeta } = useListQuery(20)
 
 const filters = reactive({
   search: '',
@@ -22,41 +16,50 @@ const filters = reactive({
   sortOrder: 'desc' as 'asc' | 'desc',
 })
 
+const statusOptions: SelectOption<typeof filters.status>[] = [
+  { label: '全部状态', value: '' },
+  { label: '连载中', value: 'serializing' },
+  { label: '已完结', value: 'completed' },
+]
+
+const sortOptions: SelectOption<typeof filters.sortBy>[] = [
+  { label: '最近更新', value: 'updatedAt' },
+  { label: '最新上架', value: 'createdAt' },
+  { label: '按标题', value: 'title' },
+]
+
 async function search() {
   searched.value = true
-  pagination.page = 1
+  await goToPage(1)
   await fetchComics()
 }
 
 async function fetchComics() {
-  loading.value = true
-  try {
-    const response = await comicApi.getComics({
-      page: pagination.page,
-      limit: pagination.limit,
-      search: filters.search || undefined,
-      status: filters.status || undefined,
-      sortBy: filters.sortBy,
-      sortOrder: filters.sortOrder,
-    })
-
-    if (response.success) {
-      comics.value = response.data
-      Object.assign(pagination, response.pagination)
-    }
-  }
-  catch (err) {
-    console.error('Failed to search comics:', err)
-  }
-  finally {
-    loading.value = false
-  }
+  const data = await execute(({ page, limit }) => comicApi.getComics({
+    page,
+    limit,
+    search: filters.search || undefined,
+    status: filters.status || undefined,
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
+  }).then((response) => {
+    if (!response.success)
+      throw new Error('搜索漫画失败')
+    return response
+  }), '搜索漫画失败')
+  if (data)
+    comics.value = data
 }
 
-function changePage(page: number) {
-  pagination.page = page
-  fetchComics()
+async function changePage(page: number) {
+  await goToPage(page)
+  await fetchComics()
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function changePageSize(size: number) {
+  await updatePageSize(size)
+  await fetchComics()
 }
 
 function resetFilters() {
@@ -64,71 +67,72 @@ function resetFilters() {
   filters.status = ''
   filters.sortBy = 'updatedAt'
   searched.value = false
+  cancel()
+  resetMeta()
   comics.value = []
-  Object.assign(pagination, { page: 1, total: 0, totalPages: 0 })
+  void goToPage(1)
 }
 </script>
 
 <template>
-  <div>
-    <header class="mb-6">
-      <h1 class="text-2xl sm:text-3xl font-bold mb-1">
-        搜索漫画
-      </h1>
+  <div class="ui-public-page">
+    <header class="ui-public-page-header">
+      <div>
+        <h1 class="ui-public-page-title">
+          搜索漫画
+        </h1>
+        <p class="ui-public-page-description">
+          按标题、状态和更新时间查找漫画
+        </p>
+      </div>
     </header>
 
     <!-- 搜索面板 -->
-    <div class="bg-card rounded-xl border p-4 sm:p-6 mb-6 shadow-sm">
-      <div class="space-y-4">
-        <div class="relative">
+    <section class="ui-public-surface ui-public-filter">
+      <div class="ui-public-field">
+        <label for="comic-search-query">关键词</label>
+        <div class="relative min-w-0">
           <svg
-            class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none"
+            class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
           >
             <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7 7 0 1 0 4.65 4.65a7 7 0 0 0 12 12Z" />
           </svg>
           <input
+            id="comic-search-query"
             v-model="filters.search"
             type="search"
-            placeholder="输入漫画标题或作者…"
-            class="w-full pl-10 pr-4 py-2.5 border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+            placeholder="输入标题或作者"
+            class="ui-public-input w-full pl-9"
             @keyup.enter="search"
           >
         </div>
+      </div>
 
-        <div class="flex flex-wrap gap-3">
-          <select
+      <div class="ui-public-filter-grid">
+        <div class="ui-public-field">
+          <label for="comic-search-status">状态</label>
+          <Select
+            id="comic-search-status"
             v-model="filters.status"
-            class="px-3 py-2 border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-          >
-            <option value="">
-              全部状态
-            </option>
-            <option value="serializing">
-              连载中
-            </option>
-            <option value="completed">
-              已完结
-            </option>
-          </select>
+            :options="statusOptions"
+          />
+        </div>
 
-          <select
+        <div class="ui-public-field">
+          <label for="comic-search-sort">排序</label>
+          <Select
+            id="comic-search-sort"
             v-model="filters.sortBy"
-            class="px-3 py-2 border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-          >
-            <option value="updatedAt">
-              最近更新
-            </option>
-            <option value="createdAt">
-              最新上架
-            </option>
-            <option value="title">
-              按标题
-            </option>
-          </select>
+            :options="sortOptions"
+          />
+        </div>
+      </div>
 
+      <div class="ui-public-actions">
+        <div class="ui-public-actions-group">
           <button
-            class="px-5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            class="ui-public-button ui-public-button-primary"
             :disabled="loading"
             @click="search"
           >
@@ -136,75 +140,65 @@ function resetFilters() {
           </button>
 
           <button
-            class="px-5 py-2 border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+            class="ui-public-button ui-public-button-ghost"
             @click="resetFilters"
           >
             重置
           </button>
         </div>
       </div>
-    </div>
+    </section>
 
     <!-- 加载中 -->
-    <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-      <div v-for="i in 10" :key="i" class="animate-pulse">
-        <div class="bg-muted aspect-3/4 rounded-xl mb-2" />
-        <div class="bg-muted h-4 rounded mb-1" />
-        <div class="bg-muted h-3 rounded w-2/3" />
-      </div>
+    <div v-if="loading" class="ui-public-grid">
+      <SkeletonCard v-for="i in 10" :key="i" variant="poster" />
+    </div>
+
+    <div v-else-if="error" class="ui-public-empty">
+      <span class="text-3xl text-[hsl(var(--status-danger))]">!</span>
+      <p>{{ error }}</p>
+      <button class="ui-public-button ui-public-button-ghost" @click="search">
+        重试
+      </button>
     </div>
 
     <!-- 无结果 -->
-    <div v-else-if="searched && comics.length === 0" class="text-center py-16 text-muted-foreground">
-      <svg class="w-12 h-12 mx-auto mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9.172 16.172a4 4 0 0 1 5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-      </svg>
+    <div v-else-if="searched && comics.length === 0" class="ui-public-empty">
+      <span class="text-3xl">⌕</span>
       <p>未找到相关漫画</p>
     </div>
 
     <!-- 结果列表 -->
     <div v-else-if="comics.length > 0">
-      <p class="text-sm text-muted-foreground mb-4">
-        共找到 {{ pagination.total }} 部漫画
+      <p class="mb-4 text-sm text-muted-foreground">
+        共找到 {{ total }} 部漫画
       </p>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <RouterLink
+      <div class="ui-public-grid">
+        <ComicCard
           v-for="comic in comics"
           :key="comic.id"
-          :to="`/comic/${comic.slug}`"
-          class="group"
-        >
-          <div class="relative overflow-hidden rounded-xl shadow-sm group-hover:shadow-md transition-shadow duration-200">
-            <div class="aspect-3/4 bg-muted">
-              <img
-                v-if="comic.coverImage"
-                :src="comic.coverImage"
-                :alt="comic.title"
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              >
-            </div>
-            <span v-if="comic.isR18" class="absolute top-2 right-2 bg-red-600 text-white text-xs px-1.5 py-0.5 rounded font-medium">
-              R18
-            </span>
-          </div>
-          <h3 class="mt-2 text-sm font-medium line-clamp-2 group-hover:text-primary transition-colors">
-            {{ comic.title }}
-          </h3>
-          <p class="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-            {{ comic.author || '未知作者' }}
-          </p>
-        </RouterLink>
+          :title="comic.title"
+          :href="`/${comic.slug}`"
+          :cover="comic.coverImage"
+          :author="comic.author"
+          :status="comic.status"
+          :is-r18="comic.isR18"
+          label-missing-cover="暂无封面"
+          label-unknown-author="未知作者"
+          label-serializing="连载中"
+          label-completed="已完结"
+        />
       </div>
 
       <!-- 分页 -->
-      <div v-if="pagination.totalPages > 1" class="mt-8">
+      <div v-if="totalPages > 1" class="mt-8">
         <Pagination
-          :current-page="pagination.page"
-          :total-pages="pagination.totalPages"
-          :total="pagination.total"
-          :page-size="pagination.limit"
+          :current-page="page"
+          :total-pages="totalPages"
+          :total="total"
+          :page-size="limit"
           @page-change="changePage"
+          @size-change="changePageSize"
         />
       </div>
     </div>

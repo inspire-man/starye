@@ -1,7 +1,7 @@
 import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
 import type { CrawlerOperationCommandInput } from './operation-registry'
-import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskLifecycleStatus, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderName, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
+import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskLifecycleStatus, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskRunSummary, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderName, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { buildCrawlerOperationSnapshot } from './operation-registry'
 import { createLocalProofProviderSnapshot, createProviderAssociationSummary, createProviderSnapshot, LOCAL_PROOF_POLICY_REFERENCE, LOCAL_PROOF_POLICY_VERSION } from './provider-association'
@@ -54,11 +54,22 @@ interface CrawlerTaskRow {
   created_at: number
   id: string
   latest_run_id: string | null
+  latest_run_attempt_number?: number | null
+  latest_run_created_at?: number | null
+  latest_run_failure_code?: string | null
+  latest_run_status?: CrawlerRunStatus | null
+  latest_run_terminal_at?: number | null
+  latest_run_updated_at?: number | null
   operation?: CrawlerTaskOperation
   request_snapshot_json?: string
   requested_by_user_id?: string
   template_key: CrawlerTaskTemplateKey
   updated_at: number
+}
+
+interface CrawlerTaskListIdentity {
+  readonly operation: CrawlerTaskOperation
+  readonly target?: { readonly id: string, readonly kind: 'movie' | 'manga' }
 }
 
 interface CrawlerRunLogRow {
@@ -356,12 +367,30 @@ function toUnixSeconds(date: Date): number {
   return Math.floor(date.getTime() / 1000)
 }
 
-function toCrawlerTaskListItem(row: CrawlerTaskRow, lifecycle: CrawlerTaskLifecycleProjection): CrawlerTaskListItem {
+function toCrawlerTaskListItem(
+  row: CrawlerTaskRow,
+  lifecycle: CrawlerTaskLifecycleProjection,
+  identity?: CrawlerTaskListIdentity,
+): CrawlerTaskListItem {
+  const latestRun: CrawlerTaskRunSummary | null = row.latest_run_id && row.latest_run_status && row.latest_run_attempt_number != null
+    ? {
+        attemptNumber: row.latest_run_attempt_number,
+        createdAt: row.latest_run_created_at ?? row.updated_at,
+        failureCode: (row.latest_run_failure_code as CrawlerRunFailureCode | null) ?? null,
+        id: row.latest_run_id,
+        status: row.latest_run_status,
+        terminalAt: row.latest_run_terminal_at ?? null,
+        updatedAt: row.latest_run_updated_at ?? row.updated_at,
+      }
+    : null
   return {
     createdAt: row.created_at,
     id: row.id,
     latestRunId: row.latest_run_id,
+    latestRun,
     lifecycle,
+    ...(identity?.operation ? { operation: identity.operation } : {}),
+    ...(identity?.target ? { target: identity.target } : {}),
     templateKey: row.template_key,
     updatedAt: row.updated_at,
   }
@@ -878,6 +907,26 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     return parsed.snapshot
   }
 
+  function listTaskIdentity(row: CrawlerTaskRow): CrawlerTaskListIdentity {
+    const operation = row.operation ?? row.template_key
+    if (!row.request_snapshot_json)
+      return { operation }
+
+    try {
+      const snapshot = parseTaskSnapshot(row.request_snapshot_json, operation)
+      if ('movieId' in snapshot) {
+        return {
+          operation,
+          target: { id: snapshot.movieId, kind: 'movie' },
+        }
+      }
+    }
+    catch {
+      // Legacy rows may contain an incomplete snapshot; keep the safe operation fallback.
+    }
+    return { operation }
+  }
+
   async function readTaskLifecycle(taskId: string): Promise<CrawlerTaskLifecycleProjection> {
     try {
       const result = await d1.prepare(`
@@ -1008,27 +1057,35 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
   }): Promise<CrawlerTaskListPage> {
     const requestedLimit = Math.max(1, Math.min(50, input.limit))
     const result = await d1.prepare(`
-      SELECT id, template_key, latest_run_id, created_at, updated_at
-      FROM crawler_task
-      WHERE (? IS NULL OR template_key = ?)
+      SELECT task.id, task.template_key, task.operation, task.request_snapshot_json,
+        task.latest_run_id, task.created_at, task.updated_at,
+        run.attempt_number AS latest_run_attempt_number,
+        run.created_at AS latest_run_created_at,
+        run.failure_code AS latest_run_failure_code,
+        run.status AS latest_run_status,
+        run.terminal_at AS latest_run_terminal_at,
+        run.updated_at AS latest_run_updated_at
+      FROM crawler_task AS task
+      LEFT JOIN crawler_run AS run ON run.id = task.latest_run_id AND run.task_id = task.id
+      WHERE (? IS NULL OR task.template_key = ?)
         AND (
           ? IS NULL
           OR (? = 'active' AND NOT EXISTS (
             SELECT 1
             FROM crawler_run_transition AS lifecycle_transition
             INNER JOIN crawler_run AS lifecycle_run ON lifecycle_run.id = lifecycle_transition.run_id
-            WHERE lifecycle_run.task_id = crawler_task.id
+            WHERE lifecycle_run.task_id = task.id
               AND lifecycle_transition.reason_code IN ('task_archived', 'task_superseded')
           ))
           OR (? = 'archived' AND EXISTS (
             SELECT 1
             FROM crawler_run_transition AS lifecycle_transition
             INNER JOIN crawler_run AS lifecycle_run ON lifecycle_run.id = lifecycle_transition.run_id
-            WHERE lifecycle_run.task_id = crawler_task.id AND lifecycle_transition.reason_code = 'task_archived'
+            WHERE lifecycle_run.task_id = task.id AND lifecycle_transition.reason_code = 'task_archived'
               AND NOT EXISTS (
                 SELECT 1 FROM crawler_run_transition AS newer
                 INNER JOIN crawler_run AS newer_run ON newer_run.id = newer.run_id
-                WHERE newer_run.task_id = crawler_task.id
+                WHERE newer_run.task_id = task.id
                   AND newer.reason_code IN ('task_archived', 'task_superseded')
                   AND (newer.created_at > lifecycle_transition.created_at
                     OR (newer.created_at = lifecycle_transition.created_at AND newer.id > lifecycle_transition.id))
@@ -1038,19 +1095,19 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
             SELECT 1
             FROM crawler_run_transition AS lifecycle_transition
             INNER JOIN crawler_run AS lifecycle_run ON lifecycle_run.id = lifecycle_transition.run_id
-            WHERE lifecycle_run.task_id = crawler_task.id AND lifecycle_transition.reason_code = 'task_superseded'
+            WHERE lifecycle_run.task_id = task.id AND lifecycle_transition.reason_code = 'task_superseded'
               AND NOT EXISTS (
                 SELECT 1 FROM crawler_run_transition AS newer
                 INNER JOIN crawler_run AS newer_run ON newer_run.id = newer.run_id
-                WHERE newer_run.task_id = crawler_task.id
+                WHERE newer_run.task_id = task.id
                   AND newer.reason_code IN ('task_archived', 'task_superseded')
                   AND (newer.created_at > lifecycle_transition.created_at
                     OR (newer.created_at = lifecycle_transition.created_at AND newer.id > lifecycle_transition.id))
               )
           ))
         )
-        AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
-      ORDER BY updated_at DESC, id DESC
+        AND (? IS NULL OR task.updated_at < ? OR (task.updated_at = ? AND task.id < ?))
+      ORDER BY task.updated_at DESC, task.id DESC
       LIMIT ?
     `).bind(
       input.templateKey ?? null,
@@ -1073,7 +1130,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       const retry = await readTaskRetryProjection(d1, row.id)
       const lifecycle = await readTaskLifecycle(row.id)
       return {
-        ...toCrawlerTaskListItem(row, lifecycle),
+        ...toCrawlerTaskListItem(row, lifecycle, listTaskIdentity(row)),
         ...(retry ? { retry } : {}),
       }
     }))
@@ -1087,7 +1144,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
 
   async function getTaskDetail(taskId: string): Promise<CrawlerTaskDetailReadModel | undefined> {
     const taskResult = await d1.prepare(`
-      SELECT id, template_key, latest_run_id, created_at, updated_at
+      SELECT id, template_key, operation, request_snapshot_json, latest_run_id, created_at, updated_at
       FROM crawler_task
       WHERE id = ?
       LIMIT 1
@@ -1152,7 +1209,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       runs,
       ...(retry ? { retry } : {}),
       task: {
-        ...toCrawlerTaskListItem(taskRow, lifecycle),
+        ...toCrawlerTaskListItem(taskRow, lifecycle, listTaskIdentity(taskRow)),
         ...(retry ? { retry } : {}),
       },
       lifecycle,

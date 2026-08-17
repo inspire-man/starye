@@ -228,7 +228,7 @@ function isActionColumn(column: Column<T>): boolean {
   max-width: 100%;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--ui-space-2, 0.5rem);
   overflow: hidden;
 }
@@ -239,12 +239,11 @@ function isActionColumn(column: Column<T>): boolean {
   min-width: 0;
   max-width: 100%;
   flex: 0 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: var(--ui-space-2, 0.5rem);
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .data-table-action-content > :deep(button),
@@ -252,9 +251,8 @@ function isActionColumn(column: Column<T>): boolean {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  overflow-wrap: anywhere;
   text-overflow: ellipsis;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .data-table-select-cell {

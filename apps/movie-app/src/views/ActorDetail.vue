@@ -45,7 +45,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="actor-detail-page">
+  <div class="ui-public-page actor-detail-page">
     <div class="container">
       <!-- 加载中 -->
       <div v-if="loading" class="loading">
@@ -198,11 +198,11 @@ onMounted(() => {
 .error {
   text-align: center;
   padding: 2rem;
-  color: #666;
+  color: hsl(var(--muted-foreground));
 }
 
 .error {
-  color: #dc2626;
+  color: hsl(var(--status-danger));
 }
 
 .actor-header {
@@ -214,7 +214,7 @@ onMounted(() => {
 
 .actor-cover {
   aspect-ratio: 3 / 4;
-  background: #f3f4f6;
+  background: hsl(var(--muted));
   border-radius: 8px;
   overflow: hidden;
   display: flex;
@@ -231,7 +231,7 @@ onMounted(() => {
 .cover-placeholder {
   font-size: 4rem;
   font-weight: bold;
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
 }
 
 .actor-name {
@@ -242,9 +242,9 @@ onMounted(() => {
 
 .info-notice {
   padding: 1rem;
-  background: #fef3c7;
+  background: hsl(var(--status-warning-soft));
   border-radius: 8px;
-  color: #92400e;
+  color: hsl(var(--status-warning));
 }
 
 .info-grid {
@@ -262,7 +262,7 @@ onMounted(() => {
 
 .label {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
 }
 
 .value {
@@ -272,7 +272,7 @@ onMounted(() => {
 
 .actor-bio {
   padding: 1rem;
-  background: #f9fafb;
+  background: hsl(var(--card));
   border-radius: 8px;
 }
 
@@ -283,7 +283,7 @@ onMounted(() => {
 }
 
 .actor-bio p {
-  color: #4b5563;
+  color: hsl(var(--foreground));
   line-height: 1.6;
 }
 
@@ -296,7 +296,7 @@ onMounted(() => {
 .empty {
   text-align: center;
   padding: 2rem;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
 }
 
 .movies-grid {
@@ -310,7 +310,7 @@ onMounted(() => {
   flex-direction: column;
   text-decoration: none;
   color: inherit;
-  border: 1px solid #e5e7eb;
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   overflow: hidden;
   transition: transform 0.2s, box-shadow 0.2s;
@@ -318,12 +318,12 @@ onMounted(() => {
 
 .movie-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--ui-surface-shadow-hover);
 }
 
 .movie-cover {
   aspect-ratio: 2 / 3;
-  background: #f3f4f6;
+  background: hsl(var(--muted));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -352,13 +352,13 @@ onMounted(() => {
 
 .movie-code {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   margin-bottom: 0.25rem;
 }
 
 .movie-date {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
 }
 
 @media (max-width: 768px) {
@@ -370,5 +370,79 @@ onMounted(() => {
     max-width: 250px;
     margin: 0 auto;
   }
+}
+</style>
+
+<style scoped>
+.actor-detail-page {
+  padding: 0;
+}
+
+.actor-detail-page .loading,
+.actor-detail-page .error,
+.actor-detail-page .empty {
+  color: hsl(var(--muted-foreground));
+}
+
+.actor-detail-page .error {
+  color: hsl(var(--status-danger));
+}
+
+.actor-detail-page .actor-cover,
+.actor-detail-page .movie-cover {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+}
+
+.actor-detail-page .actor-cover {
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-surface-shadow);
+}
+
+.actor-detail-page .cover-placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.actor-detail-page .info-notice {
+  border: 1px solid hsl(var(--status-warning) / 0.22);
+  border-radius: var(--ui-radius-md);
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
+}
+
+.actor-detail-page .label,
+.actor-detail-page .movie-code,
+.actor-detail-page .movie-date {
+  color: hsl(var(--muted-foreground));
+}
+
+.actor-detail-page .actor-bio {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md);
+  background: hsl(var(--muted) / 0.5);
+}
+
+.actor-detail-page .actor-bio p {
+  color: hsl(var(--muted-foreground));
+}
+
+.actor-detail-page .movie-card {
+  border-color: hsl(var(--border));
+  border-radius: var(--ui-radius-lg);
+  background: hsl(var(--card));
+  box-shadow: var(--ui-surface-shadow);
+}
+
+.actor-detail-page .movie-card:hover {
+  border-color: hsl(var(--primary) / 0.4);
+  box-shadow: var(--ui-surface-shadow-hover);
+}
+
+.actor-detail-page .movie-title {
+  color: hsl(var(--foreground));
+}
+
+.actor-detail-page .movie-info {
+  padding: var(--ui-space-3);
 }
 </style>

@@ -7,7 +7,7 @@
  *   不向视图层透传 any
  */
 
-import type { AppType } from '@starye/api-types'
+import type { AppType, FavoriteEntityType, FavoriteListResponse } from '@starye/api-types'
 import type {
   Actor,
   ActorDetail,
@@ -94,7 +94,9 @@ export const movieApi = {
       param: { code },
     })
     if (!res.ok) {
-      throw new Error(`Failed to fetch movie detail: ${res.status}`)
+      const payload = await res.json().catch(() => null) as { error?: string, message?: string } | null
+      const message = res.status === 404 ? '影片不存在或已下线' : payload?.error || payload?.message || '加载影片详情失败'
+      throw new Error(message)
     }
     const data = await res.json()
     return { success: true, data: data.data }
@@ -369,37 +371,50 @@ export const searchApi = {
 // ─── Favorites API ─────────────────────────────────────────────────────────
 
 export const favoritesApi = {
-  async getFavorites(_params?: {
+  async getFavorites(params?: {
     page?: number
     limit?: number
-    entityType?: 'actor' | 'publisher' | 'movie' | 'comic'
+    entityType?: FavoriteEntityType
   }): Promise<PaginatedResponse<Favorite>> {
-    const res = await client.api.favorites.$get()
+    const res = await client.api.favorites.$get({
+      query: {
+        page: params?.page?.toString(),
+        limit: params?.limit?.toString(),
+        entityType: params?.entityType,
+      },
+    })
     const data = await res.json()
     if ('error' in data) {
-      throw new Error('Failed to fetch favorites')
+      throw new Error(data.error || 'Failed to fetch favorites')
     }
     return {
       success: true,
-      data: data.data as unknown as Favorite[],
-      pagination: data.meta,
+      data: (data as unknown as FavoriteListResponse).data as unknown as Favorite[],
+      pagination: (data as unknown as FavoriteListResponse).meta,
     }
   },
 
-  async addFavorite(entityType: 'actor' | 'publisher' | 'movie' | 'comic', entityId: string): Promise<ApiResponse<{ id: string, alreadyExists: boolean }>> {
-    return apiFetch('/favorites', {
+  async addFavorite(entityType: FavoriteEntityType, entityId: string): Promise<ApiResponse<{ id: string, alreadyExists: boolean }>> {
+    const result = await apiFetch<{ success: boolean, id?: string, alreadyExists?: boolean, error?: string }>('/favorites', {
       method: 'POST',
       body: JSON.stringify({ entityType, entityId }),
     })
+    return {
+      success: result.success,
+      data: result.id
+        ? { id: result.id, alreadyExists: result.alreadyExists ?? false }
+        : undefined,
+      error: result.error,
+    }
   },
 
   async deleteFavorite(favoriteId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiFetch(`/favorites/${favoriteId}`, { method: 'DELETE' })
+    return apiFetch(`/favorites/${encodeURIComponent(favoriteId)}`, { method: 'DELETE' })
   },
 
-  async checkFavorite(entityType: 'actor' | 'publisher' | 'movie' | 'comic', entityId: string): Promise<{ isFavorited: boolean, favoriteId: string | null }> {
+  async checkFavorite(entityType: FavoriteEntityType, entityId: string): Promise<{ isFavorited: boolean, favoriteId: string | null }> {
     try {
-      const data = await apiFetch<any>(`/favorites/check/${entityType}/${entityId}`)
+      const data = await apiFetch<any>(`/favorites/check/${entityType}/${encodeURIComponent(entityId)}`)
       return {
         isFavorited: data.data?.isFavorited || false,
         favoriteId: data.data?.favoriteId || null,

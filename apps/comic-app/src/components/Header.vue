@@ -9,15 +9,15 @@ const mobileMenuOpen = ref(false)
 
 <template>
   <header class="sticky top-0 z-50 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b border-border shadow-sm">
-    <div class="container mx-auto px-4 max-w-7xl">
-      <div class="flex items-center justify-between h-14 sm:h-16">
+    <div class="mx-auto w-full max-w-[96rem] px-4 sm:px-6">
+      <div class="flex h-14 items-center justify-between gap-4 sm:h-16">
         <!-- Logo + 桌面导航 -->
-        <div class="flex items-center gap-6">
-          <RouterLink to="/" class="text-xl font-bold text-primary hover:text-primary/80 transition">
+        <div class="flex min-w-0 items-center gap-4 sm:gap-7">
+          <RouterLink to="/" class="shrink-0 text-xl font-bold tracking-tight text-primary transition hover:text-primary/80">
             漫画
           </RouterLink>
 
-          <nav class="hidden md:flex items-center gap-1">
+          <nav class="hidden items-center gap-1 md:flex">
             <RouterLink
               to="/"
               class="px-3 py-1.5 rounded-md text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-muted transition-colors"
@@ -52,7 +52,7 @@ const mobileMenuOpen = ref(false)
         </div>
 
         <!-- 右侧操作区 -->
-        <div class="flex items-center gap-2 sm:gap-3">
+        <div class="flex shrink-0 items-center gap-2 sm:gap-3">
           <!-- 移动端搜索图标 -->
           <RouterLink to="/search" class="md:hidden p-2 rounded-md text-foreground/70 hover:text-foreground hover:bg-muted transition-colors">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

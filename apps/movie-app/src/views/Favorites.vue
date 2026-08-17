@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { SelectOption } from '../components/Select.vue'
+import type { SelectOption } from '@starye/ui'
+import { Pagination, Select } from '@starye/ui'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import Select from '../components/Select.vue'
 import { useFavorites } from '../composables/useFavorites'
 import { useMobileDetect } from '../composables/useMobileDetect'
 import { useToast } from '../composables/useToast'
@@ -28,14 +28,14 @@ const {
   loading,
   error,
   total,
+  currentPage,
+  totalPages,
   isEmpty,
-  hasMore,
   fetchFavorites,
   removeFavorite,
-  loadMore,
   refresh,
 } = useFavorites({
-  entityType: computed(() => selectedType.value === 'all' ? undefined : selectedType.value).value,
+  entityType: computed(() => selectedType.value === 'all' ? undefined : selectedType.value),
   autoLoad: false,
 })
 
@@ -45,6 +45,16 @@ const entityTypeLabels: Record<string, { label: string, icon: string, color: str
   actor: { label: '女优', icon: '👤', color: 'pink' },
   publisher: { label: '厂商', icon: '🏢', color: 'purple' },
   comic: { label: '漫画', icon: '📚', color: 'green' },
+}
+
+function getEntityStatusClass(entityType: string): string {
+  if (entityType === 'movie')
+    return 'ui-status-info'
+  if (entityType === 'actor')
+    return 'ui-status-success'
+  if (entityType === 'publisher')
+    return 'ui-status-warning'
+  return 'ui-status-neutral'
 }
 
 // 构建实体跳转链接
@@ -89,9 +99,9 @@ async function confirmDeleteAction() {
   }
 }
 
-// 加载更多
-async function handleLoadMore() {
-  await loadMore()
+function changePage(page: number) {
+  void fetchFavorites(page)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 // 类型切换
@@ -106,22 +116,25 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="favorites-page">
+  <div class="ui-public-page favorites-page">
     <!-- 页面标题 -->
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold text-white mb-2">
-        ⭐ 我的收藏
-      </h1>
-      <p class="text-gray-400">
-        共 {{ total }} 项收藏
-      </p>
+    <div class="ui-public-page-header">
+      <div>
+        <h1 class="ui-public-page-title">
+          我的收藏
+        </h1>
+        <p class="ui-public-page-description">
+          共 {{ total }} 项收藏
+        </p>
+      </div>
     </div>
 
     <!-- 筛选器 -->
-    <div class="mb-6 flex items-center gap-4">
-      <div class="shrink-0">
-        <label class="text-sm text-gray-400 mb-2 block">类型筛选</label>
+    <div class="ui-public-surface ui-public-actions mb-5 p-4">
+      <div class="ui-public-field min-w-48">
+        <label for="movie-favorite-type">类型筛选</label>
         <Select
+          id="movie-favorite-type"
           :model-value="selectedType"
           :options="typeOptions"
           size="default"
@@ -131,7 +144,7 @@ onMounted(() => {
       </div>
 
       <button
-        class="ml-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors"
+        class="ui-public-button ui-public-button-ghost ml-auto"
         :disabled="loading"
         @click="refresh"
       >
@@ -142,25 +155,19 @@ onMounted(() => {
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading && favorites.length === 0" class="text-center py-12">
-      <div class="inline-block animate-spin text-4xl mb-4">
-        ⟳
-      </div>
-      <p class="text-gray-400">
-        加载中...
-      </p>
+    <div v-if="loading && favorites.length === 0" class="ui-public-empty">
+      <span class="text-3xl animate-pulse">...</span>
+      <p>加载中...</p>
     </div>
 
     <!-- 错误状态 -->
-    <div v-else-if="error" class="text-center py-12">
-      <div class="text-4xl mb-4">
-        ⚠️
-      </div>
-      <p class="text-red-400 mb-4">
+    <div v-else-if="error" class="ui-public-empty">
+      <span class="text-3xl text-[hsl(var(--status-danger))]">!</span>
+      <p class="mb-4 text-[hsl(var(--status-danger))]">
         {{ error }}
       </p>
       <button
-        class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition"
+        class="ui-public-button ui-public-button-primary"
         @click="refresh"
       >
         重试
@@ -168,16 +175,14 @@ onMounted(() => {
     </div>
 
     <!-- 空状态 -->
-    <div v-else-if="isEmpty" class="text-center py-12">
-      <div class="text-6xl mb-4">
-        ⭐
-      </div>
-      <p class="text-gray-400 mb-6">
+    <div v-else-if="isEmpty" class="ui-public-empty">
+      <span class="text-3xl">☆</span>
+      <p class="mb-4 text-muted-foreground">
         还没有收藏任何内容
       </p>
       <RouterLink
         to="/"
-        class="inline-block px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition"
+        class="ui-public-button ui-public-button-primary"
       >
         去首页看看
       </RouterLink>
@@ -188,7 +193,7 @@ onMounted(() => {
       <div
         v-for="favorite in favorites"
         :key="favorite.id"
-        class="favorite-card"
+        class="ui-public-card-row"
       >
         <div class="flex items-center gap-4">
           <!-- 封面/头像 -->
@@ -201,25 +206,20 @@ onMounted(() => {
               v-if="favorite.entity.cover"
               :src="favorite.entity.cover"
               :alt="favorite.entity.name"
-              class="w-16 h-20 object-cover rounded-lg"
+              class="h-20 w-16 rounded-md object-cover"
               :class="favorite.entityType === 'movie' ? 'object-right' : 'object-center'"
             >
             <div
               v-else
-              class="w-16 h-20 rounded-lg flex items-center justify-center text-2xl"
-              :class="{
-                'bg-blue-500/10 border border-blue-500/30': favorite.entityType === 'movie',
-                'bg-pink-500/10 border border-pink-500/30': favorite.entityType === 'actor',
-                'bg-purple-500/10 border border-purple-500/30': favorite.entityType === 'publisher',
-                'bg-green-500/10 border border-green-500/30': favorite.entityType === 'comic',
-              }"
+              class="ui-public-empty min-h-0 h-20 w-16 rounded-md p-0 text-xl"
+              :class="getEntityStatusClass(favorite.entityType)"
             >
               {{ entityTypeLabels[favorite.entityType]?.icon || '📌' }}
             </div>
           </RouterLink>
           <div
             v-else
-            class="shrink-0 w-16 h-20 rounded-lg flex items-center justify-center text-2xl bg-gray-700/50 border border-gray-600/30"
+            class="ui-public-empty min-h-0 h-20 w-16 shrink-0 rounded-md p-0 text-xl"
           >
             🚫
           </div>
@@ -228,13 +228,8 @@ onMounted(() => {
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1">
               <span
-                class="text-xs px-2 py-0.5 rounded-full font-medium"
-                :class="{
-                  'bg-blue-500/20 text-blue-400': favorite.entityType === 'movie',
-                  'bg-pink-500/20 text-pink-400': favorite.entityType === 'actor',
-                  'bg-purple-500/20 text-purple-400': favorite.entityType === 'publisher',
-                  'bg-green-500/20 text-green-400': favorite.entityType === 'comic',
-                }"
+                class="ui-status-tag"
+                :class="getEntityStatusClass(favorite.entityType)"
               >
                 {{ entityTypeLabels[favorite.entityType]?.label || favorite.entityType }}
               </span>
@@ -242,21 +237,21 @@ onMounted(() => {
             <RouterLink
               v-if="favorite.entity"
               :to="getEntityLink(favorite)"
-              class="text-white font-medium hover:text-primary-400 transition-colors block truncate"
+              class="block truncate font-medium text-foreground transition-colors hover:text-primary"
             >
               {{ favorite.entity.name }}
             </RouterLink>
-            <div v-else class="text-gray-500 font-medium">
+            <div v-else class="font-medium text-muted-foreground">
               内容已删除
             </div>
-            <div class="text-sm text-gray-400">
+            <div class="text-sm text-muted-foreground">
               收藏于 {{ new Date(favorite.createdAt * 1000).toLocaleDateString('zh-CN') }}
             </div>
           </div>
 
           <!-- 操作按钮 -->
           <button
-            class="shrink-0 px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-md transition-colors disabled:opacity-50"
+            class="ui-public-button ui-public-button-danger shrink-0"
             :disabled="deletingId === favorite.id"
             @click="requestDelete(favorite.id)"
           >
@@ -267,40 +262,33 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 加载更多 -->
-      <div v-if="hasMore" class="text-center py-6">
-        <button
-          class="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors disabled:opacity-50"
-          :disabled="loading"
-          @click="handleLoadMore"
-        >
-          <span v-if="loading">⟳ 加载中...</span>
-          <span v-else>加载更多</span>
-        </button>
-      </div>
-
-      <!-- 底部提示 -->
-      <div v-else-if="favorites.length > 0" class="text-center py-6 text-gray-500 text-sm">
-        已加载全部 {{ total }} 项收藏
-      </div>
+      <Pagination
+        v-if="totalPages > 1"
+        :current-page="currentPage"
+        :total-pages="totalPages"
+        :total="total"
+        :page-size="20"
+        layout="total, prev, pager, next, jumper"
+        @page-change="changePage"
+      />
     </div>
 
     <!-- 确认删除弹窗 -->
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="confirmModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="cancelDelete">
-          <div class="bg-gray-800 border border-gray-600 rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
-            <p class="text-white text-lg font-medium mb-2">
+        <div v-if="confirmModal.show" class="fixed inset-0 z-[1200] flex items-center justify-center bg-black/70 p-4" @click.self="cancelDelete">
+          <div class="w-full max-w-sm rounded-[var(--ui-radius-lg)] border border-border bg-card p-5 shadow-2xl">
+            <p class="mb-2 text-lg font-medium text-foreground">
               确认取消收藏？
             </p>
-            <p class="text-gray-400 text-sm mb-6">
+            <p class="mb-6 text-sm text-muted-foreground">
               取消后可随时重新收藏。
             </p>
             <div class="flex gap-3 justify-end">
-              <button class="px-4 py-2 text-sm rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors" @click="cancelDelete">
+              <button class="ui-public-button ui-public-button-ghost" @click="cancelDelete">
                 取消
               </button>
-              <button class="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors" @click="confirmDeleteAction">
+              <button class="ui-public-button ui-public-button-danger" @click="confirmDeleteAction">
                 确认删除
               </button>
             </div>
@@ -312,23 +300,10 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.favorite-card {
-  background: rgba(31, 41, 55, 0.5);
-  border: 1px solid rgba(75, 85, 99, 0.5);
-  border-radius: 12px;
-  padding: 16px;
-  transition: all 0.2s;
-}
-
-.favorite-card:hover {
-  background: rgba(31, 41, 55, 0.8);
-  border-color: rgba(75, 85, 99, 0.8);
-  transform: translateY(-2px);
-}
-
 @media (max-width: 768px) {
-  .favorite-card {
-    padding: 12px;
+  .ui-public-card-row {
+    align-items: flex-start;
+    padding: var(--ui-space-3);
   }
 }
 </style>

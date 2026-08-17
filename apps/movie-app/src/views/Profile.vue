@@ -1,12 +1,12 @@
 <!-- eslint-disable no-alert -->
 <script setup lang="ts">
-import type { SelectOption } from '../components/Select.vue'
+import type { SelectOption } from '@starye/ui'
 import type { DownloadStatus, WatchingHistoryItem } from '../types'
-import { computed, onMounted, ref } from 'vue'
+import { Select } from '@starye/ui'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import Aria2Settings from '../components/Aria2Settings.vue'
 import DownloadTaskPanel from '../components/DownloadTaskPanel.vue'
-import Select from '../components/Select.vue'
 import TorrServerSettings from '../components/TorrServerSettings.vue'
 import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
@@ -364,13 +364,19 @@ async function fetchWatchingHistory() {
 
 onMounted(() => {
   if (userStore.user) {
-    fetchWatchingHistory()
+    void fetchWatchingHistory()
+  }
+})
+
+watch(() => userStore.user?.id, (userId) => {
+  if (userId) {
+    void fetchWatchingHistory()
   }
 })
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto">
+  <div class="ui-public-page movie-profile-page">
     <div v-if="!userStore.user" class="text-center py-12">
       <p class="text-gray-400 mb-4">
         请先登录查看个人中心
@@ -889,5 +895,52 @@ onMounted(() => {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(100px);
+}
+</style>
+
+<style scoped>
+.movie-profile-page {
+  max-width: 64rem;
+}
+
+.movie-profile-page :deep([class~="bg-gray-800"]),
+.movie-profile-page :deep([class~="bg-gray-700/50"]) {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-lg);
+  background: hsl(var(--card));
+  box-shadow: var(--ui-surface-shadow);
+}
+
+.movie-profile-page :deep([class~="bg-gray-700"]) {
+  background: hsl(var(--muted));
+}
+
+.movie-profile-page :deep([class~="border-gray-700"]),
+.movie-profile-page :deep([class~="border-gray-600"]) {
+  border-color: hsl(var(--border));
+}
+
+.movie-profile-page :deep([class~="text-white"]),
+.movie-profile-page :deep([class~="text-gray-200"]) {
+  color: hsl(var(--foreground));
+}
+
+.movie-profile-page :deep([class~="text-gray-300"]),
+.movie-profile-page :deep([class~="text-gray-400"]),
+.movie-profile-page :deep([class~="text-gray-500"]) {
+  color: hsl(var(--muted-foreground));
+}
+
+.movie-profile-page :deep([class~="bg-green-900"]),
+.movie-profile-page :deep([class~="bg-green-600"]) {
+  background: hsl(var(--status-success-soft));
+}
+
+.movie-profile-page :deep([class~="text-green-300"]) {
+  color: hsl(var(--status-success));
+}
+
+.movie-profile-page :deep([class~="z-50"]) {
+  z-index: 1200;
 }
 </style>

@@ -103,14 +103,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-900">
+  <div class="ui-app-shell min-h-screen bg-background text-foreground">
     <Header
       @open-drawer="handleOpenDrawer"
       @open-search="handleOpenSearch"
     />
 
     <main
-      class="container mx-auto px-4 py-6 max-w-7xl main-content"
+      class="main-content mx-auto w-full max-w-[96rem] px-4 py-6 sm:px-6"
       :class="{ 'with-bottom-nav': isMobile }"
     >
       <RouterView />
@@ -186,39 +186,39 @@ onMounted(() => {
 .drawer-menu {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--ui-space-6);
 }
 
 .menu-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ui-space-1);
 }
 
 .menu-section-title {
   font-size: 12px;
   font-weight: 600;
-  color: rgb(156, 163, 175);
+  color: hsl(var(--muted-foreground));
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 8px 12px 4px;
+  padding: var(--ui-space-2) var(--ui-space-3) var(--ui-space-1);
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 8px;
-  color: rgb(229, 231, 235);
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-3);
+  border-radius: var(--ui-radius-md);
+  color: hsl(var(--foreground));
   text-decoration: none;
-  transition: all 0.2s;
+  transition: background-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease, transform var(--ui-motion-fast) ease;
   font-size: 15px;
 }
 
 .menu-item:hover {
-  background: rgb(55, 65, 81);
-  color: white;
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
 }
 
 .menu-item:active {
@@ -238,8 +238,8 @@ onMounted(() => {
 
 /* 路由激活状态 */
 .menu-item.router-link-active {
-  background: rgba(59, 130, 246, 0.1);
-  color: rgb(96, 165, 250);
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
 }
 </style>
 

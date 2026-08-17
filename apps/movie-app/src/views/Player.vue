@@ -1313,7 +1313,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 bg-black z-50">
+  <div class="player-shell fixed inset-0 z-50">
     <div class="absolute top-0 left-0 right-0 bg-linear-to-b from-black/80 to-transparent p-4 z-10">
       <div class="container mx-auto flex items-center justify-between">
         <button
@@ -1601,5 +1601,71 @@ onUnmounted(() => {
   .animate-spin {
     animation: none;
   }
+}
+
+.player-shell {
+  --background: 222 47% 7%;
+  --foreground: 210 40% 98%;
+  --card: 215 28% 13%;
+  --card-foreground: 210 40% 98%;
+  --muted: 215 22% 19%;
+  --muted-foreground: 213 16% 68%;
+  --border: 217 19% 27%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 0 0% 100%;
+  --status-danger: 0 72% 58%;
+  --status-warning: 36 90% 60%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.player-shell :deep([class~="bg-gray-800"]),
+.player-shell :deep([class~="bg-gray-800/80"]),
+.player-shell :deep([class~="bg-gray-800/60"]) {
+  background: hsl(var(--card));
+}
+
+.player-shell :deep([class~="bg-gray-700"]),
+.player-shell :deep([class~="bg-gray-700/50"]),
+.player-shell :deep([class~="bg-gray-700/80"]) {
+  background: hsl(var(--muted));
+}
+
+.player-shell :deep([class~="border-gray-700"]),
+.player-shell :deep([class~="border-gray-600"]) {
+  border-color: hsl(var(--border));
+}
+
+.player-shell :deep([class~="text-white"]),
+.player-shell :deep([class~="text-gray-100"]),
+.player-shell :deep([class~="text-gray-200"]) {
+  color: hsl(var(--foreground));
+}
+
+.player-shell :deep([class~="text-gray-300"]),
+.player-shell :deep([class~="text-gray-400"]),
+.player-shell :deep([class~="text-gray-500"]) {
+  color: hsl(var(--muted-foreground));
+}
+
+.player-shell :deep([class~="text-red-400"]),
+.player-shell :deep([class~="text-red-500"]) {
+  color: hsl(var(--status-danger));
+}
+
+.player-shell :deep([class~="text-amber-300"]),
+.player-shell :deep([class~="text-amber-400"]) {
+  color: hsl(var(--status-warning));
+}
+
+.player-shell :deep([class~="bg-red-600"]),
+.player-shell :deep([class~="bg-red-700"]),
+.player-shell :deep([class~="bg-red-800"]) {
+  background: hsl(var(--status-danger));
+}
+
+.player-shell :deep([class~="bg-orange-600"]),
+.player-shell :deep([class~="bg-teal-600"]) {
+  background: hsl(var(--primary));
 }
 </style>

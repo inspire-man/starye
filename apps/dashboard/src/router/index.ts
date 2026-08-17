@@ -132,9 +132,9 @@ interface UserWithRole {
   role: string
 }
 
-router.beforeEach(async (to, _from, next) => {
+router.beforeEach(async (to) => {
   if (to.meta.public)
-    return next()
+    return true
 
   const { data: session } = await authClient.getSession()
 
@@ -167,11 +167,11 @@ router.beforeEach(async (to, _from, next) => {
         actual: role,
         path: to.path,
       })
-      return next('/unauthorized')
+      return '/unauthorized'
     }
   }
 
-  next()
+  return true
 })
 
 export default router

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 interface Props {
-  variant?: 'stat' | 'content' | 'image'
+  variant?: 'stat' | 'content' | 'image' | 'poster' | 'row'
 }
 
 withDefaults(defineProps<Props>(), {
@@ -9,7 +9,7 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-  <div class="skeleton-card rounded-lg border border-border" :class="`skeleton-card-${variant}`">
+  <div class="skeleton-card rounded-lg border border-border" :class="`skeleton-card-${variant}`" role="status" aria-label="加载中">
     <!-- Stat 变体 -->
     <div v-if="variant === 'stat'" class="space-y-3">
       <div class="flex items-center justify-between">
@@ -31,13 +31,32 @@ withDefaults(defineProps<Props>(), {
     </div>
 
     <!-- Image 变体 -->
-    <div v-else-if="variant === 'image'" class="space-y-4">
-      <div class="skeleton-shimmer aspect-video w-full rounded-lg" />
+    <div v-else-if="variant === 'image'" class="space-y-3">
+      <div class="skeleton-shimmer aspect-video w-full rounded-[var(--ui-radius-lg)]" />
       <div class="space-y-2">
         <div class="skeleton-shimmer h-5 w-3/4 rounded" />
-        <div class="skeleton-shimmer h-4 w-full rounded" />
-        <div class="skeleton-shimmer h-4 w-5/6 rounded" />
+        <div class="skeleton-shimmer h-3.5 w-2/3 rounded" />
       </div>
+    </div>
+
+    <!-- Poster 变体 -->
+    <div v-else-if="variant === 'poster'" class="space-y-3">
+      <div class="skeleton-shimmer aspect-[3/4] w-full rounded-[var(--ui-radius-lg)]" />
+      <div class="space-y-2">
+        <div class="skeleton-shimmer h-5 w-3/4 rounded" />
+        <div class="skeleton-shimmer h-3.5 w-2/3 rounded" />
+      </div>
+    </div>
+
+    <!-- Row 变体 -->
+    <div v-else-if="variant === 'row'" class="flex min-h-24 items-center gap-3">
+      <div class="skeleton-shimmer h-16 w-12 shrink-0 rounded-md" />
+      <div class="min-w-0 flex-1 space-y-2">
+        <div class="skeleton-shimmer h-4 w-3/4 rounded" />
+        <div class="skeleton-shimmer h-3.5 w-full rounded" />
+        <div class="skeleton-shimmer h-3.5 w-1/2 rounded" />
+      </div>
+      <div class="skeleton-shimmer h-8 w-20 shrink-0 rounded-md" />
     </div>
   </div>
 </template>
@@ -60,6 +79,17 @@ withDefaults(defineProps<Props>(), {
 
 .skeleton-card-image {
   padding: 1rem 1.125rem;
+}
+
+.skeleton-card-poster {
+  padding: 0.25rem;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.skeleton-card-row {
+  padding: 0.75rem;
 }
 
 .skeleton-shimmer {
