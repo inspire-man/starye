@@ -1176,4 +1176,32 @@ describe('crawler task repository', () => {
       type: 'admin_cancel',
     })).resolves.toMatchObject({ kind: 'rejected', reasonCode: 'task_inactive' })
   })
+
+  it('allocates lifecycle transitions below existing negative audit sequences', async () => {
+    const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
+    expect(created.kind).toBe('created')
+    if (created.kind !== 'created')
+      throw new Error('expected created run')
+
+    await client.execute({
+      args: [created.run.id],
+      sql: `
+        INSERT INTO crawler_run_transition (
+          id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+        ) VALUES ('stale-audit', ?, -101, 'queued', 'queued', 'stale_event', 'stale runner event', 1)
+      `,
+    })
+
+    await expect(repository.archiveTask(created.run.taskId)).resolves.toMatchObject({
+      kind: 'updated',
+      lifecycle: { status: 'archived', version: 1 },
+    })
+
+    const transitions = await client.execute({
+      args: [created.run.id],
+      sql: 'SELECT sequence, reason_code FROM crawler_run_transition WHERE run_id = ? ORDER BY sequence',
+    })
+    expect(transitions.rows).toContainEqual({ sequence: -102, reason_code: 'task_archived' })
+    await expect(repository.getTaskDetail(created.run.taskId)).resolves.toMatchObject({ lifecycle: { status: 'archived', version: 1 } })
+  })
 })

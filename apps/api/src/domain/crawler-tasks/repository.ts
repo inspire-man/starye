@@ -1252,19 +1252,24 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const safeSummary = event.type === 'supersede'
       ? `superseded_by:${event.supersededByTaskId}`
       : 'task archived'
-    const transitionSequence = -(100 + next.version)
     const batchResults = await d1.batch([
       d1.prepare(`
-        INSERT OR IGNORE INTO crawler_run_transition (
+        INSERT INTO crawler_run_transition (
           id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
         )
-        SELECT ?, run.id, ?, run.status, run.status, ?, ?, ?
+        SELECT ?, run.id,
+          COALESCE(
+            (SELECT MIN(existing.sequence) - 1
+             FROM crawler_run_transition AS existing
+             WHERE existing.run_id = run.id),
+            -1
+          ),
+          run.status, run.status, ?, ?, ?
         FROM crawler_run AS run
         INNER JOIN crawler_task AS task ON task.id = run.task_id
         WHERE task.id = ? AND task.latest_run_id = ? AND task.updated_at = ? AND run.id = ?
       `).bind(
         createId(),
-        transitionSequence,
         reasonCode,
         safeSummary,
         currentNow,
@@ -1279,8 +1284,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         WHERE id = ? AND latest_run_id = ? AND updated_at = ?
       `).bind(currentNow, taskId, taskRow.latest_run_id, taskRow.updated_at),
     ])
+    const inserted = batchResults[0] as { meta?: { changes?: number } } | undefined
     const updated = batchResults[1] as { meta?: { changes?: number } } | undefined
-    if ((updated?.meta?.changes ?? 0) === 0) {
+    if ((inserted?.meta?.changes ?? 0) === 0 || (updated?.meta?.changes ?? 0) === 0) {
       const latest = await readTaskLifecycle(taskId)
       return { kind: 'rejected', lifecycle: latest, reasonCode: 'stale_task_revision', taskId }
     }
