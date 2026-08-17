@@ -279,3 +279,4 @@ describe('target-profile CLI parser', () => {
     expect(error.mock.calls.flat().join('\n')).not.toContain(fixtureSecret)
   })
 })
+

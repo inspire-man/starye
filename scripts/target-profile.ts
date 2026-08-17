@@ -608,3 +608,4 @@ const isDirectExecution = process.argv[1]
 if (isDirectExecution) {
   void main()
 }
+
