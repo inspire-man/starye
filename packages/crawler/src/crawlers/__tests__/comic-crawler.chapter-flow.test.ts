@@ -105,6 +105,11 @@ describe('comicCrawler chapter flow', () => {
       ([endpoint, payload]) => endpoint === '/api/admin/sync' && payload?.type === 'manga',
     )
     expect(mangaSyncCall?.[1].data.cover).toBe('https://source.example.com/covers/cover.jpg')
+    expect(syncToApi).toHaveBeenCalledWith(
+      '/api/admin/chapters/comics/comic-1/existing-chapters',
+      null,
+      { method: 'GET' },
+    )
 
     const chapterSyncCall = syncToApi.mock.calls.find(
       ([endpoint, payload]) => endpoint === '/api/admin/sync' && payload?.type === 'chapter',

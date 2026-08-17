@@ -409,7 +409,7 @@ export class ComicCrawler extends BaseCrawler {
       let existingChapters: string[] = []
       try {
         const res = await this.syncToApi(
-          `/api/admin/comics/${info.slug}/existing-chapters`,
+          `/api/admin/chapters/comics/${info.slug}/existing-chapters`,
           null,
           { method: 'GET' },
         ) as string[] | null
