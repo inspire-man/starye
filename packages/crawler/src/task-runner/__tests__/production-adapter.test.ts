@@ -111,6 +111,48 @@ describe('registry-owned production crawler adapters', () => {
     expect(client.succeeded).toHaveBeenCalledWith(7, ['MOV-001'], { createdCount: 1 })
   })
 
+  it('does not re-claim a manually dispatched production run', async () => {
+    const { environment } = await fixture()
+    const { client: actions } = actionsFixture()
+    const candidate = {
+      attempt: 2,
+      runId: 'run-1',
+      sequence: 2,
+      snapshot: {
+        entrypoint: 'movie-crawler' as const,
+        permissionResource: 'movie' as const,
+        templateKey: 'movie' as const,
+        templateVersion: 1 as const,
+      },
+    }
+    const runner = {
+      cancelled: vi.fn(async () => ({ accepted: true })),
+      claim: vi.fn(async () => ({ accepted: false })),
+      failed: vi.fn(async () => ({ accepted: true })),
+      heartbeat: vi.fn(async () => ({ accepted: true })),
+      log: vi.fn(async () => ({ accepted: true })),
+      observeAvailability: vi.fn(async () => ({ accepted: true })),
+      observeRepairSource: vi.fn(),
+      poll: vi.fn(async () => candidate),
+      progress: vi.fn(async () => ({ accepted: true })),
+      succeeded: vi.fn(async () => ({ accepted: true })),
+      succeededRepair: vi.fn(async () => ({ accepted: true })),
+    }
+
+    const result = await runTargetCrawlerMutation(environment, {
+      createActionsEventClient: () => actions,
+      createRunnerClient: () => runner,
+      executeMovie: async (context) => {
+        context.observe('MOV-MANUAL-DISPATCH')
+        return { contentIds: ['MOV-MANUAL-DISPATCH'] }
+      },
+    })
+
+    expect(result).toMatchObject({ contentIds: ['MOV-MANUAL-DISPATCH'], status: 'succeeded' })
+    expect(runner.claim).not.toHaveBeenCalled()
+    expect(runner.heartbeat).toHaveBeenCalledWith(candidate, 3)
+  })
+
   it('claims the server snapshot before selecting the movie repair adapter', async () => {
     const { environment } = await fixture()
     const { client: actions } = actionsFixture()

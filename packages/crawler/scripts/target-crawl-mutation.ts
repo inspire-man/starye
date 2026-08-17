@@ -279,9 +279,11 @@ async function runClaimedProductionCrawlerMutation(
     throw new Error('target-crawl-mutation rejected a candidate outside the prepared production binding.')
   }
 
-  const claim = await runner.claim(candidate)
-  if (!claim.accepted)
-    throw new Error('target-crawl-mutation rejected an unclaimed production run.')
+  if (candidate.sequence === 1) {
+    const claim = await runner.claim(candidate)
+    if (!claim.accepted)
+      throw new Error('target-crawl-mutation rejected an unclaimed production run.')
+  }
 
   const started = await actions.providerStarted(binding)
   if (!started.accepted)
@@ -343,7 +345,7 @@ async function runClaimedProductionCrawlerMutation(
   ])
 
   try {
-    // Claim precedes registry selection; the server-owned snapshot is the only operation authority.
+    // Claim scheduled runs before registry selection; manual dispatch runs were claimed before Actions started.
     if (await checkpoint()) {
       await runner.cancelled(candidate, sequence++)
       terminalEmitted = true
