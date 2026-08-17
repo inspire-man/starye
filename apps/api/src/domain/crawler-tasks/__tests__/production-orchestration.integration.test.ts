@@ -158,6 +158,34 @@ describe('production orchestration lifecycle integration', () => {
     })
   })
 
+  it('polls a bound run after dispatch claim moves it to dispatching', async () => {
+    const { repository } = await createRepositoryFixture()
+    const scheduled = await repository.scheduleRegister({
+      bodySha256: 'dispatching-poll-body',
+      environment: 'starye-org',
+      eventId: 'dispatching-poll-event',
+      keyId: 'key-current',
+      nonce: 'dispatching-poll-nonce',
+      ref: 'main',
+      repository: 'inspire-man/starye',
+      scheduleBucket: '2026-07-30T02:00Z',
+      scheduledAt: '2026-07-30T02:00:00.000Z',
+      target: 'starye-org',
+      template: 'movie',
+      workflow: '.github/workflows/daily-movie-crawl.yml',
+    })
+
+    expect(scheduled.accepted).toBe(true)
+    await expect(repository.claimDispatch(scheduled.runId)).resolves.toMatchObject({
+      kind: 'transition',
+      nextStatus: 'dispatching',
+    })
+    await expect(repository.pollDispatch({ attempt: scheduled.attempt, runId: scheduled.runId })).resolves.toMatchObject({
+      runId: scheduled.runId,
+      snapshot: { templateKey: 'movie' },
+    })
+  })
+
   it('replays manual dispatch through provider_started, poll compensation, and a validated receipt', async () => {
     const { client, repository } = await createRepositoryFixture()
 

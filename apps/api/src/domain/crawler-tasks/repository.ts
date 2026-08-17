@@ -1451,11 +1451,11 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       FROM crawler_run AS run
       INNER JOIN crawler_task AS task ON task.id = run.task_id
       INNER JOIN crawler_run_provider_association AS provider ON provider.run_id = run.id
-      WHERE run.status = 'queued'
+      WHERE (run.status = 'queued' OR (? IS NOT NULL AND run.status = 'dispatching'))
         AND (? IS NULL OR (run.id = ? AND run.attempt_number = ?))
       ORDER BY run.created_at ASC, run.id ASC
       LIMIT 1
-    `).bind(input?.runId ?? null, input?.runId ?? null, input?.attempt ?? null).all<{
+    `).bind(input?.runId ?? null, input?.runId ?? null, input?.runId ?? null, input?.attempt ?? null).all<{
       attempt_number: number
       id: string
       last_event_sequence: number
