@@ -12,12 +12,14 @@ import { useAria2 } from '../composables/useAria2'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useMobileDetect } from '../composables/useMobileDetect'
 import { useRating } from '../composables/useRating'
+import { useToast } from '../composables/useToast'
 import { progressApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 import { formatFileSize } from '../utils/aria2Client'
 
 const userStore = useUserStore()
 const { isMobile } = useMobileDetect()
+const { showToast } = useToast()
 const loadingHistory = ref(false)
 const watchingHistory = ref<WatchingHistoryItem[]>([])
 
@@ -69,16 +71,6 @@ const downloadFilterOptions: SelectOption<DownloadStatus | 'all'>[] = [
   { label: '下载中', value: 'downloading', icon: '⬇️' },
   { label: '已完成', value: 'completed', icon: '✅' },
 ]
-
-// Toast 提示
-const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
-
-function showToast(message: string, type: 'success' | 'error' = 'success') {
-  toast.value = { show: true, message, type }
-  setTimeout(() => {
-    toast.value.show = false
-  }, 3000)
-}
 
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600)
@@ -866,37 +858,8 @@ watch(() => userStore.user?.id, (userId) => {
         </div>
       </div>
     </div>
-
-    <!-- Toast 提示 -->
-    <Transition name="toast">
-      <div
-        v-if="toast.show"
-        class="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm"
-        :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'"
-      >
-        {{ toast.message }}
-      </div>
-    </Transition>
   </div>
 </template>
-
-<style scoped>
-/* Toast 动画 */
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.toast-enter-from {
-  opacity: 0;
-  transform: translateX(100px);
-}
-
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(100px);
-}
-</style>
 
 <style scoped>
 .movie-profile-page {

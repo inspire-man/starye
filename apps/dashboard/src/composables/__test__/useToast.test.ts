@@ -37,12 +37,19 @@ describe('useToast', () => {
       const id = showToast('info', '提示信息', {
         duration: 5000,
         closable: false,
+        title: '操作进度',
+        action: {
+          label: '重试',
+          onClick: vi.fn(),
+        },
       })
 
       expect(toast.toasts.value[0]).toMatchObject({
         id,
         duration: 5000,
         closable: false,
+        title: '操作进度',
+        action: expect.objectContaining({ label: '重试' }),
       })
     })
 

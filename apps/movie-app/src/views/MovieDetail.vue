@@ -10,6 +10,7 @@ import { useAuthGuard } from '../composables/useAuthGuard'
 import { useDownloadList } from '../composables/useDownloadList'
 import { useFavorites } from '../composables/useFavorites'
 import { useRating } from '../composables/useRating'
+import { useToast } from '../composables/useToast'
 import { useTorrServer } from '../composables/useTorrServer'
 import { movieApi, ratingApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
@@ -30,6 +31,7 @@ import { formatTorrentFileSize } from '../utils/torrServerClient'
 
 const route = useRoute()
 const router = useRouter()
+const { showToast } = useToast()
 const loading = ref(true)
 const error = ref('')
 const movie = ref<MovieDetail | null>(null)
@@ -214,16 +216,6 @@ const reportModal = ref({ show: false, player: null as Player | null, submitting
 
 // 本地已上报的 player id 集合（当前会话内防重复）
 const reportedPlayerIds = ref<Set<string>>(new Set())
-
-// Toast 提示
-const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
-
-function showToast(message: string, type: 'success' | 'error' = 'success') {
-  toast.value = { show: true, message, type }
-  setTimeout(() => {
-    toast.value.show = false
-  }, 3000)
-}
 
 const sourceDispositionLabels: Record<SourceDisposition, string> = {
   ready: '来源就绪',
@@ -1508,17 +1500,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Toast 提示 -->
-      <Transition name="toast">
-        <div
-          v-if="toast.show"
-          class="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm"
-          :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'"
-        >
-          {{ toast.message }}
-        </div>
-      </Transition>
-
       <!-- 二维码 Modal -->
       <Transition name="modal">
         <div
@@ -1762,22 +1743,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Toast 动画 */
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.toast-enter-from {
-  opacity: 0;
-  transform: translateX(100px);
-}
-
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(100px);
-}
-
 /* Modal 动画 */
 .modal-enter-active,
 .modal-leave-active {
