@@ -41,6 +41,8 @@ const cancelConfirmOpen = ref(false)
 const retryConfirmOpen = ref(false)
 const archiveConfirmOpen = ref(false)
 const supersedeConfirmOpen = ref(false)
+const runAction = ref<'cancel' | 'retry' | null>(null)
+const clearAction = ref(false)
 const pendingAction = ref<{ task: CrawlerTask, run: CrawlerRun } | null>(null)
 const pendingTaskMutation = ref<CrawlerTask | null>(null)
 const taskMutation = ref<'archive' | 'metadata' | 'supersede' | null>(null)
@@ -792,9 +794,12 @@ async function confirmArchive(): Promise<void> {
   if (!task || taskMutation.value)
     return
   taskMutation.value = 'archive'
+  let completed = false
   try {
     await api.admin.archiveCrawlerTask(task.id)
     success('任务已归档，历史 run、observation 和 audit 仍保留。')
+    archiveConfirmOpen.value = false
+    completed = true
     await loadTaskPanel()
     await loadTaskAudit(task.id)
   }
@@ -802,7 +807,8 @@ async function confirmArchive(): Promise<void> {
     taskError.value = '任务归档被拒绝。请刷新后重试。'
   }
   finally {
-    pendingTaskMutation.value = null
+    if (completed)
+      pendingTaskMutation.value = null
     taskMutation.value = null
   }
 }
@@ -813,9 +819,12 @@ async function confirmSupersede(): Promise<void> {
   if (!task || !command || taskMutation.value)
     return
   taskMutation.value = 'supersede'
+  let completed = false
   try {
     await api.admin.supersedeCrawlerTask(task.id, command)
     success('任务已生成新快照，正在读取历史与最新状态。')
+    supersedeConfirmOpen.value = false
+    completed = true
     await loadTaskPanel()
     await loadTaskAudit(task.id)
   }
@@ -823,7 +832,8 @@ async function confirmSupersede(): Promise<void> {
     taskError.value = '任务 supersede 被拒绝。请检查当前任务是否仍为 active。'
   }
   finally {
-    pendingTaskMutation.value = null
+    if (completed)
+      pendingTaskMutation.value = null
     taskMutation.value = null
   }
 }
@@ -842,16 +852,22 @@ async function confirmCancel(): Promise<void> {
   const target = pendingAction.value
   if (!target)
     return
+  runAction.value = 'cancel'
+  let completed = false
   try {
     await api.admin.cancelCrawlerRun(target.task.id, target.run.id)
     success('已请求取消，等待 runner 确认。')
+    cancelConfirmOpen.value = false
+    completed = true
     await loadTaskPanel()
   }
   catch {
     taskError.value = '无法加载任务数据。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
   }
   finally {
-    pendingAction.value = null
+    if (completed)
+      pendingAction.value = null
+    runAction.value = null
   }
 }
 
@@ -859,8 +875,12 @@ async function confirmRetry(): Promise<void> {
   const target = pendingAction.value
   if (!target)
     return
+  runAction.value = 'retry'
+  let completed = false
   try {
     await api.admin.retryCrawlerRun(target.task.id, target.run.id)
+    retryConfirmOpen.value = false
+    completed = true
     await loadTaskPanel()
     const task = crawlerTasks.value[taskTemplate(target.task)][0]
     if (task)
@@ -870,7 +890,9 @@ async function confirmRetry(): Promise<void> {
     taskError.value = '无法加载任务数据。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
   }
   finally {
-    pendingAction.value = null
+    if (completed)
+      pendingAction.value = null
+    runAction.value = null
   }
 }
 
@@ -925,6 +947,7 @@ async function confirmRepair(): Promise<void> {
   if (!target || repairAction.value)
     return
   repairAction.value = true
+  let completed = false
   try {
     const response = await api.admin.repairPlayers({
       confirmed: true,
@@ -933,6 +956,8 @@ async function confirmRepair(): Promise<void> {
       targetIntent: 'restore_playable_sources',
     })
     success('已创建受控来源修复任务，正在等待读回。')
+    repairConfirmOpen.value = false
+    completed = true
     await loadTaskPanel()
     const detail = await api.admin.getCrawlerTask(response.task.id)
     const task = detail.task ?? response.task
@@ -946,7 +971,8 @@ async function confirmRepair(): Promise<void> {
     taskError.value = '无法创建修复任务。请刷新页面；如果问题持续，请检查 Gateway 与本地 runner 服务。'
   }
   finally {
-    pendingRepair.value = null
+    if (completed)
+      pendingRepair.value = null
     repairAction.value = false
   }
 }
@@ -1019,13 +1045,18 @@ function handleClearFailed(type: 'comic' | 'movie') {
 
 async function executeClearFailed() {
   const type = clearConfirmType.value
+  clearAction.value = true
   try {
     await api.admin.clearFailedTasks(type)
+    clearConfirmOpen.value = false
     await loadFailedTasks()
     success(`已清空 ${type === 'comic' ? '漫画' : '电影'} 失败任务记录`)
   }
   catch (e) {
     handleError(e, `清空 ${type === 'comic' ? '漫画' : '电影'} 失败任务失败`)
+  }
+  finally {
+    clearAction.value = false
   }
 }
 </script>
@@ -1851,6 +1882,9 @@ async function executeClearFailed() {
     title="确认清空失败任务"
     :message="`确认清空 ${clearConfirmType === 'comic' ? '漫画' : '电影'} 的所有失败任务记录？此操作不可撤销。`"
     variant="danger"
+    :loading="clearAction"
+    confirm-text="确认清空"
+    cancel-text="返回"
     @confirm="executeClearFailed"
   />
 
@@ -1861,6 +1895,7 @@ async function executeClearFailed() {
     confirm-text="继续取消"
     cancel-text="返回任务"
     variant="danger"
+    :loading="runAction === 'cancel'"
     @confirm="confirmCancel"
   />
   <ConfirmDialog
@@ -1869,6 +1904,7 @@ async function executeClearFailed() {
     message="重试任务：将创建新的 attempt；原任务的状态和日志会保留。"
     confirm-text="创建重试"
     cancel-text="返回任务"
+    :loading="runAction === 'retry'"
     @confirm="confirmRetry"
   />
   <ConfirmDialog
@@ -1878,6 +1914,7 @@ async function executeClearFailed() {
     confirm-text="确认归档"
     cancel-text="返回任务"
     variant="danger"
+    :loading="taskMutation === 'archive'"
     @confirm="confirmArchive"
   />
   <ConfirmDialog
@@ -1886,6 +1923,7 @@ async function executeClearFailed() {
     message="将保留当前任务历史，并使用服务端允许的固定 operation、policy 和 target 生成新任务快照。"
     confirm-text="生成新快照"
     cancel-text="返回任务"
+    :loading="taskMutation === 'supersede'"
     @confirm="confirmSupersede"
   />
   <ConfirmDialog
@@ -1894,6 +1932,7 @@ async function executeClearFailed() {
     :message="repairConfirmationMessage"
     confirm-text="确认恢复可播放源"
     cancel-text="返回"
+    :loading="repairAction"
     @confirm="confirmRepair"
   />
 </template>

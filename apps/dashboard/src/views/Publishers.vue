@@ -442,11 +442,14 @@ onMounted(() => {
     </DetailDrawer>
 
     <ConfirmDialog
-      :open="isMergeDialogOpen"
+      v-model:open="isMergeDialogOpen"
       title="合并厂商"
       message="将此厂商合并到另一个厂商（所有关联作品将转移）"
+      variant="danger"
+      :loading="mergingPublishers"
+      confirm-text="确认合并"
+      cancel-text="返回"
       @confirm="handleMerge"
-      @cancel="isMergeDialogOpen = false"
     >
       <div class="merge-form">
         <div class="form-field">

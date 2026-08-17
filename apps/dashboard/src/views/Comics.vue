@@ -154,6 +154,8 @@ const chapters = ref<Chapter[]>([])
 const chaptersLoading = ref(false)
 const selectedChapterIds = ref<Set<string>>(new Set())
 const chapterBatchDeleteOpen = ref(false)
+const batchOperating = ref(false)
+const chapterBatchDeleting = ref(false)
 
 // ─── 数据加载 ───────────────────────────────────────────────────────────────
 
@@ -348,18 +350,20 @@ async function executeChapterBatchDelete() {
   if (!editingComic.value?.id || selectedChapterIds.value.size === 0)
     return
 
+  chapterBatchDeleting.value = true
   try {
     const chapterIds = [...selectedChapterIds.value]
     await api.admin.bulkDeleteChapters(editingComic.value.id, chapterIds)
     chapters.value = chapters.value.filter(c => !selectedChapterIds.value.has(c.id))
     selectedChapterIds.value.clear()
+    chapterBatchDeleteOpen.value = false
     success(`已删除 ${chapterIds.length} 个章节`)
   }
   catch (e) {
     handleError(e, '批量删除章节失败')
   }
   finally {
-    chapterBatchDeleteOpen.value = false
+    chapterBatchDeleting.value = false
   }
 }
 
@@ -384,51 +388,62 @@ async function executeBatchOperation() {
   const { operation } = confirmDialogData.value
   const ids = [...selectedIds.value]
   const total = ids.length
+  batchOperating.value = true
 
-  if (operation === 'delete') {
-    const progressId = showProgress('正在删除漫画...')
-    let successCount = 0
-    let failedCount = 0
+  try {
+    if (operation === 'delete') {
+      const progressId = showProgress('正在删除漫画...')
+      let successCount = 0
+      let failedCount = 0
+      const failedIds: string[] = []
 
-    try {
-      for (let i = 0; i < ids.length; i++) {
-        try {
-          await api.admin.deleteComic(ids[i])
-          successCount++
+      try {
+        for (let i = 0; i < ids.length; i++) {
+          try {
+            await api.admin.deleteComic(ids[i])
+            successCount++
+          }
+          catch {
+            failedCount++
+            failedIds.push(ids[i])
+          }
+          updateProgress(progressId, Math.round(((i + 1) / total) * 100))
         }
-        catch {
-          failedCount++
+
+        hideProgress(progressId)
+
+        if (failedCount === 0) {
+          success(`成功删除 ${successCount} 部漫画`)
+          clearSelection()
+          confirmDialogOpen.value = false
         }
-        updateProgress(progressId, Math.round(((i + 1) / total) * 100))
-      }
+        else {
+          warning(`完成删除: 成功 ${successCount} 部，失败 ${failedCount} 部；失败项已保留，可直接重试`)
+          selected.value = new Set(failedIds)
+        }
 
-      hideProgress(progressId)
-
-      if (failedCount === 0) {
-        success(`成功删除 ${successCount} 部漫画`)
+        await loadComics()
       }
-      else {
-        warning(`完成删除: 成功 ${successCount} 部，失败 ${failedCount} 部`)
+      catch (e) {
+        hideProgress(progressId)
+        handleError(e, '批量删除失败')
       }
-
-      clearSelection()
-      await loadComics()
     }
-    catch (e) {
-      hideProgress(progressId)
-      handleError(e, '批量删除失败')
+    else {
+      try {
+        await api.admin.bulkOperationComics(selectedIds.value, operation)
+        success(`成功对 ${selectedCount.value} 部漫画执行了操作`)
+        clearSelection()
+        confirmDialogOpen.value = false
+        await loadComics()
+      }
+      catch (e) {
+        handleError(e, '批量操作失败')
+      }
     }
   }
-  else {
-    try {
-      await api.admin.bulkOperationComics(selectedIds.value, operation)
-      success(`成功对 ${selectedCount.value} 部漫画执行了操作`)
-      clearSelection()
-      await loadComics()
-    }
-    catch (e) {
-      handleError(e, '批量操作失败')
-    }
+  finally {
+    batchOperating.value = false
   }
 }
 </script>
@@ -996,6 +1011,10 @@ async function executeBatchOperation() {
       v-model:open="confirmDialogOpen"
       :title="confirmDialogData.title"
       :message="confirmDialogData.message"
+      :variant="confirmDialogData.operation === 'delete' ? 'danger' : 'default'"
+      :loading="batchOperating"
+      confirm-text="确认"
+      cancel-text="返回"
       @confirm="executeBatchOperation"
     />
 
@@ -1004,6 +1023,10 @@ async function executeBatchOperation() {
       v-model:open="chapterBatchDeleteOpen"
       title="确认批量删除章节"
       :message="`确认删除选中的 ${selectedChapterIds.size} 个章节？此操作不可撤销。`"
+      variant="danger"
+      :loading="chapterBatchDeleting"
+      confirm-text="确认删除"
+      cancel-text="返回"
       @confirm="executeChapterBatchDelete"
     />
   </div>

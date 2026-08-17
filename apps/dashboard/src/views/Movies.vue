@@ -186,6 +186,7 @@ const confirmDialogData = ref<{
   message: '',
   operation: '',
 })
+const batchOperating = ref(false)
 
 async function loadMovies(retryCount = 0) {
   loading.value = true
@@ -476,64 +477,74 @@ async function executeBatchOperation() {
   const { operation, payload } = confirmDialogData.value
   const ids = [...selectedIds.value]
   const total = ids.length
+  batchOperating.value = true
 
-  // 特殊处理批量删除，显示进度
-  if (operation === 'delete') {
-    const progressId = showProgress('正在删除电影...')
-    let successCount = 0
-    let failedCount = 0
-    const failedItems: string[] = []
+  try {
+    // 特殊处理批量删除，显示进度
+    if (operation === 'delete') {
+      const progressId = showProgress('正在删除电影...')
+      let successCount = 0
+      let failedCount = 0
+      const failedItems: string[] = []
 
-    try {
-      for (let i = 0; i < ids.length; i++) {
-        const movieId = ids[i]
-        try {
-          await api.admin.deleteMovie(movieId)
-          successCount++
+      try {
+        for (let i = 0; i < ids.length; i++) {
+          const movieId = ids[i]
+          try {
+            await api.admin.deleteMovie(movieId)
+            successCount++
+          }
+          catch (e: unknown) {
+            failedCount++
+            failedItems.push(movieId)
+            console.error(`删除电影 ${movieId} 失败:`, e)
+          }
+
+          // 更新进度
+          const progress = Math.round(((i + 1) / total) * 100)
+          updateProgress(progressId, progress)
         }
-        catch (e: unknown) {
-          failedCount++
-          failedItems.push(movieId)
-          console.error(`删除电影 ${movieId} 失败:`, e)
+
+        hideProgress(progressId)
+
+        // 显示汇总结果
+        if (failedCount === 0) {
+          success(`成功删除 ${successCount} 部电影`)
+          clearSelection()
+          confirmDialogOpen.value = false
+        }
+        else if (successCount === 0) {
+          handleError(new Error('批量删除全部失败'), `删除失败: ${failedCount} 部电影`)
+          selected.value = new Set(failedItems)
+        }
+        else {
+          warning(`完成删除: 成功 ${successCount} 部，失败 ${failedCount} 部；失败项已保留，可直接重试`)
+          selected.value = new Set(failedItems)
         }
 
-        // 更新进度
-        const progress = Math.round(((i + 1) / total) * 100)
-        updateProgress(progressId, progress)
+        await loadMovies()
       }
-
-      hideProgress(progressId)
-
-      // 显示汇总结果
-      if (failedCount === 0) {
-        success(`成功删除 ${successCount} 部电影`)
+      catch (e: unknown) {
+        hideProgress(progressId)
+        handleError(e, '批量删除失败')
       }
-      else if (successCount === 0) {
-        handleError(new Error('批量删除全部失败'), `删除失败: ${failedCount} 部电影`)
-      }
-      else {
-        warning(`完成删除: 成功 ${successCount} 部，失败 ${failedCount} 部`)
-      }
-
-      clearSelection()
-      await loadMovies()
     }
-    catch (e: unknown) {
-      hideProgress(progressId)
-      handleError(e, '批量删除失败')
+    else {
+      // 其他批量操作使用原有逻辑
+      try {
+        await api.admin.bulkOperationMovies(selectedIds.value, operation, payload)
+        success(`成功对 ${selectedCount.value} 部电影执行了操作`)
+        clearSelection()
+        confirmDialogOpen.value = false
+        await loadMovies()
+      }
+      catch (e: unknown) {
+        handleError(e, '批量操作失败')
+      }
     }
   }
-  else {
-    // 其他批量操作使用原有逻辑
-    try {
-      await api.admin.bulkOperationMovies(selectedIds.value, operation, payload)
-      success(`成功对 ${selectedCount.value} 部电影执行了操作`)
-      clearSelection()
-      await loadMovies()
-    }
-    catch (e: unknown) {
-      handleError(e, '批量操作失败')
-    }
+  finally {
+    batchOperating.value = false
   }
 }
 
@@ -952,8 +963,10 @@ const tableColumns = [
       :title="confirmDialogData.title"
       :message="confirmDialogData.message"
       :require-text-confirm="confirmDialogData.operation === 'delete'"
-      variant="danger"
+      :variant="confirmDialogData.operation === 'delete' ? 'danger' : 'default'"
+      :loading="batchOperating"
       confirm-text="确认"
+      cancel-text="返回"
       @confirm="executeBatchOperation"
     />
   </div>
