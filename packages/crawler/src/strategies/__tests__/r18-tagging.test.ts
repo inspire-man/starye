@@ -88,7 +88,9 @@ describe('crawler source tagging -> isR18', () => {
     vi.spyOn(strategy as any, '_preparePage').mockResolvedValue(undefined)
     vi.spyOn(strategy as any, '_handleChallenge').mockResolvedValue(undefined)
 
-    const info = await strategy.getMovieInfo('https://javdb457.com/v/xyz-789', createMockPage())
+    expect(strategy.baseUrl).toBe('https://javdb.com')
+
+    const info = await strategy.getMovieInfo('https://javdb.com/v/xyz-789', createMockPage())
 
     expect(info.code).toBe('XYZ-789')
     expect(info.isR18).toBe(true)

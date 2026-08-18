@@ -3,7 +3,7 @@ import type { MovieCrawlStrategy, MovieInfo } from '../lib/strategy'
 
 export class JavDBStrategy implements MovieCrawlStrategy {
   name = 'javdb'
-  baseUrl = 'https://javdb457.com'
+  baseUrl = 'https://javdb.com'
 
   match(url: string): boolean {
     return url.includes('javdb')

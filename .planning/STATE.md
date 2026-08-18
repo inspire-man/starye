@@ -30,7 +30,7 @@ See: `.planning/PROJECT.md` (updated 2026-08-10)
 Phase: 26 — Video Source And Magnet Availability
 Plan: 9/10 plans complete
 Status: Wave 6 complete; ready for Wave 7 checkpoint
-Last activity: 2026-08-13 — Completed 26-06-PLAN.md
+Last activity: 2026-08-18 — Completed quick task 260818-p7i: JavDB canonical source switch
 
 ## Performance Metrics
 
@@ -132,6 +132,7 @@ Items acknowledged and carried forward from previous milestone close:
 | `260817-expand-movie-crawl-range` | 2026-08-17 | 生产电影爬取范围扩大到 100 部/10 页；真实 MUDR-392 下载源浏览器播放通过；临时影片、媒体服务、Aria2 GID 与本地载体已清理；crawler 全量测试、类型检查、lint 与 GitNexus 检查通过 |
 | `20260817-video-availability-actions` | 2026-08-17 | 服务端生成 revision/policy binding；Dashboard 与 Movie Detail 提交真实视频检查/修复任务并刷新权威状态；API 5、Dashboard 24、Movie App 23 项定向测试及类型检查、lint、构建通过 |
 | `260818-j9a-r18` | 2026-08-18 | MovieDetail R18/SFW 受限态收敛；隐藏无效播放与来源检查动作、技术来源详情和意外返回的来源卡片；Movie App 全量测试、类型检查、lint、构建、Gateway 浏览器与 GitNexus 检查通过 |
+| `260818-p7i` | 2026-08-18 | JavDB 生产来源统一切换到 `https://javdb.com`；crawler 全量单测、类型检查、diff 校验与 GitNexus 检查通过 |
 
 ## Session Continuity
 
