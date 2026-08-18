@@ -23,7 +23,23 @@ interface CacheOptions {
   /**
    * 自定义缓存键生成函数
    */
-  cacheKey?: (url: string) => string
+  cacheKey?: (url: string, request: Request) => string | Promise<string>
+}
+
+/**
+ * 以 Cookie 指纹区分详情缓存，避免把 R18 脱敏响应复用到已验证会话。
+ * 指纹只进入内部 Cache API 键，不把原始会话 Cookie 放进 URL。
+ */
+async function cookieScopedCacheKey(url: string, request: Request): Promise<string> {
+  const cookie = request.headers.get('Cookie') || 'anonymous'
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(cookie),
+  )
+  const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+  const cacheUrl = new URL(url)
+  cacheUrl.searchParams.set('__starye_detail_cache', fingerprint)
+  return cacheUrl.toString()
 }
 
 /**
@@ -47,7 +63,7 @@ function createCacheMiddleware(options: CacheOptions): MiddlewareHandler<AppEnv>
 
     // 生成缓存键
     const cacheKey = options.cacheKey
-      ? options.cacheKey(url.toString())
+      ? await options.cacheKey(url.toString(), req)
       : url.toString()
 
     // 创建缓存请求（确保协议正确）
@@ -162,7 +178,9 @@ export function listCache(): MiddlewareHandler<AppEnv> {
 export function detailCache(): MiddlewareHandler<AppEnv> {
   return createCacheMiddleware({
     maxAge: 180, // 3 分钟
+    isPrivate: true,
     staleWhileRevalidate: 60,
+    cacheKey: cookieScopedCacheKey,
   })
 }
 
