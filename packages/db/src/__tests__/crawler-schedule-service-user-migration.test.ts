@@ -49,4 +49,3 @@ describe('crawler schedule service user migration', () => {
     expect(migration).not.toMatch(/secret|token|password/iu)
   })
 })
-
