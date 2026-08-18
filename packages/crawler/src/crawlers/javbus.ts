@@ -8,6 +8,7 @@
 import type { Page } from 'puppeteer-core'
 import type { MovieInfo } from '../lib/strategy'
 import type { OptimizedCrawlerConfig } from '../types/config'
+import type { MovieImageRefreshCandidate } from '../utils/api-client'
 import {
   CLOUDFLARE_INDICATORS,
   DEFAULT_COOKIES,
@@ -39,6 +40,41 @@ export class JavBusCrawler extends OptimizedCrawler {
 
   // 系列名到厂商名的映射（用于建立映射表）
   private seriesPublisherMap?: Map<string, string>
+
+  private async backfillIncompleteImages(): Promise<Set<string>> {
+    const maxMovies = this.config.limits?.maxMovies ?? 0
+    const fetchLimit = maxMovies || 100
+    const candidates: MovieImageRefreshCandidate[] = await this.apiClient.fetchMoviesNeedingImageRefresh(fetchLimit)
+    const selectedCandidates = maxMovies > 0
+      ? candidates.slice(0, maxMovies)
+      : candidates
+    const scheduledCodes = new Set(selectedCandidates.map(candidate => candidate.code))
+
+    if (selectedCandidates.length === 0)
+      return scheduledCodes
+
+    this.progressMonitor.incrementMoviesFound(selectedCandidates.length)
+    console.log(`🖼️  开始回填 ${selectedCandidates.length} 部历史影片的封面/概览图`)
+
+    await Promise.all(selectedCandidates.map(async (candidate) => {
+      try {
+        await this.queueManager.addDetailPageTask(async () => {
+          const detailPage = await this.createPage()
+          try {
+            await this.processMovie(candidate.sourceUrl, detailPage)
+          }
+          finally {
+            await detailPage.close()
+          }
+        })
+      }
+      catch (error) {
+        console.warn(`⚠️  历史媒体回填失败 [${candidate.code}]: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }))
+
+    return scheduledCodes
+  }
 
   constructor(config: JavBusCrawlerConfig) {
     super(config)
@@ -237,6 +273,23 @@ export class JavBusCrawler extends OptimizedCrawler {
           const title = titleEl.textContent?.trim() || ''
           const bigImage = document.querySelector('.bigImage img') as HTMLImageElement
           const coverImage = bigImage?.src || ''
+          const previewImages = [...document.querySelectorAll('.sample-box')]
+            .map((element) => {
+              const anchor = element as HTMLAnchorElement
+              const image = element.querySelector('img') as HTMLImageElement | null
+              return anchor.href || image?.currentSrc || image?.src || ''
+            })
+            .map((imageUrl) => {
+              try {
+                return new URL(imageUrl, pageUrl).href
+              }
+              catch {
+                return ''
+              }
+            })
+            .filter(Boolean)
+            .filter((imageUrl, index, images) => images.indexOf(imageUrl) === index)
+            .slice(0, 12)
 
           const infoMap: Record<string, string> = {}
           const els = document.querySelectorAll('.info p')
@@ -318,6 +371,7 @@ export class JavBusCrawler extends OptimizedCrawler {
             code,
             description: '',
             coverImage: coverImage || '',
+            previewImages,
             releaseDate,
             duration,
             sourceUrl: pageUrl,
@@ -463,11 +517,13 @@ export class JavBusCrawler extends OptimizedCrawler {
     console.log(`📊 配置: 最大影片=${this.config.limits.maxMovies}, 最大页数=${this.config.limits.maxPages}`)
     console.log(`⚙️  并发: 列表=${this.config.concurrency.listPage}, 详情=${this.config.concurrency.detailPage}, 图片=${this.config.concurrency.image}`)
     console.log(`🔄 增量模式: 已启用（自动跳过已存在影片）`)
+    const refreshIncompleteImages = (this.config as JavBusCrawlerConfig).refreshIncompleteImages === true
+    const backfilledCodes = new Set<string>()
+    if (refreshIncompleteImages) {
+      console.log('🖼️  媒体回填: 已启用（仅处理缺少封面或概览图标记的旧记录）')
+    }
 
     await this.init()
-
-    // 启用增量模式进度跟踪
-    this.progressMonitor.enableIncrementalMode()
 
     // 计算最大页码：startPage + maxPages - 1
     const startPage = (this.config as JavBusCrawlerConfig).startPage || 1
@@ -476,6 +532,14 @@ export class JavBusCrawler extends OptimizedCrawler {
       : Number.POSITIVE_INFINITY
 
     try {
+      if (refreshIncompleteImages) {
+        for (const code of await this.backfillIncompleteImages())
+          backfilledCodes.add(code)
+      }
+
+      // 启用增量模式进度跟踪
+      this.progressMonitor.enableIncrementalMode()
+
       // 主循环：爬取列表页
       while (true) {
         // 检查是否达到限制
@@ -518,12 +582,16 @@ export class JavBusCrawler extends OptimizedCrawler {
             const movieCodes = movieLinks.map(url => url.split('/').pop() || '')
             const statusMap = await this.apiClient.batchQueryMovieStatus(movieCodes)
             const existingCount = Object.values(statusMap).filter(s => s.exists).length
+            const refreshCount = refreshIncompleteImages
+              ? Object.values(statusMap).filter(s => s.exists && s.needsImageRefresh).length
+              : 0
+            const skippedExistingCount = existingCount - refreshCount
 
             // 更新增量统计，用于最终报告中显示增量命中率
-            this.progressMonitor.incrementMoviesSkippedExisting(existingCount)
+            this.progressMonitor.incrementMoviesSkippedExisting(skippedExistingCount)
 
             if (existingCount > 0) {
-              console.log(`  ℹ️  跳过 ${existingCount}/${movieLinks.length} 个已存在的影片`)
+              console.log(`  ℹ️  已存在 ${existingCount}/${movieLinks.length} 个影片，跳过 ${skippedExistingCount} 个，媒体回填 ${refreshCount} 个`)
             }
 
             // 添加详情页任务（跳过已存在的）
@@ -537,10 +605,20 @@ export class JavBusCrawler extends OptimizedCrawler {
               const code = movieUrl.split('/').pop() || ''
               const status = statusMap[code]
 
-              // 增量过滤：跳过数据库中已存在的影片
-              if (status?.exists) {
+              // 增量过滤：已存在且媒体完整的影片继续跳过；缺媒体的旧记录允许回填一次。
+              const shouldRefreshImages = refreshIncompleteImages && status?.exists && status.needsImageRefresh
+              if (status?.exists && !shouldRefreshImages) {
                 console.log(`  ⏭️  跳过已存在影片: ${code}`)
                 continue
+              }
+
+              if (shouldRefreshImages) {
+                if (backfilledCodes.has(code)) {
+                  console.log(`  ⏭️  已加入历史媒体回填队列: ${code}`)
+                  continue
+                }
+                backfilledCodes.add(code)
+                console.log(`  🖼️  回填影片媒体: ${code}`)
               }
 
               this.queueManager.addDetailPageTask(async () => {

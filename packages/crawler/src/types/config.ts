@@ -65,6 +65,8 @@ export interface OptimizedCrawlerConfig extends BaseCrawlerConfig {
   delay?: Partial<DelayConfig>
   limits?: Partial<CrawlerLimits>
   options?: Partial<CrawlerOptions>
+  /** 允许生产电影任务回填旧记录中缺失的封面或概览图 */
+  refreshIncompleteImages?: boolean
 }
 
 // 默认配置
@@ -111,4 +113,6 @@ export const GITHUB_ACTIONS_CONFIG: Partial<OptimizedCrawlerConfig> = {
     maxMovies: 100,
     maxPages: 10,
   },
+  // 旧记录的 preview_images 为 NULL 时仅回填一次；已经完整同步的影片仍按番号跳过。
+  refreshIncompleteImages: true,
 }

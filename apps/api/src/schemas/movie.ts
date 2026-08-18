@@ -187,6 +187,7 @@ export const MovieDetailSchema = v.pipe(
     series: v.nullable(v.string()),
     releaseDate: v.nullable(v.string()),
     description: v.nullable(v.string()),
+    previewImages: v.optional(v.array(v.pipe(v.string(), v.url()))),
     isR18: v.boolean(),
     sourceUrl: v.nullable(v.pipe(v.string(), v.url())),
     createdAt: TimestampSchema,

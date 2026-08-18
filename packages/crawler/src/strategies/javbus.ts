@@ -153,6 +153,23 @@ export class JavBusStrategy implements MovieCrawlStrategy {
         const title = titleEl.textContent ? titleEl.textContent.trim() : ''
         const bigImage = document.querySelector('.bigImage img') as HTMLImageElement
         const coverImage = bigImage ? bigImage.src : ''
+        const previewImages = [...document.querySelectorAll('.sample-box')]
+          .map((element) => {
+            const anchor = element as HTMLAnchorElement
+            const image = element.querySelector('img') as HTMLImageElement | null
+            return anchor.href || image?.currentSrc || image?.src || ''
+          })
+          .map((imageUrl) => {
+            try {
+              return new URL(imageUrl, pageUrl).href
+            }
+            catch {
+              return ''
+            }
+          })
+          .filter(Boolean)
+          .filter((imageUrl, index, images) => images.indexOf(imageUrl) === index)
+          .slice(0, 12)
 
         const infoMap: Record<string, string> = {}
         const els = document.querySelectorAll('.info p')
@@ -218,6 +235,7 @@ export class JavBusStrategy implements MovieCrawlStrategy {
           code,
           description: '',
           coverImage: coverImage || '',
+          previewImages,
           releaseDate,
           duration,
           sourceUrl: pageUrl,
@@ -250,6 +268,9 @@ export class JavBusStrategy implements MovieCrawlStrategy {
     if (movieInfo.coverImage) {
       movieInfo.coverImage = this._normalizeImageUrl(movieInfo.coverImage) ?? ''
     }
+    movieInfo.previewImages = (movieInfo.previewImages ?? [])
+      .map(imageUrl => this._normalizeImageUrl(imageUrl) ?? '')
+      .filter(Boolean)
 
     // 抓取磁力链接：JavBus 通过 AJAX 端点加载磁链
     try {

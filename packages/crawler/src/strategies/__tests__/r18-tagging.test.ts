@@ -32,6 +32,9 @@ describe('crawler source tagging -> isR18', () => {
     document.body.innerHTML = `
       <h3>ABP-123 Test Movie</h3>
       <div class="bigImage"><img src="https://www.javbus.com/cover.jpg"></div>
+      <a class="sample-box" href="https://pics.example/abp-123-1.jpg"><img src="/sample/abp-123-1.jpg"></a>
+      <a class="sample-box" href="https://pics.example/abp-123-2.jpg"><img src="/sample/abp-123-2.jpg"></a>
+      <a class="sample-box" href="https://pics.example/abp-123-1.jpg"><img src="/sample/abp-123-1.jpg"></a>
       <div class="info">
         <p>識別碼: ABP-123</p>
         <p>發行日期: 2024-01-02</p>
@@ -59,6 +62,10 @@ describe('crawler source tagging -> isR18', () => {
     expect(info.isR18).toBe(true)
     expect(info.genres).toEqual(expect.arrayContaining(['字幕', '巨乳']))
     expect(info.publisher).toBe('S1')
+    expect(info.previewImages).toEqual([
+      'https://pics.example/abp-123-1.jpg',
+      'https://pics.example/abp-123-2.jpg',
+    ])
   })
 
   it('javDBStrategy 应将详情页内容标记为 isR18=true', async () => {
@@ -69,6 +76,11 @@ describe('crawler source tagging -> isR18', () => {
         <span class="current-title">JavDB Movie</span>
       </h2>
       <div class="column-video-cover"><img src="https://javdb.com/cover.jpg"></div>
+      <div class="tile-images preview-images">
+        <a class="preview-video-container" href="/login"><img src="https://javdb.com/video-cover.jpg"></a>
+        <a class="tile-item" href="https://c0.jdbstatic.com/samples/xyz-1.jpg"><img src="https://c0.jdbstatic.com/samples/xyz-1-small.jpg"></a>
+        <a class="tile-item" href="https://c0.jdbstatic.com/samples/xyz-2.jpg"><img src="https://c0.jdbstatic.com/samples/xyz-2-small.jpg"></a>
+      </div>
       <div class="panel-block"><strong>日期</strong><span class="value">2024-01-03</span></div>
       <div class="panel-block"><strong>時長</strong><span class="value">150分鍾</span></div>
       <div class="panel-block"><strong>片商</strong><span class="value">MOODYZ</span></div>
@@ -97,5 +109,9 @@ describe('crawler source tagging -> isR18', () => {
     expect(info.publisher).toBe('MOODYZ')
     expect(info.genres).toEqual(expect.arrayContaining(['中文字幕', '高清']))
     expect(info.players).toHaveLength(1)
+    expect(info.previewImages).toEqual([
+      'https://c0.jdbstatic.com/samples/xyz-1.jpg',
+      'https://c0.jdbstatic.com/samples/xyz-2.jpg',
+    ])
   })
 })

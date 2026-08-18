@@ -4,6 +4,7 @@ export interface Movie {
   title: string
   slug: string
   coverImage?: string | null
+  previewImages?: string[] | null
   description?: string | null
   releaseDate?: number | string | null
   duration?: number | null

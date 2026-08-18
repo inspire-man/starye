@@ -137,6 +137,31 @@ describe('syncMovieData', () => {
 
       expect(result.skipped).toBe(1)
     })
+
+    it('同步概览图时去重、清洗并持久化图片 URL', async () => {
+      const db = createMockDb({ existingMovie: null })
+
+      const result = await syncMovieData({
+        db,
+        movies: [{
+          code: 'PREVIEW-001',
+          title: '概览图同步测试',
+          previewImages: [
+            'https://www.dmmbus.cyou/samples/preview-1.jpg',
+            'https://cdn.example/preview-2.jpg',
+            'https://www.dmmbus.cyou/samples/preview-1.jpg',
+            'not-a-url',
+          ],
+        }],
+      })
+
+      expect(result.success).toBe(1)
+      const persistedMovie = await (db as any).query.movies.findFirst()
+      expect(persistedMovie.previewImages).toEqual([
+        'https://www.javbus.com/samples/preview-1.jpg',
+        'https://cdn.example/preview-2.jpg',
+      ])
+    })
   })
 
   describe('演员关联同步', () => {

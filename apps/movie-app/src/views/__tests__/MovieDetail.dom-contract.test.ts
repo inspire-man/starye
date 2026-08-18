@@ -97,6 +97,35 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.get('[data-phase13-item-code="TEST-001"][data-phase13-item-id="movie-uuid-1"]').text()).toBe('TEST-001')
   })
 
+  it('renders the persisted cover and overview images', async () => {
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'movie-images',
+        code: 'IMAGES-001',
+        title: 'Image contract fixture',
+        isR18: false,
+        coverImage: 'https://cdn.example/images-cover.webp',
+        previewImages: [
+          'https://cdn.example/images-preview-1.webp',
+          'https://cdn.example/images-preview-2.webp',
+        ],
+        players: [],
+        relatedMovies: [],
+      },
+    })
+
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+
+    expect(wrapper.get('.movie-detail-cover img').attributes('src')).toBe('https://cdn.example/images-cover.webp')
+    expect(wrapper.findAll('.movie-overview-image')).toHaveLength(2)
+    expect(wrapper.findAll('.movie-overview-image').map(image => image.attributes('src'))).toEqual([
+      'https://cdn.example/images-preview-1.webp',
+      'https://cdn.example/images-preview-2.webp',
+    ])
+  })
+
   it('renders authoritative four-layer current and bounded old-revision history', async () => {
     getMovieDetailMock.mockResolvedValueOnce({
       success: true,

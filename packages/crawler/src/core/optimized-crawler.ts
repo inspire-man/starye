@@ -96,8 +96,8 @@ export abstract class OptimizedCrawler {
         return null
       }
 
-      // 下载图片
-      if (movieInfo.coverImage) {
+      // 下载封面和概览图
+      if (movieInfo.coverImage || movieInfo.previewImages?.length) {
         await this.processImage(movieInfo)
       }
 
@@ -121,26 +121,42 @@ export abstract class OptimizedCrawler {
    */
   private async processImage(movieInfo: MovieInfo): Promise<void> {
     await this.queueManager.addImageTask(async () => {
-      try {
-        const keyPrefix = `movies/${movieInfo.code}`
-        const results = await this.imageProcessor.process(
-          {
-            imageUrl: movieInfo.coverImage!,
+      const keyPrefix = `movies/${movieInfo.code}`
+
+      const processManagedImage = async (imageUrl: string, filename: string): Promise<string | null> => {
+        try {
+          const results = await this.imageProcessor.process({
+            imageUrl,
             purpose: 'cover',
             keyNamespace: keyPrefix,
-            filename: 'cover',
-          },
-        )
+            filename,
+            refererUrl: movieInfo.sourceUrl,
+          })
+          const previewImage = results.find((r: ProcessedImage) => r.variant === 'preview')
+          if (!previewImage)
+            return null
 
-        const previewImage = results.find((r: ProcessedImage) => r.variant === 'preview')
-        if (previewImage) {
-          movieInfo.coverImage = previewImage.url
+          this.progressMonitor.incrementImagesDownloaded()
+          return previewImage.url
         }
-
-        this.progressMonitor.incrementImagesDownloaded()
+        catch (error) {
+          console.warn(`⚠️  图片下载失败 [${filename}]: ${error instanceof Error ? error.message : String(error)}`)
+          return null
+        }
       }
-      catch (error) {
-        console.warn(`⚠️  图片下载失败: ${error instanceof Error ? error.message : String(error)}`)
+
+      if (movieInfo.coverImage) {
+        const coverImage = await processManagedImage(movieInfo.coverImage, 'cover')
+        if (coverImage)
+          movieInfo.coverImage = coverImage
+      }
+
+      const previewImages = [...new Set(movieInfo.previewImages ?? [])].slice(0, 12)
+      if (movieInfo.previewImages !== undefined) {
+        const managedPreviewImages = await Promise.all(
+          previewImages.map((imageUrl, index) => processManagedImage(imageUrl, `overview-${String(index + 1).padStart(2, '0')}`)),
+        )
+        movieInfo.previewImages = managedPreviewImages.filter((url): url is string => Boolean(url))
       }
     }).catch(() => {
       // 图片任务失败已在内部处理

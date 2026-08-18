@@ -157,6 +157,7 @@ export const movies = sqliteTable('movie', {
   code: text('code').notNull().unique(), // 番号 (如: SSIS-123)
   description: text('description'), // 简介
   coverImage: text('cover_image'), // 封面图
+  previewImages: text('preview_images', { mode: 'json' }).$type<string[]>(), // 影片概览图
   releaseDate: integer('release_date', { mode: 'timestamp' }), // 发布日期
   duration: integer('duration'), // 时长（分钟）
   sourceUrl: text('source_url').unique(), // 源 URL，用于追更

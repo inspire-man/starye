@@ -1304,6 +1304,31 @@ onMounted(() => {
         </div>
       </div>
 
+      <section v-if="movie.previewImages?.length" class="movie-detail-section movie-overview-section" aria-labelledby="movie-overview-title">
+        <div class="movie-overview-heading">
+          <div>
+            <p class="movie-detail-eyebrow">
+              影片概览
+            </p>
+            <h2 id="movie-overview-title" class="movie-overview-title">
+              预览图
+            </h2>
+          </div>
+          <span class="movie-overview-count">{{ movie.previewImages.length }} 张</span>
+        </div>
+        <div class="movie-overview-grid">
+          <figure v-for="(previewImage, index) in movie.previewImages" :key="previewImage" class="movie-overview-item">
+            <img
+              :src="previewImage"
+              :alt="`${movie.title} 概览图 ${index + 1}`"
+              class="movie-overview-image"
+              loading="lazy"
+              decoding="async"
+            >
+          </figure>
+        </div>
+      </section>
+
       <div
         v-if="readiness"
         data-readiness-summary
@@ -2298,6 +2323,60 @@ onMounted(() => {
 .movie-detail-cover img,
 .movie-detail-cover > div {
   border: 1px solid hsl(var(--border));
+}
+
+.movie-detail-section {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-lg, 0.75rem);
+  background: hsl(var(--card));
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.movie-overview-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.movie-overview-title {
+  margin-top: 0.25rem;
+  color: hsl(var(--foreground));
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.movie-overview-count {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.movie-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: 0.75rem;
+}
+
+.movie-overview-item {
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.5rem);
+  background: hsl(var(--muted));
+}
+
+.movie-overview-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 180ms ease;
+}
+
+.movie-overview-item:hover .movie-overview-image {
+  transform: scale(1.02);
 }
 
 .movie-detail-primary-action {

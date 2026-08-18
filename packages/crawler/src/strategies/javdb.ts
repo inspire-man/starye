@@ -90,6 +90,15 @@ export class JavDBStrategy implements MovieCrawlStrategy {
       const title = document.querySelector('h2.title .current-title')?.textContent?.trim() || ''
       const code = document.querySelector('h2.title strong:first-child')?.textContent?.trim() || ''
       const coverImage = (document.querySelector('.column-video-cover img') as HTMLImageElement)?.src || undefined
+      const previewImages = [...document.querySelectorAll('.tile-images.preview-images a.tile-item')]
+        .map((element) => {
+          const anchor = element as HTMLAnchorElement
+          const image = element.querySelector('img') as HTMLImageElement | null
+          return anchor.href || image?.currentSrc || image?.getAttribute('data-src') || image?.src || ''
+        })
+        .filter(Boolean)
+        .filter((imageUrl, index, images) => images.indexOf(imageUrl) === index)
+        .slice(0, 12)
 
       const dateText = findValueByLabel(document, '日期') || ''
       const releaseDate = dateText ? new Date(dateText).getTime() / 1000 : undefined
@@ -132,6 +141,7 @@ export class JavDBStrategy implements MovieCrawlStrategy {
         code,
         description: '',
         coverImage,
+        previewImages,
         releaseDate,
         duration,
         sourceUrl: pageUrl,

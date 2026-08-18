@@ -10,7 +10,7 @@ import type { InferInsertModel, SQL } from 'drizzle-orm'
 import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
 import { movies, players } from '@starye/db/schema'
-import { and, count, desc, eq, gt, gte, like, lte, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
@@ -27,6 +27,49 @@ async function invalidateMovieGatewayCache(env: AppEnv['Bindings']): Promise<voi
   const deleted = await clearGatewayCacheGroup(env.CACHE, 'movies')
   console.log('[Admin/Movies] Cleared gateway movie cache', { deleted })
 }
+
+// 获取缺少媒体字段的历史影片，供生产电影任务按 sourceUrl 做一次性回填。
+adminMovies.get(
+  '/missing-images',
+  describeRoute({
+    summary: '查询缺少影片媒体的记录',
+    description: '返回封面为空或概览图尚未回填的影片，供电影爬虫执行媒体回填',
+    tags: ['Admin'],
+    operationId: 'getMoviesMissingImages',
+    security: [{ serviceAuth: [] }],
+    responses: {
+      200: { description: '缺少媒体的影片列表' },
+    },
+  }),
+  serviceAuth(['admin']),
+  async (c) => {
+    const requestedLimit = Number.parseInt(c.req.query('limit') || '100', 10)
+    const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 200) : 100
+    const db = c.get('db')
+
+    try {
+      const data = await db.query.movies.findMany({
+        where: and(
+          or(isNull(movies.coverImage), eq(movies.coverImage, ''), isNull(movies.previewImages)),
+          isNotNull(movies.sourceUrl),
+        ),
+        columns: {
+          code: true,
+          sourceUrl: true,
+        },
+        orderBy: asc(movies.createdAt),
+        limit,
+      })
+
+      return c.json({ data, meta: { limit, total: data.length } })
+    }
+    catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('[MissingImages] ❌ Database operation failed:', message)
+      return c.json({ error: 'Database operation failed' }, 500)
+    }
+  },
+)
 
 // 批量查询电影状态 (用于爬虫增量爬取)
 // 使用 serviceAuth 认证，必须在 requireResource 中间件之前定义
@@ -64,6 +107,8 @@ adminMovies.get(
         columns: {
           code: true,
           slug: true,
+          coverImage: true,
+          previewImages: true,
           updatedAt: true,
         },
       })
@@ -77,6 +122,8 @@ adminMovies.get(
             exists: true,
             code: result.code,
             slug: result.slug,
+            // NULL 表示迁移前的旧记录尚未完成概览图同步；空数组表示本次详情页已检查但来源没有概览图。
+            needsImageRefresh: !result.coverImage || !Array.isArray(result.previewImages),
             updatedAt: result.updatedAt?.toISOString(),
           }
         }

@@ -49,12 +49,12 @@ function createAnalyticsDb(
 
 // ─── App 工厂（含 requireResource 中间件的模拟）─────────────────────────────
 
-function createApp(db: any, user?: ReturnType<typeof createMockUser> | null) {
+function createApp(db: any, user?: ReturnType<typeof createMockUser> | null, env: Record<string, string> = {}) {
   const app = new Hono<AppEnv>()
   app.use('*', async (c, next) => {
     c.set('db', db)
     // 测试环境下需要设置 env，否则 requireResource 中间件读取 c.env.CRAWLER_SECRET 会崩溃
-    ;(c as any).env = {}
+    ;(c as any).env = env
     if (user !== undefined && user !== null) {
       c.set('user', user as any)
     }
@@ -62,6 +62,21 @@ function createApp(db: any, user?: ReturnType<typeof createMockUser> | null) {
   })
   app.route('/', adminMoviesRoutes)
   return app
+}
+
+function createBatchStatusDb(results: Array<{
+  code: string
+  coverImage: string | null
+  previewImages: string[] | null
+  sourceUrl?: string | null
+}>) {
+  return {
+    query: {
+      movies: {
+        findMany: vi.fn().mockResolvedValue(results),
+      },
+    },
+  } as any
 }
 
 // ─── 测试数据 ─────────────────────────────────────────────────────────────────
@@ -202,5 +217,58 @@ describe('adminMoviesRoutes — GET /analytics', () => {
     expect(res.status).toBe(500)
     const json: any = await res.json()
     expect(json.error).toBeDefined()
+  })
+})
+
+describe('adminMoviesRoutes — GET /batch-status', () => {
+  beforeEach(() => vi.restoreAllMocks())
+
+  it('标记缺少封面或尚未回填概览图的旧影片，并保留已完成影片的查重状态', async () => {
+    const db = createBatchStatusDb([
+      { code: 'SS-154', coverImage: null, previewImages: null, sourceUrl: 'https://www.javbus.com/SS-154' },
+      { code: 'SS-155', coverImage: '', previewImages: null, sourceUrl: 'https://www.javbus.com/SS-155' },
+      { code: 'SS-156', coverImage: 'https://cdn.example/cover.webp', previewImages: [], sourceUrl: 'https://www.javbus.com/SS-156' },
+      { code: 'SS-157', coverImage: 'https://cdn.example/cover.webp', previewImages: ['https://cdn.example/preview.webp'], sourceUrl: 'https://www.javbus.com/SS-157' },
+    ])
+    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret' })
+
+    const response = await app.fetch(new Request('http://localhost/batch-status?codes=SS-154,SS-155,SS-156,SS-157,SS-158', {
+      headers: { 'x-service-token': 'test-secret' },
+    }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      'SS-154': { exists: true, needsImageRefresh: true },
+      'SS-155': { exists: true, needsImageRefresh: true },
+      'SS-156': { exists: true, needsImageRefresh: false },
+      'SS-157': { exists: true, needsImageRefresh: false },
+      'SS-158': { exists: false, code: 'SS-158' },
+    })
+  })
+})
+
+describe('adminMoviesRoutes — GET /missing-images', () => {
+  beforeEach(() => vi.restoreAllMocks())
+
+  it('返回缺媒体影片的 sourceUrl，并限制回填批次大小', async () => {
+    const db = createBatchStatusDb([
+      { code: 'SS-154', coverImage: null, previewImages: null, sourceUrl: 'https://www.javbus.com/SS-154' },
+      { code: 'SS-155', coverImage: '', previewImages: [], sourceUrl: 'https://www.javbus.com/SS-155' },
+    ])
+    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret' })
+
+    const response = await app.fetch(new Request('http://localhost/missing-images?limit=500', {
+      headers: { 'x-service-token': 'test-secret' },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(db.query.movies.findMany).toHaveBeenCalledWith(expect.objectContaining({ limit: 200 }))
+    await expect(response.json()).resolves.toMatchObject({
+      data: [
+        { code: 'SS-154', sourceUrl: 'https://www.javbus.com/SS-154' },
+        { code: 'SS-155', sourceUrl: 'https://www.javbus.com/SS-155' },
+      ],
+      meta: { limit: 200, total: 2 },
+    })
   })
 })

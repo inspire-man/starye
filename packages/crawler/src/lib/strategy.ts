@@ -70,6 +70,7 @@ export interface MovieInfo extends Partial<Omit<NewMovie, 'releaseDate' | 'actor
   releaseDate?: number // timestamp in seconds
   actors?: string[]
   genres?: string[]
+  previewImages?: string[]
 
   // 新增：女优详情页信息（任务 3.1）
   actorDetails?: Array<{ name: string, url: string }>

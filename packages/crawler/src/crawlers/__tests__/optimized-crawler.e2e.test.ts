@@ -59,7 +59,7 @@ describe('optimized-crawler E2E', () => {
           return {
             ok: true,
             json: async () => ({
-              'ABC-001': { exists: true, code: 'ABC-001' },
+              'ABC-001': { exists: true, code: 'ABC-001', needsImageRefresh: true },
               'ABC-002': { exists: false, code: 'ABC-002' },
               'ABC-003': { exists: true, code: 'ABC-003' },
             }),
@@ -83,6 +83,7 @@ describe('optimized-crawler E2E', () => {
       const statusMap = await apiClient.batchQueryMovieStatus(['ABC-001', 'ABC-002', 'ABC-003'])
 
       expect(statusMap['ABC-001'].exists).toBe(true)
+      expect(statusMap['ABC-001'].needsImageRefresh).toBe(true)
       expect(statusMap['ABC-002'].exists).toBe(false)
       expect(statusMap['ABC-003'].exists).toBe(true)
       expect(mockFetch).toHaveBeenCalledWith(
@@ -153,6 +154,35 @@ describe('optimized-crawler E2E', () => {
       expect(statusMap['ABC-001'].exists).toBe(false)
       expect(statusMap['ABC-002'].exists).toBe(false)
       expect(Object.values(statusMap).every((s: any) => !s.exists)).toBe(true)
+    })
+
+    it('应该读取缺媒体影片的受控回填列表', async () => {
+      const mockFetch = vi.mocked(globalThis.fetch)
+      mockFetch.mockImplementation(async (url: string | URL | Request) => {
+        const urlStr = typeof url === 'string' ? url : (url instanceof URL ? url.toString() : url.url)
+
+        if (urlStr.includes('/api/admin/movies/missing-images')) {
+          return {
+            ok: true,
+            json: async () => ({
+              data: [{ code: 'SS-154', sourceUrl: 'https://www.javbus.com/SS-154' }],
+              meta: { limit: 10, total: 1 },
+            }),
+          } as Response
+        }
+
+        return { ok: false, status: 404, json: async () => ({}) } as Response
+      })
+
+      const crawler = new JavBusCrawler(config)
+      const apiClient = (crawler as any).apiClient
+      const candidates = await apiClient.fetchMoviesNeedingImageRefresh(10)
+
+      expect(candidates).toEqual([{ code: 'SS-154', sourceUrl: 'https://www.javbus.com/SS-154' }])
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/admin/movies/missing-images?limit=10'),
+        expect.any(Object),
+      )
     })
   })
 

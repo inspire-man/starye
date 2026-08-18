@@ -549,10 +549,10 @@ async function executeBatchOperation() {
 }
 
 const tableColumns = [
-  { key: 'coverImage', label: '封面', width: '130px', minWidth: '130px', sortable: false },
-  { key: 'code', label: '番号', width: '120px', minWidth: '100px' },
-  { key: 'title', label: '标题', minWidth: '200px', sortable: true },
-  { key: 'actors', label: '女优', width: '160px', minWidth: '120px' },
+  { key: 'coverImage', label: '封面', width: '84px', minWidth: '84px', sortable: false },
+  { key: 'code', label: '番号', width: '120px', minWidth: '110px' },
+  { key: 'title', label: '标题', width: '300px', minWidth: '240px', sortable: true },
+  { key: 'actors', label: '女优', width: '170px', minWidth: '140px' },
   { key: 'series', label: '系列', width: '120px', minWidth: '100px' },
   { key: 'publisher', label: '厂商', width: '120px', minWidth: '100px' },
   { key: 'releaseDate', label: '发布日期', width: '110px', minWidth: '100px', sortable: true },
@@ -625,6 +625,7 @@ const tableColumns = [
       v-else
       :data="movies"
       :columns="tableColumns"
+      min-width="1644px"
       :loading="loading"
       :selectable="true"
       :selected-ids="selected"
@@ -648,7 +649,11 @@ const tableColumns = [
       </template>
 
       <template #cell-code="{ item }">
-        <span :data-phase13-item-code="item.code" :data-phase13-item-id="item.id">{{ item.code }}</span>
+        <span class="movie-table-text movie-table-code" :data-phase13-item-code="item.code" :data-phase13-item-id="item.id" :title="item.code">{{ item.code }}</span>
+      </template>
+
+      <template #cell-title="{ item }">
+        <span class="movie-table-text" :title="item.title">{{ item.title }}</span>
       </template>
 
       <template #cell-actors="{ item }">
@@ -661,6 +666,14 @@ const tableColumns = [
           </span>
         </span>
         <span v-else>-</span>
+      </template>
+
+      <template #cell-series="{ item }">
+        <span class="movie-table-text" :title="item.series || undefined">{{ item.series || '-' }}</span>
+      </template>
+
+      <template #cell-publisher="{ item }">
+        <span class="movie-table-text" :title="item.publisher || undefined">{{ item.publisher || '-' }}</span>
       </template>
 
       <template #cell-isR18="{ item }">
@@ -1244,12 +1257,10 @@ const tableColumns = [
   background: #f9fafb;
 }
 
-/* 封面单元格：200:267 比例，展示横版封面右半侧
-   原图 400×267，容器 100×134（200:267 缩小 0.5x）
-   object-cover + object-right → 正好显示右半侧 200px */
+/* 保持封面比例，同时让管理表格保持紧凑行高。 */
 .movie-cover-cell {
-  width: 100px;
-  height: 134px;
+  width: 56px;
+  height: 75px;
   overflow: hidden;
   border-radius: 6px;
   background: #1f2937;
@@ -1275,9 +1286,28 @@ const tableColumns = [
   font-size: 0.75rem;
 }
 
+.movies-page :deep(.data-table-body-cell) {
+  padding-block: 0.5rem;
+}
+
+.movie-table-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.movie-table-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+
 .actor-tags {
   display: flex;
-  flex-wrap: wrap;
+  max-width: 100%;
+  overflow: hidden;
+  flex-wrap: nowrap;
   gap: 4px;
 }
 
@@ -1287,6 +1317,7 @@ const tableColumns = [
   color: #4338ca;
   border-radius: 12px;
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .more-tag {
@@ -1295,6 +1326,7 @@ const tableColumns = [
   color: #6b7280;
   border-radius: 12px;
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .action-btns {

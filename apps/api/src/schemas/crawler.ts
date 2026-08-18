@@ -73,6 +73,11 @@ export const MovieInfoSchema = v.pipe(
     code: v.pipe(v.string(), v.description('影片番号')),
     description: v.optional(v.pipe(v.string(), v.description('简介'))),
     coverImage: v.optional(v.pipe(v.string(), v.url(), v.description('封面图片 URL'))),
+    previewImages: v.optional(v.pipe(
+      v.array(v.pipe(v.string(), v.url())),
+      v.maxLength(12),
+      v.description('影片概览图 URL 列表'),
+    )),
     releaseDate: v.optional(v.pipe(v.number(), v.description('发行日期（Unix 时间戳，秒）'))),
     duration: v.optional(v.pipe(v.number(), v.description('时长（秒）'))),
     sourceUrl: v.pipe(v.string(), v.url(), v.description('源 URL')),

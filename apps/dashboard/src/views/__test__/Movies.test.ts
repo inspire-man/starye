@@ -207,6 +207,20 @@ describe('movies.vue 集成测试', () => {
       expect(wrapper.find('[data-phase13-item-code="TEST-002"][data-phase13-item-id="movie-uuid-1"]').exists()).toBe(false)
     })
 
+    it('电影表格使用稳定的最小宽度避免标题列塌缩', async () => {
+      mockGetMovies.mockResolvedValue({
+        data: [{ id: 'movie-uuid-1', title: 'A long movie title', slug: 'movie-1', code: 'TEST-001', isR18: false }],
+        meta: { total: 1, page: 1, limit: 20, totalPages: 1 },
+      })
+
+      const wrapper = mount(Movies)
+      await flushPromises()
+
+      const table = wrapper.get('table.data-table')
+      expect(table.attributes('style')).toContain('min-width: 1644px')
+      expect(wrapper.get('thead th:nth-child(4)').attributes('style')).toContain('width: 300px')
+    })
+
     it('加载失败应该显示错误处理', async () => {
       const error = new Error('Network error')
       mockGetMovies.mockRejectedValue(error)

@@ -11,6 +11,19 @@ interface BatchSyncResponse {
   readonly updated?: number
 }
 
+export interface MovieBatchStatus {
+  readonly code: string
+  readonly exists: boolean
+  readonly needsImageRefresh?: boolean
+  readonly slug?: string | null
+  readonly updatedAt?: string | null
+}
+
+export interface MovieImageRefreshCandidate {
+  readonly code: string
+  readonly sourceUrl: string
+}
+
 function splitIntoChunks<T>(items: readonly T[], size: number): T[][] {
   const chunks: T[][] = []
   for (let index = 0; index < items.length; index += size)
@@ -96,13 +109,13 @@ export class ApiClient {
    * 相比逐个查询，批量查询显著减少 API 调用次数，提升爬取效率。
    *
    * @param codes 影片代码数组（如 ['ABC-001', 'ABC-002']）
-   * @returns 状态映射对象，key 为影片代码，value 为 { exists: boolean, code: string }
+   * @returns 状态映射对象，key 为影片代码，value 包含存在状态和媒体回填状态
    *
    * **容错处理**：
    * - 失败时返回空对象 {}，爬虫将回退到全量爬取模式
    * - 避免因批量查询失败导致爬虫完全中断
    */
-  async batchQueryMovieStatus(codes: string[]): Promise<Record<string, { exists: boolean, code: string }>> {
+  async batchQueryMovieStatus(codes: string[]): Promise<Record<string, MovieBatchStatus>> {
     if (codes.length === 0) {
       return {}
     }
@@ -126,6 +139,42 @@ export class ApiClient {
     catch (error) {
       console.warn('⚠️  批量状态查询失败，将作为新影片处理', error)
       return {}
+    }
+  }
+
+  async fetchMoviesNeedingImageRefresh(limit = 100): Promise<MovieImageRefreshCandidate[]> {
+    const boundedLimit = Math.min(Math.max(Math.floor(limit), 1), 200)
+    const url = `${this.config.url}/api/admin/movies/missing-images?limit=${boundedLimit}`
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.buildHeaders(),
+        signal: AbortSignal.timeout(this.config.timeout || 60000),
+      })
+
+      if (!response.ok) {
+        console.warn(`⚠️  缺媒体影片查询失败 ${response.status}`)
+        return []
+      }
+
+      const payload = await response.json() as { data?: unknown }
+      if (!Array.isArray(payload.data))
+        return []
+
+      return payload.data.filter((item): item is MovieImageRefreshCandidate => {
+        if (!item || typeof item !== 'object')
+          return false
+        const candidate = item as Record<string, unknown>
+        return typeof candidate.code === 'string'
+          && candidate.code.trim().length > 0
+          && typeof candidate.sourceUrl === 'string'
+          && candidate.sourceUrl.trim().length > 0
+      })
+    }
+    catch (error) {
+      console.warn('⚠️  缺媒体影片查询失败，将继续常规分页爬取', error)
+      return []
     }
   }
 

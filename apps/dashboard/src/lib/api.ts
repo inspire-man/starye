@@ -60,6 +60,7 @@ export interface Movie {
   code: string
   description?: string | null
   coverImage?: string | null
+  previewImages?: string[] | null
   releaseDate?: string | null
   duration?: number | null
   actors?: (string | { id: string, name: string })[] | null
