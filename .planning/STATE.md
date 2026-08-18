@@ -6,9 +6,9 @@ current_phase: 26
 current_phase_name: Video Source And Magnet Availability
 status: executing
 stopped_at: Completed 26-06-PLAN.md
-last_updated: "2026-08-17T22:28:00+08:00"
-last_activity: 2026-08-17
-last_activity_desc: Completed quick task 20260817-video-availability-actions
+last_updated: "2026-08-18T13:57:02+08:00"
+last_activity: 2026-08-18
+last_activity_desc: Completed quick task 260818-j9a-r18
 progress:
   total_phases: 2
   completed_phases: 1
@@ -131,6 +131,7 @@ Items acknowledged and carried forward from previous milestone close:
 | `260817-movie-detail-ia` | 2026-08-17 | 影片详情首屏操作、使用引导、播放源分组、技术详情折叠和移动端布局完成；Movie App 全量测试、lint、构建、Gateway 边界与 GitNexus 检查通过 |
 | `260817-expand-movie-crawl-range` | 2026-08-17 | 生产电影爬取范围扩大到 100 部/10 页；真实 MUDR-392 下载源浏览器播放通过；临时影片、媒体服务、Aria2 GID 与本地载体已清理；crawler 全量测试、类型检查、lint 与 GitNexus 检查通过 |
 | `20260817-video-availability-actions` | 2026-08-17 | 服务端生成 revision/policy binding；Dashboard 与 Movie Detail 提交真实视频检查/修复任务并刷新权威状态；API 5、Dashboard 24、Movie App 23 项定向测试及类型检查、lint、构建通过 |
+| `260818-j9a-r18` | 2026-08-18 | MovieDetail R18/SFW 受限态收敛；隐藏无效播放与来源检查动作、技术来源详情和意外返回的来源卡片；Movie App 全量测试、类型检查、lint、构建、Gateway 浏览器与 GitNexus 检查通过 |
 
 ## Session Continuity
 

@@ -220,6 +220,51 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.text()).not.toContain('▶️ 播放')
   })
 
+  it('explains when R18 playback sources are hidden by the current access mode', async () => {
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'movie-r18-hidden',
+        primaryContentId: 'movie-r18-hidden',
+        code: 'R18-HIDDEN-001',
+        title: 'R18 hidden source fixture',
+        isR18: true,
+        players: [],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-r18-hidden', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-r18-hidden', schemaVersion: 2 },
+          source: {
+            disposition: 'ready',
+            eligibleCount: 1,
+            observedAt: 100,
+            reasonCode: null,
+            repairable: false,
+            sourceRevision: 2,
+          },
+        },
+      },
+    })
+
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+
+    expect(wrapper.get('[data-r18-source-guard]').text()).toContain('播放源已隐藏')
+    expect(wrapper.get('[data-r18-source-guard]').text()).toContain('SFW 模式')
+    expect(wrapper.get('[data-r18-source-profile]').attributes('href')).toBe('/profile')
+    expect(wrapper.get('[data-readiness-action="r18-profile"]').attributes('href')).toBe('/profile')
+    expect(wrapper.get('[data-r18-access-summary]').text()).toContain('来源检查记录和播放入口已隐藏')
+    expect(wrapper.get('[data-r18-access-details-link]').attributes('href')).toBe('/profile')
+    expect(wrapper.get('[data-readiness-summary]').text()).toContain('开启 R18 访问后再检查')
+    expect(wrapper.find('[data-readiness-action="check-video-layer"]').exists()).toBe(false)
+    expect(wrapper.find('[data-readiness-action="refresh-primary"]').exists()).toBe(false)
+    expect(wrapper.find('.movie-detail-technical-details').exists()).toBe(false)
+    expect(wrapper.find('[data-playback-sources]').exists()).toBe(false)
+    expect(wrapper.get('[data-readiness-summary]').text()).not.toContain('eligible count')
+    expect(wrapper.text()).not.toContain('该影片尚未添加播放源信息')
+  })
+
   it.each([
     ['no_source', '查看修复意图', '播放未验证', 'no_eligible_source'],
     ['source_failed', '重试读取', '播放未验证', 'source_read_failed'],

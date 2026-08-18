@@ -37,6 +37,7 @@ const loading = ref(true)
 const error = ref('')
 const movie = ref<MovieDetail | null>(null)
 const readiness = computed<ReadinessProjection | null>(() => movie.value?.readiness ?? null)
+const userStore = useUserStore()
 
 type VideoLayerName = 'metadata' | 'direct' | 'magnet' | 'playback'
 
@@ -213,6 +214,7 @@ const primaryVideoAvailabilityAction = computed<VideoLayerDisplay | null>(() => 
 
 const firstEligibleDirect = computed(() => selectDirectPlaybackSource(movie.value?.players ?? []))
 const firstControlledFallback = computed(() => selectControlledPlaybackSource(movie.value?.players ?? []))
+const r18SourcesHidden = computed(() => movie.value?.isR18 === true && !userStore.user?.isR18Verified)
 
 const movieUsageSummary = computed<MovieUsageSummary>(() => {
   const source = readiness.value?.source
@@ -226,6 +228,17 @@ const movieUsageSummary = computed<MovieUsageSummary>(() => {
       sourceDescription: '尚未完成检查',
       sourceTitle: '读取中',
       title: '正在准备影片',
+    }
+  }
+
+  if (r18SourcesHidden.value) {
+    return {
+      description: '当前账号处于 SFW 模式，R18 播放源不会显示。',
+      entryDescription: '在个人中心查看 R18 访问状态',
+      entryTitle: '查看访问状态',
+      sourceDescription: '播放源受 R18 访问权限保护',
+      sourceTitle: '需要权限',
+      title: '播放源已隐藏',
     }
   }
 
@@ -317,9 +330,6 @@ interface InformationalSourceHealthRow {
   sourceRevision: number
   sourceType: InformationalSourceType
 }
-
-// 用户状态
-const userStore = useUserStore()
 
 // 下载列表管理
 const { isInDownloadList, addToDownloadList } = useDownloadList()
@@ -1253,7 +1263,7 @@ onMounted(() => {
 
             <div class="movie-detail-hero-actions mt-6 flex flex-wrap gap-2" aria-label="影片主要操作">
               <RouterLink
-                v-if="(!readiness || readiness.source.disposition === 'ready') && firstEligibleDirect"
+                v-if="!r18SourcesHidden && (!readiness || readiness.source.disposition === 'ready') && firstEligibleDirect"
                 :to="playbackRouteFor(firstEligibleDirect, 'direct')"
                 data-hero-action="play"
                 class="movie-detail-primary-action min-h-11 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors"
@@ -1262,7 +1272,7 @@ onMounted(() => {
                 立即播放
               </RouterLink>
               <a
-                v-else-if="(!readiness || readiness.source.disposition === 'ready') && movie.players?.length"
+                v-else-if="!r18SourcesHidden && (!readiness || readiness.source.disposition === 'ready') && movie.players?.length"
                 href="#playback-sources"
                 data-hero-action="choose-source"
                 class="movie-detail-primary-action min-h-11 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors"
@@ -1314,7 +1324,15 @@ onMounted(() => {
           </div>
           <div class="flex shrink-0 flex-wrap gap-2">
             <RouterLink
-              v-if="readiness.source.disposition === 'ready' && firstEligibleDirect"
+              v-if="r18SourcesHidden"
+              to="/profile"
+              data-readiness-action="r18-profile"
+              class="movie-detail-warning-action min-h-11 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            >
+              管理访问状态
+            </RouterLink>
+            <RouterLink
+              v-if="!r18SourcesHidden && readiness.source.disposition === 'ready' && firstEligibleDirect"
               :to="playbackRouteFor(firstEligibleDirect, 'direct')"
               data-readiness-action="play"
               :data-content-id="movie.primaryContentId"
@@ -1326,7 +1344,7 @@ onMounted(() => {
               立即播放
             </RouterLink>
             <a
-              v-else-if="readiness.source.disposition === 'ready' && firstControlledFallback"
+              v-else-if="!r18SourcesHidden && readiness.source.disposition === 'ready' && firstControlledFallback"
               href="#playback-sources"
               data-controlled-fallback-summary
               data-readiness-action="choose-source"
@@ -1335,7 +1353,7 @@ onMounted(() => {
               选择播放方式
             </a>
             <button
-              v-else-if="readiness.source.repairable"
+              v-else-if="!r18SourcesHidden && readiness.source.repairable"
               type="button"
               data-readiness-action="repair-primary"
               class="movie-detail-warning-action min-h-11 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
@@ -1344,7 +1362,7 @@ onMounted(() => {
               查看修复建议
             </button>
             <button
-              v-if="readiness.source.disposition !== 'ready'"
+              v-if="!r18SourcesHidden && readiness.source.disposition !== 'ready'"
               type="button"
               data-readiness-action="refresh-primary"
               class="movie-detail-secondary-action min-h-11 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60"
@@ -1354,7 +1372,7 @@ onMounted(() => {
               {{ loading ? '检查中…' : '重新检查' }}
             </button>
             <button
-              v-if="primaryVideoAvailabilityAction"
+              v-if="!r18SourcesHidden && primaryVideoAvailabilityAction"
               type="button"
               data-readiness-action="check-video-layer"
               class="movie-detail-secondary-action min-h-11 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60"
@@ -1374,8 +1392,8 @@ onMounted(() => {
           </div>
           <div class="movie-detail-status-card">
             <span class="movie-detail-status-label">播放验证</span>
-            <strong>{{ readiness.playback.status === 'playback_verified' ? '已验证' : '未验证' }}</strong>
-            <span>{{ readiness.playback.status === 'playback_verified' ? '最近有真实播放记录' : '首次播放后会更新' }}</span>
+            <strong>{{ r18SourcesHidden ? '需先开启' : readiness.playback.status === 'playback_verified' ? '已验证' : '未验证' }}</strong>
+            <span>{{ r18SourcesHidden ? '开启 R18 访问后再检查' : readiness.playback.status === 'playback_verified' ? '最近有真实播放记录' : '首次播放后会更新' }}</span>
           </div>
           <div class="movie-detail-status-card">
             <span class="movie-detail-status-label">推荐入口</span>
@@ -1384,7 +1402,22 @@ onMounted(() => {
           </div>
         </div>
 
-        <details class="movie-detail-technical-details">
+        <div v-if="r18SourcesHidden" data-r18-access-summary class="rounded-xl border border-amber-700/50 bg-amber-900/20 p-4">
+          <p class="movie-detail-eyebrow text-amber-200">
+            R18 访问状态
+          </p>
+          <p class="mt-1 text-sm leading-6 text-amber-100/80">
+            当前账号处于 SFW 模式，播放源、来源检查记录和播放入口已隐藏。
+          </p>
+          <RouterLink
+            to="/profile"
+            data-r18-access-details-link
+            class="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-amber-600/60 px-3 py-2 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-800/40"
+          >
+            前往个人中心
+          </RouterLink>
+        </div>
+        <details v-else class="movie-detail-technical-details">
           <summary>
             <span>查看来源与技术详情</span>
             <span class="text-xs font-normal text-gray-400">内容身份、检查记录、来源健康</span>
@@ -1591,7 +1624,7 @@ onMounted(() => {
       </div>
 
       <!-- 播放源区块 -->
-      <div v-if="sourceCardGroups.length > 0 && (!readiness || readiness.source.disposition === 'ready')" id="playback-sources" data-playback-sources class="bg-gray-800 rounded-lg shadow-lg p-5 sm:p-6">
+      <div v-if="!r18SourcesHidden && sourceCardGroups.length > 0 && (!readiness || readiness.source.disposition === 'ready')" id="playback-sources" data-playback-sources class="bg-gray-800 rounded-lg shadow-lg p-5 sm:p-6">
         <section data-usage-guide class="movie-detail-usage-guide mb-6 rounded-xl border border-primary-500/20 bg-primary-500/5 p-4 sm:p-5" aria-labelledby="usage-guide-title">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1878,7 +1911,22 @@ onMounted(() => {
         <h2 class="text-xl font-bold text-white mb-4">
           播放源
         </h2>
-        <div v-if="readiness?.source.disposition === 'source_failed'" role="alert" class="text-center py-8 text-red-300">
+        <div v-if="r18SourcesHidden" data-r18-source-guard role="status" class="rounded-xl border border-amber-700/50 bg-amber-900/20 px-4 py-6 text-center">
+          <p class="text-lg font-semibold text-amber-200 mb-2">
+            播放源已隐藏
+          </p>
+          <p class="text-sm leading-6 text-amber-100/80">
+            当前账号处于 SFW 模式，R18 影片的播放源和播放入口不会显示。
+          </p>
+          <RouterLink
+            to="/profile"
+            data-r18-source-profile
+            class="mt-4 inline-flex min-h-10 items-center justify-center rounded-lg border border-amber-600/60 px-4 py-2 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-800/40"
+          >
+            查看访问状态
+          </RouterLink>
+        </div>
+        <div v-else-if="readiness?.source.disposition === 'source_failed'" role="alert" class="text-center py-8 text-red-300">
           <p class="text-lg mb-2">
             来源失败
           </p>
