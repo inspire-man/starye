@@ -126,4 +126,29 @@ describe('apiClient', () => {
       )
     })
   })
+
+  describe('batch metadata sync', () => {
+    it.each([
+      ['actors', 'batchSyncActors'] as const,
+      ['publishers', 'batchSyncPublishers'] as const,
+    ])('splits %s into timeout-safe chunks and aggregates the result', async (kind, method) => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ created: 1, updated: 2 }),
+      } as Response)
+
+      const items = Array.from({ length: 26 }, (_, index) => ({
+        name: `${kind}-${index}`,
+        sourceId: `${kind}-id-${index}`,
+        sourceUrl: `https://example.com/${kind}/${index}`,
+      }))
+      const result = await apiClient[method](items)
+      const calls = vi.mocked(fetch).mock.calls
+      const payloads = calls.map(call => JSON.parse(String(call[1]?.body)) as Record<string, unknown>)
+
+      expect(result).toEqual({ created: 2, updated: 4 })
+      expect(calls).toHaveLength(2)
+      expect(payloads.map(payload => (payload[kind] as unknown[]).length)).toEqual([25, 1])
+    })
+  })
 })
