@@ -4,6 +4,20 @@
 
 import type { ApiConfig } from '../types/config'
 
+const BATCH_SYNC_CHUNK_SIZE = 25
+
+interface BatchSyncResponse {
+  readonly created?: number
+  readonly updated?: number
+}
+
+function splitIntoChunks<T>(items: readonly T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size)
+    chunks.push(items.slice(index, index + size))
+  return chunks
+}
+
 export class ApiClient {
   constructor(private config: ApiConfig) {}
 
@@ -246,14 +260,33 @@ export class ApiClient {
   /**
    * 批量同步女优
    */
-  async batchSyncActors(actors: Array<{ name: string, sourceUrl: string }>): Promise<any> {
-    return this.sync('/api/admin/actors/batch-sync', { actors })
+  async batchSyncActors(actors: Array<{ name: string, sourceUrl: string, sourceId?: string }>): Promise<BatchSyncResponse | null> {
+    return this.batchSync('/api/admin/actors/batch-sync', 'actors', actors)
   }
 
   /**
    * 批量同步厂商
    */
-  async batchSyncPublishers(publishers: Array<{ name: string, sourceUrl: string }>): Promise<any> {
-    return this.sync('/api/admin/publishers/batch-sync', { publishers })
+  async batchSyncPublishers(publishers: Array<{ name: string, sourceUrl: string, sourceId?: string }>): Promise<BatchSyncResponse | null> {
+    return this.batchSync('/api/admin/publishers/batch-sync', 'publishers', publishers)
+  }
+
+  private async batchSync<T extends { name: string, sourceUrl: string, sourceId?: string }>(
+    endpoint: string,
+    field: 'actors' | 'publishers',
+    items: readonly T[],
+  ): Promise<BatchSyncResponse | null> {
+    let created = 0
+    let updated = 0
+
+    for (const chunk of splitIntoChunks(items, BATCH_SYNC_CHUNK_SIZE)) {
+      const result = await this.sync(endpoint, { [field]: chunk }) as BatchSyncResponse | null
+      if (!result)
+        return null
+      created += Number.isInteger(result.created) ? result.created ?? 0 : 0
+      updated += Number.isInteger(result.updated) ? result.updated ?? 0 : 0
+    }
+
+    return { created, updated }
   }
 }

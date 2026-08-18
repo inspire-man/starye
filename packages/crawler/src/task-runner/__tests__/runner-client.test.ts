@@ -55,6 +55,38 @@ describe('runnerClient', () => {
     expect(body).not.toHaveProperty('provider_run_id')
   })
 
+  it('bounds oversized success receipts to the API content-id limit', async () => {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ accepted: true }), { status: 200 }))
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      applicationAttempt: 1,
+      applicationRunId: 'run-1',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+    })
+    const candidate: Parameters<typeof client.succeeded>[0] = {
+      attempt: 1,
+      runId: 'run-1',
+      sequence: 2,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        permissionResource: 'movie',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+    }
+    const contentIds = Array.from({ length: 101 }, (_, index) => `MOV-${index + 1}`)
+
+    await expect(client.succeeded(candidate, 3, contentIds)).resolves.toMatchObject({ accepted: true })
+
+    const body = JSON.parse(String((fetch.mock.calls[0]![1] as RequestInit).body)) as {
+      receipt: { contentIds: string[] }
+    }
+    expect(body.receipt.contentIds).toHaveLength(100)
+    expect(body.receipt.contentIds).toEqual(contentIds.slice(0, 100))
+  })
+
   it('rejects a polled candidate that is not bound to the production run tuple', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({
       candidate: {

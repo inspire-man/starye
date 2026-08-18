@@ -197,6 +197,8 @@ interface PostOptions {
   readonly allowNonOk?: boolean
 }
 
+const MAX_RECEIPT_CONTENT_IDS = 100
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -548,7 +550,10 @@ export class RunnerClient {
 
   async succeeded(candidate: RunnerCandidate, sequence: number, contentIds: readonly string[]): Promise<EventResult> {
     return this.event(candidate, sequence, 'succeeded', {
-      receipt: { contentIds, templateKey: candidate.snapshot.templateKey },
+      receipt: {
+        contentIds: contentIds.slice(0, MAX_RECEIPT_CONTENT_IDS),
+        templateKey: candidate.snapshot.templateKey,
+      },
     })
   }
 
