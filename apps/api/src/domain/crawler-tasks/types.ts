@@ -20,6 +20,7 @@ export type CrawlerTaskOperation = typeof CRAWLER_TASK_OPERATION_VALUES[number]
 export type RepairPlayersReason = 'no_source' | 'source_failed'
 export type RepairPlayersTargetIntent = 'restore_playable_sources'
 export type VideoSourceTaskOperation = 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
+export type VideoSourceKind = 'direct' | 'magnet'
 export type VideoSourceFindingReason
   = | 'no_source'
     | 'source_failed'
@@ -159,6 +160,7 @@ export interface VideoSourceTaskSnapshot extends CrawlerTaskSnapshot {
   readonly operation: VideoSourceTaskOperation
   readonly policyVersion: string
   readonly reason: VideoSourceFindingReason
+  readonly sourceKind?: VideoSourceKind
   readonly sourceRevision: number
   readonly templateKey: 'movie'
 }

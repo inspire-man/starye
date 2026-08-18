@@ -149,6 +149,13 @@ export interface PlaybackEvidenceTuple {
   taskId: string
 }
 
+export interface MovieAvailabilityPlaybackTuple {
+  attemptNumber: number
+  provider: 'github-actions' | 'local-proof'
+  runId: string
+  taskId: string
+}
+
 export interface MovieAvailabilityReadback {
   current: {
     direct: MovieVideoLayerFact | null
@@ -160,10 +167,53 @@ export interface MovieAvailabilityReadback {
     }
     playback: {
       status: PlaybackProofStatus
-      tuple: PlaybackEvidenceTuple | null
+      tuple: MovieAvailabilityPlaybackTuple | null
     }
   }
   history: readonly { fact: MovieVideoLayerFact, layer: 'direct' | 'magnet' }[]
+}
+
+export type MovieAvailabilityCommandReason
+  = | 'no_source'
+    | 'source_failed'
+    | 'stale'
+    | 'direct_blocked'
+    | 'direct_transport_failed'
+    | 'direct_content_invalid'
+    | 'browser_inconclusive'
+    | 'metadata_unresolved'
+    | 'no_peer'
+    | 'stalled'
+    | 'stream_missing'
+    | 'stream_failed'
+    | 'playback_unverified'
+    | 'playback_failed'
+
+export type MovieAvailabilitySourceKind = 'direct' | 'magnet'
+
+export interface MovieAvailabilityCommand {
+  idempotencyKey: string
+  movieId: string
+  reason: MovieAvailabilityCommandReason
+  sourceKind?: MovieAvailabilitySourceKind
+}
+
+export interface MovieAvailabilityCommandResponse {
+  binding: {
+    movieId: string
+    movieRevision: number
+    policyVersion: string
+    sourceKind: MovieAvailabilitySourceKind | null
+    sourceRevision: number
+  }
+  dispatch?: Record<string, unknown>
+  kind: 'created' | 'duplicate' | 'existing_active_run'
+  run: {
+    attemptNumber: number
+    id: string
+    status: 'queued' | 'dispatching' | 'running' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled'
+    taskId: string
+  }
 }
 
 export interface MovieVideoLayerFact {

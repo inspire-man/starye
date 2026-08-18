@@ -318,7 +318,7 @@ describe('crawlers local task panel', () => {
   })
 
   it('keeps the video availability command on the typed admin boundary', async () => {
-    const command = { idempotencyKey: 'video:movie-1:7:stale', movieId: 'movie-1', movieRevision: 3, policyVersion: 'video-source-probe/v1', reason: 'stale' as const, sourceRevision: 7 }
+    const command = { idempotencyKey: 'video:movie-1:7:stale', movieId: 'movie-1', reason: 'stale' as const }
     api.admin.submitVideoAvailabilityCommand.mockResolvedValue({ kind: 'duplicate', run: { id: 'run-1' } })
 
     await api.admin.submitVideoAvailabilityCommand(command)

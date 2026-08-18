@@ -15,6 +15,8 @@ import type {
   Favorite,
   GenreItem,
   Movie,
+  MovieAvailabilityCommand,
+  MovieAvailabilityCommandResponse,
   MovieDetail,
   PaginatedResponse,
   PlaybackEvidenceRequest,
@@ -100,6 +102,13 @@ export const movieApi = {
     }
     const data = await res.json()
     return { success: true, data: data.data }
+  },
+
+  async submitVideoAvailabilityCommand(command: MovieAvailabilityCommand): Promise<MovieAvailabilityCommandResponse> {
+    return apiFetch<MovieAvailabilityCommandResponse>('/admin/crawler-tasks/video-availability', {
+      method: 'POST',
+      body: JSON.stringify(command),
+    })
   },
 
   async submitPlaybackEvidence(taskId: string, runId: string, evidence: PlaybackEvidenceRequest): Promise<unknown> {

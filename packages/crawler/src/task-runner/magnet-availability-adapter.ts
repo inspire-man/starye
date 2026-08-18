@@ -15,8 +15,11 @@ export function createMagnetAvailabilityAdapter(input: {
     templateKey: 'movie',
     async execute(context) {
       const { candidate } = context
-      if (!isVideoRunnerSnapshot(candidate.snapshot) || !magnetReasons.has(candidate.snapshot.reason))
+      if (!isVideoRunnerSnapshot(candidate.snapshot)
+        || !(candidate.snapshot.sourceKind === 'magnet'
+          || (candidate.snapshot.sourceKind === undefined && magnetReasons.has(candidate.snapshot.reason)))) {
         throw new Error('Magnet adapter requires a video runner snapshot')
+      }
       if ((candidate.sourceRevision !== undefined && candidate.sourceRevision !== candidate.snapshot.sourceRevision)
         || (candidate.policyVersion !== undefined && candidate.policyVersion !== candidate.snapshot.policyVersion)) {
         throw new Error('Magnet adapter binding mismatch')

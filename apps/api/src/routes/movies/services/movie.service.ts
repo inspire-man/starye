@@ -1,5 +1,6 @@
 import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
+import type { ProviderName } from '../../../domain/crawler-tasks/types'
 import { movies as moviesTable } from '@starye/db/schema'
 import { and, count, desc, eq, notInArray, sql } from 'drizzle-orm'
 import { createAvailabilityRepository } from '../../../domain/crawler-tasks/availability-repository'
@@ -84,9 +85,10 @@ interface AvailabilityBinding {
   readonly attemptNumber: number
   readonly metadataObservedAt: number | null
   readonly policyVersion: string
-  readonly provider: 'github-actions'
+  readonly provider: ProviderName
   readonly reason: string
   readonly runId: string
+  readonly sourceKind?: 'direct' | 'magnet'
   readonly sourceRevision: number
   readonly taskId: string
   readonly playbackEvidence?: unknown
@@ -99,7 +101,7 @@ export interface MovieAvailabilityReadback {
     readonly metadata: { readonly observedAt: number | null, readonly persisted: boolean, readonly sourceRevision: number }
     readonly playback: {
       readonly status: 'playback_verified' | 'unverified'
-      readonly tuple: { readonly attemptNumber: number, readonly provider: 'github-actions', readonly runId: string, readonly taskId: string } | null
+      readonly tuple: { readonly attemptNumber: number, readonly provider: ProviderName, readonly runId: string, readonly taskId: string } | null
     }
   }
   readonly history: readonly ({ readonly layer: 'direct' | 'magnet', readonly fact: VideoLayerFact })[]
@@ -142,7 +144,7 @@ async function readAvailabilityBinding(db: Database, contentId: string, sourceRe
     INNER JOIN crawler_run_provider_association AS provider
       ON provider.run_id = run.id AND provider.application_attempt = run.attempt_number
     WHERE run.receipt_primary_content_id = ? AND run.receipt_source_revision = ?
-      AND run.status = 'succeeded' AND provider.provider = 'github-actions'
+      AND run.status = 'succeeded' AND provider.provider IN ('github-actions', 'local-proof')
     ORDER BY run.created_at DESC
     LIMIT 1
   `).bind(contentId, sourceRevision).all() as { readonly results?: readonly {
@@ -158,6 +160,9 @@ async function readAvailabilityBinding(db: Database, contentId: string, sourceRe
   if (!row)
     return null
   try {
+    const provider = row.provider === 'github-actions' || row.provider === 'local-proof' ? row.provider : null
+    if (!provider)
+      return null
     const snapshot = JSON.parse(row.request_snapshot_json) as Record<string, unknown>
     const intent = snapshot.intent && typeof snapshot.intent === 'object' && !Array.isArray(snapshot.intent)
       ? snapshot.intent as Record<string, unknown>
@@ -166,6 +171,7 @@ async function readAvailabilityBinding(db: Database, contentId: string, sourceRe
       ? snapshot.target as Record<string, unknown>
       : { id: snapshot.movieId, kind: 'movie' }
     const policyVersion = typeof snapshot.policyVersion === 'string' ? snapshot.policyVersion : intent.policyVersion
+    const sourceKind = intent.sourceKind === 'direct' || intent.sourceKind === 'magnet' ? intent.sourceKind : undefined
     if (intent.sourceRevision !== sourceRevision
       || typeof policyVersion !== 'string'
       || typeof intent.reason !== 'string'
@@ -187,9 +193,10 @@ async function readAvailabilityBinding(db: Database, contentId: string, sourceRe
       attemptNumber: row.attempt_number,
       metadataObservedAt,
       policyVersion,
-      provider: 'github-actions',
+      provider,
       reason: intent.reason,
       runId: row.run_id,
+      ...(sourceKind ? { sourceKind } : {}),
       sourceRevision,
       taskId: row.task_id,
     }
@@ -214,7 +221,7 @@ async function readMovieAvailability(db: Database, contentId: string, sourceRevi
     createPlaybackEvidenceRepository(db).getTaskEvidence(binding.taskId),
   ])
   const magnetReasons = new Set(['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed'])
-  const layer = magnetReasons.has(binding.reason) ? 'magnet' : 'direct'
+  const layer = binding.sourceKind ?? (magnetReasons.has(binding.reason) ? 'magnet' : 'direct')
   const currentFact = availability.current ? asVideoFact(availability.current) : null
   const playback = evidence.runs.find(run => run.runId === binding.runId)?.summary ?? null
   const playbackVerified = playback?.sourceRevision === sourceRevision && playback.playback.status === 'playback_verified'

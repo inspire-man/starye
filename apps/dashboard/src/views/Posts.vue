@@ -28,6 +28,7 @@ const { t } = useI18n()
 const posts = ref<PostWithAuthor[]>([])
 const loading = ref(false)
 const deleteConfirmId = ref<string | null>(null)
+const deletingPost = ref(false)
 const selectedPost = ref<PostWithAuthor | null>(null)
 const postDrawerOpen = ref(false)
 const { currentPage, limit: pageSize, totalPages, total, setMeta, goToPage, updatePageSize } = usePagination(20)
@@ -107,7 +108,7 @@ async function confirmDelete() {
     return
 
   const id = deleteConfirmId.value
-  deleteConfirmId.value = null
+  deletingPost.value = true
 
   try {
     const response = await fetch(`/api/posts/${id}`, {
@@ -119,10 +120,14 @@ async function confirmDelete() {
       throw new Error(`HTTP error! status: ${response.status}`)
 
     success('文章已删除')
+    deleteConfirmId.value = null
     await fetchPosts()
   }
   catch (e: unknown) {
     handleError(e, '删除文章失败')
+  }
+  finally {
+    deletingPost.value = false
   }
 }
 
@@ -138,6 +143,7 @@ watch([currentPage, pageSize], fetchPosts, { immediate: true })
       :confirm-text="t('dashboard.delete')"
       :cancel-text="t('dashboard.cancel') || '取消'"
       variant="danger"
+      :loading="deletingPost"
       @update:open="!$event && cancelDelete()"
       @confirm="confirmDelete"
     />

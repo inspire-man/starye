@@ -57,4 +57,18 @@ describe('direct video availability adapter', () => {
     })
     expect(JSON.stringify(mixedResult)).not.toMatch(/good\.example|bad\.example|token|cookie/u)
   })
+
+  it('accepts a stale snapshot when the direct source kind is explicit', async () => {
+    const adapter = createVideoAvailabilityAdapter({
+      fetch: async () => { throw new Error('dns') },
+      resolve: async () => ['203.0.113.10'],
+      sources: ['https://media.example/signed.m3u8'],
+    })
+
+    await expect(adapter.execute({
+      candidate: { attempt: 1, runId: 'run-stale-direct', sequence: 1, snapshot: { ...snapshot, reason: 'stale' as const, sourceKind: 'direct' as const } },
+      checkpoint: async () => false,
+      observe: () => {},
+    })).resolves.toMatchObject({ availabilityObservation: { status: 'unknown' } })
+  })
 })

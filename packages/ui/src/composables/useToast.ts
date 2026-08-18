@@ -2,12 +2,20 @@ import { ref } from 'vue'
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
+export interface ToastAction {
+  label: string
+  onClick: () => void | Promise<void>
+  closeOnClick?: boolean
+}
+
 export interface Toast {
   id: string
   type: ToastType
   message: string
+  title?: string
   duration?: number
   closable?: boolean
+  action?: ToastAction
 }
 
 export interface ProgressToast extends Toast {
@@ -17,6 +25,8 @@ export interface ProgressToast extends Toast {
 export interface ToastOptions {
   duration?: number
   closable?: boolean
+  title?: string
+  action?: ToastAction
 }
 
 const toasts = ref<Toast[]>([])
@@ -35,8 +45,10 @@ export function showToast(
     id: generateId(),
     type,
     message,
+    ...(options.title ? { title: options.title } : {}),
     duration: options.duration ?? 3000,
     closable: options.closable ?? true,
+    ...(options.action ? { action: options.action } : {}),
   }
 
   if (toasts.value.length >= MAX_TOASTS) {
@@ -77,14 +89,16 @@ export function info(message: string, options?: ToastOptions): string {
   return showToast('info', message, options)
 }
 
-export function showProgress(message: string): string {
+export function showProgress(message: string, options: Pick<ToastOptions, 'title' | 'action'> = {}): string {
   const toast: ProgressToast = {
     id: generateId(),
     type: 'info',
     message,
+    ...(options.title ? { title: options.title } : {}),
     duration: 0,
     closable: false,
     progress: 0,
+    ...(options.action ? { action: options.action } : {}),
   }
 
   if (toasts.value.length >= MAX_TOASTS) {
@@ -96,12 +110,13 @@ export function showProgress(message: string): string {
 }
 
 export function updateProgress(id: string, progress: number, message?: string): void {
-  const toast = toasts.value.find(t => t.id === id) as ProgressToast | undefined
-  if (toast) {
-    toast.progress = Math.min(100, Math.max(0, progress))
-    if (message) {
-      toast.message = message
-    }
+  const toast = toasts.value.find(t => t.id === id)
+  if (!toast || !('progress' in toast))
+    return
+
+  toast.progress = Math.min(100, Math.max(0, progress))
+  if (message) {
+    toast.message = message
   }
 }
 

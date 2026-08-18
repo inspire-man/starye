@@ -69,7 +69,9 @@ interface ActivePlaybackEvidenceIdentity {
 }
 
 const BUFFERING_TIMEOUT_MS = 10000
+const TORRSERVER_BUFFERING_TIMEOUT_MS = 30000
 const PLAYBACK_OBSERVATION_WINDOW_MS = 15000
+const TORRSERVER_PLAYBACK_OBSERVATION_WINDOW_MS = 30000
 const MAX_SOURCE_RETRIES = 2
 const PROGRESS_SAVE_INTERVAL_SECONDS = 10
 const PROGRESS_MIN_SAVE_SECONDS = 30
@@ -253,7 +255,7 @@ function createActivePlaybackEvidenceIdentity(sourceType: PlaybackSourceType): A
     sessionToken: playbackSessionToken,
     sourceRevision,
     sourceType,
-    tuple: { ...tuple },
+    tuple: { ...tuple, provider: 'github-actions' },
   }
 }
 
@@ -310,10 +312,23 @@ function playbackEventElapsedMs(): number {
   if (playbackObservationStartedAt.value == null)
     return 0
 
+  const observationWindowMs = getPlaybackObservationWindowMs()
   return Math.max(0, Math.min(
-    PLAYBACK_OBSERVATION_WINDOW_MS,
+    observationWindowMs,
     Date.now() - playbackObservationStartedAt.value,
   ))
+}
+
+function getPlaybackObservationWindowMs(): number {
+  return isTorrServerMode.value
+    ? TORRSERVER_PLAYBACK_OBSERVATION_WINDOW_MS
+    : PLAYBACK_OBSERVATION_WINDOW_MS
+}
+
+function getBufferingTimeoutMs(): number {
+  return isTorrServerMode.value
+    ? TORRSERVER_BUFFERING_TIMEOUT_MS
+    : BUFFERING_TIMEOUT_MS
 }
 
 function readCurrentPlayerTime(): number {
@@ -369,13 +384,14 @@ function updatePlaybackProgress(identity = activePlaybackEvidenceIdentity) {
 function startPlaybackObservationWindow() {
   clearPlaybackObservationTimer()
   playbackObservationStartedAt.value = Date.now()
+  const observationWindowMs = getPlaybackObservationWindowMs()
   playbackObservationTimer.value = window.setTimeout(() => {
     playbackObservationTimer.value = null
     if (playbackStatus.value === 'progressed' || playbackStatus.value === 'failed')
       return
 
     handleSourceFailure('network', '播放观察超时，尚未观察到至少 1 秒的 currentTime 推进。')
-  }, PLAYBACK_OBSERVATION_WINDOW_MS)
+  }, observationWindowMs)
 }
 
 function rememberCurrentSourceAttempt(outcome: SourceAttemptObservation['outcome']) {
@@ -608,6 +624,7 @@ function scheduleWaitingTimeout() {
   }
   startPlayerLoading(getLoadingMessage())
   const cycleToken = loadingCycleToken
+  const bufferingTimeoutMs = getBufferingTimeoutMs()
   waitingTimeout = window.setTimeout(() => {
     if (cycleToken !== loadingCycleToken) {
       return
@@ -617,7 +634,7 @@ function scheduleWaitingTimeout() {
       isTorrServerMode.value ? 'torrserver' : 'network',
       getWaitingTimeoutMessage(),
     )
-  }, BUFFERING_TIMEOUT_MS)
+  }, bufferingTimeoutMs)
 }
 
 function getPlaybackErrorState(): PlayerErrorState {

@@ -29,6 +29,7 @@ const tableColumns = [
 const showAddDialog = ref(false)
 const addForm = ref({ email: '' })
 const adding = ref(false)
+const removing = ref(false)
 
 function syncMeta() {
   const pages = Math.max(1, Math.ceil(users.value.length / pageSize.value))
@@ -104,15 +105,19 @@ async function confirmRemoveUser() {
     return
 
   const { id: userId, name: userName } = removeConfirmUser.value
-  removeConfirmUser.value = null
+  removing.value = true
 
   try {
     await api.admin.removeFromR18Whitelist(userId)
+    removeConfirmUser.value = null
     await loadWhitelist()
     success(`已移除 ${userName} 的 R18 访问权限`)
   }
   catch (e: unknown) {
     handleError(e, '移除 R18 白名单失败')
+  }
+  finally {
+    removing.value = false
   }
 }
 
@@ -187,6 +192,7 @@ onMounted(loadWhitelist)
       confirm-text="确认移除"
       cancel-text="取消"
       variant="danger"
+      :loading="removing"
       @update:open="!$event && (removeConfirmUser = null)"
       @confirm="confirmRemoveUser"
     />

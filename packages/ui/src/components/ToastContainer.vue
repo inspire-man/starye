@@ -26,14 +26,13 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div
-      class="fixed right-4 top-4 z-50 space-y-2"
-      aria-live="polite"
-      aria-atomic="false"
+      class="ui-toast-container fixed right-4 top-4 z-[4000] w-[min(28rem,calc(100vw-2rem))]"
+      aria-label="通知"
     >
       <TransitionGroup
         name="toast"
         tag="div"
-        class="space-y-2"
+        class="ui-toast-list space-y-2"
       >
         <Toast
           v-for="toast in toasts"
@@ -47,9 +46,14 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.ui-toast-container {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.2s ease;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .toast-enter-from {
@@ -60,5 +64,25 @@ onUnmounted(() => {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(100px);
+}
+
+@media (max-width: 640px) {
+  .ui-toast-container {
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+  }
+
+  .toast-enter-from,
+  .toast-leave-to {
+    transform: translateY(-0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter-active,
+  .toast-leave-active {
+    transition: none;
+  }
 }
 </style>

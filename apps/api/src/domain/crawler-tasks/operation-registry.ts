@@ -7,6 +7,7 @@ import type {
   ProviderSnapshot,
   RepairPlayersReason,
   VideoSourceFindingReason,
+  VideoSourceKind,
   VideoSourceTaskOperation,
 } from './types'
 import { createProviderSnapshot } from './provider-association'
@@ -29,6 +30,7 @@ export interface CrawlerOperationTarget {
 export interface CrawlerOperationIntent {
   readonly kind: CrawlerOperationIntentKind
   readonly reason?: RepairPlayersReason | VideoSourceFindingReason
+  readonly sourceKind?: VideoSourceKind
   readonly sourceRevision?: number
   readonly targetIntent?: 'restore_playable_sources'
   readonly movieRevision?: number
@@ -150,6 +152,10 @@ function isVideoSourceReason(value: unknown): value is VideoSourceFindingReason 
   ].includes(value)
 }
 
+function isVideoSourceKind(value: unknown): value is VideoSourceKind {
+  return value === 'direct' || value === 'magnet'
+}
+
 function validVideoOperationReason(operation: VideoSourceTaskOperation, reason: VideoSourceFindingReason): boolean {
   switch (operation) {
     case 'check_video_source':
@@ -229,8 +235,9 @@ export function readCrawlerOperationServerSnapshot(value: unknown): CrawlerOpera
     }
   }
   else if (isVideoSourceOperation(intent.kind)) {
-    if (Object.keys(intent).some(key => !['kind', 'movieRevision', 'policyVersion', 'reason', 'sourceRevision'].includes(key))
+    if (Object.keys(intent).some(key => !['kind', 'movieRevision', 'policyVersion', 'reason', 'sourceKind', 'sourceRevision'].includes(key))
       || !isVideoSourceReason(intent.reason)
+      || (intent.sourceKind !== undefined && !isVideoSourceKind(intent.sourceKind))
       || !validVideoOperationReason(intent.kind, intent.reason)
       || typeof intent.movieRevision !== 'number'
       || !Number.isSafeInteger(intent.movieRevision)
@@ -266,6 +273,7 @@ export function readCrawlerOperationServerSnapshot(value: unknown): CrawlerOpera
             movieRevision: intent.movieRevision as number,
             policyVersion: (intent.policyVersion as string).trim(),
             reason: intent.reason as VideoSourceFindingReason,
+            ...(intent.sourceKind ? { sourceKind: intent.sourceKind } : {}),
             sourceRevision: intent.sourceRevision as number,
           }
         : { kind: 'crawl' },
@@ -403,8 +411,9 @@ function parseCommand(value: unknown): CrawlerOperationCommandInput {
     boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid')
   }
   else if (isVideoSourceOperation(intentKind)) {
-    exactKeys(value.intent, ['kind', 'movieRevision', 'policyVersion', 'reason', 'sourceRevision'], 'crawler_operation_intent_unknown_field')
+    exactKeys(value.intent, ['kind', 'movieRevision', 'policyVersion', 'reason', 'sourceKind', 'sourceRevision'], 'crawler_operation_intent_unknown_field')
     if (!isVideoSourceReason(value.intent.reason)
+      || (value.intent.sourceKind !== undefined && !isVideoSourceKind(value.intent.sourceKind))
       || !validVideoOperationReason(intentKind, value.intent.reason)) {
       throw new Error('crawler_operation_intent_invalid')
     }
@@ -439,6 +448,7 @@ function parseCommand(value: unknown): CrawlerOperationCommandInput {
             movieRevision: boundedRevision(value.intent.movieRevision, 'crawler_operation_intent_invalid'),
             policyVersion: boundedString(value.intent.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_intent_invalid'),
             reason: value.intent.reason as VideoSourceFindingReason,
+            ...(value.intent.sourceKind ? { sourceKind: value.intent.sourceKind as VideoSourceKind } : {}),
             sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
           },
     operation: value.operation,
@@ -489,6 +499,7 @@ export function buildCrawlerOperationSnapshot(value: unknown): CrawlerOperationS
           operation: command.operation,
           policyVersion: command.intent.policyVersion!,
           reason: command.intent.reason as VideoSourceFindingReason,
+          ...(command.intent.sourceKind ? { sourceKind: command.intent.sourceKind } : {}),
           sourceRevision: command.intent.sourceRevision!,
         })
       : createCrawlerTaskSnapshot(command.operation as CrawlerTaskTemplateKey)

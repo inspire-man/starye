@@ -62,7 +62,7 @@ function makeDb(movie: ReturnType<typeof makeMovie>, players: unknown[] = movie.
   } as any
 }
 
-function makeAuthoritativeDb(movie: ReturnType<typeof makeMovie>) {
+function makeAuthoritativeDb(movie: ReturnType<typeof makeMovie>, sourceKind?: 'direct' | 'magnet', provider: 'github-actions' | 'local-proof' = 'github-actions') {
   const current = {
     attempt_number: 2,
     content_id: 'movie-1',
@@ -74,7 +74,7 @@ function makeAuthoritativeDb(movie: ReturnType<typeof makeMovie>) {
     observed_at: 1_786_000_010,
     policy_version: 'video-source-probe/v1',
     projection_version: 3,
-    provider: 'github-actions',
+    provider,
     reason_code: 'available',
     run_id: 'run-2',
     source_revision: 4,
@@ -107,11 +107,16 @@ function makeAuthoritativeDb(movie: ReturnType<typeof makeMovie>) {
           if (sql.includes('FROM crawler_task AS task')) {
             return { results: [{
               attempt_number: 2,
-              provider: 'github-actions',
+              provider,
               receipt_schema_version: 2,
               receipt_summary_json: JSON.stringify({ movieId: 'movie-1', observedAt: 1_786_000_000, sourceRevision: 4 }),
               request_snapshot_json: JSON.stringify({
-                intent: { policyVersion: 'video-source-probe/v1', reason: 'direct_transport_failed', sourceRevision: 4 },
+                intent: {
+                  policyVersion: 'video-source-probe/v1',
+                  reason: sourceKind === 'magnet' ? 'stale' : 'direct_transport_failed',
+                  ...(sourceKind ? { sourceKind } : {}),
+                  sourceRevision: 4,
+                },
                 policyVersion: 'video-source-probe/v1',
                 target: { id: 'movie-1', kind: 'movie' },
               }),
@@ -211,6 +216,21 @@ describe('movie readiness projection', () => {
     ])
     expect(result?.readiness.metadata.persisted).toBe(true)
     expect(JSON.stringify(result?.availability)).not.toMatch(/request_snapshot|receipt_summary|sourceUrl|secret|token/u)
+  })
+
+  it('reads a local-proof availability tuple through the public movie contract', async () => {
+    const movie = makeMovie(makeSourceState({ disposition: 'ready', eligibleCount: 1, repairable: false, reasonCode: null }))
+    const response = await makePublicApp(makeAuthoritativeDb(movie, 'magnet', 'local-proof')).request('/TEST-001')
+    const body = await response.json() as any
+
+    expect(response.status).toBe(200)
+    expect(v.parse(MovieAvailabilityReadbackSchema, body.data.availability)).toEqual(body.data.availability)
+    expect(body.data.availability.current.magnet).toMatchObject({ sourceRevision: 4, status: 'available' })
+    expect(body.data.availability.current.direct).toBeNull()
+    expect(body.data.availability.current.playback).toEqual({
+      status: 'unverified',
+      tuple: { attemptNumber: 2, provider: 'local-proof', runId: 'run-2', taskId: 'task-2' },
+    })
   })
 
   it('keeps ready playback unverified and accepts verified playback only with explicit evidence', async () => {

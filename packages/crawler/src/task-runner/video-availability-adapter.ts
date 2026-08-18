@@ -16,8 +16,11 @@ export function createVideoAvailabilityAdapter(input: {
     templateKey: 'movie',
     async execute(context) {
       const { candidate } = context
-      if (!isVideoRunnerSnapshot(candidate.snapshot) || !directReasons.has(candidate.snapshot.reason))
+      if (!isVideoRunnerSnapshot(candidate.snapshot)
+        || !(candidate.snapshot.sourceKind === 'direct'
+          || (candidate.snapshot.sourceKind === undefined && directReasons.has(candidate.snapshot.reason)))) {
         throw new Error('Direct adapter requires a direct video snapshot')
+      }
       if ((candidate.sourceRevision !== undefined && candidate.sourceRevision !== candidate.snapshot.sourceRevision)
         || (candidate.policyVersion !== undefined && candidate.policyVersion !== candidate.snapshot.policyVersion)) {
         throw new Error('Direct adapter binding mismatch')

@@ -2,10 +2,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MovieDetail from '../MovieDetail.vue'
 
-const { getMovieDetailMock, routeState, routerPushMock } = vi.hoisted(() => ({
+const { getMovieDetailMock, routeState, routerPushMock, submitVideoAvailabilityCommandMock } = vi.hoisted(() => ({
   getMovieDetailMock: vi.fn(),
   routeState: { params: { code: 'TEST-001' } },
   routerPushMock: vi.fn(),
+  submitVideoAvailabilityCommandMock: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -27,7 +28,7 @@ vi.mock('../../components/RatingStars.vue', () => ({
 }))
 
 vi.mock('../../lib/api-client', () => ({
-  movieApi: { getMovieDetail: getMovieDetailMock },
+  movieApi: { getMovieDetail: getMovieDetailMock, submitVideoAvailabilityCommand: submitVideoAvailabilityCommandMock },
   ratingApi: { submitPlayerRating: vi.fn() },
 }))
 
@@ -70,6 +71,11 @@ vi.mock('../../composables/useAuthGuard', () => ({
 describe('movie detail DOM tuple contract', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    submitVideoAvailabilityCommandMock.mockResolvedValue({
+      binding: { movieId: 'movie-uuid-1', movieRevision: 1, policyVersion: 'video-source-probe/v1', sourceRevision: 0 },
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'run-1', status: 'queued', taskId: 'task-1' },
+    })
     getMovieDetailMock.mockResolvedValue({
       success: true,
       data: {
@@ -137,11 +143,14 @@ describe('movie detail DOM tuple contract', () => {
     await flushPromises()
     expect(wrapper.findAll('[data-video-layer]').map(row => row.attributes('data-video-layer'))).toEqual(['metadata', 'direct', 'magnet', 'playback'])
     expect(wrapper.get('[data-video-layer="metadata"]').text()).toContain('未持久化')
+    expect(wrapper.get('[data-readiness-summary]').text()).toContain('当前还不能确认可观看')
+    expect(wrapper.get('[data-readiness-summary]').text()).toContain('磁力来源待确认')
     expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('direct_transport_failed')
     expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('available：1')
     expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('重新检查')
     expect(wrapper.get('[data-video-layer="direct"] [data-video-history]').text()).toContain('revision 6')
     expect(wrapper.get('[data-video-layer="magnet"]').text()).toContain('配置 provider')
+    expect(wrapper.get('[data-readiness-action="check-video-layer"]').text()).toContain('配置 provider')
     expect(wrapper.get('[data-video-layer="playback"]').text()).toContain('播放未验证')
     expect(wrapper.text()).not.toContain('RAW_REQUEST_SENTINEL')
     expect(wrapper.text()).not.toContain('TOKEN_SENTINEL')
@@ -195,16 +204,19 @@ describe('movie detail DOM tuple contract', () => {
 
     expect(summary.text()).toContain('内容身份')
     expect(summary.text()).toContain('movie-sun-064')
-    expect(summary.text()).toContain('Metadata persisted')
+    expect(summary.text()).toContain('影片信息保存状态')
     expect(summary.text()).toContain('no_source')
     expect(summary.text()).toContain('暂无可用播放源')
     expect(summary.text()).toContain('eligible count：0')
     expect(summary.text()).toContain('可修复')
-    expect(summary.text()).toContain('Playback proof')
+    expect(summary.text()).toContain('实际播放验证')
     expect(summary.text()).toContain('播放未验证')
-    expect(summary.text()).toContain('Receipt/source summary')
+    expect(summary.text()).toContain('同步记录')
     expect(summary.text()).toContain('查看修复意图')
     expect(summary.text()).toContain('重试读取')
+    expect(wrapper.get('[data-readiness-action="repair-primary"]').text()).toContain('查看修复建议')
+    expect(wrapper.get('[data-readiness-action="refresh-primary"]').text()).toContain('重新检查')
+    expect(wrapper.get('.movie-detail-technical-details').attributes('open')).toBeUndefined()
     expect(wrapper.text()).not.toContain('▶️ 播放')
   })
 
@@ -259,11 +271,14 @@ describe('movie detail DOM tuple contract', () => {
       expect(wrapper.find('[data-source-card]').exists()).toBe(false)
       expect(wrapper.get('[data-repairing-summary]').text()).toContain('server-owned source readback')
     }
-    if (disposition === 'ready')
+    if (disposition === 'ready') {
       expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/CODE-ready/play?player=direct-ready&contentId=movie-ready&sourceRevision=5&sourceType=direct')
+      expect(wrapper.get('[data-hero-action="play"]').text()).toContain('立即播放')
+      expect(wrapper.get('[data-usage-guide]').text()).toContain('选择适合你的播放方式')
+    }
   })
 
-  it('renders bounded per-source health and hands repairable state to Dashboard with the same movie identity', async () => {
+  it('renders bounded per-source health and submits a repair task with the same movie identity', async () => {
     getMovieDetailMock.mockResolvedValueOnce({
       success: true,
       data: {
@@ -313,7 +328,20 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.text()).not.toContain('RAW_SIGNATURE_SENTINEL')
 
     await wrapper.get('[data-readiness-action="repair"]').trigger('click')
-    expect(routerPushMock).toHaveBeenCalledWith('/dashboard/crawlers?movieId=movie-sun-064&reason=no_source')
+    const dialog = document.querySelector<HTMLElement>('[data-confirm-dialog-panel]')
+    expect(dialog?.textContent).toContain('确认视频来源操作')
+    expect(dialog?.textContent).toContain('SUN-064')
+    dialog?.querySelector<HTMLButtonElement>('.confirm-dialog-confirm')?.click()
+    await flushPromises()
+
+    expect(submitVideoAvailabilityCommandMock).toHaveBeenCalledWith({
+      idempotencyKey: 'movie-detail:video-availability:movie-sun-064:4:direct:no_source',
+      movieId: 'movie-sun-064',
+      reason: 'no_source',
+      sourceKind: 'direct',
+    })
+    expect(routerPushMock).not.toHaveBeenCalled()
+    expect(getMovieDetailMock).toHaveBeenCalledTimes(2)
   })
 
   it('groups mixed sources before score sorting and keeps controlled action boundaries', async () => {
@@ -383,9 +411,14 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.get('[data-readiness-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low&contentId=movie-mixed&sourceRevision=9&sourceType=direct')
     expect(wrapper.get('[data-source-card="direct-low"] [data-source-action="play"]').attributes('href')).toBe('/movie/MIXED-001/play?player=direct-low&contentId=movie-mixed&sourceRevision=9&sourceType=direct')
     expect(wrapper.get('[data-source-card="direct-low"]').attributes('data-playback-context')).toBe('movie-mixed@9/direct/direct-low')
+    expect(wrapper.get('[data-hero-action="play"]').text()).toContain('立即播放')
+    expect(wrapper.get('[data-usage-guide]').text()).toContain('TorrServer')
 
     const magnetActions = wrapper.findAll('[data-source-card="magnet-high"] [data-source-action]').map(action => action.attributes('data-source-action'))
     expect(magnetActions.sort()).toEqual(['aria2', 'copy', 'qrcode', 'rating', 'report', 'torrserver'])
+    expect(wrapper.get('[data-source-card="magnet-high"] [data-source-action="torrserver"]').text()).toContain('在线播放')
+    expect(wrapper.get('[data-source-card="magnet-high"] [data-source-action="aria2"]').text()).toContain('添加到 Aria2')
+    expect(wrapper.get('[data-source-card="magnet-high"] .movie-source-more').text()).toContain('更多操作')
     expect(wrapper.findAll('[data-source-card="inactive-best"] [data-source-action]')).toHaveLength(0)
     expect(wrapper.findAll('[data-source-card="torrserver-ineligible"] [data-source-action]')).toHaveLength(0)
     expect(wrapper.findAll('[data-source-card="blank-active"] [data-source-action]')).toHaveLength(0)

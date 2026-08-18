@@ -23,7 +23,7 @@ describe('toast.vue', () => {
 
       expect(wrapper.text()).toContain('操作成功')
       expect(wrapper.find('[role="status"]').exists()).toBe(true)
-      expect(wrapper.html()).toContain('bg-green-600')
+      expect(wrapper.classes()).toContain('ui-toast-success')
     })
 
     it('应该渲染 error 类型的 Toast', () => {
@@ -39,7 +39,8 @@ describe('toast.vue', () => {
       })
 
       expect(wrapper.text()).toContain('操作失败')
-      expect(wrapper.html()).toContain('bg-red-600')
+      expect(wrapper.classes()).toContain('ui-toast-error')
+      expect(wrapper.attributes('role')).toBe('alert')
     })
 
     it('应该渲染 warning 类型的 Toast', () => {
@@ -55,7 +56,7 @@ describe('toast.vue', () => {
       })
 
       expect(wrapper.text()).toContain('警告提示')
-      expect(wrapper.html()).toContain('bg-orange-500')
+      expect(wrapper.classes()).toContain('ui-toast-warning')
     })
 
     it('应该渲染 info 类型的 Toast', () => {
@@ -71,7 +72,7 @@ describe('toast.vue', () => {
       })
 
       expect(wrapper.text()).toContain('信息提示')
-      expect(wrapper.html()).toContain('bg-blue-600')
+      expect(wrapper.classes()).toContain('ui-toast-info')
     })
   })
 
@@ -141,6 +142,7 @@ describe('toast.vue', () => {
 
       expect(wrapper.text()).toContain('50%')
       expect(wrapper.text()).toContain('进度')
+      expect(wrapper.find('[role="progressbar"]').attributes('aria-valuenow')).toBe('50')
     })
 
     it('进度条宽度应该根据 progress 变化', () => {
@@ -174,6 +176,33 @@ describe('toast.vue', () => {
       })
 
       expect(wrapper.classes()).toContain('transition-all')
+    })
+  })
+
+  describe('操作入口', () => {
+    it('应该执行 action 并在成功后关闭 Toast', async () => {
+      let called = 0
+      const wrapper = mount(Toast, {
+        props: {
+          toast: {
+            id: 'action-toast',
+            type: 'error',
+            message: '网络连接失败',
+            closable: true,
+            action: {
+              label: '重试',
+              onClick: async () => {
+                called++
+              },
+            },
+          },
+        },
+      })
+
+      await wrapper.find('.ui-toast-action').trigger('click')
+
+      expect(called).toBe(1)
+      expect(wrapper.emitted('close')).toEqual([['action-toast']])
     })
   })
 

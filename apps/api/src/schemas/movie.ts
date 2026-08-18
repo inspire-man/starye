@@ -104,7 +104,7 @@ export const MovieAvailabilityReadbackSchema = v.strictObject({
       status: PlaybackProofStatusSchema,
       tuple: v.nullable(v.strictObject({
         attemptNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
-        provider: v.literal('github-actions'),
+        provider: v.picklist(['github-actions', 'local-proof']),
         runId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
         taskId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
       })),

@@ -8,6 +8,7 @@ import type {
   RepairPlayersTargetIntent,
   RepairPlayersTaskSnapshot,
   VideoSourceFindingReason,
+  VideoSourceKind,
   VideoSourceTaskOperation,
   VideoSourceTaskSnapshot,
 } from './types'
@@ -42,6 +43,7 @@ export interface VideoSourceSnapshotInput {
   readonly operation: VideoSourceTaskOperation
   readonly policyVersion: string
   readonly reason: VideoSourceFindingReason
+  readonly sourceKind?: VideoSourceKind
   readonly sourceRevision: number
 }
 
@@ -110,6 +112,7 @@ function videoSourceSnapshot(input: VideoSourceSnapshotInput): VideoSourceTaskSn
     operation: input.operation,
     policyVersion: input.policyVersion.trim(),
     reason: input.reason,
+    ...(input.sourceKind ? { sourceKind: input.sourceKind } : {}),
     sourceRevision: input.sourceRevision,
     templateKey: 'movie',
   })
@@ -140,6 +143,10 @@ function isVideoSourceReason(value: unknown): value is VideoSourceFindingReason 
   ].includes(value)
 }
 
+function isVideoSourceKind(value: unknown): value is VideoSourceKind {
+  return value === 'direct' || value === 'magnet'
+}
+
 export function createCrawlerTaskSnapshot(templateKey: CrawlerTaskTemplateKey): CrawlerTaskSnapshot
 export function createCrawlerTaskSnapshot(input: RepairPlayersSnapshotInput): RepairPlayersTaskSnapshot
 export function createCrawlerTaskSnapshot(input: VideoSourceSnapshotInput): VideoSourceTaskSnapshot
@@ -153,7 +160,8 @@ export function createCrawlerTaskSnapshot(input: CrawlerTaskTemplateKey | Repair
       || !validSourceRevision(videoInput.movieRevision)
       || !validSourceRevision(videoInput.sourceRevision)
       || !validPolicyVersion(videoInput.policyVersion)
-      || !isVideoSourceReason(videoInput.reason)) {
+      || !isVideoSourceReason(videoInput.reason)
+      || (videoInput.sourceKind !== undefined && !isVideoSourceKind(videoInput.sourceKind))) {
       throw new Error('video source snapshot is invalid')
     }
     return videoSourceSnapshot(videoInput)
@@ -240,7 +248,8 @@ export function readCrawlerTaskSnapshot(
       || !validSourceRevision(value.movieRevision)
       || !validSourceRevision(value.sourceRevision)
       || !validPolicyVersion(value.policyVersion)
-      || !isVideoSourceReason(value.reason)) {
+      || !isVideoSourceReason(value.reason)
+      || (value.sourceKind !== undefined && !isVideoSourceKind(value.sourceKind))) {
       return { ok: false, reason: 'invalid_snapshot' }
     }
     return {
@@ -252,6 +261,7 @@ export function readCrawlerTaskSnapshot(
         operation,
         policyVersion: value.policyVersion,
         reason: value.reason,
+        ...(value.sourceKind ? { sourceKind: value.sourceKind } : {}),
         sourceRevision: value.sourceRevision,
       }),
       template,

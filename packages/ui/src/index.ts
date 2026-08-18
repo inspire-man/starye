@@ -22,7 +22,7 @@ export { usePagination } from './composables/usePagination'
 // Composables
 export { error, hideProgress, hideToast, info, showProgress, showToast, success, updateProgress, useToast, warning } from './composables/useToast'
 
-export type { ProgressToast, Toast as ToastData, ToastOptions, ToastType } from './composables/useToast'
+export type { ProgressToast, ToastAction, Toast as ToastData, ToastOptions, ToastType } from './composables/useToast'
 // Utils
 export * from './lib/utils'
 export type { ErrorType, ParsedError } from './types'

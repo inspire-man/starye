@@ -270,6 +270,7 @@ async function executeRecrawl() {
     const ids = Array.from(selectedActors.value)
     await api.admin.batchRecrawlActors(ids)
     success(`成功标记 ${ids.length} 位女优重新爬取`)
+    isRecrawlConfirmOpen.value = false
     selectedActors.value.clear()
     await loadActors()
   }
@@ -519,15 +520,21 @@ onMounted(() => {
       v-model:open="isRecrawlConfirmOpen"
       title="确认批量重爬"
       :message="`确定要将 ${selectedActors.size} 位演员标记为【待重新爬取】吗？下次爬虫运行时会尝试补全详情。`"
+      :loading="isBatchOperating"
+      confirm-text="开始标记"
+      cancel-text="返回"
       @confirm="executeRecrawl"
     />
 
     <ConfirmDialog
-      :open="isMergeDialogOpen"
+      v-model:open="isMergeDialogOpen"
       title="合并演员"
       message="将此演员合并到另一个演员（所有关联作品将转移）"
+      variant="danger"
+      :loading="mergingActors"
+      confirm-text="确认合并"
+      cancel-text="返回"
       @confirm="handleMerge"
-      @cancel="isMergeDialogOpen = false"
     >
       <div class="merge-form">
         <div class="form-field">

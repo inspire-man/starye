@@ -754,4 +754,41 @@ describe('player.vue security gates', () => {
     wrapper.unmount()
     vi.useRealTimers()
   })
+
+  it('cold start 的 TorrServer 缓冲不会被通用超时误判为失败', async () => {
+    vi.useFakeTimers()
+    routeState.query = {
+      streamUrl: 'http://127.0.0.1:8090/stream/video?link=magnet%3Aabc&index=0&play=',
+    }
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        title: 'TorrServer cold start fixture',
+        players: [{ sourceUrl: 'magnet:?xt=urn:btih:cold-start', isActive: true }],
+        relatedMovies: [],
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+    const currentPlayer = playerInstances[0]
+
+    await wrapper.get('[data-player-action="play"]').trigger('click')
+    currentPlayer.handlers.waiting()
+    await vi.advanceTimersByTimeAsync(10000)
+    await flushPromises()
+
+    expect(wrapper.get('[data-playback-status]').text()).toContain('播放准备中')
+    expect(wrapper.find('[data-playback-failure]').exists()).toBe(false)
+
+    currentPlayer.handlers.canplay()
+    currentPlayer.handlers.playing()
+    currentPlayer.currentTime = 1.25
+    currentPlayer.handlers.timeupdate()
+    await flushPromises()
+
+    expect(wrapper.get('[data-playback-status]').text()).toContain('播放已验证')
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
 })

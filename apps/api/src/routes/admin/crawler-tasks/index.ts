@@ -14,6 +14,7 @@ import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTask
 import { getCrawlerTaskTemplate, readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { createPlaybackArtifactReference, createPlaybackEvidenceRepository } from '../../../domain/playback-evidence/repository'
+import { VIDEO_PROBE_POLICY_V1 } from '../../../domain/video-availability/probe-policy'
 import { createGitHubActionsClient } from '../../../lib/github-app/github-actions-client'
 import { canAccessCrawler } from '../../../lib/permissions'
 import { createAuditLog } from '../../../middleware/audit-logger'
@@ -159,6 +160,11 @@ interface RepairMovieLookupRow {
   source_reason: string | null
   source_revision: number | null
   title: string
+}
+
+interface VideoAvailabilityMovieLookupRow {
+  id: string
+  source_revision: number | null
 }
 
 interface RepairTaskRow {
@@ -1105,6 +1111,26 @@ async function readRepairMovieLookup(c: any, movieId: string): Promise<RepairMov
   return row.results?.[0]
 }
 
+async function readVideoAvailabilityMovieLookup(c: any, movieId: string): Promise<{ id: string, sourceRevision: number } | undefined> {
+  const row = await getD1(c).prepare(`
+    SELECT movie.id, state.source_revision
+    FROM movie
+    LEFT JOIN movie_source_state AS state ON state.movie_id = movie.id
+    WHERE movie.id = ?
+    LIMIT 1
+  `).bind(movieId).all<VideoAvailabilityMovieLookupRow>()
+  const movie = row.results?.[0]
+  if (!movie)
+    return undefined
+  const sourceRevision = movie.source_revision
+  return {
+    id: movie.id,
+    sourceRevision: typeof sourceRevision === 'number' && Number.isSafeInteger(sourceRevision) && sourceRevision >= 0
+      ? sourceRevision
+      : 0,
+  }
+}
+
 async function readActiveRepairTask(c: any, movieId: string): Promise<RepairTaskRow | undefined> {
   const result = await getD1(c).prepare(`
     SELECT task.id, task.template_key, task.operation, task.request_snapshot_json,
@@ -1349,7 +1375,15 @@ function projectVideoAvailabilityLayers(
 ): Record<VideoLayerName, { current: VideoLayerFact | null, history: readonly VideoLayerFact[] }> {
   const snapshot = videoSnapshot(taskAccess)
   const magnetReasons = new Set(['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed'])
-  const sourceLayer = snapshot && magnetReasons.has(snapshot.reason) ? 'magnet' : snapshot ? 'direct' : null
+  const sourceLayer = snapshot?.sourceKind === 'magnet'
+    ? 'magnet'
+    : snapshot?.sourceKind === 'direct'
+      ? 'direct'
+      : snapshot && magnetReasons.has(snapshot.reason)
+        ? 'magnet'
+        : snapshot
+          ? 'direct'
+          : null
   const current = sourceLayer && availability.current && snapshot
     && availability.current.sourceRevision === snapshot.sourceRevision
     && availability.current.policyVersion === snapshot.policyVersion
@@ -1653,6 +1687,13 @@ adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvail
   const user = await requireSessionUser(c)
   requireTemplateAccess(user, 'movie')
   const command = c.req.valid('json')
+  const movie = await readVideoAvailabilityMovieLookup(c, command.movieId)
+  if (!movie)
+    throw new HTTPException(404, { message: 'Video availability movie not found' })
+
+  const policyVersion = VIDEO_PROBE_POLICY_V1.version
+  const movieRevision = movie.sourceRevision
+  const sourceRevision = movie.sourceRevision
   const repairReasons = new Set(['no_source', 'source_failed', 'direct_blocked', 'direct_content_invalid'])
   const operation = repairReasons.has(command.reason) ? 'repair_video_source' as const : 'recheck_video_source' as const
   const repository = createCrawlerTaskRepository(c.get('db'))
@@ -1662,14 +1703,15 @@ adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvail
       idempotencyKey: command.idempotencyKey,
       intent: {
         kind: operation,
-        movieRevision: command.movieRevision,
-        policyVersion: command.policyVersion,
+        movieRevision,
+        policyVersion,
         reason: command.reason,
-        sourceRevision: command.sourceRevision,
+        ...(command.sourceKind ? { sourceKind: command.sourceKind } : {}),
+        sourceRevision,
       },
       operation,
       policyReference: 'availability/video-source-probe',
-      policyVersion: command.policyVersion,
+      policyVersion,
       target: { id: command.movieId, kind: 'movie' },
     },
     requestedByUserId: user.id,
@@ -1682,7 +1724,12 @@ adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvail
         localProofRequested: true,
       })
     : { kind: 'existing_active_run' }
-  return c.json({ dispatch, kind: result.kind, run: result.run })
+  return c.json({
+    binding: { movieId: movie.id, movieRevision, policyVersion, sourceKind: command.sourceKind ?? null, sourceRevision },
+    dispatch,
+    kind: result.kind,
+    run: result.run,
+  })
 })
 
 adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema), async (c) => {

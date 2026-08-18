@@ -108,7 +108,7 @@ export const GITHUB_ACTIONS_CONFIG: Partial<OptimizedCrawlerConfig> = {
     api: 1000,
   },
   limits: {
-    maxMovies: 50,
-    maxPages: 5,
+    maxMovies: 100,
+    maxPages: 10,
   },
 }
