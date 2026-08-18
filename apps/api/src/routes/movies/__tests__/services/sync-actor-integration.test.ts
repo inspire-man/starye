@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS movie (
   code TEXT NOT NULL UNIQUE,
   description TEXT,
   cover_image TEXT,
+  preview_images TEXT,
   release_date INTEGER,
   duration INTEGER,
   source_url TEXT UNIQUE,
