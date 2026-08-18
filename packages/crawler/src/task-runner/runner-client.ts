@@ -3,6 +3,7 @@ import { createRunnerEventId, signRunnerBody } from './event-signer'
 
 export type RunnerOperation = 'manga' | 'movie' | 'repair_players' | VideoRunnerOperation
 export type VideoRunnerOperation = 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
+export type RunnerVideoSourceKind = 'direct' | 'magnet'
 export type VideoRunnerReason
   = | 'no_source' | 'source_failed' | 'stale' | 'direct_blocked' | 'direct_transport_failed'
     | 'direct_content_invalid' | 'browser_inconclusive' | 'provider_unconfigured' | 'provider_failed'
@@ -129,6 +130,7 @@ export interface VideoRunnerSnapshot extends Omit<OrdinaryRunnerSnapshot, 'opera
   readonly operation: VideoRunnerOperation
   readonly policyVersion: string
   readonly reason: VideoRunnerReason
+  readonly sourceKind?: RunnerVideoSourceKind
   readonly sourceRevision: number
   readonly templateKey: 'movie'
 }
@@ -225,6 +227,10 @@ function isVideoRunnerReason(value: unknown): value is VideoRunnerReason {
   ].includes(value)
 }
 
+function isRunnerVideoSourceKind(value: unknown): value is RunnerVideoSourceKind {
+  return value === 'direct' || value === 'magnet'
+}
+
 function isRepairReceipt(value: unknown): value is RepairPlayersReceipt {
   if (!isRecord(value)
     || value.operation !== 'repair_players'
@@ -315,7 +321,7 @@ function parseRunnerSnapshot(value: unknown): RunnerSnapshot {
   }
 
   if (value.operation === 'check_video_source' || value.operation === 'recheck_video_source' || value.operation === 'repair_video_source') {
-    if (!hasExactKeys(value, [
+    const keys = [
       'entrypoint',
       'movieId',
       'movieRevision',
@@ -326,22 +332,26 @@ function parseRunnerSnapshot(value: unknown): RunnerSnapshot {
       'sourceRevision',
       'templateKey',
       'templateVersion',
-    ])
-    || value.templateKey !== 'movie'
-    || value.entrypoint !== 'movie-crawler'
-    || value.permissionResource !== 'movie'
-    || typeof value.movieId !== 'string'
-    || value.movieId.trim().length === 0
-    || typeof value.movieRevision !== 'number'
-    || !Number.isSafeInteger(value.movieRevision)
-    || value.movieRevision < 0
-    || typeof value.sourceRevision !== 'number'
-    || !Number.isSafeInteger(value.sourceRevision)
-    || value.sourceRevision < 0
-    || typeof value.policyVersion !== 'string'
-    || value.policyVersion.trim().length === 0
-    || value.policyVersion.length > 128
-    || !isVideoRunnerReason(value.reason)) {
+    ]
+    if (value.sourceKind !== undefined)
+      keys.push('sourceKind')
+    if (!hasExactKeys(value, keys)
+      || value.templateKey !== 'movie'
+      || value.entrypoint !== 'movie-crawler'
+      || value.permissionResource !== 'movie'
+      || typeof value.movieId !== 'string'
+      || value.movieId.trim().length === 0
+      || typeof value.movieRevision !== 'number'
+      || !Number.isSafeInteger(value.movieRevision)
+      || value.movieRevision < 0
+      || typeof value.sourceRevision !== 'number'
+      || !Number.isSafeInteger(value.sourceRevision)
+      || value.sourceRevision < 0
+      || typeof value.policyVersion !== 'string'
+      || value.policyVersion.trim().length === 0
+      || value.policyVersion.length > 128
+      || !isVideoRunnerReason(value.reason)
+      || (value.sourceKind !== undefined && !isRunnerVideoSourceKind(value.sourceKind))) {
       throw new Error('Invalid video runner snapshot')
     }
     return {
@@ -352,6 +362,7 @@ function parseRunnerSnapshot(value: unknown): RunnerSnapshot {
       permissionResource: 'movie',
       policyVersion: value.policyVersion.trim(),
       reason: value.reason,
+      ...(value.sourceKind ? { sourceKind: value.sourceKind } : {}),
       sourceRevision: value.sourceRevision,
       templateKey: 'movie',
       templateVersion: 1,
@@ -624,8 +635,10 @@ export class RunnerClient {
       throw new Error('Video observation requires a video runner snapshot')
     const directReasons: readonly VideoRunnerReason[] = ['direct_blocked', 'direct_transport_failed', 'direct_content_invalid', 'browser_inconclusive']
     const magnetReasons: readonly VideoRunnerReason[] = ['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed']
-    if ((input.sourceKind === 'direct' && magnetReasons.includes(candidate.snapshot.reason))
-      || (input.sourceKind === 'magnet' && directReasons.includes(candidate.snapshot.reason))) {
+    if (candidate.snapshot.sourceKind
+      ? candidate.snapshot.sourceKind !== input.sourceKind
+      : ((input.sourceKind === 'direct' && magnetReasons.includes(candidate.snapshot.reason))
+        || (input.sourceKind === 'magnet' && directReasons.includes(candidate.snapshot.reason)))) {
       throw new Error('Runner video source variant does not match its snapshot')
     }
     return this.observeAvailability(candidate, sequence, input)

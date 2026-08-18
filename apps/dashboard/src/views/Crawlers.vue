@@ -3,7 +3,7 @@
  * 爬虫监控页面
  */
 
-import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, CrawlerVideoAvailabilityReason, CrawlerVideoLayerFact, CrawlerVideoLayerName, ReadinessProjection } from '@/lib/api'
+import type { CrawlerAvailabilityHistoryEntry, CrawlerAvailabilityNextAction, CrawlerAvailabilityOutcome, CrawlerAvailabilityProjection, CrawlerAvailabilityReasonCode, CrawlerAvailabilityStatus, CrawlerPlaybackEventName, CrawlerPlaybackEvidenceEntry, CrawlerPlaybackEvidenceEvent, CrawlerPlaybackEvidenceOutcome, CrawlerPlaybackEvidenceSummary, CrawlerRepairNextAction, CrawlerRepairReason, CrawlerRepairReceipt, CrawlerRepairSourceProjection, CrawlerRepairSourceReadback, CrawlerRun, CrawlerSourceDisposition, CrawlerSourceHealth, CrawlerSourceHealthReasonCode, CrawlerSourceHealthRow, CrawlerSourceType, CrawlerTask, CrawlerTaskAudit, CrawlerTaskDetail, CrawlerTaskLifecycleProjection, CrawlerTaskLog, CrawlerTaskMetadataUpdate, CrawlerTaskSupersedeCommand, CrawlerTaskTemplate, CrawlerVideoAvailabilityReason, CrawlerVideoAvailabilitySourceKind, CrawlerVideoLayerFact, CrawlerVideoLayerName, ReadinessProjection } from '@/lib/api'
 import { ConfirmDialog, DataTable, DetailDrawer, info, Pagination, SkeletonCard, success } from '@starye/ui'
 import { AlertTriangle, Archive, CheckCircle2, CircleAlert, CircleHelp, ExternalLink, GitBranch, History, LoaderCircle, Pencil, RefreshCw, Save, Trash2, Wrench } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -53,7 +53,7 @@ const repairConfirmOpen = ref(false)
 const pendingRepair = ref<{ movieId: string, movieTitle: string, reason: CrawlerRepairReason } | null>(null)
 const repairAction = ref(false)
 const videoAvailabilityConfirmOpen = ref(false)
-const pendingVideoAvailability = ref<{ action: 'recheck' | 'repair', layer: CrawlerVideoLayerName, movieId: string, movieTitle: string, reason: CrawlerVideoAvailabilityReason, sourceRevision: number } | null>(null)
+const pendingVideoAvailability = ref<{ action: 'recheck' | 'repair', layer: CrawlerVideoLayerName, movieId: string, movieTitle: string, reason: CrawlerVideoAvailabilityReason, sourceKind?: CrawlerVideoAvailabilitySourceKind, sourceRevision: number } | null>(null)
 const videoAvailabilityAction = ref(false)
 const expandedHistory = ref<Record<string, boolean>>({})
 const taskAudits = ref<Record<string, CrawlerTaskAudit[]>>({})
@@ -1052,6 +1052,7 @@ function askVideoAvailabilityAction(task: CrawlerTask, layer: CrawlerVideoLayerN
     movieId,
     movieTitle: task.movie?.title ?? movieId,
     reason,
+    ...(layer === 'direct' || layer === 'magnet' ? { sourceKind: layer } : {}),
     sourceRevision: fact.sourceRevision,
   }
   videoAvailabilityConfirmOpen.value = true
@@ -1065,9 +1066,10 @@ async function confirmVideoAvailabilityAction(): Promise<void> {
   let completed = false
   try {
     const response = await api.admin.submitVideoAvailabilityCommand({
-      idempotencyKey: `dashboard:video-availability:${target.movieId}:${target.sourceRevision}:${target.reason}`,
+      idempotencyKey: `dashboard:video-availability:${target.movieId}:${target.sourceRevision}:${target.sourceKind ?? 'auto'}:${target.reason}`,
       movieId: target.movieId,
       reason: target.reason,
+      ...(target.sourceKind ? { sourceKind: target.sourceKind } : {}),
     })
     if (response.kind === 'existing_active_run' || response.kind === 'duplicate')
       info('当前影片已有同一来源操作，已聚焦现有任务。')

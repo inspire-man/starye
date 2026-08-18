@@ -52,4 +52,17 @@ describe('magnet availability adapter', () => {
     })).rejects.toThrow('binding')
     expect(add).not.toHaveBeenCalled()
   })
+
+  it('accepts a stale snapshot when the magnet source kind is explicit', async () => {
+    const adapter = createMagnetAvailabilityAdapter({
+      magnet: 'magnet:?xt=urn:btih:fixture',
+      provider: { add: async () => 'gid-1', cleanup: async () => {}, configured: true, status: async () => ({ metadataReady: true, peers: 1, progressBytes: 1, streamReady: true }) },
+    })
+
+    await expect(adapter.execute({
+      candidate: { attempt: 1, runId: 'run-stale-magnet', sequence: 1, snapshot: { ...snapshot, reason: 'stale' as const, sourceKind: 'magnet' as const } },
+      checkpoint: async () => false,
+      observe: () => {},
+    })).resolves.toMatchObject({ availabilityObservation: { status: 'unknown' } })
+  })
 })

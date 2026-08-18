@@ -1375,7 +1375,15 @@ function projectVideoAvailabilityLayers(
 ): Record<VideoLayerName, { current: VideoLayerFact | null, history: readonly VideoLayerFact[] }> {
   const snapshot = videoSnapshot(taskAccess)
   const magnetReasons = new Set(['provider_unconfigured', 'provider_failed', 'metadata_unresolved', 'no_peer', 'stalled', 'stream_missing', 'stream_failed'])
-  const sourceLayer = snapshot && magnetReasons.has(snapshot.reason) ? 'magnet' : snapshot ? 'direct' : null
+  const sourceLayer = snapshot?.sourceKind === 'magnet'
+    ? 'magnet'
+    : snapshot?.sourceKind === 'direct'
+      ? 'direct'
+      : snapshot && magnetReasons.has(snapshot.reason)
+        ? 'magnet'
+        : snapshot
+          ? 'direct'
+          : null
   const current = sourceLayer && availability.current && snapshot
     && availability.current.sourceRevision === snapshot.sourceRevision
     && availability.current.policyVersion === snapshot.policyVersion
@@ -1698,6 +1706,7 @@ adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvail
         movieRevision,
         policyVersion,
         reason: command.reason,
+        ...(command.sourceKind ? { sourceKind: command.sourceKind } : {}),
         sourceRevision,
       },
       operation,
@@ -1716,7 +1725,7 @@ adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvail
       })
     : { kind: 'existing_active_run' }
   return c.json({
-    binding: { movieId: movie.id, movieRevision, policyVersion, sourceRevision },
+    binding: { movieId: movie.id, movieRevision, policyVersion, sourceKind: command.sourceKind ?? null, sourceRevision },
     dispatch,
     kind: result.kind,
     run: result.run,

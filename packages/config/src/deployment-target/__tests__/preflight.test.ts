@@ -231,6 +231,8 @@ describe('target-profile CLI parser', () => {
   it('forwards a selected Pages surface to CI preflight validation', async () => {
     const { runTargetProfileCli } = await loadTargetProfileCli()
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.stubEnv('CLOUDFLARE_API_TOKEN', 'fixture-token')
+    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', resolveTargetProfile('starye-org').profile.account.id)
 
     await expect(runTargetProfileCli({
       commandName: 'preflight',
@@ -279,4 +281,3 @@ describe('target-profile CLI parser', () => {
     expect(error.mock.calls.flat().join('\n')).not.toContain(fixtureSecret)
   })
 })
-

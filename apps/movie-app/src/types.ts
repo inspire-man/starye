@@ -149,6 +149,13 @@ export interface PlaybackEvidenceTuple {
   taskId: string
 }
 
+export interface MovieAvailabilityPlaybackTuple {
+  attemptNumber: number
+  provider: 'github-actions' | 'local-proof'
+  runId: string
+  taskId: string
+}
+
 export interface MovieAvailabilityReadback {
   current: {
     direct: MovieVideoLayerFact | null
@@ -160,7 +167,7 @@ export interface MovieAvailabilityReadback {
     }
     playback: {
       status: PlaybackProofStatus
-      tuple: PlaybackEvidenceTuple | null
+      tuple: MovieAvailabilityPlaybackTuple | null
     }
   }
   history: readonly { fact: MovieVideoLayerFact, layer: 'direct' | 'magnet' }[]
@@ -182,10 +189,13 @@ export type MovieAvailabilityCommandReason
     | 'playback_unverified'
     | 'playback_failed'
 
+export type MovieAvailabilitySourceKind = 'direct' | 'magnet'
+
 export interface MovieAvailabilityCommand {
   idempotencyKey: string
   movieId: string
   reason: MovieAvailabilityCommandReason
+  sourceKind?: MovieAvailabilitySourceKind
 }
 
 export interface MovieAvailabilityCommandResponse {
@@ -193,6 +203,7 @@ export interface MovieAvailabilityCommandResponse {
     movieId: string
     movieRevision: number
     policyVersion: string
+    sourceKind: MovieAvailabilitySourceKind | null
     sourceRevision: number
   }
   dispatch?: Record<string, unknown>

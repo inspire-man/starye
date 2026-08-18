@@ -143,11 +143,14 @@ describe('movie detail DOM tuple contract', () => {
     await flushPromises()
     expect(wrapper.findAll('[data-video-layer]').map(row => row.attributes('data-video-layer'))).toEqual(['metadata', 'direct', 'magnet', 'playback'])
     expect(wrapper.get('[data-video-layer="metadata"]').text()).toContain('未持久化')
+    expect(wrapper.get('[data-readiness-summary]').text()).toContain('当前还不能确认可观看')
+    expect(wrapper.get('[data-readiness-summary]').text()).toContain('磁力来源待确认')
     expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('direct_transport_failed')
     expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('available：1')
     expect(wrapper.get('[data-video-layer="direct"]').text()).toContain('重新检查')
     expect(wrapper.get('[data-video-layer="direct"] [data-video-history]').text()).toContain('revision 6')
     expect(wrapper.get('[data-video-layer="magnet"]').text()).toContain('配置 provider')
+    expect(wrapper.get('[data-readiness-action="check-video-layer"]').text()).toContain('配置 provider')
     expect(wrapper.get('[data-video-layer="playback"]').text()).toContain('播放未验证')
     expect(wrapper.text()).not.toContain('RAW_REQUEST_SENTINEL')
     expect(wrapper.text()).not.toContain('TOKEN_SENTINEL')
@@ -332,9 +335,10 @@ describe('movie detail DOM tuple contract', () => {
     await flushPromises()
 
     expect(submitVideoAvailabilityCommandMock).toHaveBeenCalledWith({
-      idempotencyKey: 'movie-detail:video-availability:movie-sun-064:4:no_source',
+      idempotencyKey: 'movie-detail:video-availability:movie-sun-064:4:direct:no_source',
       movieId: 'movie-sun-064',
       reason: 'no_source',
+      sourceKind: 'direct',
     })
     expect(routerPushMock).not.toHaveBeenCalled()
     expect(getMovieDetailMock).toHaveBeenCalledTimes(2)

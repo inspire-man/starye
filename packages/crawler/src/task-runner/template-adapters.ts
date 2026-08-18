@@ -66,12 +66,12 @@ export function createTemplateAdapterRegistry(adapters: readonly TaskRunnerAdapt
       if (snapshot.operation === 'check_video_source'
         || snapshot.operation === 'recheck_video_source'
         || snapshot.operation === 'repair_video_source') {
-        if (magnetVideoReasons.has(snapshot.reason)) {
+        if (snapshot.sourceKind === 'magnet' || (!snapshot.sourceKind && magnetVideoReasons.has(snapshot.reason))) {
           if (!magnetVideoAdapter)
             throw new Error('Unsupported runner operation: video_magnet')
           return magnetVideoAdapter
         }
-        if (directVideoReasons.has(snapshot.reason)) {
+        if (snapshot.sourceKind === 'direct' || (!snapshot.sourceKind && directVideoReasons.has(snapshot.reason))) {
           if (!directVideoAdapter)
             throw new Error('Unsupported runner source kind: video_direct')
           return directVideoAdapter

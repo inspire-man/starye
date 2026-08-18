@@ -85,6 +85,26 @@ describe('task runner template registry', () => {
     expect(() => registry.select({ ...snapshot, reason: 'direct_blocked' } as never)).toThrow('source kind')
   })
 
+  it('uses an explicit source kind to route stale video checks', () => {
+    const direct = { execute: async () => ({ contentIds: [] }), operation: 'video_direct' as const, templateKey: 'movie' as const }
+    const magnet = { execute: async () => ({ contentIds: [] }), operation: 'video_magnet' as const, templateKey: 'movie' as const }
+    const registry = createTemplateAdapterRegistry([direct, magnet])
+
+    expect(registry.select({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-1',
+      movieRevision: 4,
+      operation: 'recheck_video_source',
+      permissionResource: 'movie',
+      policyVersion: 'video-source-probe/v1',
+      reason: 'stale',
+      sourceKind: 'magnet',
+      sourceRevision: 7,
+      templateKey: 'movie',
+      templateVersion: 1,
+    } as never)).toBe(magnet)
+  })
+
   it('rejects malformed repair snapshot contracts before adapter selection', () => {
     const repair = createRepairPlayersAdapter({ sources: [] })
     const registry = createTemplateAdapterRegistry([repair])

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MovieAvailabilityCommandReason, MovieDetail, Player, ReadinessProjection, SourceDisposition, SourceReasonCode } from '../types'
+import type { MovieAvailabilityCommandReason, MovieAvailabilitySourceKind, MovieDetail, Player, ReadinessProjection, SourceDisposition, SourceReasonCode } from '../types'
 import type { TorrentFile } from '../utils/torrServerClient'
 import { ConfirmDialog } from '@starye/ui'
 import QrcodeVue from 'qrcode.vue'
@@ -197,6 +197,103 @@ const videoAvailabilityLayers = computed<VideoLayerDisplay[]>(() => {
   })
 })
 
+interface MovieUsageSummary {
+  readonly description: string
+  readonly entryDescription: string
+  readonly entryTitle: string
+  readonly sourceDescription: string
+  readonly sourceTitle: string
+  readonly title: string
+}
+
+const primaryVideoAvailabilityAction = computed<VideoLayerDisplay | null>(() => {
+  const candidates = videoAvailabilityLayers.value.filter(layer => (layer.key === 'direct' || layer.key === 'magnet') && layer.actionKind !== 'none')
+  return candidates.find(layer => layer.key === 'magnet') ?? candidates.find(layer => layer.key === 'direct') ?? null
+})
+
+const firstEligibleDirect = computed(() => selectDirectPlaybackSource(movie.value?.players ?? []))
+const firstControlledFallback = computed(() => selectControlledPlaybackSource(movie.value?.players ?? []))
+
+const movieUsageSummary = computed<MovieUsageSummary>(() => {
+  const source = readiness.value?.source
+  const magnet = movie.value?.availability?.current.magnet
+
+  if (!source) {
+    return {
+      description: '正在读取来源状态，请稍候。',
+      entryDescription: '等待服务端返回当前状态',
+      entryTitle: '读取中',
+      sourceDescription: '尚未完成检查',
+      sourceTitle: '读取中',
+      title: '正在准备影片',
+    }
+  }
+
+  if (source.disposition === 'repairing') {
+    return {
+      description: '来源正在更新，完成后刷新状态再选择播放方式。',
+      entryDescription: '等待新的来源读回',
+      entryTitle: '稍后刷新',
+      sourceDescription: '受控修复进行中',
+      sourceTitle: '更新中',
+      title: '来源正在更新',
+    }
+  }
+
+  if (source.disposition === 'ready' && firstEligibleDirect.value) {
+    return {
+      description: '已找到可直接播放的来源，点击“立即播放”即可开始观看。',
+      entryDescription: '浏览器可以直接打开',
+      entryTitle: '直接播放',
+      sourceDescription: `${source.eligibleCount} 个候选来源`,
+      sourceTitle: '可播放',
+      title: '现在可以直接观看',
+    }
+  }
+
+  if (source.disposition === 'ready' && firstControlledFallback.value) {
+    return {
+      description: '当前来源需要受控方式，请在下方选择 TorrServer 在线播放或 Aria2 下载。',
+      entryDescription: '在播放源区域选择 TorrServer 或 Aria2',
+      entryTitle: '选择播放方式',
+      sourceDescription: `${source.eligibleCount} 个候选来源`,
+      sourceTitle: '可受控播放',
+      title: '选择一种播放方式',
+    }
+  }
+
+  if (magnet?.status === 'unknown' || magnet?.status === 'degraded') {
+    return {
+      description: '磁力来源仍在等待 metadata、peer 或 stream 检查，不要把“已入库”当成可播放。',
+      entryDescription: '先完成 Magnet / TorrServer 检查',
+      entryTitle: '重新检查来源',
+      sourceDescription: '磁力来源待确认',
+      sourceTitle: '待确认',
+      title: '当前还不能确认可观看',
+    }
+  }
+
+  if (source.disposition === 'ready') {
+    return {
+      description: '系统保留了来源候选，但当前页面没有可播放入口，可以先重新检查来源。',
+      entryDescription: '完成来源检查后再选择播放方式',
+      entryTitle: '重新检查来源',
+      sourceDescription: `${source.eligibleCount} 个候选来源，暂无可用入口`,
+      sourceTitle: '暂无播放入口',
+      title: '当前没有可直接观看的入口',
+    }
+  }
+
+  return {
+    description: '当前还没有可直接观看的来源，可以先重新检查或查看修复建议。',
+    entryDescription: '按下方说明操作',
+    entryTitle: '先检查来源',
+    sourceDescription: source.disposition === 'source_failed' ? '来源读回失败' : '暂无可用来源',
+    sourceTitle: source.disposition === 'source_failed' ? '来源失败' : '需要处理',
+    title: '现在可以怎么用',
+  }
+})
+
 function releaseDateValue(value: number | string | null | undefined): number | null {
   if (typeof value === 'number')
     return value
@@ -264,6 +361,7 @@ const pendingVideoAvailability = ref<{
   layer: VideoLayerName
   movieId: string
   reason: MovieAvailabilityCommandReason
+  sourceKind?: MovieAvailabilitySourceKind
   sourceRevision: number
 } | null>(null)
 const videoAvailabilityAction = ref(false)
@@ -377,7 +475,14 @@ function openVideoAvailabilityAction(action: 'recheck' | 'repair', layer: VideoL
   const movieId = movie.value?.id
   if (!movieId)
     return
-  pendingVideoAvailability.value = { action, layer, movieId, reason, sourceRevision }
+  pendingVideoAvailability.value = {
+    action,
+    layer,
+    movieId,
+    reason,
+    ...(layer === 'direct' || layer === 'magnet' ? { sourceKind: layer } : {}),
+    sourceRevision,
+  }
   videoAvailabilityConfirmOpen.value = true
 }
 
@@ -417,9 +522,10 @@ async function confirmVideoAvailabilityAction(): Promise<void> {
   let completed = false
   try {
     const response = await movieApi.submitVideoAvailabilityCommand({
-      idempotencyKey: `movie-detail:video-availability:${target.movieId}:${target.sourceRevision}:${target.reason}`,
+      idempotencyKey: `movie-detail:video-availability:${target.movieId}:${target.sourceRevision}:${target.sourceKind ?? 'auto'}:${target.reason}`,
       movieId: target.movieId,
       reason: target.reason,
+      ...(target.sourceKind ? { sourceKind: target.sourceKind } : {}),
     })
     showToast(response.kind === 'existing_active_run' || response.kind === 'duplicate'
       ? '当前影片已有同一来源操作，已保留现有任务并刷新状态'
@@ -582,9 +688,6 @@ const sourceCardGroups = computed(() => {
     },
   ].filter(group => group.sources.length > 0)
 })
-
-const firstEligibleDirect = computed(() => selectDirectPlaybackSource(movie.value?.players ?? []))
-const firstControlledFallback = computed(() => selectControlledPlaybackSource(movie.value?.players ?? []))
 
 const magnetLinks = computed(() => {
   return groupPlaybackSources(sortedPlayers.value).eligibleMagnet
@@ -1029,7 +1132,7 @@ onMounted(() => {
       </nav>
 
       <div class="movie-detail-hero bg-gray-800 rounded-lg shadow-lg p-5 sm:p-6">
-        <div class="flex flex-col md:flex-row gap-6">
+        <div class="flex min-w-0 flex-col gap-6 md:flex-row">
           <!-- 封面：完整展示横版原图（400:267） -->
           <div class="movie-detail-cover shrink-0 w-full md:w-72 lg:w-80">
             <img
@@ -1047,12 +1150,12 @@ onMounted(() => {
           </div>
 
           <div class="flex min-w-0 flex-1 flex-col">
-            <div class="flex items-start justify-between gap-4 mb-4">
-              <div>
+            <div class="mb-4 flex min-w-0 flex-wrap items-start justify-between gap-4">
+              <div class="movie-detail-title-block min-w-0 flex-1">
                 <p class="movie-detail-eyebrow">
                   影片详情
                 </p>
-                <h1 class="mt-1 break-words text-2xl font-bold text-white sm:text-3xl">
+                <h1 class="movie-detail-title mt-1 break-words text-2xl font-bold text-white sm:text-3xl">
                   {{ movie.title }}
                 </h1>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -1075,7 +1178,7 @@ onMounted(() => {
               </div>
               <span
                 v-if="movie.isR18"
-                class="bg-red-600 text-white text-sm px-3 py-1 rounded"
+                class="shrink-0 bg-red-600 px-3 py-1 text-sm text-white rounded"
               >
                 R18
               </span>
@@ -1203,19 +1306,10 @@ onMounted(() => {
               观看状态
             </p>
             <h2 class="mt-1 text-xl font-bold text-white">
-              现在可以怎么用
+              {{ movieUsageSummary.title }}
             </h2>
-            <p v-if="readiness.source.disposition === 'ready' && firstEligibleDirect" class="mt-1 text-sm text-gray-300">
-              已找到可直接播放的来源，点击“立即播放”即可开始观看。
-            </p>
-            <p v-else-if="readiness.source.disposition === 'ready' && firstControlledFallback" class="mt-1 text-sm text-gray-300">
-              当前来源需要受控方式，请在下方选择 TorrServer 在线播放或 Aria2 下载。
-            </p>
-            <p v-else-if="readiness.source.disposition === 'repairing'" class="mt-1 text-sm text-gray-300">
-              来源正在更新，完成后请刷新状态再选择播放方式。
-            </p>
-            <p v-else class="mt-1 text-sm text-gray-300">
-              当前还没有可直接观看的来源，可以先重新检查或查看修复建议。
+            <p class="mt-1 max-w-3xl text-sm leading-6 text-gray-300">
+              {{ movieUsageSummary.description }}
             </p>
           </div>
           <div class="flex shrink-0 flex-wrap gap-2">
@@ -1259,14 +1353,24 @@ onMounted(() => {
             >
               {{ loading ? '检查中…' : '重新检查' }}
             </button>
+            <button
+              v-if="primaryVideoAvailabilityAction"
+              type="button"
+              data-readiness-action="check-video-layer"
+              class="movie-detail-secondary-action min-h-11 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="videoAvailabilityAction"
+              @click="requestVideoLayerAction(primaryVideoAvailabilityAction)"
+            >
+              {{ videoAvailabilityAction ? '提交中…' : primaryVideoAvailabilityAction.action }}
+            </button>
           </div>
         </div>
 
         <div class="grid gap-3 sm:grid-cols-3" data-readiness-status-cards>
           <div class="movie-detail-status-card">
-            <span class="movie-detail-status-label">来源</span>
-            <strong>{{ readiness.source.disposition === 'ready' ? '可用' : readiness.source.disposition === 'repairing' ? '更新中' : '需要处理' }}</strong>
-            <span>{{ readiness.source.eligibleCount }} 个可用来源</span>
+            <span class="movie-detail-status-label">播放入口</span>
+            <strong>{{ movieUsageSummary.sourceTitle }}</strong>
+            <span>{{ movieUsageSummary.sourceDescription }}</span>
           </div>
           <div class="movie-detail-status-card">
             <span class="movie-detail-status-label">播放验证</span>
@@ -1275,8 +1379,8 @@ onMounted(() => {
           </div>
           <div class="movie-detail-status-card">
             <span class="movie-detail-status-label">推荐入口</span>
-            <strong>{{ (!readiness || readiness.source.disposition === 'ready') && firstEligibleDirect ? '直接播放' : (!readiness || readiness.source.disposition === 'ready') && firstControlledFallback ? '选择方式' : '先检查来源' }}</strong>
-            <span>{{ (!readiness || readiness.source.disposition === 'ready') && firstEligibleDirect ? '浏览器可直接打开' : '按下方说明操作' }}</span>
+            <strong>{{ movieUsageSummary.entryTitle }}</strong>
+            <span>{{ movieUsageSummary.entryDescription }}</span>
           </div>
         </div>
 
@@ -2124,6 +2228,23 @@ onMounted(() => {
 
 .movie-detail-hero {
   overflow: hidden;
+}
+
+.movie-detail-hero > div,
+.movie-detail-title-block,
+.movie-detail-meta {
+  min-width: 0;
+}
+
+.movie-detail-title {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.movie-detail-meta > div > :last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .movie-detail-cover img,

@@ -31,9 +31,10 @@ function createApp(results: Array<unknown[]> = []) {
 }
 
 const command = {
-  idempotencyKey: 'video:movie-1:7:stale',
+  idempotencyKey: 'video:movie-1:7:magnet:stale',
   movieId: 'movie-1',
   reason: 'stale',
+  sourceKind: 'magnet',
 }
 
 describe('phase 26 admin video availability boundary', () => {
@@ -56,6 +57,7 @@ describe('phase 26 admin video availability boundary', () => {
       permissionResource: 'movie',
       policyVersion: 'video-source-probe/v1',
       reason: 'direct_transport_failed',
+      sourceKind: 'direct',
       sourceRevision: 7,
       templateKey: 'movie',
       templateVersion: 1,
@@ -115,6 +117,58 @@ describe('phase 26 admin video availability boundary', () => {
     } } })
   })
 
+  it('routes an explicit stale magnet snapshot to the magnet layer', async () => {
+    const snapshot = JSON.stringify({
+      entrypoint: 'movie-crawler',
+      movieId: 'movie-1',
+      movieRevision: 3,
+      operation: 'recheck_video_source',
+      permissionResource: 'movie',
+      policyVersion: 'video-source-probe/v1',
+      reason: 'stale',
+      sourceKind: 'magnet',
+      sourceRevision: 7,
+      templateKey: 'movie',
+      templateVersion: 1,
+    })
+    repository.getTaskDetail.mockResolvedValueOnce({
+      runs: [{ id: 'run-1', status: 'succeeded', terminalAt: 200 }],
+      task: { id: 'task-1', latestRunId: 'run-1' },
+    })
+    const row = {
+      attempt_number: 1,
+      content_id: 'movie-1',
+      event_sequence: 2,
+      freshness: 'fresh',
+      next_action: 'recheck',
+      observation_identity: 'magnet-current',
+      observed_at: 205,
+      policy_version: 'video-source-probe/v1',
+      provider: 'local-proof',
+      reason_code: 'content_missing',
+      run_id: 'run-1',
+      source_revision: 7,
+      status: 'degraded',
+      summary_json: JSON.stringify({ counts: { metadata_ready: 1, peers: 1, progress_bytes: 1024, stream_ready: 1 }, samples: [{ code: 'playback_unverified' }] }),
+      target_id: 'movie-1',
+      target_kind: 'movie',
+      task_id: 'task-1',
+    }
+    const app = createApp([
+      [{ operation: 'recheck_video_source', request_snapshot_json: snapshot, template_key: 'movie' }],
+      [{ ...row, projection_version: 1 }],
+      [{ ...row, event_sequence: 1, freshness: 'stale', observation_identity: 'magnet-old', source_revision: 6 }],
+      [],
+    ])
+
+    const response = await app.request('/crawler-tasks/task-1')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ availability: { layers: {
+      direct: { current: null, history: [] },
+      magnet: { current: { layer: 'magnet', sourceRevision: 7, status: 'degraded' }, history: [{ layer: 'magnet' }] },
+    } } })
+  })
+
   it('derives a revision-bound recheck operation and returns an existing identity', async () => {
     const response = await createApp([[{ id: 'movie-1', source_revision: 7 }]]).request('/crawler-tasks/video-availability', {
       body: JSON.stringify(command),
@@ -126,7 +180,7 @@ describe('phase 26 admin video availability boundary', () => {
     expect(repository.createOrGetActiveRun).toHaveBeenCalledWith(expect.objectContaining({
       operationCommand: expect.objectContaining({
         idempotencyKey: command.idempotencyKey,
-        intent: expect.objectContaining({ kind: 'recheck_video_source', movieRevision: 7, reason: 'stale', sourceRevision: 7 }),
+        intent: expect.objectContaining({ kind: 'recheck_video_source', movieRevision: 7, reason: 'stale', sourceKind: 'magnet', sourceRevision: 7 }),
         operation: 'recheck_video_source',
         policyVersion: 'video-source-probe/v1',
         target: { id: 'movie-1', kind: 'movie' },
@@ -135,7 +189,7 @@ describe('phase 26 admin video availability boundary', () => {
       templateKey: 'movie',
     }))
     await expect(response.json()).resolves.toMatchObject({
-      binding: { movieId: 'movie-1', movieRevision: 7, policyVersion: 'video-source-probe/v1', sourceRevision: 7 },
+      binding: { movieId: 'movie-1', movieRevision: 7, policyVersion: 'video-source-probe/v1', sourceKind: 'magnet', sourceRevision: 7 },
       kind: 'duplicate',
       run: { id: 'run-1' },
     })
@@ -172,7 +226,7 @@ describe('phase 26 admin video availability boundary', () => {
       template: 'movie',
     })
     await expect(response.json()).resolves.toMatchObject({
-      binding: { movieId: 'movie-1', movieRevision: 7, policyVersion: 'video-source-probe/v1', sourceRevision: 7 },
+      binding: { movieId: 'movie-1', movieRevision: 7, policyVersion: 'video-source-probe/v1', sourceKind: 'magnet', sourceRevision: 7 },
       dispatch: { provider: { accepted: true, kind: 'local-proof_queued' } },
       kind: 'created',
     })

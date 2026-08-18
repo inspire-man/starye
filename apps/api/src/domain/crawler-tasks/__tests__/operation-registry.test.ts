@@ -21,6 +21,7 @@ function command() {
 function videoCommand(
   operation: 'check_video_source' | 'recheck_video_source' | 'repair_video_source',
   reason: 'no_source' | 'source_failed' | 'stale' | 'direct_blocked' | 'no_peer' | 'provider_failed',
+  sourceKind?: 'direct' | 'magnet',
 ) {
   return {
     actor: { id: 'admin-1', kind: 'admin' as const },
@@ -30,6 +31,7 @@ function videoCommand(
       movieRevision: 11,
       policyVersion: 'video-source-probe/v1',
       reason,
+      ...(sourceKind ? { sourceKind } : {}),
       sourceRevision: 7,
     },
     operation,
@@ -135,5 +137,14 @@ describe('crawler operation registry', () => {
       ...base,
       intent: { ...base.intent, movieRevision: 12 },
     }))
+  })
+
+  it('keeps an explicit video source kind in the immutable command and template snapshot', () => {
+    const magnet = videoCommand('recheck_video_source', 'stale', 'magnet')
+    const snapshot = buildCrawlerOperationSnapshot(magnet)
+
+    expect(snapshot.intent).toMatchObject({ kind: 'recheck_video_source', reason: 'stale', sourceKind: 'magnet' })
+    expect(snapshot.template).toMatchObject({ operation: 'recheck_video_source', reason: 'stale', sourceKind: 'magnet' })
+    expect(fingerprintOperationCommand(magnet)).not.toBe(fingerprintOperationCommand(videoCommand('recheck_video_source', 'stale', 'direct')))
   })
 })

@@ -65,6 +65,7 @@ export const VideoAvailabilityCommandSchema = v.strictObject({
     'playback_unverified',
     'playback_failed',
   ]),
+  sourceKind: v.optional(v.picklist(['direct', 'magnet'])),
 })
 
 export const UpdateCrawlerTaskSchema = v.pipe(

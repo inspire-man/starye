@@ -181,6 +181,29 @@ describe('movieApi', () => {
     expect(result.binding).toEqual({ movieId: 'movie-1', movieRevision: 4, policyVersion: 'video-source-probe/v1', sourceRevision: 9 })
   })
 
+  it('preserves an explicit source kind in the video availability request', async () => {
+    const fetchMock = mockFetchOk({
+      binding: { movieId: 'movie-1', movieRevision: 4, policyVersion: 'video-source-probe/v1', sourceKind: 'magnet', sourceRevision: 9 },
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'run-1', status: 'queued', taskId: 'task-1' },
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await movieApi.submitVideoAvailabilityCommand({
+      idempotencyKey: 'movie-detail:video-availability:movie-1:9:magnet:stale',
+      movieId: 'movie-1',
+      reason: 'stale',
+      sourceKind: 'magnet',
+    })
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      idempotencyKey: 'movie-detail:video-availability:movie-1:9:magnet:stale',
+      movieId: 'movie-1',
+      reason: 'stale',
+      sourceKind: 'magnet',
+    })
+  })
+
   describe('trackView', () => {
     it('应请求 POST /api/public/movies/:code/view', async () => {
       const fetchMock = mockFetchOk({ success: true, data: null })
