@@ -94,6 +94,16 @@ describe('actionsEventClient', () => {
     expect(fetch).toHaveBeenCalledTimes(3)
   })
 
+  it('includes the callback response detail when a schedule registration is rejected', async () => {
+    const fetch = vi.fn(async () => response(400, { error: 'Schedule provider snapshot mismatch', requestId: 'request-1' }))
+    const client = new ActionsEventClient({ ...baseConfig, fetch })
+    const errorMessage = 'Actions callback request failed: 400: {"error":"Schedule provider snapshot mismatch","requestId":"request-1"}'
+
+    await expect(
+      client.scheduleRegister({ scheduledAt: '2026-07-30T00:00:00.000Z', scheduleBucket: '2026-07-30T00:00Z' }),
+    ).rejects.toThrow(errorMessage)
+  })
+
   it('propagates cancel_requested and keeps provider identity out of lifecycle events', async () => {
     const fetch = vi.fn(async () => response(200, { accepted: true, cancel_requested: true }))
     const client = new ActionsEventClient({ ...baseConfig, fetch, runId: 'run-1', attempt: 2, providerRunId: '77', providerRunAttempt: 1, sha: 'a'.repeat(40) })
