@@ -123,6 +123,27 @@ describe('cache Middleware', () => {
       expect(res.status).toBe(200)
       expect(res.headers.get('Cache-Control')).toContain('max-age=180')
     })
+
+    it('不应复用匿名详情响应到已验证会话', async () => {
+      let handlerCalls = 0
+      app.get('/detail/:id', detailCache(), (c) => {
+        handlerCalls += 1
+        const isVerified = c.req.header('Cookie') === 'session=verified'
+        return c.json({ coverImage: isVerified ? 'https://cdn.example/cover.webp' : null })
+      })
+
+      const anonymousResponse = await app.request('/detail/SS-154')
+      await new Promise(resolve => setTimeout(resolve, 10))
+      const verifiedResponse = await app.request('/detail/SS-154', {
+        headers: { Cookie: 'session=verified' },
+      })
+
+      expect(await anonymousResponse.json()).toEqual({ coverImage: null })
+      expect(await verifiedResponse.json()).toEqual({ coverImage: 'https://cdn.example/cover.webp' })
+      expect(handlerCalls).toBe(2)
+      expect(verifiedResponse.headers.get('Cache-Control')).toContain('private')
+      expect(verifiedResponse.headers.get('Vary')).toBe('Cookie')
+    })
   })
 
   describe('userCache', () => {

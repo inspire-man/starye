@@ -1257,12 +1257,12 @@ const tableColumns = [
   background: #f9fafb;
 }
 
-/* 保持封面比例，同时让管理表格保持紧凑行高。 */
+/* 电影封面是横版预览图，使用固定尺寸避免把整行撑成海报高度。 */
 .movie-cover-cell {
-  width: 56px;
-  height: 75px;
+  width: 64px;
+  height: 36px;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 4px;
   background: #1f2937;
   flex-shrink: 0;
 }
@@ -1271,7 +1271,7 @@ const tableColumns = [
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: right center;
+  object-position: center;
   border-radius: 6px;
   display: block;
 }
@@ -1287,7 +1287,7 @@ const tableColumns = [
 }
 
 .movies-page :deep(.data-table-body-cell) {
-  padding-block: 0.5rem;
+  padding-block: 0.375rem;
 }
 
 .movie-table-text {
