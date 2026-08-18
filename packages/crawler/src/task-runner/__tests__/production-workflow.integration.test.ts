@@ -160,4 +160,3 @@ describe('production Actions workflow integration contract', () => {
     }
   })
 })
-

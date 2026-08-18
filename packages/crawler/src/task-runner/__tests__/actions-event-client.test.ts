@@ -132,4 +132,3 @@ describe('actionsEventClient', () => {
     expect(terminal).not.toHaveProperty('provider_run_id')
   })
 })
-

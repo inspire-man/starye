@@ -316,4 +316,3 @@ if (process.argv[1]?.endsWith('actions-event-client.ts')) {
     process.exitCode = 1
   })
 }
-
