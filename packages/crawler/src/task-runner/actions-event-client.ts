@@ -193,8 +193,10 @@ export class ActionsEventClient {
         })
         if (response.ok)
           return await response.json() as ActionsEventResponse
-        if (!retryable || response.status < 500 || attempt === attempts - 1)
-          throw new Error(`Actions callback request failed: ${response.status}`)
+        if (!retryable || response.status < 500 || attempt === attempts - 1) {
+          const detail = (await response.text()).trim().replace(/\s+/gu, ' ').slice(0, 512)
+          throw new Error(`Actions callback request failed: ${response.status}${detail ? `: ${detail}` : ''}`)
+        }
       }
       catch (error) {
         const retryableError = error instanceof DOMException && error.name === 'AbortError'
@@ -314,3 +316,4 @@ if (process.argv[1]?.endsWith('actions-event-client.ts')) {
     process.exitCode = 1
   })
 }
+

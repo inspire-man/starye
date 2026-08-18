@@ -22,10 +22,15 @@ on:
         description: Selected tracked deployment target
         required: true
         type: string
+      registration_probe:
+        description: Run the scheduled registration path during a manual smoke test
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   register-schedule:
-    if: github.event_name == 'schedule'
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.registration_probe == true) }}
     runs-on: ubuntu-latest
     environment: starye-org
     outputs:
@@ -61,7 +66,7 @@ jobs:
 
   resolve-target:
     needs: register-schedule
-    if: always()
+    if: ${{ needs.register-schedule.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.registration_probe != true) }}
     runs-on: ubuntu-latest
     outputs:
       target: ${{ steps.resolve.outputs.target }}
@@ -85,13 +90,19 @@ jobs:
           INPUT_RUN_ID: ${{ inputs.run_id || '' }}
           INPUT_ATTEMPT: ${{ inputs.attempt || '' }}
           INPUT_TEMPLATE: ${{ inputs.template || '' }}
+          INPUT_REGISTRATION_PROBE: ${{ inputs.registration_probe || false }}
           REGISTER_RUN_ID: ${{ needs.register-schedule.outputs.run_id || '' }}
           REGISTER_ATTEMPT: ${{ needs.register-schedule.outputs.attempt || '' }}
         run: |
           set -euo pipefail
           target="${INPUT_TARGET:-$STARYE_TARGET_ID}"
-          run_id="${INPUT_RUN_ID:-$REGISTER_RUN_ID}"
-          attempt="${INPUT_ATTEMPT:-$REGISTER_ATTEMPT}"
+          if [ "$INPUT_REGISTRATION_PROBE" = true ]; then
+            run_id="$REGISTER_RUN_ID"
+            attempt="$REGISTER_ATTEMPT"
+          else
+            run_id="${INPUT_RUN_ID:-$REGISTER_RUN_ID}"
+            attempt="${INPUT_ATTEMPT:-$REGISTER_ATTEMPT}"
+          fi
           template="${INPUT_TEMPLATE:-movie}"
           test "$target" = starye-org
           test -n "$run_id"
@@ -148,3 +159,4 @@ jobs:
       - name: Remove generated target files
         if: always()
         run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"
+
