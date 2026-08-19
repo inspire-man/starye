@@ -17,6 +17,7 @@ interface Env {
   COMIC_ORIGIN?: string
   TAVERN_ORIGIN?: string
   AUTH_ORIGIN?: string
+  TORRSERVER_ORIGIN?: string
 }
 
 /** 创建一个来自指定 URL 的模拟请求 */
@@ -46,6 +47,108 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('torrserver 流媒体代理', () => {
+  const mediaPath = '/torrserver/stream/video?link=magnet%3Aabc&index=0&play='
+
+  it('本地仅将精确媒体路径转发到固定 TorrServer，并保留 Range 与 206 流', async () => {
+    mockFetchResponse = new Response('media-bytes', {
+      status: 206,
+      statusText: 'Partial Content',
+      headers: {
+        'Accept-Ranges': 'bytes',
+        'Content-Length': '11',
+        'Content-Range': 'bytes 0-10/11',
+        'Content-Type': 'video/mp4',
+      },
+    })
+
+    const response = await worker.fetch(makeRequest(`http://localhost:8080${mediaPath}`, {
+      headers: {
+        Accept: 'video/mp4',
+        Authorization: 'Bearer browser-token',
+        Cookie: 'session=browser-cookie',
+        Range: 'bytes=0-10',
+      },
+    }), {})
+
+    expect(capturedRequest!.url).toBe(`http://127.0.0.1:8090/stream/video?link=magnet%3Aabc&index=0&play=`)
+    expect(capturedRequest!.headers.get('Range')).toBe('bytes=0-10')
+    expect(capturedRequest!.headers.get('Authorization')).toBeNull()
+    expect(capturedRequest!.headers.get('Cookie')).toBeNull()
+    expect(capturedRequest!.headers.get('Host')).toBeNull()
+    expect(response.status).toBe(206)
+    expect(response.statusText).toBe('Partial Content')
+    expect(response.headers.get('Content-Range')).toBe('bytes 0-10/11')
+    expect(response.headers.get('Content-Type')).toBe('video/mp4')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    await expect(response.text()).resolves.toBe('media-bytes')
+  })
+
+  it('生产环境只使用服务端配置的 TorrServer origin', async () => {
+    await worker.fetch(makeRequest(`https://starye.example${mediaPath}`), {
+      TORRSERVER_ORIGIN: 'https://torr.example.test/',
+    })
+
+    expect(capturedRequest!.url).toBe('https://torr.example.test/stream/video?link=magnet%3Aabc&index=0&play=')
+  })
+
+  it.each([
+    undefined,
+    'ftp://torr.example.test',
+    'https://user:secret@torr.example.test',
+    'https://torr.example.test/path',
+  ])('生产环境缺少或非法配置时关闭代理: %s', async (origin) => {
+    const response = await worker.fetch(makeRequest(`https://starye.example${mediaPath}`), {
+      TORRSERVER_ORIGIN: origin,
+    })
+
+    expect(response.status).toBe(503)
+    expect(capturedRequest).toBeNull()
+  })
+
+  it.each([
+    '/torrserverevil/stream/video',
+    '/torrserver/settings',
+    '/torrserver/torrents',
+    '/torrserver/stream/video/extra',
+    '/torrserver%2Fstream%2Fvideo',
+  ])('拒绝混淆路径且不触发上游: %s', async (path) => {
+    const response = await worker.fetch(makeRequest(`http://localhost:8080${path}?link=magnet%3Aabc&index=0`), {})
+
+    expect(response.status).toBe(404)
+    expect(capturedRequest).toBeNull()
+  })
+
+  it.each(['POST', 'PUT', 'DELETE'])('拒绝非流媒体方法且不触发上游: %s', async (method) => {
+    const response = await worker.fetch(makeRequest(`http://localhost:8080${mediaPath}`, { method }), {})
+
+    expect(response.status).toBe(405)
+    expect(capturedRequest).toBeNull()
+  })
+
+  it('options 在 Gateway 本地完成预检且暴露 Range 响应头', async () => {
+    const response = await worker.fetch(makeRequest(`http://localhost:8080${mediaPath}`, { method: 'OPTIONS' }), {})
+
+    expect(response.status).toBe(204)
+    expect(capturedRequest).toBeNull()
+    expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET, HEAD, OPTIONS')
+    expect(response.headers.get('Access-Control-Allow-Headers')).toBe('Accept, Range')
+    expect(response.headers.get('Access-Control-Expose-Headers')).toContain('Content-Range')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  it('上游不可用时返回脱敏 502，不泄露调用方伪造的目标', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('connection refused')
+    })
+    const response = await worker.fetch(makeRequest(`http://localhost:8080${mediaPath}&target=https%3A%2F%2Fevil.example`), {})
+
+    expect(response.status).toBe(502)
+    await expect(response.text()).resolves.not.toContain('evil.example')
+  })
 })
 
 // ─── 本地/生产环境检测 ───────────────────────────────────────────────────────

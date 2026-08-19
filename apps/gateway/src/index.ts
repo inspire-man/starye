@@ -19,6 +19,7 @@ interface Env {
   COMIC_ORIGIN?: string
   TAVERN_ORIGIN?: string
   AUTH_ORIGIN?: string
+  TORRSERVER_ORIGIN?: string
   CACHE?: KVNamespace
   ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单（D-03）
   SENTRY_DSN?: string
@@ -36,6 +37,12 @@ const SENTRY_NOISE_PATTERNS = [
 ]
 
 const LOCAL_GATEWAY_ORIGIN = 'http://localhost:8080'
+const LOCAL_TORRSERVER_ORIGIN = 'http://127.0.0.1:8090'
+const TORRSERVER_STREAM_PATH = '/torrserver/stream/video'
+const TORRSERVER_UPSTREAM_PATH = '/stream/video'
+const TORRSERVER_EXPOSE_HEADERS = 'Accept-Ranges, Content-Length, Content-Range, Content-Type'
+const TORRSERVER_REQUEST_HEADERS = ['accept', 'accept-encoding', 'if-modified-since', 'if-none-match', 'if-range', 'range']
+const TORRSERVER_RESPONSE_HEADERS = ['accept-ranges', 'content-length', 'content-range', 'content-type']
 
 function isInternalLocalhostAlias(url: URL): boolean {
   return url.hostname === 'api.localhost'
@@ -48,6 +55,85 @@ function isLocalProxyTarget(targetOrigin: string): boolean {
   }
   catch {
     return false
+  }
+}
+
+function resolveTorrServerOrigin(isLocal: boolean, configuredOrigin?: string): string | null {
+  if (isLocal) {
+    return LOCAL_TORRSERVER_ORIGIN
+  }
+
+  if (!configuredOrigin) {
+    return null
+  }
+
+  try {
+    const parsed = new URL(configuredOrigin)
+    if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+      || parsed.username
+      || parsed.password
+      || parsed.pathname !== '/'
+      || parsed.search
+      || parsed.hash) {
+      return null
+    }
+    return parsed.origin
+  }
+  catch {
+    return null
+  }
+}
+
+function torrServerCorsHeaders(): Headers {
+  return new Headers({
+    'Access-Control-Allow-Headers': 'Accept, Range',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Expose-Headers': TORRSERVER_EXPOSE_HEADERS,
+    'Cache-Control': 'no-store',
+  })
+}
+
+function torrServerBlockedResponse(status: number, message: string): Response {
+  return new Response(message, { status, headers: torrServerCorsHeaders() })
+}
+
+async function proxyTorrServerStream(request: Request, targetOrigin: string): Promise<Response> {
+  const requestUrl = new URL(request.url)
+  const targetUrl = new URL(`${TORRSERVER_UPSTREAM_PATH}${requestUrl.search}`, targetOrigin)
+  const headers = new Headers()
+  for (const headerName of TORRSERVER_REQUEST_HEADERS) {
+    const value = request.headers.get(headerName)
+    if (value) {
+      headers.set(headerName, value)
+    }
+  }
+
+  try {
+    const upstreamResponse = await fetch(new Request(targetUrl, {
+      method: request.method,
+      headers,
+      redirect: 'manual',
+    }))
+    const responseHeaders = torrServerCorsHeaders()
+    for (const headerName of TORRSERVER_RESPONSE_HEADERS) {
+      const value = upstreamResponse.headers.get(headerName)
+      if (value) {
+        responseHeaders.set(headerName, value)
+      }
+    }
+    return new Response(upstreamResponse.body, {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      headers: responseHeaders,
+    })
+  }
+  catch (error) {
+    Sentry.captureException(error, {
+      tags: { subsystem: 'gateway-torrserver-stream' },
+      extra: { path: TORRSERVER_STREAM_PATH },
+    })
+    return torrServerBlockedResponse(502, 'Gateway Error: TorrServer stream unavailable')
   }
 }
 
@@ -106,6 +192,26 @@ const gatewayHandler = {
     const proxyCacheOptions = isLocal
       ? { bypassCache: true, preserveUpstreamCacheControl: true, executionCtx: ctx }
       : { executionCtx: ctx }
+
+    // TorrServer exposes a large media body. Match only its final stream path before
+    // the cached app fallbacks, keep its target server-owned, and never buffer it in KV.
+    if (path.startsWith('/torrserver')) {
+      if (path !== TORRSERVER_STREAM_PATH) {
+        return torrServerBlockedResponse(404, 'Not Found')
+      }
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: torrServerCorsHeaders() })
+      }
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return torrServerBlockedResponse(405, 'Method Not Allowed')
+      }
+
+      const targetOrigin = resolveTorrServerOrigin(isLocal, env.TORRSERVER_ORIGIN)
+      if (!targetOrigin) {
+        return torrServerBlockedResponse(503, 'TorrServer stream is not configured')
+      }
+      return proxyTorrServerStream(request, targetOrigin)
+    }
 
     // 0. robots.txt（D-15：在所有 proxy 分支之前 match，避免被 blog fallback 捕获）
     if (path === '/robots.txt') {
