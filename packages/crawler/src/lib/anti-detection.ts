@@ -407,20 +407,42 @@ export class CrawlerSession {
       await this.applyHeaders(page, 0)
 
       // 访问首页建立会话
-      await page.goto(this.baseUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 60000,
-      })
+      let navigationError: unknown
+      try {
+        await page.goto(this.baseUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000,
+        })
+      }
+      catch (error) {
+        navigationError = error
+      }
 
-      // 停留一会儿，模拟真实浏览
-      await this._sleep(2000 + Math.random() * 2000)
+      // 预热首页只是建立会话的机会；即使导航超时，页面可能已经收到响应并设置 Cookie。
+      if (!navigationError) {
+        // 停留一会儿，模拟真实浏览
+        await this._sleep(2000 + Math.random() * 2000)
+      }
 
       // 保存 Cookies
-      this.cookies = await page.cookies()
+      try {
+        this.cookies = await page.cookies()
+      }
+      catch (error) {
+        this.cookies = []
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[CrawlerSession] ⚠️ Failed to capture cookies during initialization: ${message}`)
+      }
       this.initialized = true
       this.sessionStartTime = Date.now()
 
-      console.log(`[CrawlerSession] ✅ Session initialized with ${this.cookies.length} cookies`)
+      if (navigationError) {
+        const message = navigationError instanceof Error ? navigationError.message : String(navigationError)
+        console.warn(`[CrawlerSession] ⚠️ Homepage warm-up did not complete; continuing with target navigation: ${message}`)
+      }
+      else {
+        console.log(`[CrawlerSession] ✅ Session initialized with ${this.cookies.length} cookies`)
+      }
     }
     catch (error) {
       console.error('[CrawlerSession] ❌ Failed to initialize session:', error)

@@ -79,13 +79,25 @@ export class Site92Hm implements CrawlStrategy {
     }
     // 首次调用时初始化会话
     if (!this.initialized) {
-      await this.session.initialize(page)
+      try {
+        await this.session.initialize(page)
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[Site92Hm] ⚠️ Session warm-up failed for ${this.baseUrl}; continuing with target navigation: ${message}`)
+      }
       this.initialized = true
     }
 
     // 检查会话是否需要刷新
     if (this.session.shouldRefresh()) {
-      await this.session.refreshSession(page)
+      try {
+        await this.session.refreshSession(page)
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[Site92Hm] ⚠️ Session refresh failed for ${this.baseUrl}; continuing with target navigation: ${message}`)
+      }
     }
 
     // 应用 Cookie
