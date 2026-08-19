@@ -973,6 +973,75 @@ describe('crawler task repository', () => {
     })
   })
 
+  it('finishes a local proof provider association when its runner reaches a terminal state', async () => {
+    await client.execute({
+      args: ['movie-video-2', 'Video Two', 'video-two', 'VIDEO-002', 0, 0],
+      sql: 'INSERT INTO movie (id, title, slug, code, total_players, crawled_players) VALUES (?, ?, ?, ?, ?, ?)',
+    })
+    const created = await repository.createOrGetActiveRun({
+      operationCommand: {
+        actor: { id: 'admin-1', kind: 'admin' },
+        idempotencyKey: 'video:movie-video-2:4:no_peer',
+        intent: {
+          kind: 'recheck_video_source',
+          movieRevision: 4,
+          policyVersion: 'video-source-probe/v1',
+          reason: 'no_peer',
+          sourceRevision: 4,
+        },
+        operation: 'recheck_video_source',
+        policyReference: 'availability/video-source-probe',
+        policyVersion: 'video-source-probe/v1',
+        target: { id: 'movie-video-2', kind: 'movie' },
+      },
+      requestedByUserId: 'admin-1',
+      templateKey: 'movie',
+    })
+    if (created.kind !== 'created')
+      throw new Error('expected video availability run')
+
+    await repository.ensureProviderAssociation({
+      attempt: 1,
+      provider: 'local-proof',
+      runId: created.run.id,
+      template: 'movie',
+    })
+    await repository.claimDispatch({
+      attempt: 1,
+      bodySha256: 'local-claim-body',
+      eventId: 'local-claim-event',
+      keyId: 'key-current',
+      nonce: 'local-claim-nonce',
+      runId: created.run.id,
+      sequence: 1,
+    })
+    await repository.renewLease(created.run.id, 2)
+
+    await expect(repository.getProviderAssociation(created.run.id)).resolves.toMatchObject({
+      providerStatus: 'in_progress',
+    })
+    await expect(repository.processRunnerEvent({
+      attempt: 1,
+      bodySha256: 'local-terminal-body',
+      event: {
+        actor: 'runner',
+        receipt: { contentIds: ['movie-video-2'], templateKey: 'movie' },
+        sequence: 3,
+        type: 'runner_succeeded',
+      },
+      eventId: 'local-terminal-event',
+      keyId: 'key-current',
+      nonce: 'local-terminal-nonce',
+      receipt: { contentIds: ['movie-video-2'], templateKey: 'movie' },
+      runId: created.run.id,
+      sequence: 3,
+    })).resolves.toMatchObject({ kind: 'accepted', outcome: { accepted: true, status: 'succeeded' } })
+    await expect(repository.getProviderAssociation(created.run.id)).resolves.toMatchObject({
+      providerStatus: 'completed',
+      providerConclusion: 'success',
+    })
+  })
+
   it('caps safe messages at 4 KiB, records one truncation marker after 500 normal logs, and only purges expired detail logs', async () => {
     const created = await repository.createOrGetActiveRun({ requestedByUserId: 'admin-1', templateKey: 'movie' })
     if (created.kind !== 'created')
@@ -1175,6 +1244,49 @@ describe('crawler task repository', () => {
       actor: 'admin',
       type: 'admin_cancel',
     })).resolves.toMatchObject({ kind: 'rejected', reasonCode: 'task_inactive' })
+  })
+
+  it('keeps archived operation keys replayable while allowing a new key to create a fresh task', async () => {
+    const command = {
+      actor: { id: 'admin-1', kind: 'admin' as const },
+      idempotencyKey: 'archived-operation-1',
+      intent: { kind: 'crawl' as const },
+      operation: 'movie' as const,
+      policyReference: 'crawler/default',
+      policyVersion: 'v1',
+      target: { id: 'movie-archived', kind: 'movie' as const },
+    }
+    const created = await repository.createOrGetActiveRun({
+      operationCommand: command,
+      requestedByUserId: 'admin-1',
+      templateKey: 'movie',
+    })
+    expect(created.kind).toBe('created')
+    if (created.kind !== 'created')
+      throw new Error('expected created operation task')
+
+    await expect(repository.applyTransition(created.run.id, {
+      actor: 'admin',
+      type: 'admin_cancel',
+    })).resolves.toMatchObject({ kind: 'transition', nextStatus: 'cancelled' })
+    await expect(repository.archiveTask(created.run.taskId)).resolves.toMatchObject({
+      kind: 'updated',
+      lifecycle: { status: 'archived' },
+    })
+
+    await expect(repository.createOrGetActiveRun({
+      operationCommand: command,
+      requestedByUserId: 'admin-1',
+      templateKey: 'movie',
+    })).resolves.toMatchObject({ kind: 'duplicate', taskId: created.run.taskId })
+
+    const fresh = await repository.createOrGetActiveRun({
+      operationCommand: { ...command, idempotencyKey: 'archived-operation-2' },
+      requestedByUserId: 'admin-1',
+      templateKey: 'movie',
+    })
+    expect(fresh).toMatchObject({ kind: 'created', run: { attemptNumber: 1 } })
+    expect(fresh.kind === 'created' ? fresh.run.taskId : created.run.taskId).not.toBe(created.run.taskId)
   })
 
   it('allocates lifecycle transitions below existing negative audit sequences', async () => {

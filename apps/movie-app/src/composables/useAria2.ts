@@ -53,6 +53,11 @@ export function useAria2() {
     })
   })
 
+  async function restoreConnection() {
+    if (config.value && !isConnected.value)
+      await testConnection({ silent: true })
+  }
+
   /**
    * 加载配置（从 localStorage 或后端）
    */
@@ -67,6 +72,7 @@ export function useAria2() {
       // 2. 仅在已登录时从受保护的后端配置同步
       const session = await authApi.getSession()
       if (!session?.user) {
+        await restoreConnection()
         return
       }
 
@@ -86,6 +92,10 @@ export function useAria2() {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(config.value))
         }
       }
+
+      // 恢复已保存的配置后立即静默探测连接，让详情页和下载面板共享真实状态。
+      // 失败只保留未连接状态，避免每次页面刷新都弹出过期配置提示。
+      await restoreConnection()
     }
     catch (error) {
       console.warn('加载 Aria2 配置失败', error)
@@ -132,9 +142,10 @@ export function useAria2() {
   /**
    * 测试连接并检测版本
    */
-  async function testConnection(): Promise<boolean> {
+  async function testConnection(options: { silent?: boolean } = {}): Promise<boolean> {
     if (!config.value) {
-      toast.error('请先配置 Aria2 连接')
+      if (!options.silent)
+        toast.error('请先配置 Aria2 连接')
       return false
     }
 
@@ -163,7 +174,8 @@ export function useAria2() {
         if (result.code === 0 && result.data?.result) {
           version.value = result.data.result
           isConnected.value = true
-          toast.success(`已连接到 Aria2 ${version.value?.version ?? 'unknown'}`)
+          if (!options.silent)
+            toast.success(`已连接到 Aria2 ${version.value?.version ?? 'unknown'}`)
           return true
         }
       }
@@ -175,13 +187,14 @@ export function useAria2() {
 
         version.value = await client.value.getVersion()
         isConnected.value = true
-        toast.success(`已连接到 Aria2 ${version.value.version}`)
+        if (!options.silent)
+          toast.success(`已连接到 Aria2 ${version.value.version}`)
         return true
       }
     }
     catch (error) {
       isConnected.value = false
-      if (error instanceof Error) {
+      if (!options.silent && error instanceof Error) {
         toast.error(`连接失败: ${error.message}`)
       }
       return false
@@ -259,7 +272,8 @@ export function useAria2() {
    */
   async function addMagnetTask(magnetLink: string, options?: Record<string, any>): Promise<string> {
     try {
-      const gid = await rpcRequest<string>('aria2.addUri', [[magnetLink], options])
+      const params = options === undefined ? [[magnetLink]] : [[magnetLink], options]
+      const gid = await rpcRequest<string>('aria2.addUri', params)
       toast.success('已添加到 Aria2')
       return gid
     }

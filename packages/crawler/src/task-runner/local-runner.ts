@@ -64,8 +64,23 @@ export class LocalTaskRunner {
         cancelled = heartbeat.cancel_requested === true
         return cancelled
       }
+      const log = async (message: string) => {
+        if (typeof this.options.client.log !== 'function')
+          return
+        const issued = issueSequence()
+        try {
+          await this.options.client.log(candidate, issued, message)
+        }
+        catch {
+          // Logging is best effort; a log transport failure must not change the run result.
+        }
+        finally {
+          completeSequence(issued)
+        }
+      }
 
       try {
+        await log('Local runner started')
         const adapter = this.options.adapters.select(candidate.snapshot, candidate.proofProfile)
         const result = await adapter.execute({
           candidate,
@@ -75,6 +90,7 @@ export class LocalTaskRunner {
           observe: contentId => contentIds.add(contentId),
         })
         for (const contentId of result.contentIds) contentIds.add(contentId)
+        await log(`Adapter completed; content count: ${contentIds.size}`)
         if (!cancelled && await checkpoint())
           cancelled = true
 

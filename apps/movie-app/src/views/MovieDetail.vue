@@ -368,6 +368,7 @@ const qrcodeModal = ref({ show: false, content: '', title: '' })
 const videoAvailabilityConfirmOpen = ref(false)
 const pendingVideoAvailability = ref<{
   action: 'recheck' | 'repair'
+  idempotencyKey: string
   layer: VideoLayerName
   movieId: string
   reason: MovieAvailabilityCommandReason
@@ -487,6 +488,7 @@ function openVideoAvailabilityAction(action: 'recheck' | 'repair', layer: VideoL
     return
   pendingVideoAvailability.value = {
     action,
+    idempotencyKey: `movie-detail:video-availability:${crypto.randomUUID()}`,
     layer,
     movieId,
     reason,
@@ -532,7 +534,7 @@ async function confirmVideoAvailabilityAction(): Promise<void> {
   let completed = false
   try {
     const response = await movieApi.submitVideoAvailabilityCommand({
-      idempotencyKey: `movie-detail:video-availability:${target.movieId}:${target.sourceRevision}:${target.sourceKind ?? 'auto'}:${target.reason}`,
+      idempotencyKey: target.idempotencyKey,
       movieId: target.movieId,
       reason: target.reason,
       ...(target.sourceKind ? { sourceKind: target.sourceKind } : {}),

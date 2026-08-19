@@ -46,4 +46,53 @@ describe('useAria2', () => {
       credentials: 'include',
     })
   })
+
+  it('silently restores a saved proxy connection after loading configuration', async () => {
+    vi.mocked(authApi.getSession).mockResolvedValue(null)
+    localStorage.setItem('aria2-config', JSON.stringify({
+      rpcUrl: 'http://127.0.0.1:6800/jsonrpc',
+      useProxy: true,
+    }))
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        code: 0,
+        data: { result: { version: '1.37.0' } },
+      }),
+    } as Response)
+
+    const aria2 = useAria2()
+    await aria2.loadConfig()
+
+    expect(aria2.isConnected.value).toBe(true)
+    expect(aria2.version.value).toEqual({ version: '1.37.0' })
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/api/aria2/proxy', expect.objectContaining({
+      method: 'POST',
+    }))
+  })
+
+  it('omits the optional addUri options parameter when no options are provided', async () => {
+    vi.mocked(authApi.getSession).mockResolvedValue(null)
+    localStorage.setItem('aria2-config', JSON.stringify({
+      rpcUrl: 'http://127.0.0.1:6800/jsonrpc',
+      useProxy: true,
+    }))
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        code: 0,
+        data: { result: 'test-gid' },
+      }),
+    } as Response)
+
+    const aria2 = useAria2()
+    await aria2.loadConfig()
+    await aria2.addMagnetTask('magnet:?xt=urn:btih:TEST')
+
+    const request = vi.mocked(fetch).mock.calls.at(-1)?.[1]
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      method: 'aria2.addUri',
+      params: [['magnet:?xt=urn:btih:TEST']],
+    })
+  })
 })

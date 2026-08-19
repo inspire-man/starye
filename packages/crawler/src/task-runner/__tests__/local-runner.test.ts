@@ -169,6 +169,7 @@ describe('localTaskRunner', () => {
       claim: vi.fn().mockResolvedValue({ accepted: true }),
       failed: vi.fn(),
       heartbeat: vi.fn().mockResolvedValue({ accepted: true }),
+      log: vi.fn().mockResolvedValue({ accepted: true }),
       observeAvailability: vi.fn().mockResolvedValue({ accepted: true }),
       poll: vi.fn().mockResolvedValue(localCandidate),
       succeeded: vi.fn().mockResolvedValue({ accepted: true }),
@@ -180,14 +181,16 @@ describe('localTaskRunner', () => {
 
     await runner.runOnce()
 
-    expect(client.succeeded).toHaveBeenCalledWith(localCandidate, 4, ['movie-1'])
+    expect(client.succeeded).toHaveBeenCalledWith(localCandidate, 6, ['movie-1'])
+    expect(client.log).toHaveBeenNthCalledWith(1, localCandidate, 2, 'Local runner started')
+    expect(client.log).toHaveBeenNthCalledWith(2, localCandidate, 4, 'Adapter completed; content count: 1')
     expect(client.observeAvailability).toHaveBeenCalledTimes(5)
-    expect(client.observeAvailability).toHaveBeenNthCalledWith(1, localCandidate, 5, expect.objectContaining({
+    expect(client.observeAvailability).toHaveBeenNthCalledWith(1, localCandidate, 7, expect.objectContaining({
       observationIdentity: 'local-proof:local-run-1:accepted',
       reasonCode: 'available',
       status: 'available',
     }))
-    expect(client.observeAvailability).toHaveBeenNthCalledWith(2, localCandidate, 5, expect.objectContaining({
+    expect(client.observeAvailability).toHaveBeenNthCalledWith(2, localCandidate, 7, expect.objectContaining({
       observationIdentity: 'local-proof:local-run-1:accepted',
       reasonCode: 'available',
       status: 'available',

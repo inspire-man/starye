@@ -5,9 +5,9 @@ const useIdFunction = () => useId()
 </script>
 
 <template>
-  <ConfigProvider :use-id="useIdFunction">
-    <NuxtLayout>
+  <NuxtLayout>
+    <ConfigProvider :use-id="useIdFunction">
       <NuxtPage />
-    </NuxtLayout>
-  </ConfigProvider>
+    </ConfigProvider>
+  </NuxtLayout>
 </template>

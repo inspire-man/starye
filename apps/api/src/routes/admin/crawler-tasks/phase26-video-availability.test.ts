@@ -112,9 +112,42 @@ describe('phase 26 admin video availability boundary', () => {
     await expect(response.json()).resolves.toMatchObject({ availability: { layers: {
       direct: { current: { layer: 'direct', sourceRevision: 7, status: 'degraded' }, history: [{ sourceRevision: 6 }] },
       magnet: { current: null, history: [] },
-      metadata: { current: { status: 'available' } },
+      metadata: { current: { status: 'unknown', reason: 'metadata_unresolved' } },
       playback: { current: { status: 'available' } },
     } } })
+  })
+
+  it('does not infer metadata persistence from a legacy receipt or run timestamps', async () => {
+    repository.getTaskDetail.mockResolvedValueOnce({
+      runs: [{
+        id: 'run-legacy',
+        receipt: {
+          createdCount: 1,
+          primaryContentId: 'movie-1',
+          templateKey: 'movie',
+          updatedCount: 0,
+        },
+        status: 'succeeded',
+        terminalAt: 999,
+        updatedAt: 999,
+      }],
+      task: { id: 'task-1', latestRunId: 'run-legacy' },
+    })
+    const app = createApp([
+      [{ operation: 'movie', template_key: 'movie' }],
+      [],
+      [],
+      [],
+    ])
+
+    const response = await app.request('/crawler-tasks/task-1')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      runs: [{ readiness: {
+        metadata: { observedAt: null, persisted: false },
+      } }],
+    })
   })
 
   it('routes an explicit stale magnet snapshot to the magnet layer', async () => {

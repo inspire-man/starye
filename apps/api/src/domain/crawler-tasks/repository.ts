@@ -2450,6 +2450,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       return classifyExistingRunnerEvent(concurrent, input)
     }
 
+    if (decision.kind === 'transition')
+      await updateLocalProviderState(input.runId, input.attempt, input.event.type)
+
     if (decision.kind === 'transition'
       && classifyCrawlerAutomaticRetry({
         failureCode: decision.failureCode,

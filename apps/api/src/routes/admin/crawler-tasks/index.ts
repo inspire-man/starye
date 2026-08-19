@@ -413,7 +413,10 @@ function projectReadiness(row: Record<string, unknown>, receipt: SafeCrawlerRece
   }
   return createServerReadinessProjection({
     contentId: receipt.primaryContentId,
-    metadata: { observedAt: observedAt as number | null | undefined, persisted: true },
+    // Run lifecycle timestamps do not prove that metadata was persisted. The
+    // authoritative movie readback only promotes metadata with explicit,
+    // revision-bound evidence.
+    metadata: { observedAt: null, persisted: false },
     receipt: {
       persisted: true,
       primaryContentId: receipt.primaryContentId,

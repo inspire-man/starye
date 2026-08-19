@@ -356,7 +356,7 @@ describe('movie detail DOM tuple contract', () => {
   })
 
   it('renders bounded per-source health and submits a repair task with the same movie identity', async () => {
-    getMovieDetailMock.mockResolvedValueOnce({
+    getMovieDetailMock.mockResolvedValue({
       success: true,
       data: {
         id: 'movie-sun-064',
@@ -411,14 +411,23 @@ describe('movie detail DOM tuple contract', () => {
     dialog?.querySelector<HTMLButtonElement>('.confirm-dialog-confirm')?.click()
     await flushPromises()
 
-    expect(submitVideoAvailabilityCommandMock).toHaveBeenCalledWith({
-      idempotencyKey: 'movie-detail:video-availability:movie-sun-064:4:direct:no_source',
+    expect(submitVideoAvailabilityCommandMock).toHaveBeenCalledWith(expect.objectContaining({
+      idempotencyKey: expect.stringMatching(/^movie-detail:video-availability:[0-9a-f-]{36}$/u),
       movieId: 'movie-sun-064',
       reason: 'no_source',
       sourceKind: 'direct',
-    })
+    }))
+    const firstKey = submitVideoAvailabilityCommandMock.mock.calls[0]?.[0]?.idempotencyKey
+
+    await wrapper.get('[data-readiness-action="repair"]').trigger('click')
+    document.querySelector<HTMLElement>('[data-confirm-dialog-panel] .confirm-dialog-confirm')?.click()
+    await flushPromises()
+
+    const secondKey = submitVideoAvailabilityCommandMock.mock.calls[1]?.[0]?.idempotencyKey
+    expect(secondKey).toMatch(/^movie-detail:video-availability:[0-9a-f-]{36}$/u)
+    expect(secondKey).not.toBe(firstKey)
     expect(routerPushMock).not.toHaveBeenCalled()
-    expect(getMovieDetailMock).toHaveBeenCalledTimes(2)
+    expect(getMovieDetailMock).toHaveBeenCalledTimes(3)
   })
 
   it('groups mixed sources before score sorting and keeps controlled action boundaries', async () => {

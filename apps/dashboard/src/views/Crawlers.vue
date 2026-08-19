@@ -53,7 +53,7 @@ const repairConfirmOpen = ref(false)
 const pendingRepair = ref<{ movieId: string, movieTitle: string, reason: CrawlerRepairReason } | null>(null)
 const repairAction = ref(false)
 const videoAvailabilityConfirmOpen = ref(false)
-const pendingVideoAvailability = ref<{ action: 'recheck' | 'repair', layer: CrawlerVideoLayerName, movieId: string, movieTitle: string, reason: CrawlerVideoAvailabilityReason, sourceKind?: CrawlerVideoAvailabilitySourceKind, sourceRevision: number } | null>(null)
+const pendingVideoAvailability = ref<{ action: 'recheck' | 'repair', idempotencyKey: string, layer: CrawlerVideoLayerName, movieId: string, movieTitle: string, reason: CrawlerVideoAvailabilityReason, sourceKind?: CrawlerVideoAvailabilitySourceKind, sourceRevision: number } | null>(null)
 const videoAvailabilityAction = ref(false)
 const expandedHistory = ref<Record<string, boolean>>({})
 const taskAudits = ref<Record<string, CrawlerTaskAudit[]>>({})
@@ -1048,6 +1048,7 @@ function askVideoAvailabilityAction(task: CrawlerTask, layer: CrawlerVideoLayerN
   }
   pendingVideoAvailability.value = {
     action,
+    idempotencyKey: `dashboard:video-availability:${crypto.randomUUID()}`,
     layer,
     movieId,
     movieTitle: task.movie?.title ?? movieId,
@@ -1066,7 +1067,7 @@ async function confirmVideoAvailabilityAction(): Promise<void> {
   let completed = false
   try {
     const response = await api.admin.submitVideoAvailabilityCommand({
-      idempotencyKey: `dashboard:video-availability:${target.movieId}:${target.sourceRevision}:${target.sourceKind ?? 'auto'}:${target.reason}`,
+      idempotencyKey: target.idempotencyKey,
       movieId: target.movieId,
       reason: target.reason,
       ...(target.sourceKind ? { sourceKind: target.sourceKind } : {}),

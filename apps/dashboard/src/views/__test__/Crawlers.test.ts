@@ -186,6 +186,7 @@ describe('crawlers local task panel', () => {
       id: 'task-availability',
       lifecycle: { changedAt: 100, status: 'active', version: 0 },
       latestRunId: 'run-availability',
+      movie: { id: 'movie-1', title: 'Availability fixture' },
       templateKey: 'movie',
     }
     api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({
@@ -228,6 +229,10 @@ describe('crawlers local task panel', () => {
       task,
       runs: [{ id: 'run-availability', status: 'succeeded', attemptNumber: 1, receipt: null }],
     })
+    api.admin.submitVideoAvailabilityCommand.mockResolvedValue({
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'video-run', status: 'queued', taskId: 'task-availability' },
+    })
     api.admin.getCrawlerTaskAudit.mockResolvedValue({
       audits: [{ action: 'UPDATE', actor: { email: 'admin@example.test', id: 'admin-1' }, createdAt: 220, id: 'audit-1', outcome: 'updated', reason: 'metadata_update', runId: 'run-availability' }],
       nextCursor: null,
@@ -253,6 +258,17 @@ describe('crawlers local task panel', () => {
     expect(bodyQuery('[data-section="task-lifecycle"]')?.textContent).toContain('active')
     expect(bodyText()).not.toContain('signed_url')
     expect(bodyText()).not.toContain('rawresponse')
+
+    await (wrapper.vm as any).askVideoAvailabilityAction((wrapper.vm as any).selectedRun.task, 'direct')
+    await (wrapper.vm as any).confirmVideoAvailabilityAction()
+    const firstKey = api.admin.submitVideoAvailabilityCommand.mock.calls[0]?.[0]?.idempotencyKey
+    expect(firstKey).toMatch(/^dashboard:video-availability:[0-9a-f-]{36}$/u)
+
+    await (wrapper.vm as any).askVideoAvailabilityAction((wrapper.vm as any).selectedRun.task, 'direct')
+    await (wrapper.vm as any).confirmVideoAvailabilityAction()
+    const secondKey = api.admin.submitVideoAvailabilityCommand.mock.calls[1]?.[0]?.idempotencyKey
+    expect(secondKey).toMatch(/^dashboard:video-availability:[0-9a-f-]{36}$/u)
+    expect(secondKey).not.toBe(firstKey)
   })
 
   it('posts allowlisted metadata and lifecycle actions, then reloads authoritative detail', async () => {
