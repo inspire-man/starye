@@ -2,13 +2,14 @@ import type {
   LocalEnvTargetFile,
   PreflightCommand,
   PreflightScope,
+  PreparedChildExecutionResult,
   ProjectionValidationIssue,
   TargetMutationCommand,
   TargetPagesSurface,
   TargetRemoteEntry,
   WranglerCommandExecutor,
 } from '../packages/config/src/deployment-target/index.ts'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -387,6 +388,52 @@ async function runPrepareMutation(options: TargetProfileCliOptions): Promise<voi
   }, { executeReadOnly: createWranglerExecutor().execute })
 }
 
+export function executePreparedEntryCommand(
+  command: string,
+  args: readonly string[],
+  environment: NodeJS.ProcessEnv,
+): Promise<PreparedChildExecutionResult> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      env: environment,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const complete = (result: PreparedChildExecutionResult) => {
+      if (settled)
+        return
+      settled = true
+      resolve(result)
+    }
+
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', (chunk: string) => {
+      stdout += chunk
+      process.stdout.write(chunk)
+    })
+    child.stderr?.setEncoding('utf8')
+    child.stderr?.on('data', (chunk: string) => {
+      stderr += chunk
+      process.stderr.write(chunk)
+    })
+    child.once('error', (error) => {
+      const diagnostic = error instanceof Error ? error.message : String(error)
+      stderr += diagnostic
+      process.stderr.write(`${diagnostic}\n`)
+      complete({ exitCode: 1, stdout, stderr })
+    })
+    child.once('close', (exitCode) => {
+      complete({ exitCode: exitCode ?? 1, stdout, stderr })
+    })
+  })
+}
+
+function isStructuredPreparedEntry(entry: TargetRemoteEntry): boolean {
+  return entry === 'crawler-smoke-fixture' || entry === 'd1-smoke-snapshot'
+}
+
 async function runPreparedEntry(options: TargetProfileCliOptions): Promise<void> {
   if (!options.entry || !options.preparedContextPath) {
     throw new Error('run-prepared-entry requires --entry and --prepared-context.')
@@ -395,12 +442,14 @@ async function runPreparedEntry(options: TargetProfileCliOptions): Promise<void>
     entry: options.entry,
     preparedContextPath: options.preparedContextPath,
     execute: (command, args, environment) => {
-      const child = spawnSync(command, args, { encoding: 'utf8', shell: false, env: environment })
-      return {
-        exitCode: child.status ?? 1,
-        stdout: child.stdout ?? '',
-        stderr: child.stderr ?? '',
+      const invocation = command === 'pnpm'
+        ? packageManagerInvocation(args)
+        : { command, args }
+      if (!isStructuredPreparedEntry(options.entry)) {
+        return executePreparedEntryCommand(invocation.command, invocation.args, environment)
       }
+      const child = spawnSync(invocation.command, invocation.args, { encoding: 'utf8', shell: false, env: environment })
+      return { exitCode: child.status ?? 1, stdout: child.stdout ?? '', stderr: child.stderr ?? '' }
     },
   })
 }
@@ -608,4 +657,3 @@ const isDirectExecution = process.argv[1]
 if (isDirectExecution) {
   void main()
 }
-

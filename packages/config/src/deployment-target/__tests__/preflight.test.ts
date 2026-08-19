@@ -133,6 +133,32 @@ describe('runTargetPreflight', () => {
 })
 
 describe('target-profile CLI parser', () => {
+  it('forwards prepared child stdout and stderr while retaining the execution result', async () => {
+    const { executePreparedEntryCommand } = await loadTargetProfileCli()
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    try {
+      const result = await executePreparedEntryCommand(
+        process.execPath,
+        ['-e', `process.stdout.write('child stdout\\n'); process.stderr.write('child stderr\\n')`],
+        { ...process.env },
+      )
+
+      expect(result).toEqual({
+        exitCode: 0,
+        stdout: 'child stdout\n',
+        stderr: 'child stderr\n',
+      })
+      expect(stdout).toHaveBeenCalledWith('child stdout\n')
+      expect(stderr).toHaveBeenCalledWith('child stderr\n')
+    }
+    finally {
+      stdout.mockRestore()
+      stderr.mockRestore()
+    }
+  })
+
   it('rejects a command without an explicit target', async () => {
     const { parseTargetProfileCliArgs } = await loadTargetProfileCli()
 

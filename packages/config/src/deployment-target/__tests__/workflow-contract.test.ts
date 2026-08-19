@@ -53,6 +53,9 @@ describe('phase 12 workflow target contract', () => {
     for (const workflow of workflows.filter(item => item.kind !== 'retired')) {
       const source = await workflowText(workflow.file)
 
+      expect(source, workflow.file).toContain('pnpm/action-setup@v6.0.10')
+      expect(source, workflow.file).toContain('actions/setup-node@v6.3.0')
+      expect(source, workflow.file).toMatch(/node-version:\s*24/u)
       expect(source, workflow.file).toMatch(/resolve-target:/)
       expect(source, workflow.file).toMatch(/STARYE_TARGET_ID: starye-org/)
       expect(source, workflow.file).toMatch(/target:\n\s+description:/)

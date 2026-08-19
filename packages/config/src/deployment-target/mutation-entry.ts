@@ -192,7 +192,7 @@ export interface PreparedMutationExecution {
   readonly entry: TargetRemoteEntry
   readonly preparedContextPath: string
   readonly authorizedEnvironment?: Readonly<Record<string, string | undefined>>
-  readonly execute: (command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number | PreparedChildExecutionResult
+  readonly execute: (command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => number | PreparedChildExecutionResult | Promise<number | PreparedChildExecutionResult>
 }
 
 export interface PreparedChildExecutionResult {
@@ -555,7 +555,7 @@ export async function runPreparedTargetMutation(request: PreparedMutationExecuti
     request.preparedContextPath,
     request.authorizedEnvironment ?? process.env,
   )
-  const execution = request.execute('pnpm', args, environment)
+  const execution = await request.execute('pnpm', args, environment)
   const exitCode = isPreparedChildExecutionResult(execution) ? execution.exitCode : execution
   if (exitCode !== 0) {
     const diagnostic = isPreparedChildExecutionResult(execution)
