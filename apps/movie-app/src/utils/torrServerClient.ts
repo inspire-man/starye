@@ -38,6 +38,7 @@ export interface TorrentStat {
 // 客户端配置
 export interface TorrServerClientConfig {
   serverUrl: string
+  mediaStreamBase?: string
   timeout?: number
 }
 
@@ -57,6 +58,10 @@ export class TorrServerClient {
 
   private get baseUrl(): string {
     return this.config.serverUrl.replace(/\/+$/, '')
+  }
+
+  private get mediaStreamBase(): string {
+    return (this.config.mediaStreamBase ?? this.config.serverUrl).replace(/\/+$/, '')
   }
 
   /**
@@ -206,7 +211,7 @@ export class TorrServerClient {
    * 构建流媒体 URL
    */
   getStreamUrl(magnetLink: string, fileIndex: number): string {
-    const url = new URL(`${this.baseUrl}/stream/video`)
+    const url = new URL(`${this.mediaStreamBase}/stream/video`)
     url.searchParams.set('link', magnetLink)
     url.searchParams.set('index', String(fileIndex))
     url.searchParams.set('play', '')

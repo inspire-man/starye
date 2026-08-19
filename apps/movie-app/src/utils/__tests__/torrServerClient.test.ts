@@ -1,8 +1,12 @@
 import type { TorrentFile } from '../torrServerClient'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatTorrentFileSize, TorrServerClient } from '../torrServerClient'
 
 describe('torrServerClient', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   describe('torrServerClient', () => {
     const client = new TorrServerClient({ serverUrl: 'http://localhost:8090' })
 
@@ -30,6 +34,27 @@ describe('torrServerClient', () => {
 
         expect(url).toContain('http://localhost:8090/stream/video')
         expect(url).not.toContain('http://localhost:8090//stream')
+      })
+
+      it('使用独立的媒体 base，同时保留控制 base', async () => {
+        const mediaClient = new TorrServerClient({
+          serverUrl: 'http://torr-control.example:8090/',
+          mediaStreamBase: 'http://localhost:8080/torrserver/',
+        })
+        const streamUrl = mediaClient.getStreamUrl('magnet:?xt=urn:btih:gateway', 2)
+
+        expect(streamUrl).toContain('http://localhost:8080/torrserver/stream/video')
+        expect(streamUrl).not.toContain('//torrserver//stream')
+        expect(streamUrl).toContain('index=2')
+
+        const fetchMock = vi.fn().mockResolvedValue({
+          ok: true,
+          statusText: 'OK',
+          text: () => Promise.resolve('TorrServer'),
+        })
+        vi.stubGlobal('fetch', fetchMock)
+        await mediaClient.getVersion()
+        expect(fetchMock).toHaveBeenCalledWith('http://torr-control.example:8090/echo', expect.any(Object))
       })
     })
 

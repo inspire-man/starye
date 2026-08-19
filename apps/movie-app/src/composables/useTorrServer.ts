@@ -4,6 +4,7 @@
 
 import type { TorrentFile, TorrentInfo } from '../utils/torrServerClient'
 import { computed, ref } from 'vue'
+import { moviePublicRuntime } from '../config/public-runtime'
 import { createTorrServerClient } from '../utils/torrServerClient'
 import { useToast } from './useToast'
 
@@ -37,6 +38,12 @@ const serverVersion = ref<string | null>(null)
 const isLoading = ref(false)
 /** 标记是否已尝试过系统默认值回落（避免重复请求） */
 const systemDefaultFetched = ref(false)
+const usesExplicitConfig = ref(false)
+
+function getGatewayMediaStreamBase(): string {
+  const gatewayBase = moviePublicRuntime.gatewayBaseUrl.replace(/\/+$/, '')
+  return gatewayBase.endsWith('/torrserver') ? gatewayBase : `${gatewayBase}/torrserver`
+}
 
 export function useTorrServer() {
   const toast = useToast()
@@ -44,7 +51,10 @@ export function useTorrServer() {
   const client = computed(() => {
     if (!config.value)
       return null
-    return createTorrServerClient({ serverUrl: config.value.serverUrl })
+    return createTorrServerClient({
+      serverUrl: config.value.serverUrl,
+      mediaStreamBase: usesExplicitConfig.value ? config.value.serverUrl : getGatewayMediaStreamBase(),
+    })
   })
 
   /**
@@ -55,6 +65,7 @@ export function useTorrServer() {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         config.value = JSON.parse(stored)
+        usesExplicitConfig.value = true
       }
     }
     catch (err) {
@@ -77,6 +88,7 @@ export function useTorrServer() {
       const json = await res.json() as { success: boolean, data: { defaultUrl: string | null } }
       if (json.success && json.data.defaultUrl) {
         config.value = { serverUrl: json.data.defaultUrl }
+        usesExplicitConfig.value = false
       }
     }
     catch {
@@ -89,6 +101,7 @@ export function useTorrServer() {
    */
   function saveConfig(newConfig: TorrServerConfig) {
     config.value = newConfig
+    usesExplicitConfig.value = true
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig))
     toast.success('TorrServer 配置已保存')
   }
