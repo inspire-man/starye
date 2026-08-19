@@ -1226,11 +1226,19 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     event: CrawlerTaskLifecycleEvent,
   ): Promise<CrawlerTaskMutationResult> {
     const task = await d1.prepare(`
-      SELECT id, latest_run_id, updated_at
-      FROM crawler_task
-      WHERE id = ?
+      SELECT task.id, task.latest_run_id, task.template_key, task.updated_at,
+        run.status AS latest_run_status
+      FROM crawler_task AS task
+      LEFT JOIN crawler_run AS run ON run.id = task.latest_run_id
+      WHERE task.id = ?
       LIMIT 1
-    `).bind(taskId).all<{ id: string, latest_run_id: string | null, updated_at: number }>()
+    `).bind(taskId).all<{
+      id: string
+      latest_run_id: string | null
+      latest_run_status: CrawlerRunStatus | null
+      template_key: CrawlerTaskTemplateKey
+      updated_at: number
+    }>()
     const taskRow = task.results?.[0]
     if (!taskRow)
       return { kind: 'not_found', taskId }
@@ -1252,6 +1260,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     const safeSummary = event.type === 'supersede'
       ? `superseded_by:${event.supersededByTaskId}`
       : 'task archived'
+    const archiveActiveRun = event.type === 'archive'
+      && taskRow.latest_run_status !== null
+      && !isTerminalCrawlerRunStatus(taskRow.latest_run_status)
     const batchResults = await d1.batch([
       d1.prepare(`
         INSERT INTO crawler_run_transition (
@@ -1278,6 +1289,58 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         taskRow.updated_at,
         taskRow.latest_run_id,
       ),
+      ...(archiveActiveRun
+        ? [
+            d1.prepare(`
+              INSERT INTO crawler_run_transition (
+                id, run_id, sequence, from_status, to_status, reason_code, safe_summary, created_at
+              )
+              SELECT ?, run.id, run.state_version + 1, run.status, 'cancelled',
+                'task_archived_run_cancelled', ?, ?
+              FROM crawler_run AS run
+              INNER JOIN crawler_task AS task ON task.id = run.task_id
+              WHERE run.id = ? AND run.status IN ('queued', 'dispatching', 'running', 'cancel_requested')
+                AND task.id = ? AND task.latest_run_id = ? AND task.updated_at = ?
+            `).bind(
+              createId(),
+              'active run cancelled because task was archived',
+              currentNow,
+              taskRow.latest_run_id,
+              taskId,
+              taskRow.latest_run_id,
+              taskRow.updated_at,
+            ),
+            d1.prepare(`
+              UPDATE crawler_run
+              SET status = 'cancelled',
+                state_version = state_version + 1,
+                lease_expires_at = NULL,
+                failure_code = NULL,
+                receipt_summary_json = NULL,
+                receipt_schema_version = NULL,
+                receipt_primary_content_id = NULL,
+                receipt_source_revision = NULL,
+                terminal_at = ?,
+                updated_at = ?
+              WHERE id = ? AND status IN ('queued', 'dispatching', 'running', 'cancel_requested')
+                AND EXISTS (
+                  SELECT 1
+                  FROM crawler_task AS task
+                  WHERE task.id = ? AND task.latest_run_id = ? AND task.updated_at = ?
+                )
+            `).bind(
+              currentNow,
+              currentNow,
+              taskRow.latest_run_id,
+              taskId,
+              taskRow.latest_run_id,
+              taskRow.updated_at,
+            ),
+          ]
+        : []),
+      ...(event.type === 'archive'
+        ? [d1.prepare('DELETE FROM crawler_template_lease WHERE template_key = ? AND run_id = ?').bind(taskRow.template_key, taskRow.latest_run_id)]
+        : []),
       d1.prepare(`
         UPDATE crawler_task
         SET updated_at = ?
@@ -1285,8 +1348,16 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       `).bind(currentNow, taskId, taskRow.latest_run_id, taskRow.updated_at),
     ])
     const inserted = batchResults[0] as { meta?: { changes?: number } } | undefined
-    const updated = batchResults[1] as { meta?: { changes?: number } } | undefined
-    if ((inserted?.meta?.changes ?? 0) === 0 || (updated?.meta?.changes ?? 0) === 0) {
+    const runTransitionInserted = archiveActiveRun
+      ? batchResults[1] as { meta?: { changes?: number } } | undefined
+      : undefined
+    const runUpdated = archiveActiveRun
+      ? batchResults[2] as { meta?: { changes?: number } } | undefined
+      : undefined
+    const updated = batchResults.at(-1) as { meta?: { changes?: number } } | undefined
+    if ((inserted?.meta?.changes ?? 0) === 0
+      || (updated?.meta?.changes ?? 0) === 0
+      || (archiveActiveRun && ((runTransitionInserted?.meta?.changes ?? 0) === 0 || (runUpdated?.meta?.changes ?? 0) === 0))) {
       const latest = await readTaskLifecycle(taskId)
       return { kind: 'rejected', lifecycle: latest, reasonCode: 'stale_task_revision', taskId }
     }

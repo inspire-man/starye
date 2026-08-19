@@ -1240,6 +1240,27 @@ describe('crawler task repository', () => {
       lifecycle: { status: 'archived', version: 1 },
       task: { lifecycle: { status: 'archived' } },
     })
+    const archivedRun = await client.execute({
+      args: [created.run.id],
+      sql: 'SELECT status, state_version, lease_expires_at, terminal_at FROM crawler_run WHERE id = ?',
+    })
+    expect(archivedRun.rows).toHaveLength(1)
+    expect(archivedRun.rows[0]).toMatchObject({
+      status: 'cancelled',
+      state_version: 1,
+      lease_expires_at: null,
+    })
+    expect(archivedRun.rows[0]?.terminal_at).toEqual(expect.any(Number))
+    const archivedLeases = await client.execute({
+      args: [created.run.id],
+      sql: 'SELECT run_id FROM crawler_template_lease WHERE run_id = ?',
+    })
+    expect(archivedLeases.rows).toEqual([])
+    await expect(repository.createOrGetActiveRun({
+      operationCommand: { ...command, idempotencyKey: 'lifecycle-2' },
+      requestedByUserId: 'admin-1',
+      templateKey: 'movie',
+    })).resolves.toMatchObject({ kind: 'created', run: { attemptNumber: 1 } })
     await expect(repository.applyTransition(created.run.id, {
       actor: 'admin',
       type: 'admin_cancel',

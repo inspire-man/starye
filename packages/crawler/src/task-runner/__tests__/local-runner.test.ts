@@ -174,6 +174,19 @@ describe('localTaskRunner', () => {
       poll: vi.fn().mockResolvedValue(localCandidate),
       succeeded: vi.fn().mockResolvedValue({ accepted: true }),
     }
+    const events: string[] = []
+    client.claim.mockImplementation(async () => {
+      events.push('claim')
+      return { accepted: true }
+    })
+    client.heartbeat.mockImplementation(async () => {
+      events.push('heartbeat')
+      return { accepted: true }
+    })
+    client.log.mockImplementation(async () => {
+      events.push('log')
+      return { accepted: true }
+    })
     const runner = new LocalTaskRunner({
       adapters: { select: () => createLocalProofAdapter({ now: () => 1_720_000_000_000 }) },
       client: client as never,
@@ -181,16 +194,17 @@ describe('localTaskRunner', () => {
 
     await runner.runOnce()
 
-    expect(client.succeeded).toHaveBeenCalledWith(localCandidate, 6, ['movie-1'])
-    expect(client.log).toHaveBeenNthCalledWith(1, localCandidate, 2, 'Local runner started')
-    expect(client.log).toHaveBeenNthCalledWith(2, localCandidate, 4, 'Adapter completed; content count: 1')
+    expect(events.slice(0, 3)).toEqual(['claim', 'heartbeat', 'log'])
+    expect(client.succeeded).toHaveBeenCalledWith(localCandidate, 7, ['movie-1'])
+    expect(client.log).toHaveBeenNthCalledWith(1, localCandidate, 3, 'Local runner started')
+    expect(client.log).toHaveBeenNthCalledWith(2, localCandidate, 5, 'Adapter completed; content count: 1')
     expect(client.observeAvailability).toHaveBeenCalledTimes(5)
-    expect(client.observeAvailability).toHaveBeenNthCalledWith(1, localCandidate, 7, expect.objectContaining({
+    expect(client.observeAvailability).toHaveBeenNthCalledWith(1, localCandidate, 8, expect.objectContaining({
       observationIdentity: 'local-proof:local-run-1:accepted',
       reasonCode: 'available',
       status: 'available',
     }))
-    expect(client.observeAvailability).toHaveBeenNthCalledWith(2, localCandidate, 7, expect.objectContaining({
+    expect(client.observeAvailability).toHaveBeenNthCalledWith(2, localCandidate, 8, expect.objectContaining({
       observationIdentity: 'local-proof:local-run-1:accepted',
       reasonCode: 'available',
       status: 'available',

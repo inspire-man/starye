@@ -80,7 +80,13 @@ export class LocalTaskRunner {
       }
 
       try {
-        await log('Local runner started')
+        if (typeof this.options.client.log === 'function') {
+          if (await checkpoint()) {
+            await this.options.client.cancelled(candidate, terminalSequence())
+            return
+          }
+          await log('Local runner started')
+        }
         const adapter = this.options.adapters.select(candidate.snapshot, candidate.proofProfile)
         const result = await adapter.execute({
           candidate,
