@@ -1,6 +1,6 @@
 export const PLAYBACK_EVIDENCE_SCHEMA_VERSION = 1 as const
 
-export const PLAYBACK_PROVIDER_VALUES = ['github-actions'] as const
+export const PLAYBACK_PROVIDER_VALUES = ['github-actions', 'local-proof'] as const
 export type PlaybackEvidenceProvider = typeof PLAYBACK_PROVIDER_VALUES[number]
 
 export const PLAYBACK_SOURCE_TYPE_VALUES = ['direct', 'TorrServer', 'Aria2'] as const

@@ -109,6 +109,18 @@ describe('playbackSources', () => {
       expect(route).toBe('/movie/MOVIE-001/play?player=direct-1&contentId=content-1&sourceRevision=7&sourceType=direct&taskId=task-1&runId=run-1&attemptNumber=2&provider=github-actions')
       expect(route).not.toContain('sourceUrl')
       expect(route).not.toContain('magnet:')
+
+      const localRoute = buildPlaybackRoute('MOVIE-001', {
+        playerId: 'direct-1',
+        contentId: 'content-1',
+        sourceRevision: 7,
+        sourceType: 'direct',
+        taskId: 'task-1',
+        runId: 'run-1',
+        attemptNumber: 2,
+        provider: 'local-proof',
+      })
+      expect(localRoute).toContain('provider=local-proof')
     })
   })
 

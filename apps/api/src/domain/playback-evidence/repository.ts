@@ -358,7 +358,8 @@ export function createPlaybackEvidenceRepository(
       || !hasTerminalRepairReadback(binding, candidate.contentId, candidate.sourceRevision)) {
       return reject({ ...input, outcome: 'ignored', reason: 'receipt_readback_mismatch' })
     }
-    if (binding.provider_name !== 'github-actions'
+    const provider = binding.provider_name
+    if ((provider !== 'github-actions' && provider !== 'local-proof')
       || binding.provider_conclusion !== 'success'
       || !binding.provider_run_id) {
       return reject({ ...input, outcome: 'ignored', reason: 'provider_terminal_not_successful' })
@@ -378,7 +379,7 @@ export function createPlaybackEvidenceRepository(
     const proof = derivePlaybackProof(redacted, {
       attemptNumber: binding.attempt_number,
       contentId: candidate.contentId,
-      provider: 'github-actions',
+      provider,
       runId: input.runId,
       sourceRevision: candidate.sourceRevision,
       taskId: input.taskId,
@@ -405,7 +406,7 @@ export function createPlaybackEvidenceRepository(
           INNER JOIN movie_source_state AS state ON state.movie_id = ?
           WHERE task.id = ? AND task.latest_run_id = run.id
             AND run.attempt_number = ? AND run.status = 'succeeded'
-            AND provider.provider = 'github-actions'
+            AND provider.provider = ?
             AND provider.provider_conclusion = 'success'
             AND run.receipt_primary_content_id = ?
             AND run.receipt_source_revision = ?
@@ -432,6 +433,7 @@ export function createPlaybackEvidenceRepository(
         candidate.contentId,
         input.taskId,
         candidate.tuple.attemptNumber,
+        provider,
         candidate.contentId,
         candidate.sourceRevision,
         candidate.sourceRevision,

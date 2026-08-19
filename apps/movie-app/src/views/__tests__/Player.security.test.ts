@@ -386,6 +386,50 @@ describe('player.vue security gates', () => {
     wrapper.unmount()
   })
 
+  it('submits the server-owned local-proof tuple without rewriting its provider', async () => {
+    routeState.query = {}
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-local-proof',
+        primaryContentId: 'movie-local-proof',
+        title: 'Local proof fixture',
+        players: [{ id: 'direct-local-proof', sourceName: '直连', sourceUrl: 'https://media.example/local-proof.mp4', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-local-proof', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-local-proof', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 12 },
+        },
+        availability: {
+          current: {
+            direct: null,
+            magnet: null,
+            metadata: { observedAt: 100, persisted: true, sourceRevision: 12 },
+            playback: { status: 'unverified', tuple: { attemptNumber: 1, provider: 'local-proof', runId: 'run-local-proof', taskId: 'task-local-proof' } },
+          },
+          history: [],
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+    playerInstances[0].handlers.canplay()
+    await wrapper.get('[data-player-action="play"]').trigger('click')
+    playerInstances[0].handlers.playing()
+    playerInstances[0].currentTime = 1.25
+    playerInstances[0].handlers.timeupdate()
+    await flushPromises()
+
+    expect(submitPlaybackEvidenceMock).toHaveBeenCalledWith('task-local-proof', 'run-local-proof', expect.objectContaining({
+      provider: { provider: 'local-proof', status: 'succeeded' },
+      tuple: { attemptNumber: 1, provider: 'local-proof', runId: 'run-local-proof', taskId: 'task-local-proof' },
+    }))
+    wrapper.unmount()
+  })
+
   it('does not submit without a server-owned playback tuple or positive progress', async () => {
     routeState.query = {}
     getMovieDetailMock.mockResolvedValue({

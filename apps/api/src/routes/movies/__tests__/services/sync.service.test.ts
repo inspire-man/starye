@@ -146,6 +146,7 @@ describe('syncMovieData', () => {
         movies: [{
           code: 'PREVIEW-001',
           title: '概览图同步测试',
+          sourceUrl: 'https://javdb.com/v/preview-001',
           previewImages: [
             'https://www.dmmbus.cyou/samples/preview-1.jpg',
             'https://cdn.example/preview-2.jpg',
@@ -157,6 +158,7 @@ describe('syncMovieData', () => {
 
       expect(result.success).toBe(1)
       const persistedMovie = await (db as any).query.movies.findFirst()
+      expect(persistedMovie.sourceUrl).toBe('https://javdb.com/v/preview-001')
       expect(persistedMovie.previewImages).toEqual([
         'https://www.javbus.com/samples/preview-1.jpg',
         'https://cdn.example/preview-2.jpg',

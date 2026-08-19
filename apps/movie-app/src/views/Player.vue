@@ -243,7 +243,6 @@ function createActivePlaybackEvidenceIdentity(sourceType: PlaybackSourceType): A
   const sourceRevision = currentSourceRevision.value
   const code = movieCode.value.trim()
   if (!tuple || !contentId || !/^[\w.~-]{1,128}$/u.test(code)
-    || tuple.provider !== 'github-actions'
     || (sourceType !== 'direct' && sourceType !== 'TorrServer')) {
     return null
   }
@@ -255,7 +254,7 @@ function createActivePlaybackEvidenceIdentity(sourceType: PlaybackSourceType): A
     sessionToken: playbackSessionToken,
     sourceRevision,
     sourceType,
-    tuple: { ...tuple, provider: 'github-actions' },
+    tuple: { ...tuple },
   }
 }
 

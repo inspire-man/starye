@@ -7,7 +7,7 @@ export interface PlaybackTupleReference {
   readonly taskId?: string
   readonly runId?: string
   readonly attemptNumber?: number
-  readonly provider?: 'github-actions'
+  readonly provider?: 'github-actions' | 'local-proof'
 }
 
 export interface PlaybackRouteContext extends PlaybackTupleReference {

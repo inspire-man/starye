@@ -205,6 +205,38 @@ describe('playback evidence repository', () => {
     ])
   })
 
+  it('accepts playback evidence from the configured local-proof provider', async () => {
+    const testDb = await createTestDatabase()
+    await testDb.client.execute(`
+      UPDATE crawler_run_provider_association
+      SET provider = 'local-proof', provider_run_id = 'local-run-1', provider_status = 'completed'
+      WHERE run_id = 'run-1'
+    `)
+    const repository = createPlaybackEvidenceRepository(testDb.db, {
+      createId: () => 'local-evidence-1',
+      now: () => new Date(now.getTime() + 30_000),
+    })
+
+    const evidence = createEvidence({
+      provider: { provider: 'local-proof', status: 'succeeded' },
+      tuple: { attemptNumber: 1, provider: 'local-proof', runId: 'run-1', taskId: 'task-1' },
+    })
+    const result = await repository.accept({
+      artifact: artifact('c'),
+      evidence,
+      runId: 'run-1',
+      taskId: 'task-1',
+    })
+
+    expect(result).toMatchObject({
+      kind: 'accepted',
+      summary: { outcome: 'accepted', tuple: { provider: 'local-proof' } },
+    })
+    await expect(testDb.client.execute('SELECT provider FROM playback_evidence_summary')).resolves.toMatchObject({
+      rows: [{ provider: 'local-proof' }],
+    })
+  })
+
   it('keeps the current fact unchanged for tuple mismatch, stale revision, and late attempts', async () => {
     const testDb = await createTestDatabase()
     let nextId = 0

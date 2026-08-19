@@ -145,7 +145,7 @@ export interface ReadinessProjection {
 
 export interface PlaybackEvidenceTuple {
   attemptNumber: number
-  provider: 'github-actions'
+  provider: 'github-actions' | 'local-proof'
   runId: string
   taskId: string
 }
@@ -249,7 +249,7 @@ export interface PlaybackEvidenceRequest {
     }
     status: 'playback_verified'
   }
-  provider: { provider: 'github-actions', status: 'succeeded' }
+  provider: { provider: 'github-actions' | 'local-proof', status: 'succeeded' }
   repair: { sourceRevision: number, status: 'succeeded' }
   schemaVersion: 1
   source: { revision: number, sourceType: 'direct' | 'TorrServer', status: 'ready' }

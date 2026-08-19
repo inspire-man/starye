@@ -23,6 +23,7 @@ export interface SyncMovieDataOptions {
     slug?: string
     coverImage?: string
     previewImages?: string[]
+    sourceUrl?: string
     releaseDate?: Date | string
     duration?: number
     description?: string
@@ -253,7 +254,7 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
 
   for (const movieData of movieDataList) {
     try {
-      const { code, title, slug, coverImage, previewImages, releaseDate, duration, description, genres, actors: actorNames, series, publisher, isR18, players } = movieData
+      const { code, title, slug, coverImage, previewImages, sourceUrl, releaseDate, duration, description, genres, actors: actorNames, series, publisher, isR18, players } = movieData
 
       // 检查电影是否已存在
       const existingMovie = await db.query.movies.findFirst({
@@ -281,6 +282,7 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
           : (!existingMovie && { slug: code.toLowerCase().replace(/[^a-z0-9]+/g, '-') })),
         ...(coverImage !== undefined && { coverImage: normalizeImageUrl(coverImage) }),
         ...(previewImages !== undefined && { previewImages: normalizePreviewImages(previewImages) }),
+        ...(sourceUrl !== undefined && { sourceUrl }),
         ...(releaseDate !== undefined && {
           releaseDate: releaseDate
             ? (typeof releaseDate === 'number'

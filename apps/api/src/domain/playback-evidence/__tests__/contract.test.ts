@@ -56,6 +56,16 @@ describe('playback evidence contract', () => {
     }
   })
 
+  it('accepts the local-proof provider used by the configured local runner', () => {
+    const localRequest = {
+      ...validRequest,
+      provider: { provider: 'local-proof', status: 'succeeded' },
+      tuple: { ...validRequest.tuple, provider: 'local-proof' },
+    }
+
+    expect(v.safeParse(PlaybackEvidenceRequestSchema, localRequest).success).toBe(true)
+  })
+
   it.each([
     ['target', { target: 'starye-org' }],
     ['workflow', { workflow: '.github/workflows/daily-movie-crawl.yml' }],
