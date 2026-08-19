@@ -218,6 +218,7 @@ describe('movies.vue 集成测试', () => {
 
       const table = wrapper.get('table.data-table')
       expect(table.attributes('style')).toContain('min-width: 1644px')
+      expect(wrapper.get('thead th:nth-child(2)').attributes('style')).toContain('width: 72px')
       expect(wrapper.get('thead th:nth-child(4)').attributes('style')).toContain('width: 300px')
     })
 

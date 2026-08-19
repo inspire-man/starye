@@ -223,7 +223,7 @@ describe('adminMoviesRoutes — GET /analytics', () => {
 describe('adminMoviesRoutes — GET /batch-status', () => {
   beforeEach(() => vi.restoreAllMocks())
 
-  it('标记缺少封面或尚未回填概览图的旧影片，并保留已完成影片的查重状态', async () => {
+  it('标记缺少封面或空概览图的旧影片，并保留已完成影片的查重状态', async () => {
     const db = createBatchStatusDb([
       { code: 'SS-154', coverImage: null, previewImages: null, sourceUrl: 'https://www.javbus.com/SS-154' },
       { code: 'SS-155', coverImage: '', previewImages: null, sourceUrl: 'https://www.javbus.com/SS-155' },
@@ -240,7 +240,7 @@ describe('adminMoviesRoutes — GET /batch-status', () => {
     await expect(response.json()).resolves.toMatchObject({
       'SS-154': { exists: true, needsImageRefresh: true },
       'SS-155': { exists: true, needsImageRefresh: true },
-      'SS-156': { exists: true, needsImageRefresh: false },
+      'SS-156': { exists: true, needsImageRefresh: true },
       'SS-157': { exists: true, needsImageRefresh: false },
       'SS-158': { exists: false, code: 'SS-158' },
     })
@@ -253,7 +253,7 @@ describe('adminMoviesRoutes — GET /missing-images', () => {
   it('返回缺媒体影片的 sourceUrl，并限制回填批次大小', async () => {
     const db = createBatchStatusDb([
       { code: 'SS-154', coverImage: null, previewImages: null, sourceUrl: 'https://www.javbus.com/SS-154' },
-      { code: 'SS-155', coverImage: '', previewImages: [], sourceUrl: 'https://www.javbus.com/SS-155' },
+      { code: 'SS-155', coverImage: '', previewImages: [], sourceUrl: 'https://javdb.com/v/old-ss-155' },
     ])
     const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret' })
 
@@ -269,6 +269,23 @@ describe('adminMoviesRoutes — GET /missing-images', () => {
         { code: 'SS-155', sourceUrl: 'https://www.javbus.com/SS-155' },
       ],
       meta: { limit: 200, total: 2 },
+    })
+  })
+
+  it('sourceUrl 为空时也应返回当前电影来源入口，允许旧记录回填媒体', async () => {
+    const db = createBatchStatusDb([
+      { code: 'SS-154', coverImage: null, previewImages: null, sourceUrl: null },
+    ])
+    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret' })
+
+    const response = await app.fetch(new Request('http://localhost/missing-images?limit=10', {
+      headers: { 'x-service-token': 'test-secret' },
+    }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      data: [{ code: 'SS-154', sourceUrl: 'https://www.javbus.com/SS-154' }],
+      meta: { total: 1 },
     })
   })
 })

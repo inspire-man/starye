@@ -549,7 +549,7 @@ async function executeBatchOperation() {
 }
 
 const tableColumns = [
-  { key: 'coverImage', label: '封面', width: '84px', minWidth: '84px', sortable: false },
+  { key: 'coverImage', label: '封面', width: '72px', minWidth: '72px', sortable: false },
   { key: 'code', label: '番号', width: '120px', minWidth: '110px' },
   { key: 'title', label: '标题', width: '300px', minWidth: '240px', sortable: true },
   { key: 'actors', label: '女优', width: '170px', minWidth: '140px' },
@@ -1259,8 +1259,8 @@ const tableColumns = [
 
 /* 电影封面是横版预览图，使用固定尺寸避免把整行撑成海报高度。 */
 .movie-cover-cell {
-  width: 64px;
-  height: 36px;
+  width: 56px;
+  height: 32px;
   overflow: hidden;
   border-radius: 4px;
   background: #1f2937;
@@ -1287,7 +1287,7 @@ const tableColumns = [
 }
 
 .movies-page :deep(.data-table-body-cell) {
-  padding-block: 0.375rem;
+  padding-block: 0.25rem;
 }
 
 .movie-table-text {

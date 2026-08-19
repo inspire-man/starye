@@ -113,6 +113,6 @@ export const GITHUB_ACTIONS_CONFIG: Partial<OptimizedCrawlerConfig> = {
     maxMovies: 100,
     maxPages: 10,
   },
-  // 旧记录的 preview_images 为 NULL 时仅回填一次；已经完整同步的影片仍按番号跳过。
+  // 旧记录缺少封面或概览图时回填；已经完整同步的影片仍按番号跳过。
   refreshIncompleteImages: true,
 }

@@ -723,7 +723,11 @@ function routeTupleReference() {
   const taskId = boundedRouteIdentifier(query.taskId)
   const runId = boundedRouteIdentifier(query.runId)
   const attemptNumber = routeAttemptNumber(query.attemptNumber)
-  const provider = query.provider === 'github-actions' ? 'github-actions' as const : undefined
+  const provider = query.provider === 'github-actions'
+    ? 'github-actions' as const
+    : query.provider === 'local-proof'
+      ? 'local-proof' as const
+      : undefined
 
   return { taskId, runId, attemptNumber, provider }
 }
@@ -1155,7 +1159,17 @@ onMounted(() => {
               v-else
               class="flex aspect-[4/3] w-full items-center justify-center rounded-lg bg-gray-700"
             >
-              <span class="text-gray-500">暂无封面</span>
+              <div class="flex flex-col items-center gap-3 px-4 text-center">
+                <span data-movie-cover-status class="text-gray-500">{{ r18SourcesHidden ? '完成 R18 验证后显示' : '暂无封面' }}</span>
+                <RouterLink
+                  v-if="r18SourcesHidden"
+                  to="/profile"
+                  data-movie-cover-profile
+                  class="text-sm font-semibold text-primary-400 hover:text-primary-300"
+                >
+                  前往个人中心
+                </RouterLink>
+              </div>
             </div>
           </div>
 
@@ -1304,7 +1318,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <section v-if="movie.previewImages?.length" class="movie-detail-section movie-overview-section" aria-labelledby="movie-overview-title">
+      <section class="movie-detail-section movie-overview-section" aria-labelledby="movie-overview-title">
         <div class="movie-overview-heading">
           <div>
             <p class="movie-detail-eyebrow">
@@ -1314,9 +1328,16 @@ onMounted(() => {
               预览图
             </h2>
           </div>
-          <span class="movie-overview-count">{{ movie.previewImages.length }} 张</span>
+          <span v-if="r18SourcesHidden" class="movie-overview-count">访问受限</span>
+          <span v-else class="movie-overview-count">{{ movie.previewImages?.length || 0 }} 张</span>
         </div>
-        <div class="movie-overview-grid">
+        <div v-if="r18SourcesHidden" data-r18-overview-guard class="movie-detail-media-empty">
+          <p>当前账号处于 SFW 模式，影片概览图不会显示。</p>
+          <RouterLink to="/profile" class="font-semibold text-primary-400 hover:text-primary-300">
+            前往个人中心开启访问状态
+          </RouterLink>
+        </div>
+        <div v-else-if="movie.previewImages?.length" class="movie-overview-grid">
           <figure v-for="(previewImage, index) in movie.previewImages" :key="previewImage" class="movie-overview-item">
             <img
               :src="previewImage"
@@ -1326,6 +1347,10 @@ onMounted(() => {
               decoding="async"
             >
           </figure>
+        </div>
+        <div v-else data-overview-empty class="movie-detail-media-empty">
+          <p>当前记录还没有保存影片概览图。</p>
+          <p>下一次媒体回填会重新读取来源并补齐图片。</p>
         </div>
       </section>
 
@@ -2377,6 +2402,19 @@ onMounted(() => {
 
 .movie-overview-item:hover .movie-overview-image {
   transform: scale(1.02);
+}
+
+.movie-detail-media-empty {
+  display: grid;
+  gap: 0.375rem;
+  justify-items: center;
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.5rem);
+  padding: 1.5rem 1rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  text-align: center;
 }
 
 .movie-detail-primary-action {

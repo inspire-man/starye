@@ -156,7 +156,10 @@ export abstract class OptimizedCrawler {
         const managedPreviewImages = await Promise.all(
           previewImages.map((imageUrl, index) => processManagedImage(imageUrl, `overview-${String(index + 1).padStart(2, '0')}`)),
         )
-        movieInfo.previewImages = managedPreviewImages.filter((url): url is string => Boolean(url))
+        // R2 下载失败时保留对应的源图链接，避免把“下载失败”误写成“没有概览图”。
+        movieInfo.previewImages = managedPreviewImages
+          .map((url, index) => url || previewImages[index])
+          .filter((url): url is string => Boolean(url))
       }
     }).catch(() => {
       // 图片任务失败已在内部处理

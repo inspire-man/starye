@@ -281,6 +281,9 @@ describe('movie detail DOM tuple contract', () => {
 
     expect(wrapper.get('[data-r18-source-guard]').text()).toContain('播放源已隐藏')
     expect(wrapper.get('[data-r18-source-guard]').text()).toContain('SFW 模式')
+    expect(wrapper.get('[data-movie-cover-status]').text()).toContain('完成 R18 验证后显示')
+    expect(wrapper.get('[data-movie-cover-profile]').attributes('href')).toBe('/profile')
+    expect(wrapper.get('[data-r18-overview-guard]').text()).toContain('影片概览图不会显示')
     expect(wrapper.get('[data-r18-source-profile]').attributes('href')).toBe('/profile')
     expect(wrapper.get('[data-readiness-action="r18-profile"]').attributes('href')).toBe('/profile')
     expect(wrapper.get('[data-r18-access-summary]').text()).toContain('来源检查记录和播放入口已隐藏')

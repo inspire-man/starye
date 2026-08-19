@@ -184,6 +184,42 @@ describe('optimized-crawler E2E', () => {
         expect.any(Object),
       )
     })
+
+    it('图片下载失败时应保留概览图原始链接，避免媒体回填被错误标记为完成', async () => {
+      class TestCrawler extends JavBusCrawler {
+        protected override async getMovieInfo(): Promise<any> {
+          return {
+            title: '图片回退测试',
+            slug: 'IMAGE-FALLBACK-001',
+            code: 'IMAGE-FALLBACK-001',
+            description: '',
+            coverImage: 'https://source.example/cover.jpg',
+            previewImages: ['https://source.example/preview-1.jpg'],
+            sourceUrl: 'https://www.javbus.com/IMAGE-FALLBACK-001',
+            actors: [],
+            genres: [],
+            isR18: true,
+            players: [],
+          }
+        }
+
+        async processForTest() {
+          return this.processMovie('https://www.javbus.com/IMAGE-FALLBACK-001', {} as any)
+        }
+      }
+
+      const crawler = new TestCrawler(config)
+      const syncMovie = vi.fn().mockResolvedValue({ success: true })
+      ;(crawler as any).apiClient.syncMovie = syncMovie
+      ;(crawler as any).imageProcessor.process = vi.fn().mockRejectedValue(new Error('source image unavailable'))
+
+      await crawler.processForTest()
+
+      expect(syncMovie).toHaveBeenCalledWith(expect.objectContaining({
+        previewImages: ['https://source.example/preview-1.jpg'],
+      }))
+      await crawler.cleanup()
+    })
   })
 
   describe('批量查询 API 错误处理', () => {

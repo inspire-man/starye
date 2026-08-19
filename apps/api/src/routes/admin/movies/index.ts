@@ -10,7 +10,7 @@ import type { InferInsertModel, SQL } from 'drizzle-orm'
 import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
 import { movies, players } from '@starye/db/schema'
-import { and, asc, count, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, gte, isNull, like, lte, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
@@ -28,7 +28,7 @@ async function invalidateMovieGatewayCache(env: AppEnv['Bindings']): Promise<voi
   console.log('[Admin/Movies] Cleared gateway movie cache', { deleted })
 }
 
-// 获取缺少媒体字段的历史影片，供生产电影任务按 sourceUrl 做一次性回填。
+// 获取缺少媒体字段的历史影片，供生产电影任务按番号回填媒体。
 adminMovies.get(
   '/missing-images',
   describeRoute({
@@ -50,18 +50,26 @@ adminMovies.get(
     try {
       const data = await db.query.movies.findMany({
         where: and(
-          or(isNull(movies.coverImage), eq(movies.coverImage, ''), isNull(movies.previewImages)),
-          isNotNull(movies.sourceUrl),
+          or(
+            isNull(movies.coverImage),
+            eq(movies.coverImage, ''),
+            sql`json_array_length(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE '[]' END) = 0`,
+          ),
         ),
         columns: {
           code: true,
-          sourceUrl: true,
         },
         orderBy: asc(movies.createdAt),
         limit,
       })
 
-      return c.json({ data, meta: { limit, total: data.length } })
+      const candidates = data.map(movie => ({
+        code: movie.code,
+        // 当前媒体回填执行器是 JavBusCrawler，旧记录可能仍指向已停用的 JavDB 来源。
+        sourceUrl: `https://www.javbus.com/${encodeURIComponent(movie.code)}`,
+      }))
+
+      return c.json({ data: candidates, meta: { limit, total: candidates.length } })
     }
     catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e)
@@ -122,8 +130,10 @@ adminMovies.get(
             exists: true,
             code: result.code,
             slug: result.slug,
-            // NULL 表示迁移前的旧记录尚未完成概览图同步；空数组表示本次详情页已检查但来源没有概览图。
-            needsImageRefresh: !result.coverImage || !Array.isArray(result.previewImages),
+            // NULL、无效值或空数组都表示媒体同步尚未形成可展示的概览图。
+            needsImageRefresh: !result.coverImage
+              || !Array.isArray(result.previewImages)
+              || result.previewImages.length === 0,
             updatedAt: result.updatedAt?.toISOString(),
           }
         }
