@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
-current_phase: 26
-current_phase_name: Video Source And Magnet Availability
-status: executing
-stopped_at: Completed 26-06-PLAN.md
-last_updated: "2026-08-18T13:57:02+08:00"
-last_activity: 2026-08-18
-last_activity_desc: Completed quick task 260818-j9a-r18
+current_phase: 27
+current_phase_name: Comic Chapter Completeness
+status: planning
+stopped_at: Phase 26 complete; ready to plan Phase 27
+last_updated: "2026-08-20T11:41:20+08:00"
+last_activity: 2026-08-20
+last_activity_desc: Phase 26 complete; quick task 260820-3sf-torrserver-gateway-cors verified; transitioned to Phase 27
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Project State: Starye — 个人内容中台
@@ -23,20 +23,20 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-08-10)
 
 **Core value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
-**Current focus:** Phase 26 — Video Source And Magnet Availability
+**Current focus:** Phase 27 — Comic Chapter Completeness
 
 ## Current Position
 
-Phase: 26 — Video Source And Magnet Availability
-Plan: 9/10 plans complete
-Status: Wave 6 complete; ready for Wave 7 checkpoint
-Last activity: 2026-08-18 — Completed quick task 260818-p7i: JavDB canonical source switch
+Phase: 27 — Comic Chapter Completeness
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-20 — Phase 26 complete, transitioned to Phase 27
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 32
+- Total plans completed: 39
 - Average duration: —
 - Total execution time: —
 
@@ -50,7 +50,7 @@ Last activity: 2026-08-18 — Completed quick task 260818-p7i: JavDB canonical s
 | 23 | 5 | 5 | — |
 | 24 | 5 | 5 | — |
 | 25 | 6 | 6 | ~49 min |
-| 26 | 9 | 10 | — |
+| 26 | 10 | — | — |
 | 27 | 0 | 3 | — |
 | 28 | 0 | 4 | — |
 **Per-Plan Metrics:**
@@ -70,6 +70,7 @@ Last activity: 2026-08-18 — Completed quick task 260818-p7i: JavDB canonical s
 | Phase 26 P07 | ~25 min | 2 tasks | 4 files |
 | Phase 26 P10 | ~30 min | 2 tasks | 5 files |
 | Phase 26 P06 | ~35 min | 2 tasks | 10 files |
+| Phase 26 P08 | ~8h | 2 tasks | 0 files |
 
 ## Accumulated Context
 
@@ -98,11 +99,10 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- [ ] Execute Phase 26 in Wave 1 -> Wave 7 order, then run canonical verification.
+- [ ] Plan Phase 27 before execution.
 
 ### Blockers/Concerns
 
-- Magnet truth depends on the configured Aria2/TorrServer observation path and must define bounded metadata, peer, stream and playback states during Phase 26 planning.
 - Comic sources may represent special chapters, missing numbers, duplicates and pagination differently; Phase 27 must select stable identity and terminal-state semantics before implementation.
 - Image hosts may differ for HEAD, Range, redirects, anti-hotlink challenges and browser loading; Phase 28 needs representative fixtures and bounded fan-out.
 
@@ -133,10 +133,10 @@ Items acknowledged and carried forward from previous milestone close:
 | `20260817-video-availability-actions` | 2026-08-17 | 服务端生成 revision/policy binding；Dashboard 与 Movie Detail 提交真实视频检查/修复任务并刷新权威状态；API 5、Dashboard 24、Movie App 23 项定向测试及类型检查、lint、构建通过 |
 | `260818-j9a-r18` | 2026-08-18 | MovieDetail R18/SFW 受限态收敛；隐藏无效播放与来源检查动作、技术来源详情和意外返回的来源卡片；Movie App 全量测试、类型检查、lint、构建、Gateway 浏览器与 GitNexus 检查通过 |
 | `260818-p7i` | 2026-08-18 | JavDB 生产来源统一切换到 `https://javdb.com`；crawler 全量单测、类型检查、diff 校验与 GitNexus 检查通过 |
+| `260820-3sf-torrserver-gateway-cors` | 2026-08-20 | 固定目标 TorrServer Gateway 流代理、控制/媒体地址分离、精确流路径信任与真实 MUDR-392 playback_verified 读回完成；Gateway/API/Dashboard/Movie App 测试、类型检查、lint、GitNexus 与浏览器证据通过 |
 
 ## Session Continuity
 
-Last session: 2026-08-15T00:48:20+08:00
-Stopped at: Completed quick task 260814-okh-200-ui
+Last session: 2026-08-20T11:41:20+08:00
+Stopped at: Phase 26 complete; ready to plan Phase 27
 Resume file: None
-

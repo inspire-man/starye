@@ -38,7 +38,7 @@ v1.5 将已经稳定的 crawler control plane 延伸为“任务运管 → 数�
 - [x] **Phase 23: GitHub Actions Production Repair And Reconciliation** - 把受控修复接入生产 provider，并保持 attempt、lease、callback 和 receipt 可追溯。
 - [x] **Phase 24: Fresh Production Dashboard -> Viewer -> Playback Proof** - 用独立 fresh production tuple 验收 Dashboard 到实际播放的证据链。
 - [x] **Phase 25: Task Operations And Availability Contract** - 完成任务增删改、归档、历史、审计和共享可用性结果契约。 (completed 2026-08-12)
-- [ ] **Phase 26: Video Source And Magnet Availability** - 完成视频 metadata、direct source、magnet/TorrServer 检查和受控修复。
+- [x] **Phase 26: Video Source And Magnet Availability** - 完成视频 metadata、direct source、magnet/TorrServer 检查和受控修复。 (completed 2026-08-20)
 - [ ] **Phase 27: Comic Chapter Completeness** - 完成漫画 source snapshot、缺章/重复/顺序诊断和定向重抓。
 - [ ] **Phase 28: Chapter Image Availability And Gateway Acceptance** - 完成章节图片探测、定向修复和全链路 Gateway 证据验收。
 
@@ -124,7 +124,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 26-08-PLAN.md — focused preflight 与 final canonical Gateway/provider live acceptance
+- [x] 26-08-PLAN.md — focused preflight 与 final canonical Gateway/provider live acceptance
 
 ### Phase 27: Comic Chapter Completeness
 
@@ -179,6 +179,6 @@ Plans:
 | 23. GitHub Actions Production Repair And Reconciliation | v1.4 | 5/5 | Complete | 2026-08-08 |
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | v1.4 | 5/5 | Complete | 2026-08-10 |
 | 25. Task Operations And Availability Contract | v1.5 | 6/6 | Complete    | 2026-08-11 |
-| 26. Video Source And Magnet Availability | v1.5 | 9/10 | In Progress | - |
+| 26. Video Source And Magnet Availability | v1.5 | 10/10 | Complete    | 2026-08-20 |
 | 27. Comic Chapter Completeness | v1.5 | 0/3 | Not started | - |
 | 28. Chapter Image Availability And Gateway Acceptance | v1.5 | 0/4 | Not started | - |
