@@ -10,6 +10,12 @@ export interface JavDBMovieListResult {
   next?: string
 }
 
+export interface JavDBMovieImageSearchResult {
+  code: string
+  detailUrl: string
+  cover: string
+}
+
 function normalizeHttpUrl(rawUrl: string | null | undefined, baseUrl: string): string | null {
   const value = rawUrl?.trim()
   if (!value)
@@ -32,6 +38,18 @@ function unique(values: Array<string | null>): string[] {
 
 function isMovieCode(value: string): boolean {
   return /^[a-z\d][\w-]{1,39}$/iu.test(value)
+}
+
+function normalizeMovieCode(value: string): string {
+  return value.replace(/[^a-z\d]/giu, '').toLocaleLowerCase()
+}
+
+function matchesMovieCode(candidateCode: string, targetCode: string): boolean {
+  if (candidateCode === targetCode)
+    return true
+
+  // JavDB omits the 300 prefix for some 300MIUM catalogue entries.
+  return targetCode.startsWith('300') && targetCode.slice(3) === candidateCode
 }
 
 function panelForLabel(document: Document, label: string): Element | undefined {
@@ -97,6 +115,38 @@ export function parseJavDBMovieList(document: Document, pageUrl: string): JavDBM
     items: items.filter((item, index, all) => all.findIndex(candidate => candidate.code === item.code) === index),
     next,
   }
+}
+
+export function parseJavDBMovieImageSearch(
+  document: Document,
+  pageUrl: string,
+  movieCode: string,
+): JavDBMovieImageSearchResult | null {
+  const targetCode = normalizeMovieCode(movieCode)
+  if (!targetCode)
+    return null
+
+  const item = [...document.querySelectorAll('.movie-list .item')]
+    .find((candidate) => {
+      const code = candidate.querySelector('.video-title strong')?.textContent || ''
+      return matchesMovieCode(normalizeMovieCode(code), targetCode)
+    })
+  const anchor = item?.querySelector('a.box') as HTMLAnchorElement | null
+  const image = item?.querySelector('.cover img') as HTMLImageElement | null
+  const code = item?.querySelector('.video-title strong')?.textContent?.replace(/\s+/gu, '').trim().toUpperCase() || ''
+  const detailUrl = normalizeHttpUrl(anchor?.getAttribute('href'), pageUrl)
+  const cover = normalizeHttpUrl(
+    image?.getAttribute('data-src')
+    || image?.getAttribute('data-original')
+    || image?.currentSrc
+    || image?.getAttribute('src'),
+    pageUrl,
+  )
+
+  if (!code || !detailUrl || !cover)
+    return null
+
+  return { code, detailUrl, cover }
 }
 
 export function parseJavDBMovieDetail(document: Document, pageUrl: string): MovieInfo | null {

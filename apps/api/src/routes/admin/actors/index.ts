@@ -37,7 +37,7 @@ function needsActorAvatarUpdate(
   publicBaseUrl?: string | null,
 ): boolean {
   const avatarKind = classifyStorageUrlKind(avatar, publicBaseUrl)
-  return avatarKind === 'missing' || avatarKind === 'invalid'
+  return avatarKind !== 'managed'
 }
 
 /**
@@ -1012,6 +1012,10 @@ adminActors.post(
         crawlFailureCount: 0,
         lastCrawlAttempt: new Date(),
         updatedAt: new Date(),
+      }
+
+      if (details.avatar !== undefined && classifyStorageUrlKind(details.avatar, c.env.R2_PUBLIC_URL) !== 'managed') {
+        updateData.avatar = null
       }
 
       // 处理日期字段（Unix时间戳转Date）

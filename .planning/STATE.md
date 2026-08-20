@@ -6,9 +6,9 @@ current_phase: 27
 current_phase_name: Comic Chapter Completeness
 status: planning
 stopped_at: Phase 26 complete; ready to plan Phase 27
-last_updated: "2026-08-20T11:41:20+08:00"
+last_updated: "2026-08-20T17:55:37+08:00"
 last_activity: 2026-08-20
-last_activity_desc: Phase 26 complete; quick task 260820-3sf-torrserver-gateway-cors verified; transitioned to Phase 27
+last_activity_desc: Quick task 260820-op2-agent-agents-md complete; agent rule docs condensed
 progress:
   total_phases: 2
   completed_phases: 2
@@ -134,6 +134,8 @@ Items acknowledged and carried forward from previous milestone close:
 | `260818-j9a-r18` | 2026-08-18 | MovieDetail R18/SFW 受限态收敛；隐藏无效播放与来源检查动作、技术来源详情和意外返回的来源卡片；Movie App 全量测试、类型检查、lint、构建、Gateway 浏览器与 GitNexus 检查通过 |
 | `260818-p7i` | 2026-08-18 | JavDB 生产来源统一切换到 `https://javdb.com`；crawler 全量单测、类型检查、diff 校验与 GitNexus 检查通过 |
 | `260820-3sf-torrserver-gateway-cors` | 2026-08-20 | 固定目标 TorrServer Gateway 流代理、控制/媒体地址分离、精确流路径信任与真实 MUDR-392 playback_verified 读回完成；Gateway/API/Dashboard/Movie App 测试、类型检查、lint、GitNexus 与浏览器证据通过 |
+
+| `260820-op2-agent-agents-md` | 2026-08-20 | AGENTS.md 加入工程原则；CLAUDE.md 与 documentation-ownership.md 精简并完成链接、格式和 GitNexus 范围检查 |
 
 ## Session Continuity
 

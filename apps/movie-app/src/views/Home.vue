@@ -265,7 +265,7 @@ onMounted(() => {
         >
           <div class="continue-cover">
             <img
-              v-if="item.coverImage && !item.isR18"
+              v-if="item.coverImage"
               :src="item.coverImage"
               :alt="item.title"
               loading="lazy"
@@ -314,7 +314,7 @@ onMounted(() => {
         >
           <div class="continue-cover">
             <img
-              v-if="movie.coverImage && !movie.isR18"
+              v-if="movie.coverImage"
               :src="movie.coverImage"
               :alt="movie.title"
               loading="lazy"

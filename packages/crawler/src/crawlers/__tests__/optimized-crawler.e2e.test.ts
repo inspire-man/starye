@@ -185,7 +185,7 @@ describe('optimized-crawler E2E', () => {
       )
     })
 
-    it('图片下载失败时应保留概览图原始链接，避免媒体回填被错误标记为完成', async () => {
+    it('图片下载失败时应清空媒体字段，避免把源站外链写入数据库', async () => {
       class TestCrawler extends JavBusCrawler {
         protected override async getMovieInfo(): Promise<any> {
           return {
@@ -216,7 +216,8 @@ describe('optimized-crawler E2E', () => {
       await crawler.processForTest()
 
       expect(syncMovie).toHaveBeenCalledWith(expect.objectContaining({
-        previewImages: ['https://source.example/preview-1.jpg'],
+        coverImage: null,
+        previewImages: [],
       }))
       await crawler.cleanup()
     })

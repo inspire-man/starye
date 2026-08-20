@@ -115,7 +115,7 @@ export interface GetActorBySlugOptions {
 }
 
 export async function getActorBySlug(options: GetActorBySlugOptions) {
-  const { db, slug, isR18Verified = false } = options
+  const { db, slug } = options
 
   // 查找女优
   const actor = await db.query.actors.findFirst({
@@ -128,9 +128,6 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
 
   // 优先从 movie_actor 关联表查询（新数据）
   const movieConditions: SQL[] = [eq(movieActors.actorId, actor.id)]
-  if (!isR18Verified) {
-    movieConditions.push(eq(movies.isR18, false))
-  }
 
   const joinMovies = await db
     .select({
@@ -153,9 +150,6 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
   let relatedMoviesData = joinMovies
   if (joinMovies.length === 0) {
     const likeConditions: SQL[] = [like(movies.actors, `%${actor.name}%`)]
-    if (!isR18Verified) {
-      likeConditions.push(eq(movies.isR18, false))
-    }
 
     const likeMovies = await db
       .select({

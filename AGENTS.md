@@ -2,78 +2,41 @@
 
 本文件是本仓库唯一的 canonical agent 文档。协作默认使用中文。
 
-## Doc Map
+## 文档入口
 
-| Topic | Canonical Owner | Use When |
-|-------|-----------------|----------|
-| 人类项目入口 / 最小本地启动 | [README.md](./README.md) | 需要项目概览或本地启动入口 |
-| agent 规则 / 高风险边界 | [AGENTS.md](./AGENTS.md) | 需要知道本仓库必须遵守的执行规则 |
-| 文档 owner 边界 | [`docs/documentation-ownership.md`](./docs/documentation-ownership.md) | 不确定该改哪份文档、哪份文档算当前 owner |
-| 当前 milestone / phase 真相 | [`.planning/PROJECT.md`](./.planning/PROJECT.md), [`.planning/ROADMAP.md`](./.planning/ROADMAP.md), [`.planning/STATE.md`](./.planning/STATE.md) | 继续当前阶段工作、判断下一步命令 |
-| 生产运维 / rollback / storage policy | [RUNBOOK.md](./RUNBOOK.md) | 部署、回滚、R2/D1 运维、accidental upload 处理 |
-| Claude 兼容入口 | [CLAUDE.md](./CLAUDE.md) | 只在 Claude 适配需要时查看；其内容不得覆盖 AGENTS |
-| 规格与 change 历史 | [`openspec/`](./openspec/) | 查 spec、proposal、archive |
+| 主题 | Canonical owner | 何时读取 |
+|------|-----------------|----------|
+| 人类入口、最小本地启动 | [README.md](./README.md) | 了解项目与启动方式 |
+| Agent 规则 | [AGENTS.md](./AGENTS.md) | 执行仓库内任何任务 |
+| 文档 owner 边界 | [`docs/documentation-ownership.md`](./docs/documentation-ownership.md) | 判断文档归属或更新位置 |
+| 当前 milestone / phase | [`.planning/PROJECT.md`](./.planning/PROJECT.md)、[`.planning/ROADMAP.md`](./.planning/ROADMAP.md)、[`.planning/STATE.md`](./.planning/STATE.md) | 继续 GSD 工作 |
+| 生产运维、rollback、D1、R2 | [RUNBOOK.md](./RUNBOOK.md) | 部署和生产运维 |
+| Claude 兼容入口 | [CLAUDE.md](./CLAUDE.md) | 使用 Claude 适配层时 |
+| 规格与 change 历史 | [`openspec/`](./openspec/) | 查阅 spec、proposal、archive |
 
-## Hard Rules
+## 工作规则
 
-1. 默认使用中文沟通、分析、验证和交付结论。
-2. 改仓库前先走 GSD 工作流：小改动用 `$gsd-quick`，排障用 `$gsd-debug`，phase 工作用 `$gsd-execute-phase`。
-3. 文档冲突时，执行中的当前约束先信 `.planning/*`；稳定后的规则再在 closeout 时回写到 `README.md`、`RUNBOOK.md` 或 `docs/`。
-4. 本地验证必须经 Gateway：标准入口是 `http://localhost:8080/...`，不要把 `3000/3001/3002/3003/5173` 直连端口写成 canonical URL。
-5. 更新文档时只改 canonical owner，不要把同一套说明复制到多份 root doc；owner 边界以 [`docs/documentation-ownership.md`](./docs/documentation-ownership.md) 为准。
-6. 当前工作树可能是脏的；不要回滚、覆盖或顺手暂存无关改动，也不要做 repo-wide “清理旧文件”。
-7. 如果要修改函数、类、方法等代码 symbol，先做 GitNexus impact analysis，并把 blast radius 告知用户。
-8. 如果 impact analysis 返回 HIGH 或 CRITICAL，先明确告警再继续。
-9. 提交前必须跑 GitNexus detect-changes，确认只影响预期 symbols 和 execution flows。
+1. 改仓库前先走 GSD：小改动用 `$gsd-quick`，排障用 `$gsd-debug`，phase 工作用 `$gsd-execute-phase`。
+2. 执行期发生文档冲突时先信 `.planning/*`；稳定规则在 closeout 时回写到对应 canonical owner。
+3. 本地验证统一经 Gateway：使用 `http://localhost:8080/...`，不要把应用 dev port 当成标准入口。
+4. 更新文档只改 canonical owner，不复制同一套说明到多个 root doc。
+5. 保留用户已有的工作树改动；不回滚、覆盖、暂存无关改动，也不做 repo-wide 清理。
+
+## 工程原则
+
+1. 废弃路径直接移除，不为旧路径新增向后兼容层、fallback 或迁移。
+2. 选择完整满足当前需求的最小实现，避免推测性抽象、配置和间接层。
+3. 分层演进：先让最小版本端到端可用，再在工作产品上逐层增加能力；不以未完成的复杂度替代可用产品。
+4. 保持组件模块化，清楚分离不同关注点。
+5. 优先使用成熟、维护良好的库，减少复杂度并提高可靠性；没有明确理由时不重写通用能力。
+6. 先检查项目已有依赖的文档和类型，再决定是否自行实现或新增依赖。
+7. 以长期架构为决策标准，不接受只解决眼前问题且计划后续替换的临时方案。
 
 ## GitNexus Guardrails
 
-- 改 symbol 前：先做 impact analysis。
-- 风险高时：先告警，不要静默继续。
-- 提交前：做 detect-changes。
+- 修改函数、类、方法或其他代码 symbol 前，运行 GitNexus upstream impact analysis，并向用户报告直接调用者、受影响模块/流程和风险级别。
+- impact 返回 `HIGH` 或 `CRITICAL` 时，先明确告警，再继续编辑。
+- 提交前运行 GitNexus `detect_changes`，确认只影响预期 symbols 和 execution flows。
+- 探索陌生代码时优先使用 GitNexus query/context；索引过期时先运行 `npx gitnexus analyze`。
 
-更细的文档入口见 [`docs/documentation-ownership.md`](./docs/documentation-ownership.md)。
-
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
-
-This project is indexed by GitNexus as **starye** (21779 symbols, 31166 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
-
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
-
-## Always Do
-
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
-
-## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/starye/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/starye/clusters` | All functional areas |
-| `gitnexus://repo/starye/processes` | All execution flows |
-| `gitnexus://repo/starye/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
+更细的文档归属规则见 [`docs/documentation-ownership.md`](./docs/documentation-ownership.md)。

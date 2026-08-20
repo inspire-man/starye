@@ -2,6 +2,7 @@ import type { Database } from '@starye/db'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { SourceReadinessProjection } from '../../../domain/movies/source-contract'
 import type { SourcePlayerInput } from '../../../domain/movies/source-reconciliation'
+import { classifyStorageUrlKind } from '@starye/config/storage-purpose-policy'
 import { actors as actorsTable, movieActors as movieActorsTable, moviePublishers as moviePublishersTable, movies as moviesTable, publishers as publishersTable } from '@starye/db/schema'
 import { count, eq } from 'drizzle-orm'
 import { reconcileMovieSources } from '../../../domain/movies/source-reconciliation'
@@ -21,8 +22,8 @@ export interface SyncMovieDataOptions {
     code: string
     title: string
     slug?: string
-    coverImage?: string
-    previewImages?: string[]
+    coverImage?: string | null
+    previewImages?: string[] | null
     sourceUrl?: string
     releaseDate?: Date | string
     duration?: number
@@ -34,6 +35,7 @@ export interface SyncMovieDataOptions {
     isR18?: boolean
     players?: PlayerInput[] // 播放源列表
   }>
+  r2PublicUrl?: string | null
   mode?: 'upsert' | 'insert' | 'update'
 }
 
@@ -51,42 +53,17 @@ export interface SyncMovieDataResult {
   }>
 }
 
-/**
- * 将镜像站图片 URL 规范化为主站 www.javbus.com
- * sync 层兜底：即使爬虫侧遗漏处理，入库前也会清洗
- */
-const JAVBUS_MIRROR_HOSTS = [
-  'www.dmmbus.cyou',
-  'dmmbus.cyou',
-  'www.busdmm.bond',
-  'busdmm.bond',
-  'www.cdnbus.cyou',
-  'cdnbus.cyou',
-  'www.javsee.cyou',
-  'javsee.cyou',
-]
-
-function normalizeImageUrl(url: string | null | undefined): string | null {
+function normalizeManagedImageUrl(url: string | null | undefined, r2PublicUrl?: string | null): string | null {
   if (!url)
     return null
-  try {
-    const parsed = new URL(url)
-    if (JAVBUS_MIRROR_HOSTS.includes(parsed.hostname)) {
-      parsed.hostname = 'www.javbus.com'
-      parsed.protocol = 'https:'
-      return parsed.toString()
-    }
-    return url
-  }
-  catch {
-    return null // 非合法 URL 直接丢弃
-  }
+
+  return classifyStorageUrlKind(url, r2PublicUrl) === 'managed' ? url : null
 }
 
-function normalizePreviewImages(urls: string[]): string[] {
+function normalizePreviewImages(urls: string[] | null | undefined, r2PublicUrl?: string | null): string[] {
   return [...new Set(
-    urls
-      .map(url => normalizeImageUrl(url))
+    (urls ?? [])
+      .map(url => normalizeManagedImageUrl(url, r2PublicUrl))
       .filter((url): url is string => Boolean(url)),
   )].slice(0, 12)
 }
@@ -242,7 +219,7 @@ async function syncPublisher(
 }
 
 export async function syncMovieData(options: SyncMovieDataOptions): Promise<SyncMovieDataResult> {
-  const { db, movies: movieDataList, mode = 'upsert' } = options
+  const { db, movies: movieDataList, mode = 'upsert', r2PublicUrl } = options
 
   const result: SyncMovieDataResult = {
     success: 0,
@@ -272,7 +249,7 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
         continue
       }
 
-      // 准备数据（coverImage 清洗镜像站域名，兜底防御）
+      // 只有 R2 托管地址允许写入媒体字段，源站外链统一清空。
       // 可选字段：仅当调用方显式传入时才更新，避免部分同步覆盖已有数据
       const moviePayload: Partial<Movie> = {
         code,
@@ -280,8 +257,8 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
         ...(slug !== undefined
           ? { slug }
           : (!existingMovie && { slug: code.toLowerCase().replace(/[^a-z0-9]+/g, '-') })),
-        ...(coverImage !== undefined && { coverImage: normalizeImageUrl(coverImage) }),
-        ...(previewImages !== undefined && { previewImages: normalizePreviewImages(previewImages) }),
+        ...(coverImage !== undefined && { coverImage: normalizeManagedImageUrl(coverImage, r2PublicUrl) }),
+        ...(previewImages !== undefined && { previewImages: normalizePreviewImages(previewImages, r2PublicUrl) }),
         ...(sourceUrl !== undefined && { sourceUrl }),
         ...(releaseDate !== undefined && {
           releaseDate: releaseDate

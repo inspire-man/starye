@@ -1162,15 +1162,7 @@ onMounted(() => {
               class="flex aspect-[4/3] w-full items-center justify-center rounded-lg bg-gray-700"
             >
               <div class="flex flex-col items-center gap-3 px-4 text-center">
-                <span data-movie-cover-status class="text-gray-500">{{ r18SourcesHidden ? '完成 R18 验证后显示' : '暂无封面' }}</span>
-                <RouterLink
-                  v-if="r18SourcesHidden"
-                  to="/profile"
-                  data-movie-cover-profile
-                  class="text-sm font-semibold text-primary-400 hover:text-primary-300"
-                >
-                  前往个人中心
-                </RouterLink>
+                <span data-movie-cover-status class="text-gray-500">暂无封面</span>
               </div>
             </div>
           </div>
@@ -1330,16 +1322,9 @@ onMounted(() => {
               预览图
             </h2>
           </div>
-          <span v-if="r18SourcesHidden" class="movie-overview-count">访问受限</span>
-          <span v-else class="movie-overview-count">{{ movie.previewImages?.length || 0 }} 张</span>
+          <span class="movie-overview-count">{{ movie.previewImages?.length || 0 }} 张</span>
         </div>
-        <div v-if="r18SourcesHidden" data-r18-overview-guard class="movie-detail-media-empty">
-          <p>当前账号处于 SFW 模式，影片概览图不会显示。</p>
-          <RouterLink to="/profile" class="font-semibold text-primary-400 hover:text-primary-300">
-            前往个人中心开启访问状态
-          </RouterLink>
-        </div>
-        <div v-else-if="movie.previewImages?.length" class="movie-overview-grid">
+        <div v-if="movie.previewImages?.length" class="movie-overview-grid">
           <figure v-for="(previewImage, index) in movie.previewImages" :key="previewImage" class="movie-overview-item">
             <img
               :src="previewImage"

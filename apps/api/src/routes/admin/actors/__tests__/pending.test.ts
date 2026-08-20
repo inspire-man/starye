@@ -42,7 +42,7 @@ async function fetchPendingActors(app: Hono<AppEnv>, rows: any[]) {
 }
 
 describe('admin actor pending route', () => {
-  it('合法 external avatar 不再进入 pending avatar update 队列', async () => {
+  it('external avatar 进入 pending 队列，只有 R2 托管头像才算完整', async () => {
     const app = createApp([
       {
         id: 'actor-external',
@@ -61,9 +61,13 @@ describe('admin actor pending route', () => {
     const json: any = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json.actors).toEqual([])
-    expect(json.total).toBe(0)
-    expect(json.needsAvatarUpdate).toBe(0)
+    expect(json.actors).toHaveLength(1)
+    expect(json.total).toBe(1)
+    expect(json.actors[0]).toMatchObject({
+      id: 'actor-external',
+      needsAvatarUpdate: true,
+    })
+    expect(json.needsAvatarUpdate).toBe(1)
     expect(json.needsSeesaaWikiRecrawl).toBe(0)
   })
 

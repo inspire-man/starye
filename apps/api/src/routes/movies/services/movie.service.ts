@@ -276,7 +276,6 @@ function buildMovieOrderBy(sortBy?: string, sortOrder?: string) {
 export async function getMovies(options: GetMoviesOptions): Promise<GetMoviesResult> {
   const {
     db,
-    isAdult,
     page = 1,
     pageSize = 24,
     genre,
@@ -355,20 +354,6 @@ export async function getMovies(options: GetMoviesOptions): Promise<GetMoviesRes
   const safeResults: MovieListItem[] = queryResults.map((movie) => {
     const actorsData = movie.movieActors?.map(ma => ma.actor).filter(Boolean) || []
     const publishersData = movie.moviePublishers?.map(mp => mp.publisher).filter(Boolean) || []
-
-    if (movie.isR18 && !isAdult) {
-      return {
-        id: movie.id,
-        title: movie.title,
-        slug: movie.slug,
-        code: movie.code,
-        coverImage: null,
-        releaseDate: movie.releaseDate,
-        isR18: movie.isR18,
-        actors: actorsData,
-        publishers: publishersData,
-      }
-    }
 
     return {
       id: movie.id,
@@ -578,9 +563,6 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
         )`,
         notInArray(moviesTable.id, excludedIds),
       ]
-      if (!isAdult)
-        genreConditions.push(eq(moviesTable.isR18, false))
-
       try {
         const genreResults = await db
           .select({
@@ -607,9 +589,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     }
   }
 
-  const relatedMovies = Array.from(relatedMoviesMap.values())
-    .slice(0, 12)
-    .filter(m => !m.isR18 || isAdult)
+  const relatedMovies = Array.from(relatedMoviesMap.values()).slice(0, 12)
 
   // 如果有 userId，查询用户对播放源的评分
   let userScores: Map<string, number> | undefined
@@ -651,8 +631,8 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
       availability,
       primaryContentId: movie.id,
       readiness,
-      coverImage: null,
-      previewImages: [],
+      coverImage: movie.coverImage,
+      previewImages: Array.isArray(movieData.previewImages) ? movieData.previewImages : [],
       players: [],
       actors: actorsData,
       publishers: publishersData,
@@ -681,7 +661,7 @@ export interface GetHotMoviesOptions {
 }
 
 export async function getHotMovies(options: GetHotMoviesOptions): Promise<MovieListItem[]> {
-  const { db, isAdult, limit = 12 } = options
+  const { db, limit = 12 } = options
 
   const movies = await db.query.movies.findMany({
     columns: {
@@ -727,20 +707,6 @@ export async function getHotMovies(options: GetHotMoviesOptions): Promise<MovieL
   return movies.map((movie): MovieListItem => {
     const actorsData = movie.movieActors?.map(ma => ma.actor).filter(Boolean) || []
     const publishersData = movie.moviePublishers?.map(mp => mp.publisher).filter(Boolean) || []
-
-    if (movie.isR18 && !isAdult) {
-      return {
-        id: movie.id,
-        title: movie.title,
-        slug: movie.slug,
-        code: movie.code,
-        coverImage: null,
-        releaseDate: movie.releaseDate,
-        isR18: movie.isR18,
-        actors: actorsData,
-        publishers: publishersData,
-      }
-    }
 
     return {
       id: movie.id,

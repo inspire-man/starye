@@ -7,7 +7,6 @@ import { describeRoute, resolver, validator } from 'hono-openapi'
 import * as v from 'valibot'
 import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MovieItemSchema, MoviesListDataSchema } from '../../../schemas/movie'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
-import { buildAdultVisibilityCondition } from '../../../services/adult-filter'
 import { getMovieDetail } from '../../movies/handlers/movies.handler'
 
 /**
@@ -44,7 +43,6 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
     validator('query', GetMoviesQuerySchema),
     async (c) => {
       const db = c.get('db')
-      const user = c.get('user')
       const params = c.req.valid('query')
 
       const { page, limit, actor, publisher, genre, series, search, sortBy, sortOrder, yearFrom, yearTo, durationMin, durationMax } = params
@@ -52,10 +50,6 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
 
       try {
         const conditions: SQL[] = []
-
-        const adultCond = buildAdultVisibilityCondition(user, movies)
-        if (adultCond)
-          conditions.push(adultCond)
 
         // 演员筛选 — 通过 movie_actors 关联表 EXISTS 子查询
         if (actor) {
@@ -195,14 +189,8 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
     }),
     async (c) => {
       const db = c.get('db')
-      const user = c.get('user')
-
       try {
-        // 使用 SQLite json_each 聚合 genres 数组字段，R18 认证决定可见范围
-        const r18Filter = !user?.isR18Verified
-          ? sql`AND m.is_r18 = 0`
-          : sql``
-
+        // 目录数据可见，R18 限制只作用于播放源和播放入口。
         const results = await db.all<{ genre: string, count: number }>(
           sql`
             SELECT j.value AS genre, COUNT(*) AS count
@@ -210,7 +198,6 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
             WHERE m.genres IS NOT NULL
               AND m.genres != '[]'
               AND j.value != ''
-              ${r18Filter}
             GROUP BY j.value
             ORDER BY count DESC
             LIMIT 100
@@ -266,15 +253,9 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
 
       try {
         const fallBackToHot = async () => {
-          const conditions: SQL[] = []
-          const adultCondHot = buildAdultVisibilityCondition(user, movies)
-          if (adultCondHot)
-            conditions.push(adultCondHot)
-          const whereClause = conditions.length > 0 ? and(...conditions) : undefined
           const data = await db
             .select()
             .from(movies)
-            .where(whereClause)
             .orderBy(desc(movies.viewCount))
             .limit(12)
           return c.json({ success: true, data, meta: { strategy: 'hot' } })
@@ -337,9 +318,6 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
           .slice(0, 5)
 
         const conditions: SQL[] = [notInArray(movies.code, watchedCodes)]
-        const adultCondRec = buildAdultVisibilityCondition(user, movies)
-        if (adultCondRec)
-          conditions.push(adultCondRec)
 
         let recData: (typeof movies.$inferSelect)[] = []
         if (topGenres.length > 0 || topActorIds.length > 0) {
@@ -375,9 +353,6 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
         if (finalData.length < 12) {
           const currentIds = finalData.map(m => m.id)
           const fillConditions: SQL[] = []
-          const adultCondFill = buildAdultVisibilityCondition(user, movies)
-          if (adultCondFill)
-            fillConditions.push(adultCondFill)
           if (currentIds.length > 0) {
             fillConditions.push(notInArray(movies.id, currentIds))
           }

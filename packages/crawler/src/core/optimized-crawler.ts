@@ -147,8 +147,7 @@ export abstract class OptimizedCrawler {
 
       if (movieInfo.coverImage) {
         const coverImage = await processManagedImage(movieInfo.coverImage, 'cover')
-        if (coverImage)
-          movieInfo.coverImage = coverImage
+        movieInfo.coverImage = coverImage ?? null
       }
 
       const previewImages = [...new Set(movieInfo.previewImages ?? [])].slice(0, 12)
@@ -156,9 +155,8 @@ export abstract class OptimizedCrawler {
         const managedPreviewImages = await Promise.all(
           previewImages.map((imageUrl, index) => processManagedImage(imageUrl, `overview-${String(index + 1).padStart(2, '0')}`)),
         )
-        // R2 下载失败时保留对应的源图链接，避免把“下载失败”误写成“没有概览图”。
+        // 只有 R2 返回的托管地址才能进入 API；失败项保持为空，等待后续回填。
         movieInfo.previewImages = managedPreviewImages
-          .map((url, index) => url || previewImages[index])
           .filter((url): url is string => Boolean(url))
       }
     }).catch(() => {
