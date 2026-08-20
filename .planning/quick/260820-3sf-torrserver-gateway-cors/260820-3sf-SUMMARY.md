@@ -45,7 +45,7 @@ Gateway Range 响应为 `206`、`video/mp4`，带 `Content-Range`、CORS 和 `no
 - Gateway focused suite：62/62；Movie App 定向 suite：56/56；全量相关 suite：228/228。
 - API playback-evidence repository：8/8；API 全量：81 files / 616 tests；Dashboard Crawlers：25/25。
 - API、Gateway、Crawler、Dashboard、Movie App type-check，目标文件 lint，`git diff --check` 均通过。
-- GitNexus index 已刷新至 21,780 nodes / 31,166 edges / 300 flows；提交前 detect-changes 仅覆盖本 quick task 的 Gateway、Movie App、playback evidence 与 Dashboard symbols/flows。
+- GitNexus index 已刷新至 21,779 nodes / 31,166 edges / 300 flows；提交前 detect-changes 仅覆盖本 quick task 的 Gateway、Movie App、playback evidence 与 Dashboard symbols/flows。
 
 ## Commits
 
