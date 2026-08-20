@@ -28,6 +28,10 @@ interface BindingRow {
   attempt_number: number
   content_source_revision: number | null
   content_source_status: string | null
+  content_source_eligible_count: number | null
+  content_source_repairable: number | boolean | null
+  content_source_reason_code: string | null
+  content_source_observed_at: number | null
   latest_run_id: string | null
   operation: string
   provider_conclusion: string | null
@@ -175,6 +179,49 @@ function hasTerminalRepairReadback(row: BindingRow, contentId: string, sourceRev
   })
 }
 
+function isVideoSourceOperation(value: string): boolean {
+  return value === 'check_video_source'
+    || value === 'recheck_video_source'
+    || value === 'repair_video_source'
+}
+
+function isSafeNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function asBoolean(value: number | boolean | null): boolean | null {
+  if (value === true || value === 1)
+    return true
+  if (value === false || value === 0)
+    return false
+  return null
+}
+
+function hasTerminalVideoReadback(row: BindingRow, contentId: string, sourceRevision: number): boolean {
+  const receipt = safeReceipt(row.receipt_summary_json)
+  const source = receipt?.source
+  if (!receipt || receipt.templateKey !== 'movie'
+    || receipt.receiptSchemaVersion !== 2
+    || receipt.primaryContentId !== contentId
+    || !isSafeNonNegativeInteger(receipt.createdCount)
+    || !isSafeNonNegativeInteger(receipt.updatedCount)
+    || !source || typeof source !== 'object' || Array.isArray(source)) {
+    return false
+  }
+
+  const sourceProjection = source as Record<string, unknown>
+  const sourceRepairable = sourceProjection.repairable
+  const persistedRepairable = asBoolean(row.content_source_repairable)
+  return sourceProjection.disposition === 'ready'
+    && sourceProjection.eligibleCount === row.content_source_eligible_count
+    && sourceRepairable === persistedRepairable
+    && sourceProjection.reasonCode === row.content_source_reason_code
+    && sourceProjection.observedAt === row.content_source_observed_at
+    && sourceProjection.sourceRevision === sourceRevision
+    && row.content_source_status === 'ready'
+    && row.content_source_revision === sourceRevision
+}
+
 function sourceRevisionChanged(row: BindingRow, evidence: PlaybackEvidenceRequest): boolean {
   return row.source_revision !== evidence.sourceRevision
     || row.receipt_source_revision !== evidence.sourceRevision
@@ -225,7 +272,11 @@ export function createPlaybackEvidenceRepository(
         provider.provider_conclusion, provider.provider_run_id,
         provider.reconciliation_window_ends_at AS provider_reconciliation_window_ends_at,
         state.source_revision, state.disposition AS content_source_status,
-        state.source_revision AS content_source_revision
+        state.source_revision AS content_source_revision,
+        state.eligible_count AS content_source_eligible_count,
+        state.repairable AS content_source_repairable,
+        state.reason_code AS content_source_reason_code,
+        state.observed_at AS content_source_observed_at
       FROM crawler_task AS task
       INNER JOIN crawler_run AS run ON run.task_id = task.id AND run.id = ?
       LEFT JOIN crawler_run_provider_association AS provider ON provider.run_id = run.id
@@ -341,21 +392,25 @@ export function createPlaybackEvidenceRepository(
 
     let snapshotOk = false
     try {
-      const parsed = readCrawlerTaskSnapshot(JSON.parse(binding.task_snapshot_json), binding.operation as 'movie' | 'manga' | 'repair_players')
-      snapshotOk = parsed.ok && parsed.operation === 'repair_players'
+      const parsed = readCrawlerTaskSnapshot(JSON.parse(binding.task_snapshot_json))
+      snapshotOk = parsed.ok && parsed.operation === binding.operation
         && 'movieId' in parsed.snapshot
+        && 'sourceRevision' in parsed.snapshot
         && parsed.snapshot.movieId === candidate.contentId
         && parsed.snapshot.sourceRevision === candidate.sourceRevision
     }
     catch {
       snapshotOk = false
     }
-    if (binding.operation !== 'repair_players' || !snapshotOk || binding.run_status !== 'succeeded') {
+    if ((!isVideoSourceOperation(binding.operation) && binding.operation !== 'repair_players')
+      || !snapshotOk || binding.run_status !== 'succeeded') {
       return reject({ ...input, outcome: 'ignored', reason: 'terminal_repair_readback_invalid' })
     }
     if (binding.receipt_primary_content_id !== candidate.contentId
       || binding.receipt_source_revision !== candidate.sourceRevision
-      || !hasTerminalRepairReadback(binding, candidate.contentId, candidate.sourceRevision)) {
+      || (binding.operation === 'repair_players'
+        ? !hasTerminalRepairReadback(binding, candidate.contentId, candidate.sourceRevision)
+        : !hasTerminalVideoReadback(binding, candidate.contentId, candidate.sourceRevision))) {
       return reject({ ...input, outcome: 'ignored', reason: 'receipt_readback_mismatch' })
     }
     const provider = binding.provider_name

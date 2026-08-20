@@ -64,7 +64,51 @@ async function applyMigrations(client: Client): Promise<void> {
   }
 }
 
-async function createTestDatabase() {
+type TestOperation = 'check_video_source' | 'recheck_video_source' | 'repair_players' | 'repair_video_source'
+
+async function createTestDatabase(input: { readonly operation?: TestOperation } = {}) {
+  const operation = input.operation ?? 'repair_players'
+  const snapshot = operation === 'repair_players'
+    ? {
+        entrypoint: 'movie-crawler',
+        movieId: 'movie-1',
+        operation,
+        permissionResource: 'movie',
+        reason: 'source_failed',
+        sourceRevision: 7,
+        targetIntent: 'restore_playable_sources',
+        templateKey: 'movie',
+        templateVersion: 1,
+      }
+    : {
+        entrypoint: 'movie-crawler',
+        movieId: 'movie-1',
+        movieRevision: 3,
+        operation,
+        permissionResource: 'movie',
+        policyVersion: 'video-source-probe/v1',
+        reason: 'stale',
+        sourceKind: 'direct',
+        sourceRevision: 7,
+        templateKey: 'movie',
+        templateVersion: 1,
+      }
+  const receipt = operation === 'repair_players'
+    ? {
+        movieId: 'movie-1',
+        observedAt: nowSeconds,
+        operation,
+        sourceRevision: 7,
+        sourceSummary: [{ eligible: true, health: 'unverified', observedAt: nowSeconds, reasonCode: 'source_unverified', sourceType: 'direct' }],
+      }
+    : {
+        createdCount: 1,
+        primaryContentId: 'movie-1',
+        receiptSchemaVersion: 2,
+        source: { disposition: 'ready', eligibleCount: 1, observedAt: nowSeconds, reasonCode: null, repairable: false, sourceRevision: 7 },
+        templateKey: 'movie',
+        updatedCount: 0,
+      }
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
   await client.execute(`
@@ -86,20 +130,11 @@ async function createTestDatabase() {
     { sql: 'INSERT INTO movie (id) VALUES (?)', args: ['movie-1'] },
     { sql: `INSERT INTO crawler_task (id, template_key, operation, template_version,
       requested_by_user_id, request_snapshot_json, latest_run_id, created_at, updated_at)
-      VALUES (?, 'movie', 'repair_players', 1, ?, ?, ?, ?, ?)`, args: [
+      VALUES (?, 'movie', ?, 1, ?, ?, ?, ?, ?)`, args: [
       'task-1',
+      operation,
       'admin-1',
-      JSON.stringify({
-        entrypoint: 'movie-crawler',
-        movieId: 'movie-1',
-        operation: 'repair_players',
-        permissionResource: 'movie',
-        reason: 'source_failed',
-        sourceRevision: 7,
-        targetIntent: 'restore_playable_sources',
-        templateKey: 'movie',
-        templateVersion: 1,
-      }),
+      JSON.stringify(snapshot),
       'run-1',
       nowSeconds,
       nowSeconds,
@@ -110,13 +145,7 @@ async function createTestDatabase() {
       VALUES (?, ?, 1, 'succeeded', 2, 3, ?, ?, ?, ?, ?, ?)`, args: [
       'run-1',
       'task-1',
-      JSON.stringify({
-        movieId: 'movie-1',
-        observedAt: nowSeconds,
-        operation: 'repair_players',
-        sourceRevision: 7,
-        sourceSummary: [{ eligible: true, health: 'unverified', observedAt: nowSeconds, reasonCode: 'source_unverified', sourceType: 'direct' }],
-      }),
+      JSON.stringify(receipt),
       'movie-1',
       7,
       nowSeconds,
@@ -234,6 +263,80 @@ describe('playback evidence repository', () => {
     })
     await expect(testDb.client.execute('SELECT provider FROM playback_evidence_summary')).resolves.toMatchObject({
       rows: [{ provider: 'local-proof' }],
+    })
+  })
+
+  it.each(['check_video_source', 'recheck_video_source', 'repair_video_source'] as const)(
+    'accepts playback evidence from the %s operation with a generic movie receipt',
+    async (operation) => {
+      const testDb = await createTestDatabase({ operation })
+      const repository = createPlaybackEvidenceRepository(testDb.db, {
+        createId: () => `video-${operation}`,
+        now: () => new Date(now.getTime() + 30_000),
+      })
+
+      const result = await repository.accept({
+        artifact: artifact('d'),
+        evidence: createEvidence(),
+        runId: 'run-1',
+        taskId: 'task-1',
+      })
+
+      expect(result).toMatchObject({
+        kind: 'accepted',
+        summary: { outcome: 'accepted', sourceRevision: 7 },
+      })
+    },
+  )
+
+  it('rejects video evidence when the generic receipt disagrees with the authoritative source state', async () => {
+    const testDb = await createTestDatabase({ operation: 'recheck_video_source' })
+    await testDb.client.execute(`
+      UPDATE crawler_run
+      SET receipt_summary_json = ?
+      WHERE id = 'run-1'
+    `, [JSON.stringify({
+      createdCount: 1,
+      primaryContentId: 'movie-1',
+      receiptSchemaVersion: 2,
+      source: { disposition: 'ready', eligibleCount: 1, observedAt: nowSeconds, reasonCode: 'source_read_failed', repairable: false, sourceRevision: 7 },
+      templateKey: 'movie',
+      updatedCount: 0,
+    })])
+    const repository = createPlaybackEvidenceRepository(testDb.db, {
+      createId: () => 'video-mismatch',
+      now: () => new Date(now.getTime() + 30_000),
+    })
+
+    await expect(repository.accept({
+      artifact: artifact('e'),
+      evidence: createEvidence(),
+      runId: 'run-1',
+      taskId: 'task-1',
+    })).resolves.toMatchObject({
+      kind: 'rejected',
+      outcome: 'ignored',
+      reason: 'receipt_readback_mismatch',
+    })
+  })
+
+  it('keeps video evidence stale when the server-owned source revision advances', async () => {
+    const testDb = await createTestDatabase({ operation: 'recheck_video_source' })
+    await testDb.client.execute('UPDATE movie_source_state SET source_revision = 8 WHERE movie_id = \'movie-1\'')
+    const repository = createPlaybackEvidenceRepository(testDb.db, {
+      createId: () => 'video-stale',
+      now: () => new Date(now.getTime() + 30_000),
+    })
+
+    await expect(repository.accept({
+      artifact: artifact('f'),
+      evidence: createEvidence(),
+      runId: 'run-1',
+      taskId: 'task-1',
+    })).resolves.toMatchObject({
+      kind: 'rejected',
+      outcome: 'stale',
+      reason: 'source_revision_changed',
     })
   })
 
