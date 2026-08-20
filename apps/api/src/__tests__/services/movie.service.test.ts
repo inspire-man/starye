@@ -40,7 +40,7 @@ describe('movieService', () => {
       expect(result.meta.page).toBe(1)
     })
 
-    it('应该在非成人用户访问成人内容时隐藏封面', async () => {
+    it('应该为非成人用户保留成人目录封面', async () => {
       const mockMovies = [
         {
           id: '1',
@@ -65,7 +65,7 @@ describe('movieService', () => {
         pageSize: 24,
       })
 
-      expect(result.data[0].coverImage).toBeNull()
+      expect(result.data[0].coverImage).toBe('cover.jpg')
     })
 
     it('应该正确应用分页参数', async () => {

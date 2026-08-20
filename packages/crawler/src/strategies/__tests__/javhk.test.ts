@@ -1,13 +1,21 @@
+import { Buffer } from 'node:buffer'
 import fs from 'node:fs'
 import path from 'node:path'
+import { gotScraping } from 'got-scraping'
 import { Window } from 'happy-dom'
-import { describe, expect, it } from 'vitest'
-import { buildJavHkMovieImageUrls, JavHkStrategy } from '../javhk'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildJavHkMovieImageUrls, JavHkStrategy, probeJavHkImage } from '../javhk'
 import { parseJavHkActorSearch, parseJavHkMovieSearch } from '../javhk-parser'
+
+vi.mock('got-scraping', () => ({ gotScraping: vi.fn() }))
 
 const fixturePath = path.join(import.meta.dirname, '../__fixtures__/javhk-actresses-search.html')
 
 describe('jav.hk strategy', () => {
+  beforeEach(() => {
+    vi.mocked(gotScraping).mockReset()
+  })
+
   it('builds stable image URLs from a movie code', () => {
     expect(buildJavHkMovieImageUrls('MUDR-392')).toEqual({
       cover: 'https://i.jav.hk/movie/mudr392/small/mudr392pl.jpg',
@@ -81,6 +89,69 @@ describe('jav.hk strategy', () => {
       'https://i.jav.hk/movie/mudr392/small/mudr392pl.jpg',
       'https://i.jav.hk/movie/mudr392/small/mudr392ps.jpg',
     ])
+  })
+
+  it('paginates the search API until it finds the exact movie code', async () => {
+    const requestedOffsets: string[] = []
+    const strategy = new JavHkStrategy(
+      async () => '',
+      async (url) => {
+        const offset = new URL(url).searchParams.get('offset') || ''
+        requestedOffsets.push(offset)
+        if (offset === '40') {
+          return {
+            hits: [{
+              content_id: 'mudr392',
+              cover_url: 'https://i.jav.hk/movie/mudr392/small/mudr392pl.jpg',
+              dvd_id: 'MUDR-392',
+            }],
+          }
+        }
+        return { hits: Array.from({ length: 20 }, (_, index) => ({ dvd_id: `OTHER-${index}` })) }
+      },
+      async () => true,
+    )
+
+    await expect(strategy.findMovieImages('MUDR-392')).resolves.toEqual({
+      cover: 'https://i.jav.hk/movie/mudr392/small/mudr392pl.jpg',
+      preview: 'https://i.jav.hk/movie/mudr392/small/mudr392ps.jpg',
+    })
+    expect(requestedOffsets).toEqual(['0', '20', '40'])
+  })
+
+  it('surfaces source unavailability from a real GET probe', async () => {
+    vi.mocked(gotScraping).mockResolvedValue({
+      body: Buffer.from('<html>maintenance</html>'),
+      headers: { 'content-type': 'text/html', 'retry-after': '60' },
+      statusCode: 503,
+    } as never)
+
+    await expect(probeJavHkImage('https://i.jav.hk/movie/mudr392/small/mudr392pl.jpg')).rejects.toMatchObject({
+      retryAfterMs: 60_000,
+      statusCode: 503,
+    })
+    expect(gotScraping).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'GET',
+      responseType: 'buffer',
+    }))
+  })
+
+  it('cools down the strategy after the image host becomes unavailable', async () => {
+    const requestText = vi.fn(async () => '')
+    const requestJson = vi.fn(async () => ({ hits: [] }))
+    const strategy = new JavHkStrategy(requestText, requestJson)
+    vi.mocked(gotScraping).mockResolvedValue({
+      body: Buffer.from('<html>maintenance</html>'),
+      headers: { 'content-type': 'text/html', 'retry-after': '60' },
+      statusCode: 503,
+    } as never)
+
+    await expect(strategy.findMovieImages('MUDR-392')).resolves.toBeNull()
+    await expect(strategy.findActor('天馬ゆい')).resolves.toBeNull()
+
+    expect(requestJson).toHaveBeenCalledOnce()
+    expect(requestText).not.toHaveBeenCalled()
+    expect(gotScraping).toHaveBeenCalledTimes(2)
   })
 
   it('uses an injected fetcher for actor lookup', async () => {

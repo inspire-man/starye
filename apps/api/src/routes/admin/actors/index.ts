@@ -427,7 +427,7 @@ adminActors.get(
     try {
       // 筛选条件：
       // 1. 未爬取详情的女优（hasDetailsCrawled=false）
-      // 2. 已爬取但仍缺头像或头像 URL 无效的 SeesaaWiki 女优
+      // 2. 已爬取但仍缺头像或头像 URL 无效的女优
       // 3. 有 sourceUrl
       // 4. 失败次数 < 3
       const r2PublicUrl = c.env.R2_PUBLIC_URL
@@ -454,25 +454,24 @@ adminActors.get(
 
       // 过滤逻辑：
       // 1. 未爬取的女优
-      // 2. 数据源不是SeesaaWiki的女优（需要从SeesaaWiki重新爬取）
-      // 3. 已从SeesaaWiki爬取，但仍缺头像或头像 URL 无效（需要补全头像）
+      // 2. 数据源不是SeesaaWiki的女优（需要重新爬取）
+      // 3. 任意来源已爬取但仍缺头像或头像 URL 无效（需要补全头像）
       const results = allActors.filter((actor) => {
         // 未爬取的直接包含
         if (!actor.hasDetailsCrawled) {
           return true
         }
-        // 数据源不是SeesaaWiki，需要重新爬取
-        if (actor.source !== 'seesaawiki') {
+        if (needsActorAvatarUpdate(actor.avatar, r2PublicUrl)) {
           return true
         }
-
-        return needsActorAvatarUpdate(actor.avatar, r2PublicUrl)
+        // 数据源不是SeesaaWiki，需要重新爬取
+        return actor.source !== 'seesaawiki'
       }).slice(0, limit) // 取前 limit 个
 
       // 统计各类数量
       const highPriorityCount = results.filter(a => a.movieCount >= 10).length
       const needsSeesaaWikiRecrawl = results.filter(a => a.hasDetailsCrawled && a.source !== 'seesaawiki').length
-      const needsAvatarUpdate = results.filter(a => a.hasDetailsCrawled && a.source === 'seesaawiki' && needsActorAvatarUpdate(a.avatar, r2PublicUrl)).length
+      const needsAvatarUpdate = results.filter(a => a.hasDetailsCrawled && needsActorAvatarUpdate(a.avatar, r2PublicUrl)).length
 
       console.log(`[Admin/Actors] ✓ Returned ${results.length} pending actors (${highPriorityCount} high priority, ${needsSeesaaWikiRecrawl} need SeesaaWiki recrawl, ${needsAvatarUpdate} need avatar update)`)
 
@@ -485,7 +484,7 @@ adminActors.get(
           crawlFailureCount: a.crawlFailureCount,
           lastCrawlAttempt: a.lastCrawlAttempt,
           hasDetailsCrawled: a.hasDetailsCrawled,
-          needsAvatarUpdate: a.hasDetailsCrawled && a.source === 'seesaawiki'
+          needsAvatarUpdate: a.hasDetailsCrawled
             ? needsActorAvatarUpdate(a.avatar, r2PublicUrl)
             : false,
           source: a.source, // 添加 source 字段
