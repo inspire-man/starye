@@ -971,6 +971,77 @@ describe('crawlers local task panel', () => {
     expect(bodyText()).toContain('暂无来源观察')
   })
 
+  it('renders accepted playback evidence for video-source tasks outside the repair surface', async () => {
+    const task = {
+      id: 'video-evidence-task',
+      latestRunId: 'video-evidence-run',
+      movie: { code: 'MUDR-392', id: 'movie-video-evidence', title: 'Video Evidence' },
+      operation: 'recheck_video_source',
+      sourceRevision: 2,
+      templateKey: 'movie',
+    }
+    const run = {
+      id: 'video-evidence-run',
+      attemptNumber: 1,
+      provider: { provider: 'local-proof', providerConclusion: 'success', providerRunId: 'local-video-run', providerStatus: 'completed' },
+      readiness: {
+        metadata: { contentId: 'movie-video-evidence', observedAt: null, persisted: false },
+        playback: { status: 'unverified' },
+        receipt: { persisted: true, primaryContentId: 'movie-video-evidence', schemaVersion: 2 },
+        source: { disposition: 'ready', eligibleCount: 1, observedAt: 200, reasonCode: null, repairable: false, sourceRevision: 2 },
+      },
+      receipt: {
+        createdCount: 1,
+        primaryContentId: 'movie-video-evidence',
+        receiptSchemaVersion: 2,
+        source: { disposition: 'ready', eligibleCount: 1, observedAt: 200, reasonCode: null, repairable: false, sourceRevision: 2 },
+        templateKey: 'movie',
+        updatedCount: 0,
+      },
+      status: 'succeeded',
+    }
+    const summary = {
+      artifact: { hash: 'c'.repeat(64), reference: 'phase-26/video-evidence.json', stem: 'video-evidence' },
+      contentId: 'movie-video-evidence',
+      events: [
+        { event: 'canplay', observed: true, observedAt: 201 },
+        { event: 'playing', observed: true, observedAt: 202 },
+        { event: 'waiting', observed: false, observedAt: null },
+        { event: 'stalled', observed: false, observedAt: null },
+        { event: 'error', observed: false, observedAt: null },
+      ],
+      observedAt: 203,
+      outcome: 'accepted',
+      playback: { canplay: true, error: false, playing: true, progress: { currentTimeAfter: 55.267709, currentTimeBefore: 0, currentTimeDelta: 55.267709 }, status: 'playback_verified' },
+      provider: { provider: 'local-proof', status: 'succeeded' },
+      repair: { sourceRevision: 2, status: 'succeeded' },
+      schemaVersion: 1,
+      source: { revision: 2, sourceType: 'TorrServer', status: 'ready' },
+      sourceRevision: 2,
+      tuple: { attemptNumber: 1, provider: 'local-proof', runId: 'video-evidence-run', taskId: 'video-evidence-task' },
+      viewer: { path: '/movie/MUDR-392', targetLabel: 'movie-MUDR-392' },
+    }
+    api.admin.listCrawlerTasks.mockImplementation(({ template }: { template: string }) => Promise.resolve({ tasks: template === 'movie' ? [task] : [], nextCursor: null }))
+    api.admin.getCrawlerTask.mockResolvedValue({
+      currentAttempt: run,
+      history: [],
+      playbackEvidence: { current: { runId: 'video-evidence-run', summary, rejections: [] }, history: [] },
+      runs: [run],
+      task,
+    })
+
+    const wrapper = mountCrawler()
+    await flushPromises()
+    await openTaskDetails(wrapper)
+
+    expect(bodyQuery('[data-evidence-block="actual-playback"]')).not.toBeNull()
+    expect(bodyText()).toContain('播放已验证')
+    expect(bodyText()).toContain('tuple：video-evidence-task / video-evidence-run / attempt #1 / local-proof')
+    expect(bodyText()).toContain('delta：55.267709')
+    expect(bodyText()).not.toContain('播放未验证')
+    expect(bodyText()).not.toContain('Current source projection')
+  })
+
   it('renders a pending identity when a task has no reported attempt', async () => {
     const task = {
       id: 'repair-pending',

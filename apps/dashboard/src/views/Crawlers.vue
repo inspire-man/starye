@@ -1675,11 +1675,12 @@ async function executeClearFailed() {
             <section class="readiness-block">
               <h4>Playback proof</h4>
               <p class="readiness-state">
-                <CheckCircle2 v-if="runReadiness(selectedRun.run)!.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
+                <CheckCircle2 v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'playback_verified' || (!playbackSummaryFor(selectedRun.task, selectedRun.run) && runReadiness(selectedRun.run)!.playback.status === 'playback_verified')" :size="16" aria-hidden="true" />
                 <CircleHelp v-else :size="16" aria-hidden="true" />
-                <span>{{ runReadiness(selectedRun.run)!.playback.status === 'playback_verified' ? '播放已验证' : '播放未验证' }}</span>
+                <span>{{ playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'playback_verified' || (!playbackSummaryFor(selectedRun.task, selectedRun.run) && runReadiness(selectedRun.run)!.playback.status === 'playback_verified') ? '播放已验证' : '播放未验证' }}</span>
               </p>
-              <span v-if="runReadiness(selectedRun.run)!.playback.evidence">独立证据：playing · currentTime {{ runReadiness(selectedRun.run)!.playback.evidence!.currentTime }}</span>
+              <span v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)">独立证据：playing · currentTime {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeAfter }}</span>
+              <span v-else-if="runReadiness(selectedRun.run)!.playback.evidence">独立证据：playing · currentTime {{ runReadiness(selectedRun.run)!.playback.evidence!.currentTime }}</span>
               <span v-else>ready/receipt 不等于浏览器播放证据</span>
             </section>
             <section class="readiness-block">
@@ -1806,41 +1807,6 @@ async function executeClearFailed() {
             <span>source count：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.sourceCount }}</span>
             <span>eligible count：{{ sourceReadbackFor(selectedRun.task, selectedRun.run)!.eligibleCount }}</span>
           </div>
-          <section
-            class="fact-block actual-playback-block"
-            data-evidence-block="actual-playback"
-            :role="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed' || playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.error ? 'alert' : 'status'"
-            aria-live="polite"
-          >
-            <h4>Actual playback</h4>
-            <p class="fact-state">
-              <CheckCircle2 v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
-              <CircleAlert v-else-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed'" :size="16" aria-hidden="true" />
-              <CircleHelp v-else :size="16" aria-hidden="true" />
-              {{ playbackStatusLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)) }}
-            </p>
-            <template v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)">
-              <span>tuple：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.taskId }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.runId }} / attempt #{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.attemptNumber }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.provider }}</span>
-              <span>content ID：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.contentId }} · source revision：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
-              <span>Viewer path：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.viewer.path }}</span>
-              <span>selected source：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.sourceType }} · {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.status }}</span>
-              <div class="evidence-event-list">
-                <span v-for="event in playbackSummaryFor(selectedRun.task, selectedRun.run)!.events" :key="event.event">{{ playbackEventLabel(event) }}</span>
-              </div>
-              <span>currentTimeBefore：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeBefore }}</span>
-              <span>currentTimeAfter：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeAfter }}</span>
-              <span>delta：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeDelta }}</span>
-              <span>evidence outcome：{{ playbackOutcomeLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)!.outcome) }}</span>
-              <span class="artifact-status">已写入脱敏 JSON/Markdown · artifact reference：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.artifact.reference }}</span>
-            </template>
-            <span v-else>等待浏览器证据</span>
-            <div v-if="playbackEntryFor(selectedRun.task, selectedRun.run)?.rejections.length" class="evidence-rejection-history">
-              <strong>rejection history</strong>
-              <span v-for="rejection in playbackEntryFor(selectedRun.task, selectedRun.run)!.rejections" :key="`${rejection.outcome}-${rejection.observedAt}`">
-                {{ rejection.outcome }} · content ID：{{ rejection.contentId }} · source revision：{{ rejection.sourceRevision }}
-              </span>
-            </div>
-          </section>
           <div class="readiness-actions">
             <a
               v-if="managementPath(selectedRun.task, selectedRun.run)"
@@ -1861,6 +1827,41 @@ async function executeClearFailed() {
             </button>
           </div>
         </div>
+        <section
+          class="fact-block actual-playback-block"
+          data-evidence-block="actual-playback"
+          :role="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed' || playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.error ? 'alert' : 'status'"
+          aria-live="polite"
+        >
+          <h4>Actual playback</h4>
+          <p class="fact-state">
+            <CheckCircle2 v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'playback_verified'" :size="16" aria-hidden="true" />
+            <CircleAlert v-else-if="playbackSummaryFor(selectedRun.task, selectedRun.run)?.playback.status === 'failed'" :size="16" aria-hidden="true" />
+            <CircleHelp v-else :size="16" aria-hidden="true" />
+            {{ playbackStatusLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)) }}
+          </p>
+          <template v-if="playbackSummaryFor(selectedRun.task, selectedRun.run)">
+            <span>tuple：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.taskId }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.runId }} / attempt #{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.attemptNumber }} / {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.tuple.provider }}</span>
+            <span>content ID：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.contentId }} · source revision：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.sourceRevision }}</span>
+            <span>Viewer path：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.viewer.path }}</span>
+            <span>selected source：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.sourceType }} · {{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.source.status }}</span>
+            <div class="evidence-event-list">
+              <span v-for="event in playbackSummaryFor(selectedRun.task, selectedRun.run)!.events" :key="event.event">{{ playbackEventLabel(event) }}</span>
+            </div>
+            <span>currentTimeBefore：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeBefore }}</span>
+            <span>currentTimeAfter：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeAfter }}</span>
+            <span>delta：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.playback.progress.currentTimeDelta }}</span>
+            <span>evidence outcome：{{ playbackOutcomeLabel(playbackSummaryFor(selectedRun.task, selectedRun.run)!.outcome) }}</span>
+            <span class="artifact-status">已写入脱敏 JSON/Markdown · artifact reference：{{ playbackSummaryFor(selectedRun.task, selectedRun.run)!.artifact.reference }}</span>
+          </template>
+          <span v-else>等待浏览器证据</span>
+          <div v-if="playbackEntryFor(selectedRun.task, selectedRun.run)?.rejections.length" class="evidence-rejection-history">
+            <strong>rejection history</strong>
+            <span v-for="rejection in playbackEntryFor(selectedRun.task, selectedRun.run)!.rejections" :key="`${rejection.outcome}-${rejection.observedAt}`">
+              {{ rejection.outcome }} · content ID：{{ rejection.contentId }} · source revision：{{ rejection.sourceRevision }}
+            </span>
+          </div>
+        </section>
         <div v-if="selectedRun.run.provider" class="provider-summary">
           <strong>Provider 摘要</strong>
           <span>{{ selectedRun.run.provider.provider ?? 'provider' }}</span>
