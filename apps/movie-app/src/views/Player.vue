@@ -17,7 +17,7 @@ import {
 } from '../utils/playbackSources'
 import {
   isTrustedTorrServerStreamUrl,
-  resolveTrustedTorrServerOrigins,
+  resolveTrustedTorrServerStreamBases,
   UNTRUSTED_STREAM_URL_MESSAGE,
 } from '../utils/playerSecurity'
 
@@ -838,12 +838,14 @@ async function fetchMovieAndPlay() {
         return
       }
 
-      const trustedOrigins = await resolveTrustedTorrServerOrigins()
+      const trustedStreamBases = resolveTrustedTorrServerStreamBases({
+        gatewayBaseUrl: moviePublicRuntime.gatewayBaseUrl,
+      })
       if (!isCurrentPlaybackSession(sessionToken)) {
         return
       }
 
-      if (!isTrustedTorrServerStreamUrl(streamUrl, trustedOrigins)) {
+      if (!isTrustedTorrServerStreamUrl(streamUrl, trustedStreamBases)) {
         error.value = UNTRUSTED_STREAM_URL_MESSAGE
         loading.value = false
         return

@@ -11,7 +11,7 @@ const {
   submitPlaybackEvidenceMock,
   trackViewMock,
   addMagnetTaskMock,
-  resolveTrustedOriginsMock,
+  resolveTrustedStreamBasesMock,
   xgPlayerCtor,
   playerInstances,
 } = vi.hoisted(() => ({
@@ -26,7 +26,7 @@ const {
   submitPlaybackEvidenceMock: vi.fn(),
   trackViewMock: vi.fn(),
   addMagnetTaskMock: vi.fn(),
-  resolveTrustedOriginsMock: vi.fn(),
+  resolveTrustedStreamBasesMock: vi.fn(),
   xgPlayerCtor: vi.fn(),
   playerInstances: [] as Array<{
     handlers: Record<string, () => void>
@@ -94,7 +94,7 @@ vi.mock('../../utils/playerSecurity', async () => {
   const actual = await vi.importActual<typeof import('../../utils/playerSecurity')>('../../utils/playerSecurity')
   return {
     ...actual,
-    resolveTrustedTorrServerOrigins: resolveTrustedOriginsMock,
+    resolveTrustedTorrServerStreamBases: resolveTrustedStreamBasesMock,
   }
 })
 
@@ -106,7 +106,7 @@ describe('player.vue security gates', () => {
     routeState.query = {
       streamUrl: 'http://127.0.0.1:8090/stream/video?link=magnet%3Aabc&index=0&play=',
     }
-    resolveTrustedOriginsMock.mockResolvedValue(['http://127.0.0.1:8090'])
+    resolveTrustedStreamBasesMock.mockReturnValue(['http://127.0.0.1:8090'])
     getWatchingProgressMock.mockResolvedValue({ success: true, data: null })
     submitPlaybackEvidenceMock.mockResolvedValue({ kind: 'accepted' })
   })
@@ -512,6 +512,57 @@ describe('player.vue security gates', () => {
     expect(payload.source).toEqual({ revision: 5, sourceType: 'TorrServer', status: 'ready' })
     expect(JSON.stringify(payload)).not.toContain('127.0.0.1')
     expect(JSON.stringify(payload)).not.toContain('magnet:')
+    wrapper.unmount()
+  })
+
+  it('accepts the canonical Gateway TorrServer stream and submits evidence after positive progress', async () => {
+    routeState.query = {
+      streamUrl: 'http://localhost:8080/torrserver/stream/video?link=magnet%3Aabc&index=0&play=',
+    }
+    resolveTrustedStreamBasesMock.mockReturnValue(['http://localhost:8080/torrserver'])
+    getMovieDetailMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: 'movie-gateway-torr',
+        primaryContentId: 'movie-gateway-torr',
+        title: 'Gateway TorrServer fixture',
+        players: [{ id: 'magnet-gateway', sourceUrl: 'magnet:?xt=urn:btih:gateway', isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-gateway-torr', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-gateway-torr', schemaVersion: 2 },
+          source: { disposition: 'ready', eligibleCount: 1, observedAt: 100, reasonCode: null, repairable: false, sourceRevision: 2 },
+        },
+        availability: {
+          current: {
+            direct: null,
+            magnet: null,
+            metadata: { observedAt: 100, persisted: true, sourceRevision: 2 },
+            playback: { status: 'unverified', tuple: { attemptNumber: 1, provider: 'local-proof', runId: 'run-gateway', taskId: 'task-gateway' } },
+          },
+          history: [],
+        },
+      },
+    })
+
+    const wrapper = mount(PlayerView)
+    await flushPromises()
+    playerInstances[0].handlers.canplay()
+    await wrapper.get('[data-player-action="play"]').trigger('click')
+    playerInstances[0].handlers.playing()
+    playerInstances[0].currentTime = 1.25
+    playerInstances[0].handlers.timeupdate()
+    await flushPromises()
+
+    expect(xgPlayerCtor.mock.calls[0][0]).toMatchObject({
+      url: 'http://localhost:8080/torrserver/stream/video?link=magnet%3Aabc&index=0&play=',
+    })
+    expect(submitPlaybackEvidenceMock).toHaveBeenCalledTimes(1)
+    expect(submitPlaybackEvidenceMock).toHaveBeenCalledWith('task-gateway', 'run-gateway', expect.objectContaining({
+      sourceRevision: 2,
+      tuple: { attemptNumber: 1, provider: 'local-proof', runId: 'run-gateway', taskId: 'task-gateway' },
+    }))
     wrapper.unmount()
   })
 

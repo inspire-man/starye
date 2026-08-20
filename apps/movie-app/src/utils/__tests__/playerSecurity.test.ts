@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   fetchDefaultTorrServerUrl,
   getTrustedTorrServerOrigins,
+  getTrustedTorrServerStreamBases,
   isTrustedTorrServerStreamUrl,
   readStoredTorrServerUrl,
   resolveTrustedTorrServerOrigins,
+  resolveTrustedTorrServerStreamBases,
   UNTRUSTED_STREAM_URL_MESSAGE,
 } from '../playerSecurity'
 
@@ -62,6 +64,40 @@ describe('playerSecurity', () => {
         ),
       ).toBe(false)
     })
+
+    it('只允许 Gateway 的精确 /torrserver/stream/video 路径', () => {
+      const trustedBases = getTrustedTorrServerStreamBases('http://localhost:8080/torrserver')
+
+      expect(isTrustedTorrServerStreamUrl(
+        'http://localhost:8080/torrserver/stream/video?link=magnet%3Aabc&index=0',
+        trustedBases,
+      )).toBe(true)
+      expect(isTrustedTorrServerStreamUrl(
+        'http://localhost:8080/torrserver/stream/video/extra?link=magnet%3Aabc&index=0',
+        trustedBases,
+      )).toBe(false)
+      expect(isTrustedTorrServerStreamUrl(
+        'http://localhost:8080/stream/video?link=magnet%3Aabc&index=0',
+        trustedBases,
+      )).toBe(false)
+    })
+
+    it('显式直连 base 只允许 /stream/video，并拒绝 URL 凭据', () => {
+      const trustedBases = getTrustedTorrServerStreamBases('http://127.0.0.1:8090')
+
+      expect(isTrustedTorrServerStreamUrl(
+        'http://127.0.0.1:8090/stream/video?link=magnet%3Aabc&index=0',
+        trustedBases,
+      )).toBe(true)
+      expect(isTrustedTorrServerStreamUrl(
+        'http://user:pass@127.0.0.1:8090/stream/video?link=magnet%3Aabc&index=0',
+        trustedBases,
+      )).toBe(false)
+      expect(isTrustedTorrServerStreamUrl(
+        'http://127.0.0.1:8090/torrserver/stream/video?link=magnet%3Aabc&index=0',
+        trustedBases,
+      )).toBe(false)
+    })
   })
 
   describe('readStoredTorrServerUrl', () => {
@@ -118,6 +154,22 @@ describe('playerSecurity', () => {
           fetchImpl: fetchMock as any,
         }),
       ).resolves.toEqual(['http://127.0.0.1:8090', 'https://torr.example.com'])
+    })
+  })
+
+  describe('resolveTrustedTorrServerStreamBases', () => {
+    it('合并 Gateway 媒体 base 与显式本地直连 base', () => {
+      const storage = {
+        getItem: vi.fn().mockReturnValue(JSON.stringify({ serverUrl: 'http://127.0.0.1:8090/' })),
+      }
+
+      expect(resolveTrustedTorrServerStreamBases({
+        gatewayBaseUrl: 'http://localhost:8080/',
+        storage,
+      })).toEqual([
+        'http://localhost:8080/torrserver',
+        'http://127.0.0.1:8090',
+      ])
     })
   })
 
