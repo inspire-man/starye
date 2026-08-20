@@ -2,8 +2,9 @@
 import type { MovieAvailabilityCommandReason, MovieAvailabilitySourceKind, MovieDetail, Player, ReadinessProjection, SourceDisposition, SourceReasonCode } from '../types'
 import type { TorrentFile } from '../utils/torrServerClient'
 import { ConfirmDialog } from '@starye/ui'
+import { ChevronLeft, ChevronRight, X } from 'lucide-vue-next'
 import QrcodeVue from 'qrcode.vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import RatingStars from '../components/RatingStars.vue'
 import { useAria2 } from '../composables/useAria2'
@@ -36,8 +37,52 @@ const { showToast } = useToast()
 const loading = ref(true)
 const error = ref('')
 const movie = ref<MovieDetail | null>(null)
+const previewLightboxIndex = ref<number | null>(null)
+const previewTriggerElement = ref<HTMLElement | null>(null)
 const readiness = computed<ReadinessProjection | null>(() => movie.value?.readiness ?? null)
 const userStore = useUserStore()
+
+const previewLightboxImage = computed(() => {
+  const index = previewLightboxIndex.value
+  const images = movie.value?.previewImages ?? []
+  return index === null ? null : images[index] ?? null
+})
+
+function openPreview(index: number, event?: MouseEvent): void {
+  if (movie.value?.previewImages?.[index]) {
+    previewTriggerElement.value = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    previewLightboxIndex.value = index
+    void nextTick(() => document.querySelector<HTMLElement>('[data-preview-lightbox]')?.focus())
+  }
+}
+
+function closePreview(): void {
+  previewLightboxIndex.value = null
+  void nextTick(() => previewTriggerElement.value?.focus())
+}
+
+function stepPreview(delta: number): void {
+  const images = movie.value?.previewImages ?? []
+  const index = previewLightboxIndex.value
+  if (index === null || images.length < 2)
+    return
+  previewLightboxIndex.value = (index + delta + images.length) % images.length
+}
+
+function handlePreviewKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closePreview()
+  }
+  else if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    stepPreview(-1)
+  }
+  else if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    stepPreview(1)
+  }
+}
 
 type VideoLayerName = 'metadata' | 'direct' | 'magnet' | 'playback'
 
@@ -1326,13 +1371,20 @@ onMounted(() => {
         </div>
         <div v-if="movie.previewImages?.length" class="movie-overview-grid">
           <figure v-for="(previewImage, index) in movie.previewImages" :key="previewImage" class="movie-overview-item">
-            <img
-              :src="previewImage"
-              :alt="`${movie.title} 概览图 ${index + 1}`"
-              class="movie-overview-image"
-              loading="lazy"
-              decoding="async"
+            <button
+              type="button"
+              class="movie-overview-trigger"
+              :aria-label="`查看${movie.title}概览图 ${index + 1}`"
+              @click="openPreview(index, $event)"
             >
+              <img
+                :src="previewImage"
+                :alt="`${movie.title} 概览图 ${index + 1}`"
+                class="movie-overview-image"
+                loading="lazy"
+                decoding="async"
+              >
+            </button>
           </figure>
         </div>
         <div v-else data-overview-empty class="movie-detail-media-empty">
@@ -1340,6 +1392,52 @@ onMounted(() => {
           <p>下一次媒体回填会重新读取来源并补齐图片。</p>
         </div>
       </section>
+
+      <Teleport to="body">
+        <div
+          v-if="previewLightboxImage"
+          class="movie-preview-lightbox"
+          data-preview-lightbox
+          role="dialog"
+          aria-modal="true"
+          :aria-label="`${movie.title}预览图`"
+          tabindex="-1"
+          @click.self="closePreview"
+          @keydown="handlePreviewKeydown"
+        >
+          <div class="movie-preview-lightbox-panel">
+            <div class="movie-preview-lightbox-toolbar">
+              <span>{{ (previewLightboxIndex ?? 0) + 1 }} / {{ movie.previewImages?.length || 0 }}</span>
+              <button type="button" class="movie-preview-lightbox-close" aria-label="关闭预览图" title="关闭" @click="closePreview">
+                <X :size="18" aria-hidden="true" />
+              </button>
+            </div>
+            <div class="movie-preview-lightbox-stage">
+              <button
+                v-if="(movie.previewImages?.length || 0) > 1"
+                type="button"
+                class="movie-preview-lightbox-nav movie-preview-lightbox-prev"
+                aria-label="上一张预览图"
+                title="上一张"
+                @click="stepPreview(-1)"
+              >
+                <ChevronLeft :size="26" aria-hidden="true" />
+              </button>
+              <img :src="previewLightboxImage" :alt="`${movie.title}预览图`" class="movie-preview-lightbox-image">
+              <button
+                v-if="(movie.previewImages?.length || 0) > 1"
+                type="button"
+                class="movie-preview-lightbox-nav movie-preview-lightbox-next"
+                aria-label="下一张预览图"
+                title="下一张"
+                @click="stepPreview(1)"
+              >
+                <ChevronRight :size="26" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <div
         v-if="readiness"
@@ -2389,6 +2487,124 @@ onMounted(() => {
 
 .movie-overview-item:hover .movie-overview-image {
   transform: scale(1.02);
+}
+
+.movie-overview-trigger {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+}
+
+.movie-overview-trigger:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+
+.movie-detail-hero,
+.movie-detail-section {
+  border-color: hsl(var(--border));
+  background: hsl(var(--card));
+  box-shadow: var(--ui-surface-shadow);
+}
+
+.movie-detail-hero {
+  border: 1px solid hsl(var(--border));
+}
+
+.movie-detail-cover img,
+.movie-detail-cover > div {
+  background: hsl(var(--muted));
+}
+
+.movie-preview-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  background: hsl(var(--background) / 0.92);
+  padding: clamp(1rem, 4vw, 3rem);
+  backdrop-filter: blur(10px);
+}
+
+.movie-preview-lightbox-panel {
+  display: grid;
+  width: min(100%, 78rem);
+  max-height: 100%;
+  gap: 0.75rem;
+}
+
+.movie-preview-lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.movie-preview-lightbox-close,
+.movie-preview-lightbox-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card) / 0.78);
+  color: hsl(var(--foreground));
+  transition: border-color var(--ui-motion-fast) ease, background-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease;
+}
+
+.movie-preview-lightbox-close:hover,
+.movie-preview-lightbox-nav:hover {
+  border-color: hsl(var(--primary) / 0.65);
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+}
+
+.movie-preview-lightbox-close {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.movie-preview-lightbox-stage {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  place-items: center;
+}
+
+.movie-preview-lightbox-image {
+  display: block;
+  width: min(100%, 72rem);
+  max-height: calc(100vh - 7rem);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-lg);
+  background: hsl(var(--muted));
+  object-fit: contain;
+  box-shadow: 0 1.5rem 4rem hsl(0 0% 0% / 0.45);
+}
+
+.movie-preview-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.movie-preview-lightbox-prev {
+  left: 0.75rem;
+}
+
+.movie-preview-lightbox-next {
+  right: 0.75rem;
 }
 
 .movie-detail-media-empty {

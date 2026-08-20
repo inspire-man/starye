@@ -2,7 +2,8 @@
 import type { SelectOption } from '@starye/ui'
 import type { GenreItem, Movie, WatchingHistoryItem } from '../types'
 import { MovieCard, Pagination, Select, SkeletonCard, useListQuery } from '@starye/ui'
-import { onMounted, reactive, ref, watch } from 'vue'
+import { ArrowDownUp, ArrowUpRight, LayoutGrid, List, Search } from 'lucide-vue-next'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthGuard } from '../composables/useAuthGuard'
 import { genreApi, movieApi, progressApi } from '../lib/api-client'
@@ -17,6 +18,8 @@ const movies = ref<Movie[]>([])
 const { page, limit, total, totalPages, loading, error, execute, goToPage, updatePageSize } = useListQuery(20)
 
 const activeGenre = ref('')
+const showAllGenres = ref(false)
+const viewMode = ref<'grid' | 'list'>('grid')
 
 const filters = reactive({
   search: '',
@@ -29,6 +32,16 @@ const filters = reactive({
 
 // Genre 标签数据
 const genres = ref<GenreItem[]>([])
+
+const visibleGenres = computed(() => showAllGenres.value ? genres.value : genres.value.slice(0, 18))
+const hasMoreGenres = computed(() => genres.value.length > 18)
+const activeFilterCount = computed(() => [
+  filters.search,
+  activeGenre.value,
+  filters.yearFrom,
+  filters.yearTo,
+  filters.duration,
+].filter(Boolean).length)
 
 // 继续观看列表（已登录用户，仅展示未完成记录）
 const continueWatchingList = ref<WatchingHistoryItem[]>([])
@@ -59,6 +72,7 @@ async function syncUrl(pageNumber = page.value): Promise<void> {
       ...route.query,
       ...(pageNumber > 1 ? { page: String(pageNumber) } : { page: undefined }),
       sortBy: filters.sortBy !== 'releaseDate' ? filters.sortBy : undefined,
+      sortOrder: filters.sortOrder !== 'desc' ? filters.sortOrder : undefined,
       search: filters.search || undefined,
       genre: activeGenre.value || undefined,
       yearFrom: filters.yearFrom ? String(filters.yearFrom) : undefined,
@@ -184,9 +198,27 @@ watch(() => filters.sortBy, () => {
   void applyFilters()
 })
 
+watch(() => filters.sortOrder, () => {
+  void applyFilters()
+})
+
 function clearGenreFilter() {
   activeGenre.value = ''
   void applyFilters()
+}
+
+function clearFilters(): void {
+  filters.search = ''
+  activeGenre.value = ''
+  filters.yearFrom = ''
+  filters.yearTo = ''
+  filters.duration = ''
+  void applyFilters()
+}
+
+function setViewMode(mode: 'grid' | 'list'): void {
+  viewMode.value = mode
+  localStorage.setItem('movie-view-mode', mode)
 }
 
 // 监听外部（如标签页点击）触发的 genre query 变化
@@ -215,11 +247,15 @@ function goToHistory() {
 onMounted(() => {
   // 从 URL query 恢复状态
   filters.sortBy = (route.query.sortBy as typeof filters.sortBy) || 'releaseDate'
+  filters.sortOrder = route.query.sortOrder === 'asc' ? 'asc' : 'desc'
   filters.search = (typeof route.query.search === 'string' ? route.query.search : '')
   activeGenre.value = (typeof route.query.genre === 'string' ? route.query.genre : '')
   filters.yearFrom = route.query.yearFrom && !Array.isArray(route.query.yearFrom) ? Number(route.query.yearFrom) : ''
   filters.yearTo = route.query.yearTo && !Array.isArray(route.query.yearTo) ? Number(route.query.yearTo) : ''
   filters.duration = (typeof route.query.duration === 'string' ? route.query.duration : '') as typeof filters.duration
+  const storedViewMode = localStorage.getItem('movie-view-mode')
+  if (storedViewMode === 'grid' || storedViewMode === 'list')
+    viewMode.value = storedViewMode
 
   // 并行加载：主列表 + genres + 继续观看（互不依赖）
   fetchMovies()
@@ -230,7 +266,38 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="ui-public-page">
+  <div class="ui-public-page movie-library-page">
+    <header class="movie-library-hero">
+      <div class="movie-library-kicker">
+        <span class="movie-library-brand">JAV CATALOG</span>
+        <span class="movie-library-count">{{ total }} 条记录</span>
+      </div>
+      <div class="movie-library-hero-main">
+        <div>
+          <h1 class="movie-library-title">
+            影库
+          </h1>
+          <p class="movie-library-description">
+            按番号、演员、厂商和标签浏览你的影片资料库。
+          </p>
+        </div>
+        <nav class="movie-library-shortcuts" aria-label="影库快捷入口">
+          <RouterLink to="/new-releases" class="movie-library-shortcut">
+            <span class="movie-library-shortcut-label">新片</span>
+            <ArrowUpRight :size="14" aria-hidden="true" />
+          </RouterLink>
+          <RouterLink to="/actors" class="movie-library-shortcut">
+            <span class="movie-library-shortcut-label">女优</span>
+            <ArrowUpRight :size="14" aria-hidden="true" />
+          </RouterLink>
+          <RouterLink to="/publishers" class="movie-library-shortcut">
+            <span class="movie-library-shortcut-label">厂商</span>
+            <ArrowUpRight :size="14" aria-hidden="true" />
+          </RouterLink>
+        </nav>
+      </div>
+    </header>
+
     <!-- R18 Status Banner (if logged in and not verified) -->
     <div v-if="userStore.user && !userStore.user.isR18Verified" class="ui-public-surface ui-status-warning mb-5 px-4 py-3">
       <div class="flex items-center gap-3">
@@ -345,56 +412,115 @@ onMounted(() => {
       </button>
     </div>
 
-    <div class="mb-5">
-      <div class="ui-public-page-header mb-4">
-        <h1 class="ui-public-page-title">
-          {{ activeGenre ? `标签：${activeGenre}` : '热门影片' }}
-        </h1>
+    <div class="mb-6">
+      <div class="movie-catalog-heading">
+        <div>
+          <p class="movie-library-kicker">
+            COLLECTION
+          </p>
+          <h2 class="movie-catalog-title">
+            {{ activeGenre ? `标签：${activeGenre}` : '热门影片' }}
+          </h2>
+          <p class="movie-catalog-meta">
+            {{ total }} 部影片<span v-if="activeFilterCount"> · {{ activeFilterCount }} 项筛选</span>
+          </p>
+        </div>
+        <div class="movie-view-switcher" aria-label="影片列表视图">
+          <button
+            type="button"
+            class="movie-view-button"
+            :class="{ 'is-active': viewMode === 'grid' }"
+            aria-label="网格视图"
+            :aria-pressed="viewMode === 'grid'"
+            title="网格视图"
+            @click="setViewMode('grid')"
+          >
+            <LayoutGrid :size="17" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="movie-view-button"
+            :class="{ 'is-active': viewMode === 'list' }"
+            aria-label="列表视图"
+            :aria-pressed="viewMode === 'list'"
+            title="列表视图"
+            @click="setViewMode('list')"
+          >
+            <List :size="17" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
-      <div class="ui-public-actions mb-4">
-        <input
-          v-model="filters.search"
-          type="text"
-          placeholder="搜索番号或标题..."
-          class="ui-public-input w-full max-w-sm"
-          @keyup.enter="searchMovies"
-        >
+      <div class="movie-catalog-toolbar">
+        <div class="movie-search-field">
+          <Search aria-hidden="true" class="movie-search-icon" :size="16" />
+          <input
+            v-model="filters.search"
+            type="text"
+            placeholder="搜索番号或标题..."
+            class="ui-public-input"
+            @keyup.enter="searchMovies"
+          >
+        </div>
         <Select
           v-model="filters.sortBy"
-          class="flex-1 max-w-xs"
+          class="movie-sort-select"
           :options="sortOptions"
           placeholder="排序"
           size="default"
         />
         <button
-          v-if="filters.search"
-          class="ui-public-button ui-public-button-ghost"
-          @click="filters.search = ''; searchMovies()"
+          type="button"
+          class="movie-sort-order"
+          :aria-label="filters.sortOrder === 'desc' ? '降序排列' : '升序排列'"
+          :title="filters.sortOrder === 'desc' ? '降序排列' : '升序排列'"
+          @click="filters.sortOrder = filters.sortOrder === 'desc' ? 'asc' : 'desc'"
         >
-          清除
+          <ArrowDownUp aria-hidden="true" :size="15" />
+          {{ filters.sortOrder === 'desc' ? '最新' : '最早' }}
+        </button>
+        <button
+          v-if="activeFilterCount"
+          type="button"
+          class="ui-public-button ui-public-button-ghost movie-clear-button"
+          @click="clearFilters"
+        >
+          清除筛选
         </button>
       </div>
 
       <!-- Genre 标签栏 -->
-      <div v-if="genres.length > 0" class="genre-bar">
-        <button
-          class="genre-tag"
-          :class="{ active: activeGenre === '' }"
-          @click="setGenre('')"
-        >
-          全部
-        </button>
-        <button
-          v-for="item in genres"
-          :key="item.genre"
-          class="genre-tag"
-          :class="{ active: activeGenre === item.genre }"
-          @click="setGenre(item.genre)"
-        >
-          {{ item.genre }}
-          <span class="genre-count">{{ item.count }}</span>
-        </button>
+      <div v-if="genres.length > 0" class="movie-genre-panel">
+        <div class="movie-genre-heading">
+          <span>热门标签</span>
+          <button
+            v-if="hasMoreGenres"
+            type="button"
+            class="movie-genre-more"
+            @click="showAllGenres = !showAllGenres"
+          >
+            {{ showAllGenres ? '收起' : `全部 ${genres.length}` }}
+          </button>
+        </div>
+        <div class="genre-bar">
+          <button
+            class="genre-tag"
+            :class="{ active: activeGenre === '' }"
+            @click="setGenre('')"
+          >
+            全部
+          </button>
+          <button
+            v-for="item in visibleGenres"
+            :key="item.genre"
+            class="genre-tag"
+            :class="{ active: activeGenre === item.genre }"
+            @click="setGenre(item.genre)"
+          >
+            {{ item.genre }}
+            <span class="genre-count">{{ item.count }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- 高级筛选 -->
@@ -467,7 +593,7 @@ onMounted(() => {
     </div>
 
     <div v-else>
-      <div class="ui-public-grid">
+      <div class="movie-results" :class="{ 'is-list': viewMode === 'list' }">
         <MovieCard
           v-for="movie in movies"
           :key="movie.id"
@@ -477,6 +603,8 @@ onMounted(() => {
           :cover="movie.coverImage"
           :release-date="movie.releaseDate ? new Date(movie.releaseDate) : null"
           :is-r18="movie.isR18"
+          :actors="movie.actors?.map(actor => actor.name)"
+          :layout="viewMode"
           label-missing-cover="暂无封面"
         />
       </div>
@@ -629,5 +757,278 @@ onMounted(() => {
 .genre-count {
   font-size: 0.6875rem;
   opacity: 0.65;
+}
+
+.movie-library-hero {
+  margin: -0.5rem 0 2rem;
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.25rem 0 1.5rem;
+}
+
+.movie-library-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+  line-height: 1rem;
+  text-transform: uppercase;
+}
+
+.movie-library-brand {
+  color: hsl(var(--primary));
+}
+
+.movie-library-count {
+  border-left: 1px solid hsl(var(--border));
+  padding-left: 0.625rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.movie-library-hero-main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+}
+
+.movie-library-title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.08;
+}
+
+.movie-library-description {
+  margin: 0.5rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+.movie-library-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.movie-library-shortcut {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md);
+  background: hsl(var(--card) / 0.52);
+  padding: 0 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 650;
+  transition: border-color var(--ui-motion-fast) ease, background-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease, transform var(--ui-motion-fast) ease;
+}
+
+.movie-library-shortcut:hover {
+  border-color: hsl(var(--primary) / 0.55);
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
+  transform: translateY(-1px);
+}
+
+.movie-library-shortcut-label {
+  color: hsl(var(--foreground));
+}
+
+.movie-catalog-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.movie-catalog-heading .movie-library-kicker {
+  margin-bottom: 0.25rem;
+}
+
+.movie-catalog-title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: clamp(1.25rem, 2vw, 1.625rem);
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.movie-catalog-meta {
+  margin: 0.35rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.movie-view-switcher {
+  display: inline-flex;
+  gap: 0.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md);
+  background: hsl(var(--card) / 0.55);
+  padding: 0.25rem;
+}
+
+.movie-view-button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ui-radius-sm);
+  color: hsl(var(--muted-foreground));
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: background-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease;
+}
+
+.movie-view-button:hover,
+.movie-view-button.is-active {
+  background: hsl(var(--primary) / 0.14);
+  color: hsl(var(--primary));
+}
+
+.movie-catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.movie-search-field {
+  position: relative;
+  min-width: min(100%, 18rem);
+  flex: 1 1 20rem;
+}
+
+.movie-search-field .ui-public-input {
+  width: 100%;
+  padding-left: 2.25rem;
+}
+
+.movie-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 0.75rem;
+  z-index: 1;
+  width: 1rem;
+  height: 1rem;
+  transform: translateY(-50%);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+
+.movie-sort-select {
+  flex: 0 1 11rem;
+}
+
+.movie-sort-order {
+  display: inline-flex;
+  min-height: var(--ui-control-height-md);
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md);
+  background: hsl(var(--card) / 0.55);
+  padding: 0 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 650;
+  transition: border-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease, background-color var(--ui-motion-fast) ease;
+}
+
+.movie-sort-order:hover {
+  border-color: hsl(var(--primary) / 0.55);
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
+}
+
+.movie-clear-button {
+  margin-left: auto;
+}
+
+.movie-genre-panel {
+  border-top: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.75rem 0;
+}
+
+.movie-genre-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.625rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.movie-genre-more {
+  color: hsl(var(--primary));
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.movie-genre-more:hover {
+  text-decoration: underline;
+}
+
+.movie-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ui-space-5) var(--ui-space-4);
+}
+
+.movie-results.is-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .movie-results:not(.is-list) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .movie-results:not(.is-list) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .movie-results:not(.is-list) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .movie-library-hero-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .movie-library-shortcuts {
+    justify-content: flex-start;
+  }
+
+  .movie-clear-button {
+    margin-left: 0;
+  }
 }
 </style>
