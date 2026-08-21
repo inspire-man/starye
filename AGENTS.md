@@ -84,3 +84,4 @@ This project is indexed by GitNexus as **starye** (21971 symbols, 31497 relation
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
