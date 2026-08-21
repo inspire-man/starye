@@ -1259,4 +1259,3 @@ adminMovies.put(
 )
 
 export const adminMoviesRoutes = adminMovies
-
