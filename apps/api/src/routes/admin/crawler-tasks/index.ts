@@ -1,5 +1,5 @@
 import type { AvailabilityCurrentProjection, AvailabilityObservation } from '../../../domain/crawler-tasks/availability-contract'
-import type { CrawlerTaskTemplateKey, ProviderName } from '../../../domain/crawler-tasks/types'
+import type { CrawlerTaskOperation, CrawlerTaskTemplateKey, ProviderName } from '../../../domain/crawler-tasks/types'
 import type { SourceReadinessProjection } from '../../../domain/movies/source-contract'
 import type { PlaybackEvidenceSummary } from '../../../domain/playback-evidence/types'
 import type { GitHubActionsClient } from '../../../lib/github-app/github-actions-client'
@@ -19,6 +19,7 @@ import { createGitHubActionsClient } from '../../../lib/github-app/github-action
 import { canAccessCrawler } from '../../../lib/permissions'
 import { createAuditLog } from '../../../middleware/audit-logger'
 import {
+  ChapterAvailabilityCommandSchema,
   CrawlerTaskAuditQuerySchema,
   CrawlerTaskIdParamsSchema,
   CrawlerTaskLogsQuerySchema,
@@ -148,7 +149,7 @@ async function dispatchCreatedRun(
 }
 
 interface TaskAccessRow {
-  operation?: 'movie' | 'manga' | 'repair_players' | 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
+  operation?: CrawlerTaskOperation
   request_snapshot_json?: string
   template_key: CrawlerTaskTemplateKey
 }
@@ -1460,6 +1461,117 @@ async function withPlaybackEvidence(
   }
 }
 
+function boundedChapterJson(value: unknown, fallback: unknown): unknown {
+  if (typeof value !== 'string')
+    return value ?? fallback
+  if (value.length > 32_768)
+    return fallback
+  try {
+    return JSON.parse(value)
+  }
+  catch {
+    return fallback
+  }
+}
+
+async function withChapterAvailability(c: any, detail: Record<string, unknown>, taskAccess?: TaskAccessRow): Promise<Record<string, unknown>> {
+  if (taskAccess?.template_key !== 'manga'
+    || (taskAccess.operation !== 'check_comic_chapters'
+      && taskAccess.operation !== 'recheck_comic_chapters'
+      && taskAccess.operation !== 'repair_comic_chapters'
+      && taskAccess.operation !== 'check_chapter_pages'
+      && taskAccess.operation !== 'recheck_chapter_pages'
+      && taskAccess.operation !== 'repair_chapter_pages')) {
+    return detail
+  }
+  let parsed: ReturnType<typeof readCrawlerTaskSnapshot>
+  try {
+    parsed = readCrawlerTaskSnapshot(JSON.parse(taskAccess.request_snapshot_json ?? ''), taskAccess.operation)
+  }
+  catch {
+    return detail
+  }
+  if (!parsed.ok || !('comicId' in parsed.snapshot))
+    return detail
+  const d1 = getD1(c)
+  if (parsed.snapshot.operation === 'check_comic_chapters'
+    || parsed.snapshot.operation === 'recheck_comic_chapters'
+    || parsed.snapshot.operation === 'repair_comic_chapters') {
+    const [current, history] = await Promise.all([
+      d1.prepare(`
+        SELECT source_revision, status, reason_code, counts_json, findings_json,
+          observation_identity, projection_version, observed_at
+        FROM chapter_completeness_current
+        WHERE comic_id = ? LIMIT 1
+      `).bind(parsed.snapshot.comicId).all<Record<string, unknown>>(),
+      d1.prepare(`
+        SELECT source_revision, terminal_state, source_count, row_count,
+          snapshot_identity, observed_at
+        FROM comic_chapter_source_snapshot
+        WHERE comic_id = ?
+        ORDER BY source_revision DESC
+        LIMIT 20
+      `).bind(parsed.snapshot.comicId).all<Record<string, unknown>>(),
+    ])
+    const row = current.results?.[0]
+    return {
+      ...detail,
+      chapterAvailability: {
+        comicId: parsed.snapshot.comicId,
+        current: row
+          ? {
+              counts: boundedChapterJson(row.counts_json, {}),
+              findings: boundedChapterJson(row.findings_json, []),
+              observationIdentity: row.observation_identity,
+              projectionVersion: row.projection_version,
+              reasonCode: row.reason_code,
+              sourceRevision: row.source_revision,
+              status: row.status,
+              terminalState: row.status,
+            }
+          : null,
+        history: history.results ?? [],
+        storedCount: Number((boundedChapterJson(row?.counts_json, {}) as Record<string, unknown>).storedCount ?? 0),
+      },
+    }
+  }
+
+  if (!('chapterId' in parsed.snapshot))
+    return detail
+  const current = await d1.prepare(`
+    SELECT source_revision, policy_version, status, expected_page_count,
+      stored_page_count, available_page_count, unavailable_page_count,
+      unknown_page_count, findings_json, samples_json, observation_identity,
+      projection_version, observed_at
+    FROM chapter_page_availability_current
+    WHERE chapter_id = ? LIMIT 1
+  `).bind(parsed.snapshot.chapterId).all<Record<string, unknown>>()
+  const row = current.results?.[0]
+  return {
+    ...detail,
+    chapterAvailability: {
+      chapterId: parsed.snapshot.chapterId,
+      comicCurrent: null,
+      pageCurrent: row
+        ? {
+            availablePageCount: row.available_page_count,
+            expectedPageCount: row.expected_page_count,
+            findingsJson: boundedChapterJson(row.findings_json, []),
+            observationIdentity: row.observation_identity,
+            policyVersion: row.policy_version,
+            projectionVersion: row.projection_version,
+            samplesJson: boundedChapterJson(row.samples_json, []),
+            sourceRevision: row.source_revision,
+            status: row.status,
+            storedPageCount: row.stored_page_count,
+            unknownPageCount: row.unknown_page_count,
+            unavailablePageCount: row.unavailable_page_count,
+          }
+        : null,
+    },
+  }
+}
+
 async function readCurrentAttemptNumber(c: any, taskId: string, runId: string): Promise<number> {
   const result = await getD1(c).prepare(`
     SELECT attempt_number
@@ -1735,6 +1847,101 @@ adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvail
   })
 })
 
+adminCrawlerTasksRoutes.post('/chapter-availability', validator('json', ChapterAvailabilityCommandSchema), async (c) => {
+  const user = await requireSessionUser(c)
+  requireTemplateAccess(user, 'manga')
+  const command = c.req.valid('json')
+  const isPageCommand = 'chapterId' in command
+  const policyVersion = isPageCommand ? 'chapter-page-probe/v1' : 'chapter-completeness/v1'
+  const operation = command.operation
+  const comic = await getD1(c).prepare(`
+    SELECT id
+    FROM comic
+    WHERE id = ?
+    LIMIT 1
+  `).bind(command.comicId).all<{ id: string }>()
+  if (!comic.results?.[0])
+    throw new HTTPException(404, { message: 'Comic not found' })
+
+  let sourceRevision: number
+  if (isPageCommand) {
+    const chapter = await getD1(c).prepare(`
+      SELECT chapter.id, chapter.comic_id, COALESCE(completeness.source_revision, 0) AS source_revision
+      FROM chapter
+      LEFT JOIN chapter_completeness_current AS completeness ON completeness.comic_id = chapter.comic_id
+      WHERE chapter.id = ? AND chapter.comic_id = ?
+      LIMIT 1
+    `).bind(command.chapterId, command.comicId).all<{ id: string, comic_id: string, source_revision: number }>()
+    if (!chapter.results?.[0])
+      throw new HTTPException(404, { message: 'Chapter not found for comic' })
+    sourceRevision = Number(chapter.results[0].source_revision ?? 0)
+  }
+  else {
+    const current = await getD1(c).prepare(`
+      SELECT source_revision
+      FROM chapter_completeness_current
+      WHERE comic_id = ?
+      LIMIT 1
+    `).bind(command.comicId).all<{ source_revision: number | null }>()
+    sourceRevision = Number(current.results?.[0]?.source_revision ?? 0)
+  }
+
+  const intent = isPageCommand
+    ? {
+        chapterId: command.chapterId,
+        ...(command.chapterUrl ? { chapterUrl: command.chapterUrl } : {}),
+        comicId: command.comicId,
+        finding: command.finding,
+        kind: operation,
+        ...(command.pageIdentities ? { pageIdentities: command.pageIdentities } : {}),
+        ...(command.pageNumbers ? { pageNumbers: command.pageNumbers } : {}),
+        policyVersion,
+        sourceRevision,
+      }
+    : {
+        ...(command.chapterIds ? { chapterIds: command.chapterIds } : {}),
+        ...(command.chapterUrl ? { chapterUrl: command.chapterUrl } : {}),
+        comicId: command.comicId,
+        finding: command.finding,
+        kind: operation,
+        policyVersion,
+        sourceRevision,
+      }
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const result = await repository.createOrGetActiveRun({
+    operationCommand: {
+      actor: { id: user.id, kind: 'admin' },
+      idempotencyKey: command.idempotencyKey,
+      intent,
+      operation,
+      policyReference: policyVersion === 'chapter-page-probe/v1' ? 'availability/chapter-pages' : 'availability/chapter-completeness',
+      policyVersion,
+      target: { id: command.comicId, kind: 'manga' },
+    },
+    requestedByUserId: user.id,
+    templateKey: 'manga',
+  })
+  if (result.kind === 'conflict')
+    throw new HTTPException(409, { message: 'Chapter availability command conflicts with an existing identity' })
+  const dispatch = result.kind === 'created'
+    ? await dispatchCreatedRun(c, repository, { attempt: result.run.attemptNumber, runId: result.run.id, template: 'manga' }, {
+        localProofRequested: c.env?.CRAWLER_LOCAL_PROOF_ENABLED === 'true',
+      })
+    : { kind: 'existing_active_run' }
+  return c.json({
+    binding: {
+      comicId: command.comicId,
+      ...(isPageCommand ? { chapterId: command.chapterId } : {}),
+      operation,
+      policyVersion,
+      sourceRevision,
+    },
+    dispatch,
+    kind: result.kind,
+    run: result.run,
+  })
+})
+
 adminCrawlerTasksRoutes.get('/', validator('query', ListCrawlerTasksQuerySchema), async (c) => {
   const user = await requireSessionUser(c)
   const { cursor, lifecycle, limit, template } = c.req.valid('query')
@@ -1833,7 +2040,20 @@ adminCrawlerTasksRoutes.post('/:taskId/supersede', validator('param', CrawlerTas
   requireTemplateAccess(user, template)
   if (command.operation === 'repair_players' && command.intent.kind !== 'repair_players')
     throw new HTTPException(400, { message: 'Repair supersede requires repair intent' })
-  if (command.operation !== 'repair_players' && command.intent.kind !== 'crawl')
+  const chapterOperation = command.operation === 'check_comic_chapters'
+    || command.operation === 'recheck_comic_chapters'
+    || command.operation === 'repair_comic_chapters'
+    || command.operation === 'check_chapter_pages'
+    || command.operation === 'recheck_chapter_pages'
+    || command.operation === 'repair_chapter_pages'
+  const videoOperation = command.operation === 'check_video_source'
+    || command.operation === 'recheck_video_source'
+    || command.operation === 'repair_video_source'
+  if (chapterOperation && command.intent.kind !== command.operation)
+    throw new HTTPException(400, { message: 'Chapter supersede requires matching chapter intent' })
+  if (videoOperation && command.intent.kind !== command.operation)
+    throw new HTTPException(400, { message: 'Video supersede requires matching video intent' })
+  if (command.operation !== 'repair_players' && !chapterOperation && !videoOperation && command.intent.kind !== 'crawl')
     throw new HTTPException(400, { message: 'Crawler supersede requires crawl intent' })
 
   const repository = createCrawlerTaskRepository(c.get('db'))
@@ -1928,14 +2148,16 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
       movie: { code: movie.code, id: movie.id, title: movie.title },
       taskId,
     })
-    return c.json(await withPlaybackEvidence(c, taskId, detail, detail.currentAttempt?.id ?? null, taskAccess))
+    const projected = await withPlaybackEvidence(c, taskId, detail, detail.currentAttempt?.id ?? null, taskAccess)
+    return c.json(await withChapterAvailability(c, projected, taskAccess))
   }
   const repository = createCrawlerTaskRepository(c.get('db'))
   if (repository.getTaskDetail) {
     const detail = await repository.getTaskDetail(taskId)
     if (detail) {
       const currentRunId = readCurrentRunId(detail.task, detail.runs)
-      return c.json(await withPlaybackEvidence(c, taskId, projectTaskDetail(detail), currentRunId, taskAccess))
+      const projected = await withPlaybackEvidence(c, taskId, projectTaskDetail(detail), currentRunId, taskAccess)
+      return c.json(await withChapterAvailability(c, projected, taskAccess))
     }
   }
   const d1 = getD1(c)
@@ -1944,10 +2166,11 @@ adminCrawlerTasksRoutes.get('/:taskId', validator('param', CrawlerTaskIdParamsSc
     d1.prepare('SELECT id, attempt_number, status, state_version, failure_code, receipt_summary_json, receipt_schema_version, receipt_primary_content_id, receipt_source_revision, created_at, terminal_at FROM crawler_run WHERE task_id = ? ORDER BY attempt_number DESC').bind(taskId).all<Record<string, unknown>>(),
   ])
   const currentRunId = typeof task.results?.[0]?.latest_run_id === 'string' ? task.results[0].latest_run_id as string : null
-  return c.json(await withPlaybackEvidence(c, taskId, {
+  const projected = await withPlaybackEvidence(c, taskId, {
     runs: (runs.results ?? []).map(projectRun),
     task: task.results?.[0],
-  }, currentRunId, taskAccess))
+  }, currentRunId, taskAccess)
+  return c.json(await withChapterAvailability(c, projected, taskAccess))
 })
 
 adminCrawlerTasksRoutes.get('/:taskId/runs/:runId/logs', validator('param', CrawlerTaskRunParamsSchema), validator('query', CrawlerTaskLogsQuerySchema), async (c) => {

@@ -1,6 +1,6 @@
 import type { SQL } from 'drizzle-orm'
 import type { AppEnv } from '../../../types'
-import { chapters, comics } from '@starye/db/schema'
+import { chapterPageAvailabilityCurrent, chapters, comics } from '@starye/db/schema'
 import { and, count, desc, eq, like, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
@@ -295,6 +295,12 @@ export const publicComicsRoutes = new Hono<AppEnv>()
           return c.json({ success: false, error: '章节不存在' }, 404)
         }
 
+        const pageAvailability = db.query.chapterPageAvailabilityCurrent?.findFirst
+          ? await db.query.chapterPageAvailabilityCurrent.findFirst({
+              where: eq(chapterPageAvailabilityCurrent.chapterId, chapter.id),
+            })
+          : undefined
+
         return c.json({
           success: true,
           data: {
@@ -302,6 +308,22 @@ export const publicComicsRoutes = new Hono<AppEnv>()
             title: chapter.title,
             chapterNumber: chapter.chapterNumber,
             images: chapter.pages.map(p => p.imageUrl),
+            pageAvailability: pageAvailability
+              ? {
+                  availablePageCount: pageAvailability.availablePageCount,
+                  expectedPageCount: pageAvailability.expectedPageCount,
+                  projectionVersion: pageAvailability.projectionVersion,
+                  policyVersion: pageAvailability.policyVersion,
+                  sourceRevision: pageAvailability.sourceRevision,
+                  status: pageAvailability.status,
+                  storedPageCount: pageAvailability.storedPageCount,
+                  unknownPageCount: pageAvailability.unknownPageCount,
+                  unavailablePageCount: pageAvailability.unavailablePageCount,
+                  observedAt: pageAvailability.observedAt,
+                  findings: pageAvailability.findingsJson,
+                  samples: pageAvailability.samplesJson,
+                }
+              : null,
           },
         })
       }

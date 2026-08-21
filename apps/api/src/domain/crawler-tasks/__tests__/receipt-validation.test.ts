@@ -12,6 +12,11 @@ interface Row {
   crawled_chapters?: number | null
 }
 
+interface ChapterCurrentRow {
+  chapter_id: string
+  source_revision: number
+}
+
 interface PlayerRow {
   movie_id: string
   source_url: string | null
@@ -43,10 +48,11 @@ class Statement {
   private values: unknown[] = []
 
   constructor(
-    private readonly table: 'movie' | 'comic' | 'player' | 'movie_source_state',
+    private readonly table: 'movie' | 'comic' | 'player' | 'movie_source_state' | 'chapter_page_availability_current' | 'chapter_completeness_current',
     private readonly rows: Row[],
     private readonly players: PlayerRow[],
     private readonly sourceStates: SourceStateRow[],
+    private readonly chapterCurrent: ChapterCurrentRow[],
   ) {}
 
   bind(...values: unknown[]) {
@@ -66,6 +72,11 @@ class Statement {
         results: this.sourceStates.filter(row => identifiers.includes(row.movie_id)) as T[],
       }
     }
+    if (this.table === 'chapter_page_availability_current' || this.table === 'chapter_completeness_current') {
+      return {
+        results: this.chapterCurrent.filter(row => identifiers.includes(row.chapter_id)) as T[],
+      }
+    }
     const matched = this.rows.filter((row) => {
       const identity = this.table === 'movie' ? [row.id, row.code] : [row.id, row.slug]
       return identity.some(value => value && identifiers.includes(value))
@@ -80,6 +91,7 @@ function database(options: {
   players?: PlayerRow[]
   sourceStates?: SourceStateRow[]
   observations?: ObservationRow[]
+  chapterCurrent?: ChapterCurrentRow[]
 }) {
   const rows = options
   return {
@@ -87,12 +99,16 @@ function database(options: {
       prepare(query: string) {
         const table = query.includes('FROM movie_source_state')
           ? 'movie_source_state'
-          : query.includes('FROM player')
-            ? 'player'
-            : query.includes('FROM movie')
-              ? 'movie'
-              : 'comic'
-        return new Statement(table, rows[table] ?? [], rows.players ?? [], rows.sourceStates ?? [])
+          : query.includes('FROM chapter_page_availability_current')
+            ? 'chapter_page_availability_current'
+            : query.includes('FROM chapter_completeness_current')
+              ? 'chapter_completeness_current'
+              : query.includes('FROM player')
+                ? 'player'
+                : query.includes('FROM movie')
+                  ? 'movie'
+                  : 'comic'
+        return new Statement(table, rows[table as keyof typeof rows] as Row[] ?? [], rows.players ?? [], rows.sourceStates ?? [], rows.chapterCurrent ?? [])
       },
     },
     query: {
@@ -296,6 +312,39 @@ describe('validateReceiptCandidate', () => {
         primaryContentId: 'comic-1',
         templateKey: 'manga',
         updatedCount: 3,
+      },
+    })
+  })
+
+  it('accepts a chapter page receipt only after same-revision page current readback', async () => {
+    const snapshot = createCrawlerTaskSnapshot({
+      chapterId: 'comic-1-chapter-1',
+      comicId: 'comic-1',
+      finding: 'missing_page',
+      operation: 'check_chapter_pages',
+      policyVersion: 'chapter-page-probe/v1',
+      sourceRevision: 4,
+    })
+    const result = await validateReceiptCandidate({
+      candidate: {
+        contentIds: ['comic-1'],
+        templateKey: 'manga',
+      },
+      database: database({
+        chapterCurrent: [{ chapter_id: 'comic-1-chapter-1', source_revision: 4 }],
+      }),
+      snapshot,
+      templateKey: 'manga',
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      receipt: {
+        createdCount: 0,
+        primaryContentId: 'comic-1',
+        receiptSchemaVersion: 2,
+        templateKey: 'manga',
+        updatedCount: 1,
       },
     })
   })

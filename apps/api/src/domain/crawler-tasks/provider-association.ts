@@ -167,13 +167,13 @@ export function createProviderSnapshot(templateKey: unknown): ProviderSnapshot {
 }
 
 export function createLocalProofProviderSnapshot(templateKey: unknown): ProviderSnapshot {
-  if (templateKey !== 'movie')
+  if (templateKey !== 'movie' && templateKey !== 'manga')
     throw new Error('local_proof_template_invalid')
   return Object.freeze({
     ...localProofProviderRegistry,
-    crawlerEntrypoint: 'crawler-optimized',
-    proofProfile: LOCAL_PROOF_PROFILE,
-    templateKey: 'movie',
+    crawlerEntrypoint: templateKey === 'movie' ? 'crawler-optimized' : 'crawler-comic',
+    ...(templateKey === 'movie' ? { proofProfile: LOCAL_PROOF_PROFILE } : {}),
+    templateKey,
   })
 }
 

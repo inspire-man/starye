@@ -63,7 +63,39 @@ const RepairCrawlerRunSnapshotSchema = v.strictObject({
   templateVersion: v.literal(1),
 })
 
+const ComicChapterCrawlerRunSnapshotSchema = v.strictObject({
+  chapterIds: v.optional(v.pipe(v.array(Identifier), v.minLength(1), v.maxLength(200))),
+  chapterUrl: v.optional(v.pipe(v.string(), v.url(), v.maxLength(1024))),
+  comicId: Identifier,
+  entrypoint: v.literal('manga-crawler'),
+  finding: v.picklist(['missing', 'duplicate', 'extra', 'order', 'sequence_gap', 'source_unavailable', 'source_partial', 'source_inconclusive']),
+  operation: v.picklist(['check_comic_chapters', 'recheck_comic_chapters', 'repair_comic_chapters']),
+  permissionResource: v.literal('comic'),
+  policyVersion: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  sourceRevision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  templateKey: v.literal('manga'),
+  templateVersion: v.literal(1),
+})
+
+const ChapterPageCrawlerRunSnapshotSchema = v.strictObject({
+  chapterId: Identifier,
+  chapterUrl: v.optional(v.pipe(v.string(), v.url(), v.maxLength(1024))),
+  comicId: Identifier,
+  entrypoint: v.literal('manga-crawler'),
+  finding: v.picklist(['missing_page', 'duplicate_page_number', 'page_order', 'url_invalid', 'http_failure', 'redirect', 'challenge_html', 'content_type_invalid', 'content_type_missing', 'timeout', 'probe_failed', 'unknown']),
+  operation: v.picklist(['check_chapter_pages', 'recheck_chapter_pages', 'repair_chapter_pages']),
+  pageIdentities: v.optional(v.pipe(v.array(Identifier), v.minLength(1), v.maxLength(200))),
+  pageNumbers: v.optional(v.pipe(v.array(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(10_000))), v.minLength(1), v.maxLength(200))),
+  permissionResource: v.literal('comic'),
+  policyVersion: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  sourceRevision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  templateKey: v.literal('manga'),
+  templateVersion: v.literal(1),
+})
+
 export const CrawlerRunSnapshotSchema = v.union([
+  ChapterPageCrawlerRunSnapshotSchema,
+  ComicChapterCrawlerRunSnapshotSchema,
   OrdinaryCrawlerRunSnapshotSchema,
   RepairCrawlerRunSnapshotSchema,
 ])
@@ -239,6 +271,47 @@ export const CrawlerAvailabilityObservationEventSchema = v.strictObject({
   task_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
   timestamp: v.pipe(v.number(), v.integer()),
   type: v.literal('availability_observation'),
+})
+
+export const CrawlerChapterCompletenessObservationEventSchema = v.strictObject({
+  attempt: Attempt,
+  comic_id: Identifier,
+  event_id: Identifier,
+  expected_projection_version: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000_000)),
+  key_id: Identifier,
+  nonce: Identifier,
+  operation: v.picklist(['check_comic_chapters', 'recheck_comic_chapters', 'repair_comic_chapters']),
+  policy_reference: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
+  policy_version: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  provider: v.picklist(['github-actions', 'local-proof']),
+  run_id: Identifier,
+  sequence: Sequence,
+  source_revision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  task_id: Identifier,
+  timestamp: Timestamp,
+  type: v.literal('chapter_completeness_observation'),
+})
+
+export const CrawlerChapterPageObservationEventSchema = v.strictObject({
+  attempt: Attempt,
+  chapter_id: Identifier,
+  comic_id: Identifier,
+  event_id: Identifier,
+  expected_projection_version: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000_000)),
+  key_id: Identifier,
+  nonce: Identifier,
+  operation: v.picklist(['check_chapter_pages', 'recheck_chapter_pages', 'repair_chapter_pages']),
+  page_identities: v.optional(v.pipe(v.array(Identifier), v.minLength(1), v.maxLength(200))),
+  page_numbers: v.optional(v.pipe(v.array(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(10_000))), v.minLength(1), v.maxLength(200))),
+  policy_reference: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
+  policy_version: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  provider: v.picklist(['github-actions', 'local-proof']),
+  run_id: Identifier,
+  sequence: Sequence,
+  source_revision: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  task_id: Identifier,
+  timestamp: Timestamp,
+  type: v.literal('chapter_page_observation'),
 })
 
 export const CrawlerRunEventSchema = v.union([

@@ -31,6 +31,7 @@ export const MangaInfoSchema = v.object({
   sourceUrl: v.optional(v.pipe(v.string(), v.url())),
   region: v.optional(v.string()),
   genres: v.optional(v.array(v.string())),
+  sourceTerminalState: v.optional(v.picklist(['complete', 'partial', 'unavailable', 'inconclusive'])),
   chapters: v.array(ChapterSchema),
 })
 

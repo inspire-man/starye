@@ -26,6 +26,7 @@ import { createDataChainFixture, runDataChainFixture } from '../src/smoke/data-c
 import { JavDBImageStrategy } from '../src/strategies/javdb-image'
 import { JAVHK_BASE_URL, JAVHK_LOCALE, JavHkStrategy } from '../src/strategies/javhk'
 import { createActionsEventClientFromEnvironment } from '../src/task-runner/actions-event-client'
+import { createChapterAvailabilityAdapter } from '../src/task-runner/chapter-availability-adapter'
 import { createMangaAdapter } from '../src/task-runner/manga-adapter'
 import { createMovieAdapter } from '../src/task-runner/movie-adapter'
 import { createRepairPlayersAdapter } from '../src/task-runner/repair-adapter'
@@ -622,6 +623,7 @@ async function runClaimedProductionCrawlerMutation(
   const adapters = createTemplateAdapterRegistry([
     createMovieAdapter({ ...GITHUB_ACTIONS_CONFIG, ...config } as JavBusCrawlerConfig, dependencies.executeMovie),
     createMangaAdapter(config, dependencies.executeManga),
+    { ...createChapterAvailabilityAdapter(), operation: 'chapter_availability' as const },
     repairAdapter,
     ...createServerVideoAvailabilityAdapters((dependencies.videoAvailabilityConfig ?? productionVideoAvailabilityConfig)(environment, candidate)),
   ])

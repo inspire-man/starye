@@ -142,9 +142,9 @@ Plans:
 
 Plans:
 
-- [ ] 27-01-PLAN.md — source chapter snapshot schema、章节 identity/ordinal normalization 和 terminal contract
-- [ ] 27-02-PLAN.md — missing/duplicate/order/sequence comparison、bounded finding projection 和状态读回
-- [ ] 27-03-PLAN.md — targeted chapter recrawl、空结果/非回归保护、receipt 和 Dashboard 演示
+- [x] 27-01-PLAN.md — source chapter snapshot schema、章节 identity/ordinal normalization 和 terminal contract
+- [x] 27-02-PLAN.md — missing/duplicate/order/sequence comparison、bounded finding projection 和状态读回
+- [x] 27-03-PLAN.md — targeted chapter recrawl、空结果/非回归保护、receipt 和 Dashboard 演示
 
 ### Phase 28: Chapter Image Availability And Gateway Acceptance
 
@@ -162,10 +162,10 @@ Plans:
 
 Plans:
 
-- [ ] 28-01-PLAN.md — page identity/count/order contract、URL guard 和 bounded image probe adapters
-- [ ] 28-02-PLAN.md — per-page observation、failure sample、chapter projection 和 cache freshness
-- [ ] 28-03-PLAN.md — targeted page/chapter repair、Reader readback 和 Dashboard availability surface
-- [ ] 28-04-PLAN.md — canonical Gateway fresh tuple、证据脱敏审计和全链路验收
+- [x] 28-01-PLAN.md — page identity/count/order contract、URL guard 和 bounded image probe adapters
+- [x] 28-02-PLAN.md — per-page observation、failure sample、chapter projection 和 cache freshness
+- [x] 28-03-PLAN.md — targeted page/chapter repair、Reader readback 和 Dashboard availability surface
+- [x] 28-04-PLAN.md — canonical Gateway fresh tuple、证据脱敏审计和全链路验收
 
 ## Progress
 
@@ -180,5 +180,5 @@ Plans:
 | 24. Fresh Production Dashboard -> Viewer -> Playback Proof | v1.4 | 5/5 | Complete | 2026-08-10 |
 | 25. Task Operations And Availability Contract | v1.5 | 6/6 | Complete    | 2026-08-11 |
 | 26. Video Source And Magnet Availability | v1.5 | 10/10 | Complete    | 2026-08-20 |
-| 27. Comic Chapter Completeness | v1.5 | 0/3 | Not started | - |
-| 28. Chapter Image Availability And Gateway Acceptance | v1.5 | 0/4 | Not started | - |
+| 27. Comic Chapter Completeness | v1.5 | 3/3 | Complete | 2026-08-22 |
+| 28. Chapter Image Availability And Gateway Acceptance | v1.5 | 4/4 | Complete | 2026-08-22 |

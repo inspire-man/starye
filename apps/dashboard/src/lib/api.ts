@@ -51,6 +51,7 @@ export interface Chapter {
   sortOrder: number
   sourcePageCount?: number | null
   pages?: { id: string, imageUrl: string, pageNumber: number }[]
+  sourceUrl?: string | null
 }
 
 export interface Movie {
@@ -196,7 +197,7 @@ export interface Paginated<T> {
 }
 
 export type CrawlerTaskTemplate = 'movie' | 'manga'
-export type CrawlerTaskOperation = CrawlerTaskTemplate | 'repair_players' | 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
+export type CrawlerTaskOperation = CrawlerTaskTemplate | 'repair_players' | 'check_video_source' | 'recheck_video_source' | 'repair_video_source' | 'check_comic_chapters' | 'recheck_comic_chapters' | 'repair_comic_chapters' | 'check_chapter_pages' | 'recheck_chapter_pages' | 'repair_chapter_pages'
 export type CrawlerRunStatus = 'queued' | 'dispatching' | 'running' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled'
 export type CrawlerSourceDisposition = 'ready' | 'no_source' | 'source_failed' | 'repairing'
 export type CrawlerSourceReasonCode = 'no_eligible_source' | 'repair_requested' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
@@ -228,6 +229,69 @@ export type CrawlerAvailabilityReasonCode = 'available' | 'no_source' | 'source_
 export type CrawlerAvailabilityOutcome = 'accepted' | 'duplicate' | 'stale' | 'late' | 'conflict' | 'rejected'
 export type CrawlerVideoAvailabilityReason = 'no_source' | 'source_failed' | 'stale' | 'direct_blocked' | 'direct_transport_failed' | 'direct_content_invalid' | 'browser_inconclusive' | 'metadata_unresolved' | 'no_peer' | 'stalled' | 'stream_missing' | 'stream_failed' | 'playback_unverified' | 'playback_failed'
 export type CrawlerVideoAvailabilitySourceKind = 'direct' | 'magnet'
+
+export type CrawlerChapterCompletenessFinding = 'missing' | 'duplicate' | 'extra' | 'order' | 'sequence_gap' | 'source_unavailable' | 'source_partial' | 'source_inconclusive'
+export type CrawlerChapterPageFinding = 'missing_page' | 'duplicate_page_number' | 'page_order' | 'url_invalid' | 'http_failure' | 'redirect' | 'challenge_html' | 'content_type_invalid' | 'content_type_missing' | 'timeout' | 'probe_failed' | 'unknown'
+
+export interface CrawlerChapterCompletenessProjection {
+  comicId: string
+  current: {
+    counts: Record<string, number>
+    findings: unknown[]
+    observationIdentity: string
+    projectionVersion?: number
+    reasonCode: string
+    sourceRevision: number
+    status: 'complete' | 'partial' | 'unavailable' | 'inconclusive'
+    terminalState: string
+  } | null
+  history: unknown[]
+  storedCount: number
+}
+
+export interface CrawlerChapterPageProjection {
+  chapterId: string
+  comicCurrent: CrawlerChapterCompletenessProjection['current']
+  pageCurrent: {
+    availablePageCount: number
+    expectedPageCount: number
+    findingsJson: unknown[]
+    observationIdentity: string
+    policyVersion: string
+    projectionVersion: number
+    samplesJson: unknown[]
+    sourceRevision: number
+    status: 'available' | 'unavailable' | 'degraded' | 'unknown'
+    storedPageCount: number
+    unknownPageCount: number
+    unavailablePageCount: number
+  } | null
+}
+
+export type CrawlerChapterAvailabilityCommand = {
+  chapterIds?: string[]
+  chapterUrl?: string
+  comicId: string
+  finding: CrawlerChapterCompletenessFinding
+  idempotencyKey: string
+  operation: 'check_comic_chapters' | 'recheck_comic_chapters' | 'repair_comic_chapters'
+} | {
+  chapterId: string
+  chapterUrl?: string
+  comicId: string
+  finding: CrawlerChapterPageFinding
+  idempotencyKey: string
+  operation: 'check_chapter_pages' | 'recheck_chapter_pages' | 'repair_chapter_pages'
+  pageIdentities?: string[]
+  pageNumbers?: number[]
+}
+
+export interface CrawlerChapterAvailabilityResponse {
+  binding: { chapterId?: string, comicId: string, operation: CrawlerTaskOperation, policyVersion: string, sourceRevision: number }
+  dispatch?: Record<string, unknown>
+  kind: 'created' | 'duplicate' | 'existing_active_run'
+  run: CrawlerRun
+}
 
 export interface CrawlerVideoAvailabilityCommand {
   idempotencyKey: string
@@ -695,6 +759,7 @@ export interface CrawlerTaskRunSummary {
 
 export interface CrawlerTaskDetail {
   availability?: CrawlerAvailabilityTaskProjection
+  chapterAvailability?: CrawlerChapterCompletenessProjection | CrawlerChapterPageProjection | null
   currentAttempt?: CrawlerRun | null
   history?: CrawlerRun[]
   lifecycle?: CrawlerTaskLifecycleProjection
@@ -775,7 +840,7 @@ export const api = {
 
     getComic: (id: string) => apiFetch<{ data: Comic }>(`/admin/comics/${encodeURIComponent(id)}`),
 
-    getChapters: (comicId: string) => apiFetch<Chapter[]>(`/admin/comics/${comicId}/chapters`),
+    getChapters: (comicId: string) => apiFetch<Chapter[]>(`/admin/chapters/comics/${encodeURIComponent(comicId)}/chapters`),
     getChapter: (id: string) => apiFetch<Chapter>(`/admin/chapters/${id}`),
     deleteChapter: (id: string) => apiFetch(`/admin/chapters/${id}`, { method: 'DELETE' }),
 
@@ -786,7 +851,7 @@ export const api = {
       }),
 
     bulkDeleteChapters: (comicId: string, chapterIds: string[]) =>
-      apiFetch(`/admin/comics/${comicId}/chapters/bulk-delete`, {
+      apiFetch(`/admin/chapters/comics/${encodeURIComponent(comicId)}/bulk-delete`, {
         method: 'POST',
         body: JSON.stringify({ chapterIds }),
       }),
@@ -947,6 +1012,18 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(command),
       }),
+
+    submitChapterAvailabilityCommand: (command: CrawlerChapterAvailabilityCommand) =>
+      apiFetch<CrawlerChapterAvailabilityResponse>('/admin/crawler-tasks/chapter-availability', {
+        method: 'POST',
+        body: JSON.stringify(command),
+      }),
+
+    getComicChapterCompleteness: (comicId: string) =>
+      apiFetch<CrawlerChapterCompletenessProjection>(`/admin/chapters/comics/${encodeURIComponent(comicId)}/completeness`),
+
+    getChapterCompleteness: (chapterId: string) =>
+      apiFetch<{ success: boolean, data: CrawlerChapterPageProjection }>(`/admin/chapters/${encodeURIComponent(chapterId)}/completeness`),
 
     listCrawlerTasks: (params?: { lifecycle?: CrawlerTaskLifecycleStatus, template?: CrawlerTaskTemplate, cursor?: string, limit?: number }) => {
       const query = new URLSearchParams()

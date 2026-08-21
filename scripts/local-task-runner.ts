@@ -3,6 +3,7 @@ import type { ServerVideoAvailabilityConfig } from '../packages/crawler/src/task
 import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { createChapterAvailabilityAdapter } from '../packages/crawler/src/task-runner/chapter-availability-adapter'
 import { createLocalProofAdapter } from '../packages/crawler/src/task-runner/local-proof-adapter'
 import { LocalTaskRunner } from '../packages/crawler/src/task-runner/local-runner'
 import { createMangaAdapter } from '../packages/crawler/src/task-runner/manga-adapter'
@@ -38,6 +39,7 @@ export function createLocalRunnerAdapterRegistry(config: LocalRunnerConfig) {
     createLocalProofAdapter(),
     createMovieAdapter(config.crawler.movie as never),
     createMangaAdapter(config.crawler.manga as never),
+    { ...createChapterAvailabilityAdapter(), operation: 'chapter_availability' as const },
     createRepairPlayersAdapter({ sources: config.crawler.repairPlayers?.sources }),
     ...createServerVideoAvailabilityAdapters(config.videoAvailability),
   ])

@@ -3,7 +3,7 @@ import type { SourceReadinessProjection } from '../movies/source-contract'
 import type { CrawlerOperationCommandInput } from './operation-registry'
 import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskLifecycleStatus, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskRunSummary, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderName, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
-import { buildCrawlerOperationSnapshot } from './operation-registry'
+import { buildCrawlerOperationSnapshot, readCrawlerOperationServerSnapshot } from './operation-registry'
 import { createLocalProofProviderSnapshot, createProviderAssociationSummary, createProviderSnapshot, LOCAL_PROOF_POLICY_REFERENCE, LOCAL_PROOF_POLICY_VERSION } from './provider-association'
 import { validateReceiptCandidate } from './receipt-validation'
 import { classifyCrawlerAutomaticRetry, crawlerTaskLifecycleReason, createActiveCrawlerTaskLifecycle, createManualRetryAttempt, decideCrawlerRunTransition, decideCrawlerTaskLifecycle, isTerminalCrawlerRunStatus } from './state-machine'
@@ -406,6 +406,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 interface DispatchSnapshotBinding {
+  readonly chapterId?: string
+  readonly chapterIds?: readonly string[]
+  readonly pageIdentities?: readonly string[]
+  readonly pageNumbers?: readonly number[]
   readonly operation: CrawlerTaskOperation
   readonly policyReference: string
   readonly policyVersion: string
@@ -431,7 +435,8 @@ function parseDispatchSnapshotBinding(raw: string, operation: CrawlerTaskOperati
       return undefined
     }
     const intent = isRecord(value.intent) ? value.intent : undefined
-    const sourceRevision = intent?.sourceRevision
+    const operationSnapshot = readCrawlerOperationServerSnapshot(value)
+    const sourceRevision = operationSnapshot?.intent.sourceRevision ?? intent?.sourceRevision
     return {
       operation,
       policyReference: value.policyReference.trim(),
@@ -442,6 +447,10 @@ function parseDispatchSnapshotBinding(raw: string, operation: CrawlerTaskOperati
         && sourceRevision <= 1_000_000
         ? sourceRevision
         : 0,
+      ...(typeof intent?.chapterId === 'string' ? { chapterId: intent.chapterId.trim() } : {}),
+      ...(Array.isArray(intent?.chapterIds) ? { chapterIds: intent.chapterIds.filter((item): item is string => typeof item === 'string').map(item => item.trim()) } : {}),
+      ...(Array.isArray(intent?.pageIdentities) ? { pageIdentities: intent.pageIdentities.filter((item): item is string => typeof item === 'string').map(item => item.trim()) } : {}),
+      ...(Array.isArray(intent?.pageNumbers) ? { pageNumbers: intent.pageNumbers.filter((item): item is number => typeof item === 'number') } : {}),
       target: { id: target.id.trim(), kind: target.kind },
     }
   }
@@ -451,6 +460,18 @@ function parseDispatchSnapshotBinding(raw: string, operation: CrawlerTaskOperati
 }
 
 function isLocalProofDispatchBinding(binding: DispatchSnapshotBinding): boolean {
+  if (binding.target.kind === 'manga') {
+    return (binding.operation === 'check_comic_chapters'
+      || binding.operation === 'recheck_comic_chapters'
+      || binding.operation === 'repair_comic_chapters'
+      || binding.operation === 'check_chapter_pages'
+      || binding.operation === 'recheck_chapter_pages'
+      || binding.operation === 'repair_chapter_pages')
+    && (binding.policyReference === 'availability/chapter-completeness'
+      || binding.policyReference === 'availability/chapter-pages')
+    && (binding.policyVersion === 'chapter-completeness/v1'
+      || binding.policyVersion === 'chapter-page-probe/v1')
+  }
   if (binding.target.kind !== 'movie')
     return false
   if (binding.operation === 'movie') {
@@ -923,6 +944,12 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         return {
           operation,
           target: { id: snapshot.movieId, kind: 'movie' },
+        }
+      }
+      if ('comicId' in snapshot) {
+        return {
+          operation,
+          target: { id: snapshot.comicId, kind: 'manga' },
         }
       }
     }
@@ -1560,15 +1587,32 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
         `).bind(binding.target.id, binding.target.id).all<{ content_id: string, source_revision: number }>()).results?.[0]
       : undefined
     const sourceRevision = movieBinding?.source_revision ?? binding?.sourceRevision
-    const contentId = movieBinding?.content_id
-    const currentProjection = row.provider === 'local-proof' && binding?.target && contentId
+    const contentId = movieBinding?.content_id ?? (binding?.target.kind === 'manga' ? binding.target.id : undefined)
+    const currentProjection = binding?.target.kind === 'movie' && contentId
       ? (await d1.prepare(`
           SELECT projection_version
           FROM crawler_availability_current
           WHERE target_kind = ? AND target_id = ? AND content_id = ?
           LIMIT 1
-        `).bind(binding.target.kind, binding.target.id, contentId).all<{ projection_version: number }>()).results?.[0]?.projection_version ?? 0
+          `).bind(binding.target.kind, binding.target.id, contentId).all<{ projection_version: number }>()).results?.[0]?.projection_version ?? 0
       : undefined
+    const chapterProjection = binding?.operation === 'check_comic_chapters'
+      || binding?.operation === 'recheck_comic_chapters'
+      || binding?.operation === 'repair_comic_chapters'
+      ? (await d1.prepare(`
+          SELECT projection_version
+          FROM chapter_completeness_current
+          WHERE comic_id = ?
+          LIMIT 1
+        `).bind(binding.target.id).all<{ projection_version: number }>()).results?.[0]?.projection_version ?? 0
+      : binding?.chapterId
+        ? (await d1.prepare(`
+            SELECT projection_version
+            FROM chapter_page_availability_current
+            WHERE chapter_id = ?
+            LIMIT 1
+          `).bind(binding.chapterId).all<{ projection_version: number }>()).results?.[0]?.projection_version ?? 0
+        : undefined
     return {
       attempt: row.attempt_number,
       ...(binding
@@ -1581,7 +1625,9 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
           }
         : { taskId: row.task_id }),
       ...(row.provider === 'local-proof' && contentId ? { contentId } : {}),
-      ...(row.provider === 'local-proof' && currentProjection !== undefined ? { expectedProjectionVersion: currentProjection } : {}),
+      ...((currentProjection !== undefined || chapterProjection !== undefined)
+        ? { expectedProjectionVersion: currentProjection ?? chapterProjection ?? 0 }
+        : {}),
       provider: row.provider,
       ...(row.provider === 'local-proof'
         && binding?.operation === 'movie'
@@ -1787,12 +1833,19 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       if (!binding || !isLocalProofDispatchBinding(binding)) {
         return undefined
       }
-      const target = await d1.prepare(`
-        SELECT movie.id
-        FROM movie
-        WHERE movie.id = ? OR movie.code = ?
-        LIMIT 1
-      `).bind(binding.target.id, binding.target.id).all<{ id: string }>()
+      const target = binding.target.kind === 'movie'
+        ? await d1.prepare(`
+            SELECT movie.id
+            FROM movie
+            WHERE movie.id = ? OR movie.code = ?
+            LIMIT 1
+          `).bind(binding.target.id, binding.target.id).all<{ id: string }>()
+        : await d1.prepare(`
+            SELECT comic.id
+            FROM comic
+            WHERE comic.id = ? OR comic.slug = ?
+            LIMIT 1
+          `).bind(binding.target.id, binding.target.id).all<{ id: string }>()
       if (!target.results?.[0]?.id)
         return undefined
     }

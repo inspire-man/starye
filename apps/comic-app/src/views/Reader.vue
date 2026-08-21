@@ -24,6 +24,7 @@ const readerPages = ref<ReaderPage[]>([])
 const chapterTitle = ref('')
 const currentPage = ref(0)
 const totalPages = ref(0)
+const pageAvailability = ref<NonNullable<import('../types').ChapterDetail['pageAvailability']> | null>(null)
 const scrollContainer = ref<HTMLElement | null>(null)
 
 let saveProgressTimer: number | null = null
@@ -108,6 +109,7 @@ async function fetchChapter() {
   readerPages.value = []
   chapterTitle.value = ''
   totalPages.value = 0
+  pageAvailability.value = null
   currentPage.value = 0
   chapterContentId.value = ''
 
@@ -121,6 +123,7 @@ async function fetchChapter() {
       chapterContentId.value = response.data.id
       chapterTitle.value = response.data.title
       readerPages.value = buildReaderPages(response.data.images)
+      pageAvailability.value = response.data.pageAvailability ?? null
       totalPages.value = readerPages.value.length
       currentPage.value = totalPages.value > 0 ? 1 : 0
 
@@ -366,6 +369,19 @@ onUnmounted(() => {
       @scroll="handleScroll"
     >
       <div class="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-20">
+        <div
+          v-if="pageAvailability && pageAvailability.status !== 'available'"
+          data-server-page-availability
+          class="reader-alert reader-alert-warning rounded-[var(--ui-radius-lg)] border p-4"
+        >
+          <p class="text-base font-medium">
+            服务端页面状态：{{ pageAvailability.status }}
+          </p>
+          <p class="reader-muted text-sm">
+            已确认 {{ pageAvailability.availablePageCount }} / {{ pageAvailability.expectedPageCount }} 页可用；浏览器实际加载结果会单独更新。
+          </p>
+        </div>
+
         <div
           v-if="chapterRenderState === 'partial_failed'"
           data-partial-failure

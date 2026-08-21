@@ -1,4 +1,8 @@
 import type {
+  ChapterPageFindingReason,
+  ChapterPageTaskOperation,
+  ComicChapterFindingReason,
+  ComicChapterTaskOperation,
   CrawlerPermissionResource,
   CrawlerTaskOperation,
   CrawlerTaskSnapshotUnion,
@@ -11,14 +15,15 @@ import type {
   VideoSourceTaskOperation,
 } from './types'
 import { createProviderSnapshot } from './provider-association'
-import { createCrawlerTaskSnapshot, getCrawlerTaskTemplate, isCrawlerTaskOperation, readCrawlerTaskSnapshot } from './template-registry'
+import { createCrawlerTaskSnapshot, getCrawlerTaskTemplate, isChapterPageFinding, isChapterPageOperation, isComicChapterFinding, isComicChapterOperation, isCrawlerTaskOperation, readCrawlerTaskSnapshot } from './template-registry'
 
 const MAX_ID_LENGTH = 128
 const MAX_POLICY_LENGTH = 128
 const MAX_REFERENCE_LENGTH = 256
 const MAX_JSON_BYTES = 16 * 1024
+const MAX_SELECTIONS = 200
 
-export const CRAWLER_OPERATION_INTENT_VALUES = ['crawl', 'repair_players', 'check_video_source', 'recheck_video_source', 'repair_video_source'] as const
+export const CRAWLER_OPERATION_INTENT_VALUES = ['crawl', 'repair_players', 'check_video_source', 'recheck_video_source', 'repair_video_source', 'check_comic_chapters', 'recheck_comic_chapters', 'repair_comic_chapters', 'check_chapter_pages', 'recheck_chapter_pages', 'repair_chapter_pages'] as const
 export type CrawlerOperationIntentKind = typeof CRAWLER_OPERATION_INTENT_VALUES[number]
 export type CrawlerOperationTargetKind = 'movie' | 'manga'
 
@@ -29,6 +34,13 @@ export interface CrawlerOperationTarget {
 
 export interface CrawlerOperationIntent {
   readonly kind: CrawlerOperationIntentKind
+  readonly chapterId?: string
+  readonly chapterIds?: readonly string[]
+  readonly chapterUrl?: string
+  readonly comicId?: string
+  readonly finding?: ComicChapterFindingReason | ChapterPageFindingReason
+  readonly pageIdentities?: readonly string[]
+  readonly pageNumbers?: readonly number[]
   readonly reason?: RepairPlayersReason | VideoSourceFindingReason
   readonly sourceKind?: VideoSourceKind
   readonly sourceRevision?: number
@@ -123,6 +135,48 @@ const operationRegistry: CrawlerOperationRegistry = Object.freeze({
     template: Object.freeze(getCrawlerTaskTemplate('movie')),
     provider: createProviderSnapshot('movie'),
   }),
+  check_comic_chapters: Object.freeze({
+    operation: 'check_comic_chapters',
+    permissionResource: 'comic',
+    targetKind: 'manga',
+    template: Object.freeze(getCrawlerTaskTemplate('manga')),
+    provider: createProviderSnapshot('manga'),
+  }),
+  recheck_comic_chapters: Object.freeze({
+    operation: 'recheck_comic_chapters',
+    permissionResource: 'comic',
+    targetKind: 'manga',
+    template: Object.freeze(getCrawlerTaskTemplate('manga')),
+    provider: createProviderSnapshot('manga'),
+  }),
+  repair_comic_chapters: Object.freeze({
+    operation: 'repair_comic_chapters',
+    permissionResource: 'comic',
+    targetKind: 'manga',
+    template: Object.freeze(getCrawlerTaskTemplate('manga')),
+    provider: createProviderSnapshot('manga'),
+  }),
+  check_chapter_pages: Object.freeze({
+    operation: 'check_chapter_pages',
+    permissionResource: 'comic',
+    targetKind: 'manga',
+    template: Object.freeze(getCrawlerTaskTemplate('manga')),
+    provider: createProviderSnapshot('manga'),
+  }),
+  recheck_chapter_pages: Object.freeze({
+    operation: 'recheck_chapter_pages',
+    permissionResource: 'comic',
+    targetKind: 'manga',
+    template: Object.freeze(getCrawlerTaskTemplate('manga')),
+    provider: createProviderSnapshot('manga'),
+  }),
+  repair_chapter_pages: Object.freeze({
+    operation: 'repair_chapter_pages',
+    permissionResource: 'comic',
+    targetKind: 'manga',
+    template: Object.freeze(getCrawlerTaskTemplate('manga')),
+    provider: createProviderSnapshot('manga'),
+  }),
 })
 
 export const crawlerOperationRegistry: CrawlerOperationRegistry = operationRegistry
@@ -154,6 +208,82 @@ function isVideoSourceReason(value: unknown): value is VideoSourceFindingReason 
 
 function isVideoSourceKind(value: unknown): value is VideoSourceKind {
   return value === 'direct' || value === 'magnet'
+}
+
+function isBoundedHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > 1024)
+    return false
+  try {
+    const url = new URL(value)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password && !url.hash
+  }
+  catch {
+    return false
+  }
+}
+
+function isStringSelection(value: unknown): value is readonly string[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= MAX_SELECTIONS
+    && value.every(item => typeof item === 'string' && item.trim().length > 0 && item.length <= MAX_ID_LENGTH)
+}
+
+function isOptionalStringSelection(value: unknown): value is readonly string[] | undefined {
+  return value === undefined || isStringSelection(value)
+}
+
+function isPageNumberSelection(value: unknown): value is readonly number[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= MAX_SELECTIONS
+    && value.every(item => typeof item === 'number' && Number.isSafeInteger(item) && item >= 1 && item <= 10_000)
+}
+
+function isOptionalPageNumberSelection(value: unknown): value is readonly number[] | undefined {
+  return value === undefined || isPageNumberSelection(value)
+}
+
+function isComicOperation(value: unknown): value is ComicChapterTaskOperation {
+  return isComicChapterOperation(value)
+}
+
+function isPageOperation(value: unknown): value is ChapterPageTaskOperation {
+  return isChapterPageOperation(value)
+}
+
+function validComicIntent(operation: ComicChapterTaskOperation, value: Record<string, unknown>, policyVersion: unknown): boolean {
+  if (Object.keys(value).some(key => !['chapterIds', 'chapterUrl', 'comicId', 'finding', 'kind', 'policyVersion', 'sourceRevision'].includes(key)))
+    return false
+  if (typeof value.comicId !== 'string' || value.comicId.trim().length === 0 || value.comicId.length > MAX_ID_LENGTH)
+    return false
+  if (!isComicChapterFinding(value.finding) || !isOptionalStringSelection(value.chapterIds))
+    return false
+  if (value.chapterUrl !== undefined && !isBoundedHttpUrl(value.chapterUrl))
+    return false
+  if (typeof value.policyVersion !== 'string' || value.policyVersion.trim() !== String(policyVersion).trim())
+    return false
+  if (typeof value.sourceRevision !== 'number' || !Number.isSafeInteger(value.sourceRevision) || value.sourceRevision < 0 || value.sourceRevision > 1_000_000)
+    return false
+  return operation !== 'repair_comic_chapters' || isStringSelection(value.chapterIds)
+}
+
+function validPageIntent(operation: ChapterPageTaskOperation, value: Record<string, unknown>, policyVersion: unknown): boolean {
+  if (Object.keys(value).some(key => !['chapterId', 'chapterUrl', 'comicId', 'finding', 'kind', 'pageIdentities', 'pageNumbers', 'policyVersion', 'sourceRevision'].includes(key)))
+    return false
+  if (typeof value.comicId !== 'string' || value.comicId.trim().length === 0 || value.comicId.length > MAX_ID_LENGTH)
+    return false
+  if (typeof value.chapterId !== 'string' || value.chapterId.trim().length === 0 || value.chapterId.length > MAX_ID_LENGTH)
+    return false
+  if (!isChapterPageFinding(value.finding) || !isOptionalStringSelection(value.pageIdentities) || !isOptionalPageNumberSelection(value.pageNumbers))
+    return false
+  if (value.chapterUrl !== undefined && !isBoundedHttpUrl(value.chapterUrl))
+    return false
+  if (typeof value.policyVersion !== 'string' || value.policyVersion.trim() !== String(policyVersion).trim())
+    return false
+  if (typeof value.sourceRevision !== 'number' || !Number.isSafeInteger(value.sourceRevision) || value.sourceRevision < 0 || value.sourceRevision > 1_000_000)
+    return false
+  return operation !== 'repair_chapter_pages' || isStringSelection(value.pageIdentities) || isPageNumberSelection(value.pageNumbers)
 }
 
 function validVideoOperationReason(operation: VideoSourceTaskOperation, reason: VideoSourceFindingReason): boolean {
@@ -254,6 +384,20 @@ export function readCrawlerOperationServerSnapshot(value: unknown): CrawlerOpera
       return undefined
     }
   }
+  else if (isComicOperation(intent.kind)) {
+    if (definition.targetKind !== 'manga'
+      || intent.comicId !== value.target.id
+      || !validComicIntent(intent.kind, intent, value.policyVersion)) {
+      return undefined
+    }
+  }
+  else if (isPageOperation(intent.kind)) {
+    if (definition.targetKind !== 'manga'
+      || intent.comicId !== value.target.id
+      || !validPageIntent(intent.kind, intent, value.policyVersion)) {
+      return undefined
+    }
+  }
   else {
     return undefined
   }
@@ -276,7 +420,29 @@ export function readCrawlerOperationServerSnapshot(value: unknown): CrawlerOpera
             ...(intent.sourceKind ? { sourceKind: intent.sourceKind } : {}),
             sourceRevision: intent.sourceRevision as number,
           }
-        : { kind: 'crawl' },
+        : isComicOperation(intent.kind)
+          ? {
+              kind: intent.kind,
+              ...(intent.chapterIds ? { chapterIds: Object.freeze((intent.chapterIds as string[]).map(id => id.trim())) } : {}),
+              ...(intent.chapterUrl ? { chapterUrl: (intent.chapterUrl as string).trim() } : {}),
+              comicId: (intent.comicId as string).trim(),
+              finding: intent.finding as ComicChapterFindingReason,
+              policyVersion: (intent.policyVersion as string).trim(),
+              sourceRevision: intent.sourceRevision as number,
+            }
+          : isPageOperation(intent.kind)
+            ? {
+                kind: intent.kind,
+                ...(intent.chapterUrl ? { chapterUrl: (intent.chapterUrl as string).trim() } : {}),
+                chapterId: (intent.chapterId as string).trim(),
+                comicId: (intent.comicId as string).trim(),
+                finding: intent.finding as ChapterPageFindingReason,
+                ...(intent.pageIdentities ? { pageIdentities: Object.freeze((intent.pageIdentities as string[]).map(id => id.trim())) } : {}),
+                ...(intent.pageNumbers ? { pageNumbers: Object.freeze([...(intent.pageNumbers as number[])]) } : {}),
+                policyVersion: (intent.policyVersion as string).trim(),
+                sourceRevision: intent.sourceRevision as number,
+              }
+            : { kind: 'crawl' },
     operation: value.operation,
     policyReference: value.policyReference.trim(),
     policyVersion: value.policyVersion.trim(),
@@ -424,6 +590,16 @@ function parseCommand(value: unknown): CrawlerOperationCommandInput {
       throw new Error('crawler_operation_intent_invalid')
     }
   }
+  else if (isComicOperation(intentKind)) {
+    exactKeys(value.intent, ['chapterIds', 'chapterUrl', 'comicId', 'finding', 'kind', 'policyVersion', 'sourceRevision'], 'crawler_operation_intent_unknown_field')
+    if (!validComicIntent(intentKind, value.intent, value.policyVersion))
+      throw new Error('crawler_operation_intent_invalid')
+  }
+  else if (isPageOperation(intentKind)) {
+    exactKeys(value.intent, ['chapterId', 'chapterUrl', 'comicId', 'finding', 'kind', 'pageIdentities', 'pageNumbers', 'policyVersion', 'sourceRevision'], 'crawler_operation_intent_unknown_field')
+    if (!validPageIntent(intentKind, value.intent, value.policyVersion))
+      throw new Error('crawler_operation_intent_invalid')
+  }
   else {
     throw new Error('crawler_operation_intent_invalid')
   }
@@ -443,14 +619,36 @@ function parseCommand(value: unknown): CrawlerOperationCommandInput {
             sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
             targetIntent: 'restore_playable_sources',
           }
-        : {
-            kind: intentKind as VideoSourceTaskOperation,
-            movieRevision: boundedRevision(value.intent.movieRevision, 'crawler_operation_intent_invalid'),
-            policyVersion: boundedString(value.intent.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_intent_invalid'),
-            reason: value.intent.reason as VideoSourceFindingReason,
-            ...(value.intent.sourceKind ? { sourceKind: value.intent.sourceKind as VideoSourceKind } : {}),
-            sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
-          },
+        : isVideoSourceOperation(intentKind)
+          ? {
+              kind: intentKind,
+              movieRevision: boundedRevision(value.intent.movieRevision, 'crawler_operation_intent_invalid'),
+              policyVersion: boundedString(value.intent.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_intent_invalid'),
+              reason: value.intent.reason as VideoSourceFindingReason,
+              ...(value.intent.sourceKind ? { sourceKind: value.intent.sourceKind as VideoSourceKind } : {}),
+              sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
+            }
+          : isComicOperation(intentKind)
+            ? {
+                kind: intentKind,
+                ...(value.intent.chapterIds ? { chapterIds: [...value.intent.chapterIds as string[]].map(id => id.trim()) } : {}),
+                ...(value.intent.chapterUrl ? { chapterUrl: boundedString(value.intent.chapterUrl, 1024, 'crawler_operation_intent_invalid') } : {}),
+                comicId: boundedString(value.intent.comicId, MAX_ID_LENGTH, 'crawler_operation_intent_invalid'),
+                finding: value.intent.finding as ComicChapterFindingReason,
+                policyVersion: boundedString(value.intent.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_intent_invalid'),
+                sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
+              }
+            : {
+                kind: intentKind as ChapterPageTaskOperation,
+                ...(value.intent.chapterUrl ? { chapterUrl: boundedString(value.intent.chapterUrl, 1024, 'crawler_operation_intent_invalid') } : {}),
+                chapterId: boundedString(value.intent.chapterId, MAX_ID_LENGTH, 'crawler_operation_intent_invalid'),
+                comicId: boundedString(value.intent.comicId, MAX_ID_LENGTH, 'crawler_operation_intent_invalid'),
+                finding: value.intent.finding as ChapterPageFindingReason,
+                ...(value.intent.pageIdentities ? { pageIdentities: [...value.intent.pageIdentities as string[]].map(id => id.trim()) } : {}),
+                ...(value.intent.pageNumbers ? { pageNumbers: [...value.intent.pageNumbers as number[]] } : {}),
+                policyVersion: boundedString(value.intent.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_intent_invalid'),
+                sourceRevision: boundedRevision(value.intent.sourceRevision, 'crawler_operation_intent_invalid'),
+              },
     operation: value.operation,
     policyReference: boundedString(value.policyReference, MAX_REFERENCE_LENGTH, 'crawler_operation_policy_invalid'),
     policyVersion: boundedString(value.policyVersion, MAX_POLICY_LENGTH, 'crawler_operation_policy_invalid'),
@@ -467,8 +665,17 @@ function parseCommand(value: unknown): CrawlerOperationCommandInput {
     throw new Error('crawler_operation_intent_mismatch')
   if (isVideoSourceOperation(command.operation) && command.intent.kind !== command.operation)
     throw new Error('crawler_operation_intent_mismatch')
-  if (command.operation !== 'repair_players' && !isVideoSourceOperation(command.operation) && command.intent.kind !== 'crawl')
+  if ((isComicOperation(command.operation) || isPageOperation(command.operation)) && command.intent.kind !== command.operation)
     throw new Error('crawler_operation_intent_mismatch')
+  if ((isComicOperation(command.operation) || isPageOperation(command.operation)) && command.intent.comicId !== command.target.id)
+    throw new Error('crawler_operation_target_mismatch')
+  if (command.operation !== 'repair_players'
+    && !isVideoSourceOperation(command.operation)
+    && !isComicOperation(command.operation)
+    && !isPageOperation(command.operation)
+    && command.intent.kind !== 'crawl') {
+    throw new Error('crawler_operation_intent_mismatch')
+  }
   return deepFreeze(command)
 }
 
@@ -502,7 +709,29 @@ export function buildCrawlerOperationSnapshot(value: unknown): CrawlerOperationS
           ...(command.intent.sourceKind ? { sourceKind: command.intent.sourceKind } : {}),
           sourceRevision: command.intent.sourceRevision!,
         })
-      : createCrawlerTaskSnapshot(command.operation as CrawlerTaskTemplateKey)
+      : isComicOperation(command.operation)
+        ? createCrawlerTaskSnapshot({
+            chapterIds: command.intent.chapterIds,
+            chapterUrl: command.intent.chapterUrl,
+            comicId: command.target.id,
+            finding: command.intent.finding as ComicChapterFindingReason,
+            operation: command.operation,
+            policyVersion: command.intent.policyVersion!,
+            sourceRevision: command.intent.sourceRevision!,
+          })
+        : isPageOperation(command.operation)
+          ? createCrawlerTaskSnapshot({
+              chapterId: command.intent.chapterId!,
+              chapterUrl: command.intent.chapterUrl,
+              comicId: command.target.id,
+              finding: command.intent.finding as ChapterPageFindingReason,
+              operation: command.operation,
+              pageIdentities: command.intent.pageIdentities,
+              pageNumbers: command.intent.pageNumbers,
+              policyVersion: command.intent.policyVersion!,
+              sourceRevision: command.intent.sourceRevision!,
+            })
+          : createCrawlerTaskSnapshot(command.operation as CrawlerTaskTemplateKey)
   const serverSnapshot: CrawlerOperationServerSnapshot = {
     actor: command.actor,
     idempotencyKey: command.idempotencyKey,

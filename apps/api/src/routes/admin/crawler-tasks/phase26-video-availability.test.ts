@@ -17,12 +17,12 @@ vi.mock('../../../domain/playback-evidence/repository', () => ({
   createPlaybackEvidenceRepository: vi.fn(() => playbackRepository),
 }))
 
-function createApp(results: Array<unknown[]> = []) {
+function createApp(results: Array<unknown[]> = [], role: 'movie_admin' | 'comic_admin' = 'movie_admin') {
   const app = new Hono<AppEnv>()
   const statement = { all: vi.fn(async () => ({ results: results.shift() ?? [] })), bind: vi.fn() }
   statement.bind.mockReturnValue(statement)
   app.use('*', async (c, next) => {
-    c.set('auth', { api: { getSession: async () => ({ user: { id: 'admin-1', role: 'movie_admin' } }) } } as never)
+    c.set('auth', { api: { getSession: async () => ({ user: { id: 'admin-1', role } }) } } as never)
     c.set('db', { $client: { prepare: vi.fn(() => statement) } } as never)
     await next()
   })
@@ -290,5 +290,46 @@ describe('phase 26 admin video availability boundary', () => {
       expect(response.status).toBe(400)
     }
     expect(repository.createOrGetActiveRun).not.toHaveBeenCalled()
+  })
+
+  it('creates a revision-bound comic chapter operation and preserves the target selection', async () => {
+    repository.createOrGetActiveRun.mockResolvedValueOnce({
+      kind: 'created',
+      run: { attemptNumber: 1, id: 'chapter-run-1', taskId: 'chapter-task-1' },
+    })
+    const response = await createApp([
+      [{ id: 'comic-1' }],
+      [{ source_revision: 12 }],
+    ], 'comic_admin').request('/crawler-tasks/chapter-availability', {
+      body: JSON.stringify({
+        chapterIds: ['comic-1-chapter-12'],
+        comicId: 'comic-1',
+        finding: 'missing',
+        idempotencyKey: 'chapter-repair-1',
+        operation: 'repair_comic_chapters',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(200)
+    expect(repository.createOrGetActiveRun).toHaveBeenCalledWith(expect.objectContaining({
+      operationCommand: expect.objectContaining({
+        intent: expect.objectContaining({
+          chapterIds: ['comic-1-chapter-12'],
+          comicId: 'comic-1',
+          finding: 'missing',
+          kind: 'repair_comic_chapters',
+          sourceRevision: 12,
+        }),
+        operation: 'repair_comic_chapters',
+        target: { id: 'comic-1', kind: 'manga' },
+      }),
+      templateKey: 'manga',
+    }))
+    await expect(response.json()).resolves.toMatchObject({
+      binding: { comicId: 'comic-1', operation: 'repair_comic_chapters', sourceRevision: 12 },
+      kind: 'created',
+    })
   })
 })

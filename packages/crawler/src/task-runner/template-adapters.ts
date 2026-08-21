@@ -1,9 +1,12 @@
 import type { RepairRunnerSnapshot, RepairSourceObservationInput, RepairSourceObservationResponse, RunnerAvailabilityObservationInput, RunnerCandidate, RunnerFailureCode, RunnerSnapshot } from './runner-client'
+import { isChapterPageRunnerSnapshot, isComicChapterRunnerSnapshot } from './runner-client'
 
 export interface AdapterExecutionContext {
   readonly checkpoint: () => Promise<boolean>
   readonly candidate: RunnerCandidate
   readonly client?: {
+    readonly observeChapterCompleteness?: (candidate: RunnerCandidate, sequence: number) => Promise<{ readonly accepted: boolean }>
+    readonly observeChapterPages?: (candidate: RunnerCandidate, sequence: number) => Promise<{ readonly accepted: boolean }>
     readonly observeRepairSource?: (candidate: RunnerCandidate, sequence: number, input: RepairSourceObservationInput) => Promise<RepairSourceObservationResponse>
   }
   readonly nextSequence?: () => number
@@ -18,7 +21,7 @@ export interface AdapterExecutionResult {
 }
 
 export interface TaskRunnerAdapter {
-  readonly operation?: 'repair_players' | 'video_direct' | 'video_magnet'
+  readonly operation?: 'repair_players' | 'video_direct' | 'video_magnet' | 'chapter_availability'
   readonly proofProfile?: RunnerCandidate['proofProfile']
   readonly templateKey: RunnerCandidate['snapshot']['templateKey']
   execute: (context: AdapterExecutionContext) => Promise<AdapterExecutionResult>
@@ -47,6 +50,7 @@ export function createTemplateAdapterRegistry(adapters: readonly TaskRunnerAdapt
   const repairAdapter = adapters.find(adapter => adapter.operation === 'repair_players')
   const directVideoAdapter = adapters.find(adapter => adapter.operation === 'video_direct')
   const magnetVideoAdapter = adapters.find(adapter => adapter.operation === 'video_magnet')
+  const chapterAvailabilityAdapter = adapters.find(adapter => adapter.operation === 'chapter_availability')
   const proofAdapters = new Map(adapters.filter(adapter => adapter.proofProfile).map(adapter => [adapter.proofProfile!, adapter]))
   return Object.freeze({
     select(snapshot: RunnerSnapshot, proofProfile?: RunnerCandidate['proofProfile']): TaskRunnerAdapter {
@@ -62,6 +66,11 @@ export function createTemplateAdapterRegistry(adapters: readonly TaskRunnerAdapt
         if (!repairAdapter)
           throw new Error('Unsupported runner operation: repair_players')
         return repairAdapter
+      }
+      if (isComicChapterRunnerSnapshot(snapshot) || isChapterPageRunnerSnapshot(snapshot)) {
+        if (!chapterAvailabilityAdapter)
+          throw new Error('Unsupported runner operation: chapter_availability')
+        return chapterAvailabilityAdapter
       }
       if (snapshot.operation === 'check_video_source'
         || snapshot.operation === 'recheck_video_source'

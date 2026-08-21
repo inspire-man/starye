@@ -2,8 +2,63 @@ import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { chapters, comics, movies, pages } from '@starye/db/schema'
 import { eq } from 'drizzle-orm'
+import { persistChapterCompletenessProjection, persistChapterSourceSnapshot, readStoredChapterIdentities } from '../../../domain/chapter-completeness'
 import { reconcileMovieSources } from '../../../domain/movies/source-reconciliation'
 import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
+
+interface NativeD1Statement {
+  bind: (...values: unknown[]) => NativeD1Statement
+}
+
+interface NativeD1Result {
+  readonly meta?: { readonly changes?: number }
+}
+
+interface NativeD1Client {
+  batch: (statements: readonly NativeD1Statement[]) => Promise<readonly NativeD1Result[]>
+  prepare: (query: string) => NativeD1Statement
+}
+
+function nativeD1Client(db: unknown): NativeD1Client | undefined {
+  const client = (db as { $client?: unknown }).$client as NativeD1Client | undefined
+  return client && typeof client.prepare === 'function' && typeof client.batch === 'function'
+    ? client
+    : undefined
+}
+
+async function replaceChapterPagesAtomically(
+  db: unknown,
+  chapterId: string,
+  pageValues: readonly { readonly chapterId: string, readonly height: number, readonly id: string, readonly imageUrl: string, readonly pageNumber: number, readonly width: number }[],
+): Promise<boolean> {
+  const client = nativeD1Client(db)
+  if (!client)
+    return false
+  const observedAt = Math.floor(Date.now() / 1000)
+  const insertStatements: NativeD1Statement[] = []
+  for (let offset = 0; offset < pageValues.length; offset += 80) {
+    const chunk = pageValues.slice(offset, offset + 80)
+    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')
+    const values = chunk.flatMap(page => [page.id, page.chapterId, page.pageNumber, page.imageUrl, page.width, page.height])
+    insertStatements.push(client.prepare(`
+      INSERT INTO page (id, chapter_id, page_number, image_url, width, height)
+      VALUES ${placeholders}
+    `).bind(...values))
+  }
+  const statements: NativeD1Statement[] = [
+    client.prepare('DELETE FROM page WHERE chapter_id = ?').bind(chapterId),
+    ...insertStatements,
+    client.prepare(`
+      UPDATE chapter
+      SET source_page_count = ?, updated_at = ?
+      WHERE id = ?
+    `).bind(pageValues.length, observedAt, chapterId),
+  ]
+  const result = await client.batch(statements)
+  if ((result.at(-1)?.meta?.changes ?? 0) !== 1)
+    throw new Error('chapter_page_metadata_update_failed')
+  return true
+}
 
 /**
  * 同步电影数据
@@ -125,57 +180,74 @@ export async function syncMangaData(c: Context<AppEnv>, payload: any) {
       // console.log(`[Sync] ✓ New Comic inserted`)
     }
 
-    // 2. 同步章节
-    if (data.chapters.length > 0) {
-      // console.log(`[Sync] 🗑️  Deleting existing chapters for: ${comicId}`)
-      await db.delete(chapters).where(eq(chapters.comicId, comicId))
+    // 2. Snapshot source chapters before upserting any stored chapter rows.
+    const observedAt = Math.floor(Date.now() / 1000)
+    const sourceSnapshot = await persistChapterSourceSnapshot(db, {
+      comicId,
+      observedAt,
+      sourceRows: data.chapters.map((chapter: any, sourceOrdinal: number) => ({
+        chapterNumber: chapter.number,
+        sourceOrdinal,
+        sourceUrl: chapter.url,
+        slug: chapter.slug,
+        title: chapter.title,
+      })),
+      sourceUrl: data.sourceUrl,
+      terminalState: data.sourceTerminalState ?? (data.chapters.length > 0 ? 'complete' : 'unavailable'),
+    })
 
-      const uniqueSlugs = new Set<string>()
-      const chapterValues = []
-
-      for (const ch of data.chapters) {
-        if (uniqueSlugs.has(ch.slug)) {
-          console.warn(`[Sync] ⚠️ Duplicate chapter slug detected: ${ch.slug}, skipping.`)
-          continue
-        }
-        uniqueSlugs.add(ch.slug)
-        chapterValues.push({
-          id: `${comicId}-${ch.slug}`,
-          comicId,
-          title: ch.title,
-          slug: ch.slug,
-          chapterNumber: ch.number,
-          sourcePageCount: null,
-          sortOrder: ch.number,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-      }
-
-      const chunkSize = 5
-      // console.log(`[Sync] 📚 Inserting ${chapterValues.length} chapters in ${Math.ceil(chapterValues.length / chunkSize)} batches`)
-
-      for (let i = 0; i < chapterValues.length; i += chunkSize) {
-        const chunk = chapterValues.slice(i, i + chunkSize)
-        const batchNum = Math.floor(i / chunkSize) + 1
-        const totalBatches = Math.ceil(chapterValues.length / chunkSize)
-        // console.log(`[Sync] 📦 Batch ${batchNum}/${totalBatches}: inserting ${chunk.length} chapters`)
+    // Empty/unavailable and inconclusive source results retain known chapters.
+    if (sourceSnapshot.rows.length > 0 && sourceSnapshot.terminalState !== 'unavailable' && sourceSnapshot.terminalState !== 'inconclusive') {
+      const chapterValues = sourceSnapshot.rows.map(ch => ({
+        id: `${comicId}-${ch.slug ?? ch.sourceOrdinal}`,
+        comicId,
+        title: ch.title,
+        slug: ch.slug ?? `source-${ch.sourceOrdinal}`,
+        chapterNumber: ch.chapterNumber,
+        sourcePageCount: null,
+        sortOrder: ch.chapterNumber ?? ch.sourceOrdinal,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }))
+      for (const chapterValue of chapterValues) {
         try {
-          await db.insert(chapters).values(chunk)
-          // console.log(`[Sync] ✅ Batch ${batchNum}/${totalBatches} inserted successfully`)
+          const insert = db.insert(chapters).values(chapterValue)
+          if (typeof insert.onConflictDoUpdate === 'function') {
+            await insert.onConflictDoUpdate({
+              target: chapters.id,
+              set: {
+                title: chapterValue.title,
+                chapterNumber: chapterValue.chapterNumber,
+                sortOrder: chapterValue.sortOrder,
+                updatedAt: new Date(),
+              },
+            })
+          }
+          else if (typeof insert.onConflictDoNothing === 'function') {
+            await insert.onConflictDoNothing({ target: chapters.id })
+          }
+          else {
+            await insert
+          }
         }
         catch (batchError: unknown) {
           const errorMsg = batchError instanceof Error ? batchError.message : String(batchError)
-          console.error(`[Sync] ❌ Batch ${batchNum}/${totalBatches} failed:`, errorMsg)
+          console.error(`[Sync] Chapter upsert failed:`, errorMsg)
           throw batchError
         }
       }
-
-      // console.log(`[Sync] ✓ All chapters inserted successfully`)
     }
 
+    const storedChapters = await readStoredChapterIdentities(db, comicId)
+    const completeness = await persistChapterCompletenessProjection(db, sourceSnapshot, storedChapters)
+
     // console.log(`[Sync] ✅ Sync completed for ${data.title}`)
-    return c.json({ success: true, message: `Synced ${data.chapters.length} chapters` })
+    return c.json({
+      completeness,
+      sourceRevision: sourceSnapshot.sourceRevision,
+      success: true,
+      message: `Synced ${data.chapters.length} chapters`,
+    })
   }
   catch (e: unknown) {
     console.error('[Sync] ❌ Database Error:', {
@@ -263,25 +335,25 @@ export async function syncChapterData(c: Context<AppEnv>, payload: any) {
       height: data.height || 0,
     }))
 
-    const chunkSize = 10
-
-    // 1. 删除现有页面
-    await db.delete(pages).where(eq(pages.chapterId, chapterId))
-
     try {
-      // 2. 插入新页面
-      for (let i = 0; i < pageValues.length; i += chunkSize) {
-        const chunk = pageValues.slice(i, i + chunkSize)
-        await db.insert(pages).values(chunk)
+      const atomicallyReplaced = await replaceChapterPagesAtomically(db, chapterId, pageValues)
+      if (!atomicallyReplaced) {
+        const chunkSize = 10
+        await db.delete(pages).where(eq(pages.chapterId, chapterId))
+        for (let i = 0; i < pageValues.length; i += chunkSize) {
+          const chunk = pageValues.slice(i, i + chunkSize)
+          await db.insert(pages).values(chunk)
+        }
+        await db.update(chapters)
+          .set({ sourcePageCount: incomingCount, updatedAt: new Date() })
+          .where(eq(chapters.id, chapterId))
       }
-
-      // 3. 仅在整组替换成功后更新元数据
-      await db.update(chapters)
-        .set({ sourcePageCount: incomingCount, updatedAt: new Date() })
-        .where(eq(chapters.id, chapterId))
     }
     catch (replacementError) {
+      if (nativeD1Client(db))
+        throw replacementError
       // Best-effort rollback to preserve prior readable state when replacement fails mid-flight.
+      const chunkSize = 10
       if (existingPagesSnapshot.length > 0) {
         await db.delete(pages).where(eq(pages.chapterId, chapterId))
         for (let i = 0; i < existingPagesSnapshot.length; i += chunkSize) {

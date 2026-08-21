@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
-current_phase: 27
-current_phase_name: Comic Chapter Completeness
-status: planning
-stopped_at: Phase 26 complete; ready to plan Phase 27
-last_updated: "2026-08-21T00:00:00+08:00"
-last_activity: 2026-08-21
-last_activity_desc: Backfilled the v1.4 milestone archive while preserving the active v1.5 planning state
+current_phase: 28
+current_phase_name: Chapter Image Availability And Gateway Acceptance
+status: verification
+stopped_at: Phase 28 implementation and local Gateway acceptance complete; production deployment and Actions verification pending
+last_updated: "2026-08-22T06:20:00+08:00"
+last_activity: 2026-08-22
+last_activity_desc: Completed Phase 27/28 implementation, local D1 migration/readback, Dashboard-to-Reader fresh tuple acceptance
 progress:
   total_phases: 2
   completed_phases: 2
-  total_plans: 16
-  completed_plans: 16
+  total_plans: 7
+  completed_plans: 7
 ---
 
 # Project State: Starye — 个人内容中台
@@ -27,10 +27,10 @@ See: `.planning/PROJECT.md` (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 27 — Comic Chapter Completeness
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-08-20 — Phase 26 complete, transitioned to Phase 27
+Phase: 28 — Chapter Image Availability And Gateway Acceptance
+Plan: 28-04 complete
+Status: Local verification passed; production deployment pending
+Last activity: 2026-08-22 — Fresh Dashboard → runner → D1 → Reader tuple passed
 
 ## Performance Metrics
 
@@ -99,12 +99,12 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- [ ] Plan Phase 27 before execution.
+- [ ] Push the v1.5 implementation and wait for production deploy/CI/Actions workflows.
 
 ### Blockers/Concerns
 
-- Comic sources may represent special chapters, missing numbers, duplicates and pagination differently; Phase 27 must select stable identity and terminal-state semantics before implementation.
-- Image hosts may differ for HEAD, Range, redirects, anti-hotlink challenges and browser loading; Phase 28 needs representative fixtures and bounded fan-out.
+- Production Actions has not yet run the v1.5 commit; verify migrations, API, pages and crawler workflows against the pushed SHA.
+- The local browser tuple uses bounded public image endpoints; production acceptance must use a fresh production comic/chapter tuple.
 
 ## Deferred Items
 

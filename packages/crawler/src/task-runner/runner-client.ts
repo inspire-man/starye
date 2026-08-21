@@ -1,8 +1,12 @@
 import process from 'node:process'
 import { createRunnerEventId, signRunnerBody } from './event-signer'
 
-export type RunnerOperation = 'manga' | 'movie' | 'repair_players' | VideoRunnerOperation
+export type RunnerOperation = 'manga' | 'movie' | 'repair_players' | VideoRunnerOperation | ComicChapterRunnerOperation | ChapterPageRunnerOperation
 export type VideoRunnerOperation = 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
+export type ComicChapterRunnerOperation = 'check_comic_chapters' | 'recheck_comic_chapters' | 'repair_comic_chapters'
+export type ChapterPageRunnerOperation = 'check_chapter_pages' | 'recheck_chapter_pages' | 'repair_chapter_pages'
+export type ComicChapterRunnerFinding = 'missing' | 'duplicate' | 'extra' | 'order' | 'sequence_gap' | 'source_unavailable' | 'source_partial' | 'source_inconclusive'
+export type ChapterPageRunnerFinding = 'missing_page' | 'duplicate_page_number' | 'page_order' | 'url_invalid' | 'http_failure' | 'redirect' | 'challenge_html' | 'content_type_invalid' | 'content_type_missing' | 'timeout' | 'probe_failed' | 'unknown'
 export type RunnerVideoSourceKind = 'direct' | 'magnet'
 export type VideoRunnerReason
   = | 'no_source' | 'source_failed' | 'stale' | 'direct_blocked' | 'direct_transport_failed'
@@ -56,6 +60,13 @@ export interface RunnerAvailabilityObservationResponse {
   readonly current?: unknown
   readonly kind?: string
   readonly observation?: unknown
+  readonly reason?: string
+}
+
+export interface ChapterAvailabilityObservationResponse {
+  readonly accepted: boolean
+  readonly current?: unknown
+  readonly kind?: string
   readonly reason?: string
 }
 
@@ -135,7 +146,31 @@ export interface VideoRunnerSnapshot extends Omit<OrdinaryRunnerSnapshot, 'opera
   readonly templateKey: 'movie'
 }
 
-export type RunnerSnapshot = OrdinaryRunnerSnapshot | RepairRunnerSnapshot | VideoRunnerSnapshot
+export interface ComicChapterRunnerSnapshot extends Omit<OrdinaryRunnerSnapshot, 'operation' | 'templateKey'> {
+  readonly chapterIds?: readonly string[]
+  readonly chapterUrl?: string
+  readonly comicId: string
+  readonly finding: ComicChapterRunnerFinding
+  readonly operation: ComicChapterRunnerOperation
+  readonly policyVersion: string
+  readonly sourceRevision: number
+  readonly templateKey: 'manga'
+}
+
+export interface ChapterPageRunnerSnapshot extends Omit<OrdinaryRunnerSnapshot, 'operation' | 'templateKey'> {
+  readonly chapterId: string
+  readonly chapterUrl?: string
+  readonly comicId: string
+  readonly finding: ChapterPageRunnerFinding
+  readonly operation: ChapterPageRunnerOperation
+  readonly pageIdentities?: readonly string[]
+  readonly pageNumbers?: readonly number[]
+  readonly policyVersion: string
+  readonly sourceRevision: number
+  readonly templateKey: 'manga'
+}
+
+export type RunnerSnapshot = OrdinaryRunnerSnapshot | RepairRunnerSnapshot | VideoRunnerSnapshot | ComicChapterRunnerSnapshot | ChapterPageRunnerSnapshot
 
 export function isRepairRunnerSnapshot(snapshot: RunnerSnapshot): snapshot is RepairRunnerSnapshot {
   return snapshot.operation === 'repair_players'
@@ -145,6 +180,18 @@ export function isVideoRunnerSnapshot(snapshot: RunnerSnapshot): snapshot is Vid
   return snapshot.operation === 'check_video_source'
     || snapshot.operation === 'recheck_video_source'
     || snapshot.operation === 'repair_video_source'
+}
+
+export function isComicChapterRunnerSnapshot(snapshot: RunnerSnapshot): snapshot is ComicChapterRunnerSnapshot {
+  return snapshot.operation === 'check_comic_chapters'
+    || snapshot.operation === 'recheck_comic_chapters'
+    || snapshot.operation === 'repair_comic_chapters'
+}
+
+export function isChapterPageRunnerSnapshot(snapshot: RunnerSnapshot): snapshot is ChapterPageRunnerSnapshot {
+  return snapshot.operation === 'check_chapter_pages'
+    || snapshot.operation === 'recheck_chapter_pages'
+    || snapshot.operation === 'repair_chapter_pages'
 }
 
 export interface RunnerCandidate {
@@ -231,6 +278,40 @@ function isVideoRunnerReason(value: unknown): value is VideoRunnerReason {
 
 function isRunnerVideoSourceKind(value: unknown): value is RunnerVideoSourceKind {
   return value === 'direct' || value === 'magnet'
+}
+
+function isRunnerHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > 1024)
+    return false
+  try {
+    const url = new URL(value)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password && !url.hash
+  }
+  catch {
+    return false
+  }
+}
+
+function isRunnerSelection(value: unknown): value is readonly string[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= 200
+    && value.every(item => typeof item === 'string' && item.trim().length > 0 && item.length <= 256)
+}
+
+function isRunnerPageNumberSelection(value: unknown): value is readonly number[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= 200
+    && value.every(item => typeof item === 'number' && Number.isSafeInteger(item) && item >= 1 && item <= 10_000)
+}
+
+function isComicChapterFinding(value: unknown): value is ComicChapterRunnerFinding {
+  return typeof value === 'string' && ['missing', 'duplicate', 'extra', 'order', 'sequence_gap', 'source_unavailable', 'source_partial', 'source_inconclusive'].includes(value)
+}
+
+function isChapterPageFinding(value: unknown): value is ChapterPageRunnerFinding {
+  return typeof value === 'string' && ['missing_page', 'duplicate_page_number', 'page_order', 'url_invalid', 'http_failure', 'redirect', 'challenge_html', 'content_type_invalid', 'content_type_missing', 'timeout', 'probe_failed', 'unknown'].includes(value)
 }
 
 function isRepairReceipt(value: unknown): value is RepairPlayersReceipt {
@@ -371,6 +452,94 @@ function parseRunnerSnapshot(value: unknown): RunnerSnapshot {
     }
   }
 
+  if (value.operation === 'check_comic_chapters' || value.operation === 'recheck_comic_chapters' || value.operation === 'repair_comic_chapters') {
+    const keys = ['comicId', 'entrypoint', 'finding', 'operation', 'permissionResource', 'policyVersion', 'sourceRevision', 'templateKey', 'templateVersion']
+    if (value.chapterIds !== undefined)
+      keys.push('chapterIds')
+    if (value.chapterUrl !== undefined)
+      keys.push('chapterUrl')
+    if (!hasExactKeys(value, keys)
+      || value.templateKey !== 'manga'
+      || value.entrypoint !== 'manga-crawler'
+      || value.permissionResource !== 'comic'
+      || typeof value.comicId !== 'string'
+      || !/^[A-Za-z0-9][\w-]{0,127}$/u.test(value.comicId)
+      || !isComicChapterFinding(value.finding)
+      || typeof value.policyVersion !== 'string'
+      || value.policyVersion.trim().length === 0
+      || value.policyVersion.length > 128
+      || typeof value.sourceRevision !== 'number'
+      || !Number.isSafeInteger(value.sourceRevision)
+      || value.sourceRevision < 0
+      || value.sourceRevision > 1_000_000
+      || (value.chapterIds !== undefined && !isRunnerSelection(value.chapterIds))
+      || (value.chapterUrl !== undefined && !isRunnerHttpUrl(value.chapterUrl))
+      || (value.operation === 'repair_comic_chapters' && !isRunnerSelection(value.chapterIds))) {
+      throw new Error('Invalid comic chapter runner snapshot')
+    }
+    return {
+      chapterIds: value.chapterIds as readonly string[] | undefined,
+      chapterUrl: value.chapterUrl as string | undefined,
+      comicId: value.comicId.trim(),
+      entrypoint: 'manga-crawler',
+      finding: value.finding,
+      operation: value.operation,
+      permissionResource: 'comic',
+      policyVersion: value.policyVersion.trim(),
+      sourceRevision: value.sourceRevision,
+      templateKey: 'manga',
+      templateVersion: 1,
+    }
+  }
+
+  if (value.operation === 'check_chapter_pages' || value.operation === 'recheck_chapter_pages' || value.operation === 'repair_chapter_pages') {
+    const keys = ['chapterId', 'comicId', 'entrypoint', 'finding', 'operation', 'permissionResource', 'policyVersion', 'sourceRevision', 'templateKey', 'templateVersion']
+    if (value.chapterUrl !== undefined)
+      keys.push('chapterUrl')
+    if (value.pageIdentities !== undefined)
+      keys.push('pageIdentities')
+    if (value.pageNumbers !== undefined)
+      keys.push('pageNumbers')
+    if (!hasExactKeys(value, keys)
+      || value.templateKey !== 'manga'
+      || value.entrypoint !== 'manga-crawler'
+      || value.permissionResource !== 'comic'
+      || typeof value.comicId !== 'string'
+      || !/^[A-Za-z0-9][\w-]{0,127}$/u.test(value.comicId)
+      || typeof value.chapterId !== 'string'
+      || value.chapterId.trim().length === 0
+      || value.chapterId.length > 256
+      || !isChapterPageFinding(value.finding)
+      || typeof value.policyVersion !== 'string'
+      || value.policyVersion.trim().length === 0
+      || value.policyVersion.length > 128
+      || typeof value.sourceRevision !== 'number'
+      || !Number.isSafeInteger(value.sourceRevision)
+      || value.sourceRevision < 0
+      || value.sourceRevision > 1_000_000
+      || (value.chapterUrl !== undefined && !isRunnerHttpUrl(value.chapterUrl))
+      || (value.pageIdentities !== undefined && !isRunnerSelection(value.pageIdentities))
+      || (value.pageNumbers !== undefined && !isRunnerPageNumberSelection(value.pageNumbers))
+      || (value.operation === 'repair_chapter_pages' && !isRunnerSelection(value.pageIdentities) && !isRunnerPageNumberSelection(value.pageNumbers))) {
+      throw new Error('Invalid chapter page runner snapshot')
+    }
+    return {
+      chapterId: value.chapterId.trim(),
+      chapterUrl: value.chapterUrl as string | undefined,
+      comicId: value.comicId.trim(),
+      entrypoint: 'manga-crawler',
+      finding: value.finding,
+      operation: value.operation,
+      pageIdentities: value.pageIdentities as readonly string[] | undefined,
+      pageNumbers: value.pageNumbers as readonly number[] | undefined,
+      permissionResource: 'comic',
+      policyVersion: value.policyVersion.trim(),
+      sourceRevision: value.sourceRevision,
+      templateKey: 'manga',
+      templateVersion: 1,
+    }
+  }
+
   if (value.operation !== undefined && value.operation !== value.templateKey)
     throw new Error('Runner snapshot operation does not match its template')
   if (value.templateKey === 'movie' && (value.entrypoint !== 'movie-crawler' || value.permissionResource !== 'movie'))
@@ -463,10 +632,10 @@ function parseRunnerCandidate(value: unknown): RunnerCandidate {
   const expectedProjectionVersion = optionalInteger(value.expectedProjectionVersion, 1_000_000_000)
   const snapshot = parseRunnerSnapshot(value.snapshot)
   if (provider === 'local-proof'
-    && (!taskId || !target || !contentId || sourceRevision === undefined || expectedProjectionVersion === undefined
+    && (!taskId || !target || sourceRevision === undefined || expectedProjectionVersion === undefined
       || !policyReference || !policyVersion
-      || (!isVideoRunnerSnapshot(snapshot) && proofProfile !== 'phase25-movie-availability-v1')
-      || (isVideoRunnerSnapshot(snapshot) && proofProfile !== undefined))) {
+      || (isVideoRunnerSnapshot(snapshot) && (!contentId || proofProfile !== undefined))
+      || (!isVideoRunnerSnapshot(snapshot) && proofProfile !== 'phase25-movie-availability-v1' && !isComicChapterRunnerSnapshot(snapshot) && !isChapterPageRunnerSnapshot(snapshot)))) {
     throw new Error('Local proof runner candidate binding is incomplete')
   }
 
@@ -477,6 +646,14 @@ function parseRunnerCandidate(value: unknown): RunnerCandidate {
       || target?.kind !== 'movie'
       || target.id !== snapshot.movieId)) {
     throw new Error('Runner video snapshot binding does not match the candidate')
+  }
+
+  if ((isComicChapterRunnerSnapshot(snapshot) || isChapterPageRunnerSnapshot(snapshot))
+    && (sourceRevision !== snapshot.sourceRevision
+      || policyVersion !== snapshot.policyVersion
+      || target?.kind !== 'manga'
+      || target.id !== snapshot.comicId)) {
+    throw new Error('Runner manga snapshot binding does not match the candidate')
   }
 
   return {
@@ -647,6 +824,61 @@ export class RunnerClient {
       throw new Error('Runner video source variant does not match its snapshot')
     }
     return this.observeAvailability(candidate, sequence, input)
+  }
+
+  async observeChapterCompleteness(
+    candidate: RunnerCandidate,
+    sequence: number,
+  ): Promise<ChapterAvailabilityObservationResponse> {
+    if (!isComicChapterRunnerSnapshot(candidate.snapshot))
+      throw new Error('Chapter completeness observation requires a comic chapter snapshot')
+    this.assertCandidateBinding(candidate)
+    const expectedProjectionVersion = candidate.expectedProjectionVersion ?? 0
+    return this.post(`/api/internal/crawler-runs/${encodeURIComponent(candidate.runId)}/chapter-completeness-observation`, {
+      ...this.boundEnvelope(),
+      attempt: candidate.attempt,
+      comic_id: candidate.snapshot.comicId,
+      expected_projection_version: expectedProjectionVersion,
+      operation: candidate.snapshot.operation,
+      policy_reference: candidate.policyReference,
+      policy_version: candidate.snapshot.policyVersion,
+      provider: candidate.provider,
+      run_id: candidate.runId,
+      sequence,
+      source_revision: candidate.snapshot.sourceRevision,
+      task_id: candidate.taskId,
+      timestamp: this.now(),
+      type: 'chapter_completeness_observation',
+    }, { allowNonOk: true }) as Promise<ChapterAvailabilityObservationResponse>
+  }
+
+  async observeChapterPages(
+    candidate: RunnerCandidate,
+    sequence: number,
+  ): Promise<ChapterAvailabilityObservationResponse> {
+    if (!isChapterPageRunnerSnapshot(candidate.snapshot))
+      throw new Error('Chapter page observation requires a chapter page snapshot')
+    this.assertCandidateBinding(candidate)
+    const expectedProjectionVersion = candidate.expectedProjectionVersion ?? 0
+    return this.post(`/api/internal/crawler-runs/${encodeURIComponent(candidate.runId)}/chapter-page-observation`, {
+      ...this.boundEnvelope(),
+      attempt: candidate.attempt,
+      chapter_id: candidate.snapshot.chapterId,
+      comic_id: candidate.snapshot.comicId,
+      expected_projection_version: expectedProjectionVersion,
+      operation: candidate.snapshot.operation,
+      page_identities: candidate.snapshot.pageIdentities,
+      page_numbers: candidate.snapshot.pageNumbers,
+      policy_reference: candidate.policyReference,
+      policy_version: candidate.snapshot.policyVersion,
+      provider: candidate.provider,
+      run_id: candidate.runId,
+      sequence,
+      source_revision: candidate.snapshot.sourceRevision,
+      task_id: candidate.taskId,
+      timestamp: this.now(),
+      type: 'chapter_page_observation',
+    }, { allowNonOk: true }) as Promise<ChapterAvailabilityObservationResponse>
   }
 
   async failed(candidate: RunnerCandidate, sequence: number, code: string): Promise<EventResult> {

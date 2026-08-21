@@ -15,11 +15,19 @@ export const CRAWLER_TASK_OPERATION_VALUES = [
   'check_video_source',
   'recheck_video_source',
   'repair_video_source',
+  'check_comic_chapters',
+  'recheck_comic_chapters',
+  'repair_comic_chapters',
+  'check_chapter_pages',
+  'recheck_chapter_pages',
+  'repair_chapter_pages',
 ] as const
 export type CrawlerTaskOperation = typeof CRAWLER_TASK_OPERATION_VALUES[number]
 export type RepairPlayersReason = 'no_source' | 'source_failed'
 export type RepairPlayersTargetIntent = 'restore_playable_sources'
 export type VideoSourceTaskOperation = 'check_video_source' | 'recheck_video_source' | 'repair_video_source'
+export type ComicChapterTaskOperation = 'check_comic_chapters' | 'recheck_comic_chapters' | 'repair_comic_chapters'
+export type ChapterPageTaskOperation = 'check_chapter_pages' | 'recheck_chapter_pages' | 'repair_chapter_pages'
 export type VideoSourceKind = 'direct' | 'magnet'
 export type VideoSourceFindingReason
   = | 'no_source'
@@ -38,6 +46,8 @@ export type VideoSourceFindingReason
     | 'stream_failed'
     | 'playback_unverified'
     | 'playback_failed'
+export type ComicChapterFindingReason = 'missing' | 'duplicate' | 'extra' | 'order' | 'sequence_gap' | 'source_unavailable' | 'source_partial' | 'source_inconclusive'
+export type ChapterPageFindingReason = 'missing_page' | 'duplicate_page_number' | 'page_order' | 'url_invalid' | 'http_failure' | 'redirect' | 'challenge_html' | 'content_type_invalid' | 'content_type_missing' | 'timeout' | 'probe_failed' | 'unknown'
 export const CRAWLER_RECEIPT_SCHEMA_VERSION = 2 as const
 export type CrawlerPermissionResource = Extract<Resource, 'comic' | 'movie'>
 export type ProviderName = 'github-actions' | 'local-proof'
@@ -165,7 +175,31 @@ export interface VideoSourceTaskSnapshot extends CrawlerTaskSnapshot {
   readonly templateKey: 'movie'
 }
 
-export type CrawlerTaskSnapshotUnion = CrawlerTaskSnapshot | RepairPlayersTaskSnapshot | VideoSourceTaskSnapshot
+export interface ComicChapterTaskSnapshot extends CrawlerTaskSnapshot {
+  readonly comicId: string
+  readonly chapterIds?: readonly string[]
+  readonly chapterUrl?: string
+  readonly finding: ComicChapterFindingReason
+  readonly operation: ComicChapterTaskOperation
+  readonly policyVersion: string
+  readonly sourceRevision: number
+  readonly templateKey: 'manga'
+}
+
+export interface ChapterPageTaskSnapshot extends CrawlerTaskSnapshot {
+  readonly chapterUrl?: string
+  readonly chapterId: string
+  readonly comicId: string
+  readonly finding: ChapterPageFindingReason
+  readonly operation: ChapterPageTaskOperation
+  readonly pageIdentities?: readonly string[]
+  readonly pageNumbers?: readonly number[]
+  readonly policyVersion: string
+  readonly sourceRevision: number
+  readonly templateKey: 'manga'
+}
+
+export type CrawlerTaskSnapshotUnion = CrawlerTaskSnapshot | RepairPlayersTaskSnapshot | VideoSourceTaskSnapshot | ComicChapterTaskSnapshot | ChapterPageTaskSnapshot
 
 export interface CrawlerTaskTemplate {
   readonly entrypoint: CrawlerTaskSnapshot['entrypoint']

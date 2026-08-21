@@ -6,6 +6,8 @@ import type { AppEnv } from '../../../types'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import * as v from 'valibot'
+import { buildChapterSourceSnapshot, persistChapterCompletenessProjection, readChapterCompletenessCurrent, readChapterSourceSnapshots, readStoredChapterIdentities } from '../../../domain/chapter-completeness'
+import { persistChapterPageAvailability } from '../../../domain/chapter-completeness/page-repository'
 import { createAvailabilityRepository as createAvailabilityRepositoryAdapter } from '../../../domain/crawler-tasks/availability-repository'
 import { validateBoundedAvailabilityEvidence } from '../../../domain/crawler-tasks/evidence-contract'
 import { normalizeRunnerEventForStorage } from '../../../domain/crawler-tasks/log-redaction'
@@ -17,6 +19,8 @@ import { acceptRepairSourceObservation } from '../../../domain/movies/source-rec
 import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
 import {
   CrawlerAvailabilityObservationEventSchema,
+  CrawlerChapterCompletenessObservationEventSchema,
+  CrawlerChapterPageObservationEventSchema,
   CrawlerRepairSourceObservationEventSchema,
   CrawlerRunClaimRequestSchema,
   CrawlerRunEventSchema,
@@ -178,6 +182,7 @@ interface RepairRunBinding {
   request_snapshot_json: string
   status: string
   task_id: string
+  provider_name: 'github-actions' | 'local-proof' | null
 }
 
 function providerSnapshotMatches(event: Extract<v.InferOutput<typeof CrawlerRunEventSchema>, { type: 'schedule_register' | 'provider_started' | 'dispatch_validate' }>): boolean {
@@ -248,13 +253,52 @@ export function createCrawlerRunsRoutes(options: {
   async function readRepairRunBinding(c: Context<AppEnv>, runId: string): Promise<RepairRunBinding | undefined> {
     const result = await getD1(c).prepare(`
       SELECT run.attempt_number, run.last_event_sequence, run.state_version,
-        run.status, task.operation, task.request_snapshot_json, run.task_id
+        run.status, task.operation, task.request_snapshot_json, run.task_id,
+        provider.provider AS provider_name
       FROM crawler_run AS run
       INNER JOIN crawler_task AS task ON task.id = run.task_id
+      LEFT JOIN crawler_run_provider_association AS provider ON provider.run_id = run.id
       WHERE run.id = ?
       LIMIT 1
     `).bind(runId).all<RepairRunBinding>()
     return result.results?.[0]
+  }
+
+  async function readChapterRunBinding(c: Context<AppEnv>, runId: string, taskId: string, attempt: number, provider: string) {
+    const binding = await readRepairRunBinding(c, runId)
+    if (!binding || binding.task_id !== taskId || binding.attempt_number !== attempt || binding.provider_name !== provider)
+      throw new HTTPException(409, { message: 'Chapter observation binding mismatch' })
+    if (binding.status === 'cancelled' || binding.status === 'failed')
+      throw new HTTPException(409, { message: 'Chapter observation run is terminal' })
+    return binding
+  }
+
+  async function advanceChapterObservationSequence(c: Context<AppEnv>, binding: RepairRunBinding, runId: string, sequence: number): Promise<void> {
+    if (sequence !== binding.last_event_sequence + 1)
+      throw new HTTPException(409, { message: sequence <= binding.last_event_sequence ? 'Chapter observation is stale' : 'Chapter observation is out of sequence' })
+    const result = await getD1(c).prepare(`
+      UPDATE crawler_run
+      SET last_event_sequence = ?, updated_at = ?
+      WHERE id = ? AND state_version = ? AND last_event_sequence = ?
+    `).bind(sequence, Math.floor(now() / 1000), runId, binding.state_version, binding.last_event_sequence).run()
+    if ((result.meta?.changes ?? 0) !== 1)
+      throw new HTTPException(409, { message: 'Chapter observation sequence CAS failed' })
+  }
+
+  function storedChapterSnapshot(row: any) {
+    return buildChapterSourceSnapshot({
+      comicId: row.comicId,
+      observedAt: row.observedAt instanceof Date ? Math.floor(row.observedAt.getTime() / 1000) : Number(row.observedAt),
+      sourceRows: (row.rows ?? []).map((sourceRow: any) => ({
+        chapterNumber: sourceRow.chapterNumber ?? null,
+        sourceOrdinal: sourceRow.sourceOrdinal,
+        sourceUrl: sourceRow.sourceUrl ?? null,
+        slug: sourceRow.slug ?? null,
+        title: sourceRow.title,
+      })),
+      sourceUrl: row.sourceUrl ?? null,
+      terminalState: row.terminalState,
+    }, row.sourceRevision)
   }
 
   async function storeRepairOutcome(c: Context<AppEnv>, input: {
@@ -653,6 +697,168 @@ export function createCrawlerRunsRoutes(options: {
       sequence: event.sequence,
     })
     return c.json(outcome, availabilityObservationStatus(outcome))
+  })
+
+  crawlerRunsRoutes.post('/:runId/chapter-completeness-observation', async (c) => {
+    const rawBody = await c.req.arrayBuffer()
+    const currentNow = now()
+    const signature = await verifySignedRequest(c, rawBody, currentNow)
+    const parsed = v.safeParse(CrawlerChapterCompletenessObservationEventSchema, await parseRawJson(rawBody))
+    if (!parsed.success)
+      throw new HTTPException(400, { message: 'Invalid chapter completeness observation envelope' })
+    const event = parsed.output
+    if (event.key_id !== signature.keyId || event.run_id !== c.req.param('runId'))
+      throw new HTTPException(400, { message: 'Chapter completeness observation identity mismatch' })
+    if (Math.abs(currentNow - event.timestamp) > MAX_EVENT_AGE_MS)
+      throw new HTTPException(400, { message: 'Chapter completeness observation timestamp expired' })
+
+    const binding = await readChapterRunBinding(c, event.run_id, event.task_id, event.attempt, event.provider)
+    const bodySha256 = await sha256Hex(rawBody)
+    const existing = await readRecordedRepairEvent(c, event.run_id, event.event_id, event.nonce)
+    if (existing) {
+      if (existing.event_id !== event.event_id || existing.nonce !== event.nonce || existing.body_sha256 !== bodySha256)
+        throw new HTTPException(409, { message: 'Conflicting chapter completeness observation replay' })
+      return c.json(parseStoredOutcome(existing.outcome))
+    }
+
+    const parsedSnapshot = readCrawlerTaskSnapshot(JSON.parse(binding.request_snapshot_json), binding.operation as any)
+    if (!parsedSnapshot.ok || !('comicId' in parsedSnapshot.snapshot)
+      || parsedSnapshot.snapshot.comicId !== event.comic_id
+      || parsedSnapshot.snapshot.operation !== event.operation
+      || parsedSnapshot.snapshot.policyVersion !== event.policy_version) {
+      throw new HTTPException(409, { message: 'Chapter completeness snapshot binding mismatch' })
+    }
+    const history = await readChapterSourceSnapshots(c.get('db'), event.comic_id, 1)
+    const latest = history[0]
+    if (!latest || latest.sourceRevision < event.source_revision)
+      throw new HTTPException(409, { message: 'Chapter source snapshot is stale or missing' })
+    const snapshot = storedChapterSnapshot(latest)
+    const stored = await readStoredChapterIdentities(c.get('db'), event.comic_id)
+    const currentBefore = await readChapterCompletenessCurrent(c.get('db'), event.comic_id)
+    const projection = await persistChapterCompletenessProjection(c.get('db'), snapshot, stored, {
+      allowSameRevision: true,
+      attemptNumber: event.attempt,
+      eventSequence: event.sequence,
+      expectedProjectionVersion: event.expected_projection_version,
+      provider: event.provider === 'local-proof' ? 'local-proof' : 'github-actions',
+      runId: event.run_id,
+      taskId: event.task_id,
+    })
+    const current = await readChapterCompletenessCurrent(c.get('db'), event.comic_id)
+    if (!current || Number(current.sourceRevision) < snapshot.sourceRevision)
+      throw new HTTPException(409, { message: 'Chapter completeness projection CAS failed' })
+    await advanceChapterObservationSequence(c, binding, event.run_id, event.sequence)
+    const outcome = {
+      accepted: true,
+      current: {
+        counts: projection.counts,
+        findings: projection.findings,
+        observationIdentity: projection.observationIdentity,
+        projectionVersion: current.projectionVersion,
+        reasonCode: projection.reasonCode,
+        sourceRevision: current.sourceRevision,
+        status: projection.status,
+        terminalState: projection.terminalState,
+      },
+      kind: currentBefore?.observationIdentity === projection.observationIdentity ? 'duplicate' : 'accepted',
+    } as const
+    await storeRepairOutcome(c, {
+      bodySha256,
+      eventId: event.event_id,
+      keyId: event.key_id,
+      nonce: event.nonce,
+      outcome,
+      runId: event.run_id,
+      sequence: event.sequence,
+    })
+    return c.json(outcome)
+  })
+
+  crawlerRunsRoutes.post('/:runId/chapter-page-observation', async (c) => {
+    const rawBody = await c.req.arrayBuffer()
+    const currentNow = now()
+    const signature = await verifySignedRequest(c, rawBody, currentNow)
+    const parsed = v.safeParse(CrawlerChapterPageObservationEventSchema, await parseRawJson(rawBody))
+    if (!parsed.success)
+      throw new HTTPException(400, { message: 'Invalid chapter page observation envelope' })
+    const event = parsed.output
+    if (event.key_id !== signature.keyId || event.run_id !== c.req.param('runId'))
+      throw new HTTPException(400, { message: 'Chapter page observation identity mismatch' })
+    if (Math.abs(currentNow - event.timestamp) > MAX_EVENT_AGE_MS)
+      throw new HTTPException(400, { message: 'Chapter page observation timestamp expired' })
+
+    const binding = await readChapterRunBinding(c, event.run_id, event.task_id, event.attempt, event.provider)
+    const bodySha256 = await sha256Hex(rawBody)
+    const existing = await readRecordedRepairEvent(c, event.run_id, event.event_id, event.nonce)
+    if (existing) {
+      if (existing.event_id !== event.event_id || existing.nonce !== event.nonce || existing.body_sha256 !== bodySha256)
+        throw new HTTPException(409, { message: 'Conflicting chapter page observation replay' })
+      return c.json(parseStoredOutcome(existing.outcome))
+    }
+
+    const parsedSnapshot = readCrawlerTaskSnapshot(JSON.parse(binding.request_snapshot_json), binding.operation as any)
+    if (!parsedSnapshot.ok || !('chapterId' in parsedSnapshot.snapshot)
+      || parsedSnapshot.snapshot.chapterId !== event.chapter_id
+      || parsedSnapshot.snapshot.comicId !== event.comic_id
+      || parsedSnapshot.snapshot.operation !== event.operation
+      || parsedSnapshot.snapshot.policyVersion !== event.policy_version) {
+      throw new HTTPException(409, { message: 'Chapter page snapshot binding mismatch' })
+    }
+    const chapter = await c.get('db').query.chapters.findFirst({
+      where: (chapters: any, operators: any) => operators.and(
+        operators.eq(chapters.id, event.chapter_id),
+        operators.eq(chapters.comicId, event.comic_id),
+      ),
+      with: { pages: { orderBy: (pages: any, operators: any) => [operators.asc(pages.pageNumber)] } },
+    })
+    if (!chapter)
+      throw new HTTPException(404, { message: 'Chapter not found for page observation' })
+    const completeness = await readChapterCompletenessCurrent(c.get('db'), event.comic_id)
+    if (completeness && completeness.sourceRevision > event.source_revision)
+      throw new HTTPException(409, { message: 'Chapter page observation source revision is stale' })
+    const current = await persistChapterPageAvailability(c.get('db'), {
+      attemptNumber: event.attempt,
+      chapterId: event.chapter_id,
+      expectedProjectionVersion: event.expected_projection_version,
+      eventSequence: event.sequence,
+      pageIdentities: event.page_identities,
+      pageNumbers: event.page_numbers,
+      policyVersion: event.policy_version,
+      provider: event.provider,
+      runId: event.run_id,
+      sourceRevision: event.source_revision,
+      taskId: event.task_id,
+    }, chapter)
+    if (!current || Number(current.sourceRevision) < event.source_revision)
+      throw new HTTPException(409, { message: 'Chapter page availability projection CAS failed' })
+    await advanceChapterObservationSequence(c, binding, event.run_id, event.sequence)
+    const outcome = {
+      accepted: true,
+      current: {
+        availablePageCount: current.availablePageCount,
+        expectedPageCount: current.expectedPageCount,
+        findings: current.findingsJson,
+        observationIdentity: current.observationIdentity,
+        projectionVersion: current.projectionVersion,
+        samples: current.samplesJson,
+        sourceRevision: current.sourceRevision,
+        status: current.status,
+        storedPageCount: current.storedPageCount,
+        unknownPageCount: current.unknownPageCount,
+        unavailablePageCount: current.unavailablePageCount,
+      },
+      kind: 'accepted' as const,
+    }
+    await storeRepairOutcome(c, {
+      bodySha256,
+      eventId: event.event_id,
+      keyId: event.key_id,
+      nonce: event.nonce,
+      outcome,
+      runId: event.run_id,
+      sequence: event.sequence,
+    })
+    return c.json(outcome)
   })
 
   crawlerRunsRoutes.post('/:runId/events', async (c) => {

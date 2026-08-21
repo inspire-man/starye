@@ -23,6 +23,20 @@ export interface Chapter {
 
 export interface ChapterDetail extends Chapter {
   images: string[]
+  pageAvailability?: {
+    availablePageCount: number
+    expectedPageCount: number
+    findings: unknown[]
+    observedAt: string | number
+    policyVersion: string
+    projectionVersion: number
+    samples: unknown[]
+    sourceRevision: number
+    status: 'available' | 'unavailable' | 'degraded' | 'unknown'
+    storedPageCount: number
+    unknownPageCount: number
+    unavailablePageCount: number
+  } | null
 }
 
 export interface ReadingProgress {

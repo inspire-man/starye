@@ -138,6 +138,52 @@ export const chapters = sqliteTable('chapter', {
 export type Chapter = InferSelectModel<typeof chapters>
 export type NewChapter = InferInsertModel<typeof chapters>
 
+/** Immutable source chapter set captured before a manga sync mutates stored rows. */
+export const comicChapterSourceSnapshots = sqliteTable('comic_chapter_source_snapshot', {
+  id: text('id').primaryKey(),
+  comicId: text('comic_id').notNull().references(() => comics.id, { onDelete: 'cascade' }),
+  sourceRevision: integer('source_revision').notNull(),
+  sourceUrl: text('source_url'),
+  terminalState: text('terminal_state', {
+    enum: ['complete', 'partial', 'unavailable', 'inconclusive'],
+  }).notNull(),
+  sourceCount: integer('source_count').notNull(),
+  rowCount: integer('row_count').notNull(),
+  snapshotIdentity: text('snapshot_identity').notNull(),
+  sourceFingerprint: text('source_fingerprint').notNull(),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_comic_chapter_source_snapshot_revision').on(table.comicId, table.sourceRevision),
+  uniqueIndex('idx_comic_chapter_source_snapshot_identity').on(table.snapshotIdentity),
+  uniqueIndex('idx_comic_chapter_source_snapshot_fingerprint').on(table.comicId, table.sourceFingerprint),
+  index('idx_comic_chapter_source_snapshot_observed').on(table.comicId, table.observedAt),
+])
+
+export type ComicChapterSourceSnapshot = InferSelectModel<typeof comicChapterSourceSnapshots>
+export type NewComicChapterSourceSnapshot = InferInsertModel<typeof comicChapterSourceSnapshots>
+
+/** Source rows are retained verbatim enough to audit duplicates and source ordering. */
+export const comicChapterSourceRows = sqliteTable('comic_chapter_source_row', {
+  id: text('id').primaryKey(),
+  snapshotId: text('snapshot_id').notNull().references(() => comicChapterSourceSnapshots.id, { onDelete: 'cascade' }),
+  comicId: text('comic_id').notNull().references(() => comics.id, { onDelete: 'cascade' }),
+  sourceOrdinal: integer('source_ordinal').notNull(),
+  identity: text('identity').notNull(),
+  title: text('title').notNull(),
+  slug: text('slug'),
+  chapterNumber: integer('chapter_number'),
+  sourceUrl: text('source_url'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_comic_chapter_source_row_ordinal').on(table.snapshotId, table.sourceOrdinal),
+  index('idx_comic_chapter_source_row_identity').on(table.snapshotId, table.identity),
+  index('idx_comic_chapter_source_row_comic').on(table.comicId, table.snapshotId),
+])
+
+export type ComicChapterSourceRow = InferSelectModel<typeof comicChapterSourceRows>
+export type NewComicChapterSourceRow = InferInsertModel<typeof comicChapterSourceRows>
+
 export const pages = sqliteTable('page', {
   id: text('id').primaryKey(),
   chapterId: text('chapter_id').notNull().references(() => chapters.id, { onDelete: 'cascade' }),
@@ -148,6 +194,110 @@ export const pages = sqliteTable('page', {
 })
 
 export type Page = InferSelectModel<typeof pages>
+
+/** Append-only bounded chapter completeness facts. */
+export const chapterCompletenessObservations = sqliteTable('chapter_completeness_observation', {
+  id: text('id').primaryKey(),
+  comicId: text('comic_id').notNull().references(() => comics.id, { onDelete: 'cascade' }),
+  snapshotId: text('snapshot_id').notNull().references(() => comicChapterSourceSnapshots.id, { onDelete: 'cascade' }),
+  sourceRevision: integer('source_revision').notNull(),
+  status: text('status', { enum: ['complete', 'partial', 'unavailable', 'inconclusive'] }).notNull(),
+  reasonCode: text('reason_code').notNull(),
+  countsJson: text('counts_json', { mode: 'json' }).notNull(),
+  findingsJson: text('findings_json', { mode: 'json' }).notNull(),
+  observationIdentity: text('observation_identity').notNull(),
+  eventSequence: integer('event_sequence').notNull().default(0),
+  taskId: text('task_id'),
+  runId: text('run_id'),
+  attemptNumber: integer('attempt_number'),
+  provider: text('provider', { enum: ['github-actions', 'local-proof', 'sync'] }).notNull().default('sync'),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_chapter_completeness_observation_identity').on(table.observationIdentity),
+  index('idx_chapter_completeness_observation_comic_revision').on(table.comicId, table.sourceRevision),
+  index('idx_chapter_completeness_observation_tuple').on(table.runId, table.attemptNumber, table.eventSequence),
+])
+
+export type ChapterCompletenessObservation = InferSelectModel<typeof chapterCompletenessObservations>
+export type NewChapterCompletenessObservation = InferInsertModel<typeof chapterCompletenessObservations>
+
+/** Current chapter completeness projection, promoted only by a newer source revision/observation. */
+export const chapterCompletenessCurrent = sqliteTable('chapter_completeness_current', {
+  comicId: text('comic_id').primaryKey().references(() => comics.id, { onDelete: 'cascade' }),
+  snapshotId: text('snapshot_id').notNull().references(() => comicChapterSourceSnapshots.id, { onDelete: 'cascade' }),
+  sourceRevision: integer('source_revision').notNull(),
+  status: text('status', { enum: ['complete', 'partial', 'unavailable', 'inconclusive'] }).notNull(),
+  reasonCode: text('reason_code').notNull(),
+  countsJson: text('counts_json', { mode: 'json' }).notNull(),
+  findingsJson: text('findings_json', { mode: 'json' }).notNull(),
+  observationIdentity: text('observation_identity').notNull(),
+  projectionVersion: integer('projection_version').notNull().default(0),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_chapter_completeness_current_observation').on(table.observationIdentity),
+  index('idx_chapter_completeness_current_revision').on(table.comicId, table.sourceRevision),
+])
+
+export type ChapterCompletenessCurrent = InferSelectModel<typeof chapterCompletenessCurrent>
+export type NewChapterCompletenessCurrent = InferInsertModel<typeof chapterCompletenessCurrent>
+
+/** Append-only bounded per-page image probe facts. */
+export const chapterPageAvailabilityObservations = sqliteTable('chapter_page_availability_observation', {
+  id: text('id').primaryKey(),
+  chapterId: text('chapter_id').notNull().references(() => chapters.id, { onDelete: 'cascade' }),
+  sourceRevision: integer('source_revision').notNull(),
+  policyVersion: text('policy_version').notNull(),
+  pageNumber: integer('page_number').notNull(),
+  pageIdentity: text('page_identity').notNull(),
+  status: text('status', { enum: ['available', 'unavailable', 'unknown', 'degraded'] }).notNull(),
+  reasonCode: text('reason_code').notNull(),
+  httpStatus: integer('http_status'),
+  contentType: text('content_type'),
+  urlIdentity: text('url_identity').notNull(),
+  summaryJson: text('summary_json', { mode: 'json' }).notNull(),
+  observationIdentity: text('observation_identity').notNull(),
+  eventSequence: integer('event_sequence').notNull().default(0),
+  taskId: text('task_id'),
+  runId: text('run_id'),
+  attemptNumber: integer('attempt_number'),
+  provider: text('provider', { enum: ['github-actions', 'local-proof', 'integrity'] }).notNull().default('integrity'),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_chapter_page_availability_observation_identity').on(table.observationIdentity),
+  index('idx_chapter_page_availability_observation_chapter_revision').on(table.chapterId, table.sourceRevision),
+  index('idx_chapter_page_availability_observation_page').on(table.chapterId, table.pageNumber),
+])
+
+export type ChapterPageAvailabilityObservation = InferSelectModel<typeof chapterPageAvailabilityObservations>
+export type NewChapterPageAvailabilityObservation = InferInsertModel<typeof chapterPageAvailabilityObservations>
+
+/** Current page availability projection for Reader/Dashboard readback. */
+export const chapterPageAvailabilityCurrent = sqliteTable('chapter_page_availability_current', {
+  chapterId: text('chapter_id').primaryKey().references(() => chapters.id, { onDelete: 'cascade' }),
+  sourceRevision: integer('source_revision').notNull(),
+  policyVersion: text('policy_version').notNull(),
+  status: text('status', { enum: ['available', 'unavailable', 'degraded', 'unknown'] }).notNull(),
+  expectedPageCount: integer('expected_page_count').notNull(),
+  storedPageCount: integer('stored_page_count').notNull(),
+  availablePageCount: integer('available_page_count').notNull(),
+  unavailablePageCount: integer('unavailable_page_count').notNull(),
+  unknownPageCount: integer('unknown_page_count').notNull(),
+  findingsJson: text('findings_json', { mode: 'json' }).notNull(),
+  samplesJson: text('samples_json', { mode: 'json' }).notNull(),
+  observationIdentity: text('observation_identity').notNull(),
+  projectionVersion: integer('projection_version').notNull().default(0),
+  observedAt: integer('observed_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_chapter_page_availability_current_observation').on(table.observationIdentity),
+  index('idx_chapter_page_availability_current_revision').on(table.chapterId, table.sourceRevision),
+])
+
+export type ChapterPageAvailabilityCurrent = InferSelectModel<typeof chapterPageAvailabilityCurrent>
+export type NewChapterPageAvailabilityCurrent = InferInsertModel<typeof chapterPageAvailabilityCurrent>
 
 // --- 电影业务 ---
 export const movies = sqliteTable('movie', {
@@ -821,8 +971,11 @@ export const postRelations = relations(posts, ({ one }) => ({
   }),
 }))
 
-export const comicRelations = relations(comics, ({ many }) => ({
+export const comicRelations = relations(comics, ({ many, one }) => ({
   chapters: many(chapters),
+  chapterSourceSnapshots: many(comicChapterSourceSnapshots),
+  chapterCompletenessObservations: many(chapterCompletenessObservations),
+  chapterCompletenessCurrent: one(chapterCompletenessCurrent),
 }))
 
 export const chapterRelations = relations(chapters, ({ one, many }) => ({
@@ -831,11 +984,70 @@ export const chapterRelations = relations(chapters, ({ one, many }) => ({
     references: [comics.id],
   }),
   pages: many(pages),
+  pageAvailabilityObservations: many(chapterPageAvailabilityObservations),
+  pageAvailabilityCurrent: one(chapterPageAvailabilityCurrent),
 }))
 
 export const pageRelations = relations(pages, ({ one }) => ({
   chapter: one(chapters, {
     fields: [pages.chapterId],
+    references: [chapters.id],
+  }),
+}))
+
+export const comicChapterSourceSnapshotRelations = relations(comicChapterSourceSnapshots, ({ one, many }) => ({
+  comic: one(comics, {
+    fields: [comicChapterSourceSnapshots.comicId],
+    references: [comics.id],
+  }),
+  rows: many(comicChapterSourceRows),
+  completenessObservations: many(chapterCompletenessObservations),
+  completenessCurrent: many(chapterCompletenessCurrent),
+}))
+
+export const comicChapterSourceRowRelations = relations(comicChapterSourceRows, ({ one }) => ({
+  snapshot: one(comicChapterSourceSnapshots, {
+    fields: [comicChapterSourceRows.snapshotId],
+    references: [comicChapterSourceSnapshots.id],
+  }),
+  comic: one(comics, {
+    fields: [comicChapterSourceRows.comicId],
+    references: [comics.id],
+  }),
+}))
+
+export const chapterCompletenessObservationRelations = relations(chapterCompletenessObservations, ({ one }) => ({
+  comic: one(comics, {
+    fields: [chapterCompletenessObservations.comicId],
+    references: [comics.id],
+  }),
+  snapshot: one(comicChapterSourceSnapshots, {
+    fields: [chapterCompletenessObservations.snapshotId],
+    references: [comicChapterSourceSnapshots.id],
+  }),
+}))
+
+export const chapterCompletenessCurrentRelations = relations(chapterCompletenessCurrent, ({ one }) => ({
+  comic: one(comics, {
+    fields: [chapterCompletenessCurrent.comicId],
+    references: [comics.id],
+  }),
+  snapshot: one(comicChapterSourceSnapshots, {
+    fields: [chapterCompletenessCurrent.snapshotId],
+    references: [comicChapterSourceSnapshots.id],
+  }),
+}))
+
+export const chapterPageAvailabilityObservationRelations = relations(chapterPageAvailabilityObservations, ({ one }) => ({
+  chapter: one(chapters, {
+    fields: [chapterPageAvailabilityObservations.chapterId],
+    references: [chapters.id],
+  }),
+}))
+
+export const chapterPageAvailabilityCurrentRelations = relations(chapterPageAvailabilityCurrent, ({ one }) => ({
+  chapter: one(chapters, {
+    fields: [chapterPageAvailabilityCurrent.chapterId],
     references: [chapters.id],
   }),
 }))

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createChapterAvailabilityAdapter } from '../chapter-availability-adapter'
 import { createControlledAdapter } from '../controlled-adapter'
 import { createRepairPlayersAdapter } from '../repair-adapter'
 import { createTemplateAdapterRegistry } from '../template-adapters'
@@ -252,5 +253,42 @@ describe('task runner template registry', () => {
     expect(result).toEqual({ contentIds: [], failureCode: 'receipt_missing' })
     expect(observationCalls).toBe(0)
     expect(sequenceCalls).toBe(0)
+  })
+
+  it('routes chapter page snapshots to the signed page observation boundary', async () => {
+    const adapter = createChapterAvailabilityAdapter()
+    const observeChapterPages = vi.fn(async () => ({ accepted: true }))
+    const result = await adapter.execute({
+      candidate: {
+        attempt: 1,
+        expectedProjectionVersion: 2,
+        policyReference: 'availability/chapter-pages',
+        policyVersion: 'chapter-page-probe/v1',
+        provider: 'local-proof',
+        runId: 'chapter-run-1',
+        sequence: 3,
+        snapshot: {
+          chapterId: 'comic-1-chapter-1',
+          comicId: 'comic-1',
+          entrypoint: 'manga-crawler',
+          finding: 'missing_page',
+          operation: 'recheck_chapter_pages',
+          pageNumbers: [2],
+          permissionResource: 'comic',
+          policyVersion: 'chapter-page-probe/v1',
+          sourceRevision: 4,
+          templateKey: 'manga',
+          templateVersion: 1,
+        },
+        target: { id: 'comic-1', kind: 'manga' },
+        taskId: 'chapter-task-1',
+      },
+      checkpoint: async () => false,
+      client: { observeChapterPages },
+      nextSequence: () => 4,
+      observe: vi.fn(),
+    })
+    expect(result.contentIds).toEqual(['comic-1'])
+    expect(observeChapterPages).toHaveBeenCalledWith(expect.objectContaining({ runId: 'chapter-run-1' }), 4)
   })
 })

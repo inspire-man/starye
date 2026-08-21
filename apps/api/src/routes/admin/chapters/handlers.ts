@@ -2,6 +2,7 @@ import type { Context } from 'hono'
 import type { AppEnv } from '../../../types'
 import { chapters, pages } from '@starye/db/schema'
 import { and, count, eq } from 'drizzle-orm'
+import { persistChapterPageAvailability, readChapterCompletenessCurrent, readChapterSourceSnapshots, readStoredChapterIdentities, redactChapterUrl } from '../../../domain/chapter-completeness'
 
 const INTEGRITY_PROBE_TIMEOUT_MS = 3000
 const PROBE_OK_STATUS_UPPER_BOUND = 400
@@ -140,12 +141,82 @@ export async function getComicChapters(c: Context<AppEnv>) {
   const id = c.req.param('id')!
   const db = c.get('db')
 
-  const results = await db.query.chapters.findMany({
-    where: eq(chapters.comicId, id),
-    orderBy: (chapters, { asc }) => [asc(chapters.sortOrder)],
-  })
+  const [results, snapshots] = await Promise.all([
+    db.query.chapters.findMany({
+      where: eq(chapters.comicId, id),
+      orderBy: (chapters, { asc }) => [asc(chapters.sortOrder)],
+    }),
+    readChapterSourceSnapshots(db, id, 1),
+  ])
+  const sourceRows = snapshots[0]?.rows ?? []
+  const sourceUrlBySlug = new Map(sourceRows.map(row => [row.slug, row.sourceUrl]))
 
-  return c.json(results)
+  return c.json(results.map(chapter => ({
+    ...chapter,
+    sourceUrl: sourceUrlBySlug.get(chapter.slug) ?? null,
+  })))
+}
+
+/** Read the authoritative source/stored chapter comparison for one comic. */
+export async function getComicChapterCompleteness(c: Context<AppEnv>) {
+  const comicId = c.req.param('id')!
+  const db = c.get('db')
+  const [current, history, stored] = await Promise.all([
+    readChapterCompletenessCurrent(db, comicId),
+    readChapterSourceSnapshots(db, comicId),
+    readStoredChapterIdentities(db, comicId),
+  ])
+  const currentProjection = current
+    ? {
+        comicId: current.comicId,
+        snapshotId: current.snapshotId,
+        sourceRevision: current.sourceRevision,
+        status: current.status,
+        terminalState: current.status,
+        reasonCode: current.reasonCode,
+        counts: current.countsJson,
+        findings: current.findingsJson,
+        observationIdentity: current.observationIdentity,
+        projectionVersion: current.projectionVersion,
+        observedAt: current.observedAt,
+        updatedAt: current.updatedAt,
+      }
+    : null
+  const boundedHistory = history.map(snapshot => ({
+    ...snapshot,
+    sourceUrl: redactChapterUrl(snapshot.sourceUrl) ?? null,
+    rows: snapshot.rows.slice(0, 100).map(row => ({
+      chapterNumber: row.chapterNumber,
+      identity: row.identity,
+      slug: row.slug,
+      sourceOrdinal: row.sourceOrdinal,
+      sourceUrl: redactChapterUrl(row.sourceUrl) ?? null,
+      title: row.title,
+    })),
+    rowsTruncated: snapshot.rows.length > 100,
+  }))
+  return c.json({
+    comicId,
+    current: currentProjection,
+    history: boundedHistory,
+    storedCount: stored.length,
+  })
+}
+
+/** Read chapter completeness plus bounded page availability current state. */
+export async function getChapterCompleteness(c: Context<AppEnv>) {
+  const id = c.req.param('id')!
+  const db = c.get('db')
+  const chapter = await db.query.chapters.findFirst({ where: eq(chapters.id, id) })
+  if (!chapter)
+    return c.json({ success: false, error: 'Chapter not found' }, 404)
+  const [comicCurrent, pageCurrent] = await Promise.all([
+    readChapterCompletenessCurrent(db, chapter.comicId),
+    db.query.chapterPageAvailabilityCurrent?.findFirst
+      ? db.query.chapterPageAvailabilityCurrent.findFirst({ where: (current: any, operators: any) => operators.eq(current.chapterId, id) })
+      : Promise.resolve(null),
+  ])
+  return c.json({ success: true, data: { chapterId: id, comicCurrent: comicCurrent ?? null, pageCurrent: pageCurrent ?? null } })
 }
 
 /**
@@ -267,6 +338,36 @@ export async function getChapterIntegrity(c: Context<AppEnv>) {
 
   if (!chapter) {
     return c.json({ success: false, error: 'Chapter not found' }, 404)
+  }
+
+  // New databases persist bounded page observations/current projection. Legacy
+  // fixtures keep the original read-only response shape for compatibility.
+  if (typeof db.query.chapterPageAvailabilityCurrent?.findFirst === 'function') {
+    const source = await readChapterCompletenessCurrent(db, chapter.comicId)
+    const current = await persistChapterPageAvailability(db, {
+      chapterId: id,
+      observedAt: Math.floor(Date.now() / 1000),
+      provider: 'integrity',
+      sourceRevision: source?.sourceRevision ?? 0,
+    }, chapter)
+    return c.json({
+      success: true,
+      data: {
+        chapterId: id,
+        title: chapter.title,
+        totalPages: current.storedPageCount,
+        checkedPages: current.storedPageCount,
+        okCount: current.availablePageCount,
+        failureCount: current.unavailablePageCount,
+        unknownCount: current.unknownPageCount,
+        status: current.status,
+        sourceRevision: current.sourceRevision,
+        projectionVersion: current.projectionVersion,
+        findings: current.findingsJson,
+        samples: current.samplesJson,
+        failures: current.samplesJson,
+      },
+    })
   }
 
   const blockedPages = chapter.pages

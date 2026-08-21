@@ -1,6 +1,6 @@
 import type { Database } from '@starye/db'
 import type { SourceCandidate, SourceHealthProjection } from '../movies/source-contract'
-import type { CrawlerReceiptUnion, CrawlerRunReceiptCandidate, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, RepairPlayersReceipt } from './types'
+import type { ChapterPageTaskSnapshot, ComicChapterTaskSnapshot, CrawlerReceiptUnion, CrawlerRunReceiptCandidate, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, RepairPlayersReceipt } from './types'
 import { deriveSourceReadiness } from '../movies/source-contract'
 import { readRepairSourceReadback } from '../movies/source-reconciliation'
 import { readCrawlerTaskSnapshot } from './template-registry'
@@ -222,6 +222,7 @@ export async function validateReceiptCandidate(input: {
     : readCrawlerTaskSnapshot(input.snapshot)
   if (snapshot && !snapshot.ok)
     return missing()
+  const snapshotValue = snapshot?.ok ? snapshot.snapshot : undefined
 
   const repairCandidate = asRepairReceiptCandidate(candidate)
   if (repairCandidate) {
@@ -277,6 +278,50 @@ export async function validateReceiptCandidate(input: {
         source,
         templateKey: input.templateKey,
         updatedCount: safeCount(candidate.updatedCount, 0),
+      },
+    }
+  }
+
+  if (snapshotValue && 'comicId' in snapshotValue
+    && 'operation' in snapshotValue
+    && (snapshotValue.operation === 'check_comic_chapters'
+      || snapshotValue.operation === 'recheck_comic_chapters'
+      || snapshotValue.operation === 'repair_comic_chapters'
+      || snapshotValue.operation === 'check_chapter_pages'
+      || snapshotValue.operation === 'recheck_chapter_pages'
+      || snapshotValue.operation === 'repair_chapter_pages')) {
+    const chapterSnapshot = snapshotValue as ComicChapterTaskSnapshot | ChapterPageTaskSnapshot
+    const comicId = chapterSnapshot.comicId
+    const contentId = ids.includes(comicId) ? comicId : undefined
+    if (!contentId)
+      return missing()
+    const isComicChapterSnapshot = chapterSnapshot.operation === 'check_comic_chapters'
+      || chapterSnapshot.operation === 'recheck_comic_chapters'
+      || chapterSnapshot.operation === 'repair_comic_chapters'
+    const currentQuery = isComicChapterSnapshot
+      ? input.database.$client.prepare(`
+          SELECT source_revision
+          FROM chapter_completeness_current
+          WHERE comic_id = ? AND source_revision = ?
+          LIMIT 1
+        `).bind(comicId, chapterSnapshot.sourceRevision)
+      : input.database.$client.prepare(`
+          SELECT source_revision
+          FROM chapter_page_availability_current
+          WHERE chapter_id = ? AND source_revision = ?
+          LIMIT 1
+        `).bind((chapterSnapshot as ChapterPageTaskSnapshot).chapterId, chapterSnapshot.sourceRevision)
+    const current = await currentQuery.all<{ source_revision: number }>()
+    if (!current.results?.[0])
+      return missing()
+    return {
+      ok: true,
+      receipt: {
+        createdCount: safeCount(candidate.createdCount, 0),
+        primaryContentId: contentId,
+        receiptSchemaVersion: CRAWLER_RECEIPT_SCHEMA_VERSION,
+        templateKey: 'manga',
+        updatedCount: safeCount(candidate.updatedCount, 1),
       },
     }
   }

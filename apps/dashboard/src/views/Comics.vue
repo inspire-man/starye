@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Chapter, Comic } from '@/lib/api'
+import type { Chapter, Comic, CrawlerChapterCompletenessProjection, CrawlerChapterPageProjection } from '@/lib/api'
 import { ConfirmDialog, DataTable, DetailDrawer, FilterPanel, Pagination, SkeletonCard, useFilters, usePagination, useToast } from '@starye/ui'
 import { RefreshCw } from 'lucide-vue-next'
 import { onMounted, ref, watch } from 'vue'
@@ -156,6 +156,11 @@ const selectedChapterIds = ref<Set<string>>(new Set())
 const chapterBatchDeleteOpen = ref(false)
 const batchOperating = ref(false)
 const chapterBatchDeleting = ref(false)
+const chapterCompleteness = ref<CrawlerChapterCompletenessProjection | null>(null)
+const chapterPageProjections = ref<Record<string, CrawlerChapterPageProjection['pageCurrent']>>({})
+const chapterAvailabilityAction = ref<string | null>(null)
+const chapterRepairOpen = ref(false)
+const pendingChapterRepair = ref<{ chapter: Chapter, pageNumbers: number[] } | null>(null)
 
 // ─── 数据加载 ───────────────────────────────────────────────────────────────
 
@@ -241,13 +246,108 @@ onMounted(() => {
 async function loadChapters(comicId: string) {
   chaptersLoading.value = true
   try {
-    chapters.value = await api.admin.getChapters(comicId)
+    const [chapterResponse, completeness] = await Promise.all([
+      api.admin.getChapters(comicId),
+      api.admin.getComicChapterCompleteness(comicId),
+    ])
+    chapters.value = chapterResponse
+    chapterCompleteness.value = completeness
+    chapterPageProjections.value = {}
   }
   catch (e) {
     handleError(e, '加载章节列表失败')
   }
   finally {
     chaptersLoading.value = false
+  }
+}
+
+async function checkComicCompleteness(): Promise<void> {
+  if (!editingComic.value || chapterAvailabilityAction.value)
+    return
+  chapterAvailabilityAction.value = 'comic'
+  try {
+    await api.admin.submitChapterAvailabilityCommand({
+      comicId: editingComic.value.id,
+      finding: 'source_partial',
+      idempotencyKey: `dashboard:comic-completeness:${crypto.randomUUID()}`,
+      operation: 'check_comic_chapters',
+    })
+    success('章节完整性检查已排队')
+    chapterCompleteness.value = await api.admin.getComicChapterCompleteness(editingComic.value.id)
+  }
+  catch (e) {
+    handleError(e, '提交章节完整性检查失败')
+  }
+  finally {
+    chapterAvailabilityAction.value = null
+  }
+}
+
+async function checkChapterPages(chapter: Chapter): Promise<void> {
+  if (!editingComic.value || chapterAvailabilityAction.value)
+    return
+  chapterAvailabilityAction.value = chapter.id
+  try {
+    const response = await api.admin.submitChapterAvailabilityCommand({
+      chapterId: chapter.id,
+      comicId: editingComic.value.id,
+      finding: 'unknown',
+      idempotencyKey: `dashboard:chapter-pages:${crypto.randomUUID()}`,
+      operation: 'check_chapter_pages',
+    })
+    success(response.kind === 'existing_active_run' ? '章节已有检查任务' : '章节页面检查已排队')
+    const current = await api.admin.getChapterCompleteness(chapter.id)
+    chapterPageProjections.value[chapter.id] = current.data.pageCurrent
+  }
+  catch (e) {
+    handleError(e, '提交章节页面检查失败')
+  }
+  finally {
+    chapterAvailabilityAction.value = null
+  }
+}
+
+function askChapterRepair(chapter: Chapter): void {
+  pendingChapterRepair.value = { chapter, pageNumbers: [] }
+  chapterRepairOpen.value = true
+}
+
+async function repairChapterPages(): Promise<void> {
+  const target = pendingChapterRepair.value
+  if (!editingComic.value || !target || chapterAvailabilityAction.value)
+    return
+  const pageNumbers = target.pageNumbers.length > 0
+    ? target.pageNumbers
+    : (chapterPageProjections.value[target.chapter.id]?.findingsJson ?? [])
+        .flatMap((finding: any) => Array.isArray(finding.pageNumbers) ? finding.pageNumbers : [])
+        .filter((pageNumber): pageNumber is number => Number.isSafeInteger(pageNumber) && pageNumber > 0)
+        .slice(0, 200)
+  if (pageNumbers.length === 0) {
+    handleError(new Error('empty_page_selection'), '没有可修复的页码选择')
+    return
+  }
+  chapterAvailabilityAction.value = target.chapter.id
+  try {
+    await api.admin.submitChapterAvailabilityCommand({
+      chapterId: target.chapter.id,
+      comicId: editingComic.value.id,
+      finding: 'missing_page',
+      idempotencyKey: `dashboard:chapter-page-repair:${crypto.randomUUID()}`,
+      operation: 'repair_chapter_pages',
+      pageNumbers,
+    })
+    success('章节页面修复已排队')
+    chapterRepairOpen.value = false
+    const current = await api.admin.getChapterCompleteness(target.chapter.id)
+    chapterPageProjections.value[target.chapter.id] = current.data.pageCurrent
+  }
+  catch (e) {
+    handleError(e, '提交章节页面修复失败')
+  }
+  finally {
+    chapterAvailabilityAction.value = null
+    pendingChapterRepair.value = null
   }
 }
 
@@ -905,6 +1005,37 @@ async function executeBatchOperation() {
 
           <!-- Chapters Tab -->
           <div v-else class="space-y-4">
+            <section class="rounded-md border border-primary/20 bg-primary/5 p-4" data-chapter-completeness>
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold text-foreground">
+                    章节完整性
+                  </p>
+                  <p v-if="chapterCompleteness?.current" class="mt-1 text-xs text-muted-foreground">
+                    {{ chapterCompleteness.current.status }} · revision {{ chapterCompleteness.current.sourceRevision }} ·
+                    source {{ chapterCompleteness.current.counts.sourceCount ?? 0 }} /
+                    stored {{ chapterCompleteness.current.counts.storedCount ?? 0 }}
+                  </p>
+                  <p v-else class="mt-1 text-xs text-muted-foreground">
+                    尚未产生章节完整性 projection。
+                  </p>
+                </div>
+                <button
+                  class="inline-flex h-8 items-center gap-2 rounded-md border border-primary/30 px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                  :disabled="chapterAvailabilityAction !== null"
+                  data-check-completeness
+                  @click="checkComicCompleteness"
+                >
+                  <RefreshCw :size="14" :class="{ 'animate-spin': chapterAvailabilityAction === 'comic' }" />
+                  检查章节完整性
+                </button>
+              </div>
+              <div v-if="chapterCompleteness?.current?.findings?.length" class="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span v-for="finding in chapterCompleteness.current.findings.slice(0, 8)" :key="JSON.stringify(finding)" class="rounded border border-border bg-background px-2 py-1">
+                  {{ (finding as any).code }}
+                </span>
+              </div>
+            </section>
             <div v-if="chaptersLoading" class="rounded-md border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
               加载章节中...
             </div>
@@ -970,6 +1101,29 @@ async function executeBatchOperation() {
                         <span v-if="chapter.slug" class="ml-2 font-mono text-[10px] text-muted-foreground">{{ chapter.slug }}</span>
                       </td>
                       <td class="px-4 py-2.5 text-right">
+                        <div class="mb-2 flex justify-end gap-2">
+                          <button
+                            class="inline-flex items-center gap-1 rounded border border-primary/25 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+                            :disabled="chapterAvailabilityAction !== null"
+                            :data-check-pages="chapter.id"
+                            @click="checkChapterPages(chapter)"
+                          >
+                            <RefreshCw :size="12" :class="{ 'animate-spin': chapterAvailabilityAction === chapter.id }" />
+                            检查页面
+                          </button>
+                          <button
+                            v-if="chapterPageProjections[chapter.id]?.status !== 'available'"
+                            class="inline-flex items-center gap-1 rounded border border-amber-400/40 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                            :disabled="chapterAvailabilityAction !== null"
+                            :data-repair-pages="chapter.id"
+                            @click="askChapterRepair(chapter)"
+                          >
+                            修复页面
+                          </button>
+                        </div>
+                        <p v-if="chapterPageProjections[chapter.id]" class="mb-2 text-[11px] text-muted-foreground">
+                          {{ chapterPageProjections[chapter.id]?.status }} · {{ chapterPageProjections[chapter.id]?.availablePageCount }}/{{ chapterPageProjections[chapter.id]?.expectedPageCount }} 页
+                        </p>
                         <button
                           class="text-xs font-medium text-destructive transition-colors hover:text-destructive/80"
                           @click="deleteSingleChapter(chapter.id)"
@@ -1005,6 +1159,16 @@ async function executeBatchOperation() {
         </div>
       </template>
     </DetailDrawer>
+
+    <ConfirmDialog
+      v-model:open="chapterRepairOpen"
+      title="提交章节页面修复"
+      :message="`将按当前章节 projection 的页码 finding 提交 revision-bound 修复：${pendingChapterRepair?.chapter.title ?? ''}`"
+      :loading="chapterAvailabilityAction !== null"
+      confirm-text="确认修复"
+      cancel-text="返回"
+      @confirm="repairChapterPages"
+    />
 
     <!-- 漫画批量操作确认对话框 -->
     <ConfirmDialog
