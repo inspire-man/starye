@@ -39,7 +39,7 @@ describe('javdb image strategy', () => {
     window.close()
   })
 
-  it('uses detail-page samples and probes both image URLs before returning', async () => {
+  it('uses detail-page samples and probes the complete image gallery before returning', async () => {
     const requestedUrls: string[] = []
     const strategy = new JavDBImageStrategy(
       async (url) => {
@@ -51,6 +51,7 @@ describe('javdb image strategy', () => {
           <div class="column-video-cover"><a href="https://c0.jdbstatic.com/covers/2m/2mDVMq.jpg"><img src="https://c0.jdbstatic.com/covers/2m/2mDVMq.jpg"></a></div>
           <div class="tile-images preview-images">
             <a class="tile-item" href="https://c0.jdbstatic.com/samples/2m/2mDVMq_l_0.jpg"><img src="https://c0.jdbstatic.com/samples/2m/2mDVMq_s_0.jpg"></a>
+            <a class="tile-item" href="https://c0.jdbstatic.com/samples/2m/2mDVMq_l_1.jpg"><img src="https://c0.jdbstatic.com/samples/2m/2mDVMq_s_1.jpg"></a>
           </div>
         `
       },
@@ -60,6 +61,11 @@ describe('javdb image strategy', () => {
     await expect(strategy.findMovieImages('ACZD-253')).resolves.toEqual({
       cover: 'https://c0.jdbstatic.com/covers/2m/2mDVMq.jpg',
       preview: 'https://c0.jdbstatic.com/samples/2m/2mDVMq_l_0.jpg',
+      previewImages: [
+        'https://c0.jdbstatic.com/samples/2m/2mDVMq_l_0.jpg',
+        'https://c0.jdbstatic.com/samples/2m/2mDVMq_l_1.jpg',
+      ],
+      refererUrl: 'https://javdb.com/v/2mDVMq',
     })
     expect(requestedUrls).toEqual([
       'https://javdb.com/search?q=ACZD-253',

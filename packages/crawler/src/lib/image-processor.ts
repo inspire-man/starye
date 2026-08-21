@@ -33,6 +33,7 @@ export interface ProcessedImage {
 
 export interface CrawlerImageTargetInput {
   imageUrl: string
+  imageData?: Uint8Array
   purpose: CrawlerImagePurpose | 'comic_chapter_page'
   keyNamespace: string
   filename: string
@@ -124,7 +125,7 @@ export class ImageProcessor {
     const parsedUrl = new URL(target.imageUrl)
     const defaultReferer = `${parsedUrl.origin}/`
 
-    const imageBuffer = await got(target.imageUrl, {
+    const imageBuffer = target.imageData ?? await got(target.imageUrl, {
       agent: {
         http: this.httpAgent,
         https: this.httpsAgent,

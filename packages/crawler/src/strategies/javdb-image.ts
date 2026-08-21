@@ -8,6 +8,8 @@ export const JAVDB_BASE_URL = 'https://javdb.com'
 export interface JavDBMovieImageUrls {
   cover: string
   preview: string
+  previewImages: string[]
+  refererUrl: string
 }
 
 export type JavDBTextFetcher = (url: string) => Promise<string>
@@ -96,7 +98,7 @@ export class JavDBImageStrategy {
         return null
 
       let cover = searchResult.cover
-      let preview = cover
+      let previewImages: string[] = []
       try {
         const detailHtml = await this.requestHtml(searchResult.detailUrl)
         if (detailHtml) {
@@ -109,8 +111,8 @@ export class JavDBImageStrategy {
             )
             if (detail?.coverImage)
               cover = detail.coverImage
-            if (detail?.previewImages?.[0])
-              preview = detail.previewImages[0]
+            if (detail?.previewImages?.length)
+              previewImages = detail.previewImages
           }
           finally {
             detailWindow.close()
@@ -123,10 +125,22 @@ export class JavDBImageStrategy {
 
       if (!(await this.probeImage(cover)))
         return null
-      if (!(await this.probeImage(preview)))
-        preview = cover
 
-      return { cover, preview }
+      const availablePreviewImages: string[] = []
+      for (const previewImage of previewImages) {
+        if (await this.probeImage(previewImage))
+          availablePreviewImages.push(previewImage)
+      }
+
+      if (availablePreviewImages.length === 0)
+        availablePreviewImages.push(cover)
+
+      return {
+        cover,
+        preview: availablePreviewImages[0],
+        previewImages: availablePreviewImages,
+        refererUrl: searchResult.detailUrl,
+      }
     }
     catch (error) {
       console.warn(`[JavDB] 影片搜索失败 (${movieCode}): ${error instanceof Error ? error.message : String(error)}`)

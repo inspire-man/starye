@@ -23,6 +23,7 @@ import { serviceAuth } from '../../../middleware/service-auth'
 import { AddPlayerSchema, BatchImportPlayersSchema, BatchOperationMoviesSchema, MovieFilterSchema, UpdateMovieActorsSchema, UpdateMovieMetadataSchema, UpdateMoviePublishersSchema, UpdatePlayerSchema } from '../../../schemas/admin'
 
 const adminMovies = new Hono<AppEnv>()
+const MINIMUM_MOVIE_PREVIEW_IMAGES = 2
 
 function hasManagedMovieMedia(
   coverImage: string | null | undefined,
@@ -35,6 +36,16 @@ function hasManagedMovieMedia(
     && previewImages.every(image => typeof image === 'string' && classifyStorageUrlKind(image, r2PublicUrl) === 'managed')
 }
 
+function hasManagedMoviePreviewGallery(
+  coverImage: string | null | undefined,
+  previewImages: unknown,
+  r2PublicUrl?: string | null,
+): boolean {
+  return hasManagedMovieMedia(coverImage, previewImages, r2PublicUrl)
+    && Array.isArray(previewImages)
+    && previewImages.length >= MINIMUM_MOVIE_PREVIEW_IMAGES
+}
+
 async function invalidateMovieGatewayCache(env: AppEnv['Bindings']): Promise<void> {
   const deleted = await clearGatewayCacheGroup(env.CACHE, 'movies')
   console.log('[Admin/Movies] Cleared gateway movie cache', { deleted })
@@ -45,7 +56,7 @@ adminMovies.get(
   '/missing-images',
   describeRoute({
     summary: '查询缺少影片媒体的记录',
-    description: '返回封面为空或概览图尚未回填的影片，供电影爬虫执行媒体回填',
+    description: '返回封面为空、概览图未托管或预览图集不足的影片，供电影爬虫执行媒体回填',
     tags: ['Admin'],
     operationId: 'getMoviesMissingImages',
     security: [{ serviceAuth: [] }],
@@ -65,6 +76,7 @@ adminMovies.get(
         isNull(movies.coverImage),
         eq(movies.coverImage, ''),
         sql`json_array_length(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE '[]' END) = 0`,
+        sql`json_array_length(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE '[]' END) < ${MINIMUM_MOVIE_PREVIEW_IMAGES}`,
       ]
       if (r2PublicUrl) {
         missingMediaConditions.push(
@@ -98,7 +110,7 @@ adminMovies.get(
       })
 
       const candidates = data
-        .filter(movie => !hasManagedMovieMedia(movie.coverImage, movie.previewImages, r2PublicUrl))
+        .filter(movie => !hasManagedMoviePreviewGallery(movie.coverImage, movie.previewImages, r2PublicUrl))
         .map(movie => ({
           code: movie.code,
           // 当前媒体回填执行器是 JavBusCrawler，旧记录可能仍指向已停用的 JavDB 来源。
