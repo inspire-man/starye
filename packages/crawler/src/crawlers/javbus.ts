@@ -29,6 +29,17 @@ export interface JavBusCrawlerConfig extends OptimizedCrawlerConfig {
   startPage?: number
 }
 
+export function mergeMoviePreviewImages(
+  sourcePreviewImages: readonly string[] | undefined,
+  fallbackPreviewImage: string,
+): string[] {
+  const sourceImages = (sourcePreviewImages ?? [])
+    .filter((image): image is string => Boolean(image))
+    .slice(0, 11)
+
+  return [...new Set([...sourceImages, fallbackPreviewImage].filter(Boolean))].slice(0, 12)
+}
+
 export class JavBusCrawler extends OptimizedCrawler {
   private currentPage: number
   private currentMirror: string
@@ -394,12 +405,12 @@ export class JavBusCrawler extends OptimizedCrawler {
       }, url)
 
       // JavBus/DMM 源图在当前 Node 网络路径上经常超时；JAV.hk CDN 提供稳定的番号图。
-      // 先把图片源切换到可处理的 CDN，随后仍由 ImageProcessor 统一上传到 R2。
+      // 封面使用 JAV.hk，预览图保留详情页图集，并追加 JAV.hk 单图作为兜底。
       if (movieInfo) {
         const javHkImages = buildJavHkMovieImageUrls(movieInfo.code)
         if (javHkImages) {
           movieInfo.coverImage = javHkImages.cover
-          movieInfo.previewImages = [javHkImages.preview]
+          movieInfo.previewImages = mergeMoviePreviewImages(movieInfo.previewImages, javHkImages.preview)
         }
       }
 
