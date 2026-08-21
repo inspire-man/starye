@@ -5,6 +5,7 @@ import type { ActorCrawlerConfig } from '../src/crawlers/actor-crawler'
 import type { JavBusCrawlerConfig } from '../src/crawlers/javbus'
 import type { CrawlerConfig } from '../src/lib/base-crawler'
 import type { CrawlerImageTargetInput, ProcessedImage, R2Config } from '../src/lib/image-processor'
+import type { JavDBMovieImageUrls } from '../src/strategies/javdb-image'
 import type { JavHkMovieImageUrls } from '../src/strategies/javhk'
 import type { RepairPlayersReceipt, RepairRunnerSnapshot, RepairSourceObservationInput, RepairSourceObservationResponse, RunnerAvailabilityObservationInput, RunnerCandidate } from '../src/task-runner/runner-client'
 import type { AdapterExecutionContext, AdapterExecutionResult } from '../src/task-runner/template-adapters'
@@ -75,7 +76,7 @@ interface BackfillActorSource {
 }
 
 interface BackfillMovieSource {
-  findMovieImages: (movieCode: string) => Promise<JavHkMovieImageUrls | null>
+  findMovieImages: (movieCode: string) => Promise<JavHkMovieImageUrls | JavDBMovieImageUrls | null>
 }
 
 type ProductionTemplate = 'manga' | 'movie'
@@ -304,6 +305,25 @@ function getProcessedPreviewUrl(images: readonly ProcessedImage[]): string {
   return preview.url
 }
 
+function getProcessedPreviewUrls(images: readonly ProcessedImage[]): string[] {
+  return images
+    .filter(image => image.variant === 'preview' && Boolean(image.url))
+    .map(image => image.url)
+}
+
+async function readBrowserImage(page: Page, url: string): Promise<Uint8Array | undefined> {
+  try {
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    const contentType = response?.headers()['content-type'] ?? ''
+    if ((response?.status() ?? 0) < 200 || (response?.status() ?? 0) >= 300 || !contentType.toLowerCase().startsWith('image/'))
+      return undefined
+    return await response?.buffer()
+  }
+  catch {
+    return undefined
+  }
+}
+
 async function runBackfillCoversMutation(
   context: PreparedCrawlerContext,
   environment: NodeJS.ProcessEnv,
@@ -323,6 +343,7 @@ async function runBackfillCoversMutation(
   const actorSource = dependencies.createBackfillActorSource?.() ?? new JavHkStrategy()
   let javDbBrowserManager: BrowserManager | null = null
   let javDbBrowserPage: Page | null = null
+  let javDbBrowserImagePage: Page | null = null
   let javDbBrowserSource: JavDBImageStrategy | null = null
   const movieSource = dependencies.createBackfillMovieSource?.() ?? (() => {
     const javHkSource = new JavHkStrategy()
@@ -336,11 +357,35 @@ async function runBackfillCoversMutation(
           javDbBrowserManager = new BrowserManager()
           await javDbBrowserManager.launch()
           javDbBrowserPage = await javDbBrowserManager.createPage()
+          javDbBrowserImagePage = await javDbBrowserManager.createPage()
           javDbBrowserSource = new JavDBImageStrategy(async (url) => {
             if (!javDbBrowserPage)
               return ''
             await javDbBrowserPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
             return javDbBrowserPage.content()
+          }, async (url) => {
+            if (!javDbBrowserPage)
+              return false
+
+            try {
+              const response = await javDbBrowserPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 })
+              const contentType = response?.headers()['content-type'] ?? ''
+              const imageState = await javDbBrowserPage.evaluate(() => {
+                const image = document.querySelector('img')
+                return image
+                  ? { complete: image.complete, height: image.naturalHeight, width: image.naturalWidth }
+                  : null
+              })
+              return (response?.status() ?? 0) >= 200
+                && (response?.status() ?? 0) < 300
+                && contentType.toLowerCase().startsWith('image/')
+                && imageState?.complete === true
+                && imageState.width > 0
+                && imageState.height > 0
+            }
+            catch {
+              return false
+            }
           })
         }
 
@@ -357,7 +402,7 @@ async function runBackfillCoversMutation(
   const movieCandidates = await apiClient.fetchMoviesNeedingImageRefresh(200)
   const actorCandidates = await apiClient.fetchPendingActors(200)
 
-  console.log(`🖼️  JAV.hk 媒体回填：${movieCandidates.length} 部影片，${actorCandidates.length} 位女优`)
+  console.log(`🖼️  影片/女优媒体回填：${movieCandidates.length} 部影片，${actorCandidates.length} 位女优`)
 
   try {
     for (const candidate of movieCandidates) {
@@ -368,29 +413,52 @@ async function runBackfillCoversMutation(
           continue
         }
 
-        const [coverImages, previewImages] = await Promise.all([
-          imageProcessor.process({
-            imageUrl: imageUrls.cover,
-            purpose: 'cover',
-            keyNamespace: `movies/${candidate.code}`,
-            filename: 'cover',
-            refererUrl: `${JAVHK_BASE_URL}/${JAVHK_LOCALE}`,
-          }),
-          imageProcessor.process({
-            imageUrl: imageUrls.preview,
-            purpose: 'cover',
-            keyNamespace: `movies/${candidate.code}`,
-            filename: 'overview-01',
-            refererUrl: `${JAVHK_BASE_URL}/${JAVHK_LOCALE}`,
-          }),
-        ])
+        const previewSourceImages = 'previewImages' in imageUrls && imageUrls.previewImages.length > 0
+          ? imageUrls.previewImages.slice(0, 12)
+          : [imageUrls.preview]
+        const refererUrl = 'refererUrl' in imageUrls
+          ? imageUrls.refererUrl
+          : `${JAVHK_BASE_URL}/${JAVHK_LOCALE}`
+        const coverImages = await imageProcessor.process({
+          imageUrl: imageUrls.cover,
+          ...('refererUrl' in imageUrls && javDbBrowserImagePage
+            ? { imageData: await readBrowserImage(javDbBrowserImagePage, imageUrls.cover) }
+            : {}),
+          purpose: 'cover',
+          keyNamespace: `movies/${candidate.code}`,
+          filename: 'cover',
+          refererUrl,
+        })
+        const processedPreviewImages: string[][] = []
+        for (const [index, imageUrl] of previewSourceImages.entries()) {
+          try {
+            const images = await imageProcessor.process({
+              imageUrl,
+              ...('refererUrl' in imageUrls && javDbBrowserImagePage
+                ? { imageData: await readBrowserImage(javDbBrowserImagePage, imageUrl) }
+                : {}),
+              purpose: 'cover',
+              keyNamespace: `movies/${candidate.code}`,
+              filename: `overview-${String(index + 1).padStart(2, '0')}`,
+              refererUrl,
+            })
+            processedPreviewImages.push(getProcessedPreviewUrls(images))
+          }
+          catch (error) {
+            console.warn(`⚠️  预览图回填失败 [${candidate.code}#${index + 1}]: ${error instanceof Error ? error.message : String(error)}`)
+            processedPreviewImages.push([])
+          }
+        }
 
         const coverImage = getProcessedPreviewUrl(coverImages)
-        const previewImage = getProcessedPreviewUrl(previewImages)
+        const managedPreviewImages = processedPreviewImages.flat()
+        if (managedPreviewImages.length === 0)
+          throw new Error('预览图回填未返回任何托管地址')
+
         const result = await apiClient.syncMovie({
           code: candidate.code,
           coverImage,
-          previewImages: [previewImage],
+          previewImages: managedPreviewImages,
         })
         if (!result)
           throw new Error('API 同步未返回成功响应')
@@ -929,3 +997,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exitCode = 1
   })
 }
+

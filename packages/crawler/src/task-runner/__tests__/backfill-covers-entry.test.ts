@@ -66,6 +66,10 @@ describe('registry-owned JAV.hk media backfill entry', () => {
       findMovieImages: vi.fn(async () => ({
         cover: 'https://i.jav.hk/movie/mudr392/small/mudr392pl.jpg',
         preview: 'https://i.jav.hk/movie/mudr392/small/mudr392ps.jpg',
+        previewImages: [
+          'https://i.jav.hk/movie/mudr392/samples/mudr392-01.jpg',
+          'https://i.jav.hk/movie/mudr392/samples/mudr392-02.jpg',
+        ],
       })),
     }))
     const createBackfillApiClient = vi.fn(() => ({
@@ -96,7 +100,7 @@ describe('registry-owned JAV.hk media backfill entry', () => {
     })
     expect(createBackfillActorSource).toHaveBeenCalledOnce()
     expect(createBackfillMovieSource).toHaveBeenCalledOnce()
-    expect(process).toHaveBeenCalledTimes(3)
+    expect(process).toHaveBeenCalledTimes(4)
     expect(process.mock.calls).toEqual(expect.arrayContaining([
       [expect.objectContaining({
         filename: 'cover',
@@ -105,7 +109,12 @@ describe('registry-owned JAV.hk media backfill entry', () => {
       })],
       [expect.objectContaining({
         filename: 'overview-01',
-        imageUrl: 'https://i.jav.hk/movie/mudr392/small/mudr392ps.jpg',
+        imageUrl: 'https://i.jav.hk/movie/mudr392/samples/mudr392-01.jpg',
+        purpose: 'cover',
+      })],
+      [expect.objectContaining({
+        filename: 'overview-02',
+        imageUrl: 'https://i.jav.hk/movie/mudr392/samples/mudr392-02.jpg',
         purpose: 'cover',
       })],
       [expect.objectContaining({
@@ -117,7 +126,10 @@ describe('registry-owned JAV.hk media backfill entry', () => {
     expect(syncMovie).toHaveBeenCalledWith({
       code: 'MUDR-392',
       coverImage: 'https://cdn.example.test/cover-preview.webp',
-      previewImages: ['https://cdn.example.test/overview-01-preview.webp'],
+      previewImages: [
+        'https://cdn.example.test/overview-01-preview.webp',
+        'https://cdn.example.test/overview-02-preview.webp',
+      ],
     })
     expect(syncActorDetails).toHaveBeenCalledWith('actor-1', { avatar: 'https://cdn.example.test/avatar-preview.webp' })
   })
@@ -173,3 +185,4 @@ describe('registry-owned JAV.hk media backfill entry', () => {
     expect(syncActorDetails).toHaveBeenLastCalledWith('actor-good', { avatar: 'https://cdn.example.test/avatar-preview.webp' })
   })
 })
+

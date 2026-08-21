@@ -254,6 +254,8 @@ describe('adminMoviesRoutes — GET /missing-images', () => {
     const db = createBatchStatusDb([
       { code: 'SS-154', coverImage: null, previewImages: null, sourceUrl: 'https://www.javbus.com/SS-154' },
       { code: 'SS-155', coverImage: '', previewImages: [], sourceUrl: 'https://javdb.com/v/old-ss-155' },
+      { code: 'SS-156', coverImage: 'https://cdn.example/cover.webp', previewImages: ['https://cdn.example/preview-1.webp'], sourceUrl: 'https://www.javbus.com/SS-156' },
+      { code: 'SS-157', coverImage: 'https://cdn.example/cover.webp', previewImages: ['https://cdn.example/preview-1.webp', 'https://cdn.example/preview-2.webp'], sourceUrl: 'https://www.javbus.com/SS-157' },
     ])
     const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret', R2_PUBLIC_URL: 'https://cdn.example' })
 
@@ -267,8 +269,9 @@ describe('adminMoviesRoutes — GET /missing-images', () => {
       data: [
         { code: 'SS-154', sourceUrl: 'https://www.javbus.com/SS-154' },
         { code: 'SS-155', sourceUrl: 'https://www.javbus.com/SS-155' },
+        { code: 'SS-156', sourceUrl: 'https://www.javbus.com/SS-156' },
       ],
-      meta: { limit: 200, total: 2 },
+      meta: { limit: 200, total: 3 },
     })
   })
 
@@ -289,3 +292,4 @@ describe('adminMoviesRoutes — GET /missing-images', () => {
     })
   })
 })
+
