@@ -20,6 +20,7 @@ import {
 } from '../constants'
 import { OptimizedCrawler } from '../core/optimized-crawler'
 import { FailedTaskRecorder } from '../lib/anti-detection'
+import { buildJavHkMovieImageUrls } from '../strategies/javhk'
 
 export interface JavBusCrawlerConfig extends OptimizedCrawlerConfig {
   startUrl?: string
@@ -391,6 +392,16 @@ export class JavBusCrawler extends OptimizedCrawler {
           return null
         }
       }, url)
+
+      // JavBus/DMM 源图在当前 Node 网络路径上经常超时；JAV.hk CDN 提供稳定的番号图。
+      // 先把图片源切换到可处理的 CDN，随后仍由 ImageProcessor 统一上传到 R2。
+      if (movieInfo) {
+        const javHkImages = buildJavHkMovieImageUrls(movieInfo.code)
+        if (javHkImages) {
+          movieInfo.coverImage = javHkImages.cover
+          movieInfo.previewImages = [javHkImages.preview]
+        }
+      }
 
       // 抓取磁力链接（在同一个已打开的详情页上执行 AJAX 请求）
       if (movieInfo) {

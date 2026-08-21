@@ -1,8 +1,7 @@
 import type { AppEnv } from '../../../types'
 import { actors, movies, publishers } from '@starye/db/schema'
-import { and, eq, like, or } from 'drizzle-orm'
+import { eq, like, or } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { buildAdultVisibilityCondition } from '../../../services/adult-filter'
 
 export const publicSearchRoutes = new Hono<AppEnv>()
   /**
@@ -11,7 +10,6 @@ export const publicSearchRoutes = new Hono<AppEnv>()
    */
   .get('/', async (c) => {
     const { q, types = 'movie,actor,publisher', limit = '5' } = c.req.query()
-    const user = c.get('user')
     const db = c.get('db')
 
     if (!q || q.trim().length === 0) {
@@ -30,8 +28,6 @@ export const publicSearchRoutes = new Hono<AppEnv>()
 
     try {
       if (typeList.includes('movie')) {
-        // R18 过滤：在 WHERE 层过滤，修复原应用层 filter bug（ACCESS-07）
-        const adultCond = buildAdultVisibilityCondition(user, movies)
         const searchCond = or(
           eq(movies.code, keyword),
           like(movies.title, `%${keyword}%`),
@@ -46,7 +42,7 @@ export const publicSearchRoutes = new Hono<AppEnv>()
             isR18: movies.isR18,
           })
           .from(movies)
-          .where(adultCond ? and(adultCond, searchCond) : searchCond)
+          .where(searchCond)
           .limit(limitNum) as typeof results.movies
       }
 

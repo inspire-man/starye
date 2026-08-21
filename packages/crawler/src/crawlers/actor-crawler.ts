@@ -12,6 +12,7 @@ import { FailedTaskRecorder } from '../lib/anti-detection'
 import { ImageProcessor } from '../lib/image-processor'
 import { NameMapper } from '../lib/name-mapper'
 import { JavBusStrategy } from '../strategies/javbus'
+import { JavHkStrategy } from '../strategies/javhk'
 import { SeesaaWikiStrategy } from '../strategies/seesaawiki/seesaawiki-strategy'
 import { ApiClient } from '../utils/api-client'
 import { BrowserManager } from '../utils/browser'
@@ -42,6 +43,7 @@ export class ActorCrawler {
   private browserManager: BrowserManager
   private apiClient: ApiClient
   private javbusStrategy: JavBusStrategy // 保留作为头像备用
+  private javHkStrategy: JavHkStrategy
   private seesaaWikiStrategy: SeesaaWikiStrategy // 主数据源
   private nameMapper: NameMapper
   private imageProcessor: ImageProcessor
@@ -84,6 +86,7 @@ export class ActorCrawler {
     )
     this.apiClient = new ApiClient(config.apiConfig)
     this.javbusStrategy = new JavBusStrategy()
+    this.javHkStrategy = new JavHkStrategy()
     this.seesaaWikiStrategy = new SeesaaWikiStrategy()
     this.imageProcessor = new ImageProcessor(config.r2Config)
     this.failedTasks = new FailedTaskRecorder()
@@ -235,6 +238,30 @@ export class ActorCrawler {
     return score
   }
 
+  private async resolveActorAvatar(actor: PendingActor, page: any): Promise<string | null> {
+    try {
+      const javHkActor = await this.javHkStrategy.findActor(actor.name)
+      if (javHkActor?.avatar) {
+        console.log(`   ✅ JAV.hk 头像匹配成功: ${javHkActor.sourceUrl}`)
+        return javHkActor.avatar
+      }
+    }
+    catch (error) {
+      console.warn(`   ⚠️  JAV.hk 头像查询失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    try {
+      const javbusActor = await this.javbusStrategy.crawlActorDetails(actor.sourceUrl, page)
+      if (javbusActor?.avatar)
+        return javbusActor.avatar
+    }
+    catch (error) {
+      console.warn(`   ⚠️  JavBus 头像补全失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    return null
+  }
+
   /**
    * 处理单个女优
    */
@@ -312,7 +339,7 @@ export class ActorCrawler {
         source: 'seesaawiki'
         sourceId: string
         sourceUrl: string
-        avatar?: string
+        avatar?: string | null
         bio?: string
         birthDate?: number
         height?: number
@@ -331,6 +358,7 @@ export class ActorCrawler {
         source: 'seesaawiki' as const,
         sourceId: nameMapping.wikiName,
         sourceUrl: actor.sourceUrl, // 保持原始 JavBus URL
+        avatar: null,
         bio: wikiDetails.bio || wikiDetails.reading || undefined, // 优先使用bio，fallback到reading
         birthDate: wikiDetails.birthDate || undefined,
         height: wikiDetails.height || undefined,
@@ -353,17 +381,8 @@ export class ActorCrawler {
 
       // 如果没有头像，尝试从 JavBus 补全
       if (!details.avatar) {
-        console.log(`   🔄 Wiki 无头像，尝试从 JavBus 补全...`)
-        try {
-          const javbusDetails = await this.javbusStrategy.crawlActorDetails(actor.sourceUrl, page)
-          if (javbusDetails?.avatar) {
-            details.avatar = javbusDetails.avatar
-            console.log(`   ✅ JavBus 头像补全成功`)
-          }
-        }
-        catch (e) {
-          console.warn(`   ⚠️  JavBus 头像补全失败:`, e instanceof Error ? e.message : String(e))
-        }
+        console.log(`   🔄 Wiki 无头像，尝试 JAV.hk，再回退 JavBus...`)
+        details.avatar = await this.resolveActorAvatar(actor, page)
       }
 
       // 上传头像到 R2（如果有）
@@ -383,8 +402,12 @@ export class ActorCrawler {
             details.avatar = preview.url
             console.log(`   ✅ 头像已上传: ${preview.url}`)
           }
+          else {
+            details.avatar = null
+          }
         }
         catch (e) {
+          details.avatar = null
           console.warn(`   ⚠️  头像上传失败（继续执行）:`, e instanceof Error ? e.message : String(e))
         }
       }
@@ -421,11 +444,16 @@ export class ActorCrawler {
    */
   private async processFallbackJavBus(actor: PendingActor, page: any): Promise<void> {
     try {
-      console.log(`   🔄 回退到 JavBus 数据源...`)
-      const details = await this.javbusStrategy.crawlActorDetails(actor.sourceUrl, page)
+      console.log(`   🔄 回退到 JAV.hk/JavBus 头像数据源...`)
+      const avatar = await this.resolveActorAvatar(actor, page)
+      if (!avatar)
+        throw new Error('JAV.hk/JavBus 均未能获取有效头像')
 
-      if (!details || !details.avatar) {
-        throw new Error('JavBus 也未能获取有效数据')
+      const details = {
+        source: 'javbus' as const,
+        sourceId: actor.sourceUrl.split('/').pop() || actor.id,
+        sourceUrl: actor.sourceUrl,
+        avatar,
       }
 
       // 上传头像到 R2
@@ -455,7 +483,7 @@ export class ActorCrawler {
 
       this.stats.processedActors++
       this.updateDataCompletenessStats(details, null)
-      console.log(`   ✅ JavBus 备用成功`)
+      console.log(`   ✅ 头像备用成功`)
     }
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -469,10 +497,10 @@ export class ActorCrawler {
    */
   private async processAvatarUpdate(actor: PendingActor, page: any): Promise<void> {
     try {
-      // 只爬取页面获取头像
-      const details = await this.javbusStrategy.crawlActorDetails(actor.sourceUrl, page)
+      // 只获取头像；JAV.hk 失败时再访问 JavBus 页面。
+      const avatar = await this.resolveActorAvatar(actor, page)
 
-      if (!details || !details.avatar) {
+      if (!avatar) {
         throw new Error('未能获取头像')
       }
 
@@ -480,7 +508,7 @@ export class ActorCrawler {
       console.log(`   📤 上传头像到 R2...`)
       const avatarImages = await this.imageProcessor.process(
         {
-          imageUrl: details.avatar,
+          imageUrl: avatar,
           purpose: 'avatar',
           keyNamespace: `actors/${actor.id}`,
           filename: 'avatar',
@@ -494,9 +522,9 @@ export class ActorCrawler {
 
       // 仅更新头像字段
       const result = await this.apiClient.syncActorDetails(actor.id, {
-        source: details.source,
-        sourceId: details.sourceId,
-        sourceUrl: details.sourceUrl,
+        source: 'javbus',
+        sourceId: actor.sourceUrl.split('/').pop() || actor.id,
+        sourceUrl: actor.sourceUrl,
         avatar: preview.url,
       })
 

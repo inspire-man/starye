@@ -9,6 +9,7 @@
 import type { InferInsertModel, SQL } from 'drizzle-orm'
 import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
+import { classifyStorageUrlKind } from '@starye/config/storage-purpose-policy'
 import { movies, players } from '@starye/db/schema'
 import { and, asc, count, desc, eq, gt, gte, isNull, like, lte, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -22,6 +23,17 @@ import { serviceAuth } from '../../../middleware/service-auth'
 import { AddPlayerSchema, BatchImportPlayersSchema, BatchOperationMoviesSchema, MovieFilterSchema, UpdateMovieActorsSchema, UpdateMovieMetadataSchema, UpdateMoviePublishersSchema, UpdatePlayerSchema } from '../../../schemas/admin'
 
 const adminMovies = new Hono<AppEnv>()
+
+function hasManagedMovieMedia(
+  coverImage: string | null | undefined,
+  previewImages: unknown,
+  r2PublicUrl?: string | null,
+): boolean {
+  return classifyStorageUrlKind(coverImage, r2PublicUrl) === 'managed'
+    && Array.isArray(previewImages)
+    && previewImages.length > 0
+    && previewImages.every(image => typeof image === 'string' && classifyStorageUrlKind(image, r2PublicUrl) === 'managed')
+}
 
 async function invalidateMovieGatewayCache(env: AppEnv['Bindings']): Promise<void> {
   const deleted = await clearGatewayCacheGroup(env.CACHE, 'movies')
@@ -46,28 +58,52 @@ adminMovies.get(
     const requestedLimit = Number.parseInt(c.req.query('limit') || '100', 10)
     const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 200) : 100
     const db = c.get('db')
+    const r2PublicUrl = c.env.R2_PUBLIC_URL?.trim().replace(/\/+$/u, '')
 
     try {
+      const missingMediaConditions = [
+        isNull(movies.coverImage),
+        eq(movies.coverImage, ''),
+        sql`json_array_length(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE '[]' END) = 0`,
+      ]
+      if (r2PublicUrl) {
+        missingMediaConditions.push(
+          sql`(
+            ${movies.coverImage} IS NOT NULL
+            AND ${movies.coverImage} <> ${r2PublicUrl}
+            AND ${movies.coverImage} NOT LIKE ${`${r2PublicUrl}/%`}
+            AND ${movies.coverImage} NOT LIKE ${`${r2PublicUrl}?%`}
+            AND ${movies.coverImage} NOT LIKE ${`${r2PublicUrl}#%`}
+          )`,
+          sql`EXISTS (
+            SELECT 1
+            FROM json_each(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE '[]' END) AS preview
+            WHERE preview.value <> ${r2PublicUrl}
+              AND preview.value NOT LIKE ${`${r2PublicUrl}/%`}
+              AND preview.value NOT LIKE ${`${r2PublicUrl}?%`}
+              AND preview.value NOT LIKE ${`${r2PublicUrl}#%`}
+          )`,
+        )
+      }
+
       const data = await db.query.movies.findMany({
-        where: and(
-          or(
-            isNull(movies.coverImage),
-            eq(movies.coverImage, ''),
-            sql`json_array_length(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE '[]' END) = 0`,
-          ),
-        ),
+        where: or(...missingMediaConditions),
         columns: {
           code: true,
+          coverImage: true,
+          previewImages: true,
         },
         orderBy: asc(movies.createdAt),
         limit,
       })
 
-      const candidates = data.map(movie => ({
-        code: movie.code,
-        // 当前媒体回填执行器是 JavBusCrawler，旧记录可能仍指向已停用的 JavDB 来源。
-        sourceUrl: `https://www.javbus.com/${encodeURIComponent(movie.code)}`,
-      }))
+      const candidates = data
+        .filter(movie => !hasManagedMovieMedia(movie.coverImage, movie.previewImages, r2PublicUrl))
+        .map(movie => ({
+          code: movie.code,
+          // 当前媒体回填执行器是 JavBusCrawler，旧记录可能仍指向已停用的 JavDB 来源。
+          sourceUrl: `https://www.javbus.com/${encodeURIComponent(movie.code)}`,
+        }))
 
       return c.json({ data: candidates, meta: { limit, total: candidates.length } })
     }
@@ -107,6 +143,7 @@ adminMovies.get(
 
     const db = c.get('db')
     const startTime = Date.now()
+    const r2PublicUrl = c.env.R2_PUBLIC_URL
 
     try {
     // 使用 SQL IN 查询批量获取电影状态
@@ -130,10 +167,7 @@ adminMovies.get(
             exists: true,
             code: result.code,
             slug: result.slug,
-            // NULL、无效值或空数组都表示媒体同步尚未形成可展示的概览图。
-            needsImageRefresh: !result.coverImage
-              || !Array.isArray(result.previewImages)
-              || result.previewImages.length === 0,
+            needsImageRefresh: !hasManagedMovieMedia(result.coverImage, result.previewImages, r2PublicUrl),
             updatedAt: result.updatedAt?.toISOString(),
           }
         }

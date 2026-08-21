@@ -42,7 +42,7 @@ async function fetchPendingActors(app: Hono<AppEnv>, rows: any[]) {
 }
 
 describe('admin actor pending route', () => {
-  it('合法 external avatar 不再进入 pending avatar update 队列', async () => {
+  it('external avatar 进入 pending 队列，只有 R2 托管头像才算完整', async () => {
     const app = createApp([
       {
         id: 'actor-external',
@@ -61,9 +61,13 @@ describe('admin actor pending route', () => {
     const json: any = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json.actors).toEqual([])
-    expect(json.total).toBe(0)
-    expect(json.needsAvatarUpdate).toBe(0)
+    expect(json.actors).toHaveLength(1)
+    expect(json.total).toBe(1)
+    expect(json.actors[0]).toMatchObject({
+      id: 'actor-external',
+      needsAvatarUpdate: true,
+    })
+    expect(json.needsAvatarUpdate).toBe(1)
     expect(json.needsSeesaaWikiRecrawl).toBe(0)
   })
 
@@ -102,16 +106,27 @@ describe('admin actor pending route', () => {
         avatar: 'https://images.example.com/avatars/recrawl.jpg',
         source: 'javbus',
       },
+      {
+        id: 'actor-javbus-missing-avatar',
+        name: 'JavBus Missing Avatar Actor',
+        sourceUrl: 'https://www.javbus.com/star/missing-avatar',
+        movieCount: 8,
+        crawlFailureCount: 0,
+        lastCrawlAttempt: null,
+        hasDetailsCrawled: true,
+        avatar: null,
+        source: 'javbus',
+      },
     ])
 
     const { response } = await fetchPendingActors(app, [])
     const json: any = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json.total).toBe(3)
+    expect(json.total).toBe(4)
     expect(json.highPriority).toBe(2)
-    expect(json.needsAvatarUpdate).toBe(1)
-    expect(json.needsSeesaaWikiRecrawl).toBe(1)
+    expect(json.needsAvatarUpdate).toBe(3)
+    expect(json.needsSeesaaWikiRecrawl).toBe(2)
 
     const missingAvatar = json.actors.find((actor: any) => actor.id === 'actor-missing-avatar')
     const recrawlActor = json.actors.find((actor: any) => actor.id === 'actor-recrawl')
@@ -121,7 +136,13 @@ describe('admin actor pending route', () => {
       source: 'seesaawiki',
     })
     expect(recrawlActor).toMatchObject({
-      needsAvatarUpdate: false,
+      needsAvatarUpdate: true,
+      source: 'javbus',
+    })
+
+    const javBusMissingAvatar = json.actors.find((actor: any) => actor.id === 'actor-javbus-missing-avatar')
+    expect(javBusMissingAvatar).toMatchObject({
+      needsAvatarUpdate: true,
       source: 'javbus',
     })
   })

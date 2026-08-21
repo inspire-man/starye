@@ -18,6 +18,7 @@ export async function syncMovies(c: Context<AppEnv>) {
     db,
     movies: body.movies,
     mode: body.mode || 'upsert',
+    r2PublicUrl: c.env.R2_PUBLIC_URL,
   })
 
   await clearGatewayCacheGroup(c.env.CACHE, 'movies')

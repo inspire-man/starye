@@ -1,10 +1,15 @@
 /// <reference types="node" />
 
+import type { Page } from 'puppeteer-core'
+import type { ActorCrawlerConfig } from '../src/crawlers/actor-crawler'
 import type { JavBusCrawlerConfig } from '../src/crawlers/javbus'
 import type { CrawlerConfig } from '../src/lib/base-crawler'
+import type { CrawlerImageTargetInput, ProcessedImage, R2Config } from '../src/lib/image-processor'
+import type { JavHkMovieImageUrls } from '../src/strategies/javhk'
 import type { RepairPlayersReceipt, RepairRunnerSnapshot, RepairSourceObservationInput, RepairSourceObservationResponse, RunnerAvailabilityObservationInput, RunnerCandidate } from '../src/task-runner/runner-client'
 import type { AdapterExecutionContext, AdapterExecutionResult } from '../src/task-runner/template-adapters'
 import type { ServerVideoAvailabilityConfig } from '../src/task-runner/video-runner-wiring'
+import type { MovieImageRefreshCandidate } from '../src/utils/api-client'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -14,7 +19,11 @@ import {
   productionCrawlerRequiredEnvironmentKeys as configuredProductionCrawlerRequiredEnvironmentKeys,
   productionCrawlerOptionalEnvironmentKeys,
 } from '@starye/config/deployment-target'
+import { ActorCrawler } from '../src/crawlers/actor-crawler'
+import { ImageProcessor } from '../src/lib/image-processor'
 import { createDataChainFixture, runDataChainFixture } from '../src/smoke/data-chain-fixture'
+import { JavDBImageStrategy } from '../src/strategies/javdb-image'
+import { JAVHK_BASE_URL, JAVHK_LOCALE, JavHkStrategy } from '../src/strategies/javhk'
 import { createActionsEventClientFromEnvironment } from '../src/task-runner/actions-event-client'
 import { createMangaAdapter } from '../src/task-runner/manga-adapter'
 import { createMovieAdapter } from '../src/task-runner/movie-adapter'
@@ -24,6 +33,7 @@ import { createTemplateAdapterRegistry } from '../src/task-runner/template-adapt
 import { createServerVideoAvailabilityAdapters } from '../src/task-runner/video-runner-wiring'
 import { GITHUB_ACTIONS_CONFIG } from '../src/types/config'
 import { ApiClient } from '../src/utils/api-client'
+import { BrowserManager } from '../src/utils/browser'
 
 interface PreparedCrawlerContext {
   readonly targetId: string
@@ -41,6 +51,31 @@ interface PreparedCrawlerContext {
 
 interface CrawlerApiClient {
   syncMovie: (movieData: unknown) => Promise<unknown>
+}
+
+interface BackfillActorCandidate {
+  readonly id: string
+  readonly name: string
+  readonly sourceUrl?: string | null
+}
+
+interface BackfillApiClient {
+  fetchMoviesNeedingImageRefresh: (limit?: number) => Promise<readonly MovieImageRefreshCandidate[]>
+  fetchPendingActors: (maxCount: number) => Promise<readonly BackfillActorCandidate[]>
+  syncActorDetails: (id: string, details: unknown) => Promise<unknown>
+  syncMovie: (movieData: unknown) => Promise<unknown>
+}
+
+interface BackfillImageProcessor {
+  process: (target: CrawlerImageTargetInput) => Promise<readonly ProcessedImage[]>
+}
+
+interface BackfillActorSource {
+  findActor: (actorName: string) => Promise<{ readonly avatar: string } | null>
+}
+
+interface BackfillMovieSource {
+  findMovieImages: (movieCode: string) => Promise<JavHkMovieImageUrls | null>
 }
 
 type ProductionTemplate = 'manga' | 'movie'
@@ -113,7 +148,12 @@ interface ProductionBinding {
 }
 
 export interface TargetCrawlerMutationDependencies {
+  readonly createActorCrawler?: (config: ActorCrawlerConfig) => Pick<ActorCrawler, 'run'>
   readonly createApiClient?: (config: { url: string, token: string, timeout: number }) => CrawlerApiClient
+  readonly createBackfillApiClient?: (config: { url: string, token: string, timeout: number }) => BackfillApiClient
+  readonly createBackfillImageProcessor?: (config: R2Config) => BackfillImageProcessor
+  readonly createBackfillActorSource?: () => BackfillActorSource
+  readonly createBackfillMovieSource?: () => BackfillMovieSource
   readonly createActionsEventClient?: (environment: NodeJS.ProcessEnv) => ProductionActionsClient
   readonly createRunnerClient?: (environment: NodeJS.ProcessEnv) => ProductionRunnerClient
   readonly discoverRepairSources?: (context: AdapterExecutionContext & { readonly snapshot: RepairRunnerSnapshot }) => Promise<RepairSourceObservationInput>
@@ -223,6 +263,179 @@ function createCrawlerConfig(context: PreparedCrawlerContext, environment: NodeJ
       publicUrl: requireEnvironment(environment, 'R2_PUBLIC_URL'),
       secretAccessKey: requireEnvironment(environment, 'R2_SECRET_ACCESS_KEY'),
     },
+  }
+}
+
+function createActorCrawlerConfig(context: PreparedCrawlerContext, environment: NodeJS.ProcessEnv): ActorCrawlerConfig {
+  return {
+    apiConfig: {
+      token: requireEnvironment(environment, 'CRAWLER_SECRET'),
+      url: context.identity.apiUrl,
+    },
+    browserConfig: {},
+    r2Config: {
+      accessKeyId: requireEnvironment(environment, 'R2_ACCESS_KEY_ID'),
+      accountId: context.identity.accountId,
+      bucketName: context.identity.r2Name ?? context.targetId,
+      publicUrl: requireEnvironment(environment, 'R2_PUBLIC_URL'),
+      secretAccessKey: requireEnvironment(environment, 'R2_SECRET_ACCESS_KEY'),
+    },
+  }
+}
+
+async function runActorCrawlerMutation(
+  context: PreparedCrawlerContext,
+  environment: NodeJS.ProcessEnv,
+  dependencies: TargetCrawlerMutationDependencies,
+): Promise<void> {
+  if (environment.STARYE_API_CONFIG_PATH !== context.apiConfigPath || environment.STARYE_GATEWAY_CONFIG_PATH !== context.gatewayConfigPath) {
+    throw new Error('target-crawl-mutation rejected an invalid prepared context.')
+  }
+
+  const crawler = dependencies.createActorCrawler?.(createActorCrawlerConfig(context, environment))
+    ?? new ActorCrawler(createActorCrawlerConfig(context, environment))
+  await crawler.run()
+}
+
+function getProcessedPreviewUrl(images: readonly ProcessedImage[]): string {
+  const preview = images.find(image => image.variant === 'preview')
+  if (!preview?.url)
+    throw new Error('target-crawl-mutation rejected an image processor result without a preview URL.')
+  return preview.url
+}
+
+async function runBackfillCoversMutation(
+  context: PreparedCrawlerContext,
+  environment: NodeJS.ProcessEnv,
+  dependencies: TargetCrawlerMutationDependencies,
+): Promise<void> {
+  if (environment.STARYE_API_CONFIG_PATH !== context.apiConfigPath || environment.STARYE_GATEWAY_CONFIG_PATH !== context.gatewayConfigPath) {
+    throw new Error('target-crawl-mutation rejected an invalid prepared context.')
+  }
+
+  const config = createCrawlerConfig(context, environment)
+  const apiClient = dependencies.createBackfillApiClient?.({
+    timeout: 60000,
+    token: config.api.token,
+    url: config.api.url,
+  }) ?? new ApiClient(config.api)
+  const imageProcessor = dependencies.createBackfillImageProcessor?.(config.r2) ?? new ImageProcessor(config.r2)
+  const actorSource = dependencies.createBackfillActorSource?.() ?? new JavHkStrategy()
+  let javDbBrowserManager: BrowserManager | null = null
+  let javDbBrowserPage: Page | null = null
+  let javDbBrowserSource: JavDBImageStrategy | null = null
+  const movieSource = dependencies.createBackfillMovieSource?.() ?? (() => {
+    const javHkSource = new JavHkStrategy()
+    return {
+      findMovieImages: async (movieCode: string): Promise<JavHkMovieImageUrls | null> => {
+        const javHkImages = await javHkSource.findMovieImages(movieCode)
+        if (javHkImages)
+          return javHkImages
+
+        if (!javDbBrowserManager) {
+          javDbBrowserManager = new BrowserManager()
+          await javDbBrowserManager.launch()
+          javDbBrowserPage = await javDbBrowserManager.createPage()
+          javDbBrowserSource = new JavDBImageStrategy(async (url) => {
+            if (!javDbBrowserPage)
+              return ''
+            await javDbBrowserPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+            return javDbBrowserPage.content()
+          })
+        }
+
+        if (!javDbBrowserSource)
+          return null
+
+        const javDbImages = await javDbBrowserSource.findMovieImages(movieCode)
+        if (javDbImages)
+          console.log(`✅ 使用 JavDB 图片源: ${movieCode}`)
+        return javDbImages
+      },
+    }
+  })()
+  const movieCandidates = await apiClient.fetchMoviesNeedingImageRefresh(200)
+  const actorCandidates = await apiClient.fetchPendingActors(200)
+
+  console.log(`🖼️  JAV.hk 媒体回填：${movieCandidates.length} 部影片，${actorCandidates.length} 位女优`)
+
+  try {
+    for (const candidate of movieCandidates) {
+      try {
+        const imageUrls = await movieSource.findMovieImages(candidate.code)
+        if (!imageUrls) {
+          console.warn(`⚠️  JAV.hk/JavDB 未找到可用影片图片源: ${candidate.code}`)
+          continue
+        }
+
+        const [coverImages, previewImages] = await Promise.all([
+          imageProcessor.process({
+            imageUrl: imageUrls.cover,
+            purpose: 'cover',
+            keyNamespace: `movies/${candidate.code}`,
+            filename: 'cover',
+            refererUrl: `${JAVHK_BASE_URL}/${JAVHK_LOCALE}`,
+          }),
+          imageProcessor.process({
+            imageUrl: imageUrls.preview,
+            purpose: 'cover',
+            keyNamespace: `movies/${candidate.code}`,
+            filename: 'overview-01',
+            refererUrl: `${JAVHK_BASE_URL}/${JAVHK_LOCALE}`,
+          }),
+        ])
+
+        const coverImage = getProcessedPreviewUrl(coverImages)
+        const previewImage = getProcessedPreviewUrl(previewImages)
+        const result = await apiClient.syncMovie({
+          code: candidate.code,
+          coverImage,
+          previewImages: [previewImage],
+        })
+        if (!result)
+          throw new Error('API 同步未返回成功响应')
+
+        console.log(`✅ 影片媒体已回填: ${candidate.code}`)
+      }
+      catch (error) {
+        console.warn(`⚠️ 影片媒体回填失败 [${candidate.code}]: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }
+  finally {
+    const browserManager = javDbBrowserManager as BrowserManager | null
+    if (browserManager)
+      await browserManager.close()
+  }
+
+  for (const actor of actorCandidates) {
+    if (!actor.id || !actor.name.trim())
+      continue
+
+    try {
+      const sourceActor = await actorSource.findActor(actor.name)
+      if (!sourceActor?.avatar) {
+        console.warn(`⚠️  JAV.hk 未找到女优头像: ${actor.name}`)
+        continue
+      }
+
+      const avatarImages = await imageProcessor.process({
+        imageUrl: sourceActor.avatar,
+        purpose: 'avatar',
+        keyNamespace: `actors/${actor.id}`,
+        filename: 'avatar',
+        refererUrl: `${JAVHK_BASE_URL}/${JAVHK_LOCALE}/actresses`,
+      })
+      const avatar = getProcessedPreviewUrl(avatarImages)
+      const result = await apiClient.syncActorDetails(actor.id, { avatar })
+      if (!result)
+        throw new Error('API 同步未返回成功响应')
+
+      console.log(`✅ 女优头像已回填: ${actor.name}`)
+    }
+    catch (error) {
+      console.warn(`⚠️ 女优头像回填失败 [${actor.name}]: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 }
 
@@ -667,6 +880,12 @@ export async function runTargetCrawlerMutation(
       throw new Error('target-crawl-mutation rejected an invalid prepared context.')
     }
     return runProductionCrawlerMutation(context, environment, production, dependencies)
+  }
+  if (entry === 'crawler-actor' && operation === 'actor') {
+    return runActorCrawlerMutation(context, environment, dependencies)
+  }
+  if (entry === 'crawler-backfill-covers' && operation === 'backfill-covers') {
+    return runBackfillCoversMutation(context, environment, dependencies)
   }
   if (entry === 'crawler-check-config' && operation === 'check-config') {
     console.log(JSON.stringify(redactedDiagnostic(environment)))

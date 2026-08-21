@@ -230,7 +230,7 @@ describe('adminMoviesRoutes — GET /batch-status', () => {
       { code: 'SS-156', coverImage: 'https://cdn.example/cover.webp', previewImages: [], sourceUrl: 'https://www.javbus.com/SS-156' },
       { code: 'SS-157', coverImage: 'https://cdn.example/cover.webp', previewImages: ['https://cdn.example/preview.webp'], sourceUrl: 'https://www.javbus.com/SS-157' },
     ])
-    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret' })
+    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret', R2_PUBLIC_URL: 'https://cdn.example' })
 
     const response = await app.fetch(new Request('http://localhost/batch-status?codes=SS-154,SS-155,SS-156,SS-157,SS-158', {
       headers: { 'x-service-token': 'test-secret' },
@@ -255,7 +255,7 @@ describe('adminMoviesRoutes — GET /missing-images', () => {
       { code: 'SS-154', coverImage: null, previewImages: null, sourceUrl: 'https://www.javbus.com/SS-154' },
       { code: 'SS-155', coverImage: '', previewImages: [], sourceUrl: 'https://javdb.com/v/old-ss-155' },
     ])
-    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret' })
+    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret', R2_PUBLIC_URL: 'https://cdn.example' })
 
     const response = await app.fetch(new Request('http://localhost/missing-images?limit=500', {
       headers: { 'x-service-token': 'test-secret' },

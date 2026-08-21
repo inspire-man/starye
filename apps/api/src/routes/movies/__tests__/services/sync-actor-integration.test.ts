@@ -321,7 +321,7 @@ describe('syncMovieData + getActorBySlug 端到端集成', () => {
     })
   })
 
-  describe('场景 5：R18 过滤', () => {
+  describe('场景 5：R18 目录可见性', () => {
     beforeAll(async () => {
       await syncMovieData({
         db: db as any,
@@ -331,16 +331,17 @@ describe('syncMovieData + getActorBySlug 端到端集成', () => {
       })
     })
 
-    it('未验证 R18 的用户不应看到 R18 影片', async () => {
+    it('未验证 R18 的用户仍可看到演员关联目录影片', async () => {
       const result = await getActorBySlug({
         db: db as any,
         slug: 'R18テスト演者',
         isR18Verified: false,
       })
 
-      // 演员存在，但关联影片为空（全部 R18）
+      // 目录关联可见，播放入口仍由 R18 状态控制
       expect(result).not.toBeNull()
-      expect(result!.relatedMovies).toHaveLength(0)
+      expect(result!.relatedMovies).toHaveLength(1)
+      expect(result!.relatedMovies[0].code).toBe('R18-MOVIE')
     })
 
     it('已验证 R18 的用户应看到 R18 影片', async () => {

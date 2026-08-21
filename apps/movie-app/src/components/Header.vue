@@ -43,22 +43,26 @@ function handleSearchClick() {
             </svg>
           </button>
 
-          <RouterLink to="/" class="shrink-0 text-xl font-bold tracking-tight text-primary transition hover:text-primary/80 sm:text-2xl">
-            影库
+          <RouterLink to="/" class="movie-brand shrink-0 transition hover:text-primary/80">
+            <span class="movie-brand-mark">JAV</span>
+            <span class="movie-brand-name">影库</span>
           </RouterLink>
 
           <!-- 桌面端导航 -->
           <nav class="hidden items-center gap-1 md:flex">
-            <RouterLink to="/" class="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="bg-muted text-foreground" exact>
+            <RouterLink to="/" class="movie-nav-link rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="is-active" exact>
               首页
             </RouterLink>
-            <RouterLink to="/actors" class="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="bg-muted text-foreground">
+            <RouterLink to="/new-releases" class="movie-nav-link rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="is-active">
+              新片
+            </RouterLink>
+            <RouterLink to="/actors" class="movie-nav-link rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="is-active">
               女优
             </RouterLink>
-            <RouterLink to="/publishers" class="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="bg-muted text-foreground">
+            <RouterLink to="/publishers" class="movie-nav-link rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="is-active">
               厂商
             </RouterLink>
-            <RouterLink to="/profile" class="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="bg-muted text-foreground">
+            <RouterLink to="/profile" class="movie-nav-link rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" active-class="is-active">
               我的
             </RouterLink>
           </nav>
@@ -126,3 +130,42 @@ function handleSearchClick() {
     </div>
   </header>
 </template>
+
+<style scoped>
+.movie-brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  color: hsl(var(--foreground));
+  line-height: 1;
+}
+
+.movie-brand-mark {
+  color: hsl(var(--primary));
+  font-size: 1.25rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.movie-brand-name {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.movie-nav-link {
+  transition: background-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease;
+}
+
+.movie-nav-link.is-active {
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+
+@media (max-width: 767px) {
+  .movie-brand-name {
+    display: none;
+  }
+}
+</style>

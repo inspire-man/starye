@@ -185,7 +185,7 @@ onMounted(loadHistory)
           <RouterLink :to="`/movie/${item.movieCode}/play`" class="item-cover-link">
             <div class="item-cover">
               <img
-                v-if="item.coverImage && !item.isR18"
+                v-if="item.coverImage"
                 :src="item.coverImage"
                 :alt="item.title"
                 loading="lazy"

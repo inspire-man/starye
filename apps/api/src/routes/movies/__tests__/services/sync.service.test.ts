@@ -138,7 +138,7 @@ describe('syncMovieData', () => {
       expect(result.skipped).toBe(1)
     })
 
-    it('同步概览图时去重、清洗并持久化图片 URL', async () => {
+    it('只持久化 R2 托管的概览图并过滤源站外链', async () => {
       const db = createMockDb({ existingMovie: null })
 
       const result = await syncMovieData({
@@ -148,21 +148,40 @@ describe('syncMovieData', () => {
           title: '概览图同步测试',
           sourceUrl: 'https://javdb.com/v/preview-001',
           previewImages: [
-            'https://www.dmmbus.cyou/samples/preview-1.jpg',
-            'https://cdn.example/preview-2.jpg',
-            'https://www.dmmbus.cyou/samples/preview-1.jpg',
+            'https://cdn.example/samples/preview-1.webp',
+            'https://source.example/preview-2.jpg',
+            'https://cdn.example/samples/preview-1.webp',
             'not-a-url',
           ],
         }],
+        r2PublicUrl: 'https://cdn.example',
       })
 
       expect(result.success).toBe(1)
       const persistedMovie = await (db as any).query.movies.findFirst()
       expect(persistedMovie.sourceUrl).toBe('https://javdb.com/v/preview-001')
       expect(persistedMovie.previewImages).toEqual([
-        'https://www.javbus.com/samples/preview-1.jpg',
-        'https://cdn.example/preview-2.jpg',
+        'https://cdn.example/samples/preview-1.webp',
       ])
+    })
+
+    it('源站封面和概览图不会绕过 R2 校验进入数据库', async () => {
+      const db = createMockDb({ existingMovie: null })
+
+      await syncMovieData({
+        db,
+        movies: [{
+          code: 'EXTERNAL-001',
+          title: '外链媒体拒绝测试',
+          coverImage: 'https://www.javbus.com/images/cover.jpg',
+          previewImages: ['https://www.javbus.com/images/preview.jpg'],
+        }],
+        r2PublicUrl: 'https://cdn.example',
+      })
+
+      const persistedMovie = await (db as any).query.movies.findFirst()
+      expect(persistedMovie.coverImage).toBeNull()
+      expect(persistedMovie.previewImages).toEqual([])
     })
   })
 
