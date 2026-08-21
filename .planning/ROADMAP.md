@@ -10,7 +10,7 @@ v1.5 将已经稳定的 crawler control plane 延伸为“任务运管 → 数�
 - ✅ **v1.1 存储成本控制与代码/文件整理** — Phases 6-10 shipped 2026-07-13. Archive: [v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 - ⚠ **v1.2 Cloudflare 账户/域名切换与全链路发布验证** — archived 2026-07-29 by override closeout. Archive: [v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 - ⚠ **v1.3 后台爬虫任务与内容运维** — Phases 16-19 shipped 2026-08-04 by override closeout. Archive: [v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
-- ✅ **v1.4 播放可用性与生产自愈闭环** — Phases 20-24 shipped 2026-08-10. Archive: [v1.4-phases/](milestones/v1.4-phases/)
+- ✅ **v1.4 播放可用性与生产自愈闭环** — Phases 20-24 shipped 2026-08-10. Archive: [v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md), [v1.4-REQUIREMENTS.md](milestones/v1.4-REQUIREMENTS.md), [v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md), [v1.4-phases/](milestones/v1.4-phases/)
 - 🚧 **v1.5 爬虫运管与内容可用性闭环** — Phases 25-28 in progress
 
 ## Current Milestone

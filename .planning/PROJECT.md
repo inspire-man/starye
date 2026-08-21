@@ -8,15 +8,16 @@
 
 **"部署在公网、能稳定日常使用的个人内容中台"** —— 所有子应用在同一域名下协同工作，能长期保持可访问、可阅读、可观看。其他一切（特性完整度、多用户、正式审核流）都可以退让，但"能用、不崩"必须守住。
 
-## Latest Archived Milestone: v1.3 后台爬虫任务与内容运维
+## Latest Archived Milestone: v1.4 播放可用性与生产自愈闭环
 
-**Closeout:** `override_closeout` on 2026-08-04. All 18 requirements, 4 phase verifications, 4 integration flows, and 4 end-to-end flows passed. Eight historical artifact-audit items were acknowledged as deferred in `.planning/STATE.md`.
+**Closeout:** `override_closeout` on 2026-08-10; archive backfilled on 2026-08-21. All 12 requirements, 5 phase verifications, 5 integration flows, and 5 end-to-end flows passed. Eleven global artifact-audit items were acknowledged as deferred in `.planning/STATE.md`.
 
 **Delivered and deferred scope:**
 
-- Phase 16-19 delivered the controlled movie/manga task templates, D1 task/run/attempt/log/lease audit model, independent HMAC runner callbacks, local runner, GitHub Actions production orchestration, Dashboard operations, and canonical RUNBOOK guidance.
-- Local and credentialed production evidence both complete the receipt → existing content CRUD chain. Production tuple `4af1519d-f12b-4418-8bba-1c2536ee3e2b` / `9ef31b31-f66a-4e11-927e-c890edbdf209` / provider `30890327381` is recorded in the phase archive.
-- `SUN-064` metadata mutation/readback/restore passed; its production receipt currently reports `players=0`, so player availability remains a follow-up observation.
+- Phase 20-24 delivered the source readiness contract, bounded source health, local and production `repair_players`, eligibility-aware playback state, GitHub Actions reconciliation, and fresh Dashboard → Viewer → playback evidence.
+- Metadata persisted, source transport/health, repair execution, receipt/readback, and actual playback remain independent fact layers; `SUN-064 players=0` is handled through an explicit disposition and repair boundary.
+- Phase 24 completed the fresh tuple evidence chain with tuple-bound D1 persistence, redacted playback events, visible Play, positive `currentTime` progress, and 15/15 UAT.
+- The global `audit-open` result still contains 11 historical or current debug sessions; they are tracked as follow-up context and are not v1.4 requirement gaps.
 - The unrelated `@starye/config` CI lint baseline remains tracked as non-causal technical debt.
 
 ## Current Milestone: v1.5 爬虫运管与内容可用性闭环
@@ -33,21 +34,21 @@
 
 ## Current State
 
-v1.3 已交付并归档，v1.4 已完成播放可用性、生产修复与 fresh Dashboard → Viewer → playback 证据闭环。产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations、source health、repair_players 和 receipt-backed content CRUD；v1.5 继续把视频与漫画的数据可用性检查接入同一运管链路。
+v1.4 已交付并归档，产品当前拥有可审计的 D1 crawler control plane、local runner、GitHub Actions production runner、Dashboard task operations、source health、repair_players、receipt-backed content CRUD 和 fresh playback evidence；v1.5 继续把视频与漫画的数据可用性检查接入同一运管链路。
 
-**Latest archived milestone:** v1.3 后台爬虫任务与内容运维（2026-08-04，override closeout）
+**Latest archived milestone:** v1.4 播放可用性与生产自愈闭环（2026-08-10，override closeout；2026-08-21 补归档）
 
 **Archive evidence:**
 
-- `.planning/milestones/v1.3-MILESTONE-AUDIT.md` — 18/18 requirements, 4/4 phases, 4/4 integration flows, and 4/4 end-to-end flows, with two non-blocking tech-debt observations
-- `.planning/milestones/v1.3-ROADMAP.md` — full v1.3 phase roadmap archive
-- `.planning/milestones/v1.3-REQUIREMENTS.md` — archived v1.3 requirements and traceability outcomes
-- `.planning/milestones/v1.3-phases/` — archived phase plans, summaries, verification, UAT, and local/production evidence
+- `.planning/milestones/v1.4-MILESTONE-AUDIT.md` — 12/12 requirements, 5/5 phases, 5/5 integration flows, and 5/5 end-to-end flows, with global follow-up items explicitly separated
+- `.planning/milestones/v1.4-ROADMAP.md` — full v1.4 phase roadmap archive
+- `.planning/milestones/v1.4-REQUIREMENTS.md` — archived v1.4 requirements and traceability outcomes
+- `.planning/milestones/v1.4-phases/` — archived phase plans, summaries, verification, UAT, UI specs, security, and evidence artifacts
 
 **Deferred historical evidence:**
 
 - The v1.2 selected-production Viewer terminal proof remains frozen at `canonical_viewer_unavailable` in the v1.2 archive.
-- The eight historical debug sessions acknowledged at v1.3 close remain listed in `.planning/STATE.md` for future explicit triage.
+- The global audit-open debug sessions acknowledged during the v1.4 backfill remain listed in `.planning/STATE.md` for future explicit triage.
 
 <details>
 <summary>Archived Milestone Focus - v1.1 存储成本控制与代码/文件整理</summary>
@@ -105,7 +106,11 @@ v1.3 已交付并归档，v1.4 已完成播放可用性、生产修复与 fresh 
 
 ### Validated in v1.4
 
-- ✓ 受控播放源可展示 bounded health/readback，并通过 canonical local Gateway 发起 `repair_players`，完成失败、重复、source observation、authoritative readback、receipt 和同电影 readiness 验证。 — Phase 21
+- ✓ `SRC-01`, `SRC-03`: task detail/MovieDetail 分离 metadata persisted 与 playback readiness，并对 `SUN-064 players=0` 给出可读回的 no-source/repairable disposition。 — Phase 20
+- ✓ `SRC-02`, `REP-01`: 受控播放源 health/readback 与固定模板 `repair_players` 操作通过 canonical local Gateway 串接。 — Phase 21
+- ✓ `REP-02`, `REP-03`: production repair 的 attempt、lease、provider、signed callback、retry/reconciliation、receipt 和同 content readback 保持可追溯。 — Phase 23
+- ✓ `PLAY-01`, `PLAY-02`, `PLAY-03`: MovieDetail、Dashboard 和 Player 提供 eligibility-aware 状态、受控路径、bounded retry/fallback 和状态反馈。 — Phase 22
+- ✓ `EVID-01`, `EVID-02`, `EVID-03`: fresh production tuple 贯通 Dashboard → D1 → provider → receipt/source → Viewer → playback，并保存 bounded redacted evidence。 — Phase 24
 
 ### Active
 
@@ -202,6 +207,12 @@ v1.3 已交付并归档，v1.4 已完成播放可用性、生产修复与 fresh 
 | v1.3 生产成功必须绑定完整 provider tuple | 只有匹配的 D1 task/run/attempt、provider run、签名事件、validated receipt 与既有编辑器 CRUD readback/restore 才能标记生产通过 | ✓ Validated in Phase 19 |
 | v1.3 receipt 复用既有内容编辑器 | 生产验收沿用 `primaryContentId` 进入现有 Dashboard/API/remote D1 CRUD，不新增第二套编辑器 | ✓ Validated in Phase 19 |
 | v1.3 以 override closeout 归档 | 8 个历史 artifact-audit items 被明确记录为 deferred；`SUN-064 players=0` 与 lint baseline 保留为非阻塞技术债 | ✓ Accepted at v1.3 closeout |
+| v1.4 将 metadata、source health、repair、receipt/readback 与 actual playback 分成独立事实层 | 单项成功不能掩盖来源不可用、旧 revision、失败回调或未验证播放 | ✓ Validated in Phases 20-24 |
+| v1.4 repair 只接受 server-owned operation snapshot 和 revision-bound intent | 继续复用 D1 control plane，拒绝任意 URL、命令、workflow、凭据和无界证据 | ✓ Validated in Phases 21-23 |
+| v1.4 生产浏览器继续由 GitHub Actions 承担 | Cloudflare Worker 只负责编排、鉴权、回调和 readback，不在 Worker 内运行完整 crawler/browser | ✓ Validated in Phase 23 |
+| v1.4 `playback_verified` 必须通过显式播放事件与正向 progress gate | fixture、按钮可见、provider success 或 metadata success 单独不构成实际播放证明 | ✓ Validated in Phase 24 |
+| v1.4 fresh production proof 使用独立 tuple | 历史 Phase 13 carrier 保持 frozen，新的 task/run/attempt/provider 必须可单独追溯 | ✓ Validated in Phase 24 |
+| v1.4 以 override closeout 补归档 | 归档发生在 v1.5 kickoff 后；全局 audit-open 项作为非 v1.4 requirement 的 deferred context 保存 | ✓ Accepted at v1.4 archive |
 
 ## Evolution
 
@@ -221,4 +232,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 after v1.4 completion and v1.5 kickoff*
+*Last updated: 2026-08-21 after v1.4 archive backfill*

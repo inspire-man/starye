@@ -1,5 +1,32 @@
 # Project Milestones: Starye
 
+## v1.4 播放可用性与生产自愈闭环 (Shipped: 2026-08-10)
+
+**Closeout:** `override_closeout`; archive backfilled on 2026-08-21 after v1.5 kickoff.
+
+**Verification:** 12/12 requirements, 5/5 phases, 5/5 integration flows, and 5/5 end-to-end flows passed. Phase 24 UAT recorded 15/15 passed, 0 issues, and 0 blocked items.
+
+**Known verification overrides:** The global artifact audit reported 11 historical or current debug sessions. They are acknowledged in `STATE.md`, remain outside v1.4 requirement evidence, and continue as follow-up context.
+
+**Known technical debt:** The unrelated `@starye/config` CI lint baseline remains open and non-causal. Historical Phase 13 selected-production Viewer proof remains frozen; v1.4 uses an independent fresh tuple.
+
+**Key accomplishments:**
+
+- Separated metadata persisted, source readiness, source health, repair state, receipt/readback, and actual playback into bounded fact layers, including an honest `SUN-064 players=0` disposition.
+- Delivered the local `repair_players` vertical slice through canonical Gateway with server-owned operation snapshots, signed observations, revision CAS, bounded receipts, and same-movie readback.
+- Closed Dashboard, MovieDetail, and Player readiness states with eligibility-aware source routing, bounded retry/fallback, confirmation-gated repair, polling, and redacted task detail.
+- Connected production repair to fixed GitHub Actions provider bindings, signed callbacks, lease/attempt lifecycle, retry/reconciliation, receipt validation, and current-attempt Dashboard projections.
+- Completed the fresh production Dashboard → Viewer → playback evidence chain with tuple-bound D1 persistence, redacted event evidence, visible Play, `currentTime` progress gating, and 15/15 UAT.
+
+**Archives:**
+
+- [v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
+- [v1.4-REQUIREMENTS.md](milestones/v1.4-REQUIREMENTS.md)
+- [v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md)
+- [v1.4-phases/](milestones/v1.4-phases/)
+
+---
+
 ## v1.3 后台爬虫任务与内容运维 (Shipped: 2026-08-04)
 
 **Closeout:** `override_closeout`.

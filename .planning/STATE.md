@@ -6,9 +6,9 @@ current_phase: 27
 current_phase_name: Comic Chapter Completeness
 status: planning
 stopped_at: Phase 26 complete; ready to plan Phase 27
-last_updated: "2026-08-20T17:55:37+08:00"
-last_activity: 2026-08-20
-last_activity_desc: Quick task 260820-op2-agent-agents-md complete; agent rule docs condensed
+last_updated: "2026-08-21T00:00:00+08:00"
+last_activity: 2026-08-21
+last_activity_desc: Backfilled the v1.4 milestone archive while preserving the active v1.5 planning state
 progress:
   total_phases: 2
   completed_phases: 2
@@ -20,7 +20,7 @@ progress:
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-08-10)
+See: `.planning/PROJECT.md` (updated 2026-08-21)
 
 **Core value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
 **Current focus:** Phase 27 — Comic Chapter Completeness
@@ -115,6 +115,7 @@ Items acknowledged and carried forward from previous milestone close:
 | verification_gap | Historical Phase 13 selected-production Viewer proof | frozen; v1.4 fresh tuple only | v1.2 closeout |
 | artifact_audit | Eight historical v1.3 artifact-audit items | deferred; not v1.4 success evidence | v1.3 closeout |
 | technical_debt | `@starye/config` CI lint baseline | non-causal; separate follow-up | v1.3 closeout |
+| artifact_audit | Global `audit-open` reported 11 historical or current debug sessions during the backfilled v1.4 archive | acknowledged; outside v1.4 requirement evidence and retained for later triage | v1.4 closeout |
 
 ### Quick Tasks Completed
 

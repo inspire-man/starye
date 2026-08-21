@@ -163,6 +163,49 @@
 - Sessions: multiple GSD workflow sessions across four execution phases plus production proof and closeout.
 - Notable: fixed templates, shared control-plane contracts, and evidence builders kept the production proof bounded while avoiding a second editor.
 
+## Milestone: v1.4 - 播放可用性与生产自愈闭环
+
+**Shipped:** 2026-08-10 | **Phases:** 5 | **Plans:** 23
+**Closeout:** Override closeout; archive backfilled on 2026-08-21 after v1.5 kickoff. All 12 requirements and phase-level verification passed; global artifact-audit follow-ups remain outside v1.4 scope.
+
+### What Was Built
+
+- Source readiness and receipt boundaries that keep metadata persisted, source health, repair state, and actual playback independent, including an honest `SUN-064 players=0` disposition.
+- A canonical Gateway local `repair_players` vertical slice with server-owned operation snapshots, signed observations, revision CAS, bounded receipts, and same-movie readback.
+- Dashboard, MovieDetail, and Player state closure with eligibility-aware source routing, bounded retries/fallbacks, confirmation-gated repair, polling, and redacted task details.
+- GitHub Actions production repair and reconciliation with fixed provider bindings, signed callbacks, lease/attempt history, retries, receipt validation, and current-attempt projections.
+- Fresh tuple-bound Dashboard → Viewer → playback evidence with D1 persistence, redacted media events, visible Play, positive `currentTime` progress, and 15/15 UAT.
+
+### What Worked
+
+- Keeping metadata, transport/source health, repair execution, receipts, and playback as separate facts prevented provider or metadata success from becoming a playback claim.
+- Reusing the v1.3 D1 task/run/attempt/lease/provider control plane allowed local and production repair to share idempotency, CAS, signed callbacks, and bounded history.
+- Making the fresh production tuple explicit preserved the distinction between fixture contract coverage and real Dashboard/Viewer/playback acceptance.
+
+### What Was Inefficient
+
+- The milestone archive was not created before v1.5 kickoff, so the closeout required a history-aware backfill instead of the ordinary current-milestone command.
+- The global artifact audit still contains historical and current debug sessions, which makes closeout reporting broader than the v1.4 runtime scope.
+- Production playback proof required several separate evidence layers and careful fail-closed boundaries before the final fresh tuple could be accepted.
+
+### Patterns Established
+
+- Availability state is projection from bounded, revision-bound observations and authoritative readback; no runner, HTTP, fixture, or metadata shortcut promotes content availability.
+- Repair commands are server-owned, idempotent, CAS-protected, and receipt-backed; late or stale callbacks remain history rather than overwriting the current projection.
+- Actual playback proof requires visible user play, allowlisted media events, and positive progress for the active media instance.
+
+### Key Lessons
+
+1. Archive a completed milestone before starting the next one, or preserve the completed roadmap and requirements snapshot at kickoff.
+2. Keep global debug debt explicitly separated from milestone requirement gaps so a closeout remains honest and actionable.
+3. Treat Dashboard, D1, provider, content readback, Viewer, and playback as independent evidence layers and require tuple equality across them.
+
+### Cost Observations
+
+- Model mix: not tracked.
+- Sessions: multiple GSD workflow sessions across five execution phases, production repair, playback proof, and archive backfill.
+- Notable: shared control-plane contracts and artifact-first evidence kept the production proof bounded without creating a second scheduler or content editor.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -172,6 +215,7 @@
 | v1.0 | multiple | 5 | Moved from implementation evidence to verifier-backed milestone closure |
 | v1.1 | multiple | 5 | Turned storage/cost policy into code, audit tooling, doc ownership, and shared semantics instead of one-off cleanup rules |
 | v1.2 | multiple | 5 | Added target-aware deployment contracts and accepted a bounded production-Viewer evidence deferral rather than restarting frozen carriers |
+| v1.4 | multiple | 5 | Split source readiness, repair, reconciliation, and actual playback into tuple-bound facts and completed a fresh production proof |
 
 ### Cumulative Quality
 
@@ -180,6 +224,7 @@
 | v1.0 | Phase-specific unit, typecheck, UAT, security, validation checks | 5/5 phases verified | Remaining debt is metadata/security-artifact cleanup, not unsatisfied runtime requirements |
 | v1.1 | Phase-specific unit, typecheck, audit, doc-contract, and milestone regression checks | 5/5 phases verified, 22/22 requirements satisfied | Milestone audit passed with no unsatisfied requirements |
 | v1.2 | Target-profile, deployment-contract, smoke, matrix, and audit checks | 26/30 requirements verified; override closeout | DATA-05/06/07 and TEST-05 remain deferred Viewer-proof evidence |
+| v1.4 | Source contract, repair lifecycle, Dashboard/Player, Actions reconciliation, Gateway, and playback-evidence checks | 5/5 phases verified, 12/12 requirements satisfied | Global debug audit items and unrelated config lint remain deferred outside milestone requirements |
 
 ### Top Lessons
 
