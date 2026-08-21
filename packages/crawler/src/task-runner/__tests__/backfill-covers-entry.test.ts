@@ -185,4 +185,3 @@ describe('registry-owned JAV.hk media backfill entry', () => {
     expect(syncActorDetails).toHaveBeenLastCalledWith('actor-good', { avatar: 'https://cdn.example.test/avatar-preview.webp' })
   })
 })
-

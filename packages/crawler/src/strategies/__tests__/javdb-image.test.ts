@@ -73,4 +73,3 @@ describe('javdb image strategy', () => {
     ])
   })
 })
-
