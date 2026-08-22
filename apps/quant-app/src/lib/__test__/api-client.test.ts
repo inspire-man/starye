@@ -44,4 +44,18 @@ describe('quantApi', () => {
     expect(init?.body).toBe(JSON.stringify({ ts_code: '000001.SZ', name: '平安银行' }))
     expect(init?.body).not.toContain('token')
   })
+
+  it('keeps the server reason when a sync is rejected by an active lease', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      code: 'QUANT_SYNC_IN_PROGRESS',
+      error: 'Quant daily sync is already running',
+      details: null,
+    }), { status: 409, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(quantApi.syncDaily()).resolves.toMatchObject({
+      status: 'rejected',
+      reason: 'Quant daily sync is already running',
+    })
+  })
 })

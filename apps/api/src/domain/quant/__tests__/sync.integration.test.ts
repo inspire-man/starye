@@ -8,7 +8,7 @@ import * as schema from '@starye/db/schema'
 import { drizzle } from 'drizzle-orm/libsql'
 import { describe, expect, it, vi } from 'vitest'
 import { TushareProviderError } from '../provider'
-import { createQuantWatchlistItem } from '../repository'
+import { acquireQuantSyncLease, createQuantWatchlistItem, saveQuantSyncState } from '../repository'
 import { QUANT_SYNC_PROVIDER_CONCURRENCY, QUANT_SYNC_PROVIDER_TIMEOUT_MS, syncQuantDaily } from '../sync'
 
 const migrationPath = new URL('../../../../../../packages/db/drizzle/0036_quant_workbench.sql', import.meta.url)
@@ -339,6 +339,36 @@ describe('quant daily sync integration', () => {
     expect(await client.execute('SELECT count(*) AS count FROM quant_daily_bar')).toMatchObject({ rows: [{ count: 20 }] })
     expect(await client.execute('SELECT snapshot_id FROM quant_sync_state WHERE id = \'daily\'')).toMatchObject({
       rows: [{ snapshot_id: lastResult?.snapshotId }],
+    })
+  })
+
+  it('does not finalize a sync after its lease expires', async () => {
+    const { client, db } = await createQuantDatabase()
+    const startedAt = new Date('2026-08-21T00:00:00.000Z')
+    const runId = 'expired-run'
+
+    await expect(acquireQuantSyncLease(db, {
+      runId,
+      fromDate: '20260801',
+      toDate: '20260821',
+      requestedCount: 1,
+      startedAt,
+    })).resolves.toBe(true)
+
+    await expect(saveQuantSyncState(db, {
+      status: 'completed',
+      runId,
+      fromDate: '20260801',
+      toDate: '20260821',
+      requestedCount: 1,
+      writtenCount: 1,
+      skippedCount: 0,
+      startedAt,
+      completedAt: new Date(startedAt.getTime() + 120_001),
+    })).resolves.toBe(false)
+
+    await expect(client.execute('SELECT status, run_id FROM quant_sync_state WHERE id = \'daily\'')).resolves.toMatchObject({
+      rows: [{ status: 'running', run_id: runId }],
     })
   })
 })

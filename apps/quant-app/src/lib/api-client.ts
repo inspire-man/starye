@@ -216,7 +216,7 @@ function parseSyncResult(payload: unknown): SyncResult {
     processed: readNumber(record, 'processed', 'processedCount', 'processed_count') ?? 0,
     written: writtenCount,
     skipped: skippedCount,
-    reason: readString(record, 'reason', 'message'),
+    reason: readString(record, 'reason', 'message', 'error'),
     snapshotId: readString(record, 'snapshotId', 'snapshot_id'),
     startedAt: readString(record, 'startedAt', 'started_at'),
     completedAt: readString(record, 'completedAt', 'completed_at'),

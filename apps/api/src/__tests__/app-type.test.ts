@@ -1,5 +1,6 @@
 import type { AppType } from '../index'
 import { describe, expect, it } from 'vitest'
+import { shouldBypassApiTimeout } from '../index'
 import adminMainRoutes from '../routes/admin/main'
 
 describe('appType Export', () => {
@@ -17,5 +18,11 @@ describe('appType Export', () => {
 
   it('将 crawler task router 保持在既有 admin 组合和 AppType 路径中', () => {
     expect(adminMainRoutes.routes.some(route => route.path === '/crawler-tasks')).toBe(true)
+  })
+
+  it('only bypasses the generic timeout for POST quant sync requests', () => {
+    expect(shouldBypassApiTimeout(new Request('http://localhost/api/quant/sync', { method: 'POST' }))).toBe(true)
+    expect(shouldBypassApiTimeout(new Request('http://localhost/api/quant/sync', { method: 'GET' }))).toBe(false)
+    expect(shouldBypassApiTimeout(new Request('http://localhost/api/quant/capabilities', { method: 'POST' }))).toBe(false)
   })
 })

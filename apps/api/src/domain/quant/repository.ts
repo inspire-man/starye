@@ -351,6 +351,7 @@ export async function saveQuantSyncState(db: Database, input: {
     eq(quantSyncState.id, QUANT_SYNC_STATE_ID),
     eq(quantSyncState.status, 'running'),
     eq(quantSyncState.runId, input.runId),
+    gt(quantSyncState.leaseExpiresAt, input.completedAt),
   )).run()
   return changedRows(result) === 1
 }
