@@ -33,6 +33,9 @@ describe('local env projection plan', () => {
     const apiEnv = plan.entries.find(entry => entry.file === 'apps/api/.dev.vars')
 
     expect(apiEnv?.targetManagedEntries.BETTER_AUTH_URL).toBe(plan.target.profile.urls.api)
+
+    const gatewayEnv = plan.entries.find(entry => entry.file === 'apps/gateway/.dev.vars')
+    expect(gatewayEnv?.targetManagedEntries.QUANT_ORIGIN).toBe(plan.target.profile.urls.quant)
   })
 
   it('不会为 user-managed secrets 生成具体值', () => {
@@ -65,3 +68,4 @@ describe('local env projection plan', () => {
     )
   })
 })
+

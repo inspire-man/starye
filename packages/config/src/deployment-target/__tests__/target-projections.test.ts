@@ -25,6 +25,7 @@ function resolveFixtureTarget() {
       gateway: 'https://alternate.example',
       api: 'https://api.alternate.example',
       dashboard: 'https://dashboard.alternate.example',
+      quant: 'https://quant.alternate.example',
       auth: 'https://auth.alternate.example',
       blog: 'https://blog.alternate.example',
       movie: 'https://movie.alternate.example',
@@ -84,6 +85,7 @@ describe('target projections', () => {
     })
     expect(alternate.deploy.workers.api.name).toBe('alternate-api')
     expect(current.deploy.workers.gateway.vars.tavernOrigin).toBe(defaultTargetUrls.tavern)
+    expect(current.deploy.workers.gateway.vars.quantOrigin).toBe(defaultTargetUrls.quant)
     expect(current.deploy.pages.map(page => page.surface)).not.toContain('tavern')
     expect(alternate.workflow).toMatchObject({ targetId: 'alternate-org', githubEnvironment: 'alternate-org', runId: 'alternate-run' })
   })
@@ -139,3 +141,4 @@ describe('target projections', () => {
     }
   })
 })
+

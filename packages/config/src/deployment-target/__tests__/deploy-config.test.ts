@@ -63,6 +63,8 @@ describe('target deploy config materializer', () => {
     expect(apiConfig).toContain('name = "starye-api"')
     expect(apiConfig).toContain('database_name = "starye-db"')
     expect(apiConfig).toContain('[triggers]\ncrons = ["*/1 * * * *"]')
+    const gatewayConfig = await readFile(result.gatewayConfigPath, 'utf8')
+    expect(gatewayConfig).toContain('QUANT_ORIGIN = "https://starye-quant.pages.dev"')
     expect(result.pages).toMatchObject({ surface: 'dashboard', project: 'starye-dashboard' })
     expect(path.dirname(result.pages!.redirectInputPath)).toBe(fixture.runDir)
     expect(path.relative(fixture.runDir, result.pages!.redirectInputPath).startsWith('..')).toBe(false)
@@ -141,3 +143,4 @@ describe('target deploy config materializer', () => {
     await expect(parsePagesBuildEnv(hostilePath, 'dashboard')).rejects.toThrow('Unknown Pages build env key')
   })
 })
+

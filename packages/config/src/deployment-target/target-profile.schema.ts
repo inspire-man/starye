@@ -4,6 +4,7 @@ export const targetUrlSurfaceValues = [
   'gateway',
   'api',
   'dashboard',
+  'quant',
   'auth',
   'blog',
   'movie',
@@ -151,6 +152,7 @@ const targetProfileObjectSchema = v.strictObject({
     gateway: canonicalUrl('Gateway URL'),
     api: canonicalUrl('API URL'),
     dashboard: canonicalUrl('Dashboard URL'),
+    quant: canonicalUrl('Quant URL'),
     auth: canonicalUrl('Auth URL'),
     blog: canonicalUrl('Blog URL'),
     movie: canonicalUrl('Movie URL'),
@@ -234,3 +236,4 @@ export function parseTargetProfile(input: unknown): TargetProfile {
 export function assertTargetProfile(input: unknown): asserts input is TargetProfile {
   parseTargetProfile(input)
 }
+

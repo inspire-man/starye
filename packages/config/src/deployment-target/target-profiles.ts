@@ -21,6 +21,7 @@ export const trackedTargetProfiles = [
       gateway: 'https://starye.org',
       api: 'https://api.starye.org',
       dashboard: 'https://starye-dashboard-5fz.pages.dev',
+      quant: 'https://starye-quant.pages.dev',
       auth: 'https://starye-auth-die.pages.dev',
       blog: 'https://blog.starye.org',
       movie: 'https://starye-movie-60w.pages.dev',
@@ -139,3 +140,4 @@ export const trackedTargetProfiles = [
 export const trackedTargetProfileMap: ReadonlyMap<TargetProfileId, TargetProfile> = new Map(
   trackedTargetProfiles.map(profile => [profile.id, profile]),
 )
+

@@ -183,6 +183,7 @@ function gatewayConfigContent(deploy: TargetDeployProjection): string {
     ['API_ORIGIN', worker.vars.apiOrigin],
     ['AUTH_ORIGIN', worker.vars.authOrigin],
     ['DASHBOARD_ORIGIN', worker.vars.dashboardOrigin],
+    ['QUANT_ORIGIN', worker.vars.quantOrigin],
     ['BLOG_ORIGIN', worker.vars.blogOrigin],
     ['MOVIE_ORIGIN', worker.vars.movieOrigin],
     ['COMIC_ORIGIN', worker.vars.comicOrigin],
@@ -377,3 +378,4 @@ export async function materializeTargetDeployConfig(
     throw error
   }
 }
+
