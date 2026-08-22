@@ -10,4 +10,3 @@
 - Run focused deployment-target/configuration tests and Gateway tests.
 - Run `pnpm lint`, `pnpm type-check`, and relevant tests before the Gateway deployment.
 - Verify Pages origin HTTP 200, Gateway `/quant/` HTML/static assets, and authenticated `/api/quant/capabilities` behavior without exposing secret values.
-

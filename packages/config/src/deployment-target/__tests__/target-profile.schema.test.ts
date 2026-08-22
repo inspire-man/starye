@@ -98,4 +98,3 @@ describe('targetProfile schema', () => {
     expect(parsed.ci.githubEnvironment).toBe('starye-org')
   })
 })
-

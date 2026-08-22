@@ -140,4 +140,3 @@ export const trackedTargetProfiles = [
 export const trackedTargetProfileMap: ReadonlyMap<TargetProfileId, TargetProfile> = new Map(
   trackedTargetProfiles.map(profile => [profile.id, profile]),
 )
-

@@ -26,4 +26,3 @@
 - 资源：Cloudflare Pages `starye-quant`、生产 Gateway Worker、生产 API Worker secret。
 - 验证：target profile/config 契约测试、Gateway 生产路由测试、生产 `https://starye.org/quant/` smoke。
 - 风险：Pages origin 或 API secret 缺失会分别导致页面 503 或同步能力 fail-closed；secret value 不写入 Git 或输出。
-

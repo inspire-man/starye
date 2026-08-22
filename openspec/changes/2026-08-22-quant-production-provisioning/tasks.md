@@ -14,4 +14,3 @@
 
 - [x] 3.1 Run focused tests, lint, type-check, and OpenSpec strict validation.
 - [x] 3.2 Verify `https://starye.org/quant/` and the authenticated Quant API through the Gateway.
-

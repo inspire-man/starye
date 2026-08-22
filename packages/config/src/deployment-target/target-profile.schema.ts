@@ -236,4 +236,3 @@ export function parseTargetProfile(input: unknown): TargetProfile {
 export function assertTargetProfile(input: unknown): asserts input is TargetProfile {
   parseTargetProfile(input)
 }
-

@@ -15,4 +15,3 @@ Tracked deployment targets MUST declare a valid Quant frontend origin. Target-aw
 - **WHEN** a target profile does not declare a Quant origin
 - **THEN** target-aware configuration generation fails closed before deployment
 - **AND** Gateway does not silently fall back to another Pages application
-
