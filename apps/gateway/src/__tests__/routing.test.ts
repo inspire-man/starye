@@ -12,6 +12,7 @@ import { defaultGatewayUrl } from './default-target.fixture'
 interface Env {
   API_ORIGIN?: string
   DASHBOARD_ORIGIN?: string
+  QUANT_ORIGIN?: string
   BLOG_ORIGIN?: string
   MOVIE_ORIGIN?: string
   COMIC_ORIGIN?: string
@@ -238,6 +239,39 @@ describe('路径匹配规则', () => {
     expect(resp.headers.get('location')).toBe('http://localhost/auth/login?next=%2Fdashboard%2Fmovies&error=not_admin')
   })
 
+  it('未登录访问 /quant/* 应重定向到 /auth/login 且不触发 quant 上游', async () => {
+    const req = makeRequest('http://localhost/quant/workbench')
+    const resp = await worker.fetch(req, {})
+
+    expect(resp.status).toBe(302)
+    expect(resp.headers.get('location')).toBe('http://localhost/auth/login?next=%2Fquant%2Fworkbench')
+    expect(capturedRequest).toBeNull()
+  })
+
+  it('/quant 应重定向到 /quant/', async () => {
+    const req = makeRequest('http://localhost/quant')
+    const resp = await worker.fetch(req, {})
+
+    expect(resp.status).toBe(301)
+    expect(resp.headers.get('location')).toBe('http://localhost/quant/')
+  })
+
+  it('管理员访问 /quant/* 应代理到本地 quant 服务并保留路径前缀', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }))
+      .mockImplementation(async (req: Request) => {
+        capturedRequest = req instanceof Request ? req : new Request(req)
+        return mockFetchResponse
+      }))
+
+    const req = makeRequest('http://localhost/quant/watchlist?tab=active', {
+      headers: { cookie: 'starye.session_token=quant-routing-test-token' },
+    })
+    await worker.fetch(req, { ADMIN_GITHUB_ID: '12345' })
+
+    expect(capturedRequest!.url).toBe('http://localhost:3004/quant/watchlist?tab=active')
+  })
+
   it('/api/* 应路由到 API 服务', async () => {
     const req = makeRequest('http://localhost/api/movies')
     await worker.fetch(req, {})
@@ -399,6 +433,7 @@ describe('生产环境路径重写', () => {
     COMIC_ORIGIN: 'https://comic.starye.com',
     TAVERN_ORIGIN: 'https://tavern.starye.com',
     AUTH_ORIGIN: 'https://auth.starye.com',
+    QUANT_ORIGIN: 'https://quant.starye.com',
     BLOG_ORIGIN: 'https://blog.starye.com',
     API_ORIGIN: 'https://api.starye.com',
   }
@@ -417,6 +452,43 @@ describe('生产环境路径重写', () => {
     await worker.fetch(req, { ...prodEnv, ADMIN_GITHUB_ID: '12345' })
     expect(capturedRequest!.url).not.toContain('/dashboard/movies')
     expect(capturedRequest!.url).toContain('/movies')
+  })
+
+  it('生产环境管理员访问 /quant/* 应使用 QUANT_ORIGIN 并剥离前缀', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }))
+      .mockImplementation(async (req: Request) => {
+        capturedRequest = req instanceof Request ? req : new Request(req)
+        return mockFetchResponse
+      }))
+
+    const req = makeRequest('https://starye.com/quant/watchlist', {
+      headers: { cookie: 'starye.session_token=quant-prod-routing-test-token' },
+    })
+    await worker.fetch(req, {
+      ...prodEnv,
+      ADMIN_GITHUB_ID: '12345',
+    })
+
+    expect(capturedRequest!.url).toBe('https://quant.starye.com/watchlist')
+  })
+
+  it('生产环境缺少 QUANT_ORIGIN 时关闭 quant 代理', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ user: { githubId: '12345' } }), { status: 200 }),
+    ))
+
+    const req = makeRequest('https://starye.com/quant/watchlist', {
+      headers: { cookie: 'starye.session_token=quant-missing-origin-token' },
+    })
+    const response = await worker.fetch(req, {
+      ...prodEnv,
+      ADMIN_GITHUB_ID: '12345',
+      QUANT_ORIGIN: undefined,
+    })
+
+    expect(response.status).toBe(503)
+    expect(capturedRequest).toBeNull()
   })
 
   it('生产环境 /movie/* 应剥离 /movie 前缀', async () => {

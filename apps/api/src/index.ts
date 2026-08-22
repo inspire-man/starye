@@ -40,6 +40,7 @@ import { publicSearchRoutes } from './routes/public/search'
 import { publicSeriesRoutes } from './routes/public/series'
 import { publicSettingsRoutes } from './routes/public/settings'
 import { publishersRoutes } from './routes/publishers'
+import quantRoutes from './routes/quant'
 import ratingsRoutes from './routes/ratings'
 import { uploadRoutes } from './routes/upload'
 
@@ -52,6 +53,14 @@ const SENTRY_NOISE_PATTERNS = [
   'the operation was aborted',
   'the user aborted a request',
 ]
+
+const API_REQUEST_TIMEOUT_MS = 30_000
+const QUANT_SYNC_PATH = '/api/quant/sync'
+
+export function shouldBypassApiTimeout(request: Request): boolean {
+  const url = new URL(request.url)
+  return request.method === 'POST' && url.pathname === QUANT_SYNC_PATH
+}
 
 type SentryBeforeSend = NonNullable<CloudflareOptions['beforeSend']>
 type SentryErrorEvent = Parameters<SentryBeforeSend>[0]
@@ -79,7 +88,11 @@ app.use('*', timing()) // 3️⃣ 性能指标
 app.use('*', secureHeaders()) // 4️⃣ 安全头部
 // Cloudflare Workers 自动压缩响应，无需 compress 中间件
 // 参考: https://hono.dev/docs/middleware/builtin/compress
-app.use('*', timeout(30000)) // 5️⃣ 超时控制 (30s)
+const apiRequestTimeout = timeout(API_REQUEST_TIMEOUT_MS)
+app.use('*', (c, next) => {
+  // Quant sync owns a 120s provider deadline; the generic API timeout must not preempt it.
+  return shouldBypassApiTimeout(c.req.raw) ? next() : apiRequestTimeout(c, next)
+}) // 5️⃣ 超时控制 (30s)
 app.use('*', corsMiddleware()) // 7️⃣ CORS 策略
 app.use('*', databaseMiddleware()) // 8️⃣ 数据库连接
 app.use('*', authMiddleware()) // 9️⃣ 认证会话
@@ -114,6 +127,7 @@ const routes = app
   .route('/api/public/settings', publicSettingsRoutes)
   .route('/api/series', publicSeriesRoutes)
   .route('/api/search', publicSearchRoutes)
+  .route('/api/quant', quantRoutes)
   // OpenAPI 文档
   .get(
     '/api/openapi.json',

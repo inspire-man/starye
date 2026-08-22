@@ -1,6 +1,6 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
 import { relations, sql } from 'drizzle-orm'
-import { foreignKey, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { foreignKey, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // --- 用户认证 (Better Auth 标准表) ---
 export const user = sqliteTable('user', {
@@ -917,6 +917,84 @@ export const aria2Configs = sqliteTable('aria2_configs', {
 
 export type Aria2Config = InferSelectModel<typeof aria2Configs>
 export type NewAria2Config = InferInsertModel<typeof aria2Configs>
+
+// --- 量化工作台 ---
+export const quantWatchlist = sqliteTable('quant_watchlist', {
+  id: text('id').primaryKey(),
+  tsCode: text('ts_code').notNull(),
+  name: text('name'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_quant_watchlist_ts_code').on(table.tsCode),
+  index('idx_quant_watchlist_created_at').on(table.createdAt),
+])
+
+export type QuantWatchlist = InferSelectModel<typeof quantWatchlist>
+export type NewQuantWatchlist = InferInsertModel<typeof quantWatchlist>
+
+export const quantDailyBars = sqliteTable('quant_daily_bar', {
+  id: text('id').primaryKey(),
+  tsCode: text('ts_code').notNull(),
+  tradeDate: text('trade_date').notNull(),
+  open: real('open').notNull(),
+  high: real('high').notNull(),
+  low: real('low').notNull(),
+  close: real('close').notNull(),
+  preClose: real('pre_close'),
+  change: real('change'),
+  pctChg: real('pct_chg'),
+  volume: real('volume').notNull(),
+  amount: real('amount'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_quant_daily_bar_identity').on(table.tsCode, table.tradeDate),
+  index('idx_quant_daily_bar_ts_code_date').on(table.tsCode, table.tradeDate),
+])
+
+export type QuantDailyBar = InferSelectModel<typeof quantDailyBars>
+export type NewQuantDailyBar = InferInsertModel<typeof quantDailyBars>
+
+export const quantScanSnapshots = sqliteTable('quant_scan_snapshot', {
+  id: text('id').primaryKey(),
+  status: text('status', { enum: ['completed', 'partial'] }).notNull(),
+  factorVersion: text('factor_version').notNull(),
+  inputTsCodesJson: text('input_ts_codes_json').notNull(),
+  fromDate: text('from_date').notNull(),
+  toDate: text('to_date').notNull(),
+  candidateCount: integer('candidate_count').notNull(),
+  candidatesJson: text('candidates_json').notNull(),
+  generatedAt: integer('generated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_quant_scan_snapshot_generated_at').on(table.generatedAt),
+  index('idx_quant_scan_snapshot_status_generated').on(table.status, table.generatedAt),
+])
+
+export type QuantScanSnapshot = InferSelectModel<typeof quantScanSnapshots>
+export type NewQuantScanSnapshot = InferInsertModel<typeof quantScanSnapshots>
+
+export const quantSyncState = sqliteTable('quant_sync_state', {
+  id: text('id').primaryKey(),
+  status: text('status', { enum: ['running', 'completed', 'partial', 'rejected'] }).notNull(),
+  runId: text('run_id'),
+  leaseExpiresAt: integer('lease_expires_at', { mode: 'timestamp' }),
+  fromDate: text('from_date').notNull(),
+  toDate: text('to_date').notNull(),
+  requestedCount: integer('requested_count').notNull().default(0),
+  writtenCount: integer('written_count').notNull().default(0),
+  skippedCount: integer('skipped_count').notNull().default(0),
+  reasonCode: text('reason_code'),
+  reason: text('reason'),
+  snapshotId: text('snapshot_id'),
+  startedAt: integer('started_at', { mode: 'timestamp' }).notNull(),
+  completedAt: integer('completed_at', { mode: 'timestamp' }),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+})
+
+export type QuantSyncState = InferSelectModel<typeof quantSyncState>
+export type NewQuantSyncState = InferInsertModel<typeof quantSyncState>
 
 // --- 评分关联关系 ---
 export const ratingsRelations = relations(ratings, ({ one }) => ({

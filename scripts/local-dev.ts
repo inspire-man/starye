@@ -24,6 +24,7 @@ const localGatewayOrigins = [
   ['API_ORIGIN', 'http://localhost:8787'],
   ['AUTH_ORIGIN', 'http://localhost:3003'],
   ['DASHBOARD_ORIGIN', 'http://localhost:5173'],
+  ['QUANT_ORIGIN', 'http://localhost:3004'],
   ['BLOG_ORIGIN', 'http://localhost:3002'],
   ['MOVIE_ORIGIN', 'http://localhost:3001'],
   ['COMIC_ORIGIN', 'http://localhost:3000'],
@@ -247,6 +248,12 @@ function localDevServiceSpecs(inputs: MaterializedLocalInputs): readonly LocalDe
       label: 'dashboard',
       port: 5173,
       args: ['--filter', 'dashboard', 'exec', 'vite', '--host', '0.0.0.0', '--config', 'vite.config.ts', '--configLoader', 'runner'],
+      environment: inputs.pageEnvironment('dashboard'),
+    },
+    {
+      label: 'quant',
+      port: 3004,
+      args: ['--filter', 'quant-app', 'exec', 'vite', '--host', '0.0.0.0', '--port', '3004', '--config', 'vite.config.ts', '--configLoader', 'runner'],
       environment: inputs.pageEnvironment('dashboard'),
     },
     {

@@ -4,7 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
-const fixedPorts = [8080, 8787, 5173, 3002, 3003, 3000, 3001] as const
+const fixedPorts = [8080, 8787, 5173, 3004, 3002, 3003, 3000, 3001] as const
 const legacyPorts = [8787, 5173, 3002, 3003, 3000, 3001] as const
 
 type FixedPort = (typeof fixedPorts)[number]
@@ -196,6 +196,26 @@ function findLegacyListenerOwners(listeners: readonly ListenerRecord[]): readonl
   return owners
 }
 
+function findCurrentListenerOwners(listeners: readonly ListenerRecord[]): readonly ListenerRecord[] | ClosedReason {
+  const byPort = new Map<FixedPort, ListenerRecord[]>()
+  for (const listener of listeners) {
+    const matching = byPort.get(listener.port) ?? []
+    matching.push(listener)
+    byPort.set(listener.port, matching)
+  }
+
+  const owners: ListenerRecord[] = []
+  for (const port of fixedPorts) {
+    const matching = byPort.get(port) ?? []
+    if (matching.length !== 1)
+      return 'legacy_listener_shape_mismatch'
+    owners.push(matching[0])
+  }
+  if (byPort.size !== fixedPorts.length || new Set(owners.map(owner => owner.ownerPid)).size !== owners.length)
+    return 'duplicate_listener_owner'
+  return owners
+}
+
 function reachesSupervisor(ownerPid: number, supervisorPid: number, processes: ReadonlyMap<number, ProcessRecord>): ClosedReason | null {
   const seen = new Set<number>()
   let currentPid = ownerPid
@@ -263,7 +283,10 @@ export function evaluateLocalDevAuthorization(input: unknown): LocalDevAuthoriza
     return blocked('malformed_snapshot')
   }
 
-  const listenerOwners = findLegacyListenerOwners(snapshot.listeners)
+  const usesCurrentPortShape = snapshot.listeners.some(listener => listener.port === 8080 || listener.port === 3004)
+  const listenerOwners = usesCurrentPortShape
+    ? findCurrentListenerOwners(snapshot.listeners)
+    : findLegacyListenerOwners(snapshot.listeners)
   if (typeof listenerOwners === 'string') {
     return blocked(listenerOwners)
   }
@@ -326,7 +349,7 @@ export function evaluateLocalDevAuthorization(input: unknown): LocalDevAuthoriza
 
 export function buildReadOnlySnapshotCommand(): string {
   return [
-    '$ports = @(8080,8787,5173,3002,3003,3000,3001)',
+    '$ports = @(8080,8787,5173,3004,3002,3003,3000,3001)',
     '$listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ports -contains [int]$_.LocalPort } | ForEach-Object { $listenerOwnerPid = [int]$_.OwningProcess; [pscustomobject]@{ port = [int]$_.LocalPort; ownerPid = $listenerOwnerPid } })',
     '$processes = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ProcessId -gt 0 } | ForEach-Object { $win32ProcessId = [int]$_.ProcessId; $parentProcessId = [int]$_.ParentProcessId; [pscustomobject]@{ pid = $win32ProcessId; parentPid = $parentProcessId; executable = $_.ExecutablePath; commandLine = $_.CommandLine; startTime = $_.CreationDate } })',
     '[pscustomobject]@{ listeners = $listeners; processes = $processes } | ConvertTo-Json -Compress -Depth 3',
