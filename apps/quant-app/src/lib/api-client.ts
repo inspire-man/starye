@@ -134,6 +134,8 @@ function capabilityReason(key: CapabilityKey, tier: number | null, value: string
     return `需要 2000 积分，当前 ${tier ?? '未知'} 积分档位未启用`
   if (value === 'invalid_points_tier')
     return '积分档位配置无效，能力已关闭'
+  if (value === 'invalid_provider')
+    return '数据源配置无效，能力已关闭'
   return value || defaultCapabilityReason(key, tier)
 }
 

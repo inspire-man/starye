@@ -30,4 +30,11 @@ describe('quant capability registry', () => {
   it('reports the free Eastmoney source when selected', () => {
     expect(createQuantCapabilityRegistry(undefined, 'eastmoney').provider).toBe('eastmoney')
   })
+
+  it('fails closed when the provider selection is invalid', () => {
+    const registry = createQuantCapabilityRegistry(undefined, null)
+
+    expect(registry.enabled).toEqual([])
+    expect(registry.capabilities.every(item => item.reason === 'invalid_provider')).toBe(true)
+  })
 })

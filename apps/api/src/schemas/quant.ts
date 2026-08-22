@@ -64,7 +64,7 @@ export const QuantSyncSchema = v.object({
 export const QuantCapabilitySchema = v.object({
   name: v.picklist(['daily', 'stock_basic', 'trade_cal', 'daily_basic']),
   enabled: v.boolean(),
-  reason: v.picklist(['enabled', 'requires_points_tier_2000', 'invalid_points_tier']),
+  reason: v.picklist(['enabled', 'requires_points_tier_2000', 'invalid_points_tier', 'invalid_provider']),
 })
 
 export const QuantCapabilitiesResponseSchema = v.object({

@@ -7,7 +7,7 @@ export const QUANT_CAPABILITIES = ['daily', 'stock_basic', 'trade_cal', 'daily_b
 export interface QuantCapabilityStatus {
   readonly name: QuantCapabilityName
   readonly enabled: boolean
-  readonly reason: 'enabled' | 'requires_points_tier_2000' | 'invalid_points_tier'
+  readonly reason: 'enabled' | 'requires_points_tier_2000' | 'invalid_points_tier' | 'invalid_provider'
 }
 
 export interface QuantCapabilityRegistry {
@@ -31,22 +31,26 @@ function parsePointsTier(value: unknown): 120 | 2000 | null {
 
 export function createQuantCapabilityRegistry(pointsTier: unknown = undefined, provider: QuantProviderName | null = 'tushare'): QuantCapabilityRegistry {
   const tier = parsePointsTier(pointsTier)
-  const enabled: readonly QuantCapabilityName[] = tier === 120
-    ? ['daily']
-    : tier === 2000
-      ? QUANT_CAPABILITIES
-      : []
+  const enabled: readonly QuantCapabilityName[] = provider === null
+    ? []
+    : tier === 120
+      ? ['daily']
+      : tier === 2000
+        ? QUANT_CAPABILITIES
+        : []
 
   const capabilities = QUANT_CAPABILITIES.map((name) => {
     const isEnabled = enabled.includes(name)
     return {
       name,
       enabled: isEnabled,
-      reason: tier === null
-        ? 'invalid_points_tier' as const
-        : isEnabled
-          ? 'enabled' as const
-          : 'requires_points_tier_2000' as const,
+      reason: provider === null
+        ? 'invalid_provider' as const
+        : tier === null
+          ? 'invalid_points_tier' as const
+          : isEnabled
+            ? 'enabled' as const
+            : 'requires_points_tier_2000' as const,
     }
   })
 
