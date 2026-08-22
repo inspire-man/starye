@@ -228,6 +228,7 @@ export const chapterCompletenessCurrent = sqliteTable('chapter_completeness_curr
   snapshotId: text('snapshot_id').notNull().references(() => comicChapterSourceSnapshots.id, { onDelete: 'cascade' }),
   sourceRevision: integer('source_revision').notNull(),
   status: text('status', { enum: ['complete', 'partial', 'unavailable', 'inconclusive'] }).notNull(),
+  terminalState: text('terminal_state', { enum: ['complete', 'partial', 'unavailable', 'inconclusive'] }).notNull().default('complete'),
   reasonCode: text('reason_code').notNull(),
   countsJson: text('counts_json', { mode: 'json' }).notNull(),
   findingsJson: text('findings_json', { mode: 'json' }).notNull(),

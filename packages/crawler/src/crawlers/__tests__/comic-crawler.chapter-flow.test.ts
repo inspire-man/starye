@@ -157,4 +157,21 @@ describe('comicCrawler chapter flow', () => {
       filename: '001',
     })).toThrow('Unsupported cover namespace: comics/comic-1/chapter-1. Allowed namespaces: movies/<code>, comics/<slug>')
   })
+
+  it('章节失败会让完整漫画运行以 partial failure 终止', async () => {
+    const { crawler, strategy } = createCrawler()
+    strategy.getChapterContent = vi.fn().mockRejectedValue(new Error('chapter fixture failed'))
+    ;(crawler as any).initBrowser = vi.fn().mockResolvedValue(undefined)
+    ;(crawler as any).createPage = vi.fn().mockResolvedValue({})
+    ;(crawler as any).closeBrowser = vi.fn().mockResolvedValue(undefined)
+    ;(crawler as any).failedTasks = {
+      getFailedTasks: () => [],
+      printSummary: vi.fn(),
+      record: vi.fn(),
+    }
+
+    await expect(crawler.run()).rejects.toThrow('comic_crawl_partial_failure:1:1')
+    expect((crawler as any).stats.failedMangas).toBe(1)
+    expect((crawler as any).stats.failedChapters).toBe(1)
+  })
 })

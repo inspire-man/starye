@@ -46,7 +46,12 @@ function eventForTransition(event: LifecycleEvent) {
     case 'progress': return { actor: 'runner' as const, sequence: event.sequence, type: 'runner_progress' as const }
     case 'log': return { actor: 'runner' as const, sequence: event.sequence, type: 'runner_log' as const }
     case 'succeeded': return { actor: 'runner' as const, receipt: event.receipt!, sequence: event.sequence, type: 'runner_succeeded' as const }
-    case 'failed': return { actor: 'runner' as const, sequence: event.sequence, type: 'runner_failed' as const }
+    case 'failed': return {
+      actor: 'runner' as const,
+      ...(event.code === 'partial_ingest' ? { failureCode: 'partial_ingest' as const } : {}),
+      sequence: event.sequence,
+      type: 'runner_failed' as const,
+    }
     case 'cancelled': return { actor: 'runner' as const, sequence: event.sequence, type: 'runner_cancelled' as const }
   }
 }
@@ -268,8 +273,8 @@ export function createCrawlerRunsRoutes(options: {
     const binding = await readRepairRunBinding(c, runId)
     if (!binding || binding.task_id !== taskId || binding.attempt_number !== attempt || binding.provider_name !== provider)
       throw new HTTPException(409, { message: 'Chapter observation binding mismatch' })
-    if (binding.status === 'cancelled' || binding.status === 'failed')
-      throw new HTTPException(409, { message: 'Chapter observation run is terminal' })
+    if (binding.status !== 'running' && binding.status !== 'cancel_requested')
+      throw new HTTPException(409, { message: 'Chapter observation run is not active' })
     return binding
   }
 

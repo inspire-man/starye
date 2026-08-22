@@ -1499,7 +1499,7 @@ async function withChapterAvailability(c: any, detail: Record<string, unknown>, 
     || parsed.snapshot.operation === 'repair_comic_chapters') {
     const [current, history] = await Promise.all([
       d1.prepare(`
-        SELECT source_revision, status, reason_code, counts_json, findings_json,
+        SELECT source_revision, status, terminal_state, reason_code, counts_json, findings_json,
           observation_identity, projection_version, observed_at
         FROM chapter_completeness_current
         WHERE comic_id = ? LIMIT 1
@@ -1527,7 +1527,7 @@ async function withChapterAvailability(c: any, detail: Record<string, unknown>, 
               reasonCode: row.reason_code,
               sourceRevision: row.source_revision,
               status: row.status,
-              terminalState: row.status,
+              terminalState: row.terminal_state,
             }
           : null,
         history: history.results ?? [],

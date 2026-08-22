@@ -259,6 +259,43 @@ describe('production crawler-run callback integration', () => {
     await expect(repository.getRun(runId)).resolves.toMatchObject({ status: 'succeeded', attemptNumber: 1 })
   })
 
+  it('persists a partial ingest callback as the D1 failure code', async () => {
+    const { app, client, repository } = await createHarness()
+    const scheduled = await postSigned(app, '/crawler-runs/schedule-register', scheduleEvent())
+    const { run_id: runId } = await scheduled.json() as { run_id: string }
+    await repository.claimDispatch(runId)
+    await postSigned(app, `/crawler-runs/${runId}/provider-started`, providerStartedEvent(runId))
+
+    const heartbeat = await postSigned(app, `/crawler-runs/${runId}/events`, {
+      attempt: 1,
+      event_id: 'partial-heartbeat-1',
+      key_id: 'key-current',
+      nonce: 'partial-heartbeat-nonce-1',
+      run_id: runId,
+      sequence: 2,
+      timestamp: new Date('2026-07-30T00:00:00.000Z').getTime(),
+      type: 'heartbeat',
+    })
+    expect(heartbeat.status).toBe(200)
+
+    const failed = await postSigned(app, `/crawler-runs/${runId}/events`, {
+      attempt: 1,
+      code: 'partial_ingest',
+      event_id: 'partial-failed-1',
+      key_id: 'key-current',
+      nonce: 'partial-failed-nonce-1',
+      run_id: runId,
+      sequence: 3,
+      timestamp: new Date('2026-07-30T00:00:00.000Z').getTime(),
+      type: 'failed',
+    })
+    expect(failed.status).toBe(200)
+    await expect(repository.getRun(runId)).resolves.toMatchObject({ status: 'failed' })
+    await expect(client.execute({ args: [runId], sql: 'SELECT failure_code FROM crawler_run WHERE id = ?' })).resolves.toMatchObject({
+      rows: [{ failure_code: 'partial_ingest' }],
+    })
+  })
+
   it('rejects provider snapshot drift before association mutation', async () => {
     const { app, repository } = await createHarness()
     const scheduled = await postSigned(app, '/crawler-runs/schedule-register', scheduleEvent())

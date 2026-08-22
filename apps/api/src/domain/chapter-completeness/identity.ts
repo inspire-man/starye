@@ -2,6 +2,15 @@ import type { NormalizedSourceChapterRow, SourceChapterRowInput, StoredChapterId
 
 const MAX_IDENTITY_LENGTH = 512
 
+function fingerprint(value: string): string {
+  let hash = 2_166_136_261
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16_777_619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
 function clean(value: string | null | undefined): string {
   return value?.trim().replace(/^\/+|\/+$/gu, '') ?? ''
 }
@@ -53,12 +62,14 @@ export function normalizeSourceChapterRow(input: SourceChapterRowInput): Normali
     : Number.isSafeInteger(input.chapterNumber) && input.chapterNumber >= 0 && input.chapterNumber <= 1_000_000
       ? input.chapterNumber
       : (() => { throw new Error('chapter_source_number_invalid') })()
+  const sourceUrl = normalizeChapterUrl(input.sourceUrl) ?? null
+  const slug = normalizeChapterSlug(input.slug) ?? (sourceUrl ? `url-${fingerprint(sourceUrl)}` : null)
   return {
     chapterNumber,
-    identity: normalizeChapterIdentity(input),
+    identity: normalizeChapterIdentity({ slug, sourceUrl }),
     sourceOrdinal: input.sourceOrdinal,
-    sourceUrl: normalizeChapterUrl(input.sourceUrl) ?? null,
-    slug: normalizeChapterSlug(input.slug) ?? null,
+    sourceUrl,
+    slug,
     title,
   }
 }

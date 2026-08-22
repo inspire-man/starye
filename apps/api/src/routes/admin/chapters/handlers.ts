@@ -172,7 +172,7 @@ export async function getComicChapterCompleteness(c: Context<AppEnv>) {
         snapshotId: current.snapshotId,
         sourceRevision: current.sourceRevision,
         status: current.status,
-        terminalState: current.status,
+        terminalState: current.terminalState,
         reasonCode: current.reasonCode,
         counts: current.countsJson,
         findings: current.findingsJson,

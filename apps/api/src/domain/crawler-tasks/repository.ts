@@ -2529,8 +2529,14 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     let safeSummary = input.safeSummary
     let failureCode: CrawlerRunFailureCode | undefined
 
-    if (input.event.type === 'runner_failed' && input.safeSummary === 'receipt_missing') {
-      failureCode = 'receipt_missing'
+    if (input.event.type === 'runner_failed') {
+      if (input.event.failureCode === 'partial_ingest' || input.safeSummary === 'partial_ingest') {
+        event = { ...input.event, failureCode: 'partial_ingest' }
+        failureCode = 'partial_ingest'
+      }
+      else if (input.safeSummary === 'receipt_missing') {
+        failureCode = 'receipt_missing'
+      }
     }
 
     if (input.event.type === 'runner_succeeded') {

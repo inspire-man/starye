@@ -20,11 +20,27 @@ describe('chapter image probe', () => {
   })
 
   it('accepts an image content type after a HEAD response', async () => {
-    const fetch = vi.fn(async () => new Response(null, { headers: { 'content-type': 'image/jpeg' }, status: 200 }))
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'HEAD'
+      ? new Response(null, { headers: { 'content-type': 'image/jpeg' }, status: 200 })
+      : new Response(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]), { headers: { 'content-type': 'image/jpeg' }, status: 206 }))
     await expect(probeChapterImage('https://images.example/chapter/1.jpg?token=secret', { fetch })).resolves.toMatchObject({
       reason: 'available',
       status: 'available',
       urlIdentity: 'https://images.example/chapter/1.jpg',
+    })
+    expect(fetch).toHaveBeenNthCalledWith(2, 'https://images.example/chapter/1.jpg?token=secret', expect.objectContaining({
+      headers: { Range: 'bytes=0-63' },
+      method: 'GET',
+    }))
+  })
+
+  it('does not trust an image MIME type without a valid bounded body', async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'HEAD'
+      ? new Response(null, { headers: { 'content-type': 'image/jpeg' }, status: 200 })
+      : new Response('<html>challenge</html>', { headers: { 'content-type': 'image/jpeg' }, status: 200 }))
+    await expect(probeChapterImage('https://images.example/challenge.jpg', { fetch })).resolves.toMatchObject({
+      reason: 'challenge_html',
+      status: 'unavailable',
     })
   })
 

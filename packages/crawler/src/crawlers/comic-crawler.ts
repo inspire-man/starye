@@ -74,6 +74,7 @@ export class ComicCrawler extends BaseCrawler {
 
     await this.initBrowser()
     const page = await this.createPage()
+    let runError: unknown
 
     try {
       // 恢复模式：加载失败任务并重试
@@ -99,6 +100,7 @@ export class ComicCrawler extends BaseCrawler {
     }
     catch (error) {
       console.error('❌ Crawl failed:', error)
+      runError = error
     }
     finally {
       // 输出详细统计
@@ -125,6 +127,12 @@ export class ComicCrawler extends BaseCrawler {
 
       await this.closeBrowser()
     }
+
+    if (this.stats.failedMangas > 0 || this.stats.failedChapters > 0) {
+      throw new Error(`comic_crawl_partial_failure:${this.stats.failedMangas}:${this.stats.failedChapters}`)
+    }
+    if (runError)
+      throw runError
   }
 
   /**
@@ -147,6 +155,7 @@ export class ComicCrawler extends BaseCrawler {
       catch (error) {
         console.error(`❌ 恢复失败: ${task.url}`, error)
         this.failedTasks.record(task.url, error as Error, 1)
+        this.stats.failedMangas++
         failCount++
       }
     }
@@ -181,7 +190,14 @@ export class ComicCrawler extends BaseCrawler {
       // Check if strategy implements getMangaList
       if (!this.strategy.getMangaList) {
         console.warn('⚠️ Strategy does not support list parsing. Treating as detail page.')
-        await this.processManga(currentUrl, page, {})
+        try {
+          await this.processManga(currentUrl, page, {})
+        }
+        catch (error) {
+          this.failedTasks.record(currentUrl, error as Error, 1)
+          this.stats.failedMangas++
+          throw error
+        }
         break
       }
 
@@ -461,6 +477,7 @@ export class ComicCrawler extends BaseCrawler {
 
       // 5. Process Chapters (并发处理)
       let processedCount = 0
+      let failedChapterCount = 0
 
       await pMap(chaptersToProcess, async (chapter) => {
         processedCount++
@@ -492,12 +509,15 @@ export class ComicCrawler extends BaseCrawler {
         catch (e) {
           console.error(`  ❌ 章节失败: ${chapter.title}`, e)
           this.stats.failedChapters++
+          failedChapterCount++
         }
       }, { concurrency: CRAWL_CONFIG.concurrency.chapter })
 
       // 6. 更新爬取状态
       const newStatus = crawledChapters >= totalChapters ? 'complete' : 'partial'
       await this.updateProgress(info.slug, newStatus, crawledChapters, totalChapters)
+      if (failedChapterCount > 0)
+        throw new Error('comic_manga_partial_failure')
     }
     catch (e) {
       console.error(`❌ 漫画处理失败: ${info.title}`, e)

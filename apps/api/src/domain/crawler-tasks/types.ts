@@ -73,6 +73,7 @@ export type CrawlerRunStatus
 export type CrawlerRunFailureCode
   = | 'runner_lost'
     | 'runner_failed'
+    | 'partial_ingest'
     | 'cancelled_by_runner'
     | 'receipt_missing'
     | 'provider_contract_invalid'
@@ -383,7 +384,7 @@ export type CrawlerRunTransitionEvent
     | { readonly actor: 'scheduler', readonly type: 'provider_failed' }
     | { readonly actor: 'scheduler', readonly type: 'provider_lost' }
     | { readonly actor: 'runner', readonly sequence: number, readonly type: 'runner_cancelled' }
-    | { readonly actor: 'runner', readonly sequence: number, readonly type: 'runner_failed' }
+    | { readonly actor: 'runner', readonly failureCode?: CrawlerRunFailureCode, readonly sequence: number, readonly type: 'runner_failed' }
     | { readonly actor: 'runner', readonly sequence: number, readonly type: 'runner_heartbeat' }
     | { readonly actor: 'runner', readonly sequence: number, readonly type: 'runner_log' }
     | { readonly actor: 'runner', readonly sequence: number, readonly type: 'runner_progress' }

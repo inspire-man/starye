@@ -25,6 +25,7 @@ export type RunnerSourceReasonCode
 export type RunnerFailureCode
   = | 'receipt_missing'
     | 'runner_failed'
+    | 'partial_ingest'
     | 'source_stale'
     | 'source_read_failed'
     | 'source_write_failed'

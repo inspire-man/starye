@@ -149,6 +149,31 @@ describe('localTaskRunner', () => {
     expect(client.succeededRepair).not.toHaveBeenCalled()
   })
 
+  it('maps an observed content failure to partial_ingest', async () => {
+    const client = {
+      cancelled: vi.fn(),
+      claim: vi.fn().mockResolvedValue({ accepted: true }),
+      failed: vi.fn(),
+      heartbeat: vi.fn().mockResolvedValue({ accepted: true }),
+      poll: vi.fn().mockResolvedValue(candidate),
+      succeeded: vi.fn(),
+    }
+    const runner = new LocalTaskRunner({
+      adapters: { select: () => ({
+        execute: async ({ observe }) => {
+          observe('partial-content')
+          throw new Error('partial fixture')
+        },
+        templateKey: 'movie',
+      }) },
+      client: client as never,
+    })
+
+    await runner.runOnce()
+
+    expect(client.failed).toHaveBeenCalledWith(candidate, 2, 'partial_ingest')
+  })
+
   it('sends a bounded local-proof availability observation after the ordinary receipt', async () => {
     const localCandidate: RunnerCandidate = {
       attempt: 1,

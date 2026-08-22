@@ -133,7 +133,7 @@ export class LocalTaskRunner {
         }
       }
       catch {
-        await this.options.client.failed(candidate, terminalSequence(), 'runner_failed')
+        await this.options.client.failed(candidate, terminalSequence(), contentIds.size > 0 ? 'partial_ingest' : 'runner_failed')
       }
       finally {
         this.activeRun = undefined

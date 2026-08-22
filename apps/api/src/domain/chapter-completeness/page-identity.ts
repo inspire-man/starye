@@ -1,5 +1,17 @@
 import { normalizeChapterUrl } from './identity'
 
+/** Preserve query material for the bounded transport probe; redact it only in identities. */
+export function normalizePageFetchUrl(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed)
+    throw new Error('page_url_invalid')
+  const url = new URL(trimmed)
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password)
+    throw new Error('page_url_invalid')
+  url.hash = ''
+  return url.toString()
+}
+
 export function normalizePageUrl(value: string): string {
   const normalized = normalizeChapterUrl(value)
   if (!normalized)

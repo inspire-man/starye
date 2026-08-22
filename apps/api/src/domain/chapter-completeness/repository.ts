@@ -125,7 +125,7 @@ function projectionFromCurrentRow(row: any): ChapterCompletenessProjection {
     reasonCode: row.reasonCode ?? row.reason_code,
     sourceRevision: row.sourceRevision ?? row.source_revision,
     status: row.status,
-    terminalState: row.status,
+    terminalState: row.terminalState ?? row.terminal_state ?? row.status,
   }
 }
 
@@ -334,7 +334,7 @@ export async function persistChapterCompletenessProjection(
   })
   if (existing && (existing.sourceRevision > snapshot.sourceRevision
     || (existing.sourceRevision === snapshot.sourceRevision && !options.allowSameRevision))) {
-    return projection
+    return projectionFromCurrentRow(existing)
   }
 
   const snapshotId = stableId('chapter-snapshot', snapshot.snapshotIdentity)
@@ -361,7 +361,7 @@ export async function persistChapterCompletenessProjection(
   if (client) {
     const observationId = stableId('chapter-completeness-observation', projection.observationIdentity)
     const currentRead = client.prepare(`
-      SELECT comic_id, snapshot_id, source_revision, status, reason_code,
+      SELECT comic_id, snapshot_id, source_revision, status, terminal_state, reason_code,
         counts_json, findings_json, observation_identity, projection_version,
         observed_at, updated_at
       FROM chapter_completeness_current
@@ -401,14 +401,15 @@ export async function persistChapterCompletenessProjection(
       ),
       client.prepare(`
         INSERT INTO chapter_completeness_current (
-          comic_id, snapshot_id, source_revision, status, reason_code,
+          comic_id, snapshot_id, source_revision, status, terminal_state, reason_code,
           counts_json, findings_json, observation_identity, projection_version,
           observed_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
         ON CONFLICT(comic_id) DO UPDATE SET
           snapshot_id = excluded.snapshot_id,
           source_revision = excluded.source_revision,
           status = excluded.status,
+          terminal_state = excluded.terminal_state,
           reason_code = excluded.reason_code,
           counts_json = excluded.counts_json,
           findings_json = excluded.findings_json,
@@ -426,6 +427,7 @@ export async function persistChapterCompletenessProjection(
         snapshotId,
         snapshot.sourceRevision,
         projection.status,
+        projection.terminalState,
         projection.reasonCode,
         JSON.stringify(projection.counts),
         JSON.stringify(projection.findings),
@@ -447,7 +449,7 @@ export async function persistChapterCompletenessProjection(
     }
     const authoritative = projectionFromCurrentRow(currentRow)
     if (authoritative.observationIdentity !== projection.observationIdentity
-      && authoritative.sourceRevision < snapshot.sourceRevision) {
+      && authoritative.sourceRevision <= snapshot.sourceRevision) {
       throw new Error('chapter_completeness_current_readback_mismatch')
     }
     return authoritative
@@ -469,6 +471,7 @@ export async function persistChapterCompletenessProjection(
     snapshotId,
     sourceRevision: snapshot.sourceRevision,
     status: projection.status,
+    terminalState: projection.terminalState,
     updatedAt: new Date(snapshot.observedAt * 1000),
   }
   if (!existing) {
@@ -489,9 +492,15 @@ export async function persistChapterCompletenessProjection(
       ))
   }
   const readback = await readChapterCompletenessCurrent(db, snapshot.comicId)
-  return readback && readback.sourceRevision >= snapshot.sourceRevision
-    ? projectionFromCurrentRow(readback)
-    : projection
+  if (readback && readback.sourceRevision >= snapshot.sourceRevision) {
+    const authoritative = projectionFromCurrentRow(readback)
+    if (authoritative.observationIdentity !== projection.observationIdentity
+      && authoritative.sourceRevision <= snapshot.sourceRevision) {
+      throw new Error('chapter_completeness_current_readback_mismatch')
+    }
+    return authoritative
+  }
+  return projection
 }
 
 export async function readChapterCompletenessCurrent(db: ChapterCompletenessDatabase, comicId: string) {

@@ -179,7 +179,7 @@ function transition(
   nextStatus: CrawlerRunStatus,
   reasonCode: string,
   options: {
-    readonly failureCode?: 'runner_lost' | 'runner_failed' | 'cancelled_by_runner' | 'receipt_missing' | 'provider_lost' | 'provider_failed'
+    readonly failureCode?: CrawlerRunFailureCode
     readonly sequence?: number
   } = {},
 ): CrawlerRunTransitionDecision {
@@ -253,7 +253,7 @@ export function decideCrawlerRunTransition(
         : { currentStatus: state.status, kind: 'rejected', reasonCode: 'invalid_transition' }
     case 'runner_failed':
       return state.status === 'dispatching' || state.status === 'running' || state.status === 'cancel_requested'
-        ? transition(state, 'failed', 'runner_failed', { failureCode: 'runner_failed', sequence: event.sequence })
+        ? transition(state, 'failed', 'runner_failed', { failureCode: event.failureCode ?? 'runner_failed', sequence: event.sequence })
         : { currentStatus: state.status, kind: 'rejected', reasonCode: 'invalid_transition' }
     case 'runner_cancelled':
       return state.status === 'dispatching' || state.status === 'running' || state.status === 'cancel_requested'

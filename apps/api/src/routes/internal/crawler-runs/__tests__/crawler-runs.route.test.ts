@@ -35,6 +35,28 @@ function createEvent(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function createChapterObservationEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    attempt: 1,
+    comic_id: 'comic-1',
+    event_id: 'chapter-observation-event-1',
+    expected_projection_version: 0,
+    key_id: 'key-current',
+    nonce: 'chapter-observation-nonce-1',
+    operation: 'check_comic_chapters',
+    policy_reference: 'availability/chapter-completeness',
+    policy_version: 'chapter-completeness/v1',
+    provider: 'github-actions',
+    run_id: 'run-1',
+    sequence: 2,
+    source_revision: 1,
+    task_id: 'task-1',
+    timestamp: NOW,
+    type: 'chapter_completeness_observation',
+    ...overrides,
+  }
+}
+
 function createScheduleEvent(overrides: Record<string, unknown> = {}) {
   return {
     event_id: 'schedule-event-1',
@@ -248,6 +270,24 @@ describe('signed crawler runner event route', () => {
       runId: 'run-1',
       sequence: 2,
     }))
+  })
+
+  it('rejects chapter observations from a queued or terminal run before persistence', async () => {
+    const app = createApp(createProcessor(), [[{
+      attempt_number: 1,
+      last_event_sequence: 1,
+      state_version: 2,
+      operation: 'check_comic_chapters',
+      request_snapshot_json: '{}',
+      status: 'succeeded',
+      task_id: 'task-1',
+      provider_name: 'github-actions',
+    }]])
+    const body = JSON.stringify(createChapterObservationEvent())
+    const response = await postSigned(app, '/crawler-runs/run-1/chapter-completeness-observation', body)
+
+    expect(response.status).toBe(409)
+    await expect(response.text()).resolves.toBe('Chapter observation run is not active')
   })
 
   it('rejects path/body, timestamp, attempt, and receipt-template binding failures before any state mutation', async () => {
