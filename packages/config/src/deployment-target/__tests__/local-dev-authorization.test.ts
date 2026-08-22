@@ -48,11 +48,39 @@ function legacySnapshot(overrides: {
   }
 }
 
+function currentSnapshot(): object {
+  const listeners = [
+    { port: 8080, ownerPid: 100 },
+    { port: 8787, ownerPid: 101 },
+    { port: 5173, ownerPid: 102 },
+    { port: 3004, ownerPid: 103 },
+    { port: 3002, ownerPid: 104 },
+    { port: 3003, ownerPid: 105 },
+    { port: 3000, ownerPid: 106 },
+    { port: 3001, ownerPid: 107 },
+  ]
+  const processes = [
+    processRecord(supervisorPid, 999, `node "${workspaceRoot}\\scripts\\local-dev.ts"`),
+    ...listeners.map(listener => processRecord(listener.ownerPid, supervisorPid)),
+  ]
+  return { workspaceRoot, listeners, processes }
+}
+
 async function loadAuthorization(): Promise<AuthorizationModule> {
   return import(/* @vite-ignore */ new URL('../../../../../scripts/local-dev-authorization.ts', import.meta.url).href) as Promise<AuthorizationModule>
 }
 
 describe('local-dev supervisor-root authorization', () => {
+  it('authorizes the current eight-port tree including quant on 3004', async () => {
+    const authorization = await loadAuthorization()
+    const result = authorization.evaluateLocalDevAuthorization(currentSnapshot())
+
+    expect(result).toMatchObject({
+      kind: 'authorized',
+      authorizationListenerOwnerPids: [100, 101, 102, 103, 104, 105, 106, 107],
+    })
+  })
+
   it('uses non-reserved PowerShell identifiers while retaining the fixed snapshot JSON fields', async () => {
     const authorization = await loadAuthorization()
     const command = authorization.buildReadOnlySnapshotCommand()

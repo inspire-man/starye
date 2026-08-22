@@ -119,7 +119,7 @@ function createHarness(options: {
   }
 }
 
-describe('local-dev atomic seven-port supervisor', () => {
+describe('local-dev atomic eight-port supervisor', () => {
   it('loads runner-owned video provider input only from an explicit local config file', async () => {
     const localDev = await loadLocalDev()
     const directory = await mkdtemp(join(tmpdir(), 'starye-video-provider-'))
@@ -207,7 +207,7 @@ describe('local-dev atomic seven-port supervisor', () => {
       exitCode: 1,
     })
 
-    expect([...harness.children.keys()]).toEqual(['api', 'gateway', 'dashboard', 'auth', 'blog', 'movie', 'comic'])
+    expect([...harness.children.keys()]).toEqual(['api', 'gateway', 'dashboard', 'quant', 'auth', 'blog', 'movie', 'comic'])
     expect(harness.probePort).toHaveBeenCalledWith(8080)
     expect(harness.cleanup).toHaveBeenCalledTimes(1)
     expect(harness.setExitCode).toHaveBeenCalledWith(1)
@@ -216,7 +216,7 @@ describe('local-dev atomic seven-port supervisor', () => {
     }
   }, 15_000)
 
-  it('returns the owned labeled PID records only after all seven fixed ports are ready', async () => {
+  it('returns the owned labeled PID records only after all eight fixed ports are ready', async () => {
     const localDev = await loadLocalDev()
     const harness = createHarness({ listening: () => true })
 
@@ -230,10 +230,11 @@ describe('local-dev atomic seven-port supervisor', () => {
       { label: 'api', port: 8787, pid: 10_000 },
       { label: 'gateway', port: 8080, pid: 10_001 },
       { label: 'dashboard', port: 5173, pid: 10_002 },
-      { label: 'auth', port: 3003, pid: 10_003 },
-      { label: 'blog', port: 3002, pid: 10_004 },
-      { label: 'movie', port: 3001, pid: 10_005 },
-      { label: 'comic', port: 3000, pid: 10_006 },
+      { label: 'quant', port: 3004, pid: 10_003 },
+      { label: 'auth', port: 3003, pid: 10_004 },
+      { label: 'blog', port: 3002, pid: 10_005 },
+      { label: 'movie', port: 3001, pid: 10_006 },
+      { label: 'comic', port: 3000, pid: 10_007 },
     ])
     expect(harness.serviceSpecs.get('api')?.args).toEqual(expect.arrayContaining([
       'CRAWLER_LOCAL_PROOF_ENABLED:true',

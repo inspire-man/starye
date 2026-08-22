@@ -40,6 +40,7 @@ import { publicSearchRoutes } from './routes/public/search'
 import { publicSeriesRoutes } from './routes/public/series'
 import { publicSettingsRoutes } from './routes/public/settings'
 import { publishersRoutes } from './routes/publishers'
+import quantRoutes from './routes/quant'
 import ratingsRoutes from './routes/ratings'
 import { uploadRoutes } from './routes/upload'
 
@@ -114,6 +115,7 @@ const routes = app
   .route('/api/public/settings', publicSettingsRoutes)
   .route('/api/series', publicSeriesRoutes)
   .route('/api/search', publicSearchRoutes)
+  .route('/api/quant', quantRoutes)
   // OpenAPI 文档
   .get(
     '/api/openapi.json',

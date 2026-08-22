@@ -1,0 +1,29 @@
+{
+  "name": "quant-app",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3004",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview --port 3004",
+    "type-check": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@starye/ui": "workspace:*",
+    "lucide-vue-next": "^1.0.0",
+    "vue": "^3.5.32"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^20.9.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4",
+    "vue-tsc": "^3.2.6"
+  }
+}

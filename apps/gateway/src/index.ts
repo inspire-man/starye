@@ -14,6 +14,7 @@ import { checkDashboardAuth } from './dashboard-guard'
 interface Env {
   API_ORIGIN?: string
   DASHBOARD_ORIGIN?: string
+  QUANT_ORIGIN?: string
   BLOG_ORIGIN?: string
   MOVIE_ORIGIN?: string
   COMIC_ORIGIN?: string
@@ -227,7 +228,31 @@ const gatewayHandler = {
       return cachedProxy(request, target, undefined, proxyCacheOptions)
     }
 
-    // 2. Dashboard (不缓存，前置鉴权)
+    // 2. Quant App (不缓存，复用 Dashboard 前置鉴权)
+    if (path === '/quant' || path.startsWith('/quant/')) {
+      if (path === '/quant') {
+        return Response.redirect(`${url.origin}/quant/`, 301)
+      }
+
+      const authResult = await checkDashboardAuth(request, env)
+      if (!authResult.allowed) {
+        const next = encodeURIComponent(url.pathname + url.search)
+        const errorParam = authResult.reason === 'not_admin' ? '&error=not_admin' : ''
+        return Response.redirect(`${url.origin}/auth/login?next=${next}${errorParam}`, 302)
+      }
+
+      if (!isLocal && !env.QUANT_ORIGIN) {
+        return new Response('Quant App is not configured', { status: 503 })
+      }
+      const target = isLocal ? 'http://localhost:3004' : env.QUANT_ORIGIN
+      const pathRewrite = isLocal || isLocalProxyTarget(target)
+        ? undefined
+        : (p: string) => p.replace(/^\/quant/, '') || '/'
+
+      return cachedProxy(request, target, pathRewrite, { ...proxyCacheOptions, bypassCache: true })
+    }
+
+    // 3. Dashboard (不缓存，前置鉴权)
     if (path.startsWith('/dashboard')) {
       if (path === '/dashboard') {
         return Response.redirect(`${url.origin}/dashboard/`, 301)
@@ -253,7 +278,7 @@ const gatewayHandler = {
       return cachedProxy(request, target, pathRewrite, { ...proxyCacheOptions, bypassCache: true })
     }
 
-    // 3. Movie App
+    // 4. Movie App
     if (path.startsWith('/movie')) {
       if (path === '/movie') {
         return Response.redirect(`${url.origin}/movie/`, 301)
@@ -266,7 +291,7 @@ const gatewayHandler = {
       return cachedProxy(request, target, pathRewrite, proxyCacheOptions)
     }
 
-    // 4. Comic App
+    // 5. Comic App
     if (path.startsWith('/comic')) {
       if (path === '/comic') {
         return Response.redirect(`${url.origin}/comic/`, 301)
@@ -279,7 +304,7 @@ const gatewayHandler = {
       return cachedProxy(request, target, pathRewrite, proxyCacheOptions)
     }
 
-    // 5. Tavern App
+    // 6. Tavern App
     if (path.startsWith('/tavern')) {
       if (path === '/tavern') {
         return Response.redirect(`${url.origin}/tavern/`, 301)
@@ -289,7 +314,7 @@ const gatewayHandler = {
       return cachedProxy(request, target, pathRewrite, proxyCacheOptions)
     }
 
-    // 6. Auth Service (Identity Provider) (不缓存)
+    // 7. Auth Service (Identity Provider) (不缓存)
     if (path.startsWith('/auth')) {
       if (path === '/auth') {
         return Response.redirect(`${url.origin}/auth/`, 301)
@@ -298,7 +323,7 @@ const gatewayHandler = {
       return cachedProxy(request, target, undefined, { ...proxyCacheOptions, bypassCache: true })
     }
 
-    // 7. Blog App (Default / Main Site)
+    // 8. Blog App (Default / Main Site)
     if (path === '/') {
       return Response.redirect(`${url.origin}/blog/`, 301)
     }
