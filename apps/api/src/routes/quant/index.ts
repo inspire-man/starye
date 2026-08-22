@@ -44,6 +44,7 @@ quantRoutes.get('/capabilities', (c) => {
     success: true as const,
     data: {
       tier: registry.tier,
+      provider: registry.provider,
       enabled: registry.enabled,
       capabilities: registry.capabilities,
     },

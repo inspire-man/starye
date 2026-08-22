@@ -8,14 +8,14 @@
 
 html {
   min-width: 320px;
-  background: hsl(180 18% 96%);
+  background: hsl(220 24% 97%);
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: hsl(180 18% 96%);
+  background: hsl(220 24% 97%);
 }
 
 button,
@@ -30,34 +30,42 @@ input:focus-visible {
 }
 
 .quant-shell {
-  --background: 180 18% 96%;
-  --foreground: 195 28% 15%;
+  --background: 220 24% 97%;
+  --foreground: 222 35% 16%;
   --card: 0 0% 100%;
-  --card-foreground: 195 28% 15%;
+  --card-foreground: 222 35% 16%;
   --popover: 0 0% 100%;
   --popover-foreground: 195 28% 15%;
-  --primary: 174 72% 30%;
+  --primary: 239 68% 58%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 180 19% 92%;
-  --secondary-foreground: 195 25% 25%;
-  --muted: 180 15% 92%;
-  --muted-foreground: 195 10% 44%;
-  --accent: 174 55% 94%;
-  --accent-foreground: 174 72% 23%;
-  --destructive: 0 64% 46%;
+  --secondary: 238 28% 95%;
+  --secondary-foreground: 239 32% 30%;
+  --muted: 220 20% 94%;
+  --muted-foreground: 220 12% 45%;
+  --accent: 239 88% 96%;
+  --accent-foreground: 239 48% 34%;
+  --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border: 180 14% 85%;
-  --input: 180 14% 80%;
-  --ring: 174 72% 30%;
+  --border: 220 16% 88%;
+  --input: 220 16% 85%;
+  --ring: 239 68% 58%;
   --radius: 0.5rem;
-  --status-success: 151 58% 30%;
-  --status-success-soft: 150 58% 94%;
-  --status-warning: 34 82% 38%;
-  --status-warning-soft: 38 94% 94%;
-  --status-danger: 0 64% 46%;
-  --status-danger-soft: 0 72% 95%;
-  --status-neutral: 195 10% 43%;
-  --status-neutral-soft: 195 13% 93%;
+  --status-success: 142 70% 32%;
+  --status-success-soft: 142 76% 94%;
+  --status-warning: 32 86% 38%;
+  --status-warning-soft: 36 100% 95%;
+  --status-info: 217 75% 45%;
+  --status-info-soft: 214 100% 96%;
+  --status-danger: 0 72% 44%;
+  --status-danger-soft: 0 86% 96%;
+  --status-neutral: 220 10% 42%;
+  --status-neutral-soft: 220 16% 95%;
+  --ui-radius-sm: 0.25rem;
+  --ui-radius-md: 0.375rem;
+  --ui-radius-lg: 0.5rem;
+  --ui-table-max-height: min(62vh, 44rem);
+  --ui-table-cell-x: 0.875rem;
+  --ui-table-cell-y: 0.625rem;
   color: hsl(var(--foreground));
   color-scheme: light;
 }
@@ -109,7 +117,7 @@ input:focus-visible {
   color: hsl(var(--primary));
   font-size: 0.6875rem;
   font-weight: 750;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   line-height: 1.2;
   text-transform: uppercase;
 }
@@ -226,6 +234,12 @@ input:focus-visible {
   color: hsl(var(--status-danger));
 }
 
+.status-info {
+  border-color: hsl(var(--status-info) / 0.2);
+  background: hsl(var(--status-info-soft));
+  color: hsl(var(--status-info));
+}
+
 .status-partial {
   border-color: hsl(var(--status-warning) / 0.24);
   background: hsl(var(--status-warning-soft));
@@ -276,8 +290,8 @@ input:focus-visible {
 }
 
 .metric-icon-blue {
-  background: hsl(210 90% 95%);
-  color: hsl(210 72% 40%);
+  background: hsl(var(--status-info-soft));
+  color: hsl(var(--status-info));
 }
 
 .metric-value {
@@ -655,6 +669,117 @@ input:focus-visible {
   color: hsl(var(--border));
 }
 
+.candidate-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: -0.15rem 0 0.85rem;
+}
+
+.candidate-filter-group {
+  display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md);
+  background: hsl(var(--muted) / 0.44);
+  padding: 0.2rem;
+}
+
+.candidate-filter-button {
+  display: inline-flex;
+  min-height: 1.9rem;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  padding: 0 0.6rem;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.candidate-filter-button:hover,
+.candidate-filter-button-active {
+  border-color: hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--primary));
+}
+
+.candidate-insight {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1.1fr) minmax(14rem, 0.9fr) minmax(16rem, 1.3fr);
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid hsl(var(--primary) / 0.2);
+  border-radius: var(--ui-radius-md);
+  background: hsl(var(--accent) / 0.46);
+  padding: 0.8rem 0.9rem;
+}
+
+.candidate-insight-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.candidate-insight-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.candidate-insight-heading strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-insight-code {
+  color: hsl(var(--primary));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.6875rem;
+}
+
+.candidate-insight-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.candidate-insight-stats span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.candidate-insight-stats small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+}
+
+.candidate-insight-stats strong {
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+
+.candidate-insight-signals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
 .score-value {
   color: hsl(var(--primary));
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -727,7 +852,7 @@ input:focus-visible {
   min-height: 10rem;
   overflow: hidden;
   border-left: 1px solid hsl(var(--border));
-  background: linear-gradient(180deg, hsl(var(--accent) / 0.4), hsl(var(--card)));
+  background: hsl(var(--card));
   padding: 0.5rem 0.75rem 0;
 }
 
@@ -894,6 +1019,19 @@ input:focus-visible {
   .snapshot-meta {
     justify-content: flex-start;
     text-align: left;
+  }
+
+  .candidate-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .candidate-insight {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-insight-signals {
+    justify-content: flex-start;
   }
 
   .quant-footer {

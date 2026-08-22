@@ -9,6 +9,7 @@ describe('quant capability registry', () => {
     expect(registry.enabled).toEqual(['daily'])
     expect(registry.hasCapability('daily')).toBe(true)
     expect(registry.hasCapability('daily_basic')).toBe(false)
+    expect(registry.provider).toBe('tushare')
   })
 
   it('exposes the planned extension capabilities at 2000 points', () => {
@@ -24,5 +25,16 @@ describe('quant capability registry', () => {
     expect(registry.tier).toBeNull()
     expect(registry.enabled).toEqual([])
     expect(registry.capabilities.every(item => item.reason === 'invalid_points_tier')).toBe(true)
+  })
+
+  it('reports the free Eastmoney source when selected', () => {
+    expect(createQuantCapabilityRegistry(undefined, 'eastmoney').provider).toBe('eastmoney')
+  })
+
+  it('fails closed when the provider selection is invalid', () => {
+    const registry = createQuantCapabilityRegistry(undefined, null)
+
+    expect(registry.enabled).toEqual([])
+    expect(registry.capabilities.every(item => item.reason === 'invalid_provider')).toBe(true)
   })
 })

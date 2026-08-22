@@ -6,6 +6,7 @@ import type {
   CapabilitiesResponse,
   CapabilityState,
   DailyBar,
+  QuantProviderName,
   SyncResult,
   SyncStatus,
   WatchlistItem,
@@ -18,16 +19,21 @@ import {
   Check,
   ChevronRight,
   Database,
+  Filter,
   LockKeyhole,
   Plus,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
+  Sparkles,
   Trash2,
   TrendingUp,
   X,
 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { quantApi, QuantApiError } from './lib/api-client'
+
+type CandidateFilter = 'all' | 'ready' | 'signals'
 
 const capabilities = ref<CapabilitiesResponse | null>(null)
 const watchlist = ref<WatchlistItem[]>([])
@@ -54,9 +60,22 @@ const errors = reactive<Record<'capabilities' | 'watchlist' | 'candidates' | 'da
 const deletingCode = ref<string | null>(null)
 const pendingDeleteCode = ref<string | null>(null)
 const adding = ref(false)
+const candidateFilter = ref<CandidateFilter>('all')
+const candidateFilterOptions = [
+  { key: 'all' as const, label: '全部', icon: Filter },
+  { key: 'ready' as const, label: '数据完整', icon: ShieldCheck },
+  { key: 'signals' as const, label: '有信号', icon: Sparkles },
+]
 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
+const filteredCandidateItems = computed(() => candidateItems.value.filter((item) => {
+  if (candidateFilter.value === 'ready')
+    return item.quality === 'ready'
+  if (candidateFilter.value === 'signals')
+    return item.signals.length > 0
+  return true
+}))
 const dailyCapability = computed(() => capabilities.value?.capabilities.find(item => item.key === 'daily'))
 const canSync = computed(() => Boolean(dailyCapability.value?.enabled && watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.capabilities && loading.watchlist && loading.candidates)
@@ -66,10 +85,14 @@ const latestDate = computed(() => {
   const dates = dailyBars.value.map(item => item.tradeDate).filter(Boolean)
   return dates.at(-1) || snapshot.value?.toDate || '--'
 })
+const selectedCandidate = computed(() => candidateItems.value.find(item => item.tsCode === selectedTsCode.value) || null)
+const providerLabel = computed(() => formatProviderLabel(capabilities.value?.provider ?? null))
 
 const watchlistColumns: Column<WatchlistItem>[] = [
   { key: 'tsCode', label: '代码', minWidth: '150px' },
   { key: 'name', label: '名称', minWidth: '130px', render: item => item.name || '未命名' },
+  { key: 'latestClose', label: '最新价', width: '92px', render: item => formatNumber(item.latestClose) },
+  { key: 'latestChangePercent', label: '涨跌幅', width: '92px', render: item => formatPercent(item.latestChangePercent) },
   { key: 'latestTradeDate', label: '最新日线', width: '120px', render: item => item.latestTradeDate || '--' },
   { key: 'barCount', label: '日线数', width: '90px', render: item => String(item.barCount) },
   { key: 'actions', label: '操作', width: '72px' },
@@ -137,6 +160,25 @@ function formatDateTime(value: string | null): string {
     return '--'
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function formatProviderLabel(provider: QuantProviderName | null): string {
+  return provider === 'tushare' ? 'Tushare' : provider === 'eastmoney' ? 'Eastmoney · 免费源' : '数据源读取中'
+}
+
+function formatFactorLabel(value: string): string {
+  return {
+    ma5: 'MA5 站上',
+    ma20: 'MA20 趋势',
+    new_high_20: '20 日新高',
+    continuation: '连续上涨',
+    volume_ratio: '放量',
+    relative_strength: '池内强度',
+  }[value] || value
+}
+
+function qualityLabel(value: CandidateItem['quality']): string {
+  return value === 'ready' ? '数据完整' : value === 'partial' ? '数据部分完整' : '数据不足'
 }
 
 function parsedError(error: unknown): ParsedError {
@@ -246,7 +288,7 @@ async function loadWorkspace() {
   await Promise.all([loadCapabilities(), loadWatchlist(), loadCandidates()])
 }
 
-function selectStock(item: WatchlistItem) {
+function selectStock(item: Pick<WatchlistItem, 'tsCode' | 'name'>) {
   if (selectedTsCode.value === item.tsCode)
     return
   selectedTsCode.value = item.tsCode
@@ -343,9 +385,13 @@ onMounted(loadWorkspace)
               <Activity :size="13" aria-hidden="true" />
               管理员会话
             </span>
+            <span class="status-chip status-info">
+              <Database :size="13" aria-hidden="true" />
+              {{ providerLabel }}
+            </span>
           </div>
           <p class="quant-subtitle">
-            观察池、日线同步与动量候选的单页工作区
+            观察池、日线同步与候选信号的单页工作区
           </p>
         </div>
         <div class="quant-header-actions">
@@ -415,7 +461,7 @@ onMounted(loadWorkspace)
               数据能力状态
             </h2>
           </div>
-          <span class="section-meta">服务端门控 · {{ capabilities ? (capabilities.tier === null ? '积分配置无效' : `${capabilities.tier} 积分`) : '读取中' }}</span>
+          <span class="section-meta">{{ providerLabel }} · {{ capabilities ? (capabilities.tier === null ? '积分配置无效' : `${capabilities.tier} 积分`) : '读取中' }}</span>
         </div>
         <div v-if="loading.capabilities" class="capability-grid" aria-label="能力状态加载中">
           <SkeletonCard v-for="index in 4" :key="index" variant="content" />
@@ -469,7 +515,7 @@ onMounted(loadWorkspace)
             :data="watchlist"
             :columns="watchlistColumns"
             :loading="loading.watchlist"
-            min-width="620px"
+            min-width="760px"
             empty-message="观察池为空，先加入一只股票"
             @row-click="selectStock"
           >
@@ -478,6 +524,9 @@ onMounted(loadWorkspace)
                 {{ item.tsCode }}
                 <ChevronRight :size="14" aria-hidden="true" />
               </button>
+            </template>
+            <template #cell-latestChangePercent="{ item }">
+              <span :class="item.latestChangePercent !== null && item.latestChangePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.latestChangePercent) }}</span>
             </template>
             <template #cell-actions="{ item }">
               <button class="icon-button icon-button-danger" type="button" :disabled="deletingCode === item.tsCode" :aria-label="`删除 ${item.tsCode}`" :title="`删除 ${item.tsCode}`" @click.stop="requestRemoveFromWatchlist(item.tsCode)">
@@ -566,19 +615,58 @@ onMounted(loadWorkspace)
             <span>生成 {{ formatDateTime(snapshot?.generatedAt || null) }}</span>
           </div>
         </div>
+        <div class="candidate-toolbar">
+          <div class="candidate-filter-group" role="group" aria-label="候选筛选">
+            <button
+              v-for="option in candidateFilterOptions"
+              :key="option.key"
+              class="candidate-filter-button"
+              :class="candidateFilter === option.key ? 'candidate-filter-button-active' : ''"
+              type="button"
+              :aria-pressed="candidateFilter === option.key"
+              @click="candidateFilter = option.key"
+            >
+              <component :is="option.icon" :size="14" aria-hidden="true" />
+              {{ option.label }}
+            </button>
+          </div>
+          <span class="section-meta">显示 {{ filteredCandidateItems.length }} / {{ candidateItems.length }}</span>
+        </div>
         <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
           <span>输入范围</span>
           <strong>{{ snapshot.fromDate || '--' }} → {{ snapshot.toDate || '--' }}</strong>
           <span class="snapshot-range-divider">·</span>
           <span>仅使用标准化 daily 日线</span>
         </div>
+        <div v-if="selectedCandidate" class="candidate-insight">
+          <div class="candidate-insight-heading">
+            <div>
+              <span class="section-kicker">SELECTED SIGNAL</span>
+              <strong>{{ selectedCandidate.name || selectedCandidate.tsCode }}</strong>
+              <span class="candidate-insight-code">{{ selectedCandidate.tsCode }}</span>
+            </div>
+            <span class="status-chip" :class="selectedCandidate.quality === 'ready' ? 'status-enabled' : 'status-partial'">
+              {{ qualityLabel(selectedCandidate.quality) }}
+            </span>
+          </div>
+          <div class="candidate-insight-stats">
+            <span><small>评分</small><strong>{{ formatNumber(selectedCandidate.score) }}</strong></span>
+            <span><small>20 日收益</small><strong>{{ formatPercent(selectedCandidate.return20) }}</strong></span>
+            <span><small>量比</small><strong>{{ formatNumber(selectedCandidate.volumeRatio) }}</strong></span>
+          </div>
+          <div class="candidate-insight-signals">
+            <span v-for="signal in selectedCandidate.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
+            <span v-for="factor in selectedCandidate.missingFactors" :key="factor" class="signal-tag signal-tag-muted">缺 {{ formatFactorLabel(factor) }}</span>
+            <span v-if="!selectedCandidate.signals.length && !selectedCandidate.missingFactors.length" class="muted-inline">暂无因子信号</span>
+          </div>
+        </div>
         <DataTable
-          :data="candidateItems"
+          :data="filteredCandidateItems"
           :columns="candidateColumns"
           :loading="loading.candidates"
           min-width="940px"
-          empty-message="暂无候选快照，完成一次日线同步后查看"
-          @row-click="item => selectStock({ ...item, id: item.id, tsCode: item.tsCode, name: item.name, latestTradeDate: null, barCount: 0, createdAt: null })"
+          :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
+          @row-click="selectStock"
         >
           <template #cell-tsCode="{ item }">
             <span class="font-mono text-xs font-semibold text-foreground">{{ item.tsCode }}</span>
