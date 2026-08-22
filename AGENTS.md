@@ -9,18 +9,19 @@
 | 人类入口、最小本地启动 | [README.md](./README.md) | 了解项目与启动方式 |
 | Agent 规则 | [AGENTS.md](./AGENTS.md) | 执行仓库内任何任务 |
 | 文档 owner 边界 | [`docs/documentation-ownership.md`](./docs/documentation-ownership.md) | 判断文档归属或更新位置 |
-| 当前 milestone / phase | [`.planning/PROJECT.md`](./.planning/PROJECT.md)、[`.planning/ROADMAP.md`](./.planning/ROADMAP.md)、[`.planning/STATE.md`](./.planning/STATE.md) | 继续 GSD 工作 |
+| 当前 milestone / phase | [`.planning/PROJECT.md`](./.planning/PROJECT.md)、[`.planning/ROADMAP.md`](./.planning/ROADMAP.md)、[`.planning/STATE.md`](./.planning/STATE.md) | 了解项目计划与状态 |
 | 生产运维、rollback、D1、R2 | [RUNBOOK.md](./RUNBOOK.md) | 部署和生产运维 |
 | Claude 兼容入口 | [CLAUDE.md](./CLAUDE.md) | 使用 Claude 适配层时 |
+| OpenSpec 使用与 change | [`openspec/README.md`](./openspec/README.md) | 新功能规格、任务和归档 |
 | 规格与 change 历史 | [`openspec/`](./openspec/) | 查阅 spec、proposal、archive |
 
 ## 工作规则
 
-1. 改仓库前先走 GSD：小改动用 `$gsd-quick`，排障用 `$gsd-debug`，phase 工作用 `$gsd-execute-phase`。
-2. 执行期发生文档冲突时先信 `.planning/*`；稳定规则在 closeout 时回写到对应 canonical owner。
-3. 本地验证统一经 Gateway：使用 `http://localhost:8080/...`，不要把应用 dev port 当成标准入口。
-4. 更新文档只改 canonical owner，不复制同一套说明到多个 root doc。
-5. 保留用户已有的工作树改动；不回滚、覆盖、暂存无关改动，也不做 repo-wide 清理。
+1. 发生文档冲突时先信 `.planning/*`；稳定规则在对应 canonical owner 中维护。
+2. 本地验证统一经 Gateway：使用 `http://localhost:8080/...`，不要把应用 dev port 当成标准入口。
+3. 更新文档只改 canonical owner，不复制同一套说明到多个 root doc。
+4. 保留用户已有的工作树改动；不回滚、覆盖、暂存无关改动，也不做 repo-wide 清理。
+5. 单文件小改动直接实现；跨 api/db/frontend 或接口契约变更先读 [`openspec/README.md`](./openspec/README.md) 并建立 change。
 
 ## 工程原则
 

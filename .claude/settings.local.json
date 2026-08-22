@@ -2,8 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(ls:*)",
-      "Bash(find apps:*)",
-      "Skill(gsd-quick)"
+      "Bash(find apps:*)"
     ]
   }
 }

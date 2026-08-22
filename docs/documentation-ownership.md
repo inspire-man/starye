@@ -14,6 +14,7 @@
 | 稳定专题说明 | [`docs/`](./) | 当前仍有长期参考价值的专题文档 |
 | 历史或已取代材料 | [`docs/archive/`](./archive/) | 一次性报告、旧手册和完成总结 |
 | phase / milestone 证据 | [`.planning/milestones/`](../.planning/milestones/)、[`.planning/phases/`](../.planning/phases/) | 执行证据，不回写 root docs |
+| OpenSpec 使用入口 | [`openspec/README.md`](../openspec/README.md) | 最小命令流、何时建 change、token 读取规则 |
 | spec / change history | [`openspec/`](../openspec/) | spec、proposal、change 历史 |
 
 ## 边界规则
