@@ -60,6 +60,7 @@ export interface TargetWorkerDeployProjection {
     readonly adminUrl?: string
     readonly apiOrigin?: string
     readonly dashboardOrigin?: string
+    readonly quantOrigin?: string
     readonly authOrigin?: string
     readonly blogOrigin?: string
     readonly movieOrigin?: string
@@ -203,6 +204,7 @@ function buildWorkerDeployProjection(
     vars: {
       apiOrigin: profile.urls.api,
       dashboardOrigin: profile.pages.dashboard.canonicalUrl,
+      quantOrigin: profile.urls.quant,
       authOrigin: profile.pages.auth.canonicalUrl,
       blogOrigin: profile.pages.blog.canonicalUrl,
       movieOrigin: profile.pages.movie.canonicalUrl,
