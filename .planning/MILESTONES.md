@@ -1,5 +1,34 @@
 # Project Milestones: Starye
 
+## v1.5 爬虫运管与内容可用性闭环 (Shipped: 2026-08-22)
+
+**Closeout:** `override_closeout`; 11 inherited historical debug/artifact-audit sessions remain deferred in `STATE.md` and are non-causal to v1.5.
+
+**Verification:** 22/22 requirements, 4/4 phases, 23/23 plans and all phase verification artifacts passed. API 625 tests, crawler 181, Dashboard 161, Comic App 15; type-check, lint, build and migration regression passed.
+
+**Phases completed:** 4 phases, 23 plans, 14 tasks
+
+**Key accomplishments:**
+
+- Closed crawler operation snapshots, bounded availability/CAS/evidence contracts, and generated D1 observation/current projection schema
+- Task lifecycle CRUD and bounded audit operations with immutable supersede, deterministic cancellation/retry, and callback replay guards
+- Bounded availability persistence and signed crawler-run observation callbacks with append-first D1 history, CAS current projection, and authoritative readback
+- Dashboard task operations now expose bounded lifecycle and availability facts from authoritative detail readback, with a canonical Gateway proof that fails closed without an authenticated session.
+- Ownership-aware Gateway proof that preserves the original tuple while following the authoritative availability owner after supersede
+- Comic chapter source snapshots, identity-based completeness findings, terminal-state projection and revision-bound targeted repair.
+- Chapter page identity/count/order validation, bounded image probe observations, redacted samples, CAS current projection and Reader handling.
+- Production deployment at SHA `184e294`; Manga Crawl `32536822682` succeeded with D1 run `9ee3320b-4726-4b3a-9d51-a2c6de9c972d`.
+- Production chapter `790-34389` integrity readback: 25/25 pages available, 25 observations, projection version 1; the same source image decoded at `720x9074`.
+
+**Archives:**
+
+- [v1.5-ROADMAP.md](milestones/v1.5-ROADMAP.md)
+- [v1.5-REQUIREMENTS.md](milestones/v1.5-REQUIREMENTS.md)
+- [v1.5-MILESTONE-AUDIT.md](milestones/v1.5-MILESTONE-AUDIT.md)
+- [v1.5-phases/](milestones/v1.5-phases/)
+
+---
+
 ## v1.4 播放可用性与生产自愈闭环 (Shipped: 2026-08-10)
 
 **Closeout:** `override_closeout`; archive backfilled on 2026-08-21 after v1.5 kickoff.

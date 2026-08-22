@@ -206,6 +206,49 @@
 - Sessions: multiple GSD workflow sessions across five execution phases, production repair, playback proof, and archive backfill.
 - Notable: shared control-plane contracts and artifact-first evidence kept the production proof bounded without creating a second scheduler or content editor.
 
+## Milestone: v1.5 — 爬虫运管与内容可用性闭环
+
+**Shipped:** 2026-08-22 | **Phases:** 4 | **Plans:** 23
+**Closeout:** Override closeout; 22/22 requirements passed. Eleven inherited artifact-audit/debug items remain deferred outside v1.5 scope.
+
+### What Was Built
+
+- Shared crawler task/run/attempt/provider control plane with CRUD, archive, cancel, retry, audit and replay guards.
+- Revision-bound video direct/magnet availability, signed observations, CAS projections, repair receipts and authoritative readback.
+- Comic chapter source snapshots, identity-based completeness findings, terminal-state projection and targeted repair protection.
+- Chapter page identity/count/order checks, bounded image probes, redacted observations, page projection and Reader failure handling.
+- Production deployment and Manga Crawl at SHA `184e294`; production chapter `790-34389` passed 25/25 page checks and browser image decode.
+
+### What Worked
+
+- GitNexus-first impact analysis and the existing D1 control plane kept shared lifecycle changes auditable across API, crawler and Dashboard.
+- Separating provider success, task execution, content projection and actual consumption prevented the production Crawl receipt from being mistaken for Reader proof.
+- Canonical Gateway plus authoritative D1 readback exposed the same revision, policy, counts and bounded observations across local and production checks.
+
+### What Was Inefficient
+
+- A long-running production Manga Crawl emitted several API sync timeouts before completing; the runner continued with a valid non-empty receipt, so production content completeness still required D1 and page-level readback.
+- The production Comic surface is R18-gated and the available browser session was anonymous, so production Reader UI could not be claimed in this run; the local fresh Reader tuple remains the full UI proof.
+- GSD archive generation required a manual normalization pass because the milestone had already reached implementation completion before closeout.
+
+### Patterns Established
+
+- Availability is a projection of bounded observations and authoritative readback, never of HTTP 200, metadata success or provider exit status alone.
+- External comic page URLs remain source-owned; D1 stores redacted identity and probe facts, not signed query material, cookies or media bytes.
+- Production acceptance records the task/run/attempt/provider/SHA tuple and keeps R18 session state separate from content persistence evidence.
+
+### Key Lessons
+
+1. Treat successful ingestion and successful user consumption as separate release gates.
+2. Run a small production page probe after a broad crawl to prove the persisted data is consumable.
+3. Archive the completed milestone before beginning the next planning cycle.
+
+### Cost Observations
+
+- Model mix: not tracked.
+- Sessions: multiple execution, production verification and closeout sessions.
+- Notable: the existing task control plane and bounded evidence contracts made the v1.5 vertical slices additive instead of requiring a second scheduler.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -216,6 +259,7 @@
 | v1.1 | multiple | 5 | Turned storage/cost policy into code, audit tooling, doc ownership, and shared semantics instead of one-off cleanup rules |
 | v1.2 | multiple | 5 | Added target-aware deployment contracts and accepted a bounded production-Viewer evidence deferral rather than restarting frozen carriers |
 | v1.4 | multiple | 5 | Split source readiness, repair, reconciliation, and actual playback into tuple-bound facts and completed a fresh production proof |
+| v1.5 | multiple | 4 | Extended tuple-bound availability from video to comic chapters/pages and completed production deployment plus page-level readback |
 
 ### Cumulative Quality
 
@@ -225,6 +269,7 @@
 | v1.1 | Phase-specific unit, typecheck, audit, doc-contract, and milestone regression checks | 5/5 phases verified, 22/22 requirements satisfied | Milestone audit passed with no unsatisfied requirements |
 | v1.2 | Target-profile, deployment-contract, smoke, matrix, and audit checks | 26/30 requirements verified; override closeout | DATA-05/06/07 and TEST-05 remain deferred Viewer-proof evidence |
 | v1.4 | Source contract, repair lifecycle, Dashboard/Player, Actions reconciliation, Gateway, and playback-evidence checks | 5/5 phases verified, 12/12 requirements satisfied | Global debug audit items and unrelated config lint remain deferred outside milestone requirements |
+| v1.5 | Task operations, video/magnet, chapter completeness, page availability, deployment and production readback | 4/4 phases verified, 22/22 requirements satisfied | Historical debug audit items and production R18 Reader session boundary remain explicitly documented |
 
 ### Top Lessons
 

@@ -2,35 +2,35 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
+status: Awaiting next milestone
+stopped_at: v1.5 milestone complete; production deployment and Actions verification passed
+last_updated: "2026-08-22T08:35:00+08:00"
+last_activity: 2026-08-22
+last_activity_desc: Completed v1.5 production deployment, successful Manga Crawl, production page integrity readback and milestone archive
+progress:
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 23
+  completed_plans: 23
 current_phase: 28
 current_phase_name: Chapter Image Availability And Gateway Acceptance
-status: verification
-stopped_at: Phase 28 implementation and local Gateway acceptance complete; production deployment and Actions verification pending
-last_updated: "2026-08-22T06:20:00+08:00"
-last_activity: 2026-08-22
-last_activity_desc: Completed Phase 27/28 implementation, local D1 migration/readback, Dashboard-to-Reader fresh tuple acceptance
-progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
 ---
 
 # Project State: Starye — 个人内容中台
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-08-21)
+See: `.planning/PROJECT.md` (updated 2026-08-22)
 
 **Core value:** 部署在公网、能稳定日常使用的个人内容中台；优先保证内容可访问、可阅读、可观看。
-**Current focus:** Phase 27 — Comic Chapter Completeness
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 28 — Chapter Image Availability And Gateway Acceptance
-Plan: 28-04 complete
-Status: Local verification passed; production deployment pending
-Last activity: 2026-08-22 — Fresh Dashboard → runner → D1 → Reader tuple passed
+Phase: Milestone v1.5 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-22 — Milestone v1.5 completed and archived
 
 ## Performance Metrics
 
@@ -99,12 +99,14 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- [ ] Push the v1.5 implementation and wait for production deploy/CI/Actions workflows.
+- [x] Push the v1.5 implementation and wait for production deploy/CI/Actions workflows.
 
 ### Blockers/Concerns
 
-- Production Actions has not yet run the v1.5 commit; verify migrations, API, pages and crawler workflows against the pushed SHA.
-- The local browser tuple uses bounded public image endpoints; production acceptance must use a fresh production comic/chapter tuple.
+- Production SHA `184e294` passed CI, D1 migration, API, API-after-PR, Auth, Blog, Comic, Dashboard and Movie workflows.
+- Production Manga Crawl `32536822682` succeeded with D1 run `9ee3320b-4726-4b3a-9d51-a2c6de9c972d`, provider `github-actions`, attempt 1 and matching SHA binding.
+- Production chapter `790-34389` passed a bounded 25-page integrity probe; D1 readback is `available`, 25/25, with 25 observations and projection version 1.
+- Production Reader UI was not claimed from the anonymous browser because all current production comics are R18-gated; the complete Reader tuple remains in the Phase 28 local Gateway verification artifact.
 
 ## Deferred Items
 
@@ -141,5 +143,9 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-20T11:41:20+08:00
-Stopped at: Phase 26 complete; ready to plan Phase 27
+Stopped at: v1.5 complete; ready for `$gsd-new-milestone`
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
