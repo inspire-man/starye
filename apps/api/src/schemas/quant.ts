@@ -20,6 +20,10 @@ export const QuantWatchlistItemSchema = v.object({
   name: v.nullable(v.string()),
   createdAt: v.union([v.string(), v.date()]),
   updatedAt: v.union([v.string(), v.date()]),
+  latestTradeDate: v.optional(v.nullable(v.string())),
+  barCount: v.optional(v.number()),
+  latestClose: v.optional(v.nullable(v.number())),
+  latestChangePercent: v.optional(v.nullable(v.number())),
 })
 
 export const QuantWatchlistResponseSchema = v.object({
@@ -67,6 +71,7 @@ export const QuantCapabilitiesResponseSchema = v.object({
   success: v.literal(true),
   data: v.object({
     tier: v.nullable(v.union([v.literal(120), v.literal(2000)])),
+    provider: v.nullable(v.picklist(['tushare', 'eastmoney'])),
     enabled: v.array(v.picklist(['daily', 'stock_basic', 'trade_cal', 'daily_basic'])),
     capabilities: v.array(QuantCapabilitySchema),
   }),

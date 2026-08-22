@@ -33,6 +33,7 @@ describe('quant route contract', () => {
       success: true,
       data: {
         tier: 120,
+        provider: 'eastmoney',
         enabled: ['daily'],
       },
     })

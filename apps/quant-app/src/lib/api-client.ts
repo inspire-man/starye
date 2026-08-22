@@ -5,6 +5,7 @@ import type {
   CapabilitiesResponse,
   CapabilityKey,
   DailyBar,
+  QuantProviderName,
   SyncResult,
   SyncStatus,
   WatchlistItem,
@@ -154,6 +155,8 @@ function parseCapabilities(payload: unknown): CapabilitiesResponse {
   const data = unwrapData(payload)
   const record = isRecord(data) ? data : {}
   const tier = readNumber(record, 'tier', 'pointsTier', 'points_tier')
+  const providerValue = readString(record, 'provider', 'dataProvider', 'data_provider')
+  const provider: QuantProviderName | null = providerValue === 'tushare' || providerValue === 'eastmoney' ? providerValue : null
   const enabledValues = Array.isArray(record.enabled) ? record.enabled : []
   const enabled = CAPABILITY_ORDER.filter(key => enabledValues.includes(key))
   const rawCapabilities = record.capabilities
@@ -171,7 +174,7 @@ function parseCapabilities(payload: unknown): CapabilitiesResponse {
       requires: item && Array.isArray(item.requires) ? item.requires.filter((value): value is string => typeof value === 'string') : undefined,
     }
   })
-  return { tier, enabled, capabilities }
+  return { tier, provider, enabled, capabilities }
 }
 
 function parseWatchlist(payload: unknown): WatchlistItem[] {
@@ -195,6 +198,8 @@ function parseWatchlistItem(value: JsonRecord, index: number): WatchlistItem | n
     name: readString(value, 'name', 'stockName', 'stock_name'),
     latestTradeDate: readString(value, 'latestTradeDate', 'latest_trade_date', 'tradeDate', 'trade_date'),
     barCount: readNumber(value, 'barCount', 'bar_count', 'dailyBarCount', 'daily_bar_count') ?? 0,
+    latestClose: readNumber(value, 'latestClose', 'latest_close', 'close'),
+    latestChangePercent: readNumber(value, 'latestChangePercent', 'latest_change_percent', 'pctChg', 'pct_chg'),
     createdAt: readString(value, 'createdAt', 'created_at'),
   }
 }

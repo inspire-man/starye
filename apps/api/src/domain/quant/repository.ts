@@ -67,10 +67,22 @@ export async function listQuantWatchlistWithStats(db: Database) {
       .from(quantDailyBars)
       .where(eq(quantDailyBars.tsCode, row.tsCode))
       .get()
+    const latest = await db
+      .select({
+        close: quantDailyBars.close,
+        pctChg: quantDailyBars.pctChg,
+      })
+      .from(quantDailyBars)
+      .where(eq(quantDailyBars.tsCode, row.tsCode))
+      .orderBy(desc(quantDailyBars.tradeDate))
+      .limit(1)
+      .get()
     return {
       ...row,
       latestTradeDate: stats?.latestTradeDate ?? null,
       barCount: Number(stats?.barCount ?? 0),
+      latestClose: latest?.close ?? null,
+      latestChangePercent: latest?.pctChg ?? null,
     }
   }))
 }

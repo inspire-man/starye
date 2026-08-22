@@ -1,11 +1,11 @@
 import type { Database } from '@starye/db'
-import type { TushareProvider } from './provider'
+import type { QuantDataProvider } from './provider'
 import type { DailyBar, QuantSyncInput, QuantSyncResult } from './types'
 import { nanoid } from 'nanoid'
 import { createQuantCapabilityRegistryFromEnv } from './capabilities'
 import { QuantError } from './errors'
 import { screenMomentum } from './factor'
-import { createTushareProvider, mapTushareProviderError } from './provider'
+import { createEastmoneyProvider, createTushareProvider, mapQuantProviderError, resolveQuantProviderName } from './provider'
 import {
   acquireQuantSyncLease,
   createQuantWatchlistItem,
@@ -27,13 +27,16 @@ export const QUANT_SYNC_TOTAL_DEADLINE_MS = 120_000
 const QUANT_SYNC_DEADLINE_CODE = 'QUANT_SYNC_DEADLINE'
 
 interface QuantEnvironment {
+  readonly QUANT_DATA_PROVIDER?: unknown
   readonly TUSHARE_TOKEN?: unknown
   readonly TUSHARE_BASE_URL?: unknown
   readonly TUSHARE_TIMEOUT_MS?: unknown
+  readonly EASTMONEY_BASE_URL?: unknown
+  readonly EASTMONEY_TIMEOUT_MS?: unknown
 }
 
 interface QuantSyncDependencies {
-  readonly provider?: TushareProvider
+  readonly provider?: QuantDataProvider
   readonly now?: () => Date
   readonly totalDeadlineMs?: number
 }
@@ -73,8 +76,8 @@ function resolveTotalDeadlineMs(value: number | undefined): number {
 }
 
 async function fetchDailyWithDeadlines(
-  provider: TushareProvider,
-  request: Parameters<TushareProvider['fetchDaily']>[0],
+  provider: QuantDataProvider,
+  request: Parameters<QuantDataProvider['fetchDaily']>[0],
   totalDeadline: Promise<{ readonly kind: 'deadline' }>,
 ): Promise<ProviderFetchOutcome> {
   const requestDeadline = createTimeoutSignal<ProviderFetchOutcome>(
@@ -85,7 +88,7 @@ async function fetchDailyWithDeadlines(
     .then(() => provider.fetchDaily(request))
     .then(
       bars => ({ kind: 'success', bars } satisfies ProviderFetchOutcome),
-      error => ({ kind: 'error', code: mapTushareProviderError(error).code } satisfies ProviderFetchOutcome),
+      error => ({ kind: 'error', code: mapQuantProviderError(error).code } satisfies ProviderFetchOutcome),
     )
 
   try {
@@ -120,8 +123,19 @@ function resolveDateRange(input: QuantSyncInput, now: Date): { readonly fromDate
   return { fromDate, toDate }
 }
 
-function createProviderFromEnv(env: unknown): TushareProvider {
-  const timeoutValue = Number(getString(env, 'TUSHARE_TIMEOUT_MS'))
+function createProviderFromEnv(env: unknown): QuantDataProvider {
+  const providerName = resolveQuantProviderName(env)
+  if (!providerName)
+    throw new QuantError('QUANT_PROVIDER_CONFIGURATION', 'QUANT_DATA_PROVIDER is not supported', 503)
+  const timeoutValue = Number(getString(env, providerName === 'eastmoney' ? 'EASTMONEY_TIMEOUT_MS' : 'TUSHARE_TIMEOUT_MS'))
+
+  if (providerName === 'eastmoney') {
+    return createEastmoneyProvider({
+      baseUrl: getString(env, 'EASTMONEY_BASE_URL'),
+      timeoutMs: Number.isFinite(timeoutValue) && timeoutValue > 0 ? timeoutValue : undefined,
+    })
+  }
+
   return createTushareProvider({
     token: getString(env, 'TUSHARE_TOKEN'),
     baseUrl: getString(env, 'TUSHARE_BASE_URL'),
@@ -209,7 +223,7 @@ export async function syncQuantDaily(
 
     const provider = dependencies.provider ?? createProviderFromEnv(env)
     if (!provider.isConfigured) {
-      return persistRejected(db, dateRange, runId, requestedCodes.length, startedAt, now, 'QUANT_PROVIDER_CONFIGURATION', 'Tushare provider is not configured')
+      return persistRejected(db, dateRange, runId, requestedCodes.length, startedAt, now, 'QUANT_PROVIDER_CONFIGURATION', 'Quant data provider is not configured')
     }
 
     const fetchedByIndex: Array<readonly DailyBar[] | undefined> = []
@@ -243,7 +257,7 @@ export async function syncQuantDaily(
               .slice(-MAX_DAILY_BARS_PER_CODE)
           }
           catch (error) {
-            errorsByIndex[index] = mapTushareProviderError(error).code
+            errorsByIndex[index] = mapQuantProviderError(error).code
           }
         }
       }))
