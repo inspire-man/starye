@@ -82,7 +82,7 @@ async function createFixtureRoot() {
   }
 }
 
-async function materializeGeneratedEnv(surface: 'dashboard' | 'auth' | 'blog' | 'movie' | 'comic') {
+async function materializeGeneratedEnv(surface: 'dashboard' | 'quant' | 'auth' | 'blog' | 'movie' | 'comic') {
   const fixture = await createFixtureRoot()
   const resolution = resolveTargetProfile('starye-org')
   const generated = await materializeTargetDeployConfig({
@@ -109,20 +109,24 @@ afterEach(async () => {
 describe('public runtime consumer adapters', () => {
   it('round-trips only Plan 12-01 parsed Vite and Nuxt dotenv surfaces', async () => {
     const dashboardGenerated = await materializeGeneratedEnv('dashboard')
+    const quantGenerated = await materializeGeneratedEnv('quant')
     const authGenerated = await materializeGeneratedEnv('auth')
     const movieGenerated = await materializeGeneratedEnv('movie')
     const comicGenerated = await materializeGeneratedEnv('comic')
 
     const dashboard = parseVitePublicRuntimeEnv(dashboardGenerated, 'dashboard')
+    const quant = parseVitePublicRuntimeEnv(quantGenerated, 'quant')
     const auth = parseNuxtPublicRuntimeEnv(authGenerated, 'auth')
     const movie = parseVitePublicRuntimeEnv(movieGenerated, 'movie')
     const comic = parseVitePublicRuntimeEnv(comicGenerated, 'comic')
 
     expect(buildVitePublicRuntimeEnv(dashboard, 'dashboard')).toEqual(dashboardGenerated)
+    expect(buildVitePublicRuntimeEnv(quant, 'quant')).toEqual(quantGenerated)
     expect(buildNuxtPublicRuntimeEnv(auth, 'auth')).toEqual(authGenerated)
     expect(buildVitePublicRuntimeEnv(movie, 'movie')).toEqual(movieGenerated)
     expect(buildVitePublicRuntimeEnv(comic, 'comic')).toEqual(comicGenerated)
     expect(dashboard.publicRuntime.gatewayBaseUrl).toBe(defaultTargetUrls.gateway)
+    expect(quant.publicRuntime.appBasePaths.quant).toBe('/quant/')
     expect(auth.publicRuntime.appBasePaths.auth).toBe('/auth/')
     expect(movie.publicRuntime.appBasePaths.movie).toBe('/movie/')
     expect(comic.publicRuntime.appBasePaths.comic).toBe('/comic/')

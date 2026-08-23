@@ -49,7 +49,7 @@ export interface NuxtPublicRuntimeEnv {
   readonly NUXT_PUBLIC_BUILD_MODE: string
 }
 
-type VitePagesSurface = Extract<TargetPagesSurface, 'dashboard' | 'movie' | 'comic'>
+type VitePagesSurface = Extract<TargetPagesSurface, 'dashboard' | 'quant' | 'movie' | 'comic'>
 type NuxtPagesSurface = Extract<TargetPagesSurface, 'auth' | 'blog'>
 type GeneratedPublicRuntimeEnv = object
 

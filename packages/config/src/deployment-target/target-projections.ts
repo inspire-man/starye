@@ -13,6 +13,7 @@ type TargetPagesSurface = ProfileTargetPagesSurface
 
 export const targetAppSurfaceValues = [
   'dashboard',
+  'quant',
   'auth',
   'blog',
   'movie',
@@ -24,6 +25,7 @@ export type TargetAppSurface = (typeof targetAppSurfaceValues)[number]
 
 export const targetAppBasePaths = {
   dashboard: '/dashboard/',
+  quant: '/quant/',
   auth: '/auth/',
   blog: '/blog/',
   movie: '/movie/',
