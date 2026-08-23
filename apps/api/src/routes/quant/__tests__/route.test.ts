@@ -210,4 +210,3 @@ describe('quant route contract', () => {
     })
   })
 })
-

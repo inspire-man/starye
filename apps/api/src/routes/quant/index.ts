@@ -248,4 +248,3 @@ quantRoutes.post('/sync', validator('json', QuantSyncSchema), async (c) => {
 })
 
 export default quantRoutes
-

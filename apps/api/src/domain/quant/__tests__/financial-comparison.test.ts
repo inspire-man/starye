@@ -64,4 +64,3 @@ describe('quant financial quality comparison', () => {
     })
   })
 })
-

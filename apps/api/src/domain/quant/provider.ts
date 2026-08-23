@@ -693,4 +693,3 @@ export function mapQuantProviderError(error: unknown): QuantError {
 export function mapTushareProviderError(error: unknown): QuantError {
   return mapQuantProviderError(error)
 }
-

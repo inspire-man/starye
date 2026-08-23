@@ -336,4 +336,3 @@ describe('quant daily providers', () => {
     expect(resolveQuantProviderName({ QUANT_DATA_PROVIDER: 'unknown' })).toBeNull()
   })
 })
-

@@ -181,4 +181,3 @@ export type QuantWatchlistCreate = v.InferOutput<typeof QuantWatchlistCreateSche
 export type QuantWatchlistUpdate = v.InferOutput<typeof QuantWatchlistUpdateSchema>
 export type QuantDailyQuery = v.InferOutput<typeof QuantDailyQuerySchema>
 export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>
-

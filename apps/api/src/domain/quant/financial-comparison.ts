@@ -72,4 +72,3 @@ export function buildQuantFinancialQualityComparison(
     debtAssetRatioLowerThanPercent: relativePercent(targetSample.quality.debtAssetRatio, peerQuality.map(value => value?.debtAssetRatio ?? null), (left, right) => left < right),
   }
 }
-

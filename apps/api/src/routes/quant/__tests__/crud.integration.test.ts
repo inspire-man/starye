@@ -337,4 +337,3 @@ describe('quant watchlist CRUD contract', () => {
     })
   })
 })
-
