@@ -1,10 +1,9 @@
 # quant-financial-trend Specification
 
 ## Purpose
-
 让择股工作台能把最近披露的财务质量放进时间和观察池两个维度中阅读。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Recent financial history
 
@@ -62,5 +61,3 @@ Quant 工作台 MUST 在基本面速览中展示最近报告的趋势与观察�
 
 - **WHEN** 历史或比较接口失败，或用户快速切换股票导致旧请求晚于新请求完成
 - **THEN** 只影响财务趋势区域，页面保留日线、估值和观察池数据，旧响应不得覆盖当前股票
-
-
