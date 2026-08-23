@@ -13,6 +13,7 @@ import type {
   SyncStatus,
   WatchlistItem,
 } from './lib/quant-types'
+import type { SelectionPresetKey } from './lib/selection-presets'
 import { ConfirmDialog, DataTable, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
   AlertCircle,
@@ -34,8 +35,7 @@ import {
 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { quantApi, QuantApiError } from './lib/api-client'
-
-type CandidateFilter = 'all' | 'ready' | 'signals'
+import { filterCandidatesBySelectionPreset, getSelectionReasons, selectionPresets } from './lib/selection-presets'
 
 const watchlist = ref<WatchlistItem[]>([])
 const snapshot = ref<CandidateSnapshot | null>(null)
@@ -71,22 +71,18 @@ const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation
 const deletingCode = ref<string | null>(null)
 const pendingDeleteCode = ref<string | null>(null)
 const adding = ref(false)
-const candidateFilter = ref<CandidateFilter>('all')
+const candidateFilter = ref<SelectionPresetKey>('balanced')
 const candidateFilterOptions = [
-  { key: 'all' as const, label: '全部', icon: Filter },
-  { key: 'ready' as const, label: '数据完整', icon: ShieldCheck },
-  { key: 'signals' as const, label: '有信号', icon: Sparkles },
+  { ...selectionPresets[0], icon: ShieldCheck },
+  { ...selectionPresets[1], icon: ArrowUpRight },
+  { ...selectionPresets[2], icon: ShieldAlert },
+  { ...selectionPresets[3], icon: Filter },
 ]
 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
-const filteredCandidateItems = computed(() => candidateItems.value.filter((item) => {
-  if (candidateFilter.value === 'ready')
-    return item.quality === 'ready'
-  if (candidateFilter.value === 'signals')
-    return item.signals.length > 0
-  return true
-}))
+const activeCandidatePreset = computed(() => candidateFilterOptions.find(option => option.key === candidateFilter.value) || candidateFilterOptions[0])
+const filteredCandidateItems = computed(() => filterCandidatesBySelectionPreset(candidateItems.value, candidateFilter.value))
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
 const overallError = computed(() => errors.watchlist || errors.candidates)
@@ -96,6 +92,8 @@ const latestDate = computed(() => {
   return formatTradeDate(dates.at(-1) || snapshot.value?.toDate || null)
 })
 const selectedCandidate = computed(() => candidateItems.value.find(item => item.tsCode === selectedTsCode.value) || null)
+const selectedCandidateReasons = computed(() => selectedCandidate.value ? getSelectionReasons(selectedCandidate.value, candidateFilter.value) : [])
+const selectedCandidateMatchesPreset = computed(() => selectedCandidate.value ? filteredCandidateItems.value.some(item => item.tsCode === selectedCandidate.value?.tsCode) : false)
 const latestDailyBar = computed(() => dailyBars.value.at(-1) || null)
 const latestWatchlistDate = computed(() => {
   const dates = watchlist.value.map(item => item.latestTradeDate).filter((date): date is string => Boolean(date))
@@ -939,7 +937,7 @@ onMounted(loadWorkspace)
           </div>
         </div>
         <div class="candidate-toolbar">
-          <div class="candidate-filter-group" role="group" aria-label="候选筛选">
+          <div class="candidate-filter-group" role="group" aria-label="择股预设">
             <button
               v-for="option in candidateFilterOptions"
               :key="option.key"
@@ -947,6 +945,7 @@ onMounted(loadWorkspace)
               :class="candidateFilter === option.key ? 'candidate-filter-button-active' : ''"
               type="button"
               :aria-pressed="candidateFilter === option.key"
+              :title="option.detail"
               @click="candidateFilter = option.key"
             >
               <component :is="option.icon" :size="14" aria-hidden="true" />
@@ -954,6 +953,14 @@ onMounted(loadWorkspace)
             </button>
           </div>
           <span class="section-meta">显示 {{ filteredCandidateItems.length }} / {{ candidateItems.length }}</span>
+        </div>
+        <div class="selection-guide" aria-label="择股预设说明">
+          <div class="selection-guide-copy">
+            <span class="section-kicker">START WITH A PRESET</span>
+            <strong>{{ activeCandidatePreset.label }}</strong>
+            <span>{{ activeCandidatePreset.description }}</span>
+          </div>
+          <span class="selection-guide-count">命中 {{ filteredCandidateItems.length }} 只</span>
         </div>
         <div class="selection-legend" aria-label="指标释义">
           <span><strong>信号分</strong>匹配规则数量</span>
@@ -985,8 +992,10 @@ onMounted(loadWorkspace)
           <div class="candidate-insight-signals">
             <span v-for="signal in selectedCandidate.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
             <span v-for="factor in selectedCandidate.missingFactors" :key="factor" class="signal-tag signal-tag-muted">待补 {{ formatFactorLabel(factor) }}</span>
+            <span v-for="reason in selectedCandidateReasons" :key="`preset-${reason}`" class="signal-tag signal-tag-primary">{{ reason }}</span>
             <span v-if="!selectedCandidate.signals.length && !selectedCandidate.missingFactors.length" class="muted-inline">暂无因子信号</span>
-            <span class="insight-disclaimer">{{ riskLabel(selectedCandidate) }}</span>
+            <span v-if="!selectedCandidateMatchesPreset && candidateFilter !== 'all'" class="insight-disclaimer">当前标的未命中“{{ activeCandidatePreset.label }}”，可切换到“全部候选”复核</span>
+            <span v-else class="insight-disclaimer">{{ riskLabel(selectedCandidate) }}</span>
           </div>
         </div>
         <DataTable
@@ -1283,4 +1292,3 @@ onMounted(loadWorkspace)
     </main>
   </div>
 </template>
-
