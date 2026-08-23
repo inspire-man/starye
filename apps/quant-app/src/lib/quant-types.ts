@@ -1,6 +1,7 @@
 export const CAPABILITY_ORDER = ['daily', 'stock_basic', 'trade_cal', 'daily_basic'] as const
 
 export type CapabilityKey = typeof CAPABILITY_ORDER[number]
+export type QuantProviderName = 'tushare' | 'eastmoney'
 
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 
@@ -14,6 +15,7 @@ export interface CapabilityState {
 
 export interface CapabilitiesResponse {
   tier: number | null
+  provider: QuantProviderName | null
   enabled: CapabilityKey[]
   capabilities: CapabilityState[]
 }
@@ -24,6 +26,8 @@ export interface WatchlistItem {
   name: string | null
   latestTradeDate: string | null
   barCount: number
+  latestClose: number | null
+  latestChangePercent: number | null
   createdAt: string | null
 }
 
@@ -86,4 +90,54 @@ export interface DailyBar {
   changePercent: number | null
   volume: number | null
   amount: number | null
+}
+
+export interface QuantValuationSnapshot {
+  tsCode: string
+  observedAt: string
+  dynamicPe: number | null
+  peTtm: number | null
+  peStatic: number | null
+  pb: number | null
+  ps: number | null
+  peg: number | null
+  marketCap: number | null
+}
+
+export interface QuantValuationComparisonPeer {
+  tsCode: string
+  name: string | null
+  valuation: QuantValuationSnapshot | null
+}
+
+export interface QuantValuationComparison {
+  target: QuantValuationSnapshot
+  peers: QuantValuationComparisonPeer[]
+  sampleCount: number
+  availableSampleCount: number
+  ttmPeSampleCount: number
+  pbSampleCount: number
+  ttmPeHigherThanPercent: number | null
+  pbHigherThanPercent: number | null
+}
+
+export interface QuantFinancialQualitySnapshot {
+  tsCode: string
+  observedAt: string
+  reportDate: string
+  reportType: string | null
+  reportDateName: string | null
+  noticeDate: string | null
+  revenue: number | null
+  revenueYoY: number | null
+  netProfit: number | null
+  netProfitYoY: number | null
+  adjustedNetProfit: number | null
+  adjustedNetProfitYoY: number | null
+  roe: number | null
+  grossMargin: number | null
+  netMargin: number | null
+  debtAssetRatio: number | null
+  operatingCashflowToRevenue: number | null
+  roic: number | null
 }

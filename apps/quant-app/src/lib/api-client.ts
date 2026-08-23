@@ -5,6 +5,11 @@ import type {
   CapabilitiesResponse,
   CapabilityKey,
   DailyBar,
+  QuantFinancialQualitySnapshot,
+  QuantProviderName,
+  QuantValuationComparison,
+  QuantValuationComparisonPeer,
+  QuantValuationSnapshot,
   SyncResult,
   SyncStatus,
   WatchlistItem,
@@ -133,6 +138,8 @@ function capabilityReason(key: CapabilityKey, tier: number | null, value: string
     return `需要 2000 积分，当前 ${tier ?? '未知'} 积分档位未启用`
   if (value === 'invalid_points_tier')
     return '积分档位配置无效，能力已关闭'
+  if (value === 'invalid_provider')
+    return '数据源配置无效，能力已关闭'
   return value || defaultCapabilityReason(key, tier)
 }
 
@@ -154,6 +161,8 @@ function parseCapabilities(payload: unknown): CapabilitiesResponse {
   const data = unwrapData(payload)
   const record = isRecord(data) ? data : {}
   const tier = readNumber(record, 'tier', 'pointsTier', 'points_tier')
+  const providerValue = readString(record, 'provider', 'dataProvider', 'data_provider')
+  const provider: QuantProviderName | null = providerValue === 'tushare' || providerValue === 'eastmoney' ? providerValue : null
   const enabledValues = Array.isArray(record.enabled) ? record.enabled : []
   const enabled = CAPABILITY_ORDER.filter(key => enabledValues.includes(key))
   const rawCapabilities = record.capabilities
@@ -171,7 +180,7 @@ function parseCapabilities(payload: unknown): CapabilitiesResponse {
       requires: item && Array.isArray(item.requires) ? item.requires.filter((value): value is string => typeof value === 'string') : undefined,
     }
   })
-  return { tier, enabled, capabilities }
+  return { tier, provider, enabled, capabilities }
 }
 
 function parseWatchlist(payload: unknown): WatchlistItem[] {
@@ -195,6 +204,8 @@ function parseWatchlistItem(value: JsonRecord, index: number): WatchlistItem | n
     name: readString(value, 'name', 'stockName', 'stock_name'),
     latestTradeDate: readString(value, 'latestTradeDate', 'latest_trade_date', 'tradeDate', 'trade_date'),
     barCount: readNumber(value, 'barCount', 'bar_count', 'dailyBarCount', 'daily_bar_count') ?? 0,
+    latestClose: readNumber(value, 'latestClose', 'latest_close', 'close'),
+    latestChangePercent: readNumber(value, 'latestChangePercent', 'latest_change_percent', 'pctChg', 'pct_chg'),
     createdAt: readString(value, 'createdAt', 'created_at'),
   }
 }
@@ -307,6 +318,88 @@ function parseDailyBars(payload: unknown): DailyBar[] {
   })
 }
 
+function parseValuation(payload: unknown): QuantValuationSnapshot {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('估值数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const tsCode = readString(data, 'tsCode', 'ts_code', 'code')
+  const observedAt = readString(data, 'observedAt', 'observed_at')
+  if (!tsCode || !observedAt)
+    throw new QuantApiError('估值数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  return {
+    tsCode,
+    observedAt,
+    dynamicPe: readNumber(data, 'dynamicPe', 'dynamic_pe'),
+    peTtm: readNumber(data, 'peTtm', 'pe_ttm'),
+    peStatic: readNumber(data, 'peStatic', 'pe_static'),
+    pb: readNumber(data, 'pb'),
+    ps: readNumber(data, 'ps'),
+    peg: readNumber(data, 'peg'),
+    marketCap: readNumber(data, 'marketCap', 'market_cap'),
+  }
+}
+
+function parseValuationComparison(payload: unknown): QuantValuationComparison {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('估值比较数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const target = parseValuation({ data: data.target })
+  const rawPeers = Array.isArray(data.peers) ? data.peers : []
+  const peers: QuantValuationComparisonPeer[] = rawPeers.flatMap((value) => {
+    if (!isRecord(value))
+      return []
+    const tsCode = readString(value, 'tsCode', 'ts_code', 'code')
+    if (!tsCode)
+      return []
+    return [{
+      tsCode,
+      name: readString(value, 'name', 'stockName', 'stock_name'),
+      valuation: value.valuation === null ? null : parseValuation({ data: value.valuation }),
+    }]
+  })
+  return {
+    target,
+    peers,
+    sampleCount: readNumber(data, 'sampleCount', 'sample_count') ?? 0,
+    availableSampleCount: readNumber(data, 'availableSampleCount', 'available_sample_count') ?? 0,
+    ttmPeSampleCount: readNumber(data, 'ttmPeSampleCount', 'ttm_pe_sample_count') ?? 0,
+    pbSampleCount: readNumber(data, 'pbSampleCount', 'pb_sample_count') ?? 0,
+    ttmPeHigherThanPercent: readNumber(data, 'ttmPeHigherThanPercent', 'ttm_pe_higher_than_percent'),
+    pbHigherThanPercent: readNumber(data, 'pbHigherThanPercent', 'pb_higher_than_percent'),
+  }
+}
+
+function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('基本面数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const tsCode = readString(data, 'tsCode', 'ts_code', 'code')
+  const observedAt = readString(data, 'observedAt', 'observed_at')
+  const reportDate = readString(data, 'reportDate', 'report_date')
+  if (!tsCode || !observedAt || !reportDate)
+    throw new QuantApiError('基本面数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  return {
+    tsCode,
+    observedAt,
+    reportDate,
+    reportType: readString(data, 'reportType', 'report_type'),
+    reportDateName: readString(data, 'reportDateName', 'report_date_name'),
+    noticeDate: readString(data, 'noticeDate', 'notice_date'),
+    revenue: readNumber(data, 'revenue'),
+    revenueYoY: readNumber(data, 'revenueYoY', 'revenue_yoy'),
+    netProfit: readNumber(data, 'netProfit', 'net_profit'),
+    netProfitYoY: readNumber(data, 'netProfitYoY', 'net_profit_yoy'),
+    adjustedNetProfit: readNumber(data, 'adjustedNetProfit', 'adjusted_net_profit'),
+    adjustedNetProfitYoY: readNumber(data, 'adjustedNetProfitYoY', 'adjusted_net_profit_yoy'),
+    roe: readNumber(data, 'roe'),
+    grossMargin: readNumber(data, 'grossMargin', 'gross_margin'),
+    netMargin: readNumber(data, 'netMargin', 'net_margin'),
+    debtAssetRatio: readNumber(data, 'debtAssetRatio', 'debt_asset_ratio'),
+    operatingCashflowToRevenue: readNumber(data, 'operatingCashflowToRevenue', 'operating_cashflow_to_revenue'),
+    roic: readNumber(data, 'roic'),
+  }
+}
+
 async function requestJson(path: string, init?: RequestInit, options: { readonly allowErrorResponse?: boolean } = {}): Promise<unknown> {
   const response = await fetch(`${QUANT_API_PREFIX}${path}`, {
     credentials: 'include',
@@ -382,5 +475,17 @@ export const quantApi = {
 
   async getDailyBars(tsCode: string, query: DailyBarQuery = {}): Promise<DailyBar[]> {
     return parseDailyBars(await requestJson(`/daily/${encodeURIComponent(tsCode)}${queryString(query)}`))
+  },
+
+  async getValuation(tsCode: string): Promise<QuantValuationSnapshot> {
+    return parseValuation(await requestJson(`/valuation/${encodeURIComponent(tsCode)}`))
+  },
+
+  async getValuationComparison(tsCode: string): Promise<QuantValuationComparison> {
+    return parseValuationComparison(await requestJson(`/valuation/compare/${encodeURIComponent(tsCode)}`))
+  },
+
+  async getFinancialQuality(tsCode: string): Promise<QuantFinancialQualitySnapshot> {
+    return parseFinancialQuality(await requestJson(`/financial/${encodeURIComponent(tsCode)}`))
   },
 }

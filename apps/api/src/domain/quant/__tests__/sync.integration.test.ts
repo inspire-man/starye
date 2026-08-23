@@ -13,6 +13,7 @@ import { QUANT_SYNC_PROVIDER_CONCURRENCY, QUANT_SYNC_PROVIDER_TIMEOUT_MS, syncQu
 
 const migrationPath = new URL('../../../../../../packages/db/drizzle/0036_quant_workbench.sql', import.meta.url)
 const leaseMigrationPath = new URL('../../../../../../packages/db/drizzle/0037_quant_sync_lease.sql', import.meta.url)
+const seedMigrationPath = new URL('../../../../../../packages/db/drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
 
 function fixtureBars(tsCode: string, offset = 0): readonly DailyBar[] {
   return Array.from({ length: 20 }, (_, index) => {
@@ -47,11 +48,12 @@ function deferred<T>(): { promise: Promise<T>, resolve: (value: T) => void } {
 
 async function createQuantDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
-  for (const migrationPathname of [migrationPath, leaseMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
   }
+  await client.execute('DELETE FROM quant_watchlist')
   return { client, db: drizzle(client, { schema }) as unknown as Database }
 }
 

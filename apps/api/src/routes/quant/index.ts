@@ -1,15 +1,20 @@
+import type { EastmoneyProviderOptions } from '../../domain/quant/provider'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
+import { buildQuantValuationComparison } from '../../domain/quant/comparison'
 import { QuantError } from '../../domain/quant/errors'
+import { createEastmoneyFinancialProvider, createEastmoneyValuationProvider, mapQuantProviderError } from '../../domain/quant/provider'
 import {
   createQuantWatchlistItem,
   deleteQuantWatchlistItem,
   getLatestQuantScanSnapshot,
   getQuantSyncState,
   listQuantDailyBars,
+  listQuantWatchlist,
   listQuantWatchlistWithStats,
+  normalizeTsCode,
   updateQuantWatchlistItem,
 } from '../../domain/quant/repository'
 import { syncQuantDaily } from '../../domain/quant/sync'
@@ -23,6 +28,15 @@ import {
 } from '../../schemas/quant'
 
 export const quantRoutes = new Hono<AppEnv>()
+
+function eastmoneyProviderOptions(env?: AppEnv['Bindings']): EastmoneyProviderOptions {
+  const baseUrl = env?.EASTMONEY_BASE_URL?.trim()
+  const timeoutMs = Number(env?.EASTMONEY_TIMEOUT_MS)
+  return {
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
+  }
+}
 
 quantRoutes.use('*', requireAuth(['admin', 'super_admin']))
 
@@ -44,6 +58,7 @@ quantRoutes.get('/capabilities', (c) => {
     success: true as const,
     data: {
       tier: registry.tier,
+      provider: registry.provider,
       enabled: registry.enabled,
       capabilities: registry.capabilities,
     },
@@ -91,6 +106,60 @@ quantRoutes.get('/daily/:tsCode', validator('param', QuantWatchlistParamSchema),
   })
   const limit = input.limit ? Math.min(120, Math.max(1, Number(input.limit))) : 120
   return c.json({ success: true as const, data: data.slice(-limit) })
+})
+
+quantRoutes.get('/valuation/:tsCode', validator('param', QuantWatchlistParamSchema), async (c) => {
+  const { tsCode } = c.req.valid('param')
+  try {
+    const provider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
+    const data = await provider.fetchValuation({ tsCode })
+    return c.json({ success: true as const, data })
+  }
+  catch (error) {
+    throw mapQuantProviderError(error)
+  }
+})
+
+quantRoutes.get('/valuation/compare/:tsCode', validator('param', QuantWatchlistParamSchema), async (c) => {
+  const tsCode = normalizeTsCode(c.req.valid('param').tsCode)
+  const watchlist = await listQuantWatchlist(c.get('db'))
+  if (!watchlist.some(item => item.tsCode === tsCode))
+    throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
+
+  const provider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
+  try {
+    const samples = await Promise.all(watchlist.map(async (item) => {
+      try {
+        return {
+          tsCode: item.tsCode,
+          name: item.name,
+          valuation: await provider.fetchValuation({ tsCode: item.tsCode }),
+        }
+      }
+      catch (error) {
+        if (item.tsCode === tsCode)
+          throw error
+        return { tsCode: item.tsCode, name: item.name, valuation: null }
+      }
+    }))
+    const data = buildQuantValuationComparison(tsCode, samples)
+    return c.json({ success: true as const, data })
+  }
+  catch (error) {
+    throw mapQuantProviderError(error)
+  }
+})
+
+quantRoutes.get('/financial/:tsCode', validator('param', QuantWatchlistParamSchema), async (c) => {
+  const { tsCode } = c.req.valid('param')
+  try {
+    const provider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
+    const data = await provider.fetchFinancialQuality({ tsCode })
+    return c.json({ success: true as const, data })
+  }
+  catch (error) {
+    throw mapQuantProviderError(error)
+  }
 })
 
 quantRoutes.get('/candidates', async (c) => {
