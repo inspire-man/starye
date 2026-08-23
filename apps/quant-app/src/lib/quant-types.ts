@@ -141,3 +141,31 @@ export interface QuantFinancialQualitySnapshot {
   operatingCashflowToRevenue: number | null
   roic: number | null
 }
+
+export interface QuantFinancialQualityHistory {
+  tsCode: string
+  observedAt: string
+  reports: QuantFinancialQualitySnapshot[]
+}
+
+export interface QuantFinancialQualityComparisonPeer {
+  tsCode: string
+  name: string | null
+  quality: QuantFinancialQualitySnapshot | null
+}
+
+export interface QuantFinancialQualityComparison {
+  target: QuantFinancialQualitySnapshot
+  peers: QuantFinancialQualityComparisonPeer[]
+  sampleCount: number
+  availableSampleCount: number
+  revenueYoYSampleCount: number
+  netProfitYoYSampleCount: number
+  roeSampleCount: number
+  debtAssetRatioSampleCount: number
+  revenueYoYHigherThanPercent: number | null
+  netProfitYoYHigherThanPercent: number | null
+  roeHigherThanPercent: number | null
+  debtAssetRatioLowerThanPercent: number | null
+}
+

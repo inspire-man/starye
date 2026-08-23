@@ -259,6 +259,21 @@ describe('quant daily providers', () => {
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('code=SH601899')
   })
 
+  it('returns recent Eastmoney financial reports in descending report-date order', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: [
+        { SECURITY_CODE: '601899', REPORT_DATE: '2025-12-31 00:00:00', REPORT_TYPE: '年报' },
+        { SECURITY_CODE: '601899', REPORT_DATE: '2026-06-30 00:00:00', REPORT_TYPE: '中报' },
+      ],
+    }), { status: 200 }))
+    const provider = createEastmoneyFinancialProvider({ fetchImpl })
+
+    await expect(provider.fetchFinancialQualityHistory({ tsCode: '601899.SH', limit: 2 })).resolves.toMatchObject([
+      { reportDate: '2026-06-30', reportType: '中报' },
+      { reportDate: '2025-12-31', reportType: '年报' },
+    ])
+  })
+
   it('maps Eastmoney financial requests to SH, SZ, and BJ markets', async () => {
     const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
       const code = new URL(input.toString()).searchParams.get('code') || ''
@@ -321,3 +336,4 @@ describe('quant daily providers', () => {
     expect(resolveQuantProviderName({ QUANT_DATA_PROVIDER: 'unknown' })).toBeNull()
   })
 })
+

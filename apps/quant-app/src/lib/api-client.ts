@@ -5,6 +5,8 @@ import type {
   CapabilitiesResponse,
   CapabilityKey,
   DailyBar,
+  QuantFinancialQualityComparison,
+  QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
   QuantProviderName,
   QuantValuationComparison,
@@ -400,6 +402,52 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
   }
 }
 
+function parseFinancialQualityHistory(payload: unknown): QuantFinancialQualityHistory {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('基本面历史数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const tsCode = readString(data, 'tsCode', 'ts_code', 'code')
+  const observedAt = readString(data, 'observedAt', 'observed_at')
+  const reports = Array.isArray(data.reports) ? data.reports.map(value => parseFinancialQuality({ data: value })) : []
+  if (!tsCode || !observedAt || reports.length === 0)
+    throw new QuantApiError('基本面历史数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  return { tsCode, observedAt, reports }
+}
+
+function parseFinancialQualityComparison(payload: unknown): QuantFinancialQualityComparison {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('基本面比较数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const target = parseFinancialQuality({ data: data.target })
+  const rawPeers = Array.isArray(data.peers) ? data.peers : []
+  const peers = rawPeers.flatMap((value) => {
+    if (!isRecord(value))
+      return []
+    const tsCode = readString(value, 'tsCode', 'ts_code', 'code')
+    if (!tsCode)
+      return []
+    return [{
+      tsCode,
+      name: readString(value, 'name', 'stockName', 'stock_name'),
+      quality: value.quality === null ? null : parseFinancialQuality({ data: value.quality }),
+    }]
+  })
+  return {
+    target,
+    peers,
+    sampleCount: readNumber(data, 'sampleCount', 'sample_count') ?? 0,
+    availableSampleCount: readNumber(data, 'availableSampleCount', 'available_sample_count') ?? 0,
+    revenueYoYSampleCount: readNumber(data, 'revenueYoYSampleCount', 'revenue_yoy_sample_count') ?? 0,
+    netProfitYoYSampleCount: readNumber(data, 'netProfitYoYSampleCount', 'net_profit_yoy_sample_count') ?? 0,
+    roeSampleCount: readNumber(data, 'roeSampleCount', 'roe_sample_count') ?? 0,
+    debtAssetRatioSampleCount: readNumber(data, 'debtAssetRatioSampleCount', 'debt_asset_ratio_sample_count') ?? 0,
+    revenueYoYHigherThanPercent: readNumber(data, 'revenueYoYHigherThanPercent', 'revenue_yoy_higher_than_percent'),
+    netProfitYoYHigherThanPercent: readNumber(data, 'netProfitYoYHigherThanPercent', 'net_profit_yoy_higher_than_percent'),
+    roeHigherThanPercent: readNumber(data, 'roeHigherThanPercent', 'roe_higher_than_percent'),
+    debtAssetRatioLowerThanPercent: readNumber(data, 'debtAssetRatioLowerThanPercent', 'debt_asset_ratio_lower_than_percent'),
+  }
+}
+
 async function requestJson(path: string, init?: RequestInit, options: { readonly allowErrorResponse?: boolean } = {}): Promise<unknown> {
   const response = await fetch(`${QUANT_API_PREFIX}${path}`, {
     credentials: 'include',
@@ -488,4 +536,13 @@ export const quantApi = {
   async getFinancialQuality(tsCode: string): Promise<QuantFinancialQualitySnapshot> {
     return parseFinancialQuality(await requestJson(`/financial/${encodeURIComponent(tsCode)}`))
   },
+
+  async getFinancialQualityHistory(tsCode: string, limit = 4): Promise<QuantFinancialQualityHistory> {
+    return parseFinancialQualityHistory(await requestJson(`/financial/history/${encodeURIComponent(tsCode)}?limit=${encodeURIComponent(String(limit))}`))
+  },
+
+  async getFinancialQualityComparison(tsCode: string): Promise<QuantFinancialQualityComparison> {
+    return parseFinancialQualityComparison(await requestJson(`/financial/compare/${encodeURIComponent(tsCode)}`))
+  },
 }
+

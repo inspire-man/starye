@@ -174,6 +174,30 @@ describe('quant route contract', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('https://eastmoney.fixture.test/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew')
   })
 
+  it('returns recent financial history in report-date order', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      data: [
+        { SECURITY_CODE: '601899', REPORT_DATE: '2025-12-31 00:00:00', REPORT_TYPE: '年报' },
+        { SECURITY_CODE: '601899', REPORT_DATE: '2026-06-30 00:00:00', REPORT_TYPE: '中报' },
+      ],
+    }), { status: 200 }))
+
+    const response = await createApp({ user: { role: 'admin' } }).request('/api/quant/financial/history/601899.SH?limit=2')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        tsCode: '601899.SH',
+        reports: [
+          { reportDate: '2026-06-30', reportType: '中报' },
+          { reportDate: '2025-12-31', reportType: '年报' },
+        ],
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
   it('maps a financial upstream failure to the Quant route contract', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }))
 
@@ -186,3 +210,4 @@ describe('quant route contract', () => {
     })
   })
 })
+

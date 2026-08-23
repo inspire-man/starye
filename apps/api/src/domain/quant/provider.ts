@@ -287,10 +287,16 @@ export interface QuantFinancialQualitySnapshot {
   readonly roic: number | null
 }
 
+export interface QuantFinancialQualityRequest {
+  readonly tsCode: string
+  readonly limit?: number
+}
+
 export interface QuantFinancialQualityProvider {
   readonly name: QuantProviderName
   readonly isConfigured: boolean
-  fetchFinancialQuality: (request: QuantValuationRequest) => Promise<QuantFinancialQualitySnapshot>
+  fetchFinancialQuality: (request: QuantFinancialQualityRequest) => Promise<QuantFinancialQualitySnapshot>
+  fetchFinancialQualityHistory: (request: QuantFinancialQualityRequest) => Promise<readonly QuantFinancialQualitySnapshot[]>
 }
 
 const EastmoneyResponseSchema = v.object({
@@ -571,7 +577,7 @@ export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptio
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const now = options.now ?? (() => new Date())
 
-  async function fetchFinancialQuality(request: QuantValuationRequest): Promise<QuantFinancialQualitySnapshot> {
+  async function fetchFinancialReports(request: QuantFinancialQualityRequest): Promise<readonly QuantFinancialQualitySnapshot[]> {
     const tsCode = request.tsCode.trim().toUpperCase()
     const url = new URL('/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew', baseUrl)
     url.searchParams.set('type', '0')
@@ -607,22 +613,37 @@ export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptio
     if (!parsed.success || parsed.output.data.length === 0)
       throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial response has no reports')
 
-    const normalizedTsCode = tsCode
     const reportRows = parsed.output.data.map((value) => {
       if (!isRecord(value))
         throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial report is not an object')
       return value
     })
-    const reportDates = reportRows.map(record => normalizeFinancialDate(record.REPORT_DATE, 'report date', true))
-    const latestIndex = reportDates.reduce((bestIndex, date, index) => date && (!reportDates[bestIndex] || date > reportDates[bestIndex]!) ? index : bestIndex, 0)
     const observedAt = now().toISOString()
-    return normalizeFinancialReport(normalizedTsCode, reportRows[latestIndex]!, observedAt)
+    const reports = reportRows.map(record => normalizeFinancialReport(tsCode, record, observedAt))
+    return [...new Map(reports.map(report => [`${report.reportDate}:${report.reportType ?? ''}`, report])).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+  }
+
+  async function fetchFinancialQualityHistory(request: QuantFinancialQualityRequest): Promise<readonly QuantFinancialQualitySnapshot[]> {
+    const reports = await fetchFinancialReports(request)
+    const rawLimit = request.limit ?? 4
+    const limit = Number.isInteger(rawLimit) ? Math.min(8, Math.max(1, rawLimit)) : 4
+    return reports.slice(0, limit)
+  }
+
+  async function fetchFinancialQuality(request: QuantFinancialQualityRequest): Promise<QuantFinancialQualitySnapshot> {
+    const reports = await fetchFinancialReports(request)
+    const latest = reports[0]
+    if (!latest)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial response has no reports')
+    return latest
   }
 
   return {
     name: 'eastmoney',
     isConfigured: true,
     fetchFinancialQuality,
+    fetchFinancialQualityHistory,
   }
 }
 
@@ -672,3 +693,4 @@ export function mapQuantProviderError(error: unknown): QuantError {
 export function mapTushareProviderError(error: unknown): QuantError {
   return mapQuantProviderError(error)
 }
+

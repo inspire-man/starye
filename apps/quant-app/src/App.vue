@@ -4,6 +4,8 @@ import type {
   CandidateItem,
   CandidateSnapshot,
   DailyBar,
+  QuantFinancialQualityComparison,
+  QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
   QuantValuationComparison,
   QuantValuationSnapshot,
@@ -41,6 +43,9 @@ const dailyBars = ref<DailyBar[]>([])
 const valuationComparison = ref<QuantValuationComparison | null>(null)
 const valuation = ref<QuantValuationSnapshot | null>(null)
 const financialQuality = ref<QuantFinancialQualitySnapshot | null>(null)
+const financialHistory = ref<QuantFinancialQualityHistory | null>(null)
+const financialComparison = ref<QuantFinancialQualityComparison | null>(null)
+const financialComparisonError = ref<unknown | null>(null)
 const selectedTsCode = ref<string | null>(null)
 const watchCode = ref('')
 const watchName = ref('')
@@ -125,6 +130,59 @@ const hasFinancialData = computed(() => Boolean(financialQuality.value && [
   financialQuality.value.operatingCashflowToRevenue,
   financialQuality.value.roic,
 ].some(value => value !== null)))
+
+type FinancialTrendTone = 'positive' | 'negative' | 'neutral'
+type FinancialTrendFormat = 'growth' | 'metric'
+
+interface FinancialTrendItem {
+  key: string
+  label: string
+  current: number | null
+  delta: number | null
+  format: FinancialTrendFormat
+  tone: FinancialTrendTone
+  state: string
+}
+
+function trendState(current: number | null, previous: number | null, inverse = false): { tone: FinancialTrendTone, state: string } {
+  if (current === null || previous === null)
+    return { tone: 'neutral', state: '暂无足够数据' }
+  const delta = current - previous
+  if (Math.abs(delta) < 1)
+    return { tone: 'neutral', state: '基本稳定' }
+  const improved = inverse ? delta < 0 : delta > 0
+  return improved
+    ? { tone: 'positive', state: '改善' }
+    : { tone: 'negative', state: '走弱' }
+}
+
+const financialTrendItems = computed<FinancialTrendItem[]>(() => {
+  const reports = financialHistory.value?.reports ?? []
+  const latest = reports[0]
+  const previous = reports[1]
+  if (!latest || !previous)
+    return []
+
+  const entries = [
+    { key: 'revenueYoY', label: '营收增速', current: latest.revenueYoY, previous: previous.revenueYoY, format: 'growth' as const },
+    { key: 'netProfitYoY', label: '净利润增速', current: latest.netProfitYoY, previous: previous.netProfitYoY, format: 'growth' as const },
+    { key: 'roe', label: 'ROE 回报', current: latest.roe, previous: previous.roe, format: 'metric' as const },
+    { key: 'debtAssetRatio', label: '资产负债率', current: latest.debtAssetRatio, previous: previous.debtAssetRatio, format: 'metric' as const, inverse: true },
+  ]
+
+  return entries.map((entry) => {
+    const state = trendState(entry.current, entry.previous, entry.inverse)
+    return {
+      key: entry.key,
+      label: entry.label,
+      current: entry.current,
+      delta: entry.current !== null && entry.previous !== null ? entry.current - entry.previous : null,
+      format: entry.format,
+      tone: state.tone,
+      state: state.state,
+    }
+  })
+})
 
 type RiskTone = 'neutral' | 'warning' | 'danger'
 
@@ -229,6 +287,10 @@ function formatMetricPercent(value: number | null): string {
   return value === null ? '--' : `${value.toFixed(2)}%`
 }
 
+function formatTrendDelta(value: number | null): string {
+  return value === null ? '需要至少两期数据' : `${value >= 0 ? '+' : ''}${value.toFixed(1)} 个百分点`
+}
+
 function formatCompact(value: number | null): string {
   if (value === null)
     return '--'
@@ -265,6 +327,10 @@ function formatRatioPercent(value: number | null): string {
 
 function formatComparisonPosition(value: number | null): string {
   return value === null ? '暂无足够样本' : `高于观察池 ${value}%`
+}
+
+function formatLowerComparisonPosition(value: number | null): string {
+  return value === null ? '暂无足够样本' : `低于观察池 ${value}%`
 }
 
 function formatDateTime(value: string | null): string {
@@ -399,6 +465,9 @@ async function loadWatchlist() {
       valuationComparison.value = null
       valuation.value = null
       financialQuality.value = null
+      financialHistory.value = null
+      financialComparison.value = null
+      financialComparisonError.value = null
       loading.valuation = false
       loading.financial = false
     }
@@ -467,15 +536,37 @@ async function loadFinancialQuality(tsCode: string) {
   const requestId = ++financialRequestId
   loading.financial = true
   errors.financial = null
+  financialComparisonError.value = null
   financialQuality.value = null
+  financialHistory.value = null
+  financialComparison.value = null
   try {
-    const result = await quantApi.getFinancialQuality(tsCode)
-    if (requestId === financialRequestId)
-      financialQuality.value = result
-  }
-  catch (error) {
-    if (requestId === financialRequestId)
-      errors.financial = error
+    const [historyResult, comparisonResult] = await Promise.allSettled([
+      quantApi.getFinancialQualityHistory(tsCode),
+      quantApi.getFinancialQualityComparison(tsCode),
+    ])
+    if (requestId !== financialRequestId)
+      return
+
+    if (historyResult.status === 'fulfilled') {
+      financialHistory.value = historyResult.value
+      financialQuality.value = historyResult.value.reports[0] ?? null
+    }
+    else {
+      errors.financial = historyResult.reason
+    }
+
+    if (comparisonResult.status === 'fulfilled') {
+      financialComparison.value = comparisonResult.value
+      if (!financialQuality.value)
+        financialQuality.value = comparisonResult.value.target
+    }
+    else {
+      financialComparisonError.value = comparisonResult.reason
+    }
+
+    if (historyResult.status === 'rejected' && comparisonResult.status === 'rejected')
+      errors.financial = historyResult.reason
   }
   finally {
     if (requestId === financialRequestId)
@@ -1086,6 +1177,60 @@ onMounted(loadWorkspace)
             <Info :size="17" aria-hidden="true" />
             <span>{{ selectedStock ? '报告已找到，但当前指标暂缺' : '选择一只股票后查看基本面' }}</span>
           </div>
+          <div v-if="financialTrendItems.length" class="financial-trend" aria-label="财务质量趋势">
+            <div class="financial-subheading">
+              <div>
+                <span class="section-kicker">RECENT TREND</span>
+                <strong>最近几期变化</strong>
+              </div>
+              <small>比较最近两期报告 · {{ financialHistory?.reports.length || 0 }} 期可读</small>
+            </div>
+            <div class="financial-trend-grid">
+              <div v-for="item in financialTrendItems" :key="item.key" class="financial-trend-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.format === 'growth' ? formatPercent(item.current) : formatMetricPercent(item.current) }}</strong>
+                <span class="financial-trend-delta" :class="`trend-${item.tone}`">{{ item.state }} · {{ formatTrendDelta(item.delta) }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-if="financialComparison || financialComparisonError" class="financial-comparison" aria-label="观察池财务质量比较">
+            <div class="financial-subheading">
+              <div>
+                <span class="section-kicker">QUALITY POSITION</span>
+                <strong>观察池质量位置</strong>
+              </div>
+              <small>仅当前观察池</small>
+            </div>
+            <div v-if="financialComparisonError" class="financial-comparison-empty">
+              <Info :size="15" aria-hidden="true" />
+              <span>同池质量比较暂时不可用</span>
+            </div>
+            <div v-else-if="financialComparison" class="financial-comparison-grid">
+              <div class="financial-comparison-item">
+                <span>营收同比</span>
+                <strong>{{ formatComparisonPosition(financialComparison?.revenueYoYHigherThanPercent ?? null) }}</strong>
+                <small>样本 {{ financialComparison?.revenueYoYSampleCount ?? 0 }} 只</small>
+              </div>
+              <div class="financial-comparison-item">
+                <span>净利润同比</span>
+                <strong>{{ formatComparisonPosition(financialComparison?.netProfitYoYHigherThanPercent ?? null) }}</strong>
+                <small>样本 {{ financialComparison?.netProfitYoYSampleCount ?? 0 }} 只</small>
+              </div>
+              <div class="financial-comparison-item">
+                <span>ROE 股东回报</span>
+                <strong>{{ formatComparisonPosition(financialComparison?.roeHigherThanPercent ?? null) }}</strong>
+                <small>样本 {{ financialComparison?.roeSampleCount ?? 0 }} 只</small>
+              </div>
+              <div class="financial-comparison-item">
+                <span>资产负债率</span>
+                <strong>{{ formatLowerComparisonPosition(financialComparison?.debtAssetRatioLowerThanPercent ?? null) }}</strong>
+                <small>样本 {{ financialComparison?.debtAssetRatioSampleCount ?? 0 }} 只</small>
+              </div>
+            </div>
+            <p class="financial-comparison-note">
+              可用报告 {{ financialComparison?.availableSampleCount ?? 0 }} / {{ financialComparison?.sampleCount ?? 0 }} 只；相对位置不代表行业排名或未来收益
+            </p>
+          </div>
           <p class="valuation-note">
             金额单位：元；比例单位：%；数据来自最近已披露报告，指标用于观察，不代表未来收益
           </p>
@@ -1138,3 +1283,4 @@ onMounted(loadWorkspace)
     </main>
   </div>
 </template>
+

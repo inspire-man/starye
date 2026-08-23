@@ -118,6 +118,43 @@ export const QuantFinancialQualityResponseSchema = v.object({
   data: QuantFinancialQualitySnapshotSchema,
 })
 
+export const QuantFinancialHistoryQuerySchema = v.object({
+  limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
+})
+
+export const QuantFinancialQualityHistoryResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    tsCode: v.string(),
+    observedAt: v.string(),
+    reports: v.array(QuantFinancialQualitySnapshotSchema),
+  }),
+})
+
+export const QuantFinancialQualityComparisonPeerSchema = v.object({
+  tsCode: v.string(),
+  name: v.nullable(v.string()),
+  quality: v.nullable(QuantFinancialQualitySnapshotSchema),
+})
+
+export const QuantFinancialQualityComparisonResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    target: QuantFinancialQualitySnapshotSchema,
+    peers: v.array(QuantFinancialQualityComparisonPeerSchema),
+    sampleCount: v.number(),
+    availableSampleCount: v.number(),
+    revenueYoYSampleCount: v.number(),
+    netProfitYoYSampleCount: v.number(),
+    roeSampleCount: v.number(),
+    debtAssetRatioSampleCount: v.number(),
+    revenueYoYHigherThanPercent: v.nullable(v.number()),
+    netProfitYoYHigherThanPercent: v.nullable(v.number()),
+    roeHigherThanPercent: v.nullable(v.number()),
+    debtAssetRatioLowerThanPercent: v.nullable(v.number()),
+  }),
+})
+
 export const QuantSyncSchema = v.object({
   from_date: v.optional(QuantDateSchema),
   to_date: v.optional(QuantDateSchema),
@@ -144,3 +181,4 @@ export type QuantWatchlistCreate = v.InferOutput<typeof QuantWatchlistCreateSche
 export type QuantWatchlistUpdate = v.InferOutput<typeof QuantWatchlistUpdateSchema>
 export type QuantDailyQuery = v.InferOutput<typeof QuantDailyQuerySchema>
 export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>
+

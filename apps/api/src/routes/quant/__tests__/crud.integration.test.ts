@@ -247,6 +247,60 @@ describe('quant watchlist CRUD contract', () => {
     })
   })
 
+  it('compares financial quality against available watchlist reports', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    for (const item of [
+      ['601899.SH', '紫金矿业'],
+      ['600089.SH', '特变电工'],
+      ['600938.SH', '中国海油'],
+    ] as const) {
+      await app.request('/api/quant/watchlist', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ts_code: item[0], name: item[1] }),
+      })
+    }
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const code = new URL(input.toString()).searchParams.get('code')?.slice(2)
+      const fields = {
+        601899: { revenueYoY: 20, netProfitYoY: 40, roe: 18, debtAssetRatio: 45 },
+        600089: { revenueYoY: 10, netProfitYoY: 30, roe: 12, debtAssetRatio: 55 },
+        600938: { revenueYoY: 15, netProfitYoY: 50, roe: 20, debtAssetRatio: 60 },
+      }[code || '']!
+      return new Response(JSON.stringify({
+        data: [{
+          SECURITY_CODE: code,
+          REPORT_DATE: '2026-06-30 00:00:00',
+          TOTALOPERATEREVETZ: fields.revenueYoY,
+          PARENTNETPROFITTZ: fields.netProfitYoY,
+          ROEJQ: fields.roe,
+          ZCFZL: fields.debtAssetRatio,
+        }],
+      }), { status: 200 })
+    })
+
+    const response = await app.request('/api/quant/financial/compare/601899.SH')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        sampleCount: 3,
+        availableSampleCount: 3,
+        revenueYoYHigherThanPercent: 100,
+        netProfitYoYHigherThanPercent: 50,
+        roeHigherThanPercent: 50,
+        debtAssetRatioLowerThanPercent: 100,
+        peers: [
+          { tsCode: '600089.SH', name: '特变电工', quality: { revenueYoY: 10 } },
+          { tsCode: '600938.SH', name: '中国海油', quality: { revenueYoY: 15 } },
+        ],
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('keeps comparison samples when a non-target valuation source fails', async () => {
     const { db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })
@@ -283,3 +337,4 @@ describe('quant watchlist CRUD contract', () => {
     })
   })
 })
+
