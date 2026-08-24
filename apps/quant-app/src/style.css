@@ -1352,7 +1352,7 @@ input:focus-visible {
 
 .candidate-query-field {
   display: grid;
-  min-width: 6.5rem;
+  min-width: 7rem;
   gap: 0.25rem;
 }
 

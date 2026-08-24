@@ -1,13 +1,15 @@
-import type { CandidateItem } from './quant-types'
+import type { CandidateItem, ResearchMarkerStatus } from './quant-types'
 
 export type SelectionPresetKey = 'all' | 'balanced' | 'trend' | 'risk'
 export type CandidateSortKey = 'score' | 'return20' | 'volumeRatio' | 'relativeStrength'
+export type CandidateResearchStatus = 'all' | ResearchMarkerStatus
 
 export interface CandidateQuery {
   preset: SelectionPresetKey
   minScore: number
   completeOnly: boolean
   sortBy: CandidateSortKey
+  researchStatus: CandidateResearchStatus
 }
 
 export interface SelectionPreset {
@@ -94,12 +96,18 @@ function compareDescending(left: number | null, right: number | null): number {
   return right - left
 }
 
-export function filterAndSortCandidates(items: readonly CandidateItem[], query: CandidateQuery): CandidateItem[] {
+export function filterAndSortCandidates(
+  items: readonly CandidateItem[],
+  query: CandidateQuery,
+  researchStatusByCode: ReadonlyMap<string, ResearchMarkerStatus> = new Map(),
+): CandidateItem[] {
   return [...items
     .filter((item) => {
       if (!matchesSelectionPreset(item, query.preset))
         return false
       if (query.completeOnly && item.quality !== 'ready')
+        return false
+      if (query.researchStatus !== 'all' && (researchStatusByCode.get(item.tsCode) ?? 'unreviewed') !== query.researchStatus)
         return false
       return (item.score ?? -1) >= query.minScore
     })].sort((left: CandidateItem, right: CandidateItem) => {

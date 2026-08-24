@@ -62,6 +62,7 @@ describe('selection presets', () => {
       minScore: 2,
       completeOnly: true,
       sortBy: 'return20',
+      researchStatus: 'all',
     }).map(item => item.tsCode)).toEqual(['600089.SH', '601899.SH'])
   })
 
@@ -77,6 +78,34 @@ describe('selection presets', () => {
       minScore: 0,
       completeOnly: false,
       sortBy: 'volumeRatio',
+      researchStatus: 'all',
     }).map(item => item.tsCode)).toEqual(['600089.SH', '600938.SH', '601899.SH'])
+  })
+
+  it('filters by research status and treats missing markers as unreviewed', () => {
+    const items = [
+      candidate({ id: 'candidate-1', tsCode: '601899.SH' }),
+      candidate({ id: 'candidate-2', tsCode: '600089.SH' }),
+      candidate({ id: 'candidate-3', tsCode: '600938.SH' }),
+    ]
+    const statuses = new Map([
+      ['600089.SH', 'priority' as const],
+      ['600938.SH', 'excluded' as const],
+    ])
+
+    expect(filterAndSortCandidates(items, {
+      preset: 'all',
+      minScore: 0,
+      completeOnly: false,
+      sortBy: 'score',
+      researchStatus: 'priority',
+    }, statuses).map(item => item.tsCode)).toEqual(['600089.SH'])
+    expect(filterAndSortCandidates(items, {
+      preset: 'all',
+      minScore: 0,
+      completeOnly: false,
+      sortBy: 'score',
+      researchStatus: 'unreviewed',
+    }, statuses).map(item => item.tsCode)).toEqual(['601899.SH'])
   })
 })

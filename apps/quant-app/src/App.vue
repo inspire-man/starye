@@ -15,7 +15,7 @@ import type {
   SyncStatus,
   WatchlistItem,
 } from './lib/quant-types'
-import type { CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
+import type { CandidateResearchStatus, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
   AlertCircle,
@@ -97,6 +97,7 @@ const candidateFilter = ref<SelectionPresetKey>('balanced')
 const candidateMinScore = ref(0)
 const candidateCompleteOnly = ref(false)
 const candidateSort = ref<CandidateSortKey>('score')
+const candidateResearchStatus = ref<CandidateResearchStatus>('all')
 const candidateFilterOptions = [
   { ...selectionPresets[0], icon: ShieldCheck },
   { ...selectionPresets[1], icon: ArrowUpRight },
@@ -116,6 +117,10 @@ const researchStatusOptions: { value: ResearchMarkerStatus, label: string }[] = 
   { value: 'paused', label: '暂缓' },
   { value: 'excluded', label: '已排除' },
 ]
+const candidateResearchStatusOptions: { value: CandidateResearchStatus, label: string }[] = [
+  { value: 'all', label: '全部状态' },
+  ...researchStatusOptions,
+]
 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
@@ -125,8 +130,9 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
   minScore: candidateMinScore.value,
   completeOnly: candidateCompleteOnly.value,
   sortBy: candidateSort.value,
-}))
-const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'score')
+  researchStatus: candidateResearchStatus.value,
+}, new Map(researchMarkers.value.map(marker => [marker.tsCode, marker.status]))))
+const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'score' || candidateResearchStatus.value !== 'all')
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
 const overallError = computed(() => errors.watchlist || errors.candidates || errors.research)
@@ -544,6 +550,7 @@ function resetCandidateQuery(): void {
   candidateMinScore.value = 0
   candidateCompleteOnly.value = false
   candidateSort.value = 'score'
+  candidateResearchStatus.value = 'all'
 }
 
 async function loadWatchlist() {
@@ -1200,6 +1207,14 @@ onMounted(loadWorkspace)
               <span>排序</span>
               <select v-model="candidateSort" class="candidate-query-select">
                 <option v-for="option in candidateSortOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <label class="candidate-query-field">
+              <span>研究状态</span>
+              <select v-model="candidateResearchStatus" class="candidate-query-select">
+                <option v-for="option in candidateResearchStatusOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
               </select>
