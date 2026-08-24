@@ -1,6 +1,6 @@
 import type { CandidateItem } from '../quant-types'
 import { describe, expect, it } from 'vitest'
-import { filterCandidatesBySelectionPreset, getSelectionReasons, matchesSelectionPreset } from '../selection-presets'
+import { filterAndSortCandidates, filterCandidatesBySelectionPreset, getSelectionReasons, matchesSelectionPreset } from '../selection-presets'
 
 function candidate(overrides: Partial<CandidateItem> = {}): CandidateItem {
   return {
@@ -48,5 +48,35 @@ describe('selection presets', () => {
     expect(filterCandidatesBySelectionPreset(items, 'risk')).toHaveLength(1)
     expect(filterCandidatesBySelectionPreset(items, 'all')).toHaveLength(2)
     expect(getSelectionReasons(candidate(), 'risk')).toEqual(['数据完整', '命中 3 个信号', '未触发短线回撤', '未连续上涨过久', '成交未明显异常'])
+  })
+
+  it('applies custom score and completeness filters before sorting', () => {
+    const items = [
+      candidate({ id: 'candidate-1', score: 4, return20: 0.02 }),
+      candidate({ id: 'candidate-2', tsCode: '600089.SH', score: 2, return20: 0.15 }),
+      candidate({ id: 'candidate-3', tsCode: '600938.SH', score: 4, quality: 'partial', return20: 0.3 }),
+    ]
+
+    expect(filterAndSortCandidates(items, {
+      preset: 'all',
+      minScore: 2,
+      completeOnly: true,
+      sortBy: 'return20',
+    }).map(item => item.tsCode)).toEqual(['600089.SH', '601899.SH'])
+  })
+
+  it('keeps missing sort metrics after populated values and uses score as a tie-breaker', () => {
+    const items = [
+      candidate({ id: 'candidate-1', tsCode: '601899.SH', score: 2, volumeRatio: null }),
+      candidate({ id: 'candidate-2', tsCode: '600089.SH', score: 4, volumeRatio: 1.1 }),
+      candidate({ id: 'candidate-3', tsCode: '600938.SH', score: 3, volumeRatio: 1.1 }),
+    ]
+
+    expect(filterAndSortCandidates(items, {
+      preset: 'all',
+      minScore: 0,
+      completeOnly: false,
+      sortBy: 'volumeRatio',
+    }).map(item => item.tsCode)).toEqual(['600089.SH', '600938.SH', '601899.SH'])
   })
 })

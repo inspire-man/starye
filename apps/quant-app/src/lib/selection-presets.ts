@@ -1,6 +1,14 @@
 import type { CandidateItem } from './quant-types'
 
 export type SelectionPresetKey = 'all' | 'balanced' | 'trend' | 'risk'
+export type CandidateSortKey = 'score' | 'return20' | 'volumeRatio' | 'relativeStrength'
+
+export interface CandidateQuery {
+  preset: SelectionPresetKey
+  minScore: number
+  completeOnly: boolean
+  sortBy: CandidateSortKey
+}
 
 export interface SelectionPreset {
   key: SelectionPresetKey
@@ -74,6 +82,35 @@ export function matchesSelectionPreset(item: CandidateItem, preset: SelectionPre
 
 export function filterCandidatesBySelectionPreset(items: readonly CandidateItem[], preset: SelectionPresetKey): CandidateItem[] {
   return items.filter(item => matchesSelectionPreset(item, preset))
+}
+
+function compareDescending(left: number | null, right: number | null): number {
+  if (left === null && right === null)
+    return 0
+  if (left === null)
+    return 1
+  if (right === null)
+    return -1
+  return right - left
+}
+
+export function filterAndSortCandidates(items: readonly CandidateItem[], query: CandidateQuery): CandidateItem[] {
+  return [...items
+    .filter((item) => {
+      if (!matchesSelectionPreset(item, query.preset))
+        return false
+      if (query.completeOnly && item.quality !== 'ready')
+        return false
+      return (item.score ?? -1) >= query.minScore
+    })].sort((left: CandidateItem, right: CandidateItem) => {
+    const primary = compareDescending(left[query.sortBy], right[query.sortBy])
+    if (primary !== 0)
+      return primary
+    const score = compareDescending(left.score, right.score)
+    if (score !== 0)
+      return score
+    return left.tsCode.localeCompare(right.tsCode)
+  })
 }
 
 export function getSelectionReasons(item: CandidateItem, preset: SelectionPresetKey): string[] {

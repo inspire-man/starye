@@ -15,7 +15,7 @@ import type {
   SyncStatus,
   WatchlistItem,
 } from './lib/quant-types'
-import type { SelectionPresetKey } from './lib/selection-presets'
+import type { CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
   AlertCircle,
@@ -39,7 +39,7 @@ import {
 import { computed, onMounted, reactive, ref } from 'vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildResearchSummary } from './lib/research-summary'
-import { filterCandidatesBySelectionPreset, selectionPresets } from './lib/selection-presets'
+import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
 import { buildTrendStructure } from './lib/trend-analysis'
 
 const watchlist = ref<WatchlistItem[]>([])
@@ -94,11 +94,20 @@ const deletingCode = ref<string | null>(null)
 const pendingDeleteCode = ref<string | null>(null)
 const adding = ref(false)
 const candidateFilter = ref<SelectionPresetKey>('balanced')
+const candidateMinScore = ref(0)
+const candidateCompleteOnly = ref(false)
+const candidateSort = ref<CandidateSortKey>('score')
 const candidateFilterOptions = [
   { ...selectionPresets[0], icon: ShieldCheck },
   { ...selectionPresets[1], icon: ArrowUpRight },
   { ...selectionPresets[2], icon: ShieldAlert },
   { ...selectionPresets[3], icon: Filter },
+]
+const candidateSortOptions: { value: CandidateSortKey, label: string }[] = [
+  { value: 'score', label: '信号分' },
+  { value: 'return20', label: '20 日表现' },
+  { value: 'volumeRatio', label: '成交活跃度' },
+  { value: 'relativeStrength', label: '池内强度' },
 ]
 const SIGNAL_RULE_COUNT = 6
 const researchStatusOptions: { value: ResearchMarkerStatus, label: string }[] = [
@@ -111,7 +120,13 @@ const researchStatusOptions: { value: ResearchMarkerStatus, label: string }[] = 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
 const activeCandidatePreset = computed(() => candidateFilterOptions.find(option => option.key === candidateFilter.value) || candidateFilterOptions[0])
-const filteredCandidateItems = computed(() => filterCandidatesBySelectionPreset(candidateItems.value, candidateFilter.value))
+const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateItems.value, {
+  preset: candidateFilter.value,
+  minScore: candidateMinScore.value,
+  completeOnly: candidateCompleteOnly.value,
+  sortBy: candidateSort.value,
+}))
+const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'score')
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
 const overallError = computed(() => errors.watchlist || errors.candidates || errors.research)
@@ -523,6 +538,12 @@ function candidateRiskTone(item: CandidateItem): RiskTone {
 
 function riskToneClass(tone: RiskTone): string {
   return `risk-note-${tone}`
+}
+
+function resetCandidateQuery(): void {
+  candidateMinScore.value = 0
+  candidateCompleteOnly.value = false
+  candidateSort.value = 'score'
 }
 
 async function loadWatchlist() {
@@ -1158,6 +1179,38 @@ onMounted(loadWorkspace)
             >
               <component :is="option.icon" :size="14" aria-hidden="true" />
               {{ option.label }}
+            </button>
+          </div>
+          <div class="candidate-query-controls" aria-label="候选筛选">
+            <label class="candidate-query-field">
+              <span>最低信号分</span>
+              <select v-model.number="candidateMinScore" class="candidate-query-select">
+                <option :value="0">
+                  不限
+                </option>
+                <option :value="2">
+                  2 分以上
+                </option>
+                <option :value="4">
+                  4 分以上
+                </option>
+              </select>
+            </label>
+            <label class="candidate-query-field">
+              <span>排序</span>
+              <select v-model="candidateSort" class="candidate-query-select">
+                <option v-for="option in candidateSortOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <label class="candidate-query-check">
+              <input v-model="candidateCompleteOnly" type="checkbox">
+              <span>只看数据完整</span>
+            </label>
+            <button v-if="candidateQueryActive" class="candidate-reset-button" type="button" title="重置自定义筛选" @click="resetCandidateQuery">
+              <RotateCcw :size="14" aria-hidden="true" />
+              重置
             </button>
           </div>
           <div class="candidate-toolbar-meta">
