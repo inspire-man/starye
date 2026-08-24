@@ -61,6 +61,7 @@ async function createProjectionRoot(): Promise<string> {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
@@ -98,6 +99,7 @@ describe('target-deploy wrapper', () => {
   it('uses the selected Worker config as a separate argv token and cleans it up', async () => {
     const { runTargetDeploy } = await loadTargetDeploy()
     const execute = vi.fn<(command: string, args: readonly string[], environment?: NodeJS.ProcessEnv) => number>(() => 0)
+    vi.stubEnv('CLOUDFLARE_API_TOKEN', 'fixture-token')
 
     await runTargetDeploy({
       target: 'starye-org',
@@ -115,8 +117,8 @@ describe('target-deploy wrapper', () => {
     expect(path.basename(argv[6])).toBe('.target-wrangler.worker-run.toml')
     expect(execute.mock.calls[0]?.[2]).toMatchObject({
       CLOUDFLARE_ACCOUNT_ID: 'd6e57b25da320fae1bd0079fb3c316d4',
+      CLOUDFLARE_API_TOKEN: 'fixture-token',
     })
-    expect(execute.mock.calls[0]?.[2]).not.toHaveProperty('CLOUDFLARE_API_TOKEN')
   })
 
   it('runs Pages through the fixed build/deploy argv and no caller project name', async () => {

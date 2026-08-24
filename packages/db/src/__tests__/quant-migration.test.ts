@@ -6,11 +6,12 @@ import { describe, expect, it } from 'vitest'
 const migrationPath = new URL('../../drizzle/0036_quant_workbench.sql', import.meta.url)
 const leaseMigrationPath = new URL('../../drizzle/0037_quant_sync_lease.sql', import.meta.url)
 const seedMigrationPath = new URL('../../drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
+const researchMigrationPath = new URL('../../drizzle/0039_quant_research_marker.sql', import.meta.url)
 
 async function createMigratedClient() {
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -35,12 +36,14 @@ describe('quant workbench migration', () => {
 
     expect(tables.rows.map(row => String(row.name))).toEqual([
       'quant_daily_bar',
+      'quant_research_marker',
       'quant_scan_snapshot',
       'quant_sync_state',
       'quant_watchlist',
     ])
     expect(indexes.rows.map(row => String(row.name))).toEqual(expect.arrayContaining([
       'idx_quant_daily_bar_identity',
+      'idx_quant_research_marker_ts_code',
       'idx_quant_scan_snapshot_generated_at',
       'idx_quant_watchlist_ts_code',
     ]))
@@ -87,6 +90,22 @@ describe('quant workbench migration', () => {
       'pb',
       'turnover_rate',
     ]))
+  })
+
+  it('enforces one research marker per stock and preserves nullable fields', async () => {
+    const client = await createMigratedClient()
+    await client.execute(`
+      INSERT INTO quant_research_marker (id, ts_code, status, note, review_date)
+      VALUES ('research:000001.SZ', '000001.SZ', 'priority', '核对现金流', '2026-09-01')
+    `)
+    await expect(client.execute(`
+      INSERT INTO quant_research_marker (id, ts_code, status)
+      VALUES ('research:000001.SZ-duplicate', '000001.SZ', 'paused')
+    `)).rejects.toThrow(/UNIQUE constraint failed/u)
+
+    await expect(client.execute('SELECT status, note, review_date FROM quant_research_marker')).resolves.toMatchObject({
+      rows: [{ status: 'priority', note: '核对现金流', review_date: '2026-09-01' }],
+    })
   })
 
   it('keeps the starter seed idempotent and preserves a later name edit', async () => {

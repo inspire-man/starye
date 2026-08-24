@@ -13,16 +13,19 @@ import {
   getLatestQuantScanSnapshot,
   getQuantSyncState,
   listQuantDailyBars,
+  listQuantResearchMarkers,
   listQuantWatchlist,
   listQuantWatchlistWithStats,
   normalizeTsCode,
   updateQuantWatchlistItem,
+  upsertQuantResearchMarker,
 } from '../../domain/quant/repository'
 import { syncQuantDaily } from '../../domain/quant/sync'
 import { requireAuth } from '../../middleware/guard'
 import {
   QuantDailyQuerySchema,
   QuantFinancialHistoryQuerySchema,
+  QuantResearchMarkerUpdateSchema,
   QuantSyncSchema,
   QuantWatchlistCreateSchema,
   QuantWatchlistParamSchema,
@@ -71,6 +74,28 @@ quantRoutes.get('/watchlist', async (c) => {
   const data = await listQuantWatchlistWithStats(c.get('db'))
   return c.json({ success: true as const, data })
 })
+
+quantRoutes.get('/research', async (c) => {
+  const data = await listQuantResearchMarkers(c.get('db'))
+  return c.json({ success: true as const, data })
+})
+
+quantRoutes.put(
+  '/research/:tsCode',
+  validator('param', QuantWatchlistParamSchema),
+  validator('json', QuantResearchMarkerUpdateSchema),
+  async (c) => {
+    const { tsCode } = c.req.valid('param')
+    const input = c.req.valid('json')
+    const data = await upsertQuantResearchMarker(c.get('db'), {
+      tsCode,
+      status: input.status,
+      note: input.note,
+      reviewDate: input.review_date,
+    })
+    return c.json({ success: true as const, data })
+  },
+)
 
 quantRoutes.post('/watchlist', validator('json', QuantWatchlistCreateSchema), async (c) => {
   const input = c.req.valid('json')

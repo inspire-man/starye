@@ -2,6 +2,7 @@ import type { Database } from '@starye/db'
 import type { DailyBar, MomentumCandidate, QuantSyncStatus } from './types'
 import {
   quantDailyBars,
+  quantResearchMarkers,
   quantScanSnapshots,
   quantSyncState,
   quantWatchlist,
@@ -14,6 +15,8 @@ export const QUANT_SYNC_STATE_ID = 'daily'
 export const MAX_WATCHLIST_SIZE = 50
 export const QUANT_SYNC_LEASE_DURATION_MS = 120_000
 export const QUANT_SYNC_SNAPSHOT_RETENTION = 30
+export const QUANT_RESEARCH_STATUSES = ['unreviewed', 'priority', 'paused', 'excluded'] as const
+export type QuantResearchStatus = typeof QUANT_RESEARCH_STATUSES[number]
 
 type PersistedQuantSyncStatus = QuantSyncStatus | 'running'
 
@@ -133,8 +136,70 @@ export async function deleteQuantWatchlistItem(db: Database, tsCode: string): Pr
   if (!existing)
     return false
 
+  await db.delete(quantResearchMarkers).where(eq(quantResearchMarkers.tsCode, normalizedCode))
   await db.delete(quantWatchlist).where(eq(quantWatchlist.tsCode, normalizedCode))
   return !(await getQuantWatchlistItem(db, normalizedCode))
+}
+
+function isQuantResearchStatus(value: string): value is QuantResearchStatus {
+  return (QUANT_RESEARCH_STATUSES as readonly string[]).includes(value)
+}
+
+export async function listQuantResearchMarkers(db: Database) {
+  const [watchlist, markers] = await Promise.all([
+    listQuantWatchlist(db),
+    db.select().from(quantResearchMarkers).all(),
+  ])
+  const markerByCode = new Map(markers.map(marker => [marker.tsCode, marker]))
+  return watchlist.map((item) => {
+    const marker = markerByCode.get(item.tsCode)
+    return {
+      tsCode: item.tsCode,
+      status: marker?.status ?? 'unreviewed' as const,
+      note: marker?.note ?? null,
+      reviewDate: marker?.reviewDate ?? null,
+      createdAt: marker?.createdAt ?? item.createdAt,
+      updatedAt: marker?.updatedAt ?? item.updatedAt,
+    }
+  })
+}
+
+export async function upsertQuantResearchMarker(db: Database, input: {
+  readonly tsCode: string
+  readonly status: string
+  readonly note: string | null
+  readonly reviewDate: string | null
+}) {
+  const tsCode = normalizeTsCode(input.tsCode)
+  if (!isQuantResearchStatus(input.status))
+    throw new QuantError('QUANT_INVALID_RESEARCH_STATUS', 'Research status is invalid', 400)
+  const watchlistItem = await getQuantWatchlistItem(db, tsCode)
+  if (!watchlistItem)
+    throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
+
+  const now = new Date()
+  await db.insert(quantResearchMarkers).values({
+    id: `research:${tsCode}`,
+    tsCode,
+    status: input.status,
+    note: input.note?.trim() || null,
+    reviewDate: input.reviewDate?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoUpdate({
+    target: quantResearchMarkers.tsCode,
+    set: {
+      status: input.status,
+      note: input.note?.trim() || null,
+      reviewDate: input.reviewDate?.trim() || null,
+      updatedAt: now,
+    },
+  })
+
+  const persisted = await db.select().from(quantResearchMarkers).where(eq(quantResearchMarkers.tsCode, tsCode)).get()
+  if (!persisted)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research marker readback failed', 500)
+  return persisted
 }
 
 export async function upsertQuantDailyBars(db: Database, bars: readonly DailyBar[]): Promise<number> {

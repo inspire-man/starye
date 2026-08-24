@@ -242,6 +242,20 @@ export function pickRuntimeEnvironment(
   return selected
 }
 
+export function pickCredentialedRuntimeEnvironment(
+  source: Readonly<Record<string, string | undefined>> = process.env,
+  selectedAccountId?: string,
+): NodeJS.ProcessEnv {
+  const selected = pickRuntimeEnvironment(source, selectedAccountId)
+  const token = source.CLOUDFLARE_API_TOKEN
+
+  if (token !== undefined) {
+    selected.CLOUDFLARE_API_TOKEN = token
+  }
+
+  return selected
+}
+
 function pagesBuildArgs(surface: TargetPagesSurface): readonly string[] {
   switch (surface) {
     case 'dashboard': return ['--filter', 'dashboard', 'build']
@@ -587,6 +601,9 @@ async function runPreflight(options: TargetProfileCliOptions): Promise<void> {
   const localEnvironment = options.scope === 'local'
     ? pickRuntimeEnvironment(process.env, resolveTargetProfile(options.target ?? '').profile.account.id)
     : process.env
+  const liveEnvironment = options.scope === 'local'
+    ? pickCredentialedRuntimeEnvironment(process.env, resolveTargetProfile(options.target ?? '').profile.account.id)
+    : process.env
 
   const result = runTargetPreflight({
     target: options.target ?? '',
@@ -598,7 +615,7 @@ async function runPreflight(options: TargetProfileCliOptions): Promise<void> {
     environment: localEnvironment,
     live: options.live,
     ...(options.pagesSurface ? { pagesSurface: options.pagesSurface } : {}),
-    ...(options.live ? { liveCheckExecutor: createWranglerExecutor(localEnvironment) } : {}),
+    ...(options.live ? { liveCheckExecutor: createWranglerExecutor(liveEnvironment) } : {}),
   })
 
   if (!result.ok) {

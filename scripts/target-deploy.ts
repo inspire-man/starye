@@ -70,7 +70,7 @@ function expectedSurface(app: DeployApp): TargetPagesSurface | undefined {
   return app
 }
 
-function deploymentRuntimeEnvironment(accountId: string): NodeJS.ProcessEnv {
+function deploymentRuntimeEnvironment(accountId: string, includeApiToken = true): NodeJS.ProcessEnv {
   const names = process.platform === 'win32'
     ? ['PATH', 'Path', 'SystemRoot', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'NODE_OPTIONS', 'PNPM_HOME']
     : ['PATH', 'HOME', 'TMPDIR', 'NODE_OPTIONS', 'PNPM_HOME']
@@ -81,6 +81,10 @@ function deploymentRuntimeEnvironment(accountId: string): NodeJS.ProcessEnv {
     if (value !== undefined) {
       environment[name] = value
     }
+  }
+
+  if (includeApiToken && process.env.CLOUDFLARE_API_TOKEN !== undefined) {
+    environment.CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
   }
 
   return { ...environment, CLOUDFLARE_ACCOUNT_ID: accountId }
@@ -146,6 +150,7 @@ export async function runTargetDeploy(options: TargetDeployOptions): Promise<voi
   }
 
   const deploymentEnvironment = deploymentRuntimeEnvironment(resolution.profile.account.id)
+  const preflightEnvironment = deploymentRuntimeEnvironment(resolution.profile.account.id, false)
   const projectionIssues = await collectLocalProjectionIssues(options.target, path.resolve(options.envRoot ?? repositoryRoot))
   const preflight = runTargetPreflight({
     target: options.target,
@@ -153,7 +158,7 @@ export async function runTargetDeploy(options: TargetDeployOptions): Promise<voi
     command: 'deploy',
     wranglerProfile: resolution.profile.local.wranglerProfile,
     projectionIssues,
-    environment: deploymentEnvironment,
+    environment: preflightEnvironment,
     live: true,
     liveCheckExecutor: options.liveCheckExecutor ?? createLiveCheckExecutor(deploymentEnvironment),
     ...(options.surface ? { pagesSurface: options.surface } : {}),

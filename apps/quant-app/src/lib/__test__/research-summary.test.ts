@@ -98,6 +98,11 @@ describe('buildResearchSummary', () => {
     const result = buildResearchSummary(baseInput())
 
     expect(result).toMatchObject({ status: 'research', tone: 'positive', label: '继续研究' })
+    expect(result?.headline).toContain('技术与基本面方向一致')
+    expect(result?.dimensions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'technical', state: 'positive' }),
+      expect.objectContaining({ key: 'financial', state: 'positive' }),
+    ]))
     expect(result?.support).toContain('技术信号命中 3 项')
     expect(result?.support).toContain('估值在当前观察池中相对靠前')
   })
@@ -116,6 +121,33 @@ describe('buildResearchSummary', () => {
     expect(result).toMatchObject({ status: 'observe', tone: 'warning', label: '先观察' })
     expect(result?.watchouts).toContain('短线回撤')
     expect(result?.watchouts).toContain('营收增速走弱')
+  })
+
+  it('explains when strong technical signals conflict with high valuation', () => {
+    const result = buildResearchSummary({
+      ...baseInput(),
+      valuationComparison: { ...baseInput().valuationComparison, ttmPeHigherThanPercent: 80, pbHigherThanPercent: 80 },
+    })
+
+    expect(result?.headline).toContain('估值处于观察池高位')
+    expect(result?.watchouts).toContain('技术较强但估值偏高，避免只看涨势')
+    expect(result?.dimensions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'valuation', state: 'caution' }),
+    ]))
+  })
+
+  it('asks for technical confirmation when fundamentals lead', () => {
+    const result = buildResearchSummary({
+      ...baseInput(),
+      candidate: candidate({ score: 1, signals: ['ma20'] }),
+      trends: [
+        { label: '营收增速', tone: 'positive' as const, state: '改善' },
+        { label: 'ROE 回报', tone: 'positive' as const, state: '改善' },
+      ],
+    })
+
+    expect(result?.headline).toContain('技术信号尚未确认')
+    expect(result?.nextChecks).toContain('等待技术信号进一步确认')
   })
 
   it('reports incomplete data and gives concrete next checks', () => {

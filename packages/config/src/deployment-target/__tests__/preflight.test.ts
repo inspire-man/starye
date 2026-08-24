@@ -232,6 +232,24 @@ describe('target-profile CLI parser', () => {
     await expect(runLocalPreflight(await createProjectionFixture())).resolves.toBeUndefined()
   })
 
+  it('keeps local validation token-free while preserving credentials for Wrangler checks', async () => {
+    const { pickCredentialedRuntimeEnvironment, pickRuntimeEnvironment } = await loadTargetProfileCli()
+    const source = {
+      PATH: 'fixture-path',
+      CLOUDFLARE_API_TOKEN: 'fixture-token',
+    }
+
+    expect(pickRuntimeEnvironment(source, 'fixture-account')).toEqual({
+      PATH: 'fixture-path',
+      CLOUDFLARE_ACCOUNT_ID: 'fixture-account',
+    })
+    expect(pickCredentialedRuntimeEnvironment(source, 'fixture-account')).toEqual({
+      PATH: 'fixture-path',
+      CLOUDFLARE_ACCOUNT_ID: 'fixture-account',
+      CLOUDFLARE_API_TOKEN: 'fixture-token',
+    })
+  })
+
   it('does not read operator-owned projection files for CI preflight', async () => {
     const { runTargetProfileCli } = await loadTargetProfileCli()
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
