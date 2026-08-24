@@ -22,6 +22,7 @@ export type TargetWorkerSurface = (typeof targetWorkerSurfaceValues)[number]
 
 export const targetPagesSurfaceValues = [
   'dashboard',
+  'quant',
   'auth',
   'blog',
   'movie',
@@ -165,6 +166,7 @@ const targetProfileObjectSchema = v.strictObject({
   }),
   pages: v.strictObject({
     dashboard: targetPageSchema,
+    quant: targetPageSchema,
     auth: targetPageSchema,
     blog: targetPageSchema,
     movie: targetPageSchema,

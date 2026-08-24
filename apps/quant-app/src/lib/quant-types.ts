@@ -91,3 +91,81 @@ export interface DailyBar {
   volume: number | null
   amount: number | null
 }
+
+export interface QuantValuationSnapshot {
+  tsCode: string
+  observedAt: string
+  dynamicPe: number | null
+  peTtm: number | null
+  peStatic: number | null
+  pb: number | null
+  ps: number | null
+  peg: number | null
+  marketCap: number | null
+}
+
+export interface QuantValuationComparisonPeer {
+  tsCode: string
+  name: string | null
+  valuation: QuantValuationSnapshot | null
+}
+
+export interface QuantValuationComparison {
+  target: QuantValuationSnapshot
+  peers: QuantValuationComparisonPeer[]
+  sampleCount: number
+  availableSampleCount: number
+  ttmPeSampleCount: number
+  pbSampleCount: number
+  ttmPeHigherThanPercent: number | null
+  pbHigherThanPercent: number | null
+}
+
+export interface QuantFinancialQualitySnapshot {
+  tsCode: string
+  observedAt: string
+  reportDate: string
+  reportType: string | null
+  reportDateName: string | null
+  noticeDate: string | null
+  revenue: number | null
+  revenueYoY: number | null
+  netProfit: number | null
+  netProfitYoY: number | null
+  adjustedNetProfit: number | null
+  adjustedNetProfitYoY: number | null
+  roe: number | null
+  grossMargin: number | null
+  netMargin: number | null
+  debtAssetRatio: number | null
+  operatingCashflowToRevenue: number | null
+  roic: number | null
+}
+
+export interface QuantFinancialQualityHistory {
+  tsCode: string
+  observedAt: string
+  reports: QuantFinancialQualitySnapshot[]
+}
+
+export interface QuantFinancialQualityComparisonPeer {
+  tsCode: string
+  name: string | null
+  quality: QuantFinancialQualitySnapshot | null
+}
+
+export interface QuantFinancialQualityComparison {
+  target: QuantFinancialQualitySnapshot
+  peers: QuantFinancialQualityComparisonPeer[]
+  sampleCount: number
+  availableSampleCount: number
+  revenueYoYSampleCount: number
+  netProfitYoYSampleCount: number
+  roeSampleCount: number
+  debtAssetRatioSampleCount: number
+  revenueYoYHigherThanPercent: number | null
+  netProfitYoYHigherThanPercent: number | null
+  roeHigherThanPercent: number | null
+  debtAssetRatioLowerThanPercent: number | null
+}
+

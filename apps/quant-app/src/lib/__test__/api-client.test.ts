@@ -80,4 +80,171 @@ describe('quantApi', () => {
       reason: 'Quant daily sync is already running',
     })
   })
+
+  it('normalizes the selected stock valuation snapshot and keeps missing fields null', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        ts_code: '601899.SH',
+        observed_at: '2026-08-23T00:00:00.000Z',
+        dynamic_pe: 11.79,
+        pe_ttm: 17.84,
+        pe_static: 13.65,
+        pb: 2.46,
+        ps: null,
+        peg: 1.46,
+        market_cap: 923761425968.28,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getValuation('601899.SH')).resolves.toEqual({
+      tsCode: '601899.SH',
+      observedAt: '2026-08-23T00:00:00.000Z',
+      dynamicPe: 11.79,
+      peTtm: 17.84,
+      peStatic: 13.65,
+      pb: 2.46,
+      ps: null,
+      peg: 1.46,
+      marketCap: 923761425968.28,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/valuation/601899.SH`, expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('normalizes observation-pool valuation comparison and keeps null peers', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        target: {
+          ts_code: '601899.SH',
+          observed_at: '2026-08-23T00:00:00.000Z',
+          dynamic_pe: 11.79,
+          pe_ttm: 17.84,
+          pe_static: 13.65,
+          pb: 2.46,
+          ps: null,
+          peg: 1.46,
+          market_cap: 923761425968.28,
+        },
+        peers: [
+          { ts_code: '600089.SH', name: '特变电工', valuation: null },
+        ],
+        sample_count: 2,
+        available_sample_count: 1,
+        ttm_pe_sample_count: 1,
+        pb_sample_count: 1,
+        ttm_pe_higher_than_percent: null,
+        pb_higher_than_percent: null,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getValuationComparison('601899.SH')).resolves.toMatchObject({
+      target: { tsCode: '601899.SH', peTtm: 17.84 },
+      peers: [{ tsCode: '600089.SH', valuation: null }],
+      sampleCount: 2,
+      availableSampleCount: 1,
+      ttmPeHigherThanPercent: null,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/valuation/compare/601899.SH`, expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('normalizes the latest financial quality snapshot and preserves missing metrics', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        ts_code: '601899.SH',
+        observed_at: '2026-08-23T00:00:00.000Z',
+        report_date: '2026-06-30',
+        report_type: '中报',
+        report_date_name: '2026中报',
+        notice_date: '2026-08-30',
+        revenue: '350000000000',
+        revenue_yoy: 15.78,
+        net_profit: 41000000000,
+        net_profit_yoy: 68.17,
+        adjusted_net_profit: null,
+        adjusted_net_profit_yoy: null,
+        roe: 19.6,
+        gross_margin: 37.74,
+        net_margin: 16.2,
+        debt_asset_ratio: 49.55,
+        operating_cashflow_to_revenue: 0.28,
+        roic: 11.75,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getFinancialQuality('601899.SH')).resolves.toEqual({
+      tsCode: '601899.SH',
+      observedAt: '2026-08-23T00:00:00.000Z',
+      reportDate: '2026-06-30',
+      reportType: '中报',
+      reportDateName: '2026中报',
+      noticeDate: '2026-08-30',
+      revenue: 350000000000,
+      revenueYoY: 15.78,
+      netProfit: 41000000000,
+      netProfitYoY: 68.17,
+      adjustedNetProfit: null,
+      adjustedNetProfitYoY: null,
+      roe: 19.6,
+      grossMargin: 37.74,
+      netMargin: 16.2,
+      debtAssetRatio: 49.55,
+      operatingCashflowToRevenue: 0.28,
+      roic: 11.75,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/financial/601899.SH`, expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('normalizes financial history and keeps reports in server order', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        ts_code: '601899.SH',
+        observed_at: '2026-08-23T00:00:00.000Z',
+        reports: [
+          { ts_code: '601899.SH', observed_at: '2026-08-23T00:00:00.000Z', report_date: '2026-06-30', report_type: '中报', revenue_yoy: 15.78 },
+          { ts_code: '601899.SH', observed_at: '2026-08-23T00:00:00.000Z', report_date: '2025-12-31', report_type: '年报', revenue_yoy: 3.48 },
+        ],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getFinancialQualityHistory('601899.SH', 2)).resolves.toMatchObject({
+      tsCode: '601899.SH',
+      reports: [
+        { reportDate: '2026-06-30', revenueYoY: 15.78 },
+        { reportDate: '2025-12-31', revenueYoY: 3.48 },
+      ],
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/financial/history/601899.SH?limit=2`, expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('normalizes financial quality peer positions and nullable peers', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        target: { ts_code: '601899.SH', observed_at: '2026-08-23T00:00:00.000Z', report_date: '2026-06-30', revenue_yoy: 20, roe: 18 },
+        peers: [{ ts_code: '600089.SH', name: '特变电工', quality: null }],
+        sample_count: 2,
+        available_sample_count: 1,
+        revenue_yoy_sample_count: 1,
+        net_profit_yoy_sample_count: 0,
+        roe_sample_count: 1,
+        debt_asset_ratio_sample_count: 0,
+        revenue_yoy_higher_than_percent: null,
+        net_profit_yoy_higher_than_percent: null,
+        roe_higher_than_percent: null,
+        debt_asset_ratio_lower_than_percent: null,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getFinancialQualityComparison('601899.SH')).resolves.toMatchObject({
+      target: { tsCode: '601899.SH', revenueYoY: 20 },
+      peers: [{ tsCode: '600089.SH', quality: null }],
+      availableSampleCount: 1,
+      roeHigherThanPercent: null,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/financial/compare/601899.SH`, expect.objectContaining({ credentials: 'include' }))
+  })
 })
+

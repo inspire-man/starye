@@ -19,7 +19,7 @@ import { packageManagerInvocation } from './package-manager-command.ts'
 const localTarget = 'starye-org'
 const readinessAttempts = 160
 const readinessIntervalMs = 250
-const pagesSurfaces = ['dashboard', 'auth', 'blog', 'movie', 'comic'] as const satisfies readonly TargetPagesSurface[]
+const pagesSurfaces = ['dashboard', 'quant', 'auth', 'blog', 'movie', 'comic'] as const satisfies readonly TargetPagesSurface[]
 const localGatewayOrigins = [
   ['API_ORIGIN', 'http://localhost:8787'],
   ['AUTH_ORIGIN', 'http://localhost:3003'],
@@ -254,7 +254,7 @@ function localDevServiceSpecs(inputs: MaterializedLocalInputs): readonly LocalDe
       label: 'quant',
       port: 3004,
       args: ['--filter', 'quant-app', 'exec', 'vite', '--host', '0.0.0.0', '--port', '3004', '--config', 'vite.config.ts', '--configLoader', 'runner'],
-      environment: inputs.pageEnvironment('dashboard'),
+      environment: inputs.pageEnvironment('quant'),
     },
     {
       label: 'auth',

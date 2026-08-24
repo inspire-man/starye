@@ -185,7 +185,7 @@ export function formatTargetProfileHelp(): string {
   target-profile validate --target <id>
   target-profile project-local --target <id> --check|--write [--env-root <path>]
   target-profile preflight --target <id> --scope <local|ci|remote> --command <command> [--env-root <path>] [--live]
-  target-profile run-pages-build --surface <dashboard|auth|blog|movie|comic> --pages-build-env-path <generated-path> --pages-redirect-input-path <generated-path>
+  target-profile run-pages-build --surface <dashboard|quant|auth|blog|movie|comic> --pages-build-env-path <generated-path> --pages-redirect-input-path <generated-path>
   target-profile prepare-mutation --target <id> --scope ci --command <closed-command> --ci-environment <name> --github-output <path> [--run-id <id>] [--surface <surface>]
   target-profile run-prepared-entry --entry <closed-entry> --prepared-context <generated-path>
 
@@ -212,6 +212,7 @@ interface PagesBuildOptions {
 
 const pagesBuildOutputDirectories = {
   dashboard: ['apps', 'dashboard', 'dist'],
+  quant: ['apps', 'quant-app', 'dist'],
   auth: ['apps', 'auth', 'dist'],
   blog: ['apps', 'blog', 'dist'],
   movie: ['apps', 'movie-app', 'dist'],
@@ -244,6 +245,7 @@ export function pickRuntimeEnvironment(
 function pagesBuildArgs(surface: TargetPagesSurface): readonly string[] {
   switch (surface) {
     case 'dashboard': return ['--filter', 'dashboard', 'build']
+    case 'quant': return ['--filter', 'quant-app', 'build']
     case 'auth': return ['--filter', 'starye-auth', 'build']
     case 'blog': return ['--filter', 'blog', 'build']
     case 'movie': return ['--filter', '@starye/movie-app', 'build']

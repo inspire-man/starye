@@ -23,6 +23,13 @@ const pagesRedirectTemplates: Readonly<Record<TargetPagesSurface, PagesRedirectT
       '/* /index.html 200',
     ],
   },
+  quant: {
+    surface: 'quant',
+    lines: [
+      '{{directOrigin}}/* {{gatewayUrl}}/quant/:splat 301!',
+      '/* /index.html 200',
+    ],
+  },
   auth: {
     surface: 'auth',
     lines: [

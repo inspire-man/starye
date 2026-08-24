@@ -58,6 +58,11 @@ export const trackedTargetProfiles = [
         directOrigin: 'https://starye-dashboard.pages.dev',
         canonicalUrl: 'https://starye-dashboard-5fz.pages.dev',
       },
+      quant: {
+        project: 'starye-quant',
+        directOrigin: 'https://starye-quant.pages.dev',
+        canonicalUrl: 'https://starye-quant.pages.dev',
+      },
       auth: {
         project: 'starye-auth',
         directOrigin: 'https://starye-auth-die.pages.dev',

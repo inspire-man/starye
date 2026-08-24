@@ -17,7 +17,7 @@ import {
 } from './public-runtime-input'
 import { targetAppBasePaths } from './target-projections'
 
-type VitePagesSurface = Extract<TargetPagesSurface, 'dashboard' | 'movie' | 'comic'>
+type VitePagesSurface = Extract<TargetPagesSurface, 'dashboard' | 'quant' | 'movie' | 'comic'>
 type NuxtPagesSurface = Extract<TargetPagesSurface, 'auth' | 'blog'>
 
 export type ParsedPagesBuildEnv = VitePublicRuntimeEnv | NuxtPublicRuntimeEnv
@@ -55,7 +55,7 @@ const credentialShape = /secret|token|access[_-]?key|private[_-]?key|credential/
 const unsafeShellValue = /[\r\n'"`$;&|<>()[\]{}*!?~\\]/
 const runIdPattern = /^[\w-]+$/
 
-const vitePagesSurfaces: readonly VitePagesSurface[] = ['dashboard', 'movie', 'comic']
+const vitePagesSurfaces: readonly VitePagesSurface[] = ['dashboard', 'quant', 'movie', 'comic']
 const nuxtPagesSurfaces: readonly NuxtPagesSurface[] = ['auth', 'blog']
 
 const viteBaseKeys = [

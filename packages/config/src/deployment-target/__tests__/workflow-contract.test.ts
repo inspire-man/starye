@@ -11,7 +11,7 @@ type WorkflowKind = 'retired' | 'worker' | 'pages' | 'prepared-entry' | 'rollbac
 interface WorkflowFixture {
   readonly file: string
   readonly kind: WorkflowKind
-  readonly surface?: 'dashboard' | 'auth' | 'blog' | 'movie' | 'comic'
+  readonly surface?: 'dashboard' | 'quant' | 'auth' | 'blog' | 'movie' | 'comic'
   readonly workerConfig?: 'api_config_path' | 'gateway_config_path'
   readonly entry?: 'd1-migrate' | 'crawler-comic' | 'crawler-optimized' | 'monthly-cleanup'
 }
@@ -21,6 +21,7 @@ const workflows: readonly WorkflowFixture[] = [
   { file: 'deploy-gateway.yml', kind: 'worker', workerConfig: 'gateway_config_path' },
   { file: 'deploy-api-after-pr.yml', kind: 'worker', workerConfig: 'api_config_path' },
   { file: 'deploy-dashboard.yml', kind: 'pages', surface: 'dashboard' },
+  { file: 'deploy-quant.yml', kind: 'pages', surface: 'quant' },
   { file: 'deploy-auth.yml', kind: 'pages', surface: 'auth' },
   { file: 'deploy-blog.yml', kind: 'pages', surface: 'blog' },
   { file: 'deploy-movie.yml', kind: 'pages', surface: 'movie' },
@@ -48,7 +49,7 @@ function githubExpression(value: string): string {
 
 describe('phase 12 workflow target contract', () => {
   it('keeps the full remote-mutation inventory explicit and resolver-gated', async () => {
-    expect(workflows).toHaveLength(15)
+    expect(workflows).toHaveLength(16)
 
     for (const workflow of workflows.filter(item => item.kind !== 'retired')) {
       const source = await workflowText(workflow.file)
