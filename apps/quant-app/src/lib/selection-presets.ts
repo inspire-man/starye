@@ -1,8 +1,13 @@
 import type { CandidateItem, ResearchMarkerStatus } from './quant-types'
 
 export type SelectionPresetKey = 'all' | 'balanced' | 'trend' | 'risk'
-export type CandidateSortKey = 'score' | 'return20' | 'volumeRatio' | 'relativeStrength'
+export type CandidateSortKey = 'score' | 'return20' | 'volumeRatio' | 'relativeStrength' | 'researchPriority'
 export type CandidateResearchStatus = 'all' | ResearchMarkerStatus
+
+export interface CandidateResearchMetadata {
+  status: ResearchMarkerStatus
+  reviewDate: string | null
+}
 
 export interface CandidateQuery {
   preset: SelectionPresetKey
@@ -96,10 +101,48 @@ function compareDescending(left: number | null, right: number | null): number {
   return right - left
 }
 
+function researchStatusRank(status: ResearchMarkerStatus): number {
+  return {
+    priority: 0,
+    unreviewed: 1,
+    paused: 2,
+    excluded: 3,
+  }[status]
+}
+
+function normalizedReviewDate(value: string | null): string | null {
+  return value && /^\d{4}-\d{2}-\d{2}$/u.test(value) ? value : null
+}
+
+function compareReviewDate(left: string | null, right: string | null): number {
+  const leftDate = normalizedReviewDate(left)
+  const rightDate = normalizedReviewDate(right)
+  if (leftDate === null && rightDate === null)
+    return 0
+  if (leftDate === null)
+    return 1
+  if (rightDate === null)
+    return -1
+  return leftDate.localeCompare(rightDate)
+}
+
+function compareResearchPriority(
+  left: CandidateItem,
+  right: CandidateItem,
+  researchMetadataByCode: ReadonlyMap<string, CandidateResearchMetadata>,
+): number {
+  const leftMetadata = researchMetadataByCode.get(left.tsCode) ?? { status: 'unreviewed' as const, reviewDate: null }
+  const rightMetadata = researchMetadataByCode.get(right.tsCode) ?? { status: 'unreviewed' as const, reviewDate: null }
+  const statusDifference = researchStatusRank(leftMetadata.status) - researchStatusRank(rightMetadata.status)
+  if (statusDifference !== 0)
+    return statusDifference
+  return compareReviewDate(leftMetadata.reviewDate, rightMetadata.reviewDate)
+}
+
 export function filterAndSortCandidates(
   items: readonly CandidateItem[],
   query: CandidateQuery,
-  researchStatusByCode: ReadonlyMap<string, ResearchMarkerStatus> = new Map(),
+  researchMetadataByCode: ReadonlyMap<string, CandidateResearchMetadata> = new Map(),
 ): CandidateItem[] {
   return [...items
     .filter((item) => {
@@ -107,11 +150,13 @@ export function filterAndSortCandidates(
         return false
       if (query.completeOnly && item.quality !== 'ready')
         return false
-      if (query.researchStatus !== 'all' && (researchStatusByCode.get(item.tsCode) ?? 'unreviewed') !== query.researchStatus)
+      if (query.researchStatus !== 'all' && (researchMetadataByCode.get(item.tsCode)?.status ?? 'unreviewed') !== query.researchStatus)
         return false
       return (item.score ?? -1) >= query.minScore
     })].sort((left: CandidateItem, right: CandidateItem) => {
-    const primary = compareDescending(left[query.sortBy], right[query.sortBy])
+    const primary = query.sortBy === 'researchPriority'
+      ? compareResearchPriority(left, right, researchMetadataByCode)
+      : compareDescending(left[query.sortBy], right[query.sortBy])
     if (primary !== 0)
       return primary
     const score = compareDescending(left.score, right.score)

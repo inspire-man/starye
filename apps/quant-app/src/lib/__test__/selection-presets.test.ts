@@ -89,8 +89,8 @@ describe('selection presets', () => {
       candidate({ id: 'candidate-3', tsCode: '600938.SH' }),
     ]
     const statuses = new Map([
-      ['600089.SH', 'priority' as const],
-      ['600938.SH', 'excluded' as const],
+      ['600089.SH', { status: 'priority' as const, reviewDate: null }],
+      ['600938.SH', { status: 'excluded' as const, reviewDate: null }],
     ])
 
     expect(filterAndSortCandidates(items, {
@@ -107,5 +107,28 @@ describe('selection presets', () => {
       sortBy: 'score',
       researchStatus: 'unreviewed',
     }, statuses).map(item => item.tsCode)).toEqual(['601899.SH'])
+  })
+
+  it('sorts research priority by status, review date, and signal score', () => {
+    const items = [
+      candidate({ id: 'candidate-1', tsCode: '601899.SH', score: 3 }),
+      candidate({ id: 'candidate-2', tsCode: '600089.SH', score: 4 }),
+      candidate({ id: 'candidate-3', tsCode: '600938.SH', score: 2 }),
+      candidate({ id: 'candidate-4', tsCode: '000001.SZ', score: 5 }),
+    ]
+    const metadata = new Map([
+      ['601899.SH', { status: 'priority' as const, reviewDate: '2026-09-10' }],
+      ['600089.SH', { status: 'priority' as const, reviewDate: '2026-08-20' }],
+      ['600938.SH', { status: 'unreviewed' as const, reviewDate: null }],
+      ['000001.SZ', { status: 'excluded' as const, reviewDate: null }],
+    ])
+
+    expect(filterAndSortCandidates(items, {
+      preset: 'all',
+      minScore: 0,
+      completeOnly: false,
+      sortBy: 'researchPriority',
+      researchStatus: 'all',
+    }, metadata).map(item => item.tsCode)).toEqual(['600089.SH', '601899.SH', '600938.SH', '000001.SZ'])
   })
 })
