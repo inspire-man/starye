@@ -4,6 +4,16 @@ export type CapabilityKey = typeof CAPABILITY_ORDER[number]
 export type QuantProviderName = 'tushare' | 'eastmoney'
 
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
+export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'
+
+export interface QuantResearchMarker {
+  tsCode: string
+  status: ResearchMarkerStatus
+  note: string | null
+  reviewDate: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
 
 export interface CapabilityState {
   key: CapabilityKey
@@ -168,4 +178,3 @@ export interface QuantFinancialQualityComparison {
   roeHigherThanPercent: number | null
   debtAssetRatioLowerThanPercent: number | null
 }
-

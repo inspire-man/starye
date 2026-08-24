@@ -152,6 +152,55 @@ describe('quant daily providers', () => {
     await expect(provider.fetchValuation({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
   })
 
+  it('falls back to the public valuation history endpoint when the quote endpoint fails', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString())
+      if (url.pathname === '/api/qt/stock/get')
+        return new Response('upstream unavailable', { status: 503 })
+      return new Response(JSON.stringify({
+        code: 0,
+        result: {
+          data: [{ SECURITY_CODE: '601899', PETTM: 12.5, PBMRQ: 2.1, PSTTM: 1.8, REPORT_DATE: '2026-06-30 00:00:00' }],
+        },
+      }), { status: 200 })
+    })
+    const provider = createEastmoneyValuationProvider({
+      fetchImpl,
+      valuationFallbackBaseUrl: 'https://eastmoney-datacenter.fixture.test',
+      now: () => new Date('2026-08-24T00:00:00.000Z'),
+    })
+
+    await expect(provider.fetchValuation({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      tsCode: '601899.SH',
+      observedAt: '2026-08-24T00:00:00.000Z',
+      dynamicPe: null,
+      peTtm: 12.5,
+      peStatic: null,
+      pb: 2.1,
+      ps: 1.8,
+      peg: null,
+      marketCap: null,
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain('https://eastmoney-datacenter.fixture.test/api/data/v1/get')
+  })
+
+  it('fails closed when the valuation fallback returns a different stock', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString())
+      if (url.pathname === '/api/qt/stock/get')
+        return new Response(JSON.stringify({ rc: 1, data: null }), { status: 200 })
+      return new Response(JSON.stringify({
+        code: 0,
+        result: { data: [{ SECURITY_CODE: '600089', PETTM: 12.5 }] },
+      }), { status: 200 })
+    })
+    const provider = createEastmoneyValuationProvider({ fetchImpl })
+
+    await expect(provider.fetchValuation({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
   it('maps Eastmoney valuation requests to SH, SZ, and BJ markets', async () => {
     const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
       const code = new URL(input.toString()).searchParams.get('secid')?.split('.')[1] || ''
@@ -178,6 +227,7 @@ describe('quant daily providers', () => {
       const pending = provider.fetchValuation({ tsCode: '601899.SH' })
       const expectation = expect(pending).rejects.toMatchObject({ code: 'TIMEOUT' })
 
+      await vi.advanceTimersByTimeAsync(20)
       await vi.advanceTimersByTimeAsync(20)
       await expectation
     }
