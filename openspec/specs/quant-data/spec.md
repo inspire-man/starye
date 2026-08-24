@@ -61,3 +61,18 @@
 - **WHEN** 第 31 个 `completed`/`partial` 快照在新结果已持久化后生成
 - **THEN** D1 保留最新 30 个快照，最新快照的 id、候选内容和同步状态仍可读回
 - **AND** `quant_daily_bar` 的幂等日线行不因快照清理而减少
+
+### Requirement: Independent research marker storage
+
+Quant research markers MUST be stored in an independent `quant_research_marker` table with a unique `ts_code`, status, nullable note, nullable review date, and update timestamps. The table MUST NOT change the existing daily bar or candidate snapshot records.
+
+#### Scenario: Migration creates marker storage
+
+- **WHEN** migration `0039_quant_research_marker.sql` is applied
+- **THEN** the marker table and its status/code indexes exist
+- **AND** one `ts_code` cannot have two marker rows
+
+#### Scenario: Repeated upsert
+
+- **WHEN** the same stock marker is saved repeatedly
+- **THEN** one row remains for that code with the latest status, note, review date, and updated timestamp

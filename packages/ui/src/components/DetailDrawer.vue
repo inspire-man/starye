@@ -138,17 +138,24 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detail-drawer-overlay {
+  display: flex;
+  position: fixed;
+  inset: 0;
   z-index: var(--dashboard-drawer-z-index, 1400);
+  justify-content: flex-end;
   padding: var(--dashboard-drawer-inset, 1rem);
 }
 
 .detail-drawer-panel {
+  display: flex;
+  flex-direction: column;
   width: min(100%, var(--detail-drawer-max-width, 42rem));
   max-width: var(--detail-drawer-max-width, 42rem);
   height: 100%;
   min-width: 0;
   max-height: calc(100dvh - (var(--dashboard-drawer-inset, 1rem) * 2));
   overflow: hidden;
+  flex-shrink: 0;
   border-radius: var(--ui-radius-lg, 0.75rem);
   background: hsl(var(--card));
   box-shadow: 0 20px 45px hsl(var(--foreground) / 0.18);
@@ -167,10 +174,16 @@ onBeforeUnmount(() => {
 }
 
 .detail-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
   padding: 0.875rem 1rem;
 }
 
 .detail-drawer-body {
+  flex: 1 1 0%;
   padding: 1rem;
   min-width: 0;
   max-width: 100%;
@@ -186,6 +199,7 @@ onBeforeUnmount(() => {
 }
 
 .detail-drawer-footer {
+  flex-shrink: 0;
   padding: 0.75rem 1rem;
 }
 

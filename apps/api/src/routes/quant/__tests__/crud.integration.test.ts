@@ -14,10 +14,11 @@ import { quantRoutes } from '../index'
 const migrationPath = new URL('../../../../../../packages/db/drizzle/0036_quant_workbench.sql', import.meta.url)
 const leaseMigrationPath = new URL('../../../../../../packages/db/drizzle/0037_quant_sync_lease.sql', import.meta.url)
 const seedMigrationPath = new URL('../../../../../../packages/db/drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
+const researchMigrationPath = new URL('../../../../../../packages/db/drizzle/0039_quant_research_marker.sql', import.meta.url)
 
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -112,6 +113,62 @@ describe('quant watchlist CRUD contract', () => {
     const remove = await app.request('/api/quant/watchlist/000001.SZ', { method: 'DELETE' })
     expect(remove.status).toBe(200)
     await expect(client.execute('SELECT count(*) AS count FROM quant_watchlist')).resolves.toMatchObject({ rows: [{ count: 0 }] })
+  })
+
+  it('reads and idempotently updates research markers for watchlist stocks', async () => {
+    const { client, db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+
+    await app.request('/api/quant/watchlist', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '601899.SH', name: '紫金矿业' }),
+    })
+
+    const initial = await app.request('/api/quant/research')
+    await expect(initial.json()).resolves.toMatchObject({
+      data: [{ tsCode: '601899.SH', status: 'unreviewed', note: null, reviewDate: null }],
+    })
+
+    const update = await app.request('/api/quant/research/601899.SH', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'priority', note: '重点核对现金流', review_date: '2026-09-01' }),
+    })
+    expect(update.status).toBe(200)
+    await expect(update.json()).resolves.toMatchObject({
+      data: { tsCode: '601899.SH', status: 'priority', note: '重点核对现金流', reviewDate: '2026-09-01' },
+    })
+
+    const repeat = await app.request('/api/quant/research/601899.SH', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'paused', note: null, review_date: null }),
+    })
+    expect(repeat.status).toBe(200)
+    await expect(client.execute('SELECT count(*) AS count, status FROM quant_research_marker')).resolves.toMatchObject({
+      rows: [{ count: 1, status: 'paused' }],
+    })
+  })
+
+  it('rejects invalid research status and non-watchlist targets without writing', async () => {
+    const { client, db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+
+    const invalidStatus = await app.request('/api/quant/research/601899.SH', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'buy', note: null, review_date: null }),
+    })
+    expect(invalidStatus.status).toBe(400)
+
+    const missingTarget = await app.request('/api/quant/research/601899.SH', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'priority', note: null, review_date: null }),
+    })
+    expect(missingTarget.status).toBe(404)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_marker')).resolves.toMatchObject({ rows: [{ count: 0 }] })
   })
 
   it('rejects a non-admin session before touching the database', async () => {

@@ -933,6 +933,22 @@ export const quantWatchlist = sqliteTable('quant_watchlist', {
 export type QuantWatchlist = InferSelectModel<typeof quantWatchlist>
 export type NewQuantWatchlist = InferInsertModel<typeof quantWatchlist>
 
+export const quantResearchMarkers = sqliteTable('quant_research_marker', {
+  id: text('id').primaryKey(),
+  tsCode: text('ts_code').notNull(),
+  status: text('status', { enum: ['unreviewed', 'priority', 'paused', 'excluded'] }).notNull().default('unreviewed'),
+  note: text('note'),
+  reviewDate: text('review_date'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_quant_research_marker_ts_code').on(table.tsCode),
+  index('idx_quant_research_marker_status').on(table.status),
+])
+
+export type QuantResearchMarker = InferSelectModel<typeof quantResearchMarkers>
+export type NewQuantResearchMarker = InferInsertModel<typeof quantResearchMarkers>
+
 export const quantDailyBars = sqliteTable('quant_daily_bar', {
   id: text('id').primaryKey(),
   tsCode: text('ts_code').notNull(),

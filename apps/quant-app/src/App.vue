@@ -7,14 +7,16 @@ import type {
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
+  QuantResearchMarker,
   QuantValuationComparison,
   QuantValuationSnapshot,
+  ResearchMarkerStatus,
   SyncResult,
   SyncStatus,
   WatchlistItem,
 } from './lib/quant-types'
 import type { SelectionPresetKey } from './lib/selection-presets'
-import { ConfirmDialog, DataTable, ErrorDisplay, SkeletonCard } from '@starye/ui'
+import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
   AlertCircle,
   ArrowUpRight,
@@ -27,6 +29,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Save,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -36,21 +39,37 @@ import {
 import { computed, onMounted, reactive, ref } from 'vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildResearchSummary } from './lib/research-summary'
-import { filterCandidatesBySelectionPreset, getSelectionReasons, selectionPresets } from './lib/selection-presets'
+import { filterCandidatesBySelectionPreset, selectionPresets } from './lib/selection-presets'
+import { buildTrendStructure } from './lib/trend-analysis'
 
 const watchlist = ref<WatchlistItem[]>([])
 const snapshot = ref<CandidateSnapshot | null>(null)
 const dailyBars = ref<DailyBar[]>([])
 const valuationComparison = ref<QuantValuationComparison | null>(null)
+const valuationComparisonError = ref<unknown | null>(null)
 const valuation = ref<QuantValuationSnapshot | null>(null)
 const financialQuality = ref<QuantFinancialQualitySnapshot | null>(null)
 const financialHistory = ref<QuantFinancialQualityHistory | null>(null)
 const financialComparison = ref<QuantFinancialQualityComparison | null>(null)
 const financialComparisonError = ref<unknown | null>(null)
+const researchMarkers = ref<QuantResearchMarker[]>([])
+const selectedCandidateIds = ref<Set<string>>(new Set())
+const comparisonDrawerOpen = ref(false)
+const comparisonLoading = ref(false)
+const comparisonValuations = ref<Record<string, QuantValuationSnapshot | null>>({})
+const comparisonFinancials = ref<Record<string, QuantFinancialQualitySnapshot | null>>({})
+const comparisonErrors = ref<Record<string, { valuation: boolean, financial: boolean }>>({})
+const researchFormStatus = ref<ResearchMarkerStatus>('unreviewed')
+const researchFormNote = ref('')
+const researchFormReviewDate = ref('')
+const researchSaving = ref(false)
+const researchSaveMessage = ref('')
+const researchSaveError = ref<unknown | null>(null)
 const selectedTsCode = ref<string | null>(null)
 const watchCode = ref('')
 const watchName = ref('')
 const syncResult = ref<SyncResult | null>(null)
+const detailDrawerOpen = ref(false)
 let valuationRequestId = 0
 let financialRequestId = 0
 const loading = reactive({
@@ -59,14 +78,16 @@ const loading = reactive({
   daily: false,
   valuation: false,
   financial: false,
+  research: false,
   sync: false,
 })
-const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation' | 'financial' | 'action', unknown | null>>({
+const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation' | 'financial' | 'research' | 'action', unknown | null>>({
   watchlist: null,
   candidates: null,
   daily: null,
   valuation: null,
   financial: null,
+  research: null,
   action: null,
 })
 const deletingCode = ref<string | null>(null)
@@ -79,6 +100,13 @@ const candidateFilterOptions = [
   { ...selectionPresets[2], icon: ShieldAlert },
   { ...selectionPresets[3], icon: Filter },
 ]
+const SIGNAL_RULE_COUNT = 6
+const researchStatusOptions: { value: ResearchMarkerStatus, label: string }[] = [
+  { value: 'unreviewed', label: '待研究' },
+  { value: 'priority', label: '重点关注' },
+  { value: 'paused', label: '暂缓' },
+  { value: 'excluded', label: '已排除' },
+]
 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
@@ -86,15 +114,25 @@ const activeCandidatePreset = computed(() => candidateFilterOptions.find(option 
 const filteredCandidateItems = computed(() => filterCandidatesBySelectionPreset(candidateItems.value, candidateFilter.value))
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
-const overallError = computed(() => errors.watchlist || errors.candidates)
+const overallError = computed(() => errors.watchlist || errors.candidates || errors.research)
 const deleteDialogMessage = computed(() => pendingDeleteCode.value ? `确认从观察池移除 ${pendingDeleteCode.value}？` : '')
 const latestDate = computed(() => {
   const dates = dailyBars.value.map(item => item.tradeDate).filter(Boolean)
   return formatTradeDate(dates.at(-1) || snapshot.value?.toDate || null)
 })
 const selectedCandidate = computed(() => candidateItems.value.find(item => item.tsCode === selectedTsCode.value) || null)
-const selectedCandidateReasons = computed(() => selectedCandidate.value ? getSelectionReasons(selectedCandidate.value, candidateFilter.value) : [])
-const selectedCandidateMatchesPreset = computed(() => selectedCandidate.value ? filteredCandidateItems.value.some(item => item.tsCode === selectedCandidate.value?.tsCode) : false)
+const researchMarkerMap = computed(() => new Map(researchMarkers.value.map(marker => [marker.tsCode, marker])))
+const selectedResearchMarker = computed<QuantResearchMarker>(() => researchMarkerMap.value.get(selectedTsCode.value || '') || {
+  tsCode: selectedTsCode.value || '',
+  status: 'unreviewed',
+  note: null,
+  reviewDate: null,
+  createdAt: null,
+  updatedAt: null,
+})
+const selectedCandidateItems = computed(() => candidateItems.value.filter(item => selectedCandidateIds.value.has(item.id)).slice(0, 3))
+const canCompareCandidates = computed(() => selectedCandidateItems.value.length >= 2)
+const comparisonStatusLabel = computed(() => comparisonLoading.value ? '正在读取估值与财务数据' : `${selectedCandidateItems.value.length} 只股票`)
 const latestDailyBar = computed(() => dailyBars.value.at(-1) || null)
 const latestWatchlistDate = computed(() => {
   const dates = watchlist.value.map(item => item.latestTradeDate).filter((date): date is string => Boolean(date))
@@ -240,18 +278,18 @@ const watchlistColumns: Column<WatchlistItem>[] = [
   { key: 'latestChangePercent', label: '涨跌幅', width: '92px', render: item => formatPercent(item.latestChangePercent) },
   { key: 'latestTradeDate', label: '数据截至', width: '120px', render: item => formatTradeDate(item.latestTradeDate) },
   { key: 'barCount', label: '覆盖天数', width: '90px', render: item => String(item.barCount) },
-  { key: 'actions', label: '操作', width: '72px' },
+  { key: 'actions', label: '操作', width: '80px', minWidth: '80px' },
 ]
 
 const candidateColumns: Column<CandidateItem>[] = [
   { key: 'tsCode', label: '代码', minWidth: '135px' },
   { key: 'name', label: '名称', minWidth: '120px', render: item => displayStockName(item) },
   { key: 'score', label: '信号分', width: '88px', render: item => formatNumber(item.score) },
-  { key: 'changePercent', label: '涨跌幅', width: '92px', render: item => formatPercent(item.changePercent) },
+  { key: 'return20', label: '20日表现', width: '92px', render: item => formatPercent(item.return20) },
   { key: 'ma20', label: '20日均线', width: '96px', render: item => formatNumber(item.ma20) },
   { key: 'volumeRatio', label: '成交活跃度', width: '108px', render: item => formatNumber(item.volumeRatio) },
   { key: 'relativeStrength', label: '池内强度', width: '98px', render: item => formatNumber(item.relativeStrength) },
-  { key: 'actions', label: '信号', width: '160px' },
+  { key: 'signals', label: '信号', width: '300px', minWidth: '280px' },
 ]
 
 const dailyColumns: Column<DailyBar>[] = [
@@ -284,8 +322,20 @@ const chartBars = computed(() => {
   })
 })
 
+const trendStructure = computed(() => buildTrendStructure(dailyBars.value))
+
 function formatNumber(value: number | null): string {
   return value === null ? '--' : value.toFixed(2)
+}
+
+function formatSignalScore(value: number | null): string {
+  return value === null ? '--' : `${value} / ${SIGNAL_RULE_COUNT}`
+}
+
+function signalScorePercent(value: number | null): number {
+  if (value === null)
+    return 0
+  return Math.min(100, Math.max(0, (value / SIGNAL_RULE_COUNT) * 100))
 }
 
 function formatPercent(value: number | null): string {
@@ -372,10 +422,6 @@ function displayStockName(item: Pick<CandidateItem, 'tsCode' | 'name'>): string 
   return item.name || watchlist.value.find(stock => stock.tsCode === item.tsCode)?.name || item.tsCode
 }
 
-function qualityLabel(value: CandidateItem['quality']): string {
-  return value === 'ready' ? '数据完整' : value === 'partial' ? '数据部分完整' : '数据不足'
-}
-
 function parsedError(error: unknown): ParsedError {
   let type: ErrorType = 'unknown'
   let statusCode: number | undefined
@@ -397,6 +443,28 @@ function parsedError(error: unknown): ParsedError {
     originalError: error,
     statusCode,
   }
+}
+
+function valuationErrorMessage(error: unknown): string {
+  if (error instanceof QuantApiError) {
+    switch (error.code) {
+      case 'QUANT_PROVIDER_TIMEOUT':
+        return '估值请求超时，数据源没有及时返回'
+      case 'QUANT_PROVIDER_INVALID_RESPONSE':
+        return '数据源返回的估值格式不完整'
+      case 'QUANT_PROVIDER_QUOTA':
+        return '数据源配额暂时不可用'
+      case 'QUANT_PROVIDER_CONFIGURATION':
+        return '估值数据源尚未配置'
+      case 'QUANT_PROVIDER_UPSTREAM':
+        return '估值数据源暂时不可达'
+      default:
+        return error.message || '估值请求失败'
+    }
+  }
+  if (error instanceof TypeError)
+    return '网络连接异常'
+  return '估值请求失败，请稍后重试'
 }
 
 function statusLabel(status: SyncStatus): string {
@@ -464,22 +532,19 @@ async function loadWatchlist() {
     watchlist.value = await quantApi.getWatchlist()
     if (!selectedTsCode.value || !watchlist.value.some(item => item.tsCode === selectedTsCode.value))
       selectedTsCode.value = watchlist.value[0]?.tsCode || null
-    if (selectedTsCode.value) {
-      await Promise.all([loadDailyBars(selectedTsCode.value), loadValuation(selectedTsCode.value), loadFinancialQuality(selectedTsCode.value)])
-    }
-    else {
-      valuationRequestId++
-      financialRequestId++
-      dailyBars.value = []
-      valuationComparison.value = null
-      valuation.value = null
-      financialQuality.value = null
-      financialHistory.value = null
-      financialComparison.value = null
-      financialComparisonError.value = null
-      loading.valuation = false
-      loading.financial = false
-    }
+    detailDrawerOpen.value = false
+    valuationRequestId++
+    financialRequestId++
+    dailyBars.value = []
+    valuationComparison.value = null
+    valuationComparisonError.value = null
+    valuation.value = null
+    financialQuality.value = null
+    financialHistory.value = null
+    financialComparison.value = null
+    financialComparisonError.value = null
+    loading.valuation = false
+    loading.financial = false
   }
   catch (error) {
     errors.watchlist = error
@@ -494,12 +559,28 @@ async function loadCandidates() {
   errors.candidates = null
   try {
     snapshot.value = await quantApi.getCandidates()
+    const candidateIds = new Set(candidateItems.value.map(item => item.id))
+    selectedCandidateIds.value = new Set([...selectedCandidateIds.value].filter(id => candidateIds.has(id)))
   }
   catch (error) {
     errors.candidates = error
   }
   finally {
     loading.candidates = false
+  }
+}
+
+async function loadResearchMarkers() {
+  loading.research = true
+  errors.research = null
+  try {
+    researchMarkers.value = await quantApi.getResearchMarkers()
+  }
+  catch (error) {
+    errors.research = error
+  }
+  finally {
+    loading.research = false
   }
 }
 
@@ -523,21 +604,22 @@ async function loadValuation(tsCode: string) {
   loading.valuation = true
   errors.valuation = null
   valuationComparison.value = null
+  valuationComparisonError.value = null
   valuation.value = null
-  try {
-    const result = await quantApi.getValuationComparison(tsCode)
-    if (requestId === valuationRequestId) {
-      valuationComparison.value = result
-      valuation.value = result.target
-    }
-  }
-  catch (error) {
-    if (requestId === valuationRequestId)
-      errors.valuation = error
-  }
-  finally {
-    if (requestId === valuationRequestId)
-      loading.valuation = false
+  const [targetResult, comparisonResult] = await Promise.allSettled([
+    quantApi.getValuation(tsCode),
+    quantApi.getValuationComparison(tsCode),
+  ])
+  if (requestId === valuationRequestId) {
+    if (targetResult.status === 'fulfilled')
+      valuation.value = targetResult.value
+    else
+      errors.valuation = targetResult.reason
+    if (comparisonResult.status === 'fulfilled')
+      valuationComparison.value = comparisonResult.value
+    else
+      valuationComparisonError.value = comparisonResult.reason
+    loading.valuation = false
   }
 }
 
@@ -583,15 +665,118 @@ async function loadFinancialQuality(tsCode: string) {
   }
 }
 
+function syncResearchForm(tsCode: string) {
+  const marker = researchMarkerMap.value.get(tsCode)
+  researchFormStatus.value = marker?.status || 'unreviewed'
+  researchFormNote.value = marker?.note || ''
+  researchFormReviewDate.value = marker?.reviewDate || ''
+  researchSaveMessage.value = ''
+  researchSaveError.value = null
+}
+
+async function saveResearchMarker() {
+  if (!selectedStock.value || researchSaving.value)
+    return
+  researchSaving.value = true
+  researchSaveMessage.value = ''
+  researchSaveError.value = null
+  try {
+    const marker = await quantApi.updateResearchMarker(selectedStock.value.tsCode, {
+      status: researchFormStatus.value,
+      note: researchFormNote.value.trim() || null,
+      reviewDate: researchFormReviewDate.value || null,
+    })
+    researchMarkers.value = researchMarkers.value.some(item => item.tsCode === marker.tsCode)
+      ? researchMarkers.value.map(item => item.tsCode === marker.tsCode ? marker : item)
+      : [...researchMarkers.value, marker]
+    researchSaveMessage.value = '研究记录已保存'
+  }
+  catch (error) {
+    researchSaveError.value = error
+  }
+  finally {
+    researchSaving.value = false
+  }
+}
+
+function toggleCandidateSelection(item: CandidateItem) {
+  const next = new Set(selectedCandidateIds.value)
+  if (next.has(item.id)) {
+    next.delete(item.id)
+  }
+  else if (next.size < 3) {
+    next.add(item.id)
+  }
+  selectedCandidateIds.value = next
+}
+
+function handleCandidateToggle(id: string) {
+  const item = candidateItems.value.find(candidate => candidate.id === id)
+  if (item)
+    toggleCandidateSelection(item)
+}
+
+function toggleAllCandidateSelection() {
+  const visibleIds = filteredCandidateItems.value.map(item => item.id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedCandidateIds.value.has(id))
+  const next = new Set(selectedCandidateIds.value)
+  if (allVisibleSelected) {
+    visibleIds.forEach(id => next.delete(id))
+  }
+  else {
+    visibleIds.forEach((id) => {
+      if (next.size < 3)
+        next.add(id)
+    })
+  }
+  selectedCandidateIds.value = next
+}
+
+function clearCandidateSelection() {
+  selectedCandidateIds.value = new Set()
+}
+
+async function openComparisonDrawer() {
+  if (!canCompareCandidates.value)
+    return
+  comparisonDrawerOpen.value = true
+  comparisonLoading.value = true
+  comparisonValuations.value = {}
+  comparisonFinancials.value = {}
+  comparisonErrors.value = {}
+  await Promise.all(selectedCandidateItems.value.map(async (item) => {
+    const result = { valuation: null as QuantValuationSnapshot | null, financial: null as QuantFinancialQualitySnapshot | null, valuationError: false, financialError: false }
+    const [valuationResult, financialResult] = await Promise.allSettled([
+      quantApi.getValuation(item.tsCode),
+      quantApi.getFinancialQuality(item.tsCode),
+    ])
+    if (valuationResult.status === 'fulfilled')
+      result.valuation = valuationResult.value
+    else
+      result.valuationError = true
+    if (financialResult.status === 'fulfilled')
+      result.financial = financialResult.value
+    else
+      result.financialError = true
+    comparisonValuations.value = { ...comparisonValuations.value, [item.tsCode]: result.valuation }
+    comparisonFinancials.value = { ...comparisonFinancials.value, [item.tsCode]: result.financial }
+    comparisonErrors.value = {
+      ...comparisonErrors.value,
+      [item.tsCode]: { valuation: result.valuationError, financial: result.financialError },
+    }
+  }))
+  comparisonLoading.value = false
+}
+
 async function loadWorkspace() {
   errors.action = null
-  await Promise.all([loadWatchlist(), loadCandidates()])
+  await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers()])
 }
 
 function selectStock(item: Pick<WatchlistItem, 'tsCode' | 'name'>) {
-  if (selectedTsCode.value === item.tsCode)
-    return
   selectedTsCode.value = item.tsCode
+  syncResearchForm(item.tsCode)
+  detailDrawerOpen.value = true
   void Promise.all([loadDailyBars(item.tsCode), loadValuation(item.tsCode), loadFinancialQuality(item.tsCode)])
 }
 
@@ -608,7 +793,7 @@ async function addToWatchlist() {
     await quantApi.addWatchlist({ tsCode, name })
     watchCode.value = ''
     watchName.value = ''
-    await loadWatchlist()
+    await Promise.all([loadWatchlist(), loadResearchMarkers()])
   }
   catch (error) {
     errors.action = error
@@ -637,7 +822,7 @@ async function removeFromWatchlist(tsCode: string) {
   errors.action = null
   try {
     await quantApi.removeWatchlist(tsCode)
-    await loadWatchlist()
+    await Promise.all([loadWatchlist(), loadResearchMarkers()])
     await loadCandidates()
   }
   catch (error) {
@@ -782,7 +967,11 @@ onMounted(loadWorkspace)
                 <small>{{ item.tsCode }}</small>
               </span>
               <span class="focus-signal">{{ focusSignal(item) }}</span>
-              <span class="focus-score"><strong>{{ formatNumber(item.score) }}</strong><small>信号分</small></span>
+              <span class="focus-score">
+                <strong>{{ formatSignalScore(item.score) }}</strong>
+                <span class="focus-score-meter" aria-hidden="true"><span class="focus-score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
+                <small>命中规则</small>
+              </span>
               <span class="status-chip" :class="riskToneClass(candidateRiskTone(item))">{{ riskLabel(item) }}</span>
               <ChevronRight :size="15" aria-hidden="true" />
             </button>
@@ -843,32 +1032,40 @@ onMounted(loadWorkspace)
               {{ adding ? '加入中' : '加入观察池' }}
             </button>
           </form>
-          <DataTable
-            :data="watchlist"
-            :columns="watchlistColumns"
-            :loading="loading.watchlist"
-            min-width="760px"
-            empty-message="观察池为空，先加入一只股票"
-            @row-click="selectStock"
-          >
-            <template #cell-tsCode="{ item }">
-              <button class="stock-code-button" type="button" @click.stop="selectStock(item)">
-                {{ item.tsCode }}
-                <ChevronRight :size="14" aria-hidden="true" />
-              </button>
-            </template>
-            <template #cell-latestChangePercent="{ item }">
-              <span :class="item.latestChangePercent !== null && item.latestChangePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.latestChangePercent) }}</span>
-            </template>
-            <template #cell-actions="{ item }">
-              <button class="icon-button icon-button-danger" type="button" :disabled="deletingCode === item.tsCode" :aria-label="`删除 ${item.tsCode}`" :title="`删除 ${item.tsCode}`" @click.stop="requestRemoveFromWatchlist(item.tsCode)">
-                <Trash2 :size="15" aria-hidden="true" />
-              </button>
-            </template>
-          </DataTable>
-          <p v-if="selectedStock" class="selection-note">
-            当前查看 <strong>{{ selectedStock.tsCode }}</strong> · {{ selectedStock.name || '未命名' }}
-          </p>
+          <div class="quant-table-frame watchlist-table-frame">
+            <DataTable
+              :data="watchlist"
+              :columns="watchlistColumns"
+              :loading="loading.watchlist"
+              min-width="760px"
+              empty-message="观察池为空，先加入一只股票"
+              @row-click="selectStock"
+            >
+              <template #cell-tsCode="{ item }">
+                <button class="stock-code-button" type="button" @click.stop="selectStock(item)">
+                  {{ item.tsCode }}
+                  <ChevronRight :size="14" aria-hidden="true" />
+                </button>
+              </template>
+              <template #cell-latestClose="{ item }">
+                <span class="quant-table-number quant-table-number-emphasis" :class="item.latestClose === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.latestClose) }}</span>
+              </template>
+              <template #cell-latestChangePercent="{ item }">
+                <span class="quant-table-number" :class="item.latestChangePercent === null ? 'text-status-neutral' : item.latestChangePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.latestChangePercent) }}</span>
+              </template>
+              <template #cell-latestTradeDate="{ item }">
+                <span class="quant-table-date">{{ formatTradeDate(item.latestTradeDate) }}</span>
+              </template>
+              <template #cell-barCount="{ item }">
+                <span class="quant-table-number">{{ item.barCount }}</span>
+              </template>
+              <template #cell-actions="{ item }">
+                <button class="icon-button icon-button-danger watchlist-action-button" type="button" :disabled="deletingCode === item.tsCode" :aria-label="`删除 ${item.tsCode}`" :title="`删除 ${item.tsCode}`" @click.stop="requestRemoveFromWatchlist(item.tsCode)">
+                  <Trash2 :size="15" aria-hidden="true" />
+                </button>
+              </template>
+            </DataTable>
+          </div>
         </article>
 
         <ConfirmDialog
@@ -963,7 +1160,16 @@ onMounted(loadWorkspace)
               {{ option.label }}
             </button>
           </div>
-          <span class="section-meta">显示 {{ filteredCandidateItems.length }} / {{ candidateItems.length }}</span>
+          <div class="candidate-toolbar-meta">
+            <span class="section-meta">显示 {{ filteredCandidateItems.length }} / {{ candidateItems.length }}</span>
+            <button class="compare-button" type="button" :disabled="!canCompareCandidates" @click="openComparisonDrawer">
+              <BarChart3 :size="14" aria-hidden="true" />
+              对比 {{ selectedCandidateItems.length }} 只
+            </button>
+            <button v-if="selectedCandidateItems.length" class="text-button candidate-clear-button" type="button" @click="clearCandidateSelection">
+              清除选择
+            </button>
+          </div>
         </div>
         <div class="selection-guide" aria-label="择股预设说明">
           <div class="selection-guide-copy">
@@ -974,8 +1180,8 @@ onMounted(loadWorkspace)
           <span class="selection-guide-count">命中 {{ filteredCandidateItems.length }} 只</span>
         </div>
         <div class="selection-legend" aria-label="指标释义">
-          <span><strong>信号分</strong>匹配规则数量</span>
-          <span><strong>20 日表现</strong>近 20 个交易日涨跌</span>
+          <span><strong>信号分</strong>命中规则 / {{ SIGNAL_RULE_COUNT }} 条</span>
+          <span><strong>20 日表现</strong>近 20 个交易日收益</span>
           <span><strong>成交活跃度</strong>相对近 5 日均量</span>
         </div>
         <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
@@ -984,383 +1190,632 @@ onMounted(loadWorkspace)
           <span class="snapshot-range-divider">·</span>
           <span>{{ snapshot.factorVersion || '动量信号' }}</span>
         </div>
-        <div v-if="selectedCandidate" class="candidate-insight">
-          <div class="candidate-insight-heading">
-            <div>
-              <span class="section-kicker">WHY IT STANDS OUT</span>
-              <strong>{{ displayStockName(selectedCandidate) }}</strong>
-              <span class="candidate-insight-code">{{ selectedCandidate.tsCode }}</span>
-            </div>
-            <span class="status-chip" :class="selectedCandidate.quality === 'ready' ? 'status-enabled' : 'status-partial'">
-              {{ qualityLabel(selectedCandidate.quality) }}
-            </span>
-          </div>
-          <div class="candidate-insight-stats">
-            <span><small>信号分</small><strong>{{ formatNumber(selectedCandidate.score) }}</strong></span>
-            <span><small>20 日表现</small><strong>{{ formatPercent(selectedCandidate.return20) }}</strong></span>
-            <span><small>成交活跃度</small><strong>{{ formatNumber(selectedCandidate.volumeRatio) }}</strong></span>
-          </div>
-          <div class="candidate-insight-signals">
-            <span v-for="signal in selectedCandidate.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
-            <span v-for="factor in selectedCandidate.missingFactors" :key="factor" class="signal-tag signal-tag-muted">待补 {{ formatFactorLabel(factor) }}</span>
-            <span v-for="reason in selectedCandidateReasons" :key="`preset-${reason}`" class="signal-tag signal-tag-primary">{{ reason }}</span>
-            <span v-if="!selectedCandidate.signals.length && !selectedCandidate.missingFactors.length" class="muted-inline">暂无因子信号</span>
-            <span v-if="!selectedCandidateMatchesPreset && candidateFilter !== 'all'" class="insight-disclaimer">当前标的未命中“{{ activeCandidatePreset.label }}”，可切换到“全部候选”复核</span>
-            <span v-else class="insight-disclaimer">{{ riskLabel(selectedCandidate) }}</span>
-          </div>
+        <div class="quant-table-frame candidate-table-frame">
+          <DataTable
+            :data="filteredCandidateItems"
+            :columns="candidateColumns"
+            :loading="loading.candidates"
+            selectable
+            :selected-ids="selectedCandidateIds"
+            min-width="1180px"
+            :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
+            @toggle-select="handleCandidateToggle"
+            @toggle-select-all="toggleAllCandidateSelection"
+            @row-click="selectStock"
+          >
+            <template #cell-tsCode="{ item }">
+              <span class="font-mono text-xs font-semibold text-foreground">{{ item.tsCode }}</span>
+            </template>
+            <template #cell-score="{ item }">
+              <div class="score-cell" :aria-label="`命中 ${formatSignalScore(item.score)} 条规则`">
+                <strong class="score-value" :class="item.score === null ? 'quant-table-value-muted' : ''">{{ formatSignalScore(item.score) }}</strong>
+                <span class="score-meter" aria-hidden="true"><span class="score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
+              </div>
+            </template>
+            <template #cell-return20="{ item }">
+              <span class="quant-table-number" :class="item.return20 === null ? 'text-status-neutral' : item.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.return20) }}</span>
+            </template>
+            <template #cell-ma20="{ item }">
+              <span class="quant-table-number" :class="item.ma20 === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.ma20) }}</span>
+            </template>
+            <template #cell-volumeRatio="{ item }">
+              <span class="quant-table-number" :class="item.volumeRatio === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.volumeRatio) }}</span>
+            </template>
+            <template #cell-relativeStrength="{ item }">
+              <span class="quant-table-number" :class="item.relativeStrength === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.relativeStrength) }}</span>
+            </template>
+            <template #cell-signals="{ item }">
+              <div class="signal-list candidate-signal-list">
+                <span v-if="researchMarkerMap.get(item.tsCode)?.status && researchMarkerMap.get(item.tsCode)?.status !== 'unreviewed'" class="research-status-dot" :class="`research-status-${researchMarkerMap.get(item.tsCode)?.status}`" :title="researchStatusOptions.find(option => option.value === researchMarkerMap.get(item.tsCode)?.status)?.label" aria-hidden="true" />
+                <span v-for="signal in item.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
+                <span v-if="item.quality !== 'ready'" class="signal-tag signal-tag-muted">数据不足</span>
+                <span v-if="!item.signals.length && item.quality === 'ready'" class="muted-inline">暂无明确信号</span>
+              </div>
+            </template>
+          </DataTable>
         </div>
-        <DataTable
-          :data="filteredCandidateItems"
-          :columns="candidateColumns"
-          :loading="loading.candidates"
-          min-width="940px"
-          :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
-          @row-click="selectStock"
-        >
-          <template #cell-tsCode="{ item }">
-            <span class="font-mono text-xs font-semibold text-foreground">{{ item.tsCode }}</span>
-          </template>
-          <template #cell-score="{ item }">
-            <span class="score-value">{{ formatNumber(item.score) }}</span>
-          </template>
-          <template #cell-changePercent="{ item }">
-            <span :class="item.changePercent !== null && item.changePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.changePercent) }}</span>
-          </template>
-          <template #cell-actions="{ item }">
-            <div class="signal-list">
-              <span v-for="signal in item.signals.slice(0, 3)" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
-              <span v-if="item.signals.length > 3" class="signal-tag signal-tag-muted">+{{ item.signals.length - 3 }} 项</span>
-              <span v-if="item.quality !== 'ready'" class="signal-tag signal-tag-muted">数据不足</span>
-              <span v-if="!item.signals.length && item.quality === 'ready'" class="muted-inline">暂无明确信号</span>
-            </div>
-          </template>
-        </DataTable>
       </section>
 
-      <section class="surface-panel" aria-labelledby="daily-title">
-        <div class="section-heading">
-          <div>
-            <p class="section-kicker">
-              PRICE & DAILY DATA
+      <DetailDrawer
+        :open="detailDrawerOpen && !!selectedStock"
+        :title="selectedStock ? `${selectedStock.name || selectedStock.tsCode} · 分析详情` : '分析详情'"
+        :description="selectedStock ? `${selectedStock.tsCode} · 走势、估值、财务质量与研究摘要` : ''"
+        width="lg"
+        @update:open="detailDrawerOpen = $event"
+      >
+        <section class="quant-detail-content" aria-labelledby="daily-title">
+          <section class="decision-card" aria-label="候选决策卡">
+            <div class="decision-card-heading">
+              <div>
+                <p class="section-kicker">
+                  DECISION CARD
+                </p>
+                <h2>先看依据，再做判断</h2>
+              </div>
+              <span v-if="selectedResearchMarker.status !== 'unreviewed'" class="research-status-badge" :class="`research-status-${selectedResearchMarker.status}`">
+                {{ researchStatusOptions.find(option => option.value === selectedResearchMarker.status)?.label }}
+              </span>
+            </div>
+            <div v-if="selectedCandidate" class="decision-card-grid">
+              <div class="decision-card-item decision-card-item-primary">
+                <span>信号覆盖</span>
+                <strong>{{ formatSignalScore(selectedCandidate.score) }}</strong>
+                <small>命中规则 / {{ SIGNAL_RULE_COUNT }} 条</small>
+              </div>
+              <div class="decision-card-item">
+                <span>20 日表现</span>
+                <strong :class="selectedCandidate.return20 === null ? 'text-status-neutral' : selectedCandidate.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(selectedCandidate.return20) }}</strong>
+                <small>历史窗口收益，不代表未来</small>
+              </div>
+              <div class="decision-card-item">
+                <span>数据状态</span>
+                <strong>{{ selectedCandidate.quality === 'ready' ? '数据完整' : '需要补齐' }}</strong>
+                <small>{{ selectedCandidate.factorVersion || '当前快照' }}</small>
+              </div>
+            </div>
+            <div v-else class="decision-card-empty">
+              <Info :size="16" aria-hidden="true" />
+              <span>当前股票不在最新候选快照中，先看日线、估值和基本面。</span>
+            </div>
+            <div v-if="selectedCandidate" class="decision-signal-row">
+              <span class="decision-signal-label">入选依据</span>
+              <div class="signal-list decision-signal-list">
+                <span v-for="signal in selectedCandidate.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
+                <span v-if="!selectedCandidate.signals.length" class="muted-inline">暂无明确信号</span>
+              </div>
+            </div>
+            <p class="decision-card-note">
+              技术信号用于缩小研究范围；估值和财务数据需要结合报告期与样本完整度人工核对。
             </p>
-            <h2 id="daily-title" class="section-title">
-              走势与日线
-            </h2>
-          </div>
-          <span class="section-meta">{{ selectedStock?.tsCode || '未选择股票' }}</span>
-        </div>
-        <div
-          v-if="selectedStock && researchSummary"
-          class="research-summary"
-          :class="`research-summary-${researchSummary.tone}`"
-          aria-label="研究摘要"
-        >
-          <div class="research-summary-heading">
-            <div>
-              <p class="section-kicker">
-                RESEARCH READOUT
-              </p>
-              <h3>
-                研究摘要
-              </h3>
-            </div>
-            <span
-              class="status-chip"
-              :class="researchSummary.tone === 'positive' ? 'status-enabled' : researchSummary.tone === 'warning' ? 'status-partial' : 'status-info'"
-            >
-              {{ researchSummary.label }}
-            </span>
-          </div>
-          <p class="research-summary-headline">
-            {{ researchSummary.headline }}
-          </p>
-          <div class="research-summary-grid">
-            <div class="research-summary-column">
-              <span class="research-summary-label">支持依据</span>
-              <ul v-if="researchSummary.support.length">
-                <li
-                  v-for="item in researchSummary.support"
-                  :key="`support-${item}`"
-                >
-                  {{ item }}
-                </li>
-              </ul>
-              <span v-else class="muted-inline">暂无明确支持依据</span>
-            </div>
-            <div class="research-summary-column">
-              <span class="research-summary-label">需要核对</span>
-              <ul v-if="researchSummary.watchouts.length">
-                <li
-                  v-for="item in researchSummary.watchouts"
-                  :key="`watchout-${item}`"
-                >
-                  {{ item }}
-                </li>
-              </ul>
-              <span v-else class="muted-inline">暂未发现额外核对项</span>
-            </div>
-            <div class="research-summary-column">
-              <span class="research-summary-label">下一步核对</span>
-              <ul>
-                <li
-                  v-for="item in researchSummary.nextChecks"
-                  :key="`check-${item}`"
-                >
-                  {{ item }}
-                </li>
-              </ul>
-            </div>
-          </div>
-          <p class="valuation-note">
-            研究状态只由当前观察池可用数据生成，不代表买入、卖出或收益判断
-          </p>
-        </div>
-        <div class="valuation-section" aria-label="估值速览">
-          <div class="valuation-heading">
-            <div>
-              <p class="section-kicker">
-                VALUATION SNAPSHOT
-              </p>
-              <h3>
-                估值速览
-              </h3>
-            </div>
-            <span v-if="valuation" class="section-meta">观察 {{ formatDateTime(valuation.observedAt) }}</span>
-            <span v-else-if="selectedStock" class="section-meta">读取中</span>
-          </div>
-          <div v-if="loading.valuation" class="valuation-state" aria-label="估值数据加载中">
-            <SkeletonCard variant="content" />
-          </div>
-          <div v-else-if="errors.valuation" class="valuation-state" role="status">
-            <Info :size="17" aria-hidden="true" />
-            <span>估值数据暂时不可用</span>
-            <button class="text-button" type="button" @click="selectedTsCode && loadValuation(selectedTsCode)">
-              重试
-            </button>
-          </div>
-          <div v-else-if="valuation && hasValuationData" class="valuation-grid">
-            <div class="valuation-item">
-              <span>动态 PE</span>
-              <strong>{{ formatNumber(valuation.dynamicPe) }}</strong>
-            </div>
-            <div class="valuation-item">
-              <span>TTM PE</span>
-              <strong>{{ formatNumber(valuation.peTtm) }}</strong>
-            </div>
-            <div class="valuation-item">
-              <span>静态 PE</span>
-              <strong>{{ formatNumber(valuation.peStatic) }}</strong>
-            </div>
-            <div class="valuation-item">
-              <span>PB</span>
-              <strong>{{ formatNumber(valuation.pb) }}</strong>
-            </div>
-            <div class="valuation-item">
-              <span>PS</span>
-              <strong>{{ formatNumber(valuation.ps) }}</strong>
-            </div>
-            <div class="valuation-item">
-              <span>PEG</span>
-              <strong>{{ formatNumber(valuation.peg) }}</strong>
-            </div>
-            <div class="valuation-item valuation-item-wide">
-              <span>总市值</span>
-              <strong>{{ formatMarketCap(valuation.marketCap) }}</strong>
-            </div>
-          </div>
-          <div v-else class="valuation-state">
-            <Info :size="17" aria-hidden="true" />
-            <span>{{ selectedStock ? '当前没有可比较的估值字段' : '选择一只股票后查看估值' }}</span>
-          </div>
-          <div v-if="valuationComparison" class="valuation-comparison">
-            <div class="valuation-comparison-row">
-              <span>TTM PE 相对观察池</span>
-              <strong>{{ formatComparisonPosition(valuationComparison.ttmPeHigherThanPercent) }}</strong>
-              <small>样本 {{ valuationComparison.ttmPeSampleCount }} 只</small>
-            </div>
-            <div class="valuation-comparison-row">
-              <span>PB 相对观察池</span>
-              <strong>{{ formatComparisonPosition(valuationComparison.pbHigherThanPercent) }}</strong>
-              <small>样本 {{ valuationComparison.pbSampleCount }} 只</small>
-            </div>
-            <p>比较范围：当前观察池 {{ valuationComparison.sampleCount }} 只，可用估值 {{ valuationComparison.availableSampleCount }} 只</p>
-          </div>
-          <p class="valuation-note">
-            估值只用于同口径横向比较；相对位置仅代表当前观察池，不代表行业估值
-          </p>
-        </div>
-        <div class="financial-section" aria-label="基本面速览">
-          <div class="valuation-heading">
-            <div>
-              <p class="section-kicker">
-                FINANCIAL QUALITY
-              </p>
-              <h3>
-                基本面速览
-              </h3>
-            </div>
-            <span v-if="financialQuality" class="section-meta">最近已披露报告 · {{ financialQuality.reportDateName || formatTradeDate(financialQuality.reportDate) }}</span>
-            <span v-else-if="selectedStock" class="section-meta">读取中</span>
-          </div>
-          <div v-if="financialQuality" class="financial-report-meta">
-            <span>报告期 <strong>{{ formatTradeDate(financialQuality.reportDate) }}</strong></span>
-            <span>公告日期 <strong>{{ formatTradeDate(financialQuality.noticeDate) }}</strong></span>
-            <span>报告口径 <strong>{{ financialQuality.reportType || '最近已披露' }}</strong></span>
-          </div>
-          <div v-if="loading.financial" class="valuation-state" aria-label="基本面数据加载中">
-            <SkeletonCard variant="content" />
-          </div>
-          <div v-else-if="errors.financial" class="valuation-state" role="status">
-            <Info :size="17" aria-hidden="true" />
-            <span>基本面数据暂时不可用</span>
-            <button class="text-button" type="button" @click="selectedTsCode && loadFinancialQuality(selectedTsCode)">
-              重试
-            </button>
-          </div>
-          <div v-else-if="financialQuality && hasFinancialData" class="financial-grid">
-            <div class="financial-item">
-              <span>营业收入</span>
-              <strong>{{ formatFinancialAmount(financialQuality.revenue) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>归母净利润</span>
-              <strong>{{ formatFinancialAmount(financialQuality.netProfit) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>营收同比</span>
-              <strong :class="financialQuality.revenueYoY !== null && financialQuality.revenueYoY >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(financialQuality.revenueYoY) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>净利润同比</span>
-              <strong :class="financialQuality.netProfitYoY !== null && financialQuality.netProfitYoY >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(financialQuality.netProfitYoY) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>ROE 股东回报</span>
-              <strong>{{ formatMetricPercent(financialQuality.roe) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>毛利率</span>
-              <strong>{{ formatMetricPercent(financialQuality.grossMargin) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>净利率</span>
-              <strong>{{ formatMetricPercent(financialQuality.netMargin) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>资产负债率</span>
-              <strong>{{ formatMetricPercent(financialQuality.debtAssetRatio) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>经营现金流 / 营收</span>
-              <strong>{{ formatRatioPercent(financialQuality.operatingCashflowToRevenue) }}</strong>
-            </div>
-            <div class="financial-item">
-              <span>ROIC 投入资本回报</span>
-              <strong>{{ formatMetricPercent(financialQuality.roic) }}</strong>
-            </div>
-          </div>
-          <div v-else class="valuation-state">
-            <Info :size="17" aria-hidden="true" />
-            <span>{{ selectedStock ? '报告已找到，但当前指标暂缺' : '选择一只股票后查看基本面' }}</span>
-          </div>
-          <div v-if="financialTrendItems.length" class="financial-trend" aria-label="财务质量趋势">
-            <div class="financial-subheading">
+          </section>
+          <section class="research-marker-editor" aria-label="研究记录">
+            <div class="research-marker-heading">
               <div>
-                <span class="section-kicker">RECENT TREND</span>
-                <strong>最近几期变化</strong>
+                <p class="section-kicker">
+                  RESEARCH LOG
+                </p>
+                <h2>我的研究记录</h2>
               </div>
-              <small>比较最近两期报告 · {{ financialHistory?.reports.length || 0 }} 期可读</small>
+              <span class="section-meta">只保存你的工作状态，不影响信号分</span>
             </div>
-            <div class="financial-trend-grid">
-              <div v-for="item in financialTrendItems" :key="item.key" class="financial-trend-item">
-                <span>{{ item.label }}</span>
-                <strong>{{ item.format === 'growth' ? formatPercent(item.current) : formatMetricPercent(item.current) }}</strong>
-                <span class="financial-trend-delta" :class="`trend-${item.tone}`">{{ item.state }} · {{ formatTrendDelta(item.delta) }}</span>
-              </div>
+            <div class="research-marker-form">
+              <label class="research-field">
+                <span>状态</span>
+                <select v-model="researchFormStatus" class="field-control">
+                  <option v-for="option in researchStatusOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </label>
+              <label class="research-field research-field-date">
+                <span>复查日期</span>
+                <input v-model="researchFormReviewDate" class="field-control" type="date">
+              </label>
+              <label class="research-field research-field-note">
+                <span>备注</span>
+                <textarea v-model="researchFormNote" class="field-control research-note-input" maxlength="1000" placeholder="记录需要核对的事项、假设或下一步动作" />
+              </label>
+              <button class="primary-button research-save-button" type="button" :disabled="researchSaving" @click="saveResearchMarker">
+                <Save :size="15" aria-hidden="true" />
+                {{ researchSaving ? '保存中' : '保存记录' }}
+              </button>
             </div>
+            <p v-if="researchSaveMessage" class="research-save-message" role="status">
+              {{ researchSaveMessage }}
+            </p>
+            <p v-if="researchSaveError" class="research-save-error" role="alert">
+              {{ parsedError(researchSaveError).message }}
+            </p>
+          </section>
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">
+                PRICE & DAILY DATA
+              </p>
+              <h2 id="daily-title" class="section-title">
+                走势与日线
+              </h2>
+            </div>
+            <span class="section-meta">{{ selectedStock?.tsCode || '未选择股票' }}</span>
           </div>
-          <div v-if="financialComparison || financialComparisonError" class="financial-comparison" aria-label="观察池财务质量比较">
-            <div class="financial-subheading">
+          <div
+            v-if="selectedStock && researchSummary"
+            class="research-summary"
+            :class="`research-summary-${researchSummary.tone}`"
+            aria-label="研究摘要"
+          >
+            <div class="research-summary-heading">
               <div>
-                <span class="section-kicker">QUALITY POSITION</span>
-                <strong>观察池质量位置</strong>
+                <p class="section-kicker">
+                  RESEARCH READOUT
+                </p>
+                <h3>
+                  研究摘要
+                </h3>
               </div>
-              <small>仅当前观察池</small>
+              <span
+                class="status-chip"
+                :class="researchSummary.tone === 'positive' ? 'status-enabled' : researchSummary.tone === 'warning' ? 'status-partial' : 'status-info'"
+              >
+                {{ researchSummary.label }}
+              </span>
             </div>
-            <div v-if="financialComparisonError" class="financial-comparison-empty">
-              <Info :size="15" aria-hidden="true" />
-              <span>同池质量比较暂时不可用</span>
+            <p class="research-summary-headline">
+              {{ researchSummary.headline }}
+            </p>
+            <div class="research-dimensions" aria-label="四维研究判断">
+              <div
+                v-for="dimension in researchSummary.dimensions"
+                :key="dimension.key"
+                class="research-dimension"
+                :class="`research-dimension-${dimension.state}`"
+              >
+                <span>{{ dimension.label }}</span>
+                <strong>{{ dimension.detail }}</strong>
+              </div>
             </div>
-            <div v-else-if="financialComparison" class="financial-comparison-grid">
-              <div class="financial-comparison-item">
+            <div class="research-summary-grid">
+              <div class="research-summary-column">
+                <span class="research-summary-label">支持依据</span>
+                <ul v-if="researchSummary.support.length">
+                  <li
+                    v-for="item in researchSummary.support"
+                    :key="`support-${item}`"
+                  >
+                    {{ item }}
+                  </li>
+                </ul>
+                <span v-else class="muted-inline">暂无明确支持依据</span>
+              </div>
+              <div class="research-summary-column">
+                <span class="research-summary-label">需要核对</span>
+                <ul v-if="researchSummary.watchouts.length">
+                  <li
+                    v-for="item in researchSummary.watchouts"
+                    :key="`watchout-${item}`"
+                  >
+                    {{ item }}
+                  </li>
+                </ul>
+                <span v-else class="muted-inline">暂未发现额外核对项</span>
+              </div>
+              <div class="research-summary-column">
+                <span class="research-summary-label">下一步核对</span>
+                <ul>
+                  <li
+                    v-for="item in researchSummary.nextChecks"
+                    :key="`check-${item}`"
+                  >
+                    {{ item }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <p class="valuation-note">
+              研究状态只由当前观察池可用数据生成，不代表买入、卖出或收益判断
+            </p>
+          </div>
+          <div class="valuation-section" aria-label="估值速览">
+            <div class="valuation-heading">
+              <div>
+                <p class="section-kicker">
+                  VALUATION SNAPSHOT
+                </p>
+                <h3>
+                  估值速览
+                </h3>
+              </div>
+              <span v-if="valuation" class="section-meta">观察 {{ formatDateTime(valuation.observedAt) }}</span>
+              <span v-else-if="selectedStock" class="section-meta">读取中</span>
+            </div>
+            <div v-if="loading.valuation" class="valuation-state" aria-label="估值数据加载中">
+              <SkeletonCard variant="content" />
+            </div>
+            <div v-else-if="errors.valuation" class="valuation-state" role="status">
+              <Info :size="17" aria-hidden="true" />
+              <span class="valuation-state-copy">估值数据暂时不可用：{{ valuationErrorMessage(errors.valuation) }}</span>
+              <button class="text-button" type="button" @click="selectedTsCode && loadValuation(selectedTsCode)">
+                重试
+              </button>
+            </div>
+            <div v-else-if="valuation && hasValuationData" class="valuation-grid">
+              <div class="valuation-item">
+                <span>动态 PE</span>
+                <strong>{{ formatNumber(valuation.dynamicPe) }}</strong>
+              </div>
+              <div class="valuation-item">
+                <span>TTM PE</span>
+                <strong>{{ formatNumber(valuation.peTtm) }}</strong>
+              </div>
+              <div class="valuation-item">
+                <span>静态 PE</span>
+                <strong>{{ formatNumber(valuation.peStatic) }}</strong>
+              </div>
+              <div class="valuation-item">
+                <span>PB</span>
+                <strong>{{ formatNumber(valuation.pb) }}</strong>
+              </div>
+              <div class="valuation-item">
+                <span>PS</span>
+                <strong>{{ formatNumber(valuation.ps) }}</strong>
+              </div>
+              <div class="valuation-item">
+                <span>PEG</span>
+                <strong>{{ formatNumber(valuation.peg) }}</strong>
+              </div>
+              <div class="valuation-item valuation-item-wide">
+                <span>总市值</span>
+                <strong>{{ formatMarketCap(valuation.marketCap) }}</strong>
+              </div>
+            </div>
+            <div v-else class="valuation-state">
+              <Info :size="17" aria-hidden="true" />
+              <span>{{ selectedStock ? '当前没有可比较的估值字段' : '选择一只股票后查看估值' }}</span>
+            </div>
+            <div v-if="valuationComparison" class="valuation-comparison">
+              <div class="valuation-comparison-row">
+                <span>TTM PE 相对观察池</span>
+                <strong>{{ formatComparisonPosition(valuationComparison.ttmPeHigherThanPercent) }}</strong>
+                <small>样本 {{ valuationComparison.ttmPeSampleCount }} 只</small>
+              </div>
+              <div class="valuation-comparison-row">
+                <span>PB 相对观察池</span>
+                <strong>{{ formatComparisonPosition(valuationComparison.pbHigherThanPercent) }}</strong>
+                <small>样本 {{ valuationComparison.pbSampleCount }} 只</small>
+              </div>
+              <p>比较范围：当前观察池 {{ valuationComparison.sampleCount }} 只，可用估值 {{ valuationComparison.availableSampleCount }} 只</p>
+            </div>
+            <div v-else-if="valuationComparisonError && valuation" class="valuation-comparison valuation-comparison-error">
+              <div class="financial-comparison-empty">
+                <Info :size="15" aria-hidden="true" />
+                <span>观察池相对位置暂不可用：{{ valuationErrorMessage(valuationComparisonError) }}</span>
+                <button class="text-button" type="button" @click="selectedTsCode && loadValuation(selectedTsCode)">
+                  重试
+                </button>
+              </div>
+            </div>
+            <p class="valuation-note">
+              估值只用于同口径横向比较；相对位置仅代表当前观察池，不代表行业估值
+            </p>
+          </div>
+          <div class="financial-section" aria-label="基本面速览">
+            <div class="valuation-heading">
+              <div>
+                <p class="section-kicker">
+                  FINANCIAL QUALITY
+                </p>
+                <h3>
+                  基本面速览
+                </h3>
+              </div>
+              <span v-if="financialQuality" class="section-meta">最近已披露报告 · {{ financialQuality.reportDateName || formatTradeDate(financialQuality.reportDate) }}</span>
+              <span v-else-if="selectedStock" class="section-meta">读取中</span>
+            </div>
+            <div v-if="financialQuality" class="financial-report-meta">
+              <span>报告期 <strong>{{ formatTradeDate(financialQuality.reportDate) }}</strong></span>
+              <span>公告日期 <strong>{{ formatTradeDate(financialQuality.noticeDate) }}</strong></span>
+              <span>报告口径 <strong>{{ financialQuality.reportType || '最近已披露' }}</strong></span>
+            </div>
+            <div v-if="loading.financial" class="valuation-state" aria-label="基本面数据加载中">
+              <SkeletonCard variant="content" />
+            </div>
+            <div v-else-if="errors.financial" class="valuation-state" role="status">
+              <Info :size="17" aria-hidden="true" />
+              <span>基本面数据暂时不可用</span>
+              <button class="text-button" type="button" @click="selectedTsCode && loadFinancialQuality(selectedTsCode)">
+                重试
+              </button>
+            </div>
+            <div v-else-if="financialQuality && hasFinancialData" class="financial-grid">
+              <div class="financial-item">
+                <span>营业收入</span>
+                <strong>{{ formatFinancialAmount(financialQuality.revenue) }}</strong>
+              </div>
+              <div class="financial-item">
+                <span>归母净利润</span>
+                <strong>{{ formatFinancialAmount(financialQuality.netProfit) }}</strong>
+              </div>
+              <div class="financial-item">
                 <span>营收同比</span>
-                <strong>{{ formatComparisonPosition(financialComparison?.revenueYoYHigherThanPercent ?? null) }}</strong>
-                <small>样本 {{ financialComparison?.revenueYoYSampleCount ?? 0 }} 只</small>
+                <strong :class="financialQuality.revenueYoY !== null && financialQuality.revenueYoY >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(financialQuality.revenueYoY) }}</strong>
               </div>
-              <div class="financial-comparison-item">
+              <div class="financial-item">
                 <span>净利润同比</span>
-                <strong>{{ formatComparisonPosition(financialComparison?.netProfitYoYHigherThanPercent ?? null) }}</strong>
-                <small>样本 {{ financialComparison?.netProfitYoYSampleCount ?? 0 }} 只</small>
+                <strong :class="financialQuality.netProfitYoY !== null && financialQuality.netProfitYoY >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(financialQuality.netProfitYoY) }}</strong>
               </div>
-              <div class="financial-comparison-item">
+              <div class="financial-item">
                 <span>ROE 股东回报</span>
-                <strong>{{ formatComparisonPosition(financialComparison?.roeHigherThanPercent ?? null) }}</strong>
-                <small>样本 {{ financialComparison?.roeSampleCount ?? 0 }} 只</small>
+                <strong>{{ formatMetricPercent(financialQuality.roe) }}</strong>
               </div>
-              <div class="financial-comparison-item">
+              <div class="financial-item">
+                <span>毛利率</span>
+                <strong>{{ formatMetricPercent(financialQuality.grossMargin) }}</strong>
+              </div>
+              <div class="financial-item">
+                <span>净利率</span>
+                <strong>{{ formatMetricPercent(financialQuality.netMargin) }}</strong>
+              </div>
+              <div class="financial-item">
                 <span>资产负债率</span>
-                <strong>{{ formatLowerComparisonPosition(financialComparison?.debtAssetRatioLowerThanPercent ?? null) }}</strong>
-                <small>样本 {{ financialComparison?.debtAssetRatioSampleCount ?? 0 }} 只</small>
+                <strong>{{ formatMetricPercent(financialQuality.debtAssetRatio) }}</strong>
+              </div>
+              <div class="financial-item">
+                <span>经营现金流 / 营收</span>
+                <strong>{{ formatRatioPercent(financialQuality.operatingCashflowToRevenue) }}</strong>
+              </div>
+              <div class="financial-item">
+                <span>ROIC 投入资本回报</span>
+                <strong>{{ formatMetricPercent(financialQuality.roic) }}</strong>
               </div>
             </div>
-            <p class="financial-comparison-note">
-              可用报告 {{ financialComparison?.availableSampleCount ?? 0 }} / {{ financialComparison?.sampleCount ?? 0 }} 只；相对位置不代表行业排名或未来收益
+            <div v-else class="valuation-state">
+              <Info :size="17" aria-hidden="true" />
+              <span>{{ selectedStock ? '报告已找到，但当前指标暂缺' : '选择一只股票后查看基本面' }}</span>
+            </div>
+            <div v-if="financialTrendItems.length" class="financial-trend" aria-label="财务质量趋势">
+              <div class="financial-subheading">
+                <div>
+                  <span class="section-kicker">RECENT TREND</span>
+                  <strong>最近几期变化</strong>
+                </div>
+                <small>比较最近两期报告 · {{ financialHistory?.reports.length || 0 }} 期可读</small>
+              </div>
+              <div class="financial-trend-grid">
+                <div v-for="item in financialTrendItems" :key="item.key" class="financial-trend-item">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.format === 'growth' ? formatPercent(item.current) : formatMetricPercent(item.current) }}</strong>
+                  <span class="financial-trend-delta" :class="`trend-${item.tone}`">{{ item.state }} · {{ formatTrendDelta(item.delta) }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="financialComparison || financialComparisonError" class="financial-comparison" aria-label="观察池财务质量比较">
+              <div class="financial-subheading">
+                <div>
+                  <span class="section-kicker">QUALITY POSITION</span>
+                  <strong>观察池质量位置</strong>
+                </div>
+                <small>仅当前观察池</small>
+              </div>
+              <div v-if="financialComparisonError" class="financial-comparison-empty">
+                <Info :size="15" aria-hidden="true" />
+                <span>同池质量比较暂时不可用</span>
+              </div>
+              <div v-else-if="financialComparison" class="financial-comparison-grid">
+                <div class="financial-comparison-item">
+                  <span>营收同比</span>
+                  <strong>{{ formatComparisonPosition(financialComparison?.revenueYoYHigherThanPercent ?? null) }}</strong>
+                  <small>样本 {{ financialComparison?.revenueYoYSampleCount ?? 0 }} 只</small>
+                </div>
+                <div class="financial-comparison-item">
+                  <span>净利润同比</span>
+                  <strong>{{ formatComparisonPosition(financialComparison?.netProfitYoYHigherThanPercent ?? null) }}</strong>
+                  <small>样本 {{ financialComparison?.netProfitYoYSampleCount ?? 0 }} 只</small>
+                </div>
+                <div class="financial-comparison-item">
+                  <span>ROE 股东回报</span>
+                  <strong>{{ formatComparisonPosition(financialComparison?.roeHigherThanPercent ?? null) }}</strong>
+                  <small>样本 {{ financialComparison?.roeSampleCount ?? 0 }} 只</small>
+                </div>
+                <div class="financial-comparison-item">
+                  <span>资产负债率</span>
+                  <strong>{{ formatLowerComparisonPosition(financialComparison?.debtAssetRatioLowerThanPercent ?? null) }}</strong>
+                  <small>样本 {{ financialComparison?.debtAssetRatioSampleCount ?? 0 }} 只</small>
+                </div>
+              </div>
+              <p class="financial-comparison-note">
+                可用报告 {{ financialComparison?.availableSampleCount ?? 0 }} / {{ financialComparison?.sampleCount ?? 0 }} 只；相对位置不代表行业排名或未来收益
+              </p>
+            </div>
+            <p class="valuation-note">
+              金额单位：元；比例单位：%；数据来自最近已披露报告，指标用于观察，不代表未来收益
             </p>
           </div>
-          <p class="valuation-note">
-            金额单位：元；比例单位：%；数据来自最近已披露报告，指标用于观察，不代表未来收益
-          </p>
-        </div>
-        <div v-if="selectedStock && dailyBars.length" class="daily-overview">
-          <div class="daily-overview-copy">
-            <span class="daily-code">{{ selectedStock.tsCode }}</span>
-            <strong>{{ selectedStock.name || '未命名股票' }}</strong>
-            <span>最新交易日 {{ latestDate }}</span>
-            <span class="daily-latest">最新收盘 <strong>{{ formatNumber(latestDailyBar?.close ?? selectedStock.latestClose) }}</strong> <em :class="(latestDailyBar?.changePercent ?? selectedStock.latestChangePercent ?? 0) >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(latestDailyBar?.changePercent ?? selectedStock.latestChangePercent) }}</em></span>
-          </div>
-          <div class="chart-area" aria-label="收盘价轻量趋势图">
-            <div class="chart-grid-line chart-grid-line-top" />
-            <div class="chart-grid-line chart-grid-line-mid" />
-            <div class="chart-grid-line chart-grid-line-bottom" />
-            <div class="chart-bars">
-              <div v-for="bar in chartBars" :key="bar.date" class="chart-bar-column" :title="`${bar.date} ${formatNumber(bar.close)}`">
-                <span class="chart-bar" :class="bar.positive ? 'chart-bar-positive' : 'chart-bar-negative'" :style="{ height: `${bar.height}%` }" />
+          <div v-if="selectedStock && dailyBars.length" class="daily-overview">
+            <div class="daily-overview-copy">
+              <span class="daily-code">{{ selectedStock.tsCode }}</span>
+              <strong>{{ selectedStock.name || '未命名股票' }}</strong>
+              <span>最新交易日 {{ latestDate }}</span>
+              <span class="daily-latest">最新收盘 <strong>{{ formatNumber(latestDailyBar?.close ?? selectedStock.latestClose) }}</strong> <em :class="(latestDailyBar?.changePercent ?? selectedStock.latestChangePercent ?? 0) >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(latestDailyBar?.changePercent ?? selectedStock.latestChangePercent) }}</em></span>
+            </div>
+            <div class="chart-area" aria-label="收盘价轻量趋势图">
+              <div class="chart-grid-line chart-grid-line-top" />
+              <div class="chart-grid-line chart-grid-line-mid" />
+              <div class="chart-grid-line chart-grid-line-bottom" />
+              <div class="chart-bars">
+                <div v-for="bar in chartBars" :key="bar.date" class="chart-bar-column" :title="`${bar.date} ${formatNumber(bar.close)}`">
+                  <span class="chart-bar" :class="bar.positive ? 'chart-bar-positive' : 'chart-bar-negative'" :style="{ height: `${bar.height}%` }" />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div v-if="errors.daily && !loading.daily" class="inline-alert" role="alert">
-          <AlertCircle :size="16" aria-hidden="true" />
-          <span>{{ parsedError(errors.daily).message }}</span>
-          <button class="text-button" type="button" @click="selectedTsCode && loadDailyBars(selectedTsCode)">
-            重试
-          </button>
-        </div>
-        <DataTable
-          :data="dailyBars"
-          :columns="dailyColumns"
-          :loading="loading.daily"
-          min-width="820px"
-          empty-message="选择观察池中的股票后查看日线数据"
-        >
-          <template #cell-tradeDate="{ item }">
-            <span class="font-mono text-xs text-muted-foreground">{{ formatTradeDate(item.tradeDate) }}</span>
-          </template>
-          <template #cell-changePercent="{ item }">
-            <span :class="item.changePercent !== null && item.changePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.changePercent) }}</span>
-          </template>
-        </DataTable>
-      </section>
+          <div v-if="selectedStock && dailyBars.length" class="trend-structure" aria-label="多周期趋势结构">
+            <div class="trend-structure-heading">
+              <div>
+                <span class="section-kicker">MULTI-PERIOD STRUCTURE</span>
+                <strong>多周期趋势</strong>
+              </div>
+              <small>有效日线 {{ trendStructure.availableBars }} 根</small>
+            </div>
+            <div class="trend-structure-grid">
+              <div class="trend-structure-item">
+                <span>5 日表现</span>
+                <strong :class="trendStructure.return5 === null ? 'text-status-neutral' : trendStructure.return5 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.return5) }}</strong>
+              </div>
+              <div class="trend-structure-item">
+                <span>20 日表现</span>
+                <strong :class="trendStructure.return20 === null ? 'text-status-neutral' : trendStructure.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.return20) }}</strong>
+              </div>
+              <div class="trend-structure-item">
+                <span>60 日表现</span>
+                <strong :class="trendStructure.return60 === null ? 'text-status-neutral' : trendStructure.return60 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.return60) }}</strong>
+              </div>
+              <div class="trend-structure-item">
+                <span>距 20 日均线</span>
+                <strong :class="trendStructure.ma20Gap === null ? 'text-status-neutral' : trendStructure.ma20Gap >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.ma20Gap) }}</strong>
+              </div>
+              <div class="trend-structure-item">
+                <span>60 日回撤</span>
+                <strong :class="trendStructure.drawdown60 === null ? 'text-status-neutral' : trendStructure.drawdown60 >= -0.05 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.drawdown60) }}</strong>
+              </div>
+            </div>
+            <div class="trend-structure-conclusion" :class="`trend-structure-${trendStructure.tone}`">
+              <span>结构结论</span>
+              <strong>{{ trendStructure.conclusion }}</strong>
+            </div>
+            <p class="valuation-note">
+              表现按价格间隔计算；指标用于观察当前结构，不代表未来收益
+            </p>
+          </div>
+          <div v-if="errors.daily && !loading.daily" class="inline-alert" role="alert">
+            <AlertCircle :size="16" aria-hidden="true" />
+            <span>{{ parsedError(errors.daily).message }}</span>
+            <button class="text-button" type="button" @click="selectedTsCode && loadDailyBars(selectedTsCode)">
+              重试
+            </button>
+          </div>
+          <DataTable
+            :data="dailyBars"
+            :columns="dailyColumns"
+            :loading="loading.daily"
+            min-width="820px"
+            empty-message="选择观察池中的股票后查看日线数据"
+          >
+            <template #cell-tradeDate="{ item }">
+              <span class="font-mono text-xs text-muted-foreground">{{ formatTradeDate(item.tradeDate) }}</span>
+            </template>
+            <template #cell-changePercent="{ item }">
+              <span :class="item.changePercent !== null && item.changePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.changePercent) }}</span>
+            </template>
+          </DataTable>
+        </section>
+      </DetailDrawer>
+
+      <DetailDrawer
+        :open="comparisonDrawerOpen"
+        title="候选对比"
+        :description="`技术信号、估值和基本面 · ${comparisonStatusLabel}`"
+        width="lg"
+        @update:open="comparisonDrawerOpen = $event"
+      >
+        <section class="comparison-content" aria-label="候选股票对比">
+          <div class="comparison-intro">
+            <p class="section-kicker">
+              COMPARE BEFORE RESEARCH
+            </p>
+            <h2>把候选放在同一张表里</h2>
+            <p>先比较技术事实，再看估值和最近已披露报告。缺失数据保留为空，不生成排名。</p>
+          </div>
+          <div v-if="comparisonLoading" class="comparison-loading" role="status">
+            正在读取估值与财务数据...
+          </div>
+          <div v-else class="comparison-table-wrap">
+            <table class="comparison-table">
+              <thead>
+                <tr>
+                  <th>指标</th>
+                  <th v-for="item in selectedCandidateItems" :key="item.id">
+                    <strong>{{ displayStockName(item) }}</strong>
+                    <small>{{ item.tsCode }}</small>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="comparison-group-row">
+                  <th :colspan="selectedCandidateItems.length + 1">
+                    技术信号
+                  </th>
+                </tr>
+                <tr>
+                  <th>信号覆盖</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-score`">
+                    {{ formatSignalScore(item.score) }}
+                  </td>
+                </tr>
+                <tr>
+                  <th>20 日表现</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-return20`" :class="item.return20 === null ? 'text-status-neutral' : item.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">
+                    {{ formatPercent(item.return20) }}
+                  </td>
+                </tr>
+                <tr>
+                  <th>20 日均线</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-ma20`">
+                    {{ formatNumber(item.ma20) }}
+                  </td>
+                </tr>
+                <tr>
+                  <th>成交活跃度</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-volume`">
+                    {{ formatNumber(item.volumeRatio) }}
+                  </td>
+                </tr>
+                <tr>
+                  <th>池内强度</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-strength`">
+                    {{ formatNumber(item.relativeStrength) }}
+                  </td>
+                </tr>
+                <tr class="comparison-group-row">
+                  <th :colspan="selectedCandidateItems.length + 1">
+                    估值快照
+                  </th>
+                </tr>
+                <tr>
+                  <th>TTM PE</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-pe`">
+                    {{ comparisonErrors[item.tsCode]?.valuation ? '暂不可用' : formatNumber(comparisonValuations[item.tsCode]?.peTtm ?? null) }}
+                  </td>
+                </tr>
+                <tr>
+                  <th>PB</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-pb`">
+                    {{ comparisonErrors[item.tsCode]?.valuation ? '暂不可用' : formatNumber(comparisonValuations[item.tsCode]?.pb ?? null) }}
+                  </td>
+                </tr>
+                <tr class="comparison-group-row">
+                  <th :colspan="selectedCandidateItems.length + 1">
+                    基本面快照
+                  </th>
+                </tr>
+                <tr>
+                  <th>营收同比</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-revenue`">
+                    {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatPercent(comparisonFinancials[item.tsCode]?.revenueYoY ?? null) }}
+                  </td>
+                </tr>
+                <tr>
+                  <th>净利润同比</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-profit`">
+                    {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatPercent(comparisonFinancials[item.tsCode]?.netProfitYoY ?? null) }}
+                  </td>
+                </tr>
+                <tr>
+                  <th>ROE</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-roe`">
+                    {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatMetricPercent(comparisonFinancials[item.tsCode]?.roe ?? null) }}
+                  </td>
+                </tr>
+                <tr>
+                  <th>资产负债率</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-debt`">
+                    {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatMetricPercent(comparisonFinancials[item.tsCode]?.debtAssetRatio ?? null) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="comparison-note">
+            估值和财务指标来自当前接口的最近可用快照；不同报告期不做强行横比。
+          </p>
+        </section>
+      </DetailDrawer>
 
       <footer class="quant-footer">
         <span><BarChart3 :size="14" aria-hidden="true" /> 数据口径：日线收盘价</span>

@@ -67,6 +67,29 @@ describe('quantApi', () => {
     }])
   })
 
+  it('normalizes research markers and sends the marker update contract', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: [{ ts_code: '601899.SH', status: 'priority', note: '核对现金流', review_date: '2026-09-01', updated_at: '2026-08-24T00:00:00.000Z' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: { ts_code: '601899.SH', status: 'paused', note: null, review_date: null },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getResearchMarkers()).resolves.toMatchObject([
+      { tsCode: '601899.SH', status: 'priority', note: '核对现金流', reviewDate: '2026-09-01' },
+    ])
+    await expect(quantApi.updateResearchMarker('601899.SH', { status: 'paused', note: null, reviewDate: null })).resolves.toMatchObject({
+      tsCode: '601899.SH',
+      status: 'paused',
+      note: null,
+      reviewDate: null,
+    })
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/601899.SH`)
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ status: 'paused', note: null, review_date: null }))
+  })
+
   it('keeps the server reason when a sync is rejected by an active lease', async () => {
     vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       success: false,
@@ -247,4 +270,3 @@ describe('quantApi', () => {
     expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/financial/compare/601899.SH`, expect.objectContaining({ credentials: 'include' }))
   })
 })
-

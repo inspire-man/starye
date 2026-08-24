@@ -248,6 +248,8 @@ function isActionColumn(column: Column<T>): boolean {
 
 .data-table-action-content > :deep(button),
 .data-table-action-content > :deep(a) {
+  width: auto;
+  flex: 0 0 auto;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;

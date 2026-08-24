@@ -83,3 +83,25 @@ API MUST 提供观察池 CRUD、候选快照查询和指定股票日线查询。
 - **WHEN** provider 调用在 120 秒总时限内未全部完成
 - **THEN** 已完成代码的数据按幂等规则持久化，响应状态为 `partial` 或 `rejected`
 - **AND** 响应的 `skippedCount`/原因可解释尚未完成的范围，不能返回 `completed`
+
+### Requirement: Research marker API
+
+Quant API MUST expose authenticated research marker read and upsert endpoints under `/api/quant`. The upsert endpoint MUST validate the four research statuses and MUST only accept codes currently present in the watchlist.
+
+#### Scenario: Read watchlist markers
+
+- **WHEN** an administrator requests `GET /api/quant/research`
+- **THEN** the API returns one marker per watchlist code
+- **AND** a code without a stored marker is returned as `unreviewed`
+
+#### Scenario: Upsert a marker
+
+- **WHEN** an administrator sends `PUT /api/quant/research/:tsCode` with a valid status, note, and optional review date
+- **THEN** the API returns the persisted marker
+- **AND** repeating the request updates the same marker instead of creating another row
+
+#### Scenario: Reject an unknown code
+
+- **WHEN** an administrator updates a code outside the watchlist
+- **THEN** the API returns `404 QUANT_NOT_FOUND`
+- **AND** no research marker row is written

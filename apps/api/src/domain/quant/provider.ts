@@ -239,6 +239,7 @@ export class EastmoneyProviderError extends Error {
 
 export interface EastmoneyProviderOptions {
   readonly baseUrl?: string
+  readonly valuationFallbackBaseUrl?: string
   readonly timeoutMs?: number
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
   readonly now?: () => Date
@@ -311,6 +312,13 @@ const EastmoneyResponseSchema = v.object({
 const EastmoneyQuoteResponseSchema = v.object({
   rc: v.number(),
   data: v.optional(v.nullable(v.unknown())),
+})
+
+const EastmoneyValuationHistoryResponseSchema = v.object({
+  code: v.number(),
+  result: v.optional(v.nullable(v.object({
+    data: v.array(v.unknown()),
+  }))),
 })
 
 const EastmoneyFinancialResponseSchema = v.object({
@@ -449,12 +457,12 @@ export function createEastmoneyProvider(options: EastmoneyProviderOptions = {}):
 
 export function createEastmoneyValuationProvider(options: EastmoneyProviderOptions = {}): QuantValuationProvider {
   const baseUrl = options.baseUrl?.trim() || 'https://push2.eastmoney.com'
+  const valuationFallbackBaseUrl = options.valuationFallbackBaseUrl?.trim() || 'https://datacenter-web.eastmoney.com'
   const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const now = options.now ?? (() => new Date())
 
-  async function fetchValuation(request: QuantValuationRequest): Promise<QuantValuationSnapshot> {
-    const tsCode = request.tsCode.trim().toUpperCase()
+  async function fetchPrimaryValuation(tsCode: string): Promise<QuantValuationSnapshot> {
     const url = new URL('/api/qt/stock/get', baseUrl)
     url.searchParams.set('secid', eastmoneyMarket(tsCode))
     url.searchParams.set('invt', '2')
@@ -506,6 +514,84 @@ export function createEastmoneyValuationProvider(options: EastmoneyProviderOptio
       ps: eastmoneyQuoteNumber(parsed.output.data.f166, 'ps'),
       peg: eastmoneyQuoteNumber(parsed.output.data.f168, 'peg'),
       marketCap: eastmoneyQuoteNumber(parsed.output.data.f116, 'marketCap'),
+    }
+  }
+
+  async function fetchFallbackValuation(tsCode: string): Promise<QuantValuationSnapshot> {
+    const code = tsCode.split('.')[0]
+    const url = new URL('/api/data/v1/get', valuationFallbackBaseUrl)
+    url.searchParams.set('reportName', 'RPT_VALUE_ANALYSIS')
+    url.searchParams.set('columns', 'SECUCODE,SECURITY_CODE,PETTM,PBMRQ,PSTTM,REPORT_DATE')
+    url.searchParams.set('filter', `(SECURITY_CODE="${code}")`)
+    url.searchParams.set('sortColumns', 'REPORT_DATE')
+    url.searchParams.set('sortTypes', '-1')
+    url.searchParams.set('pageNumber', '1')
+    url.searchParams.set('pageSize', '1')
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney valuation fallback timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney valuation fallback failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney valuation fallback HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney valuation fallback is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyValuationHistoryResponseSchema, payload)
+    const row = parsed.success && parsed.output.code === 0 ? parsed.output.result?.data[0] : null
+    if (!parsed.success || parsed.output.code !== 0 || !isRecord(row))
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney valuation fallback response is invalid')
+
+    const returnedCode = row.SECURITY_CODE ?? row.SECUCODE
+    const normalizedReturnedCode = typeof returnedCode === 'string' || typeof returnedCode === 'number'
+      ? String(returnedCode).split('.')[0].padStart(6, '0')
+      : null
+    if (normalizedReturnedCode !== code)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney valuation fallback code is missing')
+
+    return {
+      tsCode,
+      observedAt: now().toISOString(),
+      dynamicPe: null,
+      peTtm: eastmoneyQuoteNumber(row.PETTM, 'peTtm'),
+      peStatic: null,
+      pb: eastmoneyQuoteNumber(row.PBMRQ, 'pb'),
+      ps: eastmoneyQuoteNumber(row.PSTTM, 'ps'),
+      peg: null,
+      marketCap: null,
+    }
+  }
+
+  async function fetchValuation(request: QuantValuationRequest): Promise<QuantValuationSnapshot> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    eastmoneyMarket(tsCode)
+    try {
+      return await fetchPrimaryValuation(tsCode)
+    }
+    catch (primaryError) {
+      try {
+        return await fetchFallbackValuation(tsCode)
+      }
+      catch {
+        throw primaryError
+      }
     }
   }
 

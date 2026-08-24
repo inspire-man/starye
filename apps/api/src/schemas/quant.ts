@@ -49,6 +49,33 @@ export const QuantWatchlistParamSchema = v.object({
   tsCode: QuantTsCodeSchema,
 })
 
+export const QuantResearchStatusSchema = v.picklist(['unreviewed', 'priority', 'paused', 'excluded'])
+
+export const QuantResearchMarkerSchema = v.object({
+  tsCode: v.string(),
+  status: QuantResearchStatusSchema,
+  note: v.nullable(v.string()),
+  reviewDate: v.nullable(v.string()),
+  createdAt: v.union([v.string(), v.date()]),
+  updatedAt: v.union([v.string(), v.date()]),
+})
+
+export const QuantResearchMarkerResponseSchema = v.object({
+  success: v.literal(true),
+  data: QuantResearchMarkerSchema,
+})
+
+export const QuantResearchMarkersResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.array(QuantResearchMarkerSchema),
+})
+
+export const QuantResearchMarkerUpdateSchema = v.object({
+  status: QuantResearchStatusSchema,
+  note: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(1000))),
+  review_date: v.nullable(v.pipe(v.string(), v.trim(), v.regex(/^\d{4}-\d{2}-\d{2}$/u, 'Review date must be YYYY-MM-DD'))),
+})
+
 export const QuantDailyQuerySchema = v.object({
   from: v.optional(QuantDateSchema),
   to: v.optional(QuantDateSchema),
@@ -179,5 +206,6 @@ export const QuantCapabilitiesResponseSchema = v.object({
 
 export type QuantWatchlistCreate = v.InferOutput<typeof QuantWatchlistCreateSchema>
 export type QuantWatchlistUpdate = v.InferOutput<typeof QuantWatchlistUpdateSchema>
+export type QuantResearchMarkerUpdate = v.InferOutput<typeof QuantResearchMarkerUpdateSchema>
 export type QuantDailyQuery = v.InferOutput<typeof QuantDailyQuerySchema>
 export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>

@@ -9,9 +9,11 @@ import type {
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
   QuantProviderName,
+  QuantResearchMarker,
   QuantValuationComparison,
   QuantValuationComparisonPeer,
   QuantValuationSnapshot,
+  ResearchMarkerStatus,
   SyncResult,
   SyncStatus,
   WatchlistItem,
@@ -210,6 +212,32 @@ function parseWatchlistItem(value: JsonRecord, index: number): WatchlistItem | n
     latestChangePercent: readNumber(value, 'latestChangePercent', 'latest_change_percent', 'pctChg', 'pct_chg'),
     createdAt: readString(value, 'createdAt', 'created_at'),
   }
+}
+
+function parseResearchMarker(value: unknown): QuantResearchMarker | null {
+  if (!isRecord(value))
+    return null
+  const tsCode = readString(value, 'tsCode', 'ts_code', 'code')
+  if (!tsCode)
+    return null
+  const statusValue = readString(value, 'status')
+  const status: ResearchMarkerStatus = statusValue === 'priority' || statusValue === 'paused' || statusValue === 'excluded' ? statusValue : 'unreviewed'
+  return {
+    tsCode,
+    status,
+    note: readString(value, 'note'),
+    reviewDate: readString(value, 'reviewDate', 'review_date'),
+    createdAt: readString(value, 'createdAt', 'created_at'),
+    updatedAt: readString(value, 'updatedAt', 'updated_at'),
+  }
+}
+
+function parseResearchMarkers(payload: unknown): QuantResearchMarker[] {
+  const data = unwrapData(payload)
+  return readList(data, 'items', 'markers', 'research').flatMap((value) => {
+    const marker = parseResearchMarker(value)
+    return marker ? [marker] : []
+  })
 }
 
 function parseSyncResult(payload: unknown): SyncResult {
@@ -497,6 +525,20 @@ export const quantApi = {
     return parseWatchlist(await requestJson('/watchlist'))
   },
 
+  async getResearchMarkers(): Promise<QuantResearchMarker[]> {
+    return parseResearchMarkers(await requestJson('/research'))
+  },
+
+  async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {
+    const marker = parseResearchMarker(unwrapData(await requestJson(`/research/${encodeURIComponent(tsCode)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: input.status, note: input.note, review_date: input.reviewDate }),
+    })))
+    if (!marker)
+      throw new QuantApiError('研究标记数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+    return marker
+  },
+
   async addWatchlist(input: AddWatchlistInput): Promise<WatchlistItem | null> {
     const payload = await requestJson('/watchlist', {
       method: 'POST',
@@ -545,4 +587,3 @@ export const quantApi = {
     return parseFinancialQualityComparison(await requestJson(`/financial/compare/${encodeURIComponent(tsCode)}`))
   },
 }
-
