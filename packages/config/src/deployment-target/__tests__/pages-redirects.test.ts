@@ -25,6 +25,7 @@ describe('targetProfile Pages direct origins', () => {
       parsed.pages[surface].directOrigin,
     ]))).toEqual({
       dashboard: 'https://starye-dashboard.pages.dev',
+      quant: 'https://starye-quant.pages.dev',
       auth: 'https://starye-auth-die.pages.dev',
       blog: 'https://starye-blog.pages.dev',
       movie: 'https://starye-movie-60w.pages.dev',
@@ -52,6 +53,10 @@ describe('targetProfile Pages direct origins', () => {
 const expectedRedirectLines: Readonly<Record<TargetPagesSurface, readonly string[]>> = {
   dashboard: [
     'https://starye-dashboard.pages.dev/* https://starye.org/dashboard/:splat 301!',
+    '/* /index.html 200',
+  ],
+  quant: [
+    'https://starye-quant.pages.dev/* https://starye.org/quant/:splat 301!',
     '/* /index.html 200',
   ],
   auth: [

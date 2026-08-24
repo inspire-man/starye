@@ -187,6 +187,46 @@ describe('target-deploy wrapper', () => {
       ['--filter', '@starye/movie-app', 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', 'starye-movie'],
     ])
   })
+
+  it('supports the Quant Pages surface through the quant-app package', async () => {
+    const { runTargetDeploy } = await loadTargetDeploy()
+    const execute = vi.fn<(command: string, args: readonly string[]) => number>(() => 0)
+
+    await runTargetDeploy({
+      target: 'starye-org',
+      app: 'quant',
+      surface: 'quant',
+      envRoot: await createProjectionRoot(),
+      execute,
+      liveCheckExecutor: {
+        execute(argv: readonly string[]) {
+          return {
+            exitCode: 0,
+            stdout: argv[0] === 'kv'
+              ? 'acf49df06ae0447b82a092cf238714d8'
+              : argv[0] === 'pages'
+                ? 'starye-quant'
+                : argv.at(-1),
+          }
+        },
+      },
+      runId: 'quant-run',
+    })
+
+    expect(execute.mock.calls.map(([, argv]) => argv)).toEqual([
+      [
+        'target-profile',
+        'run-pages-build',
+        '--surface',
+        'quant',
+        '--pages-build-env-path',
+        expect.stringContaining('pages-build-env.quant-run.quant.env'),
+        '--pages-redirect-input-path',
+        expect.stringContaining('pages-redirects.quant-run.quant.txt'),
+      ],
+      ['--filter', 'quant-app', 'exec', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', 'starye-quant'],
+    ])
+  })
 })
 
 describe('run-pages-build', () => {

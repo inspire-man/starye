@@ -241,6 +241,62 @@ export interface EastmoneyProviderOptions {
   readonly baseUrl?: string
   readonly timeoutMs?: number
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  readonly now?: () => Date
+}
+
+export interface QuantValuationRequest {
+  readonly tsCode: string
+}
+
+export interface QuantValuationSnapshot {
+  readonly tsCode: string
+  readonly observedAt: string
+  readonly dynamicPe: number | null
+  readonly peTtm: number | null
+  readonly peStatic: number | null
+  readonly pb: number | null
+  readonly ps: number | null
+  readonly peg: number | null
+  readonly marketCap: number | null
+}
+
+export interface QuantValuationProvider {
+  readonly name: QuantProviderName
+  readonly isConfigured: boolean
+  fetchValuation: (request: QuantValuationRequest) => Promise<QuantValuationSnapshot>
+}
+
+export interface QuantFinancialQualitySnapshot {
+  readonly tsCode: string
+  readonly observedAt: string
+  readonly reportDate: string
+  readonly reportType: string | null
+  readonly reportDateName: string | null
+  readonly noticeDate: string | null
+  readonly revenue: number | null
+  readonly revenueYoY: number | null
+  readonly netProfit: number | null
+  readonly netProfitYoY: number | null
+  readonly adjustedNetProfit: number | null
+  readonly adjustedNetProfitYoY: number | null
+  readonly roe: number | null
+  readonly grossMargin: number | null
+  readonly netMargin: number | null
+  readonly debtAssetRatio: number | null
+  readonly operatingCashflowToRevenue: number | null
+  readonly roic: number | null
+}
+
+export interface QuantFinancialQualityRequest {
+  readonly tsCode: string
+  readonly limit?: number
+}
+
+export interface QuantFinancialQualityProvider {
+  readonly name: QuantProviderName
+  readonly isConfigured: boolean
+  fetchFinancialQuality: (request: QuantFinancialQualityRequest) => Promise<QuantFinancialQualitySnapshot>
+  fetchFinancialQualityHistory: (request: QuantFinancialQualityRequest) => Promise<readonly QuantFinancialQualitySnapshot[]>
 }
 
 const EastmoneyResponseSchema = v.object({
@@ -252,6 +308,19 @@ const EastmoneyResponseSchema = v.object({
   }))),
 })
 
+const EastmoneyQuoteResponseSchema = v.object({
+  rc: v.number(),
+  data: v.optional(v.nullable(v.unknown())),
+})
+
+const EastmoneyFinancialResponseSchema = v.object({
+  data: v.array(v.unknown()),
+})
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function eastmoneyMarket(tsCode: string): string {
   const [code, market] = tsCode.trim().toUpperCase().split('.')
   if (!code || !market || !/^\d{6}$/u.test(code) || !['SH', 'SZ', 'BJ'].includes(market))
@@ -259,10 +328,36 @@ function eastmoneyMarket(tsCode: string): string {
   return `${market === 'SH' ? '1' : '0'}.${code}`
 }
 
+function eastmoneyFinancialCode(tsCode: string): string {
+  const [code, market] = tsCode.trim().toUpperCase().split('.')
+  if (!code || !market || !/^\d{6}$/u.test(code) || !['SH', 'SZ', 'BJ'].includes(market))
+    throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney only supports SH, SZ, and BJ stock codes')
+  return `${market}${code}`
+}
+
 function eastmoneyNumber(value: string | undefined, field: string): number {
-  const numeric = Number(value)
+  const normalized = value?.trim()
+  const numeric = normalized ? Number(normalized) : Number.NaN
   if (!Number.isFinite(numeric))
     throw new EastmoneyProviderError('INVALID_RESPONSE', `Invalid Eastmoney daily field: ${field}`)
+  return numeric
+}
+
+function eastmoneyQuoteNumber(value: unknown, field: string): number | null {
+  if (value === null || value === undefined)
+    return null
+  if (typeof value === 'string') {
+    const normalized = value.trim()
+    if (!normalized || normalized === '-' || normalized === '--')
+      return null
+    const numeric = Number(normalized)
+    if (!Number.isFinite(numeric))
+      throw new EastmoneyProviderError('INVALID_RESPONSE', `Invalid Eastmoney quote field: ${field}`)
+    return numeric
+  }
+  const numeric = typeof value === 'number' ? value : Number.NaN
+  if (!Number.isFinite(numeric))
+    throw new EastmoneyProviderError('INVALID_RESPONSE', `Invalid Eastmoney quote field: ${field}`)
   return numeric
 }
 
@@ -349,6 +444,206 @@ export function createEastmoneyProvider(options: EastmoneyProviderOptions = {}):
     name: 'eastmoney',
     isConfigured: true,
     fetchDaily,
+  }
+}
+
+export function createEastmoneyValuationProvider(options: EastmoneyProviderOptions = {}): QuantValuationProvider {
+  const baseUrl = options.baseUrl?.trim() || 'https://push2.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const now = options.now ?? (() => new Date())
+
+  async function fetchValuation(request: QuantValuationRequest): Promise<QuantValuationSnapshot> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    const url = new URL('/api/qt/stock/get', baseUrl)
+    url.searchParams.set('secid', eastmoneyMarket(tsCode))
+    url.searchParams.set('invt', '2')
+    url.searchParams.set('fltt', '2')
+    url.searchParams.set('fields', 'f57,f162,f163,f164,f165,f166,f167,f168,f116')
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney valuation request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney valuation request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney valuation HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney valuation response is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyQuoteResponseSchema, payload)
+    if (!parsed.success || parsed.output.rc !== 0 || !isRecord(parsed.output.data))
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney valuation response schema is invalid')
+
+    const returnedCode = parsed.output.data.f57
+    const requestedCode = tsCode.split('.')[0]
+    if ((typeof returnedCode !== 'string' && typeof returnedCode !== 'number') || String(returnedCode).padStart(6, '0') !== requestedCode)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney valuation code is missing')
+
+    return {
+      tsCode,
+      observedAt: now().toISOString(),
+      dynamicPe: eastmoneyQuoteNumber(parsed.output.data.f162, 'dynamicPe'),
+      peTtm: eastmoneyQuoteNumber(parsed.output.data.f163, 'peTtm'),
+      peStatic: eastmoneyQuoteNumber(parsed.output.data.f164, 'peStatic'),
+      pb: eastmoneyQuoteNumber(parsed.output.data.f165, 'pb'),
+      ps: eastmoneyQuoteNumber(parsed.output.data.f166, 'ps'),
+      peg: eastmoneyQuoteNumber(parsed.output.data.f168, 'peg'),
+      marketCap: eastmoneyQuoteNumber(parsed.output.data.f116, 'marketCap'),
+    }
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    fetchValuation,
+  }
+}
+
+function financialString(record: Record<string, unknown>, field: string): string | null {
+  const value = record[field]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function normalizeFinancialDate(value: unknown, field: string, required: boolean): string | null {
+  if (value === null || value === undefined || value === '') {
+    if (required)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', `Eastmoney financial ${field} is missing`)
+    return null
+  }
+  if (typeof value !== 'string')
+    throw new EastmoneyProviderError('INVALID_RESPONSE', `Invalid Eastmoney financial ${field}`)
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:\s|T|$)/u.exec(value.trim())
+  if (!match)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', `Invalid Eastmoney financial ${field}`)
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00.000Z`)
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== `${match[1]}-${match[2]}-${match[3]}`)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', `Invalid Eastmoney financial ${field}`)
+  return `${match[1]}-${match[2]}-${match[3]}`
+}
+
+function normalizeFinancialReport(tsCode: string, record: Record<string, unknown>, observedAt: string): QuantFinancialQualitySnapshot {
+  const requestedCode = tsCode.split('.')[0]
+  const returnedCode = financialString(record, 'SECURITY_CODE')
+  if (!returnedCode || returnedCode.padStart(6, '0') !== requestedCode)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial code is missing or mismatched')
+
+  const reportDate = normalizeFinancialDate(record.REPORT_DATE, 'report date', true)
+  if (!reportDate)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial report date is missing')
+
+  return {
+    tsCode,
+    observedAt,
+    reportDate,
+    reportType: financialString(record, 'REPORT_TYPE'),
+    reportDateName: financialString(record, 'REPORT_DATE_NAME'),
+    noticeDate: normalizeFinancialDate(record.NOTICE_DATE, 'notice date', false),
+    revenue: eastmoneyQuoteNumber(record.TOTALOPERATEREVE, 'revenue'),
+    revenueYoY: eastmoneyQuoteNumber(record.TOTALOPERATEREVETZ, 'revenueYoY'),
+    netProfit: eastmoneyQuoteNumber(record.PARENTNETPROFIT, 'netProfit'),
+    netProfitYoY: eastmoneyQuoteNumber(record.PARENTNETPROFITTZ, 'netProfitYoY'),
+    adjustedNetProfit: eastmoneyQuoteNumber(record.KCFJCXSYJLR, 'adjustedNetProfit'),
+    adjustedNetProfitYoY: eastmoneyQuoteNumber(record.KCFJCXSYJLRTZ, 'adjustedNetProfitYoY'),
+    roe: eastmoneyQuoteNumber(record.ROEJQ, 'roe'),
+    grossMargin: eastmoneyQuoteNumber(record.XSMLL, 'grossMargin'),
+    netMargin: eastmoneyQuoteNumber(record.XSJLL, 'netMargin'),
+    debtAssetRatio: eastmoneyQuoteNumber(record.ZCFZL, 'debtAssetRatio'),
+    operatingCashflowToRevenue: eastmoneyQuoteNumber(record.JYXJLYYSR, 'operatingCashflowToRevenue'),
+    roic: eastmoneyQuoteNumber(record.ROIC, 'roic'),
+  }
+}
+
+export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptions = {}): QuantFinancialQualityProvider {
+  const baseUrl = options.baseUrl?.trim() || 'https://emweb.securities.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const now = options.now ?? (() => new Date())
+
+  async function fetchFinancialReports(request: QuantFinancialQualityRequest): Promise<readonly QuantFinancialQualitySnapshot[]> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    const url = new URL('/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew', baseUrl)
+    url.searchParams.set('type', '0')
+    url.searchParams.set('code', eastmoneyFinancialCode(tsCode))
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney financial request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney financial request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney financial HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial response is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyFinancialResponseSchema, payload)
+    if (!parsed.success || parsed.output.data.length === 0)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial response has no reports')
+
+    const reportRows = parsed.output.data.map((value) => {
+      if (!isRecord(value))
+        throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial report is not an object')
+      return value
+    })
+    const observedAt = now().toISOString()
+    const reports = reportRows.map(record => normalizeFinancialReport(tsCode, record, observedAt))
+    return [...new Map(reports.map(report => [`${report.reportDate}:${report.reportType ?? ''}`, report])).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+  }
+
+  async function fetchFinancialQualityHistory(request: QuantFinancialQualityRequest): Promise<readonly QuantFinancialQualitySnapshot[]> {
+    const reports = await fetchFinancialReports(request)
+    const rawLimit = request.limit ?? 4
+    const limit = Number.isInteger(rawLimit) ? Math.min(8, Math.max(1, rawLimit)) : 4
+    return reports.slice(0, limit)
+  }
+
+  async function fetchFinancialQuality(request: QuantFinancialQualityRequest): Promise<QuantFinancialQualitySnapshot> {
+    const reports = await fetchFinancialReports(request)
+    const latest = reports[0]
+    if (!latest)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial response has no reports')
+    return latest
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    fetchFinancialQuality,
+    fetchFinancialQualityHistory,
   }
 }
 

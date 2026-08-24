@@ -1,0 +1,69 @@
+name: Deploy Quant
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/quant-app/**', 'packages/**', 'package.json', 'pnpm-lock.yaml']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Selected tracked deployment target
+        required: true
+        type: string
+
+jobs:
+  resolve-target:
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.resolve.outputs.target }}
+      github_environment: ${{ steps.resolve.outputs.github_environment }}
+    env:
+      STARYE_TARGET_ID: starye-org
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6.0.10
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: resolve
+        shell: bash
+        env:
+          INPUT_TARGET: ${{ inputs.target || '' }}
+        run: |
+          set -euo pipefail
+          target="${INPUT_TARGET:-$STARYE_TARGET_ID}"
+          test -n "$target"
+          output="$(pnpm target-profile validate --target "$target")"
+          github_environment="$(printf '%s\n' "$output" | sed -n 's/^CI GitHub environment: //p')"
+          test -n "$github_environment"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "github_environment=$github_environment" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: resolve-target
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-target.outputs.github_environment }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6.0.10
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: prepare
+        env:
+          STARYE_PUBLIC_SENTRY_DSN: ${{ vars.STARYE_PUBLIC_SENTRY_DSN }}
+          STARYE_PUBLIC_SENTRY_RELEASE: ${{ vars.STARYE_PUBLIC_SENTRY_RELEASE }}
+          STARYE_PUBLIC_BUILD_MODE: ${{ vars.STARYE_PUBLIC_BUILD_MODE }}
+        run: pnpm target-profile prepare-mutation --scope ci --target "${{ needs.resolve-target.outputs.target }}" --ci-environment "${{ needs.resolve-target.outputs.github_environment }}" --command pages-deploy --surface quant --github-output "$GITHUB_OUTPUT"
+      - name: Build Quant Pages
+        run: pnpm target-profile run-pages-build --surface quant --pages-build-env-path "${{ steps.prepare.outputs.pages_build_env_path }}" --pages-redirect-input-path "${{ steps.prepare.outputs.pages_redirect_input_path }}"
+      - name: Deploy Quant Pages
+        run: pnpm exec wrangler pages deploy apps/quant-app/dist --project-name "${{ steps.prepare.outputs.pages_project }}" --branch main --commit-hash "${{ github.sha }}"
+      - name: Remove generated target files
+        if: always()
+        run: rm -f "${{ steps.prepare.outputs.api_config_path }}" "${{ steps.prepare.outputs.gateway_config_path }}" "${{ steps.prepare.outputs.pages_build_env_path }}" "${{ steps.prepare.outputs.pages_redirect_input_path }}" "${{ steps.prepare.outputs.prepared_context_path }}"

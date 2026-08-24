@@ -38,6 +38,7 @@ function resolveFixtureTarget() {
     },
     pages: {
       dashboard: { project: 'alternate-dashboard', directOrigin: 'https://dashboard.alternate.example', canonicalUrl: 'https://dashboard.alternate.example' },
+      quant: { project: 'alternate-quant', directOrigin: 'https://quant.alternate.example', canonicalUrl: 'https://quant.alternate.example' },
       auth: { project: 'alternate-auth', directOrigin: 'https://auth.alternate.example', canonicalUrl: 'https://auth.alternate.example' },
       blog: { project: 'alternate-blog', directOrigin: 'https://blog.alternate.example', canonicalUrl: 'https://blog.alternate.example' },
       movie: { project: 'alternate-movie', directOrigin: 'https://movie.alternate.example', canonicalUrl: 'https://movie.alternate.example' },
@@ -71,6 +72,7 @@ describe('target projections', () => {
       apiBaseUrl: defaultTargetUrls.api,
       appBasePaths: {
         dashboard: '/dashboard/',
+        quant: '/quant/',
         auth: '/auth/',
         blog: '/blog/',
         movie: '/movie/',
@@ -93,6 +95,7 @@ describe('target projections', () => {
   it('resolves only the selected Blog project and each closed Pages surface', () => {
     const resolution = defaultTargetResolution
     expect(getPagesDeployProjection(resolution, 'blog').project).toBe('blog-pages')
+    expect(getPagesDeployProjection(resolution, 'quant').project).toBe('starye-quant')
     expect(targetPagesSurfaceValues).not.toContain('tavern')
 
     for (const surface of targetPagesSurfaceValues) {

@@ -24,7 +24,7 @@ import {
 } from '../packages/config/src/deployment-target/index.ts'
 import { packageManagerInvocation } from './package-manager-command.ts'
 
-const deployAppValues = ['api', 'gateway', 'dashboard', 'auth', 'blog', 'movie', 'comic'] as const
+const deployAppValues = ['api', 'gateway', 'dashboard', 'quant', 'auth', 'blog', 'movie', 'comic'] as const
 const repositoryRoot = path.resolve(import.meta.dirname, '..')
 
 type DeployApp = (typeof deployAppValues)[number]
@@ -51,6 +51,8 @@ function packageFilter(app: DeployApp): string {
     return 'gateway'
   if (app === 'auth')
     return 'starye-auth'
+  if (app === 'quant')
+    return 'quant-app'
   if (app === 'movie')
     return '@starye/movie-app'
   if (app === 'comic')
@@ -223,7 +225,7 @@ export function parseTargetDeployArgs(argv: readonly string[]): TargetDeployOpti
       target = value
     else if (flag === '--app' && isDeployApp(value))
       app = value
-    else if (flag === '--surface' && ['dashboard', 'auth', 'blog', 'movie', 'comic', 'tavern'].includes(value))
+    else if (flag === '--surface' && ['dashboard', 'quant', 'auth', 'blog', 'movie', 'comic', 'tavern'].includes(value))
       surface = value as TargetPagesSurface
     else throw new Error(`Unsupported target-deploy argument: ${flag}.`)
   }
