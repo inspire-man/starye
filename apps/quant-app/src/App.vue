@@ -15,7 +15,7 @@ import type {
   SyncStatus,
   WatchlistItem,
 } from './lib/quant-types'
-import type { CandidateResearchStatus, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
+import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
   AlertCircle,
@@ -105,6 +105,7 @@ const candidateFilterOptions = [
   { ...selectionPresets[3], icon: Filter },
 ]
 const candidateSortOptions: { value: CandidateSortKey, label: string }[] = [
+  { value: 'researchPriority', label: '研究优先' },
   { value: 'score', label: '信号分' },
   { value: 'return20', label: '20 日表现' },
   { value: 'volumeRatio', label: '成交活跃度' },
@@ -131,7 +132,10 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
   completeOnly: candidateCompleteOnly.value,
   sortBy: candidateSort.value,
   researchStatus: candidateResearchStatus.value,
-}, new Map(researchMarkers.value.map(marker => [marker.tsCode, marker.status]))))
+}, new Map<string, CandidateResearchMetadata>(researchMarkers.value.map(marker => [marker.tsCode, {
+  status: marker.status,
+  reviewDate: marker.reviewDate,
+}]))))
 const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'score' || candidateResearchStatus.value !== 'all')
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
