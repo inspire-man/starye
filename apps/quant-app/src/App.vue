@@ -15,7 +15,8 @@ import type {
   SyncStatus,
   WatchlistItem,
 } from './lib/quant-types'
-import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
+import type { ResearchReviewMeta } from './lib/research-review'
+import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
   AlertCircle,
@@ -38,6 +39,7 @@ import {
 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { quantApi, QuantApiError } from './lib/api-client'
+import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
 import { buildTrendStructure } from './lib/trend-analysis'
@@ -98,6 +100,7 @@ const candidateMinScore = ref(0)
 const candidateCompleteOnly = ref(false)
 const candidateSort = ref<CandidateSortKey>('score')
 const candidateResearchStatus = ref<CandidateResearchStatus>('all')
+const candidateReviewDue = ref<CandidateReviewFilter>('all')
 const candidateFilterOptions = [
   { ...selectionPresets[0], icon: ShieldCheck },
   { ...selectionPresets[1], icon: ArrowUpRight },
@@ -122,21 +125,29 @@ const candidateResearchStatusOptions: { value: CandidateResearchStatus, label: s
   { value: 'all', label: '全部状态' },
   ...researchStatusOptions,
 ]
+const candidateReviewDueOptions: { value: CandidateReviewFilter, label: string }[] = [
+  { value: 'all', label: '全部复查' },
+  { value: 'overdue', label: '已逾期' },
+  { value: 'today', label: '今日复查' },
+  { value: 'upcoming', label: '近 7 日' },
+]
 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
 const activeCandidatePreset = computed(() => candidateFilterOptions.find(option => option.key === candidateFilter.value) || candidateFilterOptions[0])
+const todayDate = computed(() => getTodayDate())
 const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateItems.value, {
   preset: candidateFilter.value,
   minScore: candidateMinScore.value,
   completeOnly: candidateCompleteOnly.value,
   sortBy: candidateSort.value,
   researchStatus: candidateResearchStatus.value,
+  reviewDue: candidateReviewDue.value,
 }, new Map<string, CandidateResearchMetadata>(researchMarkers.value.map(marker => [marker.tsCode, {
   status: marker.status,
   reviewDate: marker.reviewDate,
-}]))))
-const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'score' || candidateResearchStatus.value !== 'all')
+}])), todayDate.value))
+const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'score' || candidateResearchStatus.value !== 'all' || candidateReviewDue.value !== 'all')
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
 const overallError = computed(() => errors.watchlist || errors.candidates || errors.research)
@@ -147,6 +158,7 @@ const latestDate = computed(() => {
 })
 const selectedCandidate = computed(() => candidateItems.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const researchMarkerMap = computed(() => new Map(researchMarkers.value.map(marker => [marker.tsCode, marker])))
+const researchReviewMap = computed(() => new Map(researchMarkers.value.map(marker => [marker.tsCode, getResearchReviewMeta(marker.reviewDate, todayDate.value)])))
 const selectedResearchMarker = computed<QuantResearchMarker>(() => researchMarkerMap.value.get(selectedTsCode.value || '') || {
   tsCode: selectedTsCode.value || '',
   status: 'unreviewed',
@@ -155,6 +167,7 @@ const selectedResearchMarker = computed<QuantResearchMarker>(() => researchMarke
   createdAt: null,
   updatedAt: null,
 })
+const selectedResearchReview = computed(() => researchReviewFor(selectedTsCode.value || ''))
 const selectedCandidateItems = computed(() => candidateItems.value.filter(item => selectedCandidateIds.value.has(item.id)).slice(0, 3))
 const canCompareCandidates = computed(() => selectedCandidateItems.value.length >= 2)
 const comparisonStatusLabel = computed(() => comparisonLoading.value ? '正在读取估值与财务数据' : `${selectedCandidateItems.value.length} 只股票`)
@@ -171,6 +184,20 @@ const dataCoverageLabel = computed(() => watchlist.value.length ? `${dataCoverag
 const topCandidates = computed(() => [...candidateItems.value]
   .sort((left, right) => (right.score ?? -1) - (left.score ?? -1))
   .slice(0, 3))
+const reviewQueueItems = computed(() => researchMarkers.value
+  .flatMap((marker) => {
+    const stock = watchlist.value.find(item => item.tsCode === marker.tsCode)
+    return stock ? [{ marker, stock, review: researchReviewMap.value.get(marker.tsCode) || getResearchReviewMeta(null, todayDate.value) }] : []
+  })
+  .filter(item => item.marker.status !== 'excluded' && ['overdue', 'today', 'upcoming'].includes(item.review.state))
+  .sort((left, right) => {
+    const dueRank = getReviewDueRank(left.review.state) - getReviewDueRank(right.review.state)
+    if (dueRank !== 0)
+      return dueRank
+    return (left.review.date || '9999-12-31').localeCompare(right.review.date || '9999-12-31') || left.stock.tsCode.localeCompare(right.stock.tsCode)
+  }))
+const reviewQueueTotal = computed(() => reviewQueueItems.value.length)
+const visibleReviewQueue = computed(() => reviewQueueItems.value.slice(0, 5))
 const hasValuationData = computed(() => Boolean(valuation.value && [
   valuation.value.dynamicPe,
   valuation.value.peTtm,
@@ -314,7 +341,8 @@ const candidateColumns: Column<CandidateItem>[] = [
   { key: 'ma20', label: '20日均线', width: '96px', render: item => formatNumber(item.ma20) },
   { key: 'volumeRatio', label: '成交活跃度', width: '108px', render: item => formatNumber(item.volumeRatio) },
   { key: 'relativeStrength', label: '池内强度', width: '98px', render: item => formatNumber(item.relativeStrength) },
-  { key: 'signals', label: '信号', width: '300px', minWidth: '280px' },
+  { key: 'review', label: '复查', width: '118px', minWidth: '110px' },
+  { key: 'signals', label: '信号', width: '260px', minWidth: '240px' },
 ]
 
 const dailyColumns: Column<DailyBar>[] = [
@@ -447,6 +475,10 @@ function displayStockName(item: Pick<CandidateItem, 'tsCode' | 'name'>): string 
   return item.name || watchlist.value.find(stock => stock.tsCode === item.tsCode)?.name || item.tsCode
 }
 
+function researchReviewFor(tsCode: string): ResearchReviewMeta {
+  return researchReviewMap.value.get(tsCode) || getResearchReviewMeta(null, todayDate.value)
+}
+
 function parsedError(error: unknown): ParsedError {
   let type: ErrorType = 'unknown'
   let statusCode: number | undefined
@@ -555,6 +587,7 @@ function resetCandidateQuery(): void {
   candidateCompleteOnly.value = false
   candidateSort.value = 'score'
   candidateResearchStatus.value = 'all'
+  candidateReviewDue.value = 'all'
 }
 
 async function loadWatchlist() {
@@ -1223,6 +1256,14 @@ onMounted(loadWorkspace)
                 </option>
               </select>
             </label>
+            <label class="candidate-query-field">
+              <span>复查状态</span>
+              <select v-model="candidateReviewDue" class="candidate-query-select">
+                <option v-for="option in candidateReviewDueOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
             <label class="candidate-query-check">
               <input v-model="candidateCompleteOnly" type="checkbox">
               <span>只看数据完整</span>
@@ -1262,6 +1303,39 @@ onMounted(loadWorkspace)
           <span class="snapshot-range-divider">·</span>
           <span>{{ snapshot.factorVersion || '动量信号' }}</span>
         </div>
+        <section v-if="reviewQueueTotal" class="review-queue" aria-labelledby="review-queue-title">
+          <div class="review-queue-heading">
+            <div>
+              <p class="section-kicker">
+                REVIEW QUEUE
+              </p>
+              <h3 id="review-queue-title">
+                复查到期队列
+              </h3>
+            </div>
+            <span class="review-queue-count">{{ reviewQueueTotal }} 条待处理</span>
+          </div>
+          <div class="review-queue-list">
+            <button
+              v-for="item in visibleReviewQueue"
+              :key="item.marker.tsCode"
+              class="review-queue-row"
+              type="button"
+              @click="selectStock(item.stock)"
+            >
+              <span class="review-state-badge" :class="`review-state-${item.review.state}`">{{ item.review.label }}</span>
+              <span class="review-queue-stock">
+                <strong>{{ item.stock.name || item.stock.tsCode }}</strong>
+                <small>{{ item.stock.tsCode }} · {{ researchStatusOptions.find(option => option.value === item.marker.status)?.label }}</small>
+              </span>
+              <span class="review-queue-detail">{{ item.review.detail }}</span>
+              <ChevronRight :size="15" aria-hidden="true" />
+            </button>
+          </div>
+          <p v-if="reviewQueueTotal > visibleReviewQueue.length" class="review-queue-more">
+            还有 {{ reviewQueueTotal - visibleReviewQueue.length }} 条记录，请使用复查筛选继续查看
+          </p>
+        </section>
         <div class="quant-table-frame candidate-table-frame">
           <DataTable
             :data="filteredCandidateItems"
@@ -1269,7 +1343,7 @@ onMounted(loadWorkspace)
             :loading="loading.candidates"
             selectable
             :selected-ids="selectedCandidateIds"
-            min-width="1180px"
+            min-width="1160px"
             :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
             @toggle-select="handleCandidateToggle"
             @toggle-select-all="toggleAllCandidateSelection"
@@ -1295,6 +1369,12 @@ onMounted(loadWorkspace)
             </template>
             <template #cell-relativeStrength="{ item }">
               <span class="quant-table-number" :class="item.relativeStrength === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.relativeStrength) }}</span>
+            </template>
+            <template #cell-review="{ item }">
+              <div class="review-cell" :title="researchReviewFor(item.tsCode).detail" :aria-label="`${researchReviewFor(item.tsCode).label}，${researchReviewFor(item.tsCode).date || '未设置日期'}`">
+                <span class="review-cell-label" :class="`review-state-text-${researchReviewFor(item.tsCode).state}`">{{ researchReviewFor(item.tsCode).label }}</span>
+                <small>{{ researchReviewFor(item.tsCode).date || '--' }}</small>
+              </div>
             </template>
             <template #cell-signals="{ item }">
               <div class="signal-list candidate-signal-list">
@@ -1324,9 +1404,14 @@ onMounted(loadWorkspace)
                 </p>
                 <h2>先看依据，再做判断</h2>
               </div>
-              <span v-if="selectedResearchMarker.status !== 'unreviewed'" class="research-status-badge" :class="`research-status-${selectedResearchMarker.status}`">
-                {{ researchStatusOptions.find(option => option.value === selectedResearchMarker.status)?.label }}
-              </span>
+              <div class="detail-review-status">
+                <span v-if="selectedResearchMarker.status !== 'unreviewed'" class="research-status-badge" :class="`research-status-${selectedResearchMarker.status}`">
+                  {{ researchStatusOptions.find(option => option.value === selectedResearchMarker.status)?.label }}
+                </span>
+                <span v-if="selectedResearchReview.state !== 'unscheduled'" class="review-state-badge" :class="`review-state-${selectedResearchReview.state}`">
+                  {{ selectedResearchReview.label }}
+                </span>
+              </div>
             </div>
             <div v-if="selectedCandidate" class="decision-card-grid">
               <div class="decision-card-item decision-card-item-primary">

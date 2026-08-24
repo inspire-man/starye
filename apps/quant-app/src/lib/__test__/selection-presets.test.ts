@@ -117,9 +117,9 @@ describe('selection presets', () => {
       candidate({ id: 'candidate-4', tsCode: '000001.SZ', score: 5 }),
     ]
     const metadata = new Map([
-      ['601899.SH', { status: 'priority' as const, reviewDate: '2026-09-10' }],
-      ['600089.SH', { status: 'priority' as const, reviewDate: '2026-08-20' }],
-      ['600938.SH', { status: 'unreviewed' as const, reviewDate: null }],
+      ['601899.SH', { status: 'priority' as const, reviewDate: '2026-08-30' }],
+      ['600089.SH', { status: 'priority' as const, reviewDate: '2026-08-23' }],
+      ['600938.SH', { status: 'unreviewed' as const, reviewDate: '2026-08-24' }],
       ['000001.SZ', { status: 'excluded' as const, reviewDate: null }],
     ])
 
@@ -129,6 +129,28 @@ describe('selection presets', () => {
       completeOnly: false,
       sortBy: 'researchPriority',
       researchStatus: 'all',
-    }, metadata).map(item => item.tsCode)).toEqual(['600089.SH', '601899.SH', '600938.SH', '000001.SZ'])
+    }, metadata, '2026-08-24').map(item => item.tsCode)).toEqual(['600089.SH', '600938.SH', '601899.SH', '000001.SZ'])
+  })
+
+  it('filters candidates by actionable review state', () => {
+    const items = [
+      candidate({ id: 'candidate-1', tsCode: '601899.SH' }),
+      candidate({ id: 'candidate-2', tsCode: '600089.SH' }),
+      candidate({ id: 'candidate-3', tsCode: '600938.SH' }),
+    ]
+    const metadata = new Map([
+      ['601899.SH', { status: 'priority' as const, reviewDate: '2026-08-30' }],
+      ['600089.SH', { status: 'priority' as const, reviewDate: '2026-08-23' }],
+      ['600938.SH', { status: 'unreviewed' as const, reviewDate: '2026-08-24' }],
+    ])
+
+    expect(filterAndSortCandidates(items, {
+      preset: 'all',
+      minScore: 0,
+      completeOnly: false,
+      sortBy: 'score',
+      researchStatus: 'all',
+      reviewDue: 'overdue',
+    }, metadata, '2026-08-24').map(item => item.tsCode)).toEqual(['600089.SH'])
   })
 })
