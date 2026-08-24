@@ -10,6 +10,7 @@ describe('quantApi', () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {
         tier: 120,
+        provider: 'eastmoney',
         enabled: ['daily'],
         capabilities: [
           { key: 'daily', enabled: true, reason: '可用' },
@@ -25,6 +26,7 @@ describe('quantApi', () => {
       credentials: 'include',
     }))
     expect(result.tier).toBe(120)
+    expect(result.provider).toBe('eastmoney')
     expect(result.capabilities.find(item => item.key === 'daily_basic')?.reason).toBe('需要更高积分')
   })
 
@@ -43,6 +45,26 @@ describe('quantApi', () => {
     expect(init?.method).toBe('POST')
     expect(init?.body).toBe(JSON.stringify({ ts_code: '000001.SZ', name: '平安银行' }))
     expect(init?.body).not.toContain('token')
+  })
+
+  it('normalizes latest watchlist market stats for comparison', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: [{
+        id: 'watch-1',
+        ts_code: '601899.SH',
+        name: '紫金矿业',
+        latest_trade_date: '20260821',
+        bar_count: 120,
+        latest_close: 34.74,
+        latest_change_percent: 0.91,
+      }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(quantApi.getWatchlist()).resolves.toMatchObject([{
+      tsCode: '601899.SH',
+      latestClose: 34.74,
+      latestChangePercent: 0.91,
+    }])
   })
 
   it('keeps the server reason when a sync is rejected by an active lease', async () => {

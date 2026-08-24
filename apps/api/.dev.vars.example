@@ -12,8 +12,11 @@ BETTER_AUTH_URL="http://localhost:8080/api/auth"
 
 OPENROUTER_API_KEY=your_better_auth_secret_min_32_chars
 
-# Quant workbench provider (server-only; leave empty to keep sync fail-closed)
+# Quant workbench provider (server-only; Eastmoney is the free default when Tushare token is empty)
+QUANT_DATA_PROVIDER=""
 TUSHARE_TOKEN=""
 TUSHARE_POINTS_TIER=120
 TUSHARE_BASE_URL="https://api.tushare.pro"
 TUSHARE_TIMEOUT_MS=10000
+EASTMONEY_BASE_URL="https://push2his.eastmoney.com"
+EASTMONEY_TIMEOUT_MS=10000

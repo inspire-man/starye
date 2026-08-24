@@ -2,6 +2,9 @@ import type { DailyBar } from './types'
 import * as v from 'valibot'
 import { QuantError } from './errors'
 
+export const QUANT_PROVIDER_NAMES = ['tushare', 'eastmoney'] as const
+export type QuantProviderName = typeof QUANT_PROVIDER_NAMES[number]
+
 export const TUSHARE_API_NAMES = ['daily'] as const
 export type TushareApiName = typeof TUSHARE_API_NAMES[number]
 
@@ -57,10 +60,14 @@ export interface TushareDailyRequest {
   readonly endDate: string
 }
 
-export interface TushareProvider {
+export interface QuantDataProvider {
+  readonly name?: QuantProviderName
   readonly isConfigured: boolean
-  request: (request: TushareRequest) => Promise<readonly DailyBar[]>
   fetchDaily: (request: TushareDailyRequest) => Promise<readonly DailyBar[]>
+}
+
+export interface TushareProvider extends QuantDataProvider {
+  request: (request: TushareRequest) => Promise<readonly DailyBar[]>
 }
 
 const TushareResponseSchema = v.object({
@@ -211,28 +218,183 @@ export function createTushareProvider(options: TushareProviderOptions = {}): Tus
   }
 
   return {
+    name: 'tushare',
     isConfigured: token !== null,
     request,
     fetchDaily,
   }
 }
 
-export function mapTushareProviderError(error: unknown): QuantError {
-  if (!(error instanceof TushareProviderError))
-    return new QuantError('QUANT_PROVIDER_UPSTREAM', 'Tushare provider failed', 502)
+export type EastmoneyProviderErrorCode = 'TIMEOUT' | 'UPSTREAM_ERROR' | 'INVALID_RESPONSE'
 
-  switch (error.code) {
-    case 'TOKEN_MISSING':
-      return new QuantError('QUANT_PROVIDER_CONFIGURATION', 'Tushare provider is not configured', 503)
-    case 'UNKNOWN_API':
-      return new QuantError('QUANT_PROVIDER_UNKNOWN_API', 'Tushare api_name is not registered', 400)
-    case 'TIMEOUT':
-      return new QuantError('QUANT_PROVIDER_TIMEOUT', 'Tushare request timed out', 504)
-    case 'QUOTA_EXHAUSTED':
-      return new QuantError('QUANT_PROVIDER_QUOTA', 'Tushare quota exhausted', 429)
-    case 'INVALID_RESPONSE':
-      return new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Tushare response is invalid', 502)
-    default:
-      return new QuantError('QUANT_PROVIDER_UPSTREAM', 'Tushare provider failed', 502)
+export class EastmoneyProviderError extends Error {
+  readonly code: EastmoneyProviderErrorCode
+
+  constructor(code: EastmoneyProviderErrorCode, message: string) {
+    super(message)
+    this.name = 'EastmoneyProviderError'
+    this.code = code
   }
+}
+
+export interface EastmoneyProviderOptions {
+  readonly baseUrl?: string
+  readonly timeoutMs?: number
+  readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+}
+
+const EastmoneyResponseSchema = v.object({
+  rc: v.number(),
+  data: v.optional(v.nullable(v.object({
+    code: v.string(),
+    market: v.number(),
+    klines: v.optional(v.array(v.string())),
+  }))),
+})
+
+function eastmoneyMarket(tsCode: string): string {
+  const [code, market] = tsCode.trim().toUpperCase().split('.')
+  if (!code || !market || !/^\d{6}$/u.test(code) || !['SH', 'SZ', 'BJ'].includes(market))
+    throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney only supports SH, SZ, and BJ stock codes')
+  return `${market === 'SH' ? '1' : '0'}.${code}`
+}
+
+function eastmoneyNumber(value: string | undefined, field: string): number {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric))
+    throw new EastmoneyProviderError('INVALID_RESPONSE', `Invalid Eastmoney daily field: ${field}`)
+  return numeric
+}
+
+function normalizeEastmoneyRows(tsCode: string, rows: readonly string[]): readonly DailyBar[] {
+  const normalized = rows.map((row) => {
+    const [rawDate, rawOpen, rawClose, rawHigh, rawLow, rawVolume, rawAmount, , rawPctChg, rawChange] = row.split(',')
+    const tradeDate = rawDate?.replaceAll('-', '')
+    if (!tradeDate || !/^\d{8}$/u.test(tradeDate))
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Invalid Eastmoney trade date')
+
+    const change = rawChange ? eastmoneyNumber(rawChange, 'change') : null
+    const close = eastmoneyNumber(rawClose, 'close')
+    return {
+      tsCode: tsCode.trim().toUpperCase(),
+      tradeDate,
+      open: eastmoneyNumber(rawOpen, 'open'),
+      high: eastmoneyNumber(rawHigh, 'high'),
+      low: eastmoneyNumber(rawLow, 'low'),
+      close,
+      preClose: change === null ? null : close - change,
+      change,
+      pctChg: rawPctChg ? eastmoneyNumber(rawPctChg, 'pct_chg') : null,
+      volume: eastmoneyNumber(rawVolume, 'volume'),
+      amount: rawAmount ? eastmoneyNumber(rawAmount, 'amount') : null,
+    } satisfies DailyBar
+  })
+
+  return [...new Map(normalized.map(row => [`${row.tsCode}:${row.tradeDate}`, row])).values()]
+    .sort((left, right) => left.tradeDate.localeCompare(right.tradeDate))
+}
+
+export function createEastmoneyProvider(options: EastmoneyProviderOptions = {}): QuantDataProvider {
+  const baseUrl = options.baseUrl?.trim() || 'https://push2his.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+
+  async function fetchDaily(request: TushareDailyRequest): Promise<readonly DailyBar[]> {
+    const startDate = normalizeDate(request.startDate, 'start_date')
+    const endDate = normalizeDate(request.endDate, 'end_date')
+    const url = new URL('/api/qt/stock/kline/get', baseUrl)
+    url.searchParams.set('secid', eastmoneyMarket(request.tsCode))
+    url.searchParams.set('klt', '101')
+    url.searchParams.set('fqt', '1')
+    url.searchParams.set('beg', startDate)
+    url.searchParams.set('end', endDate)
+    url.searchParams.set('lmt', '120')
+    url.searchParams.set('fields1', 'f1,f2,f3,f4,f5,f6')
+    url.searchParams.set('fields2', 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61')
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney response is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyResponseSchema, payload)
+    if (!parsed.success || parsed.output.rc !== 0)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney response schema is invalid')
+
+    return normalizeEastmoneyRows(request.tsCode, parsed.output.data?.klines ?? [])
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    fetchDaily,
+  }
+}
+
+function envString(env: unknown, key: string): string | undefined {
+  if (!env || typeof env !== 'object')
+    return undefined
+  const value = (env as Record<string, unknown>)[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+export function resolveQuantProviderName(env: unknown): QuantProviderName | null {
+  const configured = envString(env, 'QUANT_DATA_PROVIDER')?.toLowerCase()
+  if (configured)
+    return QUANT_PROVIDER_NAMES.includes(configured as QuantProviderName) ? configured as QuantProviderName : null
+  return envString(env, 'TUSHARE_TOKEN') ? 'tushare' : 'eastmoney'
+}
+
+export function mapQuantProviderError(error: unknown): QuantError {
+  if (error instanceof TushareProviderError) {
+    switch (error.code) {
+      case 'TOKEN_MISSING':
+        return new QuantError('QUANT_PROVIDER_CONFIGURATION', 'Tushare provider is not configured', 503)
+      case 'UNKNOWN_API':
+        return new QuantError('QUANT_PROVIDER_UNKNOWN_API', 'Tushare api_name is not registered', 400)
+      case 'TIMEOUT':
+        return new QuantError('QUANT_PROVIDER_TIMEOUT', 'Tushare request timed out', 504)
+      case 'QUOTA_EXHAUSTED':
+        return new QuantError('QUANT_PROVIDER_QUOTA', 'Tushare quota exhausted', 429)
+      case 'INVALID_RESPONSE':
+        return new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Tushare response is invalid', 502)
+      default:
+        return new QuantError('QUANT_PROVIDER_UPSTREAM', 'Tushare provider failed', 502)
+    }
+  }
+
+  if (error instanceof EastmoneyProviderError) {
+    return new QuantError(
+      error.code === 'TIMEOUT' ? 'QUANT_PROVIDER_TIMEOUT' : error.code === 'INVALID_RESPONSE' ? 'QUANT_PROVIDER_INVALID_RESPONSE' : 'QUANT_PROVIDER_UPSTREAM',
+      `Eastmoney provider ${error.code === 'TIMEOUT' ? 'timed out' : 'failed'}`,
+      error.code === 'TIMEOUT' ? 504 : 502,
+    )
+  }
+
+  return new QuantError('QUANT_PROVIDER_UPSTREAM', 'Quant data provider failed', 502)
+}
+
+export function mapTushareProviderError(error: unknown): QuantError {
+  return mapQuantProviderError(error)
 }

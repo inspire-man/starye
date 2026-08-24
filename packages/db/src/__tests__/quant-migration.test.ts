@@ -5,11 +5,12 @@ import { describe, expect, it } from 'vitest'
 
 const migrationPath = new URL('../../drizzle/0036_quant_workbench.sql', import.meta.url)
 const leaseMigrationPath = new URL('../../drizzle/0037_quant_sync_lease.sql', import.meta.url)
+const seedMigrationPath = new URL('../../drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
 
 async function createMigratedClient() {
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -50,6 +51,13 @@ describe('quant workbench migration', () => {
       'run_id',
       'lease_expires_at',
     ]))
+
+    const starterRows = await client.execute('SELECT ts_code, name FROM quant_watchlist ORDER BY ts_code')
+    expect(starterRows.rows).toEqual([
+      { ts_code: '600089.SH', name: '特变电工' },
+      { ts_code: '600938.SH', name: '中国海油' },
+      { ts_code: '601899.SH', name: '紫金矿业' },
+    ])
   })
 
   it('enforces watchlist and daily-bar identities', async () => {
@@ -79,5 +87,20 @@ describe('quant workbench migration', () => {
       'pb',
       'turnover_rate',
     ]))
+  })
+
+  it('keeps the starter seed idempotent and preserves a later name edit', async () => {
+    const client = await createMigratedClient()
+    const seed = await readFile(fileURLToPath(seedMigrationPath.href), 'utf8')
+
+    await client.execute(`UPDATE quant_watchlist SET name = '自定义名称' WHERE ts_code = '601899.SH'`)
+    for (const statement of seed.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
+      await client.execute(statement)
+
+    await expect(
+      client.execute(`SELECT count(*) AS count, name FROM quant_watchlist WHERE ts_code = '601899.SH'`),
+    )
+      .resolves
+      .toMatchObject({ rows: [{ count: 1, name: '自定义名称' }] })
   })
 })

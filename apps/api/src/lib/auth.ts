@@ -56,6 +56,13 @@ export interface Env {
   WEB_URL?: string
   ADMIN_URL?: string
   OPENROUTER_API_KEY?: string
+  QUANT_DATA_PROVIDER?: string
+  TUSHARE_TOKEN?: string
+  TUSHARE_POINTS_TIER?: string
+  TUSHARE_BASE_URL?: string
+  TUSHARE_TIMEOUT_MS?: string
+  EASTMONEY_BASE_URL?: string
+  EASTMONEY_TIMEOUT_MS?: string
   ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单
   SENTRY_DSN?: string
   SENTRY_RELEASE?: string

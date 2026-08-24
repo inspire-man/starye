@@ -1,6 +1,7 @@
 export const CAPABILITY_ORDER = ['daily', 'stock_basic', 'trade_cal', 'daily_basic'] as const
 
 export type CapabilityKey = typeof CAPABILITY_ORDER[number]
+export type QuantProviderName = 'tushare' | 'eastmoney'
 
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 
@@ -14,6 +15,7 @@ export interface CapabilityState {
 
 export interface CapabilitiesResponse {
   tier: number | null
+  provider: QuantProviderName | null
   enabled: CapabilityKey[]
   capabilities: CapabilityState[]
 }
@@ -24,6 +26,8 @@ export interface WatchlistItem {
   name: string | null
   latestTradeDate: string | null
   barCount: number
+  latestClose: number | null
+  latestChangePercent: number | null
   createdAt: string | null
 }
 

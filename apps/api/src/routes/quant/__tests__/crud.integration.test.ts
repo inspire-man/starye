@@ -13,14 +13,16 @@ import { quantRoutes } from '../index'
 
 const migrationPath = new URL('../../../../../../packages/db/drizzle/0036_quant_workbench.sql', import.meta.url)
 const leaseMigrationPath = new URL('../../../../../../packages/db/drizzle/0037_quant_sync_lease.sql', import.meta.url)
+const seedMigrationPath = new URL('../../../../../../packages/db/drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
 
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
-  for (const migrationPathname of [migrationPath, leaseMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
   }
+  await client.execute('DELETE FROM quant_watchlist')
   return { client, db: drizzle(client, { schema }) as unknown as Database }
 }
 
@@ -151,6 +153,11 @@ describe('quant watchlist CRUD contract', () => {
       await expect(client.execute('SELECT count(*) AS count FROM quant_daily_bar')).resolves.toMatchObject({ rows: [{ count: 25 }] })
       await expect(client.execute('SELECT id, candidate_count FROM quant_scan_snapshot')).resolves.toMatchObject({
         rows: [{ id: syncPayload.data.snapshotId, candidate_count: 1 }],
+      })
+
+      const watchlist = await app.request('/api/quant/watchlist')
+      await expect(watchlist.json()).resolves.toMatchObject({
+        data: [{ tsCode: '000001.SZ', latestClose: 124, latestChangePercent: 1 }],
       })
 
       const candidates = await app.request('/api/quant/candidates', {}, {
