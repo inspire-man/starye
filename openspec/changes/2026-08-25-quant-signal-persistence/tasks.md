@@ -13,5 +13,5 @@
 ## 3. 验证与交付
 
 - [x] 3.1 运行 Quant/API 定向测试、类型检查、lint、build 和 OpenSpec strict 校验
-- [ ] 3.2 运行 GitNexus detect_changes，确认只影响预期 Quant symbols 与流程
-- [ ] 3.3 提交并推送代码，检查对应 GitHub Actions run 无失败检查
+- [x] 3.2 运行 GitNexus detect_changes，确认只影响预期 Quant symbols 与流程
+- [x] 3.3 提交并推送代码，检查对应 GitHub Actions run 无失败检查
