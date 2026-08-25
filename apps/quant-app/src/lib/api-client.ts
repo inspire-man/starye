@@ -1,6 +1,8 @@
 import type {
   CandidateItem,
+  CandidatePersistenceState,
   CandidateQuality,
+  CandidateSignalPersistence,
   CandidateSnapshot,
   CapabilitiesResponse,
   CapabilityKey,
@@ -395,6 +397,69 @@ function parseSyncResult(payload: unknown): SyncResult {
   }
 }
 
+function emptyCandidatePersistence(): CandidateSignalPersistence {
+  return {
+    sampleSize: 0,
+    appearanceCount: 0,
+    persistenceRate: null,
+    latestScore: null,
+    previousScore: null,
+    scoreDelta: null,
+    scoreChange: null,
+    state: 'insufficient_history',
+    factorPersistence: [],
+    evidence: [],
+  }
+}
+
+function parseCandidatePersistence(value: unknown): CandidateSignalPersistence {
+  if (!isRecord(value))
+    return emptyCandidatePersistence()
+
+  const state = readString(value, 'state')
+  const normalizedState: CandidatePersistenceState = state === 'first_seen' || state === 'confirming' || state === 'weakening' || state === 'not_in_latest' || state === 'insufficient_history'
+    ? state
+    : 'insufficient_history'
+  const factorPersistence = readList(value, 'factorPersistence', 'factor_persistence').flatMap((item) => {
+    if (!isRecord(item))
+      return []
+    const factor = readString(item, 'factor')
+    if (!factor)
+      return []
+    return [{
+      factor,
+      appearances: Math.max(0, Math.floor(readNumber(item, 'appearances', 'count') ?? 0)),
+      rate: readNumber(item, 'rate', 'ratio'),
+    }]
+  })
+  const evidence = readList(value, 'evidence', 'history').flatMap((item) => {
+    if (!isRecord(item))
+      return []
+    const snapshotId = readString(item, 'snapshotId', 'snapshot_id')
+    if (!snapshotId)
+      return []
+    return [{
+      snapshotId,
+      generatedAt: readString(item, 'generatedAt', 'generated_at'),
+      present: readBoolean(item, 'present') ?? false,
+      score: readNumber(item, 'score'),
+      matchedFactors: readStringList(item, 'matchedFactors', 'matched_factors'),
+    }]
+  })
+  return {
+    sampleSize: Math.max(0, Math.floor(readNumber(value, 'sampleSize', 'sample_size') ?? 0)),
+    appearanceCount: Math.max(0, Math.floor(readNumber(value, 'appearanceCount', 'appearance_count') ?? 0)),
+    persistenceRate: readNumber(value, 'persistenceRate', 'persistence_rate'),
+    latestScore: readNumber(value, 'latestScore', 'latest_score'),
+    previousScore: readNumber(value, 'previousScore', 'previous_score'),
+    scoreDelta: readNumber(value, 'scoreDelta', 'score_delta'),
+    scoreChange: readNumber(value, 'scoreChange', 'score_change'),
+    state: normalizedState,
+    factorPersistence,
+    evidence,
+  }
+}
+
 function parseCandidate(value: unknown, index: number): CandidateItem | null {
   if (!isRecord(value))
     return null
@@ -428,6 +493,7 @@ function parseCandidate(value: unknown, index: number): CandidateItem | null {
     signals: rawSignals.filter((signal): signal is string => typeof signal === 'string'),
     missingFactors: rawMissingFactors.filter((factor): factor is string => typeof factor === 'string'),
     quality: normalizedQuality,
+    persistence: parseCandidatePersistence(value.persistence),
     pendingSync: readBoolean(value, 'pendingSync', 'pending_sync') ?? false,
     pendingReason: readString(value, 'pendingReason', 'pending_reason'),
   }

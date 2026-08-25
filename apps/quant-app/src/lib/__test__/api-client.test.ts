@@ -109,6 +109,45 @@ describe('quantApi', () => {
     })
   })
 
+  it('normalizes candidate signal persistence and evidence', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        candidates: [{
+          ts_code: '601899.SH',
+          score: 4,
+          matched_factors: ['ma20'],
+          persistence: {
+            sample_size: 5,
+            appearance_count: 4,
+            persistence_rate: 0.8,
+            latest_score: 4,
+            previous_score: 3,
+            score_delta: 1,
+            score_change: 2,
+            state: 'confirming',
+            factor_persistence: [{ factor: 'ma20', appearances: 4, rate: 0.8 }],
+            evidence: [{ snapshot_id: 'snapshot-1', generated_at: '2026-08-25T09:00:00.000Z', present: true, score: 4, matched_factors: ['ma20'] }],
+          },
+        }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(quantApi.getCandidates()).resolves.toMatchObject({
+      candidates: [{
+        tsCode: '601899.SH',
+        persistence: {
+          sampleSize: 5,
+          appearanceCount: 4,
+          persistenceRate: 0.8,
+          state: 'confirming',
+          scoreDelta: 1,
+          factorPersistence: [{ factor: 'ma20', appearances: 4, rate: 0.8 }],
+          evidence: [{ snapshotId: 'snapshot-1', present: true, score: 4, matchedFactors: ['ma20'] }],
+        },
+      }],
+    })
+  })
+
   it('normalizes research markers and sends the marker update contract', async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({

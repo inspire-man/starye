@@ -248,6 +248,15 @@ describe('路径匹配规则', () => {
     expect(capturedRequest).toBeNull()
   })
 
+  it('未登录访问 /quant/ 应保留查询参数并重定向到 Auth，而不是 Blog', async () => {
+    const req = makeRequest('http://localhost/quant/?view=overview')
+    const resp = await worker.fetch(req, {})
+
+    expect(resp.status).toBe(302)
+    expect(resp.headers.get('location')).toBe('http://localhost/auth/login?next=%2Fquant%2F%3Fview%3Doverview')
+    expect(capturedRequest).toBeNull()
+  })
+
   it('/quant 应重定向到 /quant/', async () => {
     const req = makeRequest('http://localhost/quant')
     const resp = await worker.fetch(req, {})

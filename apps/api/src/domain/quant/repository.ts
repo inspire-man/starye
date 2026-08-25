@@ -325,6 +325,16 @@ export async function getLatestQuantScanSnapshot(db: Database) {
   return db.select().from(quantScanSnapshots).orderBy(desc(quantScanSnapshots.generatedAt)).limit(1).get()
 }
 
+export async function listQuantScanSnapshots(db: Database, limit = QUANT_SYNC_SNAPSHOT_RETENTION) {
+  const boundedLimit = Math.min(QUANT_SYNC_SNAPSHOT_RETENTION, Math.max(1, Math.floor(limit)))
+  return db
+    .select()
+    .from(quantScanSnapshots)
+    .orderBy(desc(quantScanSnapshots.generatedAt), desc(quantScanSnapshots.id))
+    .limit(boundedLimit)
+    .all()
+}
+
 export async function getQuantSyncState(db: Database) {
   return db.select().from(quantSyncState).where(eq(quantSyncState.id, QUANT_SYNC_STATE_ID)).get()
 }

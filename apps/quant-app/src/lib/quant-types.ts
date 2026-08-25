@@ -63,6 +63,34 @@ export interface SyncResult {
 }
 
 export type CandidateQuality = 'ready' | 'partial' | 'insufficient' | 'insufficient_data'
+export type CandidatePersistenceState = 'first_seen' | 'confirming' | 'weakening' | 'not_in_latest' | 'insufficient_history'
+
+export interface CandidateFactorPersistence {
+  factor: string
+  appearances: number
+  rate: number | null
+}
+
+export interface CandidateSignalEvidence {
+  snapshotId: string
+  generatedAt: string | null
+  present: boolean
+  score: number | null
+  matchedFactors: string[]
+}
+
+export interface CandidateSignalPersistence {
+  sampleSize: number
+  appearanceCount: number
+  persistenceRate: number | null
+  latestScore: number | null
+  previousScore: number | null
+  scoreDelta: number | null
+  scoreChange: number | null
+  state: CandidatePersistenceState
+  factorPersistence: CandidateFactorPersistence[]
+  evidence: CandidateSignalEvidence[]
+}
 
 export interface CandidateItem {
   id: string
@@ -82,6 +110,7 @@ export interface CandidateItem {
   signals: string[]
   missingFactors: string[]
   quality: CandidateQuality
+  persistence?: CandidateSignalPersistence
   pendingSync?: boolean
   pendingReason?: string | null
 }

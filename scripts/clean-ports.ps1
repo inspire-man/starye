@@ -13,6 +13,7 @@ $ports = @{
     "Gateway" = 8080
     "API" = 8787
     "Dashboard" = 5173
+    "Quant" = 3004
     "Blog" = 3002
     "Auth" = 3003
     "Comic" = 3000
