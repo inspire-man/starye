@@ -26,6 +26,14 @@ function candidate(overrides: Partial<CandidateItem> = {}): CandidateItem {
 }
 
 describe('candidate research action', () => {
+  it('shows a pending sync action for a newly added watchlist stock', () => {
+    expect(getCandidateAction(candidate({ pendingSync: true, pendingReason: '先更新观察池' }))).toMatchObject({
+      action: 'complete-data',
+      label: '待更新数据',
+      detail: '先更新观察池',
+    })
+  })
+
   it('asks for missing data before interpreting a candidate', () => {
     expect(getCandidateAction(candidate({ quality: 'partial', score: 5 }))).toMatchObject({
       action: 'complete-data',

@@ -67,6 +67,48 @@ describe('quantApi', () => {
     }])
   })
 
+  it('reads a stock identity for code-only watchlist additions', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: { ts_code: '600000.SH', name: '浦发银行', observed_at: '2026-08-25T00:00:00.000Z' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getStockBasic('600000.SH')).resolves.toEqual({
+      tsCode: '600000.SH',
+      name: '浦发银行',
+      observedAt: '2026-08-25T00:00:00.000Z',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/stock-basic/600000.SH`, expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('normalizes a pending candidate and keeps its watchlist name', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        id: 'pending',
+        factor_version: 'momentum-v1',
+        generated_at: null,
+        candidates: [{
+          id: 'watch-600000.SH',
+          ts_code: '600000.SH',
+          name: '浦发银行',
+          factor_version: 'momentum-v1',
+          data_quality: 'insufficient_data',
+          score: 0,
+          pending_sync: true,
+          pending_reason: '尚未进入最近一次候选快照，请更新观察池',
+          factors: {},
+          matched_factors: [],
+          missing_factors: ['ma20'],
+        }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(quantApi.getCandidates()).resolves.toMatchObject({
+      id: 'pending',
+      candidates: [{ tsCode: '600000.SH', name: '浦发银行', pendingSync: true, pendingReason: '尚未进入最近一次候选快照，请更新观察池' }],
+    })
+  })
+
   it('normalizes research markers and sends the marker update contract', async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -377,7 +419,7 @@ describe('quantApi', () => {
   it('normalizes the source-backed investment knowledge catalog', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {
-        version: 'investment-knowledge-v1',
+        version: 'investment-knowledge-v2',
         observed_at: '2026-08-25T00:00:00.000Z',
         sources: [{ id: 'article-key-point', title: '重点来了', url: 'https://mp.weixin.qq.com/s/fNOk8LKIqNzdlo8Bm7qTaA', access: 'preview', summary: '公开试读' }],
         factors: [{ id: 'relative-valuation', category: '估值', title: '好公司还要有好价格', status: 'active', eligible_in_value_quality: true, current_dimension: 'valuation', required_fields: ['peTtm'], available_fields: ['peTtm'], missing_fields: [], source_ids: ['article-key-point'] }],
@@ -388,7 +430,7 @@ describe('quantApi', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(quantApi.getInvestmentKnowledge()).resolves.toMatchObject({
-      version: 'investment-knowledge-v1',
+      version: 'investment-knowledge-v2',
       sources: [{ id: 'article-key-point', access: 'preview' }],
       factors: [{ id: 'relative-valuation', status: 'active', eligibleInValueQuality: true }],
       aliases: [{ alias: '变变', tsCode: '600089.SH' }],

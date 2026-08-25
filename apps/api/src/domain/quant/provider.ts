@@ -22,6 +22,8 @@ export const TUSHARE_DAILY_FIELDS = [
   'amount',
 ] as const
 
+export const TUSHARE_STOCK_BASIC_FIELDS = ['ts_code', 'name'] as const
+
 export const TUSHARE_DIVIDEND_FIELDS = [
   'ts_code',
   'end_date',
@@ -278,6 +280,34 @@ export function createTushareProvider(options: TushareProviderOptions = {}): Tus
   }
 }
 
+export function createTushareStockBasicProvider(options: TushareProviderOptions = {}): QuantStockBasicProvider {
+  async function fetchStockBasic(request: { readonly tsCode: string }): Promise<QuantStockBasic> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    const rows = await requestTushareRows(options, {
+      apiName: 'stock_basic',
+      params: { ts_code: tsCode },
+      fields: TUSHARE_STOCK_BASIC_FIELDS,
+    })
+    const positions = new Map(rows.fields.map((field, index) => [field, index]))
+    const row = rows.items[0]
+    const returnedCode = row?.[positions.get('ts_code') ?? -1]
+    const name = row?.[positions.get('name') ?? -1]
+    if (typeof returnedCode !== 'string' || returnedCode.trim().toUpperCase() !== tsCode || typeof name !== 'string' || !name.trim())
+      throw new TushareProviderError('INVALID_RESPONSE', 'Tushare stock identity is missing or mismatched', 'stock_basic')
+    return {
+      tsCode,
+      name: name.trim(),
+      observedAt: new Date().toISOString(),
+    }
+  }
+
+  return {
+    name: 'tushare',
+    isConfigured: cleanProviderString(options.token) !== null,
+    fetchStockBasic,
+  }
+}
+
 function optionalTushareDate(value: unknown, field: string): string | null {
   if (value === null || value === undefined || value === '')
     return null
@@ -378,6 +408,18 @@ export interface QuantValuationProvider {
   readonly name: QuantProviderName
   readonly isConfigured: boolean
   fetchValuation: (request: QuantValuationRequest) => Promise<QuantValuationSnapshot>
+}
+
+export interface QuantStockBasic {
+  readonly tsCode: string
+  readonly name: string
+  readonly observedAt: string
+}
+
+export interface QuantStockBasicProvider {
+  readonly name: QuantProviderName
+  readonly isConfigured: boolean
+  fetchStockBasic: (request: { readonly tsCode: string }) => Promise<QuantStockBasic>
 }
 
 export interface QuantFinancialQualitySnapshot {
@@ -487,6 +529,66 @@ function eastmoneyQuoteNumber(value: unknown, field: string): number | null {
   if (!Number.isFinite(numeric))
     throw new EastmoneyProviderError('INVALID_RESPONSE', `Invalid Eastmoney quote field: ${field}`)
   return numeric
+}
+
+export function createEastmoneyStockBasicProvider(options: EastmoneyProviderOptions = {}): QuantStockBasicProvider {
+  const baseUrl = options.baseUrl?.trim() || 'https://push2.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const now = options.now ?? (() => new Date())
+
+  async function fetchStockBasic(request: { readonly tsCode: string }): Promise<QuantStockBasic> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    const requestedCode = tsCode.split('.')[0]
+    const url = new URL('/api/qt/stock/get', baseUrl)
+    url.searchParams.set('secid', eastmoneyMarket(tsCode))
+    url.searchParams.set('invt', '2')
+    url.searchParams.set('fltt', '2')
+    url.searchParams.set('fields', 'f57,f58')
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney stock identity request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney stock identity request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney stock identity HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney stock identity response is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyQuoteResponseSchema, payload)
+    if (!parsed.success || parsed.output.rc !== 0 || !isRecord(parsed.output.data))
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney stock identity response schema is invalid')
+
+    const returnedCode = parsed.output.data.f57
+    const name = typeof parsed.output.data.f58 === 'string' ? parsed.output.data.f58.trim() : ''
+    if ((typeof returnedCode !== 'string' && typeof returnedCode !== 'number') || String(returnedCode).padStart(6, '0') !== requestedCode || !name)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney stock identity is missing or mismatched')
+
+    return { tsCode, name, observedAt: now().toISOString() }
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    fetchStockBasic,
+  }
 }
 
 function normalizeEastmoneyRows(tsCode: string, rows: readonly string[]): readonly DailyBar[] {

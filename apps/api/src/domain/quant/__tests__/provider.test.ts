@@ -1,6 +1,6 @@
 import type { TushareProviderError } from '../provider'
 import { describe, expect, it, vi } from 'vitest'
-import { createEastmoneyFinancialProvider, createEastmoneyProvider, createEastmoneyValuationProvider, createTushareDividendProvider, createTushareProvider, resolveQuantProviderName } from '../provider'
+import { createEastmoneyFinancialProvider, createEastmoneyProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createTushareDividendProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
 
 describe('quant daily providers', () => {
   it('normalizes the declared daily response and keeps the token server-side', async () => {
@@ -455,5 +455,50 @@ describe('quant daily providers', () => {
     expect(resolveQuantProviderName({})).toBe('eastmoney')
     expect(resolveQuantProviderName({ QUANT_DATA_PROVIDER: 'eastmoney', TUSHARE_TOKEN: 'SERVER_TOKEN' })).toBe('eastmoney')
     expect(resolveQuantProviderName({ QUANT_DATA_PROVIDER: 'unknown' })).toBeNull()
+  })
+})
+
+describe('quant stock identity provider', () => {
+  it('normalizes the Eastmoney stock name and keeps the observation timestamp', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      rc: 0,
+      data: { f57: '600000', f58: '浦发银行' },
+    }), { status: 200 }))
+    const provider = createEastmoneyStockBasicProvider({
+      baseUrl: 'https://eastmoney.fixture.test',
+      fetchImpl,
+      now: () => new Date('2026-08-25T00:00:00.000Z'),
+    })
+
+    await expect(provider.fetchStockBasic({ tsCode: '600000.SH' })).resolves.toEqual({
+      tsCode: '600000.SH',
+      name: '浦发银行',
+      observedAt: '2026-08-25T00:00:00.000Z',
+    })
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('/api/qt/stock/get')
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('fields=f57%2Cf58')
+  })
+
+  it('rejects a missing stock name instead of returning a placeholder', async () => {
+    const provider = createEastmoneyStockBasicProvider({
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ rc: 0, data: { f57: '600000', f58: '' } }), { status: 200 })),
+    })
+
+    await expect(provider.fetchStockBasic({ tsCode: '600000.SH' })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  })
+
+  it('uses Tushare stock_basic when a server token is configured', async () => {
+    const provider = createTushareStockBasicProvider({
+      token: 'SERVER_TOKEN',
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        code: 0,
+        data: { fields: ['ts_code', 'name'], items: [['600000.SH', '浦发银行']] },
+      }), { status: 200 })),
+    })
+
+    await expect(provider.fetchStockBasic({ tsCode: '600000.SH' })).resolves.toMatchObject({
+      tsCode: '600000.SH',
+      name: '浦发银行',
+    })
   })
 })

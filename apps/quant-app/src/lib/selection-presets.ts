@@ -79,6 +79,9 @@ export function matchesSelectionPreset(item: CandidateItem, preset: SelectionPre
   if (preset === 'all')
     return true
 
+  if (item.pendingSync)
+    return true
+
   if (item.quality !== 'ready')
     return false
 
@@ -176,6 +179,9 @@ export function filterAndSortCandidates(
 }
 
 export function getSelectionReasons(item: CandidateItem, preset: SelectionPresetKey): string[] {
+  if (item.pendingSync)
+    return ['已加入观察池，等待日线更新']
+
   if (preset === 'all')
     return ['未使用额外筛选']
 

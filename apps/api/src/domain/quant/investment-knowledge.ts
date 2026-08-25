@@ -1,4 +1,4 @@
-export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v1' as const
+export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v2' as const
 
 export type QuantKnowledgeSourceAccess = 'full' | 'preview'
 export type QuantKnowledgeFactorStatus = 'active' | 'partial' | 'planned' | 'context'
@@ -53,6 +53,9 @@ function source(id: string, title: string, url: string, publishedAt: string | nu
 }
 
 export const QUANT_KNOWLEDGE_SOURCES: readonly QuantKnowledgeSource[] = [
+  source('article-new-high-20260818', '创新高', 'https://mp.weixin.qq.com/s/OquWKChdzqe22Y5oQUlv6Q', '2026-08-18', 'full', '讨论长鑫创新高、铜供需缺口、资源股周期和“方向反过来跌得也快”；量化层只提取供需、周期和波动复核思路。'),
+  source('article-loss-20260815', '越努力，亏得越多', 'https://mp.weixin.qq.com/s/3EZ2ANI1_gSrjhXVXQPjvw', '2026-08-15', 'preview', '文章为付费试读，仅保留公开可见的知识分享和时效性提示，不把未读正文转成因子。'),
+  source('article-fall-20260814', '真跌了', 'https://mp.weixin.qq.com/s/XuUWhlyNpL_avXS417OQ8g', '2026-08-14', 'full', '讨论资本开支预期、传统行业红利、算力投入和慢增长；量化层补充预期差、资本开支和股东回报复核。'),
   source('article-pingan-20260825', '2026半年报业绩增速创七年新高，再谈中国平安', 'https://mp.weixin.qq.com/s/tBZGc34P2HYZWeaquSm5Xw', '2026-08-25', 'full', '用 NBV、合同服务边际、三差和资产分类拆解保险利润含金量与利差损风险。'),
   source('article-lie-flat', '躺平了', 'https://mp.weixin.qq.com/s/FeydbWMQ4PMxXB3-3kVTjg', null, 'full', '强调好公司与好价格分开判断，并用特变电工的业绩底、行业增速和估值做相对比较。'),
   source('article-carry-on', '扛不住了', 'https://mp.weixin.qq.com/s/seve1ckimSAn3sUq4zCuSg', null, 'full', '讨论油价敏感度、行业利润增速、资源品供需和商品作为长期资产的周期属性。'),

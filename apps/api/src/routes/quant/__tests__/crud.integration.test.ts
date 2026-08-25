@@ -147,6 +147,72 @@ describe('quant watchlist CRUD contract', () => {
     await expect(client.execute('SELECT count(*) AS count FROM quant_watchlist')).resolves.toMatchObject({ rows: [{ count: 0 }] })
   })
 
+  it('backfills a code-only watchlist name from the public stock identity provider', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      rc: 0,
+      data: { f57: '600000', f58: '浦发银行' },
+    }), { status: 200 }))
+
+    const add = await app.request('/api/quant/watchlist', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '600000.SH' }),
+    }, { EASTMONEY_BASE_URL: 'https://eastmoney.fixture.test' } as AppEnv['Bindings'])
+
+    expect(add.status).toBe(201)
+    await expect(add.json()).resolves.toMatchObject({ data: { tsCode: '600000.SH', name: '浦发银行' } })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a code-only watchlist create successful when name lookup is unavailable', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ rc: 0, data: null }), { status: 200 }))
+
+    const add = await app.request('/api/quant/watchlist', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '600000.SH' }),
+    }, { EASTMONEY_BASE_URL: 'https://eastmoney.fixture.test' } as AppEnv['Bindings'])
+
+    expect(add.status).toBe(201)
+    await expect(add.json()).resolves.toMatchObject({ data: { tsCode: '600000.SH', name: null } })
+  })
+
+  it('returns current watchlist codes as pending candidates before the first scan', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    for (const item of [
+      { ts_code: '601899.SH', name: '紫金矿业' },
+      { ts_code: '600000.SH', name: '浦发银行' },
+    ]) {
+      await app.request('/api/quant/watchlist', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(item),
+      })
+    }
+
+    const beforeScan = await app.request('/api/quant/candidates')
+    await expect(beforeScan.json()).resolves.toMatchObject({
+      data: {
+        generatedAt: null,
+        candidates: [
+          { tsCode: '601899.SH', name: '紫金矿业', pendingSync: true, dataQuality: 'insufficient_data' },
+          { tsCode: '600000.SH', name: '浦发银行', pendingSync: true, dataQuality: 'insufficient_data' },
+        ],
+      },
+    })
+
+    await app.request('/api/quant/watchlist/600000.SH', { method: 'DELETE' })
+    const afterDelete = await app.request('/api/quant/candidates')
+    await expect(afterDelete.json()).resolves.toMatchObject({
+      data: { candidates: [{ tsCode: '601899.SH' }] },
+    })
+  })
+
   it('reads and idempotently updates research markers for watchlist stocks', async () => {
     const { client, db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })
@@ -221,7 +287,7 @@ describe('quant watchlist CRUD contract', () => {
       const add = await app.request('/api/quant/watchlist', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ts_code: '000001.SZ' }),
+        body: JSON.stringify({ ts_code: '000001.SZ', name: '平安银行' }),
       })
       expect(add.status).toBe(201)
 

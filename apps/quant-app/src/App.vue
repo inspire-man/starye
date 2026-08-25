@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
 import type { CandidateActionMeta } from './lib/candidate-action'
+import type { DecisionEvidenceStatus } from './lib/decision-evidence'
 import type {
   CandidateItem,
   CandidateSnapshot,
@@ -54,6 +55,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { getCandidateAction } from './lib/candidate-action'
+import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
@@ -202,7 +204,7 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
 const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'score' || candidateResearchStatus.value !== 'all' || candidateReviewDue.value !== 'all')
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
-const overallError = computed(() => errors.watchlist || errors.candidates || errors.research)
+const overallError = computed(() => errors.watchlist || errors.candidates || errors.research || errors.action)
 const deleteDialogMessage = computed(() => pendingDeleteCode.value ? `确认从观察池移除 ${pendingDeleteCode.value}？` : '')
 const latestDate = computed(() => {
   const dates = dailyBars.value.map(item => item.tradeDate).filter(Boolean)
@@ -243,6 +245,8 @@ const signalCandidateCount = computed(() => candidateItems.value.filter(item => 
 const dataCoverageCount = computed(() => watchlist.value.filter(item => item.barCount > 0 || item.latestTradeDate !== null).length)
 const dataCoverageLabel = computed(() => watchlist.value.length ? `${dataCoverageCount.value} / ${watchlist.value.length}` : '--')
 const activeViewCopy = computed(() => viewCopy[activeView.value])
+const pendingCandidateCount = computed(() => candidateItems.value.filter(item => item.pendingSync).length)
+const scannedCandidateCount = computed(() => candidateItems.value.length - pendingCandidateCount.value)
 const topCandidates = computed(() => [...candidateItems.value]
   .sort((left, right) => (right.score ?? -1) - (left.score ?? -1))
   .slice(0, 3))
@@ -394,7 +398,7 @@ const researchSummary = computed(() => buildResearchSummary({
 
 const watchlistColumns: Column<WatchlistItem>[] = [
   { key: 'tsCode', label: '代码', minWidth: '150px' },
-  { key: 'name', label: '名称', minWidth: '130px', render: item => item.name || '未命名' },
+  { key: 'name', label: '名称', minWidth: '130px', render: item => item.name || '名称待补齐' },
   { key: 'latestClose', label: '最新价', width: '92px', render: item => formatNumber(item.latestClose) },
   { key: 'latestChangePercent', label: '涨跌幅', width: '92px', render: item => formatPercent(item.latestChangePercent) },
   { key: 'latestTradeDate', label: '数据截至', width: '120px', render: item => formatTradeDate(item.latestTradeDate) },
@@ -447,6 +451,17 @@ const chartBars = computed(() => {
 })
 
 const trendStructure = computed(() => buildTrendStructure(dailyBars.value))
+const decisionEvidence = computed(() => buildDecisionEvidence({
+  candidate: selectedCandidate.value,
+  trend: trendStructure.value,
+  latestTradeDate: latestDailyBar.value?.tradeDate ?? selectedStock.value?.latestTradeDate ?? null,
+  valuation: valuation.value,
+  valuationComparison: valuationComparison.value,
+  financial: financialQuality.value,
+  financialHistory: financialHistory.value,
+  valueQuality: selectedValueQuality.value,
+  shareholderReturn: selectedShareholderReturn.value,
+}))
 
 function formatNumber(value: number | null): string {
   return value === null ? '--' : value.toFixed(2)
@@ -514,6 +529,22 @@ function formatMultiple(value: number | null): string {
 
 function formatDividendYield(value: number | null): string {
   return value === null ? '--' : `${value.toFixed(2)}%`
+}
+
+function decisionEvidenceStatusLabel(status: DecisionEvidenceStatus): string {
+  return { pass: '通过', caution: '注意', fail: '未通过', missing: '数据不足' }[status]
+}
+
+function decisionEvidenceStatusClass(status: DecisionEvidenceStatus): string {
+  return `decision-evidence-status-${status}`
+}
+
+function decisionEvidenceActionClass(action: string): string {
+  return `decision-evidence-action-${action}`
+}
+
+function formatEvidenceDate(value: string | null): string {
+  return value ? formatTradeDate(value) : '未记录'
 }
 
 function shareholderReturnStatusLabel(item: QuantShareholderReturnItem | null): string {
@@ -701,7 +732,7 @@ function formatFactorLabel(value: string): string {
 }
 
 function displayStockName(item: Pick<CandidateItem, 'tsCode' | 'name'>): string {
-  return item.name || watchlist.value.find(stock => stock.tsCode === item.tsCode)?.name || item.tsCode
+  return item.name || watchlist.value.find(stock => stock.tsCode === item.tsCode)?.name || '名称待补齐'
 }
 
 function candidateActionFor(item: CandidateItem): CandidateActionMeta {
@@ -1145,10 +1176,29 @@ async function addToWatchlist() {
   adding.value = true
   errors.action = null
   try {
-    await quantApi.addWatchlist({ tsCode, name })
+    const existing = watchlist.value.find(item => item.tsCode === tsCode)
+    let resolvedName = name
+    let nameLookupFailed = false
+    if (!resolvedName) {
+      try {
+        resolvedName = (await quantApi.getStockBasic(tsCode)).name
+      }
+      catch {
+        resolvedName = ''
+        nameLookupFailed = true
+      }
+    }
+    if (existing && resolvedName && existing.name !== resolvedName) {
+      await quantApi.updateWatchlistName(tsCode, resolvedName)
+    }
+    else {
+      await quantApi.addWatchlist({ tsCode, name: resolvedName })
+    }
     watchCode.value = ''
     watchName.value = ''
-    await Promise.all([loadWatchlist(), loadResearchMarkers()])
+    if (nameLookupFailed)
+      errors.action = new QuantApiError('股票已加入，但名称解析暂不可用；可补充名称后再次提交', 503, 'QUANT_STOCK_BASIC_UNAVAILABLE')
+    await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
   }
   catch (error) {
@@ -1492,6 +1542,7 @@ onUnmounted(() => {
 
           <ConfirmDialog
             :open="pendingDeleteCode !== null"
+            mobile-placement="center"
             title="移除观察池代码"
             :message="deleteDialogMessage"
             confirm-text="确认移除"
@@ -1563,11 +1614,43 @@ onUnmounted(() => {
                 择股信号
               </h2>
             </div>
+            <div class="candidate-heading-actions">
+              <button class="secondary-button" type="button" title="打开观察池并新增股票" @click="setActiveView('watchlist')">
+                <Plus :size="14" aria-hidden="true" />
+                添加观察股
+              </button>
+              <button class="secondary-button" type="button" title="打开观察池并更新日线数据" @click="setActiveView('watchlist')">
+                <RefreshCw :size="14" aria-hidden="true" />
+                更新数据
+              </button>
+            </div>
             <div class="snapshot-meta">
               <span>数据截至 {{ formatTradeDate(snapshot?.toDate || null) }}</span>
               <span>计算 {{ formatDateTime(snapshot?.generatedAt || null) }}</span>
             </div>
           </div>
+          <div class="candidate-sync-summary" aria-label="候选数据覆盖状态">
+            <span>当前观察池 <strong>{{ candidateItems.length }}</strong> 只</span>
+            <span>已计算 <strong>{{ scannedCandidateCount }}</strong> 只</span>
+            <span :class="pendingCandidateCount ? 'candidate-sync-summary-warning' : ''">待更新 <strong>{{ pendingCandidateCount }}</strong> 只</span>
+          </div>
+          <div v-if="pendingCandidateCount" class="candidate-pending-callout" role="status">
+            <Info :size="16" aria-hidden="true" />
+            <span>{{ pendingCandidateCount }} 只新加入的股票还没有进入最近一次日线快照，更新观察池后才会计算信号、趋势和价值质量。</span>
+            <button class="text-button" type="button" @click="setActiveView('watchlist')">
+              去更新
+            </button>
+          </div>
+          <form class="candidate-add-form" aria-label="从候选研究新增观察股" @submit.prevent="addToWatchlist">
+            <label class="sr-only" for="candidate-quant-code">新增股票代码</label>
+            <input id="candidate-quant-code" v-model="watchCode" class="field-control field-code" inputmode="text" autocomplete="off" placeholder="输入代码，如 600000.SH" maxlength="9">
+            <label class="sr-only" for="candidate-quant-name">新增股票名称</label>
+            <input id="candidate-quant-name" v-model="watchName" class="field-control" autocomplete="off" placeholder="名称可留空，系统会解析" maxlength="40">
+            <button class="primary-button" type="submit" :disabled="adding || watchlist.length >= 50">
+              <Plus :size="15" aria-hidden="true" />
+              {{ adding ? '加入中' : '加入观察池并研究' }}
+            </button>
+          </form>
           <div class="candidate-toolbar">
             <div class="candidate-filter-group" role="group" aria-label="择股预设">
               <button
@@ -1751,8 +1834,9 @@ onUnmounted(() => {
               <template #cell-signals="{ item }">
                 <div class="signal-list candidate-signal-list">
                   <span v-if="researchMarkerMap.get(item.tsCode)?.status && researchMarkerMap.get(item.tsCode)?.status !== 'unreviewed'" class="research-status-dot" :class="`research-status-${researchMarkerMap.get(item.tsCode)?.status}`" :title="researchStatusOptions.find(option => option.value === researchMarkerMap.get(item.tsCode)?.status)?.label" aria-hidden="true" />
+                  <span v-if="item.pendingSync" class="signal-tag signal-tag-warning">待更新数据</span>
                   <span v-for="signal in item.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
-                  <span v-if="item.quality !== 'ready'" class="signal-tag signal-tag-muted">数据不足</span>
+                  <span v-if="!item.pendingSync && item.quality !== 'ready'" class="signal-tag signal-tag-muted">数据不足</span>
                   <span v-if="!item.signals.length && item.quality === 'ready'" class="muted-inline">暂无明确信号</span>
                 </div>
               </template>
@@ -1942,6 +2026,76 @@ onUnmounted(() => {
             </div>
             <p class="decision-card-note">
               技术信号用于缩小研究范围；估值和财务数据需要结合报告期与样本完整度人工核对。
+            </p>
+          </section>
+          <section v-if="decisionEvidence" class="decision-evidence-panel" aria-label="中长线决策证据链">
+            <div class="decision-evidence-heading">
+              <div>
+                <p class="section-kicker">
+                  DECISION EVIDENCE V1
+                </p>
+                <h2>中长线时机证据链</h2>
+              </div>
+              <div class="decision-evidence-score" :class="decisionEvidenceActionClass(decisionEvidence.action)">
+                <strong>{{ decisionEvidence.gateScore === null ? '--' : `${decisionEvidence.gateScore}%` }}</strong>
+                <span>门槛通过率</span>
+              </div>
+            </div>
+            <div class="decision-evidence-action" :class="decisionEvidenceActionClass(decisionEvidence.action)">
+              <div>
+                <span>研究动作</span>
+                <strong>{{ decisionEvidence.label }}</strong>
+              </div>
+              <p>{{ decisionEvidence.headline }}</p>
+            </div>
+            <div class="decision-evidence-counts" aria-label="证据链统计">
+              <span><strong>{{ decisionEvidence.passedCount }}</strong> 项通过</span>
+              <span><strong>{{ decisionEvidence.cautionCount }}</strong> 项注意</span>
+              <span><strong>{{ decisionEvidence.failedCount }}</strong> 项未通过</span>
+              <span><strong>{{ decisionEvidence.missingCount }}</strong> 项缺失</span>
+            </div>
+            <div class="decision-evidence-list">
+              <div v-for="item in decisionEvidence.evidence" :key="item.key" class="decision-evidence-row" :class="decisionEvidenceStatusClass(item.status)">
+                <div class="decision-evidence-row-main">
+                  <div class="decision-evidence-row-title">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ decisionEvidenceStatusLabel(item.status) }}</span>
+                  </div>
+                  <div class="decision-evidence-values">
+                    <strong>{{ item.value }}</strong>
+                    <small>门槛 {{ item.threshold }}</small>
+                  </div>
+                  <p>{{ item.detail }}</p>
+                </div>
+                <div class="decision-evidence-meta">
+                  <span>{{ item.source }}</span>
+                  <small>{{ item.observedAt?.length === 8 ? formatEvidenceDate(item.observedAt) : item.observedAt ? formatDateTime(item.observedAt) : '未记录' }}</small>
+                </div>
+              </div>
+            </div>
+            <div class="decision-evidence-guidance">
+              <div>
+                <span>等待条件</span>
+                <ul>
+                  <li v-for="condition in decisionEvidence.waitConditions" :key="`wait-${condition}`">
+                    {{ condition }}
+                  </li>
+                  <li v-if="!decisionEvidence.waitConditions.length">
+                    当前没有额外等待条件
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <span>重新评估条件</span>
+                <ul>
+                  <li v-for="condition in decisionEvidence.reassessmentConditions" :key="`reassess-${condition}`">
+                    {{ condition }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <p class="decision-evidence-note">
+              公式 {{ decisionEvidence.formulaVersion }} · 这是一套可复核的研究时机框架，不是买入、卖出或收益承诺；所有门槛均基于当前观察池与已返回数据。
             </p>
           </section>
           <section class="value-quality-panel" aria-label="中长线价值质量评分">

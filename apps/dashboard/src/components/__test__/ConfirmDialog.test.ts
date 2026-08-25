@@ -79,6 +79,14 @@ describe('confirmDialog', () => {
     wrapper.unmount()
   })
 
+  it('exposes a centered mobile placement for compact operational dialogs', async () => {
+    const wrapper = mount(ConfirmDialog, { props: { ...baseProps, mobilePlacement: 'center' } })
+    await flushPromises()
+
+    expect(document.querySelector('[data-confirm-dialog]')?.classList.contains('confirm-dialog-mobile-center')).toBe(true)
+    wrapper.unmount()
+  })
+
   it('renders slot content and requires the exact text before confirming', async () => {
     const wrapper = mount(ConfirmDialog, {
       props: { ...baseProps, requireTextConfirm: true, variant: 'danger' },

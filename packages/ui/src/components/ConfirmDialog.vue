@@ -14,6 +14,7 @@ interface Props {
   previewItems?: string[]
   loading?: boolean
   closeOnBackdrop?: boolean
+  mobilePlacement?: 'sheet' | 'center'
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -24,6 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
   variant: 'default',
   previewItems: () => [],
   loading: false,
+  mobilePlacement: 'sheet',
 })
 
 const emit = defineEmits<{
@@ -178,6 +180,7 @@ onBeforeUnmount(() => {
       <div
         v-if="open"
         class="confirm-dialog-overlay fixed inset-0 z-[3000] flex items-center justify-center bg-background/75 p-4 backdrop-blur-sm"
+        :class="`confirm-dialog-mobile-${mobilePlacement}`"
         data-confirm-dialog
         role="presentation"
         @click.self="handleBackdropClick"
@@ -302,6 +305,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .confirm-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
   z-index: var(--dashboard-modal-z-index, 3000);
   --confirm-dialog-background: var(--dashboard-background, var(--background));
   --confirm-dialog-foreground: var(--dashboard-foreground, var(--foreground));
@@ -529,6 +539,11 @@ onBeforeUnmount(() => {
   .confirm-dialog-overlay {
     align-items: flex-end;
     padding: 0.5rem;
+  }
+
+  .confirm-dialog-overlay.confirm-dialog-mobile-center {
+    align-items: center;
+    padding: 0.75rem;
   }
 
   .confirm-dialog-panel {

@@ -22,6 +22,15 @@ function riskReasons(item: CandidateItem): string[] {
 }
 
 export function getCandidateAction(item: CandidateItem): CandidateActionMeta {
+  if (item.pendingSync) {
+    return {
+      action: 'complete-data',
+      label: '待更新数据',
+      detail: item.pendingReason || '尚未进入最近一次候选快照，先更新观察池',
+      tone: 'neutral',
+    }
+  }
+
   if (item.quality !== 'ready') {
     return {
       action: 'complete-data',

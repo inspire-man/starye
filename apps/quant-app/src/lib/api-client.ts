@@ -17,6 +17,7 @@ import type {
   QuantShareholderReturnDistribution,
   QuantShareholderReturnItem,
   QuantShareholderReturnSelection,
+  QuantStockBasic,
   QuantValuationComparison,
   QuantValuationComparisonPeer,
   QuantValuationSnapshot,
@@ -273,7 +274,7 @@ function parseInvestmentKnowledge(payload: unknown): QuantInvestmentKnowledge {
   const data = unwrapData(payload)
   const record = isRecord(data) ? data : {}
   return {
-    version: readString(record, 'version') || 'investment-knowledge-v1',
+    version: readString(record, 'version') || 'investment-knowledge-v2',
     observedAt: readString(record, 'observedAt', 'observed_at') || '',
     sources: Array.isArray(record.sources)
       ? record.sources.flatMap((value) => {
@@ -330,6 +331,18 @@ function parseWatchlistItem(value: JsonRecord, index: number): WatchlistItem | n
     latestChangePercent: readNumber(value, 'latestChangePercent', 'latest_change_percent', 'pctChg', 'pct_chg'),
     createdAt: readString(value, 'createdAt', 'created_at'),
   }
+}
+
+function parseStockBasic(payload: unknown): QuantStockBasic {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('股票名称数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const tsCode = readString(data, 'tsCode', 'ts_code', 'code')
+  const name = readString(data, 'name', 'stockName', 'stock_name')
+  const observedAt = readString(data, 'observedAt', 'observed_at')
+  if (!tsCode || !name || !observedAt)
+    throw new QuantApiError('股票名称数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  return { tsCode, name, observedAt }
 }
 
 function parseResearchMarker(value: unknown): QuantResearchMarker | null {
@@ -415,6 +428,8 @@ function parseCandidate(value: unknown, index: number): CandidateItem | null {
     signals: rawSignals.filter((signal): signal is string => typeof signal === 'string'),
     missingFactors: rawMissingFactors.filter((factor): factor is string => typeof factor === 'string'),
     quality: normalizedQuality,
+    pendingSync: readBoolean(value, 'pendingSync', 'pending_sync') ?? false,
+    pendingReason: readString(value, 'pendingReason', 'pending_reason'),
   }
 }
 
@@ -811,6 +826,10 @@ export const quantApi = {
     return parseWatchlist(await requestJson('/watchlist'))
   },
 
+  async getStockBasic(tsCode: string): Promise<QuantStockBasic> {
+    return parseStockBasic(await requestJson(`/stock-basic/${encodeURIComponent(tsCode)}`))
+  },
+
   async getResearchMarkers(): Promise<QuantResearchMarker[]> {
     return parseResearchMarkers(await requestJson('/research'))
   },
@@ -829,6 +848,15 @@ export const quantApi = {
     const payload = await requestJson('/watchlist', {
       method: 'POST',
       body: JSON.stringify({ ts_code: input.tsCode, name: input.name || undefined }),
+    })
+    const items = parseWatchlist(payload)
+    return items[0] || null
+  },
+
+  async updateWatchlistName(tsCode: string, name: string): Promise<WatchlistItem | null> {
+    const payload = await requestJson(`/watchlist/${encodeURIComponent(tsCode)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
     })
     const items = parseWatchlist(payload)
     return items[0] || null

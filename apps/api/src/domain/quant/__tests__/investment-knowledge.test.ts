@@ -9,12 +9,18 @@ import {
 } from '../investment-knowledge'
 
 describe('quant investment knowledge catalog', () => {
-  it('keeps the seven supplied sources traceable and marks the paid preview', () => {
-    expect(QUANT_KNOWLEDGE_SOURCES).toHaveLength(7)
-    expect(QUANT_KNOWLEDGE_SOURCES.filter(source => source.access === 'preview')).toEqual([
+  it('keeps the dated supplied sources traceable and marks the paid preview', () => {
+    expect(QUANT_KNOWLEDGE_SOURCES).toHaveLength(10)
+    expect(QUANT_KNOWLEDGE_SOURCES.filter(source => source.access === 'preview')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'article-loss-20260815', title: '越努力，亏得越多' }),
       expect.objectContaining({ id: 'article-key-point', title: '重点来了' }),
-    ])
-    expect(new Set(QUANT_KNOWLEDGE_SOURCES.map(source => source.url)).size).toBe(7)
+    ]))
+    expect(QUANT_KNOWLEDGE_SOURCES).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'article-new-high-20260818', publishedAt: '2026-08-18' }),
+      expect.objectContaining({ id: 'article-loss-20260815', access: 'preview', publishedAt: '2026-08-15' }),
+      expect.objectContaining({ id: 'article-fall-20260814', publishedAt: '2026-08-14' }),
+    ]))
+    expect(new Set(QUANT_KNOWLEDGE_SOURCES.map(source => source.url)).size).toBe(10)
   })
 
   it('separates active score factors from data-dependent hypotheses', () => {

@@ -41,6 +41,12 @@ export interface WatchlistItem {
   createdAt: string | null
 }
 
+export interface QuantStockBasic {
+  tsCode: string
+  name: string
+  observedAt: string
+}
+
 export interface SyncResult {
   status: SyncStatus
   requestedCount: number
@@ -76,6 +82,8 @@ export interface CandidateItem {
   signals: string[]
   missingFactors: string[]
   quality: CandidateQuality
+  pendingSync?: boolean
+  pendingReason?: string | null
 }
 
 export interface CandidateSnapshot {

@@ -26,6 +26,12 @@ function candidate(overrides: Partial<CandidateItem> = {}): CandidateItem {
 }
 
 describe('selection presets', () => {
+  it('keeps newly added pending stocks visible in the default research view', () => {
+    const pending = candidate({ pendingSync: true, quality: 'insufficient_data', score: 0 })
+    expect(matchesSelectionPreset(pending, 'balanced')).toBe(true)
+    expect(getSelectionReasons(pending, 'balanced')).toEqual(['已加入观察池，等待日线更新'])
+  })
+
   it('keeps a balanced candidate with complete data and multiple signals', () => {
     expect(matchesSelectionPreset(candidate(), 'balanced')).toBe(true)
     expect(getSelectionReasons(candidate(), 'balanced')).toEqual(['数据完整', '命中 3 个信号'])
