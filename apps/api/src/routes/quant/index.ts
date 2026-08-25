@@ -1,4 +1,5 @@
 import type { EastmoneyProviderOptions, TushareProviderOptions } from '../../domain/quant/provider'
+import type { QuantSignalHistoryCandidate, QuantSignalHistorySnapshot } from '../../domain/quant/signal-persistence'
 import type { MomentumCandidate } from '../../domain/quant/types'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
@@ -13,10 +14,10 @@ import { createEastmoneyFinancialProvider, createEastmoneyStockBasicProvider, cr
 import {
   createQuantWatchlistItem,
   deleteQuantWatchlistItem,
-  getLatestQuantScanSnapshot,
   getQuantSyncState,
   listQuantDailyBars,
   listQuantResearchMarkers,
+  listQuantScanSnapshots,
   listQuantWatchlist,
   listQuantWatchlistWithStats,
   normalizeTsCode,
@@ -24,6 +25,7 @@ import {
   upsertQuantResearchMarker,
 } from '../../domain/quant/repository'
 import { readQuantShareholderReturns } from '../../domain/quant/shareholder-return'
+import { buildQuantSignalPersistence } from '../../domain/quant/signal-persistence'
 import { syncQuantDaily } from '../../domain/quant/sync'
 import { readQuantValueSelection } from '../../domain/quant/value-selection-service'
 import { requireAuth } from '../../middleware/guard'
@@ -57,17 +59,39 @@ function parseStoredCandidates(snapshot: { readonly candidatesJson: string } | u
   }
 }
 
+function parseSignalHistoryCandidate(value: Record<string, unknown>): QuantSignalHistoryCandidate {
+  const rawScore = value.score
+  const score = typeof rawScore === 'number' && Number.isFinite(rawScore) ? rawScore : null
+  const rawFactors = value.matchedFactors
+  const matchedFactors = Array.isArray(rawFactors)
+    ? rawFactors.filter((factor): factor is string => typeof factor === 'string')
+    : []
+  return { score, matchedFactors }
+}
+
+function parseSignalHistorySnapshot(snapshot: {
+  readonly id: string
+  readonly generatedAt: Date
+  readonly candidatesJson: string
+}): QuantSignalHistorySnapshot {
+  const candidates = new Map([...parseStoredCandidates(snapshot)].map(([tsCode, candidate]) => [tsCode, parseSignalHistoryCandidate(candidate)] as const))
+  return { id: snapshot.id, generatedAt: snapshot.generatedAt, candidates }
+}
+
 async function readCurrentQuantCandidates(db: AppEnv['Variables']['db']) {
-  const [watchlist, snapshot] = await Promise.all([
+  const [watchlist, snapshotHistory] = await Promise.all([
     listQuantWatchlist(db),
-    getLatestQuantScanSnapshot(db),
+    listQuantScanSnapshots(db),
   ])
+  const snapshot = snapshotHistory[0]
   const barsByCode = Object.fromEntries(await Promise.all(watchlist.map(async item => [
     item.tsCode,
     await listQuantDailyBars(db, { tsCode: item.tsCode }),
   ] as const)))
   const recalculated = new Map(screenMomentum(barsByCode).map(candidate => [candidate.tsCode, candidate]))
   const stored = parseStoredCandidates(snapshot)
+  const signalHistory = snapshotHistory.map(parseSignalHistorySnapshot)
+  const persistenceByCode = new Map(watchlist.map(item => [item.tsCode, buildQuantSignalPersistence(item.tsCode, signalHistory)] as const))
   const candidates = watchlist.map((item) => {
     const snapshotCandidate = stored.get(item.tsCode)
     if (snapshotCandidate) {
@@ -78,6 +102,7 @@ async function readCurrentQuantCandidates(db: AppEnv['Variables']['db']) {
         name: item.name ?? snapshotCandidate.name ?? null,
         pendingSync: false,
         pendingReason: null,
+        persistence: persistenceByCode.get(item.tsCode),
       }
     }
 
@@ -105,6 +130,7 @@ async function readCurrentQuantCandidates(db: AppEnv['Variables']['db']) {
       name: item.name,
       pendingSync: true,
       pendingReason: '尚未进入最近一次候选快照，请更新观察池',
+      persistence: persistenceByCode.get(item.tsCode),
     }
   })
 

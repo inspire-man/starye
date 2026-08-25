@@ -213,6 +213,62 @@ describe('quant watchlist CRUD contract', () => {
     })
   })
 
+  it('returns persisted signal history for candidates', async () => {
+    const { client, db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    await createQuantWatchlistItem(db, { tsCode: '601899.SH', name: '紫金矿业' })
+
+    const candidateJson = (score: number, matchedFactors: string[]) => JSON.stringify([{
+      tsCode: '601899.SH',
+      score,
+      matchedFactors,
+      factorVersion: 'momentum-v1',
+      dataQuality: 'ready',
+      factors: {},
+    }])
+    for (const [id, generatedAt, score, matchedFactors] of [
+      ['snapshot-new', 1_700_000_200, 4, ['ma20', 'relative_strength']],
+      ['snapshot-old', 1_700_000_100, 3, ['ma20']],
+    ] as const) {
+      await client.execute({
+        sql: `INSERT INTO quant_scan_snapshot (
+          id, status, factor_version, input_ts_codes_json, from_date, to_date,
+          candidate_count, candidates_json, generated_at, created_at
+        ) VALUES (?, 'completed', 'momentum-v1', ?, '20260824', '20260825', 1, ?, ?, ?)`,
+        args: [id, JSON.stringify(['601899.SH']), candidateJson(score, matchedFactors), generatedAt, generatedAt],
+      })
+    }
+
+    const response = await app.request('/api/quant/candidates')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: 'snapshot-new',
+        candidates: [{
+          tsCode: '601899.SH',
+          name: '紫金矿业',
+          persistence: {
+            sampleSize: 2,
+            appearanceCount: 2,
+            persistenceRate: 1,
+            state: 'confirming',
+            previousScore: 3,
+            scoreDelta: 1,
+            scoreChange: 1,
+            factorPersistence: expect.arrayContaining([
+              { factor: 'ma20', appearances: 2, rate: 1 },
+              { factor: 'relative_strength', appearances: 1, rate: 0.5 },
+            ]),
+            evidence: expect.arrayContaining([
+              expect.objectContaining({ snapshotId: 'snapshot-new', present: true, score: 4 }),
+              expect.objectContaining({ snapshotId: 'snapshot-old', present: true, score: 3 }),
+            ]),
+          },
+        }],
+      },
+    })
+  })
+
   it('reads and idempotently updates research markers for watchlist stocks', async () => {
     const { client, db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })

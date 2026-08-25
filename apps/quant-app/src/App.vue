@@ -4,6 +4,7 @@ import type { CandidateActionMeta } from './lib/candidate-action'
 import type { DecisionEvidenceStatus } from './lib/decision-evidence'
 import type {
   CandidateItem,
+  CandidateSignalPersistence,
   CandidateSnapshot,
   DailyBar,
   QuantFinancialQualityComparison,
@@ -416,6 +417,7 @@ const candidateColumns: Column<CandidateItem>[] = [
   { key: 'tsCode', label: '代码', minWidth: '115px' },
   { key: 'name', label: '名称', minWidth: '100px', render: item => displayStockName(item) },
   { key: 'score', label: '信号分', width: '78px', render: item => formatNumber(item.score) },
+  { key: 'persistence', label: '信号持续', width: '118px', minWidth: '110px' },
   { key: 'return20', label: '20日表现', width: '86px', render: item => formatPercent(item.return20) },
   { key: 'ma20', label: '20日均线', width: '88px', render: item => formatNumber(item.ma20) },
   { key: 'volumeRatio', label: '成交活跃度', width: '98px', render: item => formatNumber(item.volumeRatio) },
@@ -475,6 +477,58 @@ function formatNumber(value: number | null): string {
 
 function formatSignalScore(value: number | null): string {
   return value === null ? '--' : `${value} / ${SIGNAL_RULE_COUNT}`
+}
+
+const EMPTY_SIGNAL_PERSISTENCE: CandidateSignalPersistence = {
+  sampleSize: 0,
+  appearanceCount: 0,
+  persistenceRate: null,
+  latestScore: null,
+  previousScore: null,
+  scoreDelta: null,
+  scoreChange: null,
+  state: 'insufficient_history',
+  factorPersistence: [],
+  evidence: [],
+}
+
+function candidatePersistenceFor(item: CandidateItem | null): CandidateSignalPersistence {
+  return item?.persistence || EMPTY_SIGNAL_PERSISTENCE
+}
+
+function candidatePersistenceLabel(item: CandidateItem | null): string {
+  return {
+    first_seen: '首次出现',
+    confirming: '持续确认',
+    weakening: '信号减弱',
+    not_in_latest: '未进最新',
+    insufficient_history: '历史不足',
+  }[candidatePersistenceFor(item).state]
+}
+
+function candidatePersistenceClass(item: CandidateItem | null): string {
+  return `candidate-persistence-${candidatePersistenceFor(item).state}`
+}
+
+function formatPersistenceRate(value: number | null): string {
+  return value === null ? '--' : `${Math.round(value * 100)}%`
+}
+
+function formatScoreDelta(value: number | null): string {
+  return value === null ? '--' : `${value >= 0 ? '+' : ''}${value}`
+}
+
+function scoreDeltaClass(value: number | null): string {
+  return value === null ? 'text-status-neutral' : value >= 0 ? 'text-status-success' : 'text-status-danger'
+}
+
+function candidatePersistenceDetail(item: CandidateItem | null): string {
+  const persistence = candidatePersistenceFor(item)
+  if (persistence.state === 'not_in_latest')
+    return `最近 ${persistence.sampleSize} 次快照中当前未进入最新一次，请先更新观察池数据`
+  if (persistence.state === 'insufficient_history')
+    return `已记录 ${persistence.sampleSize} 次快照，样本不足以判断信号方向`
+  return `最近 ${persistence.sampleSize} 次出现 ${persistence.appearanceCount} 次 · 相邻分数 ${formatScoreDelta(persistence.scoreDelta)} · 出现比例 ${formatPersistenceRate(persistence.persistenceRate)}`
 }
 
 function signalScorePercent(value: number | null): number {
@@ -1855,6 +1909,12 @@ onUnmounted(() => {
                   <span class="score-meter" aria-hidden="true"><span class="score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
                 </div>
               </template>
+              <template #cell-persistence="{ item }">
+                <div class="candidate-persistence-cell" :title="candidatePersistenceDetail(item)">
+                  <span class="candidate-persistence-state" :class="candidatePersistenceClass(item)">{{ candidatePersistenceLabel(item) }}</span>
+                  <small>{{ item.persistence?.sampleSize ? `${item.persistence.appearanceCount} / ${item.persistence.sampleSize} 次` : '暂无历史快照' }}</small>
+                </div>
+              </template>
               <template #cell-return20="{ item }">
                 <span class="quant-table-number" :class="item.return20 === null ? 'text-status-neutral' : item.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.return20) }}</span>
               </template>
@@ -2081,6 +2141,66 @@ onUnmounted(() => {
             <p class="decision-card-note">
               技术信号用于缩小研究范围；估值和财务数据需要结合报告期与样本完整度人工核对。
             </p>
+          </section>
+          <section v-if="selectedCandidate" class="signal-persistence-panel" aria-label="信号持续性证据">
+            <div class="signal-persistence-heading">
+              <div>
+                <p class="section-kicker">
+                  SIGNAL PERSISTENCE
+                </p>
+                <h2>信号是否持续</h2>
+              </div>
+              <span class="candidate-persistence-state" :class="candidatePersistenceClass(selectedCandidate)">{{ candidatePersistenceLabel(selectedCandidate) }}</span>
+            </div>
+            <div class="signal-persistence-summary">
+              <div>
+                <span>出现比例</span>
+                <strong>{{ formatPersistenceRate(candidatePersistenceFor(selectedCandidate).persistenceRate) }}</strong>
+                <small>最近 {{ candidatePersistenceFor(selectedCandidate).sampleSize }} 次快照</small>
+              </div>
+              <div>
+                <span>相邻分数</span>
+                <strong :class="scoreDeltaClass(candidatePersistenceFor(selectedCandidate).scoreDelta)">{{ formatScoreDelta(candidatePersistenceFor(selectedCandidate).scoreDelta) }}</strong>
+                <small>最新对比前次</small>
+              </div>
+              <div>
+                <span>首末变化</span>
+                <strong :class="scoreDeltaClass(candidatePersistenceFor(selectedCandidate).scoreChange)">{{ formatScoreDelta(candidatePersistenceFor(selectedCandidate).scoreChange) }}</strong>
+                <small>当前窗口内</small>
+              </div>
+            </div>
+            <div class="signal-persistence-factors">
+              <div class="signal-persistence-subheading">
+                <span>因子出现频次</span>
+                <small>出现次数 / 快照样本</small>
+              </div>
+              <div v-if="candidatePersistenceFor(selectedCandidate).factorPersistence.length" class="signal-persistence-factor-list">
+                <span v-for="factor in candidatePersistenceFor(selectedCandidate).factorPersistence" :key="factor.factor" class="signal-persistence-factor" :title="`${formatFactorLabel(factor.factor)}出现比例 ${formatPersistenceRate(factor.rate)}`">
+                  <strong>{{ formatFactorLabel(factor.factor) }}</strong>
+                  <small>{{ factor.appearances }} / {{ candidatePersistenceFor(selectedCandidate).sampleSize || '--' }}</small>
+                </span>
+              </div>
+              <span v-else class="muted-inline">暂无可比较的历史因子</span>
+            </div>
+            <div class="signal-persistence-evidence">
+              <div class="signal-persistence-subheading">
+                <span>最近快照证据</span>
+                <small>服务端已保存记录</small>
+              </div>
+              <div v-if="candidatePersistenceFor(selectedCandidate).evidence.length" class="signal-persistence-evidence-list">
+                <div v-for="evidence in candidatePersistenceFor(selectedCandidate).evidence" :key="evidence.snapshotId" class="signal-persistence-evidence-row">
+                  <span class="signal-persistence-evidence-date">{{ formatDateTime(evidence.generatedAt) }}</span>
+                  <strong>{{ evidence.present ? `命中 ${formatSignalScore(evidence.score)}` : '未出现在快照' }}</strong>
+                  <span v-if="evidence.present" class="signal-list signal-persistence-evidence-tags">
+                    <span v-for="factor in evidence.matchedFactors" :key="`${evidence.snapshotId}-${factor}`" class="signal-tag signal-tag-teal">{{ formatFactorLabel(factor) }}</span>
+                  </span>
+                </div>
+              </div>
+              <span v-else class="muted-inline">暂无历史快照，请完成一次日线同步</span>
+            </div>
+            <span class="signal-persistence-note" title="持续性只描述当前观察池中已保存的快照样本；它是筛选线索，不是买入或卖出指令。" aria-label="信号持续性口径说明">
+              <Info :size="15" aria-hidden="true" />
+            </span>
           </section>
           <section v-if="decisionEvidence" class="decision-evidence-panel" aria-label="中长线决策证据链">
             <div class="decision-evidence-heading">
