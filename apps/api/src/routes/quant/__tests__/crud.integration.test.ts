@@ -1,5 +1,6 @@
 import type { Database } from '@starye/db'
 import type { AddressInfo } from 'node:http'
+import type { DailyBar } from '../../../domain/quant/types'
 import type { AppEnv } from '../../../types'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -9,12 +10,14 @@ import * as schema from '@starye/db/schema'
 import { drizzle } from 'drizzle-orm/libsql'
 import { Hono } from 'hono'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createQuantWatchlistItem, upsertQuantDailyBars } from '../../../domain/quant/repository'
 import { quantRoutes } from '../index'
 
 const migrationPath = new URL('../../../../../../packages/db/drizzle/0036_quant_workbench.sql', import.meta.url)
 const leaseMigrationPath = new URL('../../../../../../packages/db/drizzle/0037_quant_sync_lease.sql', import.meta.url)
 const seedMigrationPath = new URL('../../../../../../packages/db/drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
 const researchMigrationPath = new URL('../../../../../../packages/db/drizzle/0039_quant_research_marker.sql', import.meta.url)
+const knowledgeSeedMigrationPath = new URL('../../../../../../packages/db/drizzle/0040_quant_investment_knowledge_seed.sql', import.meta.url)
 
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
@@ -27,6 +30,16 @@ async function createDatabase(): Promise<{ client: ReturnType<typeof createClien
   return { client, db: drizzle(client, { schema }) as unknown as Database }
 }
 
+async function createSeedDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
+  const client = createClient({ url: 'file::memory:' })
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath]) {
+    const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
+    for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
+      await client.execute(statement)
+  }
+  return { client, db: drizzle(client, { schema }) as unknown as Database }
+}
+
 function createApp(db: Database, session: unknown) {
   const app = new Hono<AppEnv>()
   app.use('*', async (c, next) => {
@@ -36,6 +49,25 @@ function createApp(db: Database, session: unknown) {
   })
   app.route('/api/quant', quantRoutes)
   return app
+}
+
+function valueFixtureBars(tsCode: string, offset = 0): DailyBar[] {
+  return Array.from({ length: 80 }, (_, index) => {
+    const close = 100 + offset + index
+    return {
+      tsCode,
+      tradeDate: `2026${String(Math.floor(index / 30) + 1).padStart(2, '0')}${String(index % 30 + 1).padStart(2, '0')}`,
+      open: close,
+      high: close + 1,
+      low: close - 1,
+      close,
+      preClose: index === 0 ? null : close - 1,
+      change: index === 0 ? null : 1,
+      pctChg: index === 0 ? null : 1,
+      volume: 1000,
+      amount: 10000,
+    }
+  })
 }
 
 async function startTushareFixture(): Promise<{ url: string, close: () => Promise<void> }> {
@@ -304,6 +336,29 @@ describe('quant watchlist CRUD contract', () => {
     })
   })
 
+  it('applies the article-derived watchlist seed idempotently and preserves a user name edit', async () => {
+    const { client } = await createSeedDatabase()
+    const seededCodes = ['601318.SH', '000001.SZ', '600028.SH', '601857.SH', '601919.SH', '600011.SH', '600900.SH', '600312.SH', '603993.SH', '603986.SH']
+    const seededCodeList = seededCodes.map(code => `'${code}'`).join(',')
+
+    await expect(client.execute(`SELECT count(*) AS count FROM quant_watchlist WHERE ts_code IN (${seededCodeList})`)).resolves.toMatchObject({
+      rows: [{ count: 10 }],
+    })
+
+    await client.execute('UPDATE quant_watchlist SET name = \'自定义名称\' WHERE ts_code = \'601318.SH\'')
+    const migration = await readFile(fileURLToPath(knowledgeSeedMigrationPath.href), 'utf8')
+    for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
+      await client.execute(statement)
+
+    await expect(client.execute('SELECT name FROM quant_watchlist WHERE ts_code = \'601318.SH\'')).resolves.toMatchObject({
+      rows: [{ name: '自定义名称' }],
+    })
+    await client.execute('DELETE FROM quant_watchlist WHERE ts_code = \'601318.SH\'')
+    await expect(client.execute('SELECT count(*) AS count FROM quant_watchlist WHERE ts_code = \'601318.SH\'')).resolves.toMatchObject({
+      rows: [{ count: 0 }],
+    })
+  })
+
   it('compares financial quality against available watchlist reports', async () => {
     const { db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })
@@ -392,5 +447,92 @@ describe('quant watchlist CRUD contract', () => {
         peers: [{ tsCode: '600089.SH', valuation: null }],
       },
     })
+  })
+
+  it('returns value-quality scores for an expanded watchlist with independent valuation and financial sources', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    const stocks = [
+      ['601899.SH', '紫金矿业'],
+      ['600089.SH', '特变电工'],
+      ['600938.SH', '中国海油'],
+      ['000001.SZ', '平安银行'],
+    ] as const
+    for (const [tsCode, name] of stocks)
+      await createQuantWatchlistItem(db, { tsCode, name })
+    await upsertQuantDailyBars(db, stocks.map(([tsCode], index) => valueFixtureBars(tsCode, index * 10)).flat())
+
+    const values: Record<string, { pe: number, pb: number, roe: number }> = {
+      '601899': { pe: 12, pb: 1.4, roe: 18 },
+      '600089': { pe: 18, pb: 2.1, roe: 12 },
+      '600938': { pe: 9, pb: 1.1, roe: 20 },
+      '000001': { pe: 22, pb: 1.8, roe: 10 },
+    }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(input.toString())
+      if (url.pathname.includes('/api/qt/stock/get')) {
+        const code = url.searchParams.get('secid')?.split('.')[1] || ''
+        const value = values[code] || { pe: 20, pb: 2, roe: 10 }
+        return new Response(JSON.stringify({
+          rc: 0,
+          data: { f57: code, f163: value.pe, f165: value.pb, f166: 2, f168: 1 },
+        }), { status: 200 })
+      }
+      const code = (url.searchParams.get('code') || '').slice(2)
+      const value = values[code] || { pe: 20, pb: 2, roe: 10 }
+      return new Response(JSON.stringify({
+        data: [
+          {
+            SECURITY_CODE: code,
+            REPORT_DATE: '2026-06-30 00:00:00',
+            REPORT_TYPE: '中报',
+            NOTICE_DATE: '2026-08-30 00:00:00',
+            TOTALOPERATEREVETZ: 10,
+            PARENTNETPROFITTZ: 12,
+            KCFJCXSYJLRTZ: 11,
+            ROEJQ: value.roe,
+            XSMLL: 30,
+            XSJLL: 12,
+            ZCFZL: 45,
+            JYXJLYYSR: 0.08,
+            ROIC: 10,
+          },
+          {
+            SECURITY_CODE: code,
+            REPORT_DATE: '2025-12-31 00:00:00',
+            REPORT_TYPE: '年报',
+            NOTICE_DATE: '2026-04-01 00:00:00',
+            TOTALOPERATEREVETZ: 8,
+            PARENTNETPROFITTZ: 9,
+            KCFJCXSYJLRTZ: 8,
+            ROEJQ: value.roe - 1,
+            XSMLL: 29,
+            XSJLL: 11,
+            ZCFZL: 46,
+            JYXJLYYSR: 0.07,
+            ROIC: 9,
+          },
+        ],
+      }), { status: 200 })
+    })
+
+    const response = await app.request('/api/quant/value-selection')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        formulaVersion: 'value-quality-v1',
+        sampleCount: 4,
+        readyCount: 4,
+        items: [
+          { tsCode: '601899.SH', name: '紫金矿业', status: 'ready', score: expect.any(Number), financialReportDate: '2026-06-30' },
+          { tsCode: '600089.SH', name: '特变电工', status: 'ready' },
+          { tsCode: '600938.SH', name: '中国海油', status: 'ready' },
+          { tsCode: '000001.SZ', name: '平安银行', status: 'ready' },
+        ],
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(stocks.length * 2)
   })
 })

@@ -8,11 +8,19 @@ import type {
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
+  QuantInvestmentKnowledge,
+  QuantKnowledgeAlias,
+  QuantKnowledgeFactor,
+  QuantKnowledgeSource,
   QuantProviderName,
   QuantResearchMarker,
   QuantValuationComparison,
   QuantValuationComparisonPeer,
   QuantValuationSnapshot,
+  QuantValueQualityDimension,
+  QuantValueQualityItem,
+  QuantValueQualityMetric,
+  QuantValueSelection,
   ResearchMarkerStatus,
   SyncResult,
   SyncStatus,
@@ -117,6 +125,14 @@ function readList(payload: unknown, ...keys: string[]): unknown[] {
   return []
 }
 
+function readStringList(record: JsonRecord, ...keys: string[]): string[] {
+  for (const key of keys) {
+    if (Array.isArray(record[key]))
+      return record[key].filter((item): item is string => typeof item === 'string')
+  }
+  return []
+}
+
 function capabilityLabel(key: CapabilityKey): string {
   const labels: Record<CapabilityKey, string> = {
     daily: '日线 daily',
@@ -185,6 +201,105 @@ function parseCapabilities(payload: unknown): CapabilitiesResponse {
     }
   })
   return { tier, provider, enabled, capabilities }
+}
+
+function parseKnowledgeSource(value: unknown): QuantKnowledgeSource | null {
+  if (!isRecord(value))
+    return null
+  const id = readString(value, 'id')
+  const title = readString(value, 'title')
+  const url = readString(value, 'url')
+  if (!id || !title || !url)
+    return null
+  return {
+    id,
+    title,
+    url,
+    publishedAt: readString(value, 'publishedAt', 'published_at'),
+    access: value.access === 'preview' ? 'preview' : 'full',
+    summary: readString(value, 'summary') || '',
+  }
+}
+
+function parseKnowledgeFactor(value: unknown): QuantKnowledgeFactor | null {
+  if (!isRecord(value))
+    return null
+  const id = readString(value, 'id')
+  const category = readString(value, 'category')
+  const title = readString(value, 'title')
+  if (!id || !category || !title)
+    return null
+  const currentDimension = readString(value, 'currentDimension', 'current_dimension')
+  const status = readString(value, 'status')
+  return {
+    id,
+    category,
+    title,
+    interpretation: readString(value, 'interpretation') || '',
+    measurement: readString(value, 'measurement') || '',
+    requiredFields: readStringList(value, 'requiredFields', 'required_fields'),
+    availableFields: readStringList(value, 'availableFields', 'available_fields'),
+    missingFields: readStringList(value, 'missingFields', 'missing_fields'),
+    status: status === 'active' || status === 'partial' || status === 'planned' ? status : 'context',
+    eligibleInValueQuality: value.eligibleInValueQuality === true || value.eligible_in_value_quality === true,
+    currentDimension: currentDimension === 'valuation' || currentDimension === 'quality' || currentDimension === 'growth' || currentDimension === 'trend' ? currentDimension : null,
+    sourceIds: readStringList(value, 'sourceIds', 'source_ids'),
+  }
+}
+
+function parseKnowledgeAlias(value: unknown): QuantKnowledgeAlias | null {
+  if (!isRecord(value))
+    return null
+  const alias = readString(value, 'alias')
+  if (!alias)
+    return null
+  const status = readString(value, 'status')
+  const confidence = readString(value, 'confidence')
+  return {
+    alias,
+    status: status === 'mapped' || status === 'ambiguous' ? status : 'context_only',
+    confidence: confidence === 'high' || confidence === 'medium' ? confidence : 'low',
+    tsCode: readString(value, 'tsCode', 'ts_code'),
+    name: readString(value, 'name'),
+    candidates: readStringList(value, 'candidates'),
+    note: readString(value, 'note') || '',
+  }
+}
+
+function parseInvestmentKnowledge(payload: unknown): QuantInvestmentKnowledge {
+  const data = unwrapData(payload)
+  const record = isRecord(data) ? data : {}
+  return {
+    version: readString(record, 'version') || 'investment-knowledge-v1',
+    observedAt: readString(record, 'observedAt', 'observed_at') || '',
+    sources: Array.isArray(record.sources)
+      ? record.sources.flatMap((value) => {
+          const item = parseKnowledgeSource(value)
+          return item ? [item] : []
+        })
+      : [],
+    factors: Array.isArray(record.factors)
+      ? record.factors.flatMap((value) => {
+          const item = parseKnowledgeFactor(value)
+          return item ? [item] : []
+        })
+      : [],
+    aliases: Array.isArray(record.aliases)
+      ? record.aliases.flatMap((value) => {
+          const item = parseKnowledgeAlias(value)
+          return item ? [item] : []
+        })
+      : [],
+    recommendedWatchlist: Array.isArray(record.recommendedWatchlist || record.recommended_watchlist)
+      ? (Array.isArray(record.recommendedWatchlist) ? record.recommendedWatchlist : record.recommended_watchlist as unknown[]).flatMap((value) => {
+          if (!isRecord(value))
+            return []
+          const tsCode = readString(value, 'tsCode', 'ts_code')
+          const name = readString(value, 'name')
+          return tsCode && name ? [{ tsCode, name }] : []
+        })
+      : [],
+  }
 }
 
 function parseWatchlist(payload: unknown): WatchlistItem[] {
@@ -476,6 +591,95 @@ function parseFinancialQualityComparison(payload: unknown): QuantFinancialQualit
   }
 }
 
+function parseValueQualityMetric(value: unknown): QuantValueQualityMetric | null {
+  if (!isRecord(value))
+    return null
+  const key = readString(value, 'key')
+  const label = readString(value, 'label')
+  if (!key || !label)
+    return null
+  return {
+    key,
+    label,
+    value: readNumber(value, 'value'),
+    favorablePercentile: readNumber(value, 'favorablePercentile', 'favorable_percentile'),
+    sampleCount: readNumber(value, 'sampleCount', 'sample_count') ?? 0,
+  }
+}
+
+function parseValueQualityDimension(value: unknown): QuantValueQualityDimension | null {
+  if (!isRecord(value))
+    return null
+  const key = readString(value, 'key')
+  const label = readString(value, 'label')
+  if (key !== 'valuation' && key !== 'quality' && key !== 'growth' && key !== 'trend')
+    return null
+  const status = readString(value, 'status')
+  return {
+    key,
+    label: label || key,
+    score: readNumber(value, 'score'),
+    maxScore: readNumber(value, 'maxScore', 'max_score') ?? 0,
+    status: status === 'ready' || status === 'partial' ? status : 'missing',
+    metrics: Array.isArray(value.metrics)
+      ? value.metrics.flatMap((item) => {
+          const metric = parseValueQualityMetric(item)
+          return metric ? [metric] : []
+        })
+      : [],
+  }
+}
+
+function parseValueQualityItem(value: unknown): QuantValueQualityItem | null {
+  if (!isRecord(value))
+    return null
+  const tsCode = readString(value, 'tsCode', 'ts_code', 'code')
+  if (!tsCode)
+    return null
+  const status = readString(value, 'status')
+  return {
+    tsCode,
+    name: readString(value, 'name', 'stockName', 'stock_name'),
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'value-quality-v1',
+    status: status === 'ready' || status === 'partial' ? status : 'insufficient_data',
+    score: readNumber(value, 'score'),
+    observedAt: readString(value, 'observedAt', 'observed_at') || '',
+    valuationObservedAt: readString(value, 'valuationObservedAt', 'valuation_observed_at'),
+    financialObservedAt: readString(value, 'financialObservedAt', 'financial_observed_at'),
+    financialReportDate: readString(value, 'financialReportDate', 'financial_report_date'),
+    financialNoticeDate: readString(value, 'financialNoticeDate', 'financial_notice_date'),
+    valuationStatus: value.valuationStatus === 'ready' || value.valuationStatus === 'failed' ? value.valuationStatus : 'missing',
+    financialStatus: value.financialStatus === 'ready' || value.financialStatus === 'failed' ? value.financialStatus : 'missing',
+    dailyStatus: value.dailyStatus === 'ready' || value.dailyStatus === 'partial' ? value.dailyStatus : 'missing',
+    dimensions: Array.isArray(value.dimensions)
+      ? value.dimensions.flatMap((item) => {
+          const dimension = parseValueQualityDimension(item)
+          return dimension ? [dimension] : []
+        })
+      : [],
+    riskDeduction: readNumber(value, 'riskDeduction', 'risk_deduction') ?? 0,
+    riskNotes: Array.isArray(value.riskNotes) ? value.riskNotes.filter((item): item is string => typeof item === 'string') : [],
+    missingFields: Array.isArray(value.missingFields) ? value.missingFields.filter((item): item is string => typeof item === 'string') : [],
+  }
+}
+
+function parseValueSelection(payload: unknown): QuantValueSelection {
+  const data = unwrapData(payload)
+  const record = isRecord(data) ? data : {}
+  return {
+    formulaVersion: readString(record, 'formulaVersion', 'formula_version') || 'value-quality-v1',
+    observedAt: readString(record, 'observedAt', 'observed_at') || '',
+    sampleCount: readNumber(record, 'sampleCount', 'sample_count') ?? 0,
+    readyCount: readNumber(record, 'readyCount', 'ready_count') ?? 0,
+    partialCount: readNumber(record, 'partialCount', 'partial_count') ?? 0,
+    insufficientCount: readNumber(record, 'insufficientCount', 'insufficient_count') ?? 0,
+    items: readList(record, 'items', 'results').flatMap((value) => {
+      const item = parseValueQualityItem(value)
+      return item ? [item] : []
+    }),
+  }
+}
+
 async function requestJson(path: string, init?: RequestInit, options: { readonly allowErrorResponse?: boolean } = {}): Promise<unknown> {
   const response = await fetch(`${QUANT_API_PREFIX}${path}`, {
     credentials: 'include',
@@ -519,6 +723,10 @@ function queryString(query: DailyBarQuery): string {
 export const quantApi = {
   async getCapabilities(): Promise<CapabilitiesResponse> {
     return parseCapabilities(await requestJson('/capabilities'))
+  },
+
+  async getInvestmentKnowledge(): Promise<QuantInvestmentKnowledge> {
+    return parseInvestmentKnowledge(await requestJson('/knowledge'))
   },
 
   async getWatchlist(): Promise<WatchlistItem[]> {
@@ -585,5 +793,9 @@ export const quantApi = {
 
   async getFinancialQualityComparison(tsCode: string): Promise<QuantFinancialQualityComparison> {
     return parseFinancialQualityComparison(await requestJson(`/financial/compare/${encodeURIComponent(tsCode)}`))
+  },
+
+  async getValueSelection(): Promise<QuantValueSelection> {
+    return parseValueSelection(await requestJson('/value-selection'))
   },
 }

@@ -33,6 +33,35 @@ describe('quant route contract', () => {
     expect(response.status).toBe(401)
   })
 
+  it('requires authentication for the batch value-quality score', async () => {
+    const response = await createApp(null).request('/api/quant/value-selection')
+    expect(response.status).toBe(401)
+  })
+
+  it('returns the source-backed investment knowledge catalog', async () => {
+    const response = await createApp({ user: { role: 'admin' } }).request('/api/quant/knowledge')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        version: 'investment-knowledge-v1',
+        sources: expect.arrayContaining([
+          expect.objectContaining({ id: 'article-pingan-20260825', title: '2026半年报业绩增速创七年新高，再谈中国平安' }),
+          expect.objectContaining({ id: 'article-key-point', access: 'preview' }),
+        ]),
+        factors: expect.arrayContaining([
+          expect.objectContaining({ id: 'relative-valuation', status: 'active', eligibleInValueQuality: true }),
+          expect.objectContaining({ id: 'cashflow-capex-coverage', status: 'partial', eligibleInValueQuality: false }),
+        ]),
+        aliases: expect.arrayContaining([
+          expect.objectContaining({ alias: '变变', tsCode: '600089.SH' }),
+          expect.objectContaining({ alias: '海狗', status: 'ambiguous' }),
+        ]),
+      },
+    })
+  })
+
   it('returns the default 120-point capability contract', async () => {
     const response = await createApp({ user: { role: 'admin' } }).request('/api/quant/capabilities', {}, {
       TUSHARE_POINTS_TIER: undefined,

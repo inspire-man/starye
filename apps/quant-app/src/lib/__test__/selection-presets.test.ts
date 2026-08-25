@@ -153,4 +153,25 @@ describe('selection presets', () => {
       reviewDue: 'overdue',
     }, metadata, '2026-08-24').map(item => item.tsCode)).toEqual(['600089.SH'])
   })
+
+  it('sorts candidates by the external value-quality score when available', () => {
+    const items = [
+      candidate({ id: 'candidate-1', tsCode: '601899.SH' }),
+      candidate({ id: 'candidate-2', tsCode: '600089.SH' }),
+      candidate({ id: 'candidate-3', tsCode: '600938.SH' }),
+    ]
+
+    expect(filterAndSortCandidates(items, {
+      preset: 'all',
+      minScore: 0,
+      completeOnly: false,
+      sortBy: 'valueQuality',
+      researchStatus: 'all',
+      valueQualityByCode: new Map([
+        ['601899.SH', 58],
+        ['600089.SH', null],
+        ['600938.SH', 76],
+      ]),
+    }).map(item => item.tsCode)).toEqual(['600938.SH', '601899.SH', '600089.SH'])
+  })
 })
