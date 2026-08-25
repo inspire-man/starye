@@ -28,6 +28,7 @@ import type {
 import type { QuantView } from './lib/quant-view'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
+import type { TimingHistoryBucket, TimingHistoryState } from './lib/timing-history'
 import type { TimingWindow, TimingWindowMetricStatus } from './lib/timing-window'
 import type { WatchlistEnvironmentStatus } from './lib/watchlist-environment'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
@@ -63,6 +64,7 @@ import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
+import { buildTimingHistory } from './lib/timing-history'
 import { buildTimingWindow } from './lib/timing-window'
 import { buildTrendStructure } from './lib/trend-analysis'
 import { buildWatchlistEnvironment } from './lib/watchlist-environment'
@@ -462,6 +464,8 @@ const chartBars = computed(() => {
 
 const trendStructure = computed(() => buildTrendStructure(dailyBars.value))
 const timingWindow = computed(() => buildTimingWindow(dailyBars.value, trendStructure.value))
+const timingHistory = computed(() => buildTimingHistory(dailyBars.value))
+const timingHistoryCurrentBucket = computed(() => timingHistory.value.buckets.find(bucket => bucket.state === timingHistory.value.currentState) || null)
 const decisionEvidence = computed(() => buildDecisionEvidence({
   candidate: selectedCandidate.value,
   trend: trendStructure.value,
@@ -633,6 +637,22 @@ function formatTimingWindowMetric(metric: TimingWindow['metrics'][number]): stri
   if (metric.key === 'volatility20')
     return value
   return `${metric.value >= 0 ? '+' : '-'}${value}`
+}
+
+function timingHistoryStateClass(state: TimingHistoryState): string {
+  return `timing-history-state-${state}`
+}
+
+function formatTimingHistoryRate(value: number | null): string {
+  return value === null ? '--' : `${Math.round(value * 100)}%`
+}
+
+function formatTimingHistoryPercent(value: number | null): string {
+  return value === null ? '--' : `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`
+}
+
+function timingHistoryBucketTitle(bucket: TimingHistoryBucket): string {
+  return `${bucket.label}：${bucket.sampleSize} 个历史截点，未来 20 日上涨比例 ${formatTimingHistoryRate(bucket.positiveRate)}`
 }
 
 function formatEvidenceDate(value: string | null): string {
@@ -2252,6 +2272,69 @@ onUnmounted(() => {
               </div>
             </div>
             <span class="timing-window-note" title="按最近 N 根有效日线计算：MA20、MA60、20 日高点回撤和近 20 个收益波动率。状态只用于研究排序，不是买入或卖出指令。" aria-label="时机窗口口径说明">
+              <Info :size="15" aria-hidden="true" />
+            </span>
+          </section>
+          <section v-if="selectedStock" class="timing-history-panel" aria-label="时机条件历史回看">
+            <div class="timing-history-heading">
+              <div>
+                <p class="section-kicker">
+                  HISTORY CHECK V1
+                </p>
+                <h2>历史条件回看</h2>
+              </div>
+              <span class="timing-history-current" :class="timingHistoryStateClass(timingHistory.currentState === 'insufficient' ? 'constructive' : timingHistory.currentState)">
+                当前：{{ timingHistory.currentLabel }}
+              </span>
+            </div>
+            <div class="timing-history-meta">
+              <span>有效日线 <strong>{{ timingHistory.availableBars }}</strong> 根</span>
+              <span>可回看 <strong>{{ timingHistory.evaluatedWindows }}</strong> 个截点</span>
+              <span v-if="timingHistory.dataStartDate && timingHistory.dataEndDate">数据范围 {{ formatTradeDate(timingHistory.dataStartDate) }} → {{ formatTradeDate(timingHistory.dataEndDate) }}</span>
+            </div>
+            <div v-if="timingHistoryCurrentBucket && timingHistory.evaluatedWindows" class="timing-history-current-grid">
+              <div>
+                <span>当前状态样本</span>
+                <strong>{{ timingHistoryCurrentBucket.sampleSize }}</strong>
+                <small>历史截点</small>
+              </div>
+              <div>
+                <span>未来 20 日上涨比例</span>
+                <strong>{{ formatTimingHistoryRate(timingHistoryCurrentBucket.positiveRate) }}</strong>
+                <small>{{ timingHistoryCurrentBucket.positiveCount }} / {{ timingHistoryCurrentBucket.sampleSize }} 个样本</small>
+              </div>
+              <div>
+                <span>中位数收益</span>
+                <strong :class="timingHistoryCurrentBucket.medianForwardReturn20 === null ? 'text-status-neutral' : timingHistoryCurrentBucket.medianForwardReturn20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatTimingHistoryPercent(timingHistoryCurrentBucket.medianForwardReturn20) }}</strong>
+                <small>未来 20 个有效交易日</small>
+              </div>
+              <div>
+                <span>平均收益</span>
+                <strong :class="timingHistoryCurrentBucket.averageForwardReturn20 === null ? 'text-status-neutral' : timingHistoryCurrentBucket.averageForwardReturn20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatTimingHistoryPercent(timingHistoryCurrentBucket.averageForwardReturn20) }}</strong>
+                <small>重叠历史窗口</small>
+              </div>
+            </div>
+            <div v-if="timingHistory.evaluatedWindows" class="timing-history-table" role="table" aria-label="四类时机状态历史对照">
+              <div class="timing-history-table-row timing-history-table-head" role="row">
+                <span role="columnheader">状态</span>
+                <span role="columnheader">样本</span>
+                <span role="columnheader">上涨比例</span>
+                <span role="columnheader">中位数</span>
+                <span role="columnheader">最好 / 最差</span>
+              </div>
+              <div v-for="bucket in timingHistory.buckets" :key="bucket.state" class="timing-history-table-row" :class="timingHistoryStateClass(bucket.state)" role="row" :title="timingHistoryBucketTitle(bucket)">
+                <strong role="cell">{{ bucket.label }}</strong>
+                <span role="cell">{{ bucket.sampleSize || '--' }}</span>
+                <span role="cell">{{ formatTimingHistoryRate(bucket.positiveRate) }}</span>
+                <span role="cell" :class="bucket.medianForwardReturn20 === null ? 'text-status-neutral' : bucket.medianForwardReturn20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatTimingHistoryPercent(bucket.medianForwardReturn20) }}</span>
+                <span role="cell">{{ formatTimingHistoryPercent(bucket.bestForwardReturn20) }} / {{ formatTimingHistoryPercent(bucket.worstForwardReturn20) }}</span>
+              </div>
+            </div>
+            <div v-else class="timing-history-empty" role="status">
+              <Info :size="15" aria-hidden="true" />
+              <span>至少需要 80 根有效日线，才能回看未来 20 个交易日结果</span>
+            </div>
+            <span class="timing-history-note" title="统计只使用当前股票已保存的本地有效日线；状态窗口与未来收益窗口分离，但历史截点可能重叠。结果不是预测，也不是买入或卖出指令。" aria-label="历史回看口径说明">
               <Info :size="15" aria-hidden="true" />
             </span>
           </section>
