@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 36000)
+Total output lines: 3041
+
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
 import type { CandidateActionMeta } from './lib/candidate-action'
@@ -28,6 +31,7 @@ import type {
 import type { QuantView } from './lib/quant-view'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
+import type { TimingWindow, TimingWindowMetricStatus } from './lib/timing-window'
 import type { WatchlistEnvironmentStatus } from './lib/watchlist-environment'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
@@ -62,6 +66,7 @@ import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
+import { buildTimingWindow } from './lib/timing-window'
 import { buildTrendStructure } from './lib/trend-analysis'
 import { buildWatchlistEnvironment } from './lib/watchlist-environment'
 
@@ -459,6 +464,7 @@ const chartBars = computed(() => {
 })
 
 const trendStructure = computed(() => buildTrendStructure(dailyBars.value))
+const timingWindow = computed(() => buildTimingWindow(dailyBars.value, trendStructure.value))
 const decisionEvidence = computed(() => buildDecisionEvidence({
   candidate: selectedCandidate.value,
   trend: trendStructure.value,
@@ -609,6 +615,27 @@ function decisionEvidenceStatusClass(status: DecisionEvidenceStatus): string {
 
 function decisionEvidenceActionClass(action: string): string {
   return `decision-evidence-action-${action}`
+}
+
+function timingWindowClass(window: TimingWindow): string {
+  return `timing-window-${window.tone}`
+}
+
+function timingWindowMetricClass(status: TimingWindowMetricStatus): string {
+  return `timing-window-metric-${status}`
+}
+
+function timingWindowMetricStatusLabel(status: TimingWindowMetricStatus): string {
+  return { pass: '通过', caution: '注意', fail: '偏弱', missing: '数据不足' }[status]
+}
+
+function formatTimingWindowMetric(metric: TimingWindow['metrics'][number]): string {
+  if (metric.value === null)
+    return '--'
+  const value = `${Math.abs(metric.value * 100).toFixed(2)}%`
+  if (metric.key === 'volatility20')
+    return value
+  return `${metric.value >= 0 ? '+' : '-'}${value}`
 }
 
 function formatEvidenceDate(value: string | null): string {
@@ -1514,440 +1541,7 @@ onUnmounted(() => {
                 <span class="status-chip" :class="riskToneClass(candidateRiskTone(item))">{{ riskLabel(item) }}</span>
                 <ChevronRight :size="15" aria-hidden="true" />
               </button>
-              <div v-if="!loading.candidates && !topCandidates.length" class="focus-empty">
-                <Sparkles :size="18" aria-hidden="true" />
-                <span>完成一次日线更新后，这里会出现可比较的信号</span>
-              </div>
-            </div>
-            <aside class="risk-summary" aria-labelledby="risk-title">
-              <div class="risk-summary-heading">
-                <div>
-                  <p class="section-kicker">
-                    CHECK BEFORE DECISION
-                  </p>
-                  <h3 id="risk-title">
-                    风险提示
-                  </h3>
-                </div>
-                <ShieldAlert :size="18" aria-hidden="true" />
-              </div>
-              <div class="risk-list">
-                <div v-for="item in riskItems" :key="item.key" class="risk-note" :class="riskToneClass(item.tone)">
-                  <span class="risk-note-mark" aria-hidden="true" />
-                  <div>
-                    <strong>{{ item.title }}</strong>
-                    <span>{{ item.detail }}</span>
-                  </div>
-                </div>
-              </div>
-              <span class="risk-footnote" role="img" tabindex="0" aria-label="信号是筛选线索，不是买入指令" title="信号是筛选线索，不是买入指令">
-                <Info :size="14" aria-hidden="true" />
-              </span>
-            </aside>
-          </div>
-        </section>
-
-        <section class="research-path-section" aria-labelledby="research-path-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                RESEARCH PATH
-              </p>
-              <h2 id="research-path-title" class="section-title">
-                下一步怎么做
-              </h2>
-            </div>
-            <span class="section-meta">按顺序完成一次研究</span>
-          </div>
-          <div class="research-path-grid">
-            <button class="research-path-card" type="button" @click="setActiveView('candidates')">
-              <span class="research-path-index">01</span>
-              <span class="research-path-copy">
-                <strong>筛选候选</strong>
-                <small>先用预设和数据完整度缩小范围</small>
-              </span>
-              <ChevronRight :size="16" aria-hidden="true" />
-            </button>
-            <button class="research-path-card" type="button" @click="setActiveView('watchlist')">
-              <span class="research-path-index">02</span>
-              <span class="research-path-copy">
-                <strong>维护观察池</strong>
-                <small>确认标的并更新最近 120 个交易日</small>
-              </span>
-              <ChevronRight :size="16" aria-hidden="true" />
-            </button>
-            <button class="research-path-card" type="button" @click="setActiveView('knowledge')">
-              <span class="research-path-index">03</span>
-              <span class="research-path-copy">
-                <strong>核对因子</strong>
-                <small>理解信号、估值和财务数据的边界</small>
-              </span>
-              <ChevronRight :size="16" aria-hidden="true" />
-            </button>
-          </div>
-        </section>
-      </template>
-
-      <template v-else-if="activeView === 'watchlist'">
-        <section class="workspace-grid">
-          <article class="surface-panel" aria-labelledby="watchlist-title">
-            <div class="section-heading">
-              <div>
-                <p class="section-kicker">
-                  WATCHLIST
-                </p>
-                <h2 id="watchlist-title" class="section-title">
-                  观察池
-                </h2>
-              </div>
-              <span class="section-meta">{{ watchlist.length }} / 50</span>
-            </div>
-            <form class="watchlist-form" @submit.prevent="addToWatchlist">
-              <label class="sr-only" for="quant-code">股票代码</label>
-              <input id="quant-code" v-model="watchCode" class="field-control field-code" inputmode="text" autocomplete="off" placeholder="000001.SZ" maxlength="9">
-              <label class="sr-only" for="quant-name">股票名称</label>
-              <input id="quant-name" v-model="watchName" class="field-control" autocomplete="off" placeholder="名称（可选）" maxlength="40">
-              <button class="primary-button" type="submit" :disabled="adding || watchlist.length >= 50">
-                <Plus :size="16" aria-hidden="true" />
-                {{ adding ? '加入中' : '加入观察池' }}
-              </button>
-            </form>
-            <div class="quant-table-frame watchlist-table-frame">
-              <DataTable
-                :data="watchlist"
-                :columns="watchlistColumns"
-                :loading="loading.watchlist"
-                min-width="760px"
-                empty-message="观察池为空，先加入一只股票"
-                @row-click="selectStock"
-              >
-                <template #cell-tsCode="{ item }">
-                  <button class="stock-code-button" type="button" @click.stop="selectStock(item)">
-                    {{ item.tsCode }}
-                    <ChevronRight :size="14" aria-hidden="true" />
-                  </button>
-                </template>
-                <template #cell-latestClose="{ item }">
-                  <span class="quant-table-number quant-table-number-emphasis" :class="item.latestClose === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.latestClose) }}</span>
-                </template>
-                <template #cell-latestChangePercent="{ item }">
-                  <span class="quant-table-number" :class="item.latestChangePercent === null ? 'text-status-neutral' : item.latestChangePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.latestChangePercent) }}</span>
-                </template>
-                <template #cell-latestTradeDate="{ item }">
-                  <span class="quant-table-date">{{ formatTradeDate(item.latestTradeDate) }}</span>
-                </template>
-                <template #cell-barCount="{ item }">
-                  <span class="quant-table-number">{{ item.barCount }}</span>
-                </template>
-                <template #cell-actions="{ item }">
-                  <button class="icon-button icon-button-danger watchlist-action-button" type="button" :disabled="deletingCode === item.tsCode" :aria-label="`删除 ${item.tsCode}`" :title="`删除 ${item.tsCode}`" @click.stop="requestRemoveFromWatchlist(item.tsCode)">
-                    <Trash2 :size="15" aria-hidden="true" />
-                  </button>
-                </template>
-              </DataTable>
-            </div>
-          </article>
-
-          <ConfirmDialog
-            :open="pendingDeleteCode !== null"
-            mobile-placement="center"
-            title="移除观察池代码"
-            :message="deleteDialogMessage"
-            confirm-text="确认移除"
-            cancel-text="取消"
-            variant="danger"
-            :loading="deletingCode !== null"
-            @update:open="value => !value && cancelRemoveFromWatchlist()"
-            @cancel="cancelRemoveFromWatchlist"
-            @confirm="confirmRemoveFromWatchlist"
-          />
-
-          <article class="surface-panel sync-panel" aria-labelledby="sync-title">
-            <div class="section-heading">
-              <div>
-                <p class="section-kicker">
-                  DATA UPDATE
-                </p>
-                <h2 id="sync-title" class="section-title">
-                  更新数据
-                </h2>
-              </div>
-              <span v-if="syncResult" class="status-chip" :class="syncStatusClass(syncResult.status)">
-                {{ statusLabel(syncResult.status) }}
-              </span>
-            </div>
-            <div class="sync-copy">
-              <div class="sync-window">
-                <span>股票</span><strong>{{ watchlist.length }} 只</strong>
-              </div>
-              <div class="sync-window">
-                <span>历史范围</span><strong>最近 120 个交易日</strong>
-              </div>
-              <div class="sync-window">
-                <span>数据截至</span><strong>{{ latestWatchlistDate }}</strong>
-              </div>
-            </div>
-            <button class="sync-button" type="button" :disabled="!canSync" @click="syncDaily">
-              <RefreshCw :size="17" :class="loading.sync ? 'animate-spin' : ''" aria-hidden="true" />
-              {{ loading.sync ? '更新中' : '更新观察池' }}
-            </button>
-            <div v-if="syncResult" class="sync-result" :class="syncStatusClass(syncResult.status)">
-              <div class="sync-result-main">
-                <span class="sync-status-dot" aria-hidden="true" />
-                <strong>{{ statusLabel(syncResult.status) }}</strong>
-                <span>{{ syncResult.reason || '已完成本次同步请求' }}</span>
-              </div>
-              <div class="sync-result-stats">
-                <span>请求 <strong>{{ syncResult.requested }}</strong></span>
-                <span>写入 <strong>{{ syncResult.written }}</strong></span>
-                <span>跳过 <strong>{{ syncResult.skipped }}</strong></span>
-              </div>
-            </div>
-            <div v-else class="empty-state sync-empty">
-              <RotateCcw :size="18" aria-hidden="true" />
-              <span>尚未更新日线数据</span>
-            </div>
-          </article>
-        </section>
-      </template>
-
-      <template v-else-if="activeView === 'candidates'">
-        <section class="surface-panel" aria-labelledby="candidate-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                SELECTION SIGNALS
-              </p>
-              <h2 id="candidate-title" class="section-title">
-                择股信号
-              </h2>
-            </div>
-            <div class="candidate-heading-actions">
-              <button class="secondary-button" type="button" title="打开观察池并新增股票" @click="setActiveView('watchlist')">
-                <Plus :size="14" aria-hidden="true" />
-                添加观察股
-              </button>
-              <button class="secondary-button" type="button" title="打开观察池并更新日线数据" @click="setActiveView('watchlist')">
-                <RefreshCw :size="14" aria-hidden="true" />
-                更新数据
-              </button>
-            </div>
-            <div class="snapshot-meta">
-              <span>数据截至 {{ formatTradeDate(snapshot?.toDate || null) }}</span>
-              <span>计算 {{ formatDateTime(snapshot?.generatedAt || null) }}</span>
-            </div>
-          </div>
-          <div class="candidate-sync-summary" aria-label="候选数据覆盖状态">
-            <span>当前观察池 <strong>{{ candidateItems.length }}</strong> 只</span>
-            <span>已计算 <strong>{{ scannedCandidateCount }}</strong> 只</span>
-            <span :class="pendingCandidateCount ? 'candidate-sync-summary-warning' : ''">待更新 <strong>{{ pendingCandidateCount }}</strong> 只</span>
-          </div>
-          <div v-if="pendingCandidateCount" class="candidate-pending-callout" role="status">
-            <Info :size="16" aria-hidden="true" />
-            <span>{{ pendingCandidateCount }} 只新加入的股票还没有进入最近一次日线快照，更新观察池后才会计算信号、趋势和价值质量。</span>
-            <button class="text-button" type="button" @click="setActiveView('watchlist')">
-              去更新
-            </button>
-          </div>
-          <form class="candidate-add-form" aria-label="从候选研究新增观察股" @submit.prevent="addToWatchlist">
-            <label class="sr-only" for="candidate-quant-code">新增股票代码</label>
-            <input id="candidate-quant-code" v-model="watchCode" class="field-control field-code" inputmode="text" autocomplete="off" placeholder="输入代码，如 600000.SH" maxlength="9">
-            <label class="sr-only" for="candidate-quant-name">新增股票名称</label>
-            <input id="candidate-quant-name" v-model="watchName" class="field-control" autocomplete="off" placeholder="名称可留空，系统会解析" maxlength="40">
-            <button class="primary-button" type="submit" :disabled="adding || watchlist.length >= 50">
-              <Plus :size="15" aria-hidden="true" />
-              {{ adding ? '加入中' : '加入观察池并研究' }}
-            </button>
-          </form>
-          <div class="candidate-toolbar">
-            <div class="candidate-filter-group" role="group" aria-label="择股预设">
-              <button
-                v-for="option in candidateFilterOptions"
-                :key="option.key"
-                class="candidate-filter-button"
-                :class="candidateFilter === option.key ? 'candidate-filter-button-active' : ''"
-                type="button"
-                :aria-pressed="candidateFilter === option.key"
-                :title="option.detail"
-                @click="candidateFilter = option.key"
-              >
-                <component :is="option.icon" :size="14" aria-hidden="true" />
-                {{ option.label }}
-              </button>
-            </div>
-            <div class="candidate-query-controls" aria-label="候选筛选">
-              <label class="candidate-query-field">
-                <span>最低信号分</span>
-                <select v-model.number="candidateMinScore" class="candidate-query-select">
-                  <option :value="0">
-                    不限
-                  </option>
-                  <option :value="2">
-                    2 分以上
-                  </option>
-                  <option :value="4">
-                    4 分以上
-                  </option>
-                </select>
-              </label>
-              <label class="candidate-query-field">
-                <span>排序</span>
-                <select v-model="candidateSort" class="candidate-query-select">
-                  <option v-for="option in candidateSortOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="candidate-query-field">
-                <span>研究状态</span>
-                <select v-model="candidateResearchStatus" class="candidate-query-select">
-                  <option v-for="option in candidateResearchStatusOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="candidate-query-field">
-                <span>复查状态</span>
-                <select v-model="candidateReviewDue" class="candidate-query-select">
-                  <option v-for="option in candidateReviewDueOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="candidate-query-check">
-                <input v-model="candidateCompleteOnly" type="checkbox">
-                <span>只看数据完整</span>
-              </label>
-              <button v-if="candidateQueryActive" class="candidate-reset-button" type="button" title="重置自定义筛选" @click="resetCandidateQuery">
-                <RotateCcw :size="14" aria-hidden="true" />
-                重置
-              </button>
-            </div>
-            <div class="candidate-toolbar-meta">
-              <span class="section-meta">显示 {{ filteredCandidateItems.length }} / {{ candidateItems.length }}</span>
-              <button class="compare-button" type="button" :disabled="!canCompareCandidates" @click="openComparisonDrawer">
-                <BarChart3 :size="14" aria-hidden="true" />
-                对比 {{ selectedCandidateItems.length }} 只
-              </button>
-              <button v-if="selectedCandidateItems.length" class="text-button candidate-clear-button" type="button" @click="clearCandidateSelection">
-                清除选择
-              </button>
-            </div>
-          </div>
-          <div class="selection-guide" aria-label="择股预设说明">
-            <div class="selection-guide-copy">
-              <span class="section-kicker">START WITH A PRESET</span>
-              <strong>{{ activeCandidatePreset.label }}</strong>
-              <span>{{ activeCandidatePreset.description }}</span>
-            </div>
-            <span class="selection-guide-count">命中 {{ filteredCandidateItems.length }} 只</span>
-          </div>
-          <div class="selection-legend" aria-label="指标释义">
-            <span><strong>信号分</strong>命中规则 / {{ SIGNAL_RULE_COUNT }} 条</span>
-            <span><strong>20 日表现</strong>近 20 个交易日收益</span>
-            <span><strong>成交活跃度</strong>相对近 5 日均量</span>
-            <span><strong>价值质量</strong>估值、经营、增长、趋势四维观察</span>
-          </div>
-          <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
-            <span>观察窗口</span>
-            <strong>{{ formatTradeDate(snapshot.fromDate || null) }} → {{ formatTradeDate(snapshot.toDate || null) }}</strong>
-            <span class="snapshot-range-divider">·</span>
-            <span>{{ snapshot.factorVersion || '动量信号' }}</span>
-          </div>
-          <section v-if="reviewQueueTotal" class="review-queue" aria-labelledby="review-queue-title">
-            <div class="review-queue-heading">
-              <div>
-                <p class="section-kicker">
-                  REVIEW QUEUE
-                </p>
-                <h3 id="review-queue-title">
-                  复查到期队列
-                </h3>
-              </div>
-              <span class="review-queue-count">{{ reviewQueueTotal }} 条待处理</span>
-            </div>
-            <div class="review-queue-list">
-              <button
-                v-for="item in visibleReviewQueue"
-                :key="item.marker.tsCode"
-                class="review-queue-row"
-                type="button"
-                @click="selectStock(item.stock)"
-              >
-                <span class="review-state-badge" :class="`review-state-${item.review.state}`">{{ item.review.label }}</span>
-                <span class="review-queue-stock">
-                  <strong>{{ item.stock.name || item.stock.tsCode }}</strong>
-                  <small>{{ item.stock.tsCode }} · {{ researchStatusOptions.find(option => option.value === item.marker.status)?.label }}</small>
-                </span>
-                <span class="review-queue-detail">{{ item.review.detail }}</span>
-                <ChevronRight :size="15" aria-hidden="true" />
-              </button>
-            </div>
-            <p v-if="reviewQueueTotal > visibleReviewQueue.length" class="review-queue-more">
-              还有 {{ reviewQueueTotal - visibleReviewQueue.length }} 条记录，请使用复查筛选继续查看
-            </p>
-          </section>
-          <div class="quant-table-frame candidate-table-frame">
-            <DataTable
-              :data="filteredCandidateItems"
-              :columns="candidateColumns"
-              :loading="loading.candidates"
-              selectable
-              :selected-ids="selectedCandidateIds"
-              min-width="1280px"
-              :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
-              @toggle-select="handleCandidateToggle"
-              @toggle-select-all="toggleAllCandidateSelection"
-              @row-click="selectStock"
-            >
-              <template #cell-tsCode="{ item }">
-                <span class="font-mono text-xs font-semibold text-foreground">{{ item.tsCode }}</span>
-              </template>
-              <template #cell-score="{ item }">
-                <div class="score-cell" :aria-label="`命中 ${formatSignalScore(item.score)} 条规则`">
-                  <strong class="score-value" :class="item.score === null ? 'quant-table-value-muted' : ''">{{ formatSignalScore(item.score) }}</strong>
-                  <span class="score-meter" aria-hidden="true"><span class="score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
-                </div>
-              </template>
-              <template #cell-persistence="{ item }">
-                <div class="candidate-persistence-cell" :title="candidatePersistenceDetail(item)">
-                  <span class="candidate-persistence-state" :class="candidatePersistenceClass(item)">{{ candidatePersistenceLabel(item) }}</span>
-                  <small>{{ item.persistence?.sampleSize ? `${item.persistence.appearanceCount} / ${item.persistence.sampleSize} 次` : '暂无历史快照' }}</small>
-                </div>
-              </template>
-              <template #cell-return20="{ item }">
-                <span class="quant-table-number" :class="item.return20 === null ? 'text-status-neutral' : item.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.return20) }}</span>
-              </template>
-              <template #cell-ma20="{ item }">
-                <span class="quant-table-number" :class="item.ma20 === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.ma20) }}</span>
-              </template>
-              <template #cell-volumeRatio="{ item }">
-                <span class="quant-table-number" :class="item.volumeRatio === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.volumeRatio) }}</span>
-              </template>
-              <template #cell-relativeStrength="{ item }">
-                <span class="quant-table-number" :class="item.relativeStrength === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.relativeStrength) }}</span>
-              </template>
-              <template #cell-valueQuality="{ item }">
-                <div class="value-quality-table-cell" :title="valueQualitySummary(valueQualityFor(item.tsCode))">
-                  <strong :class="valueQualityStatusClass(valueQualityFor(item.tsCode))">{{ formatValueQualityScore(valueQualityFor(item.tsCode)) }}</strong>
-                  <small>{{ valueQualityStatusLabel(valueQualityFor(item.tsCode)) }}</small>
-                </div>
-              </template>
-              <template #cell-review="{ item }">
-                <div class="review-cell" :title="researchReviewFor(item.tsCode).detail" :aria-label="`${researchReviewFor(item.tsCode).label}，${researchReviewFor(item.tsCode).date || '未设置日期'}`">
-                  <span class="review-cell-label" :class="`review-state-text-${researchReviewFor(item.tsCode).state}`">{{ researchReviewFor(item.tsCode).label }}</span>
-                  <small>{{ researchReviewFor(item.tsCode).date || '--' }}</small>
-                </div>
-              </template>
-              <template #cell-action="{ item }">
-                <div class="candidate-action-cell" :title="candidateActionFor(item).detail" :aria-label="`${candidateActionFor(item).label}：${candidateActionFor(item).detail}`">
-                  <span class="candidate-action-badge" :class="`candidate-action-${candidateActionFor(item).tone}`">{{ candidateActionFor(item).label }}</span>
-                  <small>{{ candidateActionFor(item).detail }}</small>
-                </div>
-              </template>
-              <template #cell-signals="{ item }">
-                <div class="signal-list candidate-signal-list">
-                  <span v-if="researchMarkerMap.get(item.tsCode)?.status && researchMarkerMap.get(item.tsCode)?.status !== 'unreviewed'" class="research-status-dot" :class="`research-status-${researchMarkerMap.get(item.tsCode)?.status}`" :title="researchStatusOptions.find(option => option.value === researchMarkerMap.get(item.tsCode)?.status)?.label" aria-hidden="true" />
+              <div v-if="!loading.candidates && !topCandidates.length…6000 tokens truncated…esearch-status-dot" :class="`research-status-${researchMarkerMap.get(item.tsCode)?.status}`" :title="researchStatusOptions.find(option => option.value === researchMarkerMap.get(item.tsCode)?.status)?.label" aria-hidden="true" />
                   <span v-if="item.pendingSync" class="signal-tag signal-tag-warning">待更新数据</span>
                   <span v-for="signal in item.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
                   <span v-if="!item.pendingSync && item.quality !== 'ready'" class="signal-tag signal-tag-muted">数据不足</span>
@@ -2199,6 +1793,35 @@ onUnmounted(() => {
               <span v-else class="muted-inline">暂无历史快照，请完成一次日线同步</span>
             </div>
             <span class="signal-persistence-note" title="持续性只描述当前观察池中已保存的快照样本；它是筛选线索，不是买入或卖出指令。" aria-label="信号持续性口径说明">
+              <Info :size="15" aria-hidden="true" />
+            </span>
+          </section>
+          <section v-if="selectedStock" class="timing-window-panel" aria-label="中长线时机窗口">
+            <div class="timing-window-heading">
+              <div>
+                <p class="section-kicker">
+                  TIMING WINDOW V1
+                </p>
+                <h2>中长线时机窗口</h2>
+              </div>
+              <span class="timing-window-state" :class="timingWindowClass(timingWindow)">{{ timingWindow.label }}</span>
+            </div>
+            <div class="timing-window-headline" :class="timingWindowClass(timingWindow)">
+              <strong>{{ timingWindow.label }}</strong>
+              <p>{{ timingWindow.headline }}</p>
+            </div>
+            <div class="timing-window-metrics">
+              <div v-for="metric in timingWindow.metrics" :key="metric.key" class="timing-window-metric" :class="timingWindowMetricClass(metric.status)">
+                <div class="timing-window-metric-heading">
+                  <span>{{ metric.label }}</span>
+                  <small>{{ timingWindowMetricStatusLabel(metric.status) }}</small>
+                </div>
+                <strong>{{ formatTimingWindowMetric(metric) }}</strong>
+                <p>{{ metric.detail }}</p>
+                <small class="timing-window-threshold">阈值：{{ metric.threshold }}</small>
+              </div>
+            </div>
+            <span class="timing-window-note" title="按最近 N 根有效日线计算：MA20、MA60、20 日高点回撤和近 20 个收益波动率。状态只用于研究排序，不是买入或卖出指令。" aria-label="时机窗口口径说明">
               <Info :size="15" aria-hidden="true" />
             </span>
           </section>
@@ -2985,3 +2608,4 @@ onUnmounted(() => {
     </main>
   </div>
 </template>
+
