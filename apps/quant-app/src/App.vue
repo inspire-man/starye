@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
+import type { CandidateActionMeta } from './lib/candidate-action'
 import type {
   CandidateItem,
   CandidateSnapshot,
@@ -7,9 +8,14 @@ import type {
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
+  QuantInvestmentKnowledge,
+  QuantKnowledgeFactor,
   QuantResearchMarker,
   QuantValuationComparison,
   QuantValuationSnapshot,
+  QuantValueQualityDimension,
+  QuantValueQualityItem,
+  QuantValueSelection,
   ResearchMarkerStatus,
   SyncResult,
   SyncStatus,
@@ -22,8 +28,11 @@ import {
   AlertCircle,
   ArrowUpRight,
   BarChart3,
+  BookOpen,
   CalendarDays,
   ChevronRight,
+  DatabaseZap,
+  ExternalLink,
   Eye,
   Filter,
   Info,
@@ -34,11 +43,13 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Tags,
   Trash2,
   X,
 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { quantApi, QuantApiError } from './lib/api-client'
+import { getCandidateAction } from './lib/candidate-action'
 import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
@@ -54,6 +65,8 @@ const financialQuality = ref<QuantFinancialQualitySnapshot | null>(null)
 const financialHistory = ref<QuantFinancialQualityHistory | null>(null)
 const financialComparison = ref<QuantFinancialQualityComparison | null>(null)
 const financialComparisonError = ref<unknown | null>(null)
+const valueSelection = ref<QuantValueSelection | null>(null)
+const investmentKnowledge = ref<QuantInvestmentKnowledge | null>(null)
 const researchMarkers = ref<QuantResearchMarker[]>([])
 const selectedCandidateIds = ref<Set<string>>(new Set())
 const comparisonDrawerOpen = ref(false)
@@ -74,21 +87,26 @@ const syncResult = ref<SyncResult | null>(null)
 const detailDrawerOpen = ref(false)
 let valuationRequestId = 0
 let financialRequestId = 0
+let valueQualityRequestId = 0
 const loading = reactive({
   watchlist: false,
   candidates: false,
   daily: false,
   valuation: false,
   financial: false,
+  valueQuality: false,
+  knowledge: false,
   research: false,
   sync: false,
 })
-const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation' | 'financial' | 'research' | 'action', unknown | null>>({
+const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation' | 'financial' | 'valueQuality' | 'knowledge' | 'research' | 'action', unknown | null>>({
   watchlist: null,
   candidates: null,
   daily: null,
   valuation: null,
   financial: null,
+  valueQuality: null,
+  knowledge: null,
   research: null,
   action: null,
 })
@@ -113,6 +131,7 @@ const candidateSortOptions: { value: CandidateSortKey, label: string }[] = [
   { value: 'return20', label: '20 日表现' },
   { value: 'volumeRatio', label: '成交活跃度' },
   { value: 'relativeStrength', label: '池内强度' },
+  { value: 'valueQuality', label: '价值质量' },
 ]
 const SIGNAL_RULE_COUNT = 6
 const researchStatusOptions: { value: ResearchMarkerStatus, label: string }[] = [
@@ -143,6 +162,7 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
   sortBy: candidateSort.value,
   researchStatus: candidateResearchStatus.value,
   reviewDue: candidateReviewDue.value,
+  valueQualityByCode: new Map(valueSelection.value?.items.map(item => [item.tsCode, item.score]) || []),
 }, new Map<string, CandidateResearchMetadata>(researchMarkers.value.map(marker => [marker.tsCode, {
   status: marker.status,
   reviewDate: marker.reviewDate,
@@ -157,6 +177,13 @@ const latestDate = computed(() => {
   return formatTradeDate(dates.at(-1) || snapshot.value?.toDate || null)
 })
 const selectedCandidate = computed(() => candidateItems.value.find(item => item.tsCode === selectedTsCode.value) || null)
+const valueQualityMap = computed(() => new Map(valueSelection.value?.items.map(item => [item.tsCode, item]) || []))
+const selectedValueQuality = computed(() => valueQualityMap.value.get(selectedTsCode.value || '') || null)
+const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
+const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
+const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
+const mappedKnowledgeAliases = computed(() => investmentKnowledge.value?.aliases.filter(alias => alias.status === 'mapped') || [])
+const contextKnowledgeAliases = computed(() => investmentKnowledge.value?.aliases.filter(alias => alias.status !== 'mapped') || [])
 const researchMarkerMap = computed(() => new Map(researchMarkers.value.map(marker => [marker.tsCode, marker])))
 const researchReviewMap = computed(() => new Map(researchMarkers.value.map(marker => [marker.tsCode, getResearchReviewMeta(marker.reviewDate, todayDate.value)])))
 const selectedResearchMarker = computed<QuantResearchMarker>(() => researchMarkerMap.value.get(selectedTsCode.value || '') || {
@@ -334,15 +361,17 @@ const watchlistColumns: Column<WatchlistItem>[] = [
 ]
 
 const candidateColumns: Column<CandidateItem>[] = [
-  { key: 'tsCode', label: '代码', minWidth: '135px' },
-  { key: 'name', label: '名称', minWidth: '120px', render: item => displayStockName(item) },
-  { key: 'score', label: '信号分', width: '88px', render: item => formatNumber(item.score) },
-  { key: 'return20', label: '20日表现', width: '92px', render: item => formatPercent(item.return20) },
-  { key: 'ma20', label: '20日均线', width: '96px', render: item => formatNumber(item.ma20) },
-  { key: 'volumeRatio', label: '成交活跃度', width: '108px', render: item => formatNumber(item.volumeRatio) },
-  { key: 'relativeStrength', label: '池内强度', width: '98px', render: item => formatNumber(item.relativeStrength) },
-  { key: 'review', label: '复查', width: '118px', minWidth: '110px' },
-  { key: 'signals', label: '信号', width: '260px', minWidth: '240px' },
+  { key: 'tsCode', label: '代码', minWidth: '115px' },
+  { key: 'name', label: '名称', minWidth: '100px', render: item => displayStockName(item) },
+  { key: 'score', label: '信号分', width: '78px', render: item => formatNumber(item.score) },
+  { key: 'return20', label: '20日表现', width: '86px', render: item => formatPercent(item.return20) },
+  { key: 'ma20', label: '20日均线', width: '88px', render: item => formatNumber(item.ma20) },
+  { key: 'volumeRatio', label: '成交活跃度', width: '98px', render: item => formatNumber(item.volumeRatio) },
+  { key: 'relativeStrength', label: '池内强度', width: '88px', render: item => formatNumber(item.relativeStrength) },
+  { key: 'valueQuality', label: '价值质量', width: '124px', minWidth: '116px' },
+  { key: 'review', label: '复查', width: '100px', minWidth: '94px' },
+  { key: 'action', label: '研究动作', width: '112px', minWidth: '106px' },
+  { key: 'signals', label: '信号', width: '240px', minWidth: '220px' },
 ]
 
 const dailyColumns: Column<DailyBar>[] = [
@@ -441,6 +470,134 @@ function formatComparisonPosition(value: number | null): string {
   return value === null ? '暂无足够样本' : `高于观察池 ${value}%`
 }
 
+function valueQualityFor(tsCode: string): QuantValueQualityItem | null {
+  return valueQualityMap.value.get(tsCode) || null
+}
+
+function valueQualityStatusLabel(item: QuantValueQualityItem | null): string {
+  if (!item)
+    return loading.valueQuality ? '读取中' : '暂无评分'
+  if (item.status === 'ready')
+    return '可比较'
+  if (item.status === 'partial')
+    return '部分数据'
+  return '数据不足'
+}
+
+function valueQualityStatusClass(item: QuantValueQualityItem | null): string {
+  if (!item || item.status === 'insufficient_data')
+    return 'value-quality-status-muted'
+  return item.status === 'ready' ? 'value-quality-status-ready' : 'value-quality-status-partial'
+}
+
+function formatValueQualityScore(item: QuantValueQualityItem | null): string {
+  return item?.score === null || item?.score === undefined ? '--' : `${item.score.toFixed(1)} / 100`
+}
+
+function valueQualityDimension(item: QuantValueQualityItem | null, key: QuantValueQualityDimension['key']): QuantValueQualityDimension | null {
+  return item?.dimensions.find(dimension => dimension.key === key) || null
+}
+
+function formatValueQualityDimension(item: QuantValueQualityItem | null, key: QuantValueQualityDimension['key']): string {
+  const dimension = valueQualityDimension(item, key)
+  return dimension?.score === null || dimension?.score === undefined ? '--' : `${dimension.score.toFixed(1)} / ${dimension.maxScore}`
+}
+
+function valueQualityDimensionSamples(dimension: QuantValueQualityDimension): number {
+  return dimension.metrics.reduce((maximum, metric) => Math.max(maximum, metric.sampleCount), 0)
+}
+
+function valueQualitySummary(item: QuantValueQualityItem | null): string {
+  if (!item)
+    return loading.valueQuality ? '正在读取观察池估值、财务和长期趋势' : '完成日线更新后读取价值质量'
+  if (item.status === 'ready')
+    return `报告期 ${formatTradeDate(item.financialReportDate)} · 观察 ${formatDateTime(item.observedAt)}`
+  return item.missingFields[0] || '关键数据尚未齐全'
+}
+
+function knowledgeStatusLabel(status: QuantKnowledgeFactor['status']): string {
+  return {
+    active: '已进入评分',
+    partial: '部分接通',
+    planned: '待接数据',
+    context: '知识参考',
+  }[status]
+}
+
+function knowledgeStatusClass(status: QuantKnowledgeFactor['status']): string {
+  return `knowledge-status-${status}`
+}
+
+function knowledgeFieldLabel(field: string): string {
+  return {
+    peTtm: 'TTM PE',
+    pb: 'PB',
+    ps: 'PS',
+    peg: 'PEG',
+    netProfitYoY: '净利润同比',
+    adjustedNetProfitYoY: '扣非净利润同比',
+    operatingCashflowToRevenue: '经营现金流 / 营收',
+    roe: 'ROE',
+    roic: 'ROIC',
+    grossMargin: '毛利率',
+    netMargin: '净利率',
+    debtAssetRatio: '资产负债率',
+    revenueYoY: '营收同比',
+    reportDate: '报告期',
+    dailyBars: '日线',
+    return60: '60 日表现',
+    ma60Gap: '距 60 日均线',
+    drawdown60: '60 日回撤',
+    operatingCashflow: '经营现金流',
+    capitalExpenditure: '资本开支',
+    interestExpense: '利息支出',
+    interestBearingDebt: '有息负债',
+    orderBacklog: '订单金额',
+    contractLiabilities: '合同负债',
+    segmentRevenue: '分部收入',
+    segmentGrossMargin: '分部毛利率',
+    volume: '销量',
+    realizedPrice: '实现价格',
+    commodityPrice: '商品价格',
+    unitCost: '单位成本',
+    output: '产量',
+    longTermContractRatio: '长协比例',
+    dividendYield: '股息率',
+    payoutRatio: '分红支付率',
+    freeCashflow: '自由现金流',
+    buybackAmount: '回购金额',
+    sharesOutstandingChange: '股本变化',
+    industry: '行业分类',
+    industryProfitYoY: '行业利润同比',
+    industryIndexReturn: '行业指数表现',
+    companyProfitYoY: '公司利润同比',
+    consensusRevenue: '一致预期营收',
+    consensusProfit: '一致预期利润',
+    earningsSurprise: '业绩超预期',
+    forwardPe: '前瞻 PE',
+    priceBeforeReport: '报告前价格',
+    cash: '现金',
+    interestCoverage: '利息覆盖倍数',
+    profitVolatility: '利润波动',
+  }[field] || field
+}
+
+function formatKnowledgeFields(fields: readonly string[]): string {
+  return fields.map(knowledgeFieldLabel).join('、')
+}
+
+function knowledgeAliasStatusLabel(status: 'mapped' | 'ambiguous' | 'context_only'): string {
+  return {
+    mapped: '已映射',
+    ambiguous: '待确认',
+    context_only: '跨市场 / 语境样本',
+  }[status]
+}
+
+function knowledgeConfidenceLabel(confidence: 'high' | 'medium' | 'low'): string {
+  return { high: '高置信度', medium: '中置信度', low: '低置信度' }[confidence]
+}
+
 function formatLowerComparisonPosition(value: number | null): string {
   return value === null ? '暂无足够样本' : `低于观察池 ${value}%`
 }
@@ -473,6 +630,10 @@ function formatFactorLabel(value: string): string {
 
 function displayStockName(item: Pick<CandidateItem, 'tsCode' | 'name'>): string {
   return item.name || watchlist.value.find(stock => stock.tsCode === item.tsCode)?.name || item.tsCode
+}
+
+function candidateActionFor(item: CandidateItem): CandidateActionMeta {
+  return getCandidateAction(item)
 }
 
 function researchReviewFor(tsCode: string): ResearchReviewMeta {
@@ -537,21 +698,14 @@ function syncStatusClass(status: SyncStatus): string {
 }
 
 function focusSignal(item: CandidateItem): string {
-  if (item.newHigh20)
-    return '趋势走强'
-  if (item.upStreak !== null && item.upStreak >= 3)
-    return `连续上涨 ${item.upStreak} 日`
-  if (item.volumeRatio !== null && item.volumeRatio >= 1.2)
-    return '成交活跃'
-  if (item.relativeStrength !== null && item.relativeStrength >= 0.5)
-    return '池内相对更强'
-  return item.quality === 'ready' ? '数据完整' : '数据待补齐'
+  return getCandidateAction(item).label
 }
 
 function focusTone(item: CandidateItem): string {
-  if (item.quality !== 'ready')
+  const action = getCandidateAction(item)
+  if (action.tone === 'warning')
     return 'focus-tone-warning'
-  return item.signals.length > 0 ? 'focus-tone-positive' : 'focus-tone-neutral'
+  return action.tone === 'positive' ? 'focus-tone-positive' : 'focus-tone-neutral'
 }
 
 function riskLabel(item: CandidateItem): string {
@@ -593,6 +747,7 @@ function resetCandidateQuery(): void {
 async function loadWatchlist() {
   loading.watchlist = true
   errors.watchlist = null
+  valueQualityRequestId++
   try {
     watchlist.value = await quantApi.getWatchlist()
     if (!selectedTsCode.value || !watchlist.value.some(item => item.tsCode === selectedTsCode.value))
@@ -608,6 +763,8 @@ async function loadWatchlist() {
     financialHistory.value = null
     financialComparison.value = null
     financialComparisonError.value = null
+    valueSelection.value = null
+    errors.valueQuality = null
     loading.valuation = false
     loading.financial = false
   }
@@ -632,6 +789,42 @@ async function loadCandidates() {
   }
   finally {
     loading.candidates = false
+  }
+}
+
+async function loadValueSelection() {
+  const requestId = ++valueQualityRequestId
+  loading.valueQuality = true
+  errors.valueQuality = null
+  try {
+    const result = await quantApi.getValueSelection()
+    if (requestId === valueQualityRequestId)
+      valueSelection.value = result
+  }
+  catch (error) {
+    if (requestId === valueQualityRequestId) {
+      errors.valueQuality = error
+      valueSelection.value = null
+    }
+  }
+  finally {
+    if (requestId === valueQualityRequestId)
+      loading.valueQuality = false
+  }
+}
+
+async function loadInvestmentKnowledge() {
+  loading.knowledge = true
+  errors.knowledge = null
+  try {
+    investmentKnowledge.value = await quantApi.getInvestmentKnowledge()
+  }
+  catch (error) {
+    errors.knowledge = error
+    investmentKnowledge.value = null
+  }
+  finally {
+    loading.knowledge = false
   }
 }
 
@@ -835,7 +1028,8 @@ async function openComparisonDrawer() {
 
 async function loadWorkspace() {
   errors.action = null
-  await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers()])
+  await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers(), loadInvestmentKnowledge()])
+  await loadValueSelection()
 }
 
 function selectStock(item: Pick<WatchlistItem, 'tsCode' | 'name'>) {
@@ -859,6 +1053,7 @@ async function addToWatchlist() {
     watchCode.value = ''
     watchName.value = ''
     await Promise.all([loadWatchlist(), loadResearchMarkers()])
+    await loadValueSelection()
   }
   catch (error) {
     errors.action = error
@@ -888,7 +1083,7 @@ async function removeFromWatchlist(tsCode: string) {
   try {
     await quantApi.removeWatchlist(tsCode)
     await Promise.all([loadWatchlist(), loadResearchMarkers()])
-    await loadCandidates()
+    await Promise.all([loadCandidates(), loadValueSelection()])
   }
   catch (error) {
     errors.action = error
@@ -907,6 +1102,7 @@ async function syncDaily() {
   try {
     syncResult.value = await quantApi.syncDaily()
     await Promise.all([loadWatchlist(), loadCandidates()])
+    await loadValueSelection()
   }
   catch (error) {
     errors.action = error
@@ -1031,7 +1227,7 @@ onMounted(loadWorkspace)
                 <strong>{{ displayStockName(item) }}</strong>
                 <small>{{ item.tsCode }}</small>
               </span>
-              <span class="focus-signal">{{ focusSignal(item) }}</span>
+              <span class="focus-signal" :title="candidateActionFor(item).detail">{{ focusSignal(item) }}</span>
               <span class="focus-score">
                 <strong>{{ formatSignalScore(item.score) }}</strong>
                 <span class="focus-score-meter" aria-hidden="true"><span class="focus-score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
@@ -1296,6 +1492,7 @@ onMounted(loadWorkspace)
           <span><strong>信号分</strong>命中规则 / {{ SIGNAL_RULE_COUNT }} 条</span>
           <span><strong>20 日表现</strong>近 20 个交易日收益</span>
           <span><strong>成交活跃度</strong>相对近 5 日均量</span>
+          <span><strong>价值质量</strong>估值、经营、增长、趋势四维观察</span>
         </div>
         <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
           <span>观察窗口</span>
@@ -1343,7 +1540,7 @@ onMounted(loadWorkspace)
             :loading="loading.candidates"
             selectable
             :selected-ids="selectedCandidateIds"
-            min-width="1160px"
+            min-width="1280px"
             :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
             @toggle-select="handleCandidateToggle"
             @toggle-select-all="toggleAllCandidateSelection"
@@ -1370,10 +1567,22 @@ onMounted(loadWorkspace)
             <template #cell-relativeStrength="{ item }">
               <span class="quant-table-number" :class="item.relativeStrength === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.relativeStrength) }}</span>
             </template>
+            <template #cell-valueQuality="{ item }">
+              <div class="value-quality-table-cell" :title="valueQualitySummary(valueQualityFor(item.tsCode))">
+                <strong :class="valueQualityStatusClass(valueQualityFor(item.tsCode))">{{ formatValueQualityScore(valueQualityFor(item.tsCode)) }}</strong>
+                <small>{{ valueQualityStatusLabel(valueQualityFor(item.tsCode)) }}</small>
+              </div>
+            </template>
             <template #cell-review="{ item }">
               <div class="review-cell" :title="researchReviewFor(item.tsCode).detail" :aria-label="`${researchReviewFor(item.tsCode).label}，${researchReviewFor(item.tsCode).date || '未设置日期'}`">
                 <span class="review-cell-label" :class="`review-state-text-${researchReviewFor(item.tsCode).state}`">{{ researchReviewFor(item.tsCode).label }}</span>
                 <small>{{ researchReviewFor(item.tsCode).date || '--' }}</small>
+              </div>
+            </template>
+            <template #cell-action="{ item }">
+              <div class="candidate-action-cell" :title="candidateActionFor(item).detail" :aria-label="`${candidateActionFor(item).label}：${candidateActionFor(item).detail}`">
+                <span class="candidate-action-badge" :class="`candidate-action-${candidateActionFor(item).tone}`">{{ candidateActionFor(item).label }}</span>
+                <small>{{ candidateActionFor(item).detail }}</small>
               </div>
             </template>
             <template #cell-signals="{ item }">
@@ -1386,6 +1595,125 @@ onMounted(loadWorkspace)
             </template>
           </DataTable>
         </div>
+      </section>
+
+      <section class="knowledge-section" aria-labelledby="knowledge-title">
+        <div class="knowledge-heading">
+          <div>
+            <p class="section-kicker">
+              INVESTMENT KNOWLEDGE
+            </p>
+            <h2 id="knowledge-title" class="section-title">
+              投资因子框架
+            </h2>
+            <p class="knowledge-intro">
+              把文章中的判断拆成可验证的因子；当前只有“已进入评分”的因子影响价值质量分。
+            </p>
+          </div>
+          <div v-if="investmentKnowledge" class="knowledge-meta">
+            <span>知识库 {{ investmentKnowledge.version }}</span>
+            <span>{{ investmentKnowledge.sources.length }} 篇来源</span>
+          </div>
+        </div>
+        <div v-if="loading.knowledge" class="knowledge-state" role="status">
+          <SkeletonCard variant="content" />
+        </div>
+        <div v-else-if="errors.knowledge" class="knowledge-state" role="status">
+          <Info :size="17" aria-hidden="true" />
+          <span>投资知识暂时不可用</span>
+          <button class="text-button" type="button" @click="loadInvestmentKnowledge">
+            重试
+          </button>
+        </div>
+        <template v-else-if="investmentKnowledge">
+          <div class="knowledge-summary-grid" aria-label="因子状态统计">
+            <div class="knowledge-summary-item knowledge-summary-active">
+              <DatabaseZap :size="16" aria-hidden="true" />
+              <strong>{{ activeKnowledgeFactors.length }}</strong>
+              <span>已进入评分</span>
+            </div>
+            <div class="knowledge-summary-item knowledge-summary-partial">
+              <Sparkles :size="16" aria-hidden="true" />
+              <strong>{{ partialKnowledgeFactors.length }}</strong>
+              <span>部分接通</span>
+            </div>
+            <div class="knowledge-summary-item knowledge-summary-planned">
+              <BookOpen :size="16" aria-hidden="true" />
+              <strong>{{ plannedKnowledgeFactors.length }}</strong>
+              <span>待接或定性</span>
+            </div>
+            <div class="knowledge-summary-item knowledge-summary-alias">
+              <Tags :size="16" aria-hidden="true" />
+              <strong>{{ mappedKnowledgeAliases.length }}</strong>
+              <span>已映射别名</span>
+            </div>
+          </div>
+          <div class="knowledge-factor-grid">
+            <article v-for="factor in investmentKnowledge.factors" :key="factor.id" class="knowledge-factor" :class="knowledgeStatusClass(factor.status)">
+              <div class="knowledge-factor-heading">
+                <div>
+                  <span class="knowledge-factor-category">{{ factor.category }}</span>
+                  <h3>{{ factor.title }}</h3>
+                </div>
+                <span class="knowledge-status-badge" :class="knowledgeStatusClass(factor.status)">{{ knowledgeStatusLabel(factor.status) }}</span>
+              </div>
+              <p>{{ factor.interpretation }}</p>
+              <div class="knowledge-factor-measurement">
+                <strong>量化方向</strong>
+                <span>{{ factor.measurement }}</span>
+              </div>
+              <div class="knowledge-factor-fields">
+                <span v-if="factor.availableFields.length">已接：{{ formatKnowledgeFields(factor.availableFields) }}</span>
+                <span v-if="factor.missingFields.length">待接：{{ formatKnowledgeFields(factor.missingFields) }}</span>
+              </div>
+              <div class="knowledge-factor-foot">
+                <span v-if="factor.eligibleInValueQuality">当前价值质量评分使用</span>
+                <span v-else>先作为研究假设</span>
+                <span>{{ factor.sourceIds.length }} 篇关联来源</span>
+              </div>
+            </article>
+          </div>
+          <details class="knowledge-details">
+            <summary>
+              <BookOpen :size="15" aria-hidden="true" />
+              查看文章来源与股票别名映射
+            </summary>
+            <div class="knowledge-context-grid">
+              <div class="knowledge-context-column">
+                <div class="knowledge-context-heading">
+                  <strong>文章来源</strong>
+                  <span>{{ investmentKnowledge.sources.length }} 篇</span>
+                </div>
+                <div class="knowledge-source-list">
+                  <a v-for="source in investmentKnowledge.sources" :key="source.id" class="knowledge-source-row" :href="source.url" target="_blank" rel="noreferrer" :title="source.url">
+                    <span class="knowledge-source-access" :class="source.access === 'preview' ? 'knowledge-source-preview' : 'knowledge-source-full'">{{ source.access === 'preview' ? '试读' : '全文' }}</span>
+                    <span class="knowledge-source-copy">
+                      <strong>{{ source.title }}</strong>
+                      <small>{{ source.publishedAt || '日期未读取' }} · {{ source.summary }}</small>
+                    </span>
+                    <ExternalLink :size="13" aria-hidden="true" />
+                  </a>
+                </div>
+              </div>
+              <div class="knowledge-context-column">
+                <div class="knowledge-context-heading">
+                  <strong>文章别名映射</strong>
+                  <span>{{ investmentKnowledge.aliases.length }} 条 · {{ contextKnowledgeAliases.length }} 待确认</span>
+                </div>
+                <div class="knowledge-alias-grid">
+                  <div v-for="alias in investmentKnowledge.aliases" :key="alias.alias" class="knowledge-alias-row" :title="alias.note">
+                    <span class="knowledge-alias-name">{{ alias.alias }}</span>
+                    <strong>{{ alias.name || alias.candidates.join(' / ') || '待确认' }}</strong>
+                    <small>{{ knowledgeAliasStatusLabel(alias.status) }} · {{ knowledgeConfidenceLabel(alias.confidence) }}</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="knowledge-details-note">
+              已映射的 A 股研究样本已通过幂等 migration 加入观察池；港股、未上市主体和待确认别名保留在知识层，不进入当前 A 股日线同步。
+            </p>
+          </details>
+        </template>
       </section>
 
       <DetailDrawer
@@ -1441,9 +1769,82 @@ onMounted(loadWorkspace)
                 <span v-if="!selectedCandidate.signals.length" class="muted-inline">暂无明确信号</span>
               </div>
             </div>
+            <div v-if="selectedCandidate" class="decision-action-row">
+              <span>研究动作</span>
+              <strong :class="`candidate-action-text-${candidateActionFor(selectedCandidate).tone}`">{{ candidateActionFor(selectedCandidate).label }}</strong>
+              <small>{{ candidateActionFor(selectedCandidate).detail }}</small>
+            </div>
             <p class="decision-card-note">
               技术信号用于缩小研究范围；估值和财务数据需要结合报告期与样本完整度人工核对。
             </p>
+          </section>
+          <section class="value-quality-panel" aria-label="中长线价值质量评分">
+            <div class="value-quality-heading">
+              <div>
+                <p class="section-kicker">
+                  VALUE QUALITY V1
+                </p>
+                <h2>中长线价值质量</h2>
+              </div>
+              <span v-if="selectedValueQuality" class="section-meta">{{ valueQualityStatusLabel(selectedValueQuality) }}</span>
+              <span v-else-if="selectedStock" class="section-meta">读取中</span>
+            </div>
+            <div v-if="loading.valueQuality" class="value-quality-state" role="status">
+              <SkeletonCard variant="content" />
+            </div>
+            <div v-else-if="errors.valueQuality" class="value-quality-state" role="status">
+              <Info :size="17" aria-hidden="true" />
+              <span>价值质量暂时不可用</span>
+              <button class="text-button" type="button" @click="loadValueSelection">
+                重试
+              </button>
+            </div>
+            <template v-else-if="selectedValueQuality">
+              <div class="value-quality-score-row">
+                <div>
+                  <span>研究评分</span>
+                  <strong :class="valueQualityStatusClass(selectedValueQuality)">{{ formatValueQualityScore(selectedValueQuality) }}</strong>
+                </div>
+                <div>
+                  <span>风险扣分</span>
+                  <strong :class="selectedValueQuality.riskDeduction > 0 ? 'value-quality-status-partial' : 'text-status-success'">-{{ selectedValueQuality.riskDeduction.toFixed(1) }}</strong>
+                </div>
+                <div>
+                  <span>报告期</span>
+                  <strong>{{ formatTradeDate(selectedValueQuality.financialReportDate) }}</strong>
+                </div>
+              </div>
+              <div class="value-quality-dimension-grid">
+                <div v-for="dimension in selectedValueQuality.dimensions" :key="dimension.key" class="value-quality-dimension" :class="`value-quality-dimension-${dimension.status}`">
+                  <div>
+                    <span>{{ dimension.label }}</span>
+                    <strong>{{ formatValueQualityDimension(selectedValueQuality, dimension.key) }}</strong>
+                  </div>
+                  <div class="value-quality-meter" aria-hidden="true">
+                    <span :style="{ width: `${dimension.score === null ? 0 : (dimension.score / dimension.maxScore) * 100}%` }" />
+                  </div>
+                  <small>{{ dimension.status === 'ready' ? '样本可比较' : dimension.status === 'partial' ? '部分指标可用' : '暂无可比数据' }} · {{ valueQualityDimensionSamples(dimension) }} 只</small>
+                </div>
+              </div>
+              <div v-if="selectedValueQuality.riskNotes.length" class="value-quality-notes value-quality-notes-warning">
+                <strong>先核对</strong>
+                <span v-for="note in selectedValueQuality.riskNotes" :key="note">{{ note }}</span>
+              </div>
+              <div v-if="selectedValueQuality.missingFields.length" class="value-quality-notes value-quality-notes-muted">
+                <strong>数据缺口</strong>
+                <span v-for="field in selectedValueQuality.missingFields" :key="field">{{ field }}</span>
+              </div>
+              <p class="value-quality-note">
+                估值、质量、增长、趋势分别占 35 / 30 / 20 / 15 分；百分位只代表当前观察池，评分用于研究排序，不代表未来收益。观察 {{ formatDateTime(selectedValueQuality.observedAt) }}
+              </p>
+            </template>
+            <div v-else class="value-quality-state">
+              <Info :size="17" aria-hidden="true" />
+              <span>当前股票暂无价值质量数据</span>
+              <button class="text-button" type="button" @click="loadValueSelection">
+                重试
+              </button>
+            </div>
           </section>
           <section class="research-marker-editor" aria-label="研究记录">
             <div class="research-marker-heading">

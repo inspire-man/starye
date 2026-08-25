@@ -178,3 +178,102 @@ export interface QuantFinancialQualityComparison {
   roeHigherThanPercent: number | null
   debtAssetRatioLowerThanPercent: number | null
 }
+
+export type ValueQualityStatus = 'ready' | 'partial' | 'insufficient_data'
+export type ValueQualityDimensionStatus = 'ready' | 'partial' | 'missing'
+export type ValueQualityDimensionKey = 'valuation' | 'quality' | 'growth' | 'trend'
+
+export interface QuantValueQualityMetric {
+  key: string
+  label: string
+  value: number | null
+  favorablePercentile: number | null
+  sampleCount: number
+}
+
+export interface QuantValueQualityDimension {
+  key: ValueQualityDimensionKey
+  label: string
+  score: number | null
+  maxScore: number
+  status: ValueQualityDimensionStatus
+  metrics: QuantValueQualityMetric[]
+}
+
+export interface QuantValueQualityItem {
+  tsCode: string
+  name: string | null
+  formulaVersion: string
+  status: ValueQualityStatus
+  score: number | null
+  observedAt: string
+  valuationObservedAt: string | null
+  financialObservedAt: string | null
+  financialReportDate: string | null
+  financialNoticeDate: string | null
+  valuationStatus: 'ready' | 'failed' | 'missing'
+  financialStatus: 'ready' | 'failed' | 'missing'
+  dailyStatus: 'ready' | 'partial' | 'missing'
+  dimensions: QuantValueQualityDimension[]
+  riskDeduction: number
+  riskNotes: string[]
+  missingFields: string[]
+}
+
+export interface QuantValueSelection {
+  formulaVersion: string
+  observedAt: string
+  sampleCount: number
+  readyCount: number
+  partialCount: number
+  insufficientCount: number
+  items: QuantValueQualityItem[]
+}
+
+export type QuantKnowledgeSourceAccess = 'full' | 'preview'
+export type QuantKnowledgeFactorStatus = 'active' | 'partial' | 'planned' | 'context'
+export type QuantKnowledgeAliasStatus = 'mapped' | 'ambiguous' | 'context_only'
+export type QuantKnowledgeConfidence = 'high' | 'medium' | 'low'
+
+export interface QuantKnowledgeSource {
+  id: string
+  title: string
+  url: string
+  publishedAt: string | null
+  access: QuantKnowledgeSourceAccess
+  summary: string
+}
+
+export interface QuantKnowledgeFactor {
+  id: string
+  category: string
+  title: string
+  interpretation: string
+  measurement: string
+  requiredFields: string[]
+  availableFields: string[]
+  missingFields: string[]
+  status: QuantKnowledgeFactorStatus
+  eligibleInValueQuality: boolean
+  currentDimension: 'valuation' | 'quality' | 'growth' | 'trend' | null
+  sourceIds: string[]
+}
+
+export interface QuantKnowledgeAlias {
+  alias: string
+  status: QuantKnowledgeAliasStatus
+  confidence: QuantKnowledgeConfidence
+  tsCode: string | null
+  name: string | null
+  candidates: string[]
+  note: string
+}
+
+export interface QuantInvestmentKnowledge {
+  version: string
+  observedAt: string
+  sources: QuantKnowledgeSource[]
+  factors: QuantKnowledgeFactor[]
+  aliases: QuantKnowledgeAlias[]
+  recommendedWatchlist: { tsCode: string, name: string }[]
+}

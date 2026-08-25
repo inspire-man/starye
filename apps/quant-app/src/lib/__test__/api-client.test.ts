@@ -269,4 +269,80 @@ describe('quantApi', () => {
     })
     expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/financial/compare/601899.SH`, expect.objectContaining({ credentials: 'include' }))
   })
+
+  it('normalizes value-quality dimensions, null scores, and risk notes', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        formula_version: 'value-quality-v1',
+        observed_at: '2026-08-25T00:00:00.000Z',
+        sample_count: 4,
+        ready_count: 2,
+        partial_count: 1,
+        insufficient_count: 1,
+        items: [{
+          ts_code: '601899.SH',
+          name: '紫金矿业',
+          status: 'ready',
+          score: 72.5,
+          valuation_status: 'ready',
+          financial_status: 'ready',
+          daily_status: 'ready',
+          financial_report_date: '2026-06-30',
+          dimensions: [{
+            key: 'valuation',
+            label: '估值',
+            score: 28,
+            max_score: 35,
+            status: 'ready',
+            metrics: [{ key: 'pe_ttm', label: 'TTM PE', value: 12.4, favorable_percentile: 66, sample_count: 4 }],
+          }],
+          risk_deduction: 3,
+          risk_notes: ['净利润增长与经营现金流方向不一致'],
+          missing_fields: [],
+        }, {
+          ts_code: '600089.SH',
+          status: 'insufficient_data',
+          score: null,
+          dimensions: [],
+          risk_notes: [],
+          missing_fields: ['最近两期财务增长数据'],
+        }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getValueSelection()).resolves.toMatchObject({
+      formulaVersion: 'value-quality-v1',
+      sampleCount: 4,
+      readyCount: 2,
+      items: [
+        { tsCode: '601899.SH', score: 72.5, dimensions: [{ key: 'valuation', metrics: [{ favorablePercentile: 66 }] }] },
+        { tsCode: '600089.SH', score: null, status: 'insufficient_data' },
+      ],
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/value-selection`, expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('normalizes the source-backed investment knowledge catalog', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        version: 'investment-knowledge-v1',
+        observed_at: '2026-08-25T00:00:00.000Z',
+        sources: [{ id: 'article-key-point', title: '重点来了', url: 'https://mp.weixin.qq.com/s/fNOk8LKIqNzdlo8Bm7qTaA', access: 'preview', summary: '公开试读' }],
+        factors: [{ id: 'relative-valuation', category: '估值', title: '好公司还要有好价格', status: 'active', eligible_in_value_quality: true, current_dimension: 'valuation', required_fields: ['peTtm'], available_fields: ['peTtm'], missing_fields: [], source_ids: ['article-key-point'] }],
+        aliases: [{ alias: '变变', status: 'mapped', confidence: 'high', ts_code: '600089.SH', name: '特变电工', candidates: [], note: '上下文' }],
+        recommended_watchlist: [{ ts_code: '600089.SH', name: '特变电工' }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getInvestmentKnowledge()).resolves.toMatchObject({
+      version: 'investment-knowledge-v1',
+      sources: [{ id: 'article-key-point', access: 'preview' }],
+      factors: [{ id: 'relative-valuation', status: 'active', eligibleInValueQuality: true }],
+      aliases: [{ alias: '变变', tsCode: '600089.SH' }],
+      recommendedWatchlist: [{ tsCode: '600089.SH', name: '特变电工' }],
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/knowledge`, expect.objectContaining({ credentials: 'include' }))
+  })
 })

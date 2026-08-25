@@ -6,6 +6,7 @@ import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabil
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
 import { QuantError } from '../../domain/quant/errors'
 import { buildQuantFinancialQualityComparison } from '../../domain/quant/financial-comparison'
+import { getQuantInvestmentKnowledge } from '../../domain/quant/investment-knowledge'
 import { createEastmoneyFinancialProvider, createEastmoneyValuationProvider, mapQuantProviderError } from '../../domain/quant/provider'
 import {
   createQuantWatchlistItem,
@@ -21,6 +22,7 @@ import {
   upsertQuantResearchMarker,
 } from '../../domain/quant/repository'
 import { syncQuantDaily } from '../../domain/quant/sync'
+import { readQuantValueSelection } from '../../domain/quant/value-selection-service'
 import { requireAuth } from '../../middleware/guard'
 import {
   QuantDailyQuerySchema,
@@ -67,6 +69,13 @@ quantRoutes.get('/capabilities', (c) => {
       enabled: registry.enabled,
       capabilities: registry.capabilities,
     },
+  })
+})
+
+quantRoutes.get('/knowledge', (c) => {
+  return c.json({
+    success: true as const,
+    data: getQuantInvestmentKnowledge(),
   })
 })
 
@@ -254,6 +263,15 @@ quantRoutes.get('/candidates', async (c) => {
       candidates: JSON.parse(snapshot.candidatesJson) as readonly unknown[],
     },
   })
+})
+
+quantRoutes.get('/value-selection', async (c) => {
+  const options = eastmoneyProviderOptions(c.env)
+  const data = await readQuantValueSelection(c.get('db'), {
+    valuation: createEastmoneyValuationProvider(options),
+    financial: createEastmoneyFinancialProvider(options),
+  })
+  return c.json({ success: true as const, data })
 })
 
 quantRoutes.get('/sync', async (c) => {
