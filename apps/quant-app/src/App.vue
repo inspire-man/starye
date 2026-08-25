@@ -28,8 +28,8 @@ import type {
 import type { QuantView } from './lib/quant-view'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
-import type { TimingHistoryBucket, TimingHistoryState } from './lib/timing-history'
-import type { TimingWindow, TimingWindowMetricStatus } from './lib/timing-window'
+import type { TimingHistoryBucket } from './lib/timing-history'
+import type { TimingWindow, TimingWindowMetricStatus, TimingWindowState } from './lib/timing-window'
 import type { WatchlistEnvironmentStatus } from './lib/watchlist-environment'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
@@ -639,7 +639,7 @@ function formatTimingWindowMetric(metric: TimingWindow['metrics'][number]): stri
   return `${metric.value >= 0 ? '+' : '-'}${value}`
 }
 
-function timingHistoryStateClass(state: TimingHistoryState): string {
+function timingHistoryStateClass(state: TimingWindowState): string {
   return `timing-history-state-${state}`
 }
 
@@ -2283,7 +2283,7 @@ onUnmounted(() => {
                 </p>
                 <h2>历史条件回看</h2>
               </div>
-              <span class="timing-history-current" :class="timingHistoryStateClass(timingHistory.currentState === 'insufficient' ? 'constructive' : timingHistory.currentState)">
+              <span class="timing-history-current" :class="timingHistoryStateClass(timingHistory.currentState)">
                 当前：{{ timingHistory.currentLabel }}
               </span>
             </div>
