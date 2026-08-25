@@ -561,6 +561,9 @@ describe('quant watchlist CRUD contract', () => {
             XSJLL: 12,
             ZCFZL: 45,
             JYXJLYYSR: 0.08,
+            INTEREST_COVERAGE_RATIO: 12,
+            INTEREST_DEBT_RATIO: 28,
+            CASH_RATIO: 1.1,
             ROIC: 10,
           },
           {
@@ -576,6 +579,9 @@ describe('quant watchlist CRUD contract', () => {
             XSJLL: 11,
             ZCFZL: 46,
             JYXJLYYSR: 0.07,
+            INTEREST_COVERAGE_RATIO: 10,
+            INTEREST_DEBT_RATIO: 30,
+            CASH_RATIO: 1.05,
             ROIC: 9,
           },
         ],
@@ -588,7 +594,7 @@ describe('quant watchlist CRUD contract', () => {
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       data: {
-        formulaVersion: 'value-quality-v1',
+        formulaVersion: 'value-quality-v2',
         sampleCount: 4,
         readyCount: 4,
         items: [

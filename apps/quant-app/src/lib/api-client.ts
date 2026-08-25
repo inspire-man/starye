@@ -246,7 +246,7 @@ function parseKnowledgeFactor(value: unknown): QuantKnowledgeFactor | null {
     missingFields: readStringList(value, 'missingFields', 'missing_fields'),
     status: status === 'active' || status === 'partial' || status === 'planned' ? status : 'context',
     eligibleInValueQuality: value.eligibleInValueQuality === true || value.eligible_in_value_quality === true,
-    currentDimension: currentDimension === 'valuation' || currentDimension === 'quality' || currentDimension === 'growth' || currentDimension === 'trend' ? currentDimension : null,
+    currentDimension: currentDimension === 'valuation' || currentDimension === 'quality' || currentDimension === 'growth' || currentDimension === 'resilience' || currentDimension === 'trend' ? currentDimension : null,
     sourceIds: readStringList(value, 'sourceIds', 'source_ids'),
   }
 }
@@ -274,7 +274,7 @@ function parseInvestmentKnowledge(payload: unknown): QuantInvestmentKnowledge {
   const data = unwrapData(payload)
   const record = isRecord(data) ? data : {}
   return {
-    version: readString(record, 'version') || 'investment-knowledge-v2',
+    version: readString(record, 'version') || 'investment-knowledge-v3',
     observedAt: readString(record, 'observedAt', 'observed_at') || '',
     sources: Array.isArray(record.sources)
       ? record.sources.flatMap((value) => {
@@ -705,7 +705,7 @@ function parseValueQualityDimension(value: unknown): QuantValueQualityDimension 
     return null
   const key = readString(value, 'key')
   const label = readString(value, 'label')
-  if (key !== 'valuation' && key !== 'quality' && key !== 'growth' && key !== 'trend')
+  if (key !== 'valuation' && key !== 'quality' && key !== 'growth' && key !== 'resilience' && key !== 'trend')
     return null
   const status = readString(value, 'status')
   return {
@@ -733,7 +733,7 @@ function parseValueQualityItem(value: unknown): QuantValueQualityItem | null {
   return {
     tsCode,
     name: readString(value, 'name', 'stockName', 'stock_name'),
-    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'value-quality-v1',
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'value-quality-v2',
     status: status === 'ready' || status === 'partial' ? status : 'insufficient_data',
     score: readNumber(value, 'score'),
     observedAt: readString(value, 'observedAt', 'observed_at') || '',
@@ -760,7 +760,7 @@ function parseValueSelection(payload: unknown): QuantValueSelection {
   const data = unwrapData(payload)
   const record = isRecord(data) ? data : {}
   return {
-    formulaVersion: readString(record, 'formulaVersion', 'formula_version') || 'value-quality-v1',
+    formulaVersion: readString(record, 'formulaVersion', 'formula_version') || 'value-quality-v2',
     observedAt: readString(record, 'observedAt', 'observed_at') || '',
     sampleCount: readNumber(record, 'sampleCount', 'sample_count') ?? 0,
     readyCount: readNumber(record, 'readyCount', 'ready_count') ?? 0,

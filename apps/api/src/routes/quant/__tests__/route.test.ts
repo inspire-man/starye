@@ -50,13 +50,14 @@ describe('quant route contract', () => {
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       data: {
-        version: 'investment-knowledge-v2',
+        version: 'investment-knowledge-v3',
         sources: expect.arrayContaining([
           expect.objectContaining({ id: 'article-pingan-20260825', title: '2026半年报业绩增速创七年新高，再谈中国平安' }),
           expect.objectContaining({ id: 'article-key-point', access: 'preview' }),
         ]),
         factors: expect.arrayContaining([
           expect.objectContaining({ id: 'relative-valuation', status: 'active', eligibleInValueQuality: true }),
+          expect.objectContaining({ id: 'business-resilience', status: 'active', currentDimension: 'resilience', eligibleInValueQuality: true }),
           expect.objectContaining({ id: 'cashflow-capex-coverage', status: 'partial', eligibleInValueQuality: false }),
         ]),
         aliases: expect.arrayContaining([

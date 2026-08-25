@@ -1,4 +1,4 @@
-export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v2' as const
+export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v3' as const
 
 export type QuantKnowledgeSourceAccess = 'full' | 'preview'
 export type QuantKnowledgeFactorStatus = 'active' | 'partial' | 'planned' | 'context'
@@ -25,7 +25,7 @@ export interface QuantKnowledgeFactor {
   readonly missingFields: readonly string[]
   readonly status: QuantKnowledgeFactorStatus
   readonly eligibleInValueQuality: boolean
-  readonly currentDimension: 'valuation' | 'quality' | 'growth' | 'trend' | null
+  readonly currentDimension: 'valuation' | 'quality' | 'growth' | 'resilience' | 'trend' | null
   readonly sourceIds: readonly string[]
 }
 
@@ -100,8 +100,8 @@ export const QUANT_KNOWLEDGE_FACTORS: readonly QuantKnowledgeFactor[] = [
     title: '增长需要连续报告验证',
     interpretation: '单期高增长先当作线索，连续报告的方向、波动和扣非表现更重要。',
     measurement: '至少两期报告，结合营收同比、净利润同比和扣非净利润同比判断稳定性。',
-    requiredFields: ['revenueYoY', 'netProfitYoY', 'adjustedNetProfitYoY', 'reportDate'],
-    availableFields: ['revenueYoY', 'netProfitYoY', 'adjustedNetProfitYoY', 'reportDate'],
+    requiredFields: ['revenueYoY', 'netProfitYoY', 'adjustedNetProfitYoY', 'operatingCashflowToRevenue', 'reportDate'],
+    availableFields: ['revenueYoY', 'netProfitYoY', 'adjustedNetProfitYoY', 'operatingCashflowToRevenue', 'reportDate'],
     missingFields: [],
     status: 'active',
     eligibleInValueQuality: true,
@@ -211,13 +211,13 @@ export const QUANT_KNOWLEDGE_FACTORS: readonly QuantKnowledgeFactor[] = [
     category: '逆境韧性',
     title: '先问公司能否熬过逆风期',
     interpretation: '长线持有需要现金、负债、利息和经营现金流共同支撑，而非只看景气高点。',
-    measurement: '现金与债务、利息覆盖、经营现金流和利润波动的组合观察。',
-    requiredFields: ['cash', 'interestBearingDebt', 'interestCoverage', 'operatingCashflow', 'profitVolatility'],
-    availableFields: ['debtAssetRatio', 'operatingCashflowToRevenue', 'operatingCashflowPerShare', 'interestCoverage', 'interestBearingDebtRatio', 'cashRatio', 'totalLiability'],
-    missingFields: ['cash', 'interestBearingDebt', 'interestCoverage', 'operatingCashflow', 'profitVolatility'],
-    status: 'partial',
-    eligibleInValueQuality: false,
-    currentDimension: null,
+    measurement: '利息覆盖、现金比率、带息负债率进入韧性评分，跨报告经营现金流连续性作为增长质量复核。',
+    requiredFields: ['interestCoverage', 'cashRatio', 'interestBearingDebtRatio', 'operatingCashflowToRevenue'],
+    availableFields: ['operatingCashflowToRevenue', 'interestCoverage', 'interestBearingDebtRatio', 'cashRatio'],
+    missingFields: [],
+    status: 'active',
+    eligibleInValueQuality: true,
+    currentDimension: 'resilience',
     sourceIds: ['article-pingan-20260825', 'article-dilemma', 'article-dont-buy-blindly'],
   },
 ] as const

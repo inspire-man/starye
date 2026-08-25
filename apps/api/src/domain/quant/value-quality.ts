@@ -1,10 +1,10 @@
 import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './provider'
 import type { DailyBar, MomentumCandidate } from './types'
 
-export const VALUE_QUALITY_FACTOR_VERSION = 'value-quality-v1' as const
+export const VALUE_QUALITY_FACTOR_VERSION = 'value-quality-v2' as const
 
 export type ValueQualityStatus = 'ready' | 'partial' | 'insufficient_data'
-export type ValueQualityDimensionKey = 'valuation' | 'quality' | 'growth' | 'trend'
+export type ValueQualityDimensionKey = 'valuation' | 'quality' | 'growth' | 'resilience' | 'trend'
 export type ValueQualityMetricKey
   = | 'pe_ttm'
     | 'pb'
@@ -20,6 +20,10 @@ export type ValueQualityMetricKey
     | 'net_profit_yoy'
     | 'adjusted_net_profit_yoy'
     | 'growth_stability'
+    | 'cashflow_continuity'
+    | 'interest_coverage'
+    | 'cash_ratio'
+    | 'interest_bearing_debt_ratio'
     | 'return_60'
     | 'ma60_gap'
     | 'drawdown_60'
@@ -109,10 +113,17 @@ const QUALITY_METRICS: readonly MetricDefinition[] = [
 ]
 
 const GROWTH_METRICS: readonly MetricDefinition[] = [
-  { key: 'revenue_yoy', label: '营收同比', direction: 'higher', weight: 0.3, read: input => finite(input.financialReports[0]?.revenueYoY) },
-  { key: 'net_profit_yoy', label: '净利润同比', direction: 'higher', weight: 0.35, read: input => finite(input.financialReports[0]?.netProfitYoY) },
+  { key: 'revenue_yoy', label: '营收同比', direction: 'higher', weight: 0.25, read: input => finite(input.financialReports[0]?.revenueYoY) },
+  { key: 'net_profit_yoy', label: '净利润同比', direction: 'higher', weight: 0.3, read: input => finite(input.financialReports[0]?.netProfitYoY) },
   { key: 'adjusted_net_profit_yoy', label: '扣非净利润同比', direction: 'higher', weight: 0.2, read: input => finite(input.financialReports[0]?.adjustedNetProfitYoY) },
-  { key: 'growth_stability', label: '增长稳定性', direction: 'higher', weight: 0.15, read: input => calculateGrowthStability(input.financialReports) },
+  { key: 'growth_stability', label: '增长稳定性', direction: 'higher', weight: 0.1, read: input => calculateGrowthStability(input.financialReports) },
+  { key: 'cashflow_continuity', label: '现金流连续性', direction: 'higher', weight: 0.15, read: input => calculateCashflowContinuity(input.financialReports) },
+]
+
+const RESILIENCE_METRICS: readonly MetricDefinition[] = [
+  { key: 'interest_coverage', label: '利息覆盖倍数', direction: 'higher', weight: 0.4, read: input => finite(input.financialReports[0]?.interestCoverage) },
+  { key: 'cash_ratio', label: '现金比率', direction: 'higher', weight: 0.3, read: input => finite(input.financialReports[0]?.cashRatio) },
+  { key: 'interest_bearing_debt_ratio', label: '带息负债率', direction: 'lower', weight: 0.3, read: input => finite(input.financialReports[0]?.interestBearingDebtRatio) },
 ]
 
 const TREND_METRICS: readonly MetricDefinition[] = [
@@ -187,6 +198,15 @@ function calculateGrowthStability(reports: readonly QuantFinancialQualitySnapsho
   return (positiveRatio * 0.6 + clamp((average(values)! + 20) / 60, 0, 1) * 0.4) * volatilityFactor
 }
 
+function calculateCashflowContinuity(reports: readonly QuantFinancialQualitySnapshot[]): number | null {
+  const values = reports
+    .map(report => finite(report.operatingCashflowToRevenue))
+    .filter((value): value is number => value !== null)
+  if (values.length < 2)
+    return null
+  return values.filter(value => value >= 0).length / values.length
+}
+
 function favorablePercentile(value: number, samples: readonly number[], direction: MetricDefinition['direction']): number | null {
   if (samples.length < 2)
     return null
@@ -216,6 +236,7 @@ function createDimension(
     } satisfies ValueQualityMetric
   })
   const scored = metrics.filter(metric => metric.favorablePercentile !== null)
+  const available = metrics.filter(metric => metric.value !== null)
   const weightByKey = new Map(definitions.map(definition => [definition.key, definition.weight]))
   const totalWeight = scored.reduce((total, metric) => total + (weightByKey.get(metric.key) ?? 0), 0)
   const weightedPercentile = totalWeight > 0
@@ -227,7 +248,7 @@ function createDimension(
     label,
     score: weightedPercentile === null ? null : roundScore(weightedPercentile / 100 * maxScore),
     maxScore,
-    status: scored.length >= minimumMetrics ? 'ready' : scored.length > 0 ? 'partial' : 'missing',
+    status: scored.length >= minimumMetrics ? 'ready' : available.length > 0 ? 'partial' : 'missing',
     metrics,
   }
 }
@@ -250,6 +271,12 @@ function buildRisk(
   const latest = input.financialReports[0]
   const drawdown = metricByKey(dimensions.find(dimension => dimension.key === 'trend')!, 'drawdown_60')?.value
   const trendScore = dimensions.find(dimension => dimension.key === 'trend')?.score ?? null
+  const growth = dimensions.find(dimension => dimension.key === 'growth')!
+  const resilience = dimensions.find(dimension => dimension.key === 'resilience')!
+  const cashflowContinuity = metricByKey(growth, 'cashflow_continuity')?.value ?? null
+  const interestCoverage = metricByKey(resilience, 'interest_coverage')?.value ?? null
+  const cashRatio = metricByKey(resilience, 'cash_ratio')?.value ?? null
+  const interestBearingDebtRatio = metricByKey(resilience, 'interest_bearing_debt_ratio')?.value ?? null
 
   if (drawdown !== null && drawdown !== undefined && drawdown < -0.2) {
     deduction += 3
@@ -272,6 +299,27 @@ function buildRisk(
     addUnique(notes, '净利润增长与经营现金流方向不一致')
   }
 
+  if (cashflowContinuity !== null && cashflowContinuity <= 0.5) {
+    if (cashflowContinuity < 0.5)
+      deduction += 2
+    addUnique(notes, '经营现金流连续性不高于 50%，利润质量需要复核')
+  }
+
+  if (interestCoverage !== null && interestCoverage < 5) {
+    deduction += interestCoverage < 2 ? 3 : 2
+    addUnique(notes, interestCoverage < 2 ? '利息覆盖低于 2 倍，债务承压明显' : '利息覆盖低于 5 倍，先核对偿债能力')
+  }
+
+  if (cashRatio !== null && cashRatio < 1) {
+    deduction += cashRatio < 0.5 ? 2 : 1
+    addUnique(notes, cashRatio < 0.5 ? '现金比率低于 0.5，短期流动性偏紧' : '现金比率低于 1，流动性安全边际有限')
+  }
+
+  if (interestBearingDebtRatio !== null && interestBearingDebtRatio > 35) {
+    deduction += interestBearingDebtRatio > 50 ? 3 : 2
+    addUnique(notes, interestBearingDebtRatio > 50 ? '带息负债率高于 50%，债务结构需要复核' : '带息负债率高于 35%，关注利率和再融资压力')
+  }
+
   const valuation = dimensions.find(dimension => dimension.key === 'valuation')
   const expensiveCount = valuation?.metrics
     .filter(metric => metric.key === 'pe_ttm' || metric.key === 'pb')
@@ -287,15 +335,18 @@ function buildRisk(
 }
 
 export function buildValueQualityResult(input: ValueQualityInput, pool: readonly ValueQualityInput[]): ValueQualityResult {
-  const valuation = createDimension('valuation', '估值', 35, 2, VALUATION_METRICS, input, pool)
+  const valuation = createDimension('valuation', '估值', 30, 2, VALUATION_METRICS, input, pool)
   const quality = createDimension('quality', '盈利质量', 30, 3, QUALITY_METRICS, input, pool)
   const growth = createDimension('growth', '增长稳定性', 20, 2, GROWTH_METRICS, input, pool)
-  const trend = createDimension('trend', '趋势与风险', 15, 2, TREND_METRICS, input, pool)
-  const dimensions = [valuation, quality, growth, trend] as const
+  const resilience = createDimension('resilience', '资产负债表韧性', 15, 2, RESILIENCE_METRICS, input, pool)
+  const trend = createDimension('trend', '趋势与风险', 5, 2, TREND_METRICS, input, pool)
+  const dimensions = [valuation, quality, growth, resilience, trend] as const
   const risk = buildRisk(input, dimensions)
   const missingFields: string[] = []
   const qualityMetricCount = quality.metrics.filter(metric => metric.favorablePercentile !== null).length
   const growthMetricCount = growth.metrics.filter(metric => metric.favorablePercentile !== null).length
+  const resilienceMetricCount = resilience.metrics.filter(metric => metric.favorablePercentile !== null).length
+  const cashflowContinuity = metricByKey(growth, 'cashflow_continuity')?.value ?? null
   const trendMetricCount = trend.metrics.filter(metric => metric.favorablePercentile !== null).length
   const hasLongTrendWindow = sortedBars(input.dailyBars).length >= 61
 
@@ -311,6 +362,10 @@ export function buildValueQualityResult(input: ValueQualityInput, pool: readonly
     addUnique(missingFields, '盈利质量指标不足（至少需要 3 项）')
   if (input.financialReports.length < 2 || growthMetricCount < 2)
     addUnique(missingFields, '最近两期财务增长数据')
+  if (cashflowContinuity === null)
+    addUnique(missingFields, '至少两期经营现金流 / 营收数据')
+  if (resilienceMetricCount < 2)
+    addUnique(missingFields, '资产负债表韧性指标不足（至少需要 2 项）')
   if (!hasLongTrendWindow || trendMetricCount < 2)
     addUnique(missingFields, '60 日趋势窗口')
 

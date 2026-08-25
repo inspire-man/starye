@@ -33,6 +33,7 @@ describe('quant investment knowledge catalog', () => {
       'earnings-quality',
       'growth-stability',
       'long-term-trend',
+      'business-resilience',
     ])
     expect(eligible).toEqual(active)
     expect(planned.length).toBeGreaterThanOrEqual(2)

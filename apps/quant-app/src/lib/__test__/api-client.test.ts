@@ -366,7 +366,7 @@ describe('quantApi', () => {
   it('normalizes value-quality dimensions, null scores, and risk notes', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {
-        formula_version: 'value-quality-v1',
+        formula_version: 'value-quality-v2',
         observed_at: '2026-08-25T00:00:00.000Z',
         sample_count: 4,
         ready_count: 2,
@@ -385,9 +385,16 @@ describe('quantApi', () => {
             key: 'valuation',
             label: '估值',
             score: 28,
-            max_score: 35,
+            max_score: 30,
             status: 'ready',
             metrics: [{ key: 'pe_ttm', label: 'TTM PE', value: 12.4, favorable_percentile: 66, sample_count: 4 }],
+          }, {
+            key: 'resilience',
+            label: '资产负债表韧性',
+            score: 12,
+            max_score: 15,
+            status: 'ready',
+            metrics: [{ key: 'interest_coverage', label: '利息覆盖倍数', value: 12, favorable_percentile: 80, sample_count: 4 }],
           }],
           risk_deduction: 3,
           risk_notes: ['净利润增长与经营现金流方向不一致'],
@@ -405,11 +412,14 @@ describe('quantApi', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(quantApi.getValueSelection()).resolves.toMatchObject({
-      formulaVersion: 'value-quality-v1',
+      formulaVersion: 'value-quality-v2',
       sampleCount: 4,
       readyCount: 2,
       items: [
-        { tsCode: '601899.SH', score: 72.5, dimensions: [{ key: 'valuation', metrics: [{ favorablePercentile: 66 }] }] },
+        { tsCode: '601899.SH', score: 72.5, dimensions: expect.arrayContaining([
+          expect.objectContaining({ key: 'valuation', metrics: expect.arrayContaining([expect.objectContaining({ favorablePercentile: 66 })]) }),
+          expect.objectContaining({ key: 'resilience', maxScore: 15, metrics: expect.arrayContaining([expect.objectContaining({ favorablePercentile: 80 })]) }),
+        ]) },
         { tsCode: '600089.SH', score: null, status: 'insufficient_data' },
       ],
     })
@@ -419,10 +429,13 @@ describe('quantApi', () => {
   it('normalizes the source-backed investment knowledge catalog', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {
-        version: 'investment-knowledge-v2',
+        version: 'investment-knowledge-v3',
         observed_at: '2026-08-25T00:00:00.000Z',
         sources: [{ id: 'article-key-point', title: '重点来了', url: 'https://mp.weixin.qq.com/s/fNOk8LKIqNzdlo8Bm7qTaA', access: 'preview', summary: '公开试读' }],
-        factors: [{ id: 'relative-valuation', category: '估值', title: '好公司还要有好价格', status: 'active', eligible_in_value_quality: true, current_dimension: 'valuation', required_fields: ['peTtm'], available_fields: ['peTtm'], missing_fields: [], source_ids: ['article-key-point'] }],
+        factors: [
+          { id: 'relative-valuation', category: '估值', title: '好公司还要有好价格', status: 'active', eligible_in_value_quality: true, current_dimension: 'valuation', required_fields: ['peTtm'], available_fields: ['peTtm'], missing_fields: [], source_ids: ['article-key-point'] },
+          { id: 'business-resilience', category: '逆境韧性', title: '先问公司能否熬过逆风期', status: 'active', eligible_in_value_quality: true, current_dimension: 'resilience', required_fields: ['cashRatio'], available_fields: ['cashRatio'], missing_fields: [], source_ids: ['article-key-point'] },
+        ],
         aliases: [{ alias: '变变', status: 'mapped', confidence: 'high', ts_code: '600089.SH', name: '特变电工', candidates: [], note: '上下文' }],
         recommended_watchlist: [{ ts_code: '600089.SH', name: '特变电工' }],
       },
@@ -430,9 +443,12 @@ describe('quantApi', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(quantApi.getInvestmentKnowledge()).resolves.toMatchObject({
-      version: 'investment-knowledge-v2',
+      version: 'investment-knowledge-v3',
       sources: [{ id: 'article-key-point', access: 'preview' }],
-      factors: [{ id: 'relative-valuation', status: 'active', eligibleInValueQuality: true }],
+      factors: [
+        { id: 'relative-valuation', status: 'active', eligibleInValueQuality: true },
+        { id: 'business-resilience', status: 'active', currentDimension: 'resilience', eligibleInValueQuality: true },
+      ],
       aliases: [{ alias: '变变', tsCode: '600089.SH' }],
       recommendedWatchlist: [{ tsCode: '600089.SH', name: '特变电工' }],
     })

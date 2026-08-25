@@ -335,7 +335,7 @@ export function buildDecisionEvidence(input: DecisionEvidenceInput): DecisionEvi
       status: input.valueQuality === null ? 'missing' : input.valueQuality.riskDeduction <= 0 ? 'pass' : input.valueQuality.riskDeduction >= 5 ? 'fail' : 'caution',
       numericValue: input.valueQuality?.riskDeduction ?? null,
       threshold: '= 0 分',
-      source: 'Quant value-quality-v1',
+      source: 'Quant value-quality-v2',
       observedAt: input.valueQuality?.observedAt ?? null,
       detail: input.valueQuality === null ? '价值质量尚未返回' : input.valueQuality.riskDeduction <= 0 ? '暂无风险扣分' : `存在 ${input.valueQuality.riskDeduction.toFixed(1)} 分风险扣分`,
       format: value => value === null ? '--' : `-${value.toFixed(1)} 分`,

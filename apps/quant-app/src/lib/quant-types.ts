@@ -231,7 +231,7 @@ export interface QuantFinancialQualityComparison {
 
 export type ValueQualityStatus = 'ready' | 'partial' | 'insufficient_data'
 export type ValueQualityDimensionStatus = 'ready' | 'partial' | 'missing'
-export type ValueQualityDimensionKey = 'valuation' | 'quality' | 'growth' | 'trend'
+export type ValueQualityDimensionKey = 'valuation' | 'quality' | 'growth' | 'resilience' | 'trend'
 
 export interface QuantValueQualityMetric {
   key: string
@@ -305,7 +305,7 @@ export interface QuantKnowledgeFactor {
   missingFields: string[]
   status: QuantKnowledgeFactorStatus
   eligibleInValueQuality: boolean
-  currentDimension: 'valuation' | 'quality' | 'growth' | 'trend' | null
+  currentDimension: 'valuation' | 'quality' | 'growth' | 'resilience' | 'trend' | null
   sourceIds: string[]
 }
 

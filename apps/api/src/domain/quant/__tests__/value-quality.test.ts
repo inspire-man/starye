@@ -40,9 +40,9 @@ function report(tsCode: string, reportDate: string, values: Partial<QuantFinanci
     operatingCashflowPerShare: null,
     fcffBack: null,
     fcffForward: null,
-    interestCoverage: null,
-    interestBearingDebtRatio: null,
-    cashRatio: null,
+    interestCoverage: 10,
+    interestBearingDebtRatio: 25,
+    cashRatio: 1.2,
     totalLiability: null,
     roic: 9,
     ...values,
@@ -152,6 +152,87 @@ describe('quant value quality formula', () => {
     expect(result.riskDeduction).toBeGreaterThanOrEqual(5)
     expect(result.riskNotes).toContain('净利润增长与经营现金流方向不一致')
     expect(result.riskNotes).toContain('短期上涨或放量偏快，避免把强势当成价值')
+  })
+
+  it('adds resilience scoring and absolute debt-risk thresholds', () => {
+    const result = buildValueQualityResult(input('000001.SZ', {
+      financialReports: [report('000001.SZ', '2026-03-31', {
+        interestCoverage: 2.5,
+        interestBearingDebtRatio: 55,
+        cashRatio: 0.4,
+        operatingCashflowToRevenue: -4,
+      }), report('000001.SZ', '2025-12-31', { operatingCashflowToRevenue: 8 })],
+    }), [input('000001.SZ', {
+      financialReports: [report('000001.SZ', '2026-03-31', {
+        interestCoverage: 2.5,
+        interestBearingDebtRatio: 55,
+        cashRatio: 0.4,
+        operatingCashflowToRevenue: -4,
+      }), report('000001.SZ', '2025-12-31', { operatingCashflowToRevenue: 8 })],
+    }), input('000002.SZ')])
+
+    const resilience = result.dimensions.find(dimension => dimension.key === 'resilience')!
+    const continuity = result.dimensions.find(dimension => dimension.key === 'growth')!.metrics.find(metric => metric.key === 'cashflow_continuity')!
+
+    expect(result.formulaVersion).toBe('value-quality-v2')
+    expect(resilience.maxScore).toBe(15)
+    expect(resilience.status).toBe('ready')
+    expect(continuity.value).toBe(0.5)
+    expect(result.riskDeduction).toBeGreaterThanOrEqual(8)
+    expect(result.riskDeduction).toBeLessThanOrEqual(10)
+    expect(result.riskNotes).toContain('经营现金流连续性不高于 50%，利润质量需要复核')
+    expect(result.riskNotes).toEqual(expect.arrayContaining([
+      '利息覆盖低于 5 倍，先核对偿债能力',
+      '现金比率低于 0.5，短期流动性偏紧',
+      '带息负债率高于 50%，债务结构需要复核',
+    ]))
+  })
+
+  it('ranks stronger resilience values more favorably inside the watchlist', () => {
+    const stronger = input('000001.SZ', {
+      financialReports: [report('000001.SZ', '2026-03-31', { interestCoverage: 20, cashRatio: 2, interestBearingDebtRatio: 15 }), report('000001.SZ', '2025-12-31')],
+    })
+    const weaker = input('000002.SZ', {
+      financialReports: [report('000002.SZ', '2026-03-31', { interestCoverage: 3, cashRatio: 0.6, interestBearingDebtRatio: 55 }), report('000002.SZ', '2025-12-31')],
+    })
+    const result = buildValueQualityBatch([stronger, weaker], '2026-08-25T00:00:00.000Z')
+    const strongerDimension = result.items[0]!.dimensions.find(dimension => dimension.key === 'resilience')!
+    const weakerDimension = result.items[1]!.dimensions.find(dimension => dimension.key === 'resilience')!
+
+    for (const key of ['interest_coverage', 'cash_ratio', 'interest_bearing_debt_ratio']) {
+      const strongerMetric = strongerDimension.metrics.find(metric => metric.key === key)!
+      const weakerMetric = weakerDimension.metrics.find(metric => metric.key === key)!
+      expect(strongerMetric.favorablePercentile).toBeGreaterThan(weakerMetric.favorablePercentile ?? -1)
+    }
+  })
+
+  it('requires at least two resilience metrics before marking the result complete', () => {
+    const result = buildValueQualityResult(input('000001.SZ', {
+      financialReports: [report('000001.SZ', '2026-03-31', { cashRatio: null, interestBearingDebtRatio: null }), report('000001.SZ', '2025-12-31')],
+    }), [input('000001.SZ', {
+      financialReports: [report('000001.SZ', '2026-03-31', { cashRatio: null, interestBearingDebtRatio: null }), report('000001.SZ', '2025-12-31')],
+    }), input('000002.SZ')])
+
+    expect(result.score).toBeNull()
+    expect(result.status).toBe('insufficient_data')
+    expect(result.missingFields).toContain('资产负债表韧性指标不足（至少需要 2 项）')
+  })
+
+  it('keeps a single resilience value visible when the peer sample is insufficient', () => {
+    const target = input('000001.SZ', {
+      financialReports: [report('000001.SZ', '2026-03-31', { cashRatio: null, interestBearingDebtRatio: null }), report('000001.SZ', '2025-12-31', { cashRatio: null, interestBearingDebtRatio: null })],
+    })
+    const peer = input('000002.SZ', {
+      financialReports: [report('000002.SZ', '2026-03-31', { interestCoverage: null, cashRatio: null, interestBearingDebtRatio: null }), report('000002.SZ', '2025-12-31', { interestCoverage: null, cashRatio: null, interestBearingDebtRatio: null })],
+    })
+    const result = buildValueQualityResult(target, [target, peer])
+    const resilience = result.dimensions.find(dimension => dimension.key === 'resilience')!
+    const coverage = resilience.metrics.find(metric => metric.key === 'interest_coverage')!
+
+    expect(resilience.status).toBe('partial')
+    expect(coverage.value).toBe(10)
+    expect(coverage.sampleCount).toBe(1)
+    expect(coverage.favorablePercentile).toBeNull()
   })
 
   it('reports partial source failure without zero-filling the result', () => {

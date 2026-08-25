@@ -102,7 +102,7 @@ const shareholderReturn: QuantShareholderReturnItem = {
 const valueQuality: QuantValueQualityItem = {
   tsCode: '601899.SH',
   name: '紫金矿业',
-  formulaVersion: 'value-quality-v1',
+  formulaVersion: 'value-quality-v2',
   status: 'ready',
   score: 78,
   observedAt: '2026-08-25T00:00:00.000Z',

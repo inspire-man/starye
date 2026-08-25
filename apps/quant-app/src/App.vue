@@ -2102,7 +2102,7 @@ onUnmounted(() => {
             <div class="value-quality-heading">
               <div>
                 <p class="section-kicker">
-                  VALUE QUALITY V1
+                  VALUE QUALITY V2
                 </p>
                 <h2>中长线价值质量</h2>
               </div>
@@ -2155,7 +2155,7 @@ onUnmounted(() => {
                 <span v-for="field in selectedValueQuality.missingFields" :key="field">{{ field }}</span>
               </div>
               <p class="value-quality-note">
-                估值、质量、增长、趋势分别占 35 / 30 / 20 / 15 分；百分位只代表当前观察池，评分用于研究排序，不代表未来收益。观察 {{ formatDateTime(selectedValueQuality.observedAt) }}
+                估值、质量、增长、韧性、趋势分别占 30 / 30 / 20 / 15 / 5 分；百分位只代表当前观察池，评分用于研究排序，不代表未来收益。观察 {{ formatDateTime(selectedValueQuality.observedAt) }}
               </p>
             </template>
             <div v-else class="value-quality-state">
