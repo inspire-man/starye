@@ -1,6 +1,6 @@
 import { appendResponseHeader, createError, defineEventHandler, getQuery, sendRedirect } from 'h3'
 
-function normalizeRedirect(raw: string | undefined, origin: string): string {
+export function normalizeRedirect(raw: string | undefined, origin: string): string {
   const candidate = raw || '/'
   try {
     const target = new URL(candidate, origin)

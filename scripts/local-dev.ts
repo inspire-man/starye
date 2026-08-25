@@ -349,6 +349,22 @@ function defaultSleep(milliseconds: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
 }
 
+async function assertLocalPortsAvailable(
+  services: readonly LocalDevServiceSpec[],
+  isPortListening: (port: number) => Promise<boolean>,
+): Promise<void> {
+  const occupied = (await Promise.all(services.map(async (service) => {
+    if (service.port === undefined || !(await isPortListening(service.port))) {
+      return null
+    }
+    return `${service.label} (${service.port})`
+  }))).filter((entry): entry is string => entry !== null)
+
+  if (occupied.length > 0) {
+    throw new Error(`Local development ports are already in use: ${occupied.join(', ')}. Run pnpm dev:clean before starting.`)
+  }
+}
+
 function registerProcessSignalHandlers(stop: (exitCode: 0 | 1) => Promise<void>): void {
   process.once('SIGINT', () => void stop(0))
   process.once('SIGTERM', () => void stop(0))
@@ -443,7 +459,9 @@ export async function runLocalDevSupervisor(dependencies: LocalDevSupervisorDepe
 
   try {
     materialized = await materializeInputs()
-    for (const service of localDevServiceSpecs(materialized)) {
+    const services = localDevServiceSpecs(materialized)
+    await assertLocalPortsAvailable(services, isPortListening)
+    for (const service of services) {
       const child = startService(service)
       const startedChild = {
         label: service.label,

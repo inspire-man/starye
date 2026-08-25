@@ -5,6 +5,7 @@ $services = @(
     [pscustomobject]@{ Name = 'Gateway'; Port = 8080 }
     [pscustomobject]@{ Name = 'API'; Port = 8787 }
     [pscustomobject]@{ Name = 'Dashboard'; Port = 5173 }
+    [pscustomobject]@{ Name = 'Quant'; Port = 3004 }
     [pscustomobject]@{ Name = 'Blog'; Port = 3002 }
     [pscustomobject]@{ Name = 'Auth'; Port = 3003 }
     [pscustomobject]@{ Name = 'Comic'; Port = 3000 }

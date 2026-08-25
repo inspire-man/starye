@@ -27,6 +27,7 @@ import type {
 import type { QuantView } from './lib/quant-view'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
+import type { WatchlistEnvironmentStatus } from './lib/watchlist-environment'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
   AlertCircle,
@@ -61,6 +62,7 @@ import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/res
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
 import { buildTrendStructure } from './lib/trend-analysis'
+import { buildWatchlistEnvironment } from './lib/watchlist-environment'
 
 const watchlist = ref<WatchlistItem[]>([])
 const snapshot = ref<CandidateSnapshot | null>(null)
@@ -242,6 +244,10 @@ const latestWatchlistDate = computed(() => {
 const upCount = computed(() => watchlist.value.filter(item => item.latestChangePercent !== null && item.latestChangePercent >= 0).length)
 const downCount = computed(() => watchlist.value.filter(item => item.latestChangePercent !== null && item.latestChangePercent < 0).length)
 const signalCandidateCount = computed(() => candidateItems.value.filter(item => item.signals.length > 0).length)
+const watchlistEnvironment = computed(() => buildWatchlistEnvironment({
+  watchlist: watchlist.value,
+  candidates: candidateItems.value,
+}))
 const dataCoverageCount = computed(() => watchlist.value.filter(item => item.barCount > 0 || item.latestTradeDate !== null).length)
 const dataCoverageLabel = computed(() => watchlist.value.length ? `${dataCoverageCount.value} / ${watchlist.value.length}` : '--')
 const activeViewCopy = computed(() => viewCopy[activeView.value])
@@ -479,6 +485,14 @@ function signalScorePercent(value: number | null): number {
 
 function formatPercent(value: number | null): string {
   return value === null ? '--' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+}
+
+function environmentStatusClass(status: WatchlistEnvironmentStatus): string {
+  return `environment-status-${status}`
+}
+
+function formatEnvironmentRatio(value: number | null): string {
+  return value === null ? '--' : `${Math.round(value * 100)}%`
 }
 
 function formatMetricPercent(value: number | null): string {
@@ -1365,6 +1379,46 @@ onUnmounted(() => {
               <span class="metric-note">最新 {{ latestWatchlistDate }}</span>
             </article>
           </template>
+        </section>
+
+        <section class="environment-section" aria-labelledby="environment-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">
+                WATCHLIST CONTEXT
+              </p>
+              <h2 id="environment-title" class="section-title">
+                观察池环境
+              </h2>
+            </div>
+            <span class="section-meta">只看当前样本，不代表大盘</span>
+          </div>
+          <div class="environment-layout">
+            <div class="environment-summary" :class="environmentStatusClass(watchlistEnvironment.status)">
+              <div class="environment-summary-heading">
+                <span class="status-chip" :class="environmentStatusClass(watchlistEnvironment.status)">{{ watchlistEnvironment.label }}</span>
+                <strong>{{ watchlistEnvironment.headline }}</strong>
+              </div>
+              <p>{{ watchlistEnvironment.scopeNote }}</p>
+              <ul v-if="watchlistEnvironment.cautions.length" class="environment-cautions">
+                <li v-for="caution in watchlistEnvironment.cautions" :key="caution">
+                  {{ caution }}
+                </li>
+              </ul>
+            </div>
+            <div class="environment-metrics" role="list" aria-label="观察池环境指标">
+              <div v-for="metric in watchlistEnvironment.metrics" :key="metric.key" class="environment-metric" role="listitem">
+                <div class="environment-metric-heading">
+                  <span>{{ metric.label }}</span>
+                  <strong>{{ formatEnvironmentRatio(metric.ratio) }}</strong>
+                </div>
+                <div class="environment-meter" role="progressbar" :aria-label="metric.label" :aria-valuenow="metric.ratio === null ? undefined : Math.round(metric.ratio * 100)" aria-valuemin="0" aria-valuemax="100">
+                  <span :style="{ width: `${metric.ratio === null ? 0 : Math.round(metric.ratio * 100)}%` }" />
+                </div>
+                <small>{{ metric.detail }}</small>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="focus-section" aria-labelledby="focus-title">

@@ -64,6 +64,7 @@ const rootLockfile = new URL('../../../../../pnpm-lock.yaml', import.meta.url)
 
 function createHarness(options: {
   readonly listening: (port: number) => boolean
+  readonly occupiedPort?: number
   readonly readinessAttempts?: number
   readonly triggerGatewayError?: boolean
   readonly triggerGatewayExit?: boolean
@@ -79,7 +80,13 @@ function createHarness(options: {
   const serviceSpecs = new Map<string, FakeService>()
   const cleanup = vi.fn(async () => {})
   const setExitCode = vi.fn()
-  const probePort = vi.fn(async (port: number) => options.listening(port))
+  let servicesStarted = false
+  const probePort = vi.fn(async (port: number) => {
+    if (!servicesStarted) {
+      return options.occupiedPort === port
+    }
+    return options.listening(port)
+  })
   let nextPid = 10_000
 
   return {
@@ -93,6 +100,7 @@ function createHarness(options: {
         cleanup,
       }),
       startService: (service: FakeService) => {
+        servicesStarted = true
         const child = new FakeChild(nextPid++)
         children.set(service.label, child)
         serviceSpecs.set(service.label, service)
@@ -215,6 +223,21 @@ describe('local-dev atomic eight-port supervisor', () => {
       expectChildTerminated(child)
     }
   }, 15_000)
+
+  it('fails before starting services when a fixed port is already occupied', async () => {
+    const localDev = await loadLocalDev()
+    const harness = createHarness({ listening: () => true, occupiedPort: 8080 })
+
+    await expect(localDev.runLocalDevSupervisor(harness.dependencies)).resolves.toMatchObject({
+      status: 'failed',
+      exitCode: 1,
+    })
+
+    expect(harness.children).toHaveLength(0)
+    expect(harness.probePort).toHaveBeenCalledWith(8080)
+    expect(harness.cleanup).toHaveBeenCalledTimes(1)
+    expect(harness.setExitCode).toHaveBeenCalledWith(1)
+  })
 
   it('returns the owned labeled PID records only after all eight fixed ports are ready', async () => {
     const localDev = await loadLocalDev()
