@@ -1002,6 +1002,12 @@ input:focus-visible {
   color: hsl(var(--status-danger));
 }
 
+.timing-history-state-insufficient,
+.timing-history-current.timing-history-state-insufficient {
+  border-left-color: hsl(var(--muted-foreground) / 0.42);
+  color: hsl(var(--muted-foreground));
+}
+
 .timing-history-meta {
   display: flex;
   flex-wrap: wrap;
