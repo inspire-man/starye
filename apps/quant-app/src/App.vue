@@ -28,6 +28,7 @@ import type {
 import type { QuantView } from './lib/quant-view'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
+import type { TimingWindow, TimingWindowMetricStatus } from './lib/timing-window'
 import type { WatchlistEnvironmentStatus } from './lib/watchlist-environment'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
 import {
@@ -62,6 +63,7 @@ import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
+import { buildTimingWindow } from './lib/timing-window'
 import { buildTrendStructure } from './lib/trend-analysis'
 import { buildWatchlistEnvironment } from './lib/watchlist-environment'
 
@@ -459,6 +461,7 @@ const chartBars = computed(() => {
 })
 
 const trendStructure = computed(() => buildTrendStructure(dailyBars.value))
+const timingWindow = computed(() => buildTimingWindow(dailyBars.value, trendStructure.value))
 const decisionEvidence = computed(() => buildDecisionEvidence({
   candidate: selectedCandidate.value,
   trend: trendStructure.value,
@@ -609,6 +612,27 @@ function decisionEvidenceStatusClass(status: DecisionEvidenceStatus): string {
 
 function decisionEvidenceActionClass(action: string): string {
   return `decision-evidence-action-${action}`
+}
+
+function timingWindowClass(window: TimingWindow): string {
+  return `timing-window-${window.tone}`
+}
+
+function timingWindowMetricClass(status: TimingWindowMetricStatus): string {
+  return `timing-window-metric-${status}`
+}
+
+function timingWindowMetricStatusLabel(status: TimingWindowMetricStatus): string {
+  return { pass: '通过', caution: '注意', fail: '偏弱', missing: '数据不足' }[status]
+}
+
+function formatTimingWindowMetric(metric: TimingWindow['metrics'][number]): string {
+  if (metric.value === null)
+    return '--'
+  const value = `${Math.abs(metric.value * 100).toFixed(2)}%`
+  if (metric.key === 'volatility20')
+    return value
+  return `${metric.value >= 0 ? '+' : '-'}${value}`
 }
 
 function formatEvidenceDate(value: string | null): string {
@@ -2199,6 +2223,35 @@ onUnmounted(() => {
               <span v-else class="muted-inline">暂无历史快照，请完成一次日线同步</span>
             </div>
             <span class="signal-persistence-note" title="持续性只描述当前观察池中已保存的快照样本；它是筛选线索，不是买入或卖出指令。" aria-label="信号持续性口径说明">
+              <Info :size="15" aria-hidden="true" />
+            </span>
+          </section>
+          <section v-if="selectedStock" class="timing-window-panel" aria-label="中长线时机窗口">
+            <div class="timing-window-heading">
+              <div>
+                <p class="section-kicker">
+                  TIMING WINDOW V1
+                </p>
+                <h2>中长线时机窗口</h2>
+              </div>
+              <span class="timing-window-state" :class="timingWindowClass(timingWindow)">{{ timingWindow.label }}</span>
+            </div>
+            <div class="timing-window-headline" :class="timingWindowClass(timingWindow)">
+              <strong>{{ timingWindow.label }}</strong>
+              <p>{{ timingWindow.headline }}</p>
+            </div>
+            <div class="timing-window-metrics">
+              <div v-for="metric in timingWindow.metrics" :key="metric.key" class="timing-window-metric" :class="timingWindowMetricClass(metric.status)">
+                <div class="timing-window-metric-heading">
+                  <span>{{ metric.label }}</span>
+                  <small>{{ timingWindowMetricStatusLabel(metric.status) }}</small>
+                </div>
+                <strong>{{ formatTimingWindowMetric(metric) }}</strong>
+                <p>{{ metric.detail }}</p>
+                <small class="timing-window-threshold">阈值：{{ metric.threshold }}</small>
+              </div>
+            </div>
+            <span class="timing-window-note" title="按最近 N 根有效日线计算：MA20、MA60、20 日高点回撤和近 20 个收益波动率。状态只用于研究排序，不是买入或卖出指令。" aria-label="时机窗口口径说明">
               <Info :size="15" aria-hidden="true" />
             </span>
           </section>

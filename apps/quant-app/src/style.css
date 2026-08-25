@@ -765,6 +765,191 @@ input:focus-visible {
   color: hsl(var(--foreground));
 }
 
+.timing-window-panel {
+  margin-bottom: 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md);
+  background: hsl(var(--card));
+  padding: 0.9rem;
+}
+
+.timing-window-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.timing-window-heading h2 {
+  margin: 0.35rem 0 0;
+  color: hsl(var(--foreground));
+  font-size: 0.9375rem;
+  font-weight: 720;
+}
+
+.timing-window-state {
+  flex: 0 0 auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: 9999px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.timing-window-positive {
+  border-color: hsl(var(--status-success) / 0.28);
+  color: hsl(var(--status-success));
+}
+
+.timing-window-warning {
+  border-color: hsl(var(--status-warning) / 0.3);
+  color: hsl(var(--status-warning));
+}
+
+.timing-window-danger {
+  border-color: hsl(var(--status-danger) / 0.3);
+  color: hsl(var(--status-danger));
+}
+
+.timing-window-neutral {
+  border-color: hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+
+.timing-window-headline {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+  border-top: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.7rem 0;
+}
+
+.timing-window-headline strong {
+  font-size: 0.8125rem;
+  font-weight: 780;
+}
+
+.timing-window-headline p {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.timing-window-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.timing-window-metric {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.25rem;
+  border-left: 2px solid hsl(var(--border));
+  padding: 0.2rem 0.6rem;
+}
+
+.timing-window-metric-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.timing-window-metric-heading span,
+.timing-window-metric-heading small,
+.timing-window-metric p,
+.timing-window-threshold {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
+
+.timing-window-metric-heading span {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timing-window-metric-heading small {
+  flex: 0 0 auto;
+  font-weight: 750;
+}
+
+.timing-window-metric > strong {
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 780;
+}
+
+.timing-window-metric p {
+  min-height: 2.6rem;
+  margin: 0;
+}
+
+.timing-window-threshold {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.timing-window-metric-pass {
+  border-left-color: hsl(var(--status-success) / 0.58);
+}
+
+.timing-window-metric-pass .timing-window-metric-heading small {
+  color: hsl(var(--status-success));
+}
+
+.timing-window-metric-caution {
+  border-left-color: hsl(var(--status-warning) / 0.62);
+}
+
+.timing-window-metric-caution .timing-window-metric-heading small {
+  color: hsl(var(--status-warning));
+}
+
+.timing-window-metric-fail {
+  border-left-color: hsl(var(--status-danger) / 0.68);
+}
+
+.timing-window-metric-fail .timing-window-metric-heading small {
+  color: hsl(var(--status-danger));
+}
+
+.timing-window-metric-missing {
+  border-left-color: hsl(var(--muted-foreground) / 0.42);
+  background: hsl(var(--muted) / 0.22);
+}
+
+.timing-window-metric-missing .timing-window-metric-heading small {
+  color: hsl(var(--muted-foreground));
+}
+
+.timing-window-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0.7rem 0 0 auto;
+  color: hsl(var(--muted-foreground));
+  cursor: help;
+}
+
+.timing-window-note:hover {
+  color: hsl(var(--foreground));
+}
+
 .decision-card-heading,
 .research-marker-heading {
   display: flex;
@@ -4264,6 +4449,15 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .timing-window-headline,
+  .timing-window-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .timing-window-metric p {
+    min-height: 0;
+  }
+
   .signal-persistence-evidence-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -4369,3 +4563,4 @@ input:focus-visible {
     animation-duration: 0.01ms !important;
   }
 }
+
