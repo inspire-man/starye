@@ -38,6 +38,11 @@ describe('quant route contract', () => {
     expect(response.status).toBe(401)
   })
 
+  it('requires authentication for shareholder returns', async () => {
+    const response = await createApp(null).request('/api/quant/shareholder-returns')
+    expect(response.status).toBe(401)
+  })
+
   it('returns the source-backed investment knowledge catalog', async () => {
     const response = await createApp({ user: { role: 'admin' } }).request('/api/quant/knowledge')
 

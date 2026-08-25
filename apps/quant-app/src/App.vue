@@ -11,6 +11,8 @@ import type {
   QuantInvestmentKnowledge,
   QuantKnowledgeFactor,
   QuantResearchMarker,
+  QuantShareholderReturnItem,
+  QuantShareholderReturnSelection,
   QuantValuationComparison,
   QuantValuationSnapshot,
   QuantValueQualityDimension,
@@ -21,6 +23,7 @@ import type {
   SyncStatus,
   WatchlistItem,
 } from './lib/quant-types'
+import type { QuantView } from './lib/quant-view'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
 import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
@@ -47,9 +50,11 @@ import {
   Trash2,
   X,
 } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { getCandidateAction } from './lib/candidate-action'
+import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
@@ -66,6 +71,7 @@ const financialHistory = ref<QuantFinancialQualityHistory | null>(null)
 const financialComparison = ref<QuantFinancialQualityComparison | null>(null)
 const financialComparisonError = ref<unknown | null>(null)
 const valueSelection = ref<QuantValueSelection | null>(null)
+const shareholderReturns = ref<QuantShareholderReturnSelection | null>(null)
 const investmentKnowledge = ref<QuantInvestmentKnowledge | null>(null)
 const researchMarkers = ref<QuantResearchMarker[]>([])
 const selectedCandidateIds = ref<Set<string>>(new Set())
@@ -88,6 +94,7 @@ const detailDrawerOpen = ref(false)
 let valuationRequestId = 0
 let financialRequestId = 0
 let valueQualityRequestId = 0
+let shareholderReturnRequestId = 0
 const loading = reactive({
   watchlist: false,
   candidates: false,
@@ -95,17 +102,19 @@ const loading = reactive({
   valuation: false,
   financial: false,
   valueQuality: false,
+  shareholderReturns: false,
   knowledge: false,
   research: false,
   sync: false,
 })
-const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation' | 'financial' | 'valueQuality' | 'knowledge' | 'research' | 'action', unknown | null>>({
+const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation' | 'financial' | 'valueQuality' | 'shareholderReturns' | 'knowledge' | 'research' | 'action', unknown | null>>({
   watchlist: null,
   candidates: null,
   daily: null,
   valuation: null,
   financial: null,
   valueQuality: null,
+  shareholderReturns: null,
   knowledge: null,
   research: null,
   action: null,
@@ -113,6 +122,7 @@ const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation
 const deletingCode = ref<string | null>(null)
 const pendingDeleteCode = ref<string | null>(null)
 const adding = ref(false)
+const activeView = ref<QuantView>('overview')
 const candidateFilter = ref<SelectionPresetKey>('balanced')
 const candidateMinScore = ref(0)
 const candidateCompleteOnly = ref(false)
@@ -150,6 +160,28 @@ const candidateReviewDueOptions: { value: CandidateReviewFilter, label: string }
   { value: 'today', label: '今日复查' },
   { value: 'upcoming', label: '近 7 日' },
 ]
+const viewCopy: Record<QuantView, { eyebrow: string, title: string, subtitle: string }> = {
+  overview: {
+    eyebrow: 'STARYE / STOCK SELECTION',
+    title: '择股工作台',
+    subtitle: '先看统计和优先关注，再进入候选研究、观察池或因子框架。',
+  },
+  candidates: {
+    eyebrow: 'RESEARCH CANDIDATES',
+    title: '候选研究',
+    subtitle: '用预设、数据完整度和研究状态缩小范围，再打开分析详情。',
+  },
+  watchlist: {
+    eyebrow: 'WATCHLIST / DATA UPDATE',
+    title: '观察池',
+    subtitle: '维护关注标的并更新日线数据，观察池是所有比较的样本底座。',
+  },
+  knowledge: {
+    eyebrow: 'INVESTMENT KNOWLEDGE',
+    title: '投资因子框架',
+    subtitle: '查看每个判断如何量化、哪些字段已接通，以及当前仍存在的数据缺口。',
+  },
+}
 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
@@ -179,6 +211,8 @@ const latestDate = computed(() => {
 const selectedCandidate = computed(() => candidateItems.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const valueQualityMap = computed(() => new Map(valueSelection.value?.items.map(item => [item.tsCode, item]) || []))
 const selectedValueQuality = computed(() => valueQualityMap.value.get(selectedTsCode.value || '') || null)
+const shareholderReturnMap = computed(() => new Map(shareholderReturns.value?.items.map(item => [item.tsCode, item]) || []))
+const selectedShareholderReturn = computed(() => shareholderReturnMap.value.get(selectedTsCode.value || '') || null)
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
 const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
@@ -208,6 +242,7 @@ const downCount = computed(() => watchlist.value.filter(item => item.latestChang
 const signalCandidateCount = computed(() => candidateItems.value.filter(item => item.signals.length > 0).length)
 const dataCoverageCount = computed(() => watchlist.value.filter(item => item.barCount > 0 || item.latestTradeDate !== null).length)
 const dataCoverageLabel = computed(() => watchlist.value.length ? `${dataCoverageCount.value} / ${watchlist.value.length}` : '--')
+const activeViewCopy = computed(() => viewCopy[activeView.value])
 const topCandidates = computed(() => [...candidateItems.value]
   .sort((left, right) => (right.score ?? -1) - (left.score ?? -1))
   .slice(0, 3))
@@ -244,6 +279,13 @@ const hasFinancialData = computed(() => Boolean(financialQuality.value && [
   financialQuality.value.netMargin,
   financialQuality.value.debtAssetRatio,
   financialQuality.value.operatingCashflowToRevenue,
+  financialQuality.value.operatingCashflowPerShare,
+  financialQuality.value.fcffBack,
+  financialQuality.value.fcffForward,
+  financialQuality.value.interestCoverage,
+  financialQuality.value.interestBearingDebtRatio,
+  financialQuality.value.cashRatio,
+  financialQuality.value.totalLiability,
   financialQuality.value.roic,
 ].some(value => value !== null)))
 
@@ -466,6 +508,30 @@ function formatRatioPercent(value: number | null): string {
   return value === null ? '--' : `${(value * 100).toFixed(2)}%`
 }
 
+function formatMultiple(value: number | null): string {
+  return value === null ? '--' : `${value.toFixed(2)}x`
+}
+
+function formatDividendYield(value: number | null): string {
+  return value === null ? '--' : `${value.toFixed(2)}%`
+}
+
+function shareholderReturnStatusLabel(item: QuantShareholderReturnItem | null): string {
+  if (!item)
+    return loading.shareholderReturns ? '读取中' : '暂无数据'
+  if (item.status === 'ready')
+    return '已接通'
+  if (item.status === 'partial')
+    return '部分数据'
+  return '数据不足'
+}
+
+function shareholderReturnStatusClass(item: QuantShareholderReturnItem | null): string {
+  if (!item || item.status === 'insufficient_data')
+    return 'value-quality-status-muted'
+  return item.status === 'ready' ? 'value-quality-status-ready' : 'value-quality-status-partial'
+}
+
 function formatComparisonPosition(value: number | null): string {
   return value === null ? '暂无足够样本' : `高于观察池 ${value}%`
 }
@@ -542,6 +608,13 @@ function knowledgeFieldLabel(field: string): string {
     grossMargin: '毛利率',
     netMargin: '净利率',
     debtAssetRatio: '资产负债率',
+    operatingCashflowPerShare: '经营现金流 / 股',
+    fcffBack: 'FCFF（历史）',
+    fcffForward: 'FCFF（前瞻）',
+    interestCoverage: '利息覆盖倍数',
+    interestBearingDebtRatio: '带息负债率',
+    cashRatio: '现金比率',
+    totalLiability: '负债规模',
     revenueYoY: '营收同比',
     reportDate: '报告期',
     dailyBars: '日线',
@@ -577,7 +650,6 @@ function knowledgeFieldLabel(field: string): string {
     forwardPe: '前瞻 PE',
     priceBeforeReport: '报告前价格',
     cash: '现金',
-    interestCoverage: '利息覆盖倍数',
     profitVolatility: '利润波动',
   }[field] || field
 }
@@ -765,6 +837,9 @@ async function loadWatchlist() {
     financialComparisonError.value = null
     valueSelection.value = null
     errors.valueQuality = null
+    shareholderReturnRequestId++
+    shareholderReturns.value = null
+    errors.shareholderReturns = null
     loading.valuation = false
     loading.financial = false
   }
@@ -810,6 +885,27 @@ async function loadValueSelection() {
   finally {
     if (requestId === valueQualityRequestId)
       loading.valueQuality = false
+  }
+}
+
+async function loadShareholderReturns() {
+  const requestId = ++shareholderReturnRequestId
+  loading.shareholderReturns = true
+  errors.shareholderReturns = null
+  try {
+    const result = await quantApi.getShareholderReturns()
+    if (requestId === shareholderReturnRequestId)
+      shareholderReturns.value = result
+  }
+  catch (error) {
+    if (requestId === shareholderReturnRequestId) {
+      errors.shareholderReturns = error
+      shareholderReturns.value = null
+    }
+  }
+  finally {
+    if (requestId === shareholderReturnRequestId)
+      loading.shareholderReturns = false
   }
 }
 
@@ -1029,7 +1125,7 @@ async function openComparisonDrawer() {
 async function loadWorkspace() {
   errors.action = null
   await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers(), loadInvestmentKnowledge()])
-  await loadValueSelection()
+  await Promise.all([loadValueSelection(), loadShareholderReturns()])
 }
 
 function selectStock(item: Pick<WatchlistItem, 'tsCode' | 'name'>) {
@@ -1053,7 +1149,7 @@ async function addToWatchlist() {
     watchCode.value = ''
     watchName.value = ''
     await Promise.all([loadWatchlist(), loadResearchMarkers()])
-    await loadValueSelection()
+    await Promise.all([loadValueSelection(), loadShareholderReturns()])
   }
   catch (error) {
     errors.action = error
@@ -1083,7 +1179,7 @@ async function removeFromWatchlist(tsCode: string) {
   try {
     await quantApi.removeWatchlist(tsCode)
     await Promise.all([loadWatchlist(), loadResearchMarkers()])
-    await Promise.all([loadCandidates(), loadValueSelection()])
+    await Promise.all([loadCandidates(), loadValueSelection(), loadShareholderReturns()])
   }
   catch (error) {
     errors.action = error
@@ -1102,7 +1198,7 @@ async function syncDaily() {
   try {
     syncResult.value = await quantApi.syncDaily()
     await Promise.all([loadWatchlist(), loadCandidates()])
-    await loadValueSelection()
+    await Promise.all([loadValueSelection(), loadShareholderReturns()])
   }
   catch (error) {
     errors.action = error
@@ -1112,34 +1208,57 @@ async function syncDaily() {
   }
 }
 
-onMounted(loadWorkspace)
+function syncViewFromHash(): void {
+  const view = parseQuantView(window.location.hash)
+  activeView.value = view
+  const normalizedHash = quantViewHash(view)
+  if (window.location.hash !== normalizedHash) {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${normalizedHash}`)
+  }
+}
+
+function setActiveView(view: QuantView): void {
+  activeView.value = view
+  const normalizedHash = quantViewHash(view)
+  if (window.location.hash !== normalizedHash) {
+    window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${normalizedHash}`)
+  }
+}
+
+onMounted(() => {
+  syncViewFromHash()
+  window.addEventListener('hashchange', syncViewFromHash)
+  window.addEventListener('popstate', syncViewFromHash)
+  void loadWorkspace()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('hashchange', syncViewFromHash)
+  window.removeEventListener('popstate', syncViewFromHash)
+})
 </script>
 
 <template>
   <div class="quant-shell min-h-screen">
+    <QuantHeader :active-view="activeView" :latest-date="latestWatchlistDate" :busy="pageBusy" @navigate="setActiveView" @refresh="loadWorkspace" />
     <main class="quant-page">
-      <header class="quant-header">
+      <header class="quant-view-heading">
         <div class="min-w-0">
           <p class="quant-eyebrow">
-            STARYE / STOCK SELECTION
+            {{ activeViewCopy.eyebrow }}
           </p>
-          <div class="mt-2 flex flex-wrap items-center gap-3">
+          <div class="quant-view-title-row">
             <h1 class="quant-title">
-              择股工作台
+              {{ activeViewCopy.title }}
             </h1>
           </div>
           <p class="quant-subtitle">
-            用可解释的日线信号筛出值得继续研究的标的
+            {{ activeViewCopy.subtitle }}
           </p>
         </div>
-        <div class="quant-header-actions">
-          <div class="header-metric">
-            <span class="header-metric-label">数据截至</span>
-            <strong>{{ latestWatchlistDate }}</strong>
-          </div>
-          <button class="icon-button" type="button" title="刷新工作台" aria-label="刷新工作台" :disabled="pageBusy" @click="loadWorkspace">
-            <RefreshCw :size="17" :class="pageBusy ? 'animate-spin' : ''" aria-hidden="true" />
-          </button>
+        <div class="quant-view-heading-meta">
+          <span>当前视图</span>
+          <strong>{{ activeViewCopy.title }}</strong>
         </div>
       </header>
 
@@ -1157,564 +1276,611 @@ onMounted(loadWorkspace)
         </button>
       </div>
 
-      <section class="metric-grid" aria-label="工作台概览">
-        <template v-if="pageBusy">
-          <SkeletonCard v-for="index in 4" :key="index" variant="stat" />
-        </template>
-        <template v-else>
-          <article class="metric-card">
-            <div class="metric-card-heading">
-              <span class="metric-icon metric-icon-teal"><Eye :size="17" aria-hidden="true" /></span>
-              <span>观察池</span>
-            </div>
-            <strong class="metric-value">{{ watchlist.length }}<small>/ 50</small></strong>
-            <span class="metric-note">当前关注标的</span>
-          </article>
-          <article class="metric-card">
-            <div class="metric-card-heading">
-              <span class="metric-icon metric-icon-green"><ArrowUpRight :size="17" aria-hidden="true" /></span>
-              <span>今日涨跌</span>
-            </div>
-            <strong class="metric-value metric-value-split"><span class="text-status-success">+{{ upCount }}</span><small>/ 跌 {{ downCount }}</small></strong>
-            <span class="metric-note">观察池最新日线</span>
-          </article>
-          <article class="metric-card">
-            <div class="metric-card-heading">
-              <span class="metric-icon metric-icon-amber"><Sparkles :size="17" aria-hidden="true" /></span>
-              <span>有信号</span>
-            </div>
-            <strong class="metric-value">{{ signalCandidateCount }}</strong>
-            <span class="metric-note">候选快照中的标的</span>
-          </article>
-          <article class="metric-card">
-            <div class="metric-card-heading">
-              <span class="metric-icon metric-icon-blue"><CalendarDays :size="17" aria-hidden="true" /></span>
-              <span>数据覆盖</span>
-            </div>
-            <strong class="metric-value metric-value-date">{{ dataCoverageLabel }}</strong>
-            <span class="metric-note">最新 {{ latestWatchlistDate }}</span>
-          </article>
-        </template>
-      </section>
-
-      <section class="focus-section" aria-labelledby="focus-title">
-        <div class="section-heading">
-          <div>
-            <p class="section-kicker">
-              TODAY'S FOCUS
-            </p>
-            <h2 id="focus-title" class="section-title">
-              今日优先关注
-            </h2>
-          </div>
-          <span class="section-meta">按当前信号分排序 · {{ latestWatchlistDate }}</span>
-        </div>
-        <div class="focus-layout">
-          <div class="focus-list">
-            <div v-if="loading.candidates" class="focus-empty" aria-label="优先关注加载中">
-              <SkeletonCard variant="content" />
-            </div>
-            <button
-              v-for="(item, index) in topCandidates"
-              :key="item.tsCode"
-              class="focus-row"
-              :class="focusTone(item)"
-              type="button"
-              @click="selectStock(item)"
-            >
-              <span class="focus-rank">0{{ index + 1 }}</span>
-              <span class="focus-stock">
-                <strong>{{ displayStockName(item) }}</strong>
-                <small>{{ item.tsCode }}</small>
-              </span>
-              <span class="focus-signal" :title="candidateActionFor(item).detail">{{ focusSignal(item) }}</span>
-              <span class="focus-score">
-                <strong>{{ formatSignalScore(item.score) }}</strong>
-                <span class="focus-score-meter" aria-hidden="true"><span class="focus-score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
-                <small>命中规则</small>
-              </span>
-              <span class="status-chip" :class="riskToneClass(candidateRiskTone(item))">{{ riskLabel(item) }}</span>
-              <ChevronRight :size="15" aria-hidden="true" />
-            </button>
-            <div v-if="!loading.candidates && !topCandidates.length" class="focus-empty">
-              <Sparkles :size="18" aria-hidden="true" />
-              <span>完成一次日线更新后，这里会出现可比较的信号</span>
-            </div>
-          </div>
-          <aside class="risk-summary" aria-labelledby="risk-title">
-            <div class="risk-summary-heading">
-              <div>
-                <p class="section-kicker">
-                  CHECK BEFORE DECISION
-                </p>
-                <h3 id="risk-title">
-                  风险提示
-                </h3>
+      <template v-if="activeView === 'overview'">
+        <section class="metric-grid" aria-label="工作台概览">
+          <template v-if="pageBusy">
+            <SkeletonCard v-for="index in 4" :key="index" variant="stat" />
+          </template>
+          <template v-else>
+            <article class="metric-card">
+              <div class="metric-card-heading">
+                <span class="metric-icon metric-icon-teal"><Eye :size="17" aria-hidden="true" /></span>
+                <span>观察池</span>
               </div>
-              <ShieldAlert :size="18" aria-hidden="true" />
-            </div>
-            <div class="risk-list">
-              <div v-for="item in riskItems" :key="item.key" class="risk-note" :class="riskToneClass(item.tone)">
-                <span class="risk-note-mark" aria-hidden="true" />
-                <div>
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.detail }}</span>
-                </div>
-              </div>
-            </div>
-            <p class="risk-footnote">
-              <Info :size="13" aria-hidden="true" />
-              信号是筛选线索，不是买入指令
-            </p>
-          </aside>
-        </div>
-      </section>
-
-      <section class="workspace-grid">
-        <article class="surface-panel" aria-labelledby="watchlist-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                WATCHLIST
-              </p>
-              <h2 id="watchlist-title" class="section-title">
-                观察池
-              </h2>
-            </div>
-            <span class="section-meta">{{ watchlist.length }} / 50</span>
-          </div>
-          <form class="watchlist-form" @submit.prevent="addToWatchlist">
-            <label class="sr-only" for="quant-code">股票代码</label>
-            <input id="quant-code" v-model="watchCode" class="field-control field-code" inputmode="text" autocomplete="off" placeholder="000001.SZ" maxlength="9">
-            <label class="sr-only" for="quant-name">股票名称</label>
-            <input id="quant-name" v-model="watchName" class="field-control" autocomplete="off" placeholder="名称（可选）" maxlength="40">
-            <button class="primary-button" type="submit" :disabled="adding || watchlist.length >= 50">
-              <Plus :size="16" aria-hidden="true" />
-              {{ adding ? '加入中' : '加入观察池' }}
-            </button>
-          </form>
-          <div class="quant-table-frame watchlist-table-frame">
-            <DataTable
-              :data="watchlist"
-              :columns="watchlistColumns"
-              :loading="loading.watchlist"
-              min-width="760px"
-              empty-message="观察池为空，先加入一只股票"
-              @row-click="selectStock"
-            >
-              <template #cell-tsCode="{ item }">
-                <button class="stock-code-button" type="button" @click.stop="selectStock(item)">
-                  {{ item.tsCode }}
-                  <ChevronRight :size="14" aria-hidden="true" />
-                </button>
-              </template>
-              <template #cell-latestClose="{ item }">
-                <span class="quant-table-number quant-table-number-emphasis" :class="item.latestClose === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.latestClose) }}</span>
-              </template>
-              <template #cell-latestChangePercent="{ item }">
-                <span class="quant-table-number" :class="item.latestChangePercent === null ? 'text-status-neutral' : item.latestChangePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.latestChangePercent) }}</span>
-              </template>
-              <template #cell-latestTradeDate="{ item }">
-                <span class="quant-table-date">{{ formatTradeDate(item.latestTradeDate) }}</span>
-              </template>
-              <template #cell-barCount="{ item }">
-                <span class="quant-table-number">{{ item.barCount }}</span>
-              </template>
-              <template #cell-actions="{ item }">
-                <button class="icon-button icon-button-danger watchlist-action-button" type="button" :disabled="deletingCode === item.tsCode" :aria-label="`删除 ${item.tsCode}`" :title="`删除 ${item.tsCode}`" @click.stop="requestRemoveFromWatchlist(item.tsCode)">
-                  <Trash2 :size="15" aria-hidden="true" />
-                </button>
-              </template>
-            </DataTable>
-          </div>
-        </article>
-
-        <ConfirmDialog
-          :open="pendingDeleteCode !== null"
-          title="移除观察池代码"
-          :message="deleteDialogMessage"
-          confirm-text="确认移除"
-          cancel-text="取消"
-          variant="danger"
-          :loading="deletingCode !== null"
-          @update:open="value => !value && cancelRemoveFromWatchlist()"
-          @cancel="cancelRemoveFromWatchlist"
-          @confirm="confirmRemoveFromWatchlist"
-        />
-
-        <article class="surface-panel sync-panel" aria-labelledby="sync-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                DATA UPDATE
-              </p>
-              <h2 id="sync-title" class="section-title">
-                更新数据
-              </h2>
-            </div>
-            <span v-if="syncResult" class="status-chip" :class="syncStatusClass(syncResult.status)">
-              {{ statusLabel(syncResult.status) }}
-            </span>
-          </div>
-          <div class="sync-copy">
-            <div class="sync-window">
-              <span>股票</span><strong>{{ watchlist.length }} 只</strong>
-            </div>
-            <div class="sync-window">
-              <span>历史范围</span><strong>最近 120 个交易日</strong>
-            </div>
-            <div class="sync-window">
-              <span>数据截至</span><strong>{{ latestWatchlistDate }}</strong>
-            </div>
-          </div>
-          <button class="sync-button" type="button" :disabled="!canSync" @click="syncDaily">
-            <RefreshCw :size="17" :class="loading.sync ? 'animate-spin' : ''" aria-hidden="true" />
-            {{ loading.sync ? '更新中' : '更新观察池' }}
-          </button>
-          <div v-if="syncResult" class="sync-result" :class="syncStatusClass(syncResult.status)">
-            <div class="sync-result-main">
-              <span class="sync-status-dot" aria-hidden="true" />
-              <strong>{{ statusLabel(syncResult.status) }}</strong>
-              <span>{{ syncResult.reason || '已完成本次同步请求' }}</span>
-            </div>
-            <div class="sync-result-stats">
-              <span>请求 <strong>{{ syncResult.requested }}</strong></span>
-              <span>写入 <strong>{{ syncResult.written }}</strong></span>
-              <span>跳过 <strong>{{ syncResult.skipped }}</strong></span>
-            </div>
-          </div>
-          <div v-else class="empty-state sync-empty">
-            <RotateCcw :size="18" aria-hidden="true" />
-            <span>尚未更新日线数据</span>
-          </div>
-        </article>
-      </section>
-
-      <section class="surface-panel" aria-labelledby="candidate-title">
-        <div class="section-heading">
-          <div>
-            <p class="section-kicker">
-              SELECTION SIGNALS
-            </p>
-            <h2 id="candidate-title" class="section-title">
-              择股信号
-            </h2>
-          </div>
-          <div class="snapshot-meta">
-            <span>数据截至 {{ formatTradeDate(snapshot?.toDate || null) }}</span>
-            <span>计算 {{ formatDateTime(snapshot?.generatedAt || null) }}</span>
-          </div>
-        </div>
-        <div class="candidate-toolbar">
-          <div class="candidate-filter-group" role="group" aria-label="择股预设">
-            <button
-              v-for="option in candidateFilterOptions"
-              :key="option.key"
-              class="candidate-filter-button"
-              :class="candidateFilter === option.key ? 'candidate-filter-button-active' : ''"
-              type="button"
-              :aria-pressed="candidateFilter === option.key"
-              :title="option.detail"
-              @click="candidateFilter = option.key"
-            >
-              <component :is="option.icon" :size="14" aria-hidden="true" />
-              {{ option.label }}
-            </button>
-          </div>
-          <div class="candidate-query-controls" aria-label="候选筛选">
-            <label class="candidate-query-field">
-              <span>最低信号分</span>
-              <select v-model.number="candidateMinScore" class="candidate-query-select">
-                <option :value="0">
-                  不限
-                </option>
-                <option :value="2">
-                  2 分以上
-                </option>
-                <option :value="4">
-                  4 分以上
-                </option>
-              </select>
-            </label>
-            <label class="candidate-query-field">
-              <span>排序</span>
-              <select v-model="candidateSort" class="candidate-query-select">
-                <option v-for="option in candidateSortOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-            <label class="candidate-query-field">
-              <span>研究状态</span>
-              <select v-model="candidateResearchStatus" class="candidate-query-select">
-                <option v-for="option in candidateResearchStatusOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-            <label class="candidate-query-field">
-              <span>复查状态</span>
-              <select v-model="candidateReviewDue" class="candidate-query-select">
-                <option v-for="option in candidateReviewDueOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-            <label class="candidate-query-check">
-              <input v-model="candidateCompleteOnly" type="checkbox">
-              <span>只看数据完整</span>
-            </label>
-            <button v-if="candidateQueryActive" class="candidate-reset-button" type="button" title="重置自定义筛选" @click="resetCandidateQuery">
-              <RotateCcw :size="14" aria-hidden="true" />
-              重置
-            </button>
-          </div>
-          <div class="candidate-toolbar-meta">
-            <span class="section-meta">显示 {{ filteredCandidateItems.length }} / {{ candidateItems.length }}</span>
-            <button class="compare-button" type="button" :disabled="!canCompareCandidates" @click="openComparisonDrawer">
-              <BarChart3 :size="14" aria-hidden="true" />
-              对比 {{ selectedCandidateItems.length }} 只
-            </button>
-            <button v-if="selectedCandidateItems.length" class="text-button candidate-clear-button" type="button" @click="clearCandidateSelection">
-              清除选择
-            </button>
-          </div>
-        </div>
-        <div class="selection-guide" aria-label="择股预设说明">
-          <div class="selection-guide-copy">
-            <span class="section-kicker">START WITH A PRESET</span>
-            <strong>{{ activeCandidatePreset.label }}</strong>
-            <span>{{ activeCandidatePreset.description }}</span>
-          </div>
-          <span class="selection-guide-count">命中 {{ filteredCandidateItems.length }} 只</span>
-        </div>
-        <div class="selection-legend" aria-label="指标释义">
-          <span><strong>信号分</strong>命中规则 / {{ SIGNAL_RULE_COUNT }} 条</span>
-          <span><strong>20 日表现</strong>近 20 个交易日收益</span>
-          <span><strong>成交活跃度</strong>相对近 5 日均量</span>
-          <span><strong>价值质量</strong>估值、经营、增长、趋势四维观察</span>
-        </div>
-        <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
-          <span>观察窗口</span>
-          <strong>{{ formatTradeDate(snapshot.fromDate || null) }} → {{ formatTradeDate(snapshot.toDate || null) }}</strong>
-          <span class="snapshot-range-divider">·</span>
-          <span>{{ snapshot.factorVersion || '动量信号' }}</span>
-        </div>
-        <section v-if="reviewQueueTotal" class="review-queue" aria-labelledby="review-queue-title">
-          <div class="review-queue-heading">
-            <div>
-              <p class="section-kicker">
-                REVIEW QUEUE
-              </p>
-              <h3 id="review-queue-title">
-                复查到期队列
-              </h3>
-            </div>
-            <span class="review-queue-count">{{ reviewQueueTotal }} 条待处理</span>
-          </div>
-          <div class="review-queue-list">
-            <button
-              v-for="item in visibleReviewQueue"
-              :key="item.marker.tsCode"
-              class="review-queue-row"
-              type="button"
-              @click="selectStock(item.stock)"
-            >
-              <span class="review-state-badge" :class="`review-state-${item.review.state}`">{{ item.review.label }}</span>
-              <span class="review-queue-stock">
-                <strong>{{ item.stock.name || item.stock.tsCode }}</strong>
-                <small>{{ item.stock.tsCode }} · {{ researchStatusOptions.find(option => option.value === item.marker.status)?.label }}</small>
-              </span>
-              <span class="review-queue-detail">{{ item.review.detail }}</span>
-              <ChevronRight :size="15" aria-hidden="true" />
-            </button>
-          </div>
-          <p v-if="reviewQueueTotal > visibleReviewQueue.length" class="review-queue-more">
-            还有 {{ reviewQueueTotal - visibleReviewQueue.length }} 条记录，请使用复查筛选继续查看
-          </p>
-        </section>
-        <div class="quant-table-frame candidate-table-frame">
-          <DataTable
-            :data="filteredCandidateItems"
-            :columns="candidateColumns"
-            :loading="loading.candidates"
-            selectable
-            :selected-ids="selectedCandidateIds"
-            min-width="1280px"
-            :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
-            @toggle-select="handleCandidateToggle"
-            @toggle-select-all="toggleAllCandidateSelection"
-            @row-click="selectStock"
-          >
-            <template #cell-tsCode="{ item }">
-              <span class="font-mono text-xs font-semibold text-foreground">{{ item.tsCode }}</span>
-            </template>
-            <template #cell-score="{ item }">
-              <div class="score-cell" :aria-label="`命中 ${formatSignalScore(item.score)} 条规则`">
-                <strong class="score-value" :class="item.score === null ? 'quant-table-value-muted' : ''">{{ formatSignalScore(item.score) }}</strong>
-                <span class="score-meter" aria-hidden="true"><span class="score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
-              </div>
-            </template>
-            <template #cell-return20="{ item }">
-              <span class="quant-table-number" :class="item.return20 === null ? 'text-status-neutral' : item.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.return20) }}</span>
-            </template>
-            <template #cell-ma20="{ item }">
-              <span class="quant-table-number" :class="item.ma20 === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.ma20) }}</span>
-            </template>
-            <template #cell-volumeRatio="{ item }">
-              <span class="quant-table-number" :class="item.volumeRatio === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.volumeRatio) }}</span>
-            </template>
-            <template #cell-relativeStrength="{ item }">
-              <span class="quant-table-number" :class="item.relativeStrength === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.relativeStrength) }}</span>
-            </template>
-            <template #cell-valueQuality="{ item }">
-              <div class="value-quality-table-cell" :title="valueQualitySummary(valueQualityFor(item.tsCode))">
-                <strong :class="valueQualityStatusClass(valueQualityFor(item.tsCode))">{{ formatValueQualityScore(valueQualityFor(item.tsCode)) }}</strong>
-                <small>{{ valueQualityStatusLabel(valueQualityFor(item.tsCode)) }}</small>
-              </div>
-            </template>
-            <template #cell-review="{ item }">
-              <div class="review-cell" :title="researchReviewFor(item.tsCode).detail" :aria-label="`${researchReviewFor(item.tsCode).label}，${researchReviewFor(item.tsCode).date || '未设置日期'}`">
-                <span class="review-cell-label" :class="`review-state-text-${researchReviewFor(item.tsCode).state}`">{{ researchReviewFor(item.tsCode).label }}</span>
-                <small>{{ researchReviewFor(item.tsCode).date || '--' }}</small>
-              </div>
-            </template>
-            <template #cell-action="{ item }">
-              <div class="candidate-action-cell" :title="candidateActionFor(item).detail" :aria-label="`${candidateActionFor(item).label}：${candidateActionFor(item).detail}`">
-                <span class="candidate-action-badge" :class="`candidate-action-${candidateActionFor(item).tone}`">{{ candidateActionFor(item).label }}</span>
-                <small>{{ candidateActionFor(item).detail }}</small>
-              </div>
-            </template>
-            <template #cell-signals="{ item }">
-              <div class="signal-list candidate-signal-list">
-                <span v-if="researchMarkerMap.get(item.tsCode)?.status && researchMarkerMap.get(item.tsCode)?.status !== 'unreviewed'" class="research-status-dot" :class="`research-status-${researchMarkerMap.get(item.tsCode)?.status}`" :title="researchStatusOptions.find(option => option.value === researchMarkerMap.get(item.tsCode)?.status)?.label" aria-hidden="true" />
-                <span v-for="signal in item.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
-                <span v-if="item.quality !== 'ready'" class="signal-tag signal-tag-muted">数据不足</span>
-                <span v-if="!item.signals.length && item.quality === 'ready'" class="muted-inline">暂无明确信号</span>
-              </div>
-            </template>
-          </DataTable>
-        </div>
-      </section>
-
-      <section class="knowledge-section" aria-labelledby="knowledge-title">
-        <div class="knowledge-heading">
-          <div>
-            <p class="section-kicker">
-              INVESTMENT KNOWLEDGE
-            </p>
-            <h2 id="knowledge-title" class="section-title">
-              投资因子框架
-            </h2>
-            <p class="knowledge-intro">
-              把文章中的判断拆成可验证的因子；当前只有“已进入评分”的因子影响价值质量分。
-            </p>
-          </div>
-          <div v-if="investmentKnowledge" class="knowledge-meta">
-            <span>知识库 {{ investmentKnowledge.version }}</span>
-            <span>{{ investmentKnowledge.sources.length }} 篇来源</span>
-          </div>
-        </div>
-        <div v-if="loading.knowledge" class="knowledge-state" role="status">
-          <SkeletonCard variant="content" />
-        </div>
-        <div v-else-if="errors.knowledge" class="knowledge-state" role="status">
-          <Info :size="17" aria-hidden="true" />
-          <span>投资知识暂时不可用</span>
-          <button class="text-button" type="button" @click="loadInvestmentKnowledge">
-            重试
-          </button>
-        </div>
-        <template v-else-if="investmentKnowledge">
-          <div class="knowledge-summary-grid" aria-label="因子状态统计">
-            <div class="knowledge-summary-item knowledge-summary-active">
-              <DatabaseZap :size="16" aria-hidden="true" />
-              <strong>{{ activeKnowledgeFactors.length }}</strong>
-              <span>已进入评分</span>
-            </div>
-            <div class="knowledge-summary-item knowledge-summary-partial">
-              <Sparkles :size="16" aria-hidden="true" />
-              <strong>{{ partialKnowledgeFactors.length }}</strong>
-              <span>部分接通</span>
-            </div>
-            <div class="knowledge-summary-item knowledge-summary-planned">
-              <BookOpen :size="16" aria-hidden="true" />
-              <strong>{{ plannedKnowledgeFactors.length }}</strong>
-              <span>待接或定性</span>
-            </div>
-            <div class="knowledge-summary-item knowledge-summary-alias">
-              <Tags :size="16" aria-hidden="true" />
-              <strong>{{ mappedKnowledgeAliases.length }}</strong>
-              <span>已映射别名</span>
-            </div>
-          </div>
-          <div class="knowledge-factor-grid">
-            <article v-for="factor in investmentKnowledge.factors" :key="factor.id" class="knowledge-factor" :class="knowledgeStatusClass(factor.status)">
-              <div class="knowledge-factor-heading">
-                <div>
-                  <span class="knowledge-factor-category">{{ factor.category }}</span>
-                  <h3>{{ factor.title }}</h3>
-                </div>
-                <span class="knowledge-status-badge" :class="knowledgeStatusClass(factor.status)">{{ knowledgeStatusLabel(factor.status) }}</span>
-              </div>
-              <p>{{ factor.interpretation }}</p>
-              <div class="knowledge-factor-measurement">
-                <strong>量化方向</strong>
-                <span>{{ factor.measurement }}</span>
-              </div>
-              <div class="knowledge-factor-fields">
-                <span v-if="factor.availableFields.length">已接：{{ formatKnowledgeFields(factor.availableFields) }}</span>
-                <span v-if="factor.missingFields.length">待接：{{ formatKnowledgeFields(factor.missingFields) }}</span>
-              </div>
-              <div class="knowledge-factor-foot">
-                <span v-if="factor.eligibleInValueQuality">当前价值质量评分使用</span>
-                <span v-else>先作为研究假设</span>
-                <span>{{ factor.sourceIds.length }} 篇关联来源</span>
-              </div>
+              <strong class="metric-value">{{ watchlist.length }}<small>/ 50</small></strong>
+              <span class="metric-note">当前关注标的</span>
             </article>
-          </div>
-          <details class="knowledge-details">
-            <summary>
-              <BookOpen :size="15" aria-hidden="true" />
-              查看文章来源与股票别名映射
-            </summary>
-            <div class="knowledge-context-grid">
-              <div class="knowledge-context-column">
-                <div class="knowledge-context-heading">
-                  <strong>文章来源</strong>
-                  <span>{{ investmentKnowledge.sources.length }} 篇</span>
-                </div>
-                <div class="knowledge-source-list">
-                  <a v-for="source in investmentKnowledge.sources" :key="source.id" class="knowledge-source-row" :href="source.url" target="_blank" rel="noreferrer" :title="source.url">
-                    <span class="knowledge-source-access" :class="source.access === 'preview' ? 'knowledge-source-preview' : 'knowledge-source-full'">{{ source.access === 'preview' ? '试读' : '全文' }}</span>
-                    <span class="knowledge-source-copy">
-                      <strong>{{ source.title }}</strong>
-                      <small>{{ source.publishedAt || '日期未读取' }} · {{ source.summary }}</small>
-                    </span>
-                    <ExternalLink :size="13" aria-hidden="true" />
-                  </a>
-                </div>
+            <article class="metric-card">
+              <div class="metric-card-heading">
+                <span class="metric-icon metric-icon-green"><ArrowUpRight :size="17" aria-hidden="true" /></span>
+                <span>今日涨跌</span>
               </div>
-              <div class="knowledge-context-column">
-                <div class="knowledge-context-heading">
-                  <strong>文章别名映射</strong>
-                  <span>{{ investmentKnowledge.aliases.length }} 条 · {{ contextKnowledgeAliases.length }} 待确认</span>
+              <strong class="metric-value metric-value-split"><span class="text-status-success">+{{ upCount }}</span><small>/ 跌 {{ downCount }}</small></strong>
+              <span class="metric-note">观察池最新日线</span>
+            </article>
+            <article class="metric-card">
+              <div class="metric-card-heading">
+                <span class="metric-icon metric-icon-amber"><Sparkles :size="17" aria-hidden="true" /></span>
+                <span>有信号</span>
+              </div>
+              <strong class="metric-value">{{ signalCandidateCount }}</strong>
+              <span class="metric-note">候选快照中的标的</span>
+            </article>
+            <article class="metric-card">
+              <div class="metric-card-heading">
+                <span class="metric-icon metric-icon-blue"><CalendarDays :size="17" aria-hidden="true" /></span>
+                <span>数据覆盖</span>
+              </div>
+              <strong class="metric-value metric-value-date">{{ dataCoverageLabel }}</strong>
+              <span class="metric-note">最新 {{ latestWatchlistDate }}</span>
+            </article>
+          </template>
+        </section>
+
+        <section class="focus-section" aria-labelledby="focus-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">
+                TODAY'S FOCUS
+              </p>
+              <h2 id="focus-title" class="section-title">
+                今日优先关注
+              </h2>
+            </div>
+            <span class="section-meta">按当前信号分排序 · {{ latestWatchlistDate }}</span>
+          </div>
+          <div class="focus-layout">
+            <div class="focus-list">
+              <div v-if="loading.candidates" class="focus-empty" aria-label="优先关注加载中">
+                <SkeletonCard variant="content" />
+              </div>
+              <button
+                v-for="(item, index) in topCandidates"
+                :key="item.tsCode"
+                class="focus-row"
+                :class="focusTone(item)"
+                type="button"
+                @click="selectStock(item)"
+              >
+                <span class="focus-rank">0{{ index + 1 }}</span>
+                <span class="focus-stock">
+                  <strong>{{ displayStockName(item) }}</strong>
+                  <small>{{ item.tsCode }}</small>
+                </span>
+                <span class="focus-signal" :title="candidateActionFor(item).detail">{{ focusSignal(item) }}</span>
+                <span class="focus-score">
+                  <strong>{{ formatSignalScore(item.score) }}</strong>
+                  <span class="focus-score-meter" aria-hidden="true"><span class="focus-score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
+                  <small>命中规则</small>
+                </span>
+                <span class="status-chip" :class="riskToneClass(candidateRiskTone(item))">{{ riskLabel(item) }}</span>
+                <ChevronRight :size="15" aria-hidden="true" />
+              </button>
+              <div v-if="!loading.candidates && !topCandidates.length" class="focus-empty">
+                <Sparkles :size="18" aria-hidden="true" />
+                <span>完成一次日线更新后，这里会出现可比较的信号</span>
+              </div>
+            </div>
+            <aside class="risk-summary" aria-labelledby="risk-title">
+              <div class="risk-summary-heading">
+                <div>
+                  <p class="section-kicker">
+                    CHECK BEFORE DECISION
+                  </p>
+                  <h3 id="risk-title">
+                    风险提示
+                  </h3>
                 </div>
-                <div class="knowledge-alias-grid">
-                  <div v-for="alias in investmentKnowledge.aliases" :key="alias.alias" class="knowledge-alias-row" :title="alias.note">
-                    <span class="knowledge-alias-name">{{ alias.alias }}</span>
-                    <strong>{{ alias.name || alias.candidates.join(' / ') || '待确认' }}</strong>
-                    <small>{{ knowledgeAliasStatusLabel(alias.status) }} · {{ knowledgeConfidenceLabel(alias.confidence) }}</small>
+                <ShieldAlert :size="18" aria-hidden="true" />
+              </div>
+              <div class="risk-list">
+                <div v-for="item in riskItems" :key="item.key" class="risk-note" :class="riskToneClass(item.tone)">
+                  <span class="risk-note-mark" aria-hidden="true" />
+                  <div>
+                    <strong>{{ item.title }}</strong>
+                    <span>{{ item.detail }}</span>
                   </div>
                 </div>
               </div>
+              <span class="risk-footnote" role="img" tabindex="0" aria-label="信号是筛选线索，不是买入指令" title="信号是筛选线索，不是买入指令">
+                <Info :size="14" aria-hidden="true" />
+              </span>
+            </aside>
+          </div>
+        </section>
+
+        <section class="research-path-section" aria-labelledby="research-path-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">
+                RESEARCH PATH
+              </p>
+              <h2 id="research-path-title" class="section-title">
+                下一步怎么做
+              </h2>
             </div>
-            <p class="knowledge-details-note">
-              已映射的 A 股研究样本已通过幂等 migration 加入观察池；港股、未上市主体和待确认别名保留在知识层，不进入当前 A 股日线同步。
+            <span class="section-meta">按顺序完成一次研究</span>
+          </div>
+          <div class="research-path-grid">
+            <button class="research-path-card" type="button" @click="setActiveView('candidates')">
+              <span class="research-path-index">01</span>
+              <span class="research-path-copy">
+                <strong>筛选候选</strong>
+                <small>先用预设和数据完整度缩小范围</small>
+              </span>
+              <ChevronRight :size="16" aria-hidden="true" />
+            </button>
+            <button class="research-path-card" type="button" @click="setActiveView('watchlist')">
+              <span class="research-path-index">02</span>
+              <span class="research-path-copy">
+                <strong>维护观察池</strong>
+                <small>确认标的并更新最近 120 个交易日</small>
+              </span>
+              <ChevronRight :size="16" aria-hidden="true" />
+            </button>
+            <button class="research-path-card" type="button" @click="setActiveView('knowledge')">
+              <span class="research-path-index">03</span>
+              <span class="research-path-copy">
+                <strong>核对因子</strong>
+                <small>理解信号、估值和财务数据的边界</small>
+              </span>
+              <ChevronRight :size="16" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+      </template>
+
+      <template v-else-if="activeView === 'watchlist'">
+        <section class="workspace-grid">
+          <article class="surface-panel" aria-labelledby="watchlist-title">
+            <div class="section-heading">
+              <div>
+                <p class="section-kicker">
+                  WATCHLIST
+                </p>
+                <h2 id="watchlist-title" class="section-title">
+                  观察池
+                </h2>
+              </div>
+              <span class="section-meta">{{ watchlist.length }} / 50</span>
+            </div>
+            <form class="watchlist-form" @submit.prevent="addToWatchlist">
+              <label class="sr-only" for="quant-code">股票代码</label>
+              <input id="quant-code" v-model="watchCode" class="field-control field-code" inputmode="text" autocomplete="off" placeholder="000001.SZ" maxlength="9">
+              <label class="sr-only" for="quant-name">股票名称</label>
+              <input id="quant-name" v-model="watchName" class="field-control" autocomplete="off" placeholder="名称（可选）" maxlength="40">
+              <button class="primary-button" type="submit" :disabled="adding || watchlist.length >= 50">
+                <Plus :size="16" aria-hidden="true" />
+                {{ adding ? '加入中' : '加入观察池' }}
+              </button>
+            </form>
+            <div class="quant-table-frame watchlist-table-frame">
+              <DataTable
+                :data="watchlist"
+                :columns="watchlistColumns"
+                :loading="loading.watchlist"
+                min-width="760px"
+                empty-message="观察池为空，先加入一只股票"
+                @row-click="selectStock"
+              >
+                <template #cell-tsCode="{ item }">
+                  <button class="stock-code-button" type="button" @click.stop="selectStock(item)">
+                    {{ item.tsCode }}
+                    <ChevronRight :size="14" aria-hidden="true" />
+                  </button>
+                </template>
+                <template #cell-latestClose="{ item }">
+                  <span class="quant-table-number quant-table-number-emphasis" :class="item.latestClose === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.latestClose) }}</span>
+                </template>
+                <template #cell-latestChangePercent="{ item }">
+                  <span class="quant-table-number" :class="item.latestChangePercent === null ? 'text-status-neutral' : item.latestChangePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.latestChangePercent) }}</span>
+                </template>
+                <template #cell-latestTradeDate="{ item }">
+                  <span class="quant-table-date">{{ formatTradeDate(item.latestTradeDate) }}</span>
+                </template>
+                <template #cell-barCount="{ item }">
+                  <span class="quant-table-number">{{ item.barCount }}</span>
+                </template>
+                <template #cell-actions="{ item }">
+                  <button class="icon-button icon-button-danger watchlist-action-button" type="button" :disabled="deletingCode === item.tsCode" :aria-label="`删除 ${item.tsCode}`" :title="`删除 ${item.tsCode}`" @click.stop="requestRemoveFromWatchlist(item.tsCode)">
+                    <Trash2 :size="15" aria-hidden="true" />
+                  </button>
+                </template>
+              </DataTable>
+            </div>
+          </article>
+
+          <ConfirmDialog
+            :open="pendingDeleteCode !== null"
+            title="移除观察池代码"
+            :message="deleteDialogMessage"
+            confirm-text="确认移除"
+            cancel-text="取消"
+            variant="danger"
+            :loading="deletingCode !== null"
+            @update:open="value => !value && cancelRemoveFromWatchlist()"
+            @cancel="cancelRemoveFromWatchlist"
+            @confirm="confirmRemoveFromWatchlist"
+          />
+
+          <article class="surface-panel sync-panel" aria-labelledby="sync-title">
+            <div class="section-heading">
+              <div>
+                <p class="section-kicker">
+                  DATA UPDATE
+                </p>
+                <h2 id="sync-title" class="section-title">
+                  更新数据
+                </h2>
+              </div>
+              <span v-if="syncResult" class="status-chip" :class="syncStatusClass(syncResult.status)">
+                {{ statusLabel(syncResult.status) }}
+              </span>
+            </div>
+            <div class="sync-copy">
+              <div class="sync-window">
+                <span>股票</span><strong>{{ watchlist.length }} 只</strong>
+              </div>
+              <div class="sync-window">
+                <span>历史范围</span><strong>最近 120 个交易日</strong>
+              </div>
+              <div class="sync-window">
+                <span>数据截至</span><strong>{{ latestWatchlistDate }}</strong>
+              </div>
+            </div>
+            <button class="sync-button" type="button" :disabled="!canSync" @click="syncDaily">
+              <RefreshCw :size="17" :class="loading.sync ? 'animate-spin' : ''" aria-hidden="true" />
+              {{ loading.sync ? '更新中' : '更新观察池' }}
+            </button>
+            <div v-if="syncResult" class="sync-result" :class="syncStatusClass(syncResult.status)">
+              <div class="sync-result-main">
+                <span class="sync-status-dot" aria-hidden="true" />
+                <strong>{{ statusLabel(syncResult.status) }}</strong>
+                <span>{{ syncResult.reason || '已完成本次同步请求' }}</span>
+              </div>
+              <div class="sync-result-stats">
+                <span>请求 <strong>{{ syncResult.requested }}</strong></span>
+                <span>写入 <strong>{{ syncResult.written }}</strong></span>
+                <span>跳过 <strong>{{ syncResult.skipped }}</strong></span>
+              </div>
+            </div>
+            <div v-else class="empty-state sync-empty">
+              <RotateCcw :size="18" aria-hidden="true" />
+              <span>尚未更新日线数据</span>
+            </div>
+          </article>
+        </section>
+      </template>
+
+      <template v-else-if="activeView === 'candidates'">
+        <section class="surface-panel" aria-labelledby="candidate-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">
+                SELECTION SIGNALS
+              </p>
+              <h2 id="candidate-title" class="section-title">
+                择股信号
+              </h2>
+            </div>
+            <div class="snapshot-meta">
+              <span>数据截至 {{ formatTradeDate(snapshot?.toDate || null) }}</span>
+              <span>计算 {{ formatDateTime(snapshot?.generatedAt || null) }}</span>
+            </div>
+          </div>
+          <div class="candidate-toolbar">
+            <div class="candidate-filter-group" role="group" aria-label="择股预设">
+              <button
+                v-for="option in candidateFilterOptions"
+                :key="option.key"
+                class="candidate-filter-button"
+                :class="candidateFilter === option.key ? 'candidate-filter-button-active' : ''"
+                type="button"
+                :aria-pressed="candidateFilter === option.key"
+                :title="option.detail"
+                @click="candidateFilter = option.key"
+              >
+                <component :is="option.icon" :size="14" aria-hidden="true" />
+                {{ option.label }}
+              </button>
+            </div>
+            <div class="candidate-query-controls" aria-label="候选筛选">
+              <label class="candidate-query-field">
+                <span>最低信号分</span>
+                <select v-model.number="candidateMinScore" class="candidate-query-select">
+                  <option :value="0">
+                    不限
+                  </option>
+                  <option :value="2">
+                    2 分以上
+                  </option>
+                  <option :value="4">
+                    4 分以上
+                  </option>
+                </select>
+              </label>
+              <label class="candidate-query-field">
+                <span>排序</span>
+                <select v-model="candidateSort" class="candidate-query-select">
+                  <option v-for="option in candidateSortOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="candidate-query-field">
+                <span>研究状态</span>
+                <select v-model="candidateResearchStatus" class="candidate-query-select">
+                  <option v-for="option in candidateResearchStatusOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="candidate-query-field">
+                <span>复查状态</span>
+                <select v-model="candidateReviewDue" class="candidate-query-select">
+                  <option v-for="option in candidateReviewDueOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="candidate-query-check">
+                <input v-model="candidateCompleteOnly" type="checkbox">
+                <span>只看数据完整</span>
+              </label>
+              <button v-if="candidateQueryActive" class="candidate-reset-button" type="button" title="重置自定义筛选" @click="resetCandidateQuery">
+                <RotateCcw :size="14" aria-hidden="true" />
+                重置
+              </button>
+            </div>
+            <div class="candidate-toolbar-meta">
+              <span class="section-meta">显示 {{ filteredCandidateItems.length }} / {{ candidateItems.length }}</span>
+              <button class="compare-button" type="button" :disabled="!canCompareCandidates" @click="openComparisonDrawer">
+                <BarChart3 :size="14" aria-hidden="true" />
+                对比 {{ selectedCandidateItems.length }} 只
+              </button>
+              <button v-if="selectedCandidateItems.length" class="text-button candidate-clear-button" type="button" @click="clearCandidateSelection">
+                清除选择
+              </button>
+            </div>
+          </div>
+          <div class="selection-guide" aria-label="择股预设说明">
+            <div class="selection-guide-copy">
+              <span class="section-kicker">START WITH A PRESET</span>
+              <strong>{{ activeCandidatePreset.label }}</strong>
+              <span>{{ activeCandidatePreset.description }}</span>
+            </div>
+            <span class="selection-guide-count">命中 {{ filteredCandidateItems.length }} 只</span>
+          </div>
+          <div class="selection-legend" aria-label="指标释义">
+            <span><strong>信号分</strong>命中规则 / {{ SIGNAL_RULE_COUNT }} 条</span>
+            <span><strong>20 日表现</strong>近 20 个交易日收益</span>
+            <span><strong>成交活跃度</strong>相对近 5 日均量</span>
+            <span><strong>价值质量</strong>估值、经营、增长、趋势四维观察</span>
+          </div>
+          <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
+            <span>观察窗口</span>
+            <strong>{{ formatTradeDate(snapshot.fromDate || null) }} → {{ formatTradeDate(snapshot.toDate || null) }}</strong>
+            <span class="snapshot-range-divider">·</span>
+            <span>{{ snapshot.factorVersion || '动量信号' }}</span>
+          </div>
+          <section v-if="reviewQueueTotal" class="review-queue" aria-labelledby="review-queue-title">
+            <div class="review-queue-heading">
+              <div>
+                <p class="section-kicker">
+                  REVIEW QUEUE
+                </p>
+                <h3 id="review-queue-title">
+                  复查到期队列
+                </h3>
+              </div>
+              <span class="review-queue-count">{{ reviewQueueTotal }} 条待处理</span>
+            </div>
+            <div class="review-queue-list">
+              <button
+                v-for="item in visibleReviewQueue"
+                :key="item.marker.tsCode"
+                class="review-queue-row"
+                type="button"
+                @click="selectStock(item.stock)"
+              >
+                <span class="review-state-badge" :class="`review-state-${item.review.state}`">{{ item.review.label }}</span>
+                <span class="review-queue-stock">
+                  <strong>{{ item.stock.name || item.stock.tsCode }}</strong>
+                  <small>{{ item.stock.tsCode }} · {{ researchStatusOptions.find(option => option.value === item.marker.status)?.label }}</small>
+                </span>
+                <span class="review-queue-detail">{{ item.review.detail }}</span>
+                <ChevronRight :size="15" aria-hidden="true" />
+              </button>
+            </div>
+            <p v-if="reviewQueueTotal > visibleReviewQueue.length" class="review-queue-more">
+              还有 {{ reviewQueueTotal - visibleReviewQueue.length }} 条记录，请使用复查筛选继续查看
             </p>
-          </details>
-        </template>
-      </section>
+          </section>
+          <div class="quant-table-frame candidate-table-frame">
+            <DataTable
+              :data="filteredCandidateItems"
+              :columns="candidateColumns"
+              :loading="loading.candidates"
+              selectable
+              :selected-ids="selectedCandidateIds"
+              min-width="1280px"
+              :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
+              @toggle-select="handleCandidateToggle"
+              @toggle-select-all="toggleAllCandidateSelection"
+              @row-click="selectStock"
+            >
+              <template #cell-tsCode="{ item }">
+                <span class="font-mono text-xs font-semibold text-foreground">{{ item.tsCode }}</span>
+              </template>
+              <template #cell-score="{ item }">
+                <div class="score-cell" :aria-label="`命中 ${formatSignalScore(item.score)} 条规则`">
+                  <strong class="score-value" :class="item.score === null ? 'quant-table-value-muted' : ''">{{ formatSignalScore(item.score) }}</strong>
+                  <span class="score-meter" aria-hidden="true"><span class="score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
+                </div>
+              </template>
+              <template #cell-return20="{ item }">
+                <span class="quant-table-number" :class="item.return20 === null ? 'text-status-neutral' : item.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.return20) }}</span>
+              </template>
+              <template #cell-ma20="{ item }">
+                <span class="quant-table-number" :class="item.ma20 === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.ma20) }}</span>
+              </template>
+              <template #cell-volumeRatio="{ item }">
+                <span class="quant-table-number" :class="item.volumeRatio === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.volumeRatio) }}</span>
+              </template>
+              <template #cell-relativeStrength="{ item }">
+                <span class="quant-table-number" :class="item.relativeStrength === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.relativeStrength) }}</span>
+              </template>
+              <template #cell-valueQuality="{ item }">
+                <div class="value-quality-table-cell" :title="valueQualitySummary(valueQualityFor(item.tsCode))">
+                  <strong :class="valueQualityStatusClass(valueQualityFor(item.tsCode))">{{ formatValueQualityScore(valueQualityFor(item.tsCode)) }}</strong>
+                  <small>{{ valueQualityStatusLabel(valueQualityFor(item.tsCode)) }}</small>
+                </div>
+              </template>
+              <template #cell-review="{ item }">
+                <div class="review-cell" :title="researchReviewFor(item.tsCode).detail" :aria-label="`${researchReviewFor(item.tsCode).label}，${researchReviewFor(item.tsCode).date || '未设置日期'}`">
+                  <span class="review-cell-label" :class="`review-state-text-${researchReviewFor(item.tsCode).state}`">{{ researchReviewFor(item.tsCode).label }}</span>
+                  <small>{{ researchReviewFor(item.tsCode).date || '--' }}</small>
+                </div>
+              </template>
+              <template #cell-action="{ item }">
+                <div class="candidate-action-cell" :title="candidateActionFor(item).detail" :aria-label="`${candidateActionFor(item).label}：${candidateActionFor(item).detail}`">
+                  <span class="candidate-action-badge" :class="`candidate-action-${candidateActionFor(item).tone}`">{{ candidateActionFor(item).label }}</span>
+                  <small>{{ candidateActionFor(item).detail }}</small>
+                </div>
+              </template>
+              <template #cell-signals="{ item }">
+                <div class="signal-list candidate-signal-list">
+                  <span v-if="researchMarkerMap.get(item.tsCode)?.status && researchMarkerMap.get(item.tsCode)?.status !== 'unreviewed'" class="research-status-dot" :class="`research-status-${researchMarkerMap.get(item.tsCode)?.status}`" :title="researchStatusOptions.find(option => option.value === researchMarkerMap.get(item.tsCode)?.status)?.label" aria-hidden="true" />
+                  <span v-for="signal in item.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
+                  <span v-if="item.quality !== 'ready'" class="signal-tag signal-tag-muted">数据不足</span>
+                  <span v-if="!item.signals.length && item.quality === 'ready'" class="muted-inline">暂无明确信号</span>
+                </div>
+              </template>
+            </DataTable>
+          </div>
+        </section>
+      </template>
+
+      <template v-else-if="activeView === 'knowledge'">
+        <section class="knowledge-section" aria-labelledby="knowledge-title">
+          <div class="knowledge-heading">
+            <div>
+              <p class="section-kicker">
+                INVESTMENT KNOWLEDGE
+              </p>
+              <h2 id="knowledge-title" class="section-title">
+                投资因子框架
+              </h2>
+              <p class="knowledge-intro">
+                把文章中的判断拆成可验证的因子；当前只有“已进入评分”的因子影响价值质量分。
+              </p>
+            </div>
+            <div v-if="investmentKnowledge" class="knowledge-meta">
+              <span>知识库 {{ investmentKnowledge.version }}</span>
+              <span>{{ investmentKnowledge.sources.length }} 篇来源</span>
+            </div>
+          </div>
+          <div v-if="loading.knowledge" class="knowledge-state" role="status">
+            <SkeletonCard variant="content" />
+          </div>
+          <div v-else-if="errors.knowledge" class="knowledge-state" role="status">
+            <Info :size="17" aria-hidden="true" />
+            <span>投资知识暂时不可用</span>
+            <button class="text-button" type="button" @click="loadInvestmentKnowledge">
+              重试
+            </button>
+          </div>
+          <template v-else-if="investmentKnowledge">
+            <div class="knowledge-summary-grid" aria-label="因子状态统计">
+              <div class="knowledge-summary-item knowledge-summary-active">
+                <DatabaseZap :size="16" aria-hidden="true" />
+                <strong>{{ activeKnowledgeFactors.length }}</strong>
+                <span>已进入评分</span>
+              </div>
+              <div class="knowledge-summary-item knowledge-summary-partial">
+                <Sparkles :size="16" aria-hidden="true" />
+                <strong>{{ partialKnowledgeFactors.length }}</strong>
+                <span>部分接通</span>
+              </div>
+              <div class="knowledge-summary-item knowledge-summary-planned">
+                <BookOpen :size="16" aria-hidden="true" />
+                <strong>{{ plannedKnowledgeFactors.length }}</strong>
+                <span>待接或定性</span>
+              </div>
+              <div class="knowledge-summary-item knowledge-summary-alias">
+                <Tags :size="16" aria-hidden="true" />
+                <strong>{{ mappedKnowledgeAliases.length }}</strong>
+                <span>已映射别名</span>
+              </div>
+            </div>
+            <div class="knowledge-factor-grid">
+              <article v-for="factor in investmentKnowledge.factors" :key="factor.id" class="knowledge-factor" :class="knowledgeStatusClass(factor.status)">
+                <div class="knowledge-factor-heading">
+                  <div>
+                    <span class="knowledge-factor-category">{{ factor.category }}</span>
+                    <h3>{{ factor.title }}</h3>
+                  </div>
+                  <span class="knowledge-status-badge" :class="knowledgeStatusClass(factor.status)">{{ knowledgeStatusLabel(factor.status) }}</span>
+                </div>
+                <p>{{ factor.interpretation }}</p>
+                <div class="knowledge-factor-measurement">
+                  <strong>量化方向</strong>
+                  <span>{{ factor.measurement }}</span>
+                </div>
+                <div class="knowledge-factor-fields">
+                  <span v-if="factor.availableFields.length">已接：{{ formatKnowledgeFields(factor.availableFields) }}</span>
+                  <span v-if="factor.missingFields.length">待接：{{ formatKnowledgeFields(factor.missingFields) }}</span>
+                </div>
+                <div class="knowledge-factor-foot">
+                  <span v-if="factor.eligibleInValueQuality">当前价值质量评分使用</span>
+                  <span v-else>先作为研究假设</span>
+                  <span>{{ factor.sourceIds.length }} 篇关联来源</span>
+                </div>
+              </article>
+            </div>
+            <details class="knowledge-details">
+              <summary>
+                <BookOpen :size="15" aria-hidden="true" />
+                查看文章来源与股票别名映射
+              </summary>
+              <div class="knowledge-context-grid">
+                <div class="knowledge-context-column">
+                  <div class="knowledge-context-heading">
+                    <strong>文章来源</strong>
+                    <span>{{ investmentKnowledge.sources.length }} 篇</span>
+                  </div>
+                  <div class="knowledge-source-list">
+                    <a v-for="source in investmentKnowledge.sources" :key="source.id" class="knowledge-source-row" :href="source.url" target="_blank" rel="noreferrer" :title="source.url">
+                      <span class="knowledge-source-access" :class="source.access === 'preview' ? 'knowledge-source-preview' : 'knowledge-source-full'">{{ source.access === 'preview' ? '试读' : '全文' }}</span>
+                      <span class="knowledge-source-copy">
+                        <strong>{{ source.title }}</strong>
+                        <small>{{ source.publishedAt || '日期未读取' }} · {{ source.summary }}</small>
+                      </span>
+                      <ExternalLink :size="13" aria-hidden="true" />
+                    </a>
+                  </div>
+                </div>
+                <div class="knowledge-context-column">
+                  <div class="knowledge-context-heading">
+                    <strong>文章别名映射</strong>
+                    <span>{{ investmentKnowledge.aliases.length }} 条 · {{ contextKnowledgeAliases.length }} 待确认</span>
+                  </div>
+                  <div class="knowledge-alias-grid">
+                    <div v-for="alias in investmentKnowledge.aliases" :key="alias.alias" class="knowledge-alias-row" :title="alias.note">
+                      <span class="knowledge-alias-name">{{ alias.alias }}</span>
+                      <strong>{{ alias.name || alias.candidates.join(' / ') || '待确认' }}</strong>
+                      <small>{{ knowledgeAliasStatusLabel(alias.status) }} · {{ knowledgeConfidenceLabel(alias.confidence) }}</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="knowledge-details-note">
+                已映射的 A 股研究样本已通过幂等 migration 加入观察池；港股、未上市主体和待确认别名保留在知识层，不进入当前 A 股日线同步。
+              </p>
+            </details>
+          </template>
+        </section>
+      </template>
 
       <DetailDrawer
         :open="detailDrawerOpen && !!selectedStock"
@@ -2181,6 +2347,115 @@ onMounted(loadWorkspace)
               <p class="financial-comparison-note">
                 可用报告 {{ financialComparison?.availableSampleCount ?? 0 }} / {{ financialComparison?.sampleCount ?? 0 }} 只；相对位置不代表行业排名或未来收益
               </p>
+            </div>
+            <div v-if="financialQuality" class="financial-context-panel" aria-label="现金流韧性">
+              <div class="financial-subheading">
+                <div>
+                  <span class="section-kicker">CASHFLOW RESILIENCE</span>
+                  <strong>现金流韧性</strong>
+                </div>
+                <small>报告期 {{ formatTradeDate(financialQuality.reportDate) }}</small>
+              </div>
+              <div class="financial-context-grid">
+                <div class="financial-context-item">
+                  <span>经营现金流 / 营收</span>
+                  <strong>{{ formatRatioPercent(financialQuality.operatingCashflowToRevenue) }}</strong>
+                </div>
+                <div class="financial-context-item">
+                  <span>经营现金流 / 股</span>
+                  <strong>{{ formatNumber(financialQuality.operatingCashflowPerShare) }}</strong>
+                </div>
+                <div class="financial-context-item">
+                  <span>FCFF（历史）</span>
+                  <strong>{{ formatFinancialAmount(financialQuality.fcffBack) }}</strong>
+                </div>
+                <div class="financial-context-item">
+                  <span>FCFF（前瞻）</span>
+                  <strong>{{ formatFinancialAmount(financialQuality.fcffForward) }}</strong>
+                </div>
+                <div class="financial-context-item">
+                  <span>利息覆盖倍数</span>
+                  <strong>{{ formatMultiple(financialQuality.interestCoverage) }}</strong>
+                </div>
+                <div class="financial-context-item">
+                  <span>带息负债率</span>
+                  <strong>{{ formatMetricPercent(financialQuality.interestBearingDebtRatio) }}</strong>
+                </div>
+                <div class="financial-context-item">
+                  <span>现金比率</span>
+                  <strong>{{ formatRatioPercent(financialQuality.cashRatio) }}</strong>
+                </div>
+                <div class="financial-context-item">
+                  <span>负债规模</span>
+                  <strong>{{ formatFinancialAmount(financialQuality.totalLiability) }}</strong>
+                </div>
+              </div>
+              <p class="financial-context-note">
+                这些指标用于判断现金流和偿债韧性；资本开支逐项数据、回购和分红支付率暂未接通，不进入价值质量总分。
+              </p>
+            </div>
+            <div class="shareholder-return-panel" aria-label="股东回报">
+              <div class="financial-subheading">
+                <div>
+                  <span class="section-kicker">SHAREHOLDER RETURNS</span>
+                  <strong>股东回报</strong>
+                </div>
+                <small>{{ shareholderReturns?.provider === 'tushare' ? 'Tushare 分红实施记录' : '分红数据源未配置' }}</small>
+              </div>
+              <div v-if="loading.shareholderReturns" class="shareholder-return-state" role="status">
+                <SkeletonCard variant="content" />
+              </div>
+              <div v-else-if="errors.shareholderReturns" class="shareholder-return-state" role="status">
+                <Info :size="16" aria-hidden="true" />
+                <span>股东回报暂时不可用</span>
+                <button class="text-button" type="button" @click="loadShareholderReturns">
+                  重试
+                </button>
+              </div>
+              <template v-else-if="selectedShareholderReturn">
+                <div class="shareholder-return-grid">
+                  <div class="shareholder-return-item shareholder-return-item-primary">
+                    <span>近 12 个月股息率</span>
+                    <strong :class="shareholderReturnStatusClass(selectedShareholderReturn)">{{ formatDividendYield(selectedShareholderReturn.trailingDividendYield) }}</strong>
+                  </div>
+                  <div class="shareholder-return-item">
+                    <span>每股现金分红</span>
+                    <strong>{{ selectedShareholderReturn.trailingCashDividendPerShare === null ? '--' : selectedShareholderReturn.trailingCashDividendPerShare.toFixed(3) }}</strong>
+                  </div>
+                  <div class="shareholder-return-item">
+                    <span>近 5 年有分红</span>
+                    <strong>{{ selectedShareholderReturn.dividendYears }} 年</strong>
+                  </div>
+                  <div class="shareholder-return-item">
+                    <span>最新收盘价</span>
+                    <strong>{{ formatNumber(selectedShareholderReturn.latestClose) }}</strong>
+                  </div>
+                </div>
+                <div v-if="selectedShareholderReturn.distributions.length" class="shareholder-distribution-list">
+                  <div class="financial-subheading">
+                    <div>
+                      <strong>最近实施记录</strong>
+                    </div>
+                    <small>{{ shareholderReturnStatusLabel(selectedShareholderReturn) }}</small>
+                  </div>
+                  <div v-for="distribution in selectedShareholderReturn.distributions.slice(0, 4)" :key="`${distribution.endDate}-${distribution.payDate || distribution.exDate || 'pending'}`" class="shareholder-distribution-row">
+                    <span>{{ formatTradeDate(distribution.endDate) }}</span>
+                    <strong>每股 {{ distribution.cashDividendPerShare.toFixed(3) }} 元</strong>
+                    <small>{{ distribution.payDate ? `派息 ${formatTradeDate(distribution.payDate)}` : distribution.exDate ? `除息 ${formatTradeDate(distribution.exDate)}` : '日期待确认' }}</small>
+                  </div>
+                </div>
+                <div v-if="selectedShareholderReturn.missingFields.length" class="value-quality-notes value-quality-notes-muted">
+                  <strong>数据缺口</strong>
+                  <span v-for="field in selectedShareholderReturn.missingFields" :key="field">{{ field }}</span>
+                </div>
+                <p class="valuation-note">
+                  仅统计已实施现金分红；股息率按近 12 个月现金分红 / 最新本地收盘价计算。该指标用于研究上下文，不代表未来收益。
+                </p>
+              </template>
+              <div v-else class="shareholder-return-state">
+                <Info :size="16" aria-hidden="true" />
+                <span>选择一只股票后查看股东回报</span>
+              </div>
             </div>
             <p class="valuation-note">
               金额单位：元；比例单位：%；数据来自最近已披露报告，指标用于观察，不代表未来收益

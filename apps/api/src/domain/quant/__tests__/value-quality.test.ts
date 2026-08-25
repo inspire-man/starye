@@ -37,6 +37,13 @@ function report(tsCode: string, reportDate: string, values: Partial<QuantFinanci
     netMargin: 10,
     debtAssetRatio: 45,
     operatingCashflowToRevenue: 8,
+    operatingCashflowPerShare: null,
+    fcffBack: null,
+    fcffForward: null,
+    interestCoverage: null,
+    interestBearingDebtRatio: null,
+    cashRatio: null,
+    totalLiability: null,
     roic: 9,
     ...values,
   }

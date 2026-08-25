@@ -18,6 +18,8 @@ const error = computed(() => {
     return '此账号没有管理员权限。' // D-05 新增
   if (err === 'insufficient_permissions')
     return '权限不足：需要管理员身份。'
+  if (err === 'invalid_code')
+    return 'GitHub 授权已失效，请重新发起登录；如果连续出现，请检查本地 OAuth App 配置。'
   return err
 })
 

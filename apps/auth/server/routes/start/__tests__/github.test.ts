@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readSetCookieHeaders } from '../github.get'
+import { buildGitHubOAuthBody, readSetCookieHeaders } from '../github.get'
 
 vi.mock('h3', () => ({
   createError: vi.fn(),
@@ -9,6 +9,14 @@ vi.mock('h3', () => ({
 }))
 
 describe('github OAuth start route', () => {
+  it('uses the login page as both success and error callback', () => {
+    expect(buildGitHubOAuthBody('http://localhost:8080/auth/login?next=%2Fblog%2F')).toEqual({
+      provider: 'github',
+      callbackURL: 'http://localhost:8080/auth/login?next=%2Fblog%2F',
+      errorCallbackURL: 'http://localhost:8080/auth/login?next=%2Fblog%2F',
+    })
+  })
+
   it('preserves all OAuth state cookies returned by the API', () => {
     const getSetCookie = vi.fn(() => [
       'starye.state=state-value; Path=/; HttpOnly',

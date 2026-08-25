@@ -14,6 +14,9 @@ import type {
   QuantKnowledgeSource,
   QuantProviderName,
   QuantResearchMarker,
+  QuantShareholderReturnDistribution,
+  QuantShareholderReturnItem,
+  QuantShareholderReturnSelection,
   QuantValuationComparison,
   QuantValuationComparisonPeer,
   QuantValuationSnapshot,
@@ -541,6 +544,13 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
     netMargin: readNumber(data, 'netMargin', 'net_margin'),
     debtAssetRatio: readNumber(data, 'debtAssetRatio', 'debt_asset_ratio'),
     operatingCashflowToRevenue: readNumber(data, 'operatingCashflowToRevenue', 'operating_cashflow_to_revenue'),
+    operatingCashflowPerShare: readNumber(data, 'operatingCashflowPerShare', 'operating_cashflow_per_share'),
+    fcffBack: readNumber(data, 'fcffBack', 'fcff_back'),
+    fcffForward: readNumber(data, 'fcffForward', 'fcff_forward'),
+    interestCoverage: readNumber(data, 'interestCoverage', 'interest_coverage'),
+    interestBearingDebtRatio: readNumber(data, 'interestBearingDebtRatio', 'interest_bearing_debt_ratio'),
+    cashRatio: readNumber(data, 'cashRatio', 'cash_ratio'),
+    totalLiability: readNumber(data, 'totalLiability', 'total_liability'),
     roic: readNumber(data, 'roic'),
   }
 }
@@ -588,6 +598,74 @@ function parseFinancialQualityComparison(payload: unknown): QuantFinancialQualit
     netProfitYoYHigherThanPercent: readNumber(data, 'netProfitYoYHigherThanPercent', 'net_profit_yoy_higher_than_percent'),
     roeHigherThanPercent: readNumber(data, 'roeHigherThanPercent', 'roe_higher_than_percent'),
     debtAssetRatioLowerThanPercent: readNumber(data, 'debtAssetRatioLowerThanPercent', 'debt_asset_ratio_lower_than_percent'),
+  }
+}
+
+function parseShareholderReturnDistribution(value: unknown): QuantShareholderReturnDistribution | null {
+  if (!isRecord(value))
+    return null
+  const endDate = readString(value, 'endDate', 'end_date')
+  const cashDividendPerShare = readNumber(value, 'cashDividendPerShare', 'cash_dividend_per_share')
+  if (!endDate || cashDividendPerShare === null)
+    return null
+  return {
+    endDate,
+    annDate: readString(value, 'annDate', 'ann_date'),
+    cashDividendPerShare,
+    exDate: readString(value, 'exDate', 'ex_date'),
+    payDate: readString(value, 'payDate', 'pay_date'),
+  }
+}
+
+function parseShareholderReturnItem(value: unknown): QuantShareholderReturnItem | null {
+  if (!isRecord(value))
+    return null
+  const tsCode = readString(value, 'tsCode', 'ts_code', 'code')
+  if (!tsCode)
+    return null
+  const status = readString(value, 'status')
+  const missingFields = Array.isArray(value.missingFields)
+    ? value.missingFields.filter((item): item is string => typeof item === 'string')
+    : Array.isArray(value.missing_fields)
+      ? value.missing_fields.filter((item): item is string => typeof item === 'string')
+      : []
+  const distributions = Array.isArray(value.distributions)
+    ? value.distributions.flatMap((item) => {
+        const distribution = parseShareholderReturnDistribution(item)
+        return distribution ? [distribution] : []
+      })
+    : []
+  return {
+    tsCode,
+    name: readString(value, 'name', 'stockName', 'stock_name'),
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-return-v1',
+    status: status === 'ready' || status === 'partial' ? status : 'insufficient_data',
+    observedAt: readString(value, 'observedAt', 'observed_at') || '',
+    latestClose: readNumber(value, 'latestClose', 'latest_close'),
+    trailingCashDividendPerShare: readNumber(value, 'trailingCashDividendPerShare', 'trailing_cash_dividend_per_share'),
+    trailingDividendYield: readNumber(value, 'trailingDividendYield', 'trailing_dividend_yield'),
+    dividendYears: readNumber(value, 'dividendYears', 'dividend_years') ?? 0,
+    distributions,
+    missingFields,
+  }
+}
+
+function parseShareholderReturns(payload: unknown): QuantShareholderReturnSelection {
+  const data = unwrapData(payload)
+  const record = isRecord(data) ? data : {}
+  const provider = readString(record, 'provider', 'dataProvider', 'data_provider')
+  return {
+    formulaVersion: readString(record, 'formulaVersion', 'formula_version') || 'shareholder-return-v1',
+    observedAt: readString(record, 'observedAt', 'observed_at') || '',
+    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    sampleCount: readNumber(record, 'sampleCount', 'sample_count') ?? 0,
+    readyCount: readNumber(record, 'readyCount', 'ready_count') ?? 0,
+    partialCount: readNumber(record, 'partialCount', 'partial_count') ?? 0,
+    insufficientCount: readNumber(record, 'insufficientCount', 'insufficient_count') ?? 0,
+    items: readList(record, 'items', 'results').flatMap((value) => {
+      const item = parseShareholderReturnItem(value)
+      return item ? [item] : []
+    }),
   }
 }
 
@@ -797,5 +875,9 @@ export const quantApi = {
 
   async getValueSelection(): Promise<QuantValueSelection> {
     return parseValueSelection(await requestJson('/value-selection'))
+  },
+
+  async getShareholderReturns(): Promise<QuantShareholderReturnSelection> {
+    return parseShareholderReturns(await requestJson('/shareholder-returns'))
   },
 }

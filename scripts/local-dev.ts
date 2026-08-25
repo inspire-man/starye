@@ -19,6 +19,7 @@ import { packageManagerInvocation } from './package-manager-command.ts'
 const localTarget = 'starye-org'
 const readinessAttempts = 160
 const readinessIntervalMs = 250
+const localAuthBaseURL = `${LOCAL_GATEWAY_ORIGIN}/api/auth`
 const pagesSurfaces = ['dashboard', 'quant', 'auth', 'blog', 'movie', 'comic'] as const satisfies readonly TargetPagesSurface[]
 const localGatewayOrigins = [
   ['API_ORIGIN', 'http://localhost:8787'],
@@ -32,7 +33,7 @@ const localGatewayOrigins = [
 ] as const
 
 const localApiOrigins = [
-  ['BETTER_AUTH_URL', LOCAL_GATEWAY_ORIGIN],
+  ['BETTER_AUTH_URL', localAuthBaseURL],
   ['WEB_URL', LOCAL_GATEWAY_ORIGIN],
   ['ADMIN_URL', LOCAL_GATEWAY_ORIGIN],
 ] as const

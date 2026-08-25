@@ -44,6 +44,13 @@ function financial(overrides: Partial<QuantFinancialQualitySnapshot> = {}): Quan
     netMargin: 16.2,
     debtAssetRatio: 49.55,
     operatingCashflowToRevenue: 0.28,
+    operatingCashflowPerShare: null,
+    fcffBack: null,
+    fcffForward: null,
+    interestCoverage: null,
+    interestBearingDebtRatio: null,
+    cashRatio: null,
+    totalLiability: null,
     roic: 11.75,
     ...overrides,
   }

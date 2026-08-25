@@ -1,4 +1,4 @@
-import type { EastmoneyProviderOptions } from '../../domain/quant/provider'
+import type { EastmoneyProviderOptions, TushareProviderOptions } from '../../domain/quant/provider'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
@@ -7,7 +7,7 @@ import { buildQuantValuationComparison } from '../../domain/quant/comparison'
 import { QuantError } from '../../domain/quant/errors'
 import { buildQuantFinancialQualityComparison } from '../../domain/quant/financial-comparison'
 import { getQuantInvestmentKnowledge } from '../../domain/quant/investment-knowledge'
-import { createEastmoneyFinancialProvider, createEastmoneyValuationProvider, mapQuantProviderError } from '../../domain/quant/provider'
+import { createEastmoneyFinancialProvider, createEastmoneyValuationProvider, createTushareDividendProvider, mapQuantProviderError } from '../../domain/quant/provider'
 import {
   createQuantWatchlistItem,
   deleteQuantWatchlistItem,
@@ -21,6 +21,7 @@ import {
   updateQuantWatchlistItem,
   upsertQuantResearchMarker,
 } from '../../domain/quant/repository'
+import { readQuantShareholderReturns } from '../../domain/quant/shareholder-return'
 import { syncQuantDaily } from '../../domain/quant/sync'
 import { readQuantValueSelection } from '../../domain/quant/value-selection-service'
 import { requireAuth } from '../../middleware/guard'
@@ -40,6 +41,17 @@ function eastmoneyProviderOptions(env?: AppEnv['Bindings']): EastmoneyProviderOp
   const baseUrl = env?.EASTMONEY_BASE_URL?.trim()
   const timeoutMs = Number(env?.EASTMONEY_TIMEOUT_MS)
   return {
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
+  }
+}
+
+function tushareProviderOptions(env?: AppEnv['Bindings']): TushareProviderOptions {
+  const token = env?.TUSHARE_TOKEN?.trim()
+  const baseUrl = env?.TUSHARE_BASE_URL?.trim()
+  const timeoutMs = Number(env?.TUSHARE_TIMEOUT_MS)
+  return {
+    ...(token ? { token } : {}),
     ...(baseUrl ? { baseUrl } : {}),
     ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
   }
@@ -271,6 +283,14 @@ quantRoutes.get('/value-selection', async (c) => {
     valuation: createEastmoneyValuationProvider(options),
     financial: createEastmoneyFinancialProvider(options),
   })
+  return c.json({ success: true as const, data })
+})
+
+quantRoutes.get('/shareholder-returns', async (c) => {
+  const data = await readQuantShareholderReturns(
+    c.get('db'),
+    createTushareDividendProvider(tushareProviderOptions(c.env)),
+  )
   return c.json({ success: true as const, data })
 })
 

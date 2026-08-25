@@ -22,6 +22,16 @@ export const TUSHARE_DAILY_FIELDS = [
   'amount',
 ] as const
 
+export const TUSHARE_DIVIDEND_FIELDS = [
+  'ts_code',
+  'end_date',
+  'ann_date',
+  'div_proc',
+  'cash_div',
+  'ex_date',
+  'pay_date',
+] as const
+
 export type TushareProviderErrorCode
   = | 'UNKNOWN_API'
     | 'TOKEN_MISSING'
@@ -47,6 +57,26 @@ export interface TushareProviderOptions {
   readonly baseUrl?: string
   readonly timeoutMs?: number
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+}
+
+export interface QuantDividendRequest {
+  readonly tsCode: string
+}
+
+export interface QuantDividendRecord {
+  readonly tsCode: string
+  readonly endDate: string
+  readonly annDate: string | null
+  readonly divProc: string | null
+  readonly cashDiv: number | null
+  readonly exDate: string | null
+  readonly payDate: string | null
+}
+
+export interface QuantDividendProvider {
+  readonly name: 'tushare'
+  readonly isConfigured: boolean
+  fetchDividends: (request: QuantDividendRequest) => Promise<readonly QuantDividendRecord[]>
 }
 
 export interface TushareRequest {
@@ -134,77 +164,100 @@ function normalizeDailyRows(fields: readonly string[], items: readonly (readonly
 }
 
 function isQuotaResponse(code: number, message: string): boolean {
-  return code === 402 || /quota|point|积分|配额/iu.test(message)
+  return code === 402 || /quota|point|积分|配额|频率|rate limit/iu.test(message)
+}
+
+function cleanProviderString(value: string | null | undefined): string | null {
+  const normalized = value?.trim() || ''
+  if (!normalized)
+    return null
+  const unquoted = normalized.replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/u, '$1$2').trim()
+  return unquoted || null
+}
+
+interface TushareRows {
+  readonly fields: readonly string[]
+  readonly items: readonly (readonly unknown[])[]
+}
+
+async function requestTushareRows(options: TushareProviderOptions, request: {
+  readonly apiName: string
+  readonly params: Readonly<Record<string, string>>
+  readonly fields: readonly string[]
+}): Promise<TushareRows> {
+  const token = cleanProviderString(options.token)
+  if (!token)
+    throw new TushareProviderError('TOKEN_MISSING', 'Tushare token is not configured', request.apiName)
+
+  const baseUrl = cleanProviderString(options.baseUrl) || 'https://api.tushare.pro'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  let response: Response
+  try {
+    response = await fetchImpl(baseUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        api_name: request.apiName,
+        token,
+        params: request.params,
+        fields: request.fields.join(','),
+      }),
+      signal: controller.signal,
+    })
+  }
+  catch {
+    if (controller.signal.aborted)
+      throw new TushareProviderError('TIMEOUT', 'Tushare request timed out', request.apiName)
+    throw new TushareProviderError('UPSTREAM_ERROR', 'Tushare request failed', request.apiName)
+  }
+  finally {
+    clearTimeout(timer)
+  }
+
+  if (response.status === 429)
+    throw new TushareProviderError('QUOTA_EXHAUSTED', 'Tushare quota exhausted', request.apiName)
+  if (!response.ok)
+    throw new TushareProviderError('UPSTREAM_ERROR', `Tushare HTTP ${response.status}`, request.apiName)
+
+  let payload: unknown
+  try {
+    payload = await response.json()
+  }
+  catch {
+    throw new TushareProviderError('INVALID_RESPONSE', 'Tushare response is not JSON', request.apiName)
+  }
+
+  const parsed = v.safeParse(TushareResponseSchema, payload)
+  if (!parsed.success)
+    throw new TushareProviderError('INVALID_RESPONSE', 'Tushare response schema is invalid', request.apiName)
+
+  const message = parsed.output.msg ?? ''
+  if (parsed.output.code !== 0) {
+    if (isQuotaResponse(parsed.output.code, message))
+      throw new TushareProviderError('QUOTA_EXHAUSTED', 'Tushare quota exhausted', request.apiName)
+    throw new TushareProviderError('UPSTREAM_ERROR', 'Tushare rejected the request', request.apiName)
+  }
+
+  return parsed.output.data ?? { fields: [], items: [] }
 }
 
 export function createTushareProvider(options: TushareProviderOptions = {}): TushareProvider {
-  const token = options.token?.trim() || null
-  const baseUrl = options.baseUrl?.trim() || 'https://api.tushare.pro'
-  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
-
   async function fetchDaily(request: TushareDailyRequest): Promise<readonly DailyBar[]> {
-    if (!token)
-      throw new TushareProviderError('TOKEN_MISSING', 'Tushare token is not configured', 'daily')
-
     const tsCode = request.tsCode.trim().toUpperCase()
     if (!/^[A-Z0-9.-]{1,20}$/u.test(tsCode))
       throw new TushareProviderError('UPSTREAM_ERROR', 'Invalid ts_code', 'daily')
     const startDate = normalizeDate(request.startDate, 'start_date')
     const endDate = normalizeDate(request.endDate, 'end_date')
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-    let response: Response
-    try {
-      response = await fetchImpl(baseUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          api_name: 'daily',
-          token,
-          params: { ts_code: tsCode, start_date: startDate, end_date: endDate },
-          fields: TUSHARE_DAILY_FIELDS.join(','),
-        }),
-        signal: controller.signal,
-      })
-    }
-    catch (error) {
-      if (controller.signal.aborted)
-        throw new TushareProviderError('TIMEOUT', 'Tushare request timed out', 'daily')
-      throw new TushareProviderError('UPSTREAM_ERROR', error instanceof Error ? 'Tushare request failed' : 'Tushare request failed', 'daily')
-    }
-    finally {
-      clearTimeout(timer)
-    }
-
-    if (response.status === 429)
-      throw new TushareProviderError('QUOTA_EXHAUSTED', 'Tushare quota exhausted', 'daily')
-    if (!response.ok)
-      throw new TushareProviderError('UPSTREAM_ERROR', `Tushare HTTP ${response.status}`, 'daily')
-
-    let payload: unknown
-    try {
-      payload = await response.json()
-    }
-    catch {
-      throw new TushareProviderError('INVALID_RESPONSE', 'Tushare response is not JSON', 'daily')
-    }
-
-    const parsed = v.safeParse(TushareResponseSchema, payload)
-    if (!parsed.success)
-      throw new TushareProviderError('INVALID_RESPONSE', 'Tushare response schema is invalid', 'daily')
-
-    const message = parsed.output.msg ?? ''
-    if (parsed.output.code !== 0) {
-      if (isQuotaResponse(parsed.output.code, message))
-        throw new TushareProviderError('QUOTA_EXHAUSTED', 'Tushare quota exhausted', 'daily')
-      throw new TushareProviderError('UPSTREAM_ERROR', 'Tushare rejected the request', 'daily')
-    }
-
-    if (!parsed.output.data)
-      return []
-    return normalizeDailyRows(parsed.output.data.fields, parsed.output.data.items)
+    const rows = await requestTushareRows(options, {
+      apiName: 'daily',
+      params: { ts_code: tsCode, start_date: startDate, end_date: endDate },
+      fields: TUSHARE_DAILY_FIELDS,
+    })
+    return normalizeDailyRows(rows.fields, rows.items)
   }
 
   async function request(request: TushareRequest): Promise<readonly DailyBar[]> {
@@ -219,9 +272,69 @@ export function createTushareProvider(options: TushareProviderOptions = {}): Tus
 
   return {
     name: 'tushare',
-    isConfigured: token !== null,
+    isConfigured: cleanProviderString(options.token) !== null,
     request,
     fetchDaily,
+  }
+}
+
+function optionalTushareDate(value: unknown, field: string): string | null {
+  if (value === null || value === undefined || value === '')
+    return null
+  if (typeof value !== 'string')
+    throw new TushareProviderError('INVALID_RESPONSE', `Invalid ${field}`, 'dividend')
+  return normalizeDate(value, field)
+}
+
+function normalizeDividendRows(requestedTsCode: string, fields: readonly string[], items: readonly (readonly unknown[])[]): readonly QuantDividendRecord[] {
+  const positions = new Map(fields.map((field, index) => [field, index]))
+  for (const field of ['ts_code', 'end_date', 'div_proc', 'cash_div']) {
+    if (!positions.has(field))
+      throw new TushareProviderError('INVALID_RESPONSE', `Missing dividend field: ${field}`, 'dividend')
+  }
+
+  const read = (row: readonly unknown[], field: string): unknown => row[positions.get(field) ?? -1]
+  const normalized = items.map((row) => {
+    const tsCode = read(row, 'ts_code')
+    if (typeof tsCode !== 'string' || tsCode.trim().toUpperCase() !== requestedTsCode)
+      throw new TushareProviderError('INVALID_RESPONSE', 'Invalid dividend ts_code', 'dividend')
+    const divProc = read(row, 'div_proc')
+    if (divProc !== null && divProc !== undefined && typeof divProc !== 'string')
+      throw new TushareProviderError('INVALID_RESPONSE', 'Invalid dividend process', 'dividend')
+    return {
+      tsCode: requestedTsCode,
+      endDate: normalizeDate(String(read(row, 'end_date')), 'end_date'),
+      annDate: optionalTushareDate(read(row, 'ann_date'), 'ann_date'),
+      divProc: typeof divProc === 'string' ? divProc : null,
+      cashDiv: optionalNumber(read(row, 'cash_div'), 'cash_div'),
+      exDate: optionalTushareDate(read(row, 'ex_date'), 'ex_date'),
+      payDate: optionalTushareDate(read(row, 'pay_date'), 'pay_date'),
+    } satisfies QuantDividendRecord
+  })
+
+  return [...new Map(normalized.map(record => [
+    `${record.endDate}:${record.annDate ?? ''}:${record.divProc ?? ''}:${record.exDate ?? ''}:${record.payDate ?? ''}`,
+    record,
+  ])).values()].sort((left, right) => right.endDate.localeCompare(left.endDate))
+}
+
+export function createTushareDividendProvider(options: TushareProviderOptions = {}): QuantDividendProvider {
+  async function fetchDividends(request: QuantDividendRequest): Promise<readonly QuantDividendRecord[]> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    if (!/^[A-Z0-9.-]{1,20}$/u.test(tsCode))
+      throw new TushareProviderError('UPSTREAM_ERROR', 'Invalid ts_code', 'dividend')
+    const rows = await requestTushareRows(options, {
+      apiName: 'dividend',
+      params: { ts_code: tsCode },
+      fields: TUSHARE_DIVIDEND_FIELDS,
+    })
+    return normalizeDividendRows(tsCode, rows.fields, rows.items)
+  }
+
+  return {
+    name: 'tushare',
+    isConfigured: cleanProviderString(options.token) !== null,
+    fetchDividends,
   }
 }
 
@@ -285,6 +398,13 @@ export interface QuantFinancialQualitySnapshot {
   readonly netMargin: number | null
   readonly debtAssetRatio: number | null
   readonly operatingCashflowToRevenue: number | null
+  readonly operatingCashflowPerShare: number | null
+  readonly fcffBack: number | null
+  readonly fcffForward: number | null
+  readonly interestCoverage: number | null
+  readonly interestBearingDebtRatio: number | null
+  readonly cashRatio: number | null
+  readonly totalLiability: number | null
   readonly roic: number | null
 }
 
@@ -653,6 +773,13 @@ function normalizeFinancialReport(tsCode: string, record: Record<string, unknown
     netMargin: eastmoneyQuoteNumber(record.XSJLL, 'netMargin'),
     debtAssetRatio: eastmoneyQuoteNumber(record.ZCFZL, 'debtAssetRatio'),
     operatingCashflowToRevenue: eastmoneyQuoteNumber(record.JYXJLYYSR, 'operatingCashflowToRevenue'),
+    operatingCashflowPerShare: eastmoneyQuoteNumber(record.MGJYXJJE, 'operatingCashflowPerShare'),
+    fcffBack: eastmoneyQuoteNumber(record.FCFF_BACK, 'fcffBack'),
+    fcffForward: eastmoneyQuoteNumber(record.FCFF_FORWARD, 'fcffForward'),
+    interestCoverage: eastmoneyQuoteNumber(record.INTEREST_COVERAGE_RATIO, 'interestCoverage'),
+    interestBearingDebtRatio: eastmoneyQuoteNumber(record.INTEREST_DEBT_RATIO, 'interestBearingDebtRatio'),
+    cashRatio: eastmoneyQuoteNumber(record.CASH_RATIO, 'cashRatio'),
+    totalLiability: eastmoneyQuoteNumber(record.LIABILITY, 'totalLiability'),
     roic: eastmoneyQuoteNumber(record.ROIC, 'roic'),
   }
 }

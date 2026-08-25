@@ -1,6 +1,6 @@
 import type { TushareProviderError } from '../provider'
 import { describe, expect, it, vi } from 'vitest'
-import { createEastmoneyFinancialProvider, createEastmoneyProvider, createEastmoneyValuationProvider, createTushareProvider, resolveQuantProviderName } from '../provider'
+import { createEastmoneyFinancialProvider, createEastmoneyProvider, createEastmoneyValuationProvider, createTushareDividendProvider, createTushareProvider, resolveQuantProviderName } from '../provider'
 
 describe('quant daily providers', () => {
   it('normalizes the declared daily response and keeps the token server-side', async () => {
@@ -51,6 +51,12 @@ describe('quant daily providers', () => {
       fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 402, msg: 'quota exhausted' }), { status: 200 })),
     })
     await expect(quota.fetchDaily({ tsCode: '000001.SZ', startDate: '20260801', endDate: '20260821' })).rejects.toMatchObject({ code: 'QUOTA_EXHAUSTED' })
+
+    const frequency = createTushareDividendProvider({
+      token: 'SERVER_TOKEN',
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 40203, msg: '接口频率超限' }), { status: 200 })),
+    })
+    await expect(frequency.fetchDividends({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'QUOTA_EXHAUSTED' })
   })
 
   it('normalizes Eastmoney history K-lines without a token', async () => {
@@ -276,6 +282,13 @@ describe('quant daily providers', () => {
           XSJLL: 16.2,
           ZCFZL: 49.55,
           JYXJLYYSR: 0.28,
+          MGJYXJJE: 2.0861,
+          FCFF_BACK: 19447406136,
+          FCFF_FORWARD: 39583497221,
+          INTEREST_COVERAGE_RATIO: 25.18,
+          INTEREST_DEBT_RATIO: 30.59,
+          CASH_RATIO: 0.777,
+          LIABILITY: 268266643912,
           ROIC: 11.75,
         },
       ],
@@ -304,6 +317,13 @@ describe('quant daily providers', () => {
       netMargin: 16.2,
       debtAssetRatio: 49.55,
       operatingCashflowToRevenue: 0.28,
+      operatingCashflowPerShare: 2.0861,
+      fcffBack: 19447406136,
+      fcffForward: 39583497221,
+      interestCoverage: 25.18,
+      interestBearingDebtRatio: 30.59,
+      cashRatio: 0.777,
+      totalLiability: 268266643912,
       roic: 11.75,
     })
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('code=SH601899')
@@ -322,6 +342,57 @@ describe('quant daily providers', () => {
       { reportDate: '2026-06-30', reportType: '中报' },
       { reportDate: '2025-12-31', reportType: '年报' },
     ])
+  })
+
+  it('normalizes only the requested Tushare dividend fields and keeps implementation status', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      data: {
+        fields: ['ts_code', 'end_date', 'ann_date', 'div_proc', 'cash_div', 'ex_date', 'pay_date'],
+        items: [
+          ['601899.SH', '20260331', '20260711', '实施', 0.42, '20260821', '20260821'],
+          ['601899.SH', '20260331', '20260711', '预案', 0, null, null],
+          ['601899.SH', '20251231', '20260606', '实施', 0.38, '20260626', '20260626'],
+        ],
+      },
+    }), { status: 200 }))
+    const provider = createTushareDividendProvider({ token: 'SERVER_TOKEN', baseUrl: '"https://tushare.fixture.test"', fetchImpl })
+
+    await expect(provider.fetchDividends({ tsCode: '601899.SH' })).resolves.toEqual([
+      {
+        tsCode: '601899.SH',
+        endDate: '20260331',
+        annDate: '20260711',
+        divProc: '实施',
+        cashDiv: 0.42,
+        exDate: '20260821',
+        payDate: '20260821',
+      },
+      {
+        tsCode: '601899.SH',
+        endDate: '20260331',
+        annDate: '20260711',
+        divProc: '预案',
+        cashDiv: 0,
+        exDate: null,
+        payDate: null,
+      },
+      {
+        tsCode: '601899.SH',
+        endDate: '20251231',
+        annDate: '20260606',
+        divProc: '实施',
+        cashDiv: 0.38,
+        exDate: '20260626',
+        payDate: '20260626',
+      },
+    ])
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({
+      api_name: 'dividend',
+      token: 'SERVER_TOKEN',
+      params: { ts_code: '601899.SH' },
+    })
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe('https://tushare.fixture.test')
   })
 
   it('maps Eastmoney financial requests to SH, SZ, and BJ markets', async () => {

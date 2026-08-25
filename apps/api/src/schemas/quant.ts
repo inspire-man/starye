@@ -137,6 +137,13 @@ export const QuantFinancialQualitySnapshotSchema = v.object({
   netMargin: v.nullable(v.number()),
   debtAssetRatio: v.nullable(v.number()),
   operatingCashflowToRevenue: v.nullable(v.number()),
+  operatingCashflowPerShare: v.nullable(v.number()),
+  fcffBack: v.nullable(v.number()),
+  fcffForward: v.nullable(v.number()),
+  interestCoverage: v.nullable(v.number()),
+  interestBearingDebtRatio: v.nullable(v.number()),
+  cashRatio: v.nullable(v.number()),
+  totalLiability: v.nullable(v.number()),
   roic: v.nullable(v.number()),
 })
 

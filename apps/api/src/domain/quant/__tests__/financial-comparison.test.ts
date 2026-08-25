@@ -21,6 +21,13 @@ function quality(tsCode: string, revenueYoY: number | null, netProfitYoY: number
     netMargin: null,
     debtAssetRatio,
     operatingCashflowToRevenue: null,
+    operatingCashflowPerShare: null,
+    fcffBack: null,
+    fcffForward: null,
+    interestCoverage: null,
+    interestBearingDebtRatio: null,
+    cashRatio: null,
+    totalLiability: null,
     roic: null,
   }
 }

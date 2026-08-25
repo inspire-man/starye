@@ -149,7 +149,49 @@ export interface QuantFinancialQualitySnapshot {
   netMargin: number | null
   debtAssetRatio: number | null
   operatingCashflowToRevenue: number | null
+  operatingCashflowPerShare: number | null
+  fcffBack: number | null
+  fcffForward: number | null
+  interestCoverage: number | null
+  interestBearingDebtRatio: number | null
+  cashRatio: number | null
+  totalLiability: number | null
   roic: number | null
+}
+
+export type QuantShareholderReturnStatus = 'ready' | 'partial' | 'insufficient_data'
+
+export interface QuantShareholderReturnDistribution {
+  endDate: string
+  annDate: string | null
+  cashDividendPerShare: number
+  exDate: string | null
+  payDate: string | null
+}
+
+export interface QuantShareholderReturnItem {
+  tsCode: string
+  name: string | null
+  formulaVersion: string
+  status: QuantShareholderReturnStatus
+  observedAt: string
+  latestClose: number | null
+  trailingCashDividendPerShare: number | null
+  trailingDividendYield: number | null
+  dividendYears: number
+  distributions: QuantShareholderReturnDistribution[]
+  missingFields: string[]
+}
+
+export interface QuantShareholderReturnSelection {
+  formulaVersion: string
+  observedAt: string
+  provider: QuantProviderName | null
+  sampleCount: number
+  readyCount: number
+  partialCount: number
+  insufficientCount: number
+  items: QuantShareholderReturnItem[]
 }
 
 export interface QuantFinancialQualityHistory {

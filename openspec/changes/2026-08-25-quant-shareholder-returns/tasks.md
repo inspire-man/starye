@@ -1,0 +1,6 @@
+- [x] 1.1 扩展 Eastmoney 财报快照字段并补齐 provider 解析测试；完成标准：新字段可为空、报告期保留、现有 provider 测试通过。
+- [x] 1.2 增加 Tushare 分红 provider 和股东回报 domain service；完成标准：仅处理实施记录，公式和失败隔离有单测。
+- [x] 2.1 新增受保护 `/api/quant/shareholder-returns` 路由及 API/集成契约测试；完成标准：未认证拦截，认证请求返回版本化批量结果。
+- [x] 2.2 扩展 Quant client 类型归一化；完成标准：snake_case、空值和状态在 Vitest 中覆盖。
+- [x] 3.1 在分析抽屉增加现金流韧性与股东回报区域；完成标准：ready/partial/insufficient/loading/error/窄屏状态不重排且不引入首页运管卡片。
+- [x] 4.1 执行 OpenSpec 严格校验、API/Quant 测试、type-check、build 和 Gateway 浏览器验收；完成标准：所有命令通过并记录缺口。

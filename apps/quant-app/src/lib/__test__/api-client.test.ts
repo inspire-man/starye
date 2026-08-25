@@ -191,6 +191,13 @@ describe('quantApi', () => {
         net_margin: 16.2,
         debt_asset_ratio: 49.55,
         operating_cashflow_to_revenue: 0.28,
+        operating_cashflow_per_share: 2.0861,
+        fcff_back: 19447406136,
+        fcff_forward: 39583497221,
+        interest_coverage: 25.18,
+        interest_bearing_debt_ratio: 30.59,
+        cash_ratio: 0.777,
+        total_liability: 268266643912,
         roic: 11.75,
       },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
@@ -214,9 +221,53 @@ describe('quantApi', () => {
       netMargin: 16.2,
       debtAssetRatio: 49.55,
       operatingCashflowToRevenue: 0.28,
+      operatingCashflowPerShare: 2.0861,
+      fcffBack: 19447406136,
+      fcffForward: 39583497221,
+      interestCoverage: 25.18,
+      interestBearingDebtRatio: 30.59,
+      cashRatio: 0.777,
+      totalLiability: 268266643912,
       roic: 11.75,
     })
     expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/financial/601899.SH`, expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('normalizes shareholder return status, distributions, and missing fields', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        formula_version: 'shareholder-return-v1',
+        observed_at: '2026-08-25T00:00:00.000Z',
+        provider: 'tushare',
+        sample_count: 1,
+        ready_count: 1,
+        partial_count: 0,
+        insufficient_count: 0,
+        items: [{
+          ts_code: '601899.SH',
+          name: '紫金矿业',
+          status: 'ready',
+          latest_close: 34.54,
+          trailing_cash_dividend_per_share: 0.42,
+          trailing_dividend_yield: 1.22,
+          dividend_years: 4,
+          distributions: [{ end_date: '20260331', cash_dividend_per_share: 0.42, pay_date: '20260821' }],
+          missing_fields: [],
+        }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getShareholderReturns()).resolves.toMatchObject({
+      formulaVersion: 'shareholder-return-v1',
+      provider: 'tushare',
+      items: [{
+        tsCode: '601899.SH',
+        trailingDividendYield: 1.22,
+        distributions: [{ endDate: '20260331', cashDividendPerShare: 0.42 }],
+      }],
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/shareholder-returns`, expect.objectContaining({ credentials: 'include' }))
   })
 
   it('normalizes financial history and keeps reports in server order', async () => {

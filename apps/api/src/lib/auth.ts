@@ -8,6 +8,7 @@ import { getAllowedOrigins } from '../config'
 
 // Move regex to module scope to avoid re-compilation
 const IP_ADDRESS_REGEX = /\d+\.\d+\.\d+\.\d+/
+const AUTH_BASE_PATH = '/api/auth'
 
 export const GITHUB_APP_CONFIGURATION_ERROR = 'github_app_configuration_missing' as const
 export const GITHUB_APP_BINDING_NAMES = [
@@ -101,6 +102,20 @@ export function injectGithubIdIntoSession(
   return githubAccount?.accountId ?? null
 }
 
+/** Keep Better Auth's base URL and the provider callback on the same mounted endpoint. */
+export function resolveAuthBaseURL(configuredURL: string | undefined, requestOrigin: string): string {
+  const candidate = configuredURL?.trim() || `${requestOrigin}${AUTH_BASE_PATH}`
+  const url = new URL(candidate)
+
+  if (!url.pathname || url.pathname === '/') {
+    url.pathname = AUTH_BASE_PATH
+  }
+
+  url.search = ''
+  url.hash = ''
+  return url.toString().replace(/\/$/u, '')
+}
+
 // 解耦 Context，只依赖 Env 和 Request
 export function createAuth(env: Env, request: Request) {
   const db = createDb(env.DB)
@@ -114,7 +129,8 @@ export function createAuth(env: Env, request: Request) {
   const requestOrigin = `${url.protocol}//${url.host}`
 
   // 核心：Better Auth 的 baseURL 必须指向它自己挂载的端点
-  const baseURL = env.BETTER_AUTH_URL || `${requestOrigin}/api/auth`
+  const baseURL = resolveAuthBaseURL(env.BETTER_AUTH_URL, requestOrigin)
+  const githubRedirectURI = `${baseURL}/callback/github`
   const isHttps = url.protocol === 'https:' || forwardedProto === 'https'
 
   const originHostname = new URL(baseURL).hostname
@@ -170,6 +186,7 @@ export function createAuth(env: Env, request: Request) {
       github: {
         clientId: env.GITHUB_CLIENT_ID,
         clientSecret: env.GITHUB_CLIENT_SECRET,
+        redirectURI: githubRedirectURI,
       },
     },
     // 允许前端跨域访问

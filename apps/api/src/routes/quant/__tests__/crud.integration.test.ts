@@ -535,4 +535,48 @@ describe('quant watchlist CRUD contract', () => {
     })
     expect(fetchMock).toHaveBeenCalledTimes(stocks.length * 2)
   })
+
+  it('returns shareholder returns from implemented Tushare dividends and local prices', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    await createQuantWatchlistItem(db, { tsCode: '601899.SH', name: '紫金矿业' })
+    await upsertQuantDailyBars(db, valueFixtureBars('601899.SH'))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      data: {
+        fields: ['ts_code', 'end_date', 'ann_date', 'div_proc', 'cash_div', 'ex_date', 'pay_date'],
+        items: [
+          ['601899.SH', '20260331', '20260711', '实施', 0.42, '20260821', '20260821'],
+          ['601899.SH', '20260331', '20260711', '预案', 0, null, null],
+        ],
+      },
+    }), { status: 200 }))
+
+    const response = await app.request('/api/quant/shareholder-returns', {}, {
+      TUSHARE_TOKEN: 'fixture-token',
+      TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+    } as AppEnv['Bindings'])
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        formulaVersion: 'shareholder-return-v1',
+        provider: 'tushare',
+        sampleCount: 1,
+        readyCount: 1,
+        items: [{
+          tsCode: '601899.SH',
+          status: 'ready',
+          trailingCashDividendPerShare: 0.42,
+          trailingDividendYield: expect.any(Number),
+        }],
+      },
+    })
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      api_name: 'dividend',
+      token: 'fixture-token',
+      params: { ts_code: '601899.SH' },
+    })
+  })
 })

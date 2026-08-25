@@ -3,7 +3,7 @@
  * 覆盖：ACCESS-02（githubId 字段注入逻辑）
  */
 import { describe, expect, it } from 'vitest'
-import { createAuth, injectGithubIdIntoSession } from '../auth'
+import { createAuth, injectGithubIdIntoSession, resolveAuthBaseURL } from '../auth'
 
 describe('injectGithubIdIntoSession', () => {
   it('有 GitHub account 时返回 accountId', () => {
@@ -23,6 +23,15 @@ describe('injectGithubIdIntoSession', () => {
 })
 
 describe('createAuth 基础验证', () => {
+  it('将 origin 形式的配置规范化为 Better Auth 挂载路径', () => {
+    expect(resolveAuthBaseURL('https://api.starye.org', 'https://127.0.0.1:8787')).toBe('https://api.starye.org/api/auth')
+    expect(resolveAuthBaseURL('https://api.starye.org/api/auth/', 'https://127.0.0.1:8787')).toBe('https://api.starye.org/api/auth')
+  })
+
+  it('无配置时从 API request origin 构造 Better Auth 挂载路径', () => {
+    expect(resolveAuthBaseURL(undefined, 'https://api.starye.org')).toBe('https://api.starye.org/api/auth')
+  })
+
   it('gateway 转发时仍以 API request origin 作为 OAuth callback 基址', () => {
     const env = {
       DB: {} as any,
@@ -43,6 +52,7 @@ describe('createAuth 基础验证', () => {
     const auth = createAuth(env, request)
 
     expect(auth.options.baseURL).toBe('https://api.starye.org/api/auth')
+    expect((auth.options.socialProviders as any).github.redirectURI).toBe('https://api.starye.org/api/auth/callback/github')
   })
 
   it('createAuth 返回包含 api 的 auth 实例', async () => {
@@ -62,5 +72,7 @@ describe('createAuth 基础验证', () => {
     const auth = createAuth(mockEnv, mockRequest)
     expect(auth).toBeDefined()
     expect(auth.api).toBeDefined()
+    expect(auth.options.baseURL).toBe('http://localhost:8787/api/auth')
+    expect((auth.options.socialProviders as any).github.redirectURI).toBe('http://localhost:8787/api/auth/callback/github')
   })
 })

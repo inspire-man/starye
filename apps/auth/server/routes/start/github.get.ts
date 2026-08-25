@@ -25,6 +25,18 @@ export function readSetCookieHeaders(headers: Headers): string[] {
   return value ? [value] : []
 }
 
+export function buildGitHubOAuthBody(callbackURL: string): {
+  provider: 'github'
+  callbackURL: string
+  errorCallbackURL: string
+} {
+  return {
+    provider: 'github',
+    callbackURL,
+    errorCallbackURL: callbackURL,
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const origin = config.public.gatewayBaseUrl
@@ -38,10 +50,7 @@ export default defineEventHandler(async (event) => {
     {
       baseURL: apiUrl,
       method: 'POST',
-      body: {
-        provider: 'github',
-        callbackURL,
-      },
+      body: buildGitHubOAuthBody(callbackURL),
       retry: false,
     },
   )
