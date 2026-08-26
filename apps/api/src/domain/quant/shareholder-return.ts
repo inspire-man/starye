@@ -157,11 +157,12 @@ function providerErrorCode(error: unknown): string {
 
 export async function readQuantShareholderReturns(
   db: Database,
+  userId: string,
   provider: QuantDividendProvider,
   now: () => Date = () => new Date(),
 ): Promise<QuantShareholderReturnBatchResult> {
   const observedAt = now().toISOString()
-  const watchlist = await listQuantWatchlist(db)
+  const watchlist = await listQuantWatchlist(db, userId)
   if (watchlist.length === 0) {
     return {
       formulaVersion: QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION,

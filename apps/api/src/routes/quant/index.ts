@@ -1,9 +1,13 @@
+import type { QuantResearchRun as QuantResearchRunRecord } from '@starye/db/schema'
+import type { Context } from 'hono'
 import type { EastmoneyProviderOptions, TushareProviderOptions } from '../../domain/quant/provider'
+import type { QuantResearchReport } from '../../domain/quant/research-report'
 import type { QuantSignalHistoryCandidate, QuantSignalHistorySnapshot } from '../../domain/quant/signal-persistence'
 import type { MomentumCandidate } from '../../domain/quant/types'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
+import { deleteQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
 import { QuantError } from '../../domain/quant/errors'
@@ -12,11 +16,15 @@ import { buildQuantFinancialQualityComparison } from '../../domain/quant/financi
 import { getQuantInvestmentKnowledge } from '../../domain/quant/investment-knowledge'
 import { createEastmoneyFinancialProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createTushareDividendProvider, createTushareStockBasicProvider, mapQuantProviderError, resolveQuantProviderName } from '../../domain/quant/provider'
 import {
+  createQuantResearchRun,
   createQuantWatchlistItem,
   deleteQuantWatchlistItem,
+  ensureQuantStarterWatchlist,
   getQuantSyncState,
+  getQuantWatchlistItem,
   listQuantDailyBars,
   listQuantResearchMarkers,
+  listQuantResearchRuns,
   listQuantScanSnapshots,
   listQuantWatchlist,
   listQuantWatchlistWithStats,
@@ -24,15 +32,19 @@ import {
   updateQuantWatchlistItem,
   upsertQuantResearchMarker,
 } from '../../domain/quant/repository'
+import { buildQuantResearchReport } from '../../domain/quant/research-report'
 import { readQuantShareholderReturns } from '../../domain/quant/shareholder-return'
 import { buildQuantSignalPersistence } from '../../domain/quant/signal-persistence'
 import { syncQuantDaily } from '../../domain/quant/sync'
 import { readQuantValueSelection } from '../../domain/quant/value-selection-service'
 import { requireAuth } from '../../middleware/guard'
 import {
+  QuantAiConfigUpdateSchema,
   QuantDailyQuerySchema,
   QuantFinancialHistoryQuerySchema,
   QuantResearchMarkerUpdateSchema,
+  QuantResearchRunCreateSchema,
+  QuantResearchRunsQuerySchema,
   QuantSyncSchema,
   QuantWatchlistCreateSchema,
   QuantWatchlistParamSchema,
@@ -40,6 +52,13 @@ import {
 } from '../../schemas/quant'
 
 export const quantRoutes = new Hono<AppEnv>()
+
+function currentQuantUserId(c: Context<AppEnv>): string {
+  const userId = c.get('user')?.id
+  if (!userId)
+    throw new QuantError('QUANT_INVALID_INPUT', 'Authenticated user is required', 401)
+  return userId
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -78,10 +97,36 @@ function parseSignalHistorySnapshot(snapshot: {
   return { id: snapshot.id, generatedAt: snapshot.generatedAt, candidates }
 }
 
-async function readCurrentQuantCandidates(db: AppEnv['Variables']['db']) {
+function parseResearchReport(reportJson: string): QuantResearchReport {
+  try {
+    const parsed: unknown = JSON.parse(reportJson)
+    if (!isRecord(parsed) || parsed.reportVersion !== 'research-report-v1' || !Array.isArray(parsed.evidence))
+      throw new Error('invalid report')
+    return parsed as unknown as QuantResearchReport
+  }
+  catch {
+    throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted research report is invalid', 500)
+  }
+}
+
+function researchRunView(row: QuantResearchRunRecord) {
+  return {
+    id: row.id,
+    tsCode: row.tsCode,
+    name: row.name,
+    status: row.status,
+    reportVersion: row.reportVersion,
+    sourceSnapshotId: row.sourceSnapshotId,
+    generatedAt: row.generatedAt,
+    createdAt: row.createdAt,
+    report: parseResearchReport(row.reportJson),
+  }
+}
+
+async function readCurrentQuantCandidates(db: AppEnv['Variables']['db'], userId: string) {
   const [watchlist, snapshotHistory] = await Promise.all([
-    listQuantWatchlist(db),
-    listQuantScanSnapshots(db),
+    listQuantWatchlist(db, userId),
+    listQuantScanSnapshots(db, userId),
   ])
   const snapshot = snapshotHistory[0]
   const barsByCode = Object.fromEntries(await Promise.all(watchlist.map(async item => [
@@ -172,7 +217,7 @@ function stockBasicProvider(env?: AppEnv['Bindings']) {
     : createEastmoneyStockBasicProvider(eastmoneyProviderOptions(env))
 }
 
-quantRoutes.use('*', requireAuth(['admin', 'super_admin']))
+quantRoutes.use('*', requireAuth())
 
 quantRoutes.onError((error, c) => {
   if (error instanceof QuantError) {
@@ -207,8 +252,33 @@ quantRoutes.get('/knowledge', (c) => {
 })
 
 quantRoutes.get('/watchlist', async (c) => {
-  const data = await listQuantWatchlistWithStats(c.get('db'))
+  const userId = currentQuantUserId(c)
+  await ensureQuantStarterWatchlist(c.get('db'), userId)
+  const data = await listQuantWatchlistWithStats(c.get('db'), userId)
   return c.json({ success: true as const, data })
+})
+
+quantRoutes.get('/ai-config', async (c) => {
+  const data = await getQuantAiConfig(c.get('db'), currentQuantUserId(c))
+  return c.json({ success: true as const, data })
+})
+
+quantRoutes.put('/ai-config', validator('json', QuantAiConfigUpdateSchema), async (c) => {
+  const input = c.req.valid('json')
+  const data = await saveQuantAiConfig(c.get('db'), {
+    userId: currentQuantUserId(c),
+    provider: input.provider,
+    model: input.model,
+    baseUrl: input.base_url,
+    apiKey: input.api_key,
+    clearApiKey: input.clear_api_key,
+  }, c.env.QUANT_AI_ENCRYPTION_KEY)
+  return c.json({ success: true as const, data })
+})
+
+quantRoutes.delete('/ai-config', async (c) => {
+  const deleted = await deleteQuantAiConfig(c.get('db'), currentQuantUserId(c))
+  return c.json({ success: true as const, data: { deleted } })
 })
 
 quantRoutes.get('/stock-basic/:tsCode', validator('param', QuantWatchlistParamSchema), async (c) => {
@@ -223,8 +293,65 @@ quantRoutes.get('/stock-basic/:tsCode', validator('param', QuantWatchlistParamSc
 })
 
 quantRoutes.get('/research', async (c) => {
-  const data = await listQuantResearchMarkers(c.get('db'))
+  const userId = currentQuantUserId(c)
+  await ensureQuantStarterWatchlist(c.get('db'), userId)
+  const data = await listQuantResearchMarkers(c.get('db'), userId)
   return c.json({ success: true as const, data })
+})
+
+quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const input = c.req.valid('json')
+  const tsCode = normalizeTsCode(input.ts_code)
+  const watchlistItem = await getQuantWatchlistItem(c.get('db'), userId, tsCode)
+  if (!watchlistItem)
+    throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
+
+  const [dailyBars, snapshots] = await Promise.all([
+    listQuantDailyBars(c.get('db'), { tsCode }),
+    listQuantScanSnapshots(c.get('db'), userId, 1),
+  ])
+  const candidate = screenMomentum({ [tsCode]: dailyBars }).find(item => item.tsCode === tsCode) ?? null
+  const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
+  const financialProvider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
+  const dividendProvider = createTushareDividendProvider(tushareProviderOptions(c.env))
+  const [valuationResult, financialResult, shareholderResult] = await Promise.allSettled([
+    valuationProvider.fetchValuation({ tsCode }),
+    financialProvider.fetchFinancialQualityHistory({ tsCode, limit: 4 }),
+    readQuantShareholderReturns(c.get('db'), userId, dividendProvider).then(result => result.items.find(item => item.tsCode === tsCode) ?? null),
+  ])
+  const generatedAt = new Date()
+  const report = buildQuantResearchReport({
+    tsCode,
+    name: watchlistItem.name,
+    generatedAt,
+    sourceSnapshotId: snapshots[0]?.id ?? null,
+    candidate,
+    dailyBars,
+    valuation: valuationResult.status === 'fulfilled' ? valuationResult.value : null,
+    financialReports: financialResult.status === 'fulfilled' ? financialResult.value : [],
+    shareholderReturn: shareholderResult.status === 'fulfilled' ? shareholderResult.value : null,
+    valuationErrorCode: valuationResult.status === 'rejected' ? mapQuantProviderError(valuationResult.reason).code : null,
+    financialErrorCode: financialResult.status === 'rejected' ? mapQuantProviderError(financialResult.reason).code : null,
+  })
+  const persisted = await createQuantResearchRun(c.get('db'), {
+    userId,
+    tsCode,
+    name: watchlistItem.name,
+    status: report.status,
+    reportVersion: report.reportVersion,
+    sourceSnapshotId: report.sourceSnapshotId,
+    reportJson: JSON.stringify(report),
+    generatedAt,
+  })
+  return c.json({ success: true as const, data: researchRunView(persisted) }, 201)
+})
+
+quantRoutes.get('/research/runs/:tsCode', validator('param', QuantWatchlistParamSchema), validator('query', QuantResearchRunsQuerySchema), async (c) => {
+  const { tsCode } = c.req.valid('param')
+  const { limit } = c.req.valid('query')
+  const data = await listQuantResearchRuns(c.get('db'), currentQuantUserId(c), tsCode, limit ? Number(limit) : 5)
+  return c.json({ success: true as const, data: data.map(researchRunView) })
 })
 
 quantRoutes.put(
@@ -235,6 +362,7 @@ quantRoutes.put(
     const { tsCode } = c.req.valid('param')
     const input = c.req.valid('json')
     const data = await upsertQuantResearchMarker(c.get('db'), {
+      userId: currentQuantUserId(c),
       tsCode,
       status: input.status,
       note: input.note,
@@ -245,6 +373,7 @@ quantRoutes.put(
 )
 
 quantRoutes.post('/watchlist', validator('json', QuantWatchlistCreateSchema), async (c) => {
+  const userId = currentQuantUserId(c)
   const input = c.req.valid('json')
   let name = input.name?.trim() || null
   if (!name) {
@@ -255,9 +384,9 @@ quantRoutes.post('/watchlist', validator('json', QuantWatchlistCreateSchema), as
       name = null
     }
   }
-  let data = await createQuantWatchlistItem(c.get('db'), { tsCode: input.ts_code, name })
+  let data = await createQuantWatchlistItem(c.get('db'), { userId, tsCode: input.ts_code, name })
   if (!data.name && name)
-    data = await updateQuantWatchlistItem(c.get('db'), input.ts_code, name)
+    data = await updateQuantWatchlistItem(c.get('db'), userId, input.ts_code, name)
   return c.json({ success: true as const, data }, 201)
 })
 
@@ -268,14 +397,14 @@ quantRoutes.patch(
   async (c) => {
     const { tsCode } = c.req.valid('param')
     const { name } = c.req.valid('json')
-    const data = await updateQuantWatchlistItem(c.get('db'), tsCode, name)
+    const data = await updateQuantWatchlistItem(c.get('db'), currentQuantUserId(c), tsCode, name)
     return c.json({ success: true as const, data })
   },
 )
 
 quantRoutes.delete('/watchlist/:tsCode', validator('param', QuantWatchlistParamSchema), async (c) => {
   const { tsCode } = c.req.valid('param')
-  const deleted = await deleteQuantWatchlistItem(c.get('db'), tsCode)
+  const deleted = await deleteQuantWatchlistItem(c.get('db'), currentQuantUserId(c), tsCode)
   if (!deleted)
     throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
   return c.json({ success: true as const, data: { tsCode } })
@@ -307,7 +436,7 @@ quantRoutes.get('/valuation/:tsCode', validator('param', QuantWatchlistParamSche
 
 quantRoutes.get('/valuation/compare/:tsCode', validator('param', QuantWatchlistParamSchema), async (c) => {
   const tsCode = normalizeTsCode(c.req.valid('param').tsCode)
-  const watchlist = await listQuantWatchlist(c.get('db'))
+  const watchlist = await listQuantWatchlist(c.get('db'), currentQuantUserId(c))
   if (!watchlist.some(item => item.tsCode === tsCode))
     throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
 
@@ -372,7 +501,7 @@ quantRoutes.get('/financial/history/:tsCode', validator('param', QuantWatchlistP
 
 quantRoutes.get('/financial/compare/:tsCode', validator('param', QuantWatchlistParamSchema), async (c) => {
   const tsCode = normalizeTsCode(c.req.valid('param').tsCode)
-  const watchlist = await listQuantWatchlist(c.get('db'))
+  const watchlist = await listQuantWatchlist(c.get('db'), currentQuantUserId(c))
   if (!watchlist.some(item => item.tsCode === tsCode))
     throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
 
@@ -401,12 +530,16 @@ quantRoutes.get('/financial/compare/:tsCode', validator('param', QuantWatchlistP
 })
 
 quantRoutes.get('/candidates', async (c) => {
-  return c.json({ success: true as const, data: await readCurrentQuantCandidates(c.get('db')) })
+  const userId = currentQuantUserId(c)
+  await ensureQuantStarterWatchlist(c.get('db'), userId)
+  return c.json({ success: true as const, data: await readCurrentQuantCandidates(c.get('db'), userId) })
 })
 
 quantRoutes.get('/value-selection', async (c) => {
+  const userId = currentQuantUserId(c)
+  await ensureQuantStarterWatchlist(c.get('db'), userId)
   const options = eastmoneyProviderOptions(c.env)
-  const data = await readQuantValueSelection(c.get('db'), {
+  const data = await readQuantValueSelection(c.get('db'), userId, {
     valuation: createEastmoneyValuationProvider(options),
     financial: createEastmoneyFinancialProvider(options),
   })
@@ -414,25 +547,30 @@ quantRoutes.get('/value-selection', async (c) => {
 })
 
 quantRoutes.get('/shareholder-returns', async (c) => {
+  const userId = currentQuantUserId(c)
+  await ensureQuantStarterWatchlist(c.get('db'), userId)
   const data = await readQuantShareholderReturns(
     c.get('db'),
+    userId,
     createTushareDividendProvider(tushareProviderOptions(c.env)),
   )
   return c.json({ success: true as const, data })
 })
 
 quantRoutes.get('/sync', async (c) => {
-  const state = await getQuantSyncState(c.get('db'))
+  const state = await getQuantSyncState(c.get('db'), currentQuantUserId(c))
   return c.json({ success: true as const, data: state ?? null })
 })
 
 quantRoutes.post('/sync', validator('json', QuantSyncSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  await ensureQuantStarterWatchlist(c.get('db'), userId)
   const input = c.req.valid('json')
   const result = await syncQuantDaily(c.get('db'), c.env, {
     ...(input.from_date ? { fromDate: input.from_date } : {}),
     ...(input.to_date ? { toDate: input.to_date } : {}),
     ...(input.ts_codes ? { tsCodes: input.ts_codes } : {}),
-  })
+  }, { userId })
   const status = result.status === 'rejected' ? 409 : 200
   return c.json({ success: result.status !== 'rejected', data: result }, status)
 })

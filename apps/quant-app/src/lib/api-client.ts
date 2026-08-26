@@ -7,6 +7,8 @@ import type {
   CapabilitiesResponse,
   CapabilityKey,
   DailyBar,
+  QuantAiConfig,
+  QuantAiProvider,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -15,7 +17,11 @@ import type {
   QuantKnowledgeFactor,
   QuantKnowledgeSource,
   QuantProviderName,
+  QuantResearchEvidence,
   QuantResearchMarker,
+  QuantResearchReport,
+  QuantResearchRun,
+  QuantResearchSource,
   QuantShareholderReturnDistribution,
   QuantShareholderReturnItem,
   QuantShareholderReturnSelection,
@@ -47,6 +53,14 @@ export interface DailyBarQuery {
   from?: string
   to?: string
   limit?: number
+}
+
+export interface UpdateAiConfigInput {
+  provider: QuantAiProvider
+  model: string
+  baseUrl?: string | null
+  apiKey?: string
+  clearApiKey?: boolean
 }
 
 export class QuantApiError extends Error {
@@ -207,6 +221,31 @@ function parseCapabilities(payload: unknown): CapabilitiesResponse {
     }
   })
   return { tier, provider, enabled, capabilities }
+}
+
+function parseAiConfig(payload: unknown): QuantAiConfig | null {
+  const data = unwrapData(payload)
+  if (data === null)
+    return null
+  if (!isRecord(data))
+    throw new QuantApiError('AI 配置数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const provider = readString(data, 'provider')
+  if (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    throw new QuantApiError('AI provider 数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const id = readString(data, 'id')
+  const model = readString(data, 'model')
+  if (!id || !model)
+    throw new QuantApiError('AI 配置数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  return {
+    id,
+    provider,
+    model,
+    baseUrl: readString(data, 'baseUrl', 'base_url'),
+    hasApiKey: data.hasApiKey === true || data.has_api_key === true,
+    apiKeyHint: readString(data, 'apiKeyHint', 'api_key_hint'),
+    createdAt: readString(data, 'createdAt', 'created_at'),
+    updatedAt: readString(data, 'updatedAt', 'updated_at'),
+  }
 }
 
 function parseKnowledgeSource(value: unknown): QuantKnowledgeSource | null {
@@ -370,6 +409,113 @@ function parseResearchMarkers(payload: unknown): QuantResearchMarker[] {
   return readList(data, 'items', 'markers', 'research').flatMap((value) => {
     const marker = parseResearchMarker(value)
     return marker ? [marker] : []
+  })
+}
+
+function parseResearchEvidence(value: unknown): QuantResearchEvidence | null {
+  if (!isRecord(value))
+    return null
+  const key = readString(value, 'key')
+  const label = readString(value, 'label')
+  if (!key || !label)
+    return null
+  const status = readString(value, 'status')
+  const normalizedStatus: QuantResearchEvidence['status'] = status === 'pass' || status === 'caution' || status === 'fail' ? status : 'missing'
+  return {
+    key,
+    dimension: readString(value, 'dimension') || 'unknown',
+    label,
+    status: normalizedStatus,
+    value: readNumber(value, 'value', 'numericValue', 'numeric_value'),
+    threshold: readString(value, 'threshold') || '--',
+    source: readString(value, 'source') || '未记录',
+    observedAt: readString(value, 'observedAt', 'observed_at'),
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'unknown',
+    detail: readString(value, 'detail') || '',
+    optional: value.optional === true,
+  }
+}
+
+function parseResearchSource(value: unknown): QuantResearchSource | null {
+  if (!isRecord(value))
+    return null
+  const id = readString(value, 'id')
+  const name = readString(value, 'name')
+  if (!id || !name)
+    return null
+  return {
+    id,
+    name,
+    observedAt: readString(value, 'observedAt', 'observed_at'),
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'unknown',
+  }
+}
+
+function parseResearchReport(value: unknown): QuantResearchReport | null {
+  if (!isRecord(value))
+    return null
+  const reportVersion = readString(value, 'reportVersion', 'report_version')
+  const tsCode = readString(value, 'tsCode', 'ts_code')
+  const generatedAt = readString(value, 'generatedAt', 'generated_at')
+  if (!reportVersion || !tsCode || !generatedAt)
+    return null
+  const status = readString(value, 'status')
+  const action = readString(value, 'action')
+  const normalizedAction: QuantResearchReport['action'] = action === 'research-window' || action === 'wait-confirmation' || action === 'reassess' ? action : 'complete-data'
+  const evidence = readList(value, 'evidence', 'items').flatMap((item) => {
+    const parsed = parseResearchEvidence(item)
+    return parsed ? [parsed] : []
+  })
+  const sources = readList(value, 'sources').flatMap((item) => {
+    const parsed = parseResearchSource(item)
+    return parsed ? [parsed] : []
+  })
+  return {
+    reportVersion,
+    tsCode,
+    name: readString(value, 'name'),
+    generatedAt,
+    sourceSnapshotId: readString(value, 'sourceSnapshotId', 'source_snapshot_id'),
+    status: status === 'ready' || status === 'partial' ? status : 'insufficient_data',
+    action: normalizedAction,
+    score: readNumber(value, 'score'),
+    headline: readString(value, 'headline') || '',
+    strengths: readStringList(value, 'strengths'),
+    risks: readStringList(value, 'risks'),
+    gaps: readStringList(value, 'gaps'),
+    nextActions: readStringList(value, 'nextActions', 'next_actions'),
+    evidence,
+    sources,
+  }
+}
+
+function parseResearchRun(value: unknown): QuantResearchRun | null {
+  if (!isRecord(value))
+    return null
+  const id = readString(value, 'id')
+  const tsCode = readString(value, 'tsCode', 'ts_code')
+  const report = parseResearchReport(value.report)
+  if (!id || !tsCode || !report)
+    return null
+  const status = readString(value, 'status')
+  return {
+    id,
+    tsCode,
+    name: readString(value, 'name'),
+    status: status === 'ready' || status === 'partial' ? status : 'insufficient_data',
+    reportVersion: readString(value, 'reportVersion', 'report_version') || report.reportVersion,
+    sourceSnapshotId: readString(value, 'sourceSnapshotId', 'source_snapshot_id'),
+    generatedAt: readString(value, 'generatedAt', 'generated_at'),
+    createdAt: readString(value, 'createdAt', 'created_at'),
+    report,
+  }
+}
+
+function parseResearchRuns(payload: unknown): QuantResearchRun[] {
+  const data = unwrapData(payload)
+  return readList(data, 'items', 'runs', 'researchRuns', 'research_runs').flatMap((value) => {
+    const run = parseResearchRun(value)
+    return run ? [run] : []
   })
 }
 
@@ -888,6 +1034,31 @@ export const quantApi = {
     return parseInvestmentKnowledge(await requestJson('/knowledge'))
   },
 
+  async getAiConfig(): Promise<QuantAiConfig | null> {
+    return parseAiConfig(await requestJson('/ai-config'))
+  },
+
+  async updateAiConfig(input: UpdateAiConfigInput): Promise<QuantAiConfig> {
+    const config = parseAiConfig(await requestJson('/ai-config', {
+      method: 'PUT',
+      body: JSON.stringify({
+        provider: input.provider,
+        model: input.model,
+        base_url: input.baseUrl,
+        api_key: input.apiKey,
+        clear_api_key: input.clearApiKey,
+      }),
+    }))
+    if (!config)
+      throw new QuantApiError('AI 配置数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+    return config
+  },
+
+  async deleteAiConfig(): Promise<boolean> {
+    const data = unwrapData(await requestJson('/ai-config', { method: 'DELETE' }))
+    return isRecord(data) && data.deleted === true
+  },
+
   async getWatchlist(): Promise<WatchlistItem[]> {
     return parseWatchlist(await requestJson('/watchlist'))
   },
@@ -898,6 +1069,20 @@ export const quantApi = {
 
   async getResearchMarkers(): Promise<QuantResearchMarker[]> {
     return parseResearchMarkers(await requestJson('/research'))
+  },
+
+  async generateResearchRun(tsCode: string): Promise<QuantResearchRun> {
+    const run = parseResearchRun(unwrapData(await requestJson('/research/runs', {
+      method: 'POST',
+      body: JSON.stringify({ ts_code: tsCode }),
+    })))
+    if (!run)
+      throw new QuantApiError('研究报告数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+    return run
+  },
+
+  async getResearchRuns(tsCode: string, limit = 5): Promise<QuantResearchRun[]> {
+    return parseResearchRuns(await requestJson(`/research/runs/${encodeURIComponent(tsCode)}?limit=${encodeURIComponent(String(limit))}`))
   },
 
   async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {

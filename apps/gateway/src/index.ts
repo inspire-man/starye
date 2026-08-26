@@ -10,6 +10,7 @@ import type { CloudflareOptions } from '@sentry/cloudflare'
 import * as Sentry from '@sentry/cloudflare'
 import { createCachedProxy } from './cache-middleware'
 import { checkDashboardAuth } from './dashboard-guard'
+import { checkQuantAuth } from './quant-guard'
 
 interface Env {
   API_ORIGIN?: string
@@ -228,17 +229,16 @@ const gatewayHandler = {
       return cachedProxy(request, target, undefined, proxyCacheOptions)
     }
 
-    // 2. Quant App (不缓存，复用 Dashboard 前置鉴权)
+    // 2. Quant App (不缓存，只要求登录，不要求管理员角色)
     if (path === '/quant' || path.startsWith('/quant/')) {
       if (path === '/quant') {
         return Response.redirect(`${url.origin}/quant/`, 301)
       }
 
-      const authResult = await checkDashboardAuth(request, env)
+      const authResult = await checkQuantAuth(request, env)
       if (!authResult.allowed) {
         const next = encodeURIComponent(url.pathname + url.search)
-        const errorParam = authResult.reason === 'not_admin' ? '&error=not_admin' : ''
-        return Response.redirect(`${url.origin}/auth/login?next=${next}${errorParam}`, 302)
+        return Response.redirect(`${url.origin}/auth/login?next=${next}`, 302)
       }
 
       if (!isLocal && !env.QUANT_ORIGIN) {

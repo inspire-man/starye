@@ -211,8 +211,50 @@ export const QuantCapabilitiesResponseSchema = v.object({
   }),
 })
 
+export const QuantAiProviderSchema = v.picklist(['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'])
+
+export const QuantAiConfigSchema = v.object({
+  id: v.string(),
+  provider: QuantAiProviderSchema,
+  model: v.string(),
+  baseUrl: v.nullable(v.string()),
+  hasApiKey: v.boolean(),
+  apiKeyHint: v.nullable(v.string()),
+  createdAt: v.union([v.string(), v.date()]),
+  updatedAt: v.union([v.string(), v.date()]),
+})
+
+export const QuantAiConfigResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.nullable(QuantAiConfigSchema),
+})
+
+export const QuantAiConfigUpdateSchema = v.object({
+  provider: QuantAiProviderSchema,
+  model: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  base_url: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2048)))),
+  api_key: v.optional(v.pipe(v.string(), v.maxLength(1024))),
+  clear_api_key: v.optional(v.boolean()),
+})
+
+export const QuantAiConfigDeleteResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({ deleted: v.boolean() }),
+})
+
+export const QuantResearchRunCreateSchema = v.object({
+  ts_code: QuantTsCodeSchema,
+})
+
+export const QuantResearchRunsQuerySchema = v.object({
+  limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
+})
+
 export type QuantWatchlistCreate = v.InferOutput<typeof QuantWatchlistCreateSchema>
 export type QuantWatchlistUpdate = v.InferOutput<typeof QuantWatchlistUpdateSchema>
 export type QuantResearchMarkerUpdate = v.InferOutput<typeof QuantResearchMarkerUpdateSchema>
 export type QuantDailyQuery = v.InferOutput<typeof QuantDailyQuerySchema>
 export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>
+export type QuantAiConfigUpdate = v.InferOutput<typeof QuantAiConfigUpdateSchema>
+export type QuantResearchRunCreate = v.InferOutput<typeof QuantResearchRunCreateSchema>
+export type QuantResearchRunsQuery = v.InferOutput<typeof QuantResearchRunsQuerySchema>

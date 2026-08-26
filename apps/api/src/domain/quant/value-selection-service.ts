@@ -42,13 +42,14 @@ function providerErrorCode(error: unknown): string {
 
 export async function readQuantValueSelection(
   db: Database,
+  userId: string,
   providers: QuantValueSelectionProviders,
   now: () => Date = () => new Date(),
 ): Promise<ValueQualityBatchResult> {
   const observedAt = now().toISOString()
   const [watchlist, snapshot] = await Promise.all([
-    listQuantWatchlist(db),
-    getLatestQuantScanSnapshot(db),
+    listQuantWatchlist(db, userId),
+    getLatestQuantScanSnapshot(db, userId),
   ])
   if (watchlist.length === 0)
     return buildValueQualityBatch([], observedAt)

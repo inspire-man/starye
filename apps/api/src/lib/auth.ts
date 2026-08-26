@@ -64,6 +64,7 @@ export interface Env {
   TUSHARE_TIMEOUT_MS?: string
   EASTMONEY_BASE_URL?: string
   EASTMONEY_TIMEOUT_MS?: string
+  QUANT_AI_ENCRYPTION_KEY?: string
   ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单
   SENTRY_DSN?: string
   SENTRY_RELEASE?: string

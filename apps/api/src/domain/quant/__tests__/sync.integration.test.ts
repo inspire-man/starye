@@ -14,6 +14,9 @@ import { QUANT_SYNC_PROVIDER_CONCURRENCY, QUANT_SYNC_PROVIDER_TIMEOUT_MS, syncQu
 const migrationPath = new URL('../../../../../../packages/db/drizzle/0036_quant_workbench.sql', import.meta.url)
 const leaseMigrationPath = new URL('../../../../../../packages/db/drizzle/0037_quant_sync_lease.sql', import.meta.url)
 const seedMigrationPath = new URL('../../../../../../packages/db/drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
+const researchMigrationPath = new URL('../../../../../../packages/db/drizzle/0039_quant_research_marker.sql', import.meta.url)
+const userScopeMigrationPath = new URL('../../../../../../packages/db/drizzle/0041_quant_user_scope.sql', import.meta.url)
+const TEST_USER_ID = 'user-1'
 
 function fixtureBars(tsCode: string, offset = 0): readonly DailyBar[] {
   return Array.from({ length: 20 }, (_, index) => {
@@ -48,7 +51,9 @@ function deferred<T>(): { promise: Promise<T>, resolve: (value: T) => void } {
 
 async function createQuantDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath]) {
+  await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
+  await client.execute(`INSERT INTO user (id, created_at) VALUES ('${TEST_USER_ID}', 1)`)
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -61,7 +66,7 @@ describe('quant daily sync integration', () => {
   it('upserts repeated daily responses and persists a completed snapshot', async () => {
     const { client, db } = await createQuantDatabase()
     const tsCode = '000001.SZ'
-    await createQuantWatchlistItem(db, { tsCode, name: '平安银行' })
+    await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode, name: '平安银行' })
     const provider: TushareProvider = {
       isConfigured: true,
       request: vi.fn(),
@@ -69,10 +74,12 @@ describe('quant daily sync integration', () => {
     }
 
     const first = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, {
+      userId: TEST_USER_ID,
       provider,
       now: () => new Date('2026-08-21T00:00:00.000Z'),
     })
     const second = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, {
+      userId: TEST_USER_ID,
       provider,
       now: () => new Date('2026-08-21T00:00:00.000Z'),
     })
@@ -82,7 +89,42 @@ describe('quant daily sync integration', () => {
     expect(second.status).toBe('completed')
     expect(await client.execute('SELECT count(*) AS count FROM quant_daily_bar')).toMatchObject({ rows: [{ count: 20 }] })
     expect(await client.execute('SELECT count(*) AS count FROM quant_scan_snapshot')).toMatchObject({ rows: [{ count: 2 }] })
-    expect(await client.execute('SELECT status, written_count FROM quant_sync_state WHERE id = \'daily\'')).toMatchObject({ rows: [{ status: 'completed', written_count: 20 }] })
+    expect(await client.execute('SELECT status, written_count FROM quant_sync_state WHERE id = \'daily:user-1\'')).toMatchObject({ rows: [{ status: 'completed', written_count: 20 }] })
+  })
+
+  it('keeps user sync states independent while sharing daily-bar facts', async () => {
+    const { client, db } = await createQuantDatabase()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const tsCode = '000001.SZ'
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode, name: '平安银行' })
+    await createQuantWatchlistItem(db, { userId: 'user-2', tsCode, name: '平安银行' })
+    const provider: TushareProvider = {
+      isConfigured: true,
+      request: vi.fn(),
+      fetchDaily: vi.fn().mockResolvedValue(fixtureBars(tsCode)),
+    }
+
+    await expect(syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, {
+      userId: 'user-1',
+      provider,
+      now: () => new Date('2026-08-21T00:00:00.000Z'),
+    })).resolves.toMatchObject({ status: 'completed' })
+    await expect(syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, {
+      userId: 'user-2',
+      provider,
+      now: () => new Date('2026-08-21T00:01:00.000Z'),
+    })).resolves.toMatchObject({ status: 'completed' })
+
+    await expect(client.execute('SELECT count(*) AS count FROM quant_daily_bar')).resolves.toMatchObject({ rows: [{ count: 20 }] })
+    await expect(client.execute('SELECT user_id, count(*) AS count FROM quant_scan_snapshot GROUP BY user_id ORDER BY user_id')).resolves.toMatchObject({
+      rows: [{ user_id: 'user-1', count: 1 }, { user_id: 'user-2', count: 1 }],
+    })
+    await expect(client.execute('SELECT id, user_id, status FROM quant_sync_state ORDER BY user_id')).resolves.toMatchObject({
+      rows: [
+        { id: 'daily:user-1', user_id: 'user-1', status: 'completed' },
+        { id: 'daily:user-2', user_id: 'user-2', status: 'completed' },
+      ],
+    })
   })
 
   it('limits provider concurrency while preserving request order in the snapshot', async () => {
@@ -97,7 +139,7 @@ describe('quant daily sync integration', () => {
       '000007.SZ',
     ]
     for (const tsCode of requestedCodes)
-      await createQuantWatchlistItem(db, { tsCode })
+      await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode })
 
     let activeRequests = 0
     let maxActiveRequests = 0
@@ -118,6 +160,7 @@ describe('quant daily sync integration', () => {
     }
 
     const result = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, { tsCodes: requestedCodes }, {
+      userId: TEST_USER_ID,
       provider,
       now: () => new Date('2026-08-21T00:00:00.000Z'),
     })
@@ -135,7 +178,7 @@ describe('quant daily sync integration', () => {
     const { client, db } = await createQuantDatabase()
     const requestedCodes = ['000003.SZ', '000001.SZ', '000002.SZ', '000004.SZ']
     for (const tsCode of requestedCodes)
-      await createQuantWatchlistItem(db, { tsCode })
+      await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode })
 
     const provider: TushareProvider = {
       isConfigured: true,
@@ -155,6 +198,7 @@ describe('quant daily sync integration', () => {
     }
 
     const result = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, { tsCodes: requestedCodes }, {
+      userId: TEST_USER_ID,
       provider,
       now: () => new Date('2026-08-21T00:00:00.000Z'),
     })
@@ -179,7 +223,7 @@ describe('quant daily sync integration', () => {
     const { client, db } = await createQuantDatabase()
     const requestedCodes = ['000001.SZ', '000002.SZ']
     for (const tsCode of requestedCodes)
-      await createQuantWatchlistItem(db, { tsCode })
+      await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode })
 
     const provider: TushareProvider = {
       isConfigured: true,
@@ -188,6 +232,7 @@ describe('quant daily sync integration', () => {
     }
 
     const result = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, { tsCodes: requestedCodes }, {
+      userId: TEST_USER_ID,
       provider,
       now: () => new Date('2026-08-21T00:00:00.000Z'),
     })
@@ -202,7 +247,7 @@ describe('quant daily sync integration', () => {
       candidates: [],
     })
     expect(await client.execute('SELECT count(*) AS count FROM quant_scan_snapshot')).toMatchObject({ rows: [{ count: 0 }] })
-    expect(await client.execute('SELECT status, skipped_count FROM quant_sync_state WHERE id = \'daily\'')).toMatchObject({
+    expect(await client.execute('SELECT status, skipped_count FROM quant_sync_state WHERE id = \'daily:user-1\'')).toMatchObject({
       rows: [{ status: 'rejected', skipped_count: 2 }],
     })
   })
@@ -210,7 +255,7 @@ describe('quant daily sync integration', () => {
   it('rejects an overlapping sync before calling its provider', async () => {
     const { client, db } = await createQuantDatabase()
     const tsCode = '000001.SZ'
-    await createQuantWatchlistItem(db, { tsCode })
+    await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode })
     const providerStarted = deferred<void>()
     const providerResult = deferred<readonly DailyBar[]>()
     const provider: TushareProvider = {
@@ -222,10 +267,10 @@ describe('quant daily sync integration', () => {
       }),
     }
     const now = () => new Date('2026-08-21T00:00:00.000Z')
-    const first = syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, { provider, now })
+    const first = syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, { userId: TEST_USER_ID, provider, now })
     await providerStarted.promise
 
-    await expect(syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, { provider, now })).rejects.toMatchObject({
+    await expect(syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, { userId: TEST_USER_ID, provider, now })).rejects.toMatchObject({
       code: 'QUANT_SYNC_IN_PROGRESS',
       status: 409,
     })
@@ -233,7 +278,7 @@ describe('quant daily sync integration', () => {
 
     providerResult.resolve(fixtureBars(tsCode))
     await expect(first).resolves.toMatchObject({ status: 'completed' })
-    expect(await client.execute('SELECT status, run_id, lease_expires_at FROM quant_sync_state WHERE id = \'daily\'')).toMatchObject({
+    expect(await client.execute('SELECT status, run_id, lease_expires_at FROM quant_sync_state WHERE id = \'daily:user-1\'')).toMatchObject({
       rows: [{ status: 'completed', lease_expires_at: null }],
     })
   })
@@ -241,7 +286,7 @@ describe('quant daily sync integration', () => {
   it('lets a stale lease be taken over without accepting the old run result', async () => {
     const { client, db } = await createQuantDatabase()
     const tsCode = '000001.SZ'
-    await createQuantWatchlistItem(db, { tsCode })
+    await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode })
     const providerStarted = deferred<void>()
     const oldProviderResult = deferred<readonly DailyBar[]>()
     let calls = 0
@@ -258,20 +303,21 @@ describe('quant daily sync integration', () => {
       }),
     }
     const oldNow = () => new Date('2026-08-21T00:00:00.000Z')
-    const oldRun = syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, { provider, now: oldNow })
+    const oldRun = syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, { userId: TEST_USER_ID, provider, now: oldNow })
     await providerStarted.promise
 
     const newResult = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, {
+      userId: TEST_USER_ID,
       provider,
       now: () => new Date('2026-08-21T00:02:01.000Z'),
     })
     expect(newResult.status).toBe('completed')
-    const stateAfterTakeover = await client.execute('SELECT status, run_id, snapshot_id FROM quant_sync_state WHERE id = \'daily\'')
+    const stateAfterTakeover = await client.execute('SELECT status, run_id, snapshot_id FROM quant_sync_state WHERE id = \'daily:user-1\'')
 
     oldProviderResult.resolve(fixtureBars(tsCode, 100))
     await expect(oldRun).rejects.toMatchObject({ code: 'QUANT_SYNC_REJECTED', status: 409 })
 
-    expect(await client.execute('SELECT status, run_id, snapshot_id FROM quant_sync_state WHERE id = \'daily\'')).toEqual(stateAfterTakeover)
+    expect(await client.execute('SELECT status, run_id, snapshot_id FROM quant_sync_state WHERE id = \'daily:user-1\'')).toEqual(stateAfterTakeover)
     expect(await client.execute('SELECT count(*) AS count FROM quant_scan_snapshot')).toMatchObject({ rows: [{ count: 1 }] })
     expect(await client.execute('SELECT close FROM quant_daily_bar WHERE ts_code = \'000001.SZ\' AND trade_date = \'20260820\'')).toMatchObject({
       rows: [{ close: 20 }],
@@ -283,7 +329,7 @@ describe('quant daily sync integration', () => {
     const { client, db } = await createQuantDatabase()
     const requestedCodes = Array.from({ length: 10 }, (_, index) => `0000${String(index + 1).padStart(2, '0')}.SZ`)
     for (const tsCode of requestedCodes)
-      await createQuantWatchlistItem(db, { tsCode })
+      await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode })
 
     const provider: TushareProvider = {
       isConfigured: true,
@@ -296,6 +342,7 @@ describe('quant daily sync integration', () => {
     }
 
     const result = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, { tsCodes: requestedCodes }, {
+      userId: TEST_USER_ID,
       provider,
       totalDeadlineMs: 20,
       now: () => new Date('2026-08-21T00:00:00.000Z'),
@@ -312,7 +359,7 @@ describe('quant daily sync integration', () => {
       reason: 'QUANT_SYNC_DEADLINE',
     })
     expect(await client.execute('SELECT count(*) AS count FROM quant_daily_bar')).toMatchObject({ rows: [{ count: 20 }] })
-    expect(await client.execute('SELECT status, skipped_count FROM quant_sync_state WHERE id = \'daily\'')).toMatchObject({
+    expect(await client.execute('SELECT status, skipped_count FROM quant_sync_state WHERE id = \'daily:user-1\'')).toMatchObject({
       rows: [{ status: 'partial', skipped_count: 9 }],
     })
   })
@@ -320,7 +367,7 @@ describe('quant daily sync integration', () => {
   it('retains only the latest 30 valid snapshots without deleting daily bars', async () => {
     const { client, db } = await createQuantDatabase()
     const tsCode = '000001.SZ'
-    await createQuantWatchlistItem(db, { tsCode })
+    await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode })
     const provider: TushareProvider = {
       isConfigured: true,
       request: vi.fn(),
@@ -330,7 +377,7 @@ describe('quant daily sync integration', () => {
     let lastResult: Awaited<ReturnType<typeof syncQuantDaily>> | undefined
     for (let index = 0; index < 31; index++) {
       const now = new Date(Date.UTC(2026, 7, 21, 0, 0, index))
-      lastResult = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, { provider, now: () => now })
+      lastResult = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, { userId: TEST_USER_ID, provider, now: () => now })
     }
 
     expect(lastResult?.status).toBe('completed')
@@ -339,7 +386,7 @@ describe('quant daily sync integration', () => {
       rows: [{ id: lastResult?.snapshotId }],
     })
     expect(await client.execute('SELECT count(*) AS count FROM quant_daily_bar')).toMatchObject({ rows: [{ count: 20 }] })
-    expect(await client.execute('SELECT snapshot_id FROM quant_sync_state WHERE id = \'daily\'')).toMatchObject({
+    expect(await client.execute('SELECT snapshot_id FROM quant_sync_state WHERE id = \'daily:user-1\'')).toMatchObject({
       rows: [{ snapshot_id: lastResult?.snapshotId }],
     })
   })
@@ -350,6 +397,7 @@ describe('quant daily sync integration', () => {
     const runId = 'expired-run'
 
     await expect(acquireQuantSyncLease(db, {
+      userId: TEST_USER_ID,
       runId,
       fromDate: '20260801',
       toDate: '20260821',
@@ -358,6 +406,7 @@ describe('quant daily sync integration', () => {
     })).resolves.toBe(true)
 
     await expect(saveQuantSyncState(db, {
+      userId: TEST_USER_ID,
       status: 'completed',
       runId,
       fromDate: '20260801',
@@ -369,7 +418,7 @@ describe('quant daily sync integration', () => {
       completedAt: new Date(startedAt.getTime() + 120_001),
     })).resolves.toBe(false)
 
-    await expect(client.execute('SELECT status, run_id FROM quant_sync_state WHERE id = \'daily\'')).resolves.toMatchObject({
+    await expect(client.execute('SELECT status, run_id FROM quant_sync_state WHERE id = \'daily:user-1\'')).resolves.toMatchObject({
       rows: [{ status: 'running', run_id: runId }],
     })
   })

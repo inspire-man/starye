@@ -90,4 +90,3 @@ describe('buildTimingWindow', () => {
     expect(result.metrics.find(metric => metric.key === 'ma20-gap')).toMatchObject({ status: 'pass' })
   })
 })
-

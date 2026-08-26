@@ -115,7 +115,7 @@ describe('selection presets', () => {
     }, statuses).map(item => item.tsCode)).toEqual(['601899.SH'])
   })
 
-  it('sorts research priority by status, review date, and signal score', () => {
+  it('sorts research priority by action, review date, and signal score', () => {
     const items = [
       candidate({ id: 'candidate-1', tsCode: '601899.SH', score: 3 }),
       candidate({ id: 'candidate-2', tsCode: '600089.SH', score: 4 }),

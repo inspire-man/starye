@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
-import type { CandidateActionMeta } from './lib/candidate-action'
 import type { DecisionEvidenceStatus } from './lib/decision-evidence'
 import type {
   CandidateItem,
@@ -12,7 +11,9 @@ import type {
   QuantFinancialQualitySnapshot,
   QuantInvestmentKnowledge,
   QuantKnowledgeFactor,
+  QuantResearchEvidence,
   QuantResearchMarker,
+  QuantResearchRun,
   QuantShareholderReturnItem,
   QuantShareholderReturnSelection,
   QuantValuationComparison,
@@ -26,6 +27,7 @@ import type {
   WatchlistItem,
 } from './lib/quant-types'
 import type { QuantView } from './lib/quant-view'
+import type { ResearchPriority, ResearchPriorityValueQuality } from './lib/research-priority'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
 import type { TimingHistoryBucket } from './lib/timing-history'
@@ -56,12 +58,13 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
-import { getCandidateAction } from './lib/candidate-action'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
-import { getResearchReviewMeta, getReviewDueRank, getTodayDate } from './lib/research-review'
+import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
+import { getResearchReviewMeta, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
 import { buildTimingHistory } from './lib/timing-history'
@@ -83,6 +86,10 @@ const valueSelection = ref<QuantValueSelection | null>(null)
 const shareholderReturns = ref<QuantShareholderReturnSelection | null>(null)
 const investmentKnowledge = ref<QuantInvestmentKnowledge | null>(null)
 const researchMarkers = ref<QuantResearchMarker[]>([])
+const researchRuns = ref<QuantResearchRun[]>([])
+const researchRunLoading = ref(false)
+const researchRunGenerating = ref(false)
+const researchRunError = ref<unknown | null>(null)
 const selectedCandidateIds = ref<Set<string>>(new Set())
 const comparisonDrawerOpen = ref(false)
 const comparisonLoading = ref(false)
@@ -100,10 +107,12 @@ const watchCode = ref('')
 const watchName = ref('')
 const syncResult = ref<SyncResult | null>(null)
 const detailDrawerOpen = ref(false)
+const aiSettingsOpen = ref(false)
 let valuationRequestId = 0
 let financialRequestId = 0
 let valueQualityRequestId = 0
 let shareholderReturnRequestId = 0
+let researchRunRequestId = 0
 const loading = reactive({
   watchlist: false,
   candidates: false,
@@ -135,7 +144,7 @@ const activeView = ref<QuantView>('overview')
 const candidateFilter = ref<SelectionPresetKey>('balanced')
 const candidateMinScore = ref(0)
 const candidateCompleteOnly = ref(false)
-const candidateSort = ref<CandidateSortKey>('score')
+const candidateSort = ref<CandidateSortKey>('researchPriority')
 const candidateResearchStatus = ref<CandidateResearchStatus>('all')
 const candidateReviewDue = ref<CandidateReviewFilter>('all')
 const candidateFilterOptions = [
@@ -194,6 +203,8 @@ const viewCopy: Record<QuantView, { eyebrow: string, title: string, subtitle: st
 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
+const valueQualityMap = computed(() => new Map(valueSelection.value?.items.map(item => [item.tsCode, item]) || []))
+const valueQualityResultsLoaded = computed(() => Boolean(valueSelection.value && !loading.valueQuality && !errors.valueQuality))
 const activeCandidatePreset = computed(() => candidateFilterOptions.find(option => option.key === candidateFilter.value) || candidateFilterOptions[0])
 const todayDate = computed(() => getTodayDate())
 const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateItems.value, {
@@ -204,11 +215,23 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
   researchStatus: candidateResearchStatus.value,
   reviewDue: candidateReviewDue.value,
   valueQualityByCode: new Map(valueSelection.value?.items.map(item => [item.tsCode, item.score]) || []),
+  valueQualityDetailsByCode: valueQualityResultsLoaded.value
+    ? new Map<string, ResearchPriorityValueQuality | null>(candidateItems.value.map((item) => {
+        const value = valueQualityMap.value.get(item.tsCode)
+        return [item.tsCode, value
+          ? {
+              status: value.status,
+              score: value.score,
+              riskDeduction: value.riskDeduction,
+            }
+          : null]
+      }))
+    : undefined,
 }, new Map<string, CandidateResearchMetadata>(researchMarkers.value.map(marker => [marker.tsCode, {
   status: marker.status,
   reviewDate: marker.reviewDate,
 }])), todayDate.value))
-const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'score' || candidateResearchStatus.value !== 'all' || candidateReviewDue.value !== 'all')
+const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'researchPriority' || candidateResearchStatus.value !== 'all' || candidateReviewDue.value !== 'all')
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
 const overallError = computed(() => errors.watchlist || errors.candidates || errors.research || errors.action)
@@ -218,16 +241,26 @@ const latestDate = computed(() => {
   return formatTradeDate(dates.at(-1) || snapshot.value?.toDate || null)
 })
 const selectedCandidate = computed(() => candidateItems.value.find(item => item.tsCode === selectedTsCode.value) || null)
-const valueQualityMap = computed(() => new Map(valueSelection.value?.items.map(item => [item.tsCode, item]) || []))
 const selectedValueQuality = computed(() => valueQualityMap.value.get(selectedTsCode.value || '') || null)
 const shareholderReturnMap = computed(() => new Map(shareholderReturns.value?.items.map(item => [item.tsCode, item]) || []))
 const selectedShareholderReturn = computed(() => shareholderReturnMap.value.get(selectedTsCode.value || '') || null)
+const latestResearchRun = computed(() => researchRuns.value[0] || null)
+const latestResearchReport = computed(() => latestResearchRun.value?.report || null)
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
 const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
 const mappedKnowledgeAliases = computed(() => investmentKnowledge.value?.aliases.filter(alias => alias.status === 'mapped') || [])
 const contextKnowledgeAliases = computed(() => investmentKnowledge.value?.aliases.filter(alias => alias.status !== 'mapped') || [])
 const researchMarkerMap = computed(() => new Map(researchMarkers.value.map(marker => [marker.tsCode, marker])))
+const researchPriorityMap = computed<Map<string, ResearchPriority>>(() => new Map(candidateItems.value.map((item) => {
+  const marker = researchMarkerMap.value.get(item.tsCode)
+  return [item.tsCode, buildResearchPriority({
+    candidate: item,
+    metadata: marker ? { status: marker.status, reviewDate: marker.reviewDate } : undefined,
+    valueQuality: valueQualityResultsLoaded.value ? valueQualityMap.value.get(item.tsCode) || null : undefined,
+    today: todayDate.value,
+  })]
+})))
 const researchReviewMap = computed(() => new Map(researchMarkers.value.map(marker => [marker.tsCode, getResearchReviewMeta(marker.reviewDate, todayDate.value)])))
 const selectedResearchMarker = computed<QuantResearchMarker>(() => researchMarkerMap.value.get(selectedTsCode.value || '') || {
   tsCode: selectedTsCode.value || '',
@@ -259,22 +292,15 @@ const activeViewCopy = computed(() => viewCopy[activeView.value])
 const pendingCandidateCount = computed(() => candidateItems.value.filter(item => item.pendingSync).length)
 const scannedCandidateCount = computed(() => candidateItems.value.length - pendingCandidateCount.value)
 const topCandidates = computed(() => [...candidateItems.value]
-  .sort((left, right) => (right.score ?? -1) - (left.score ?? -1))
+  .sort((left, right) => compareResearchPriorities(candidatePriorityFor(left), candidatePriorityFor(right)))
   .slice(0, 3))
-const reviewQueueItems = computed(() => researchMarkers.value
-  .flatMap((marker) => {
-    const stock = watchlist.value.find(item => item.tsCode === marker.tsCode)
-    return stock ? [{ marker, stock, review: researchReviewMap.value.get(marker.tsCode) || getResearchReviewMeta(null, todayDate.value) }] : []
-  })
-  .filter(item => item.marker.status !== 'excluded' && ['overdue', 'today', 'upcoming'].includes(item.review.state))
-  .sort((left, right) => {
-    const dueRank = getReviewDueRank(left.review.state) - getReviewDueRank(right.review.state)
-    if (dueRank !== 0)
-      return dueRank
-    return (left.review.date || '9999-12-31').localeCompare(right.review.date || '9999-12-31') || left.stock.tsCode.localeCompare(right.stock.tsCode)
-  }))
-const reviewQueueTotal = computed(() => reviewQueueItems.value.length)
-const visibleReviewQueue = computed(() => reviewQueueItems.value.slice(0, 5))
+const researchPriorityQueueItems = computed(() => [...candidateItems.value]
+  .map(item => ({ item, priority: candidatePriorityFor(item) }))
+  .sort((left, right) => compareResearchPriorities(left.priority, right.priority) || left.item.tsCode.localeCompare(right.item.tsCode)))
+const researchPriorityTotal = computed(() => researchPriorityQueueItems.value.length)
+const visibleResearchPriorityQueue = computed(() => researchPriorityQueueItems.value.slice(0, 5))
+const researchPrioritySummary = computed(() => summarizeResearchPriorities(researchPriorityQueueItems.value.map(item => item.priority)))
+const researchPriorityHighestLabel = computed(() => visibleResearchPriorityQueue.value[0]?.priority.levelLabel || '暂无')
 const hasValuationData = computed(() => Boolean(valuation.value && [
   valuation.value.dynamicPe,
   valuation.value.peTtm,
@@ -420,6 +446,7 @@ const watchlistColumns: Column<WatchlistItem>[] = [
 const candidateColumns: Column<CandidateItem>[] = [
   { key: 'tsCode', label: '代码', minWidth: '115px' },
   { key: 'name', label: '名称', minWidth: '100px', render: item => displayStockName(item) },
+  { key: 'priority', label: '研究优先', width: '104px', minWidth: '98px' },
   { key: 'score', label: '信号分', width: '78px', render: item => formatNumber(item.score) },
   { key: 'persistence', label: '信号持续', width: '118px', minWidth: '110px' },
   { key: 'return20', label: '20日表现', width: '86px', render: item => formatPercent(item.return20) },
@@ -616,6 +643,55 @@ function decisionEvidenceStatusClass(status: DecisionEvidenceStatus): string {
 
 function decisionEvidenceActionClass(action: string): string {
   return `decision-evidence-action-${action}`
+}
+
+function researchRunStatusLabel(status: QuantResearchRun['status']): string {
+  return { ready: '证据完整', partial: '部分可用', insufficient_data: '数据不足' }[status]
+}
+
+function researchRunStatusClass(status: QuantResearchRun['status']): string {
+  return `research-run-status-${status}`
+}
+
+function researchRunActionLabel(action: QuantResearchRun['report']['action']): string {
+  return {
+    'research-window': '进入研究窗口',
+    'wait-confirmation': '等待确认',
+    'reassess': '重新评估',
+    'complete-data': '补齐数据',
+  }[action]
+}
+
+function researchEvidenceStatusLabel(status: QuantResearchEvidence['status']): string {
+  return { pass: '通过', caution: '注意', fail: '未通过', missing: '数据不足' }[status]
+}
+
+function researchEvidenceStatusClass(status: QuantResearchEvidence['status']): string {
+  return `research-run-evidence-${status}`
+}
+
+function formatResearchEvidenceValue(item: QuantResearchEvidence): string {
+  if (item.value === null)
+    return '--'
+  if (item.key === 'trend-sample')
+    return `${item.value.toFixed(0)} 根`
+  if (item.key === 'risk-volume')
+    return `${item.value.toFixed(2)} 倍`
+  if (item.key === 'risk-streak')
+    return `${item.value.toFixed(0)} 天`
+  if (item.key === 'quality-history')
+    return `${item.value.toFixed(0)} 期`
+  if (item.key === 'quality-cashflow')
+    return `${(item.value * 100).toFixed(2)}%`
+  if (item.key.startsWith('trend-') || item.key.startsWith('quality-') || item.key === 'shareholder-yield')
+    return `${item.value.toFixed(2)}%`
+  return item.value.toFixed(2)
+}
+
+function formatResearchRunSourceDate(value: string | null): string {
+  if (!value)
+    return '未记录'
+  return value.length === 8 ? formatTradeDate(value) : formatDateTime(value)
 }
 
 function timingWindowClass(window: TimingWindow): string {
@@ -847,8 +923,26 @@ function displayStockName(item: Pick<CandidateItem, 'tsCode' | 'name'>): string 
   return item.name || watchlist.value.find(stock => stock.tsCode === item.tsCode)?.name || '名称待补齐'
 }
 
-function candidateActionFor(item: CandidateItem): CandidateActionMeta {
-  return getCandidateAction(item)
+function candidatePriorityFor(item: CandidateItem): ResearchPriority {
+  return researchPriorityMap.value.get(item.tsCode) || buildResearchPriority({
+    candidate: item,
+    metadata: researchMarkerMap.value.get(item.tsCode),
+    valueQuality: valueQualityResultsLoaded.value ? valueQualityMap.value.get(item.tsCode) || null : undefined,
+    today: todayDate.value,
+  })
+}
+
+function researchPriorityDetail(item: CandidateItem): string {
+  const priority = candidatePriorityFor(item)
+  return `${priority.reasons.join('；')} · 研究优先级 ${priority.score} 分`
+}
+
+function researchPriorityClass(item: CandidateItem): string {
+  return `research-priority-${candidatePriorityFor(item).level}`
+}
+
+function researchPriorityActionClass(item: CandidateItem): string {
+  return `research-priority-action-${candidatePriorityFor(item).tone}`
 }
 
 function researchReviewFor(tsCode: string): ResearchReviewMeta {
@@ -913,14 +1007,14 @@ function syncStatusClass(status: SyncStatus): string {
 }
 
 function focusSignal(item: CandidateItem): string {
-  return getCandidateAction(item).label
+  return candidatePriorityFor(item).actionLabel
 }
 
 function focusTone(item: CandidateItem): string {
-  const action = getCandidateAction(item)
-  if (action.tone === 'warning')
+  const tone = candidatePriorityFor(item).tone
+  if (tone === 'warning' || tone === 'danger')
     return 'focus-tone-warning'
-  return action.tone === 'positive' ? 'focus-tone-positive' : 'focus-tone-neutral'
+  return tone === 'positive' ? 'focus-tone-positive' : 'focus-tone-neutral'
 }
 
 function riskLabel(item: CandidateItem): string {
@@ -954,7 +1048,7 @@ function riskToneClass(tone: RiskTone): string {
 function resetCandidateQuery(): void {
   candidateMinScore.value = 0
   candidateCompleteOnly.value = false
-  candidateSort.value = 'score'
+  candidateSort.value = 'researchPriority'
   candidateResearchStatus.value = 'all'
   candidateReviewDue.value = 'all'
 }
@@ -983,6 +1077,9 @@ async function loadWatchlist() {
     shareholderReturnRequestId++
     shareholderReturns.value = null
     errors.shareholderReturns = null
+    researchRunRequestId++
+    researchRuns.value = []
+    researchRunError.value = null
     loading.valuation = false
     loading.financial = false
   }
@@ -1078,6 +1175,44 @@ async function loadResearchMarkers() {
   }
   finally {
     loading.research = false
+  }
+}
+
+async function loadResearchRuns(tsCode: string) {
+  const requestId = ++researchRunRequestId
+  researchRunLoading.value = true
+  researchRunError.value = null
+  try {
+    const runs = await quantApi.getResearchRuns(tsCode)
+    if (requestId === researchRunRequestId)
+      researchRuns.value = runs
+  }
+  catch (error) {
+    if (requestId === researchRunRequestId) {
+      researchRunError.value = error
+      researchRuns.value = []
+    }
+  }
+  finally {
+    if (requestId === researchRunRequestId)
+      researchRunLoading.value = false
+  }
+}
+
+async function generateResearchReport() {
+  if (!selectedStock.value || researchRunGenerating.value)
+    return
+  researchRunGenerating.value = true
+  researchRunError.value = null
+  try {
+    const run = await quantApi.generateResearchRun(selectedStock.value.tsCode)
+    researchRuns.value = [run, ...researchRuns.value.filter(item => item.id !== run.id)].slice(0, 5)
+  }
+  catch (error) {
+    researchRunError.value = error
+  }
+  finally {
+    researchRunGenerating.value = false
   }
 }
 
@@ -1275,7 +1410,7 @@ function selectStock(item: Pick<WatchlistItem, 'tsCode' | 'name'>) {
   selectedTsCode.value = item.tsCode
   syncResearchForm(item.tsCode)
   detailDrawerOpen.value = true
-  void Promise.all([loadDailyBars(item.tsCode), loadValuation(item.tsCode), loadFinancialQuality(item.tsCode)])
+  void Promise.all([loadDailyBars(item.tsCode), loadValuation(item.tsCode), loadFinancialQuality(item.tsCode), loadResearchRuns(item.tsCode)])
 }
 
 async function addToWatchlist() {
@@ -1402,7 +1537,8 @@ onUnmounted(() => {
 
 <template>
   <div class="quant-shell min-h-screen">
-    <QuantHeader :active-view="activeView" :latest-date="latestWatchlistDate" :busy="pageBusy" @navigate="setActiveView" @refresh="loadWorkspace" />
+    <QuantHeader :active-view="activeView" :latest-date="latestWatchlistDate" :busy="pageBusy" @navigate="setActiveView" @refresh="loadWorkspace" @settings="aiSettingsOpen = true" />
+    <QuantAiSettingsDrawer v-model:open="aiSettingsOpen" />
     <main class="quant-page">
       <header class="quant-view-heading">
         <div class="min-w-0">
@@ -1549,7 +1685,7 @@ onUnmounted(() => {
                   <strong>{{ displayStockName(item) }}</strong>
                   <small>{{ item.tsCode }}</small>
                 </span>
-                <span class="focus-signal" :title="candidateActionFor(item).detail">{{ focusSignal(item) }}</span>
+                <span class="focus-signal" :title="researchPriorityDetail(item)">{{ focusSignal(item) }}</span>
                 <span class="focus-score">
                   <strong>{{ formatSignalScore(item.score) }}</strong>
                   <span class="focus-score-meter" aria-hidden="true"><span class="focus-score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
@@ -1898,37 +2034,67 @@ onUnmounted(() => {
             <span class="snapshot-range-divider">·</span>
             <span>{{ snapshot.factorVersion || '动量信号' }}</span>
           </div>
-          <section v-if="reviewQueueTotal" class="review-queue" aria-labelledby="review-queue-title">
-            <div class="review-queue-heading">
+          <section v-if="researchPriorityTotal" class="research-priority-queue" aria-labelledby="research-priority-title">
+            <div class="research-priority-heading">
               <div>
                 <p class="section-kicker">
-                  REVIEW QUEUE
+                  RESEARCH PRIORITY
                 </p>
-                <h3 id="review-queue-title">
-                  复查到期队列
+                <h3 id="research-priority-title">
+                  研究优先队列
                 </h3>
               </div>
-              <span class="review-queue-count">{{ reviewQueueTotal }} 条待处理</span>
-            </div>
-            <div class="review-queue-list">
-              <button
-                v-for="item in visibleReviewQueue"
-                :key="item.marker.tsCode"
-                class="review-queue-row"
-                type="button"
-                @click="selectStock(item.stock)"
-              >
-                <span class="review-state-badge" :class="`review-state-${item.review.state}`">{{ item.review.label }}</span>
-                <span class="review-queue-stock">
-                  <strong>{{ item.stock.name || item.stock.tsCode }}</strong>
-                  <small>{{ item.stock.tsCode }} · {{ researchStatusOptions.find(option => option.value === item.marker.status)?.label }}</small>
+              <div class="research-priority-heading-meta">
+                <span>{{ researchPriorityTotal }} 只候选</span>
+                <span class="research-priority-info" role="img" tabindex="0" aria-label="研究优先级只用于安排核对顺序，不代表买卖指令" title="研究优先级只用于安排核对顺序，不代表买卖指令">
+                  <Info :size="14" aria-hidden="true" />
                 </span>
-                <span class="review-queue-detail">{{ item.review.detail }}</span>
+              </div>
+            </div>
+            <div class="research-priority-summary" role="list" aria-label="研究队列统计">
+              <div class="research-priority-summary-item" role="listitem">
+                <strong>{{ researchPriorityHighestLabel }}</strong>
+                <span>最高优先</span>
+              </div>
+              <div class="research-priority-summary-item" role="listitem">
+                <strong>{{ researchPrioritySummary.dataGap }}</strong>
+                <span>待补数据</span>
+              </div>
+              <div class="research-priority-summary-item" role="listitem">
+                <strong>{{ researchPrioritySummary.review }}</strong>
+                <span>待复查</span>
+              </div>
+              <div class="research-priority-summary-item" role="listitem">
+                <strong>{{ researchPrioritySummary.risk }}</strong>
+                <span>核对风险</span>
+              </div>
+              <div class="research-priority-summary-item" role="listitem">
+                <strong>{{ researchPrioritySummary.valueQuality }}</strong>
+                <span>补看价值</span>
+              </div>
+            </div>
+            <div class="research-priority-list">
+              <button
+                v-for="entry in visibleResearchPriorityQueue"
+                :key="entry.item.tsCode"
+                class="research-priority-row"
+                type="button"
+                @click="selectStock(entry.item)"
+              >
+                <span class="research-priority-badge" :class="researchPriorityClass(entry.item)">{{ entry.priority.levelLabel }}</span>
+                <span class="research-priority-stock">
+                  <strong>{{ displayStockName(entry.item) }}</strong>
+                  <small>{{ entry.item.tsCode }} · {{ entry.priority.score }} 分</small>
+                </span>
+                <span class="research-priority-detail">
+                  <strong :class="researchPriorityActionClass(entry.item)">{{ entry.priority.actionLabel }}</strong>
+                  <small>{{ entry.priority.reasons.join('；') }}</small>
+                </span>
                 <ChevronRight :size="15" aria-hidden="true" />
               </button>
             </div>
-            <p v-if="reviewQueueTotal > visibleReviewQueue.length" class="review-queue-more">
-              还有 {{ reviewQueueTotal - visibleReviewQueue.length }} 条记录，请使用复查筛选继续查看
+            <p v-if="researchPriorityTotal > visibleResearchPriorityQueue.length" class="research-priority-more">
+              还有 {{ researchPriorityTotal - visibleResearchPriorityQueue.length }} 条记录，请使用研究优先排序查看
             </p>
           </section>
           <div class="quant-table-frame candidate-table-frame">
@@ -1938,7 +2104,7 @@ onUnmounted(() => {
               :loading="loading.candidates"
               selectable
               :selected-ids="selectedCandidateIds"
-              min-width="1280px"
+              min-width="1400px"
               :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
               @toggle-select="handleCandidateToggle"
               @toggle-select-all="toggleAllCandidateSelection"
@@ -1951,6 +2117,12 @@ onUnmounted(() => {
                 <div class="score-cell" :aria-label="`命中 ${formatSignalScore(item.score)} 条规则`">
                   <strong class="score-value" :class="item.score === null ? 'quant-table-value-muted' : ''">{{ formatSignalScore(item.score) }}</strong>
                   <span class="score-meter" aria-hidden="true"><span class="score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
+                </div>
+              </template>
+              <template #cell-priority="{ item }">
+                <div class="research-priority-cell" :title="researchPriorityDetail(item)">
+                  <span class="research-priority-badge" :class="researchPriorityClass(item)">{{ candidatePriorityFor(item).levelLabel }}</span>
+                  <small>{{ candidatePriorityFor(item).score }} 分</small>
                 </div>
               </template>
               <template #cell-persistence="{ item }">
@@ -1984,9 +2156,9 @@ onUnmounted(() => {
                 </div>
               </template>
               <template #cell-action="{ item }">
-                <div class="candidate-action-cell" :title="candidateActionFor(item).detail" :aria-label="`${candidateActionFor(item).label}：${candidateActionFor(item).detail}`">
-                  <span class="candidate-action-badge" :class="`candidate-action-${candidateActionFor(item).tone}`">{{ candidateActionFor(item).label }}</span>
-                  <small>{{ candidateActionFor(item).detail }}</small>
+                <div class="candidate-action-cell" :title="researchPriorityDetail(item)" :aria-label="`${candidatePriorityFor(item).actionLabel}：${researchPriorityDetail(item)}`">
+                  <span class="candidate-action-badge" :class="`research-priority-action-${candidatePriorityFor(item).tone}`">{{ candidatePriorityFor(item).actionLabel }}</span>
+                  <small>{{ candidatePriorityFor(item).reasons[0] || '按当前数据保持观察' }}</small>
                 </div>
               </template>
               <template #cell-signals="{ item }">
@@ -2165,6 +2337,11 @@ onUnmounted(() => {
                 <strong>{{ selectedCandidate.quality === 'ready' ? '数据完整' : '需要补齐' }}</strong>
                 <small>{{ selectedCandidate.factorVersion || '当前快照' }}</small>
               </div>
+              <div class="decision-card-item">
+                <span>研究优先</span>
+                <strong :class="researchPriorityActionClass(selectedCandidate)">{{ candidatePriorityFor(selectedCandidate).levelLabel }}</strong>
+                <small>{{ candidatePriorityFor(selectedCandidate).score }} 分 · {{ candidatePriorityFor(selectedCandidate).actionLabel }}</small>
+              </div>
             </div>
             <div v-else class="decision-card-empty">
               <Info :size="16" aria-hidden="true" />
@@ -2179,12 +2356,127 @@ onUnmounted(() => {
             </div>
             <div v-if="selectedCandidate" class="decision-action-row">
               <span>研究动作</span>
-              <strong :class="`candidate-action-text-${candidateActionFor(selectedCandidate).tone}`">{{ candidateActionFor(selectedCandidate).label }}</strong>
-              <small>{{ candidateActionFor(selectedCandidate).detail }}</small>
+              <strong :class="researchPriorityActionClass(selectedCandidate)">{{ candidatePriorityFor(selectedCandidate).actionLabel }}</strong>
+              <small>{{ researchPriorityDetail(selectedCandidate) }}</small>
             </div>
             <p class="decision-card-note">
               技术信号用于缩小研究范围；估值和财务数据需要结合报告期与样本完整度人工核对。
             </p>
+          </section>
+          <section v-if="selectedStock" class="research-run-panel" aria-label="结构化研究报告">
+            <div class="research-run-heading">
+              <div>
+                <p class="section-kicker">
+                  RESEARCH RUN V1
+                </p>
+                <h2>结构化研究报告</h2>
+                <small v-if="latestResearchReport">最近生成 {{ formatDateTime(latestResearchReport.generatedAt) }}</small>
+              </div>
+              <button class="secondary-button research-run-generate-button" type="button" :disabled="researchRunGenerating || researchRunLoading" title="按当前已保存数据生成一份可回看的研究快照" @click="generateResearchReport">
+                <RotateCcw :size="15" :class="researchRunGenerating ? 'animate-spin' : ''" aria-hidden="true" />
+                {{ researchRunGenerating ? '生成中' : latestResearchReport ? '重新生成' : '生成报告' }}
+              </button>
+            </div>
+            <div v-if="researchRunLoading" class="research-run-state" role="status">
+              <RefreshCw :size="16" class="animate-spin" aria-hidden="true" />
+              <span>正在读取研究历史</span>
+            </div>
+            <div v-else-if="researchRunError" class="research-run-state research-run-state-error" role="status">
+              <Info :size="16" aria-hidden="true" />
+              <span>{{ parsedError(researchRunError).message }}</span>
+              <button class="text-button" type="button" @click="selectedStock && loadResearchRuns(selectedStock.tsCode)">
+                重试
+              </button>
+            </div>
+            <template v-else-if="latestResearchReport">
+              <div class="research-run-summary">
+                <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">
+                  <span>当前状态</span>
+                  <strong>{{ researchRunStatusLabel(latestResearchReport.status) }}</strong>
+                  <small>{{ latestResearchReport.reportVersion }}</small>
+                </div>
+                <div>
+                  <span>研究动作</span>
+                  <strong>{{ researchRunActionLabel(latestResearchReport.action) }}</strong>
+                  <small>{{ latestResearchReport.score === null ? '--' : `${latestResearchReport.score.toFixed(1)} / 100` }}</small>
+                </div>
+                <div>
+                  <span>证据条数</span>
+                  <strong>{{ latestResearchReport.evidence.length }}</strong>
+                  <small>{{ latestResearchReport.sources.length }} 个来源</small>
+                </div>
+              </div>
+              <p class="research-run-headline">
+                {{ latestResearchReport.headline }}
+              </p>
+              <div class="research-run-guidance-grid">
+                <div v-if="latestResearchReport.strengths.length" class="research-run-guidance research-run-guidance-positive">
+                  <span>支持依据</span>
+                  <ul>
+                    <li v-for="item in latestResearchReport.strengths" :key="`strength-${item}`">
+                      {{ item }}
+                    </li>
+                  </ul>
+                </div>
+                <div v-if="latestResearchReport.risks.length" class="research-run-guidance research-run-guidance-danger">
+                  <span>风险核对</span>
+                  <ul>
+                    <li v-for="item in latestResearchReport.risks" :key="`risk-${item}`">
+                      {{ item }}
+                    </li>
+                  </ul>
+                </div>
+                <div v-if="latestResearchReport.gaps.length" class="research-run-guidance research-run-guidance-warning">
+                  <span>数据缺口</span>
+                  <ul>
+                    <li v-for="item in latestResearchReport.gaps" :key="`gap-${item}`">
+                      {{ item }}
+                    </li>
+                  </ul>
+                </div>
+                <div class="research-run-guidance research-run-guidance-neutral">
+                  <span>下一步</span>
+                  <ul>
+                    <li v-for="item in latestResearchReport.nextActions" :key="`next-${item}`">
+                      {{ item }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="research-run-evidence-list">
+                <div v-for="item in latestResearchReport.evidence" :key="item.key" class="research-run-evidence-row" :class="researchEvidenceStatusClass(item.status)">
+                  <div class="research-run-evidence-main">
+                    <div class="research-run-evidence-title">
+                      <strong>{{ item.label }}</strong>
+                      <span>{{ researchEvidenceStatusLabel(item.status) }}</span>
+                      <small v-if="item.optional">可选证据</small>
+                    </div>
+                    <p>{{ item.detail }}</p>
+                  </div>
+                  <div class="research-run-evidence-value">
+                    <strong>{{ formatResearchEvidenceValue(item) }}</strong>
+                    <small>阈值 {{ item.threshold }}</small>
+                  </div>
+                  <div class="research-run-evidence-meta">
+                    <span>{{ item.source }}</span>
+                    <small>{{ formatResearchRunSourceDate(item.observedAt) }} · {{ item.formulaVersion }}</small>
+                  </div>
+                </div>
+              </div>
+              <div class="research-run-sources">
+                <span>来源快照</span>
+                <span v-for="source in latestResearchReport.sources" :key="source.id" :title="source.formulaVersion">
+                  {{ source.name }} · {{ formatResearchRunSourceDate(source.observedAt) }}
+                </span>
+              </div>
+              <p class="research-run-note">
+                这是基于已保存数据的版本化研究快照；报告用于整理核对顺序，不是买入、卖出或收益预测。
+              </p>
+            </template>
+            <div v-else class="research-run-state" role="status">
+              <Info :size="16" aria-hidden="true" />
+              <span>还没有研究运行，生成一份报告后可在这里回看证据链。</span>
+            </div>
           </section>
           <section v-if="selectedCandidate" class="signal-persistence-panel" aria-label="信号持续性证据">
             <div class="signal-persistence-heading">

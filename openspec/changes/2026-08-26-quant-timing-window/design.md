@@ -39,4 +39,3 @@ Quant 详情抽屉已经使用 `DailyBar` 和 `TrendStructure` 展示 5/20/60 �
 ## Migration Plan
 
 无需迁移。前端部署后，已有详情日线即可即时计算；回滚只移除纯函数和面板，不影响已保存数据。
-

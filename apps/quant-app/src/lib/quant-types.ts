@@ -2,6 +2,73 @@ export const CAPABILITY_ORDER = ['daily', 'stock_basic', 'trade_cal', 'daily_bas
 
 export type CapabilityKey = typeof CAPABILITY_ORDER[number]
 export type QuantProviderName = 'tushare' | 'eastmoney'
+export type QuantAiProvider = 'openai_compatible' | 'deepseek' | 'qwen' | 'gemini' | 'ollama'
+
+export interface QuantAiConfig {
+  id: string
+  provider: QuantAiProvider
+  model: string
+  baseUrl: string | null
+  hasApiKey: boolean
+  apiKeyHint: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export type QuantResearchRunStatus = 'ready' | 'partial' | 'insufficient_data'
+export type QuantResearchEvidenceStatus = 'pass' | 'caution' | 'fail' | 'missing'
+export type QuantResearchAction = 'research-window' | 'wait-confirmation' | 'reassess' | 'complete-data'
+
+export interface QuantResearchEvidence {
+  key: string
+  dimension: string
+  label: string
+  status: QuantResearchEvidenceStatus
+  value: number | null
+  threshold: string
+  source: string
+  observedAt: string | null
+  formulaVersion: string
+  detail: string
+  optional?: boolean
+}
+
+export interface QuantResearchSource {
+  id: string
+  name: string
+  observedAt: string | null
+  formulaVersion: string
+}
+
+export interface QuantResearchReport {
+  reportVersion: string
+  tsCode: string
+  name: string | null
+  generatedAt: string
+  sourceSnapshotId: string | null
+  status: QuantResearchRunStatus
+  action: QuantResearchAction
+  score: number | null
+  headline: string
+  strengths: string[]
+  risks: string[]
+  gaps: string[]
+  nextActions: string[]
+  evidence: QuantResearchEvidence[]
+  sources: QuantResearchSource[]
+}
+
+export interface QuantResearchRun {
+  id: string
+  tsCode: string
+  name: string | null
+  status: QuantResearchRunStatus
+  reportVersion: string
+  sourceSnapshotId: string | null
+  generatedAt: string | null
+  createdAt: string | null
+  report: QuantResearchReport
+}
 
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'

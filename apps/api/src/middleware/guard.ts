@@ -21,6 +21,7 @@ export function requireAuth(requiredRole?: string | string[]) {
     }
 
     const user = session.user as SessionUser
+    c.set('user', user)
 
     if (requiredRole) {
       const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]

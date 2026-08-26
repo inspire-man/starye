@@ -281,6 +281,22 @@ describe('路径匹配规则', () => {
     expect(capturedRequest!.url).toBe('http://localhost:3004/quant/watchlist?tab=active')
   })
 
+  it('普通登录用户访问 /quant/* 时不需要管理员白名单', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { githubId: '99999' } }), { status: 200 }))
+      .mockImplementation(async (req: Request) => {
+        capturedRequest = req instanceof Request ? req : new Request(req)
+        return mockFetchResponse
+      }))
+
+    const req = makeRequest('http://localhost/quant/candidates', {
+      headers: { cookie: 'starye.session_token=quant-user-routing-test-token' },
+    })
+    await worker.fetch(req, { ADMIN_GITHUB_ID: '12345' })
+
+    expect(capturedRequest!.url).toBe('http://localhost:3004/quant/candidates')
+  })
+
   it('/api/* 应路由到 API 服务', async () => {
     const req = makeRequest('http://localhost/api/movies')
     await worker.fetch(req, {})

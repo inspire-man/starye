@@ -13,4 +13,3 @@
 - [x] 3.1 运行 Quant 测试、类型检查、构建、OpenSpec strict 和 Gateway 浏览器回归
 - [x] 3.2 运行 GitNexus detect_changes，确认只影响预期 Quant symbols 与流程
 - [x] 3.3 提交并推送代码，检查 Actions 结果
-
