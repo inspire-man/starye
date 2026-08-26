@@ -268,9 +268,13 @@ const researchEvidenceGroups = computed(() => {
   const groups = new Map<string, QuantResearchEvidence[]>()
   for (const item of report.evidence)
     groups.set(item.dimension, [...(groups.get(item.dimension) || []), item])
-  return order.flatMap(dimension => groups.has(dimension)
+  const orderedGroups = order.flatMap(dimension => groups.has(dimension)
     ? [{ dimension, label: labels[dimension] || dimension, items: groups.get(dimension) || [] }]
     : [])
+  const additionalGroups = [...groups.entries()]
+    .filter(([dimension]) => !order.includes(dimension))
+    .map(([dimension, items]) => ({ dimension, label: `其他证据 · ${dimension}`, items }))
+  return [...orderedGroups, ...additionalGroups]
 })
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
