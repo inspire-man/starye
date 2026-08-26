@@ -107,7 +107,7 @@ describe('quant research report', () => {
     })
 
     expect(report).toMatchObject({
-      reportVersion: 'research-report-v1',
+      reportVersion: 'research-report-v2',
       tsCode: '601899.SH',
       sourceSnapshotId: 'snapshot-1',
       status: 'ready',

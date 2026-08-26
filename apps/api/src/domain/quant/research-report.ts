@@ -1,8 +1,10 @@
+import type { QuantAkshareBridgeResult } from './akshare-bridge'
 import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './provider'
 import type { QuantShareholderReturnItem } from './shareholder-return'
 import type { DailyBar, MomentumCandidate } from './types'
 
-export const QUANT_RESEARCH_REPORT_VERSION = 'research-report-v1' as const
+export const QUANT_RESEARCH_REPORT_V1_VERSION = 'research-report-v1' as const
+export const QUANT_RESEARCH_REPORT_VERSION = 'research-report-v2' as const
 
 export type QuantResearchReportStatus = 'ready' | 'partial' | 'insufficient_data'
 export type QuantResearchEvidenceStatus = 'pass' | 'caution' | 'fail' | 'missing'
@@ -31,7 +33,7 @@ export interface QuantResearchSource {
 }
 
 export interface QuantResearchReport {
-  readonly reportVersion: typeof QUANT_RESEARCH_REPORT_VERSION
+  readonly reportVersion: typeof QUANT_RESEARCH_REPORT_V1_VERSION | typeof QUANT_RESEARCH_REPORT_VERSION
   readonly tsCode: string
   readonly name: string | null
   readonly generatedAt: string
@@ -60,6 +62,9 @@ export interface QuantResearchReportInput {
   readonly shareholderReturn: QuantShareholderReturnItem | null
   readonly valuationErrorCode?: string | null
   readonly financialErrorCode?: string | null
+  readonly akshare?: QuantAkshareBridgeResult | null
+  readonly akshareConfigured?: boolean
+  readonly akshareErrorCode?: string | null
 }
 
 function finite(value: number | null | undefined): number | null {
@@ -129,6 +134,14 @@ function buildSources(input: QuantResearchReportInput, latestTradeDate: string |
       name: 'Tushare 实施分红',
       observedAt: input.shareholderReturn.observedAt,
       formulaVersion: input.shareholderReturn.formulaVersion,
+    })
+  }
+  if (input.akshare || input.akshareConfigured || input.akshareErrorCode) {
+    sources.push({
+      id: 'akshare-bridge',
+      name: input.akshare?.source.name ?? 'AkShare bridge',
+      observedAt: input.akshare?.observedAt ?? null,
+      formulaVersion: input.akshare?.source.formulaVersion ?? 'akshare-adapter-v1',
     })
   }
   return sources
@@ -277,6 +290,29 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     optional: true,
   }))
 
+  if (input.akshare?.evidence.length) {
+    evidenceItems.push(...input.akshare.evidence.map(item => evidence({
+      ...item,
+      observedAt: item.observedAt ?? input.akshare!.observedAt,
+      optional: true,
+    })))
+  }
+  else if (input.akshareConfigured || input.akshareErrorCode) {
+    evidenceItems.push(evidence({
+      key: 'akshare-bridge',
+      dimension: 'quality',
+      label: 'AkShare bridge',
+      status: 'missing',
+      value: null,
+      threshold: 'bridge 返回有效标准化证据',
+      source: 'AkShare bridge',
+      observedAt: input.akshare?.observedAt ?? null,
+      formulaVersion: input.akshare?.source.formulaVersion ?? 'akshare-adapter-v1',
+      detail: input.akshareErrorCode ? `bridge 读取失败（${input.akshareErrorCode}）` : 'bridge 尚未返回有效证据',
+      optional: true,
+    }))
+  }
+
   const volumeRatio = finite(candidate?.factors.volumeRatio)
   const upStreak = finite(candidate?.factors.consecutiveUpDays)
   evidenceItems.push(evidence({
@@ -335,9 +371,9 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
         : ['结合行业位置、竞争格局和管理层信息，继续人工研究']
   const status: QuantResearchReportStatus = missingCount > 0
     ? 'insufficient_data'
-    : [...evidenceItems].some(item => item.status === 'caution' || item.status === 'fail')
-        ? 'partial'
-        : 'ready'
+    : required.some(item => item.status === 'caution' || item.status === 'fail')
+      ? 'partial'
+      : 'ready'
 
   return {
     reportVersion: QUANT_RESEARCH_REPORT_VERSION,

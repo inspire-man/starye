@@ -590,4 +590,42 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ ts_code: '601899.SH' }))
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/601899.SH?limit=3`)
   })
+
+  it('normalizes saved AI research summaries and keeps generation separate from report history', async () => {
+    const summary = {
+      id: 'summary-1',
+      research_run_id: 'run-1',
+      summary_version: 'research-summary-v1',
+      report_version: 'research-report-v2',
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      generated_at: '2026-08-26T00:00:00.000Z',
+      created_at: '2026-08-26T00:00:00.000Z',
+      cited_evidence_keys: ['quality-roe'],
+      summary: {
+        summary_version: 'research-summary-v1',
+        overview: '基本面有一项明确支持，但仍应继续核对。',
+        supports: ['ROE 达到报告门槛'],
+        concerns: ['当前证据范围仍有限'],
+        next_checks: ['等待下一期财报并复核'],
+        cited_evidence_keys: ['quality-roe'],
+      },
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: summary }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [summary] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.generateResearchSummary('run-1')).resolves.toMatchObject({
+      id: 'summary-1',
+      researchRunId: 'run-1',
+      provider: 'deepseek',
+      summary: { overview: '基本面有一项明确支持，但仍应继续核对。', nextChecks: ['等待下一期财报并复核'] },
+      citedEvidenceKeys: ['quality-roe'],
+    })
+    await expect(quantApi.getResearchSummaries('run-1', 1)).resolves.toMatchObject([{ id: 'summary-1', reportVersion: 'research-report-v2' }])
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary`)
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary?limit=1`)
+  })
 })

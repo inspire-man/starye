@@ -14,6 +14,7 @@ import type {
   QuantResearchEvidence,
   QuantResearchMarker,
   QuantResearchRun,
+  QuantResearchSummary,
   QuantShareholderReturnItem,
   QuantShareholderReturnSelection,
   QuantValuationComparison,
@@ -58,6 +59,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
@@ -87,9 +89,13 @@ const shareholderReturns = ref<QuantShareholderReturnSelection | null>(null)
 const investmentKnowledge = ref<QuantInvestmentKnowledge | null>(null)
 const researchMarkers = ref<QuantResearchMarker[]>([])
 const researchRuns = ref<QuantResearchRun[]>([])
+const researchAiSummary = ref<QuantResearchSummary | null>(null)
 const researchRunLoading = ref(false)
 const researchRunGenerating = ref(false)
 const researchRunError = ref<unknown | null>(null)
+const researchSummaryLoading = ref(false)
+const researchSummaryGenerating = ref(false)
+const researchSummaryError = ref<unknown | null>(null)
 const selectedCandidateIds = ref<Set<string>>(new Set())
 const comparisonDrawerOpen = ref(false)
 const comparisonLoading = ref(false)
@@ -113,6 +119,7 @@ let financialRequestId = 0
 let valueQualityRequestId = 0
 let shareholderReturnRequestId = 0
 let researchRunRequestId = 0
+let researchSummaryRequestId = 0
 const loading = reactive({
   watchlist: false,
   candidates: false,
@@ -246,6 +253,7 @@ const shareholderReturnMap = computed(() => new Map(shareholderReturns.value?.it
 const selectedShareholderReturn = computed(() => shareholderReturnMap.value.get(selectedTsCode.value || '') || null)
 const latestResearchRun = computed(() => researchRuns.value[0] || null)
 const latestResearchReport = computed(() => latestResearchRun.value?.report || null)
+const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
 const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
@@ -1080,6 +1088,11 @@ async function loadWatchlist() {
     researchRunRequestId++
     researchRuns.value = []
     researchRunError.value = null
+    researchSummaryRequestId++
+    researchAiSummary.value = null
+    researchSummaryError.value = null
+    researchSummaryLoading.value = false
+    researchSummaryGenerating.value = false
     loading.valuation = false
     loading.financial = false
   }
@@ -1180,12 +1193,20 @@ async function loadResearchMarkers() {
 
 async function loadResearchRuns(tsCode: string) {
   const requestId = ++researchRunRequestId
+  researchSummaryRequestId++
+  researchAiSummary.value = null
+  researchSummaryError.value = null
+  researchSummaryLoading.value = false
+  researchSummaryGenerating.value = false
   researchRunLoading.value = true
   researchRunError.value = null
   try {
     const runs = await quantApi.getResearchRuns(tsCode)
-    if (requestId === researchRunRequestId)
+    if (requestId === researchRunRequestId) {
       researchRuns.value = runs
+      if (runs[0])
+        await loadResearchSummary(runs[0].id)
+    }
   }
   catch (error) {
     if (requestId === researchRunRequestId) {
@@ -1199,6 +1220,27 @@ async function loadResearchRuns(tsCode: string) {
   }
 }
 
+async function loadResearchSummary(runId: string) {
+  const requestId = ++researchSummaryRequestId
+  researchSummaryLoading.value = true
+  researchSummaryError.value = null
+  try {
+    const summaries = await quantApi.getResearchSummaries(runId, 1)
+    if (requestId === researchSummaryRequestId)
+      researchAiSummary.value = summaries[0] || null
+  }
+  catch (error) {
+    if (requestId === researchSummaryRequestId) {
+      researchSummaryError.value = error
+      researchAiSummary.value = null
+    }
+  }
+  finally {
+    if (requestId === researchSummaryRequestId)
+      researchSummaryLoading.value = false
+  }
+}
+
 async function generateResearchReport() {
   if (!selectedStock.value || researchRunGenerating.value)
     return
@@ -1207,12 +1249,37 @@ async function generateResearchReport() {
   try {
     const run = await quantApi.generateResearchRun(selectedStock.value.tsCode)
     researchRuns.value = [run, ...researchRuns.value.filter(item => item.id !== run.id)].slice(0, 5)
+    researchSummaryRequestId++
+    researchAiSummary.value = null
+    researchSummaryError.value = null
+    await loadResearchSummary(run.id)
   }
   catch (error) {
     researchRunError.value = error
   }
   finally {
     researchRunGenerating.value = false
+  }
+}
+
+async function generateResearchSummary() {
+  const run = latestResearchRun.value
+  if (!run || researchSummaryGenerating.value)
+    return
+  const requestId = ++researchSummaryRequestId
+  researchSummaryGenerating.value = true
+  researchSummaryError.value = null
+  try {
+    const summary = await quantApi.generateResearchSummary(run.id)
+    if (requestId === researchSummaryRequestId)
+      researchAiSummary.value = summary
+  }
+  catch (error) {
+    if (requestId === researchSummaryRequestId)
+      researchSummaryError.value = error
+  }
+  finally {
+    researchSummaryGenerating.value = false
   }
 }
 
@@ -2469,6 +2536,16 @@ onUnmounted(() => {
                   {{ source.name }} · {{ formatResearchRunSourceDate(source.observedAt) }}
                 </span>
               </div>
+              <QuantAiResearchSummary
+                :report="latestResearchReport"
+                :summary="researchAiSummary"
+                :loading="researchSummaryLoading"
+                :generating="researchSummaryGenerating"
+                :error-message="researchSummaryError ? parsedError(researchSummaryError).message : null"
+                :configuration-error="researchSummaryConfigurationError"
+                @generate="generateResearchSummary"
+                @open-settings="aiSettingsOpen = true"
+              />
               <p class="research-run-note">
                 这是基于已保存数据的版本化研究快照；报告用于整理核对顺序，不是买入、卖出或收益预测。
               </p>

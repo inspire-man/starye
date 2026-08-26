@@ -250,6 +250,14 @@ export const QuantResearchRunsQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })
 
+export const QuantResearchRunIdParamSchema = v.object({
+  runId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64), v.regex(/^[\w-]+$/u)),
+})
+
+export const QuantResearchSummaryQuerySchema = v.object({
+  limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
+})
+
 export type QuantWatchlistCreate = v.InferOutput<typeof QuantWatchlistCreateSchema>
 export type QuantWatchlistUpdate = v.InferOutput<typeof QuantWatchlistUpdateSchema>
 export type QuantResearchMarkerUpdate = v.InferOutput<typeof QuantResearchMarkerUpdateSchema>
@@ -258,3 +266,5 @@ export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>
 export type QuantAiConfigUpdate = v.InferOutput<typeof QuantAiConfigUpdateSchema>
 export type QuantResearchRunCreate = v.InferOutput<typeof QuantResearchRunCreateSchema>
 export type QuantResearchRunsQuery = v.InferOutput<typeof QuantResearchRunsQuerySchema>
+export type QuantResearchRunIdParam = v.InferOutput<typeof QuantResearchRunIdParamSchema>
+export type QuantResearchSummaryQuery = v.InferOutput<typeof QuantResearchSummaryQuerySchema>

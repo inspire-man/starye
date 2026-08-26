@@ -1,5 +1,6 @@
-import type { QuantResearchRun as QuantResearchRunRecord } from '@starye/db/schema'
+import type { QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
+import type { QuantAiSummary } from '../../domain/quant/ai-summary'
 import type { EastmoneyProviderOptions, TushareProviderOptions } from '../../domain/quant/provider'
 import type { QuantResearchReport } from '../../domain/quant/research-report'
 import type { QuantSignalHistoryCandidate, QuantSignalHistorySnapshot } from '../../domain/quant/signal-persistence'
@@ -7,7 +8,9 @@ import type { MomentumCandidate } from '../../domain/quant/types'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
-import { deleteQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
+import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
+import { generateQuantAiSummary } from '../../domain/quant/ai-summary'
+import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
 import { QuantError } from '../../domain/quant/errors'
@@ -17,14 +20,17 @@ import { getQuantInvestmentKnowledge } from '../../domain/quant/investment-knowl
 import { createEastmoneyFinancialProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createTushareDividendProvider, createTushareStockBasicProvider, mapQuantProviderError, resolveQuantProviderName } from '../../domain/quant/provider'
 import {
   createQuantResearchRun,
+  createQuantResearchSummary,
   createQuantWatchlistItem,
   deleteQuantWatchlistItem,
   ensureQuantStarterWatchlist,
+  getQuantResearchRun,
   getQuantSyncState,
   getQuantWatchlistItem,
   listQuantDailyBars,
   listQuantResearchMarkers,
   listQuantResearchRuns,
+  listQuantResearchSummaries,
   listQuantScanSnapshots,
   listQuantWatchlist,
   listQuantWatchlistWithStats,
@@ -44,7 +50,9 @@ import {
   QuantFinancialHistoryQuerySchema,
   QuantResearchMarkerUpdateSchema,
   QuantResearchRunCreateSchema,
+  QuantResearchRunIdParamSchema,
   QuantResearchRunsQuerySchema,
+  QuantResearchSummaryQuerySchema,
   QuantSyncSchema,
   QuantWatchlistCreateSchema,
   QuantWatchlistParamSchema,
@@ -100,7 +108,7 @@ function parseSignalHistorySnapshot(snapshot: {
 function parseResearchReport(reportJson: string): QuantResearchReport {
   try {
     const parsed: unknown = JSON.parse(reportJson)
-    if (!isRecord(parsed) || parsed.reportVersion !== 'research-report-v1' || !Array.isArray(parsed.evidence))
+    if (!isRecord(parsed) || (parsed.reportVersion !== 'research-report-v1' && parsed.reportVersion !== 'research-report-v2') || !Array.isArray(parsed.evidence))
       throw new Error('invalid report')
     return parsed as unknown as QuantResearchReport
   }
@@ -120,6 +128,66 @@ function researchRunView(row: QuantResearchRunRecord) {
     generatedAt: row.generatedAt,
     createdAt: row.createdAt,
     report: parseResearchReport(row.reportJson),
+  }
+}
+
+function parseStoredAiSummary(value: string, report: QuantResearchReport): QuantAiSummary {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!isRecord(parsed) || parsed.summaryVersion !== 'research-summary-v1')
+      throw new Error('invalid summary')
+    const stringList = (field: string, max: number): string[] => {
+      const items = parsed[field]
+      if (!Array.isArray(items) || items.length > max || items.some(item => typeof item !== 'string'))
+        throw new Error(`invalid ${field}`)
+      return items as string[]
+    }
+    const citedEvidenceKeys = stringList('citedEvidenceKeys', 16)
+    const allowed = new Set(report.evidence.map(item => item.key))
+    if (citedEvidenceKeys.some(key => !allowed.has(key)))
+      throw new Error('unknown evidence key')
+    if (typeof parsed.overview !== 'string' || !parsed.overview.trim())
+      throw new Error('invalid overview')
+    return {
+      summaryVersion: 'research-summary-v1',
+      overview: parsed.overview,
+      supports: stringList('supports', 6),
+      concerns: stringList('concerns', 6),
+      nextChecks: stringList('nextChecks', 6),
+      citedEvidenceKeys,
+    }
+  }
+  catch {
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI summary is invalid', 500)
+  }
+}
+
+function parseStoredEvidenceKeys(value: string): readonly string[] {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed) || parsed.some(item => typeof item !== 'string'))
+      throw new Error('invalid evidence keys')
+    return parsed as string[]
+  }
+  catch {
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI summary evidence references are invalid', 500)
+  }
+}
+
+function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResearchReport) {
+  const summary = parseStoredAiSummary(row.summaryJson, report)
+  const citedEvidenceKeys = parseStoredEvidenceKeys(row.citedEvidenceKeysJson)
+  return {
+    id: row.id,
+    researchRunId: row.researchRunId,
+    summaryVersion: row.summaryVersion,
+    reportVersion: row.reportVersion,
+    provider: row.provider,
+    model: row.model,
+    generatedAt: row.generatedAt,
+    createdAt: row.createdAt,
+    summary,
+    citedEvidenceKeys,
   }
 }
 
@@ -218,6 +286,24 @@ function tushareProviderOptions(env?: AppEnv['Bindings']): TushareProviderOption
     ...(baseUrl ? { baseUrl } : {}),
     ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
   }
+}
+
+function akshareBridgeOptions(env?: AppEnv['Bindings']) {
+  const timeoutMs = Number(env?.QUANT_AKSHARE_BRIDGE_TIMEOUT_MS)
+  return {
+    baseUrl: env?.QUANT_AKSHARE_BRIDGE_URL,
+    token: env?.QUANT_AKSHARE_BRIDGE_TOKEN,
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
+  }
+}
+
+function akshareBridgeErrorCode(error: unknown): string {
+  return error instanceof QuantAkshareBridgeError ? `BRIDGE_${error.code}` : 'BRIDGE_UPSTREAM'
+}
+
+function aiSummaryTimeoutMs(env?: AppEnv['Bindings']): number | undefined {
+  const timeoutMs = Number(env?.QUANT_AI_SUMMARY_TIMEOUT_MS)
+  return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined
 }
 
 function stockBasicProvider(env?: AppEnv['Bindings']) {
@@ -328,10 +414,12 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
   const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
   const financialProvider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
   const dividendProvider = createTushareDividendProvider(tushareProviderOptions(c.env))
-  const [valuationResult, financialResult, shareholderResult] = await Promise.allSettled([
+  const akshareBridge = createQuantAkshareBridge(akshareBridgeOptions(c.env))
+  const [valuationResult, financialResult, shareholderResult, akshareResult] = await Promise.allSettled([
     valuationProvider.fetchValuation({ tsCode }),
     financialProvider.fetchFinancialQualityHistory({ tsCode, limit: 4 }),
     readQuantShareholderReturn(c.get('db'), userId, tsCode, dividendProvider),
+    akshareBridge.isConfigured ? akshareBridge.fetchEvidence({ tsCode }) : Promise.resolve(null),
   ])
   const generatedAt = new Date()
   const report = buildQuantResearchReport({
@@ -346,6 +434,9 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
     shareholderReturn: shareholderResult.status === 'fulfilled' ? shareholderResult.value : null,
     valuationErrorCode: valuationResult.status === 'rejected' ? mapQuantProviderError(valuationResult.reason).code : null,
     financialErrorCode: financialResult.status === 'rejected' ? mapQuantProviderError(financialResult.reason).code : null,
+    akshare: akshareResult.status === 'fulfilled' ? akshareResult.value : null,
+    akshareConfigured: akshareBridge.isConfigured,
+    akshareErrorCode: akshareResult.status === 'rejected' ? akshareBridgeErrorCode(akshareResult.reason) : null,
   })
   const persisted = await createQuantResearchRun(c.get('db'), {
     userId,
@@ -358,6 +449,47 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
     generatedAt,
   })
   return c.json({ success: true as const, data: researchRunView(persisted) }, 201)
+})
+
+quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResearchRunIdParamSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { runId } = c.req.valid('param')
+  const run = await getQuantResearchRun(c.get('db'), userId, runId)
+  if (!run)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+  const report = parseResearchReport(run.reportJson)
+  const config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env.QUANT_AI_ENCRYPTION_KEY)
+  if (!config)
+    throw new QuantError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI summary configuration is not available', 503)
+  const summary = await generateQuantAiSummary({
+    report,
+    config,
+    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+  })
+  const persisted = await createQuantResearchSummary(c.get('db'), {
+    userId,
+    researchRunId: run.id,
+    summaryVersion: summary.summaryVersion,
+    reportVersion: report.reportVersion,
+    provider: config.provider,
+    model: config.model,
+    summaryJson: JSON.stringify(summary),
+    citedEvidenceKeys: summary.citedEvidenceKeys,
+    generatedAt: new Date(),
+  })
+  return c.json({ success: true as const, data: researchSummaryView(persisted, report) }, 201)
+})
+
+quantRoutes.get('/research/runs/:runId/summary', validator('param', QuantResearchRunIdParamSchema), validator('query', QuantResearchSummaryQuerySchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { runId } = c.req.valid('param')
+  const { limit } = c.req.valid('query')
+  const run = await getQuantResearchRun(c.get('db'), userId, runId)
+  if (!run)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+  const report = parseResearchReport(run.reportJson)
+  const summaries = await listQuantResearchSummaries(c.get('db'), userId, run.id, limit ? Number(limit) : 10)
+  return c.json({ success: true as const, data: summaries.map(summary => researchSummaryView(summary, report)) })
 })
 
 quantRoutes.get('/research/runs/:tsCode', validator('param', QuantWatchlistParamSchema), validator('query', QuantResearchRunsQuerySchema), async (c) => {

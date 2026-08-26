@@ -4,6 +4,7 @@ import {
   quantDailyBars,
   quantResearchMarkers,
   quantResearchRuns,
+  quantResearchSummaries,
   quantScanSnapshots,
   quantSyncState,
   quantWatchlist,
@@ -17,6 +18,7 @@ export const MAX_WATCHLIST_SIZE = 50
 export const QUANT_SYNC_LEASE_DURATION_MS = 120_000
 export const QUANT_SYNC_SNAPSHOT_RETENTION = 30
 export const QUANT_RESEARCH_RUN_RETENTION = 30
+export const QUANT_RESEARCH_SUMMARY_RETENTION = 10
 export const QUANT_RESEARCH_STATUSES = ['unreviewed', 'priority', 'paused', 'excluded'] as const
 export type QuantResearchStatus = typeof QUANT_RESEARCH_STATUSES[number]
 
@@ -481,6 +483,83 @@ export async function listQuantResearchRuns(db: Database, userId: string, tsCode
     eq(quantResearchRuns.userId, ownerId),
     eq(quantResearchRuns.tsCode, normalizedCode),
   )).orderBy(desc(quantResearchRuns.generatedAt), desc(quantResearchRuns.id)).limit(boundedLimit).all()
+}
+
+export async function getQuantResearchRun(db: Database, userId: string, id: string) {
+  const ownerId = normalizeQuantUserId(userId)
+  const normalizedId = id.trim()
+  if (!normalizedId)
+    throw new QuantError('QUANT_INVALID_INPUT', 'Research run id is required', 400)
+  return db.select().from(quantResearchRuns).where(and(
+    eq(quantResearchRuns.id, normalizedId),
+    eq(quantResearchRuns.userId, ownerId),
+  )).get()
+}
+
+export async function createQuantResearchSummary(db: Database, input: {
+  readonly userId: string
+  readonly researchRunId: string
+  readonly summaryVersion: string
+  readonly reportVersion: string
+  readonly provider: 'openai_compatible' | 'deepseek' | 'qwen' | 'gemini' | 'ollama'
+  readonly model: string
+  readonly summaryJson: string
+  readonly citedEvidenceKeys: readonly string[]
+  readonly generatedAt: Date
+}): Promise<typeof quantResearchSummaries.$inferSelect> {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const researchRun = await getQuantResearchRun(db, ownerId, input.researchRunId)
+  if (!researchRun)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+  const id = nanoid()
+  await db.insert(quantResearchSummaries).values({
+    id,
+    userId: ownerId,
+    researchRunId: researchRun.id,
+    summaryVersion: input.summaryVersion,
+    reportVersion: input.reportVersion,
+    provider: input.provider,
+    model: input.model,
+    summaryJson: input.summaryJson,
+    citedEvidenceKeysJson: JSON.stringify(input.citedEvidenceKeys),
+    generatedAt: input.generatedAt,
+    createdAt: new Date(),
+  })
+  const persisted = await db.select().from(quantResearchSummaries).where(and(
+    eq(quantResearchSummaries.id, id),
+    eq(quantResearchSummaries.userId, ownerId),
+    eq(quantResearchSummaries.researchRunId, researchRun.id),
+  )).get()
+  if (!persisted)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research summary readback failed', 500)
+  try {
+    await db.run(sql`
+      DELETE FROM quant_research_summary
+      WHERE rowid IN (
+        SELECT rowid
+        FROM quant_research_summary
+        WHERE user_id = ${ownerId} AND research_run_id = ${researchRun.id}
+        ORDER BY generated_at DESC, rowid DESC
+        LIMIT -1 OFFSET ${QUANT_RESEARCH_SUMMARY_RETENTION}
+      )
+    `)
+  }
+  catch {
+    // The authoritative summary is already persisted; retention is best effort.
+  }
+  return persisted
+}
+
+export async function listQuantResearchSummaries(db: Database, userId: string, researchRunId: string, limit = QUANT_RESEARCH_SUMMARY_RETENTION) {
+  const ownerId = normalizeQuantUserId(userId)
+  const researchRun = await getQuantResearchRun(db, ownerId, researchRunId)
+  if (!researchRun)
+    return []
+  const boundedLimit = Math.min(QUANT_RESEARCH_SUMMARY_RETENTION, Math.max(1, Math.floor(limit)))
+  return db.select().from(quantResearchSummaries).where(and(
+    eq(quantResearchSummaries.userId, ownerId),
+    eq(quantResearchSummaries.researchRunId, researchRun.id),
+  )).orderBy(desc(quantResearchSummaries.generatedAt), desc(quantResearchSummaries.id)).limit(boundedLimit).all()
 }
 
 export async function getQuantSyncState(db: Database, userId: string) {

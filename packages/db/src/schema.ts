@@ -1051,6 +1051,26 @@ export const quantResearchRuns = sqliteTable('quant_research_run', {
 export type QuantResearchRun = InferSelectModel<typeof quantResearchRuns>
 export type NewQuantResearchRun = InferInsertModel<typeof quantResearchRuns>
 
+export const quantResearchSummaries = sqliteTable('quant_research_summary', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  researchRunId: text('research_run_id').notNull().references(() => quantResearchRuns.id, { onDelete: 'cascade' }),
+  summaryVersion: text('summary_version').notNull(),
+  reportVersion: text('report_version').notNull(),
+  provider: text('provider', { enum: ['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'] }).notNull(),
+  model: text('model').notNull(),
+  summaryJson: text('summary_json').notNull(),
+  citedEvidenceKeysJson: text('cited_evidence_keys_json').notNull(),
+  generatedAt: integer('generated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_quant_research_summary_user_run_generated_at').on(table.userId, table.researchRunId, table.generatedAt),
+  index('idx_quant_research_summary_user_generated_at').on(table.userId, table.generatedAt),
+])
+
+export type QuantResearchSummary = InferSelectModel<typeof quantResearchSummaries>
+export type NewQuantResearchSummary = InferInsertModel<typeof quantResearchSummaries>
+
 // --- 评分关联关系 ---
 export const ratingsRelations = relations(ratings, ({ one }) => ({
   player: one(players, {
@@ -1106,10 +1126,22 @@ export const quantSyncStateRelations = relations(quantSyncState, ({ one }) => ({
   }),
 }))
 
-export const quantResearchRunsRelations = relations(quantResearchRuns, ({ one }) => ({
+export const quantResearchRunsRelations = relations(quantResearchRuns, ({ one, many }) => ({
   user: one(user, {
     fields: [quantResearchRuns.userId],
     references: [user.id],
+  }),
+  summaries: many(quantResearchSummaries),
+}))
+
+export const quantResearchSummariesRelations = relations(quantResearchSummaries, ({ one }) => ({
+  user: one(user, {
+    fields: [quantResearchSummaries.userId],
+    references: [user.id],
+  }),
+  researchRun: one(quantResearchRuns, {
+    fields: [quantResearchSummaries.researchRunId],
+    references: [quantResearchRuns.id],
   }),
 }))
 
@@ -1129,6 +1161,7 @@ export const userRelations = relations(user, ({ many }) => ({
   quantScanSnapshots: many(quantScanSnapshots),
   quantSyncStates: many(quantSyncState),
   quantResearchRuns: many(quantResearchRuns),
+  quantResearchSummaries: many(quantResearchSummaries),
   crawlerTasks: many(crawlerTasks),
 }))
 

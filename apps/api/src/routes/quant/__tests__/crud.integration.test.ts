@@ -20,6 +20,7 @@ const researchMigrationPath = new URL('../../../../../../packages/db/drizzle/003
 const knowledgeSeedMigrationPath = new URL('../../../../../../packages/db/drizzle/0040_quant_investment_knowledge_seed.sql', import.meta.url)
 const userScopeMigrationPath = new URL('../../../../../../packages/db/drizzle/0041_quant_user_scope.sql', import.meta.url)
 const researchRunMigrationPath = new URL('../../../../../../packages/db/drizzle/0042_quant_research_run.sql', import.meta.url)
+const researchSummaryMigrationPath = new URL('../../../../../../packages/db/drizzle/0043_quant_research_summary.sql', import.meta.url)
 
 async function prepareUsers(client: ReturnType<typeof createClient>) {
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
@@ -29,7 +30,7 @@ async function prepareUsers(client: ReturnType<typeof createClient>) {
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -487,7 +488,7 @@ describe('quant watchlist CRUD contract', () => {
     expect(generatedPayload.data).toMatchObject({
       sourceSnapshotId: null,
       report: {
-        reportVersion: 'research-report-v1',
+        reportVersion: 'research-report-v2',
         evidence: expect.arrayContaining([expect.objectContaining({ key: 'trend-sample' })]),
       },
     })
@@ -520,7 +521,7 @@ describe('quant watchlist CRUD contract', () => {
     ]))
     const persistedRuns = await client.execute('SELECT user_id, ts_code, report_version, report_json FROM quant_research_run')
     expect(persistedRuns.rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ user_id: 'user-1', ts_code: '601899.SH', report_version: 'research-report-v1', report_json: expect.stringContaining('trend-sample') }),
+      expect.objectContaining({ user_id: 'user-1', ts_code: '601899.SH', report_version: 'research-report-v2', report_json: expect.stringContaining('trend-sample') }),
     ]))
 
     await expect((await userB.request('/api/quant/research/runs/601899.SH')).json()).resolves.toMatchObject({ data: [] })
@@ -530,6 +531,95 @@ describe('quant watchlist CRUD contract', () => {
       body: JSON.stringify({ ts_code: '600089.SH' }),
     })
     expect(outside.status).toBe(404)
+  })
+
+  it('generates an evidence-grounded AI summary and keeps it isolated by user', async () => {
+    const { client, db } = await createDatabase()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const report = JSON.stringify({
+      reportVersion: 'research-report-v2',
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: '2026-08-26T00:00:00.000Z',
+      sourceSnapshotId: null,
+      status: 'partial',
+      action: 'wait-confirmation',
+      score: 72.5,
+      headline: '等待确认：部分证据可用',
+      strengths: [],
+      risks: [],
+      gaps: [],
+      nextActions: [],
+      evidence: [{
+        key: 'quality-roe',
+        dimension: 'quality',
+        label: 'ROE',
+        status: 'pass',
+        value: 18,
+        threshold: '至少 10%',
+        source: 'Eastmoney 最新财报',
+        observedAt: '2026-06-30',
+        formulaVersion: 'eastmoney-financial-v1',
+        detail: '最近一期 ROE 达到研究门槛。',
+      }],
+      sources: [],
+    })
+    await client.execute({
+      sql: `INSERT INTO quant_research_run (
+        id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+        report_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['summary-run-1', 'user-1', '601899.SH', '紫金矿业', 'partial', 'research-report-v2', null, report, 10, 10],
+    })
+    const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const userB = createApp(db, { user: { id: 'user-2', role: 'user' } })
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'test-encryption-secret' } as AppEnv['Bindings']
+
+    const config = await userA.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'openai_compatible',
+        model: 'gpt-5.5',
+        base_url: 'https://ai.example.test/v1',
+        api_key: 'sk-user-one-1234',
+      }),
+    }, env)
+    expect(config.status).toBe(200)
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+        overview: '基本面有一项明确支持，但仍应继续核对。',
+        supports: ['ROE 达到报告门槛'],
+        concerns: ['当前证据范围仍有限'],
+        nextChecks: ['等待下一期财报并复核'],
+        citedEvidenceKeys: ['quality-roe'],
+      }) } }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+        overview: '引用了不存在的证据。',
+        supports: [],
+        concerns: [],
+        nextChecks: [],
+        citedEvidenceKeys: ['invented-key'],
+      }) } }] }), { status: 200 }))
+
+    const generated = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)
+    expect(generated.status).toBe(201)
+    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[] }, provider: string } }
+    expect(generatedPayload.data).toMatchObject({ provider: 'openai_compatible', summary: { citedEvidenceKeys: ['quality-roe'] } })
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(expect.objectContaining({ authorization: 'Bearer sk-user-one-1234' }))
+    await expect(client.execute('SELECT summary_json, cited_evidence_keys_json FROM quant_research_summary')).resolves.toMatchObject({
+      rows: [{ summary_json: expect.not.stringContaining('sk-user-one-1234'), cited_evidence_keys_json: '["quality-roe"]' }],
+    })
+
+    const history = await userA.request('/api/quant/research/runs/summary-run-1/summary?limit=1', {}, env)
+    expect(history.status).toBe(200)
+    await expect(history.json()).resolves.toMatchObject({ data: [{ researchRunId: 'summary-run-1', citedEvidenceKeys: ['quality-roe'] }] })
+    expect((await userB.request('/api/quant/research/runs/summary-run-1/summary', {}, env)).status).toBe(404)
+
+    const rejected = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)
+    expect(rejected.status).toBe(502)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 1 }] })
   })
 
   it('completes a fixture-backed sync and reads the persisted snapshot back', async () => {
