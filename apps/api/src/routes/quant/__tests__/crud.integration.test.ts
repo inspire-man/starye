@@ -18,10 +18,18 @@ const leaseMigrationPath = new URL('../../../../../../packages/db/drizzle/0037_q
 const seedMigrationPath = new URL('../../../../../../packages/db/drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
 const researchMigrationPath = new URL('../../../../../../packages/db/drizzle/0039_quant_research_marker.sql', import.meta.url)
 const knowledgeSeedMigrationPath = new URL('../../../../../../packages/db/drizzle/0040_quant_investment_knowledge_seed.sql', import.meta.url)
+const userScopeMigrationPath = new URL('../../../../../../packages/db/drizzle/0041_quant_user_scope.sql', import.meta.url)
+const researchRunMigrationPath = new URL('../../../../../../packages/db/drizzle/0042_quant_research_run.sql', import.meta.url)
+
+async function prepareUsers(client: ReturnType<typeof createClient>) {
+  await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
+  await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-1\', 1)')
+}
 
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath]) {
+  await prepareUsers(client)
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -32,7 +40,8 @@ async function createDatabase(): Promise<{ client: ReturnType<typeof createClien
 
 async function createSeedDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath]) {
+  await prepareUsers(client)
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -41,14 +50,30 @@ async function createSeedDatabase(): Promise<{ client: ReturnType<typeof createC
 }
 
 function createApp(db: Database, session: unknown) {
+  const normalizedSession = normalizeSession(session)
   const app = new Hono<AppEnv>()
   app.use('*', async (c, next) => {
     c.set('db', db)
-    c.set('auth', { api: { getSession: vi.fn().mockResolvedValue(session) } } as any)
+    c.set('auth', { api: { getSession: vi.fn().mockResolvedValue(normalizedSession) } } as any)
     await next()
   })
   app.route('/api/quant', quantRoutes)
   return app
+}
+
+function normalizeSession(session: unknown): unknown {
+  if (!session || typeof session !== 'object')
+    return session
+  const record = session as Record<string, unknown>
+  if (!record.user || typeof record.user !== 'object')
+    return session
+  return {
+    ...record,
+    user: {
+      id: 'user-1',
+      ...record.user,
+    },
+  }
 }
 
 function valueFixtureBars(tsCode: string, offset = 0): DailyBar[] {
@@ -216,7 +241,7 @@ describe('quant watchlist CRUD contract', () => {
   it('returns persisted signal history for candidates', async () => {
     const { client, db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })
-    await createQuantWatchlistItem(db, { tsCode: '601899.SH', name: '紫金矿业' })
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
 
     const candidateJson = (score: number, matchedFactors: string[]) => JSON.stringify([{
       tsCode: '601899.SH',
@@ -232,9 +257,9 @@ describe('quant watchlist CRUD contract', () => {
     ] as const) {
       await client.execute({
         sql: `INSERT INTO quant_scan_snapshot (
-          id, status, factor_version, input_ts_codes_json, from_date, to_date,
+          id, user_id, status, factor_version, input_ts_codes_json, from_date, to_date,
           candidate_count, candidates_json, generated_at, created_at
-        ) VALUES (?, 'completed', 'momentum-v1', ?, '20260824', '20260825', 1, ?, ?, ?)`,
+        ) VALUES (?, 'user-1', 'completed', 'momentum-v1', ?, '20260824', '20260825', 1, ?, ?, ?)`,
         args: [id, JSON.stringify(['601899.SH']), candidateJson(score, matchedFactors), generatedAt, generatedAt],
       })
     }
@@ -325,13 +350,186 @@ describe('quant watchlist CRUD contract', () => {
     await expect(client.execute('SELECT count(*) AS count FROM quant_research_marker')).resolves.toMatchObject({ rows: [{ count: 0 }] })
   })
 
-  it('rejects a non-admin session before touching the database', async () => {
+  it('allows an ordinary authenticated user to use their own workspace', async () => {
     const { db } = await createDatabase()
     const app = createApp(db, { user: { role: 'user' } })
 
     const response = await app.request('/api/quant/watchlist')
 
-    expect(response.status).toBe(403)
+    expect(response.status).toBe(200)
+  })
+
+  it('provisions an idempotent starter watchlist for a new user', async () => {
+    const { client, db } = await createDatabase()
+    const app = createApp(db, { user: { id: 'user-1', role: 'user' } })
+
+    const first = await app.request('/api/quant/watchlist')
+    expect(first.status).toBe(200)
+    const payload = await first.json() as { data: Array<{ tsCode: string, name: string }> }
+    expect(payload.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tsCode: '601899.SH', name: '紫金矿业' }),
+      expect.objectContaining({ tsCode: '600089.SH', name: '特变电工' }),
+      expect.objectContaining({ tsCode: '600938.SH', name: '中国海油' }),
+    ]))
+    await expect(client.execute('SELECT count(*) AS count FROM quant_watchlist WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 13 }] })
+
+    const update = await app.request('/api/quant/watchlist/601899.SH', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '紫金矿业（自定义）' }),
+    })
+    expect(update.status).toBe(200)
+    await app.request('/api/quant/watchlist')
+    await expect(client.execute('SELECT count(*) AS count, name FROM quant_watchlist WHERE user_id = \'user-1\' AND ts_code = \'601899.SH\'')).resolves.toMatchObject({
+      rows: [{ count: 1, name: '紫金矿业（自定义）' }],
+    })
+  })
+
+  it('isolates watchlists and research markers by authenticated user', async () => {
+    const { client, db } = await createDatabase()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const userB = createApp(db, { user: { id: 'user-2', role: 'user' } })
+
+    await userA.request('/api/quant/watchlist', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '000001.SZ', name: '平安银行' }),
+    })
+    await userB.request('/api/quant/watchlist', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '600000.SH', name: '浦发银行' }),
+    })
+
+    await expect((await userA.request('/api/quant/watchlist')).json()).resolves.toMatchObject({ data: [{ tsCode: '000001.SZ' }] })
+    await expect((await userB.request('/api/quant/watchlist')).json()).resolves.toMatchObject({ data: [{ tsCode: '600000.SH' }] })
+
+    const marker = await userA.request('/api/quant/research/000001.SZ', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'priority', note: '用户 A', review_date: null }),
+    })
+    expect(marker.status).toBe(200)
+    const crossUserMarker = await userB.request('/api/quant/research/000001.SZ', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'priority', note: '用户 B', review_date: null }),
+    })
+    expect(crossUserMarker.status).toBe(404)
+    await expect(client.execute('SELECT user_id, ts_code FROM quant_research_marker')).resolves.toMatchObject({
+      rows: [{ user_id: 'user-1', ts_code: '000001.SZ' }],
+    })
+  })
+
+  it('stores and redacts a user-scoped AI configuration', async () => {
+    const { client, db } = await createDatabase()
+    const app = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'test-encryption-secret' } as AppEnv['Bindings']
+
+    const save = await app.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'openai_compatible',
+        model: 'gpt-5.5',
+        base_url: 'https://ai.example.test/v1',
+        api_key: 'sk-user-one-1234',
+      }),
+    }, env)
+    expect(save.status).toBe(200)
+    const savePayload = await save.json() as { data: Record<string, unknown> }
+    expect(savePayload.data).toMatchObject({ provider: 'openai_compatible', model: 'gpt-5.5', hasApiKey: true, apiKeyHint: '1234' })
+    expect(JSON.stringify(savePayload)).not.toContain('sk-user-one-1234')
+
+    const read = await app.request('/api/quant/ai-config', {}, env)
+    expect(read.status).toBe(200)
+    await expect(read.json()).resolves.toMatchObject({ data: { hasApiKey: true, apiKeyHint: '1234' } })
+    await expect(client.execute('SELECT user_id, encrypted_api_key FROM quant_ai_config')).resolves.toMatchObject({
+      rows: [{ user_id: 'user-1', encrypted_api_key: expect.stringMatching(/^v1:/u) }],
+    })
+  })
+
+  it('generates a structured research run, reads its history, and isolates it by user', async () => {
+    const { client, db } = await createDatabase()
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
+    await upsertQuantDailyBars(db, valueFixtureBars('601899.SH'))
+    await client.execute(`
+      INSERT INTO quant_scan_snapshot (
+        id, user_id, status, factor_version, input_ts_codes_json, from_date, to_date,
+        candidate_count, candidates_json, generated_at, created_at
+      ) VALUES ('target-snapshot', 'user-1', 'partial', 'momentum-v1', '["601899.SH"]', '20260101', '20260826', 0, '[]', 9, 9)
+    `)
+    await client.execute(`
+      INSERT INTO quant_scan_snapshot (
+        id, user_id, status, factor_version, input_ts_codes_json, from_date, to_date,
+        candidate_count, candidates_json, generated_at, created_at
+      ) VALUES ('unrelated-snapshot', 'user-1', 'partial', 'momentum-v1', '["600089.SH"]', '20260101', '20260826', 0, '[]', 10, 10)
+    `)
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const userB = createApp(db, { user: { id: 'user-2', role: 'user' } })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }))
+
+    const generated = await userA.request('/api/quant/research/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '601899.SH' }),
+    }, {
+      TUSHARE_TOKEN: 'fixture-token',
+      TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+    } as AppEnv['Bindings'])
+    expect(generated.status).toBe(201)
+    const generatedPayload = await generated.json() as { data: { id: string, sourceSnapshotId: string | null, report: { reportVersion: string, evidence: unknown[] } } }
+    expect(generatedPayload.data).toMatchObject({
+      sourceSnapshotId: null,
+      report: {
+        reportVersion: 'research-report-v1',
+        evidence: expect.arrayContaining([expect.objectContaining({ key: 'trend-sample' })]),
+      },
+    })
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === 'https://tushare.fixture.test')).toHaveLength(1)
+
+    await client.execute(`
+      INSERT INTO quant_scan_snapshot (
+        id, user_id, status, factor_version, input_ts_codes_json, from_date, to_date,
+        candidate_count, candidates_json, generated_at, created_at
+      ) VALUES ('target-input-only-snapshot', 'user-1', 'partial', 'momentum-v1', '["601899.SH"]', '20260101', '20260826', 0, '[]', 11, 11)
+    `)
+    const generatedWithInputOnlySnapshot = await userA.request('/api/quant/research/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '601899.SH' }),
+    }, {
+      TUSHARE_TOKEN: 'fixture-token',
+      TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+    } as AppEnv['Bindings'])
+    expect(generatedWithInputOnlySnapshot.status).toBe(201)
+    const generatedWithInputOnlySnapshotPayload = await generatedWithInputOnlySnapshot.json() as { data: { id: string, sourceSnapshotId: string | null } }
+    expect(generatedWithInputOnlySnapshotPayload.data).toMatchObject({ sourceSnapshotId: 'target-input-only-snapshot' })
+
+    const history = await userA.request('/api/quant/research/runs/601899.SH?limit=2')
+    expect(history.status).toBe(200)
+    const historyPayload = await history.json() as { data: Array<{ id: string, tsCode: string }> }
+    expect(historyPayload.data.map(item => ({ id: item.id, tsCode: item.tsCode }))).toEqual(expect.arrayContaining([
+      { id: generatedPayload.data.id, tsCode: '601899.SH' },
+      { id: generatedWithInputOnlySnapshotPayload.data.id, tsCode: '601899.SH' },
+    ]))
+    const persistedRuns = await client.execute('SELECT user_id, ts_code, report_version, report_json FROM quant_research_run')
+    expect(persistedRuns.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ user_id: 'user-1', ts_code: '601899.SH', report_version: 'research-report-v1', report_json: expect.stringContaining('trend-sample') }),
+    ]))
+
+    await expect((await userB.request('/api/quant/research/runs/601899.SH')).json()).resolves.toMatchObject({ data: [] })
+    const outside = await userA.request('/api/quant/research/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '600089.SH' }),
+    })
+    expect(outside.status).toBe(404)
   })
 
   it('completes a fixture-backed sync and reads the persisted snapshot back', async () => {
@@ -581,7 +779,7 @@ describe('quant watchlist CRUD contract', () => {
       ['000001.SZ', '平安银行'],
     ] as const
     for (const [tsCode, name] of stocks)
-      await createQuantWatchlistItem(db, { tsCode, name })
+      await createQuantWatchlistItem(db, { userId: 'user-1', tsCode, name })
     await upsertQuantDailyBars(db, stocks.map(([tsCode], index) => valueFixtureBars(tsCode, index * 10)).flat())
 
     const values: Record<string, { pe: number, pb: number, roe: number }> = {
@@ -667,7 +865,7 @@ describe('quant watchlist CRUD contract', () => {
   it('returns shareholder returns from implemented Tushare dividends and local prices', async () => {
     const { db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })
-    await createQuantWatchlistItem(db, { tsCode: '601899.SH', name: '紫金矿业' })
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
     await upsertQuantDailyBars(db, valueFixtureBars('601899.SH'))
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       code: 0,

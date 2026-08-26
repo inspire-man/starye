@@ -918,16 +918,33 @@ export const aria2Configs = sqliteTable('aria2_configs', {
 export type Aria2Config = InferSelectModel<typeof aria2Configs>
 export type NewAria2Config = InferInsertModel<typeof aria2Configs>
 
+// --- Quant 用户级 AI 配置 ---
+export const quantAiConfigs = sqliteTable('quant_ai_config', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
+  provider: text('provider', { enum: ['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'] }).notNull(),
+  model: text('model').notNull(),
+  baseUrl: text('base_url'),
+  encryptedApiKey: text('encrypted_api_key'),
+  apiKeyHint: text('api_key_hint'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+})
+
+export type QuantAiConfig = InferSelectModel<typeof quantAiConfigs>
+export type NewQuantAiConfig = InferInsertModel<typeof quantAiConfigs>
+
 // --- 量化工作台 ---
 export const quantWatchlist = sqliteTable('quant_watchlist', {
   id: text('id').primaryKey(),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
   tsCode: text('ts_code').notNull(),
   name: text('name'),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
 }, table => [
-  uniqueIndex('idx_quant_watchlist_ts_code').on(table.tsCode),
-  index('idx_quant_watchlist_created_at').on(table.createdAt),
+  uniqueIndex('idx_quant_watchlist_user_ts_code').on(table.userId, table.tsCode),
+  index('idx_quant_watchlist_user_created_at').on(table.userId, table.createdAt),
 ])
 
 export type QuantWatchlist = InferSelectModel<typeof quantWatchlist>
@@ -935,6 +952,7 @@ export type NewQuantWatchlist = InferInsertModel<typeof quantWatchlist>
 
 export const quantResearchMarkers = sqliteTable('quant_research_marker', {
   id: text('id').primaryKey(),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
   tsCode: text('ts_code').notNull(),
   status: text('status', { enum: ['unreviewed', 'priority', 'paused', 'excluded'] }).notNull().default('unreviewed'),
   note: text('note'),
@@ -942,8 +960,8 @@ export const quantResearchMarkers = sqliteTable('quant_research_marker', {
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
 }, table => [
-  uniqueIndex('idx_quant_research_marker_ts_code').on(table.tsCode),
-  index('idx_quant_research_marker_status').on(table.status),
+  uniqueIndex('idx_quant_research_marker_user_ts_code').on(table.userId, table.tsCode),
+  index('idx_quant_research_marker_user_status').on(table.userId, table.status),
 ])
 
 export type QuantResearchMarker = InferSelectModel<typeof quantResearchMarkers>
@@ -974,6 +992,7 @@ export type NewQuantDailyBar = InferInsertModel<typeof quantDailyBars>
 
 export const quantScanSnapshots = sqliteTable('quant_scan_snapshot', {
   id: text('id').primaryKey(),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
   status: text('status', { enum: ['completed', 'partial'] }).notNull(),
   factorVersion: text('factor_version').notNull(),
   inputTsCodesJson: text('input_ts_codes_json').notNull(),
@@ -984,8 +1003,8 @@ export const quantScanSnapshots = sqliteTable('quant_scan_snapshot', {
   generatedAt: integer('generated_at', { mode: 'timestamp' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
 }, table => [
-  index('idx_quant_scan_snapshot_generated_at').on(table.generatedAt),
-  index('idx_quant_scan_snapshot_status_generated').on(table.status, table.generatedAt),
+  index('idx_quant_scan_snapshot_user_generated_at').on(table.userId, table.generatedAt),
+  index('idx_quant_scan_snapshot_user_status_generated').on(table.userId, table.status, table.generatedAt),
 ])
 
 export type QuantScanSnapshot = InferSelectModel<typeof quantScanSnapshots>
@@ -993,6 +1012,7 @@ export type NewQuantScanSnapshot = InferInsertModel<typeof quantScanSnapshots>
 
 export const quantSyncState = sqliteTable('quant_sync_state', {
   id: text('id').primaryKey(),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
   status: text('status', { enum: ['running', 'completed', 'partial', 'rejected'] }).notNull(),
   runId: text('run_id'),
   leaseExpiresAt: integer('lease_expires_at', { mode: 'timestamp' }),
@@ -1011,6 +1031,25 @@ export const quantSyncState = sqliteTable('quant_sync_state', {
 
 export type QuantSyncState = InferSelectModel<typeof quantSyncState>
 export type NewQuantSyncState = InferInsertModel<typeof quantSyncState>
+
+export const quantResearchRuns = sqliteTable('quant_research_run', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  tsCode: text('ts_code').notNull(),
+  name: text('name'),
+  status: text('status', { enum: ['ready', 'partial', 'insufficient_data'] }).notNull(),
+  reportVersion: text('report_version').notNull(),
+  sourceSnapshotId: text('source_snapshot_id'),
+  reportJson: text('report_json').notNull(),
+  generatedAt: integer('generated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_quant_research_run_user_generated_at').on(table.userId, table.generatedAt),
+  index('idx_quant_research_run_user_ts_code_generated_at').on(table.userId, table.tsCode, table.generatedAt),
+])
+
+export type QuantResearchRun = InferSelectModel<typeof quantResearchRuns>
+export type NewQuantResearchRun = InferInsertModel<typeof quantResearchRuns>
 
 // --- 评分关联关系 ---
 export const ratingsRelations = relations(ratings, ({ one }) => ({
@@ -1032,6 +1071,48 @@ export const aria2ConfigsRelations = relations(aria2Configs, ({ one }) => ({
   }),
 }))
 
+export const quantAiConfigsRelations = relations(quantAiConfigs, ({ one }) => ({
+  user: one(user, {
+    fields: [quantAiConfigs.userId],
+    references: [user.id],
+  }),
+}))
+
+export const quantWatchlistRelations = relations(quantWatchlist, ({ one }) => ({
+  user: one(user, {
+    fields: [quantWatchlist.userId],
+    references: [user.id],
+  }),
+}))
+
+export const quantResearchMarkersRelations = relations(quantResearchMarkers, ({ one }) => ({
+  user: one(user, {
+    fields: [quantResearchMarkers.userId],
+    references: [user.id],
+  }),
+}))
+
+export const quantScanSnapshotsRelations = relations(quantScanSnapshots, ({ one }) => ({
+  user: one(user, {
+    fields: [quantScanSnapshots.userId],
+    references: [user.id],
+  }),
+}))
+
+export const quantSyncStateRelations = relations(quantSyncState, ({ one }) => ({
+  user: one(user, {
+    fields: [quantSyncState.userId],
+    references: [user.id],
+  }),
+}))
+
+export const quantResearchRunsRelations = relations(quantResearchRuns, ({ one }) => ({
+  user: one(user, {
+    fields: [quantResearchRuns.userId],
+    references: [user.id],
+  }),
+}))
+
 // --- 关联关系定义 ---
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -1042,6 +1123,12 @@ export const userRelations = relations(user, ({ many }) => ({
   favorites: many(userFavorites),
   ratings: many(ratings),
   aria2Config: many(aria2Configs),
+  quantAiConfigs: many(quantAiConfigs),
+  quantWatchlists: many(quantWatchlist),
+  quantResearchMarkers: many(quantResearchMarkers),
+  quantScanSnapshots: many(quantScanSnapshots),
+  quantSyncStates: many(quantSyncState),
+  quantResearchRuns: many(quantResearchRuns),
   crawlerTasks: many(crawlerTasks),
 }))
 

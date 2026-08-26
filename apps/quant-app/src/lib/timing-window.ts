@@ -157,4 +157,3 @@ export function buildTimingWindow(bars: readonly DailyBar[], trend: TrendStructu
     metrics,
   }
 }
-

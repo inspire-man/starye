@@ -493,4 +493,101 @@ describe('quantApi', () => {
     })
     expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/knowledge`, expect.objectContaining({ credentials: 'include' }))
   })
+
+  it('normalizes user-scoped AI config and never sends a stored key on read', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        id: 'ai-1',
+        provider: 'openai_compatible',
+        model: 'gpt-5.5',
+        base_url: 'https://ai.example.test/v1',
+        has_api_key: true,
+        api_key_hint: '1234',
+      } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        id: 'ai-1',
+        provider: 'deepseek',
+        model: 'deepseek-chat',
+        base_url: null,
+        has_api_key: true,
+        api_key_hint: '5678',
+      } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { deleted: true } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getAiConfig()).resolves.toMatchObject({
+      provider: 'openai_compatible',
+      model: 'gpt-5.5',
+      hasApiKey: true,
+      apiKeyHint: '1234',
+    })
+    await expect(quantApi.updateAiConfig({
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      clearApiKey: false,
+    })).resolves.toMatchObject({ provider: 'deepseek', model: 'deepseek-chat' })
+    await expect(quantApi.deleteAiConfig()).resolves.toBe(true)
+    expect(JSON.stringify(fetchMock.mock.calls[0])).not.toContain('stored')
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      base_url: undefined,
+      api_key: undefined,
+      clear_api_key: false,
+    }))
+  })
+
+  it('normalizes structured research runs and requests history by stock code', async () => {
+    const run = {
+      id: 'run-1',
+      ts_code: '601899.SH',
+      name: '紫金矿业',
+      status: 'partial',
+      report_version: 'research-report-v1',
+      source_snapshot_id: 'snapshot-1',
+      generated_at: '2026-08-26T00:00:00.000Z',
+      created_at: '2026-08-26T00:00:00.000Z',
+      report: {
+        report_version: 'research-report-v1',
+        ts_code: '601899.SH',
+        name: '紫金矿业',
+        generated_at: '2026-08-26T00:00:00.000Z',
+        source_snapshot_id: 'snapshot-1',
+        status: 'partial',
+        action: 'wait-confirmation',
+        score: 72.7,
+        headline: '等待确认：部分证据可用',
+        strengths: ['ROE 达到研究门槛'],
+        risks: ['TTM PE 需要结合行业'],
+        gaps: ['财报连续性仍需补齐'],
+        next_actions: ['等待下一期报告'],
+        evidence: [{
+          key: 'quality-roe',
+          dimension: 'quality',
+          label: 'ROE',
+          status: 'pass',
+          value: 18,
+          threshold: '至少 10%',
+          source: 'Eastmoney 最新财报',
+          observed_at: '2026-06-30',
+          formula_version: 'eastmoney-financial-v1',
+          detail: '资本回报达到研究门槛',
+        }],
+        sources: [{ id: 'eastmoney-financial', name: 'Eastmoney 财务报告', observed_at: '2026-08-26T00:00:00.000Z', formula_version: 'eastmoney-financial-v1' }],
+      },
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: run }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [run] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.generateResearchRun('601899.SH')).resolves.toMatchObject({
+      id: 'run-1',
+      tsCode: '601899.SH',
+      report: { action: 'wait-confirmation', evidence: [{ key: 'quality-roe', status: 'pass', value: 18 }] },
+    })
+    await expect(quantApi.getResearchRuns('601899.SH', 3)).resolves.toMatchObject([{ id: 'run-1', reportVersion: 'research-report-v1' }])
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ ts_code: '601899.SH' }))
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/601899.SH?limit=3`)
+  })
 })

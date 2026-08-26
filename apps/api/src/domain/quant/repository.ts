@@ -3,6 +3,7 @@ import type { DailyBar, MomentumCandidate, QuantSyncStatus } from './types'
 import {
   quantDailyBars,
   quantResearchMarkers,
+  quantResearchRuns,
   quantScanSnapshots,
   quantSyncState,
   quantWatchlist,
@@ -15,8 +16,25 @@ export const QUANT_SYNC_STATE_ID = 'daily'
 export const MAX_WATCHLIST_SIZE = 50
 export const QUANT_SYNC_LEASE_DURATION_MS = 120_000
 export const QUANT_SYNC_SNAPSHOT_RETENTION = 30
+export const QUANT_RESEARCH_RUN_RETENTION = 30
 export const QUANT_RESEARCH_STATUSES = ['unreviewed', 'priority', 'paused', 'excluded'] as const
 export type QuantResearchStatus = typeof QUANT_RESEARCH_STATUSES[number]
+
+export const QUANT_STARTER_WATCHLIST = [
+  { tsCode: '601899.SH', name: '紫金矿业' },
+  { tsCode: '600089.SH', name: '特变电工' },
+  { tsCode: '600938.SH', name: '中国海油' },
+  { tsCode: '601318.SH', name: '中国平安' },
+  { tsCode: '000001.SZ', name: '平安银行' },
+  { tsCode: '600028.SH', name: '中国石化' },
+  { tsCode: '601857.SH', name: '中国石油' },
+  { tsCode: '601919.SH', name: '中远海控' },
+  { tsCode: '600011.SH', name: '华能国际' },
+  { tsCode: '600900.SH', name: '长江电力' },
+  { tsCode: '600312.SH', name: '平高电气' },
+  { tsCode: '603993.SH', name: '洛阳钼业' },
+  { tsCode: '603986.SH', name: '兆易创新' },
+] as const
 
 type PersistedQuantSyncStatus = QuantSyncStatus | 'running'
 
@@ -41,6 +59,33 @@ function leaseExpiry(now: Date, durationMs: number): Date {
   return new Date((Math.ceil(now.getTime() / 1000) + durationSeconds) * 1000)
 }
 
+function normalizeQuantUserId(value: string): string {
+  const normalized = value.trim()
+  if (!normalized)
+    throw new QuantError('QUANT_INVALID_INPUT', 'Authenticated user id is required', 401)
+  return normalized
+}
+
+export function quantSyncStateId(userId: string): string {
+  return `${QUANT_SYNC_STATE_ID}:${normalizeQuantUserId(userId)}`
+}
+
+function toQuantWatchlistView(row: {
+  readonly id: string
+  readonly tsCode: string
+  readonly name: string | null
+  readonly createdAt: Date
+  readonly updatedAt: Date
+}) {
+  return {
+    id: row.id,
+    tsCode: row.tsCode,
+    name: row.name,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }
+}
+
 export function normalizeTsCode(value: string): string {
   const normalized = value.trim().toUpperCase()
   if (!/^[A-Z0-9.-]{1,20}$/u.test(normalized))
@@ -55,12 +100,34 @@ export function normalizeTradeDate(value: string, field = 'date'): string {
   return normalized
 }
 
-export async function listQuantWatchlist(db: Database) {
-  return db.select().from(quantWatchlist).orderBy(asc(quantWatchlist.createdAt)).all()
+export async function listQuantWatchlist(db: Database, userId: string) {
+  const ownerId = normalizeQuantUserId(userId)
+  return db.select().from(quantWatchlist).where(eq(quantWatchlist.userId, ownerId)).orderBy(asc(quantWatchlist.createdAt)).all()
 }
 
-export async function listQuantWatchlistWithStats(db: Database) {
-  const rows = await listQuantWatchlist(db)
+export async function ensureQuantStarterWatchlist(db: Database, userId: string): Promise<void> {
+  const ownerId = normalizeQuantUserId(userId)
+  const existing = await db.select({ id: quantWatchlist.id })
+    .from(quantWatchlist)
+    .where(eq(quantWatchlist.userId, ownerId))
+    .limit(1)
+    .get()
+  if (existing)
+    return
+
+  const now = new Date()
+  await db.insert(quantWatchlist).values(QUANT_STARTER_WATCHLIST.map(item => ({
+    id: nanoid(),
+    userId: ownerId,
+    tsCode: item.tsCode,
+    name: item.name,
+    createdAt: now,
+    updatedAt: now,
+  }))).onConflictDoNothing({ target: [quantWatchlist.userId, quantWatchlist.tsCode] })
+}
+
+export async function listQuantWatchlistWithStats(db: Database, userId: string) {
+  const rows = await listQuantWatchlist(db, userId)
   return Promise.all(rows.map(async (row) => {
     const stats = await db
       .select({
@@ -81,7 +148,7 @@ export async function listQuantWatchlistWithStats(db: Database) {
       .limit(1)
       .get()
     return {
-      ...row,
+      ...toQuantWatchlistView(row),
       latestTradeDate: stats?.latestTradeDate ?? null,
       barCount: Number(stats?.barCount ?? 0),
       latestClose: latest?.close ?? null,
@@ -90,65 +157,80 @@ export async function listQuantWatchlistWithStats(db: Database) {
   }))
 }
 
-export async function getQuantWatchlistItem(db: Database, tsCode: string) {
-  return db.select().from(quantWatchlist).where(eq(quantWatchlist.tsCode, normalizeTsCode(tsCode))).get()
+export async function getQuantWatchlistItem(db: Database, userId: string, tsCode: string) {
+  const ownerId = normalizeQuantUserId(userId)
+  return db.select().from(quantWatchlist).where(and(
+    eq(quantWatchlist.userId, ownerId),
+    eq(quantWatchlist.tsCode, normalizeTsCode(tsCode)),
+  )).get()
 }
 
-export async function createQuantWatchlistItem(db: Database, input: { readonly tsCode: string, readonly name?: string | null }) {
+export async function createQuantWatchlistItem(db: Database, input: { readonly userId: string, readonly tsCode: string, readonly name?: string | null }) {
+  const ownerId = normalizeQuantUserId(input.userId)
   const tsCode = normalizeTsCode(input.tsCode)
-  const existing = await getQuantWatchlistItem(db, tsCode)
+  const existing = await getQuantWatchlistItem(db, ownerId, tsCode)
   if (existing)
-    return existing
+    return toQuantWatchlistView(existing)
 
-  const countRows = await db.select({ count: sql<number>`count(*)` }).from(quantWatchlist).all()
+  const countRows = await db.select({ count: sql<number>`count(*)` }).from(quantWatchlist).where(eq(quantWatchlist.userId, ownerId)).all()
   if (Number(countRows[0]?.count ?? 0) >= MAX_WATCHLIST_SIZE) {
     throw new QuantError('QUANT_WATCHLIST_LIMIT', 'Watchlist limit is 50 items', 409)
   }
 
   await db.insert(quantWatchlist).values({
     id: nanoid(),
+    userId: ownerId,
     tsCode,
     name: input.name?.trim() || null,
     createdAt: new Date(),
     updatedAt: new Date(),
-  }).onConflictDoNothing({ target: quantWatchlist.tsCode })
+  }).onConflictDoNothing({ target: [quantWatchlist.userId, quantWatchlist.tsCode] })
 
-  const persisted = await getQuantWatchlistItem(db, tsCode)
+  const persisted = await getQuantWatchlistItem(db, ownerId, tsCode)
   if (!persisted)
     throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item readback failed', 500)
-  return persisted
+  return toQuantWatchlistView(persisted)
 }
 
-export async function updateQuantWatchlistItem(db: Database, tsCode: string, name: string | null) {
+export async function updateQuantWatchlistItem(db: Database, userId: string, tsCode: string, name: string | null) {
+  const ownerId = normalizeQuantUserId(userId)
   const normalizedCode = normalizeTsCode(tsCode)
   await db.update(quantWatchlist)
     .set({ name: name?.trim() || null, updatedAt: new Date() })
-    .where(eq(quantWatchlist.tsCode, normalizedCode))
-  const persisted = await getQuantWatchlistItem(db, normalizedCode)
+    .where(and(eq(quantWatchlist.userId, ownerId), eq(quantWatchlist.tsCode, normalizedCode)))
+  const persisted = await getQuantWatchlistItem(db, ownerId, normalizedCode)
   if (!persisted)
     throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
-  return persisted
+  return toQuantWatchlistView(persisted)
 }
 
-export async function deleteQuantWatchlistItem(db: Database, tsCode: string): Promise<boolean> {
+export async function deleteQuantWatchlistItem(db: Database, userId: string, tsCode: string): Promise<boolean> {
+  const ownerId = normalizeQuantUserId(userId)
   const normalizedCode = normalizeTsCode(tsCode)
-  const existing = await getQuantWatchlistItem(db, normalizedCode)
+  const existing = await getQuantWatchlistItem(db, ownerId, normalizedCode)
   if (!existing)
     return false
 
-  await db.delete(quantResearchMarkers).where(eq(quantResearchMarkers.tsCode, normalizedCode))
-  await db.delete(quantWatchlist).where(eq(quantWatchlist.tsCode, normalizedCode))
-  return !(await getQuantWatchlistItem(db, normalizedCode))
+  await db.delete(quantResearchMarkers).where(and(
+    eq(quantResearchMarkers.userId, ownerId),
+    eq(quantResearchMarkers.tsCode, normalizedCode),
+  ))
+  await db.delete(quantWatchlist).where(and(
+    eq(quantWatchlist.userId, ownerId),
+    eq(quantWatchlist.tsCode, normalizedCode),
+  ))
+  return !(await getQuantWatchlistItem(db, ownerId, normalizedCode))
 }
 
 function isQuantResearchStatus(value: string): value is QuantResearchStatus {
   return (QUANT_RESEARCH_STATUSES as readonly string[]).includes(value)
 }
 
-export async function listQuantResearchMarkers(db: Database) {
+export async function listQuantResearchMarkers(db: Database, userId: string) {
+  const ownerId = normalizeQuantUserId(userId)
   const [watchlist, markers] = await Promise.all([
-    listQuantWatchlist(db),
-    db.select().from(quantResearchMarkers).all(),
+    listQuantWatchlist(db, ownerId),
+    db.select().from(quantResearchMarkers).where(eq(quantResearchMarkers.userId, ownerId)).all(),
   ])
   const markerByCode = new Map(markers.map(marker => [marker.tsCode, marker]))
   return watchlist.map((item) => {
@@ -165,21 +247,24 @@ export async function listQuantResearchMarkers(db: Database) {
 }
 
 export async function upsertQuantResearchMarker(db: Database, input: {
+  readonly userId: string
   readonly tsCode: string
   readonly status: string
   readonly note: string | null
   readonly reviewDate: string | null
 }) {
+  const ownerId = normalizeQuantUserId(input.userId)
   const tsCode = normalizeTsCode(input.tsCode)
   if (!isQuantResearchStatus(input.status))
     throw new QuantError('QUANT_INVALID_RESEARCH_STATUS', 'Research status is invalid', 400)
-  const watchlistItem = await getQuantWatchlistItem(db, tsCode)
+  const watchlistItem = await getQuantWatchlistItem(db, ownerId, tsCode)
   if (!watchlistItem)
     throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
 
   const now = new Date()
   await db.insert(quantResearchMarkers).values({
-    id: `research:${tsCode}`,
+    id: `research:${ownerId}:${tsCode}`,
+    userId: ownerId,
     tsCode,
     status: input.status,
     note: input.note?.trim() || null,
@@ -187,7 +272,7 @@ export async function upsertQuantResearchMarker(db: Database, input: {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoUpdate({
-    target: quantResearchMarkers.tsCode,
+    target: [quantResearchMarkers.userId, quantResearchMarkers.tsCode],
     set: {
       status: input.status,
       note: input.note?.trim() || null,
@@ -196,10 +281,20 @@ export async function upsertQuantResearchMarker(db: Database, input: {
     },
   })
 
-  const persisted = await db.select().from(quantResearchMarkers).where(eq(quantResearchMarkers.tsCode, tsCode)).get()
+  const persisted = await db.select().from(quantResearchMarkers).where(and(
+    eq(quantResearchMarkers.userId, ownerId),
+    eq(quantResearchMarkers.tsCode, tsCode),
+  )).get()
   if (!persisted)
     throw new QuantError('QUANT_NOT_FOUND', 'Research marker readback failed', 500)
-  return persisted
+  return {
+    tsCode: persisted.tsCode,
+    status: persisted.status,
+    note: persisted.note,
+    reviewDate: persisted.reviewDate,
+    createdAt: persisted.createdAt,
+    updatedAt: persisted.updatedAt,
+  }
 }
 
 export async function upsertQuantDailyBars(db: Database, bars: readonly DailyBar[]): Promise<number> {
@@ -273,6 +368,7 @@ export async function listQuantDailyBars(db: Database, options: {
 }
 
 export async function saveQuantScanSnapshot(db: Database, input: {
+  readonly userId: string
   readonly status: Extract<QuantSyncStatus, 'completed' | 'partial'>
   readonly runId: string
   readonly inputTsCodes: readonly string[]
@@ -281,21 +377,24 @@ export async function saveQuantScanSnapshot(db: Database, input: {
   readonly candidates: readonly MomentumCandidate[]
   readonly generatedAt: Date
 }): Promise<string> {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const stateId = quantSyncStateId(ownerId)
   const id = nanoid()
   const generatedAt = toUnixSeconds(input.generatedAt)
   const inserted = await db.run(sql`
     INSERT INTO quant_scan_snapshot (
       id, status, factor_version, input_ts_codes_json, from_date, to_date,
-      candidate_count, candidates_json, generated_at, created_at
+      candidate_count, candidates_json, generated_at, created_at, user_id
     )
     SELECT
       ${id}, ${input.status}, 'momentum-v1', ${JSON.stringify(input.inputTsCodes)},
       ${input.fromDate}, ${input.toDate}, ${input.candidates.length},
-      ${JSON.stringify(input.candidates)}, ${generatedAt}, ${generatedAt}
+      ${JSON.stringify(input.candidates)}, ${generatedAt}, ${generatedAt}, ${ownerId}
     WHERE EXISTS (
       SELECT 1
       FROM quant_sync_state
-      WHERE id = ${QUANT_SYNC_STATE_ID}
+      WHERE id = ${stateId}
+        AND user_id = ${ownerId}
         AND status = 'running'
         AND run_id = ${input.runId}
         AND lease_expires_at > ${generatedAt}
@@ -310,6 +409,7 @@ export async function saveQuantScanSnapshot(db: Database, input: {
       WHERE rowid IN (
         SELECT rowid
         FROM quant_scan_snapshot
+        WHERE user_id = ${ownerId}
         ORDER BY generated_at DESC, rowid DESC
         LIMIT -1 OFFSET ${QUANT_SYNC_SNAPSHOT_RETENTION}
       )
@@ -321,25 +421,78 @@ export async function saveQuantScanSnapshot(db: Database, input: {
   return id
 }
 
-export async function getLatestQuantScanSnapshot(db: Database) {
-  return db.select().from(quantScanSnapshots).orderBy(desc(quantScanSnapshots.generatedAt)).limit(1).get()
+export async function getLatestQuantScanSnapshot(db: Database, userId: string) {
+  const ownerId = normalizeQuantUserId(userId)
+  return db.select().from(quantScanSnapshots).where(eq(quantScanSnapshots.userId, ownerId)).orderBy(desc(quantScanSnapshots.generatedAt)).limit(1).get()
 }
 
-export async function listQuantScanSnapshots(db: Database, limit = QUANT_SYNC_SNAPSHOT_RETENTION) {
+export async function listQuantScanSnapshots(db: Database, userId: string, limit = QUANT_SYNC_SNAPSHOT_RETENTION) {
+  const ownerId = normalizeQuantUserId(userId)
   const boundedLimit = Math.min(QUANT_SYNC_SNAPSHOT_RETENTION, Math.max(1, Math.floor(limit)))
   return db
     .select()
     .from(quantScanSnapshots)
+    .where(eq(quantScanSnapshots.userId, ownerId))
     .orderBy(desc(quantScanSnapshots.generatedAt), desc(quantScanSnapshots.id))
     .limit(boundedLimit)
     .all()
 }
 
-export async function getQuantSyncState(db: Database) {
-  return db.select().from(quantSyncState).where(eq(quantSyncState.id, QUANT_SYNC_STATE_ID)).get()
+export async function createQuantResearchRun(db: Database, input: {
+  readonly userId: string
+  readonly tsCode: string
+  readonly name: string | null
+  readonly status: 'ready' | 'partial' | 'insufficient_data'
+  readonly reportVersion: string
+  readonly sourceSnapshotId: string | null
+  readonly reportJson: string
+  readonly generatedAt: Date
+}): Promise<typeof quantResearchRuns.$inferSelect> {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const tsCode = normalizeTsCode(input.tsCode)
+  const id = nanoid()
+  const createdAt = new Date()
+  await db.insert(quantResearchRuns).values({
+    id,
+    userId: ownerId,
+    tsCode,
+    name: input.name,
+    status: input.status,
+    reportVersion: input.reportVersion,
+    sourceSnapshotId: input.sourceSnapshotId,
+    reportJson: input.reportJson,
+    generatedAt: input.generatedAt,
+    createdAt,
+  })
+  const persisted = await db.select().from(quantResearchRuns).where(and(
+    eq(quantResearchRuns.id, id),
+    eq(quantResearchRuns.userId, ownerId),
+  )).get()
+  if (!persisted)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run readback failed', 500)
+  return persisted
+}
+
+export async function listQuantResearchRuns(db: Database, userId: string, tsCode: string, limit = 5) {
+  const ownerId = normalizeQuantUserId(userId)
+  const normalizedCode = normalizeTsCode(tsCode)
+  const boundedLimit = Math.min(QUANT_RESEARCH_RUN_RETENTION, Math.max(1, Math.floor(limit)))
+  return db.select().from(quantResearchRuns).where(and(
+    eq(quantResearchRuns.userId, ownerId),
+    eq(quantResearchRuns.tsCode, normalizedCode),
+  )).orderBy(desc(quantResearchRuns.generatedAt), desc(quantResearchRuns.id)).limit(boundedLimit).all()
+}
+
+export async function getQuantSyncState(db: Database, userId: string) {
+  const ownerId = normalizeQuantUserId(userId)
+  return db.select().from(quantSyncState).where(and(
+    eq(quantSyncState.id, quantSyncStateId(ownerId)),
+    eq(quantSyncState.userId, ownerId),
+  )).get()
 }
 
 export async function acquireQuantSyncLease(db: Database, input: {
+  readonly userId: string
   readonly runId: string
   readonly fromDate: string
   readonly toDate: string
@@ -347,10 +500,13 @@ export async function acquireQuantSyncLease(db: Database, input: {
   readonly startedAt: Date
   readonly leaseDurationMs?: number
 }): Promise<boolean> {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const stateId = quantSyncStateId(ownerId)
   const leaseExpiresAt = leaseExpiry(input.startedAt, Math.max(QUANT_SYNC_LEASE_DURATION_MS, input.leaseDurationMs ?? 0))
   const nowSeconds = toUnixSeconds(input.startedAt)
   const result = await db.insert(quantSyncState).values({
-    id: QUANT_SYNC_STATE_ID,
+    id: stateId,
+    userId: ownerId,
     status: 'running',
     runId: input.runId,
     leaseExpiresAt,
@@ -392,11 +548,13 @@ export async function acquireQuantSyncLease(db: Database, input: {
   return changedRows(result) === 1
 }
 
-export async function hasQuantSyncLease(db: Database, input: { readonly runId: string, readonly now: Date }): Promise<boolean> {
+export async function hasQuantSyncLease(db: Database, input: { readonly userId: string, readonly runId: string, readonly now: Date }): Promise<boolean> {
+  const ownerId = normalizeQuantUserId(input.userId)
   const row = await db.select({ id: quantSyncState.id })
     .from(quantSyncState)
     .where(and(
-      eq(quantSyncState.id, QUANT_SYNC_STATE_ID),
+      eq(quantSyncState.id, quantSyncStateId(ownerId)),
+      eq(quantSyncState.userId, ownerId),
       eq(quantSyncState.status, 'running'),
       eq(quantSyncState.runId, input.runId),
       gt(quantSyncState.leaseExpiresAt, input.now),
@@ -406,6 +564,7 @@ export async function hasQuantSyncLease(db: Database, input: { readonly runId: s
 }
 
 export async function saveQuantSyncState(db: Database, input: {
+  readonly userId: string
   readonly status: Exclude<PersistedQuantSyncStatus, 'running'>
   readonly runId: string
   readonly fromDate: string
@@ -419,6 +578,7 @@ export async function saveQuantSyncState(db: Database, input: {
   readonly startedAt: Date
   readonly completedAt: Date
 }): Promise<boolean> {
+  const ownerId = normalizeQuantUserId(input.userId)
   const result = await db.update(quantSyncState).set({
     status: input.status,
     runId: input.runId,
@@ -435,7 +595,8 @@ export async function saveQuantSyncState(db: Database, input: {
     completedAt: input.completedAt,
     updatedAt: input.completedAt,
   }).where(and(
-    eq(quantSyncState.id, QUANT_SYNC_STATE_ID),
+    eq(quantSyncState.id, quantSyncStateId(ownerId)),
+    eq(quantSyncState.userId, ownerId),
     eq(quantSyncState.status, 'running'),
     eq(quantSyncState.runId, input.runId),
     gt(quantSyncState.leaseExpiresAt, input.completedAt),
@@ -444,10 +605,12 @@ export async function saveQuantSyncState(db: Database, input: {
 }
 
 export async function releaseQuantSyncLease(db: Database, input: {
+  readonly userId: string
   readonly runId: string
   readonly completedAt: Date
   readonly reason?: string
 }): Promise<boolean> {
+  const ownerId = normalizeQuantUserId(input.userId)
   const result = await db.update(quantSyncState).set({
     status: 'rejected',
     leaseExpiresAt: null,
@@ -457,7 +620,8 @@ export async function releaseQuantSyncLease(db: Database, input: {
     completedAt: input.completedAt,
     updatedAt: input.completedAt,
   }).where(and(
-    eq(quantSyncState.id, QUANT_SYNC_STATE_ID),
+    eq(quantSyncState.id, quantSyncStateId(ownerId)),
+    eq(quantSyncState.userId, ownerId),
     eq(quantSyncState.status, 'running'),
     eq(quantSyncState.runId, input.runId),
   )).run()

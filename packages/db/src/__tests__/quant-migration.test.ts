@@ -7,11 +7,15 @@ const migrationPath = new URL('../../drizzle/0036_quant_workbench.sql', import.m
 const leaseMigrationPath = new URL('../../drizzle/0037_quant_sync_lease.sql', import.meta.url)
 const seedMigrationPath = new URL('../../drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
 const researchMigrationPath = new URL('../../drizzle/0039_quant_research_marker.sql', import.meta.url)
+const userScopeMigrationPath = new URL('../../drizzle/0041_quant_user_scope.sql', import.meta.url)
+const researchRunMigrationPath = new URL('../../drizzle/0042_quant_research_run.sql', import.meta.url)
 
 async function createMigratedClient() {
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath]) {
+  await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
+  await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-1\', 1)')
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -35,17 +39,20 @@ describe('quant workbench migration', () => {
     `)
 
     expect(tables.rows.map(row => String(row.name))).toEqual([
+      'quant_ai_config',
       'quant_daily_bar',
       'quant_research_marker',
+      'quant_research_run',
       'quant_scan_snapshot',
       'quant_sync_state',
       'quant_watchlist',
     ])
     expect(indexes.rows.map(row => String(row.name))).toEqual(expect.arrayContaining([
       'idx_quant_daily_bar_identity',
-      'idx_quant_research_marker_ts_code',
-      'idx_quant_scan_snapshot_generated_at',
-      'idx_quant_watchlist_ts_code',
+      'idx_quant_research_marker_user_ts_code',
+      'idx_quant_research_run_user_ts_code_generated_at',
+      'idx_quant_scan_snapshot_user_generated_at',
+      'idx_quant_watchlist_user_ts_code',
     ]))
 
     const syncColumns = await client.execute('PRAGMA table_info(quant_sync_state)')
@@ -67,13 +74,18 @@ describe('quant workbench migration', () => {
     const client = await createMigratedClient()
 
     await client.execute(`
-      INSERT INTO quant_watchlist (id, ts_code, name)
-      VALUES ('watch-1', '000001.SZ', '平安银行')
+      INSERT INTO quant_watchlist (id, user_id, ts_code, name)
+      VALUES ('watch-1', 'user-1', '000001.SZ', '平安银行')
     `)
     await expect(client.execute(`
-      INSERT INTO quant_watchlist (id, ts_code, name)
-      VALUES ('watch-2', '000001.SZ', 'duplicate')
+      INSERT INTO quant_watchlist (id, user_id, ts_code, name)
+      VALUES ('watch-2', 'user-1', '000001.SZ', 'duplicate')
     `)).rejects.toThrow(/UNIQUE constraint failed/u)
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    await expect(client.execute(`
+      INSERT INTO quant_watchlist (id, user_id, ts_code, name)
+      VALUES ('watch-3', 'user-2', '000001.SZ', '另一用户')
+    `)).resolves.toBeDefined()
 
     const dailyBar = `
       INSERT INTO quant_daily_bar (
@@ -95,12 +107,12 @@ describe('quant workbench migration', () => {
   it('enforces one research marker per stock and preserves nullable fields', async () => {
     const client = await createMigratedClient()
     await client.execute(`
-      INSERT INTO quant_research_marker (id, ts_code, status, note, review_date)
-      VALUES ('research:000001.SZ', '000001.SZ', 'priority', '核对现金流', '2026-09-01')
+      INSERT INTO quant_research_marker (id, user_id, ts_code, status, note, review_date)
+      VALUES ('research:user-1:000001.SZ', 'user-1', '000001.SZ', 'priority', '核对现金流', '2026-09-01')
     `)
     await expect(client.execute(`
-      INSERT INTO quant_research_marker (id, ts_code, status)
-      VALUES ('research:000001.SZ-duplicate', '000001.SZ', 'paused')
+      INSERT INTO quant_research_marker (id, user_id, ts_code, status)
+      VALUES ('research:user-1:000001.SZ-duplicate', 'user-1', '000001.SZ', 'paused')
     `)).rejects.toThrow(/UNIQUE constraint failed/u)
 
     await expect(client.execute('SELECT status, note, review_date FROM quant_research_marker')).resolves.toMatchObject({
@@ -121,5 +133,37 @@ describe('quant workbench migration', () => {
     )
       .resolves
       .toMatchObject({ rows: [{ count: 1, name: '自定义名称' }] })
+  })
+
+  it('keeps research runs isolated and preserves the versioned report snapshot', async () => {
+    const client = await createMigratedClient()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const report = JSON.stringify({ reportVersion: 'research-report-v1', score: 75, evidence: [{ key: 'trend-sample', status: 'pass' }] })
+
+    await client.execute({
+      sql: `INSERT INTO quant_research_run (
+        id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+        report_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['run-1', 'user-1', '601899.SH', '紫金矿业', 'partial', 'research-report-v1', 'snapshot-1', report, 10, 10],
+    })
+    await client.execute({
+      sql: `INSERT INTO quant_research_run (
+        id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+        report_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['run-2', 'user-2', '601899.SH', '紫金矿业', 'ready', 'research-report-v1', null, report, 20, 20],
+    })
+
+    await expect(client.execute(`
+      SELECT id, ts_code, report_version, report_json
+      FROM quant_research_run
+      WHERE user_id = 'user-1' AND ts_code = '601899.SH'
+      ORDER BY generated_at DESC
+    `)).resolves.toMatchObject({
+      rows: [{ id: 'run-1', ts_code: '601899.SH', report_version: 'research-report-v1', report_json: report }],
+    })
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_run WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_run WHERE user_id = \'user-2\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
   })
 })

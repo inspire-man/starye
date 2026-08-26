@@ -8,6 +8,7 @@ import {
   ListFilter,
   Menu,
   RefreshCw,
+  Settings2,
   X,
 } from 'lucide-vue-next'
 import { ref } from 'vue'
@@ -21,6 +22,7 @@ defineProps<{
 const emit = defineEmits<{
   navigate: [view: QuantView]
   refresh: []
+  settings: []
 }>()
 
 const mobileMenuOpen = ref(false)
@@ -74,6 +76,9 @@ function selectView(view: QuantView): void {
         <button class="quant-refresh-button" type="button" title="刷新工作台" aria-label="刷新工作台" :disabled="busy" @click="emit('refresh')">
           <RefreshCw :size="16" :class="busy ? 'animate-spin' : ''" aria-hidden="true" />
         </button>
+        <button class="quant-settings-button" type="button" title="AI 配置" aria-label="打开 AI 配置" @click="emit('settings')">
+          <Settings2 :size="16" aria-hidden="true" />
+        </button>
         <button class="quant-mobile-menu-button" type="button" :aria-expanded="mobileMenuOpen" aria-controls="quant-mobile-nav" :aria-label="mobileMenuOpen ? '关闭导航菜单' : '打开导航菜单'" :title="mobileMenuOpen ? '关闭导航菜单' : '打开导航菜单'" @click="mobileMenuOpen = !mobileMenuOpen">
           <X v-if="mobileMenuOpen" :size="19" aria-hidden="true" />
           <Menu v-else :size="19" aria-hidden="true" />
@@ -97,6 +102,13 @@ function selectView(view: QuantView): void {
           <small>{{ item.detail }}</small>
         </span>
       </button>
+      <a class="quant-mobile-nav-link quant-mobile-nav-ops-link" href="/dashboard/">
+        <ExternalLink :size="16" aria-hidden="true" />
+        <span>
+          <strong>运管后台</strong>
+          <small>返回内容与数据运管</small>
+        </span>
+      </a>
     </nav>
   </header>
 </template>
@@ -156,6 +168,7 @@ function selectView(view: QuantView): void {
 .quant-nav-link,
 .quant-mobile-nav-link,
 .quant-refresh-button,
+.quant-settings-button,
 .quant-mobile-menu-button,
 .quant-ops-link {
   display: inline-flex;
@@ -227,6 +240,7 @@ function selectView(view: QuantView): void {
 }
 
 .quant-refresh-button,
+.quant-settings-button,
 .quant-mobile-menu-button {
   width: 2.25rem;
   height: 2.25rem;
@@ -236,6 +250,17 @@ function selectView(view: QuantView): void {
 .quant-refresh-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.quant-settings-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  background: transparent;
+}
+
+.quant-settings-button:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 
 .quant-mobile-menu-button {
@@ -273,6 +298,10 @@ function selectView(view: QuantView): void {
   }
 
   .quant-primary-nav {
+    display: none;
+  }
+
+  .quant-ops-link {
     display: none;
   }
 
@@ -325,6 +354,11 @@ function selectView(view: QuantView): void {
   .quant-mobile-nav-link-active {
     background: hsl(var(--primary) / 0.08);
     color: hsl(var(--primary));
+  }
+
+  .quant-mobile-nav-ops-link {
+    color: hsl(var(--muted-foreground));
+    text-decoration: none;
   }
 }
 </style>

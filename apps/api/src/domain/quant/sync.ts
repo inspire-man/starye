@@ -36,6 +36,7 @@ interface QuantEnvironment {
 }
 
 interface QuantSyncDependencies {
+  readonly userId: string
   readonly provider?: QuantDataProvider
   readonly now?: () => Date
   readonly totalDeadlineMs?: number
@@ -145,6 +146,7 @@ function createProviderFromEnv(env: unknown): QuantDataProvider {
 
 async function persistRejected(
   db: Database,
+  userId: string,
   dateRange: { readonly fromDate: string, readonly toDate: string },
   runId: string,
   requestedCount: number,
@@ -155,6 +157,7 @@ async function persistRejected(
 ): Promise<QuantSyncResult> {
   const completedAt = now()
   const saved = await saveQuantSyncState(db, {
+    userId,
     status: 'rejected',
     runId,
     fromDate: dateRange.fromDate,
@@ -186,12 +189,13 @@ export async function syncQuantDaily(
   db: Database,
   env: unknown,
   input: QuantSyncInput = {},
-  dependencies: QuantSyncDependencies = {},
+  dependencies: QuantSyncDependencies,
 ): Promise<QuantSyncResult> {
   const now = dependencies.now ?? (() => new Date())
+  const userId = dependencies.userId
   const startedAt = now()
   const dateRange = resolveDateRange(input, startedAt)
-  const watchlist = await listQuantWatchlist(db)
+  const watchlist = await listQuantWatchlist(db, userId)
   const watchlistCodes = watchlist.map(item => item.tsCode)
   const requestedCodes = input.tsCodes && input.tsCodes.length > 0
     ? [...new Set(input.tsCodes.map(code => code.trim().toUpperCase()))]
@@ -205,6 +209,7 @@ export async function syncQuantDaily(
   const totalDeadlineMs = resolveTotalDeadlineMs(dependencies.totalDeadlineMs)
   const runId = nanoid()
   const acquired = await acquireQuantSyncLease(db, {
+    userId,
     runId,
     fromDate: dateRange.fromDate,
     toDate: dateRange.toDate,
@@ -218,12 +223,12 @@ export async function syncQuantDaily(
   try {
     const registry = createQuantCapabilityRegistryFromEnv(env)
     if (!registry.hasCapability('daily')) {
-      return persistRejected(db, dateRange, runId, requestedCodes.length, startedAt, now, 'QUANT_CAPABILITY_DISABLED', 'daily capability is disabled')
+      return persistRejected(db, userId, dateRange, runId, requestedCodes.length, startedAt, now, 'QUANT_CAPABILITY_DISABLED', 'daily capability is disabled')
     }
 
     const provider = dependencies.provider ?? createProviderFromEnv(env)
     if (!provider.isConfigured) {
-      return persistRejected(db, dateRange, runId, requestedCodes.length, startedAt, now, 'QUANT_PROVIDER_CONFIGURATION', 'Quant data provider is not configured')
+      return persistRejected(db, userId, dateRange, runId, requestedCodes.length, startedAt, now, 'QUANT_PROVIDER_CONFIGURATION', 'Quant data provider is not configured')
     }
 
     const fetchedByIndex: Array<readonly DailyBar[] | undefined> = []
@@ -285,6 +290,7 @@ export async function syncQuantDaily(
     if (requestedCodes.length > 0 && fetched.size === 0) {
       return persistRejected(
         db,
+        userId,
         dateRange,
         runId,
         requestedCodes.length,
@@ -295,16 +301,17 @@ export async function syncQuantDaily(
       )
     }
 
-    if (!(await hasQuantSyncLease(db, { runId, now: now() })))
+    if (!(await hasQuantSyncLease(db, { userId, runId, now: now() })))
       throw createSyncLeaseLostError()
     const allFetchedBars = [...fetched.values()].flat()
     const writtenCount = await upsertQuantDailyBars(db, allFetchedBars)
-    if (!(await hasQuantSyncLease(db, { runId, now: now() })))
+    if (!(await hasQuantSyncLease(db, { userId, runId, now: now() })))
       throw createSyncLeaseLostError()
     const barsByCode = await readBarsByCode(db, requestedCodes, dateRange.fromDate, dateRange.toDate)
     const candidates = screenMomentum(barsByCode)
     const status = errors.length > 0 ? 'partial' : 'completed'
     const snapshotId = await saveQuantScanSnapshot(db, {
+      userId,
       status,
       runId,
       inputTsCodes: requestedCodes,
@@ -315,6 +322,7 @@ export async function syncQuantDaily(
     })
     const completedAt = now()
     const saved = await saveQuantSyncState(db, {
+      userId,
       status,
       runId,
       fromDate: dateRange.fromDate,
@@ -347,6 +355,7 @@ export async function syncQuantDaily(
   finally {
     try {
       await releaseQuantSyncLease(db, {
+        userId,
         runId,
         completedAt: now(),
       })
@@ -357,6 +366,6 @@ export async function syncQuantDaily(
   }
 }
 
-export async function ensureQuantWatchlistSeed(db: Database, tsCode: string): Promise<void> {
-  await createQuantWatchlistItem(db, { tsCode })
+export async function ensureQuantWatchlistSeed(db: Database, userId: string, tsCode: string): Promise<void> {
+  await createQuantWatchlistItem(db, { userId, tsCode })
 }

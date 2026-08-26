@@ -2,7 +2,7 @@ import type { Database } from '@starye/db'
 import type { QuantDividendProvider, QuantDividendRecord } from './provider'
 import type { DailyBar } from './types'
 import { mapQuantProviderError } from './provider'
-import { listQuantDailyBars, listQuantWatchlist } from './repository'
+import { getQuantWatchlistItem, listQuantDailyBars, listQuantWatchlist } from './repository'
 
 export const QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION = 'shareholder-return-v1' as const
 export const QUANT_SHAREHOLDER_RETURN_CONCURRENCY = 4
@@ -155,13 +155,58 @@ function providerErrorCode(error: unknown): string {
   return mapQuantProviderError(error).code
 }
 
+async function readShareholderReturnInput(
+  item: { readonly tsCode: string, readonly name: string | null },
+  dailyBars: readonly DailyBar[],
+  provider: QuantDividendProvider,
+  observedAt: string,
+): Promise<ShareholderReturnInput> {
+  let dividends: readonly QuantDividendRecord[] = []
+  let dividendErrorCode: string | null = null
+  if (provider.isConfigured) {
+    try {
+      dividends = await provider.fetchDividends({ tsCode: item.tsCode })
+    }
+    catch (error) {
+      dividendErrorCode = providerErrorCode(error)
+    }
+  }
+  else {
+    dividendErrorCode = 'QUANT_PROVIDER_CONFIGURATION'
+  }
+  return {
+    tsCode: item.tsCode,
+    name: item.name,
+    dividends,
+    dailyBars,
+    dividendErrorCode,
+    observedAt,
+  }
+}
+
+export async function readQuantShareholderReturn(
+  db: Database,
+  userId: string,
+  tsCode: string,
+  provider: QuantDividendProvider,
+  now: () => Date = () => new Date(),
+): Promise<QuantShareholderReturnItem | null> {
+  const item = await getQuantWatchlistItem(db, userId, tsCode)
+  if (!item)
+    return null
+  const observedAt = now().toISOString()
+  const dailyBars = await listQuantDailyBars(db, { tsCode: item.tsCode })
+  return buildShareholderReturnResult(await readShareholderReturnInput(item, dailyBars, provider, observedAt))
+}
+
 export async function readQuantShareholderReturns(
   db: Database,
+  userId: string,
   provider: QuantDividendProvider,
   now: () => Date = () => new Date(),
 ): Promise<QuantShareholderReturnBatchResult> {
   const observedAt = now().toISOString()
-  const watchlist = await listQuantWatchlist(db)
+  const watchlist = await listQuantWatchlist(db, userId)
   if (watchlist.length === 0) {
     return {
       formulaVersion: QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION,
@@ -188,27 +233,7 @@ export async function readQuantShareholderReturns(
     while (nextIndex < watchlist.length) {
       const index = nextIndex++
       const item = watchlist[index]!
-      let dividends: readonly QuantDividendRecord[] = []
-      let dividendErrorCode: string | null = null
-      if (provider.isConfigured) {
-        try {
-          dividends = await provider.fetchDividends({ tsCode: item.tsCode })
-        }
-        catch (error) {
-          dividendErrorCode = providerErrorCode(error)
-        }
-      }
-      else {
-        dividendErrorCode = 'QUANT_PROVIDER_CONFIGURATION'
-      }
-      inputs[index] = {
-        tsCode: item.tsCode,
-        name: item.name,
-        dividends,
-        dailyBars: barsByCode.get(item.tsCode) ?? [],
-        dividendErrorCode,
-        observedAt,
-      }
+      inputs[index] = await readShareholderReturnInput(item, barsByCode.get(item.tsCode) ?? [], provider, observedAt)
     }
   }))
 
