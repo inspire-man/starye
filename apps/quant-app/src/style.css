@@ -1364,10 +1364,40 @@ input:focus-visible {
   color: hsl(var(--status-warning));
 }
 
+.research-run-evidence-groups {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.research-run-evidence-group {
+  min-width: 0;
+}
+
+.research-run-evidence-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-bottom: 1px solid hsl(var(--border));
+  padding-bottom: 0.35rem;
+}
+
+.research-run-evidence-group-heading strong {
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  font-weight: 740;
+}
+
+.research-run-evidence-group-heading small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
 .research-run-evidence-list {
   display: grid;
   gap: 0.45rem;
-  margin-top: 0.85rem;
+  margin-top: 0.45rem;
 }
 
 .research-run-evidence-row {
