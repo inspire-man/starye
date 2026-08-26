@@ -1,7 +1,7 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_ts_code, validate_date_range
+from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
@@ -62,6 +62,38 @@ class NormalizerTest(unittest.TestCase):
     def test_request_contract_is_explicit(self) -> None:
         request = BridgeRequest(ts_code="600089.SH", start_date="20260101", end_date="20260826")
         self.assertEqual(request.ts_code, "600089.SH")
+
+    def test_builds_granular_factor_evidence_with_dates_and_thresholds(self) -> None:
+        daily_bars = [{"trade_date": f"202608{index:02d}", "close": 100 + index} for index in range(1, 21)]
+        financials = [{
+            "report_date": "20260630",
+            "roe": 12.5,
+            "revenue_yoy": -4,
+            "net_profit_yoy": -20,
+            "gross_margin": 18,
+            "net_margin": 8,
+            "debt_asset_ratio": 68,
+        }]
+
+        items = {item.key: item for item in build_evidence("601899.SH", "2026-08-26T00:00:00Z", daily_bars, financials)}
+
+        self.assertEqual(items["akshare-return20"].value, 18.81)
+        self.assertEqual(items["akshare-return20"].status, "pass")
+        self.assertEqual(items["akshare-return20"].observed_at, "20260820")
+        self.assertEqual(items["akshare-roe"].status, "pass")
+        self.assertEqual(items["akshare-revenue-yoy"].status, "caution")
+        self.assertEqual(items["akshare-net-profit-yoy"].status, "fail")
+        self.assertEqual(items["akshare-gross-margin"].status, "caution")
+        self.assertEqual(items["akshare-net-margin"].status, "caution")
+        self.assertEqual(items["akshare-debt-asset-ratio"].status, "caution")
+        self.assertEqual(items["akshare-roe"].observed_at, "20260630")
+
+    def test_marks_factor_values_missing_without_filling_zero(self) -> None:
+        items = {item.key: item for item in build_evidence("601899.SH", "2026-08-26T00:00:00Z", [], [])}
+
+        for key in ("akshare-return20", "akshare-roe", "akshare-revenue-yoy", "akshare-net-profit-yoy", "akshare-gross-margin", "akshare-net-margin", "akshare-debt-asset-ratio"):
+            self.assertIsNone(items[key].value)
+            self.assertEqual(items[key].status, "missing")
 
 
 if __name__ == "__main__":

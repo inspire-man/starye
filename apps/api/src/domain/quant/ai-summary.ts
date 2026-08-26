@@ -72,6 +72,7 @@ function reportPrompt(report: QuantResearchReport): string {
       source: item.source,
       observedAt: item.observedAt,
       formulaVersion: item.formulaVersion,
+      optional: item.optional === true,
       detail: item.detail.slice(0, 360),
     })),
   }
@@ -85,6 +86,7 @@ export function buildQuantAiSummaryPrompt(report: QuantResearchReport): string {
     '返回一个 JSON 对象，字段必须是 overview、supports、concerns、nextChecks、citedEvidenceKeys；数组最多各 6 项。',
     'overview 用 1-3 句说明当前证据代表什么；supports、concerns、nextChecks 都写成可核对的短句。',
     '不要重算或修改 status、action、score；不要添加报告中不存在的数值、来源或证据 key。',
+    '对于 optional 的 AkShare 证据，必须保留 source、observedAt 和 formulaVersion；报告期不同或 provider 数值不同只能表述为交叉核对线索，并明确需要人工核对。',
     '不要写目标价、未来收益预测或直接交易指令。',
     `研究报告：${reportPrompt(report)}`,
   ].join('\n')

@@ -31,6 +31,8 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(payload["identity"], {"name": "紫金矿业"})
         self.assertEqual(payload["daily_bars"][0]["trade_date"], "20260825")
         self.assertEqual(payload["evidence"][0]["key"], "akshare-daily-sample")
+        self.assertIn("akshare-roe", {item["key"] for item in payload["evidence"]})
+        self.assertIn("akshare-return20", {item["key"] for item in payload["evidence"]})
 
     def test_marks_provider_failure_as_unavailable(self) -> None:
         class BrokenAkShare:

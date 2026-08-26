@@ -253,6 +253,29 @@ const shareholderReturnMap = computed(() => new Map(shareholderReturns.value?.it
 const selectedShareholderReturn = computed(() => shareholderReturnMap.value.get(selectedTsCode.value || '') || null)
 const latestResearchRun = computed(() => researchRuns.value[0] || null)
 const latestResearchReport = computed(() => latestResearchRun.value?.report || null)
+const researchEvidenceGroups = computed(() => {
+  const report = latestResearchReport.value
+  if (!report)
+    return [] as { dimension: string, label: string, items: QuantResearchEvidence[] }[]
+  const labels: Record<string, string> = {
+    'trend': '趋势与价格',
+    'valuation': '估值',
+    'quality': '经营质量',
+    'shareholder-return': '股东回报',
+    'risk': '风险与波动',
+  }
+  const order = ['trend', 'valuation', 'quality', 'shareholder-return', 'risk']
+  const groups = new Map<string, QuantResearchEvidence[]>()
+  for (const item of report.evidence)
+    groups.set(item.dimension, [...(groups.get(item.dimension) || []), item])
+  const orderedGroups = order.flatMap(dimension => groups.has(dimension)
+    ? [{ dimension, label: labels[dimension] || dimension, items: groups.get(dimension) || [] }]
+    : [])
+  const additionalGroups = [...groups.entries()]
+    .filter(([dimension]) => !order.includes(dimension))
+    .map(([dimension, items]) => ({ dimension, label: `其他证据 · ${dimension}`, items }))
+  return [...orderedGroups, ...additionalGroups]
+})
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
@@ -689,9 +712,13 @@ function formatResearchEvidenceValue(item: QuantResearchEvidence): string {
     return `${item.value.toFixed(0)} 天`
   if (item.key === 'quality-history')
     return `${item.value.toFixed(0)} 期`
+  if (item.key === 'akshare-daily-sample')
+    return `${item.value.toFixed(0)} 根`
+  if (item.key === 'akshare-financial-sample')
+    return `${item.value.toFixed(0)} 期`
   if (item.key === 'quality-cashflow')
     return `${(item.value * 100).toFixed(2)}%`
-  if (item.key.startsWith('trend-') || item.key.startsWith('quality-') || item.key === 'shareholder-yield')
+  if (item.key.startsWith('trend-') || item.key.startsWith('quality-') || item.key.startsWith('akshare-') || item.key === 'shareholder-yield')
     return `${item.value.toFixed(2)}%`
   return item.value.toFixed(2)
 }
@@ -2510,25 +2537,33 @@ onUnmounted(() => {
                   </ul>
                 </div>
               </div>
-              <div class="research-run-evidence-list">
-                <div v-for="item in latestResearchReport.evidence" :key="item.key" class="research-run-evidence-row" :class="researchEvidenceStatusClass(item.status)">
-                  <div class="research-run-evidence-main">
-                    <div class="research-run-evidence-title">
-                      <strong>{{ item.label }}</strong>
-                      <span>{{ researchEvidenceStatusLabel(item.status) }}</span>
-                      <small v-if="item.optional">可选证据</small>
+              <div class="research-run-evidence-groups">
+                <section v-for="group in researchEvidenceGroups" :key="group.dimension" class="research-run-evidence-group" :aria-labelledby="`research-evidence-${group.dimension}`">
+                  <div class="research-run-evidence-group-heading">
+                    <strong :id="`research-evidence-${group.dimension}`">{{ group.label }}</strong>
+                    <small>{{ group.items.length }} 条证据</small>
+                  </div>
+                  <div class="research-run-evidence-list">
+                    <div v-for="item in group.items" :key="item.key" class="research-run-evidence-row" :class="researchEvidenceStatusClass(item.status)" :title="`${item.source} · ${item.formulaVersion}`">
+                      <div class="research-run-evidence-main">
+                        <div class="research-run-evidence-title">
+                          <strong>{{ item.label }}</strong>
+                          <span>{{ researchEvidenceStatusLabel(item.status) }}</span>
+                          <small v-if="item.optional">可选证据</small>
+                        </div>
+                        <p>{{ item.detail }}</p>
+                      </div>
+                      <div class="research-run-evidence-value">
+                        <strong>{{ formatResearchEvidenceValue(item) }}</strong>
+                        <small>阈值 {{ item.threshold }}</small>
+                      </div>
+                      <div class="research-run-evidence-meta">
+                        <span>{{ item.source }}</span>
+                        <small>{{ formatResearchRunSourceDate(item.observedAt) }} · {{ item.formulaVersion }}</small>
+                      </div>
                     </div>
-                    <p>{{ item.detail }}</p>
                   </div>
-                  <div class="research-run-evidence-value">
-                    <strong>{{ formatResearchEvidenceValue(item) }}</strong>
-                    <small>阈值 {{ item.threshold }}</small>
-                  </div>
-                  <div class="research-run-evidence-meta">
-                    <span>{{ item.source }}</span>
-                    <small>{{ formatResearchRunSourceDate(item.observedAt) }} · {{ item.formulaVersion }}</small>
-                  </div>
-                </div>
+                </section>
               </div>
               <div class="research-run-sources">
                 <span>来源快照</span>

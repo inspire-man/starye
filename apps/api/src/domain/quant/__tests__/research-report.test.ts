@@ -1,3 +1,4 @@
+import type { QuantAkshareBridgeResult } from '../akshare-bridge'
 import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from '../provider'
 import type { QuantShareholderReturnItem } from '../shareholder-return'
 import type { DailyBar, MomentumCandidate } from '../types'
@@ -92,6 +93,48 @@ const shareholderReturn: QuantShareholderReturnItem = {
   missingFields: [],
 }
 
+const akshare: QuantAkshareBridgeResult = {
+  schemaVersion: 'quant-akshare-v1',
+  provider: 'akshare',
+  requestId: 'bridge-1',
+  tsCode: '601899.SH',
+  observedAt: '2026-08-26T00:00:00.000Z',
+  status: 'ready',
+  source: {
+    id: 'akshare-bridge',
+    name: 'AkShare bridge · akshare-adapter-v1',
+    observedAt: '2026-08-26T00:00:00.000Z',
+    formulaVersion: 'akshare-adapter-v1',
+  },
+  identity: { name: '紫金矿业' },
+  dailyBars: [],
+  financials: [],
+  evidence: [{
+    key: 'akshare-roe',
+    dimension: 'quality',
+    label: 'AkShare ROE',
+    status: 'pass',
+    value: 18,
+    threshold: '至少 10%',
+    source: 'AkShare stock_financial_analysis_indicator',
+    observedAt: '20260630',
+    formulaVersion: 'akshare-adapter-v1',
+    detail: 'ROE 达到基础价值研究门槛',
+  }, {
+    key: 'akshare-net-profit-yoy',
+    dimension: 'quality',
+    label: 'AkShare 净利润同比',
+    status: 'pass',
+    value: 15,
+    threshold: '不低于 0%',
+    source: 'AkShare stock_financial_analysis_indicator',
+    observedAt: '20251231',
+    formulaVersion: 'akshare-adapter-v1',
+    detail: '净利润同比保持正增长',
+  }],
+  errors: [],
+}
+
 describe('quant research report', () => {
   it('builds a versioned report with source and threshold metadata', () => {
     const report = buildQuantResearchReport({
@@ -152,5 +195,26 @@ describe('quant research report', () => {
     ]))
     expect(report.gaps.length).toBeGreaterThan(0)
     expect(report.risks.length).toBeGreaterThan(0)
+  })
+
+  it('keeps AkShare factors optional and makes cross-source differences explicit', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-1',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial, { ...financial, reportDate: '2025-12-31' }],
+      shareholderReturn,
+      akshare,
+    })
+
+    expect(report).toMatchObject({ action: 'research-window', score: 100, status: 'ready' })
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'akshare-roe', optional: true, status: 'pass', detail: expect.stringContaining('同期值接近') }),
+      expect.objectContaining({ key: 'akshare-net-profit-yoy', optional: true, status: 'caution', detail: expect.stringContaining('报告期不同') }),
+    ]))
   })
 })

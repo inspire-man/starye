@@ -94,6 +94,46 @@ function statusForValue(value: number | null, pass: (value: number) => boolean, 
   return caution?.(value) ? 'caution' : 'fail'
 }
 
+function compactDate(value: string | null | undefined): string | null {
+  const normalized = value?.trim()
+  return normalized ? normalized.replace(/-/gu, '').slice(0, 8) : null
+}
+
+function withAkshareCrossSourceCheck(item: QuantResearchEvidence, latestFinancial: QuantFinancialQualitySnapshot | null): QuantResearchEvidence {
+  const existingValues: Record<string, number | null | undefined> = {
+    'akshare-roe': latestFinancial?.roe,
+    'akshare-revenue-yoy': latestFinancial?.revenueYoY,
+    'akshare-net-profit-yoy': latestFinancial?.netProfitYoY,
+    'akshare-gross-margin': latestFinancial?.grossMargin,
+    'akshare-net-margin': latestFinancial?.netMargin,
+    'akshare-debt-asset-ratio': latestFinancial?.debtAssetRatio,
+  }
+  const existingValue = finite(existingValues[item.key])
+  if (item.value === null || existingValue === null || !latestFinancial)
+    return item
+
+  const bridgeDate = compactDate(item.observedAt)
+  const existingDate = compactDate(latestFinancial.reportDate)
+  if (!bridgeDate || !existingDate)
+    return item
+  if (bridgeDate !== existingDate) {
+    return {
+      ...item,
+      status: item.status === 'fail' ? 'fail' : 'caution',
+      detail: `${item.detail}；与 Eastmoney 报告期不同（AkShare ${bridgeDate}，Eastmoney ${existingDate}），仅供交叉核对`,
+    }
+  }
+
+  const difference = round(Math.abs(item.value - existingValue))
+  return {
+    ...item,
+    status: difference <= 2 || item.status === 'fail' ? item.status : 'caution',
+    detail: difference <= 2
+      ? `${item.detail}；与 Eastmoney 同期值接近（相差 ${difference} 个百分点）`
+      : `${item.detail}；与 Eastmoney 同期值相差 ${difference} 个百分点，需要人工核对`,
+  }
+}
+
 function actionLabel(action: QuantResearchAction): string {
   return {
     'research-window': '进入研究窗口',
@@ -291,9 +331,11 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
   }))
 
   if (input.akshare?.evidence.length) {
-    evidenceItems.push(...input.akshare.evidence.map(item => evidence({
+    evidenceItems.push(...input.akshare.evidence.map(item => withAkshareCrossSourceCheck({
       ...item,
       observedAt: item.observedAt ?? input.akshare!.observedAt,
+    }, latestFinancial)).map(item => ({
+      ...item,
       optional: true,
     })))
   }
