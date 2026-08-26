@@ -3,13 +3,14 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Iterable, Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from .contracts import BridgeEvidence, BridgeError
 
 FORMULA_VERSION = "akshare-adapter-v1"
 TS_CODE_PATTERN = re.compile(r"^(?P<code>\d{6})\.(?P<market>SH|SZ|BJ)$", re.IGNORECASE)
+MAX_DATE_RANGE_DAYS = 3653
 
 
 def normalize_ts_code(value: str) -> str:
@@ -38,6 +39,17 @@ def normalize_date(value: str | None, field: str = "date") -> str | None:
     except ValueError as error:
         raise ValueError(f"{field} must be a valid calendar date") from error
     return normalized
+
+
+def validate_date_range(start_date: str | None, end_date: str | None) -> None:
+    if not start_date or not end_date:
+        return
+    start = datetime.strptime(start_date, "%Y%m%d")
+    end = datetime.strptime(end_date, "%Y%m%d")
+    if start > end:
+        raise ValueError("start_date must not be after end_date")
+    if end - start > timedelta(days=MAX_DATE_RANGE_DAYS):
+        raise ValueError("date range must not exceed 10 years")
 
 
 def _rows(value: Any) -> list[dict[str, Any]]:

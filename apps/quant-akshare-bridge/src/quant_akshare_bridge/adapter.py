@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .contracts import BridgeError, BridgeRequest, BridgeResponse, BridgeSource, observed_now
-from .normalizer import FORMULA_VERSION, akshare_symbol, build_evidence, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_ts_code
+from .normalizer import FORMULA_VERSION, akshare_symbol, build_evidence, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_ts_code, validate_date_range
 
 
 def akshare_available() -> bool:
@@ -26,8 +26,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     ts_code = normalize_ts_code(request.ts_code)
     start_date = normalize_date(request.start_date, "start_date")
     end_date = normalize_date(request.end_date, "end_date")
-    if start_date and end_date and start_date > end_date:
-        raise ValueError("start_date must not be after end_date")
+    validate_date_range(start_date, end_date)
     symbol = akshare_symbol(ts_code)
     observed_at = observed_now()
     api = client or _client()

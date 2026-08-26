@@ -8,7 +8,7 @@ from typing import Any
 
 from .adapter import akshare_available, collect_evidence
 from .contracts import CONTRACT_VERSION, BridgeRequest
-from .normalizer import normalize_date, normalize_ts_code
+from .normalizer import normalize_date, normalize_ts_code, validate_date_range
 
 
 def _json_bytes(payload: dict[str, Any]) -> bytes:
@@ -66,8 +66,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             ts_code = normalize_ts_code(str(body.get("ts_code", "")))
             start_date = normalize_date(body.get("start_date"), "start_date")
             end_date = normalize_date(body.get("end_date"), "end_date")
-            if start_date and end_date and start_date > end_date:
-                raise ValueError("start_date must not be after end_date")
+            validate_date_range(start_date, end_date)
             include_financials = body.get("include_financials", True)
             if not isinstance(include_financials, bool):
                 raise ValueError("include_financials must be a boolean")

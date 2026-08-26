@@ -68,6 +68,15 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(payload["errors"][0]["code"], "BRIDGE_INVALID_INPUT")
 
+    def test_rejects_an_unbounded_date_range(self) -> None:
+        status, payload = self.request("POST", "/v1/evidence", {
+            "ts_code": "601899.SH",
+            "start_date": "20150101",
+            "end_date": "20260826",
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["errors"][0]["code"], "BRIDGE_INVALID_INPUT")
+
 
 if __name__ == "__main__":
     unittest.main()

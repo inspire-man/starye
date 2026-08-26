@@ -156,7 +156,7 @@ function citedEvidence(key: string): QuantResearchEvidence | null {
   text-align: center;
 }
 
-  .quant-ai-summary-state-error {
+.quant-ai-summary-state-error {
   justify-content: flex-start;
   flex-wrap: wrap;
   color: hsl(var(--status-danger));

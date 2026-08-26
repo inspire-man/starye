@@ -1,7 +1,7 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_ts_code
+from quant_akshare_bridge.normalizer import akshare_symbol, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
@@ -34,6 +34,11 @@ class NormalizerTest(unittest.TestCase):
             normalize_date("2026-02-30")
         with self.assertRaises(ValueError):
             normalize_date("20260825-extra")
+
+    def test_bounds_date_ranges(self) -> None:
+        validate_date_range("20160101", "20260101")
+        with self.assertRaisesRegex(ValueError, "10 years"):
+            validate_date_range("20150101", "20260826")
 
     def test_normalizes_financial_aliases_and_bounds_rows(self) -> None:
         rows, errors = normalize_financial_rows("601899.SH", [
