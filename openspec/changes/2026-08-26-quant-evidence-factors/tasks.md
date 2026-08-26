@@ -17,4 +17,4 @@
 
 - [x] 4.1 Run focused bridge/API/Quant tests, type-checks, lint and builds; run OpenSpec strict validation.
 - [x] 4.2 Run GitNexus detect_changes and inspect the changed execution flows before commit.
-- [ ] 4.3 Commit and push the branch, start code review, then inspect Actions and report any external deployment failures separately from code failures.
+- [x] 4.3 Commit and push the branch, start code review, then inspect Actions and report any external deployment failures separately from code failures.
