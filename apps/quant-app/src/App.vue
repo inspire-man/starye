@@ -31,6 +31,7 @@ import type { QuantView } from './lib/quant-view'
 import type { ResearchEvidenceChange } from './lib/research-evidence-history'
 import type { ResearchPriority, ResearchPriorityValueQuality } from './lib/research-priority'
 import type { ResearchReviewMeta } from './lib/research-review'
+import type { ResearchRunScoreDirection } from './lib/research-run-timeline'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
 import type { TimingHistoryBucket } from './lib/timing-history'
 import type { TimingWindow, TimingWindowMetricStatus, TimingWindowState } from './lib/timing-window'
@@ -69,6 +70,7 @@ import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
 import { getResearchReviewMeta, getTodayDate } from './lib/research-review'
+import { buildResearchRunTimeline } from './lib/research-run-timeline'
 import { buildResearchSummary } from './lib/research-summary'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
 import { buildTimingHistory } from './lib/timing-history'
@@ -280,6 +282,7 @@ const researchEvidenceGroups = computed(() => {
 })
 const previousResearchRun = computed(() => researchRuns.value[1] || null)
 const researchEvidenceComparison = computed(() => buildResearchEvidenceComparison(latestResearchReport.value, previousResearchRun.value?.report || null))
+const researchRunTimeline = computed(() => buildResearchRunTimeline(researchRuns.value))
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
@@ -760,6 +763,21 @@ function researchEvidenceHistoryValue(change: ResearchEvidenceChange, current: b
 function researchEvidenceHistoryStatus(change: ResearchEvidenceChange, current: boolean): string {
   const item = current ? change.current : change.previous
   return item ? researchEvidenceStatusLabel(item.status) : current ? '本次未返回' : '无历史记录'
+}
+
+function researchRunTimelineScoreClass(direction: ResearchRunScoreDirection): string {
+  return `research-run-timeline-score-${direction}`
+}
+
+function formatResearchRunTimelineScore(value: number | null): string {
+  return value === null ? '--' : `${value.toFixed(1)} / 100`
+}
+
+function formatResearchRunTimelineDelta(value: number | null, direction: ResearchRunScoreDirection = 'none'): string {
+  if (value === null)
+    return '不可比较'
+  const label = { up: '上升', down: '下降', flat: '持平', none: '变化' }[direction]
+  return `${label} ${value > 0 ? '+' : ''}${value.toFixed(1)} 分`
 }
 
 function formatResearchRunSourceDate(value: string | null): string {
@@ -2576,6 +2594,69 @@ onUnmounted(() => {
                   </ul>
                 </div>
               </div>
+              <section class="research-run-timeline-panel" aria-label="研究决策轨迹">
+                <div class="research-run-timeline-heading">
+                  <div>
+                    <p class="section-kicker">
+                      DECISION TIMELINE
+                    </p>
+                    <h3>研究决策轨迹</h3>
+                  </div>
+                  <div class="research-run-timeline-heading-meta">
+                    <span>{{ researchRunTimeline.points.length }} / {{ researchRunTimeline.totalRunCount }} 次</span>
+                    <span class="research-run-timeline-info" role="img" tabindex="0" aria-label="轨迹只记录已保存研究快照的变化，不替代当前报告的研究动作" title="轨迹只记录已保存研究快照的变化，不替代当前报告的研究动作">
+                      <Info :size="14" aria-hidden="true" />
+                    </span>
+                  </div>
+                </div>
+                <div v-if="researchRunTimeline.points.length < 2" class="research-run-timeline-state" role="status">
+                  <Info :size="15" aria-hidden="true" />
+                  <span>当前只有 1 份研究快照，再生成 1 份后可观察分数和动作轨迹。</span>
+                </div>
+                <template v-else>
+                  <div class="research-run-timeline-summary" role="list" aria-label="研究轨迹统计">
+                    <div role="listitem">
+                      <span>最近分数</span>
+                      <strong>{{ formatResearchRunTimelineScore(researchRunTimeline.latestScore) }}</strong>
+                      <small>当前报告</small>
+                    </div>
+                    <div role="listitem">
+                      <span>相邻变化</span>
+                      <strong :class="researchRunTimelineScoreClass(researchRunTimeline.latestScoreDirection)">{{ formatResearchRunTimelineDelta(researchRunTimeline.latestScoreDelta, researchRunTimeline.latestScoreDirection) }}</strong>
+                      <small>仅比较有限数值</small>
+                    </div>
+                    <div role="listitem">
+                      <span>状态 / 动作变化</span>
+                      <strong>{{ researchRunTimeline.statusChangeCount }} / {{ researchRunTimeline.actionChangeCount }}</strong>
+                      <small>最近可见快照</small>
+                    </div>
+                  </div>
+                  <div class="research-run-timeline-list">
+                    <article v-for="point in researchRunTimeline.points" :key="point.id" class="research-run-timeline-row">
+                      <div class="research-run-timeline-rail" aria-hidden="true">
+                        <span />
+                      </div>
+                      <div class="research-run-timeline-date">
+                        <time>{{ formatDateTime(point.generatedAt) }}</time>
+                        <small>{{ point.id.slice(0, 8) }}</small>
+                      </div>
+                      <div class="research-run-timeline-main">
+                        <div class="research-run-timeline-title">
+                          <span class="research-run-timeline-status" :class="`research-run-timeline-status-${point.status}`">{{ researchRunStatusLabel(point.status) }}</span>
+                          <strong>{{ researchRunActionLabel(point.action) }}</strong>
+                          <span v-if="point.statusChanged || point.actionChanged" class="research-run-timeline-change">结论变化</span>
+                        </div>
+                        <p>{{ point.headline }}</p>
+                        <small>{{ point.evidenceCount }} 条证据</small>
+                      </div>
+                      <div class="research-run-timeline-score" :class="researchRunTimelineScoreClass(point.scoreDirection)">
+                        <strong>{{ formatResearchRunTimelineScore(point.score) }}</strong>
+                        <span>{{ point.scoreDelta === null ? '无可比分数' : `相邻 ${formatResearchRunTimelineDelta(point.scoreDelta, point.scoreDirection)}` }}</span>
+                      </div>
+                    </article>
+                  </div>
+                </template>
+              </section>
               <div class="research-run-evidence-groups">
                 <section v-for="group in researchEvidenceGroups" :key="group.dimension" class="research-run-evidence-group" :aria-labelledby="`research-evidence-${group.dimension}`">
                   <div class="research-run-evidence-group-heading">
