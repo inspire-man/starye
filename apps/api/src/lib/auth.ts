@@ -65,6 +65,10 @@ export interface Env {
   EASTMONEY_BASE_URL?: string
   EASTMONEY_TIMEOUT_MS?: string
   QUANT_AI_ENCRYPTION_KEY?: string
+  QUANT_AKSHARE_BRIDGE_URL?: string
+  QUANT_AKSHARE_BRIDGE_TOKEN?: string
+  QUANT_AKSHARE_BRIDGE_TIMEOUT_MS?: string
+  QUANT_AI_SUMMARY_TIMEOUT_MS?: string
   ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单
   SENTRY_DSN?: string
   SENTRY_RELEASE?: string

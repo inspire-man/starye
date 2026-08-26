@@ -70,6 +70,26 @@ export interface QuantResearchRun {
   report: QuantResearchReport
 }
 
+export interface QuantResearchSummary {
+  id: string
+  researchRunId: string
+  summaryVersion: string
+  reportVersion: string
+  provider: QuantAiProvider
+  model: string
+  generatedAt: string | null
+  createdAt: string | null
+  summary: {
+    summaryVersion: string
+    overview: string
+    supports: string[]
+    concerns: string[]
+    nextChecks: string[]
+    citedEvidenceKeys: string[]
+  }
+  citedEvidenceKeys: string[]
+}
+
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'
 

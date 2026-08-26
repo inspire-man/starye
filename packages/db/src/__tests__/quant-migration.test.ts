@@ -9,13 +9,14 @@ const seedMigrationPath = new URL('../../drizzle/0038_quant_watchlist_seed.sql',
 const researchMigrationPath = new URL('../../drizzle/0039_quant_research_marker.sql', import.meta.url)
 const userScopeMigrationPath = new URL('../../drizzle/0041_quant_user_scope.sql', import.meta.url)
 const researchRunMigrationPath = new URL('../../drizzle/0042_quant_research_run.sql', import.meta.url)
+const researchSummaryMigrationPath = new URL('../../drizzle/0043_quant_research_summary.sql', import.meta.url)
 
 async function createMigratedClient() {
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
   await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-1\', 1)')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -43,6 +44,7 @@ describe('quant workbench migration', () => {
       'quant_daily_bar',
       'quant_research_marker',
       'quant_research_run',
+      'quant_research_summary',
       'quant_scan_snapshot',
       'quant_sync_state',
       'quant_watchlist',
@@ -51,6 +53,7 @@ describe('quant workbench migration', () => {
       'idx_quant_daily_bar_identity',
       'idx_quant_research_marker_user_ts_code',
       'idx_quant_research_run_user_ts_code_generated_at',
+      'idx_quant_research_summary_user_run_generated_at',
       'idx_quant_scan_snapshot_user_generated_at',
       'idx_quant_watchlist_user_ts_code',
     ]))
@@ -165,5 +168,30 @@ describe('quant workbench migration', () => {
     })
     await expect(client.execute('SELECT count(*) AS count FROM quant_research_run WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
     await expect(client.execute('SELECT count(*) AS count FROM quant_research_run WHERE user_id = \'user-2\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+  })
+
+  it('keeps research summaries isolated by user and research run', async () => {
+    const client = await createMigratedClient()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    await client.execute(`
+      INSERT INTO quant_research_run (
+        id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+        report_json, generated_at, created_at
+      ) VALUES ('run-1', 'user-1', '601899.SH', '紫金矿业', 'partial', 'research-report-v2', null, '{}', 10, 10)
+    `)
+    const summary = JSON.stringify({ summaryVersion: 'research-summary-v1', overview: '只解释证据' })
+    await client.execute({
+      sql: `INSERT INTO quant_research_summary (
+        id, user_id, research_run_id, summary_version, report_version, provider, model,
+        summary_json, cited_evidence_keys_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['summary-1', 'user-1', 'run-1', 'research-summary-v1', 'research-report-v2', 'ollama', 'qwen3', summary, '["trend-sample"]', 20, 20],
+    })
+    await expect(client.execute(`
+      SELECT user_id, research_run_id, summary_json
+      FROM quant_research_summary
+      WHERE user_id = 'user-1' AND research_run_id = 'run-1'
+    `)).resolves.toMatchObject({ rows: [{ user_id: 'user-1', research_run_id: 'run-1', summary_json: summary }] })
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary WHERE user_id = \'user-2\'')).resolves.toMatchObject({ rows: [{ count: 0 }] })
   })
 })

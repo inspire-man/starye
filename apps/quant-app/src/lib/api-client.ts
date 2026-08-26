@@ -22,6 +22,7 @@ import type {
   QuantResearchReport,
   QuantResearchRun,
   QuantResearchSource,
+  QuantResearchSummary,
   QuantShareholderReturnDistribution,
   QuantShareholderReturnItem,
   QuantShareholderReturnSelection,
@@ -516,6 +517,57 @@ function parseResearchRuns(payload: unknown): QuantResearchRun[] {
   return readList(data, 'items', 'runs', 'researchRuns', 'research_runs').flatMap((value) => {
     const run = parseResearchRun(value)
     return run ? [run] : []
+  })
+}
+
+function parseResearchSummary(value: unknown): QuantResearchSummary | null {
+  if (!isRecord(value))
+    return null
+  const id = readString(value, 'id')
+  const researchRunId = readString(value, 'researchRunId', 'research_run_id')
+  const summaryVersion = readString(value, 'summaryVersion', 'summary_version')
+  const reportVersion = readString(value, 'reportVersion', 'report_version')
+  const provider = readString(value, 'provider')
+  const model = readString(value, 'model')
+  const rawSummary = isRecord(value.summary) ? value.summary : null
+  if (!id || !researchRunId || !summaryVersion || !reportVersion || !model || !rawSummary)
+    return null
+  if (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    return null
+  const normalizedProvider: QuantAiProvider = provider
+  const parseSummaryList = (...keys: string[]) => readStringList(rawSummary, ...keys)
+  const overview = readString(rawSummary, 'overview')
+  if (!overview)
+    return null
+  const citedEvidenceKeys = parseSummaryList('citedEvidenceKeys')
+  return {
+    id,
+    researchRunId,
+    summaryVersion,
+    reportVersion,
+    provider: normalizedProvider,
+    model,
+    generatedAt: readString(value, 'generatedAt', 'generated_at'),
+    createdAt: readString(value, 'createdAt', 'created_at'),
+    summary: {
+      summaryVersion: readString(rawSummary, 'summaryVersion', 'summary_version') || summaryVersion,
+      overview,
+      supports: parseSummaryList('supports'),
+      concerns: parseSummaryList('concerns'),
+      nextChecks: parseSummaryList('nextChecks', 'next_checks'),
+      citedEvidenceKeys,
+    },
+    citedEvidenceKeys: readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys').length
+      ? readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys')
+      : citedEvidenceKeys,
+  }
+}
+
+function parseResearchSummaries(payload: unknown): QuantResearchSummary[] {
+  const data = unwrapData(payload)
+  return readList(data, 'items', 'summaries', 'researchSummaries', 'research_summaries').flatMap((value) => {
+    const summary = parseResearchSummary(value)
+    return summary ? [summary] : []
   })
 }
 
@@ -1083,6 +1135,19 @@ export const quantApi = {
 
   async getResearchRuns(tsCode: string, limit = 5): Promise<QuantResearchRun[]> {
     return parseResearchRuns(await requestJson(`/research/runs/${encodeURIComponent(tsCode)}?limit=${encodeURIComponent(String(limit))}`))
+  },
+
+  async generateResearchSummary(runId: string): Promise<QuantResearchSummary> {
+    const summary = parseResearchSummary(unwrapData(await requestJson(`/research/runs/${encodeURIComponent(runId)}/summary`, {
+      method: 'POST',
+    })))
+    if (!summary)
+      throw new QuantApiError('AI 研究摘要数据格式无效', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+    return summary
+  },
+
+  async getResearchSummaries(runId: string, limit = 1): Promise<QuantResearchSummary[]> {
+    return parseResearchSummaries(await requestJson(`/research/runs/${encodeURIComponent(runId)}/summary?limit=${encodeURIComponent(String(limit))}`))
   },
 
   async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {

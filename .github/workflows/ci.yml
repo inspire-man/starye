@@ -7,6 +7,21 @@ on:
     branches: [main]
 
 jobs:
+  quant-akshare-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Run Quant AkShare bridge tests
+        shell: bash
+        run: PYTHONPATH=apps/quant-akshare-bridge/src python -m unittest discover -s apps/quant-akshare-bridge/tests -v
+
   migration-destructive-scan:
     runs-on: ubuntu-latest
     outputs:
