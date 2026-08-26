@@ -22,6 +22,54 @@ const evidenceByKey = computed(() => new Map(props.report.evidence.map(item => [
 function citedEvidence(key: string): QuantResearchEvidence | null {
   return evidenceByKey.value.get(key) || null
 }
+
+function reportStatusLabel(status: QuantResearchReport['status']): string {
+  return { ready: '证据完整', partial: '部分可用', insufficient_data: '数据不足' }[status]
+}
+
+function reportActionLabel(action: QuantResearchReport['action']): string {
+  return {
+    'research-window': '进入研究窗口',
+    'wait-confirmation': '等待确认',
+    'reassess': '重新评估',
+    'complete-data': '补齐数据',
+  }[action]
+}
+
+function evidenceStatusLabel(status: QuantResearchEvidence['status']): string {
+  return { pass: '通过', caution: '注意', fail: '未通过', missing: '数据不足' }[status]
+}
+
+function evidenceStatusClass(status: QuantResearchEvidence['status']): string {
+  return `quant-ai-summary-evidence-${status}`
+}
+
+function formatEvidenceValue(item: QuantResearchEvidence): string {
+  if (item.value === null)
+    return '--'
+  if (item.key === 'trend-sample' || item.key === 'akshare-daily-sample')
+    return `${item.value.toFixed(0)} 根`
+  if (item.key === 'quality-history' || item.key === 'akshare-financial-sample')
+    return `${item.value.toFixed(0)} 期`
+  if (item.key === 'risk-volume')
+    return `${item.value.toFixed(2)} 倍`
+  if (item.key === 'risk-streak')
+    return `${item.value.toFixed(0)} 天`
+  if (item.key === 'quality-cashflow')
+    return `${(item.value * 100).toFixed(2)}%`
+  if (item.key.startsWith('trend-') || item.key.startsWith('quality-') || item.key.startsWith('akshare-') || item.key === 'shareholder-yield')
+    return `${item.value.toFixed(2)}%`
+  return item.value.toFixed(2)
+}
+
+function formatEvidenceDate(value: string | null): string {
+  if (!value)
+    return '时间未记录'
+  const compact = value.replace(/-/gu, '').slice(0, 8)
+  if (/^\d{8}$/u.test(compact))
+    return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`
+  return value.slice(0, 10)
+}
 </script>
 
 <template>
@@ -41,6 +89,21 @@ function citedEvidence(key: string): QuantResearchEvidence | null {
         <BrainCircuit v-else :size="14" aria-hidden="true" />
         {{ loading || generating ? '读取中' : summary ? '重新解读' : '生成解读' }}
       </button>
+    </div>
+
+    <div class="quant-ai-summary-deterministic" aria-label="确定性研究结论">
+      <div>
+        <span>报告状态</span>
+        <strong>{{ reportStatusLabel(report.status) }}</strong>
+      </div>
+      <div>
+        <span>研究动作</span>
+        <strong>{{ reportActionLabel(report.action) }}</strong>
+      </div>
+      <div>
+        <span>确定性分数</span>
+        <strong>{{ report.score === null ? '--' : `${report.score.toFixed(1)} / 100` }}</strong>
+      </div>
     </div>
 
     <div v-if="loading" class="quant-ai-summary-state" role="status">
@@ -87,13 +150,32 @@ function citedEvidence(key: string): QuantResearchEvidence | null {
       <div class="quant-ai-summary-citations">
         <div class="quant-ai-summary-citations-heading">
           <span>引用证据</span>
-          <small>{{ summary.model }} · {{ summary.generatedAt || '时间未记录' }}</small>
+          <small>{{ summary.citedEvidenceKeys.length }} 条 · {{ summary.model }} · {{ summary.generatedAt || '时间未记录' }}</small>
         </div>
         <div class="quant-ai-summary-citation-list">
-          <span v-for="key in summary.citedEvidenceKeys" :key="key" class="quant-ai-summary-citation" :title="citedEvidence(key)?.detail || '证据已在报告中保存'">
-            <CheckCircle2 :size="13" aria-hidden="true" />
-            {{ citedEvidence(key)?.label || key }}
-          </span>
+          <article v-for="key in summary.citedEvidenceKeys" :key="key" class="quant-ai-summary-citation" :class="citedEvidence(key) ? evidenceStatusClass(citedEvidence(key)!.status) : 'quant-ai-summary-evidence-missing'">
+            <div class="quant-ai-summary-citation-primary">
+              <div class="quant-ai-summary-citation-title">
+                <CheckCircle2 v-if="citedEvidence(key)" :size="13" aria-hidden="true" />
+                <CircleHelp v-else :size="13" aria-hidden="true" />
+                <strong>{{ citedEvidence(key)?.label || key }}</strong>
+                <span v-if="citedEvidence(key)">{{ evidenceStatusLabel(citedEvidence(key)!.status) }}</span>
+                <span v-else>当前报告未找到</span>
+              </div>
+              <strong class="quant-ai-summary-citation-value">{{ citedEvidence(key) ? formatEvidenceValue(citedEvidence(key)!) : '--' }}</strong>
+            </div>
+            <p v-if="citedEvidence(key)" class="quant-ai-summary-citation-detail">
+              {{ citedEvidence(key)!.detail }}
+            </p>
+            <div v-if="citedEvidence(key)" class="quant-ai-summary-citation-meta">
+              <span>阈值 {{ citedEvidence(key)!.threshold }}</span>
+              <span>{{ citedEvidence(key)!.source }}</span>
+              <span>{{ formatEvidenceDate(citedEvidence(key)!.observedAt) }} · {{ citedEvidence(key)!.formulaVersion }}</span>
+            </div>
+            <p v-else class="quant-ai-summary-citation-detail">
+              引用 key：{{ key }}；当前报告未返回可核验数值。
+            </p>
+          </article>
           <span v-if="!summary.citedEvidenceKeys.length" class="quant-ai-summary-empty-citation">
             <CircleHelp :size="13" aria-hidden="true" />
             未返回引用证据
@@ -115,6 +197,36 @@ function citedEvidence(key: string): QuantResearchEvidence | null {
   margin-top: 0.85rem;
   border-top: 1px solid hsl(var(--primary) / 0.28);
   padding-top: 0.8rem;
+}
+
+.quant-ai-summary-deterministic {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--muted) / 0.28);
+  padding: 0.5rem 0.6rem;
+}
+
+.quant-ai-summary-deterministic > div {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.quant-ai-summary-deterministic span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-summary-deterministic strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  font-weight: 740;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quant-ai-summary-heading,
@@ -219,29 +331,134 @@ function citedEvidence(key: string): QuantResearchEvidence | null {
 
 .quant-ai-summary-citation-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
-.quant-ai-summary-citation,
+.quant-ai-summary-citation {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  border: 1px solid hsl(var(--status-success) / 0.25);
+  border-left: 2px solid hsl(var(--status-success) / 0.62);
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--status-success) / 0.06);
+  padding: 0.45rem 0.5rem;
+}
+
+.quant-ai-summary-citation-primary,
+.quant-ai-summary-citation-title,
+.quant-ai-summary-citation-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.quant-ai-summary-citation-primary {
+  justify-content: space-between;
+}
+
+.quant-ai-summary-citation-title {
+  overflow: hidden;
+  color: hsl(var(--status-success));
+}
+
+.quant-ai-summary-citation-title strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quant-ai-summary-citation-title span {
+  flex: 0 0 auto;
+  font-size: 0.625rem;
+  font-weight: 720;
+}
+
+.quant-ai-summary-citation-value {
+  flex: 0 0 auto;
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.quant-ai-summary-citation-detail {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.4;
+}
+
+.quant-ai-summary-citation-meta {
+  flex-wrap: wrap;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
+
+.quant-ai-summary-citation-meta span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-summary-evidence-pass {
+  border-left-color: hsl(var(--status-success) / 0.72);
+}
+
+.quant-ai-summary-evidence-pass .quant-ai-summary-citation-title span {
+  color: hsl(var(--status-success));
+}
+
+.quant-ai-summary-evidence-caution {
+  border-color: hsl(var(--status-warning) / 0.25);
+  border-left-color: hsl(var(--status-warning) / 0.75);
+  background: hsl(var(--status-warning) / 0.06);
+}
+
+.quant-ai-summary-evidence-caution .quant-ai-summary-citation-title {
+  color: hsl(var(--status-warning));
+}
+
+.quant-ai-summary-evidence-caution .quant-ai-summary-citation-title span {
+  color: hsl(var(--status-warning));
+}
+
+.quant-ai-summary-evidence-fail {
+  border-color: hsl(var(--status-danger) / 0.25);
+  border-left-color: hsl(var(--status-danger) / 0.75);
+  background: hsl(var(--status-danger) / 0.06);
+}
+
+.quant-ai-summary-evidence-fail .quant-ai-summary-citation-title {
+  color: hsl(var(--status-danger));
+}
+
+.quant-ai-summary-evidence-fail .quant-ai-summary-citation-title span {
+  color: hsl(var(--status-danger));
+}
+
 .quant-ai-summary-empty-citation {
   display: inline-flex;
   max-width: 100%;
   align-items: center;
   gap: 0.25rem;
-  border: 1px solid hsl(var(--status-success) / 0.25);
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted) / 0.5);
+  border: 1px solid hsl(var(--border));
   border-radius: var(--ui-radius-sm, 0.25rem);
-  background: hsl(var(--status-success) / 0.08);
   padding: 0.25rem 0.4rem;
-  color: hsl(var(--status-success));
+  color: hsl(var(--muted-foreground));
   font-size: 0.625rem;
   line-height: 1.25;
 }
 
-.quant-ai-summary-empty-citation {
-  border-color: hsl(var(--border));
-  background: hsl(var(--muted) / 0.5);
-  color: hsl(var(--muted-foreground));
+.quant-ai-summary-citation-list > .quant-ai-summary-empty-citation {
+  width: fit-content;
 }
 
 @media (max-width: 680px) {
@@ -255,6 +472,22 @@ function citedEvidence(key: string): QuantResearchEvidence | null {
 
   .quant-ai-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .quant-ai-summary-deterministic {
+    grid-template-columns: 1fr;
+  }
+
+  .quant-ai-summary-citation-primary {
+    align-items: flex-start;
+  }
+
+  .quant-ai-summary-citation-title {
+    align-items: flex-start;
+  }
+
+  .quant-ai-summary-citation-title strong {
+    white-space: normal;
   }
 }
 </style>
