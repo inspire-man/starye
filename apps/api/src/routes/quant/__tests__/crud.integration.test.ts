@@ -454,10 +454,22 @@ describe('quant watchlist CRUD contract', () => {
     const { client, db } = await createDatabase()
     await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
     await upsertQuantDailyBars(db, valueFixtureBars('601899.SH'))
+    await client.execute(`
+      INSERT INTO quant_scan_snapshot (
+        id, user_id, status, factor_version, input_ts_codes_json, from_date, to_date,
+        candidate_count, candidates_json, generated_at, created_at
+      ) VALUES ('target-snapshot', 'user-1', 'partial', 'momentum-v1', '["601899.SH"]', '20260101', '20260826', 0, '[]', 9, 9)
+    `)
+    await client.execute(`
+      INSERT INTO quant_scan_snapshot (
+        id, user_id, status, factor_version, input_ts_codes_json, from_date, to_date,
+        candidate_count, candidates_json, generated_at, created_at
+      ) VALUES ('unrelated-snapshot', 'user-1', 'partial', 'momentum-v1', '["600089.SH"]', '20260101', '20260826', 0, '[]', 10, 10)
+    `)
     await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
     const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
     const userB = createApp(db, { user: { id: 'user-2', role: 'user' } })
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }))
@@ -466,22 +478,50 @@ describe('quant watchlist CRUD contract', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ts_code: '601899.SH' }),
-    })
+    }, {
+      TUSHARE_TOKEN: 'fixture-token',
+      TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+    } as AppEnv['Bindings'])
     expect(generated.status).toBe(201)
-    const generatedPayload = await generated.json() as { data: { id: string, report: { reportVersion: string, evidence: unknown[] } } }
+    const generatedPayload = await generated.json() as { data: { id: string, sourceSnapshotId: string | null, report: { reportVersion: string, evidence: unknown[] } } }
     expect(generatedPayload.data).toMatchObject({
+      sourceSnapshotId: null,
       report: {
         reportVersion: 'research-report-v1',
         evidence: expect.arrayContaining([expect.objectContaining({ key: 'trend-sample' })]),
       },
     })
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === 'https://tushare.fixture.test')).toHaveLength(1)
 
-    const history = await userA.request('/api/quant/research/runs/601899.SH?limit=1')
+    await client.execute(`
+      INSERT INTO quant_scan_snapshot (
+        id, user_id, status, factor_version, input_ts_codes_json, from_date, to_date,
+        candidate_count, candidates_json, generated_at, created_at
+      ) VALUES ('target-input-only-snapshot', 'user-1', 'partial', 'momentum-v1', '["601899.SH"]', '20260101', '20260826', 0, '[]', 11, 11)
+    `)
+    const generatedWithInputOnlySnapshot = await userA.request('/api/quant/research/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_code: '601899.SH' }),
+    }, {
+      TUSHARE_TOKEN: 'fixture-token',
+      TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+    } as AppEnv['Bindings'])
+    expect(generatedWithInputOnlySnapshot.status).toBe(201)
+    const generatedWithInputOnlySnapshotPayload = await generatedWithInputOnlySnapshot.json() as { data: { id: string, sourceSnapshotId: string | null } }
+    expect(generatedWithInputOnlySnapshotPayload.data).toMatchObject({ sourceSnapshotId: 'target-input-only-snapshot' })
+
+    const history = await userA.request('/api/quant/research/runs/601899.SH?limit=2')
     expect(history.status).toBe(200)
-    await expect(history.json()).resolves.toMatchObject({ data: [{ id: generatedPayload.data.id, tsCode: '601899.SH' }] })
-    await expect(client.execute('SELECT user_id, ts_code, report_version, report_json FROM quant_research_run')).resolves.toMatchObject({
-      rows: [{ user_id: 'user-1', ts_code: '601899.SH', report_version: 'research-report-v1', report_json: expect.stringContaining('trend-sample') }],
-    })
+    const historyPayload = await history.json() as { data: Array<{ id: string, tsCode: string }> }
+    expect(historyPayload.data.map(item => ({ id: item.id, tsCode: item.tsCode }))).toEqual(expect.arrayContaining([
+      { id: generatedPayload.data.id, tsCode: '601899.SH' },
+      { id: generatedWithInputOnlySnapshotPayload.data.id, tsCode: '601899.SH' },
+    ]))
+    const persistedRuns = await client.execute('SELECT user_id, ts_code, report_version, report_json FROM quant_research_run')
+    expect(persistedRuns.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ user_id: 'user-1', ts_code: '601899.SH', report_version: 'research-report-v1', report_json: expect.stringContaining('trend-sample') }),
+    ]))
 
     await expect((await userB.request('/api/quant/research/runs/601899.SH')).json()).resolves.toMatchObject({ data: [] })
     const outside = await userA.request('/api/quant/research/runs', {

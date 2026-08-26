@@ -33,7 +33,7 @@ import {
   upsertQuantResearchMarker,
 } from '../../domain/quant/repository'
 import { buildQuantResearchReport } from '../../domain/quant/research-report'
-import { readQuantShareholderReturns } from '../../domain/quant/shareholder-return'
+import { readQuantShareholderReturn, readQuantShareholderReturns } from '../../domain/quant/shareholder-return'
 import { buildQuantSignalPersistence } from '../../domain/quant/signal-persistence'
 import { syncQuantDaily } from '../../domain/quant/sync'
 import { readQuantValueSelection } from '../../domain/quant/value-selection-service'
@@ -120,6 +120,16 @@ function researchRunView(row: QuantResearchRunRecord) {
     generatedAt: row.generatedAt,
     createdAt: row.createdAt,
     report: parseResearchReport(row.reportJson),
+  }
+}
+
+function snapshotIncludesCode(snapshot: { readonly inputTsCodesJson: string }, tsCode: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(snapshot.inputTsCodesJson)
+    return Array.isArray(parsed) && parsed.some(code => typeof code === 'string' && code.trim().toUpperCase() === tsCode)
+  }
+  catch {
+    return false
   }
 }
 
@@ -311,6 +321,9 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
     listQuantDailyBars(c.get('db'), { tsCode }),
     listQuantScanSnapshots(c.get('db'), userId, 1),
   ])
+  const sourceSnapshotId = snapshots[0] && snapshotIncludesCode(snapshots[0], tsCode)
+    ? snapshots[0].id
+    : null
   const candidate = screenMomentum({ [tsCode]: dailyBars }).find(item => item.tsCode === tsCode) ?? null
   const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
   const financialProvider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
@@ -318,14 +331,14 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
   const [valuationResult, financialResult, shareholderResult] = await Promise.allSettled([
     valuationProvider.fetchValuation({ tsCode }),
     financialProvider.fetchFinancialQualityHistory({ tsCode, limit: 4 }),
-    readQuantShareholderReturns(c.get('db'), userId, dividendProvider).then(result => result.items.find(item => item.tsCode === tsCode) ?? null),
+    readQuantShareholderReturn(c.get('db'), userId, tsCode, dividendProvider),
   ])
   const generatedAt = new Date()
   const report = buildQuantResearchReport({
     tsCode,
     name: watchlistItem.name,
     generatedAt,
-    sourceSnapshotId: snapshots[0]?.id ?? null,
+    sourceSnapshotId,
     candidate,
     dailyBars,
     valuation: valuationResult.status === 'fulfilled' ? valuationResult.value : null,
