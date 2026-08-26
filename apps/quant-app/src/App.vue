@@ -28,6 +28,7 @@ import type {
   WatchlistItem,
 } from './lib/quant-types'
 import type { QuantView } from './lib/quant-view'
+import type { ResearchEvidenceChange } from './lib/research-evidence-history'
 import type { ResearchPriority, ResearchPriorityValueQuality } from './lib/research-priority'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
@@ -65,6 +66,7 @@ import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
+import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
 import { getResearchReviewMeta, getTodayDate } from './lib/research-review'
 import { buildResearchSummary } from './lib/research-summary'
@@ -276,6 +278,8 @@ const researchEvidenceGroups = computed(() => {
     .map(([dimension, items]) => ({ dimension, label: `其他证据 · ${dimension}`, items }))
   return [...orderedGroups, ...additionalGroups]
 })
+const previousResearchRun = computed(() => researchRuns.value[1] || null)
+const researchEvidenceComparison = computed(() => buildResearchEvidenceComparison(latestResearchReport.value, previousResearchRun.value?.report || null))
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
@@ -721,6 +725,41 @@ function formatResearchEvidenceValue(item: QuantResearchEvidence): string {
   if (item.key.startsWith('trend-') || item.key.startsWith('quality-') || item.key.startsWith('akshare-') || item.key === 'shareholder-yield')
     return `${item.value.toFixed(2)}%`
   return item.value.toFixed(2)
+}
+
+function researchEvidenceChangeClass(kind: ResearchEvidenceChange['kind']): string {
+  return `research-evidence-change-${kind}`
+}
+
+function formatResearchEvidenceDelta(change: ResearchEvidenceChange): string {
+  if (change.valueDelta === null)
+    return '--'
+  const evidence = change.current || change.previous
+  if (!evidence)
+    return '--'
+  const value = evidence.key === 'quality-cashflow' ? change.valueDelta * 100 : change.valueDelta
+  const prefix = value > 0 ? '+' : ''
+  if (evidence.key === 'trend-sample' || evidence.key === 'akshare-daily-sample')
+    return `${prefix}${value.toFixed(0)} 根`
+  if (evidence.key === 'quality-history' || evidence.key === 'akshare-financial-sample')
+    return `${prefix}${value.toFixed(0)} 期`
+  if (evidence.key === 'risk-volume')
+    return `${prefix}${value.toFixed(2)} 倍`
+  if (evidence.key === 'risk-streak')
+    return `${prefix}${value.toFixed(0)} 天`
+  if (evidence.key.startsWith('trend-') || evidence.key.startsWith('quality-') || evidence.key.startsWith('akshare-') || evidence.key === 'shareholder-yield')
+    return `${prefix}${value.toFixed(2)}%`
+  return `${prefix}${value.toFixed(2)}`
+}
+
+function researchEvidenceHistoryValue(change: ResearchEvidenceChange, current: boolean): string {
+  const item = current ? change.current : change.previous
+  return item ? formatResearchEvidenceValue(item) : '--'
+}
+
+function researchEvidenceHistoryStatus(change: ResearchEvidenceChange, current: boolean): string {
+  const item = current ? change.current : change.previous
+  return item ? researchEvidenceStatusLabel(item.status) : current ? '本次未返回' : '无历史记录'
 }
 
 function formatResearchRunSourceDate(value: string | null): string {
@@ -2581,6 +2620,80 @@ onUnmounted(() => {
                 @generate="generateResearchSummary"
                 @open-settings="aiSettingsOpen = true"
               />
+              <section class="research-evidence-history-panel" aria-label="研究证据变化">
+                <div class="research-evidence-history-heading">
+                  <div>
+                    <p class="section-kicker">
+                      HISTORY DIFF
+                    </p>
+                    <h3>与上次快照相比</h3>
+                    <small v-if="researchEvidenceComparison">
+                      本次 {{ formatDateTime(researchEvidenceComparison.currentGeneratedAt) }} · 上次 {{ formatDateTime(researchEvidenceComparison.previousGeneratedAt) }}
+                    </small>
+                  </div>
+                  <span v-if="researchEvidenceComparison" class="research-evidence-history-count">
+                    {{ researchEvidenceComparison.changedCount }} 项变化
+                  </span>
+                </div>
+                <div v-if="researchRuns.length < 2" class="research-evidence-history-state" role="status">
+                  <Info :size="15" aria-hidden="true" />
+                  <span>当前只有 1 份研究快照，再生成 1 份后可比较证据变化。</span>
+                </div>
+                <template v-else-if="researchEvidenceComparison">
+                  <div class="research-evidence-history-summary">
+                    <div>
+                      <span>变化项</span>
+                      <strong>{{ researchEvidenceComparison.changedCount }}</strong>
+                      <small>共 {{ researchEvidenceComparison.totalEvidenceCount }} 项证据</small>
+                    </div>
+                    <div>
+                      <span>改善 / 恢复</span>
+                      <strong class="research-evidence-history-positive">{{ researchEvidenceComparison.improvedCount }}</strong>
+                      <small>状态或数据可用性变好</small>
+                    </div>
+                    <div>
+                      <span>转弱 / 缺失</span>
+                      <strong class="research-evidence-history-negative">{{ researchEvidenceComparison.weakenedCount }}</strong>
+                      <small>需要优先核对</small>
+                    </div>
+                    <div>
+                      <span>仍缺失</span>
+                      <strong>{{ researchEvidenceComparison.missingCount }}</strong>
+                      <small>没有用零值补齐</small>
+                    </div>
+                  </div>
+                  <div v-if="researchEvidenceComparison.items.length" class="research-evidence-history-list">
+                    <article v-for="change in researchEvidenceComparison.items" :key="change.key" class="research-evidence-history-row" :class="researchEvidenceChangeClass(change.kind)">
+                      <div class="research-evidence-history-main">
+                        <div class="research-evidence-history-title">
+                          <strong>{{ change.label }}</strong>
+                          <span>{{ change.kindLabel }}</span>
+                        </div>
+                        <small>{{ change.key }}</small>
+                      </div>
+                      <div class="research-evidence-history-values">
+                        <div>
+                          <small>上次</small>
+                          <strong>{{ researchEvidenceHistoryValue(change, false) }}</strong>
+                          <span>{{ researchEvidenceHistoryStatus(change, false) }}</span>
+                        </div>
+                        <ChevronRight :size="14" aria-hidden="true" />
+                        <div>
+                          <small>本次</small>
+                          <strong>{{ researchEvidenceHistoryValue(change, true) }}</strong>
+                          <span>{{ researchEvidenceHistoryStatus(change, true) }}</span>
+                        </div>
+                        <em v-if="change.valueDelta !== null">变化 {{ formatResearchEvidenceDelta(change) }}</em>
+                      </div>
+                      <p>{{ (change.current || change.previous)?.detail || '当前没有可补充的解释。' }}</p>
+                    </article>
+                  </div>
+                  <div v-else class="research-evidence-history-state" role="status">
+                    <CheckCircle2 :size="15" aria-hidden="true" />
+                    <span>最近两份报告的证据状态和数值没有明显变化。</span>
+                  </div>
+                </template>
+              </section>
               <p class="research-run-note">
                 这是基于已保存数据的版本化研究快照；报告用于整理核对顺序，不是买入、卖出或收益预测。
               </p>

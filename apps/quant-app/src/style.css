@@ -1527,6 +1527,232 @@ input:focus-visible {
   color: hsl(var(--foreground));
 }
 
+.research-evidence-history-panel {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+  border-top: 1px solid hsl(var(--primary) / 0.2);
+  padding-top: 0.8rem;
+}
+
+.research-evidence-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.research-evidence-history-heading h3 {
+  margin: 0.3rem 0 0;
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+  font-weight: 740;
+}
+
+.research-evidence-history-heading small {
+  display: block;
+  margin-top: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.4;
+}
+
+.research-evidence-history-count {
+  flex: 0 0 auto;
+  border: 1px solid hsl(var(--primary) / 0.25);
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--primary) / 0.08);
+  padding: 0.28rem 0.4rem;
+  color: hsl(var(--primary));
+  font-size: 0.625rem;
+  font-weight: 720;
+}
+
+.research-evidence-history-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.research-evidence-history-summary > div {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  border-left: 2px solid hsl(var(--border));
+  padding: 0.15rem 0.5rem;
+}
+
+.research-evidence-history-summary span,
+.research-evidence-history-summary small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
+
+.research-evidence-history-summary strong {
+  color: hsl(var(--foreground));
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.research-evidence-history-positive {
+  color: hsl(var(--status-success)) !important;
+}
+
+.research-evidence-history-negative {
+  color: hsl(var(--status-danger)) !important;
+}
+
+.research-evidence-history-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.research-evidence-history-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.9fr) minmax(0, 1.8fr);
+  gap: 0.6rem;
+  min-width: 0;
+  border: 1px solid hsl(var(--border));
+  border-left: 2px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--card) / 0.5);
+  padding: 0.5rem 0.6rem;
+}
+
+.research-evidence-history-main {
+  display: grid;
+  align-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.research-evidence-history-title {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.research-evidence-history-title strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-evidence-history-title span {
+  flex: 0 0 auto;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  font-weight: 720;
+}
+
+.research-evidence-history-main > small {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.5625rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-evidence-history-values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.research-evidence-history-values > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.research-evidence-history-values small,
+.research-evidence-history-values span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.5625rem;
+  line-height: 1.3;
+}
+
+.research-evidence-history-values strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-evidence-history-values > svg {
+  color: hsl(var(--muted-foreground));
+}
+
+.research-evidence-history-values em {
+  color: hsl(var(--primary));
+  font-size: 0.625rem;
+  font-style: normal;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.research-evidence-history-row > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.4;
+}
+
+.research-evidence-change-improved,
+.research-evidence-change-restored,
+.research-evidence-change-added {
+  border-left-color: hsl(var(--status-success) / 0.7);
+}
+
+.research-evidence-change-improved .research-evidence-history-title span,
+.research-evidence-change-restored .research-evidence-history-title span,
+.research-evidence-change-added .research-evidence-history-title span {
+  color: hsl(var(--status-success));
+}
+
+.research-evidence-change-weakened,
+.research-evidence-change-newly-missing,
+.research-evidence-change-removed {
+  border-left-color: hsl(var(--status-danger) / 0.72);
+}
+
+.research-evidence-change-weakened .research-evidence-history-title span,
+.research-evidence-change-newly-missing .research-evidence-history-title span,
+.research-evidence-change-removed .research-evidence-history-title span {
+  color: hsl(var(--status-danger));
+}
+
+.research-evidence-change-persistent-missing {
+  border-left-color: hsl(var(--status-warning) / 0.72);
+}
+
+.research-evidence-change-persistent-missing .research-evidence-history-title span {
+  color: hsl(var(--status-warning));
+}
+
+.research-evidence-history-state {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  text-align: center;
+}
+
 .research-run-note {
   margin: 0.7rem 0 0;
 }
@@ -5252,6 +5478,30 @@ input:focus-visible {
 
   .research-run-evidence-meta {
     justify-content: flex-start;
+  }
+
+  .research-evidence-history-heading {
+    flex-direction: column;
+  }
+
+  .research-evidence-history-count {
+    align-self: flex-start;
+  }
+
+  .research-evidence-history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .research-evidence-history-row {
+    grid-template-columns: 1fr;
+  }
+
+  .research-evidence-history-values {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .research-evidence-history-values em {
+    grid-column: 1 / -1;
   }
 
   .decision-evidence-list {
