@@ -3435,7 +3435,7 @@ input:focus-visible {
 
 .comparison-research-item {
   display: grid;
-  grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.2fr) minmax(6.5rem, auto);
   gap: 0.6rem;
   min-width: 0;
   border-left: 2px solid hsl(var(--border));
@@ -3475,6 +3475,28 @@ input:focus-visible {
   color: hsl(var(--foreground));
   font-size: 0.6875rem;
   font-weight: 720;
+}
+
+.comparison-research-actions {
+  display: flex;
+  min-width: 6.5rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.comparison-research-action {
+  min-height: var(--ui-control-height-sm, 2rem);
+  white-space: nowrap;
+}
+
+.comparison-research-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.comparison-research-item-error .comparison-research-detail small {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .comparison-research-item-pending,
@@ -5971,6 +5993,11 @@ input:focus-visible {
 
   .comparison-research-item {
     grid-template-columns: 1fr;
+  }
+
+  .comparison-research-actions {
+    min-width: 0;
+    justify-content: flex-start;
   }
 
   .research-run-evidence-row {
