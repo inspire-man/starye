@@ -49,6 +49,7 @@ import {
   CheckCircle2,
   ChevronRight,
   DatabaseZap,
+  Download,
   ExternalLink,
   Eye,
   Filter,
@@ -76,6 +77,7 @@ import { runResearchBatch } from './lib/research-batch'
 import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from './lib/research-batch-follow-up'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
+import { buildResearchReportFilename, buildResearchReportMarkdown } from './lib/research-report-export'
 import { getResearchReviewMeta, getTodayDate } from './lib/research-review'
 import { buildResearchRunTimeline } from './lib/research-run-timeline'
 import { buildResearchSummary } from './lib/research-summary'
@@ -1454,6 +1456,22 @@ async function generateResearchSummary() {
   }
 }
 
+function downloadResearchReport() {
+  const run = latestResearchRun.value
+  if (!run)
+    return
+
+  const blob = new Blob([buildResearchReportMarkdown(run, researchAiSummary.value)], { type: 'text/markdown;charset=utf-8' })
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = buildResearchReportFilename(run)
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+}
+
 async function loadDailyBars(tsCode: string) {
   loading.daily = true
   errors.daily = null
@@ -2736,10 +2754,16 @@ onUnmounted(() => {
                 <h2>结构化研究报告</h2>
                 <small v-if="latestResearchReport">最近生成 {{ formatDateTime(latestResearchReport.generatedAt) }}</small>
               </div>
-              <button class="secondary-button research-run-generate-button" type="button" :disabled="researchRunGenerating || researchRunLoading" title="按当前已保存数据生成一份可回看的研究快照" @click="generateResearchReport">
-                <RotateCcw :size="15" :class="researchRunGenerating ? 'animate-spin' : ''" aria-hidden="true" />
-                {{ researchRunGenerating ? '生成中' : latestResearchReport ? '重新生成' : '生成报告' }}
-              </button>
+              <div class="research-run-heading-actions">
+                <button class="secondary-button research-run-generate-button" type="button" :disabled="researchRunGenerating || researchRunLoading" title="按当前已保存数据生成一份可回看的研究快照" @click="generateResearchReport">
+                  <RotateCcw :size="15" :class="researchRunGenerating ? 'animate-spin' : ''" aria-hidden="true" />
+                  {{ researchRunGenerating ? '生成中' : latestResearchReport ? '重新生成' : '生成报告' }}
+                </button>
+                <button v-if="latestResearchReport" class="secondary-button research-run-export-button" type="button" title="将当前研究报告下载为 Markdown 文件" aria-label="导出当前研究报告为 Markdown 文件" @click="downloadResearchReport">
+                  <Download :size="15" aria-hidden="true" />
+                  导出 Markdown
+                </button>
+              </div>
             </div>
             <div v-if="researchRunLoading" class="research-run-state" role="status">
               <RefreshCw :size="16" class="animate-spin" aria-hidden="true" />
