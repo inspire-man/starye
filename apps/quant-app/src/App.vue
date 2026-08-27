@@ -29,6 +29,7 @@ import type {
   WatchlistItem,
 } from './lib/quant-types'
 import type { QuantView } from './lib/quant-view'
+import type { BatchResearchItemStatus, BatchResearchProgress } from './lib/research-batch'
 import type { ResearchEvidenceChange } from './lib/research-evidence-history'
 import type { ResearchPriority, ResearchPriorityValueQuality } from './lib/research-priority'
 import type { ResearchReviewMeta } from './lib/research-review'
@@ -44,6 +45,7 @@ import {
   BarChart3,
   BookOpen,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   DatabaseZap,
   ExternalLink,
@@ -69,6 +71,7 @@ import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
+import { runResearchBatch } from './lib/research-batch'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
 import { getResearchReviewMeta, getTodayDate } from './lib/research-review'
@@ -79,6 +82,12 @@ import { buildTimingHistory } from './lib/timing-history'
 import { buildTimingWindow } from './lib/timing-window'
 import { buildTrendStructure } from './lib/trend-analysis'
 import { buildWatchlistEnvironment } from './lib/watchlist-environment'
+
+interface ComparisonResearchItemState {
+  status: BatchResearchItemStatus | 'idle'
+  run: QuantResearchRun | null
+  error: unknown | null
+}
 
 const watchlist = ref<WatchlistItem[]>([])
 const snapshot = ref<CandidateSnapshot | null>(null)
@@ -108,6 +117,8 @@ const comparisonLoading = ref(false)
 const comparisonValuations = ref<Record<string, QuantValuationSnapshot | null>>({})
 const comparisonFinancials = ref<Record<string, QuantFinancialQualitySnapshot | null>>({})
 const comparisonErrors = ref<Record<string, { valuation: boolean, financial: boolean }>>({})
+const comparisonResearchRunning = ref(false)
+const comparisonResearchStates = ref<Record<string, ComparisonResearchItemState>>({})
 const researchFormStatus = ref<ResearchMarkerStatus>('unreviewed')
 const researchFormNote = ref('')
 const researchFormReviewDate = ref('')
@@ -326,6 +337,33 @@ const selectedResearchReview = computed(() => researchReviewFor(selectedTsCode.v
 const selectedCandidateItems = computed(() => candidateItems.value.filter(item => selectedCandidateIds.value.has(item.id)).slice(0, 3))
 const canCompareCandidates = computed(() => selectedCandidateItems.value.length >= 2)
 const comparisonStatusLabel = computed(() => comparisonLoading.value ? '正在读取估值与财务数据' : `${selectedCandidateItems.value.length} 只股票`)
+const comparisonResearchSummary = computed(() => {
+  const states = selectedCandidateItems.value.map(item => comparisonResearchStates.value[item.tsCode]?.status || 'idle')
+  const success = states.filter(status => status === 'success').length
+  const error = states.filter(status => status === 'error').length
+  const running = states.filter(status => status === 'running').length
+  const pending = states.filter(status => status === 'pending').length
+  return {
+    total: states.length,
+    success,
+    error,
+    running,
+    pending,
+    completed: success + error,
+    started: states.some(status => status !== 'idle'),
+  }
+})
+const comparisonResearchButtonLabel = computed(() => comparisonResearchSummary.value.started ? '重新生成研究' : '批量生成研究')
+const comparisonResearchSummaryLabel = computed(() => {
+  const summary = comparisonResearchSummary.value
+  if (!summary.started)
+    return '尚未生成本批次研究报告'
+  if (summary.running || summary.pending)
+    return `已完成 ${summary.completed} / ${summary.total}，${summary.running + summary.pending} 项待完成`
+  if (summary.error)
+    return `已完成 ${summary.success} / ${summary.total}，${summary.error} 项失败`
+  return `已完成 ${summary.success} / ${summary.total} 项`
+})
 const latestDailyBar = computed(() => dailyBars.value.at(-1) || null)
 const latestWatchlistDate = computed(() => {
   const dates = watchlist.value.map(item => item.latestTradeDate).filter((date): date is string => Boolean(date))
@@ -1570,6 +1608,40 @@ function clearCandidateSelection() {
   selectedCandidateIds.value = new Set()
 }
 
+function comparisonResearchStateFor(item: CandidateItem): ComparisonResearchItemState {
+  return comparisonResearchStates.value[item.tsCode] || { status: 'idle', run: null, error: null }
+}
+
+function comparisonResearchStateClass(state: ComparisonResearchItemState): string {
+  return `comparison-research-item-${state.status}`
+}
+
+function comparisonResearchStatusLabel(state: ComparisonResearchItemState): string {
+  if (state.status === 'idle')
+    return '未开始'
+  if (state.status === 'pending')
+    return '排队中'
+  if (state.status === 'running')
+    return '生成中'
+  if (state.status === 'error')
+    return '生成失败'
+  return state.run ? researchRunStatusLabel(state.run.status) : '已完成'
+}
+
+function comparisonResearchStatusDetail(state: ComparisonResearchItemState): string {
+  if (state.status === 'idle')
+    return '等待批量启动'
+  if (state.status === 'pending')
+    return '等待可用任务位'
+  if (state.status === 'running')
+    return '正在生成独立研究快照'
+  if (state.status === 'error')
+    return parsedError(state.error).message
+  if (!state.run)
+    return '研究快照已返回'
+  return `${researchRunActionLabel(state.run.report.action)} · ${state.run.report.evidence.length} 条证据`
+}
+
 async function openComparisonDrawer() {
   if (!canCompareCandidates.value)
     return
@@ -1600,6 +1672,41 @@ async function openComparisonDrawer() {
     }
   }))
   comparisonLoading.value = false
+}
+
+async function startBatchResearch() {
+  if (!canCompareCandidates.value || comparisonResearchRunning.value)
+    return
+
+  const items = [...selectedCandidateItems.value]
+  comparisonResearchStates.value = Object.fromEntries(items.map(item => [item.tsCode, {
+    status: 'pending' as const,
+    run: null,
+    error: null,
+  }]))
+  comparisonResearchRunning.value = true
+  try {
+    await runResearchBatch(
+      items.map(item => item.tsCode),
+      tsCode => quantApi.generateResearchRun(tsCode),
+      (progress: BatchResearchProgress) => {
+        const previous = comparisonResearchStates.value[progress.tsCode]
+        if (!previous)
+          return
+        comparisonResearchStates.value = {
+          ...comparisonResearchStates.value,
+          [progress.tsCode]: {
+            status: progress.status,
+            run: progress.run || previous.run,
+            error: progress.error ?? null,
+          },
+        }
+      },
+    )
+  }
+  finally {
+    comparisonResearchRunning.value = false
+  }
 }
 
 async function loadWorkspace() {
@@ -3798,6 +3905,38 @@ onUnmounted(() => {
               </tbody>
             </table>
           </div>
+          <section class="comparison-research-panel" aria-labelledby="comparison-research-title">
+            <div class="comparison-research-heading">
+              <div>
+                <p class="section-kicker">
+                  RESEARCH RUNS
+                </p>
+                <h3 id="comparison-research-title">
+                  批量进入研究
+                </h3>
+                <p>为当前选中的候选分别生成研究快照，结果会保留在各自的研究历史中。</p>
+              </div>
+              <button class="primary-button comparison-research-button" type="button" :disabled="!canCompareCandidates || comparisonLoading || comparisonResearchRunning" @click="startBatchResearch">
+                <RotateCcw :size="15" :class="comparisonResearchRunning ? 'animate-spin' : ''" aria-hidden="true" />
+                {{ comparisonResearchButtonLabel }}
+              </button>
+            </div>
+            <div class="comparison-research-list" role="list" aria-live="polite">
+              <div v-for="item in selectedCandidateItems" :key="`research-${item.id}`" class="comparison-research-item" :class="comparisonResearchStateClass(comparisonResearchStateFor(item))" role="listitem">
+                <div class="comparison-research-stock">
+                  <strong>{{ displayStockName(item) }}</strong>
+                  <small>{{ item.tsCode }}</small>
+                </div>
+                <div class="comparison-research-detail">
+                  <span>{{ comparisonResearchStatusLabel(comparisonResearchStateFor(item)) }}</span>
+                  <small>{{ comparisonResearchStatusDetail(comparisonResearchStateFor(item)) }}</small>
+                </div>
+              </div>
+            </div>
+            <p class="comparison-research-summary" role="status">
+              {{ comparisonResearchSummaryLabel }}
+            </p>
+          </section>
           <p class="comparison-note">
             估值和财务指标来自当前接口的最近可用快照；不同报告期不做强行横比。
           </p>
