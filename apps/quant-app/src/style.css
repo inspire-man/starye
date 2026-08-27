@@ -1236,6 +1236,15 @@ input:focus-visible {
   gap: 1rem;
 }
 
+.research-run-heading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .research-run-heading h2 {
   margin: 0.35rem 0 0;
   color: hsl(var(--foreground));
@@ -1261,6 +1270,11 @@ input:focus-visible {
 
 .research-run-generate-button {
   flex: 0 0 auto;
+}
+
+.research-run-export-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .research-run-state {
@@ -5980,6 +5994,16 @@ input:focus-visible {
   }
 
   .research-run-generate-button {
+    width: 100%;
+  }
+
+  .research-run-heading-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .research-run-heading-actions > button {
     width: 100%;
   }
 
