@@ -180,4 +180,25 @@ describe('selection presets', () => {
       ]),
     }).map(item => item.tsCode)).toEqual(['600938.SH', '601899.SH', '600089.SH'])
   })
+
+  it('sorts candidates by evidence readiness and keeps unavailable results last', () => {
+    const items = [
+      candidate({ id: 'candidate-1', tsCode: '601899.SH', score: 5 }),
+      candidate({ id: 'candidate-2', tsCode: '600089.SH', score: 2 }),
+      candidate({ id: 'candidate-3', tsCode: '600938.SH', score: 4 }),
+    ]
+
+    expect(filterAndSortCandidates(items, {
+      preset: 'all',
+      minScore: 0,
+      completeOnly: false,
+      sortBy: 'evidenceScore',
+      researchStatus: 'all',
+      evidenceScoreByCode: new Map([
+        ['601899.SH', 58],
+        ['600089.SH', null],
+        ['600938.SH', 82],
+      ]),
+    }).map(item => item.tsCode)).toEqual(['600938.SH', '601899.SH', '600089.SH'])
+  })
 })

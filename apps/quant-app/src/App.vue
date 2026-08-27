@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
+import type { CandidateEvidenceScore } from './lib/candidate-evidence-score'
 import type { DecisionEvidenceStatus } from './lib/decision-evidence'
 import type {
   CandidateItem,
@@ -65,6 +66,7 @@ import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
+import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
@@ -171,6 +173,7 @@ const candidateSortOptions: { value: CandidateSortKey, label: string }[] = [
   { value: 'volumeRatio', label: '成交活跃度' },
   { value: 'relativeStrength', label: '池内强度' },
   { value: 'valueQuality', label: '价值质量' },
+  { value: 'evidenceScore', label: '证据就绪' },
 ]
 const SIGNAL_RULE_COUNT = 6
 const researchStatusOptions: { value: ResearchMarkerStatus, label: string }[] = [
@@ -216,6 +219,16 @@ const selectedStock = computed(() => watchlist.value.find(item => item.tsCode ==
 const candidateItems = computed(() => snapshot.value?.candidates || [])
 const valueQualityMap = computed(() => new Map(valueSelection.value?.items.map(item => [item.tsCode, item]) || []))
 const valueQualityResultsLoaded = computed(() => Boolean(valueSelection.value && !loading.valueQuality && !errors.valueQuality))
+const candidateEvidenceMap = computed(() => new Map(candidateItems.value.map(item => [
+  item.tsCode,
+  buildCandidateEvidenceScore(item, valueQualityResultsLoaded.value ? valueQualityMap.value.get(item.tsCode) || null : undefined),
+])))
+const candidateEvidenceSummary = computed(() => {
+  const summary = { ready: 0, partial: 0, missing: 0, unavailable: 0 }
+  for (const result of candidateEvidenceMap.value.values())
+    summary[result.status]++
+  return summary
+})
 const activeCandidatePreset = computed(() => candidateFilterOptions.find(option => option.key === candidateFilter.value) || candidateFilterOptions[0])
 const todayDate = computed(() => getTodayDate())
 const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateItems.value, {
@@ -238,6 +251,7 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
           : null]
       }))
     : undefined,
+  evidenceScoreByCode: new Map(candidateItems.value.map(item => [item.tsCode, candidateEvidenceFor(item).score])),
 }, new Map<string, CandidateResearchMetadata>(researchMarkers.value.map(marker => [marker.tsCode, {
   status: marker.status,
   reviewDate: marker.reviewDate,
@@ -492,6 +506,7 @@ const candidateColumns: Column<CandidateItem>[] = [
   { key: 'volumeRatio', label: '成交活跃度', width: '98px', render: item => formatNumber(item.volumeRatio) },
   { key: 'relativeStrength', label: '池内强度', width: '88px', render: item => formatNumber(item.relativeStrength) },
   { key: 'valueQuality', label: '价值质量', width: '124px', minWidth: '116px' },
+  { key: 'evidence', label: '证据就绪', width: '128px', minWidth: '120px' },
   { key: 'review', label: '复查', width: '100px', minWidth: '94px' },
   { key: 'action', label: '研究动作', width: '112px', minWidth: '106px' },
   { key: 'signals', label: '信号', width: '240px', minWidth: '220px' },
@@ -890,6 +905,42 @@ function valueQualitySummary(item: QuantValueQualityItem | null): string {
   if (item.status === 'ready')
     return `报告期 ${formatTradeDate(item.financialReportDate)} · 观察 ${formatDateTime(item.observedAt)}`
   return item.missingFields[0] || '关键数据尚未齐全'
+}
+
+function candidateEvidenceFor(item: CandidateItem): CandidateEvidenceScore {
+  return candidateEvidenceMap.value.get(item.tsCode) || buildCandidateEvidenceScore(item, valueQualityResultsLoaded.value ? valueQualityMap.value.get(item.tsCode) || null : undefined)
+}
+
+function candidateEvidenceStatusLabel(item: CandidateEvidenceScore): string {
+  if (item.status === 'ready')
+    return '证据充分'
+  if (item.status === 'partial')
+    return '部分覆盖'
+  if (item.status === 'missing')
+    return '待补证据'
+  if (loading.valueQuality)
+    return '读取中'
+  if (errors.valueQuality)
+    return '暂不可用'
+  return '待加载'
+}
+
+function candidateEvidenceStatusClass(item: CandidateEvidenceScore): string {
+  return `candidate-evidence-status-${item.status}`
+}
+
+function formatCandidateEvidenceScore(item: CandidateEvidenceScore): string {
+  return item.score === null ? '--' : `${item.score} / 100`
+}
+
+function candidateEvidenceCoverage(item: CandidateEvidenceScore): string {
+  return item.score === null ? '--' : `${item.coveredMetricCount} / ${item.totalMetricCount} 字段`
+}
+
+function candidateEvidenceDetail(item: CandidateItem): string {
+  const result = candidateEvidenceFor(item)
+  const reason = result.missingReasons[0]
+  return reason ? `${result.summary} · ${reason}` : result.summary
 }
 
 function knowledgeStatusLabel(status: QuantKnowledgeFactor['status']): string {
@@ -2179,6 +2230,38 @@ onUnmounted(() => {
             <span><strong>成交活跃度</strong>相对近 5 日均量</span>
             <span><strong>价值质量</strong>估值、经营、增长、趋势四维观察</span>
           </div>
+          <section v-if="candidateItems.length" class="candidate-evidence-overview" aria-label="候选证据就绪度">
+            <div class="candidate-evidence-overview-heading">
+              <div>
+                <p class="section-kicker">
+                  EVIDENCE READINESS
+                </p>
+                <h3>证据就绪度</h3>
+              </div>
+              <span class="candidate-evidence-overview-info" role="img" tabindex="0" aria-label="证据就绪度只统计五个研究维度的原始字段覆盖，不代表价值质量好坏或买卖判断" title="只统计五个研究维度的原始字段覆盖，不代表价值质量好坏或买卖判断">
+                <Info :size="14" aria-hidden="true" />
+              </span>
+            </div>
+            <div class="candidate-evidence-overview-stats" role="list" aria-label="证据就绪统计">
+              <div role="listitem">
+                <strong class="candidate-evidence-overview-ready">{{ candidateEvidenceSummary.ready }}</strong>
+                <span>可直接核对</span>
+              </div>
+              <div role="listitem">
+                <strong class="candidate-evidence-overview-partial">{{ candidateEvidenceSummary.partial }}</strong>
+                <span>部分覆盖</span>
+              </div>
+              <div role="listitem">
+                <strong class="candidate-evidence-overview-missing">{{ candidateEvidenceSummary.missing }}</strong>
+                <span>待补证据</span>
+              </div>
+              <div role="listitem">
+                <strong class="candidate-evidence-overview-unavailable">{{ candidateEvidenceSummary.unavailable }}</strong>
+                <span>{{ loading.valueQuality ? '读取中' : errors.valueQuality ? '暂不可用' : '待加载' }}</span>
+              </div>
+            </div>
+            <p>仅衡量原始字段是否齐全；价值质量分仍单独表示指标表现。</p>
+          </section>
           <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
             <span>观察窗口</span>
             <strong>{{ formatTradeDate(snapshot.fromDate || null) }} → {{ formatTradeDate(snapshot.toDate || null) }}</strong>
@@ -2255,7 +2338,7 @@ onUnmounted(() => {
               :loading="loading.candidates"
               selectable
               :selected-ids="selectedCandidateIds"
-              min-width="1400px"
+              min-width="1580px"
               :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
               @toggle-select="handleCandidateToggle"
               @toggle-select-all="toggleAllCandidateSelection"
@@ -2298,6 +2381,15 @@ onUnmounted(() => {
                 <div class="value-quality-table-cell" :title="valueQualitySummary(valueQualityFor(item.tsCode))">
                   <strong :class="valueQualityStatusClass(valueQualityFor(item.tsCode))">{{ formatValueQualityScore(valueQualityFor(item.tsCode)) }}</strong>
                   <small>{{ valueQualityStatusLabel(valueQualityFor(item.tsCode)) }}</small>
+                </div>
+              </template>
+              <template #cell-evidence="{ item }">
+                <div class="candidate-evidence-cell" :title="candidateEvidenceDetail(item)" :aria-label="`${candidateEvidenceStatusLabel(candidateEvidenceFor(item))}，${candidateEvidenceDetail(item)}`">
+                  <div class="candidate-evidence-cell-heading">
+                    <strong :class="candidateEvidenceStatusClass(candidateEvidenceFor(item))">{{ formatCandidateEvidenceScore(candidateEvidenceFor(item)) }}</strong>
+                    <span :class="candidateEvidenceStatusClass(candidateEvidenceFor(item))">{{ candidateEvidenceStatusLabel(candidateEvidenceFor(item)) }}</span>
+                  </div>
+                  <small>{{ candidateEvidenceCoverage(candidateEvidenceFor(item)) }}</small>
                 </div>
               </template>
               <template #cell-review="{ item }">

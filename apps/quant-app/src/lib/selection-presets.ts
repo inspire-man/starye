@@ -4,7 +4,7 @@ import { buildResearchPriority, getResearchPriorityLevelRank } from './research-
 import { getResearchReviewState, getReviewDueRank, getTodayDate, normalizeReviewDate } from './research-review'
 
 export type SelectionPresetKey = 'all' | 'balanced' | 'trend' | 'risk'
-export type CandidateSortKey = 'score' | 'return20' | 'volumeRatio' | 'relativeStrength' | 'valueQuality' | 'researchPriority'
+export type CandidateSortKey = 'score' | 'return20' | 'volumeRatio' | 'relativeStrength' | 'valueQuality' | 'evidenceScore' | 'researchPriority'
 export type { CandidateReviewFilter } from './research-review'
 export type CandidateResearchStatus = 'all' | ResearchMarkerStatus
 
@@ -17,6 +17,7 @@ export interface CandidateQuery {
   sortBy: CandidateSortKey
   valueQualityByCode?: ReadonlyMap<string, number | null>
   valueQualityDetailsByCode?: ReadonlyMap<string, ResearchPriorityValueQuality | null>
+  evidenceScoreByCode?: ReadonlyMap<string, number | null>
   researchStatus: CandidateResearchStatus
   reviewDue?: import('./research-review').CandidateReviewFilter
 }
@@ -161,7 +162,9 @@ export function filterAndSortCandidates(
       ? compareResearchPriority(left, right, researchMetadataByCode, query.valueQualityByCode, query.valueQualityDetailsByCode, today)
       : query.sortBy === 'valueQuality'
         ? compareDescending(query.valueQualityByCode?.get(left.tsCode) ?? null, query.valueQualityByCode?.get(right.tsCode) ?? null)
-        : compareDescending(left[query.sortBy], right[query.sortBy])
+        : query.sortBy === 'evidenceScore'
+          ? compareDescending(query.evidenceScoreByCode?.get(left.tsCode) ?? null, query.evidenceScoreByCode?.get(right.tsCode) ?? null)
+          : compareDescending(left[query.sortBy], right[query.sortBy])
     if (primary !== 0)
       return primary
     const score = compareDescending(left.score, right.score)
