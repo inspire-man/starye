@@ -48,6 +48,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  Copy,
   DatabaseZap,
   Download,
   ExternalLink,
@@ -77,6 +78,7 @@ import { runResearchBatch } from './lib/research-batch'
 import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from './lib/research-batch-follow-up'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
+import { copyResearchReportMarkdown } from './lib/research-report-copy'
 import { buildResearchReportFilename, buildResearchReportMarkdown } from './lib/research-report-export'
 import { getResearchReviewMeta, getTodayDate } from './lib/research-review'
 import { buildResearchRunTimeline } from './lib/research-run-timeline'
@@ -88,6 +90,7 @@ import { buildTrendStructure } from './lib/trend-analysis'
 import { buildWatchlistEnvironment } from './lib/watchlist-environment'
 
 type ComparisonResearchItemState = BatchResearchFollowUpState
+type ResearchReportCopyOutcome = 'success' | 'error' | null
 
 const watchlist = ref<WatchlistItem[]>([])
 const snapshot = ref<CandidateSnapshot | null>(null)
@@ -111,6 +114,9 @@ const researchRunError = ref<unknown | null>(null)
 const researchSummaryLoading = ref(false)
 const researchSummaryGenerating = ref(false)
 const researchSummaryError = ref<unknown | null>(null)
+const researchReportCopying = ref(false)
+const researchReportCopyOutcome = ref<ResearchReportCopyOutcome>(null)
+const researchReportCopyMessage = ref('')
 const selectedCandidateIds = ref<Set<string>>(new Set())
 const comparisonDrawerOpen = ref(false)
 const comparisonLoading = ref(false)
@@ -137,6 +143,7 @@ let valueQualityRequestId = 0
 let shareholderReturnRequestId = 0
 let researchRunRequestId = 0
 let researchSummaryRequestId = 0
+let researchReportCopyRequestId = 0
 const loading = reactive({
   watchlist: false,
   candidates: false,
@@ -1366,6 +1373,7 @@ async function loadResearchMarkers() {
 
 async function loadResearchRuns(tsCode: string) {
   const requestId = ++researchRunRequestId
+  resetResearchReportCopyState()
   researchSummaryRequestId++
   researchAiSummary.value = null
   researchSummaryError.value = null
@@ -1417,6 +1425,7 @@ async function loadResearchSummary(runId: string) {
 async function generateResearchReport() {
   if (!selectedStock.value || researchRunGenerating.value)
     return
+  resetResearchReportCopyState()
   researchRunGenerating.value = true
   researchRunError.value = null
   try {
@@ -1470,6 +1479,42 @@ function downloadResearchReport() {
   anchor.click()
   anchor.remove()
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+}
+
+function resetResearchReportCopyState() {
+  researchReportCopyRequestId++
+  researchReportCopying.value = false
+  researchReportCopyOutcome.value = null
+  researchReportCopyMessage.value = ''
+}
+
+async function copyResearchReport() {
+  const run = latestResearchRun.value
+  if (!run || researchReportCopying.value)
+    return
+
+  const requestId = ++researchReportCopyRequestId
+  researchReportCopying.value = true
+  researchReportCopyOutcome.value = null
+  researchReportCopyMessage.value = ''
+  const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined
+  const result = await copyResearchReportMarkdown(buildResearchReportMarkdown(run, researchAiSummary.value), clipboard)
+  if (requestId !== researchReportCopyRequestId)
+    return
+
+  researchReportCopying.value = false
+  if (result === 'copied') {
+    researchReportCopyOutcome.value = 'success'
+    researchReportCopyMessage.value = 'Markdown 已复制到剪贴板'
+  }
+  else if (result === 'unavailable') {
+    researchReportCopyOutcome.value = 'error'
+    researchReportCopyMessage.value = '当前浏览器不支持剪贴板写入'
+  }
+  else {
+    researchReportCopyOutcome.value = 'error'
+    researchReportCopyMessage.value = '复制失败，请检查剪贴板权限后重试'
+  }
 }
 
 async function loadDailyBars(tsCode: string) {
@@ -2763,8 +2808,15 @@ onUnmounted(() => {
                   <Download :size="15" aria-hidden="true" />
                   导出 Markdown
                 </button>
+                <button v-if="latestResearchReport" class="secondary-button research-run-copy-button" type="button" :disabled="researchReportCopying" title="将当前研究报告复制到剪贴板" aria-label="复制当前研究报告 Markdown" @click="copyResearchReport">
+                  <Copy :size="15" aria-hidden="true" />
+                  {{ researchReportCopying ? '复制中' : '复制 Markdown' }}
+                </button>
               </div>
             </div>
+            <p v-if="researchReportCopyMessage" class="research-report-copy-message" :class="{ 'research-report-copy-message-error': researchReportCopyOutcome === 'error' }" role="status">
+              {{ researchReportCopyMessage }}
+            </p>
             <div v-if="researchRunLoading" class="research-run-state" role="status">
               <RefreshCw :size="16" class="animate-spin" aria-hidden="true" />
               <span>正在读取研究历史</span>

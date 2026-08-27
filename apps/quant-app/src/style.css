@@ -1277,6 +1277,22 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.research-run-copy-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.research-report-copy-message {
+  margin: 0.55rem 0 0;
+  color: hsl(var(--status-success));
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.research-report-copy-message-error {
+  color: hsl(var(--status-danger));
+}
+
 .research-run-state {
   display: flex;
   min-height: 3.75rem;
