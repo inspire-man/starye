@@ -29,7 +29,8 @@ import type {
   WatchlistItem,
 } from './lib/quant-types'
 import type { QuantView } from './lib/quant-view'
-import type { BatchResearchItemStatus, BatchResearchProgress } from './lib/research-batch'
+import type { BatchResearchProgress } from './lib/research-batch'
+import type { BatchResearchFollowUpState } from './lib/research-batch-follow-up'
 import type { ResearchEvidenceChange } from './lib/research-evidence-history'
 import type { ResearchPriority, ResearchPriorityValueQuality } from './lib/research-priority'
 import type { ResearchReviewMeta } from './lib/research-review'
@@ -72,6 +73,7 @@ import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { runResearchBatch } from './lib/research-batch'
+import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from './lib/research-batch-follow-up'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
 import { getResearchReviewMeta, getTodayDate } from './lib/research-review'
@@ -83,11 +85,7 @@ import { buildTimingWindow } from './lib/timing-window'
 import { buildTrendStructure } from './lib/trend-analysis'
 import { buildWatchlistEnvironment } from './lib/watchlist-environment'
 
-interface ComparisonResearchItemState {
-  status: BatchResearchItemStatus | 'idle'
-  run: QuantResearchRun | null
-  error: unknown | null
-}
+type ComparisonResearchItemState = BatchResearchFollowUpState
 
 const watchlist = ref<WatchlistItem[]>([])
 const snapshot = ref<CandidateSnapshot | null>(null)
@@ -1612,6 +1610,10 @@ function comparisonResearchStateFor(item: CandidateItem): ComparisonResearchItem
   return comparisonResearchStates.value[item.tsCode] || { status: 'idle', run: null, error: null }
 }
 
+function comparisonResearchActionFor(item: CandidateItem) {
+  return getBatchResearchItemAction(comparisonResearchStateFor(item))
+}
+
 function comparisonResearchStateClass(state: ComparisonResearchItemState): string {
   return `comparison-research-item-${state.status}`
 }
@@ -1690,23 +1692,35 @@ async function startBatchResearch() {
       items.map(item => item.tsCode),
       tsCode => quantApi.generateResearchRun(tsCode),
       (progress: BatchResearchProgress) => {
-        const previous = comparisonResearchStates.value[progress.tsCode]
-        if (!previous)
-          return
-        comparisonResearchStates.value = {
-          ...comparisonResearchStates.value,
-          [progress.tsCode]: {
-            status: progress.status,
-            run: progress.run || previous.run,
-            error: progress.error ?? null,
-          },
-        }
+        comparisonResearchStates.value = applyBatchResearchProgress(comparisonResearchStates.value, progress)
       },
     )
   }
   finally {
     comparisonResearchRunning.value = false
   }
+}
+
+async function retryBatchResearchItem(item: CandidateItem) {
+  const current = comparisonResearchStateFor(item)
+  if (current.status !== 'error' || comparisonResearchRunning.value)
+    return
+
+  comparisonResearchStates.value = markBatchResearchItemPending(comparisonResearchStates.value, item.tsCode)
+  await runResearchBatch(
+    [item.tsCode],
+    tsCode => quantApi.generateResearchRun(tsCode),
+    (progress: BatchResearchProgress) => {
+      comparisonResearchStates.value = applyBatchResearchProgress(comparisonResearchStates.value, progress)
+    },
+  )
+}
+
+function openBatchResearchResult(item: CandidateItem) {
+  if (comparisonResearchActionFor(item) !== 'view')
+    return
+  comparisonDrawerOpen.value = false
+  selectStock(item)
 }
 
 async function loadWorkspace() {
@@ -3930,6 +3944,31 @@ onUnmounted(() => {
                 <div class="comparison-research-detail">
                   <span>{{ comparisonResearchStatusLabel(comparisonResearchStateFor(item)) }}</span>
                   <small>{{ comparisonResearchStatusDetail(comparisonResearchStateFor(item)) }}</small>
+                </div>
+                <div class="comparison-research-actions">
+                  <button
+                    v-if="comparisonResearchActionFor(item) === 'view'"
+                    class="text-button comparison-research-action"
+                    type="button"
+                    :aria-label="`查看 ${displayStockName(item)} 的研究详情`"
+                    title="重新读取并打开研究详情"
+                    @click="openBatchResearchResult(item)"
+                  >
+                    <Eye :size="14" aria-hidden="true" />
+                    查看详情
+                  </button>
+                  <button
+                    v-else-if="comparisonResearchActionFor(item) === 'retry'"
+                    class="text-button comparison-research-action"
+                    type="button"
+                    :disabled="comparisonResearchRunning"
+                    :aria-label="`重试 ${displayStockName(item)} 的研究`"
+                    title="只重试这一只股票"
+                    @click="retryBatchResearchItem(item)"
+                  >
+                    <RotateCcw :size="14" aria-hidden="true" />
+                    单项重试
+                  </button>
                 </div>
               </div>
             </div>
