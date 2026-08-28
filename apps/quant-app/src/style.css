@@ -3582,6 +3582,11 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.comparison-research-ai-summary-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .comparison-research-export-message {
   margin: 0;
   color: hsl(var(--status-success));
@@ -3601,6 +3606,17 @@ input:focus-visible {
 }
 
 .comparison-research-copy-message-error {
+  color: hsl(var(--status-danger));
+}
+
+.comparison-research-ai-summary-message {
+  margin: 0;
+  color: hsl(var(--status-success));
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.comparison-research-ai-summary-message-error {
   color: hsl(var(--status-danger));
 }
 
@@ -3651,6 +3667,51 @@ input:focus-visible {
   color: hsl(var(--foreground));
   font-size: 0.6875rem;
   font-weight: 720;
+}
+
+.comparison-research-ai-summary {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid hsl(var(--border) / 0.7);
+  padding-top: 0.2rem;
+}
+
+.comparison-research-ai-summary span,
+.comparison-research-ai-summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comparison-research-ai-summary span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.comparison-research-ai-summary small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.59375rem;
+}
+
+.comparison-research-ai-summary-pending span,
+.comparison-research-ai-summary-running span {
+  color: hsl(var(--status-info));
+}
+
+.comparison-research-ai-summary-success span {
+  color: hsl(var(--status-success));
+}
+
+.comparison-research-ai-summary-error span {
+  color: hsl(var(--status-danger));
+}
+
+.comparison-research-ai-summary-error small {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .comparison-research-item-history-loading .comparison-research-detail > span {
@@ -6225,7 +6286,8 @@ input:focus-visible {
   }
 
   .comparison-research-export-button,
-  .comparison-research-copy-button {
+  .comparison-research-copy-button,
+  .comparison-research-ai-summary-button {
     width: 100%;
   }
 
