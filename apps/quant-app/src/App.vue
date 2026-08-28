@@ -13,6 +13,7 @@ import type {
   QuantFinancialQualitySnapshot,
   QuantInvestmentKnowledge,
   QuantKnowledgeFactor,
+  QuantResearchChangeExplanation,
   QuantResearchComparison,
   QuantResearchComparisonCitation,
   QuantResearchEvidence,
@@ -74,6 +75,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import QuantAiResearchChangeExplanation from './components/QuantAiResearchChangeExplanation.vue'
 import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
@@ -135,6 +137,9 @@ const researchQuestionInput = ref('')
 const researchQuestion = ref<QuantResearchQuestion | null>(null)
 const researchQuestionLoading = ref(false)
 const researchQuestionError = ref<unknown | null>(null)
+const researchChangeExplanation = ref<QuantResearchChangeExplanation | null>(null)
+const researchChangeExplanationGenerating = ref(false)
+const researchChangeExplanationError = ref<unknown | null>(null)
 const researchReportCopying = ref(false)
 const researchReportCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const researchReportCopyMessage = ref('')
@@ -184,6 +189,7 @@ let shareholderReturnRequestId = 0
 let researchRunRequestId = 0
 let researchSummaryRequestId = 0
 let researchQuestionRequestId = 0
+let researchChangeExplanationRequestId = 0
 let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
 let comparisonResearchAiSummaryRequestId = 0
@@ -378,6 +384,7 @@ const researchEvidenceComparison = computed(() => buildResearchEvidenceCompariso
 const researchRunTimeline = computed(() => buildResearchRunTimeline(researchRuns.value))
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const researchQuestionConfigurationError = computed(() => researchQuestionError.value instanceof QuantApiError && researchQuestionError.value.code === 'QUANT_AI_QUESTION_CONFIGURATION')
+const researchChangeExplanationConfigurationError = computed(() => researchChangeExplanationError.value instanceof QuantApiError && researchChangeExplanationError.value.code === 'QUANT_AI_CHANGE_EXPLANATION_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
 const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
@@ -1428,6 +1435,7 @@ async function loadWatchlist() {
     researchSummaryLoading.value = false
     researchSummaryGenerating.value = false
     resetResearchQuestionState()
+    resetResearchChangeExplanationState()
     loading.valuation = false
     loading.financial = false
   }
@@ -1546,6 +1554,7 @@ async function loadResearchRuns(tsCode: string) {
   const requestId = ++researchRunRequestId
   resetResearchReportCopyState()
   resetResearchQuestionState()
+  resetResearchChangeExplanationState()
   researchSummaryRequestId++
   researchAiSummary.value = null
   researchSummaryError.value = null
@@ -1602,6 +1611,7 @@ async function generateResearchReport() {
     return
   resetResearchReportCopyState()
   resetResearchQuestionState()
+  resetResearchChangeExplanationState()
   researchRunGenerating.value = true
   researchRunError.value = null
   try {
@@ -1649,6 +1659,13 @@ function resetResearchQuestionState(): void {
   researchQuestionError.value = null
 }
 
+function resetResearchChangeExplanationState(): void {
+  researchChangeExplanationRequestId++
+  researchChangeExplanation.value = null
+  researchChangeExplanationGenerating.value = false
+  researchChangeExplanationError.value = null
+}
+
 async function askResearchQuestion(question: string): Promise<void> {
   const run = latestResearchRun.value
   const normalizedQuestion = question.trim()
@@ -1672,6 +1689,32 @@ async function askResearchQuestion(question: string): Promise<void> {
   finally {
     if (requestId === researchQuestionRequestId)
       researchQuestionLoading.value = false
+  }
+}
+
+async function generateResearchChangeExplanation(): Promise<void> {
+  const currentRun = latestResearchRun.value
+  const previousRun = previousResearchRun.value
+  const comparison = researchEvidenceComparison.value
+  if (!currentRun || !previousRun || !comparison || researchChangeExplanationGenerating.value)
+    return
+
+  const requestId = ++researchChangeExplanationRequestId
+  researchChangeExplanation.value = null
+  researchChangeExplanationGenerating.value = true
+  researchChangeExplanationError.value = null
+  try {
+    const explanation = await quantApi.generateResearchChangeExplanation(currentRun.id, previousRun.id)
+    if (requestId === researchChangeExplanationRequestId)
+      researchChangeExplanation.value = explanation
+  }
+  catch (error) {
+    if (requestId === researchChangeExplanationRequestId)
+      researchChangeExplanationError.value = error
+  }
+  finally {
+    if (requestId === researchChangeExplanationRequestId)
+      researchChangeExplanationGenerating.value = false
   }
 }
 
@@ -3768,6 +3811,18 @@ onUnmounted(() => {
                   </div>
                 </template>
               </section>
+              <QuantAiResearchChangeExplanation
+                v-if="researchEvidenceComparison"
+                :comparison="researchEvidenceComparison"
+                :explanation="researchChangeExplanation"
+                :loading="false"
+                :generating="researchChangeExplanationGenerating"
+                :error-message="researchChangeExplanationError ? parsedError(researchChangeExplanationError).message : null"
+                :configuration-error="researchChangeExplanationConfigurationError"
+                @generate="generateResearchChangeExplanation"
+                @open-settings="aiSettingsOpen = true"
+                @focus-evidence="focusResearchQuestionEvidence"
+              />
               <p class="research-run-note">
                 这是基于已保存数据的版本化研究快照；报告用于整理核对顺序，不是买入、卖出或收益预测。
               </p>

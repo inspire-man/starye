@@ -18,6 +18,7 @@ import type {
   QuantKnowledgeFactor,
   QuantKnowledgeSource,
   QuantProviderName,
+  QuantResearchChangeExplanation,
   QuantResearchComparison,
   QuantResearchEvidence,
   QuantResearchMarker,
@@ -677,6 +678,59 @@ function parseResearchQuestion(payload: unknown): QuantResearchQuestion {
   }
 }
 
+function parseResearchChangeExplanation(payload: unknown): QuantResearchChangeExplanation {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('AI 研究变化解释数据格式无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+  const version = readString(data, 'changeExplanationVersion', 'change_explanation_version')
+  const provider = readString(data, 'provider')
+  const model = readString(data, 'model')
+  const generatedAt = readString(data, 'generatedAt', 'generated_at')
+  const currentGeneratedAt = readString(data, 'currentGeneratedAt', 'current_generated_at')
+  const previousGeneratedAt = readString(data, 'previousGeneratedAt', 'previous_generated_at')
+  const overview = readString(data, 'overview')
+  if (version !== 'research-change-explanation-v1' || !provider || !model || !generatedAt || !currentGeneratedAt || !previousGeneratedAt || !overview)
+    throw new QuantApiError('AI 研究变化解释数据格式无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+  if (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    throw new QuantApiError('AI 研究变化解释 provider 数据格式无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+  if (!Array.isArray(data.changes) || data.changes.length > 8)
+    throw new QuantApiError('AI 研究变化解释差异格式无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+  const changes = data.changes.map((value) => {
+    if (!isRecord(value))
+      throw new QuantApiError('AI 研究变化解释差异格式无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+    const evidenceKey = readString(value, 'evidenceKey', 'evidence_key')
+    const label = readString(value, 'label')
+    const kind = readString(value, 'kind')
+    const kindLabel = readString(value, 'kindLabel', 'kind_label')
+    const explanation = readString(value, 'explanation')
+    if (!evidenceKey || !label || label.length > 160 || !kind || !kindLabel || kindLabel.length > 40 || !explanation || explanation.length > 480)
+      throw new QuantApiError('AI 研究变化解释差异格式无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+    const validKinds: QuantResearchChangeExplanation['changes'][number]['kind'][] = ['improved', 'weakened', 'restored', 'newly-missing', 'persistent-missing', 'changed', 'incomparable', 'added']
+    if (!validKinds.includes(kind as QuantResearchChangeExplanation['changes'][number]['kind']))
+      throw new QuantApiError('AI 研究变化解释差异类型无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+    return { evidenceKey, label, kind: kind as QuantResearchChangeExplanation['changes'][number]['kind'], kindLabel, explanation }
+  })
+  const rawNextChecks = data.nextChecks ?? data.next_checks
+  if (!Array.isArray(rawNextChecks) || rawNextChecks.length > 6 || rawNextChecks.some(item => typeof item !== 'string' || !item.trim() || item.length > 360))
+    throw new QuantApiError('AI 研究变化解释核对项格式无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+  const nextChecks = rawNextChecks.map(item => (item as string).trim())
+  const citedEvidenceKeys = data.citedEvidenceKeys ?? data.cited_evidence_keys
+  if (!Array.isArray(citedEvidenceKeys) || citedEvidenceKeys.length > 16 || citedEvidenceKeys.some(key => typeof key !== 'string' || !key.trim() || key.length > 80))
+    throw new QuantApiError('AI 研究变化解释引用格式无效', 502, 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE')
+  return {
+    changeExplanationVersion: 'research-change-explanation-v1',
+    provider: provider as QuantResearchChangeExplanation['provider'],
+    model,
+    generatedAt,
+    currentGeneratedAt,
+    previousGeneratedAt,
+    overview,
+    changes,
+    nextChecks,
+    citedEvidenceKeys: [...new Set(citedEvidenceKeys.map(key => (key as string).trim()))],
+  }
+}
+
 function parseSyncResult(payload: unknown): SyncResult {
   const data = unwrapData(payload, true)
   const record = isRecord(data) ? data : {}
@@ -1277,6 +1331,13 @@ export const quantApi = {
     return parseResearchQuestion(await requestJson(`/research/runs/${encodeURIComponent(runId)}/question`, {
       method: 'POST',
       body: JSON.stringify({ question }),
+    }))
+  },
+
+  async generateResearchChangeExplanation(runId: string, previousRunId: string): Promise<QuantResearchChangeExplanation> {
+    return parseResearchChangeExplanation(await requestJson(`/research/runs/${encodeURIComponent(runId)}/change-explanation`, {
+      method: 'POST',
+      body: JSON.stringify({ previous_run_id: previousRunId }),
     }))
   },
 

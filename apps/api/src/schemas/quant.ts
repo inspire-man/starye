@@ -307,6 +307,43 @@ export const QuantResearchQuestionResponseSchema = v.strictObject({
   }),
 })
 
+export const QuantResearchChangeExplanationSchema = v.strictObject({
+  previous_run_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64), v.regex(/^[\w-]+$/u)),
+})
+
+export const QuantResearchChangeKindSchema = v.picklist([
+  'improved',
+  'weakened',
+  'restored',
+  'newly-missing',
+  'persistent-missing',
+  'changed',
+  'incomparable',
+  'added',
+])
+
+export const QuantResearchChangeExplanationResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.strictObject({
+    changeExplanationVersion: v.literal('research-change-explanation-v1'),
+    provider: QuantAiProviderSchema,
+    model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    generatedAt: v.string(),
+    currentGeneratedAt: v.string(),
+    previousGeneratedAt: v.string(),
+    overview: v.pipe(v.string(), v.minLength(1), v.maxLength(1200)),
+    changes: v.pipe(v.array(v.strictObject({
+      evidenceKey: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+      label: v.pipe(v.string(), v.minLength(1), v.maxLength(160)),
+      kind: QuantResearchChangeKindSchema,
+      kindLabel: v.pipe(v.string(), v.minLength(1), v.maxLength(40)),
+      explanation: v.pipe(v.string(), v.minLength(1), v.maxLength(480)),
+    })), v.maxLength(8)),
+    nextChecks: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(360))), v.maxLength(6)),
+    citedEvidenceKeys: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(80))), v.maxLength(16)),
+  }),
+})
+
 export const QuantResearchSummaryQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })
@@ -324,4 +361,5 @@ export type QuantResearchComparison = v.InferOutput<typeof QuantResearchComparis
 export type QuantResearchComparisonResponse = v.InferOutput<typeof QuantResearchComparisonResponseSchema>
 export type QuantResearchQuestion = v.InferOutput<typeof QuantResearchQuestionSchema>
 export type QuantResearchQuestionResponse = v.InferOutput<typeof QuantResearchQuestionResponseSchema>
+export type QuantResearchChangeExplanationInput = v.InferOutput<typeof QuantResearchChangeExplanationSchema>
 export type QuantResearchSummaryQuery = v.InferOutput<typeof QuantResearchSummaryQuerySchema>
