@@ -5,11 +5,11 @@
 
 ## 2. Quant question surface
 
-- [ ] 2.1 Extend Quant types/client and add the report question panel; completion: request/response normalization, idle/loading/success/failure/retry states and duplicate-submit prevention are covered by focused tests.
-- [ ] 2.2 Add evidence citation navigation, request-race protection, focus states and narrow-screen styles; completion: citations scroll/highlight the authoritative report row and 390px has no horizontal overflow.
+- [x] 2.1 Extend Quant types/client and add the report question panel; completion: request/response normalization, idle/loading/success/failure/retry states and duplicate-submit prevention are covered by focused tests.
+- [x] 2.2 Add evidence citation navigation, request-race protection, focus states and narrow-screen styles; completion: citations scroll/highlight the authoritative report row and 390px has no horizontal overflow.
 
 ## 3. Verification
 
-- [ ] 3.1 Run API/Quant focused tests, type-check, lint and build; completion: all affected checks pass.
-- [ ] 3.2 Run OpenSpec strict validation, GitNexus detect_changes and `git diff --check`; completion: only expected API/Quant symbols and flows are reported.
+- [x] 3.1 Run API/Quant focused tests, type-check, lint and build; completion: all affected checks pass.
+- [x] 3.2 Run OpenSpec strict validation, GitNexus detect_changes and `git diff --check`; completion: only expected API/Quant symbols and flows are reported.
 - [ ] 3.3 Verify through `http://localhost:8080/quant/` with report-present, report-absent, success, failure/retry and citation navigation states; completion: no console error/warn and deterministic report data remains unchanged.

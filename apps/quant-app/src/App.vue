@@ -17,6 +17,7 @@ import type {
   QuantResearchComparisonCitation,
   QuantResearchEvidence,
   QuantResearchMarker,
+  QuantResearchQuestion,
   QuantResearchRun,
   QuantResearchSummary,
   QuantShareholderReturnItem,
@@ -73,6 +74,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
@@ -129,6 +131,10 @@ const researchRunError = ref<unknown | null>(null)
 const researchSummaryLoading = ref(false)
 const researchSummaryGenerating = ref(false)
 const researchSummaryError = ref<unknown | null>(null)
+const researchQuestionInput = ref('')
+const researchQuestion = ref<QuantResearchQuestion | null>(null)
+const researchQuestionLoading = ref(false)
+const researchQuestionError = ref<unknown | null>(null)
 const researchReportCopying = ref(false)
 const researchReportCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const researchReportCopyMessage = ref('')
@@ -177,6 +183,7 @@ let valueQualityRequestId = 0
 let shareholderReturnRequestId = 0
 let researchRunRequestId = 0
 let researchSummaryRequestId = 0
+let researchQuestionRequestId = 0
 let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
 let comparisonResearchAiSummaryRequestId = 0
@@ -370,6 +377,7 @@ const previousResearchRun = computed(() => researchRuns.value[1] || null)
 const researchEvidenceComparison = computed(() => buildResearchEvidenceComparison(latestResearchReport.value, previousResearchRun.value?.report || null))
 const researchRunTimeline = computed(() => buildResearchRunTimeline(researchRuns.value))
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
+const researchQuestionConfigurationError = computed(() => researchQuestionError.value instanceof QuantApiError && researchQuestionError.value.code === 'QUANT_AI_QUESTION_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
 const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
@@ -1419,6 +1427,7 @@ async function loadWatchlist() {
     researchSummaryError.value = null
     researchSummaryLoading.value = false
     researchSummaryGenerating.value = false
+    resetResearchQuestionState()
     loading.valuation = false
     loading.financial = false
   }
@@ -1536,6 +1545,7 @@ async function loadResearchMarkers() {
 async function loadResearchRuns(tsCode: string) {
   const requestId = ++researchRunRequestId
   resetResearchReportCopyState()
+  resetResearchQuestionState()
   researchSummaryRequestId++
   researchAiSummary.value = null
   researchSummaryError.value = null
@@ -1591,6 +1601,7 @@ async function generateResearchReport() {
   if (!selectedStock.value || researchRunGenerating.value)
     return
   resetResearchReportCopyState()
+  resetResearchQuestionState()
   researchRunGenerating.value = true
   researchRunError.value = null
   try {
@@ -1627,6 +1638,40 @@ async function generateResearchSummary() {
   }
   finally {
     researchSummaryGenerating.value = false
+  }
+}
+
+function resetResearchQuestionState(): void {
+  researchQuestionRequestId++
+  researchQuestionInput.value = ''
+  researchQuestion.value = null
+  researchQuestionLoading.value = false
+  researchQuestionError.value = null
+}
+
+async function askResearchQuestion(question: string): Promise<void> {
+  const run = latestResearchRun.value
+  const normalizedQuestion = question.trim()
+  if (!run || !normalizedQuestion || normalizedQuestion.length > 500 || researchQuestionLoading.value)
+    return
+
+  const requestId = ++researchQuestionRequestId
+  researchQuestionInput.value = normalizedQuestion
+  researchQuestion.value = null
+  researchQuestionLoading.value = true
+  researchQuestionError.value = null
+  try {
+    const result = await quantApi.askResearchQuestion(run.id, normalizedQuestion)
+    if (requestId === researchQuestionRequestId)
+      researchQuestion.value = result
+  }
+  catch (error) {
+    if (requestId === researchQuestionRequestId)
+      researchQuestionError.value = error
+  }
+  finally {
+    if (requestId === researchQuestionRequestId)
+      researchQuestionLoading.value = false
   }
 }
 
@@ -1861,6 +1906,20 @@ async function focusComparisonAiEvidence(citation: QuantResearchComparisonCitati
   }
   if (comparisonAiEvidenceTarget.value?.tsCode === citation.tsCode && comparisonAiEvidenceTarget.value.evidenceKey === citation.evidenceKey)
     comparisonAiEvidenceTarget.value = null
+}
+
+async function focusResearchQuestionEvidence(evidenceKey: string): Promise<void> {
+  const report = latestResearchReport.value
+  if (!report?.evidence.some(evidence => evidence.key === evidenceKey))
+    return
+
+  await nextTick()
+  const element = document.getElementById(researchEvidenceDomId(report.tsCode, evidenceKey))
+  element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  if (element instanceof HTMLElement) {
+    element.classList.add('research-evidence-focus')
+    window.setTimeout(() => element.classList.remove('research-evidence-focus'), 2200)
+  }
 }
 
 function comparisonResearchStateFor(item: CandidateItem): ComparisonResearchItemState {
@@ -3621,6 +3680,19 @@ onUnmounted(() => {
                 :configuration-error="researchSummaryConfigurationError"
                 @generate="generateResearchSummary"
                 @open-settings="aiSettingsOpen = true"
+              />
+              <QuantAiResearchQuestion
+                v-if="!researchRunGenerating"
+                :report="latestResearchReport"
+                :input="researchQuestionInput"
+                :result="researchQuestion"
+                :loading="researchQuestionLoading"
+                :error-message="researchQuestionError ? parsedError(researchQuestionError).message : null"
+                :configuration-error="researchQuestionConfigurationError"
+                @update:input="researchQuestionInput = $event"
+                @ask="askResearchQuestion"
+                @open-settings="aiSettingsOpen = true"
+                @focus-evidence="focusResearchQuestionEvidence"
               />
               <section class="research-evidence-history-panel" aria-label="研究证据变化">
                 <div class="research-evidence-history-heading">

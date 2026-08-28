@@ -21,6 +21,7 @@ import type {
   QuantResearchComparison,
   QuantResearchEvidence,
   QuantResearchMarker,
+  QuantResearchQuestion,
   QuantResearchReport,
   QuantResearchRun,
   QuantResearchSource,
@@ -648,6 +649,34 @@ function parseResearchComparison(payload: unknown): QuantResearchComparison {
   }
 }
 
+function parseResearchQuestion(payload: unknown): QuantResearchQuestion {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('AI 研究提问数据格式无效', 502, 'QUANT_AI_QUESTION_INVALID_RESPONSE')
+  const questionVersion = readString(data, 'questionVersion', 'question_version')
+  const provider = readString(data, 'provider')
+  const model = readString(data, 'model')
+  const generatedAt = readString(data, 'generatedAt', 'generated_at')
+  const question = readString(data, 'question')
+  const answer = readString(data, 'answer')
+  const citedEvidenceKeys = data.citedEvidenceKeys ?? data.cited_evidence_keys
+  if (questionVersion !== 'research-question-v1' || !provider || !model || !generatedAt || !question || question.length > 500 || !answer || answer.length > 8000)
+    throw new QuantApiError('AI 研究提问数据格式无效', 502, 'QUANT_AI_QUESTION_INVALID_RESPONSE')
+  if (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    throw new QuantApiError('AI 研究提问 provider 数据格式无效', 502, 'QUANT_AI_QUESTION_INVALID_RESPONSE')
+  if (!Array.isArray(citedEvidenceKeys) || citedEvidenceKeys.length > 16 || citedEvidenceKeys.some(key => typeof key !== 'string' || !key.trim() || key.length > 80))
+    throw new QuantApiError('AI 研究提问引用格式无效', 502, 'QUANT_AI_QUESTION_INVALID_RESPONSE')
+  return {
+    questionVersion,
+    provider,
+    model,
+    generatedAt,
+    question,
+    answer,
+    citedEvidenceKeys: [...new Set(citedEvidenceKeys.map(key => (key as string).trim()))],
+  }
+}
+
 function parseSyncResult(payload: unknown): SyncResult {
   const data = unwrapData(payload, true)
   const record = isRecord(data) ? data : {}
@@ -1242,6 +1271,13 @@ export const quantApi = {
       body: JSON.stringify({ run_ids: runIds }),
     }))
     return comparison
+  },
+
+  async askResearchQuestion(runId: string, question: string): Promise<QuantResearchQuestion> {
+    return parseResearchQuestion(await requestJson(`/research/runs/${encodeURIComponent(runId)}/question`, {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    }))
   },
 
   async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {
