@@ -148,6 +148,8 @@ const selectedTsCode = ref<string | null>(null)
 const watchCode = ref('')
 const watchName = ref('')
 const syncResult = ref<SyncResult | null>(null)
+const syncState = ref<SyncResult | null>(null)
+const syncStateError = ref<unknown | null>(null)
 const detailDrawerOpen = ref(false)
 const aiSettingsOpen = ref(false)
 let valuationRequestId = 0
@@ -171,6 +173,7 @@ const loading = reactive({
   knowledge: false,
   research: false,
   sync: false,
+  syncState: false,
 })
 const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation' | 'financial' | 'valueQuality' | 'shareholderReturns' | 'knowledge' | 'research' | 'action', unknown | null>>({
   watchlist: null,
@@ -292,6 +295,20 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
 }])), todayDate.value))
 const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'researchPriority' || candidateResearchStatus.value !== 'all' || candidateReviewDue.value !== 'all')
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
+const displayedSyncResult = computed(() => syncResult.value || syncState.value)
+const displayedSyncResultMessage = computed(() => {
+  const result = displayedSyncResult.value
+  if (!result)
+    return ''
+  if (result.reason)
+    return result.reason
+  if (result.status === 'partial')
+    return '部分完成，仍有数据未写入'
+  if (result.status === 'rejected')
+    return '同步请求已拒绝'
+  return syncResult.value ? '已完成本次同步请求' : '最近一次同步已完成'
+})
+const displayedSyncResultTime = computed(() => displayedSyncResult.value?.completedAt || displayedSyncResult.value?.startedAt || null)
 const pageBusy = computed(() => loading.watchlist || loading.candidates)
 const overallError = computed(() => errors.watchlist || errors.candidates || errors.research || errors.action)
 const deleteDialogMessage = computed(() => pendingDeleteCode.value ? `确认从观察池移除 ${pendingDeleteCode.value}？` : '')
@@ -1394,6 +1411,22 @@ async function loadInvestmentKnowledge() {
   }
 }
 
+async function loadSyncState() {
+  loading.syncState = true
+  syncStateError.value = null
+  syncState.value = null
+  try {
+    syncState.value = await quantApi.getSyncState()
+  }
+  catch (error) {
+    syncState.value = null
+    syncStateError.value = error
+  }
+  finally {
+    loading.syncState = false
+  }
+}
+
 async function loadResearchMarkers() {
   loading.research = true
   errors.research = null
@@ -2038,7 +2071,8 @@ async function copyComparisonResearchReports() {
 
 async function loadWorkspace() {
   errors.action = null
-  await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers(), loadInvestmentKnowledge()])
+  syncResult.value = null
+  await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState()])
   await Promise.all([loadValueSelection(), loadShareholderReturns()])
 }
 
@@ -2130,6 +2164,8 @@ async function syncDaily() {
   errors.action = null
   try {
     syncResult.value = await quantApi.syncDaily()
+    syncState.value = syncResult.value
+    syncStateError.value = null
     await Promise.all([loadWatchlist(), loadCandidates()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
   }
@@ -2488,8 +2524,8 @@ onUnmounted(() => {
                   更新数据
                 </h2>
               </div>
-              <span v-if="syncResult" class="status-chip" :class="syncStatusClass(syncResult.status)">
-                {{ statusLabel(syncResult.status) }}
+              <span v-if="displayedSyncResult" class="status-chip" :class="syncStatusClass(displayedSyncResult.status)">
+                {{ statusLabel(displayedSyncResult.status) }}
               </span>
             </div>
             <div class="sync-copy">
@@ -2507,17 +2543,26 @@ onUnmounted(() => {
               <RefreshCw :size="17" :class="loading.sync ? 'animate-spin' : ''" aria-hidden="true" />
               {{ loading.sync ? '更新中' : '更新观察池' }}
             </button>
-            <div v-if="syncResult" class="sync-result" :class="syncStatusClass(syncResult.status)">
+            <div v-if="displayedSyncResult" class="sync-result" :class="syncStatusClass(displayedSyncResult.status)">
               <div class="sync-result-main">
                 <span class="sync-status-dot" aria-hidden="true" />
-                <strong>{{ statusLabel(syncResult.status) }}</strong>
-                <span>{{ syncResult.reason || '已完成本次同步请求' }}</span>
+                <strong>{{ statusLabel(displayedSyncResult.status) }}</strong>
+                <span>{{ displayedSyncResultMessage }}</span>
+                <small v-if="displayedSyncResultTime">完成于 {{ formatDateTime(displayedSyncResultTime) }}</small>
               </div>
               <div class="sync-result-stats">
-                <span>请求 <strong>{{ syncResult.requested }}</strong></span>
-                <span>写入 <strong>{{ syncResult.written }}</strong></span>
-                <span>跳过 <strong>{{ syncResult.skipped }}</strong></span>
+                <span>请求 <strong>{{ displayedSyncResult.requested }}</strong></span>
+                <span>写入 <strong>{{ displayedSyncResult.written }}</strong></span>
+                <span>跳过 <strong>{{ displayedSyncResult.skipped }}</strong></span>
               </div>
+            </div>
+            <div v-else-if="loading.syncState" class="empty-state sync-empty" role="status">
+              <RefreshCw :size="18" class="animate-spin" aria-hidden="true" />
+              <span>正在读取最近一次同步状态</span>
+            </div>
+            <div v-else-if="syncStateError" class="empty-state sync-empty sync-empty-error" role="alert">
+              <AlertCircle :size="18" aria-hidden="true" />
+              <span>同步状态读取失败：{{ parsedError(syncStateError).message }}</span>
             </div>
             <div v-else class="empty-state sync-empty">
               <RotateCcw :size="18" aria-hidden="true" />

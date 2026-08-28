@@ -4388,6 +4388,11 @@ input:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.sync-result-main > small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.7rem;
+}
+
 .sync-status-dot {
   width: 0.45rem;
   height: 0.45rem;
@@ -4420,6 +4425,16 @@ input:focus-visible {
 
 .sync-empty {
   flex: 1;
+}
+
+.sync-empty-error {
+  justify-content: flex-start;
+  color: hsl(var(--status-danger));
+  text-align: left;
+}
+
+.sync-empty-error span {
+  overflow-wrap: anywhere;
 }
 
 .text-button {
