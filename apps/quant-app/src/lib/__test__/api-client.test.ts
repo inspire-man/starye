@@ -591,6 +591,41 @@ describe('quantApi', () => {
     expect(JSON.stringify(fetchMock.mock.calls[0])).not.toContain('api_key')
   })
 
+  it('requests the candidate AI briefing without sending candidate facts', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      briefing_version: 'candidate-briefing-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-08-29T03:00:00.000Z',
+      overview: '当前候选先核对数据完整性，再按研究优先级继续检查。',
+      focus_items: [{
+        ts_code: '601899.SH',
+        name: '紫金矿业',
+        priority_level: 'high',
+        priority_score: 72,
+        action_label: '核对风险',
+        reasons: ['近日日线回撤达到 3%'],
+        explanation: '先回看当前候选的风险事实和数据日期。',
+      }],
+      next_checks: ['核对数据截至日期'],
+      cited_candidate_codes: ['601899.SH'],
+    } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.generateCandidateAiBriefing()).resolves.toMatchObject({
+      briefingVersion: 'candidate-briefing-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      focusItems: [{ tsCode: '601899.SH', priorityLevel: 'high', priorityScore: 72 }],
+      nextChecks: ['核对数据截至日期'],
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/candidates/ai-briefing`, expect.objectContaining({
+      method: 'POST',
+      credentials: 'include',
+    }))
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBeUndefined()
+  })
+
   it('normalizes structured research runs and requests history by stock code', async () => {
     const run = {
       id: 'run-1',

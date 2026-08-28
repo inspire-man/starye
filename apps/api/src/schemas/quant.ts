@@ -344,6 +344,32 @@ export const QuantResearchChangeExplanationResponseSchema = v.strictObject({
   }),
 })
 
+export const QuantAiCandidateBriefingPriorityLevelSchema = v.picklist(['urgent', 'high', 'normal', 'low'])
+
+export const QuantAiCandidateBriefingFocusItemSchema = v.strictObject({
+  tsCode: QuantTsCodeSchema,
+  name: v.nullable(v.string()),
+  priorityLevel: QuantAiCandidateBriefingPriorityLevelSchema,
+  priorityScore: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+  actionLabel: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+  reasons: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(360))), v.maxLength(3)),
+  explanation: v.pipe(v.string(), v.minLength(1), v.maxLength(480)),
+})
+
+export const QuantAiCandidateBriefingResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.strictObject({
+    briefingVersion: v.literal('candidate-briefing-v1'),
+    provider: QuantAiProviderSchema,
+    model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    generatedAt: v.string(),
+    overview: v.pipe(v.string(), v.minLength(1), v.maxLength(1200)),
+    focusItems: v.pipe(v.array(QuantAiCandidateBriefingFocusItemSchema), v.maxLength(5)),
+    nextChecks: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(360))), v.maxLength(6)),
+    citedCandidateCodes: v.pipe(v.array(QuantTsCodeSchema), v.maxLength(5)),
+  }),
+})
+
 export const QuantResearchSummaryQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })

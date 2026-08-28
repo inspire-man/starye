@@ -154,6 +154,29 @@ export interface QuantResearchChangeExplanation {
   citedEvidenceKeys: string[]
 }
 
+export type QuantAiCandidateBriefingPriorityLevel = 'urgent' | 'high' | 'normal' | 'low'
+
+export interface QuantAiCandidateBriefingFocusItem {
+  tsCode: string
+  name: string | null
+  priorityLevel: QuantAiCandidateBriefingPriorityLevel
+  priorityScore: number
+  actionLabel: string
+  reasons: string[]
+  explanation: string
+}
+
+export interface QuantAiCandidateBriefing {
+  briefingVersion: 'candidate-briefing-v1'
+  provider: QuantAiProvider
+  model: string
+  generatedAt: string
+  overview: string
+  focusItems: QuantAiCandidateBriefingFocusItem[]
+  nextChecks: string[]
+  citedCandidateCodes: string[]
+}
+
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'
 

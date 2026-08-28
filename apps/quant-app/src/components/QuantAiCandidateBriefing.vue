@@ -1,0 +1,534 @@
+<script setup lang="ts">
+import type { QuantAiCandidateBriefing } from '../lib/quant-types'
+import { AlertCircle, BrainCircuit, CircleHelp, RefreshCw } from 'lucide-vue-next'
+import { computed } from 'vue'
+
+const props = withDefaults(defineProps<{
+  briefing: QuantAiCandidateBriefing | null
+  candidateCount: number
+  available?: boolean
+  loading: boolean
+  errorMessage: string | null
+  configurationError: boolean
+}>(), {
+  available: true,
+})
+
+const emit = defineEmits<{
+  generate: []
+  openSettings: []
+  focusCandidate: [tsCode: string]
+}>()
+
+const hasCandidates = computed(() => props.candidateCount > 0)
+const canGenerate = computed(() => props.available !== false && hasCandidates.value)
+const visibleFocusItems = computed(() => props.briefing?.focusItems.slice(0, 5) || [])
+const visibleNextChecks = computed(() => props.briefing?.nextChecks.slice(0, 6) || [])
+
+const generateButtonLabel = computed(() => {
+  if (props.loading)
+    return '生成中'
+  if (!canGenerate.value)
+    return '暂无候选'
+  return props.briefing ? '重新生成简报' : '生成 AI 简报'
+})
+
+function priorityLabel(level: string): string {
+  return {
+    urgent: '紧急',
+    high: '高优先',
+    normal: '常规',
+    low: '低优先',
+  }[level] || level || '未标记'
+}
+
+function priorityClass(level: string): string {
+  const normalized = ['urgent', 'high', 'normal', 'low'].includes(level) ? level : 'normal'
+  return `quant-ai-briefing-priority-${normalized}`
+}
+
+function formatScore(score: number): string {
+  return Number.isFinite(score) ? `${score.toFixed(1)} 分` : '--'
+}
+
+function formatDate(value: string): string {
+  if (!value)
+    return '时间未记录'
+  const compact = value.replace(/-/gu, '').slice(0, 8)
+  if (/^\d{8}$/u.test(compact))
+    return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`
+  return value.slice(0, 10)
+}
+
+function focusCandidate(tsCode: string): void {
+  emit('focusCandidate', tsCode)
+}
+</script>
+
+<template>
+  <section
+    class="quant-ai-briefing-panel quant-ai-briefing-responsive"
+    aria-labelledby="quant-ai-briefing-title"
+    :aria-busy="loading"
+  >
+    <div class="quant-ai-briefing-heading">
+      <div class="quant-ai-briefing-heading-copy">
+        <p class="section-kicker">
+          CANDIDATE BRIEFING
+        </p>
+        <h3 id="quant-ai-briefing-title">
+          AI 候选简报
+        </h3>
+        <small>只解释当前候选的确定性研究事实，不改变排序、评分或研究动作</small>
+      </div>
+      <button
+        class="secondary-button quant-ai-briefing-generate"
+        type="button"
+        :disabled="loading || !canGenerate"
+        title="基于当前候选研究事实生成 AI 简报"
+        @click="emit('generate')"
+      >
+        <RefreshCw v-if="loading" :size="14" class="animate-spin" aria-hidden="true" />
+        <BrainCircuit v-else :size="14" aria-hidden="true" />
+        {{ generateButtonLabel }}
+      </button>
+    </div>
+
+    <div class="quant-ai-briefing-scope quant-ai-briefing-wrap-anywhere" aria-label="候选简报范围">
+      <span>当前候选 <strong>{{ candidateCount }}</strong> 个</span>
+      <span v-if="briefing">版本 {{ briefing.briefingVersion }}</span>
+      <span v-if="briefing">{{ briefing.provider }} · {{ briefing.model }} · {{ formatDate(briefing.generatedAt) }}</span>
+    </div>
+
+    <div v-if="loading" class="quant-ai-briefing-state" role="status">
+      <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
+      <span>AI 正在整理当前候选简报</span>
+    </div>
+    <div v-else-if="errorMessage" class="quant-ai-briefing-state quant-ai-briefing-state-error" role="alert">
+      <AlertCircle :size="15" aria-hidden="true" />
+      <span class="quant-ai-briefing-wrap-anywhere">{{ errorMessage }}</span>
+      <button v-if="configurationError" class="text-button quant-ai-briefing-error-action" type="button" @click="emit('openSettings')">
+        打开 AI 配置
+      </button>
+      <button v-else class="text-button quant-ai-briefing-error-action" type="button" @click="emit('generate')">
+        重试
+      </button>
+    </div>
+    <div v-else-if="!briefing" class="quant-ai-briefing-state" role="status">
+      <CircleHelp :size="15" aria-hidden="true" />
+      <span v-if="!hasCandidates">当前没有候选数据，加载候选后即可生成简报。</span>
+      <span v-else-if="!canGenerate">候选快照尚未准备好，完成一次日线更新后即可生成简报。</span>
+      <span v-else>还没有生成候选简报，按需读取当前研究重点。</span>
+    </div>
+    <template v-else>
+      <div class="quant-ai-briefing-overview-block">
+        <span class="quant-ai-briefing-label">整体概览</span>
+        <p class="quant-ai-briefing-overview quant-ai-briefing-wrap-anywhere">
+          {{ briefing.overview }}
+        </p>
+      </div>
+
+      <div class="quant-ai-briefing-section">
+        <div class="quant-ai-briefing-section-heading">
+          <span class="quant-ai-briefing-label">重点候选</span>
+          <small>{{ visibleFocusItems.length }} 个 · 点击候选回看详情</small>
+        </div>
+        <div v-if="visibleFocusItems.length" class="quant-ai-briefing-focus-list">
+          <button
+            v-for="item in visibleFocusItems"
+            :key="item.tsCode"
+            class="quant-ai-briefing-focus-item quant-ai-briefing-wrap-anywhere"
+            type="button"
+            :aria-label="`打开候选 ${item.name}（${item.tsCode}）详情`"
+            @click="focusCandidate(item.tsCode)"
+          >
+            <span class="quant-ai-briefing-focus-heading">
+              <span class="quant-ai-briefing-focus-name">
+                <strong>{{ item.name }}</strong>
+                <code>{{ item.tsCode }}</code>
+              </span>
+              <span class="quant-ai-briefing-focus-arrow" aria-hidden="true">↗</span>
+            </span>
+            <span class="quant-ai-briefing-focus-meta">
+              <span class="quant-ai-briefing-priority" :class="priorityClass(item.priorityLevel)">
+                {{ priorityLabel(item.priorityLevel) }}
+              </span>
+              <span>{{ formatScore(item.priorityScore) }}</span>
+              <span>{{ item.actionLabel }}</span>
+            </span>
+            <span v-if="item.reasons.length" class="quant-ai-briefing-reasons">
+              <span v-for="reason in item.reasons" :key="reason" class="quant-ai-briefing-reason quant-ai-briefing-wrap-anywhere">
+                {{ reason }}
+              </span>
+            </span>
+            <span class="quant-ai-briefing-explanation quant-ai-briefing-wrap-anywhere">
+              {{ item.explanation }}
+            </span>
+          </button>
+        </div>
+        <span v-else class="quant-ai-briefing-empty">
+          <CircleHelp :size="13" aria-hidden="true" />
+          未返回重点候选
+        </span>
+      </div>
+
+      <div class="quant-ai-briefing-section quant-ai-briefing-next">
+        <span class="quant-ai-briefing-label">下一步核对</span>
+        <ul v-if="visibleNextChecks.length">
+          <li v-for="check in visibleNextChecks" :key="check" class="quant-ai-briefing-wrap-anywhere">
+            {{ check }}
+          </li>
+        </ul>
+        <span v-else class="quant-ai-briefing-empty">未返回下一步核对项</span>
+      </div>
+
+      <div class="quant-ai-briefing-section quant-ai-briefing-citations">
+        <div class="quant-ai-briefing-section-heading">
+          <span class="quant-ai-briefing-label">引用候选代码</span>
+          <small>点击代码回看候选详情</small>
+        </div>
+        <div v-if="briefing.citedCandidateCodes.length" class="quant-ai-briefing-citation-list">
+          <button
+            v-for="tsCode in briefing.citedCandidateCodes"
+            :key="tsCode"
+            class="quant-ai-briefing-citation quant-ai-briefing-wrap-anywhere"
+            type="button"
+            :aria-label="`打开引用候选 ${tsCode} 详情`"
+            @click="focusCandidate(tsCode)"
+          >
+            <code>{{ tsCode }}</code>
+            <span>回看候选</span>
+          </button>
+        </div>
+        <span v-else class="quant-ai-briefing-empty">
+          <CircleHelp :size="13" aria-hidden="true" />
+          未返回引用代码
+        </span>
+      </div>
+    </template>
+  </section>
+</template>
+
+<style scoped>
+.quant-ai-briefing-panel {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+  margin-top: 0.85rem;
+  border-top: 1px solid hsl(var(--primary) / 0.28);
+  padding-top: 0.8rem;
+}
+
+.quant-ai-briefing-heading,
+.quant-ai-briefing-section-heading,
+.quant-ai-briefing-focus-heading,
+.quant-ai-briefing-focus-meta {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.quant-ai-briefing-heading {
+  gap: 0.75rem;
+}
+
+.quant-ai-briefing-heading-copy,
+.quant-ai-briefing-section,
+.quant-ai-briefing-overview-block {
+  min-width: 0;
+}
+
+.quant-ai-briefing-heading h3 {
+  margin: 0.3rem 0 0;
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+  font-weight: 740;
+}
+
+.quant-ai-briefing-heading small,
+.quant-ai-briefing-section-heading small {
+  display: block;
+  margin-top: 0.2rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-briefing-generate {
+  flex: 0 0 auto;
+}
+
+.quant-ai-briefing-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--muted) / 0.28);
+  padding: 0.45rem 0.55rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-briefing-scope strong {
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.quant-ai-briefing-state {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  text-align: center;
+}
+
+.quant-ai-briefing-state-error {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: hsl(var(--status-danger));
+}
+
+.quant-ai-briefing-overview-block,
+.quant-ai-briefing-section {
+  display: grid;
+  gap: 0.4rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.6rem;
+}
+
+.quant-ai-briefing-overview-block {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.quant-ai-briefing-label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.quant-ai-briefing-overview {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.quant-ai-briefing-focus-list {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.quant-ai-briefing-focus-item {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 0.35rem;
+  border: 1px solid hsl(var(--border));
+  border-left: 2px solid hsl(var(--status-info) / 0.7);
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--card));
+  padding: 0.5rem 0.55rem;
+  color: hsl(var(--foreground));
+  text-align: left;
+  cursor: pointer;
+}
+
+.quant-ai-briefing-focus-item:hover {
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.quant-ai-briefing-focus-heading {
+  align-items: center;
+}
+
+.quant-ai-briefing-focus-name {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.quant-ai-briefing-focus-name strong {
+  font-size: 0.75rem;
+  font-weight: 740;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-briefing-focus-name code,
+.quant-ai-briefing-citation code {
+  color: hsl(var(--muted-foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.625rem;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-briefing-focus-arrow {
+  flex: 0 0 auto;
+  color: hsl(var(--primary));
+  font-size: 0.875rem;
+}
+
+.quant-ai-briefing-focus-meta {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
+
+.quant-ai-briefing-priority {
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  padding: 0.12rem 0.35rem;
+  font-weight: 720;
+}
+
+.quant-ai-briefing-priority-urgent {
+  background: hsl(var(--status-danger) / 0.12);
+  color: hsl(var(--status-danger));
+}
+
+.quant-ai-briefing-priority-high {
+  background: hsl(var(--status-warning) / 0.14);
+  color: hsl(var(--status-warning));
+}
+
+.quant-ai-briefing-priority-normal {
+  background: hsl(var(--status-info) / 0.12);
+  color: hsl(var(--status-info));
+}
+
+.quant-ai-briefing-priority-low {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.quant-ai-briefing-reasons {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.quant-ai-briefing-reason {
+  max-width: 100%;
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--muted) / 0.7);
+  padding: 0.16rem 0.3rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
+
+.quant-ai-briefing-explanation {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  line-height: 1.45;
+}
+
+.quant-ai-briefing-next ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 0.95rem;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  line-height: 1.45;
+}
+
+.quant-ai-briefing-citation-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.quant-ai-briefing-citation {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid hsl(var(--status-success) / 0.3);
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--status-success) / 0.06);
+  padding: 0.35rem 0.45rem;
+  color: hsl(var(--foreground));
+  text-align: left;
+  cursor: pointer;
+}
+
+.quant-ai-briefing-citation:hover {
+  border-color: hsl(var(--status-success) / 0.65);
+}
+
+.quant-ai-briefing-citation span {
+  flex: 0 0 auto;
+  color: hsl(var(--status-success));
+  font-size: 0.59375rem;
+}
+
+.quant-ai-briefing-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-briefing-wrap-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media (max-width: 680px) {
+  .quant-ai-briefing-heading {
+    flex-direction: column;
+  }
+
+  .quant-ai-briefing-generate {
+    width: 100%;
+  }
+
+  .quant-ai-briefing-scope {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .quant-ai-briefing-section-heading,
+  .quant-ai-briefing-focus-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .quant-ai-briefing-focus-arrow {
+    display: none;
+  }
+
+  .quant-ai-briefing-focus-name strong {
+    white-space: normal;
+  }
+
+  .quant-ai-briefing-focus-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+</style>
