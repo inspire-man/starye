@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
 import type { CandidateEvidenceScore } from './lib/candidate-evidence-score'
-import type { QuantDataHealthStatus } from './lib/data-health'
+import type { QuantDataHealthActionView, QuantDataHealthStatus } from './lib/data-health'
 import type { DecisionEvidenceStatus } from './lib/decision-evidence'
 import type {
   CandidateItem,
@@ -1286,6 +1286,11 @@ function dataHealthSummaryClass(status: QuantDataHealthStatus): string {
   return `data-health-summary-${status}`
 }
 
+function openDataHealthAction(view: QuantDataHealthActionView | null): void {
+  if (view)
+    setActiveView(view)
+}
+
 function focusSignal(item: CandidateItem): string {
   return candidatePriorityFor(item).actionLabel
 }
@@ -2357,6 +2362,16 @@ onUnmounted(() => {
                 </div>
                 <p>{{ item.detail }}</p>
                 <small v-if="item.observedAt">观测 {{ formatDateTime(item.observedAt) }}</small>
+                <button
+                  v-if="item.actionView && item.actionLabel"
+                  class="text-button data-health-action"
+                  type="button"
+                  :aria-label="`${item.label}：${item.actionLabel}`"
+                  @click="openDataHealthAction(item.actionView)"
+                >
+                  <ChevronRight :size="13" aria-hidden="true" />
+                  {{ item.actionLabel }}
+                </button>
               </div>
             </div>
           </div>

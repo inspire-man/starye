@@ -442,6 +442,15 @@ input:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.data-health-action {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.16rem;
+  padding: 0.12rem 0;
+  font-size: 0.68rem;
+}
+
 .environment-section {
   margin-top: 1.25rem;
   border-top: 1px solid hsl(var(--border));

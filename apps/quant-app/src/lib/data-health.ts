@@ -4,6 +4,7 @@ export const QUANT_DATA_HEALTH_VERSION = 'quant-data-health-v1' as const
 
 export type QuantDataHealthStatus = 'ready' | 'partial' | 'missing' | 'loading' | 'error'
 export type QuantDataHealthKey = 'daily' | 'value-quality' | 'shareholder-returns'
+export type QuantDataHealthActionView = 'watchlist' | 'candidates'
 
 export interface QuantDataHealthItem {
   key: QuantDataHealthKey
@@ -13,6 +14,8 @@ export interface QuantDataHealthItem {
   totalCount: number | null
   detail: string
   observedAt: string | null
+  actionView: QuantDataHealthActionView | null
+  actionLabel: string | null
 }
 
 export interface QuantDataHealthSummary {
@@ -59,6 +62,27 @@ function resultCounts(selection: QuantValueSelection | QuantShareholderReturnSel
   }
 }
 
+const DATA_HEALTH_ACTIONS: Record<QuantDataHealthKey, { actionView: QuantDataHealthActionView, actionLabel: string }> = {
+  'daily': { actionView: 'watchlist', actionLabel: '去更新日线' },
+  'value-quality': { actionView: 'candidates', actionLabel: '去看候选研究' },
+  'shareholder-returns': { actionView: 'candidates', actionLabel: '去看候选研究' },
+}
+
+function dataHealthActionFor(key: QuantDataHealthKey, status: QuantDataHealthStatus): Pick<QuantDataHealthItem, 'actionView' | 'actionLabel'> {
+  if (status === 'ready' || status === 'loading')
+    return { actionView: null, actionLabel: null }
+  return DATA_HEALTH_ACTIONS[key]
+}
+
+function createDataHealthItem(
+  key: QuantDataHealthKey,
+  label: string,
+  status: QuantDataHealthStatus,
+  details: Omit<QuantDataHealthItem, 'key' | 'label' | 'status' | 'actionView' | 'actionLabel'>,
+): QuantDataHealthItem {
+  return { key, label, status, ...details, ...dataHealthActionFor(key, status) }
+}
+
 function buildSelectionItem(
   key: QuantDataHealthKey,
   label: string,
@@ -67,78 +91,68 @@ function buildSelectionItem(
   error: boolean,
 ): QuantDataHealthItem {
   if (loading) {
-    return { key, label, status: 'loading', readyCount: null, totalCount: null, detail: '正在读取当前数据', observedAt: null }
+    return createDataHealthItem(key, label, 'loading', { readyCount: null, totalCount: null, detail: '正在读取当前数据', observedAt: null })
   }
   if (error) {
-    return { key, label, status: 'error', readyCount: null, totalCount: null, detail: '数据读取失败，请打开详情重试', observedAt: null }
+    return createDataHealthItem(key, label, 'error', { readyCount: null, totalCount: null, detail: '数据读取失败，请打开详情重试', observedAt: null })
   }
   if (!selection) {
-    return { key, label, status: 'missing', readyCount: 0, totalCount: 0, detail: '当前没有可用结果', observedAt: null }
+    return createDataHealthItem(key, label, 'missing', { readyCount: 0, totalCount: 0, detail: '当前没有可用结果', observedAt: null })
   }
 
   const counts = resultCounts(selection)
   if (counts.total === 0) {
-    return { key, label, status: 'missing', readyCount: 0, totalCount: 0, detail: '当前观察池没有可比较样本', observedAt: selection.observedAt }
+    return createDataHealthItem(key, label, 'missing', { readyCount: 0, totalCount: 0, detail: '当前观察池没有可比较样本', observedAt: selection.observedAt })
   }
 
   const status = counts.ready === counts.total && counts.partial === 0 && counts.insufficient === 0 ? 'ready' : 'partial'
   const detail = `${counts.ready} / ${counts.total} 只完整 · ${counts.partial} 只部分 · ${counts.insufficient} 只数据不足`
-  return { key, label, status, readyCount: counts.ready, totalCount: counts.total, detail, observedAt: selection.observedAt }
+  return createDataHealthItem(key, label, status, { readyCount: counts.ready, totalCount: counts.total, detail, observedAt: selection.observedAt })
 }
 
 function buildDailyItem(input: QuantDataHealthInput): QuantDataHealthItem {
   const total = input.watchlist.length
   const covered = countCoveredWatchlistItems(input.watchlist)
   if (input.syncLoading)
-    return { key: 'daily', label: '日线同步', status: 'loading', readyCount: covered, totalCount: total, detail: '正在读取最近一次同步状态', observedAt: null }
+    return createDataHealthItem('daily', '日线同步', 'loading', { readyCount: covered, totalCount: total, detail: '正在读取最近一次同步状态', observedAt: null })
   if (input.syncError)
-    return { key: 'daily', label: '日线同步', status: 'error', readyCount: covered, totalCount: total, detail: `同步状态读取失败 · 当前覆盖 ${covered} / ${total} 只`, observedAt: null }
+    return createDataHealthItem('daily', '日线同步', 'error', { readyCount: covered, totalCount: total, detail: `同步状态读取失败 · 当前覆盖 ${covered} / ${total} 只`, observedAt: null })
   if (total === 0)
-    return { key: 'daily', label: '日线同步', status: 'missing', readyCount: 0, totalCount: 0, detail: '观察池为空，先加入股票', observedAt: null }
+    return createDataHealthItem('daily', '日线同步', 'missing', { readyCount: 0, totalCount: 0, detail: '观察池为空，先加入股票', observedAt: null })
   if (!input.sync) {
-    return {
-      key: 'daily',
-      label: '日线同步',
-      status: covered > 0 ? 'partial' : 'missing',
+    const status = covered > 0 ? 'partial' : 'missing'
+    return createDataHealthItem('daily', '日线同步', status, {
       readyCount: covered,
       totalCount: total,
       detail: covered > 0 ? `已覆盖 ${covered} / ${total} 只，但没有同步状态记录` : '尚未完成一次日线同步',
       observedAt: null,
-    }
+    })
   }
 
   const observedAt = input.sync.completedAt || input.sync.startedAt
   if (input.sync.status === 'rejected') {
-    return {
-      key: 'daily',
-      label: '日线同步',
-      status: covered > 0 ? 'partial' : 'error',
+    const status = covered > 0 ? 'partial' : 'error'
+    return createDataHealthItem('daily', '日线同步', status, {
       readyCount: covered,
       totalCount: total,
       detail: `${input.sync.reason || '最近一次同步被拒绝'} · 当前覆盖 ${covered} / ${total} 只`,
       observedAt,
-    }
+    })
   }
   if (input.sync.status === 'partial' || covered < total) {
-    return {
-      key: 'daily',
-      label: '日线同步',
-      status: 'partial',
+    return createDataHealthItem('daily', '日线同步', 'partial', {
       readyCount: covered,
       totalCount: total,
       detail: `${input.sync.status === 'partial' ? '最近一次同步部分完成' : '同步已完成但覆盖不足'} · ${covered} / ${total} 只`,
       observedAt,
-    }
+    })
   }
-  return {
-    key: 'daily',
-    label: '日线同步',
-    status: 'ready',
+  return createDataHealthItem('daily', '日线同步', 'ready', {
     readyCount: covered,
     totalCount: total,
     detail: `最近一次同步已完成 · ${covered} / ${total} 只`,
     observedAt,
-  }
+  })
 }
 
 function summaryStatus(items: readonly QuantDataHealthItem[], watchlistCount: number): QuantDataHealthStatus {
