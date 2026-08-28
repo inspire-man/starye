@@ -31,6 +31,7 @@ import type {
 import type { QuantView } from './lib/quant-view'
 import type { BatchResearchProgress } from './lib/research-batch'
 import type { BatchResearchFollowUpState } from './lib/research-batch-follow-up'
+import type { ResearchBatchStateSource } from './lib/research-batch-history'
 import type { ResearchEvidenceChange } from './lib/research-evidence-history'
 import type { ResearchPriority, ResearchPriorityValueQuality } from './lib/research-priority'
 import type { ResearchReportCopyResult } from './lib/research-report-copy'
@@ -78,6 +79,7 @@ import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { runResearchBatch } from './lib/research-batch'
 import { buildResearchBatchFilename, buildResearchBatchMarkdown } from './lib/research-batch-export'
 import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from './lib/research-batch-follow-up'
+import { hydrateResearchBatchState } from './lib/research-batch-history'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
 import { copyResearchReportMarkdown } from './lib/research-report-copy'
@@ -127,6 +129,9 @@ const comparisonFinancials = ref<Record<string, QuantFinancialQualitySnapshot | 
 const comparisonErrors = ref<Record<string, { valuation: boolean, financial: boolean }>>({})
 const comparisonResearchRunning = ref(false)
 const comparisonResearchStates = ref<Record<string, ComparisonResearchItemState>>({})
+const comparisonResearchHistoryLoading = ref<Record<string, boolean>>({})
+const comparisonResearchHistoryErrors = ref<Record<string, unknown | null>>({})
+const comparisonResearchHistorySources = ref<Record<string, ResearchBatchStateSource | undefined>>({})
 const comparisonResearchExporting = ref(false)
 const comparisonResearchExportMessage = ref('')
 const comparisonResearchExportError = ref(false)
@@ -153,6 +158,8 @@ let researchRunRequestId = 0
 let researchSummaryRequestId = 0
 let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
+let comparisonResearchHistoryRequestId = 0
+const comparisonResearchHistoryRequestIds = new Map<string, number>()
 const loading = reactive({
   watchlist: false,
   candidates: false,
@@ -359,6 +366,8 @@ const comparisonResearchSummary = computed(() => {
   const error = states.filter(status => status === 'error').length
   const running = states.filter(status => status === 'running').length
   const pending = states.filter(status => status === 'pending').length
+  const historyLoading = selectedCandidateItems.value.filter(item => comparisonResearchHistoryLoading.value[item.tsCode]).length
+  const historyError = selectedCandidateItems.value.filter(item => comparisonResearchHistoryErrors.value[item.tsCode]).length
   return {
     total: states.length,
     success,
@@ -367,17 +376,25 @@ const comparisonResearchSummary = computed(() => {
     pending,
     completed: success + error,
     started: states.some(status => status !== 'idle'),
+    historyLoading,
+    historyError,
   }
 })
 const comparisonResearchButtonLabel = computed(() => comparisonResearchSummary.value.started ? '重新生成研究' : '批量生成研究')
 const comparisonResearchSummaryLabel = computed(() => {
   const summary = comparisonResearchSummary.value
+  if (summary.historyLoading)
+    return `${summary.started ? `已完成 ${summary.completed} / ${summary.total}` : '批量研究未开始'}，${summary.historyLoading} 项历史读取中`
+  if (!summary.started && summary.historyError)
+    return `${summary.historyError} 项历史读取失败，可重试`
   if (!summary.started)
     return '尚未生成本批次研究报告'
   if (summary.running || summary.pending)
     return `已完成 ${summary.completed} / ${summary.total}，${summary.running + summary.pending} 项待完成`
   if (summary.error)
     return `已完成 ${summary.success} / ${summary.total}，${summary.error} 项失败`
+  if (summary.historyError)
+    return `已完成 ${summary.success} / ${summary.total}，${summary.historyError} 项历史读取失败`
   return `已完成 ${summary.success} / ${summary.total} 项`
 })
 const comparisonResearchSuccessfulRuns = computed(() => selectedCandidateItems.value
@@ -1693,12 +1710,33 @@ function comparisonResearchStateFor(item: CandidateItem): ComparisonResearchItem
   return comparisonResearchStates.value[item.tsCode] || { status: 'idle', run: null, error: null }
 }
 
+function comparisonResearchHistoryLoadingFor(item: CandidateItem): boolean {
+  return comparisonResearchHistoryLoading.value[item.tsCode] === true
+}
+
+function comparisonResearchHistoryErrorFor(item: CandidateItem): unknown | null {
+  return comparisonResearchHistoryErrors.value[item.tsCode] || null
+}
+
+function comparisonResearchStateSourceFor(item: CandidateItem): ResearchBatchStateSource | undefined {
+  return comparisonResearchHistorySources.value[item.tsCode]
+}
+
 function comparisonResearchActionFor(item: CandidateItem) {
   return getBatchResearchItemAction(comparisonResearchStateFor(item))
 }
 
 function comparisonResearchStateClass(state: ComparisonResearchItemState): string {
   return `comparison-research-item-${state.status}`
+}
+
+function comparisonResearchItemClass(item: CandidateItem): string {
+  const classes = [comparisonResearchStateClass(comparisonResearchStateFor(item))]
+  if (comparisonResearchHistoryLoadingFor(item))
+    classes.push('comparison-research-item-history-loading')
+  if (comparisonResearchHistoryErrorFor(item))
+    classes.push('comparison-research-item-history-error')
+  return classes.join(' ')
 }
 
 function comparisonResearchStatusLabel(state: ComparisonResearchItemState): string {
@@ -1711,6 +1749,15 @@ function comparisonResearchStatusLabel(state: ComparisonResearchItemState): stri
   if (state.status === 'error')
     return '生成失败'
   return state.run ? researchRunStatusLabel(state.run.status) : '已完成'
+}
+
+function comparisonResearchStatusLabelFor(item: CandidateItem): string {
+  const state = comparisonResearchStateFor(item)
+  if (state.status === 'idle' && comparisonResearchHistoryLoadingFor(item))
+    return '读取历史中'
+  if (state.status === 'idle' && comparisonResearchHistoryErrorFor(item))
+    return '历史读取失败'
+  return comparisonResearchStatusLabel(state)
 }
 
 function comparisonResearchStatusDetail(state: ComparisonResearchItemState): string {
@@ -1727,9 +1774,86 @@ function comparisonResearchStatusDetail(state: ComparisonResearchItemState): str
   return `${researchRunActionLabel(state.run.report.action)} · ${state.run.report.evidence.length} 条证据`
 }
 
+function comparisonResearchStatusDetailFor(item: CandidateItem): string {
+  const state = comparisonResearchStateFor(item)
+  if (state.status === 'idle' && comparisonResearchHistoryLoadingFor(item))
+    return '正在读取最近研究历史'
+  if (state.status === 'idle' && comparisonResearchHistoryErrorFor(item))
+    return '点击重试读取历史'
+  return comparisonResearchStatusDetail(state)
+}
+
+function comparisonResearchHistoryMetaFor(item: CandidateItem): string {
+  const error = comparisonResearchHistoryErrorFor(item)
+  if (comparisonResearchHistoryLoadingFor(item))
+    return comparisonResearchStateSourceFor(item) === 'batch' ? '正在同步最近研究历史' : ''
+  if (error)
+    return `历史读取失败：${parsedError(error).message}`
+  return ''
+}
+
+function comparisonResearchHistoryRequestIsCurrent(tsCode: string, requestId: number): boolean {
+  return comparisonResearchHistoryRequestIds.get(tsCode) === requestId
+}
+
+function invalidateComparisonResearchHistory(tsCode: string): void {
+  const requestId = ++comparisonResearchHistoryRequestId
+  comparisonResearchHistoryRequestIds.set(tsCode, requestId)
+  comparisonResearchHistoryLoading.value = { ...comparisonResearchHistoryLoading.value, [tsCode]: false }
+  comparisonResearchHistoryErrors.value = { ...comparisonResearchHistoryErrors.value, [tsCode]: null }
+}
+
+async function loadComparisonResearchHistory(item: CandidateItem): Promise<void> {
+  const tsCode = item.tsCode
+  const requestId = ++comparisonResearchHistoryRequestId
+  comparisonResearchHistoryRequestIds.set(tsCode, requestId)
+  comparisonResearchHistoryLoading.value = { ...comparisonResearchHistoryLoading.value, [tsCode]: true }
+  comparisonResearchHistoryErrors.value = { ...comparisonResearchHistoryErrors.value, [tsCode]: null }
+
+  try {
+    const runs = await quantApi.getResearchRuns(tsCode, 1)
+    if (!comparisonResearchHistoryRequestIsCurrent(tsCode, requestId))
+      return
+
+    const result = hydrateResearchBatchState({
+      existing: comparisonResearchStates.value[tsCode],
+      source: comparisonResearchHistorySources.value[tsCode],
+      run: runs[0] || null,
+    })
+    comparisonResearchStates.value = { ...comparisonResearchStates.value, [tsCode]: result.state }
+    comparisonResearchHistorySources.value = { ...comparisonResearchHistorySources.value, [tsCode]: result.source }
+    comparisonResearchHistoryErrors.value = { ...comparisonResearchHistoryErrors.value, [tsCode]: null }
+  }
+  catch (error) {
+    if (!comparisonResearchHistoryRequestIsCurrent(tsCode, requestId))
+      return
+
+    const result = hydrateResearchBatchState({
+      existing: comparisonResearchStates.value[tsCode],
+      source: comparisonResearchHistorySources.value[tsCode],
+      run: null,
+      error,
+    })
+    comparisonResearchStates.value = { ...comparisonResearchStates.value, [tsCode]: result.state }
+    comparisonResearchHistorySources.value = { ...comparisonResearchHistorySources.value, [tsCode]: result.source }
+    comparisonResearchHistoryErrors.value = { ...comparisonResearchHistoryErrors.value, [tsCode]: result.error }
+  }
+  finally {
+    if (comparisonResearchHistoryRequestIsCurrent(tsCode, requestId))
+      comparisonResearchHistoryLoading.value = { ...comparisonResearchHistoryLoading.value, [tsCode]: false }
+  }
+}
+
+async function retryComparisonResearchHistory(item: CandidateItem): Promise<void> {
+  if (comparisonResearchHistoryLoadingFor(item))
+    return
+  await loadComparisonResearchHistory(item)
+}
+
 async function openComparisonDrawer() {
   if (!canCompareCandidates.value)
     return
+  const items = [...selectedCandidateItems.value]
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
   comparisonDrawerOpen.value = true
@@ -1737,7 +1861,12 @@ async function openComparisonDrawer() {
   comparisonValuations.value = {}
   comparisonFinancials.value = {}
   comparisonErrors.value = {}
-  await Promise.all(selectedCandidateItems.value.map(async (item) => {
+  comparisonResearchHistoryErrors.value = {
+    ...comparisonResearchHistoryErrors.value,
+    ...Object.fromEntries(items.map(item => [item.tsCode, null])),
+  }
+  void Promise.all(items.map(item => loadComparisonResearchHistory(item)))
+  await Promise.all(items.map(async (item) => {
     const result = { valuation: null as QuantValuationSnapshot | null, financial: null as QuantFinancialQualitySnapshot | null, valuationError: false, financialError: false }
     const [valuationResult, financialResult] = await Promise.allSettled([
       quantApi.getValuation(item.tsCode),
@@ -1768,11 +1897,21 @@ async function startBatchResearch() {
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
   const items = [...selectedCandidateItems.value]
+  for (const item of items)
+    invalidateComparisonResearchHistory(item.tsCode)
   comparisonResearchStates.value = Object.fromEntries(items.map(item => [item.tsCode, {
     status: 'pending' as const,
     run: null,
     error: null,
   }]))
+  const sources = { ...comparisonResearchHistorySources.value }
+  const historyErrors = { ...comparisonResearchHistoryErrors.value }
+  for (const item of items) {
+    sources[item.tsCode] = 'batch'
+    historyErrors[item.tsCode] = null
+  }
+  comparisonResearchHistorySources.value = sources
+  comparisonResearchHistoryErrors.value = historyErrors
   comparisonResearchRunning.value = true
   try {
     await runResearchBatch(
@@ -1795,7 +1934,10 @@ async function retryBatchResearchItem(item: CandidateItem) {
 
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
+  invalidateComparisonResearchHistory(item.tsCode)
   comparisonResearchStates.value = markBatchResearchItemPending(comparisonResearchStates.value, item.tsCode)
+  comparisonResearchHistorySources.value = { ...comparisonResearchHistorySources.value, [item.tsCode]: 'batch' }
+  comparisonResearchHistoryErrors.value = { ...comparisonResearchHistoryErrors.value, [item.tsCode]: null }
   await runResearchBatch(
     [item.tsCode],
     tsCode => quantApi.generateResearchRun(tsCode),
@@ -4134,14 +4276,15 @@ onUnmounted(() => {
               {{ comparisonResearchCopyMessage }}
             </p>
             <div class="comparison-research-list" role="list" aria-live="polite">
-              <div v-for="item in selectedCandidateItems" :key="`research-${item.id}`" class="comparison-research-item" :class="comparisonResearchStateClass(comparisonResearchStateFor(item))" role="listitem">
+              <div v-for="item in selectedCandidateItems" :key="`research-${item.id}`" class="comparison-research-item" :class="comparisonResearchItemClass(item)" role="listitem">
                 <div class="comparison-research-stock">
                   <strong>{{ displayStockName(item) }}</strong>
                   <small>{{ item.tsCode }}</small>
                 </div>
                 <div class="comparison-research-detail">
-                  <span>{{ comparisonResearchStatusLabel(comparisonResearchStateFor(item)) }}</span>
-                  <small>{{ comparisonResearchStatusDetail(comparisonResearchStateFor(item)) }}</small>
+                  <span>{{ comparisonResearchStatusLabelFor(item) }}</span>
+                  <small>{{ comparisonResearchStatusDetailFor(item) }}</small>
+                  <small v-if="comparisonResearchHistoryMetaFor(item)" class="comparison-research-history-meta">{{ comparisonResearchHistoryMetaFor(item) }}</small>
                 </div>
                 <div class="comparison-research-actions">
                   <button
@@ -4166,6 +4309,18 @@ onUnmounted(() => {
                   >
                     <RotateCcw :size="14" aria-hidden="true" />
                     单项重试
+                  </button>
+                  <button
+                    v-if="comparisonResearchHistoryErrorFor(item)"
+                    class="text-button comparison-research-action"
+                    type="button"
+                    :disabled="comparisonResearchHistoryLoadingFor(item)"
+                    :aria-label="`重试读取 ${displayStockName(item)} 的研究历史`"
+                    title="只重试读取这一只股票的研究历史"
+                    @click="retryComparisonResearchHistory(item)"
+                  >
+                    <RefreshCw :size="14" :class="comparisonResearchHistoryLoadingFor(item) ? 'animate-spin' : ''" aria-hidden="true" />
+                    {{ comparisonResearchHistoryLoadingFor(item) ? '读取中' : '重试读取' }}
                   </button>
                 </div>
               </div>
