@@ -758,4 +758,44 @@ describe('quantApi', () => {
       status: 502,
     })
   })
+
+  it('normalizes a research change explanation and posts the previous run id', async () => {
+    const explanation = {
+      change_explanation_version: 'research-change-explanation-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-08-29T02:00:00.000Z',
+      current_generated_at: '2026-08-29T00:00:00.000Z',
+      previous_generated_at: '2026-08-28T00:00:00.000Z',
+      overview: 'ROE 状态由注意变为通过。',
+      changes: [{ evidence_key: 'quality-roe', label: 'ROE', kind: 'improved', kind_label: '状态改善', explanation: '数值上升，按报告事实回看。' }],
+      next_checks: ['复核来源日期'],
+      cited_evidence_keys: ['quality-roe'],
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: explanation }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...explanation, changes: [null] } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.generateResearchChangeExplanation('run-current', 'run-previous')).resolves.toEqual({
+      changeExplanationVersion: 'research-change-explanation-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generatedAt: '2026-08-29T02:00:00.000Z',
+      currentGeneratedAt: '2026-08-29T00:00:00.000Z',
+      previousGeneratedAt: '2026-08-28T00:00:00.000Z',
+      overview: 'ROE 状态由注意变为通过。',
+      changes: [{ evidenceKey: 'quality-roe', label: 'ROE', kind: 'improved', kindLabel: '状态改善', explanation: '数值上升，按报告事实回看。' }],
+      nextChecks: ['复核来源日期'],
+      citedEvidenceKeys: ['quality-roe'],
+    })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-current/change-explanation`)
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ previous_run_id: 'run-previous' }))
+
+    await expect(quantApi.generateResearchChangeExplanation('run-current', 'run-previous')).rejects.toMatchObject({
+      code: 'QUANT_AI_CHANGE_EXPLANATION_INVALID_RESPONSE',
+      status: 502,
+    })
+  })
 })

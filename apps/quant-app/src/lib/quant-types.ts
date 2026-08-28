@@ -131,6 +131,29 @@ export interface QuantResearchQuestion {
   citedEvidenceKeys: string[]
 }
 
+export type QuantResearchChangeKind = 'improved' | 'weakened' | 'restored' | 'newly-missing' | 'persistent-missing' | 'changed' | 'incomparable' | 'added'
+
+export interface QuantResearchChangeExplanationItem {
+  evidenceKey: string
+  label: string
+  kind: QuantResearchChangeKind
+  kindLabel: string
+  explanation: string
+}
+
+export interface QuantResearchChangeExplanation {
+  changeExplanationVersion: 'research-change-explanation-v1'
+  provider: QuantAiProvider
+  model: string
+  generatedAt: string
+  currentGeneratedAt: string
+  previousGeneratedAt: string
+  overview: string
+  changes: QuantResearchChangeExplanationItem[]
+  nextChecks: string[]
+  citedEvidenceKeys: string[]
+}
+
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'
 

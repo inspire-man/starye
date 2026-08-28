@@ -1,5 +1,6 @@
 import type { QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
+import type { QuantAiChangeExplanationResult } from '../../domain/quant/ai-change-explanation'
 import type { QuantAiComparisonResult } from '../../domain/quant/ai-comparison'
 import type { QuantAiQuestionResult } from '../../domain/quant/ai-question'
 import type { QuantAiSummary } from '../../domain/quant/ai-summary'
@@ -10,6 +11,7 @@ import type { MomentumCandidate } from '../../domain/quant/types'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
+import { generateQuantAiChangeExplanation } from '../../domain/quant/ai-change-explanation'
 import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
 import { testQuantAiConnection } from '../../domain/quant/ai-connection'
@@ -53,6 +55,7 @@ import {
   QuantAiConfigUpdateSchema,
   QuantDailyQuerySchema,
   QuantFinancialHistoryQuerySchema,
+  QuantResearchChangeExplanationSchema,
   QuantResearchComparisonSchema,
   QuantResearchMarkerUpdateSchema,
   QuantResearchQuestionSchema,
@@ -222,6 +225,21 @@ function researchQuestionView(question: QuantAiQuestionResult) {
     question: question.question,
     answer: question.answer,
     citedEvidenceKeys: question.citedEvidenceKeys,
+  }
+}
+
+function researchChangeExplanationView(explanation: QuantAiChangeExplanationResult) {
+  return {
+    changeExplanationVersion: explanation.changeExplanationVersion,
+    provider: explanation.provider,
+    model: explanation.model,
+    generatedAt: explanation.generatedAt,
+    currentGeneratedAt: explanation.currentGeneratedAt,
+    previousGeneratedAt: explanation.previousGeneratedAt,
+    overview: explanation.overview,
+    changes: explanation.changes,
+    nextChecks: explanation.nextChecks,
+    citedEvidenceKeys: explanation.citedEvidenceKeys,
   }
 }
 
@@ -585,6 +603,38 @@ quantRoutes.post('/research/runs/:runId/question', validator('param', QuantResea
     ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
   })
   return c.json({ success: true as const, data: researchQuestionView(generated) })
+})
+
+quantRoutes.post('/research/runs/:runId/change-explanation', validator('param', QuantResearchRunIdParamSchema), validator('json', QuantResearchChangeExplanationSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { runId } = c.req.valid('param')
+  const { previous_run_id: previousRunId } = c.req.valid('json')
+  if (runId === previousRunId)
+    throw new QuantError('QUANT_INVALID_INPUT', 'Change explanation requires two different research runs', 400)
+  const [currentRun, previousRun] = await Promise.all([
+    getQuantResearchRun(c.get('db'), userId, runId),
+    getQuantResearchRun(c.get('db'), userId, previousRunId),
+  ])
+  if (!currentRun || !previousRun)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+  const currentReport = parseResearchReport(currentRun.reportJson)
+  const previousReport = parseResearchReport(previousRun.reportJson)
+  if (currentReport.tsCode !== currentRun.tsCode || currentReport.status !== currentRun.status || currentReport.reportVersion !== currentRun.reportVersion || !isComparableResearchReport(currentReport)
+    || previousReport.tsCode !== previousRun.tsCode || previousReport.status !== previousRun.status || previousReport.reportVersion !== previousRun.reportVersion || !isComparableResearchReport(previousReport)) {
+    throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted research run does not match its report', 500)
+  }
+  if (currentRun.tsCode !== previousRun.tsCode)
+    throw new QuantError('QUANT_INVALID_INPUT', 'Change explanation requires research runs for the same stock', 400)
+  const config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env.QUANT_AI_ENCRYPTION_KEY)
+  if (!config)
+    throw new QuantError('QUANT_AI_CHANGE_EXPLANATION_CONFIGURATION', 'AI change explanation configuration is not available', 503)
+  const explanation = await generateQuantAiChangeExplanation({
+    currentReport,
+    previousReport,
+    config,
+    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+  })
+  return c.json({ success: true as const, data: researchChangeExplanationView(explanation) })
 })
 
 quantRoutes.post('/research/comparison', validator('json', QuantResearchComparisonSchema), async (c) => {
