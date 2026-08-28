@@ -83,6 +83,7 @@ import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
+import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from './lib/candidate-briefing-export'
 import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
@@ -145,6 +146,9 @@ const researchChangeExplanationError = ref<unknown | null>(null)
 const candidateAiBriefing = ref<QuantAiCandidateBriefing | null>(null)
 const candidateAiBriefingLoading = ref(false)
 const candidateAiBriefingError = ref<unknown | null>(null)
+const candidateAiBriefingCopying = ref(false)
+const candidateAiBriefingCopyOutcome = ref<ResearchReportCopyOutcome>(null)
+const candidateAiBriefingCopyMessage = ref('')
 const researchReportCopying = ref(false)
 const researchReportCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const researchReportCopyMessage = ref('')
@@ -196,6 +200,7 @@ let researchSummaryRequestId = 0
 let researchQuestionRequestId = 0
 let researchChangeExplanationRequestId = 0
 let candidateAiBriefingRequestId = 0
+let candidateAiBriefingCopyRequestId = 0
 let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
 let comparisonResearchAiSummaryRequestId = 0
@@ -1259,6 +1264,21 @@ function candidatePriorityFor(item: CandidateItem): ResearchPriority {
   })
 }
 
+function resetCandidateAiBriefingCopyState(): void {
+  candidateAiBriefingCopyRequestId++
+  candidateAiBriefingCopying.value = false
+  candidateAiBriefingCopyOutcome.value = null
+  candidateAiBriefingCopyMessage.value = ''
+}
+
+function resetCandidateAiBriefingState(): void {
+  candidateAiBriefingRequestId++
+  candidateAiBriefing.value = null
+  candidateAiBriefingLoading.value = false
+  candidateAiBriefingError.value = null
+  resetCandidateAiBriefingCopyState()
+}
+
 function researchPriorityDetail(item: CandidateItem): string {
   const priority = candidatePriorityFor(item)
   return `${priority.reasons.join('；')} · 研究优先级 ${priority.score} 分`
@@ -1415,10 +1435,7 @@ async function loadWatchlist() {
   valueQualityRequestId++
   try {
     watchlist.value = await quantApi.getWatchlist()
-    candidateAiBriefingRequestId++
-    candidateAiBriefing.value = null
-    candidateAiBriefingLoading.value = false
-    candidateAiBriefingError.value = null
+    resetCandidateAiBriefingState()
     if (!selectedTsCode.value || !watchlist.value.some(item => item.tsCode === selectedTsCode.value))
       selectedTsCode.value = watchlist.value[0]?.tsCode || null
     detailDrawerOpen.value = false
@@ -1459,10 +1476,7 @@ async function loadWatchlist() {
 }
 
 async function loadCandidates() {
-  candidateAiBriefingRequestId++
-  candidateAiBriefing.value = null
-  candidateAiBriefingLoading.value = false
-  candidateAiBriefingError.value = null
+  resetCandidateAiBriefingState()
   loading.candidates = true
   errors.candidates = null
   try {
@@ -1482,6 +1496,7 @@ async function generateCandidateAiBriefing(): Promise<void> {
   if (!snapshot.value?.generatedAt || !candidateItems.value.length || candidateAiBriefingLoading.value)
     return
   const requestId = ++candidateAiBriefingRequestId
+  resetCandidateAiBriefingCopyState()
   candidateAiBriefingLoading.value = true
   candidateAiBriefingError.value = null
   try {
@@ -1496,6 +1511,51 @@ async function generateCandidateAiBriefing(): Promise<void> {
   finally {
     if (requestId === candidateAiBriefingRequestId)
       candidateAiBriefingLoading.value = false
+  }
+}
+
+function downloadCandidateAiBriefing(): void {
+  const briefing = candidateAiBriefing.value
+  if (!briefing)
+    return
+
+  const blob = new Blob([buildCandidateAiBriefingMarkdown(briefing, candidateItems.value.length)], { type: 'text/markdown;charset=utf-8' })
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = buildCandidateAiBriefingFilename(briefing)
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+}
+
+async function copyCandidateAiBriefing(): Promise<void> {
+  const briefing = candidateAiBriefing.value
+  if (!briefing || candidateAiBriefingCopying.value)
+    return
+
+  const requestId = ++candidateAiBriefingCopyRequestId
+  candidateAiBriefingCopying.value = true
+  candidateAiBriefingCopyOutcome.value = null
+  candidateAiBriefingCopyMessage.value = ''
+  const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined
+  const result = await copyResearchReportMarkdown(buildCandidateAiBriefingMarkdown(briefing, candidateItems.value.length), clipboard)
+  if (requestId !== candidateAiBriefingCopyRequestId)
+    return
+
+  candidateAiBriefingCopying.value = false
+  if (result === 'copied') {
+    candidateAiBriefingCopyOutcome.value = 'success'
+    candidateAiBriefingCopyMessage.value = 'Markdown 已复制到剪贴板'
+  }
+  else if (result === 'unavailable') {
+    candidateAiBriefingCopyOutcome.value = 'error'
+    candidateAiBriefingCopyMessage.value = '当前浏览器不支持剪贴板写入'
+  }
+  else {
+    candidateAiBriefingCopyOutcome.value = 'error'
+    candidateAiBriefingCopyMessage.value = '复制失败，请检查剪贴板权限后重试'
   }
 }
 
@@ -2600,10 +2660,7 @@ async function syncDaily() {
     syncResult.value = await quantApi.syncDaily()
     syncState.value = syncResult.value
     syncStateError.value = null
-    candidateAiBriefingRequestId++
-    candidateAiBriefing.value = null
-    candidateAiBriefingLoading.value = false
-    candidateAiBriefingError.value = null
+    resetCandidateAiBriefingState()
     await Promise.all([loadWatchlist(), loadCandidates()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
   }
@@ -3303,9 +3360,14 @@ onUnmounted(() => {
             :loading="candidateAiBriefingLoading"
             :error-message="candidateAiBriefingError ? parsedError(candidateAiBriefingError).message : null"
             :configuration-error="candidateAiBriefingConfigurationError"
+            :copying="candidateAiBriefingCopying"
+            :copy-outcome="candidateAiBriefingCopyOutcome"
+            :copy-message="candidateAiBriefingCopyMessage"
             @generate="generateCandidateAiBriefing"
             @open-settings="aiSettingsOpen = true"
             @focus-candidate="focusCandidateFromBriefing"
+            @copy="copyCandidateAiBriefing"
+            @export="downloadCandidateAiBriefing"
           />
           <div class="quant-table-frame candidate-table-frame">
             <DataTable

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { QuantAiCandidateBriefing } from '../lib/quant-types'
-import { AlertCircle, BrainCircuit, CircleHelp, RefreshCw } from 'lucide-vue-next'
+import { AlertCircle, BrainCircuit, CircleHelp, Copy, Download, RefreshCw } from 'lucide-vue-next'
 import { computed } from 'vue'
+
+type CopyOutcome = 'success' | 'error' | null
 
 const props = withDefaults(defineProps<{
   briefing: QuantAiCandidateBriefing | null
@@ -10,18 +12,27 @@ const props = withDefaults(defineProps<{
   loading: boolean
   errorMessage: string | null
   configurationError: boolean
+  copying?: boolean
+  copyOutcome?: CopyOutcome
+  copyMessage?: string
 }>(), {
   available: true,
+  copying: false,
+  copyOutcome: null,
+  copyMessage: '',
 })
 
 const emit = defineEmits<{
   generate: []
   openSettings: []
   focusCandidate: [tsCode: string]
+  copy: []
+  export: []
 }>()
 
 const hasCandidates = computed(() => props.candidateCount > 0)
 const canGenerate = computed(() => props.available !== false && hasCandidates.value)
+const showBriefingActions = computed(() => Boolean(props.briefing && !props.loading && !props.errorMessage))
 const visibleFocusItems = computed(() => props.briefing?.focusItems.slice(0, 5) || [])
 const visibleNextChecks = computed(() => props.briefing?.nextChecks.slice(0, 6) || [])
 
@@ -81,17 +92,42 @@ function focusCandidate(tsCode: string): void {
         </h3>
         <small>只解释当前候选的确定性研究事实，不改变排序、评分或研究动作</small>
       </div>
-      <button
-        class="secondary-button quant-ai-briefing-generate"
-        type="button"
-        :disabled="loading || !canGenerate"
-        title="基于当前候选研究事实生成 AI 简报"
-        @click="emit('generate')"
-      >
-        <RefreshCw v-if="loading" :size="14" class="animate-spin" aria-hidden="true" />
-        <BrainCircuit v-else :size="14" aria-hidden="true" />
-        {{ generateButtonLabel }}
-      </button>
+      <div class="quant-ai-briefing-actions">
+        <button
+          class="secondary-button quant-ai-briefing-generate"
+          type="button"
+          :disabled="loading || !canGenerate"
+          title="基于当前候选研究事实生成 AI 简报"
+          @click="emit('generate')"
+        >
+          <RefreshCw v-if="loading" :size="14" class="animate-spin" aria-hidden="true" />
+          <BrainCircuit v-else :size="14" aria-hidden="true" />
+          {{ generateButtonLabel }}
+        </button>
+        <template v-if="showBriefingActions">
+          <button
+            class="secondary-button quant-ai-briefing-export"
+            type="button"
+            title="将当前候选简报下载为 Markdown 文件"
+            aria-label="导出候选 AI 简报为 Markdown 文件"
+            @click="emit('export')"
+          >
+            <Download :size="14" aria-hidden="true" />
+            导出 Markdown
+          </button>
+          <button
+            class="secondary-button quant-ai-briefing-copy"
+            type="button"
+            :disabled="copying"
+            title="将当前候选简报复制到剪贴板"
+            aria-label="复制候选 AI 简报 Markdown"
+            @click="emit('copy')"
+          >
+            <Copy :size="14" aria-hidden="true" />
+            {{ copying ? '复制中' : '复制 Markdown' }}
+          </button>
+        </template>
+      </div>
     </div>
 
     <div class="quant-ai-briefing-scope quant-ai-briefing-wrap-anywhere" aria-label="候选简报范围">
@@ -99,6 +135,10 @@ function focusCandidate(tsCode: string): void {
       <span v-if="briefing">版本 {{ briefing.briefingVersion }}</span>
       <span v-if="briefing">{{ briefing.provider }} · {{ briefing.model }} · {{ formatDate(briefing.generatedAt) }}</span>
     </div>
+
+    <p v-if="copyMessage && showBriefingActions" class="quant-ai-briefing-copy-message" :class="{ 'quant-ai-briefing-copy-message-error': copyOutcome === 'error' }" role="status">
+      {{ copyMessage }}
+    </p>
 
     <div v-if="loading" class="quant-ai-briefing-state" role="status">
       <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
@@ -234,6 +274,14 @@ function focusCandidate(tsCode: string): void {
   gap: 0.75rem;
 }
 
+.quant-ai-briefing-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
 .quant-ai-briefing-heading-copy,
 .quant-ai-briefing-section,
 .quant-ai-briefing-overview-block {
@@ -259,6 +307,17 @@ function focusCandidate(tsCode: string): void {
 
 .quant-ai-briefing-generate {
   flex: 0 0 auto;
+}
+
+.quant-ai-briefing-copy-message {
+  margin: -0.15rem 0 0;
+  color: hsl(var(--status-success));
+  font-size: 0.625rem;
+  line-height: 1.4;
+}
+
+.quant-ai-briefing-copy-message-error {
+  color: hsl(var(--status-danger));
 }
 
 .quant-ai-briefing-scope {
@@ -500,6 +559,15 @@ button:focus-visible {
 @media (max-width: 680px) {
   .quant-ai-briefing-heading {
     flex-direction: column;
+  }
+
+  .quant-ai-briefing-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .quant-ai-briefing-actions button {
+    flex: 1 1 100%;
   }
 
   .quant-ai-briefing-generate {
