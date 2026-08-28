@@ -47,7 +47,7 @@ function baseUrl(config: QuantDecryptedAiConfig): string {
   return value.replace(/\/+$/u, '')
 }
 
-function chatCompletionsUrl(config: QuantDecryptedAiConfig): string {
+export function chatCompletionsUrl(config: QuantDecryptedAiConfig): string {
   const value = baseUrl(config)
   return value.endsWith('/chat/completions') ? value : `${value}/chat/completions`
 }

@@ -8,6 +8,7 @@ import type {
   CapabilityKey,
   DailyBar,
   QuantAiConfig,
+  QuantAiConnectionTest,
   QuantAiProvider,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
@@ -247,6 +248,18 @@ function parseAiConfig(payload: unknown): QuantAiConfig | null {
     createdAt: readString(data, 'createdAt', 'created_at'),
     updatedAt: readString(data, 'updatedAt', 'updated_at'),
   }
+}
+
+function parseAiConnectionTest(payload: unknown): QuantAiConnectionTest {
+  const data = unwrapData(payload)
+  const record = isRecord(data) ? data : {}
+  const provider = readString(record, 'provider')
+  const model = readString(record, 'model')
+  const testedAt = readString(record, 'testedAt', 'tested_at')
+  const latencyMs = readNumber(record, 'latencyMs', 'latency_ms')
+  if ((provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama') || !model || !testedAt || latencyMs === null || latencyMs < 0)
+    throw new QuantApiError('AI 连接测试数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  return { provider, model, testedAt, latencyMs }
 }
 
 function parseKnowledgeSource(value: unknown): QuantKnowledgeSource | null {
@@ -1109,6 +1122,10 @@ export const quantApi = {
     if (!config)
       throw new QuantApiError('AI 配置数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
     return config
+  },
+
+  async testAiConfig(): Promise<QuantAiConnectionTest> {
+    return parseAiConnectionTest(await requestJson('/ai-config/test', { method: 'POST' }))
   },
 
   async deleteAiConfig(): Promise<boolean> {

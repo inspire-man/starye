@@ -451,6 +451,38 @@ describe('quant watchlist CRUD contract', () => {
     })
   })
 
+  it('tests the saved AI configuration without persisting a research summary', async () => {
+    const { client, db } = await createDatabase()
+    const app = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'test-encryption-secret' } as AppEnv['Bindings']
+    const save = await app.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        base_url: 'https://ai.example.test/v1',
+        api_key: 'sk-user-one-1234',
+      }),
+    }, env)
+    expect(save.status).toBe(200)
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }))
+    const test = await app.request('/api/quant/ai-config/test', { method: 'POST' }, env)
+    expect(test.status).toBe(200)
+    const payload = await test.json() as { data: Record<string, unknown> }
+    expect(payload.data).toMatchObject({ provider: 'openai_compatible', model: 'gpt-5.4', latencyMs: expect.any(Number) })
+    expect(JSON.stringify(payload)).not.toContain('sk-user-one-1234')
+    expect(fetchMock).toHaveBeenCalledWith('https://ai.example.test/v1/chat/completions', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ authorization: 'Bearer sk-user-one-1234' }),
+    }))
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 0 }] })
+  })
+
   it('generates a structured research run, reads its history, and isolates it by user', async () => {
     const { client, db } = await createDatabase()
     await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })

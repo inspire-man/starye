@@ -569,6 +569,28 @@ describe('quantApi', () => {
     }))
   })
 
+  it('normalizes AI connection test metadata without sending a client-side key', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      tested_at: '2026-08-28T12:00:00.000Z',
+      latency_ms: 42,
+    } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.testAiConfig()).resolves.toEqual({
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      testedAt: '2026-08-28T12:00:00.000Z',
+      latencyMs: 42,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/ai-config/test`, expect.objectContaining({
+      method: 'POST',
+      credentials: 'include',
+    }))
+    expect(JSON.stringify(fetchMock.mock.calls[0])).not.toContain('api_key')
+  })
+
   it('normalizes structured research runs and requests history by stock code', async () => {
     const run = {
       id: 'run-1',

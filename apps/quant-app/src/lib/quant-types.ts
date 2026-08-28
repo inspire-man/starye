@@ -15,6 +15,13 @@ export interface QuantAiConfig {
   updatedAt: string | null
 }
 
+export interface QuantAiConnectionTest {
+  provider: QuantAiProvider
+  model: string
+  testedAt: string
+  latencyMs: number
+}
+
 export type QuantResearchRunStatus = 'ready' | 'partial' | 'insufficient_data'
 export type QuantResearchEvidenceStatus = 'pass' | 'caution' | 'fail' | 'missing'
 export type QuantResearchAction = 'research-window' | 'wait-confirmation' | 'reassess' | 'complete-data'
