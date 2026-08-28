@@ -55,6 +55,91 @@ describe('runnerClient', () => {
     expect(body).not.toHaveProperty('provider_run_id')
   })
 
+  it('retries a transient control 5xx with the same signed event identity', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'temporary' }), { status: 500 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ accepted: true }), { status: 200 }))
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      applicationAttempt: 1,
+      applicationRunId: 'run-1',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+      transientRetryDelayMs: 0,
+    })
+    const candidate: Parameters<RunnerClient['progress']>[0] = {
+      attempt: 1,
+      runId: 'run-1',
+      sequence: 2,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        permissionResource: 'movie',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+    }
+
+    await expect(client.progress(candidate, 3, { observed: 394 })).resolves.toMatchObject({ accepted: true })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    const firstInit = fetch.mock.calls[0]![1] as RequestInit
+    const secondInit = fetch.mock.calls[1]![1] as RequestInit
+    expect(secondInit.body).toBe(firstInit.body)
+    expect(new Headers(secondInit.headers).get('x-runner-key-id')).toBe(new Headers(firstInit.headers).get('x-runner-key-id'))
+    expect(new Headers(secondInit.headers).get('x-runner-signature')).toBe(new Headers(firstInit.headers).get('x-runner-signature'))
+    expect(JSON.parse(String(secondInit.body))).toEqual(JSON.parse(String(firstInit.body)))
+  })
+
+  it('stops transient control retries at the bounded limit', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ error: 'still unavailable' }), { status: 503 }))
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+      transientRetryDelayMs: 0,
+    })
+    const candidate: Parameters<RunnerClient['heartbeat']>[0] = {
+      attempt: 1,
+      runId: 'run-1',
+      sequence: 1,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        permissionResource: 'movie',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+    }
+
+    await expect(client.heartbeat(candidate, 2)).rejects.toThrow('Runner control request failed: 503')
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not retry a client error response', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ error: 'bad request' }), { status: 400 }))
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+      transientRetryDelayMs: 0,
+    })
+    const candidate: Parameters<RunnerClient['heartbeat']>[0] = {
+      attempt: 1,
+      runId: 'run-1',
+      sequence: 1,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        permissionResource: 'movie',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+    }
+
+    await expect(client.heartbeat(candidate, 2)).rejects.toThrow('Runner control request failed: 400')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('bounds oversized success receipts to the API content-id limit', async () => {
     const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ accepted: true }), { status: 200 }))
     const client = new RunnerClient({

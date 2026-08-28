@@ -19,6 +19,8 @@ interface NativeD1Client {
   prepare: (query: string) => NativeD1Statement
 }
 
+const CHAPTER_PAGE_BATCH_SIZE = 10
+
 function nativeD1Client(db: unknown): NativeD1Client | undefined {
   const client = (db as { $client?: unknown }).$client as NativeD1Client | undefined
   return client && typeof client.prepare === 'function' && typeof client.batch === 'function'
@@ -36,8 +38,8 @@ async function replaceChapterPagesAtomically(
     return false
   const observedAt = Math.floor(Date.now() / 1000)
   const insertStatements: NativeD1Statement[] = []
-  for (let offset = 0; offset < pageValues.length; offset += 80) {
-    const chunk = pageValues.slice(offset, offset + 80)
+  for (let offset = 0; offset < pageValues.length; offset += CHAPTER_PAGE_BATCH_SIZE) {
+    const chunk = pageValues.slice(offset, offset + CHAPTER_PAGE_BATCH_SIZE)
     const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')
     const values = chunk.flatMap(page => [page.id, page.chapterId, page.pageNumber, page.imageUrl, page.width, page.height])
     insertStatements.push(client.prepare(`
@@ -338,10 +340,9 @@ export async function syncChapterData(c: Context<AppEnv>, payload: any) {
     try {
       const atomicallyReplaced = await replaceChapterPagesAtomically(db, chapterId, pageValues)
       if (!atomicallyReplaced) {
-        const chunkSize = 10
         await db.delete(pages).where(eq(pages.chapterId, chapterId))
-        for (let i = 0; i < pageValues.length; i += chunkSize) {
-          const chunk = pageValues.slice(i, i + chunkSize)
+        for (let i = 0; i < pageValues.length; i += CHAPTER_PAGE_BATCH_SIZE) {
+          const chunk = pageValues.slice(i, i + CHAPTER_PAGE_BATCH_SIZE)
           await db.insert(pages).values(chunk)
         }
         await db.update(chapters)
@@ -353,11 +354,10 @@ export async function syncChapterData(c: Context<AppEnv>, payload: any) {
       if (nativeD1Client(db))
         throw replacementError
       // Best-effort rollback to preserve prior readable state when replacement fails mid-flight.
-      const chunkSize = 10
       if (existingPagesSnapshot.length > 0) {
         await db.delete(pages).where(eq(pages.chapterId, chapterId))
-        for (let i = 0; i < existingPagesSnapshot.length; i += chunkSize) {
-          const originalChunk = existingPagesSnapshot.slice(i, i + chunkSize)
+        for (let i = 0; i < existingPagesSnapshot.length; i += CHAPTER_PAGE_BATCH_SIZE) {
+          const originalChunk = existingPagesSnapshot.slice(i, i + CHAPTER_PAGE_BATCH_SIZE)
           await db.insert(pages).values(originalChunk)
         }
       }

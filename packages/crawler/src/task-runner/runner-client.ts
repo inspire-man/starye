@@ -222,6 +222,7 @@ export interface RunnerClientConfig {
   readonly now?: () => number
   readonly providerRunAttempt?: number
   readonly providerRunId?: string
+  readonly transientRetryDelayMs?: number
   readonly timeoutMs?: number
 }
 
@@ -246,6 +247,8 @@ interface PostOptions {
 }
 
 const MAX_RECEIPT_CONTENT_IDS = 100
+const MAX_TRANSIENT_POST_RETRIES = 2
+const DEFAULT_TRANSIENT_RETRY_DELAY_MS = 250
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -677,11 +680,13 @@ function parseRunnerCandidate(value: unknown): RunnerCandidate {
 export class RunnerClient {
   private readonly fetch: typeof fetch
   private readonly now: () => number
+  private readonly transientRetryDelayMs: number
   private readonly timeoutMs: number
 
   constructor(private readonly config: RunnerClientConfig) {
     this.fetch = config.fetch ?? globalThis.fetch
     this.now = config.now ?? (() => Date.now())
+    this.transientRetryDelayMs = Math.max(0, config.transientRetryDelayMs ?? DEFAULT_TRANSIENT_RETRY_DELAY_MS)
     this.timeoutMs = config.timeoutMs ?? 10_000
   }
 
@@ -957,16 +962,28 @@ export class RunnerClient {
 
   private async post(path: string, payload: Record<string, unknown>, options: PostOptions = {}): Promise<unknown> {
     const body = JSON.stringify(payload)
-    const response = await this.fetch(`${this.config.apiBaseUrl.replace(/\/$/u, '')}${path}`, {
-      body,
-      headers: {
-        'content-type': 'application/json',
-        'x-runner-key-id': this.config.callbackKeyId,
-        'x-runner-signature': signRunnerBody(body, this.config.callbackSecret),
-      },
-      method: 'POST',
-      signal: AbortSignal.timeout(this.timeoutMs),
-    })
+    const url = `${this.config.apiBaseUrl.replace(/\/$/u, '')}${path}`
+    const headers = {
+      'content-type': 'application/json',
+      'x-runner-key-id': this.config.callbackKeyId,
+      'x-runner-signature': signRunnerBody(body, this.config.callbackSecret),
+    }
+    let response: Response | undefined
+    for (let retry = 0; retry <= MAX_TRANSIENT_POST_RETRIES; retry++) {
+      response = await this.fetch(url, {
+        body,
+        headers,
+        method: 'POST',
+        signal: AbortSignal.timeout(this.timeoutMs),
+      })
+      if (response.status < 500 || response.status >= 600 || retry === MAX_TRANSIENT_POST_RETRIES)
+        break
+      const delayMs = this.transientRetryDelayMs * (retry + 1)
+      if (delayMs > 0)
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+    if (!response)
+      throw new Error('Runner control request did not return a response')
     if (!response.ok && !options.allowNonOk) {
       throw new Error(`Runner control request failed: ${response.status}`)
     }
