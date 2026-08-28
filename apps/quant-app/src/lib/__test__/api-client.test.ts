@@ -682,4 +682,46 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary?limit=1`)
   })
+
+  it('normalizes an evidence-grounded AI research comparison and rejects malformed items', async () => {
+    const comparison = {
+      comparison_version: 'research-comparison-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-08-29T00:00:00.000Z',
+      overview: '两份报告都有可核对证据。',
+      common_ground: ['都有已保存的财务证据'],
+      differences: [{ ts_code: '601899.SH', point: 'ROE 证据可用', evidence_keys: ['quality-roe'] }],
+      risks: ['报告期需要人工核对'],
+      next_checks: ['复核来源日期'],
+      cited_evidence: [{ ts_code: '601899.SH', evidence_key: 'quality-roe' }],
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: comparison }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        ...comparison,
+        differences: [null],
+      } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.generateResearchComparison(['run-a', 'run-b'])).resolves.toEqual({
+      comparisonVersion: 'research-comparison-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generatedAt: '2026-08-29T00:00:00.000Z',
+      overview: '两份报告都有可核对证据。',
+      commonGround: ['都有已保存的财务证据'],
+      differences: [{ tsCode: '601899.SH', point: 'ROE 证据可用', evidenceKeys: ['quality-roe'] }],
+      risks: ['报告期需要人工核对'],
+      nextChecks: ['复核来源日期'],
+      citedEvidence: [{ tsCode: '601899.SH', evidenceKey: 'quality-roe' }],
+    })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/comparison`)
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ run_ids: ['run-a', 'run-b'] })
+
+    await expect(quantApi.generateResearchComparison(['run-a', 'run-b'])).rejects.toMatchObject({
+      code: 'QUANT_AI_COMPARISON_INVALID_RESPONSE',
+      status: 502,
+    })
+  })
 })

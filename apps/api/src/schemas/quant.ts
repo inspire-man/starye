@@ -254,6 +254,42 @@ export const QuantResearchRunIdParamSchema = v.object({
   runId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64), v.regex(/^[\w-]+$/u)),
 })
 
+export const QuantResearchComparisonSchema = v.strictObject({
+  run_ids: v.pipe(
+    v.array(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64), v.regex(/^[\w-]+$/u))),
+    v.minLength(2),
+    v.maxLength(3),
+    v.check(runIds => new Set(runIds).size === runIds.length, 'Research run ids must be unique'),
+  ),
+})
+
+export const QuantResearchComparisonDifferenceSchema = v.strictObject({
+  tsCode: QuantTsCodeSchema,
+  point: v.pipe(v.string(), v.minLength(1), v.maxLength(480)),
+  evidenceKeys: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(80))), v.minLength(1), v.maxLength(16)),
+})
+
+export const QuantResearchComparisonCitationSchema = v.strictObject({
+  tsCode: QuantTsCodeSchema,
+  evidenceKey: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+})
+
+export const QuantResearchComparisonResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.strictObject({
+    comparisonVersion: v.literal('research-comparison-v1'),
+    provider: QuantAiProviderSchema,
+    model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    generatedAt: v.string(),
+    overview: v.pipe(v.string(), v.minLength(1), v.maxLength(1200)),
+    commonGround: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(360))), v.maxLength(6)),
+    differences: v.pipe(v.array(QuantResearchComparisonDifferenceSchema), v.maxLength(6)),
+    risks: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(360))), v.maxLength(6)),
+    nextChecks: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(360))), v.maxLength(6)),
+    citedEvidence: v.pipe(v.array(QuantResearchComparisonCitationSchema), v.maxLength(24)),
+  }),
+})
+
 export const QuantResearchSummaryQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })
@@ -267,4 +303,6 @@ export type QuantAiConfigUpdate = v.InferOutput<typeof QuantAiConfigUpdateSchema
 export type QuantResearchRunCreate = v.InferOutput<typeof QuantResearchRunCreateSchema>
 export type QuantResearchRunsQuery = v.InferOutput<typeof QuantResearchRunsQuerySchema>
 export type QuantResearchRunIdParam = v.InferOutput<typeof QuantResearchRunIdParamSchema>
+export type QuantResearchComparison = v.InferOutput<typeof QuantResearchComparisonSchema>
+export type QuantResearchComparisonResponse = v.InferOutput<typeof QuantResearchComparisonResponseSchema>
 export type QuantResearchSummaryQuery = v.InferOutput<typeof QuantResearchSummaryQuerySchema>

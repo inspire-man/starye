@@ -654,6 +654,328 @@ describe('quant watchlist CRUD contract', () => {
     await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 1 }] })
   })
 
+  it('generates an in-memory AI comparison from current-user runs without writing research data', async () => {
+    const { client, db } = await createDatabase()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const reportFor = (tsCode: string, evidenceKey: string, status = 'ready') => JSON.stringify({
+      reportVersion: 'research-report-v2',
+      tsCode,
+      name: tsCode === '601899.SH' ? '紫金矿业' : '平安银行',
+      generatedAt: '2026-08-28T00:00:00.000Z',
+      sourceSnapshotId: null,
+      status,
+      action: status === 'ready' ? 'research-window' : 'wait-confirmation',
+      score: status === 'ready' ? 82 : 62,
+      headline: status === 'ready' ? '证据链完整' : '部分证据需要确认',
+      strengths: [],
+      risks: [],
+      gaps: [],
+      nextActions: [],
+      evidence: [{
+        key: evidenceKey,
+        dimension: 'quality',
+        label: 'ROE',
+        status: 'pass',
+        value: 18,
+        threshold: '至少 10%',
+        source: 'Quant fixture',
+        observedAt: '2026-08-28',
+        formulaVersion: 'fixture-v1',
+        detail: '来自已保存报告的事实。',
+      }],
+      sources: [],
+    })
+    for (const [id, tsCode, evidenceKey, userId, status] of [
+      ['comparison-run-a', '601899.SH', 'comparison-roe-a', 'user-1', 'ready'],
+      ['comparison-run-b', '000001.SZ', 'comparison-roe-b', 'user-1', 'ready'],
+      ['foreign-comparison-run', '600000.SH', 'comparison-roe-foreign', 'user-2', 'ready'],
+      ['foreign-comparison-run-2', '600519.SH', 'comparison-roe-foreign-2', 'user-2', 'ready'],
+    ] as const) {
+      await client.execute({
+        sql: `INSERT INTO quant_research_run (
+          id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+          report_json, generated_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [id, userId, tsCode, tsCode, status, 'research-report-v2', null, reportFor(tsCode, evidenceKey, status), 10, 10],
+      })
+    }
+
+    const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const userB = createApp(db, { user: { id: 'user-2', role: 'user' } })
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'comparison-test-secret' } as AppEnv['Bindings']
+    await userA.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        base_url: 'https://ai.example.test/v1',
+        api_key: 'sk-comparison-route-secret',
+      }),
+    }, env)
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+      overview: '两份报告都有可核对证据。',
+      commonGround: ['都有一项财务证据'],
+      differences: [{ tsCode: '601899.SH', point: 'ROE 证据可用', evidenceKeys: ['comparison-roe-a'] }],
+      risks: ['报告期仍需人工核对'],
+      nextChecks: ['复核来源日期'],
+      citedEvidence: [
+        { tsCode: '601899.SH', evidenceKey: 'comparison-roe-a' },
+        { tsCode: '000001.SZ', evidenceKey: 'comparison-roe-b' },
+      ],
+    }) } }] }), { status: 200 }))
+
+    const beforeRuns = await client.execute('SELECT id, report_json FROM quant_research_run ORDER BY id')
+    const beforeSummaries = await client.execute('SELECT count(*) AS count FROM quant_research_summary')
+    const extraFields = await userA.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['comparison-run-a', 'comparison-run-b'], report: 'client forged report', api_key: 'client forged key' }),
+    }, env)
+    expect(extraFields.status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    const response = await userA.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['comparison-run-a', 'comparison-run-b'] }),
+    }, env)
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        comparisonVersion: 'research-comparison-v1',
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        differences: [{ tsCode: '601899.SH', evidenceKeys: ['comparison-roe-a'] }],
+        citedEvidence: expect.arrayContaining([
+          { tsCode: '601899.SH', evidenceKey: 'comparison-roe-a' },
+          { tsCode: '000001.SZ', evidenceKey: 'comparison-roe-b' },
+        ]),
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { messages: Array<{ content: string }> }
+    expect(requestBody.messages[1]?.content).toContain('comparison-roe-a')
+    expect(requestBody.messages[1]?.content).not.toContain('client forged report')
+    expect(requestBody.messages[1]?.content).not.toContain('sk-comparison-route-secret')
+    await expect(client.execute('SELECT id, report_json FROM quant_research_run ORDER BY id')).resolves.toEqual(beforeRuns)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toEqual(beforeSummaries)
+
+    const foreign = await userA.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['comparison-run-a', 'foreign-comparison-run'] }),
+    }, env)
+    expect(foreign.status).toBe(404)
+    await expect(foreign.json()).resolves.toMatchObject({ success: false, code: 'QUANT_NOT_FOUND' })
+    expect(fetchMock).toHaveBeenCalledOnce()
+
+    const missing = await userA.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['comparison-run-a', 'missing-comparison-run'] }),
+    }, env)
+    expect(missing.status).toBe(404)
+    await expect(missing.json()).resolves.toMatchObject({ success: false, code: 'QUANT_NOT_FOUND' })
+    expect(fetchMock).toHaveBeenCalledOnce()
+
+    const invalid = await userA.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['comparison-run-a', 'comparison-run-a'] }),
+    }, env)
+    expect(invalid.status).toBe(400)
+    expect(fetchMock).toHaveBeenCalledOnce()
+
+    for (const runIds of [
+      ['comparison-run-a'],
+      ['comparison-run-a', 'comparison-run-b', 'comparison-run-a', 'comparison-run-b'],
+    ]) {
+      const countInvalid = await userA.request('/api/quant/research/comparison', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ run_ids: runIds }),
+      }, env)
+      expect(countInvalid.status).toBe(400)
+    }
+    expect(fetchMock).toHaveBeenCalledOnce()
+
+    const missingConfig = await userB.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['foreign-comparison-run', 'foreign-comparison-run-2'] }),
+    }, env)
+    expect(missingConfig.status).toBe(503)
+    await expect(missingConfig.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_COMPARISON_CONFIGURATION' })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('rejects invalid AI comparison output without persisting a comparison or changing reports', async () => {
+    const { client, db } = await createDatabase()
+    const reportFor = (tsCode: string, evidenceKey: string) => JSON.stringify({
+      reportVersion: 'research-report-v2',
+      tsCode,
+      name: null,
+      generatedAt: '2026-08-28T00:00:00.000Z',
+      sourceSnapshotId: null,
+      status: 'ready',
+      action: 'research-window',
+      score: 80,
+      headline: '证据链完整',
+      strengths: [],
+      risks: [],
+      gaps: [],
+      nextActions: [],
+      evidence: [{
+        key: evidenceKey,
+        dimension: 'quality',
+        label: 'ROE',
+        status: 'pass',
+        value: 18,
+        threshold: '至少 10%',
+        source: 'Quant fixture',
+        observedAt: '2026-08-28',
+        formulaVersion: 'fixture-v1',
+        detail: '来自已保存报告的事实。',
+      }],
+      sources: [],
+    })
+    for (const [id, tsCode, evidenceKey] of [
+      ['invalid-comparison-run-a', '601899.SH', 'comparison-roe-a'],
+      ['invalid-comparison-run-b', '000001.SZ', 'comparison-roe-b'],
+    ] as const) {
+      await client.execute({
+        sql: `INSERT INTO quant_research_run (
+          id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+          report_json, generated_at, created_at
+        ) VALUES (?, 'user-1', ?, NULL, 'ready', 'research-report-v2', NULL, ?, 10, 10)`,
+        args: [id, tsCode, reportFor(tsCode, evidenceKey)],
+      })
+    }
+    const app = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'comparison-invalid-secret' } as AppEnv['Bindings']
+    await app.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        base_url: 'https://ai.example.test/v1',
+        api_key: 'sk-invalid-comparison',
+      }),
+    }, env)
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+      overview: '包含交易结论',
+      commonGround: [],
+      differences: [],
+      risks: [],
+      nextChecks: [],
+      citedEvidence: [{ tsCode: '601899.SH', evidenceKey: 'unknown-key' }],
+    }) } }] }), { status: 200 }))
+    const beforeRuns = await client.execute('SELECT id, report_json FROM quant_research_run ORDER BY id')
+    const response = await app.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['invalid-comparison-run-a', 'invalid-comparison-run-b'] }),
+    }, env)
+    expect(response.status).toBe(502)
+    await expect(response.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_COMPARISON_INVALID_RESPONSE' })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    await expect(client.execute('SELECT id, report_json FROM quant_research_run ORDER BY id')).resolves.toEqual(beforeRuns)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 0 }] })
+  })
+
+  it('passes three current-user reports to the comparison model and classifies upstream errors', async () => {
+    const { client, db } = await createDatabase()
+    const reportFor = (tsCode: string, evidenceKey: string) => JSON.stringify({
+      reportVersion: 'research-report-v2',
+      tsCode,
+      name: null,
+      generatedAt: '2026-08-28T00:00:00.000Z',
+      sourceSnapshotId: null,
+      status: 'ready',
+      action: 'research-window',
+      score: 80,
+      headline: '证据链完整',
+      strengths: [],
+      risks: [],
+      gaps: [],
+      nextActions: [],
+      evidence: [{
+        key: evidenceKey,
+        dimension: 'quality',
+        label: 'ROE',
+        status: 'pass',
+        value: 18,
+        threshold: '至少 10%',
+        source: 'fixture',
+        observedAt: '2026-08-28',
+        formulaVersion: 'fixture-v1',
+        detail: '事实',
+      }],
+      sources: [],
+    })
+    for (const [id, tsCode, evidenceKey] of [
+      ['three-run-a', '601899.SH', 'three-roe-a'],
+      ['three-run-b', '000001.SZ', 'three-roe-b'],
+      ['three-run-c', '600000.SH', 'three-roe-c'],
+    ] as const) {
+      await client.execute({
+        sql: `INSERT INTO quant_research_run (
+          id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+          report_json, generated_at, created_at
+        ) VALUES (?, 'user-1', ?, NULL, 'ready', 'research-report-v2', NULL, ?, 10, 10)`,
+        args: [id, tsCode, reportFor(tsCode, evidenceKey)],
+      })
+    }
+    const app = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'three-comparison-secret' } as AppEnv['Bindings']
+    await app.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        base_url: 'https://ai.example.test/v1',
+        api_key: 'sk-three-comparison',
+      }),
+    }, env)
+    const valid = JSON.stringify({
+      overview: '三份报告均有证据。',
+      commonGround: [],
+      differences: [{
+        tsCode: '600000.SH',
+        point: '第三份报告',
+        evidenceKeys: ['three-roe-c'],
+      }],
+      risks: [],
+      nextChecks: [],
+      citedEvidence: [{ tsCode: '600000.SH', evidenceKey: 'three-roe-c' }],
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({
+      choices: [{ message: { content: valid } }],
+    }), { status: 200 }))
+    const response = await app.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['three-run-a', 'three-run-b', 'three-run-c'] }),
+    }, env)
+    expect(response.status).toBe(200)
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { messages: Array<{ content: string }> }
+    expect(requestBody.messages[1]?.content).toContain('three-roe-c')
+
+    fetchMock.mockResolvedValueOnce(new Response('upstream failed', { status: 500 }))
+    const failed = await app.request('/api/quant/research/comparison', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ run_ids: ['three-run-a', 'three-run-b'] }),
+    }, env)
+    expect(failed.status).toBe(502)
+    await expect(failed.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_COMPARISON_UPSTREAM' })
+  })
+
   it('completes a fixture-backed sync and reads the persisted snapshot back', async () => {
     const { client, db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })

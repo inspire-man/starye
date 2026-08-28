@@ -97,6 +97,30 @@ export interface QuantResearchSummary {
   citedEvidenceKeys: string[]
 }
 
+export interface QuantResearchComparisonDifference {
+  tsCode: string
+  point: string
+  evidenceKeys: string[]
+}
+
+export interface QuantResearchComparisonCitation {
+  tsCode: string
+  evidenceKey: string
+}
+
+export interface QuantResearchComparison {
+  comparisonVersion: 'research-comparison-v1'
+  provider: QuantAiProvider
+  model: string
+  generatedAt: string
+  overview: string
+  commonGround: string[]
+  differences: QuantResearchComparisonDifference[]
+  risks: string[]
+  nextChecks: string[]
+  citedEvidence: QuantResearchComparisonCitation[]
+}
+
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'
 
