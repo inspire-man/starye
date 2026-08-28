@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { QuantAiConfig, QuantAiProvider } from '../lib/quant-types'
+import type { QuantAiConfig, QuantAiConnectionTest, QuantAiProvider } from '../lib/quant-types'
 import { DetailDrawer } from '@starye/ui'
-import { AlertCircle, KeyRound, Save, ShieldCheck } from 'lucide-vue-next'
+import { AlertCircle, KeyRound, RefreshCw, Save, ShieldCheck } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { quantApi, QuantApiError } from '../lib/api-client'
 
@@ -24,8 +24,11 @@ const providerOptions: { value: QuantAiProvider, label: string }[] = [
 const config = ref<QuantAiConfig | null>(null)
 const loading = ref(false)
 const saving = ref(false)
+const testing = ref(false)
 const errorMessage = ref('')
 const savedMessage = ref('')
+const connectionResult = ref<QuantAiConnectionTest | null>(null)
+const connectionErrorMessage = ref('')
 const form = reactive<{
   provider: QuantAiProvider
   model: string
@@ -41,6 +44,19 @@ const form = reactive<{
 })
 
 const hasApiKey = computed(() => Boolean(config.value?.hasApiKey))
+const hasUnsavedConfig = computed(() => {
+  const saved = config.value
+  return !saved
+    || saved.provider !== form.provider
+    || saved.model !== form.model.trim()
+    || (saved.baseUrl || '') !== form.baseUrl.trim()
+    || Boolean(form.apiKey.trim())
+    || form.clearApiKey
+})
+const canTest = computed(() => {
+  const saved = config.value
+  return Boolean(saved && !hasUnsavedConfig.value && saved.model && (saved.hasApiKey || saved.provider === 'ollama'))
+})
 
 function resetForm(value: QuantAiConfig | null): void {
   config.value = value
@@ -49,6 +65,8 @@ function resetForm(value: QuantAiConfig | null): void {
   form.baseUrl = value?.baseUrl || ''
   form.apiKey = ''
   form.clearApiKey = false
+  connectionResult.value = null
+  connectionErrorMessage.value = ''
 }
 
 function errorText(error: unknown): string {
@@ -99,9 +117,31 @@ async function saveConfig(): Promise<void> {
   }
 }
 
+async function testConnection(): Promise<void> {
+  if (!canTest.value || testing.value)
+    return
+  testing.value = true
+  connectionResult.value = null
+  connectionErrorMessage.value = ''
+  try {
+    connectionResult.value = await quantApi.testAiConfig()
+  }
+  catch (error) {
+    connectionErrorMessage.value = errorText(error)
+  }
+  finally {
+    testing.value = false
+  }
+}
+
 watch(() => props.open, (open) => {
   if (open)
     void loadConfig()
+})
+
+watch(() => [form.provider, form.model, form.baseUrl, form.apiKey, form.clearApiKey], () => {
+  connectionResult.value = null
+  connectionErrorMessage.value = ''
 })
 </script>
 
@@ -174,7 +214,24 @@ watch(() => props.open, (open) => {
           <span>{{ savedMessage }}</span>
         </div>
 
+        <div v-if="testing" class="quant-ai-settings-alert quant-ai-settings-alert-success" role="status">
+          <RefreshCw :size="16" class="animate-spin" aria-hidden="true" />
+          <span>正在测试已保存配置</span>
+        </div>
+        <div v-else-if="connectionResult" class="quant-ai-settings-alert quant-ai-settings-alert-success" role="status">
+          <ShieldCheck :size="16" aria-hidden="true" />
+          <span>连接成功 · {{ connectionResult.model }} · {{ connectionResult.latencyMs }} ms</span>
+        </div>
+        <div v-else-if="connectionErrorMessage" class="quant-ai-settings-alert quant-ai-settings-alert-error" role="alert">
+          <AlertCircle :size="16" aria-hidden="true" />
+          <span>{{ connectionErrorMessage }}</span>
+        </div>
+
         <div class="quant-ai-settings-actions">
+          <button class="secondary-button" type="button" :disabled="!canTest || saving || testing" :title="hasUnsavedConfig ? '请先保存当前配置后再测试' : '仅测试已保存的配置'" @click="testConnection">
+            <RefreshCw :size="15" :class="testing ? 'animate-spin' : ''" aria-hidden="true" />
+            {{ testing ? '测试中' : '测试连接' }}
+          </button>
           <button class="secondary-button" type="button" @click="emit('update:open', false)">
             关闭
           </button>
@@ -281,9 +338,14 @@ watch(() => props.open, (open) => {
 
 .quant-ai-settings-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
   border-top: 1px solid hsl(var(--border));
   padding-top: 0.85rem;
+}
+
+.quant-ai-settings-actions > button {
+  min-width: 0;
 }
 </style>

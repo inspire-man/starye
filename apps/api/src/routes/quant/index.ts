@@ -9,6 +9,7 @@ import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
+import { testQuantAiConnection } from '../../domain/quant/ai-connection'
 import { generateQuantAiSummary } from '../../domain/quant/ai-summary'
 import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
@@ -369,6 +370,18 @@ quantRoutes.put('/ai-config', validator('json', QuantAiConfigUpdateSchema), asyn
     apiKey: input.api_key,
     clearApiKey: input.clear_api_key,
   }, c.env.QUANT_AI_ENCRYPTION_KEY)
+  return c.json({ success: true as const, data })
+})
+
+quantRoutes.post('/ai-config/test', async (c) => {
+  const userId = currentQuantUserId(c)
+  const config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env.QUANT_AI_ENCRYPTION_KEY)
+  if (!config)
+    throw new QuantError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI summary configuration is not available', 503)
+  const data = await testQuantAiConnection({
+    config,
+    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+  })
   return c.json({ success: true as const, data })
 })
 
