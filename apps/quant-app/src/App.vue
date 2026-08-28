@@ -33,6 +33,7 @@ import type { BatchResearchProgress } from './lib/research-batch'
 import type { BatchResearchFollowUpState } from './lib/research-batch-follow-up'
 import type { ResearchEvidenceChange } from './lib/research-evidence-history'
 import type { ResearchPriority, ResearchPriorityValueQuality } from './lib/research-priority'
+import type { ResearchReportCopyResult } from './lib/research-report-copy'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { ResearchRunScoreDirection } from './lib/research-run-timeline'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
@@ -129,6 +130,9 @@ const comparisonResearchStates = ref<Record<string, ComparisonResearchItemState>
 const comparisonResearchExporting = ref(false)
 const comparisonResearchExportMessage = ref('')
 const comparisonResearchExportError = ref(false)
+const comparisonResearchCopying = ref(false)
+const comparisonResearchCopyOutcome = ref<ResearchReportCopyOutcome>(null)
+const comparisonResearchCopyMessage = ref('')
 const researchFormStatus = ref<ResearchMarkerStatus>('unreviewed')
 const researchFormNote = ref('')
 const researchFormReviewDate = ref('')
@@ -148,6 +152,7 @@ let shareholderReturnRequestId = 0
 let researchRunRequestId = 0
 let researchSummaryRequestId = 0
 let researchReportCopyRequestId = 0
+let comparisonResearchCopyRequestId = 0
 const loading = reactive({
   watchlist: false,
   candidates: false,
@@ -1726,6 +1731,7 @@ async function openComparisonDrawer() {
   if (!canCompareCandidates.value)
     return
   resetComparisonResearchExportState()
+  resetComparisonResearchCopyState()
   comparisonDrawerOpen.value = true
   comparisonLoading.value = true
   comparisonValuations.value = {}
@@ -1760,6 +1766,7 @@ async function startBatchResearch() {
     return
 
   resetComparisonResearchExportState()
+  resetComparisonResearchCopyState()
   const items = [...selectedCandidateItems.value]
   comparisonResearchStates.value = Object.fromEntries(items.map(item => [item.tsCode, {
     status: 'pending' as const,
@@ -1787,6 +1794,7 @@ async function retryBatchResearchItem(item: CandidateItem) {
     return
 
   resetComparisonResearchExportState()
+  resetComparisonResearchCopyState()
   comparisonResearchStates.value = markBatchResearchItemPending(comparisonResearchStates.value, item.tsCode)
   await runResearchBatch(
     [item.tsCode],
@@ -1808,6 +1816,13 @@ function resetComparisonResearchExportState() {
   comparisonResearchExportMessage.value = ''
   comparisonResearchExportError.value = false
   comparisonResearchExporting.value = false
+}
+
+function resetComparisonResearchCopyState() {
+  comparisonResearchCopyRequestId++
+  comparisonResearchCopying.value = false
+  comparisonResearchCopyOutcome.value = null
+  comparisonResearchCopyMessage.value = ''
 }
 
 function downloadComparisonResearchReports() {
@@ -1839,6 +1854,43 @@ function downloadComparisonResearchReports() {
   }
   finally {
     comparisonResearchExporting.value = false
+  }
+}
+
+async function copyComparisonResearchReports() {
+  if (!comparisonResearchExportReady.value || comparisonResearchCopying.value)
+    return
+
+  const requestId = ++comparisonResearchCopyRequestId
+  comparisonResearchCopying.value = true
+  comparisonResearchCopyOutcome.value = null
+  comparisonResearchCopyMessage.value = ''
+  let result: ResearchReportCopyResult
+  try {
+    const markdown = buildResearchBatchMarkdown(comparisonResearchSuccessfulRuns.value, comparisonResearchFailedCodes.value)
+    if (!markdown)
+      throw new Error('当前批次暂无成功研究报告')
+    const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined
+    result = await copyResearchReportMarkdown(markdown, clipboard)
+  }
+  catch {
+    result = 'failed'
+  }
+  if (requestId !== comparisonResearchCopyRequestId)
+    return
+
+  comparisonResearchCopying.value = false
+  if (result === 'copied') {
+    comparisonResearchCopyOutcome.value = 'success'
+    comparisonResearchCopyMessage.value = `已复制 ${comparisonResearchSuccessfulRuns.value.length} 份研究报告到剪贴板`
+  }
+  else if (result === 'unavailable') {
+    comparisonResearchCopyOutcome.value = 'error'
+    comparisonResearchCopyMessage.value = '当前浏览器不支持剪贴板写入'
+  }
+  else {
+    comparisonResearchCopyOutcome.value = 'error'
+    comparisonResearchCopyMessage.value = '批量复制失败，请检查剪贴板权限后重试'
   }
 }
 
@@ -4070,9 +4122,16 @@ onUnmounted(() => {
                 <Download :size="15" aria-hidden="true" />
                 {{ comparisonResearchExporting ? '导出中' : `导出 ${comparisonResearchSummary.success} 份` }}
               </button>
+              <button v-if="comparisonResearchSummary.success" class="secondary-button comparison-research-copy-button" type="button" :disabled="!comparisonResearchExportReady || comparisonResearchCopying" title="将当前批次研究报告复制到剪贴板" :aria-label="`复制 ${comparisonResearchSummary.success} 份研究报告 Markdown`" @click="copyComparisonResearchReports">
+                <Copy :size="15" aria-hidden="true" />
+                {{ comparisonResearchCopying ? '复制中' : `复制 ${comparisonResearchSummary.success} 份` }}
+              </button>
             </div>
             <p v-if="comparisonResearchExportMessage" class="comparison-research-export-message" :class="{ 'comparison-research-export-message-error': comparisonResearchExportError }" role="status">
               {{ comparisonResearchExportMessage }}
+            </p>
+            <p v-if="comparisonResearchCopyMessage" class="comparison-research-copy-message" :class="{ 'comparison-research-copy-message-error': comparisonResearchCopyOutcome === 'error' }" role="status">
+              {{ comparisonResearchCopyMessage }}
             </p>
             <div class="comparison-research-list" role="list" aria-live="polite">
               <div v-for="item in selectedCandidateItems" :key="`research-${item.id}`" class="comparison-research-item" :class="comparisonResearchStateClass(comparisonResearchStateFor(item))" role="listitem">

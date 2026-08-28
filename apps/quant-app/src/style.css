@@ -3463,6 +3463,11 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.comparison-research-copy-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .comparison-research-export-message {
   margin: 0;
   color: hsl(var(--status-success));
@@ -3471,6 +3476,17 @@ input:focus-visible {
 }
 
 .comparison-research-export-message-error {
+  color: hsl(var(--status-danger));
+}
+
+.comparison-research-copy-message {
+  margin: 0;
+  color: hsl(var(--status-success));
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.comparison-research-copy-message-error {
   color: hsl(var(--status-danger));
 }
 
@@ -6044,6 +6060,11 @@ input:focus-visible {
   }
 
   .comparison-research-button {
+    width: 100%;
+  }
+
+  .comparison-research-export-button,
+  .comparison-research-copy-button {
     width: 100%;
   }
 
