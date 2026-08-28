@@ -13,6 +13,8 @@ import type {
   QuantFinancialQualitySnapshot,
   QuantInvestmentKnowledge,
   QuantKnowledgeFactor,
+  QuantResearchComparison,
+  QuantResearchComparisonCitation,
   QuantResearchEvidence,
   QuantResearchMarker,
   QuantResearchRun,
@@ -70,7 +72,7 @@ import {
   Trash2,
   X,
 } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
@@ -151,6 +153,10 @@ const comparisonResearchAiSummaryRunning = ref(false)
 const comparisonResearchAiSummaryStates = ref<Record<string, BatchAiSummaryState>>({})
 const comparisonResearchAiSummaryMessage = ref('')
 const comparisonResearchAiSummaryError = ref(false)
+const comparisonAiComparison = ref<QuantResearchComparison | null>(null)
+const comparisonAiComparisonLoading = ref(false)
+const comparisonAiComparisonError = ref<unknown | null>(null)
+const comparisonAiEvidenceTarget = ref<QuantResearchComparisonCitation | null>(null)
 const researchFormStatus = ref<ResearchMarkerStatus>('unreviewed')
 const researchFormNote = ref('')
 const researchFormReviewDate = ref('')
@@ -174,6 +180,7 @@ let researchSummaryRequestId = 0
 let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
 let comparisonResearchAiSummaryRequestId = 0
+let comparisonAiComparisonRequestId = 0
 let comparisonResearchHistoryRequestId = 0
 const comparisonResearchHistoryRequestIds = new Map<string, number>()
 const loading = reactive({
@@ -458,6 +465,17 @@ const comparisonResearchAiSummarySummary = computed(() => {
 const comparisonResearchAiSummaryReady = computed(() => comparisonResearchExportReady.value
   && comparisonResearchSuccessfulRuns.value.length > 0)
 const comparisonResearchAiSummaryButtonLabel = computed(() => comparisonResearchAiSummarySummary.value.started ? '重新生成 AI 摘要' : '批量生成 AI 摘要')
+const comparisonAiComparisonReady = computed(() => comparisonResearchSuccessfulRuns.value.length >= 2)
+const comparisonAiComparisonCitations = computed(() => {
+  const runs = new Map(comparisonResearchSuccessfulRuns.value.map(run => [run.tsCode, run]))
+  const cited = comparisonAiComparison.value?.citedEvidence || []
+  const differences = comparisonAiComparison.value?.differences || []
+  const differenceCitations = differences.flatMap(item => item.evidenceKeys.map(evidenceKey => ({ tsCode: item.tsCode, evidenceKey })))
+  return [...new Map([...cited, ...differenceCitations].map(citation => [`${citation.tsCode}:${citation.evidenceKey}`, citation])).values()].filter((citation) => {
+    const run = runs.get(citation.tsCode)
+    return Boolean(run?.report.evidence.some(evidence => evidence.key === citation.evidenceKey))
+  })
+})
 const latestDailyBar = computed(() => dailyBars.value.at(-1) || null)
 const latestWatchlistDate = computed(() => {
   const dates = watchlist.value.map(item => item.latestTradeDate).filter((date): date is string => Boolean(date))
@@ -1531,6 +1549,9 @@ async function loadResearchRuns(tsCode: string) {
       researchRuns.value = runs
       if (runs[0])
         await loadResearchSummary(runs[0].id)
+      const evidenceTarget = comparisonAiEvidenceTarget.value
+      if (evidenceTarget?.tsCode === tsCode)
+        await focusComparisonAiEvidence(evidenceTarget)
     }
   }
   catch (error) {
@@ -1784,6 +1805,7 @@ function toggleCandidateSelection(item: CandidateItem) {
   else if (next.size < 3) {
     next.add(item.id)
   }
+  resetComparisonAiComparisonState()
   selectedCandidateIds.value = next
 }
 
@@ -1794,6 +1816,7 @@ function handleCandidateToggle(id: string) {
 }
 
 function toggleAllCandidateSelection() {
+  resetComparisonAiComparisonState()
   const visibleIds = filteredCandidateItems.value.map(item => item.id)
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedCandidateIds.value.has(id))
   const next = new Set(selectedCandidateIds.value)
@@ -1810,7 +1833,34 @@ function toggleAllCandidateSelection() {
 }
 
 function clearCandidateSelection() {
+  resetComparisonAiComparisonState()
   selectedCandidateIds.value = new Set()
+}
+
+function handleComparisonDrawerOpenChange(open: boolean): void {
+  comparisonDrawerOpen.value = open
+  if (!open)
+    resetComparisonAiComparisonState()
+}
+
+function researchEvidenceDomId(tsCode: string, evidenceKey: string): string {
+  return `research-evidence-${encodeURIComponent(tsCode)}-${encodeURIComponent(evidenceKey)}`
+}
+
+async function focusComparisonAiEvidence(citation: QuantResearchComparisonCitation): Promise<void> {
+  const run = researchRuns.value.find(candidate => candidate.tsCode === citation.tsCode)
+  if (!run?.report.evidence.some(evidence => evidence.key === citation.evidenceKey))
+    return
+
+  await nextTick()
+  const element = document.getElementById(researchEvidenceDomId(citation.tsCode, citation.evidenceKey))
+  element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  if (element instanceof HTMLElement) {
+    element.classList.add('research-evidence-focus')
+    window.setTimeout(() => element.classList.remove('research-evidence-focus'), 2200)
+  }
+  if (comparisonAiEvidenceTarget.value?.tsCode === citation.tsCode && comparisonAiEvidenceTarget.value.evidenceKey === citation.evidenceKey)
+    comparisonAiEvidenceTarget.value = null
 }
 
 function comparisonResearchStateFor(item: CandidateItem): ComparisonResearchItemState {
@@ -2000,6 +2050,7 @@ async function openComparisonDrawer() {
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
   resetComparisonResearchAiSummaryState()
+  resetComparisonAiComparisonState()
   comparisonDrawerOpen.value = true
   comparisonLoading.value = true
   comparisonValuations.value = {}
@@ -2041,6 +2092,7 @@ async function startBatchResearch() {
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
   resetComparisonResearchAiSummaryState()
+  resetComparisonAiComparisonState()
   const items = [...selectedCandidateItems.value]
   for (const item of items)
     invalidateComparisonResearchHistory(item.tsCode)
@@ -2080,6 +2132,7 @@ async function retryBatchResearchItem(item: CandidateItem) {
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
   resetComparisonResearchAiSummaryState()
+  resetComparisonAiComparisonState()
   invalidateComparisonResearchHistory(item.tsCode)
   comparisonResearchStates.value = markBatchResearchItemPending(comparisonResearchStates.value, item.tsCode)
   comparisonResearchHistorySources.value = { ...comparisonResearchHistorySources.value, [item.tsCode]: 'batch' }
@@ -2096,7 +2149,7 @@ async function retryBatchResearchItem(item: CandidateItem) {
 function openBatchResearchResult(item: CandidateItem) {
   if (comparisonResearchActionFor(item) !== 'view')
     return
-  comparisonDrawerOpen.value = false
+  handleComparisonDrawerOpenChange(false)
   selectStock(item)
 }
 
@@ -2188,6 +2241,51 @@ function resetComparisonResearchAiSummaryState() {
   comparisonResearchAiSummaryStates.value = {}
   comparisonResearchAiSummaryMessage.value = ''
   comparisonResearchAiSummaryError.value = false
+}
+
+function resetComparisonAiComparisonState() {
+  comparisonAiComparisonRequestId++
+  comparisonAiComparison.value = null
+  comparisonAiComparisonLoading.value = false
+  comparisonAiComparisonError.value = null
+  comparisonAiEvidenceTarget.value = null
+}
+
+function comparisonAiComparisonErrorMessage(): string {
+  return parsedError(comparisonAiComparisonError.value).message
+}
+
+async function generateComparisonAiComparison(): Promise<void> {
+  if (!comparisonAiComparisonReady.value || comparisonAiComparisonLoading.value)
+    return
+
+  const requestId = ++comparisonAiComparisonRequestId
+  comparisonAiComparisonLoading.value = true
+  comparisonAiComparisonError.value = null
+  try {
+    const result = await quantApi.generateResearchComparison(comparisonResearchSuccessfulRuns.value.map(run => run.id))
+    if (requestId === comparisonAiComparisonRequestId)
+      comparisonAiComparison.value = result
+  }
+  catch (error) {
+    if (requestId === comparisonAiComparisonRequestId)
+      comparisonAiComparisonError.value = error
+  }
+  finally {
+    if (requestId === comparisonAiComparisonRequestId)
+      comparisonAiComparisonLoading.value = false
+  }
+}
+
+function openComparisonAiCitation(citation: QuantResearchComparisonCitation): void {
+  const target = comparisonAiComparisonCitations.value.find(item => item.tsCode === citation.tsCode && item.evidenceKey === citation.evidenceKey)
+  if (!target)
+    return
+  handleComparisonDrawerOpenChange(false)
+  comparisonAiEvidenceTarget.value = target
+  const item = watchlist.value.find(candidate => candidate.tsCode === citation.tsCode) || candidateItems.value.find(candidate => candidate.tsCode === citation.tsCode)
+  if (item)
+    selectStock(item)
 }
 
 function updateComparisonResearchAiSummaryMessage() {
@@ -3487,7 +3585,7 @@ onUnmounted(() => {
                     <small>{{ group.items.length }} 条证据</small>
                   </div>
                   <div class="research-run-evidence-list">
-                    <div v-for="item in group.items" :key="item.key" class="research-run-evidence-row" :class="researchEvidenceStatusClass(item.status)" :title="`${item.source} · ${item.formulaVersion}`">
+                    <div v-for="item in group.items" :id="researchEvidenceDomId(latestResearchReport.tsCode, item.key)" :key="item.key" class="research-run-evidence-row" :class="researchEvidenceStatusClass(item.status)" :title="`${item.source} · ${item.formulaVersion}`">
                       <div class="research-run-evidence-main">
                         <div class="research-run-evidence-title">
                           <strong>{{ item.label }}</strong>
@@ -4431,7 +4529,7 @@ onUnmounted(() => {
         title="候选对比"
         :description="`技术信号、估值和基本面 · ${comparisonStatusLabel}`"
         width="lg"
-        @update:open="comparisonDrawerOpen = $event"
+        @update:open="handleComparisonDrawerOpenChange"
       >
         <section class="comparison-content" aria-label="候选股票对比">
           <div class="comparison-intro">
@@ -4635,6 +4733,86 @@ onUnmounted(() => {
             <p class="comparison-research-summary" role="status">
               {{ comparisonResearchSummaryLabel }}
             </p>
+          </section>
+          <section v-if="comparisonAiComparisonReady" class="comparison-ai-panel" aria-labelledby="comparison-ai-title">
+            <div class="comparison-ai-heading">
+              <div>
+                <p class="section-kicker">
+                  AI RESEARCH
+                </p>
+                <h3 id="comparison-ai-title">
+                  AI 对比研究助手
+                </h3>
+                <p>基于当前已完成的 {{ comparisonResearchSuccessfulRuns.length }} 份研究报告，提炼共同点、差异和下一步核对项。</p>
+              </div>
+              <button class="primary-button comparison-ai-button" type="button" :disabled="comparisonAiComparisonLoading" :aria-label="comparisonAiComparisonLoading ? 'AI 对比研究生成中' : comparisonAiComparison ? '重新生成 AI 对比研究' : '生成 AI 对比研究'" @click="generateComparisonAiComparison">
+                <Sparkles :size="15" :class="comparisonAiComparisonLoading ? 'animate-spin' : ''" aria-hidden="true" />
+                {{ comparisonAiComparisonLoading ? '对比生成中' : comparisonAiComparison ? '重新生成对比' : '生成 AI 对比' }}
+              </button>
+            </div>
+            <div v-if="comparisonAiComparisonLoading" class="comparison-ai-state" role="status">
+              正在读取已完成的研究报告并生成对比...
+            </div>
+            <div v-else-if="comparisonAiComparisonError" class="comparison-ai-state comparison-ai-state-error" role="alert">
+              <span>{{ comparisonAiComparisonErrorMessage() }}</span>
+              <button class="text-button" type="button" @click="generateComparisonAiComparison">
+                重试
+              </button>
+            </div>
+            <div v-else-if="comparisonAiComparison" class="comparison-ai-result">
+              <p class="comparison-ai-meta">
+                {{ comparisonAiComparison.provider }} · {{ comparisonAiComparison.model }} · {{ formatDateTime(comparisonAiComparison.generatedAt) }}
+              </p>
+              <p class="comparison-ai-overview">
+                {{ comparisonAiComparison.overview }}
+              </p>
+              <div v-if="comparisonAiComparison.commonGround.length" class="comparison-ai-block">
+                <strong>共同点</strong>
+                <ul>
+                  <li v-for="item in comparisonAiComparison.commonGround" :key="`common-${item}`">
+                    {{ item }}
+                  </li>
+                </ul>
+              </div>
+              <div v-if="comparisonAiComparison.differences.length" class="comparison-ai-block">
+                <strong>关键差异</strong>
+                <ul>
+                  <li v-for="(item, index) in comparisonAiComparison.differences" :key="`difference-${item.tsCode}-${index}`">
+                    <span class="comparison-ai-stock-label">{{ item.tsCode }}</span>{{ item.point }}
+                    <span v-if="item.evidenceKeys.length" class="comparison-ai-evidence-keys">
+                      证据：
+                      <button v-for="evidenceKey in item.evidenceKeys" :key="`${item.tsCode}-${evidenceKey}`" class="text-button comparison-ai-inline-citation" type="button" :aria-label="`打开 ${item.tsCode} 的证据 ${evidenceKey}`" @click="openComparisonAiCitation({ tsCode: item.tsCode, evidenceKey })">
+                        {{ evidenceKey }}
+                      </button>
+                    </span>
+                  </li>
+                </ul>
+              </div>
+              <div v-if="comparisonAiComparison.risks.length" class="comparison-ai-block comparison-ai-block-risk">
+                <strong>风险</strong>
+                <ul>
+                  <li v-for="item in comparisonAiComparison.risks" :key="`risk-${item}`">
+                    {{ item }}
+                  </li>
+                </ul>
+              </div>
+              <div v-if="comparisonAiComparison.nextChecks.length" class="comparison-ai-block">
+                <strong>下一步核对</strong>
+                <ul>
+                  <li v-for="item in comparisonAiComparison.nextChecks" :key="`next-${item}`">
+                    {{ item }}
+                  </li>
+                </ul>
+              </div>
+              <div v-if="comparisonAiComparisonCitations.length" class="comparison-ai-citations">
+                <strong>引用证据</strong>
+                <div class="comparison-ai-citation-list">
+                  <button v-for="citation in comparisonAiComparisonCitations" :key="`${citation.tsCode}-${citation.evidenceKey}`" class="text-button comparison-ai-citation" type="button" :aria-label="`打开 ${citation.tsCode} 的证据 ${citation.evidenceKey}`" @click="openComparisonAiCitation(citation)">
+                    {{ citation.tsCode }} · {{ citation.evidenceKey }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </section>
           <p class="comparison-note">
             估值和财务指标来自当前接口的最近可用快照；不同报告期不做强行横比。

@@ -18,6 +18,7 @@ import type {
   QuantKnowledgeFactor,
   QuantKnowledgeSource,
   QuantProviderName,
+  QuantResearchComparison,
   QuantResearchEvidence,
   QuantResearchMarker,
   QuantResearchReport,
@@ -582,6 +583,69 @@ function parseResearchSummaries(payload: unknown): QuantResearchSummary[] {
     const summary = parseResearchSummary(value)
     return summary ? [summary] : []
   })
+}
+
+function parseResearchComparison(payload: unknown): QuantResearchComparison {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('AI 对比研究数据格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+
+  const comparisonVersion = readString(data, 'comparisonVersion', 'comparison_version')
+  const provider = readString(data, 'provider')
+  const model = readString(data, 'model')
+  const generatedAt = readString(data, 'generatedAt', 'generated_at')
+  const overview = readString(data, 'overview')
+  if (comparisonVersion !== 'research-comparison-v1' || !provider || !model || !generatedAt || !overview)
+    throw new QuantApiError('AI 对比研究数据格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+  if (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    throw new QuantApiError('AI 对比研究 provider 数据格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+
+  const parseStringList = (key: string, alias?: string): string[] | null => {
+    const raw = data[key] ?? (alias ? data[alias] : undefined)
+    if (!Array.isArray(raw) || raw.length > 6 || raw.some(value => typeof value !== 'string' || !value.trim() || value.length > 360))
+      return null
+    return raw.map(value => (value as string).trim())
+  }
+  const commonGround = parseStringList('commonGround', 'common_ground')
+  const risks = parseStringList('risks')
+  const nextChecks = parseStringList('nextChecks', 'next_checks')
+  if (!commonGround || !risks || !nextChecks || !Array.isArray(data.differences) || data.differences.length > 6)
+    throw new QuantApiError('AI 对比研究数据格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+  const differences = data.differences.map((value) => {
+    if (!isRecord(value))
+      throw new QuantApiError('AI 对比研究差异格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+    const tsCode = readString(value, 'tsCode', 'ts_code')
+    const point = readString(value, 'point')
+    const evidenceKeys = Array.isArray(value.evidenceKeys) ? value.evidenceKeys : value.evidence_keys
+    if (!tsCode || !point || !Array.isArray(evidenceKeys) || evidenceKeys.length < 1 || evidenceKeys.length > 16 || evidenceKeys.some(item => typeof item !== 'string' || !item.trim() || item.length > 80))
+      throw new QuantApiError('AI 对比研究差异格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+    return { tsCode, point, evidenceKeys: evidenceKeys.map(item => (item as string).trim()) }
+  })
+  const rawCitations = Array.isArray(data.citedEvidence) ? data.citedEvidence : data.cited_evidence
+  if (!Array.isArray(rawCitations) || rawCitations.length > 24)
+    throw new QuantApiError('AI 对比研究引用格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+  const citedEvidence = rawCitations.map((value) => {
+    if (!isRecord(value))
+      throw new QuantApiError('AI 对比研究引用格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+    const tsCode = readString(value, 'tsCode', 'ts_code')
+    const evidenceKey = readString(value, 'evidenceKey', 'evidence_key')
+    if (!tsCode || !evidenceKey)
+      throw new QuantApiError('AI 对比研究引用格式无效', 502, 'QUANT_AI_COMPARISON_INVALID_RESPONSE')
+    return { tsCode, evidenceKey }
+  })
+
+  return {
+    comparisonVersion,
+    provider,
+    model,
+    generatedAt,
+    overview,
+    commonGround,
+    differences,
+    risks,
+    nextChecks,
+    citedEvidence,
+  }
 }
 
 function parseSyncResult(payload: unknown): SyncResult {
@@ -1170,6 +1234,14 @@ export const quantApi = {
 
   async getResearchSummaries(runId: string, limit = 1): Promise<QuantResearchSummary[]> {
     return parseResearchSummaries(await requestJson(`/research/runs/${encodeURIComponent(runId)}/summary?limit=${encodeURIComponent(String(limit))}`))
+  },
+
+  async generateResearchComparison(runIds: string[]): Promise<QuantResearchComparison> {
+    const comparison = parseResearchComparison(await requestJson('/research/comparison', {
+      method: 'POST',
+      body: JSON.stringify({ run_ids: runIds }),
+    }))
+    return comparison
   },
 
   async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {

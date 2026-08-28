@@ -1,5 +1,6 @@
 import type { QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
+import type { QuantAiComparisonResult } from '../../domain/quant/ai-comparison'
 import type { QuantAiSummary } from '../../domain/quant/ai-summary'
 import type { EastmoneyProviderOptions, TushareProviderOptions } from '../../domain/quant/provider'
 import type { QuantResearchReport } from '../../domain/quant/research-report'
@@ -8,6 +9,7 @@ import type { MomentumCandidate } from '../../domain/quant/types'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
+import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
 import { testQuantAiConnection } from '../../domain/quant/ai-connection'
 import { generateQuantAiSummary } from '../../domain/quant/ai-summary'
@@ -49,6 +51,7 @@ import {
   QuantAiConfigUpdateSchema,
   QuantDailyQuerySchema,
   QuantFinancialHistoryQuerySchema,
+  QuantResearchComparisonSchema,
   QuantResearchMarkerUpdateSchema,
   QuantResearchRunCreateSchema,
   QuantResearchRunIdParamSchema,
@@ -190,6 +193,60 @@ function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResea
     summary,
     citedEvidenceKeys,
   }
+}
+
+function researchComparisonView(comparison: QuantAiComparisonResult) {
+  return {
+    comparisonVersion: comparison.comparisonVersion,
+    provider: comparison.provider,
+    model: comparison.model,
+    generatedAt: comparison.generatedAt,
+    overview: comparison.overview,
+    commonGround: comparison.commonGround,
+    differences: comparison.differences,
+    risks: comparison.risks,
+    nextChecks: comparison.nextChecks,
+    citedEvidence: comparison.citedEvidence,
+  }
+}
+
+function isComparableResearchReport(report: QuantResearchReport): boolean {
+  const validStatuses = new Set(['ready', 'partial', 'insufficient_data'])
+  const validActions = new Set(['research-window', 'wait-confirmation', 'reassess', 'complete-data'])
+  const validEvidenceStatuses = new Set(['pass', 'caution', 'fail', 'missing'])
+  return typeof report.generatedAt === 'string'
+    && typeof report.headline === 'string'
+    && (report.name === null || typeof report.name === 'string')
+    && (report.score === null || (typeof report.score === 'number' && Number.isFinite(report.score)))
+    && Array.isArray(report.strengths)
+    && report.strengths.every(item => typeof item === 'string')
+    && Array.isArray(report.risks)
+    && report.risks.every(item => typeof item === 'string')
+    && Array.isArray(report.gaps)
+    && report.gaps.every(item => typeof item === 'string')
+    && Array.isArray(report.nextActions)
+    && report.nextActions.every(item => typeof item === 'string')
+    && validStatuses.has(report.status)
+    && validActions.has(report.action)
+    && Array.isArray(report.evidence)
+    && report.evidence.every(item => isRecord(item)
+      && typeof item.key === 'string'
+      && typeof item.dimension === 'string'
+      && typeof item.label === 'string'
+      && typeof item.status === 'string'
+      && validEvidenceStatuses.has(item.status)
+      && (item.value === null || (typeof item.value === 'number' && Number.isFinite(item.value)))
+      && typeof item.threshold === 'string'
+      && typeof item.source === 'string'
+      && (item.observedAt === null || typeof item.observedAt === 'string')
+      && typeof item.formulaVersion === 'string'
+      && typeof item.detail === 'string')
+    && Array.isArray(report.sources)
+    && report.sources.every(item => isRecord(item)
+      && typeof item.id === 'string'
+      && typeof item.name === 'string'
+      && (item.observedAt === null || typeof item.observedAt === 'string')
+      && typeof item.formulaVersion === 'string')
 }
 
 function snapshotIncludesCode(snapshot: { readonly inputTsCodesJson: string }, tsCode: string): boolean {
@@ -491,6 +548,35 @@ quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResear
     generatedAt: new Date(),
   })
   return c.json({ success: true as const, data: researchSummaryView(persisted, report) }, 201)
+})
+
+quantRoutes.post('/research/comparison', validator('json', QuantResearchComparisonSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { run_ids: runIds } = c.req.valid('json')
+  const runs = await Promise.all(runIds.map(runId => getQuantResearchRun(c.get('db'), userId, runId)))
+  if (runs.some(run => !run))
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+
+  const records = runs.filter((run): run is QuantResearchRunRecord => run !== undefined)
+  const tsCodes = new Set(records.map(run => run.tsCode))
+  if (tsCodes.size !== records.length)
+    throw new QuantError('QUANT_INVALID_INPUT', 'Research comparison requires different stocks', 400)
+
+  const reports = records.map((run) => {
+    const report = parseResearchReport(run.reportJson)
+    if (report.tsCode !== run.tsCode || report.status !== run.status || report.reportVersion !== run.reportVersion || !isComparableResearchReport(report))
+      throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted research run does not match its report', 500)
+    return { runId: run.id, report }
+  })
+  const config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env.QUANT_AI_ENCRYPTION_KEY)
+  if (!config)
+    throw new QuantError('QUANT_AI_COMPARISON_CONFIGURATION', 'AI comparison configuration is not available', 503)
+  const comparison = await generateQuantAiComparison({
+    reports,
+    config,
+    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+  })
+  return c.json({ success: true as const, data: researchComparisonView(comparison) })
 })
 
 quantRoutes.get('/research/runs/:runId/summary', validator('param', QuantResearchRunIdParamSchema), validator('query', QuantResearchSummaryQuerySchema), async (c) => {
