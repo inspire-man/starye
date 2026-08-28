@@ -1,6 +1,7 @@
 import type { QuantResearchRun } from '../quant-types'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildResearchBatchFilename, buildResearchBatchMarkdown } from '../research-batch-export'
+import { copyResearchReportMarkdown } from '../research-report-copy'
 
 function researchRun(tsCode: string, generatedAt = '2026-08-28T08:00:00.000Z'): QuantResearchRun {
   return {
@@ -67,5 +68,14 @@ describe('research batch Markdown export', () => {
     expect(markdown).not.toContain('API_KEY')
     expect(buildResearchBatchFilename([run])).toBe('quant-research-batch-2026-08-28.md')
     expect(buildResearchBatchFilename([])).toBe('quant-research-batch-unknown-date.md')
+  })
+
+  it('passes the stable Markdown payload to the clipboard unchanged', async () => {
+    const markdown = buildResearchBatchMarkdown([researchRun('A')], ['B'])
+    const writeText = vi.fn().mockResolvedValue(undefined)
+
+    await expect(copyResearchReportMarkdown(markdown, { writeText })).resolves.toBe('copied')
+    expect(writeText).toHaveBeenCalledOnce()
+    expect(writeText).toHaveBeenCalledWith(buildResearchBatchMarkdown([researchRun('A')], ['B']))
   })
 })
