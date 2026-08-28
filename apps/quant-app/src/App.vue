@@ -75,6 +75,7 @@ import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { runResearchBatch } from './lib/research-batch'
+import { buildResearchBatchFilename, buildResearchBatchMarkdown } from './lib/research-batch-export'
 import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from './lib/research-batch-follow-up'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
@@ -125,6 +126,9 @@ const comparisonFinancials = ref<Record<string, QuantFinancialQualitySnapshot | 
 const comparisonErrors = ref<Record<string, { valuation: boolean, financial: boolean }>>({})
 const comparisonResearchRunning = ref(false)
 const comparisonResearchStates = ref<Record<string, ComparisonResearchItemState>>({})
+const comparisonResearchExporting = ref(false)
+const comparisonResearchExportMessage = ref('')
+const comparisonResearchExportError = ref(false)
 const researchFormStatus = ref<ResearchMarkerStatus>('unreviewed')
 const researchFormNote = ref('')
 const researchFormReviewDate = ref('')
@@ -371,6 +375,17 @@ const comparisonResearchSummaryLabel = computed(() => {
     return `已完成 ${summary.success} / ${summary.total}，${summary.error} 项失败`
   return `已完成 ${summary.success} / ${summary.total} 项`
 })
+const comparisonResearchSuccessfulRuns = computed(() => selectedCandidateItems.value
+  .map(item => comparisonResearchStates.value[item.tsCode])
+  .filter((state): state is ComparisonResearchItemState & { status: 'success', run: QuantResearchRun } => state?.status === 'success' && !!state.run)
+  .map(state => state.run))
+const comparisonResearchFailedCodes = computed(() => selectedCandidateItems.value
+  .filter(item => comparisonResearchStates.value[item.tsCode]?.status === 'error')
+  .map(item => item.tsCode))
+const comparisonResearchExportReady = computed(() => comparisonResearchSuccessfulRuns.value.length > 0
+  && comparisonResearchSummary.value.completed === comparisonResearchSummary.value.total
+  && comparisonResearchSummary.value.pending === 0
+  && comparisonResearchSummary.value.running === 0)
 const latestDailyBar = computed(() => dailyBars.value.at(-1) || null)
 const latestWatchlistDate = computed(() => {
   const dates = watchlist.value.map(item => item.latestTradeDate).filter((date): date is string => Boolean(date))
@@ -1710,6 +1725,7 @@ function comparisonResearchStatusDetail(state: ComparisonResearchItemState): str
 async function openComparisonDrawer() {
   if (!canCompareCandidates.value)
     return
+  resetComparisonResearchExportState()
   comparisonDrawerOpen.value = true
   comparisonLoading.value = true
   comparisonValuations.value = {}
@@ -1743,6 +1759,7 @@ async function startBatchResearch() {
   if (!canCompareCandidates.value || comparisonResearchRunning.value)
     return
 
+  resetComparisonResearchExportState()
   const items = [...selectedCandidateItems.value]
   comparisonResearchStates.value = Object.fromEntries(items.map(item => [item.tsCode, {
     status: 'pending' as const,
@@ -1769,6 +1786,7 @@ async function retryBatchResearchItem(item: CandidateItem) {
   if (current.status !== 'error' || comparisonResearchRunning.value)
     return
 
+  resetComparisonResearchExportState()
   comparisonResearchStates.value = markBatchResearchItemPending(comparisonResearchStates.value, item.tsCode)
   await runResearchBatch(
     [item.tsCode],
@@ -1784,6 +1802,44 @@ function openBatchResearchResult(item: CandidateItem) {
     return
   comparisonDrawerOpen.value = false
   selectStock(item)
+}
+
+function resetComparisonResearchExportState() {
+  comparisonResearchExportMessage.value = ''
+  comparisonResearchExportError.value = false
+  comparisonResearchExporting.value = false
+}
+
+function downloadComparisonResearchReports() {
+  if (!comparisonResearchExportReady.value || comparisonResearchExporting.value)
+    return
+
+  comparisonResearchExporting.value = true
+  comparisonResearchExportMessage.value = ''
+  comparisonResearchExportError.value = false
+  try {
+    const runs = comparisonResearchSuccessfulRuns.value
+    const markdown = buildResearchBatchMarkdown(runs, comparisonResearchFailedCodes.value)
+    if (!markdown)
+      throw new Error('当前批次暂无成功研究报告')
+
+    const objectUrl = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = buildResearchBatchFilename(runs)
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+    comparisonResearchExportMessage.value = `已导出 ${runs.length} 份成功研究报告`
+  }
+  catch {
+    comparisonResearchExportError.value = true
+    comparisonResearchExportMessage.value = '批量导出失败，请稍后重试'
+  }
+  finally {
+    comparisonResearchExporting.value = false
+  }
 }
 
 async function loadWorkspace() {
@@ -4010,7 +4066,14 @@ onUnmounted(() => {
                 <RotateCcw :size="15" :class="comparisonResearchRunning ? 'animate-spin' : ''" aria-hidden="true" />
                 {{ comparisonResearchButtonLabel }}
               </button>
+              <button v-if="comparisonResearchSummary.success" class="secondary-button comparison-research-export-button" type="button" :disabled="!comparisonResearchExportReady || comparisonResearchExporting" title="导出当前批次已经成功生成的研究报告" :aria-label="`导出 ${comparisonResearchSummary.success} 份成功研究报告`" @click="downloadComparisonResearchReports">
+                <Download :size="15" aria-hidden="true" />
+                {{ comparisonResearchExporting ? '导出中' : `导出 ${comparisonResearchSummary.success} 份` }}
+              </button>
             </div>
+            <p v-if="comparisonResearchExportMessage" class="comparison-research-export-message" :class="{ 'comparison-research-export-message-error': comparisonResearchExportError }" role="status">
+              {{ comparisonResearchExportMessage }}
+            </p>
             <div class="comparison-research-list" role="list" aria-live="polite">
               <div v-for="item in selectedCandidateItems" :key="`research-${item.id}`" class="comparison-research-item" :class="comparisonResearchStateClass(comparisonResearchStateFor(item))" role="listitem">
                 <div class="comparison-research-stock">
