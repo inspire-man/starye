@@ -7,6 +7,7 @@ import type {
   CapabilitiesResponse,
   CapabilityKey,
   DailyBar,
+  QuantAiCandidateBriefing,
   QuantAiConfig,
   QuantAiConnectionTest,
   QuantAiProvider,
@@ -731,6 +732,65 @@ function parseResearchChangeExplanation(payload: unknown): QuantResearchChangeEx
   }
 }
 
+function parseCandidateAiBriefing(payload: unknown): QuantAiCandidateBriefing {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('AI 候选简报数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  const briefingVersion = readString(data, 'briefingVersion', 'briefing_version')
+  const provider = readString(data, 'provider')
+  const model = readString(data, 'model')
+  const generatedAt = readString(data, 'generatedAt', 'generated_at')
+  const overview = readString(data, 'overview')
+  if (briefingVersion !== 'candidate-briefing-v1' || !provider || !model || !generatedAt || !overview)
+    throw new QuantApiError('AI 候选简报数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  if (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    throw new QuantApiError('AI 候选简报 provider 数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  const rawFocusItems = data.focusItems ?? data.focus_items
+  if (!Array.isArray(rawFocusItems) || rawFocusItems.length > 5)
+    throw new QuantApiError('AI 候选简报重点候选格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  const validLevels = ['urgent', 'high', 'normal', 'low'] as const
+  const focusItems = rawFocusItems.map((value) => {
+    if (!isRecord(value))
+      throw new QuantApiError('AI 候选简报重点候选格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+    const tsCode = readString(value, 'tsCode', 'ts_code')
+    const name = value.name === null ? null : readString(value, 'name', 'stockName', 'stock_name')
+    const priorityLevel = readString(value, 'priorityLevel', 'priority_level')
+    const priorityScore = readNumber(value, 'priorityScore', 'priority_score')
+    const actionLabel = readString(value, 'actionLabel', 'action_label')
+    const explanation = readString(value, 'explanation')
+    const reasons = value.reasons ?? value.reason_list
+    if (!tsCode || !priorityLevel || !validLevels.includes(priorityLevel as typeof validLevels[number]) || priorityScore === null || priorityScore < 0 || priorityScore > 100 || !actionLabel || !explanation || explanation.length > 480 || !Array.isArray(reasons) || reasons.length > 3 || reasons.some(item => typeof item !== 'string' || !item.trim() || item.length > 360))
+      throw new QuantApiError('AI 候选简报重点候选格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+    return {
+      tsCode: tsCode.toUpperCase(),
+      name,
+      priorityLevel: priorityLevel as QuantAiCandidateBriefing['focusItems'][number]['priorityLevel'],
+      priorityScore,
+      actionLabel,
+      reasons: reasons.map(item => (item as string).trim()),
+      explanation,
+    }
+  })
+  const parseStringList = (key: string, maxItems: number, maxLength: number): string[] => {
+    const raw = data[key]
+    if (!Array.isArray(raw) || raw.length > maxItems || raw.some(item => typeof item !== 'string' || !item.trim() || item.length > maxLength))
+      throw new QuantApiError('AI 候选简报列表格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+    return raw.map(item => (item as string).trim())
+  }
+  const nextChecks = parseStringList(data.nextChecks !== undefined ? 'nextChecks' : 'next_checks', 6, 360)
+  const citedCandidateCodes = [...new Set(parseStringList(data.citedCandidateCodes !== undefined ? 'citedCandidateCodes' : 'cited_candidate_codes', 5, 20).map(code => code.toUpperCase()))]
+  return {
+    briefingVersion: 'candidate-briefing-v1',
+    provider,
+    model,
+    generatedAt,
+    overview,
+    focusItems,
+    nextChecks,
+    citedCandidateCodes,
+  }
+}
+
 function parseSyncResult(payload: unknown): SyncResult {
   const data = unwrapData(payload, true)
   const record = isRecord(data) ? data : {}
@@ -1339,6 +1399,10 @@ export const quantApi = {
       method: 'POST',
       body: JSON.stringify({ previous_run_id: previousRunId }),
     }))
+  },
+
+  async generateCandidateAiBriefing(): Promise<QuantAiCandidateBriefing> {
+    return parseCandidateAiBriefing(await requestJson('/candidates/ai-briefing', { method: 'POST' }))
   },
 
   async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {

@@ -8,6 +8,7 @@ import type {
   CandidateSignalPersistence,
   CandidateSnapshot,
   DailyBar,
+  QuantAiCandidateBriefing,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -75,6 +76,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import QuantAiCandidateBriefingPanel from './components/QuantAiCandidateBriefing.vue'
 import QuantAiResearchChangeExplanation from './components/QuantAiResearchChangeExplanation.vue'
 import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
@@ -140,6 +142,9 @@ const researchQuestionError = ref<unknown | null>(null)
 const researchChangeExplanation = ref<QuantResearchChangeExplanation | null>(null)
 const researchChangeExplanationGenerating = ref(false)
 const researchChangeExplanationError = ref<unknown | null>(null)
+const candidateAiBriefing = ref<QuantAiCandidateBriefing | null>(null)
+const candidateAiBriefingLoading = ref(false)
+const candidateAiBriefingError = ref<unknown | null>(null)
 const researchReportCopying = ref(false)
 const researchReportCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const researchReportCopyMessage = ref('')
@@ -190,6 +195,7 @@ let researchRunRequestId = 0
 let researchSummaryRequestId = 0
 let researchQuestionRequestId = 0
 let researchChangeExplanationRequestId = 0
+let candidateAiBriefingRequestId = 0
 let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
 let comparisonResearchAiSummaryRequestId = 0
@@ -385,6 +391,7 @@ const researchRunTimeline = computed(() => buildResearchRunTimeline(researchRuns
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const researchQuestionConfigurationError = computed(() => researchQuestionError.value instanceof QuantApiError && researchQuestionError.value.code === 'QUANT_AI_QUESTION_CONFIGURATION')
 const researchChangeExplanationConfigurationError = computed(() => researchChangeExplanationError.value instanceof QuantApiError && researchChangeExplanationError.value.code === 'QUANT_AI_CHANGE_EXPLANATION_CONFIGURATION')
+const candidateAiBriefingConfigurationError = computed(() => candidateAiBriefingError.value instanceof QuantApiError && candidateAiBriefingError.value.code === 'QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
 const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
@@ -1408,6 +1415,10 @@ async function loadWatchlist() {
   valueQualityRequestId++
   try {
     watchlist.value = await quantApi.getWatchlist()
+    candidateAiBriefingRequestId++
+    candidateAiBriefing.value = null
+    candidateAiBriefingLoading.value = false
+    candidateAiBriefingError.value = null
     if (!selectedTsCode.value || !watchlist.value.some(item => item.tsCode === selectedTsCode.value))
       selectedTsCode.value = watchlist.value[0]?.tsCode || null
     detailDrawerOpen.value = false
@@ -1448,6 +1459,10 @@ async function loadWatchlist() {
 }
 
 async function loadCandidates() {
+  candidateAiBriefingRequestId++
+  candidateAiBriefing.value = null
+  candidateAiBriefingLoading.value = false
+  candidateAiBriefingError.value = null
   loading.candidates = true
   errors.candidates = null
   try {
@@ -1460,6 +1475,27 @@ async function loadCandidates() {
   }
   finally {
     loading.candidates = false
+  }
+}
+
+async function generateCandidateAiBriefing(): Promise<void> {
+  if (!snapshot.value?.generatedAt || !candidateItems.value.length || candidateAiBriefingLoading.value)
+    return
+  const requestId = ++candidateAiBriefingRequestId
+  candidateAiBriefingLoading.value = true
+  candidateAiBriefingError.value = null
+  try {
+    const briefing = await quantApi.generateCandidateAiBriefing()
+    if (requestId === candidateAiBriefingRequestId)
+      candidateAiBriefing.value = briefing
+  }
+  catch (error) {
+    if (requestId === candidateAiBriefingRequestId)
+      candidateAiBriefingError.value = error
+  }
+  finally {
+    if (requestId === candidateAiBriefingRequestId)
+      candidateAiBriefingLoading.value = false
   }
 }
 
@@ -2475,6 +2511,12 @@ function selectStock(item: Pick<WatchlistItem, 'tsCode' | 'name'>) {
   void Promise.all([loadDailyBars(item.tsCode), loadValuation(item.tsCode), loadFinancialQuality(item.tsCode), loadResearchRuns(item.tsCode)])
 }
 
+function focusCandidateFromBriefing(tsCode: string): void {
+  const item = candidateItems.value.find(candidate => candidate.tsCode === tsCode)
+  if (item)
+    selectStock(item)
+}
+
 async function addToWatchlist() {
   const tsCode = watchCode.value.trim().toUpperCase()
   const name = watchName.value.trim()
@@ -2558,6 +2600,10 @@ async function syncDaily() {
     syncResult.value = await quantApi.syncDaily()
     syncState.value = syncResult.value
     syncStateError.value = null
+    candidateAiBriefingRequestId++
+    candidateAiBriefing.value = null
+    candidateAiBriefingLoading.value = false
+    candidateAiBriefingError.value = null
     await Promise.all([loadWatchlist(), loadCandidates()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
   }
@@ -3249,6 +3295,18 @@ onUnmounted(() => {
               还有 {{ researchPriorityTotal - visibleResearchPriorityQueue.length }} 条记录，请使用研究优先排序查看
             </p>
           </section>
+          <QuantAiCandidateBriefingPanel
+            v-if="candidateItems.length"
+            :briefing="candidateAiBriefing"
+            :candidate-count="candidateItems.length"
+            :available="Boolean(snapshot?.generatedAt)"
+            :loading="candidateAiBriefingLoading"
+            :error-message="candidateAiBriefingError ? parsedError(candidateAiBriefingError).message : null"
+            :configuration-error="candidateAiBriefingConfigurationError"
+            @generate="generateCandidateAiBriefing"
+            @open-settings="aiSettingsOpen = true"
+            @focus-candidate="focusCandidateFromBriefing"
+          />
           <div class="quant-table-frame candidate-table-frame">
             <DataTable
               :data="filteredCandidateItems"

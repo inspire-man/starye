@@ -1,5 +1,6 @@
 import type { QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
+import type { QuantAiCandidateBriefingResult, QuantCandidateBriefingCandidate, QuantCandidateBriefingMarker } from '../../domain/quant/ai-candidate-briefing'
 import type { QuantAiChangeExplanationResult } from '../../domain/quant/ai-change-explanation'
 import type { QuantAiComparisonResult } from '../../domain/quant/ai-comparison'
 import type { QuantAiQuestionResult } from '../../domain/quant/ai-question'
@@ -11,6 +12,7 @@ import type { MomentumCandidate } from '../../domain/quant/types'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
+import { buildQuantCandidateBriefingFacts, generateQuantAiCandidateBriefing } from '../../domain/quant/ai-candidate-briefing'
 import { generateQuantAiChangeExplanation } from '../../domain/quant/ai-change-explanation'
 import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
@@ -80,6 +82,33 @@ function currentQuantUserId(c: Context<AppEnv>): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+interface CurrentQuantCandidateView {
+  readonly [key: string]: unknown
+  readonly id: string
+  readonly tsCode: string
+  readonly factorVersion: string | null
+  readonly name: string | null
+  readonly score: number | null
+  readonly changePercent: number | null
+  readonly dataQuality: string
+  readonly matchedFactors: readonly string[]
+  readonly missingFactors: readonly string[]
+  readonly factors: unknown
+  readonly pendingSync: boolean
+  readonly pendingReason: string | null
+  readonly persistence?: ReturnType<typeof buildQuantSignalPersistence>
+}
+
+interface CurrentQuantCandidateSnapshot {
+  readonly id: string
+  readonly factorVersion: string
+  readonly generatedAt: Date | null
+  readonly fromDate: string | null
+  readonly toDate: string | null
+  readonly inputTsCodes: readonly string[]
+  readonly candidates: readonly CurrentQuantCandidateView[]
 }
 
 function parseStoredCandidates(snapshot: { readonly candidatesJson: string } | undefined): ReadonlyMap<string, Record<string, unknown>> {
@@ -243,6 +272,19 @@ function researchChangeExplanationView(explanation: QuantAiChangeExplanationResu
   }
 }
 
+function candidateBriefingView(briefing: QuantAiCandidateBriefingResult) {
+  return {
+    briefingVersion: briefing.briefingVersion,
+    provider: briefing.provider,
+    model: briefing.model,
+    generatedAt: briefing.generatedAt,
+    overview: briefing.overview,
+    focusItems: briefing.focusItems,
+    nextChecks: briefing.nextChecks,
+    citedCandidateCodes: briefing.citedCandidateCodes,
+  }
+}
+
 function isComparableResearchReport(report: QuantResearchReport): boolean {
   const validStatuses = new Set(['ready', 'partial', 'insufficient_data'])
   const validActions = new Set(['research-window', 'wait-confirmation', 'reassess', 'complete-data'])
@@ -292,7 +334,7 @@ function snapshotIncludesCode(snapshot: { readonly inputTsCodesJson: string }, t
   }
 }
 
-async function readCurrentQuantCandidates(db: AppEnv['Variables']['db'], userId: string) {
+async function readCurrentQuantCandidates(db: AppEnv['Variables']['db'], userId: string): Promise<CurrentQuantCandidateSnapshot> {
   const [watchlist, snapshotHistory] = await Promise.all([
     listQuantWatchlist(db, userId),
     listQuantScanSnapshots(db, userId),
@@ -313,11 +355,18 @@ async function readCurrentQuantCandidates(db: AppEnv['Variables']['db'], userId:
         ...snapshotCandidate,
         id: `snapshot-${item.tsCode}`,
         tsCode: item.tsCode,
-        name: item.name ?? snapshotCandidate.name ?? null,
+        factorVersion: typeof snapshotCandidate.factorVersion === 'string' ? snapshotCandidate.factorVersion : snapshot?.factorVersion ?? 'momentum-v1',
+        name: item.name ?? (typeof snapshotCandidate.name === 'string' ? snapshotCandidate.name : null),
+        score: typeof snapshotCandidate.score === 'number' && Number.isFinite(snapshotCandidate.score) ? snapshotCandidate.score : null,
+        changePercent: typeof snapshotCandidate.changePercent === 'number' && Number.isFinite(snapshotCandidate.changePercent) ? snapshotCandidate.changePercent : null,
+        dataQuality: typeof snapshotCandidate.dataQuality === 'string' ? snapshotCandidate.dataQuality : 'insufficient_data',
+        matchedFactors: Array.isArray(snapshotCandidate.matchedFactors) ? snapshotCandidate.matchedFactors.filter((factor): factor is string => typeof factor === 'string') : [],
+        missingFactors: Array.isArray(snapshotCandidate.missingFactors) ? snapshotCandidate.missingFactors.filter((factor): factor is string => typeof factor === 'string') : [],
+        factors: isRecord(snapshotCandidate.factors) ? snapshotCandidate.factors : null,
         pendingSync: false,
         pendingReason: null,
         persistence: persistenceByCode.get(item.tsCode),
-      }
+      } satisfies CurrentQuantCandidateView
     }
 
     const candidate = recalculated.get(item.tsCode) as MomentumCandidate | undefined
@@ -342,10 +391,25 @@ async function readCurrentQuantCandidates(db: AppEnv['Variables']['db'], userId:
       id: `watchlist-${item.tsCode}`,
       tsCode: item.tsCode,
       name: item.name,
+      score: candidate?.score ?? 0,
+      changePercent: null,
+      dataQuality: candidate?.dataQuality ?? 'insufficient_data',
+      matchedFactors: candidate?.matchedFactors ?? [],
+      missingFactors: candidate?.missingFactors ?? ['ma5', 'ma20', 'new_high_20', 'continuation', 'volume_ratio', 'relative_strength'],
+      factorVersion: candidate?.factorVersion ?? 'momentum-v1',
+      factors: candidate?.factors ?? {
+        ma5: null,
+        ma20: null,
+        isNewHigh20: null,
+        consecutiveUpDays: null,
+        volumeRatio: null,
+        return20: null,
+        relativeStrength: null,
+      },
       pendingSync: true,
       pendingReason: '尚未进入最近一次候选快照，请更新观察池',
       persistence: persistenceByCode.get(item.tsCode),
-    }
+    } satisfies CurrentQuantCandidateView
   })
 
   return {
@@ -357,6 +421,65 @@ async function readCurrentQuantCandidates(db: AppEnv['Variables']['db'], userId:
     inputTsCodes: watchlist.map(item => item.tsCode),
     candidates,
   }
+}
+
+async function readCandidateBriefingFacts(db: AppEnv['Variables']['db'], userId: string, env: AppEnv['Bindings'] | undefined, snapshot: CurrentQuantCandidateSnapshot) {
+  const markers = await listQuantResearchMarkers(db, userId)
+  const valueSelection = await readQuantValueSelection(db, userId, {
+    valuation: createEastmoneyValuationProvider(eastmoneyProviderOptions(env)),
+    financial: createEastmoneyFinancialProvider(eastmoneyProviderOptions(env)),
+  })
+  const valueQualityByCode = new Map(valueSelection.items.map(item => [item.tsCode, {
+    score: item.score,
+    status: item.status,
+    riskDeduction: item.riskDeduction,
+  }] as const))
+  const candidates: QuantCandidateBriefingCandidate[] = snapshot.candidates.map((candidate) => {
+    const rawFactors = isRecord(candidate.factors) ? candidate.factors : {}
+    const factorNumber = (...keys: string[]): number | null => {
+      for (const key of keys) {
+        const value = rawFactors[key]
+        if (typeof value === 'number' && Number.isFinite(value))
+          return value
+      }
+      return null
+    }
+    const factorValues = {
+      consecutiveUpDays: factorNumber('consecutiveUpDays', 'upStreak', 'up_streak', 'continuation'),
+      volumeRatio: factorNumber('volumeRatio', 'volume_ratio'),
+      return20: factorNumber('return20', 'return_20'),
+    }
+    return {
+      tsCode: candidate.tsCode,
+      name: candidate.name,
+      factorVersion: candidate.factorVersion,
+      score: candidate.score,
+      changePercent: candidate.changePercent,
+      dataQuality: candidate.dataQuality,
+      matchedFactors: candidate.matchedFactors,
+      missingFactors: candidate.missingFactors,
+      pendingSync: candidate.pendingSync ?? false,
+      pendingReason: candidate.pendingReason ?? null,
+      factors: factorValues,
+      ...(candidate.persistence
+        ? {
+            persistence: {
+              sampleSize: candidate.persistence.sampleSize,
+              appearanceCount: candidate.persistence.appearanceCount,
+              scoreDelta: candidate.persistence.scoreDelta,
+              state: candidate.persistence.state,
+            },
+          }
+        : {}),
+      valueQuality: valueQualityByCode.get(candidate.tsCode) ?? null,
+    }
+  })
+  const briefingMarkers: QuantCandidateBriefingMarker[] = markers.map(marker => ({
+    tsCode: marker.tsCode,
+    status: marker.status,
+    reviewDate: marker.reviewDate,
+  }))
+  return buildQuantCandidateBriefingFacts(candidates, briefingMarkers)
 }
 
 function eastmoneyProviderOptions(env?: AppEnv['Bindings']): EastmoneyProviderOptions {
@@ -664,6 +787,23 @@ quantRoutes.post('/research/comparison', validator('json', QuantResearchComparis
     ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
   })
   return c.json({ success: true as const, data: researchComparisonView(comparison) })
+})
+
+quantRoutes.post('/candidates/ai-briefing', async (c) => {
+  const userId = currentQuantUserId(c)
+  const snapshot = await readCurrentQuantCandidates(c.get('db'), userId)
+  if (!snapshot.candidates.length || snapshot.id === 'pending' || !snapshot.generatedAt)
+    throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_INPUT', 'Candidate snapshot is not available', 422)
+  const config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env?.QUANT_AI_ENCRYPTION_KEY)
+  if (!config)
+    throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION', 'AI candidate briefing configuration is not available', 503)
+  const facts = await readCandidateBriefingFacts(c.get('db'), userId, c.env, snapshot)
+  const briefing = await generateQuantAiCandidateBriefing({
+    candidates: facts,
+    config,
+    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+  })
+  return c.json({ success: true as const, data: candidateBriefingView(briefing) })
 })
 
 quantRoutes.get('/research/runs/:runId/summary', validator('param', QuantResearchRunIdParamSchema), validator('query', QuantResearchSummaryQuerySchema), async (c) => {
