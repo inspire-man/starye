@@ -31,6 +31,7 @@ import type {
 } from './lib/quant-types'
 import type { QuantView } from './lib/quant-view'
 import type { BatchResearchProgress } from './lib/research-batch'
+import type { BatchAiSummaryProgress, BatchAiSummaryState } from './lib/research-batch-ai-summary'
 import type { BatchResearchFollowUpState } from './lib/research-batch-follow-up'
 import type { ResearchBatchStateSource } from './lib/research-batch-history'
 import type { ResearchEvidenceChange } from './lib/research-evidence-history'
@@ -79,6 +80,12 @@ import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { runResearchBatch } from './lib/research-batch'
+import {
+  applyBatchAiSummaryProgress,
+  idleBatchAiSummaryState,
+  markBatchAiSummaryItemPending,
+  runResearchAiSummaryBatch,
+} from './lib/research-batch-ai-summary'
 import { buildResearchBatchFilename, buildResearchBatchMarkdown } from './lib/research-batch-export'
 import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from './lib/research-batch-follow-up'
 import { hydrateResearchBatchState } from './lib/research-batch-history'
@@ -140,6 +147,10 @@ const comparisonResearchExportError = ref(false)
 const comparisonResearchCopying = ref(false)
 const comparisonResearchCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const comparisonResearchCopyMessage = ref('')
+const comparisonResearchAiSummaryRunning = ref(false)
+const comparisonResearchAiSummaryStates = ref<Record<string, BatchAiSummaryState>>({})
+const comparisonResearchAiSummaryMessage = ref('')
+const comparisonResearchAiSummaryError = ref(false)
 const researchFormStatus = ref<ResearchMarkerStatus>('unreviewed')
 const researchFormNote = ref('')
 const researchFormReviewDate = ref('')
@@ -162,6 +173,7 @@ let researchRunRequestId = 0
 let researchSummaryRequestId = 0
 let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
+let comparisonResearchAiSummaryRequestId = 0
 let comparisonResearchHistoryRequestId = 0
 const comparisonResearchHistoryRequestIds = new Map<string, number>()
 const loading = reactive({
@@ -427,6 +439,25 @@ const comparisonResearchExportReady = computed(() => comparisonResearchSuccessfu
   && comparisonResearchSummary.value.completed === comparisonResearchSummary.value.total
   && comparisonResearchSummary.value.pending === 0
   && comparisonResearchSummary.value.running === 0)
+const comparisonResearchAiSummarySummary = computed(() => {
+  const states = comparisonResearchSuccessfulRuns.value.map(run => comparisonResearchAiSummaryStates.value[run.tsCode]?.status || 'idle')
+  const success = states.filter(status => status === 'success').length
+  const error = states.filter(status => status === 'error').length
+  const running = states.filter(status => status === 'running').length
+  const pending = states.filter(status => status === 'pending').length
+  return {
+    total: states.length,
+    success,
+    error,
+    running,
+    pending,
+    completed: success + error,
+    started: states.some(status => status !== 'idle'),
+  }
+})
+const comparisonResearchAiSummaryReady = computed(() => comparisonResearchExportReady.value
+  && comparisonResearchSuccessfulRuns.value.length > 0)
+const comparisonResearchAiSummaryButtonLabel = computed(() => comparisonResearchAiSummarySummary.value.started ? '重新生成 AI 摘要' : '批量生成 AI 摘要')
 const latestDailyBar = computed(() => dailyBars.value.at(-1) || null)
 const latestWatchlistDate = computed(() => {
   const dates = watchlist.value.map(item => item.latestTradeDate).filter((date): date is string => Boolean(date))
@@ -1786,6 +1817,42 @@ function comparisonResearchStateFor(item: CandidateItem): ComparisonResearchItem
   return comparisonResearchStates.value[item.tsCode] || { status: 'idle', run: null, error: null }
 }
 
+function comparisonResearchAiSummaryStateFor(item: CandidateItem): BatchAiSummaryState {
+  return comparisonResearchAiSummaryStates.value[item.tsCode] || idleBatchAiSummaryState()
+}
+
+function comparisonResearchAiSummaryStatusLabel(state: BatchAiSummaryState): string {
+  if (state.status === 'idle')
+    return '未生成'
+  if (state.status === 'pending')
+    return '排队中'
+  if (state.status === 'running')
+    return '生成中'
+  if (state.status === 'error')
+    return '生成失败'
+  return '已生成'
+}
+
+function comparisonResearchAiSummaryStatusDetail(state: BatchAiSummaryState): string {
+  if (state.status === 'idle')
+    return '点击上方按钮生成摘要'
+  if (state.status === 'pending')
+    return '等待可用任务位'
+  if (state.status === 'running')
+    return '正在请求 AI 摘要'
+  if (state.status === 'error')
+    return parsedError(state.error).message
+  if (!state.summary)
+    return '摘要已返回'
+  return `${state.summary.provider} · ${state.summary.model}`
+}
+
+function comparisonResearchAiSummaryActionFor(item: CandidateItem): 'retry' | null {
+  const researchState = comparisonResearchStateFor(item)
+  const summaryState = comparisonResearchAiSummaryStateFor(item)
+  return researchState.status === 'success' && researchState.run && summaryState.status === 'error' ? 'retry' : null
+}
+
 function comparisonResearchHistoryLoadingFor(item: CandidateItem): boolean {
   return comparisonResearchHistoryLoading.value[item.tsCode] === true
 }
@@ -1932,6 +1999,7 @@ async function openComparisonDrawer() {
   const items = [...selectedCandidateItems.value]
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
+  resetComparisonResearchAiSummaryState()
   comparisonDrawerOpen.value = true
   comparisonLoading.value = true
   comparisonValuations.value = {}
@@ -1967,11 +2035,12 @@ async function openComparisonDrawer() {
 }
 
 async function startBatchResearch() {
-  if (!canCompareCandidates.value || comparisonResearchRunning.value)
+  if (!canCompareCandidates.value || comparisonResearchRunning.value || comparisonResearchAiSummaryRunning.value)
     return
 
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
+  resetComparisonResearchAiSummaryState()
   const items = [...selectedCandidateItems.value]
   for (const item of items)
     invalidateComparisonResearchHistory(item.tsCode)
@@ -2005,11 +2074,12 @@ async function startBatchResearch() {
 
 async function retryBatchResearchItem(item: CandidateItem) {
   const current = comparisonResearchStateFor(item)
-  if (current.status !== 'error' || comparisonResearchRunning.value)
+  if (current.status !== 'error' || comparisonResearchRunning.value || comparisonResearchAiSummaryRunning.value)
     return
 
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
+  resetComparisonResearchAiSummaryState()
   invalidateComparisonResearchHistory(item.tsCode)
   comparisonResearchStates.value = markBatchResearchItemPending(comparisonResearchStates.value, item.tsCode)
   comparisonResearchHistorySources.value = { ...comparisonResearchHistorySources.value, [item.tsCode]: 'batch' }
@@ -2109,6 +2179,85 @@ async function copyComparisonResearchReports() {
   else {
     comparisonResearchCopyOutcome.value = 'error'
     comparisonResearchCopyMessage.value = '批量复制失败，请检查剪贴板权限后重试'
+  }
+}
+
+function resetComparisonResearchAiSummaryState() {
+  comparisonResearchAiSummaryRequestId++
+  comparisonResearchAiSummaryRunning.value = false
+  comparisonResearchAiSummaryStates.value = {}
+  comparisonResearchAiSummaryMessage.value = ''
+  comparisonResearchAiSummaryError.value = false
+}
+
+function updateComparisonResearchAiSummaryMessage() {
+  const summary = comparisonResearchAiSummarySummary.value
+  if (!summary.total)
+    return
+
+  comparisonResearchAiSummaryError.value = summary.error > 0
+  comparisonResearchAiSummaryMessage.value = summary.error > 0
+    ? `已生成 ${summary.success} / ${summary.total} 项 AI 摘要，${summary.error} 项失败，可单独重试`
+    : `已生成 ${summary.success} / ${summary.total} 项 AI 摘要`
+}
+
+async function startBatchResearchAiSummary() {
+  if (!comparisonResearchAiSummaryReady.value || comparisonResearchAiSummaryRunning.value)
+    return
+
+  const candidates = comparisonResearchSuccessfulRuns.value.map(run => ({ tsCode: run.tsCode, runId: run.id }))
+  if (!candidates.length)
+    return
+
+  const requestId = ++comparisonResearchAiSummaryRequestId
+  comparisonResearchAiSummaryStates.value = Object.fromEntries(candidates.map(candidate => [candidate.tsCode, idleBatchAiSummaryState()]))
+  comparisonResearchAiSummaryMessage.value = ''
+  comparisonResearchAiSummaryError.value = false
+  comparisonResearchAiSummaryRunning.value = true
+  try {
+    await runResearchAiSummaryBatch(
+      candidates,
+      candidate => quantApi.generateResearchSummary(candidate.runId),
+      (progress: BatchAiSummaryProgress) => {
+        if (requestId === comparisonResearchAiSummaryRequestId)
+          comparisonResearchAiSummaryStates.value = applyBatchAiSummaryProgress(comparisonResearchAiSummaryStates.value, progress)
+      },
+    )
+    if (requestId === comparisonResearchAiSummaryRequestId)
+      updateComparisonResearchAiSummaryMessage()
+  }
+  finally {
+    if (requestId === comparisonResearchAiSummaryRequestId)
+      comparisonResearchAiSummaryRunning.value = false
+  }
+}
+
+async function retryComparisonResearchAiSummary(item: CandidateItem) {
+  const run = comparisonResearchSuccessfulRuns.value.find(candidate => candidate.tsCode === item.tsCode)
+  const current = comparisonResearchAiSummaryStateFor(item)
+  if (!run || current.status !== 'error' || comparisonResearchAiSummaryRunning.value)
+    return
+
+  const requestId = ++comparisonResearchAiSummaryRequestId
+  comparisonResearchAiSummaryStates.value = markBatchAiSummaryItemPending(comparisonResearchAiSummaryStates.value, item.tsCode)
+  comparisonResearchAiSummaryMessage.value = ''
+  comparisonResearchAiSummaryError.value = false
+  comparisonResearchAiSummaryRunning.value = true
+  try {
+    await runResearchAiSummaryBatch(
+      [{ tsCode: run.tsCode, runId: run.id }],
+      candidate => quantApi.generateResearchSummary(candidate.runId),
+      (progress: BatchAiSummaryProgress) => {
+        if (requestId === comparisonResearchAiSummaryRequestId)
+          comparisonResearchAiSummaryStates.value = applyBatchAiSummaryProgress(comparisonResearchAiSummaryStates.value, progress)
+      },
+    )
+    if (requestId === comparisonResearchAiSummaryRequestId)
+      updateComparisonResearchAiSummaryMessage()
+  }
+  finally {
+    if (requestId === comparisonResearchAiSummaryRequestId)
+      comparisonResearchAiSummaryRunning.value = false
   }
 }
 
@@ -4403,12 +4552,19 @@ onUnmounted(() => {
                 <Copy :size="15" aria-hidden="true" />
                 {{ comparisonResearchCopying ? '复制中' : `复制 ${comparisonResearchSummary.success} 份` }}
               </button>
+              <button v-if="comparisonResearchAiSummaryReady" class="secondary-button comparison-research-ai-summary-button" type="button" :disabled="comparisonResearchAiSummaryRunning" title="为当前批次已经完成的研究报告生成 AI 摘要" :aria-label="comparisonResearchAiSummaryButtonLabel" @click="startBatchResearchAiSummary">
+                <Sparkles :size="15" :class="comparisonResearchAiSummaryRunning ? 'animate-spin' : ''" aria-hidden="true" />
+                {{ comparisonResearchAiSummaryRunning ? '摘要生成中' : comparisonResearchAiSummaryButtonLabel }}
+              </button>
             </div>
             <p v-if="comparisonResearchExportMessage" class="comparison-research-export-message" :class="{ 'comparison-research-export-message-error': comparisonResearchExportError }" role="status">
               {{ comparisonResearchExportMessage }}
             </p>
             <p v-if="comparisonResearchCopyMessage" class="comparison-research-copy-message" :class="{ 'comparison-research-copy-message-error': comparisonResearchCopyOutcome === 'error' }" role="status">
               {{ comparisonResearchCopyMessage }}
+            </p>
+            <p v-if="comparisonResearchAiSummaryMessage" class="comparison-research-ai-summary-message" :class="{ 'comparison-research-ai-summary-message-error': comparisonResearchAiSummaryError }" role="status">
+              {{ comparisonResearchAiSummaryMessage }}
             </p>
             <div class="comparison-research-list" role="list" aria-live="polite">
               <div v-for="item in selectedCandidateItems" :key="`research-${item.id}`" class="comparison-research-item" :class="comparisonResearchItemClass(item)" role="listitem">
@@ -4420,6 +4576,10 @@ onUnmounted(() => {
                   <span>{{ comparisonResearchStatusLabelFor(item) }}</span>
                   <small>{{ comparisonResearchStatusDetailFor(item) }}</small>
                   <small v-if="comparisonResearchHistoryMetaFor(item)" class="comparison-research-history-meta">{{ comparisonResearchHistoryMetaFor(item) }}</small>
+                  <div v-if="comparisonResearchStateFor(item).status === 'success'" class="comparison-research-ai-summary" :class="`comparison-research-ai-summary-${comparisonResearchAiSummaryStateFor(item).status}`">
+                    <span>AI 摘要 · {{ comparisonResearchAiSummaryStatusLabel(comparisonResearchAiSummaryStateFor(item)) }}</span>
+                    <small>{{ comparisonResearchAiSummaryStatusDetail(comparisonResearchAiSummaryStateFor(item)) }}</small>
+                  </div>
                 </div>
                 <div class="comparison-research-actions">
                   <button
@@ -4456,6 +4616,18 @@ onUnmounted(() => {
                   >
                     <RefreshCw :size="14" :class="comparisonResearchHistoryLoadingFor(item) ? 'animate-spin' : ''" aria-hidden="true" />
                     {{ comparisonResearchHistoryLoadingFor(item) ? '读取中' : '重试读取' }}
+                  </button>
+                  <button
+                    v-if="comparisonResearchAiSummaryActionFor(item) === 'retry'"
+                    class="text-button comparison-research-action"
+                    type="button"
+                    :disabled="comparisonResearchAiSummaryRunning"
+                    :aria-label="`重试 ${displayStockName(item)} 的 AI 摘要`"
+                    title="只重试这一只股票的 AI 摘要"
+                    @click="retryComparisonResearchAiSummary(item)"
+                  >
+                    <RotateCcw :size="14" :class="comparisonResearchAiSummaryRunning ? 'animate-spin' : ''" aria-hidden="true" />
+                    重试摘要
                   </button>
                 </div>
               </div>
