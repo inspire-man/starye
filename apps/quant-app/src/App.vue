@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
 import type { CandidateEvidenceScore } from './lib/candidate-evidence-score'
+import type { QuantDataHealthStatus } from './lib/data-health'
 import type { DecisionEvidenceStatus } from './lib/decision-evidence'
 import type {
   CandidateItem,
@@ -74,6 +75,7 @@ import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
+import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { runResearchBatch } from './lib/research-batch'
@@ -436,6 +438,18 @@ const signalCandidateCount = computed(() => candidateItems.value.filter(item => 
 const watchlistEnvironment = computed(() => buildWatchlistEnvironment({
   watchlist: watchlist.value,
   candidates: candidateItems.value,
+}))
+const dataHealthSummary = computed(() => buildQuantDataHealth({
+  watchlist: watchlist.value,
+  sync: syncResult.value || syncState.value,
+  syncLoading: loading.sync || loading.syncState,
+  syncError: Boolean(syncStateError.value),
+  valueSelection: valueSelection.value,
+  valueLoading: loading.valueQuality,
+  valueError: Boolean(errors.valueQuality),
+  shareholderReturns: shareholderReturns.value,
+  shareholderLoading: loading.shareholderReturns,
+  shareholderError: Boolean(errors.shareholderReturns),
 }))
 const dataCoverageCount = computed(() => watchlist.value.filter(item => item.barCount > 0 || item.latestTradeDate !== null).length)
 const dataCoverageLabel = computed(() => watchlist.value.length ? `${dataCoverageCount.value} / ${watchlist.value.length}` : '--')
@@ -1246,6 +1260,30 @@ function syncStatusClass(status: SyncStatus): string {
     partial: 'status-partial',
     rejected: 'status-disabled',
   }[status]
+}
+
+function dataHealthStatusLabel(status: QuantDataHealthStatus): string {
+  return {
+    ready: '完整',
+    partial: '部分可用',
+    missing: '待补数据',
+    loading: '读取中',
+    error: '读取失败',
+  }[status]
+}
+
+function dataHealthStatusClass(status: QuantDataHealthStatus): string {
+  return {
+    ready: 'status-enabled',
+    partial: 'status-partial',
+    missing: 'status-disabled',
+    loading: 'status-info',
+    error: 'status-disabled',
+  }[status]
+}
+
+function dataHealthSummaryClass(status: QuantDataHealthStatus): string {
+  return `data-health-summary-${status}`
 }
 
 function focusSignal(item: CandidateItem): string {
@@ -2285,6 +2323,43 @@ onUnmounted(() => {
               <span class="metric-note">最新 {{ latestWatchlistDate }}</span>
             </article>
           </template>
+        </section>
+
+        <section class="data-health-section" aria-labelledby="data-health-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">
+                DATA HEALTH
+              </p>
+              <h2 id="data-health-title" class="section-title">
+                数据健康
+              </h2>
+            </div>
+            <span class="status-chip" :class="dataHealthStatusClass(dataHealthSummary.status)">
+              {{ dataHealthStatusLabel(dataHealthSummary.status) }}
+            </span>
+          </div>
+          <div class="data-health-layout">
+            <div class="data-health-summary" :class="dataHealthSummaryClass(dataHealthSummary.status)">
+              <div class="data-health-summary-icon" aria-hidden="true">
+                <DatabaseZap :size="18" />
+              </div>
+              <strong>{{ dataHealthSummary.headline }}</strong>
+              <p>{{ dataHealthSummary.scopeNote }}</p>
+            </div>
+            <div class="data-health-list" role="list" aria-label="数据健康状态">
+              <div v-for="item in dataHealthSummary.items" :key="item.key" class="data-health-item" role="listitem">
+                <div class="data-health-item-heading">
+                  <strong>{{ item.label }}</strong>
+                  <span class="status-chip" :class="dataHealthStatusClass(item.status)">
+                    {{ dataHealthStatusLabel(item.status) }}
+                  </span>
+                </div>
+                <p>{{ item.detail }}</p>
+                <small v-if="item.observedAt">观测 {{ formatDateTime(item.observedAt) }}</small>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="environment-section" aria-labelledby="environment-title">
