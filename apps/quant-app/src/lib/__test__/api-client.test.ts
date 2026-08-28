@@ -185,6 +185,38 @@ describe('quantApi', () => {
     })
   })
 
+  it('reads persisted sync state and preserves an empty state', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          status: 'completed',
+          from_date: '20260301',
+          to_date: '20260828',
+          requested_count: 14,
+          written_count: 1680,
+          skipped_count: 0,
+          snapshot_id: 'snapshot-1',
+          started_at: '2026-08-28T09:58:29.000Z',
+          completed_at: '2026-08-28T09:58:31.000Z',
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: null }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getSyncState()).resolves.toMatchObject({
+      status: 'completed',
+      requested: 14,
+      written: 1680,
+      skipped: 0,
+      snapshotId: 'snapshot-1',
+      completedAt: '2026-08-28T09:58:31.000Z',
+    })
+    await expect(quantApi.getSyncState()).resolves.toBeNull()
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/sync`)
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ credentials: 'include' }))
+  })
+
   it('normalizes the selected stock valuation snapshot and keeps missing fields null', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {

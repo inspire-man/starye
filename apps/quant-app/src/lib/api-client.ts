@@ -595,6 +595,11 @@ function parseSyncResult(payload: unknown): SyncResult {
   }
 }
 
+function parseSyncState(payload: unknown): SyncResult | null {
+  const data = unwrapData(payload)
+  return data === null ? null : parseSyncResult(data)
+}
+
 function emptyCandidatePersistence(): CandidateSignalPersistence {
   return {
     sampleSize: 0,
@@ -1180,6 +1185,10 @@ export const quantApi = {
 
   async removeWatchlist(tsCode: string): Promise<void> {
     await requestJson(`/watchlist/${encodeURIComponent(tsCode)}`, { method: 'DELETE' })
+  },
+
+  async getSyncState(): Promise<SyncResult | null> {
+    return parseSyncState(await requestJson('/sync'))
   },
 
   async syncDaily(): Promise<SyncResult> {
