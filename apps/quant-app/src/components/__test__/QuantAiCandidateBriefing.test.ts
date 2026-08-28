@@ -40,6 +40,9 @@ const baseProps = {
   loading: false,
   errorMessage: null,
   configurationError: false,
+  copying: false,
+  copyOutcome: null,
+  copyMessage: '',
 }
 
 describe('quant ai candidate briefing', () => {
@@ -85,6 +88,55 @@ describe('quant ai candidate briefing', () => {
       ['601899.SH'],
       ['601899.SH'],
     ])
+  })
+
+  it('exposes export and copy actions only in success state and reports copy progress', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing },
+    })
+
+    expect(wrapper.get('.quant-ai-briefing-export').attributes('aria-label')).toBe('导出候选 AI 简报为 Markdown 文件')
+    expect(wrapper.get('.quant-ai-briefing-copy').attributes('disabled')).toBeUndefined()
+
+    await wrapper.get('.quant-ai-briefing-export').trigger('click')
+    await wrapper.get('.quant-ai-briefing-copy').trigger('click')
+
+    expect(wrapper.emitted('export')).toHaveLength(1)
+    expect(wrapper.emitted('copy')).toHaveLength(1)
+
+    const loading = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing, loading: true, copyMessage: '上一轮已复制' },
+    })
+    expect(loading.find('.quant-ai-briefing-export').exists()).toBe(false)
+    expect(loading.find('.quant-ai-briefing-copy').exists()).toBe(false)
+    expect(loading.find('.quant-ai-briefing-copy-message').exists()).toBe(false)
+
+    const error = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing, errorMessage: '生成失败', copyMessage: '上一轮已复制' },
+    })
+    expect(error.find('.quant-ai-briefing-export').exists()).toBe(false)
+    expect(error.find('.quant-ai-briefing-copy').exists()).toBe(false)
+    expect(error.find('.quant-ai-briefing-copy-message').exists()).toBe(false)
+
+    const copying = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing, copying: true, copyMessage: '复制中' },
+    })
+    expect(copying.get('.quant-ai-briefing-copy').attributes('disabled')).toBeDefined()
+    expect(copying.text()).toContain('复制中')
+  })
+
+  it('renders clipboard success and failure messages without changing briefing facts', () => {
+    const success = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing, copyOutcome: 'success', copyMessage: 'Markdown 已复制到剪贴板' },
+    })
+    expect(success.get('.quant-ai-briefing-copy-message').text()).toBe('Markdown 已复制到剪贴板')
+    expect(success.get('.quant-ai-briefing-copy-message').classes()).not.toContain('quant-ai-briefing-copy-message-error')
+
+    const failure = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing, copyOutcome: 'error', copyMessage: '复制失败，请检查剪贴板权限后重试' },
+    })
+    expect(failure.get('.quant-ai-briefing-copy-message').text()).toContain('复制失败')
+    expect(failure.get('.quant-ai-briefing-copy-message').classes()).toContain('quant-ai-briefing-copy-message-error')
   })
 
   it('opens settings for configuration errors and retries other errors', async () => {
