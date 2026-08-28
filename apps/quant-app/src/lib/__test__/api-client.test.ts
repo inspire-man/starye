@@ -724,4 +724,38 @@ describe('quantApi', () => {
       status: 502,
     })
   })
+
+  it('normalizes a report-grounded AI research question and posts only the question', async () => {
+    const question = {
+      question_version: 'research-question-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-08-29T01:00:00.000Z',
+      question: 'ROE 是否达到报告门槛？',
+      answer: '报告中的 ROE 为 18%，高于报告列出的至少 10% 门槛。',
+      cited_evidence_keys: ['quality-roe'],
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: question }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...question, answer: '' } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.askResearchQuestion('run-1', 'ROE 是否达到报告门槛？')).resolves.toEqual({
+      questionVersion: 'research-question-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generatedAt: '2026-08-29T01:00:00.000Z',
+      question: 'ROE 是否达到报告门槛？',
+      answer: '报告中的 ROE 为 18%，高于报告列出的至少 10% 门槛。',
+      citedEvidenceKeys: ['quality-roe'],
+    })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/question`)
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ question: 'ROE 是否达到报告门槛？' }))
+
+    await expect(quantApi.askResearchQuestion('run-1', 'ROE 是否达到报告门槛？')).rejects.toMatchObject({
+      code: 'QUANT_AI_QUESTION_INVALID_RESPONSE',
+      status: 502,
+    })
+  })
 })

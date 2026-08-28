@@ -121,6 +121,16 @@ export interface QuantResearchComparison {
   citedEvidence: QuantResearchComparisonCitation[]
 }
 
+export interface QuantResearchQuestion {
+  questionVersion: 'research-question-v1'
+  provider: QuantAiProvider
+  model: string
+  generatedAt: string
+  question: string
+  answer: string
+  citedEvidenceKeys: string[]
+}
+
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'
 

@@ -290,6 +290,23 @@ export const QuantResearchComparisonResponseSchema = v.strictObject({
   }),
 })
 
+export const QuantResearchQuestionSchema = v.strictObject({
+  question: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(500)),
+})
+
+export const QuantResearchQuestionResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.strictObject({
+    questionVersion: v.literal('research-question-v1'),
+    provider: QuantAiProviderSchema,
+    model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    generatedAt: v.string(),
+    question: v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
+    answer: v.pipe(v.string(), v.minLength(1), v.maxLength(8000)),
+    citedEvidenceKeys: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(80))), v.maxLength(16)),
+  }),
+})
+
 export const QuantResearchSummaryQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })
@@ -305,4 +322,6 @@ export type QuantResearchRunsQuery = v.InferOutput<typeof QuantResearchRunsQuery
 export type QuantResearchRunIdParam = v.InferOutput<typeof QuantResearchRunIdParamSchema>
 export type QuantResearchComparison = v.InferOutput<typeof QuantResearchComparisonSchema>
 export type QuantResearchComparisonResponse = v.InferOutput<typeof QuantResearchComparisonResponseSchema>
+export type QuantResearchQuestion = v.InferOutput<typeof QuantResearchQuestionSchema>
+export type QuantResearchQuestionResponse = v.InferOutput<typeof QuantResearchQuestionResponseSchema>
 export type QuantResearchSummaryQuery = v.InferOutput<typeof QuantResearchSummaryQuerySchema>

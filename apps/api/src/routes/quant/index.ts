@@ -1,6 +1,7 @@
 import type { QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
 import type { QuantAiComparisonResult } from '../../domain/quant/ai-comparison'
+import type { QuantAiQuestionResult } from '../../domain/quant/ai-question'
 import type { QuantAiSummary } from '../../domain/quant/ai-summary'
 import type { EastmoneyProviderOptions, TushareProviderOptions } from '../../domain/quant/provider'
 import type { QuantResearchReport } from '../../domain/quant/research-report'
@@ -12,6 +13,7 @@ import { validator } from 'hono-openapi'
 import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
 import { testQuantAiConnection } from '../../domain/quant/ai-connection'
+import { generateQuantAiQuestion } from '../../domain/quant/ai-question'
 import { generateQuantAiSummary } from '../../domain/quant/ai-summary'
 import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
@@ -53,6 +55,7 @@ import {
   QuantFinancialHistoryQuerySchema,
   QuantResearchComparisonSchema,
   QuantResearchMarkerUpdateSchema,
+  QuantResearchQuestionSchema,
   QuantResearchRunCreateSchema,
   QuantResearchRunIdParamSchema,
   QuantResearchRunsQuerySchema,
@@ -207,6 +210,18 @@ function researchComparisonView(comparison: QuantAiComparisonResult) {
     risks: comparison.risks,
     nextChecks: comparison.nextChecks,
     citedEvidence: comparison.citedEvidence,
+  }
+}
+
+function researchQuestionView(question: QuantAiQuestionResult) {
+  return {
+    questionVersion: question.questionVersion,
+    provider: question.provider,
+    model: question.model,
+    generatedAt: question.generatedAt,
+    question: question.question,
+    answer: question.answer,
+    citedEvidenceKeys: question.citedEvidenceKeys,
   }
 }
 
@@ -548,6 +563,28 @@ quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResear
     generatedAt: new Date(),
   })
   return c.json({ success: true as const, data: researchSummaryView(persisted, report) }, 201)
+})
+
+quantRoutes.post('/research/runs/:runId/question', validator('param', QuantResearchRunIdParamSchema), validator('json', QuantResearchQuestionSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { runId } = c.req.valid('param')
+  const { question } = c.req.valid('json')
+  const run = await getQuantResearchRun(c.get('db'), userId, runId)
+  if (!run)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+  const report = parseResearchReport(run.reportJson)
+  if (report.tsCode !== run.tsCode || report.status !== run.status || report.reportVersion !== run.reportVersion || !isComparableResearchReport(report))
+    throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted research run does not match its report', 500)
+  const config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env.QUANT_AI_ENCRYPTION_KEY)
+  if (!config)
+    throw new QuantError('QUANT_AI_QUESTION_CONFIGURATION', 'AI question configuration is not available', 503)
+  const generated = await generateQuantAiQuestion({
+    report,
+    question,
+    config,
+    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+  })
+  return c.json({ success: true as const, data: researchQuestionView(generated) })
 })
 
 quantRoutes.post('/research/comparison', validator('json', QuantResearchComparisonSchema), async (c) => {

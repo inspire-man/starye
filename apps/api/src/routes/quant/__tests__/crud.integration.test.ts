@@ -812,6 +812,129 @@ describe('quant watchlist CRUD contract', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
+  it('answers questions from the owned report without accepting forged input or persisting results', async () => {
+    const { client, db } = await createDatabase()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const reportFor = (tsCode: string, evidenceKey: string) => JSON.stringify({
+      reportVersion: 'research-report-v2',
+      tsCode,
+      name: tsCode === '601899.SH' ? '紫金矿业' : '外部用户股票',
+      generatedAt: '2026-08-29T00:00:00.000Z',
+      sourceSnapshotId: null,
+      status: 'partial',
+      action: 'wait-confirmation',
+      score: 72.5,
+      headline: '等待确认：部分证据可用',
+      strengths: [],
+      risks: [],
+      gaps: [],
+      nextActions: [],
+      evidence: [{
+        key: evidenceKey,
+        dimension: 'quality',
+        label: 'ROE',
+        status: 'pass',
+        value: 18,
+        threshold: '至少 10%',
+        source: 'Quant fixture',
+        observedAt: '2026-08-28',
+        formulaVersion: 'fixture-v1',
+        detail: '来自服务端保存报告的事实。',
+      }],
+      sources: [],
+    })
+    for (const [id, userId, tsCode, evidenceKey] of [
+      ['question-run-owned', 'user-1', '601899.SH', 'question-roe'],
+      ['question-run-foreign', 'user-2', '000001.SZ', 'foreign-roe'],
+    ] as const) {
+      await client.execute({
+        sql: `INSERT INTO quant_research_run (
+          id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+          report_json, generated_at, created_at
+        ) VALUES (?, ?, ?, ?, 'partial', 'research-report-v2', NULL, ?, 10, 10)`,
+        args: [id, userId, tsCode, tsCode, reportFor(tsCode, evidenceKey)],
+      })
+    }
+
+    const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'question-route-secret' } as AppEnv['Bindings']
+    await userA.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        base_url: 'https://ai.example.test/v1',
+        api_key: 'sk-question-route-secret',
+      }),
+    }, env)
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        answer: '报告显示 ROE 为 18%，达到至少 10% 的报告门槛。',
+        citedEvidenceKeys: ['question-roe'],
+      }) } }],
+    }), { status: 200 }))
+    const beforeRuns = await client.execute('SELECT id, report_json FROM quant_research_run ORDER BY id')
+    const beforeSummaries = await client.execute('SELECT count(*) AS count FROM quant_research_summary')
+
+    const forged = await userA.request('/api/quant/research/runs/question-run-owned/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'ROE 如何？', report: 'client forged report', model: 'client-forged-model', api_key: 'client-forged-key' }),
+    }, env)
+    expect(forged.status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    const response = await userA.request('/api/quant/research/runs/question-run-owned/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: ' ROE 是否达到报告门槛？ ' }),
+    }, env)
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        questionVersion: 'research-question-v1',
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        question: 'ROE 是否达到报告门槛？',
+        answer: expect.stringContaining('18%'),
+        citedEvidenceKeys: ['question-roe'],
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { messages: Array<{ content: string }> }
+    expect(requestBody.messages[1]?.content).toContain('question-roe')
+    expect(requestBody.messages[1]?.content).not.toContain('client forged report')
+    expect(requestBody.messages[1]?.content).not.toContain('client-forged-key')
+    expect(requestBody.messages[1]?.content).not.toContain('sk-question-route-secret')
+
+    await expect(client.execute('SELECT id, report_json FROM quant_research_run ORDER BY id')).resolves.toEqual(beforeRuns)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toEqual(beforeSummaries)
+
+    for (const runId of ['question-run-foreign', 'question-run-missing']) {
+      const missing = await userA.request(`/api/quant/research/runs/${runId}/question`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question: '问题' }),
+      }, env)
+      expect(missing.status).toBe(404)
+      await expect(missing.json()).resolves.toMatchObject({ success: false, code: 'QUANT_NOT_FOUND' })
+    }
+    expect(fetchMock).toHaveBeenCalledOnce()
+
+    for (const question of ['', 'x'.repeat(501)]) {
+      const invalid = await userA.request('/api/quant/research/runs/question-run-owned/question', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question }),
+      }, env)
+      expect(invalid.status).toBe(400)
+    }
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
   it('rejects invalid AI comparison output without persisting a comparison or changing reports', async () => {
     const { client, db } = await createDatabase()
     const reportFor = (tsCode: string, evidenceKey: string) => JSON.stringify({

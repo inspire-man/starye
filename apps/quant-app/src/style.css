@@ -19,12 +19,14 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+textarea:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
@@ -1405,6 +1407,192 @@ input:focus-visible {
 
 .research-report-copy-message-error {
   color: hsl(var(--status-danger));
+}
+
+.quant-ai-question-panel {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.85rem;
+  border-top: 1px solid hsl(var(--status-info) / 0.3);
+  padding-top: 0.8rem;
+}
+
+.quant-ai-question-heading,
+.quant-ai-question-answer-heading,
+.quant-ai-question-citations-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.quant-ai-question-heading > svg {
+  flex: 0 0 auto;
+  color: hsl(var(--status-info));
+}
+
+.quant-ai-question-heading h3 {
+  margin: 0.3rem 0 0;
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+  font-weight: 740;
+}
+
+.quant-ai-question-heading small,
+.quant-ai-question-answer-heading small,
+.quant-ai-question-citations-heading small {
+  display: block;
+  margin-top: 0.2rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.4;
+}
+
+.quant-ai-question-form,
+.quant-ai-question-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.quant-ai-question-field > span {
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.quant-ai-question-input {
+  width: 100%;
+  height: auto;
+  min-height: 4.75rem;
+  resize: vertical;
+  padding: 0.6rem 0.7rem;
+  line-height: 1.45;
+}
+
+.quant-ai-question-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.quant-ai-question-actions > small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-question-state {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.quant-ai-question-state-error {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  color: hsl(var(--status-danger));
+  text-align: left;
+}
+
+.quant-ai-question-state-error small {
+  color: hsl(var(--muted-foreground));
+}
+
+.quant-ai-question-answer,
+.quant-ai-question-citations {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid hsl(var(--status-info) / 0.24);
+  border-left: 2px solid hsl(var(--status-info) / 0.65);
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--status-info) / 0.05);
+  padding: 0.55rem 0.6rem;
+}
+
+.quant-ai-question-answer-heading strong,
+.quant-ai-question-citations-heading strong {
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  font-weight: 740;
+}
+
+.quant-ai-question-answer p {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-question-citations {
+  border-color: hsl(var(--status-success) / 0.24);
+  border-left-color: hsl(var(--status-success) / 0.65);
+  background: hsl(var(--status-success) / 0.04);
+}
+
+.quant-ai-question-citation-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.quant-ai-question-citation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--card) / 0.72);
+  padding: 0.45rem 0.5rem;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  text-align: left;
+}
+
+.quant-ai-question-citation:hover {
+  border-color: hsl(var(--primary) / 0.4);
+  background: hsl(var(--accent));
+  color: hsl(var(--primary));
+}
+
+.quant-ai-question-citation > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.quant-ai-question-citation > span small {
+  overflow-wrap: anywhere;
+  color: hsl(var(--muted-foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.625rem;
+  font-weight: 500;
+}
+
+.quant-ai-question-citation > strong {
+  flex: 0 0 auto;
+  color: hsl(var(--status-success));
+  font-size: 0.625rem;
+  font-weight: 740;
+}
+
+.quant-ai-question-empty-citation {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.35;
 }
 
 .research-run-state {
@@ -6425,6 +6613,21 @@ input:focus-visible {
   }
 
   .research-run-heading-actions > button {
+    width: 100%;
+  }
+
+  .quant-ai-question-heading,
+  .quant-ai-question-answer-heading,
+  .quant-ai-question-citations-heading {
+    flex-direction: column;
+  }
+
+  .quant-ai-question-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quant-ai-question-actions > button {
     width: 100%;
   }
 
