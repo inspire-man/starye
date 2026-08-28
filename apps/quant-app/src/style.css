@@ -3458,6 +3458,22 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.comparison-research-export-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.comparison-research-export-message {
+  margin: 0;
+  color: hsl(var(--status-success));
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.comparison-research-export-message-error {
+  color: hsl(var(--status-danger));
+}
+
 .comparison-research-list {
   display: grid;
   gap: 0.35rem;
