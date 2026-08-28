@@ -3539,11 +3539,27 @@ input:focus-visible {
   font-weight: 720;
 }
 
+.comparison-research-item-history-loading .comparison-research-detail > span {
+  color: hsl(var(--status-info));
+}
+
+.comparison-research-item-history-error .comparison-research-detail > span,
+.comparison-research-history-meta {
+  color: hsl(var(--status-danger));
+}
+
+.comparison-research-history-meta {
+  overflow-wrap: anywhere;
+  white-space: normal !important;
+}
+
 .comparison-research-actions {
   display: flex;
+  flex-wrap: wrap;
   min-width: 6.5rem;
   align-items: center;
   justify-content: flex-end;
+  gap: 0.45rem;
 }
 
 .comparison-research-action {
