@@ -191,6 +191,55 @@ describe('syncChapterData', () => {
     expect(spies.insertValues).toHaveBeenCalledTimes(3)
     expect(spies.updateSet).not.toHaveBeenCalled()
   })
+
+  it('native D1 大页面集按安全变量边界拆批并保持完整替换', async () => {
+    const { db, state } = createSyncDb()
+    const preparedStatements: Array<{ sql: string, values: unknown[] }> = []
+    const client = {
+      prepare: vi.fn((sql: string) => {
+        const statement = {
+          sql,
+          values: [] as unknown[],
+          bind: vi.fn((...values: unknown[]) => {
+            statement.values = values
+            return statement
+          }),
+        }
+        preparedStatements.push(statement)
+        return statement
+      }),
+      batch: vi.fn(async (statements: Array<{ sql: string, values: unknown[] }>) => {
+        for (const statement of statements) {
+          if (statement.sql.includes('DELETE FROM page')) {
+            state.pages = []
+          }
+          else if (statement.sql.includes('INSERT INTO page')) {
+            for (let index = 0; index < statement.values.length; index += 6) {
+              state.pages.push({
+                chapterId: String(statement.values[index + 1]),
+                height: Number(statement.values[index + 5]),
+                id: String(statement.values[index]),
+                imageUrl: String(statement.values[index + 3]),
+                pageNumber: Number(statement.values[index + 2]),
+                width: Number(statement.values[index + 4]),
+              })
+            }
+          }
+        }
+        return statements.map((_, index) => ({ meta: { changes: index === statements.length - 1 ? 1 : 0 } }))
+      }),
+    }
+    Object.assign(db as any, { $client: client })
+
+    const response = await runSyncChapterData(db, Array.from({ length: 21 }, (_, index) => `https://new.example.com/${index + 1}.jpg`))
+
+    expect(response.status).toBe(200)
+    expect(state.pages).toHaveLength(21)
+    const inserts = preparedStatements.filter(statement => statement.sql.includes('INSERT INTO page'))
+    expect(inserts).toHaveLength(3)
+    expect(inserts.map(statement => statement.values.length)).toEqual([60, 60, 6])
+    expect(inserts.every(statement => statement.values.length <= 60)).toBe(true)
+  })
 })
 
 function createMovieSyncDb() {
