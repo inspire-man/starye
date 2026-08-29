@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingQuestion } from '../lib/quant-types'
+import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingQuestion, QuantAiCandidateBriefingSession } from '../lib/quant-types'
 import { AlertCircle, BrainCircuit, CircleHelp, Copy, Download, RefreshCw } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { quantApi, QuantApiError } from '../lib/api-client'
 
 type CopyOutcome = 'success' | 'error' | null
 
@@ -11,6 +12,9 @@ const props = withDefaults(defineProps<{
   filteredCandidateCount: number
   briefingAvailableCandidateCount: number
   briefingCandidateCount?: number | null
+  currentScopeKey?: string
+  currentSnapshotId?: string | null
+  historyResetKey?: number
   available?: boolean
   loading: boolean
   errorMessage: string | null
@@ -20,17 +24,23 @@ const props = withDefaults(defineProps<{
   questionLoading?: boolean
   questionErrorMessage?: string | null
   questionConfigurationError?: boolean
+  sessionHistory?: QuantAiCandidateBriefingSession[] | null
+  sessionHistoryErrorMessage?: string | null
   copying?: boolean
   copyOutcome?: CopyOutcome
   copyMessage?: string
 }>(), {
   available: true,
   briefingCandidateCount: null,
+  currentScopeKey: '',
+  currentSnapshotId: null,
+  historyResetKey: 0,
   questionInput: '',
   questionResult: null,
   questionLoading: false,
   questionErrorMessage: null,
   questionConfigurationError: false,
+  sessionHistoryErrorMessage: null,
   copying: false,
   copyOutcome: null,
   copyMessage: '',
@@ -54,6 +64,17 @@ const canAskQuestion = computed(() => props.available !== false && hasBriefingCa
 const showBriefingActions = computed(() => Boolean(props.briefing && !props.loading && !props.errorMessage))
 const visibleFocusItems = computed(() => props.briefing?.focusItems.slice(0, 5) || [])
 const visibleNextChecks = computed(() => props.briefing?.nextChecks.slice(0, 6) || [])
+const loadedSessionHistory = ref<QuantAiCandidateBriefingSession[]>([])
+const historyLoading = ref(false)
+const historyErrorMessage = ref<string | null>(null)
+const historyOpen = ref(true)
+const selectedHistorySession = ref<QuantAiCandidateBriefingSession | null>(null)
+const historyDetailLoading = ref(false)
+const historyDetailErrorMessage = ref<string | null>(null)
+const historyListRequestId = ref(0)
+const historyRequestId = ref(0)
+const visibleSessionHistory = computed(() => props.sessionHistory ?? loadedSessionHistory.value)
+const visibleHistoryError = computed(() => props.sessionHistoryErrorMessage ?? historyErrorMessage.value)
 
 const generateButtonLabel = computed(() => {
   if (props.loading)
@@ -104,6 +125,91 @@ function submitQuestion(): void {
   if (canAskQuestion.value)
     emit('askQuestion', props.questionInput.trim())
 }
+
+function historyError(error: unknown): string {
+  if (error instanceof QuantApiError || error instanceof Error)
+    return error.message
+  return '最近会话加载失败，请稍后重试'
+}
+
+async function loadSessionHistory(): Promise<void> {
+  if (props.sessionHistory !== undefined)
+    return
+  const requestId = historyListRequestId.value + 1
+  historyListRequestId.value = requestId
+  historyLoading.value = true
+  historyErrorMessage.value = null
+  try {
+    const result = await quantApi.getCandidateAiSessions(5)
+    if (historyListRequestId.value === requestId)
+      loadedSessionHistory.value = result.items
+  }
+  catch (error) {
+    if (historyListRequestId.value === requestId)
+      historyErrorMessage.value = historyError(error)
+  }
+  finally {
+    if (historyListRequestId.value === requestId)
+      historyLoading.value = false
+  }
+}
+
+async function viewHistory(session: QuantAiCandidateBriefingSession): Promise<void> {
+  historyOpen.value = true
+  selectedHistorySession.value = session
+  historyDetailErrorMessage.value = null
+  if (props.sessionHistory !== undefined)
+    return
+  const requestId = historyRequestId.value + 1
+  historyRequestId.value = requestId
+  historyDetailLoading.value = true
+  try {
+    const detail = await quantApi.getCandidateAiSession(session.id)
+    if (historyRequestId.value === requestId)
+      selectedHistorySession.value = detail
+  }
+  catch (error) {
+    if (historyRequestId.value === requestId)
+      historyDetailErrorMessage.value = historyError(error)
+  }
+  finally {
+    if (historyRequestId.value === requestId)
+      historyDetailLoading.value = false
+  }
+}
+
+function formatSessionRange(session: QuantAiCandidateBriefingSession): string {
+  if (session.fromDate && session.toDate)
+    return `${formatDate(session.fromDate)} ~ ${formatDate(session.toDate)}`
+  if (session.fromDate || session.toDate)
+    return formatDate(session.fromDate || session.toDate || '')
+  return '日期范围未记录'
+}
+
+function sessionSnapshotDate(session: QuantAiCandidateBriefingSession): string {
+  return formatDate(session.snapshotGeneratedAt || session.updatedAt || session.createdAt)
+}
+
+function sessionTitle(session: QuantAiCandidateBriefingSession): string {
+  return `${sessionSnapshotDate(session)} · ${session.candidateCodes.length} 个候选`
+}
+
+onMounted(() => {
+  void loadSessionHistory()
+})
+
+watch(() => [props.briefing?.sessionId, props.questionResult?.sessionId], () => {
+  if (props.sessionHistory === undefined)
+    void loadSessionHistory()
+})
+
+watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetKey], () => {
+  selectedHistorySession.value = null
+  historyDetailErrorMessage.value = null
+  historyDetailLoading.value = false
+  historyListRequestId.value++
+  historyRequestId.value++
+})
 </script>
 
 <template>
@@ -168,6 +274,122 @@ function submitQuestion(): void {
       <span v-if="briefing">版本 {{ briefing.briefingVersion }}</span>
       <span v-if="briefing">{{ briefing.provider }} · {{ briefing.model }} · {{ formatDate(briefing.generatedAt) }}</span>
     </div>
+
+    <section class="quant-ai-briefing-history" aria-labelledby="quant-ai-briefing-history-title">
+      <div class="quant-ai-briefing-section-heading">
+        <div>
+          <span id="quant-ai-briefing-history-title" class="quant-ai-briefing-label">最近会话</span>
+          <small>保留历史快照和 AI 内容，只读查看，不改变当前候选范围</small>
+        </div>
+        <button
+          class="text-button quant-ai-briefing-history-toggle"
+          type="button"
+          :aria-expanded="historyOpen"
+          @click="historyOpen = !historyOpen"
+        >
+          {{ historyOpen ? '收起历史' : '查看历史' }}
+        </button>
+      </div>
+      <div v-if="historyOpen" class="quant-ai-briefing-history-body">
+        <div v-if="historyLoading" class="quant-ai-briefing-history-state" role="status">
+          <RefreshCw :size="14" class="animate-spin" aria-hidden="true" />
+          正在加载最近会话
+        </div>
+        <div v-else-if="visibleHistoryError" class="quant-ai-briefing-history-state quant-ai-briefing-history-state-error" role="alert">
+          <AlertCircle :size="14" aria-hidden="true" />
+          <span class="quant-ai-briefing-wrap-anywhere">{{ visibleHistoryError }}</span>
+          <button class="text-button" type="button" @click="loadSessionHistory">
+            重试
+          </button>
+        </div>
+        <div v-else-if="!visibleSessionHistory.length" class="quant-ai-briefing-history-state" role="status">
+          <CircleHelp :size="14" aria-hidden="true" />
+          暂无已保存的候选 AI 会话
+        </div>
+        <div v-else class="quant-ai-briefing-history-list">
+          <button
+            v-for="session in visibleSessionHistory"
+            :key="session.id"
+            class="quant-ai-briefing-history-item"
+            :class="{ 'quant-ai-briefing-history-item-active': selectedHistorySession?.id === session.id }"
+            type="button"
+            @click="viewHistory(session)"
+          >
+            <span class="quant-ai-briefing-history-item-heading">
+              <strong>{{ sessionTitle(session) }}</strong>
+              <span class="quant-ai-briefing-history-badge">历史 · 查看历史</span>
+            </span>
+            <span class="quant-ai-briefing-history-item-meta quant-ai-briefing-wrap-anywhere">
+              快照 {{ sessionSnapshotDate(session) }} · 范围 {{ formatSessionRange(session) }} · {{ session.scopeKey }}
+            </span>
+          </button>
+        </div>
+
+        <div v-if="selectedHistorySession" class="quant-ai-briefing-history-detail">
+          <div class="quant-ai-briefing-section-heading">
+            <span class="quant-ai-briefing-label">历史会话只读恢复</span>
+            <small v-if="historyDetailLoading">正在读取详情</small>
+            <small v-else>更新于 {{ formatDate(selectedHistorySession.updatedAt) }}</small>
+          </div>
+          <div class="quant-ai-briefing-history-metadata quant-ai-briefing-wrap-anywhere">
+            <span>快照时间 <strong>{{ sessionSnapshotDate(selectedHistorySession) }}</strong></span>
+            <span>范围 <strong>{{ formatSessionRange(selectedHistorySession) }}</strong></span>
+            <span>历史候选 <strong>{{ selectedHistorySession.candidateCodes.length }} 个</strong></span>
+            <span>scopeKey <code>{{ selectedHistorySession.scopeKey }}</code></span>
+          </div>
+          <p
+            v-if="historyDetailErrorMessage"
+            class="quant-ai-briefing-history-detail-error"
+            role="alert"
+          >
+            {{ historyDetailErrorMessage }}
+          </p>
+          <div v-if="selectedHistorySession.briefing" class="quant-ai-briefing-history-briefing">
+            <span class="quant-ai-briefing-label">历史简报</span>
+            <p class="quant-ai-briefing-wrap-anywhere">
+              {{ selectedHistorySession.briefing.overview }}
+            </p>
+            <small>{{ selectedHistorySession.briefing.provider }} · {{ selectedHistorySession.briefing.model }} · {{ formatDate(selectedHistorySession.briefing.generatedAt) }}</small>
+            <div v-if="selectedHistorySession.briefing.focusItems.length" class="quant-ai-briefing-history-focus-list">
+              <span class="quant-ai-briefing-history-sub-label">重点候选</span>
+              <div v-for="item in selectedHistorySession.briefing.focusItems" :key="item.tsCode" class="quant-ai-briefing-history-focus-item">
+                <strong>{{ item.name || item.tsCode }}</strong>
+                <span>{{ item.tsCode }} · {{ formatScore(item.priorityScore) }} · {{ item.actionLabel }}</span>
+                <p class="quant-ai-briefing-wrap-anywhere">
+                  {{ item.explanation }}
+                </p>
+              </div>
+            </div>
+            <div v-if="selectedHistorySession.briefing.nextChecks.length" class="quant-ai-briefing-history-next-checks">
+              <span class="quant-ai-briefing-history-sub-label">下一步核对</span>
+              <ul>
+                <li v-for="check in selectedHistorySession.briefing.nextChecks" :key="check" class="quant-ai-briefing-wrap-anywhere">
+                  {{ check }}
+                </li>
+              </ul>
+            </div>
+            <div v-if="selectedHistorySession.briefing.citedCandidateCodes.length" class="quant-ai-briefing-history-citations">
+              <span class="quant-ai-briefing-history-sub-label">引用候选代码</span>
+              <code v-for="tsCode in selectedHistorySession.briefing.citedCandidateCodes" :key="tsCode">{{ tsCode }}</code>
+            </div>
+          </div>
+          <div v-if="selectedHistorySession.questions.length" class="quant-ai-briefing-history-questions">
+            <span class="quant-ai-briefing-label">历史追问</span>
+            <article v-for="question in selectedHistorySession.questions" :key="`${question.question}-${question.generatedAt}`" class="quant-ai-briefing-history-question">
+              <strong class="quant-ai-briefing-wrap-anywhere">{{ question.question }}</strong>
+              <p class="quant-ai-briefing-wrap-anywhere">
+                {{ question.answer }}
+              </p>
+              <small>引用 {{ question.citedCandidateCodes.join('、') || '无' }} · {{ formatDate(question.generatedAt) }}</small>
+            </article>
+          </div>
+          <span v-if="!selectedHistorySession.briefing && !selectedHistorySession.questions.length" class="quant-ai-briefing-empty">
+            <CircleHelp :size="13" aria-hidden="true" />
+            该历史会话尚未保存简报或追问
+          </span>
+        </div>
+      </div>
+    </section>
 
     <div class="quant-ai-briefing-question">
       <div class="quant-ai-briefing-section-heading">
@@ -543,6 +765,181 @@ function submitQuestion(): void {
 .quant-ai-briefing-scope strong {
   color: hsl(var(--foreground));
   font-variant-numeric: tabular-nums;
+}
+
+.quant-ai-briefing-history {
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.65rem;
+}
+
+.quant-ai-briefing-history-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.quant-ai-briefing-history-body,
+.quant-ai-briefing-history-list,
+.quant-ai-briefing-history-detail,
+.quant-ai-briefing-history-briefing,
+.quant-ai-briefing-history-questions {
+  display: grid;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.quant-ai-briefing-history-list {
+  max-height: 14rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+.quant-ai-briefing-history-item {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--card));
+  padding: 0.45rem 0.55rem;
+  color: hsl(var(--foreground));
+  text-align: left;
+}
+
+.quant-ai-briefing-history-item:hover,
+.quant-ai-briefing-history-item-active {
+  border-color: hsl(var(--primary) / 0.55);
+  background: hsl(var(--primary) / 0.05);
+}
+
+.quant-ai-briefing-history-item-heading,
+.quant-ai-briefing-history-metadata,
+.quant-ai-briefing-history-citations {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+}
+
+.quant-ai-briefing-history-item-heading {
+  justify-content: space-between;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+}
+
+.quant-ai-briefing-history-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.12);
+  padding: 0.12rem 0.35rem;
+  color: hsl(var(--primary));
+  font-size: 0.5625rem;
+}
+
+.quant-ai-briefing-history-item-meta,
+.quant-ai-briefing-history-briefing > small,
+.quant-ai-briefing-history-question > small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.4;
+}
+
+.quant-ai-briefing-history-detail {
+  border-left: 2px solid hsl(var(--primary) / 0.55);
+  background: hsl(var(--muted) / 0.2);
+  padding: 0.55rem 0.6rem;
+}
+
+.quant-ai-briefing-history-metadata {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-briefing-history-metadata strong {
+  color: hsl(var(--foreground));
+}
+
+.quant-ai-briefing-history-briefing,
+.quant-ai-briefing-history-questions {
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.45rem;
+}
+
+.quant-ai-briefing-history-briefing > p,
+.quant-ai-briefing-history-question > p {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.quant-ai-briefing-history-sub-label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.quant-ai-briefing-history-focus-list,
+.quant-ai-briefing-history-next-checks,
+.quant-ai-briefing-history-citations {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.quant-ai-briefing-history-focus-item {
+  display: grid;
+  gap: 0.15rem;
+  border-left: 1px solid hsl(var(--border));
+  padding-left: 0.45rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-briefing-history-focus-item strong {
+  color: hsl(var(--foreground));
+}
+
+.quant-ai-briefing-history-focus-item p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.quant-ai-briefing-history-next-checks ul {
+  margin: 0;
+  padding-left: 1rem;
+  color: hsl(var(--foreground));
+  font-size: 0.625rem;
+  line-height: 1.45;
+}
+
+.quant-ai-briefing-history-citations code {
+  width: fit-content;
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--background));
+  padding: 0.12rem 0.3rem;
+  color: hsl(var(--foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-briefing-history-state,
+.quant-ai-briefing-history-detail-error {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.4rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+}
+
+.quant-ai-briefing-history-state-error,
+.quant-ai-briefing-history-detail-error {
+  color: hsl(var(--status-danger));
+}
+
+.quant-ai-briefing-history-detail-error {
+  margin: 0;
 }
 
 .quant-ai-briefing-state {

@@ -7,7 +7,7 @@ import * as schema from '@starye/db/schema'
 import { drizzle } from 'drizzle-orm/libsql'
 import { Hono } from 'hono'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createQuantWatchlistItem, upsertQuantResearchMarker } from '../../../domain/quant/repository'
+import { createQuantCandidateAiSession, createQuantWatchlistItem, upsertQuantResearchMarker } from '../../../domain/quant/repository'
 import { quantRoutes } from '../index'
 
 const migrationPaths = [
@@ -18,6 +18,7 @@ const migrationPaths = [
   new URL('../../../../../../packages/db/drizzle/0041_quant_user_scope.sql', import.meta.url),
   new URL('../../../../../../packages/db/drizzle/0042_quant_research_run.sql', import.meta.url),
   new URL('../../../../../../packages/db/drizzle/0043_quant_research_summary.sql', import.meta.url),
+  new URL('../../../../../../packages/db/drizzle/0044_quant_candidate_ai_session.sql', import.meta.url),
 ]
 
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
@@ -140,9 +141,11 @@ describe('quant candidate AI briefing route', () => {
     }, env)
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toMatchObject({
+    const responseBody = await response.json() as { success: boolean, data: { sessionId: string } }
+    expect(responseBody).toMatchObject({
       success: true,
       data: {
+        sessionId: expect.any(String),
         briefingVersion: 'candidate-briefing-v1',
         provider: 'openai_compatible',
         model: 'gpt-5.4',
@@ -155,6 +158,28 @@ describe('quant candidate AI briefing route', () => {
         }],
         citedCandidateCodes: ['601899.SH'],
       },
+    })
+    const historyResponse = await app.request('/api/quant/candidates/ai-sessions?limit=5', {}, env)
+    expect(historyResponse.status).toBe(200)
+    await expect(historyResponse.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        limit: 5,
+        items: [expect.objectContaining({
+          id: responseBody.data.sessionId,
+          snapshotId: 'snapshot-user-1',
+          scopeKey: '601899.SH',
+          candidateCodes: ['601899.SH'],
+          briefing: expect.objectContaining({ briefingVersion: 'candidate-briefing-v1' }),
+          questions: [],
+        })],
+      },
+    })
+    const detailResponse = await app.request(`/api/quant/candidates/ai-sessions/${responseBody.data.sessionId}`, {}, env)
+    expect(detailResponse.status).toBe(200)
+    await expect(detailResponse.json()).resolves.toMatchObject({
+      success: true,
+      data: { id: responseBody.data.sessionId, briefing: expect.objectContaining({ overview: expect.any(String) }) },
     })
     const aiCall = fetchMock.mock.calls.find(call => String(call[0]).endsWith('/chat/completions'))
     expect(aiCall).toBeDefined()
@@ -445,5 +470,152 @@ describe('quant candidate AI briefing route', () => {
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_CONFIGURATION' })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('appends a question to the owned session and rejects a stale session before calling AI', async () => {
+    const { client, db } = await createDatabase()
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
+    await insertSnapshot(client, 'user-1', 'snapshot-user-1')
+    const app = createApp(db, 'user-1')
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'candidate-session-route-secret' } as AppEnv['Bindings']
+    await app.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'openai_compatible', model: 'gpt-5.4', base_url: 'https://ai.example.test/v1', api_key: 'session-route-key' }),
+    }, env)
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/chat/completions'))
+        return aiResponse(validQuestionContent())
+      if (url.includes('/api/qt/stock/get'))
+        return new Response(JSON.stringify({ rc: 0, data: { f57: '601899', f162: 12, f163: 12, f164: 10, f165: 2, f166: 1, f168: 1, f116: 1000000000 } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      if (url.includes('/PC_HSF10/'))
+        return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } })
+      return new Response(JSON.stringify({ data: null }), { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+
+    const created = await createQuantCandidateAiSession(db, {
+      userId: 'user-1',
+      snapshotId: 'snapshot-user-1',
+      snapshotGeneratedAt: new Date(1_756_435_200_000),
+      fromDate: '20260801',
+      toDate: '20260829',
+      scopeKey: '601899.SH',
+      candidateCodesJson: JSON.stringify(['601899.SH']),
+      briefingJson: null,
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      createdAt: new Date(1_756_435_201_000),
+    })
+
+    const appended = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['601899.SH'], question: '当前范围先核对什么？', session_id: created.id }),
+    }, env)
+    expect(appended.status).toBe(200)
+    await expect(appended.json()).resolves.toMatchObject({ success: true, data: { sessionId: created.id } })
+    const detail = await app.request(`/api/quant/candidates/ai-sessions/${created.id}`, {}, env)
+    await expect(detail.json()).resolves.toMatchObject({
+      success: true,
+      data: { questions: [expect.objectContaining({ question: '当前范围先核对什么？' })] },
+    })
+    for (let index = 0; index < 10; index++) {
+      const response = await app.request('/api/quant/candidates/ai-briefing/question', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ts_codes: ['601899.SH'], question: `追加问题 ${index}`, session_id: created.id }),
+      }, env)
+      expect(response.status).toBe(200)
+    }
+    const boundedDetail = await app.request(`/api/quant/candidates/ai-sessions/${created.id}`, {}, env)
+    const boundedBody = await boundedDetail.json() as { success: boolean, data: { questions: Array<{ question: string }> } }
+    expect(boundedBody).toMatchObject({
+      success: true,
+      data: {
+        questions: expect.arrayContaining([expect.objectContaining({ question: '追加问题 0' })]),
+      },
+    })
+    expect(boundedBody.data.questions).toHaveLength(10)
+
+    await insertSnapshot(client, 'user-1', 'snapshot-z', ['601899.SH'])
+    const callsBeforeStale = fetchMock.mock.calls.filter(call => String(call[0]).endsWith('/chat/completions')).length
+    const stale = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['601899.SH'], question: '过期会话问题', session_id: created.id }),
+    }, env)
+    expect(stale.status).toBe(422)
+    await expect(stale.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_CANDIDATE_SESSION_STALE' })
+    expect(fetchMock.mock.calls.filter(call => String(call[0]).endsWith('/chat/completions')).length).toBe(callsBeforeStale)
+  })
+
+  it('isolates candidate AI session history by user and bounds session retention', async () => {
+    const { client, db } = await createDatabase()
+    const snapshotGeneratedAt = new Date(1_756_435_200_000)
+    for (let index = 0; index < 11; index++) {
+      await createQuantCandidateAiSession(db, {
+        userId: 'user-1',
+        snapshotId: `snapshot-${index}`,
+        snapshotGeneratedAt,
+        fromDate: '20260801',
+        toDate: '20260829',
+        scopeKey: '601899.SH',
+        candidateCodesJson: JSON.stringify(['601899.SH']),
+        briefingJson: null,
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        createdAt: new Date(snapshotGeneratedAt.getTime() + index * 1000),
+      })
+    }
+    const app = createApp(db, 'user-1')
+    const history = await app.request('/api/quant/candidates/ai-sessions?limit=10')
+    await expect(history.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        limit: 10,
+        items: expect.arrayContaining([expect.objectContaining({ snapshotId: 'snapshot-10' })]),
+      },
+    })
+    await expect(client.execute('SELECT count(*) AS count FROM quant_candidate_ai_session WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 10 }] })
+  })
+
+  it('does not expose another user session through list or detail', async () => {
+    const { client, db } = await createDatabase()
+    const other = await createQuantCandidateAiSession(db, {
+      userId: 'user-2',
+      snapshotId: 'snapshot-user-2',
+      snapshotGeneratedAt: new Date(1_756_435_200_000),
+      fromDate: '20260801',
+      toDate: '20260829',
+      scopeKey: '601899.SH',
+      candidateCodesJson: JSON.stringify(['601899.SH']),
+      briefingJson: null,
+      provider: 'ollama',
+      model: 'qwen3',
+    })
+    const app = createApp(db, 'user-1')
+    const history = await app.request('/api/quant/candidates/ai-sessions')
+    await expect(history.json()).resolves.toMatchObject({ success: true, data: { items: [] } })
+    const detail = await app.request(`/api/quant/candidates/ai-sessions/${other.id}`)
+    expect(detail.status).toBe(404)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_candidate_ai_session WHERE user_id = \'user-2\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+  })
+
+  it('fails closed when persisted candidate AI content is corrupted', async () => {
+    const { client, db } = await createDatabase()
+    await client.execute(`
+      INSERT INTO quant_candidate_ai_session (
+        id, user_id, snapshot_id, snapshot_generated_at, from_date, to_date, scope_key,
+        candidate_codes_json, briefing_json, questions_json, provider, model, created_at, updated_at
+      ) VALUES ('corrupt-session', 'user-1', 'snapshot-1', 1756435200, '20260801', '20260829', '601899.SH', ?, '{bad-json', '[]', 'openai_compatible', 'gpt-5.4', 1756435200, 1756435200)
+    `, ['["601899.SH"]'])
+    const app = createApp(db, 'user-1')
+
+    const response = await app.request('/api/quant/candidates/ai-sessions/corrupt-session')
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_CANDIDATE_SESSION_INVALID' })
   })
 })

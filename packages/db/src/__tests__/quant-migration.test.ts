@@ -10,13 +10,14 @@ const researchMigrationPath = new URL('../../drizzle/0039_quant_research_marker.
 const userScopeMigrationPath = new URL('../../drizzle/0041_quant_user_scope.sql', import.meta.url)
 const researchRunMigrationPath = new URL('../../drizzle/0042_quant_research_run.sql', import.meta.url)
 const researchSummaryMigrationPath = new URL('../../drizzle/0043_quant_research_summary.sql', import.meta.url)
+const candidateAiSessionMigrationPath = new URL('../../drizzle/0044_quant_candidate_ai_session.sql', import.meta.url)
 
 async function createMigratedClient() {
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
   await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-1\', 1)')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -41,6 +42,7 @@ describe('quant workbench migration', () => {
 
     expect(tables.rows.map(row => String(row.name))).toEqual([
       'quant_ai_config',
+      'quant_candidate_ai_session',
       'quant_daily_bar',
       'quant_research_marker',
       'quant_research_run',
@@ -51,6 +53,8 @@ describe('quant workbench migration', () => {
     ])
     expect(indexes.rows.map(row => String(row.name))).toEqual(expect.arrayContaining([
       'idx_quant_daily_bar_identity',
+      'idx_quant_candidate_ai_session_user_created_at',
+      'idx_quant_candidate_ai_session_user_snapshot_generated_at',
       'idx_quant_research_marker_user_ts_code',
       'idx_quant_research_run_user_ts_code_generated_at',
       'idx_quant_research_summary_user_run_generated_at',

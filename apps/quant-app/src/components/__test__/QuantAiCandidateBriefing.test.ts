@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { QuantAiCandidateBriefingSession } from '../../lib/quant-types'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import QuantAiCandidateBriefing from '../QuantAiCandidateBriefing.vue'
@@ -46,6 +47,40 @@ const baseProps = {
   copying: false,
   copyOutcome: null,
   copyMessage: '',
+  sessionHistory: [],
+}
+
+const historySession: QuantAiCandidateBriefingSession = {
+  id: 'session-1',
+  snapshotId: 'snapshot-history-1',
+  snapshotGeneratedAt: '2026-08-28T03:00:00.000Z',
+  fromDate: '2026-08-01',
+  toDate: '2026-08-28',
+  scopeKey: '601899.SH|000001.SZ',
+  candidateCodes: ['601899.SH', '000001.SZ'],
+  briefing: {
+    briefingVersion: 'candidate-briefing-v1',
+    provider: 'openai_compatible',
+    model: 'gpt-5.4',
+    generatedAt: '2026-08-28T03:10:00.000Z',
+    overview: '历史简报：先核对数据完整性。',
+    focusItems: [],
+    nextChecks: [],
+    citedCandidateCodes: ['601899.SH'],
+  },
+  questions: [{
+    questionVersion: 'candidate-briefing-question-v1',
+    provider: 'openai_compatible',
+    model: 'gpt-5.4',
+    generatedAt: '2026-08-28T03:12:00.000Z',
+    question: '历史范围先看什么？',
+    answer: '历史事实显示应先核对数据完整性。',
+    citedCandidateCodes: ['601899.SH'],
+  }],
+  provider: 'openai_compatible',
+  model: 'gpt-5.4',
+  createdAt: '2026-08-28T03:10:00.000Z',
+  updatedAt: '2026-08-28T03:12:00.000Z',
 }
 
 describe('quant ai candidate briefing', () => {
@@ -159,6 +194,54 @@ describe('quant ai candidate briefing', () => {
     })
     await retry.get('.quant-ai-briefing-question-error-action').trigger('click')
     expect(retry.emitted('askQuestion')).toEqual([['问题']])
+  })
+
+  it('shows recent sessions with historical snapshot metadata and restores a read-only session', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, sessionHistory: [historySession] },
+    })
+
+    expect(wrapper.text()).toContain('最近会话')
+    expect(wrapper.text()).toContain('历史')
+    expect(wrapper.text()).toContain('快照 2026-08-28')
+    expect(wrapper.text()).toContain('范围 2026-08-01 ~ 2026-08-28')
+    expect(wrapper.text()).toContain('601899.SH|000001.SZ')
+    expect(wrapper.find('.quant-ai-briefing-history-detail').exists()).toBe(false)
+
+    await wrapper.get('.quant-ai-briefing-history-item').trigger('click')
+
+    expect(wrapper.text()).toContain('历史会话只读恢复')
+    expect(wrapper.text()).toContain('历史简报：先核对数据完整性。')
+    expect(wrapper.text()).toContain('历史范围先看什么？')
+    expect(wrapper.text()).toContain('历史事实显示应先核对数据完整性。')
+    expect(wrapper.find('.quant-ai-briefing-generate').exists()).toBe(true)
+    expect(wrapper.emitted('generate')).toBeUndefined()
+  })
+
+  it('keeps the current briefing and question separate from the selected historical session', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        briefing,
+        questionResult: {
+          questionVersion: 'candidate-briefing-question-v1',
+          provider: 'openai_compatible',
+          model: 'gpt-5.4',
+          generatedAt: '2026-08-29T02:00:00.000Z',
+          question: '当前问题',
+          answer: '当前回答',
+          citedCandidateCodes: ['000001.SZ'],
+        },
+        sessionHistory: [historySession],
+      },
+    })
+
+    await wrapper.get('.quant-ai-briefing-history-item').trigger('click')
+
+    expect(wrapper.text()).toContain('当前候选集中，高优先级标的需要先补齐风险核对')
+    expect(wrapper.text()).toContain('当前回答')
+    expect(wrapper.text()).toContain('历史简报：先核对数据完整性。')
+    expect(wrapper.text()).toContain('历史会话只读恢复')
   })
 
   it('exposes export and copy actions only in success state and reports copy progress', async () => {

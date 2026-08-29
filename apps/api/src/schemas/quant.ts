@@ -353,6 +353,7 @@ export const QuantAiCandidateBriefingRequestSchema = v.strictObject({
 export const QuantAiCandidateBriefingQuestionRequestSchema = v.strictObject({
   ts_codes: v.pipe(v.array(QuantTsCodeSchema), v.minLength(1), v.maxLength(50)),
   question: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(500)),
+  session_id: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128))),
 })
 
 export const QuantAiCandidateBriefingFocusItemSchema = v.strictObject({
@@ -368,6 +369,7 @@ export const QuantAiCandidateBriefingFocusItemSchema = v.strictObject({
 export const QuantAiCandidateBriefingResponseSchema = v.strictObject({
   success: v.literal(true),
   data: v.strictObject({
+    sessionId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
     briefingVersion: v.literal('candidate-briefing-v1'),
     provider: QuantAiProviderSchema,
     model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
@@ -382,6 +384,7 @@ export const QuantAiCandidateBriefingResponseSchema = v.strictObject({
 export const QuantAiCandidateBriefingQuestionResponseSchema = v.strictObject({
   success: v.literal(true),
   data: v.strictObject({
+    sessionId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
     questionVersion: v.literal('candidate-briefing-question-v1'),
     provider: QuantAiProviderSchema,
     model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
@@ -390,6 +393,66 @@ export const QuantAiCandidateBriefingQuestionResponseSchema = v.strictObject({
     answer: v.pipe(v.string(), v.minLength(1), v.maxLength(8000)),
     citedCandidateCodes: v.pipe(v.array(QuantTsCodeSchema), v.maxLength(16)),
   }),
+})
+
+const QuantAiCandidateBriefingHistoryBriefingSchema = v.strictObject({
+  sessionId: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  briefingVersion: v.literal('candidate-briefing-v1'),
+  provider: QuantAiProviderSchema,
+  model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  generatedAt: v.string(),
+  overview: v.pipe(v.string(), v.minLength(1), v.maxLength(1200)),
+  focusItems: v.pipe(v.array(QuantAiCandidateBriefingFocusItemSchema), v.maxLength(5)),
+  nextChecks: v.pipe(v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(360))), v.maxLength(6)),
+  citedCandidateCodes: v.pipe(v.array(QuantTsCodeSchema), v.maxLength(5)),
+})
+
+const QuantAiCandidateBriefingHistoryQuestionSchema = v.strictObject({
+  sessionId: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  questionVersion: v.literal('candidate-briefing-question-v1'),
+  provider: QuantAiProviderSchema,
+  model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  generatedAt: v.string(),
+  question: v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
+  answer: v.pipe(v.string(), v.minLength(1), v.maxLength(8000)),
+  citedCandidateCodes: v.pipe(v.array(QuantTsCodeSchema), v.maxLength(16)),
+})
+
+export const QuantAiCandidateBriefingSessionIdParamSchema = v.object({
+  sessionId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+})
+
+export const QuantAiCandidateBriefingSessionQuerySchema = v.object({
+  limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
+})
+
+export const QuantAiCandidateBriefingSessionSchema = v.strictObject({
+  id: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  snapshotId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  snapshotGeneratedAt: v.nullable(v.string()),
+  fromDate: v.nullable(v.string()),
+  toDate: v.nullable(v.string()),
+  scopeKey: v.pipe(v.string(), v.minLength(1), v.maxLength(1200)),
+  candidateCodes: v.pipe(v.array(QuantTsCodeSchema), v.maxLength(50)),
+  briefing: v.nullable(QuantAiCandidateBriefingHistoryBriefingSchema),
+  questions: v.pipe(v.array(QuantAiCandidateBriefingHistoryQuestionSchema), v.maxLength(10)),
+  provider: QuantAiProviderSchema,
+  model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  createdAt: v.string(),
+  updatedAt: v.string(),
+})
+
+export const QuantAiCandidateBriefingSessionListResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.strictObject({
+    items: v.array(QuantAiCandidateBriefingSessionSchema),
+    limit: v.pipe(v.number(), v.minValue(1), v.maxValue(10)),
+  }),
+})
+
+export const QuantAiCandidateBriefingSessionResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: QuantAiCandidateBriefingSessionSchema,
 })
 
 export const QuantResearchSummaryQuerySchema = v.object({
@@ -404,6 +467,7 @@ export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>
 export type QuantAiConfigUpdate = v.InferOutput<typeof QuantAiConfigUpdateSchema>
 export type QuantAiCandidateBriefingRequest = v.InferOutput<typeof QuantAiCandidateBriefingRequestSchema>
 export type QuantAiCandidateBriefingQuestionRequest = v.InferOutput<typeof QuantAiCandidateBriefingQuestionRequestSchema>
+export type QuantAiCandidateBriefingSessionQuery = v.InferOutput<typeof QuantAiCandidateBriefingSessionQuerySchema>
 export type QuantResearchRunCreate = v.InferOutput<typeof QuantResearchRunCreateSchema>
 export type QuantResearchRunsQuery = v.InferOutput<typeof QuantResearchRunsQuerySchema>
 export type QuantResearchRunIdParam = v.InferOutput<typeof QuantResearchRunIdParamSchema>
