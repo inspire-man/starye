@@ -103,6 +103,7 @@ import {
 import { buildResearchBatchFilename, buildResearchBatchMarkdown } from './lib/research-batch-export'
 import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from './lib/research-batch-follow-up'
 import { hydrateResearchBatchState } from './lib/research-batch-history'
+import { buildResearchChangeNextCheckPrompt } from './lib/research-change-prompts'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
 import { copyResearchReportMarkdown } from './lib/research-report-copy'
@@ -421,7 +422,7 @@ const researchEvidenceComparison = computed(() => buildResearchEvidenceCompariso
 const researchRunTimeline = computed(() => buildResearchRunTimeline(researchRuns.value))
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const researchQuestionConfigurationError = computed(() => researchQuestionError.value instanceof QuantApiError && researchQuestionError.value.code === 'QUANT_AI_QUESTION_CONFIGURATION')
-const researchSummaryNextCheckPromptReady = computed(() => Boolean(
+const researchQuestionPromptReady = computed(() => Boolean(
   latestResearchReport.value
   && researchQuestionPanel.value
   && !researchRunGenerating.value
@@ -1897,13 +1898,20 @@ async function askResearchQuestion(question: string): Promise<void> {
   }
 }
 
-function useResearchSummaryNextCheck(check: string): void {
-  const prompt = buildResearchSummaryNextCheckPrompt(check)
+function useResearchQuestionPrompt(prompt: string): void {
   const panel = researchQuestionPanel.value
-  if (!prompt || !researchSummaryNextCheckPromptReady.value || !panel)
+  if (!prompt || !researchQuestionPromptReady.value || !panel)
     return
 
   panel.useQuestionPrompt(prompt)
+}
+
+function useResearchSummaryNextCheck(check: string): void {
+  useResearchQuestionPrompt(buildResearchSummaryNextCheckPrompt(check))
+}
+
+function useResearchChangeNextCheck(check: string): void {
+  useResearchQuestionPrompt(buildResearchChangeNextCheckPrompt(check))
 }
 
 async function generateResearchChangeExplanation(): Promise<void> {
@@ -4062,7 +4070,7 @@ onUnmounted(() => {
                 :generating="researchSummaryGenerating"
                 :error-message="researchSummaryError ? parsedError(researchSummaryError).message : null"
                 :configuration-error="researchSummaryConfigurationError"
-                :question-prompt-ready="researchSummaryNextCheckPromptReady"
+                :question-prompt-ready="researchQuestionPromptReady"
                 @generate="generateResearchSummary"
                 @open-settings="aiSettingsOpen = true"
                 @use-next-check="useResearchSummaryNextCheck"
@@ -4163,8 +4171,10 @@ onUnmounted(() => {
                 :generating="researchChangeExplanationGenerating"
                 :error-message="researchChangeExplanationError ? parsedError(researchChangeExplanationError).message : null"
                 :configuration-error="researchChangeExplanationConfigurationError"
+                :question-prompt-ready="researchQuestionPromptReady"
                 @generate="generateResearchChangeExplanation"
                 @open-settings="aiSettingsOpen = true"
+                @use-next-check="useResearchChangeNextCheck"
                 @focus-evidence="focusResearchQuestionEvidence"
               />
               <p class="research-run-note">

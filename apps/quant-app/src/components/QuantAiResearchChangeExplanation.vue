@@ -10,12 +10,14 @@ const props = defineProps<{
   generating: boolean
   errorMessage: string | null
   configurationError: boolean
+  questionPromptReady: boolean
 }>()
 
 const emit = defineEmits<{
   generate: []
   openSettings: []
   focusEvidence: [evidenceKey: string]
+  useNextCheck: [check: string]
 }>()
 
 function formatDate(value: string): string {
@@ -118,8 +120,19 @@ const isBusy = () => props.loading || props.generating
         <div class="quant-ai-change-next">
           <span>下一步核对</span>
           <ul>
-            <li v-for="check in explanation.nextChecks" :key="check">
-              {{ check }}
+            <li v-for="check in explanation.nextChecks" :key="check" class="quant-ai-change-next-item">
+              <span class="quant-ai-change-next-text">{{ check }}</span>
+              <button
+                class="text-button quant-ai-change-next-prompt"
+                type="button"
+                :disabled="!questionPromptReady || !check.trim()"
+                :aria-label="`将变化核对项带入当前追问：${check}`"
+                title="将变化核对项转换为当前追问"
+                @click="emit('useNextCheck', check)"
+              >
+                <BrainCircuit :size="13" aria-hidden="true" />
+                带入追问
+              </button>
             </li>
           </ul>
         </div>
@@ -170,6 +183,11 @@ const isBusy = () => props.loading || props.generating
 .quant-ai-change-next, .quant-ai-change-citations { display: grid; gap: .4rem; border-top: 1px solid hsl(var(--border)); padding-top: .6rem; }
 .quant-ai-change-next > span, .quant-ai-change-citations-heading strong { color: hsl(var(--muted-foreground)); font-size: .625rem; font-weight: 700; }
 .quant-ai-change-next ul { display: grid; gap: .25rem; margin: 0; padding-left: .95rem; color: hsl(var(--foreground)); font-size: .6875rem; line-height: 1.45; }
+.quant-ai-change-next-item { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: .35rem; }
+.quant-ai-change-next-text { min-width: 0; overflow-wrap: anywhere; }
+.quant-ai-change-next-prompt { display: inline-flex; flex: 0 0 auto; align-items: center; gap: .2rem; white-space: nowrap; }
+.quant-ai-change-next-prompt:hover:not(:disabled) { text-decoration: underline; }
+.quant-ai-change-next-prompt:disabled { cursor: not-allowed; opacity: .55; }
 .quant-ai-change-citations-heading small { color: hsl(var(--muted-foreground)); font-size: .625rem; text-align: right; overflow-wrap: anywhere; }
 .quant-ai-change-citation-list { display: flex; flex-wrap: wrap; gap: .4rem; min-width: 0; }
 .quant-ai-change-citation-link { display: inline-flex; max-width: 100%; flex-direction: column; gap: .1rem; border: 1px solid hsl(var(--status-success) / .25); border-radius: var(--ui-radius-sm, .25rem); background: hsl(var(--status-success) / .06); padding: .35rem .45rem; }
@@ -177,5 +195,5 @@ const isBusy = () => props.loading || props.generating
 .quant-ai-change-citation-link small { color: hsl(var(--status-success)); }
 .quant-ai-change-empty { display: inline-flex; align-items: center; gap: .25rem; color: hsl(var(--muted-foreground)); font-size: .625rem; }
 button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
-@media (max-width: 680px) { .quant-ai-change-heading { flex-direction: column; } .quant-ai-change-button { width: 100%; } .quant-ai-change-item-heading { flex-direction: column; gap: .25rem; } .quant-ai-change-citation { white-space: normal; overflow-wrap: anywhere; } .quant-ai-change-citations-heading { flex-direction: column; gap: .25rem; } .quant-ai-change-citations-heading small { text-align: left; } }
+@media (max-width: 680px) { .quant-ai-change-heading { flex-direction: column; } .quant-ai-change-button { width: 100%; } .quant-ai-change-item-heading { flex-direction: column; gap: .25rem; } .quant-ai-change-citation { white-space: normal; overflow-wrap: anywhere; } .quant-ai-change-next-item { grid-template-columns: minmax(0, 1fr); } .quant-ai-change-next-prompt { justify-self: start; } .quant-ai-change-citations-heading { flex-direction: column; gap: .25rem; } .quant-ai-change-citations-heading small { text-align: left; } }
 </style>
