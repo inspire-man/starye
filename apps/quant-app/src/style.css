@@ -4038,11 +4038,46 @@ textarea:focus-visible {
   padding: 0.75rem;
 }
 
+.comparison-ai-result-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .comparison-ai-meta {
+  min-width: 0;
   margin: 0;
   color: hsl(var(--muted-foreground));
   font-size: 0.625rem;
   line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.comparison-ai-result-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.comparison-ai-result-actions button {
+  min-height: var(--ui-control-height-sm, 2rem);
+  white-space: nowrap;
+}
+
+.comparison-ai-transfer-message {
+  margin: 0;
+  color: hsl(var(--status-success));
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.comparison-ai-transfer-message-error {
+  color: hsl(var(--status-danger));
 }
 
 .comparison-ai-overview {
@@ -6650,6 +6685,20 @@ textarea:focus-visible {
   }
 
   .comparison-ai-button {
+    width: 100%;
+  }
+
+  .comparison-ai-result-heading {
+    flex-direction: column;
+  }
+
+  .comparison-ai-result-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .comparison-ai-result-actions button {
     width: 100%;
   }
 
