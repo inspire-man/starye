@@ -1087,6 +1087,30 @@ function shareholderReturnStatusClass(item: QuantShareholderReturnItem | null): 
   return item.status === 'ready' ? 'value-quality-status-ready' : 'value-quality-status-partial'
 }
 
+function shareholderReturnProviderLabel(provider: QuantShareholderReturnItem['provider']): string {
+  return provider === 'tushare' ? 'Tushare' : provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+}
+
+function shareholderReturnSourceLabel(item: QuantShareholderReturnItem | null): string {
+  if (!item)
+    return '分红数据源未配置'
+  const source = `${shareholderReturnProviderLabel(item.provider)} 实施分红`
+  if (item.fallbackUsed && item.fallbackReason)
+    return `${source} · 已回退（${item.fallbackReason}）`
+  return source
+}
+
+function shareholderReturnHeaderLabel(): string {
+  const item = selectedShareholderReturn.value
+  if (item)
+    return shareholderReturnSourceLabel(item)
+  const provider = shareholderReturns.value?.provider ?? null
+  const chain = shareholderReturns.value?.providerChain ?? []
+  if (!provider)
+    return '分红数据源未配置'
+  return chain.length > 1 ? `${shareholderReturnProviderLabel(provider)} 分红 · 回退链 ${chain.join(' -> ')}` : `${shareholderReturnProviderLabel(provider)} 分红`
+}
+
 function formatComparisonPosition(value: number | null): string {
   return value === null ? '暂无足够样本' : `高于观察池 ${value}%`
 }
@@ -4869,7 +4893,7 @@ onUnmounted(() => {
                   <span class="section-kicker">SHAREHOLDER RETURNS</span>
                   <strong>股东回报</strong>
                 </div>
-                <small>{{ shareholderReturns?.provider === 'tushare' ? 'Tushare 分红实施记录' : '分红数据源未配置' }}</small>
+                <small>{{ shareholderReturnHeaderLabel() }}</small>
               </div>
               <div v-if="loading.shareholderReturns" class="shareholder-return-state" role="status">
                 <SkeletonCard variant="content" />
@@ -4899,6 +4923,11 @@ onUnmounted(() => {
                     <span>最新收盘价</span>
                     <strong>{{ formatNumber(selectedShareholderReturn.latestClose) }}</strong>
                   </div>
+                </div>
+                <div class="shareholder-return-provenance">
+                  <strong>{{ shareholderReturnSourceLabel(selectedShareholderReturn) }}</strong>
+                  <small v-if="selectedShareholderReturn.providerChain.length > 1">来源链：{{ selectedShareholderReturn.providerChain.join(' -> ') }}</small>
+                  <small v-if="selectedShareholderReturn.providerErrorCode">来源错误：{{ selectedShareholderReturn.providerErrorCode }}</small>
                 </div>
                 <div v-if="selectedShareholderReturn.distributions.length" class="shareholder-distribution-list">
                   <div class="financial-subheading">

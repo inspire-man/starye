@@ -1495,4 +1495,53 @@ describe('quant watchlist CRUD contract', () => {
       params: { ts_code: '601899.SH' },
     })
   })
+
+  it('falls back from Tushare quota to Eastmoney and keeps provider metadata out of secrets', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
+    await upsertQuantDailyBars(db, valueFixtureBars('601899.SH'))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(input.toString())
+      if (url.origin === 'https://tushare.fixture.test')
+        return new Response(JSON.stringify({ code: 402, msg: 'quota exhausted' }), { status: 200 })
+      return new Response(JSON.stringify({
+        code: 0,
+        success: true,
+        result: {
+          data: [{
+            SECURITY_CODE: '601899',
+            REPORT_DATE: '2026-03-31 00:00:00',
+            NOTICE_DATE: '2026-08-13 00:00:00',
+            EX_DIVIDEND_DATE: '2026-08-21 00:00:00',
+            PRETAX_BONUS_RMB: 4.2,
+            ASSIGN_PROGRESS: '实施分配',
+          }],
+        },
+      }), { status: 200 })
+    })
+
+    const response = await app.request('/api/quant/shareholder-returns', {}, {
+      TUSHARE_TOKEN: 'fixture-token',
+      TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+      EASTMONEY_DIVIDEND_BASE_URL: 'https://eastmoney-dividend.fixture.test',
+    } as AppEnv['Bindings'])
+    const payload = await response.json() as { data: { provider: string, providerChain: string[], items: Array<Record<string, unknown>> } }
+
+    expect(response.status).toBe(200)
+    expect(payload.data).toMatchObject({
+      provider: 'tushare',
+      providerChain: ['tushare', 'eastmoney'],
+      items: [{
+        provider: 'eastmoney',
+        providerChain: ['tushare', 'eastmoney'],
+        fallbackUsed: true,
+        fallbackReason: 'QUANT_PROVIDER_QUOTA',
+        providerErrorCode: null,
+        trailingCashDividendPerShare: 0.42,
+      }],
+    })
+    expect(JSON.stringify(payload)).not.toContain('fixture-token')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })

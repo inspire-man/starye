@@ -1,6 +1,6 @@
 import type { TushareProviderError } from '../provider'
 import { describe, expect, it, vi } from 'vitest'
-import { createEastmoneyFinancialProvider, createEastmoneyProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createTushareDividendProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
+import { createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantDividendProviderChain, createTushareDividendProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
 
 describe('quant daily providers', () => {
   it('normalizes the declared daily response and keeps the token server-side', async () => {
@@ -358,41 +358,167 @@ describe('quant daily providers', () => {
     }), { status: 200 }))
     const provider = createTushareDividendProvider({ token: 'SERVER_TOKEN', baseUrl: '"https://tushare.fixture.test"', fetchImpl })
 
-    await expect(provider.fetchDividends({ tsCode: '601899.SH' })).resolves.toEqual([
-      {
-        tsCode: '601899.SH',
-        endDate: '20260331',
-        annDate: '20260711',
-        divProc: '实施',
-        cashDiv: 0.42,
-        exDate: '20260821',
-        payDate: '20260821',
-      },
-      {
-        tsCode: '601899.SH',
-        endDate: '20260331',
-        annDate: '20260711',
-        divProc: '预案',
-        cashDiv: 0,
-        exDate: null,
-        payDate: null,
-      },
-      {
-        tsCode: '601899.SH',
-        endDate: '20251231',
-        annDate: '20260606',
-        divProc: '实施',
-        cashDiv: 0.38,
-        exDate: '20260626',
-        payDate: '20260626',
-      },
-    ])
+    await expect(provider.fetchDividends({ tsCode: '601899.SH' })).resolves.toEqual({
+      records: [
+        {
+          tsCode: '601899.SH',
+          endDate: '20260331',
+          annDate: '20260711',
+          divProc: '实施',
+          cashDiv: 0.42,
+          exDate: '20260821',
+          payDate: '20260821',
+        },
+        {
+          tsCode: '601899.SH',
+          endDate: '20260331',
+          annDate: '20260711',
+          divProc: '预案',
+          cashDiv: 0,
+          exDate: null,
+          payDate: null,
+        },
+        {
+          tsCode: '601899.SH',
+          endDate: '20251231',
+          annDate: '20260606',
+          divProc: '实施',
+          cashDiv: 0.38,
+          exDate: '20260626',
+          payDate: '20260626',
+        },
+      ],
+      provider: 'tushare',
+      fallbackUsed: false,
+      fallbackReason: null,
+    })
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({
       api_name: 'dividend',
       token: 'SERVER_TOKEN',
       params: { ts_code: '601899.SH' },
     })
     expect(fetchImpl.mock.calls[0]?.[0]).toBe('https://tushare.fixture.test')
+  })
+
+  it('normalizes implemented Eastmoney dividends and converts per-ten-share cash to per-share cash', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      success: true,
+      result: {
+        data: [
+          {
+            SECURITY_CODE: '601899',
+            REPORT_DATE: '2026-03-31 00:00:00',
+            NOTICE_DATE: '2026-08-13 00:00:00',
+            EX_DIVIDEND_DATE: '2026-08-21 00:00:00',
+            PRETAX_BONUS_RMB: 4.2,
+            ASSIGN_PROGRESS: '实施分配',
+          },
+          {
+            SECURITY_CODE: '601899',
+            REPORT_DATE: '2026-06-30 00:00:00',
+            NOTICE_DATE: '2026-03-21 00:00:00',
+            EX_DIVIDEND_DATE: null,
+            PRETAX_BONUS_RMB: null,
+            ASSIGN_PROGRESS: '预披露',
+          },
+        ],
+      },
+    }), { status: 200 }))
+    const provider = createEastmoneyDividendProvider({
+      dividendBaseUrl: 'https://eastmoney-dividend.fixture.test',
+      fetchImpl,
+    })
+
+    await expect(provider.fetchDividends({ tsCode: '601899.SH' })).resolves.toEqual({
+      records: [{
+        tsCode: '601899.SH',
+        endDate: '20260331',
+        annDate: '20260813',
+        divProc: '实施',
+        cashDiv: 0.42,
+        exDate: '20260821',
+        payDate: null,
+      }],
+      provider: 'eastmoney',
+      fallbackUsed: false,
+      fallbackReason: null,
+    })
+    const requestUrl = new URL(String(fetchImpl.mock.calls[0]?.[0]))
+    expect(requestUrl.origin).toBe('https://eastmoney-dividend.fixture.test')
+    expect(requestUrl.pathname).toBe('/api/data/v1/get')
+    expect(requestUrl.searchParams.get('reportName')).toBe('RPT_SHAREBONUS_DET')
+    expect(requestUrl.searchParams.get('filter')).toBe('(SECURITY_CODE="601899")')
+  })
+
+  it('falls back from a Tushare quota error to Eastmoney and records the reason', async () => {
+    const tushareFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 402, msg: 'quota exhausted' }), { status: 200 }))
+    const eastmoneyFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      success: true,
+      result: {
+        data: [{
+          SECURITY_CODE: '601899',
+          REPORT_DATE: '2026-03-31 00:00:00',
+          NOTICE_DATE: '2026-08-13 00:00:00',
+          EX_DIVIDEND_DATE: '2026-08-21 00:00:00',
+          PRETAX_BONUS_RMB: 4.2,
+          ASSIGN_PROGRESS: '实施分配',
+        }],
+      },
+    }), { status: 200 }))
+    const chain = createQuantDividendProviderChain(
+      createTushareDividendProvider({ token: 'SERVER_TOKEN', fetchImpl: tushareFetch }),
+      createEastmoneyDividendProvider({ fetchImpl: eastmoneyFetch }),
+    )
+
+    await expect(chain.fetchDividends({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      provider: 'eastmoney',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_QUOTA',
+      records: [expect.objectContaining({ cashDiv: 0.42 })],
+    })
+    expect(tushareFetch).toHaveBeenCalledOnce()
+    expect(eastmoneyFetch).toHaveBeenCalledOnce()
+    expect(chain.providerChain).toEqual(['tushare', 'eastmoney'])
+  })
+
+  it('uses Eastmoney directly when Tushare has no token and does not call the unconfigured provider', async () => {
+    const tushareFetch = vi.fn()
+    const eastmoneyFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      success: true,
+      result: { data: [] },
+    }), { status: 200 }))
+    const chain = createQuantDividendProviderChain(
+      createTushareDividendProvider({ fetchImpl: tushareFetch }),
+      createEastmoneyDividendProvider({ fetchImpl: eastmoneyFetch }),
+    )
+
+    await expect(chain.fetchDividends({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      provider: 'eastmoney',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_CONFIGURATION',
+      records: [],
+    })
+    expect(tushareFetch).not.toHaveBeenCalled()
+    expect(eastmoneyFetch).toHaveBeenCalledOnce()
+  })
+
+  it('fails with both provider error categories when the dividend chain is exhausted', async () => {
+    const chain = createQuantDividendProviderChain(
+      createTushareDividendProvider({
+        token: 'SERVER_TOKEN',
+        fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 402, msg: 'quota exhausted' }), { status: 200 })),
+      }),
+      createEastmoneyDividendProvider({
+        fetchImpl: vi.fn().mockResolvedValue(new Response('upstream failed', { status: 503 })),
+      }),
+    )
+
+    await expect(chain.fetchDividends({ tsCode: '601899.SH' })).rejects.toMatchObject({
+      name: 'QuantDividendProviderChainError',
+    })
   })
 
   it('maps Eastmoney financial requests to SH, SZ, and BJ markets', async () => {

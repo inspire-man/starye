@@ -5853,6 +5853,27 @@ textarea:focus-visible {
   border-left-color: hsl(var(--status-success) / 0.46);
 }
 
+.shareholder-return-provenance {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+  margin-top: 0.65rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.shareholder-return-provenance strong {
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.shareholder-return-provenance small {
+  overflow-wrap: anywhere;
+}
+
 .financial-context-note {
   margin: 0.7rem 0 0;
   color: hsl(var(--muted-foreground));

@@ -75,10 +75,30 @@ export interface QuantDividendRecord {
   readonly payDate: string | null
 }
 
+export interface QuantDividendFetchResult {
+  readonly records: readonly QuantDividendRecord[]
+  readonly provider: QuantProviderName
+  readonly fallbackUsed: boolean
+  readonly fallbackReason: string | null
+}
+
 export interface QuantDividendProvider {
-  readonly name: 'tushare'
+  readonly name: QuantProviderName
   readonly isConfigured: boolean
-  fetchDividends: (request: QuantDividendRequest) => Promise<readonly QuantDividendRecord[]>
+  readonly providerChain: readonly QuantProviderName[]
+  fetchDividends: (request: QuantDividendRequest) => Promise<QuantDividendFetchResult>
+}
+
+export class QuantDividendProviderChainError extends Error {
+  readonly primaryError: unknown
+  readonly fallbackError: unknown | null
+
+  constructor(primaryError: unknown, fallbackError: unknown | null = null) {
+    super('Quant dividend provider chain failed')
+    this.name = 'QuantDividendProviderChainError'
+    this.primaryError = primaryError
+    this.fallbackError = fallbackError
+  }
 }
 
 export interface TushareRequest {
@@ -349,7 +369,7 @@ function normalizeDividendRows(requestedTsCode: string, fields: readonly string[
 }
 
 export function createTushareDividendProvider(options: TushareProviderOptions = {}): QuantDividendProvider {
-  async function fetchDividends(request: QuantDividendRequest): Promise<readonly QuantDividendRecord[]> {
+  async function fetchDividends(request: QuantDividendRequest): Promise<QuantDividendFetchResult> {
     const tsCode = request.tsCode.trim().toUpperCase()
     if (!/^[A-Z0-9.-]{1,20}$/u.test(tsCode))
       throw new TushareProviderError('UPSTREAM_ERROR', 'Invalid ts_code', 'dividend')
@@ -358,12 +378,18 @@ export function createTushareDividendProvider(options: TushareProviderOptions = 
       params: { ts_code: tsCode },
       fields: TUSHARE_DIVIDEND_FIELDS,
     })
-    return normalizeDividendRows(tsCode, rows.fields, rows.items)
+    return {
+      records: normalizeDividendRows(tsCode, rows.fields, rows.items),
+      provider: 'tushare',
+      fallbackUsed: false,
+      fallbackReason: null,
+    }
   }
 
   return {
     name: 'tushare',
     isConfigured: cleanProviderString(options.token) !== null,
+    providerChain: ['tushare'],
     fetchDividends,
   }
 }
@@ -382,6 +408,7 @@ export class EastmoneyProviderError extends Error {
 
 export interface EastmoneyProviderOptions {
   readonly baseUrl?: string
+  readonly dividendBaseUrl?: string
   readonly valuationFallbackBaseUrl?: string
   readonly timeoutMs?: number
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -486,6 +513,25 @@ const EastmoneyValuationHistoryResponseSchema = v.object({
 const EastmoneyFinancialResponseSchema = v.object({
   data: v.array(v.unknown()),
 })
+
+const EastmoneyShareBonusResponseSchema = v.object({
+  code: v.number(),
+  success: v.boolean(),
+  result: v.optional(v.nullable(v.object({
+    data: v.array(v.unknown()),
+  }))),
+})
+
+const EASTMONEY_DIVIDEND_COLUMNS = [
+  'SECUCODE',
+  'SECURITY_CODE',
+  'REPORT_DATE',
+  'NOTICE_DATE',
+  'EX_DIVIDEND_DATE',
+  'PRETAX_BONUS_RMB',
+  'ASSIGN_PROGRESS',
+  'EQUITY_RECORD_DATE',
+] as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -674,6 +720,146 @@ export function createEastmoneyProvider(options: EastmoneyProviderOptions = {}):
     name: 'eastmoney',
     isConfigured: true,
     fetchDaily,
+  }
+}
+
+function normalizeEastmoneyDividendDate(value: unknown, field: string, required: boolean): string | null {
+  return normalizeFinancialDate(value, field, required)?.replaceAll('-', '') ?? null
+}
+
+function normalizeEastmoneyDividendRecord(tsCode: string, record: Record<string, unknown>): QuantDividendRecord | null {
+  const requestedCode = tsCode.split('.')[0]
+  const returnedCode = record.SECURITY_CODE
+  const normalizedCode = typeof returnedCode === 'string' || typeof returnedCode === 'number'
+    ? String(returnedCode).padStart(6, '0')
+    : null
+  if (normalizedCode !== requestedCode)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney dividend code is missing or mismatched')
+
+  const endDate = normalizeEastmoneyDividendDate(record.REPORT_DATE, 'report date', true)
+  const annDate = normalizeEastmoneyDividendDate(record.NOTICE_DATE, 'notice date', false)
+  const exDate = normalizeEastmoneyDividendDate(record.EX_DIVIDEND_DATE, 'ex-dividend date', false)
+  if (record.ASSIGN_PROGRESS !== '实施分配')
+    return null
+  const cashPerTenShares = eastmoneyQuoteNumber(record.PRETAX_BONUS_RMB, 'cashDividendPerTenShares')
+  if (cashPerTenShares === null || cashPerTenShares <= 0 || exDate === null)
+    return null
+
+  return {
+    tsCode,
+    endDate: endDate!,
+    annDate,
+    divProc: '实施',
+    cashDiv: Math.round(cashPerTenShares / 10 * 1_000_000) / 1_000_000,
+    exDate,
+    payDate: null,
+  }
+}
+
+export function createEastmoneyDividendProvider(options: EastmoneyProviderOptions = {}): QuantDividendProvider {
+  const baseUrl = options.dividendBaseUrl?.trim() || 'https://datacenter-web.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+
+  async function fetchDividends(request: QuantDividendRequest): Promise<QuantDividendFetchResult> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    const code = eastmoneyFinancialCode(tsCode).slice(2)
+    const url = new URL('/api/data/v1/get', baseUrl)
+    url.searchParams.set('reportName', 'RPT_SHAREBONUS_DET')
+    url.searchParams.set('columns', EASTMONEY_DIVIDEND_COLUMNS.join(','))
+    url.searchParams.set('filter', `(SECURITY_CODE="${code}")`)
+    url.searchParams.set('sortColumns', 'REPORT_DATE')
+    url.searchParams.set('sortTypes', '-1')
+    url.searchParams.set('pageNumber', '1')
+    url.searchParams.set('pageSize', '100')
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney dividend request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney dividend request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney dividend HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney dividend response is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyShareBonusResponseSchema, payload)
+    if (!parsed.success || parsed.output.code !== 0 || !parsed.output.success)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney dividend response schema is invalid')
+
+    const records = (parsed.output.result?.data ?? []).flatMap((value) => {
+      if (!isRecord(value))
+        throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney dividend row is not an object')
+      const record = normalizeEastmoneyDividendRecord(tsCode, value)
+      return record ? [record] : []
+    })
+    return {
+      records: [...new Map(records.map(record => [
+        `${record.endDate}:${record.annDate ?? ''}:${record.exDate ?? ''}`,
+        record,
+      ])).values()].sort((left, right) => right.endDate.localeCompare(left.endDate)),
+      provider: 'eastmoney',
+      fallbackUsed: false,
+      fallbackReason: null,
+    }
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    providerChain: ['eastmoney'],
+    fetchDividends,
+  }
+}
+
+export function createQuantDividendProviderChain(primary: QuantDividendProvider, fallback?: QuantDividendProvider): QuantDividendProvider {
+  const providers = [primary, fallback].filter((provider): provider is QuantDividendProvider => provider !== undefined)
+  const providerChain = providers.flatMap(provider => provider.providerChain)
+  const configured = providers.find(provider => provider.isConfigured)
+
+  async function fetchDividends(request: QuantDividendRequest): Promise<QuantDividendFetchResult> {
+    let primaryError: unknown = null
+    for (const provider of providers) {
+      if (!provider.isConfigured) {
+        primaryError ??= new TushareProviderError('TOKEN_MISSING', `${provider.name} provider is not configured`, 'dividend')
+        continue
+      }
+      try {
+        const result = await provider.fetchDividends(request)
+        return primaryError
+          ? { ...result, fallbackUsed: true, fallbackReason: mapQuantProviderError(primaryError).code }
+          : result
+      }
+      catch (error) {
+        if (primaryError)
+          throw new QuantDividendProviderChainError(primaryError, error)
+        primaryError = error
+      }
+    }
+    throw new QuantDividendProviderChainError(primaryError ?? new Error('No dividend provider is configured'))
+  }
+
+  return {
+    name: configured?.name ?? primary.name,
+    isConfigured: configured !== undefined,
+    providerChain,
+    fetchDividends,
   }
 }
 

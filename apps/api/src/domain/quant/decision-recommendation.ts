@@ -125,6 +125,15 @@ function factorStatus(items: readonly QuantResearchEvidence[], expectedCount: nu
   return usable.length === expectedCount ? 'ready' : 'partial'
 }
 
+function factorSourceId(definition: FactorDefinition, items: readonly QuantResearchEvidence[]): string {
+  if (definition.key !== 'shareholder-return')
+    return definition.sourceId
+  const source = items.map(item => item.source).join(' ')
+  if (/Eastmoney/iu.test(source))
+    return 'eastmoney-dividend'
+  return definition.sourceId
+}
+
 function buildFactorModel(evidence: readonly QuantResearchEvidence[]): QuantFactorModel {
   const evidenceByKey = new Map(evidence.map(item => [item.key, item] as const))
   const factors = QUANT_FACTOR_DEFINITIONS.map((definition) => {
@@ -140,8 +149,8 @@ function buildFactorModel(evidence: readonly QuantResearchEvidence[]): QuantFact
       key: definition.key,
       label: definition.label,
       weight: definition.weight,
-      sourceId: definition.sourceId,
-      source: definition.source,
+      sourceId: factorSourceId(definition, items),
+      source: items[0]?.source ?? definition.source,
       status,
       score,
       evidenceKeys: definition.evidenceKeys,

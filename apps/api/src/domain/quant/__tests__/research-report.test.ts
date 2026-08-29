@@ -84,6 +84,11 @@ const shareholderReturn: QuantShareholderReturnItem = {
   name: '紫金矿业',
   formulaVersion: 'shareholder-return-v1',
   status: 'ready',
+  provider: 'tushare',
+  providerChain: ['tushare', 'eastmoney'],
+  fallbackUsed: false,
+  fallbackReason: null,
+  providerErrorCode: null,
   observedAt: '2026-08-26T00:00:00.000Z',
   latestClose: 110,
   trailingCashDividendPerShare: 1,
@@ -166,6 +171,41 @@ describe('quant research report', () => {
       expect.objectContaining({ id: 'local-daily-bars' }),
       expect.objectContaining({ id: 'eastmoney-financial' }),
     ]))
+  })
+
+  it('keeps the actual Eastmoney fallback source in evidence and factor provenance', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-fallback',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial, { ...financial, reportDate: '2025-12-31' }],
+      shareholderReturn: {
+        ...shareholderReturn,
+        provider: 'eastmoney',
+        providerChain: ['tushare', 'eastmoney'],
+        fallbackUsed: true,
+        fallbackReason: 'QUANT_PROVIDER_QUOTA',
+      },
+    })
+
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'shareholder-yield',
+        source: expect.stringContaining('Eastmoney'),
+        detail: expect.stringContaining('QUANT_PROVIDER_QUOTA'),
+      }),
+    ]))
+    expect(report.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'eastmoney-dividend', name: expect.stringContaining('回退链') }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'shareholder-return')).toMatchObject({
+      sourceId: 'eastmoney-dividend',
+      source: expect.stringContaining('Eastmoney'),
+    })
   })
 
   it('fails closed on missing data and highlights risk before research timing', () => {

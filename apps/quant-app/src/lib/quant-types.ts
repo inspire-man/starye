@@ -484,6 +484,11 @@ export interface QuantShareholderReturnItem {
   name: string | null
   formulaVersion: string
   status: QuantShareholderReturnStatus
+  provider: QuantProviderName | null
+  providerChain: QuantProviderName[]
+  fallbackUsed: boolean
+  fallbackReason: string | null
+  providerErrorCode: string | null
   observedAt: string
   latestClose: number | null
   trailingCashDividendPerShare: number | null
@@ -497,6 +502,7 @@ export interface QuantShareholderReturnSelection {
   formulaVersion: string
   observedAt: string
   provider: QuantProviderName | null
+  providerChain: QuantProviderName[]
   sampleCount: number
   readyCount: number
   partialCount: number

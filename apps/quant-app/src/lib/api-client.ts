@@ -1361,6 +1361,8 @@ function parseShareholderReturnItem(value: unknown): QuantShareholderReturnItem 
   if (!tsCode)
     return null
   const status = readString(value, 'status')
+  const provider = readString(value, 'provider', 'dataProvider', 'data_provider')
+  const providerChain = readStringList(value, 'providerChain', 'provider_chain').filter((item): item is QuantProviderName => item === 'tushare' || item === 'eastmoney')
   const missingFields = Array.isArray(value.missingFields)
     ? value.missingFields.filter((item): item is string => typeof item === 'string')
     : Array.isArray(value.missing_fields)
@@ -1377,6 +1379,11 @@ function parseShareholderReturnItem(value: unknown): QuantShareholderReturnItem 
     name: readString(value, 'name', 'stockName', 'stock_name'),
     formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-return-v1',
     status: status === 'ready' || status === 'partial' ? status : 'insufficient_data',
+    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    providerChain,
+    fallbackUsed: value.fallbackUsed === true || value.fallback_used === true,
+    fallbackReason: readString(value, 'fallbackReason', 'fallback_reason'),
+    providerErrorCode: readString(value, 'providerErrorCode', 'provider_error_code'),
     observedAt: readString(value, 'observedAt', 'observed_at') || '',
     latestClose: readNumber(value, 'latestClose', 'latest_close'),
     trailingCashDividendPerShare: readNumber(value, 'trailingCashDividendPerShare', 'trailing_cash_dividend_per_share'),
@@ -1391,10 +1398,12 @@ function parseShareholderReturns(payload: unknown): QuantShareholderReturnSelect
   const data = unwrapData(payload)
   const record = isRecord(data) ? data : {}
   const provider = readString(record, 'provider', 'dataProvider', 'data_provider')
+  const providerChain = readStringList(record, 'providerChain', 'provider_chain').filter((item): item is QuantProviderName => item === 'tushare' || item === 'eastmoney')
   return {
     formulaVersion: readString(record, 'formulaVersion', 'formula_version') || 'shareholder-return-v1',
     observedAt: readString(record, 'observedAt', 'observed_at') || '',
     provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    providerChain,
     sampleCount: readNumber(record, 'sampleCount', 'sample_count') ?? 0,
     readyCount: readNumber(record, 'readyCount', 'ready_count') ?? 0,
     partialCount: readNumber(record, 'partialCount', 'partial_count') ?? 0,
