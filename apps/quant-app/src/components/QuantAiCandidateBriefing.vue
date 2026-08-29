@@ -3,6 +3,8 @@ import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingQuestion, QuantA
 import { AlertCircle, BrainCircuit, Check, CircleHelp, Copy, Download, RefreshCw, Trash2, X } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { quantApi, QuantApiError } from '../lib/api-client'
+import { buildCandidateAiSessionFilename, buildCandidateAiSessionMarkdown } from '../lib/candidate-briefing-export'
+import { copyResearchReportMarkdown } from '../lib/research-report-copy'
 
 type CopyOutcome = 'success' | 'error' | null
 
@@ -75,8 +77,14 @@ const historyOpen = ref(true)
 const selectedHistorySession = ref<QuantAiCandidateBriefingSession | null>(null)
 const historyDetailLoading = ref(false)
 const historyDetailErrorMessage = ref<string | null>(null)
+const historyExporting = ref(false)
+const historyExportErrorMessage = ref<string | null>(null)
+const historyCopying = ref(false)
+const historyCopyOutcome = ref<CopyOutcome>(null)
+const historyCopyMessage = ref('')
 const historyListRequestId = ref(0)
 const historyRequestId = ref(0)
+const historyCopyRequestId = ref(0)
 const historyDeleteRequestId = ref(0)
 const deleteConfirmSessionId = ref<string | null>(null)
 const deletingSessionId = ref<string | null>(null)
@@ -144,6 +152,15 @@ function focusHistoricalCandidate(tsCode: string): void {
     focusCandidate(tsCode)
 }
 
+function resetHistoryTransferState(): void {
+  historyCopyRequestId.value++
+  historyExporting.value = false
+  historyExportErrorMessage.value = null
+  historyCopying.value = false
+  historyCopyOutcome.value = null
+  historyCopyMessage.value = ''
+}
+
 function submitQuestion(): void {
   if (canAskQuestion.value)
     emit('askQuestion', props.questionInput.trim())
@@ -182,6 +199,7 @@ async function loadSessionHistory(): Promise<void> {
 
 async function viewHistory(session: QuantAiCandidateBriefingSession): Promise<void> {
   historyOpen.value = true
+  resetHistoryTransferState()
   selectedHistorySession.value = session
   historyDetailErrorMessage.value = null
   if (props.sessionHistory !== undefined)
@@ -201,6 +219,63 @@ async function viewHistory(session: QuantAiCandidateBriefingSession): Promise<vo
   finally {
     if (historyRequestId.value === requestId)
       historyDetailLoading.value = false
+  }
+}
+
+function exportSelectedHistorySession(): void {
+  const session = selectedHistorySession.value
+  if (!session || historyDetailLoading.value || historyExporting.value)
+    return
+
+  historyExporting.value = true
+  historyExportErrorMessage.value = null
+  try {
+    const blob = new Blob([buildCandidateAiSessionMarkdown(session)], { type: 'text/markdown;charset=utf-8' })
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = buildCandidateAiSessionFilename(session)
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+  }
+  catch {
+    historyExportErrorMessage.value = '历史会话导出失败，请稍后重试'
+  }
+  finally {
+    historyExporting.value = false
+  }
+}
+
+async function copySelectedHistorySession(): Promise<void> {
+  const session = selectedHistorySession.value
+  if (!session || historyDetailLoading.value || historyCopying.value)
+    return
+
+  const requestId = historyCopyRequestId.value + 1
+  historyCopyRequestId.value = requestId
+  historyCopying.value = true
+  historyExportErrorMessage.value = null
+  historyCopyOutcome.value = null
+  historyCopyMessage.value = ''
+  const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined
+  const result = await copyResearchReportMarkdown(buildCandidateAiSessionMarkdown(session), clipboard)
+  if (requestId !== historyCopyRequestId.value)
+    return
+
+  historyCopying.value = false
+  if (result === 'copied') {
+    historyCopyOutcome.value = 'success'
+    historyCopyMessage.value = '历史 Markdown 已复制到剪贴板'
+  }
+  else if (result === 'unavailable') {
+    historyCopyOutcome.value = 'error'
+    historyCopyMessage.value = '当前浏览器不支持剪贴板写入'
+  }
+  else {
+    historyCopyOutcome.value = 'error'
+    historyCopyMessage.value = '历史会话复制失败，请检查剪贴板权限后重试'
   }
 }
 
@@ -247,6 +322,7 @@ async function deleteSession(sessionId: string): Promise<void> {
       historyDetailErrorMessage.value = null
       historyDetailLoading.value = false
       historyRequestId.value++
+      resetHistoryTransferState()
     }
     sessionDeleteTargetId.value = null
     sessionDeleteSuccessMessage.value = '候选 AI 会话已删除'
@@ -295,6 +371,7 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   selectedHistorySession.value = null
   historyDetailErrorMessage.value = null
   historyDetailLoading.value = false
+  resetHistoryTransferState()
   deleteConfirmSessionId.value = null
   deletingSessionId.value = null
   sessionDeleteTargetId.value = null
@@ -474,10 +551,42 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
 
         <div v-if="selectedHistorySession" class="quant-ai-briefing-history-detail">
           <div class="quant-ai-briefing-section-heading">
-            <span class="quant-ai-briefing-label">历史会话只读恢复</span>
-            <small v-if="historyDetailLoading">正在读取详情</small>
-            <small v-else>更新于 {{ formatDate(selectedHistorySession.updatedAt) }}</small>
+            <div>
+              <span class="quant-ai-briefing-label">历史会话只读恢复</span>
+              <small v-if="historyDetailLoading">正在读取详情</small>
+              <small v-else>更新于 {{ formatDate(selectedHistorySession.updatedAt) }}</small>
+            </div>
+            <div class="quant-ai-briefing-history-detail-actions">
+              <button
+                class="secondary-button quant-ai-briefing-history-detail-action quant-ai-briefing-history-export"
+                type="button"
+                :disabled="historyDetailLoading || historyExporting"
+                title="将选中的历史候选 AI 会话下载为 Markdown 文件"
+                aria-label="导出选中的历史候选 AI 会话为 Markdown 文件"
+                @click="exportSelectedHistorySession"
+              >
+                <Download :size="14" aria-hidden="true" />
+                {{ historyExporting ? '导出中' : '导出 Markdown' }}
+              </button>
+              <button
+                class="secondary-button quant-ai-briefing-history-detail-action quant-ai-briefing-history-copy"
+                type="button"
+                :disabled="historyDetailLoading || historyCopying"
+                title="将选中的历史候选 AI 会话复制到剪贴板"
+                aria-label="复制选中的历史候选 AI 会话 Markdown"
+                @click="copySelectedHistorySession"
+              >
+                <Copy :size="14" aria-hidden="true" />
+                {{ historyCopying ? '复制中' : '复制 Markdown' }}
+              </button>
+            </div>
           </div>
+          <p v-if="historyExportErrorMessage" class="quant-ai-briefing-history-transfer-message quant-ai-briefing-history-transfer-message-error" role="alert">
+            {{ historyExportErrorMessage }}
+          </p>
+          <p v-else-if="historyCopyMessage" class="quant-ai-briefing-history-transfer-message" :class="{ 'quant-ai-briefing-history-transfer-message-error': historyCopyOutcome === 'error' }" role="status">
+            {{ historyCopyMessage }}
+          </p>
           <div class="quant-ai-briefing-history-metadata quant-ai-briefing-wrap-anywhere">
             <span>快照时间 <strong>{{ sessionSnapshotDate(selectedHistorySession) }}</strong></span>
             <span>范围 <strong>{{ formatSessionRange(selectedHistorySession) }}</strong></span>
@@ -1153,6 +1262,30 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   border-left: 2px solid hsl(var(--primary) / 0.55);
   background: hsl(var(--muted) / 0.2);
   padding: 0.55rem 0.6rem;
+}
+
+.quant-ai-briefing-history-detail-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.quant-ai-briefing-history-detail-action {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
+.quant-ai-briefing-history-transfer-message {
+  margin: -0.1rem 0 0;
+  color: hsl(var(--status-success));
+  font-size: 0.625rem;
+  line-height: 1.4;
+}
+
+.quant-ai-briefing-history-transfer-message-error {
+  color: hsl(var(--status-danger));
 }
 
 .quant-ai-briefing-history-candidates {
