@@ -90,10 +90,10 @@ function formatEvidenceDate(value: string | null): string {
         </h3>
         <small>基于本份报告证据复核推荐；价格区间始终来自确定性公式</small>
       </div>
-      <button class="secondary-button quant-ai-summary-button" type="button" :disabled="loading || generating" title="基于当前研究报告生成解释" @click="emit('generate')">
+      <button class="secondary-button quant-ai-summary-button" type="button" :disabled="loading || generating" :title="generating ? '正在生成 AI 决策复核' : '基于当前研究报告生成解释'" @click="emit('generate')">
         <RefreshCw v-if="loading || generating" :size="14" class="animate-spin" aria-hidden="true" />
         <BrainCircuit v-else :size="14" aria-hidden="true" />
-        {{ loading || generating ? '读取中' : summary ? '重新解读' : '生成解读' }}
+        {{ loading ? '读取中' : generating ? 'AI 复核中' : summary ? '重新解读' : '生成解读' }}
       </button>
     </div>
 
@@ -115,6 +115,10 @@ function formatEvidenceDate(value: string | null): string {
     <div v-if="loading" class="quant-ai-summary-state" role="status">
       <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
       <span>正在读取已保存的解读</span>
+    </div>
+    <div v-else-if="generating" class="quant-ai-summary-state" role="status" aria-live="polite">
+      <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
+      <span>正在生成 AI 决策复核</span>
     </div>
     <div v-else-if="errorMessage" class="quant-ai-summary-state quant-ai-summary-state-error" role="alert">
       <AlertCircle :size="15" aria-hidden="true" />
@@ -227,7 +231,7 @@ function formatEvidenceDate(value: string | null): string {
     </template>
     <div v-else class="quant-ai-summary-state" role="status">
       <CircleHelp :size="15" aria-hidden="true" />
-      <span>还没有生成解释。先阅读上方确定性证据，再按需生成。</span>
+      <span>配置 AI 后，生成新研究报告会自动进行决策复核；也可以按需生成解读。</span>
     </div>
   </section>
 </template>

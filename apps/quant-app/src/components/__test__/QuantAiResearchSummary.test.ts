@@ -101,7 +101,17 @@ describe('quant ai research summary', () => {
 
     expect(wrapper.text()).toContain('补齐数据')
     expect(wrapper.text()).toContain('确定性分数')
-    expect(wrapper.text()).toContain('还没有生成解释')
+    expect(wrapper.text()).toContain('生成新研究报告会自动进行决策复核')
+  })
+
+  it('shows the automatic decision review state and disables duplicate generation', () => {
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, generating: true, report: report(), summary: null },
+    })
+
+    expect(wrapper.text()).toContain('正在生成 AI 决策复核')
+    expect(wrapper.get('.quant-ai-summary-button').text()).toContain('AI 复核中')
+    expect((wrapper.get('.quant-ai-summary-button').element as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('offers a same-level next-check action without submitting a question', async () => {

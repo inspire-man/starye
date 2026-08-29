@@ -95,6 +95,7 @@ import { buildComparisonAiNextCheckPrompt } from './lib/comparison-ai-prompts'
 import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
+import { isQuantAiAutoReviewReady } from './lib/research-ai-auto-review'
 import { runResearchBatch } from './lib/research-batch'
 import {
   applyBatchAiSummaryProgress,
@@ -1818,14 +1819,29 @@ async function loadResearchRuns(tsCode: string) {
   }
 }
 
-async function loadResearchSummary(runId: string) {
+async function loadResearchSummary(runId: string, options: { autoGenerate?: boolean } = {}) {
   const requestId = ++researchSummaryRequestId
   researchSummaryLoading.value = true
+  researchSummaryGenerating.value = false
   researchSummaryError.value = null
   try {
     const summaries = await quantApi.getResearchSummaries(runId, 1)
-    if (requestId === researchSummaryRequestId)
+    if (requestId !== researchSummaryRequestId)
+      return
+    if (summaries[0]) {
       researchAiSummary.value = summaries[0] || null
+      return
+    }
+    if (!options.autoGenerate)
+      return
+    const config = await quantApi.getAiConfig()
+    if (requestId !== researchSummaryRequestId || !isQuantAiAutoReviewReady(config))
+      return
+    researchSummaryLoading.value = false
+    researchSummaryGenerating.value = true
+    const summary = await quantApi.generateResearchSummary(runId)
+    if (requestId === researchSummaryRequestId)
+      researchAiSummary.value = summary
   }
   catch (error) {
     if (requestId === researchSummaryRequestId) {
@@ -1853,7 +1869,7 @@ async function generateResearchReport() {
     researchSummaryRequestId++
     researchAiSummary.value = null
     researchSummaryError.value = null
-    await loadResearchSummary(run.id)
+    await loadResearchSummary(run.id, { autoGenerate: true })
   }
   catch (error) {
     researchRunError.value = error
