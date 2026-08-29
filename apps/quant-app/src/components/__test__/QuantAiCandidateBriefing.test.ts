@@ -203,6 +203,37 @@ describe('quant ai candidate briefing', () => {
     expect(wrapper.emitted('focusCandidate')).toContainEqual(['601899.SH'])
   })
 
+  it('fills a bounded current next-check prompt, focuses the input, and does not submit it', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing },
+      attachTo: document.body,
+    })
+
+    await wrapper.get('.quant-ai-briefing-next-prompt').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('update:questionInput')).toEqual([
+      ['围绕“核对风险证据样本”，当前候选范围内有哪些确定性事实需要优先核对？'],
+    ])
+    expect(wrapper.emitted('askQuestion')).toBeUndefined()
+    expect(document.activeElement).toBe(wrapper.get('.quant-ai-briefing-question-input').element)
+
+    const longCheck = '检查'.repeat(400)
+    const bounded = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        briefing: { ...briefing, nextChecks: [longCheck] },
+      },
+      attachTo: document.body,
+    })
+    await bounded.get('.quant-ai-briefing-next-prompt').trigger('click')
+    const prompt = bounded.emitted('update:questionInput')?.[0]?.[0]
+    expect(typeof prompt).toBe('string')
+    expect((prompt as string).length).toBe(500)
+    wrapper.unmount()
+    bounded.unmount()
+  })
+
   it('renders question loading, configuration error, and retry states', async () => {
     const loading = mount(QuantAiCandidateBriefing, {
       props: { ...baseProps, questionInput: '问题', questionLoading: true },
@@ -269,6 +300,50 @@ describe('quant ai candidate briefing', () => {
     expect(wrapper.text()).toContain('当前回答')
     expect(wrapper.text()).toContain('历史简报：先核对数据完整性。')
     expect(wrapper.text()).toContain('历史会话只读恢复')
+  })
+
+  it('reuses a historical question in the current input without changing read-only history', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        currentCandidateCodes: ['601899.SH'],
+        sessionHistory: [historySession],
+      },
+      attachTo: document.body,
+    })
+
+    await wrapper.get('.quant-ai-briefing-history-item').trigger('click')
+    await wrapper.get('.quant-ai-briefing-history-reuse-question').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('update:questionInput')).toEqual([['历史范围先看什么？']])
+    expect(wrapper.emitted('askQuestion')).toBeUndefined()
+    expect(wrapper.text()).toContain('历史事实显示应先核对数据完整性。')
+    expect(document.activeElement).toBe(wrapper.get('.quant-ai-briefing-question-input').element)
+    wrapper.unmount()
+  })
+
+  it('disables quick prompts while the current question flow is unavailable or loading', async () => {
+    const loading = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        briefing,
+        currentCandidateCodes: ['601899.SH'],
+        questionLoading: true,
+        sessionHistory: [historySession],
+      },
+    })
+
+    expect(loading.get('.quant-ai-briefing-next-prompt').attributes('disabled')).toBeDefined()
+    await loading.get('.quant-ai-briefing-history-item').trigger('click')
+    expect(loading.get('.quant-ai-briefing-history-reuse-question').attributes('disabled')).toBeDefined()
+    await loading.get('.quant-ai-briefing-next-prompt').trigger('click')
+    expect(loading.emitted('update:questionInput')).toBeUndefined()
+
+    const unavailable = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing, available: false },
+    })
+    expect(unavailable.get('.quant-ai-briefing-next-prompt').attributes('disabled')).toBeDefined()
   })
 
   it('makes current historical references actionable and keeps absent codes read-only across every surface', async () => {

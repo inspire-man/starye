@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingQuestion, QuantAiCandidateBriefingSession } from '../lib/quant-types'
 import { AlertCircle, BrainCircuit, Check, CircleHelp, Copy, Download, RefreshCw, Trash2, X } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { quantApi, QuantApiError } from '../lib/api-client'
 import { buildCandidateAiSessionFilename, buildCandidateAiSessionMarkdown } from '../lib/candidate-briefing-export'
 import { copyResearchReportMarkdown } from '../lib/research-report-copy'
@@ -66,6 +66,7 @@ const hasFilteredCandidates = computed(() => props.filteredCandidateCount > 0)
 const hasBriefingCandidates = computed(() => props.briefingAvailableCandidateCount > 0)
 const canGenerate = computed(() => props.available !== false && hasFilteredCandidates.value && hasBriefingCandidates.value)
 const canAskQuestion = computed(() => props.available !== false && hasBriefingCandidates.value && Boolean(props.questionInput.trim()) && !props.questionLoading)
+const canUseQuestionPrompt = computed(() => props.available !== false && hasBriefingCandidates.value && !props.questionLoading)
 const showBriefingActions = computed(() => Boolean(props.briefing && !props.loading && !props.errorMessage))
 const visibleFocusItems = computed(() => props.briefing?.focusItems.slice(0, 5) || [])
 const visibleNextChecks = computed(() => props.briefing?.nextChecks.slice(0, 6) || [])
@@ -86,6 +87,7 @@ const historyListRequestId = ref(0)
 const historyRequestId = ref(0)
 const historyCopyRequestId = ref(0)
 const historyDeleteRequestId = ref(0)
+const questionInputElement = ref<HTMLTextAreaElement | null>(null)
 const deleteConfirmSessionId = ref<string | null>(null)
 const deletingSessionId = ref<string | null>(null)
 const sessionDeleteTargetId = ref<string | null>(null)
@@ -164,6 +166,20 @@ function resetHistoryTransferState(): void {
 function submitQuestion(): void {
   if (canAskQuestion.value)
     emit('askQuestion', props.questionInput.trim())
+}
+
+function questionPromptForNextCheck(check: string): string {
+  return `围绕“${check.trim()}”，当前候选范围内有哪些确定性事实需要优先核对？`.slice(0, 500)
+}
+
+function useQuestionPrompt(prompt: string): void {
+  if (!canUseQuestionPrompt.value)
+    return
+  const normalized = prompt.trim().slice(0, 500)
+  if (!normalized)
+    return
+  emit('update:questionInput', normalized)
+  void nextTick(() => questionInputElement.value?.focus())
 }
 
 function historyError(error: unknown): string {
@@ -690,7 +706,20 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
           <div v-if="selectedHistorySession.questions.length" class="quant-ai-briefing-history-questions">
             <span class="quant-ai-briefing-label">历史追问</span>
             <article v-for="question in selectedHistorySession.questions" :key="`${question.question}-${question.generatedAt}`" class="quant-ai-briefing-history-question">
-              <strong class="quant-ai-briefing-wrap-anywhere">{{ question.question }}</strong>
+              <div class="quant-ai-briefing-history-question-heading">
+                <strong class="quant-ai-briefing-wrap-anywhere">{{ question.question }}</strong>
+                <button
+                  class="text-button quant-ai-briefing-history-reuse-question"
+                  type="button"
+                  :disabled="!canUseQuestionPrompt"
+                  :aria-label="`将历史追问带入当前问题：${question.question}`"
+                  title="将历史追问带入当前问题框"
+                  @click="useQuestionPrompt(question.question)"
+                >
+                  <BrainCircuit :size="13" aria-hidden="true" />
+                  再次追问
+                </button>
+              </div>
               <p class="quant-ai-briefing-wrap-anywhere">
                 {{ question.answer }}
               </p>
@@ -738,6 +767,7 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
         <label class="quant-ai-briefing-question-field">
           <span>问题</span>
           <textarea
+            ref="questionInputElement"
             :value="questionInput"
             class="field-control quant-ai-briefing-question-input"
             maxlength="500"
@@ -891,8 +921,19 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
       <div class="quant-ai-briefing-section quant-ai-briefing-next">
         <span class="quant-ai-briefing-label">下一步核对</span>
         <ul v-if="visibleNextChecks.length">
-          <li v-for="check in visibleNextChecks" :key="check" class="quant-ai-briefing-wrap-anywhere">
-            {{ check }}
+          <li v-for="check in visibleNextChecks" :key="check" class="quant-ai-briefing-next-item">
+            <span class="quant-ai-briefing-wrap-anywhere">{{ check }}</span>
+            <button
+              class="text-button quant-ai-briefing-next-prompt"
+              type="button"
+              :disabled="!canUseQuestionPrompt"
+              :aria-label="`将核对项带入当前追问：${check}`"
+              title="将核对项转换为当前追问"
+              @click="useQuestionPrompt(questionPromptForNextCheck(check))"
+            >
+              <BrainCircuit :size="13" aria-hidden="true" />
+              带入追问
+            </button>
           </li>
         </ul>
         <span v-else class="quant-ai-briefing-empty">未返回下一步核对项</span>
@@ -1378,6 +1419,26 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   line-height: 1.5;
 }
 
+.quant-ai-briefing-history-question-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.quant-ai-briefing-history-question-heading strong {
+  min-width: 0;
+}
+
+.quant-ai-briefing-history-reuse-question {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
 .quant-ai-briefing-history-sub-label {
   color: hsl(var(--muted-foreground));
   font-size: 0.625rem;
@@ -1643,6 +1704,22 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   line-height: 1.45;
 }
 
+.quant-ai-briefing-next-item {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.35rem;
+}
+
+.quant-ai-briefing-next-prompt {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
 .quant-ai-briefing-citation-list {
   display: flex;
   min-width: 0;
@@ -1743,6 +1820,20 @@ button:focus-visible {
   .quant-ai-briefing-focus-meta {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .quant-ai-briefing-next-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quant-ai-briefing-next-prompt {
+    justify-self: start;
+  }
+
+  .quant-ai-briefing-history-question-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 
   .quant-ai-briefing-question-form {
