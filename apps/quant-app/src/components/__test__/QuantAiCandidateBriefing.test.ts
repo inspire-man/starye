@@ -43,6 +43,7 @@ const baseProps = {
   filteredCandidateCount: 2,
   briefingAvailableCandidateCount: 2,
   briefingCandidateCount: null,
+  currentCandidateCodes: [],
   loading: false,
   errorMessage: null,
   configurationError: false,
@@ -66,9 +67,28 @@ const historySession: QuantAiCandidateBriefingSession = {
     model: 'gpt-5.4',
     generatedAt: '2026-08-28T03:10:00.000Z',
     overview: '历史简报：先核对数据完整性。',
-    focusItems: [],
+    focusItems: [
+      {
+        tsCode: '601899.SH',
+        name: '紫金矿业',
+        priorityLevel: 'high',
+        priorityScore: 82,
+        actionLabel: '继续研究',
+        reasons: ['历史重点'],
+        explanation: '历史重点候选的说明。',
+      },
+      {
+        tsCode: '000001.SZ',
+        name: '平安银行',
+        priorityLevel: 'normal',
+        priorityScore: 66,
+        actionLabel: '核对数据',
+        reasons: ['历史引用'],
+        explanation: '当前快照中已经不存在的历史重点候选。',
+      },
+    ],
     nextChecks: [],
-    citedCandidateCodes: ['601899.SH'],
+    citedCandidateCodes: ['601899.SH', '000001.SZ'],
   },
   questions: [{
     questionVersion: 'candidate-briefing-question-v1',
@@ -77,7 +97,7 @@ const historySession: QuantAiCandidateBriefingSession = {
     generatedAt: '2026-08-28T03:12:00.000Z',
     question: '历史范围先看什么？',
     answer: '历史事实显示应先核对数据完整性。',
-    citedCandidateCodes: ['601899.SH'],
+    citedCandidateCodes: ['601899.SH', '000001.SZ'],
   }],
   provider: 'openai_compatible',
   model: 'gpt-5.4',
@@ -248,6 +268,47 @@ describe('quant ai candidate briefing', () => {
     expect(wrapper.text()).toContain('当前回答')
     expect(wrapper.text()).toContain('历史简报：先核对数据完整性。')
     expect(wrapper.text()).toContain('历史会话只读恢复')
+  })
+
+  it('makes current historical references actionable and keeps absent codes read-only across every surface', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        currentCandidateCodes: ['601899.SH'],
+        sessionHistory: [historySession],
+      },
+    })
+
+    await wrapper.get('.quant-ai-briefing-history-item').trigger('click')
+
+    const currentReferences = wrapper.findAll('.quant-ai-briefing-history-code-action')
+    const staleReferences = wrapper.findAll('.quant-ai-briefing-history-code-stale')
+    const currentFocus = wrapper.findAll('.quant-ai-briefing-history-focus-action')
+    const staleFocus = wrapper.findAll('.quant-ai-briefing-history-focus-stale')
+
+    expect(currentReferences).toHaveLength(3)
+    expect(staleReferences).toHaveLength(3)
+    expect(currentFocus).toHaveLength(1)
+    expect(staleFocus).toHaveLength(1)
+    expect(currentReferences.every(reference => reference.element.tagName === 'BUTTON')).toBe(true)
+    expect(staleReferences.every(reference => reference.element.tagName === 'SPAN')).toBe(true)
+    expect(staleFocus[0].element.tagName).toBe('SPAN')
+
+    for (const reference of currentReferences)
+      await reference.trigger('click')
+    await currentFocus[0].trigger('click')
+
+    expect(wrapper.emitted('focusCandidate')).toEqual([
+      ['601899.SH'],
+      ['601899.SH'],
+      ['601899.SH'],
+      ['601899.SH'],
+    ])
+    expect(wrapper.findAll('.quant-ai-briefing-history-code-stale code').map(code => code.text())).toEqual([
+      '000001.SZ',
+      '000001.SZ',
+      '000001.SZ',
+    ])
   })
 
   it('requires confirmation and removes a self-loaded session without nested row controls', async () => {

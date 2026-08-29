@@ -308,6 +308,7 @@ const viewCopy: Record<QuantView, { eyebrow: string, title: string, subtitle: st
 
 const selectedStock = computed(() => watchlist.value.find(item => item.tsCode === selectedTsCode.value) || null)
 const candidateItems = computed(() => snapshot.value?.candidates || [])
+const currentCandidateCodes = computed(() => candidateItems.value.map(item => item.tsCode))
 const valueQualityMap = computed(() => new Map(valueSelection.value?.items.map(item => [item.tsCode, item]) || []))
 const valueQualityResultsLoaded = computed(() => Boolean(valueSelection.value && !loading.valueQuality && !errors.valueQuality))
 const candidateEvidenceMap = computed(() => new Map(candidateItems.value.map(item => [
@@ -3444,6 +3445,7 @@ onUnmounted(() => {
             :briefing-candidate-count="candidateAiBriefingScopeCount"
             :current-scope-key="candidateBriefingScopeKey"
             :current-snapshot-id="snapshot?.id || null"
+            :current-candidate-codes="currentCandidateCodes"
             :history-reset-key="candidateAiBriefingHistoryResetKey"
             :available="Boolean(snapshot?.generatedAt)"
             :loading="candidateAiBriefingLoading"

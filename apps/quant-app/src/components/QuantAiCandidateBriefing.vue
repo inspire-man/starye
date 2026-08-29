@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<{
   briefingCandidateCount?: number | null
   currentScopeKey?: string
   currentSnapshotId?: string | null
+  currentCandidateCodes?: string[]
   historyResetKey?: number
   available?: boolean
   loading: boolean
@@ -34,6 +35,7 @@ const props = withDefaults(defineProps<{
   briefingCandidateCount: null,
   currentScopeKey: '',
   currentSnapshotId: null,
+  currentCandidateCodes: () => [],
   historyResetKey: 0,
   questionInput: '',
   questionResult: null,
@@ -65,6 +67,7 @@ const canAskQuestion = computed(() => props.available !== false && hasBriefingCa
 const showBriefingActions = computed(() => Boolean(props.briefing && !props.loading && !props.errorMessage))
 const visibleFocusItems = computed(() => props.briefing?.focusItems.slice(0, 5) || [])
 const visibleNextChecks = computed(() => props.briefing?.nextChecks.slice(0, 6) || [])
+const currentCandidateCodeSet = computed(() => new Set(props.currentCandidateCodes))
 const loadedSessionHistory = ref<QuantAiCandidateBriefingSession[]>([])
 const historyLoading = ref(false)
 const historyErrorMessage = ref<string | null>(null)
@@ -130,6 +133,15 @@ function formatDate(value: string): string {
 
 function focusCandidate(tsCode: string): void {
   emit('focusCandidate', tsCode)
+}
+
+function isCurrentCandidateCode(tsCode: string): boolean {
+  return currentCandidateCodeSet.value.has(tsCode)
+}
+
+function focusHistoricalCandidate(tsCode: string): void {
+  if (isCurrentCandidateCode(tsCode))
+    focusCandidate(tsCode)
 }
 
 function submitQuestion(): void {
@@ -472,6 +484,31 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
             <span>历史候选 <strong>{{ selectedHistorySession.candidateCodes.length }} 个</strong></span>
             <span>scopeKey <code>{{ selectedHistorySession.scopeKey }}</code></span>
           </div>
+          <div v-if="selectedHistorySession.candidateCodes.length" class="quant-ai-briefing-history-candidates">
+            <span class="quant-ai-briefing-history-sub-label">历史候选代码</span>
+            <div class="quant-ai-briefing-history-code-list">
+              <template v-for="tsCode in selectedHistorySession.candidateCodes" :key="`history-candidate-${tsCode}`">
+                <button
+                  v-if="isCurrentCandidateCode(tsCode)"
+                  class="quant-ai-briefing-history-code-action quant-ai-briefing-wrap-anywhere"
+                  type="button"
+                  :aria-label="`打开历史候选 ${tsCode} 的当前详情`"
+                  @click="focusHistoricalCandidate(tsCode)"
+                >
+                  <code>{{ tsCode }}</code>
+                  <span>打开当前详情</span>
+                </button>
+                <span
+                  v-else
+                  class="quant-ai-briefing-history-code-stale quant-ai-briefing-wrap-anywhere"
+                  :title="`${tsCode} 已不在当前候选快照中`"
+                >
+                  <code>{{ tsCode }}</code>
+                  <span>当前不可用</span>
+                </span>
+              </template>
+            </div>
+          </div>
           <p
             v-if="historyDetailErrorMessage"
             class="quant-ai-briefing-history-detail-error"
@@ -488,8 +525,20 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
             <div v-if="selectedHistorySession.briefing.focusItems.length" class="quant-ai-briefing-history-focus-list">
               <span class="quant-ai-briefing-history-sub-label">重点候选</span>
               <div v-for="item in selectedHistorySession.briefing.focusItems" :key="item.tsCode" class="quant-ai-briefing-history-focus-item">
-                <strong>{{ item.name || item.tsCode }}</strong>
-                <span>{{ item.tsCode }} · {{ formatScore(item.priorityScore) }} · {{ item.actionLabel }}</span>
+                <button
+                  v-if="isCurrentCandidateCode(item.tsCode)"
+                  class="quant-ai-briefing-history-focus-action"
+                  type="button"
+                  :aria-label="`打开历史重点候选 ${item.name || item.tsCode}（${item.tsCode}）当前详情`"
+                  @click="focusHistoricalCandidate(item.tsCode)"
+                >
+                  <strong>{{ item.name || item.tsCode }}</strong>
+                  <span>{{ item.tsCode }} · {{ formatScore(item.priorityScore) }} · {{ item.actionLabel }}</span>
+                </button>
+                <span v-else class="quant-ai-briefing-history-focus-stale" :title="`${item.tsCode} 已不在当前候选快照中`">
+                  <strong>{{ item.name || item.tsCode }}</strong>
+                  <span>{{ item.tsCode }} · {{ formatScore(item.priorityScore) }} · {{ item.actionLabel }} · 当前不可用</span>
+                </span>
                 <p class="quant-ai-briefing-wrap-anywhere">
                   {{ item.explanation }}
                 </p>
@@ -505,7 +554,28 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
             </div>
             <div v-if="selectedHistorySession.briefing.citedCandidateCodes.length" class="quant-ai-briefing-history-citations">
               <span class="quant-ai-briefing-history-sub-label">引用候选代码</span>
-              <code v-for="tsCode in selectedHistorySession.briefing.citedCandidateCodes" :key="tsCode">{{ tsCode }}</code>
+              <div class="quant-ai-briefing-history-code-list">
+                <template v-for="tsCode in selectedHistorySession.briefing.citedCandidateCodes" :key="`history-briefing-citation-${tsCode}`">
+                  <button
+                    v-if="isCurrentCandidateCode(tsCode)"
+                    class="quant-ai-briefing-history-code-action quant-ai-briefing-wrap-anywhere"
+                    type="button"
+                    :aria-label="`打开历史简报引用候选 ${tsCode} 当前详情`"
+                    @click="focusHistoricalCandidate(tsCode)"
+                  >
+                    <code>{{ tsCode }}</code>
+                    <span>回看候选</span>
+                  </button>
+                  <span
+                    v-else
+                    class="quant-ai-briefing-history-code-stale quant-ai-briefing-wrap-anywhere"
+                    :title="`${tsCode} 已不在当前候选快照中`"
+                  >
+                    <code>{{ tsCode }}</code>
+                    <span>当前不可用</span>
+                  </span>
+                </template>
+              </div>
             </div>
           </div>
           <div v-if="selectedHistorySession.questions.length" class="quant-ai-briefing-history-questions">
@@ -515,7 +585,31 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
               <p class="quant-ai-briefing-wrap-anywhere">
                 {{ question.answer }}
               </p>
-              <small>引用 {{ question.citedCandidateCodes.join('、') || '无' }} · {{ formatDate(question.generatedAt) }}</small>
+              <small class="quant-ai-briefing-history-question-citations">
+                <span>引用</span>
+                <template v-if="question.citedCandidateCodes.length">
+                  <template v-for="tsCode in question.citedCandidateCodes" :key="`history-question-citation-${question.generatedAt}-${tsCode}`">
+                    <button
+                      v-if="isCurrentCandidateCode(tsCode)"
+                      class="quant-ai-briefing-history-code-action quant-ai-briefing-wrap-anywhere"
+                      type="button"
+                      :aria-label="`打开历史追问引用候选 ${tsCode} 当前详情`"
+                      @click="focusHistoricalCandidate(tsCode)"
+                    >
+                      <code>{{ tsCode }}</code>
+                    </button>
+                    <span
+                      v-else
+                      class="quant-ai-briefing-history-code-stale quant-ai-briefing-wrap-anywhere"
+                      :title="`${tsCode} 已不在当前候选快照中`"
+                    >
+                      <code>{{ tsCode }}</code>
+                    </span>
+                  </template>
+                </template>
+                <span v-else>无</span>
+                <span>· {{ formatDate(question.generatedAt) }}</span>
+              </small>
             </article>
           </div>
           <span v-if="!selectedHistorySession.briefing && !selectedHistorySession.questions.length" class="quant-ai-briefing-empty">
@@ -1061,6 +1155,73 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   padding: 0.55rem 0.6rem;
 }
 
+.quant-ai-briefing-history-candidates {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+
+.quant-ai-briefing-history-code-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.quant-ai-briefing-history-code-action,
+.quant-ai-briefing-history-code-stale {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  padding: 0.2rem 0.3rem;
+  font-size: 0.625rem;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.quant-ai-briefing-history-code-action {
+  border-color: hsl(var(--primary) / 0.35);
+  background: hsl(var(--primary) / 0.06);
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+
+.quant-ai-briefing-history-code-action:hover {
+  border-color: hsl(var(--primary) / 0.7);
+  background: hsl(var(--primary) / 0.12);
+}
+
+.quant-ai-briefing-history-code-stale {
+  background: hsl(var(--muted) / 0.4);
+  color: hsl(var(--muted-foreground));
+}
+
+.quant-ai-briefing-history-code-action code,
+.quant-ai-briefing-history-code-stale code {
+  min-width: 0;
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.625rem;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-briefing-history-code-action span,
+.quant-ai-briefing-history-code-stale span {
+  flex: 0 0 auto;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.5625rem;
+}
+
+.quant-ai-briefing-history-code-action span {
+  color: hsl(var(--primary));
+}
+
 .quant-ai-briefing-history-metadata {
   color: hsl(var(--muted-foreground));
   font-size: 0.625rem;
@@ -1106,6 +1267,27 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   font-size: 0.625rem;
 }
 
+.quant-ai-briefing-history-focus-action,
+.quant-ai-briefing-history-focus-stale {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 0.15rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+}
+
+.quant-ai-briefing-history-focus-action {
+  cursor: pointer;
+}
+
+.quant-ai-briefing-history-focus-action:hover strong {
+  color: hsl(var(--primary));
+}
+
 .quant-ai-briefing-history-focus-item strong {
   color: hsl(var(--foreground));
 }
@@ -1113,6 +1295,14 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
 .quant-ai-briefing-history-focus-item p {
   margin: 0;
   line-height: 1.4;
+}
+
+.quant-ai-briefing-history-question-citations {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
 }
 
 .quant-ai-briefing-history-next-checks ul {
