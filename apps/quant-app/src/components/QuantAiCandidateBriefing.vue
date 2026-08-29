@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantAiCandidateBriefing } from '../lib/quant-types'
+import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingQuestion } from '../lib/quant-types'
 import { AlertCircle, BrainCircuit, CircleHelp, Copy, Download, RefreshCw } from 'lucide-vue-next'
 import { computed } from 'vue'
 
@@ -15,29 +15,42 @@ const props = withDefaults(defineProps<{
   loading: boolean
   errorMessage: string | null
   configurationError: boolean
+  questionInput?: string
+  questionResult?: QuantAiCandidateBriefingQuestion | null
+  questionLoading?: boolean
+  questionErrorMessage?: string | null
+  questionConfigurationError?: boolean
   copying?: boolean
   copyOutcome?: CopyOutcome
   copyMessage?: string
 }>(), {
   available: true,
   briefingCandidateCount: null,
+  questionInput: '',
+  questionResult: null,
+  questionLoading: false,
+  questionErrorMessage: null,
+  questionConfigurationError: false,
   copying: false,
   copyOutcome: null,
   copyMessage: '',
 })
 
 const emit = defineEmits<{
-  generate: []
-  openSettings: []
-  focusCandidate: [tsCode: string]
-  copy: []
-  export: []
+  'generate': []
+  'openSettings': []
+  'focusCandidate': [tsCode: string]
+  'update:questionInput': [value: string]
+  'askQuestion': [question: string]
+  'copy': []
+  'export': []
 }>()
 
 const hasCandidates = computed(() => props.candidateCount > 0)
 const hasFilteredCandidates = computed(() => props.filteredCandidateCount > 0)
 const hasBriefingCandidates = computed(() => props.briefingAvailableCandidateCount > 0)
 const canGenerate = computed(() => props.available !== false && hasFilteredCandidates.value && hasBriefingCandidates.value)
+const canAskQuestion = computed(() => props.available !== false && hasBriefingCandidates.value && Boolean(props.questionInput.trim()) && !props.questionLoading)
 const showBriefingActions = computed(() => Boolean(props.briefing && !props.loading && !props.errorMessage))
 const visibleFocusItems = computed(() => props.briefing?.focusItems.slice(0, 5) || [])
 const visibleNextChecks = computed(() => props.briefing?.nextChecks.slice(0, 6) || [])
@@ -85,6 +98,11 @@ function formatDate(value: string): string {
 
 function focusCandidate(tsCode: string): void {
   emit('focusCandidate', tsCode)
+}
+
+function submitQuestion(): void {
+  if (canAskQuestion.value)
+    emit('askQuestion', props.questionInput.trim())
 }
 </script>
 
@@ -149,6 +167,87 @@ function focusCandidate(tsCode: string): void {
       <span v-if="briefingCandidateCount !== null">本次简报 <strong>{{ briefingCandidateCount }}</strong> 个</span>
       <span v-if="briefing">版本 {{ briefing.briefingVersion }}</span>
       <span v-if="briefing">{{ briefing.provider }} · {{ briefing.model }} · {{ formatDate(briefing.generatedAt) }}</span>
+    </div>
+
+    <div class="quant-ai-briefing-question">
+      <div class="quant-ai-briefing-section-heading">
+        <span class="quant-ai-briefing-label">范围内追问</span>
+        <small>只基于当前可生成范围的候选事实回答</small>
+      </div>
+      <form class="quant-ai-briefing-question-form" @submit.prevent="submitQuestion">
+        <label class="quant-ai-briefing-question-field">
+          <span>问题</span>
+          <textarea
+            :value="questionInput"
+            class="field-control quant-ai-briefing-question-input"
+            maxlength="500"
+            rows="2"
+            placeholder="例如：当前范围内最需要先核对哪类事实？"
+            :disabled="questionLoading || !hasBriefingCandidates || available === false"
+            @input="emit('update:questionInput', ($event.target as HTMLTextAreaElement).value)"
+          />
+        </label>
+        <div class="quant-ai-briefing-question-actions">
+          <small>{{ questionInput.length }} / 500</small>
+          <button class="secondary-button quant-ai-briefing-question-submit" type="submit" :disabled="!canAskQuestion" title="基于当前候选范围回答问题">
+            <RefreshCw v-if="questionLoading" :size="14" class="animate-spin" aria-hidden="true" />
+            <BrainCircuit v-else :size="14" aria-hidden="true" />
+            {{ questionLoading ? '回答中' : questionResult ? '重新追问' : '提交追问' }}
+          </button>
+        </div>
+      </form>
+      <div v-if="questionLoading" class="quant-ai-briefing-question-state" role="status">
+        <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
+        <span>正在基于当前候选范围整理回答</span>
+      </div>
+      <div v-else-if="questionErrorMessage" class="quant-ai-briefing-question-state quant-ai-briefing-question-state-error" role="alert">
+        <AlertCircle :size="15" aria-hidden="true" />
+        <span class="quant-ai-briefing-wrap-anywhere">{{ questionErrorMessage }}</span>
+        <button v-if="questionConfigurationError" class="text-button quant-ai-briefing-question-error-action" type="button" @click="emit('openSettings')">
+          打开 AI 配置
+        </button>
+        <button v-else class="text-button quant-ai-briefing-question-error-action" type="button" @click="submitQuestion">
+          重试
+        </button>
+      </div>
+      <div v-else-if="questionResult" class="quant-ai-briefing-question-result">
+        <div class="quant-ai-briefing-question-answer-heading">
+          <strong>回答</strong>
+          <small>{{ questionResult.model }} · {{ formatDate(questionResult.generatedAt) }}</small>
+        </div>
+        <p class="quant-ai-briefing-question-answer quant-ai-briefing-wrap-anywhere">
+          {{ questionResult.answer }}
+        </p>
+        <div class="quant-ai-briefing-question-citations">
+          <div class="quant-ai-briefing-section-heading">
+            <span class="quant-ai-briefing-label">引用候选代码</span>
+            <small>{{ questionResult.citedCandidateCodes.length }} 个 · 点击回看详情</small>
+          </div>
+          <div v-if="questionResult.citedCandidateCodes.length" class="quant-ai-briefing-citation-list">
+            <button
+              v-for="tsCode in questionResult.citedCandidateCodes"
+              :key="tsCode"
+              class="quant-ai-briefing-citation quant-ai-briefing-wrap-anywhere"
+              type="button"
+              :aria-label="`打开追问引用候选 ${tsCode} 详情`"
+              @click="focusCandidate(tsCode)"
+            >
+              <code>{{ tsCode }}</code>
+              <span>回看候选</span>
+            </button>
+          </div>
+          <span v-else class="quant-ai-briefing-empty">
+            <CircleHelp :size="13" aria-hidden="true" />
+            回答未返回引用代码
+          </span>
+        </div>
+      </div>
+      <div v-else class="quant-ai-briefing-question-state" role="status">
+        <CircleHelp :size="15" aria-hidden="true" />
+        <span v-if="!hasBriefingCandidates">当前筛选没有可追问的快照候选</span>
+        <span v-else-if="available === false">候选快照尚未准备好，完成一次日线更新后即可追问</span>
+        <span v-else>输入一个具体问题，AI 会只根据当前候选范围回答。</span>
+      </div>
     </div>
 
     <p v-if="copyMessage && showBriefingActions" class="quant-ai-briefing-copy-message" :class="{ 'quant-ai-briefing-copy-message-error': copyOutcome === 'error' }" role="status">
@@ -335,6 +434,97 @@ function focusCandidate(tsCode: string): void {
 
 .quant-ai-briefing-copy-message-error {
   color: hsl(var(--status-danger));
+}
+
+.quant-ai-briefing-question {
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.65rem;
+}
+
+.quant-ai-briefing-question-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.quant-ai-briefing-question-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.quant-ai-briefing-question-field > span,
+.quant-ai-briefing-question-actions small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-briefing-question-input {
+  min-height: 3.3rem;
+  resize: vertical;
+}
+
+.quant-ai-briefing-question-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
+}
+
+.quant-ai-briefing-question-submit {
+  white-space: nowrap;
+}
+
+.quant-ai-briefing-question-state {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.4rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+}
+
+.quant-ai-briefing-question-state-error {
+  flex-wrap: wrap;
+  color: hsl(var(--status-danger));
+}
+
+.quant-ai-briefing-question-result {
+  display: grid;
+  gap: 0.45rem;
+  border-left: 2px solid hsl(var(--status-success) / 0.7);
+  background: hsl(var(--status-success) / 0.04);
+  padding: 0.5rem 0.6rem;
+}
+
+.quant-ai-briefing-question-answer-heading {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+}
+
+.quant-ai-briefing-question-answer-heading small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-briefing-question-answer {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.quant-ai-briefing-question-citations {
+  display: grid;
+  gap: 0.35rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.45rem;
 }
 
 .quant-ai-briefing-scope {
@@ -612,6 +802,25 @@ button:focus-visible {
   }
 
   .quant-ai-briefing-focus-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .quant-ai-briefing-question-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quant-ai-briefing-question-actions {
+    align-items: center;
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .quant-ai-briefing-question-submit {
+    width: 100%;
+  }
+
+  .quant-ai-briefing-question-answer-heading {
     align-items: flex-start;
     flex-direction: column;
   }

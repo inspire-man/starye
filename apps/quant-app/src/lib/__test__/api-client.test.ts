@@ -627,6 +627,35 @@ describe('quantApi', () => {
     expect(String(fetchMock.mock.calls[0]?.[1]?.body)).not.toContain('priorityScore')
   })
 
+  it('requests a candidate briefing follow-up with only scope codes and the question', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      question_version: 'candidate-briefing-question-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-08-29T03:30:00.000Z',
+      question: '当前范围内先核对什么？',
+      answer: '先核对当前候选的已有数据事实。',
+      cited_candidate_codes: ['601899.SH', '601899.SH'],
+    } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.askCandidateAiBriefingQuestion(['601899.SH', '000001.SZ'], '  当前范围内先核对什么？  ')).resolves.toEqual({
+      questionVersion: 'candidate-briefing-question-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generatedAt: '2026-08-29T03:30:00.000Z',
+      question: '当前范围内先核对什么？',
+      answer: '先核对当前候选的已有数据事实。',
+      citedCandidateCodes: ['601899.SH'],
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/candidates/ai-briefing/question`, expect.objectContaining({
+      method: 'POST',
+      credentials: 'include',
+    }))
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ ts_codes: ['601899.SH', '000001.SZ'], question: '当前范围内先核对什么？' }))
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).not.toContain('priorityScore')
+  })
+
   it('normalizes structured research runs and requests history by stock code', async () => {
     const run = {
       id: 'run-1',

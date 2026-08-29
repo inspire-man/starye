@@ -1,6 +1,7 @@
 import type { QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
 import type { QuantAiCandidateBriefingResult, QuantCandidateBriefingCandidate, QuantCandidateBriefingMarker } from '../../domain/quant/ai-candidate-briefing'
+import type { QuantAiCandidateBriefingQuestionResult } from '../../domain/quant/ai-candidate-briefing-question'
 import type { QuantAiChangeExplanationResult } from '../../domain/quant/ai-change-explanation'
 import type { QuantAiComparisonResult } from '../../domain/quant/ai-comparison'
 import type { QuantAiQuestionResult } from '../../domain/quant/ai-question'
@@ -13,6 +14,7 @@ import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { buildQuantCandidateBriefingFacts, generateQuantAiCandidateBriefing } from '../../domain/quant/ai-candidate-briefing'
+import { generateQuantAiCandidateBriefingQuestion } from '../../domain/quant/ai-candidate-briefing-question'
 import { generateQuantAiChangeExplanation } from '../../domain/quant/ai-change-explanation'
 import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
@@ -54,6 +56,7 @@ import { syncQuantDaily } from '../../domain/quant/sync'
 import { readQuantValueSelection } from '../../domain/quant/value-selection-service'
 import { requireAuth } from '../../middleware/guard'
 import {
+  QuantAiCandidateBriefingQuestionRequestSchema,
   QuantAiCandidateBriefingRequestSchema,
   QuantAiConfigUpdateSchema,
   QuantDailyQuerySchema,
@@ -286,6 +289,18 @@ function candidateBriefingView(briefing: QuantAiCandidateBriefingResult) {
   }
 }
 
+function candidateBriefingQuestionView(question: QuantAiCandidateBriefingQuestionResult) {
+  return {
+    questionVersion: question.questionVersion,
+    provider: question.provider,
+    model: question.model,
+    generatedAt: question.generatedAt,
+    question: question.question,
+    answer: question.answer,
+    citedCandidateCodes: question.citedCandidateCodes,
+  }
+}
+
 function isComparableResearchReport(report: QuantResearchReport): boolean {
   const validStatuses = new Set(['ready', 'partial', 'insufficient_data'])
   const validActions = new Set(['research-window', 'wait-confirmation', 'reassess', 'complete-data'])
@@ -352,7 +367,11 @@ function parseSnapshotInputTsCodes(snapshot: { readonly inputTsCodesJson: string
   }
 }
 
-function scopeCurrentQuantCandidates(snapshot: CurrentQuantCandidateSnapshot, tsCodes: readonly string[] | undefined): CurrentQuantCandidateSnapshot {
+function scopeCurrentQuantCandidates(
+  snapshot: CurrentQuantCandidateSnapshot,
+  tsCodes: readonly string[] | undefined,
+  inputErrorCode: 'QUANT_AI_CANDIDATE_BRIEFING_INPUT' | 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INPUT' = 'QUANT_AI_CANDIDATE_BRIEFING_INPUT',
+): CurrentQuantCandidateSnapshot {
   if (tsCodes === undefined)
     return snapshot
 
@@ -364,7 +383,7 @@ function scopeCurrentQuantCandidates(snapshot: CurrentQuantCandidateSnapshot, ts
   const snapshotCodes = new Set(snapshot.inputTsCodes)
   const unknownCodes = normalizedCodes.filter(tsCode => !snapshotCodes.has(tsCode) || !candidatesByCode.has(tsCode))
   if (unknownCodes.length)
-    throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_INPUT', 'Candidate briefing scope contains a candidate outside the current snapshot', 422, { tsCodes: unknownCodes })
+    throw new QuantError(inputErrorCode, 'Candidate briefing scope contains a candidate outside the current snapshot', 422, { tsCodes: unknownCodes })
 
   return {
     ...snapshot,
@@ -845,6 +864,26 @@ quantRoutes.post('/candidates/ai-briefing', validator('json', QuantAiCandidateBr
     ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
   })
   return c.json({ success: true as const, data: candidateBriefingView(briefing) })
+})
+
+quantRoutes.post('/candidates/ai-briefing/question', validator('json', QuantAiCandidateBriefingQuestionRequestSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { ts_codes: tsCodes, question } = c.req.valid('json')
+  const snapshot = await readCurrentQuantCandidates(c.get('db'), userId)
+  if (!snapshot.candidates.length || snapshot.id === 'pending' || !snapshot.generatedAt)
+    throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INPUT', 'Candidate snapshot is not available', 422)
+  const scopedSnapshot = scopeCurrentQuantCandidates(snapshot, tsCodes, 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INPUT')
+  const config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env?.QUANT_AI_ENCRYPTION_KEY)
+  if (!config)
+    throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_QUESTION_CONFIGURATION', 'AI candidate briefing question configuration is not available', 503)
+  const facts = await readCandidateBriefingFacts(c.get('db'), userId, c.env, scopedSnapshot)
+  const generated = await generateQuantAiCandidateBriefingQuestion({
+    candidates: facts,
+    question,
+    config,
+    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+  })
+  return c.json({ success: true as const, data: candidateBriefingQuestionView(generated) })
 })
 
 quantRoutes.get('/research/runs/:runId/summary', validator('param', QuantResearchRunIdParamSchema), validator('query', QuantResearchSummaryQuerySchema), async (c) => {

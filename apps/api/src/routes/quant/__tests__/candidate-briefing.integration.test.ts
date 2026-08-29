@@ -87,6 +87,14 @@ function validBriefingContent(tsCode = '601899.SH', overrides: Record<string, un
   })
 }
 
+function validQuestionContent(citedCandidateCodes = ['601899.SH'], overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    answer: '当前候选事实显示，应先核对数据完整性和研究标记，再继续查看已有信号。',
+    citedCandidateCodes,
+    ...overrides,
+  })
+}
+
 describe('quant candidate AI briefing route', () => {
   beforeEach(() => vi.restoreAllMocks())
 
@@ -302,6 +310,140 @@ describe('quant candidate AI briefing route', () => {
       success: false,
       code: 'QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION',
     })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('answers only from the requested current candidate scope', async () => {
+    const { client, db } = await createDatabase()
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '000001.SZ', name: '平安银行' })
+    await insertSnapshot(client, 'user-1', 'snapshot-user-1', ['601899.SH', '000001.SZ'])
+    const app = createApp(db, 'user-1')
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'candidate-question-route-secret' } as AppEnv['Bindings']
+    await app.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'openai_compatible', model: 'gpt-5.4', base_url: 'https://ai.example.test/v1', api_key: 'sk-candidate-question-route' }),
+    }, env)
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/chat/completions'))
+        return aiResponse(validQuestionContent(['000001.SZ']))
+      if (url.includes('/api/qt/stock/get'))
+        return new Response(JSON.stringify({ rc: 0, data: { f57: '000001', f162: 12, f163: 12, f164: 10, f165: 2, f166: 1, f168: 1, f116: 1000000000 } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      if (url.includes('/PC_HSF10/'))
+        return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } })
+      return new Response(JSON.stringify({ data: null }), { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+
+    const response = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['000001.sz'], question: '  当前范围内先核对什么？  ' }),
+    }, env)
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        questionVersion: 'candidate-briefing-question-v1',
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        question: '当前范围内先核对什么？',
+        answer: expect.stringContaining('数据完整性'),
+        citedCandidateCodes: ['000001.SZ'],
+      },
+    })
+    const aiCall = fetchMock.mock.calls.find(call => String(call[0]).endsWith('/chat/completions'))
+    expect(aiCall).toBeDefined()
+    const requestBody = JSON.parse(String(aiCall?.[1]?.body)) as { messages: Array<{ content: string }> }
+    expect(requestBody.messages[1]?.content).toContain('000001.SZ')
+    expect(requestBody.messages[1]?.content).not.toContain('601899.SH')
+    expect(requestBody.messages[1]?.content).not.toContain('sk-candidate-question-route')
+    expect(aiCall?.[1]?.headers).toMatchObject({ authorization: 'Bearer sk-candidate-question-route' })
+  })
+
+  it('rejects invalid question scopes and client-owned facts before calling AI', async () => {
+    const { client, db } = await createDatabase()
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
+    await insertSnapshot(client, 'user-1', 'snapshot-user-1')
+    await createQuantWatchlistItem(db, { userId: 'user-2', tsCode: '000001.SZ', name: '平安银行' })
+    await insertSnapshot(client, 'user-2', 'snapshot-user-2', ['000001.SZ'])
+    const app = createApp(db, 'user-1')
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'candidate-question-route-secret' } as AppEnv['Bindings']
+    await app.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'openai_compatible', model: 'gpt-5.4', base_url: 'https://ai.example.test/v1', api_key: 'sk-candidate-question-route' }),
+    }, env)
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    const missing = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['601899.SH'] }),
+    }, env)
+    const empty = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: [], question: '问题' }),
+    }, env)
+    const unknown = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['999999.SZ'], question: '问题' }),
+    }, env)
+    const foreign = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['000001.SZ'], question: '问题' }),
+    }, env)
+    const oversized = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: Array.from({ length: 51 }, (_, index) => `${String(index).padStart(6, '0')}.SZ`), question: '问题' }),
+    }, env)
+    const clientOwned = await app.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['601899.SH'], question: '问题', candidates: [{ tsCode: 'FAKE.SZ' }] }),
+    }, env)
+
+    expect(missing.status).toBe(400)
+    expect(empty.status).toBe(400)
+    await expect(unknown.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INPUT' })
+    await expect(foreign.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INPUT' })
+    expect(oversized.status).toBe(400)
+    expect(clientOwned.status).toBe(400)
+    expect(fetchMock.mock.calls.filter(call => String(call[0]).endsWith('/chat/completions'))).toHaveLength(0)
+  })
+
+  it('requires authentication and configuration for candidate briefing questions', async () => {
+    const { db } = await createDatabase()
+    const unauthenticated = createApp(db, null)
+    const unauthenticatedFetch = vi.spyOn(globalThis, 'fetch')
+    const unauthorized = await unauthenticated.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['601899.SH'], question: '问题' }),
+    })
+    expect(unauthorized.status).toBe(401)
+    expect(unauthenticatedFetch).not.toHaveBeenCalled()
+
+    vi.restoreAllMocks()
+    const { client: configuredClient, db: configuredDb } = await createDatabase()
+    await createQuantWatchlistItem(configuredDb, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
+    await insertSnapshot(configuredClient, 'user-1', 'snapshot-user-1')
+    const configured = createApp(configuredDb, 'user-1')
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const response = await configured.request('/api/quant/candidates/ai-briefing/question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts_codes: ['601899.SH'], question: '问题' }),
+    }, { QUANT_AI_ENCRYPTION_KEY: 'candidate-question-route-secret' } as AppEnv['Bindings'])
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toMatchObject({ success: false, code: 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_CONFIGURATION' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
