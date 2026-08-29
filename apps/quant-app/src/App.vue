@@ -55,6 +55,7 @@ import {
   ArrowUpRight,
   BarChart3,
   BookOpen,
+  BrainCircuit,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -88,6 +89,7 @@ import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } fr
 import { buildCandidateBriefingScopeKey, canApplyCandidateBriefingResponse } from './lib/candidate-briefing-scope'
 import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildResearchComparisonFilename, buildResearchComparisonMarkdown } from './lib/comparison-ai-export'
+import { buildComparisonAiNextCheckPrompt } from './lib/comparison-ai-prompts'
 import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
@@ -153,6 +155,7 @@ const candidateAiBriefingQuestionInput = ref('')
 const candidateAiBriefingQuestion = ref<QuantAiCandidateBriefingQuestion | null>(null)
 const candidateAiBriefingQuestionLoading = ref(false)
 const candidateAiBriefingQuestionError = ref<unknown | null>(null)
+const candidateAiBriefingPanel = ref<{ useQuestionPrompt: (prompt: string) => void } | null>(null)
 const candidateAiBriefingCopying = ref(false)
 const candidateAiBriefingCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const candidateAiBriefingCopyMessage = ref('')
@@ -525,6 +528,11 @@ const comparisonAiComparisonCitations = computed(() => {
     return Boolean(run?.report.evidence.some(evidence => evidence.key === citation.evidenceKey))
   })
 })
+const comparisonAiNextCheckPromptReady = computed(() => Boolean(
+  snapshot.value?.generatedAt
+  && candidateBriefingScopeItems.value.length
+  && !candidateAiBriefingQuestionLoading.value,
+))
 const latestDailyBar = computed(() => dailyBars.value.at(-1) || null)
 const latestWatchlistDate = computed(() => {
   const dates = watchlist.value.map(item => item.latestTradeDate).filter((date): date is string => Boolean(date))
@@ -2656,6 +2664,16 @@ function openComparisonAiCitation(citation: QuantResearchComparisonCitation): vo
     selectStock(item)
 }
 
+function useComparisonAiNextCheck(check: string): void {
+  const prompt = buildComparisonAiNextCheckPrompt(check)
+  const panel = candidateAiBriefingPanel.value
+  if (!prompt || !comparisonAiNextCheckPromptReady.value || !panel)
+    return
+
+  panel.useQuestionPrompt(prompt)
+  handleComparisonDrawerOpenChange(false)
+}
+
 function updateComparisonResearchAiSummaryMessage() {
   const summary = comparisonResearchAiSummarySummary.value
   if (!summary.total)
@@ -3524,6 +3542,7 @@ onUnmounted(() => {
           </section>
           <QuantAiCandidateBriefingPanel
             v-if="candidateItems.length"
+            ref="candidateAiBriefingPanel"
             :briefing="candidateAiBriefing"
             :candidate-count="candidateItems.length"
             :filtered-candidate-count="filteredCandidateItems.length"
@@ -5249,8 +5268,19 @@ onUnmounted(() => {
               <div v-if="comparisonAiComparison.nextChecks.length" class="comparison-ai-block">
                 <strong>下一步核对</strong>
                 <ul>
-                  <li v-for="item in comparisonAiComparison.nextChecks" :key="`next-${item}`">
-                    {{ item }}
+                  <li v-for="item in comparisonAiComparison.nextChecks" :key="`next-${item}`" class="comparison-ai-next-check">
+                    <span>{{ item }}</span>
+                    <button
+                      class="text-button comparison-ai-next-prompt"
+                      type="button"
+                      :disabled="!comparisonAiNextCheckPromptReady || !item.trim()"
+                      :aria-label="`将对比核对项带入当前追问：${item}`"
+                      title="将对比核对项带入候选 AI 追问"
+                      @click="useComparisonAiNextCheck(item)"
+                    >
+                      <BrainCircuit :size="13" aria-hidden="true" />
+                      带入追问
+                    </button>
                   </li>
                 </ul>
               </div>

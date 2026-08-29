@@ -4116,6 +4116,22 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.comparison-ai-next-check {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.35rem;
+}
+
+.comparison-ai-next-prompt {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
 .comparison-ai-block-risk > strong {
   color: hsl(var(--status-danger));
 }
@@ -6700,6 +6716,14 @@ textarea:focus-visible {
 
   .comparison-ai-result-actions button {
     width: 100%;
+  }
+
+  .comparison-ai-next-check {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .comparison-ai-next-prompt {
+    justify-self: start;
   }
 
   .comparison-research-item {
