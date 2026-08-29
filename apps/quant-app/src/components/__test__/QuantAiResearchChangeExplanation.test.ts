@@ -30,7 +30,7 @@ const explanation: QuantResearchChangeExplanation = {
   citedEvidenceKeys: ['trend-strength'],
 }
 
-const base = { comparison, explanation: null, loading: false, generating: false, errorMessage: null, configurationError: false }
+const base = { comparison, explanation: null, loading: false, generating: false, errorMessage: null, configurationError: false, questionPromptReady: true }
 
 describe('quant ai research change explanation', () => {
   it('renders idle and honest empty-comparison states', () => {
@@ -49,8 +49,25 @@ describe('quant ai research change explanation', () => {
     await wrapper.setProps({ generating: false })
     expect(wrapper.text()).toContain('趋势强度较上次走弱')
     expect(wrapper.text()).toContain('核对趋势样本')
+    const nextCheck = wrapper.get('.quant-ai-change-next-item')
+    expect(nextCheck.findAll('button')).toHaveLength(1)
+    expect(nextCheck.get('button').attributes('aria-label')).toContain('核对趋势样本')
+    await nextCheck.get('button').trigger('click')
+    expect(wrapper.emitted('useNextCheck')).toEqual([['核对趋势样本']])
+    expect(wrapper.emitted('generate')).toBeUndefined()
     await wrapper.get('.quant-ai-change-citation-link').trigger('click')
     expect(wrapper.emitted('focusEvidence')).toEqual([['trend-strength']])
+  })
+
+  it('disables next-check reuse when the report question flow is unavailable', async () => {
+    const wrapper = mount(QuantAiResearchChangeExplanation, {
+      props: { ...base, explanation, questionPromptReady: false },
+    })
+
+    const button = wrapper.get('.quant-ai-change-next-prompt')
+    expect((button.element as HTMLButtonElement).disabled).toBe(true)
+    await button.trigger('click')
+    expect(wrapper.emitted('useNextCheck')).toBeUndefined()
   })
 
   it('renders configuration and retry error actions', async () => {
