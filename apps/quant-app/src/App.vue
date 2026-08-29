@@ -110,6 +110,7 @@ import { buildResearchReportFilename, buildResearchReportMarkdown } from './lib/
 import { getResearchReviewMeta, getTodayDate } from './lib/research-review'
 import { buildResearchRunTimeline } from './lib/research-run-timeline'
 import { buildResearchSummary } from './lib/research-summary'
+import { buildResearchSummaryNextCheckPrompt } from './lib/research-summary-prompts'
 import { filterAndSortCandidates, selectionPresets } from './lib/selection-presets'
 import { buildTimingHistory } from './lib/timing-history'
 import { buildTimingWindow } from './lib/timing-window'
@@ -145,6 +146,7 @@ const researchQuestionInput = ref('')
 const researchQuestion = ref<QuantResearchQuestion | null>(null)
 const researchQuestionLoading = ref(false)
 const researchQuestionError = ref<unknown | null>(null)
+const researchQuestionPanel = ref<{ useQuestionPrompt: (prompt: string) => void } | null>(null)
 const researchChangeExplanation = ref<QuantResearchChangeExplanation | null>(null)
 const researchChangeExplanationGenerating = ref(false)
 const researchChangeExplanationError = ref<unknown | null>(null)
@@ -419,6 +421,12 @@ const researchEvidenceComparison = computed(() => buildResearchEvidenceCompariso
 const researchRunTimeline = computed(() => buildResearchRunTimeline(researchRuns.value))
 const researchSummaryConfigurationError = computed(() => researchSummaryError.value instanceof QuantApiError && researchSummaryError.value.code === 'QUANT_AI_SUMMARY_CONFIGURATION')
 const researchQuestionConfigurationError = computed(() => researchQuestionError.value instanceof QuantApiError && researchQuestionError.value.code === 'QUANT_AI_QUESTION_CONFIGURATION')
+const researchSummaryNextCheckPromptReady = computed(() => Boolean(
+  latestResearchReport.value
+  && researchQuestionPanel.value
+  && !researchRunGenerating.value
+  && !researchQuestionLoading.value,
+))
 const researchChangeExplanationConfigurationError = computed(() => researchChangeExplanationError.value instanceof QuantApiError && researchChangeExplanationError.value.code === 'QUANT_AI_CHANGE_EXPLANATION_CONFIGURATION')
 const candidateAiBriefingConfigurationError = computed(() => candidateAiBriefingError.value instanceof QuantApiError && candidateAiBriefingError.value.code === 'QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION')
 const candidateAiBriefingQuestionConfigurationError = computed(() => candidateAiBriefingQuestionError.value instanceof QuantApiError && candidateAiBriefingQuestionError.value.code === 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_CONFIGURATION')
@@ -1887,6 +1895,15 @@ async function askResearchQuestion(question: string): Promise<void> {
     if (requestId === researchQuestionRequestId)
       researchQuestionLoading.value = false
   }
+}
+
+function useResearchSummaryNextCheck(check: string): void {
+  const prompt = buildResearchSummaryNextCheckPrompt(check)
+  const panel = researchQuestionPanel.value
+  if (!prompt || !researchSummaryNextCheckPromptReady.value || !panel)
+    return
+
+  panel.useQuestionPrompt(prompt)
 }
 
 async function generateResearchChangeExplanation(): Promise<void> {
@@ -4045,11 +4062,14 @@ onUnmounted(() => {
                 :generating="researchSummaryGenerating"
                 :error-message="researchSummaryError ? parsedError(researchSummaryError).message : null"
                 :configuration-error="researchSummaryConfigurationError"
+                :question-prompt-ready="researchSummaryNextCheckPromptReady"
                 @generate="generateResearchSummary"
                 @open-settings="aiSettingsOpen = true"
+                @use-next-check="useResearchSummaryNextCheck"
               />
               <QuantAiResearchQuestion
                 v-if="!researchRunGenerating"
+                ref="researchQuestionPanel"
                 :report="latestResearchReport"
                 :input="researchQuestionInput"
                 :result="researchQuestion"

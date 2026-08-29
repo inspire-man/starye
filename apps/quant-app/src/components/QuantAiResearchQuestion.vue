@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { QuantResearchEvidence, QuantResearchQuestion, QuantResearchReport } from '../lib/quant-types'
 import { AlertCircle, BrainCircuit, CircleHelp, RefreshCw } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 const props = defineProps<{
   report: QuantResearchReport
@@ -21,6 +21,7 @@ const emit = defineEmits<{
 
 const evidenceByKey = computed(() => new Map(props.report.evidence.map(item => [item.key, item])))
 const canAsk = computed(() => Boolean(props.input.trim()) && !props.loading)
+const questionInputElement = ref<HTMLTextAreaElement | null>(null)
 
 function evidenceFor(key: string): QuantResearchEvidence | null {
   return evidenceByKey.value.get(key) || null
@@ -30,6 +31,16 @@ function submit(): void {
   if (canAsk.value)
     emit('ask', props.input.trim())
 }
+
+function useQuestionPrompt(prompt: string): void {
+  const normalized = prompt.trim().slice(0, 500)
+  if (!normalized || props.loading)
+    return
+  emit('update:input', normalized)
+  void nextTick(() => questionInputElement.value?.focus())
+}
+
+defineExpose({ useQuestionPrompt })
 </script>
 
 <template>
@@ -51,6 +62,7 @@ function submit(): void {
       <label class="quant-ai-question-field">
         <span>问题</span>
         <textarea
+          ref="questionInputElement"
           :value="input"
           class="field-control quant-ai-question-input"
           maxlength="500"
