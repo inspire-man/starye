@@ -149,6 +149,17 @@ function actionLabel(action: QuantResearchAction): string {
   }[action]
 }
 
+function shareholderDividendSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
+  const providerLabel = item?.provider === 'eastmoney' ? 'Eastmoney' : item?.provider === 'tushare' ? 'Tushare' : 'Quant'
+  const providerId = item?.provider === 'eastmoney' ? 'eastmoney-dividend' : item?.provider === 'tushare' ? 'tushare-dividend' : 'quant-dividend-provider'
+  const chain = item?.providerChain?.length ? `，回退链：${item.providerChain.join(' -> ')}` : ''
+  const reason = item?.fallbackUsed && item.fallbackReason ? `，主源失败：${item.fallbackReason}` : ''
+  return {
+    id: providerId,
+    name: `${providerLabel} 实施分红${chain}${reason}`,
+  }
+}
+
 function buildSources(input: QuantResearchReportInput, latestTradeDate: string | null): readonly QuantResearchSource[] {
   const sources: QuantResearchSource[] = [
     {
@@ -175,9 +186,10 @@ function buildSources(input: QuantResearchReportInput, latestTradeDate: string |
     })
   }
   if (input.shareholderReturn) {
+    const source = shareholderDividendSource(input.shareholderReturn)
     sources.push({
-      id: 'tushare-dividend',
-      name: 'Tushare 实施分红',
+      id: source.id,
+      name: source.name,
       observedAt: input.shareholderReturn.observedAt,
       formulaVersion: input.shareholderReturn.formulaVersion,
     })
@@ -322,6 +334,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
   }))
 
   const dividendYield = finite(input.shareholderReturn?.trailingDividendYield)
+  const dividendSource = shareholderDividendSource(input.shareholderReturn)
   evidenceItems.push(evidence({
     key: 'shareholder-yield',
     dimension: 'shareholder-return',
@@ -329,10 +342,14 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(dividendYield, value => value > 0),
     value: dividendYield,
     threshold: '有实施分红记录且大于 0%',
-    source: 'Tushare 实施分红 + 本地最新收盘价',
+    source: `${dividendSource.name} + 本地最新收盘价`,
     observedAt: input.shareholderReturn?.observedAt ?? null,
     formulaVersion: input.shareholderReturn?.formulaVersion ?? 'shareholder-return-v1',
-    detail: input.shareholderReturn?.status === 'ready' ? '股东现金回报可核对' : '股东回报数据不完整，不以零值代替',
+    detail: input.shareholderReturn?.status === 'ready'
+      ? input.shareholderReturn.fallbackUsed && input.shareholderReturn.fallbackReason
+        ? `股东现金回报可核对，已使用回退源（${input.shareholderReturn.fallbackReason}）`
+        : '股东现金回报可核对'
+      : '股东回报数据不完整，不以零值代替',
     optional: true,
   }))
 

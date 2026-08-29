@@ -50,6 +50,7 @@ function shareholderReturns(overrides: Partial<QuantShareholderReturnSelection> 
     formulaVersion: 'shareholder-return-v1',
     observedAt: '2026-08-28T10:00:00.000Z',
     provider: 'tushare',
+    providerChain: ['tushare', 'eastmoney'],
     sampleCount: 3,
     readyCount: 3,
     partialCount: 0,

@@ -28,7 +28,7 @@ import { QuantError } from '../../domain/quant/errors'
 import { screenMomentum } from '../../domain/quant/factor'
 import { buildQuantFinancialQualityComparison } from '../../domain/quant/financial-comparison'
 import { getQuantInvestmentKnowledge } from '../../domain/quant/investment-knowledge'
-import { createEastmoneyFinancialProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createTushareDividendProvider, createTushareStockBasicProvider, mapQuantProviderError, resolveQuantProviderName } from '../../domain/quant/provider'
+import { createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantDividendProviderChain, createTushareDividendProvider, createTushareStockBasicProvider, mapQuantProviderError, resolveQuantProviderName } from '../../domain/quant/provider'
 import {
   appendQuantCandidateAiSessionQuestion,
   createQuantCandidateAiSession,
@@ -768,9 +768,11 @@ async function readCandidateBriefingFacts(db: AppEnv['Variables']['db'], userId:
 
 function eastmoneyProviderOptions(env?: AppEnv['Bindings']): EastmoneyProviderOptions {
   const baseUrl = env?.EASTMONEY_BASE_URL?.trim()
+  const dividendBaseUrl = env?.EASTMONEY_DIVIDEND_BASE_URL?.trim()
   const timeoutMs = Number(env?.EASTMONEY_TIMEOUT_MS)
   return {
     ...(baseUrl ? { baseUrl } : {}),
+    ...(dividendBaseUrl ? { dividendBaseUrl } : {}),
     ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
   }
 }
@@ -809,6 +811,19 @@ function stockBasicProvider(env?: AppEnv['Bindings']) {
   return resolveQuantProviderName(env) === 'tushare'
     ? createTushareStockBasicProvider(options)
     : createEastmoneyStockBasicProvider(eastmoneyProviderOptions(env))
+}
+
+function dividendProvider(env?: AppEnv['Bindings']) {
+  const tushare = createTushareDividendProvider(tushareProviderOptions(env))
+  const eastmoney = createEastmoneyDividendProvider(eastmoneyProviderOptions(env))
+  const selected = resolveQuantProviderName(env)
+  const primary = selected === 'tushare' && tushare.isConfigured ? tushare : eastmoney
+  const fallback = primary.name === 'tushare' && eastmoney.isConfigured
+    ? eastmoney
+    : primary.name === 'eastmoney' && tushare.isConfigured
+      ? tushare
+      : undefined
+  return createQuantDividendProviderChain(primary, fallback)
 }
 
 quantRoutes.use('*', requireAuth())
@@ -923,12 +938,12 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
   const candidate = screenMomentum({ [tsCode]: dailyBars }).find(item => item.tsCode === tsCode) ?? null
   const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
   const financialProvider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
-  const dividendProvider = createTushareDividendProvider(tushareProviderOptions(c.env))
+  const dividendSourceProvider = dividendProvider(c.env)
   const akshareBridge = createQuantAkshareBridge(akshareBridgeOptions(c.env))
   const [valuationResult, financialResult, shareholderResult, akshareResult] = await Promise.allSettled([
     valuationProvider.fetchValuation({ tsCode }),
     financialProvider.fetchFinancialQualityHistory({ tsCode, limit: 4 }),
-    readQuantShareholderReturn(c.get('db'), userId, tsCode, dividendProvider),
+    readQuantShareholderReturn(c.get('db'), userId, tsCode, dividendSourceProvider),
     akshareBridge.isConfigured ? akshareBridge.fetchEvidence({ tsCode }) : Promise.resolve(null),
   ])
   const generatedAt = new Date()
@@ -1405,7 +1420,7 @@ quantRoutes.get('/shareholder-returns', async (c) => {
   const data = await readQuantShareholderReturns(
     c.get('db'),
     userId,
-    createTushareDividendProvider(tushareProviderOptions(c.env)),
+    dividendProvider(c.env),
   )
   return c.json({ success: true as const, data })
 })

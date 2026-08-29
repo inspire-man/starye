@@ -63,6 +63,7 @@ export interface Env {
   TUSHARE_BASE_URL?: string
   TUSHARE_TIMEOUT_MS?: string
   EASTMONEY_BASE_URL?: string
+  EASTMONEY_DIVIDEND_BASE_URL?: string
   EASTMONEY_TIMEOUT_MS?: string
   QUANT_AI_ENCRYPTION_KEY?: string
   QUANT_AKSHARE_BRIDGE_URL?: string

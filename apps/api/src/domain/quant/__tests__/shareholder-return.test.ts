@@ -87,4 +87,28 @@ describe('quant shareholder return formula', () => {
     })
     expect(result.missingFields[0]).toContain('QUANT_PROVIDER_CONFIGURATION')
   })
+
+  it('returns actual provider and fallback metadata without changing the dividend formula', () => {
+    const result = buildShareholderReturnResult({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      dividends: [dividend()],
+      dailyBars: bars(34.54),
+      dividendErrorCode: null,
+      dividendProvider: 'eastmoney',
+      providerChain: ['tushare', 'eastmoney'],
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_QUOTA',
+      observedAt: '2026-08-25T00:00:00.000Z',
+    })
+
+    expect(result).toMatchObject({
+      provider: 'eastmoney',
+      providerChain: ['tushare', 'eastmoney'],
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_QUOTA',
+      providerErrorCode: null,
+      trailingCashDividendPerShare: 0.42,
+    })
+  })
 })

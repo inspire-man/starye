@@ -1,7 +1,7 @@
 import type { Database } from '@starye/db'
-import type { QuantDividendProvider, QuantDividendRecord } from './provider'
+import type { QuantDividendProvider, QuantDividendRecord, QuantProviderName } from './provider'
 import type { DailyBar } from './types'
-import { mapQuantProviderError } from './provider'
+import { mapQuantProviderError, QuantDividendProviderChainError } from './provider'
 import { getQuantWatchlistItem, listQuantDailyBars, listQuantWatchlist } from './repository'
 
 export const QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION = 'shareholder-return-v1' as const
@@ -22,6 +22,11 @@ export interface QuantShareholderReturnItem {
   readonly name: string | null
   readonly formulaVersion: typeof QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION
   readonly status: ShareholderReturnStatus
+  readonly provider: QuantProviderName | null
+  readonly providerChain: readonly QuantProviderName[]
+  readonly fallbackUsed: boolean
+  readonly fallbackReason: string | null
+  readonly providerErrorCode: string | null
   readonly observedAt: string
   readonly latestClose: number | null
   readonly trailingCashDividendPerShare: number | null
@@ -34,7 +39,8 @@ export interface QuantShareholderReturnItem {
 export interface QuantShareholderReturnBatchResult {
   readonly formulaVersion: typeof QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION
   readonly observedAt: string
-  readonly provider: 'tushare' | null
+  readonly provider: QuantProviderName | null
+  readonly providerChain: readonly QuantProviderName[]
   readonly sampleCount: number
   readonly readyCount: number
   readonly partialCount: number
@@ -48,6 +54,10 @@ export interface ShareholderReturnInput {
   readonly dividends: readonly QuantDividendRecord[]
   readonly dailyBars: readonly DailyBar[]
   readonly dividendErrorCode: string | null
+  readonly dividendProvider?: QuantProviderName | null
+  readonly providerChain?: readonly QuantProviderName[]
+  readonly fallbackUsed?: boolean
+  readonly fallbackReason?: string | null
   readonly observedAt: string
 }
 
@@ -141,6 +151,11 @@ export function buildShareholderReturnResult(input: ShareholderReturnInput): Qua
     name: input.name,
     formulaVersion: QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION,
     status,
+    provider: input.dividendProvider ?? null,
+    providerChain: input.providerChain ?? (input.dividendProvider ? [input.dividendProvider] : []),
+    fallbackUsed: input.fallbackUsed ?? false,
+    fallbackReason: input.fallbackReason ?? null,
+    providerErrorCode: input.dividendErrorCode,
     observedAt: input.observedAt,
     latestClose: close,
     trailingCashDividendPerShare,
@@ -152,6 +167,11 @@ export function buildShareholderReturnResult(input: ShareholderReturnInput): Qua
 }
 
 function providerErrorCode(error: unknown): string {
+  if (error instanceof QuantDividendProviderChainError) {
+    const primary = mapQuantProviderError(error.primaryError).code
+    const fallback = error.fallbackError ? mapQuantProviderError(error.fallbackError).code : 'QUANT_PROVIDER_CONFIGURATION'
+    return `${primary}|${fallback}`
+  }
   return mapQuantProviderError(error).code
 }
 
@@ -163,12 +183,20 @@ async function readShareholderReturnInput(
 ): Promise<ShareholderReturnInput> {
   let dividends: readonly QuantDividendRecord[] = []
   let dividendErrorCode: string | null = null
+  let dividendProvider: QuantProviderName | null = provider.isConfigured ? provider.name : null
+  let fallbackUsed = false
+  let fallbackReason: string | null = null
   if (provider.isConfigured) {
     try {
-      dividends = await provider.fetchDividends({ tsCode: item.tsCode })
+      const result = await provider.fetchDividends({ tsCode: item.tsCode })
+      dividends = result.records
+      dividendProvider = result.provider
+      fallbackUsed = result.fallbackUsed
+      fallbackReason = result.fallbackReason
     }
     catch (error) {
       dividendErrorCode = providerErrorCode(error)
+      dividendProvider = null
     }
   }
   else {
@@ -180,6 +208,10 @@ async function readShareholderReturnInput(
     dividends,
     dailyBars,
     dividendErrorCode,
+    dividendProvider,
+    providerChain: provider.providerChain,
+    fallbackUsed,
+    fallbackReason,
     observedAt,
   }
 }
@@ -212,6 +244,7 @@ export async function readQuantShareholderReturns(
       formulaVersion: QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION,
       observedAt,
       provider: provider.isConfigured ? provider.name : null,
+      providerChain: provider.providerChain,
       sampleCount: 0,
       readyCount: 0,
       partialCount: 0,
@@ -244,6 +277,7 @@ export async function readQuantShareholderReturns(
     formulaVersion: QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION,
     observedAt,
     provider: provider.isConfigured ? provider.name : null,
+    providerChain: provider.providerChain,
     sampleCount: items.length,
     readyCount: items.filter(item => item.status === 'ready').length,
     partialCount: items.filter(item => item.status === 'partial').length,
