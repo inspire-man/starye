@@ -172,6 +172,18 @@ function questionPromptForNextCheck(check: string): string {
   return `围绕“${check.trim()}”，当前候选范围内有哪些确定性事实需要优先核对？`.slice(0, 500)
 }
 
+function questionPromptForFocusItem(item: QuantAiCandidateBriefing['focusItems'][number]): string {
+  const candidateCode = item.tsCode.trim()
+  const candidateName = item.name?.trim()
+  const prefix = '请基于“'
+  const suffix = '”的当前候选事实，说明其研究优先级依据和下一项核对内容。'
+  const codeSuffix = candidateName ? `（${candidateCode}）` : ''
+  const maxNameLength = Math.max(0, 500 - prefix.length - suffix.length - candidateCode.length - codeSuffix.length)
+  const boundedName = candidateName?.slice(0, maxNameLength)
+  const candidateLabel = boundedName ? `${boundedName}${codeSuffix}` : candidateCode
+  return `${prefix}${candidateLabel}${suffix}`
+}
+
 function useQuestionPrompt(prompt: string): void {
   if (!canUseQuestionPrompt.value)
     return
@@ -880,37 +892,52 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
           <small>{{ visibleFocusItems.length }} 个 · 点击候选回看详情</small>
         </div>
         <div v-if="visibleFocusItems.length" class="quant-ai-briefing-focus-list">
-          <button
+          <div
             v-for="item in visibleFocusItems"
             :key="item.tsCode"
-            class="quant-ai-briefing-focus-item quant-ai-briefing-wrap-anywhere"
-            type="button"
-            :aria-label="`打开候选 ${item.name}（${item.tsCode}）详情`"
-            @click="focusCandidate(item.tsCode)"
+            class="quant-ai-briefing-focus-row"
           >
-            <span class="quant-ai-briefing-focus-heading">
-              <span class="quant-ai-briefing-focus-name">
-                <strong>{{ item.name }}</strong>
-                <code>{{ item.tsCode }}</code>
+            <button
+              class="quant-ai-briefing-focus-item quant-ai-briefing-wrap-anywhere"
+              type="button"
+              :aria-label="`打开候选 ${item.name || item.tsCode}（${item.tsCode}）详情`"
+              @click="focusCandidate(item.tsCode)"
+            >
+              <span class="quant-ai-briefing-focus-heading">
+                <span class="quant-ai-briefing-focus-name">
+                  <strong>{{ item.name || item.tsCode }}</strong>
+                  <code>{{ item.tsCode }}</code>
+                </span>
+                <span class="quant-ai-briefing-focus-arrow" aria-hidden="true">↗</span>
               </span>
-              <span class="quant-ai-briefing-focus-arrow" aria-hidden="true">↗</span>
-            </span>
-            <span class="quant-ai-briefing-focus-meta">
-              <span class="quant-ai-briefing-priority" :class="priorityClass(item.priorityLevel)">
-                {{ priorityLabel(item.priorityLevel) }}
+              <span class="quant-ai-briefing-focus-meta">
+                <span class="quant-ai-briefing-priority" :class="priorityClass(item.priorityLevel)">
+                  {{ priorityLabel(item.priorityLevel) }}
+                </span>
+                <span>{{ formatScore(item.priorityScore) }}</span>
+                <span>{{ item.actionLabel }}</span>
               </span>
-              <span>{{ formatScore(item.priorityScore) }}</span>
-              <span>{{ item.actionLabel }}</span>
-            </span>
-            <span v-if="item.reasons.length" class="quant-ai-briefing-reasons">
-              <span v-for="reason in item.reasons" :key="reason" class="quant-ai-briefing-reason quant-ai-briefing-wrap-anywhere">
-                {{ reason }}
+              <span v-if="item.reasons.length" class="quant-ai-briefing-reasons">
+                <span v-for="reason in item.reasons" :key="reason" class="quant-ai-briefing-reason quant-ai-briefing-wrap-anywhere">
+                  {{ reason }}
+                </span>
               </span>
-            </span>
-            <span class="quant-ai-briefing-explanation quant-ai-briefing-wrap-anywhere">
-              {{ item.explanation }}
-            </span>
-          </button>
+              <span class="quant-ai-briefing-explanation quant-ai-briefing-wrap-anywhere">
+                {{ item.explanation }}
+              </span>
+            </button>
+            <button
+              class="text-button quant-ai-briefing-focus-prompt"
+              type="button"
+              :disabled="!canUseQuestionPrompt"
+              :aria-label="`针对候选 ${item.name || item.tsCode}（${item.tsCode}）提问`"
+              title="将该重点候选带入当前追问"
+              @click="useQuestionPrompt(questionPromptForFocusItem(item))"
+            >
+              <BrainCircuit :size="13" aria-hidden="true" />
+              针对提问
+            </button>
+          </div>
         </div>
         <span v-else class="quant-ai-briefing-empty">
           <CircleHelp :size="13" aria-hidden="true" />
@@ -1584,6 +1611,14 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   min-width: 0;
 }
 
+.quant-ai-briefing-focus-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
 .quant-ai-briefing-focus-item {
   display: grid;
   width: 100%;
@@ -1601,6 +1636,16 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
 
 .quant-ai-briefing-focus-item:hover {
   border-color: hsl(var(--primary) / 0.5);
+}
+
+.quant-ai-briefing-focus-prompt {
+  display: inline-flex;
+  min-width: 4.6rem;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  gap: 0.2rem;
+  white-space: nowrap;
 }
 
 .quant-ai-briefing-focus-heading {
@@ -1813,6 +1858,10 @@ button:focus-visible {
     display: none;
   }
 
+  .quant-ai-briefing-focus-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .quant-ai-briefing-focus-name strong {
     white-space: normal;
   }
@@ -1827,6 +1876,10 @@ button:focus-visible {
   }
 
   .quant-ai-briefing-next-prompt {
+    justify-self: start;
+  }
+
+  .quant-ai-briefing-focus-prompt {
     justify-self: start;
   }
 
