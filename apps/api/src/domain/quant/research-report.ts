@@ -1,7 +1,9 @@
 import type { QuantAkshareBridgeResult } from './akshare-bridge'
+import type { QuantDecisionProjection, QuantFactorModel } from './decision-recommendation'
 import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './provider'
 import type { QuantShareholderReturnItem } from './shareholder-return'
 import type { DailyBar, MomentumCandidate } from './types'
+import { buildQuantDecisionProjection } from './decision-recommendation'
 
 export const QUANT_RESEARCH_REPORT_V1_VERSION = 'research-report-v1' as const
 export const QUANT_RESEARCH_REPORT_VERSION = 'research-report-v2' as const
@@ -48,6 +50,10 @@ export interface QuantResearchReport {
   readonly nextActions: readonly string[]
   readonly evidence: readonly QuantResearchEvidence[]
   readonly sources: readonly QuantResearchSource[]
+  /** Optional for historical research-report-v1/v2 rows; always present on newly generated reports. */
+  readonly factorModel?: QuantFactorModel
+  /** Optional for historical research-report-v1/v2 rows; always present on newly generated reports. */
+  readonly decision?: QuantDecisionProjection
 }
 
 export interface QuantResearchReportInput {
@@ -416,6 +422,10 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     : required.some(item => item.status === 'caution' || item.status === 'fail')
       ? 'partial'
       : 'ready'
+  const { factorModel, decision } = buildQuantDecisionProjection({
+    evidence: evidenceItems,
+    dailyBars: input.dailyBars,
+  })
 
   return {
     reportVersion: QUANT_RESEARCH_REPORT_VERSION,
@@ -433,5 +443,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     nextActions,
     evidence: evidenceItems,
     sources: buildSources(input, latestTradeDate),
+    factorModel,
+    decision,
   }
 }

@@ -87,6 +87,57 @@ describe('research report Markdown export', () => {
     expect(markdown).toContain('估值快照')
   })
 
+  it('exports the simplified recommendation and factor provenance without serializing secrets', () => {
+    const markdown = buildResearchReportMarkdown(reportRun({
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 1,
+        coverage: 100,
+        score: 78,
+        factors: [{
+          key: 'shareholder-return',
+          label: '股东回报',
+          weight: 0.15,
+          sourceId: 'tushare-dividend',
+          source: 'Tushare 实施分红 + 本地最新收盘价',
+          status: 'ready',
+          score: 100,
+          evidenceKeys: ['shareholder-yield'],
+          missingEvidenceKeys: [],
+        }],
+      },
+      decision: {
+        decisionVersion: 'research-decision-v1',
+        recommendation: 'bullish',
+        label: '看多',
+        deterministicScore: 78,
+        confidence: 78,
+        coverage: 100,
+        buyPriceRange: {
+          low: 10,
+          high: 11,
+          currency: 'CNY',
+          formulaVersion: 'reference-price-v1',
+          source: '本地 Quant 日线库',
+          observedAt: '20260829',
+          evidenceKeys: ['trend-sample'],
+        },
+        sellPriceRange: null,
+        evidenceKeys: ['shareholder-yield'],
+        invalidationConditions: ['趋势转弱后重新评估'],
+        headline: '看多：正向证据占优',
+      },
+    }))
+
+    expect(markdown).toContain('## 简化推荐')
+    expect(markdown).toContain('推荐：看多')
+    expect(markdown).toContain('参考买入区间：10 - 11 元')
+    expect(markdown).toContain('## 因子模型')
+    expect(markdown).toContain('股东回报：权重 0.15')
+    expect(markdown).toContain('Tushare 实施分红 + 本地最新收盘价')
+  })
+
   it('keeps missing values explicit and includes an existing AI summary without its configuration', () => {
     const markdown = buildResearchReportMarkdown(reportRun({
       name: null,

@@ -797,6 +797,37 @@ describe('quantApi', () => {
           detail: '资本回报达到研究门槛',
         }],
         sources: [{ id: 'eastmoney-financial', name: 'Eastmoney 财务报告', observed_at: '2026-08-26T00:00:00.000Z', formula_version: 'eastmoney-financial-v1' }],
+        factor_model: {
+          model_version: 'research-factors-v1',
+          total_weight: 1,
+          covered_weight: 1,
+          coverage: 100,
+          score: 78,
+          factors: [{
+            key: 'quality',
+            label: '盈利质量',
+            weight: 0.2,
+            source_id: 'eastmoney-financial',
+            source: 'Eastmoney 最新财报',
+            status: 'ready',
+            score: 78,
+            evidence_keys: ['quality-roe'],
+            missing_evidence_keys: [],
+          }],
+        },
+        decision: {
+          decision_version: 'research-decision-v1',
+          recommendation: 'bullish',
+          label: '看多',
+          deterministic_score: 78,
+          confidence: 78,
+          coverage: 100,
+          buy_price_range: null,
+          sell_price_range: null,
+          evidence_keys: ['quality-roe'],
+          invalidation_conditions: ['趋势转弱后复核'],
+          headline: '看多：正向证据占优',
+        },
       },
     }
     const fetchMock = vi.fn<typeof fetch>()
@@ -807,7 +838,12 @@ describe('quantApi', () => {
     await expect(quantApi.generateResearchRun('601899.SH')).resolves.toMatchObject({
       id: 'run-1',
       tsCode: '601899.SH',
-      report: { action: 'wait-confirmation', evidence: [{ key: 'quality-roe', status: 'pass', value: 18 }] },
+      report: {
+        action: 'wait-confirmation',
+        evidence: [{ key: 'quality-roe', status: 'pass', value: 18 }],
+        factorModel: { modelVersion: 'research-factors-v1', coverage: 100 },
+        decision: { recommendation: 'bullish', label: '看多', coverage: 100 },
+      },
     })
     await expect(quantApi.getResearchRuns('601899.SH', 3)).resolves.toMatchObject([{ id: 'run-1', reportVersion: 'research-report-v1' }])
     expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ ts_code: '601899.SH' }))
@@ -850,6 +886,51 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary`)
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary?limit=1`)
+  })
+
+  it('normalizes an accepted AI decision review without accepting model-generated prices', async () => {
+    const summary = {
+      id: 'summary-decision-1',
+      research_run_id: 'run-decision-1',
+      summary_version: 'research-summary-v2',
+      report_version: 'research-report-v2',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-08-29T00:00:00.000Z',
+      created_at: '2026-08-29T00:00:00.000Z',
+      cited_evidence_keys: ['quality-roe'],
+      summary: {
+        summary_version: 'research-summary-v2',
+        overview: 'AI 复核完成。',
+        supports: [],
+        concerns: [],
+        next_checks: [],
+        cited_evidence_keys: ['quality-roe'],
+        decision_review: {
+          decision_version: 'ai-decision-v1',
+          recommendation: 'bearish',
+          confidence: 82,
+          accepted: true,
+          rejection_reason: null,
+          rationale: '风险证据更值得优先核对。',
+          invalidation_conditions: ['下一期财报改善后复核'],
+          cited_evidence_keys: ['quality-roe'],
+        },
+      },
+    }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: summary }), { status: 201, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(quantApi.generateResearchSummary('run-decision-1')).resolves.toMatchObject({
+      summaryVersion: 'research-summary-v2',
+      summary: {
+        decisionReview: {
+          recommendation: 'bearish',
+          confidence: 82,
+          accepted: true,
+          citedEvidenceKeys: ['quality-roe'],
+        },
+      },
+    })
   })
 
   it('normalizes an evidence-grounded AI research comparison and rejects malformed items', async () => {

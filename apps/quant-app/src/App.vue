@@ -83,6 +83,7 @@ import QuantAiResearchChangeExplanation from './components/QuantAiResearchChange
 import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
+import QuantDecisionRecommendation from './components/QuantDecisionRecommendation.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from './lib/candidate-briefing-export'
@@ -3912,6 +3913,10 @@ onUnmounted(() => {
               </button>
             </div>
             <template v-else-if="latestResearchReport">
+              <QuantDecisionRecommendation
+                :report="latestResearchReport"
+                :summary="researchAiSummary"
+              />
               <div class="research-run-summary">
                 <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">
                   <span>当前状态</span>

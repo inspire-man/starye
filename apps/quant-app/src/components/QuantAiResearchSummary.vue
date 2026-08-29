@@ -38,6 +38,10 @@ function reportActionLabel(action: QuantResearchReport['action']): string {
   }[action]
 }
 
+function recommendationLabel(value: string): string {
+  return value === 'bullish' ? '看多' : value === 'bearish' ? '看空' : '观望'
+}
+
 function evidenceStatusLabel(status: QuantResearchEvidence['status']): string {
   return { pass: '通过', caution: '注意', fail: '未通过', missing: '数据不足' }[status]
 }
@@ -84,7 +88,7 @@ function formatEvidenceDate(value: string | null): string {
         <h3 id="quant-ai-summary-title">
           AI 证据解读
         </h3>
-        <small>只解释本份报告已有证据，不改变评分和研究动作</small>
+        <small>基于本份报告证据复核推荐；价格区间始终来自确定性公式</small>
       </div>
       <button class="secondary-button quant-ai-summary-button" type="button" :disabled="loading || generating" title="基于当前研究报告生成解释" @click="emit('generate')">
         <RefreshCw v-if="loading || generating" :size="14" class="animate-spin" aria-hidden="true" />
@@ -120,6 +124,31 @@ function formatEvidenceDate(value: string | null): string {
       </button>
     </div>
     <template v-else-if="summary">
+      <section v-if="summary.summary.decisionReview" class="quant-ai-summary-decision" aria-label="AI 决策复核">
+        <div class="quant-ai-summary-decision-heading">
+          <div>
+            <span>AI 决策复核</span>
+            <strong>{{ recommendationLabel(summary.summary.decisionReview.recommendation) }}</strong>
+          </div>
+          <span class="quant-ai-summary-decision-status" :class="summary.summary.decisionReview.accepted ? 'quant-ai-summary-decision-accepted' : 'quant-ai-summary-decision-not-accepted'">
+            {{ summary.summary.decisionReview.accepted ? '已纳入最终推荐' : summary.summary.decisionReview.rejectionReason === 'deterministic-watch' ? '数据不足，保持观望' : '低置信度，保留确定性结论' }}
+          </span>
+        </div>
+        <div class="quant-ai-summary-decision-meta">
+          <span>置信度 {{ summary.summary.decisionReview.confidence.toFixed(0) }}</span>
+          <span>{{ summary.summary.decisionReview.citedEvidenceKeys.length }} 条引用证据</span>
+          <span>{{ summary.model }} · {{ summary.generatedAt || '时间未记录' }}</span>
+        </div>
+        <p>{{ summary.summary.decisionReview.rationale }}</p>
+        <div v-if="summary.summary.decisionReview.invalidationConditions.length" class="quant-ai-summary-decision-invalidations">
+          <span>失效条件</span>
+          <ul>
+            <li v-for="item in summary.summary.decisionReview.invalidationConditions" :key="`ai-invalidation-${item}`">
+              {{ item }}
+            </li>
+          </ul>
+        </div>
+      </section>
       <p class="quant-ai-summary-overview">
         {{ summary.summary.overview }}
       </p>
@@ -292,6 +321,86 @@ function formatEvidenceDate(value: string | null): string {
   color: hsl(var(--foreground));
   font-size: 0.75rem;
   line-height: 1.55;
+}
+
+.quant-ai-summary-decision {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid hsl(var(--status-info) / 0.28);
+  border-left: 3px solid hsl(var(--status-info) / 0.72);
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--status-info) / 0.06);
+  padding: 0.6rem 0.7rem;
+}
+
+.quant-ai-summary-decision-heading,
+.quant-ai-summary-decision-heading > div,
+.quant-ai-summary-decision-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.quant-ai-summary-decision-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.quant-ai-summary-decision-heading > div {
+  align-items: baseline;
+}
+
+.quant-ai-summary-decision-heading span,
+.quant-ai-summary-decision-meta,
+.quant-ai-summary-decision-invalidations > span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-ai-summary-decision-heading strong {
+  color: hsl(var(--foreground));
+  font-size: 0.9375rem;
+  font-weight: 780;
+}
+
+.quant-ai-summary-decision-status {
+  flex: 0 0 auto;
+  font-weight: 720;
+}
+
+.quant-ai-summary-decision-accepted {
+  color: hsl(var(--status-success)) !important;
+}
+
+.quant-ai-summary-decision-not-accepted {
+  color: hsl(var(--status-warning)) !important;
+}
+
+.quant-ai-summary-decision-meta {
+  flex-wrap: wrap;
+}
+
+.quant-ai-summary-decision p {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  line-height: 1.45;
+}
+
+.quant-ai-summary-decision-invalidations {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.quant-ai-summary-decision-invalidations ul {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding-left: 0.95rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.4;
 }
 
 .quant-ai-summary-grid {
@@ -539,6 +648,10 @@ function formatEvidenceDate(value: string | null): string {
 
   .quant-ai-summary-next-prompt {
     justify-self: start;
+  }
+
+  .quant-ai-summary-decision-heading {
+    display: grid;
   }
 }
 </style>

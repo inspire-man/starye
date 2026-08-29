@@ -79,12 +79,13 @@ describe('quant AI summary', () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent()))
 
     await expect(generateQuantAiSummary({ report, config, fetchImpl })).resolves.toEqual({
-      summaryVersion: 'research-summary-v1',
+      summaryVersion: 'research-summary-v2',
       overview: '当前证据显示基本面有支持，但仍有需要复核的部分。',
       supports: ['ROE 达到报告门槛'],
       concerns: ['TTM PE 需要结合行业比较'],
       nextChecks: ['等待下一期财报并复核'],
       citedEvidenceKeys: ['quality-roe', 'valuation-pe'],
+      decisionReview: null,
     })
     expect(fetchImpl).toHaveBeenCalledWith('https://ai.example.test/v1/chat/completions', expect.objectContaining({
       method: 'POST',
@@ -113,6 +114,68 @@ describe('quant AI summary', () => {
     const prohibited = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({ overview: '建议买入并设置目标价。' })))
     await expect(generateQuantAiSummary({ report, config, fetchImpl: prohibited })).rejects.toMatchObject({
       code: 'QUANT_AI_SUMMARY_INVALID_RESPONSE',
+    })
+  })
+
+  it('accepts a cited AI decision review only when the deterministic report has enough data', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
+      decisionReview: {
+        decisionVersion: 'ai-decision-v1',
+        recommendation: 'bearish',
+        confidence: 82,
+        rationale: '估值证据需要优先核对，当前风险权重更高。',
+        invalidationConditions: ['下一期财报改善后重新复核'],
+        citedEvidenceKeys: ['valuation-pe'],
+      },
+    })))
+    const result = await generateQuantAiSummary({
+      report: {
+        ...report,
+        decision: {
+          decisionVersion: 'research-decision-v1',
+          recommendation: 'bullish',
+          label: '看多',
+          deterministicScore: 78,
+          confidence: 78,
+          coverage: 100,
+          buyPriceRange: null,
+          sellPriceRange: null,
+          evidenceKeys: ['quality-roe', 'valuation-pe'],
+          invalidationConditions: [],
+          headline: '看多：证据覆盖充分',
+        },
+      },
+      config,
+      fetchImpl,
+    })
+
+    expect(result.decisionReview).toMatchObject({
+      decisionVersion: 'ai-decision-v1',
+      recommendation: 'bearish',
+      confidence: 82,
+      accepted: true,
+      rejectionReason: null,
+      citedEvidenceKeys: ['valuation-pe'],
+    })
+  })
+
+  it('keeps a low-confidence or data-insufficient AI review from changing the final direction', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
+      decisionReview: {
+        decisionVersion: 'ai-decision-v1',
+        recommendation: 'bullish',
+        confidence: 45,
+        rationale: '现有证据不足以形成高置信度复核。',
+        invalidationConditions: ['补齐缺失数据'],
+        citedEvidenceKeys: ['quality-roe'],
+      },
+    })))
+    const result = await generateQuantAiSummary({ report, config, fetchImpl })
+
+    expect(result.decisionReview).toMatchObject({
+      recommendation: 'bullish',
+      accepted: false,
+      rejectionReason: 'deterministic-watch',
     })
   })
 

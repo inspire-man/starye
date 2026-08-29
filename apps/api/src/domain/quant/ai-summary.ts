@@ -1,17 +1,31 @@
 import type { QuantDecryptedAiConfig } from './ai-config'
+import type { QuantRecommendation } from './decision-recommendation'
 import type { QuantResearchReport } from './research-report'
 import { QuantError } from './errors'
 
-export const QUANT_AI_SUMMARY_VERSION = 'research-summary-v1' as const
+export const QUANT_AI_SUMMARY_VERSION = 'research-summary-v2' as const
+export const QUANT_AI_DECISION_VERSION = 'ai-decision-v1' as const
 export const QUANT_AI_SUMMARY_MAX_PROMPT_LENGTH = 16_000
 export const QUANT_AI_SUMMARY_MAX_RESPONSE_LENGTH = 8_000
 
 export interface QuantAiSummary {
-  readonly summaryVersion: typeof QUANT_AI_SUMMARY_VERSION
+  readonly summaryVersion: typeof QUANT_AI_SUMMARY_VERSION | 'research-summary-v1'
   readonly overview: string
   readonly supports: readonly string[]
   readonly concerns: readonly string[]
   readonly nextChecks: readonly string[]
+  readonly citedEvidenceKeys: readonly string[]
+  readonly decisionReview: QuantAiDecisionReview | null
+}
+
+export interface QuantAiDecisionReview {
+  readonly decisionVersion: typeof QUANT_AI_DECISION_VERSION
+  readonly recommendation: QuantRecommendation
+  readonly confidence: number
+  readonly accepted: boolean
+  readonly rejectionReason: 'low-confidence' | 'deterministic-watch' | null
+  readonly rationale: string
+  readonly invalidationConditions: readonly string[]
   readonly citedEvidenceKeys: readonly string[]
 }
 
@@ -61,6 +75,8 @@ function reportPrompt(report: QuantResearchReport): string {
     action: report.action,
     score: report.score,
     headline: report.headline,
+    factorModel: report.factorModel ?? null,
+    decision: report.decision ?? null,
     sources: report.sources,
     evidence: report.evidence.slice(0, 32).map(item => ({
       key: item.key,
@@ -82,12 +98,13 @@ function reportPrompt(report: QuantResearchReport): string {
 
 export function buildQuantAiSummaryPrompt(report: QuantResearchReport): string {
   return [
-    '请把下面这份 Quant 确定性研究报告解释给金融初学者。只使用 JSON 中已有的事实和 evidence key。',
-    '返回一个 JSON 对象，字段必须是 overview、supports、concerns、nextChecks、citedEvidenceKeys；数组最多各 6 项。',
+    '请把下面这份 Quant 确定性研究报告解释给金融初学者，并复核其中的结构化推荐。只使用 JSON 中已有的事实和 evidence key。',
+    '返回一个 JSON 对象，字段必须是 overview、supports、concerns、nextChecks、citedEvidenceKeys、decisionReview；数组最多各 6 项。',
     'overview 用 1-3 句说明当前证据代表什么；supports、concerns、nextChecks 都写成可核对的短句。',
-    '不要重算或修改 status、action、score；不要添加报告中不存在的数值、来源或证据 key。',
+    'decisionReview 必须是对象或 null。对象字段必须是 decisionVersion、recommendation、confidence、rationale、invalidationConditions、citedEvidenceKeys；recommendation 只能是 bullish、bearish、watch，confidence 为 0-100 的数字。',
+    'decisionReview 只能复核报告已有证据；如果报告确定性推荐为 watch 或数据覆盖度不足，不得升级为 bullish/bearish。不要添加报告中不存在的数值、来源或证据 key。',
     '对于 optional 的 AkShare 证据，必须保留 source、observedAt 和 formulaVersion；报告期不同或 provider 数值不同只能表述为交叉核对线索，并明确需要人工核对。',
-    '不要写目标价、未来收益预测或直接交易指令。',
+    '不要生成买入/卖出价格，不要写目标价、未来收益预测或直接交易指令；价格区间只能使用报告中的确定性字段。',
     `研究报告：${reportPrompt(report)}`,
   ].join('\n')
 }
@@ -125,6 +142,39 @@ function citedEvidenceKeys(value: unknown, report: QuantResearchReport): readonl
   return keys
 }
 
+function recommendation(value: unknown): QuantRecommendation {
+  if (value === 'bullish' || value === 'bearish' || value === 'watch')
+    return value
+  throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision recommendation is invalid', 502)
+}
+
+function decisionReview(value: unknown, report: QuantResearchReport): QuantAiDecisionReview | null {
+  if (value === undefined || value === null)
+    return null
+  const parsed = record(value)
+  if (!parsed || parsed.decisionVersion !== QUANT_AI_DECISION_VERSION)
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision review version is invalid', 502)
+  const confidence = parsed.confidence
+  if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100)
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision confidence is invalid', 502)
+  const rationale = stringValue(parsed.rationale, 'decisionReview.rationale', 600)
+  const invalidationConditions = stringList(parsed.invalidationConditions, 'decisionReview.invalidationConditions')
+  const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
+  const normalizedRecommendation = recommendation(parsed.recommendation)
+  const deterministicWatch = report.decision?.recommendation === 'watch' || (report.decision?.coverage ?? 0) < 80
+  const accepted = confidence >= 60 && !deterministicWatch
+  return {
+    decisionVersion: QUANT_AI_DECISION_VERSION,
+    recommendation: normalizedRecommendation,
+    confidence,
+    accepted,
+    rejectionReason: accepted ? null : deterministicWatch ? 'deterministic-watch' : 'low-confidence',
+    rationale,
+    invalidationConditions,
+    citedEvidenceKeys: cited,
+  }
+}
+
 function validateSummary(value: unknown, report: QuantResearchReport): QuantAiSummary {
   const parsed = record(value)
   if (!parsed)
@@ -134,8 +184,9 @@ function validateSummary(value: unknown, report: QuantResearchReport): QuantAiSu
   const concerns = stringList(parsed.concerns, 'concerns')
   const nextChecks = stringList(parsed.nextChecks, 'nextChecks')
   const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
-  const text = [overview, ...supports, ...concerns, ...nextChecks].join('\n')
-  if (/买入|卖出|目标价|收益预测|price\s*target|return\s+forecast|\bbuy\b|\bsell\b/iu.test(text))
+  const review = decisionReview(parsed.decisionReview, report)
+  const text = [overview, ...supports, ...concerns, ...nextChecks, review?.rationale ?? '', ...(review?.invalidationConditions ?? [])].join('\n')
+  if (/目标价|收益预测|未来收益|price\s*target|return\s+forecast|直接(?:买入|卖出)|建议(?:买入|卖出)/iu.test(text))
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary contains a prohibited trading conclusion', 502)
   return {
     summaryVersion: QUANT_AI_SUMMARY_VERSION,
@@ -143,7 +194,8 @@ function validateSummary(value: unknown, report: QuantResearchReport): QuantAiSu
     supports,
     concerns,
     nextChecks,
-    citedEvidenceKeys: cited,
+    citedEvidenceKeys: [...new Set([...cited, ...(review?.citedEvidenceKeys ?? [])])],
+    decisionReview: review,
   }
 }
 
@@ -179,7 +231,7 @@ export async function generateQuantAiSummary(input: QuantAiSummaryRequest): Prom
         temperature: 0.2,
         max_tokens: 1000,
         messages: [
-          { role: 'system', content: '你是严格的证据解释器，只能解释给定研究报告，不得创造事实或交易指令。' },
+          { role: 'system', content: '你是严格的证据解释器和决策复核器，只能使用给定研究报告，不得创造事实、价格或直接交易指令。' },
           { role: 'user', content: buildQuantAiSummaryPrompt(report) },
         ],
       }),

@@ -25,6 +25,53 @@ export interface QuantAiConnectionTest {
 export type QuantResearchRunStatus = 'ready' | 'partial' | 'insufficient_data'
 export type QuantResearchEvidenceStatus = 'pass' | 'caution' | 'fail' | 'missing'
 export type QuantResearchAction = 'research-window' | 'wait-confirmation' | 'reassess' | 'complete-data'
+export type QuantRecommendation = 'bullish' | 'bearish' | 'watch'
+export type QuantResearchFactorStatus = 'ready' | 'partial' | 'missing' | 'unavailable'
+
+export interface QuantResearchFactor {
+  key: 'trend' | 'valuation' | 'quality' | 'shareholder-return' | 'risk'
+  label: string
+  weight: number
+  sourceId: string
+  source: string
+  status: QuantResearchFactorStatus
+  score: number | null
+  evidenceKeys: string[]
+  missingEvidenceKeys: string[]
+}
+
+export interface QuantFactorModel {
+  modelVersion: string
+  totalWeight: number
+  coveredWeight: number
+  coverage: number
+  score: number | null
+  factors: QuantResearchFactor[]
+}
+
+export interface QuantReferencePriceRange {
+  low: number
+  high: number
+  currency: 'CNY'
+  formulaVersion: string
+  source: string
+  observedAt: string
+  evidenceKeys: string[]
+}
+
+export interface QuantDecisionProjection {
+  decisionVersion: string
+  recommendation: QuantRecommendation
+  label: '看多' | '看空' | '观望'
+  deterministicScore: number | null
+  confidence: number | null
+  coverage: number
+  buyPriceRange: QuantReferencePriceRange | null
+  sellPriceRange: QuantReferencePriceRange | null
+  evidenceKeys: string[]
+  invalidationConditions: string[]
+  headline: string
+}
 
 export interface QuantResearchEvidence {
   key: string
@@ -63,6 +110,19 @@ export interface QuantResearchReport {
   nextActions: string[]
   evidence: QuantResearchEvidence[]
   sources: QuantResearchSource[]
+  factorModel?: QuantFactorModel
+  decision?: QuantDecisionProjection
+}
+
+export interface QuantAiDecisionReview {
+  decisionVersion: string
+  recommendation: QuantRecommendation
+  confidence: number
+  accepted: boolean
+  rejectionReason: 'low-confidence' | 'deterministic-watch' | null
+  rationale: string
+  invalidationConditions: string[]
+  citedEvidenceKeys: string[]
 }
 
 export interface QuantResearchRun {
@@ -93,6 +153,7 @@ export interface QuantResearchSummary {
     concerns: string[]
     nextChecks: string[]
     citedEvidenceKeys: string[]
+    decisionReview?: QuantAiDecisionReview | null
   }
   citedEvidenceKeys: string[]
 }
