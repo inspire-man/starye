@@ -194,6 +194,8 @@ function useQuestionPrompt(prompt: string): void {
   void nextTick(() => questionInputElement.value?.focus())
 }
 
+defineExpose({ useQuestionPrompt })
+
 function historyError(error: unknown): string {
   if (error instanceof QuantApiError || error instanceof Error)
     return error.message

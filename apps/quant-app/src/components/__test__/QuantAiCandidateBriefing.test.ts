@@ -288,6 +288,22 @@ describe('quant ai candidate briefing', () => {
     unnamed.unmount()
   })
 
+  it('keeps the question prompt bridge available to the parent without submitting', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing },
+      attachTo: document.body,
+    })
+    const exposed = wrapper.vm as unknown as { useQuestionPrompt: (prompt: string) => void }
+
+    exposed.useQuestionPrompt('对比结果需要先核对哪一项？')
+    await flushPromises()
+
+    expect(wrapper.emitted('update:questionInput')).toEqual([['对比结果需要先核对哪一项？']])
+    expect(wrapper.emitted('askQuestion')).toBeUndefined()
+    expect(document.activeElement).toBe(wrapper.get('.quant-ai-briefing-question-input').element)
+    wrapper.unmount()
+  })
+
   it('renders question loading, configuration error, and retry states', async () => {
     const loading = mount(QuantAiCandidateBriefing, {
       props: { ...baseProps, questionInput: '问题', questionLoading: true },
