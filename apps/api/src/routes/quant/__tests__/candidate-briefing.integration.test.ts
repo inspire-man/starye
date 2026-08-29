@@ -603,6 +603,58 @@ describe('quant candidate AI briefing route', () => {
     await expect(client.execute('SELECT count(*) AS count FROM quant_candidate_ai_session WHERE user_id = \'user-2\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
   })
 
+  it('deletes only the owned candidate AI session and confirms the delete readback', async () => {
+    const { client, db } = await createDatabase()
+    const owned = await createQuantCandidateAiSession(db, {
+      userId: 'user-1',
+      snapshotId: 'snapshot-user-1',
+      snapshotGeneratedAt: new Date(1_756_435_200_000),
+      fromDate: '20260801',
+      toDate: '20260829',
+      scopeKey: '601899.SH',
+      candidateCodesJson: JSON.stringify(['601899.SH']),
+      briefingJson: null,
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+    })
+    const foreign = await createQuantCandidateAiSession(db, {
+      userId: 'user-2',
+      snapshotId: 'snapshot-user-2',
+      snapshotGeneratedAt: new Date(1_756_435_200_000),
+      fromDate: '20260801',
+      toDate: '20260829',
+      scopeKey: '601899.SH',
+      candidateCodesJson: JSON.stringify(['601899.SH']),
+      briefingJson: null,
+      provider: 'ollama',
+      model: 'qwen3',
+    })
+    const app = createApp(db, 'user-1')
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    const deleted = await app.request(`/api/quant/candidates/ai-sessions/${owned.id}`, { method: 'DELETE' })
+    expect(deleted.status).toBe(200)
+    await expect(deleted.json()).resolves.toMatchObject({
+      success: true,
+      data: { deleted: true, sessionId: owned.id },
+    })
+
+    const list = await app.request('/api/quant/candidates/ai-sessions')
+    await expect(list.json()).resolves.toMatchObject({ success: true, data: { items: [] } })
+    const missingDetail = await app.request(`/api/quant/candidates/ai-sessions/${owned.id}`)
+    expect(missingDetail.status).toBe(404)
+    const repeatedDelete = await app.request(`/api/quant/candidates/ai-sessions/${owned.id}`, { method: 'DELETE' })
+    expect(repeatedDelete.status).toBe(404)
+
+    const foreignDelete = await app.request(`/api/quant/candidates/ai-sessions/${foreign.id}`, { method: 'DELETE' })
+    expect(foreignDelete.status).toBe(404)
+    const otherUserDetail = await createApp(db, 'user-2').request(`/api/quant/candidates/ai-sessions/${foreign.id}`)
+    expect(otherUserDetail.status).toBe(200)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_candidate_ai_session WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 0 }] })
+    await expect(client.execute('SELECT count(*) AS count FROM quant_candidate_ai_session WHERE user_id = \'user-2\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('fails closed when persisted candidate AI content is corrupted', async () => {
     const { client, db } = await createDatabase()
     await client.execute(`

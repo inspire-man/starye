@@ -210,6 +210,11 @@ export interface QuantAiCandidateBriefingSessionList {
   limit: number
 }
 
+export interface QuantAiCandidateBriefingSessionDeletion {
+  deleted: true
+  sessionId: string
+}
+
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'
 

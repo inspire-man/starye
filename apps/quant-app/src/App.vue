@@ -1576,6 +1576,24 @@ async function askCandidateAiBriefingQuestion(question: string): Promise<void> {
   }
 }
 
+function handleCandidateAiSessionDeleted(sessionId: string): void {
+  const activeSessionId = candidateAiBriefing.value?.sessionId || candidateAiBriefingQuestion.value?.sessionId
+  if (activeSessionId !== sessionId)
+    return
+
+  candidateAiBriefingQuestionRequestId++
+  candidateAiBriefingQuestionLoading.value = false
+  candidateAiBriefingQuestionError.value = null
+  if (candidateAiBriefing.value?.sessionId === sessionId) {
+    const { sessionId: _sessionId, ...briefing } = candidateAiBriefing.value
+    candidateAiBriefing.value = briefing
+  }
+  if (candidateAiBriefingQuestion.value?.sessionId === sessionId) {
+    const { sessionId: _sessionId, ...question } = candidateAiBriefingQuestion.value
+    candidateAiBriefingQuestion.value = question
+  }
+}
+
 function downloadCandidateAiBriefing(): void {
   const briefing = candidateAiBriefing.value
   if (!briefing)
@@ -3446,6 +3464,7 @@ onUnmounted(() => {
             @focus-candidate="focusCandidateFromBriefing"
             @copy="copyCandidateAiBriefing"
             @export="downloadCandidateAiBriefing"
+            @session-deleted="handleCandidateAiSessionDeleted"
           />
           <div class="quant-table-frame candidate-table-frame">
             <DataTable
