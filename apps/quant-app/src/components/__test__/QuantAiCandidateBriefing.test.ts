@@ -234,6 +234,60 @@ describe('quant ai candidate briefing', () => {
     bounded.unmount()
   })
 
+  it('fills a focus candidate prompt without nesting controls or submitting it', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing },
+      attachTo: document.body,
+    })
+
+    const row = wrapper.get('.quant-ai-briefing-focus-row')
+    expect(row.findAll('button')).toHaveLength(2)
+    expect(wrapper.get('.quant-ai-briefing-focus-item').findAll('button')).toHaveLength(0)
+
+    await row.get('.quant-ai-briefing-focus-prompt').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('update:questionInput')).toEqual([
+      ['请基于“紫金矿业（601899.SH）”的当前候选事实，说明其研究优先级依据和下一项核对内容。'],
+    ])
+    expect(wrapper.emitted('askQuestion')).toBeUndefined()
+    expect(document.activeElement).toBe(wrapper.get('.quant-ai-briefing-question-input').element)
+
+    await wrapper.get('.quant-ai-briefing-focus-item').trigger('click')
+    expect(wrapper.emitted('focusCandidate')).toEqual([['601899.SH']])
+    wrapper.unmount()
+
+    const longName = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        briefing: {
+          ...briefing,
+          focusItems: [{ ...briefing.focusItems[0], name: '超长候选名称'.repeat(200) }],
+        },
+      },
+    })
+    await longName.get('.quant-ai-briefing-focus-prompt').trigger('click')
+    const longPrompt = longName.emitted('update:questionInput')?.[0]?.[0] as string
+    expect(longPrompt.length).toBeLessThanOrEqual(500)
+    expect(longPrompt).toContain('601899.SH')
+    expect(longPrompt).toContain('当前候选事实')
+    longName.unmount()
+
+    const unnamed = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        briefing: {
+          ...briefing,
+          focusItems: [{ ...briefing.focusItems[1], name: '' }],
+        },
+      },
+    })
+    await unnamed.get('.quant-ai-briefing-focus-prompt').trigger('click')
+    const unnamedPrompt = unnamed.emitted('update:questionInput')?.[0]?.[0] as string
+    expect(unnamedPrompt).toContain('000001.SZ')
+    unnamed.unmount()
+  })
+
   it('renders question loading, configuration error, and retry states', async () => {
     const loading = mount(QuantAiCandidateBriefing, {
       props: { ...baseProps, questionInput: '问题', questionLoading: true },
@@ -335,6 +389,7 @@ describe('quant ai candidate briefing', () => {
     })
 
     expect(loading.get('.quant-ai-briefing-next-prompt').attributes('disabled')).toBeDefined()
+    expect(loading.get('.quant-ai-briefing-focus-prompt').attributes('disabled')).toBeDefined()
     await loading.get('.quant-ai-briefing-history-item').trigger('click')
     expect(loading.get('.quant-ai-briefing-history-reuse-question').attributes('disabled')).toBeDefined()
     await loading.get('.quant-ai-briefing-next-prompt').trigger('click')
@@ -344,6 +399,7 @@ describe('quant ai candidate briefing', () => {
       props: { ...baseProps, briefing, available: false },
     })
     expect(unavailable.get('.quant-ai-briefing-next-prompt').attributes('disabled')).toBeDefined()
+    expect(unavailable.get('.quant-ai-briefing-focus-prompt').attributes('disabled')).toBeDefined()
   })
 
   it('makes current historical references actionable and keeps absent codes read-only across every surface', async () => {
@@ -603,6 +659,7 @@ describe('quant ai candidate briefing', () => {
 
     expect(wrapper.get('.quant-ai-briefing-panel').classes()).toContain('quant-ai-briefing-responsive')
     expect(wrapper.get('.quant-ai-briefing-focus-item').classes()).toContain('quant-ai-briefing-wrap-anywhere')
+    expect(wrapper.get('.quant-ai-briefing-focus-row').findAll('button')).toHaveLength(2)
     expect(wrapper.get('.quant-ai-briefing-citation').classes()).toContain('quant-ai-briefing-wrap-anywhere')
     expect(wrapper.get('.quant-ai-briefing-focus-item').attributes('type')).toBe('button')
     expect(wrapper.get('.quant-ai-briefing-citation').attributes('type')).toBe('button')
