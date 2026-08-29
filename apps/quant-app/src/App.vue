@@ -156,6 +156,7 @@ const candidateAiBriefingCopying = ref(false)
 const candidateAiBriefingCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const candidateAiBriefingCopyMessage = ref('')
 const candidateAiBriefingScopeCount = ref<number | null>(null)
+const candidateAiBriefingHistoryResetKey = ref(0)
 const researchReportCopying = ref(false)
 const researchReportCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const researchReportCopyMessage = ref('')
@@ -1284,6 +1285,7 @@ function resetCandidateAiBriefingCopyState(): void {
 }
 
 function resetCandidateAiBriefingState(): void {
+  candidateAiBriefingHistoryResetKey.value++
   candidateAiBriefingRequestId++
   candidateAiBriefingQuestionRequestId++
   candidateAiBriefing.value = null
@@ -1554,12 +1556,13 @@ async function askCandidateAiBriefingQuestion(question: string): Promise<void> {
 
   const requestId = ++candidateAiBriefingQuestionRequestId
   const scopeKey = buildCandidateBriefingScopeKey(scopeCodes)
+  const sessionId = candidateAiBriefing.value?.sessionId || candidateAiBriefingQuestion.value?.sessionId
   candidateAiBriefingQuestionInput.value = normalizedQuestion
   candidateAiBriefingQuestion.value = null
   candidateAiBriefingQuestionLoading.value = true
   candidateAiBriefingQuestionError.value = null
   try {
-    const result = await quantApi.askCandidateAiBriefingQuestion(scopeCodes, normalizedQuestion)
+    const result = await quantApi.askCandidateAiBriefingQuestion(scopeCodes, normalizedQuestion, sessionId)
     if (canApplyCandidateBriefingResponse(requestId, candidateAiBriefingQuestionRequestId, scopeKey, candidateBriefingScopeKey.value))
       candidateAiBriefingQuestion.value = result
   }
@@ -3421,6 +3424,9 @@ onUnmounted(() => {
             :filtered-candidate-count="filteredCandidateItems.length"
             :briefing-available-candidate-count="candidateBriefingScopeItems.length"
             :briefing-candidate-count="candidateAiBriefingScopeCount"
+            :current-scope-key="candidateBriefingScopeKey"
+            :current-snapshot-id="snapshot?.id || null"
+            :history-reset-key="candidateAiBriefingHistoryResetKey"
             :available="Boolean(snapshot?.generatedAt)"
             :loading="candidateAiBriefingLoading"
             :error-message="candidateAiBriefingError ? parsedError(candidateAiBriefingError).message : null"

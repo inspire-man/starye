@@ -1,6 +1,7 @@
 import type { Database } from '@starye/db'
 import type { DailyBar, MomentumCandidate, QuantSyncStatus } from './types'
 import {
+  quantCandidateAiSessions,
   quantDailyBars,
   quantResearchMarkers,
   quantResearchRuns,
@@ -19,6 +20,8 @@ export const QUANT_SYNC_LEASE_DURATION_MS = 120_000
 export const QUANT_SYNC_SNAPSHOT_RETENTION = 30
 export const QUANT_RESEARCH_RUN_RETENTION = 30
 export const QUANT_RESEARCH_SUMMARY_RETENTION = 10
+export const QUANT_CANDIDATE_AI_SESSION_RETENTION = 10
+export const QUANT_CANDIDATE_AI_QUESTION_RETENTION = 10
 export const QUANT_RESEARCH_STATUSES = ['unreviewed', 'priority', 'paused', 'excluded'] as const
 export type QuantResearchStatus = typeof QUANT_RESEARCH_STATUSES[number]
 
@@ -560,6 +563,162 @@ export async function listQuantResearchSummaries(db: Database, userId: string, r
     eq(quantResearchSummaries.userId, ownerId),
     eq(quantResearchSummaries.researchRunId, researchRun.id),
   )).orderBy(desc(quantResearchSummaries.generatedAt), desc(quantResearchSummaries.id)).limit(boundedLimit).all()
+}
+
+function boundedCandidateAiSessionLimit(value: number): number {
+  const normalized = Number.isFinite(value) ? Math.floor(value) : QUANT_CANDIDATE_AI_SESSION_RETENTION
+  return Math.min(QUANT_CANDIDATE_AI_SESSION_RETENTION, Math.max(1, normalized))
+}
+
+function parseCandidateAiQuestions(value: string): unknown[] {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed))
+      throw new Error('questions must be an array')
+    return parsed
+  }
+  catch {
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INVALID', 'Candidate AI session questions are invalid', 500)
+  }
+}
+
+function parseCandidateAiQuestion(value: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+      throw new Error('question must be an object')
+    return parsed
+  }
+  catch {
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INPUT', 'Candidate AI session question is invalid', 422)
+  }
+}
+
+async function trimQuantCandidateAiSessions(db: Database, userId: string): Promise<void> {
+  try {
+    await db.run(sql`
+        DELETE FROM quant_candidate_ai_session
+        WHERE rowid IN (
+          SELECT rowid
+          FROM quant_candidate_ai_session
+          WHERE user_id = ${userId}
+          ORDER BY updated_at DESC, id DESC
+          LIMIT -1 OFFSET ${QUANT_CANDIDATE_AI_SESSION_RETENTION}
+        )
+      `)
+  }
+  catch {
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INVALID', 'Candidate AI session retention failed', 500)
+  }
+}
+
+export async function createQuantCandidateAiSession(db: Database, input: {
+  readonly userId: string
+  readonly snapshotId: string
+  readonly snapshotGeneratedAt: Date
+  readonly fromDate: string
+  readonly toDate: string
+  readonly scopeKey: string
+  readonly candidateCodesJson: string
+  readonly briefingJson: string | null
+  readonly questionsJson?: string
+  readonly provider: 'openai_compatible' | 'deepseek' | 'qwen' | 'gemini' | 'ollama'
+  readonly model: string
+  readonly createdAt?: Date
+}): Promise<typeof quantCandidateAiSessions.$inferSelect> {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const snapshotId = input.snapshotId.trim()
+  const scopeKey = input.scopeKey.trim()
+  const model = input.model.trim()
+  if (!snapshotId || !scopeKey || !model)
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INPUT', 'Candidate AI session identity is incomplete', 422)
+
+  const id = nanoid()
+  const createdAt = input.createdAt ?? new Date()
+  await db.insert(quantCandidateAiSessions).values({
+    id,
+    userId: ownerId,
+    snapshotId,
+    snapshotGeneratedAt: input.snapshotGeneratedAt,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    scopeKey,
+    candidateCodesJson: input.candidateCodesJson,
+    briefingJson: input.briefingJson ?? 'null',
+    questionsJson: input.questionsJson ?? '[]',
+    provider: input.provider,
+    model,
+    createdAt,
+    updatedAt: createdAt,
+  })
+  const persisted = await db.select().from(quantCandidateAiSessions).where(and(
+    eq(quantCandidateAiSessions.id, id),
+    eq(quantCandidateAiSessions.userId, ownerId),
+  )).get()
+  if (!persisted)
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INVALID', 'Candidate AI session readback failed', 500)
+  await trimQuantCandidateAiSessions(db, ownerId)
+  return persisted
+}
+
+export async function getQuantCandidateAiSession(db: Database, userId: string, id: string) {
+  const ownerId = normalizeQuantUserId(userId)
+  const normalizedId = id.trim()
+  if (!normalizedId)
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INPUT', 'Candidate AI session id is required', 400)
+  return db.select().from(quantCandidateAiSessions).where(and(
+    eq(quantCandidateAiSessions.id, normalizedId),
+    eq(quantCandidateAiSessions.userId, ownerId),
+  )).get()
+}
+
+export async function listQuantCandidateAiSessions(db: Database, userId: string, limit = QUANT_CANDIDATE_AI_SESSION_RETENTION) {
+  const ownerId = normalizeQuantUserId(userId)
+  return db.select().from(quantCandidateAiSessions).where(eq(quantCandidateAiSessions.userId, ownerId)).orderBy(desc(quantCandidateAiSessions.updatedAt), desc(quantCandidateAiSessions.id)).limit(boundedCandidateAiSessionLimit(limit)).all()
+}
+
+export async function appendQuantCandidateAiSessionQuestion(db: Database, input: {
+  readonly userId: string
+  readonly sessionId: string
+  readonly snapshotId: string
+  readonly snapshotGeneratedAt: Date
+  readonly fromDate: string
+  readonly toDate: string
+  readonly scopeKey: string
+  readonly candidateCodesJson: string
+  readonly questionJson: string
+  readonly provider: 'openai_compatible' | 'deepseek' | 'qwen' | 'gemini' | 'ollama'
+  readonly model: string
+  readonly updatedAt?: Date
+}): Promise<typeof quantCandidateAiSessions.$inferSelect> {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const existing = await getQuantCandidateAiSession(db, ownerId, input.sessionId)
+  if (!existing)
+    throw new QuantError('QUANT_NOT_FOUND', 'Candidate AI session not found', 404)
+  if (existing.snapshotId !== input.snapshotId
+    || existing.snapshotGeneratedAt.getTime() !== input.snapshotGeneratedAt.getTime()
+    || existing.fromDate !== input.fromDate
+    || existing.toDate !== input.toDate
+    || existing.scopeKey !== input.scopeKey
+    || existing.candidateCodesJson !== input.candidateCodesJson) {
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_STALE', 'Candidate AI session scope no longer matches the current snapshot', 422)
+  }
+
+  const questions = [...parseCandidateAiQuestions(existing.questionsJson), parseCandidateAiQuestion(input.questionJson)]
+  const updatedAt = input.updatedAt ?? new Date()
+  await db.update(quantCandidateAiSessions).set({
+    questionsJson: JSON.stringify(questions.slice(-QUANT_CANDIDATE_AI_QUESTION_RETENTION)),
+    provider: input.provider,
+    model: input.model.trim(),
+    updatedAt,
+  }).where(and(
+    eq(quantCandidateAiSessions.id, existing.id),
+    eq(quantCandidateAiSessions.userId, ownerId),
+  )).run()
+  const persisted = await getQuantCandidateAiSession(db, ownerId, existing.id)
+  if (!persisted)
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INVALID', 'Candidate AI session question readback failed', 500)
+  return persisted
 }
 
 export async function getQuantSyncState(db: Database, userId: string) {

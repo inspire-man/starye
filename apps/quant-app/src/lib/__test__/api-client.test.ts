@@ -656,6 +656,81 @@ describe('quantApi', () => {
     expect(String(fetchMock.mock.calls[0]?.[1]?.body)).not.toContain('priorityScore')
   })
 
+  it('carries the active session id when appending a candidate briefing follow-up', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      session_id: 'session-1',
+      question_version: 'candidate-briefing-question-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-08-29T03:40:00.000Z',
+      question: '当前范围内先核对什么？',
+      answer: '先核对当前候选的已有数据事实。',
+      cited_candidate_codes: ['601899.SH'],
+    } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.askCandidateAiBriefingQuestion(['601899.SH'], '问题', ' session-1 ')).resolves.toMatchObject({
+      sessionId: 'session-1',
+      question: '当前范围内先核对什么？',
+    })
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      ts_codes: ['601899.SH'],
+      question: '问题',
+      session_id: 'session-1',
+    })
+  })
+
+  it('normalizes candidate AI session history and keeps nested content versioned', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      items: [{
+        id: 'session-1',
+        snapshot_id: 'snapshot-1',
+        snapshot_generated_at: '2026-08-29T03:00:00.000Z',
+        from_date: '20260801',
+        to_date: '20260829',
+        scope_key: '000001.SZ|601899.SH',
+        candidate_codes: ['601899.SH', '000001.SZ', '601899.SH'],
+        briefing: {
+          briefing_version: 'candidate-briefing-v1',
+          provider: 'openai_compatible',
+          model: 'gpt-5.4',
+          generated_at: '2026-08-29T03:10:00.000Z',
+          overview: '历史简报',
+          focus_items: [],
+          next_checks: [],
+          cited_candidate_codes: [],
+        },
+        questions: [{
+          question_version: 'candidate-briefing-question-v1',
+          provider: 'openai_compatible',
+          model: 'gpt-5.4',
+          generated_at: '2026-08-29T03:20:00.000Z',
+          question: '问题',
+          answer: '回答',
+          cited_candidate_codes: ['601899.SH'],
+        }],
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        created_at: '2026-08-29T03:10:00.000Z',
+        updated_at: '2026-08-29T03:20:00.000Z',
+      }],
+      limit: 5,
+    } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getCandidateAiSessions()).resolves.toEqual({
+      limit: 5,
+      items: [expect.objectContaining({
+        id: 'session-1',
+        snapshotId: 'snapshot-1',
+        candidateCodes: ['601899.SH', '000001.SZ'],
+        briefing: expect.objectContaining({ overview: '历史简报' }),
+        questions: [expect.objectContaining({ question: '问题' })],
+      })],
+    })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/candidates/ai-sessions?limit=5`)
+  })
+
   it('normalizes structured research runs and requests history by stock code', async () => {
     const run = {
       id: 'run-1',

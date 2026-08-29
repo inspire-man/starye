@@ -1071,6 +1071,29 @@ export const quantResearchSummaries = sqliteTable('quant_research_summary', {
 export type QuantResearchSummary = InferSelectModel<typeof quantResearchSummaries>
 export type NewQuantResearchSummary = InferInsertModel<typeof quantResearchSummaries>
 
+export const quantCandidateAiSessions = sqliteTable('quant_candidate_ai_session', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  snapshotId: text('snapshot_id').notNull(),
+  snapshotGeneratedAt: integer('snapshot_generated_at', { mode: 'timestamp' }).notNull(),
+  fromDate: text('from_date').notNull(),
+  toDate: text('to_date').notNull(),
+  scopeKey: text('scope_key').notNull(),
+  candidateCodesJson: text('candidate_codes_json').notNull(),
+  briefingJson: text('briefing_json').notNull(),
+  questionsJson: text('questions_json').notNull(),
+  provider: text('provider', { enum: ['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'] }).notNull(),
+  model: text('model').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_quant_candidate_ai_session_user_created_at').on(table.userId, table.createdAt),
+  index('idx_quant_candidate_ai_session_user_snapshot_generated_at').on(table.userId, table.snapshotGeneratedAt),
+])
+
+export type QuantCandidateAiSession = InferSelectModel<typeof quantCandidateAiSessions>
+export type NewQuantCandidateAiSession = InferInsertModel<typeof quantCandidateAiSessions>
+
 // --- 评分关联关系 ---
 export const ratingsRelations = relations(ratings, ({ one }) => ({
   player: one(players, {
@@ -1145,6 +1168,13 @@ export const quantResearchSummariesRelations = relations(quantResearchSummaries,
   }),
 }))
 
+export const quantCandidateAiSessionsRelations = relations(quantCandidateAiSessions, ({ one }) => ({
+  user: one(user, {
+    fields: [quantCandidateAiSessions.userId],
+    references: [user.id],
+  }),
+}))
+
 // --- 关联关系定义 ---
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -1162,6 +1192,7 @@ export const userRelations = relations(user, ({ many }) => ({
   quantSyncStates: many(quantSyncState),
   quantResearchRuns: many(quantResearchRuns),
   quantResearchSummaries: many(quantResearchSummaries),
+  quantCandidateAiSessions: many(quantCandidateAiSessions),
   crawlerTasks: many(crawlerTasks),
 }))
 

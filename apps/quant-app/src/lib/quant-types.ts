@@ -168,6 +168,7 @@ export interface QuantAiCandidateBriefingFocusItem {
 
 export interface QuantAiCandidateBriefing {
   briefingVersion: 'candidate-briefing-v1'
+  sessionId?: string
   provider: QuantAiProvider
   model: string
   generatedAt: string
@@ -179,12 +180,34 @@ export interface QuantAiCandidateBriefing {
 
 export interface QuantAiCandidateBriefingQuestion {
   questionVersion: 'candidate-briefing-question-v1'
+  sessionId?: string
   provider: QuantAiProvider
   model: string
   generatedAt: string
   question: string
   answer: string
   citedCandidateCodes: string[]
+}
+
+export interface QuantAiCandidateBriefingSession {
+  id: string
+  snapshotId: string
+  snapshotGeneratedAt: string | null
+  fromDate: string | null
+  toDate: string | null
+  scopeKey: string
+  candidateCodes: string[]
+  briefing: QuantAiCandidateBriefing | null
+  questions: QuantAiCandidateBriefingQuestion[]
+  provider: QuantAiProvider
+  model: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface QuantAiCandidateBriefingSessionList {
+  items: QuantAiCandidateBriefingSession[]
+  limit: number
 }
 
 export type SyncStatus = 'completed' | 'partial' | 'rejected'

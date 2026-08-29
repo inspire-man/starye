@@ -9,6 +9,8 @@ import type {
   DailyBar,
   QuantAiCandidateBriefing,
   QuantAiCandidateBriefingQuestion,
+  QuantAiCandidateBriefingSession,
+  QuantAiCandidateBriefingSessionList,
   QuantAiConfig,
   QuantAiConnectionTest,
   QuantAiProvider,
@@ -782,6 +784,7 @@ function parseCandidateAiBriefing(payload: unknown): QuantAiCandidateBriefing {
   const citedCandidateCodes = [...new Set(parseStringList(data.citedCandidateCodes !== undefined ? 'citedCandidateCodes' : 'cited_candidate_codes', 5, 20).map(code => code.toUpperCase()))]
   return {
     briefingVersion: 'candidate-briefing-v1',
+    ...(readString(data, 'sessionId', 'session_id') ? { sessionId: readString(data, 'sessionId', 'session_id')! } : {}),
     provider,
     model,
     generatedAt,
@@ -812,6 +815,7 @@ function parseCandidateAiBriefingQuestion(payload: unknown): QuantAiCandidateBri
   const citedCandidateCodes = [...new Set(rawCodes.map(item => (item as string).trim().toUpperCase()))]
   return {
     questionVersion: 'candidate-briefing-question-v1',
+    ...(readString(data, 'sessionId', 'session_id') ? { sessionId: readString(data, 'sessionId', 'session_id')! } : {}),
     provider,
     model,
     generatedAt,
@@ -819,6 +823,65 @@ function parseCandidateAiBriefingQuestion(payload: unknown): QuantAiCandidateBri
     answer,
     citedCandidateCodes,
   }
+}
+
+function parseCandidateAiBriefingSession(value: unknown): QuantAiCandidateBriefingSession {
+  if (!isRecord(value))
+    throw new QuantApiError('AI 候选会话数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  const id = readString(value, 'id')
+  const snapshotId = readString(value, 'snapshotId', 'snapshot_id')
+  const snapshotGeneratedAt = value.snapshotGeneratedAt === null || value.snapshot_generated_at === null
+    ? null
+    : readString(value, 'snapshotGeneratedAt', 'snapshot_generated_at')
+  const fromDate = value.fromDate === null || value.from_date === null ? null : readString(value, 'fromDate', 'from_date')
+  const toDate = value.toDate === null || value.to_date === null ? null : readString(value, 'toDate', 'to_date')
+  const scopeKey = readString(value, 'scopeKey', 'scope_key')
+  const provider = readString(value, 'provider')
+  const model = readString(value, 'model')
+  const createdAt = readString(value, 'createdAt', 'created_at')
+  const updatedAt = readString(value, 'updatedAt', 'updated_at')
+  const rawCodes = value.candidateCodes ?? value.candidate_codes
+  const rawQuestions = value.questions
+  if (!id || !snapshotId || !scopeKey || !provider || !model || !createdAt || !updatedAt
+    || (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    || (snapshotGeneratedAt !== null && !snapshotGeneratedAt)
+    || (fromDate !== null && !fromDate)
+    || (toDate !== null && !toDate)
+    || !Array.isArray(rawCodes)
+    || rawCodes.length > 50
+    || rawCodes.some(code => typeof code !== 'string' || !code.trim() || code.length > 20)
+    || !Array.isArray(rawQuestions)) {
+    throw new QuantApiError('AI 候选会话数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  }
+  const candidateCodes = [...new Set(rawCodes.map(code => (code as string).trim().toUpperCase()))]
+  if (!/^[A-Z0-9.-]{1,20}(?:\|[A-Z0-9.-]{1,20})*$/u.test(scopeKey) || candidateCodes.slice().sort((left, right) => left.localeCompare(right)).join('|') !== scopeKey)
+    throw new QuantApiError('AI 候选会话范围数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  const briefing = value.briefing === null ? null : parseCandidateAiBriefing(value.briefing)
+  return {
+    id,
+    snapshotId,
+    snapshotGeneratedAt,
+    fromDate,
+    toDate,
+    scopeKey,
+    candidateCodes,
+    briefing,
+    questions: rawQuestions.map(question => parseCandidateAiBriefingQuestion(question)),
+    provider: provider as QuantAiCandidateBriefingSession['provider'],
+    model,
+    createdAt,
+    updatedAt,
+  }
+}
+
+function parseCandidateAiBriefingSessionList(payload: unknown): QuantAiCandidateBriefingSessionList {
+  const data = unwrapData(payload)
+  if (!isRecord(data) || !Array.isArray(data.items))
+    throw new QuantApiError('AI 候选会话列表数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  const limit = readNumber(data, 'limit')
+  if (limit === null || limit < 1 || limit > 10 || !Number.isInteger(limit))
+    throw new QuantApiError('AI 候选会话列表限制格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  return { items: data.items.map(parseCandidateAiBriefingSession), limit }
 }
 
 function parseSyncResult(payload: unknown): SyncResult {
@@ -1438,11 +1501,26 @@ export const quantApi = {
     }))
   },
 
-  async askCandidateAiBriefingQuestion(tsCodes: readonly string[], question: string): Promise<QuantAiCandidateBriefingQuestion> {
+  async askCandidateAiBriefingQuestion(tsCodes: readonly string[], question: string, sessionId?: string): Promise<QuantAiCandidateBriefingQuestion> {
     return parseCandidateAiBriefingQuestion(await requestJson('/candidates/ai-briefing/question', {
       method: 'POST',
-      body: JSON.stringify({ ts_codes: [...tsCodes], question: question.trim() }),
+      body: JSON.stringify({
+        ts_codes: [...tsCodes],
+        question: question.trim(),
+        ...(sessionId?.trim() ? { session_id: sessionId.trim() } : {}),
+      }),
     }))
+  },
+
+  async getCandidateAiSessions(limit = 5): Promise<QuantAiCandidateBriefingSessionList> {
+    return parseCandidateAiBriefingSessionList(await requestJson(`/candidates/ai-sessions?limit=${encodeURIComponent(String(limit))}`))
+  },
+
+  async getCandidateAiSession(sessionId: string): Promise<QuantAiCandidateBriefingSession> {
+    const normalizedSessionId = sessionId.trim()
+    if (!normalizedSessionId)
+      throw new QuantApiError('候选 AI 会话标识无效', 400, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+    return parseCandidateAiBriefingSession(await requestJson(`/candidates/ai-sessions/${encodeURIComponent(normalizedSessionId)}`))
   },
 
   async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {
