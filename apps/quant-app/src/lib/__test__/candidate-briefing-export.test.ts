@@ -1,6 +1,11 @@
-import type { QuantAiCandidateBriefing } from '../quant-types'
+import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingSession } from '../quant-types'
 import { describe, expect, it } from 'vitest'
-import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from '../candidate-briefing-export'
+import {
+  buildCandidateAiBriefingFilename,
+  buildCandidateAiBriefingMarkdown,
+  buildCandidateAiSessionFilename,
+  buildCandidateAiSessionMarkdown,
+} from '../candidate-briefing-export'
 
 function briefing(overrides: Partial<QuantAiCandidateBriefing> = {}): QuantAiCandidateBriefing {
   return {
@@ -20,6 +25,36 @@ function briefing(overrides: Partial<QuantAiCandidateBriefing> = {}): QuantAiCan
     }],
     nextChecks: ['核对数据截至日期'],
     citedCandidateCodes: ['601899.SH'],
+    ...overrides,
+  }
+}
+
+function session(overrides: Partial<QuantAiCandidateBriefingSession> = {}): QuantAiCandidateBriefingSession {
+  return {
+    id: 'session-2026-08-29',
+    snapshotId: 'snapshot-history-1',
+    snapshotGeneratedAt: '2026-08-28T03:00:00.000Z',
+    fromDate: '2026-08-01',
+    toDate: '2026-08-28',
+    scopeKey: '601899.SH|000001.SZ',
+    candidateCodes: ['601899.SH', '000001.SZ'],
+    briefing: briefing({
+      overview: '历史简报概览。',
+      citedCandidateCodes: ['601899.SH'],
+    }),
+    questions: [{
+      questionVersion: 'candidate-briefing-question-v1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generatedAt: '2026-08-28T03:12:00.000Z',
+      question: '历史范围先看什么？',
+      answer: '先核对数据完整性。',
+      citedCandidateCodes: ['601899.SH'],
+    }],
+    provider: 'openai_compatible',
+    model: 'gpt-5.4',
+    createdAt: '2026-08-28T03:10:00.000Z',
+    updatedAt: '2026-08-28T03:12:00.000Z',
     ...overrides,
   }
 }
@@ -77,5 +112,43 @@ describe('candidate AI briefing Markdown export', () => {
     expect(markdown).not.toContain('API_KEY')
     expect(markdown).not.toContain('TOKEN')
     expect(markdown).not.toContain('INTERNAL_NOTE')
+  })
+
+  it('exports historical session metadata, briefing, questions, and citations', () => {
+    const value = {
+      ...session(),
+      apiKey: 'API_KEY',
+      briefing: session().briefing ? { ...session().briefing, internalNote: 'INTERNAL_NOTE' } : null,
+    } as QuantAiCandidateBriefingSession & { apiKey: string, briefing: (QuantAiCandidateBriefing & { internalNote: string }) | null }
+    const markdown = buildCandidateAiSessionMarkdown(value)
+
+    expect(markdown).toContain('# Quant AI 候选历史会话')
+    expect(markdown).toContain('会话 ID：session-2026-08-29')
+    expect(markdown).toContain('快照时间：2026-08-28T03:00:00.000Z')
+    expect(markdown).toContain('日期范围：2026-08-01 ~ 2026-08-28')
+    expect(markdown).toContain('## 历史候选代码')
+    expect(markdown).toContain('- 601899.SH')
+    expect(markdown).toContain('历史简报概览。')
+    expect(markdown).toContain('历史范围先看什么？')
+    expect(markdown).toContain('先核对数据完整性。')
+    expect(markdown).not.toContain('API_KEY')
+    expect(markdown).not.toContain('INTERNAL_NOTE')
+  })
+
+  it('keeps empty historical content explicit and makes the filename date/id safe', () => {
+    const value = session({
+      id: 'history/session:1',
+      snapshotGeneratedAt: null,
+      fromDate: null,
+      toDate: null,
+      briefing: null,
+      questions: [],
+    })
+    const markdown = buildCandidateAiSessionMarkdown(value)
+
+    expect(markdown).toContain('日期范围：未记录')
+    expect(markdown).toContain('## 历史简报\n\n- 未保存历史简报')
+    expect(markdown).toContain('## 历史追问\n\n- 未保存历史追问')
+    expect(buildCandidateAiSessionFilename(value)).toBe('quant-candidate-ai-session-2026-08-28-history-session-1.md')
   })
 })

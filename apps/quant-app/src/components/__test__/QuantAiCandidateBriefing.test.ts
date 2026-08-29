@@ -108,6 +108,7 @@ const historySession: QuantAiCandidateBriefingSession = {
 describe('quant ai candidate briefing', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('renders the idle state and enables generation when candidates exist', async () => {
@@ -309,6 +310,96 @@ describe('quant ai candidate briefing', () => {
       '000001.SZ',
       '000001.SZ',
     ])
+  })
+
+  it('exports and copies the selected historical session with accessible controls', async () => {
+    const createObjectUrl = vi.fn(() => 'blob:history-session')
+    const revokeObjectUrl = vi.fn()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    const nativeUrl = URL
+    const testUrl = class extends nativeUrl {}
+    Object.assign(testUrl, { createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl })
+    vi.stubGlobal('URL', testUrl)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        currentCandidateCodes: ['601899.SH'],
+        sessionHistory: [historySession],
+      },
+    })
+
+    await wrapper.get('.quant-ai-briefing-history-item').trigger('click')
+    const exportButton = wrapper.get('.quant-ai-briefing-history-export')
+    const copyButton = wrapper.get('.quant-ai-briefing-history-copy')
+    expect(exportButton.attributes('type')).toBe('button')
+    expect(copyButton.attributes('type')).toBe('button')
+
+    await exportButton.trigger('click')
+    expect(createObjectUrl).toHaveBeenCalledTimes(1)
+
+    await copyButton.trigger('click')
+    await flushPromises()
+    await new Promise(resolve => window.setTimeout(resolve, 0))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('# Quant AI 候选历史会话'))
+    expect(wrapper.get('.quant-ai-briefing-history-transfer-message').text()).toContain('已复制到剪贴板')
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:history-session')
+  })
+
+  it('shows unavailable and failed clipboard states while keeping retry enabled', async () => {
+    vi.stubGlobal('navigator', {})
+    const unavailable = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, sessionHistory: [historySession] },
+    })
+    await unavailable.get('.quant-ai-briefing-history-item').trigger('click')
+    await unavailable.get('.quant-ai-briefing-history-copy').trigger('click')
+    await flushPromises()
+    expect(unavailable.get('.quant-ai-briefing-history-transfer-message').text()).toContain('不支持剪贴板写入')
+    expect(unavailable.get('.quant-ai-briefing-history-copy').attributes('disabled')).toBeUndefined()
+
+    const writeText = vi.fn().mockRejectedValue(new Error('clipboard rejected'))
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const failed = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, sessionHistory: [historySession] },
+    })
+    await failed.get('.quant-ai-briefing-history-item').trigger('click')
+    await failed.get('.quant-ai-briefing-history-copy').trigger('click')
+    await flushPromises()
+    expect(failed.get('.quant-ai-briefing-history-transfer-message').text()).toContain('复制失败')
+    expect(failed.get('.quant-ai-briefing-history-transfer-message').classes()).toContain('quant-ai-briefing-history-transfer-message-error')
+    expect(failed.get('.quant-ai-briefing-history-copy').attributes('disabled')).toBeUndefined()
+  })
+
+  it('ignores a stale copy result after selecting another historical session', async () => {
+    let resolveCopy: (() => void) | undefined
+    const writeText = vi.fn(() => new Promise<void>((resolve) => {
+      resolveCopy = resolve
+    }))
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const secondSession: QuantAiCandidateBriefingSession = {
+      ...historySession,
+      id: 'session-2',
+      scopeKey: 'SECOND.SZ',
+      briefing: historySession.briefing
+        ? { ...historySession.briefing, overview: '第二个历史会话。' }
+        : null,
+    }
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, sessionHistory: [historySession, secondSession] },
+    })
+
+    const historyItems = wrapper.findAll('.quant-ai-briefing-history-item')
+    await historyItems[0].trigger('click')
+    await wrapper.get('.quant-ai-briefing-history-copy').trigger('click')
+    expect(wrapper.get('.quant-ai-briefing-history-copy').attributes('disabled')).toBeDefined()
+
+    await historyItems[1].trigger('click')
+    expect(wrapper.text()).toContain('第二个历史会话。')
+    resolveCopy?.()
+    await flushPromises()
+    expect(wrapper.find('.quant-ai-briefing-history-transfer-message').exists()).toBe(false)
+    expect(wrapper.get('.quant-ai-briefing-history-copy').attributes('disabled')).toBeUndefined()
   })
 
   it('requires confirmation and removes a self-loaded session without nested row controls', async () => {
