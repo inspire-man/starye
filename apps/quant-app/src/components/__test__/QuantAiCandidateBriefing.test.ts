@@ -37,6 +37,9 @@ const briefing = {
 const baseProps = {
   briefing: null,
   candidateCount: 2,
+  filteredCandidateCount: 2,
+  briefingAvailableCandidateCount: 2,
+  briefingCandidateCount: null,
   loading: false,
   errorMessage: null,
   configurationError: false,
@@ -50,7 +53,9 @@ describe('quant ai candidate briefing', () => {
     const wrapper = mount(QuantAiCandidateBriefing, { props: baseProps })
 
     expect(wrapper.text()).toContain('还没有生成候选简报')
-    expect(wrapper.text()).toContain('当前候选 2 个')
+    expect(wrapper.text()).toContain('当前筛选 2 个')
+    expect(wrapper.text()).toContain('观察池 2 个')
+    expect(wrapper.text()).toContain('可生成范围 2 个')
     expect(wrapper.get('.quant-ai-briefing-generate').attributes('disabled')).toBeUndefined()
 
     await wrapper.get('.quant-ai-briefing-generate').trigger('click')
@@ -68,7 +73,7 @@ describe('quant ai candidate briefing', () => {
 
   it('renders success content and emits focusCandidate for focus items and citations', async () => {
     const wrapper = mount(QuantAiCandidateBriefing, {
-      props: { ...baseProps, briefing },
+      props: { ...baseProps, briefing, briefingCandidateCount: 2 },
     })
 
     expect(wrapper.text()).toContain('当前候选集中，高优先级标的需要先补齐风险核对')
@@ -80,6 +85,7 @@ describe('quant ai candidate briefing', () => {
     expect(wrapper.text()).toContain('确认研究标记是否已更新')
     expect(wrapper.text()).toContain('gpt-5.4')
     expect(wrapper.text()).toContain('2026-08-29')
+    expect(wrapper.text()).toContain('本次简报 2 个')
 
     await wrapper.get('.quant-ai-briefing-focus-item').trigger('click')
     await wrapper.get('.quant-ai-briefing-citation').trigger('click')
@@ -88,6 +94,24 @@ describe('quant ai candidate briefing', () => {
       ['601899.SH'],
       ['601899.SH'],
     ])
+  })
+
+  it('disables generation and explains an empty filtered scope', () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, filteredCandidateCount: 0, briefingAvailableCandidateCount: 0 },
+    })
+
+    expect(wrapper.text()).toContain('当前筛选没有候选')
+    expect(wrapper.get('.quant-ai-briefing-generate').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps the action disabled when the filtered rows are pending snapshot data', () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefingAvailableCandidateCount: 0 },
+    })
+
+    expect(wrapper.text()).toContain('当前筛选候选尚未进入最新快照')
+    expect(wrapper.get('.quant-ai-briefing-generate').attributes('disabled')).toBeDefined()
   })
 
   it('exposes export and copy actions only in success state and reports copy progress', async () => {

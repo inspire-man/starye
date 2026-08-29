@@ -1401,8 +1401,11 @@ export const quantApi = {
     }))
   },
 
-  async generateCandidateAiBriefing(): Promise<QuantAiCandidateBriefing> {
-    return parseCandidateAiBriefing(await requestJson('/candidates/ai-briefing', { method: 'POST' }))
+  async generateCandidateAiBriefing(tsCodes?: readonly string[]): Promise<QuantAiCandidateBriefing> {
+    return parseCandidateAiBriefing(await requestJson('/candidates/ai-briefing', {
+      method: 'POST',
+      body: JSON.stringify(tsCodes === undefined ? {} : { ts_codes: [...tsCodes] }),
+    }))
   },
 
   async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {

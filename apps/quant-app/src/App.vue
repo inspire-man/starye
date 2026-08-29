@@ -75,7 +75,7 @@ import {
   Trash2,
   X,
 } from 'lucide-vue-next'
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import QuantAiCandidateBriefingPanel from './components/QuantAiCandidateBriefing.vue'
 import QuantAiResearchChangeExplanation from './components/QuantAiResearchChangeExplanation.vue'
 import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
@@ -84,6 +84,7 @@ import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from './lib/candidate-briefing-export'
+import { buildCandidateBriefingScopeKey, canApplyCandidateBriefingResponse } from './lib/candidate-briefing-scope'
 import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
@@ -149,6 +150,7 @@ const candidateAiBriefingError = ref<unknown | null>(null)
 const candidateAiBriefingCopying = ref(false)
 const candidateAiBriefingCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const candidateAiBriefingCopyMessage = ref('')
+const candidateAiBriefingScopeCount = ref<number | null>(null)
 const researchReportCopying = ref(false)
 const researchReportCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const researchReportCopyMessage = ref('')
@@ -338,6 +340,9 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
   status: marker.status,
   reviewDate: marker.reviewDate,
 }])), todayDate.value))
+const candidateBriefingScopeItems = computed(() => filteredCandidateItems.value.filter(item => !item.pendingSync))
+const candidateBriefingScopeCodes = computed(() => candidateBriefingScopeItems.value.map(item => item.tsCode))
+const candidateBriefingScopeKey = computed(() => buildCandidateBriefingScopeKey(candidateBriefingScopeCodes.value))
 const candidateQueryActive = computed(() => candidateMinScore.value > 0 || candidateCompleteOnly.value || candidateSort.value !== 'researchPriority' || candidateResearchStatus.value !== 'all' || candidateReviewDue.value !== 'all')
 const canSync = computed(() => Boolean(watchlist.value.length > 0 && !loading.sync))
 const displayedSyncResult = computed(() => syncResult.value || syncState.value)
@@ -1276,8 +1281,19 @@ function resetCandidateAiBriefingState(): void {
   candidateAiBriefing.value = null
   candidateAiBriefingLoading.value = false
   candidateAiBriefingError.value = null
+  candidateAiBriefingScopeCount.value = null
   resetCandidateAiBriefingCopyState()
 }
+
+watch(candidateBriefingScopeKey, (scopeKey, previousScopeKey) => {
+  if (previousScopeKey !== undefined && scopeKey !== previousScopeKey)
+    resetCandidateAiBriefingState()
+})
+
+watch(
+  [candidateFilter, candidateMinScore, candidateCompleteOnly, candidateSort, candidateResearchStatus, candidateReviewDue],
+  () => resetCandidateAiBriefingState(),
+)
 
 function researchPriorityDetail(item: CandidateItem): string {
   const priority = candidatePriorityFor(item)
@@ -1430,12 +1446,12 @@ function resetCandidateQuery(): void {
 }
 
 async function loadWatchlist() {
+  resetCandidateAiBriefingState()
   loading.watchlist = true
   errors.watchlist = null
   valueQualityRequestId++
   try {
     watchlist.value = await quantApi.getWatchlist()
-    resetCandidateAiBriefingState()
     if (!selectedTsCode.value || !watchlist.value.some(item => item.tsCode === selectedTsCode.value))
       selectedTsCode.value = watchlist.value[0]?.tsCode || null
     detailDrawerOpen.value = false
@@ -1493,19 +1509,23 @@ async function loadCandidates() {
 }
 
 async function generateCandidateAiBriefing(): Promise<void> {
-  if (!snapshot.value?.generatedAt || !candidateItems.value.length || candidateAiBriefingLoading.value)
+  const scopeCodes = [...candidateBriefingScopeCodes.value]
+  if (!snapshot.value?.generatedAt || !scopeCodes.length || candidateAiBriefingLoading.value)
     return
   const requestId = ++candidateAiBriefingRequestId
+  const scopeKey = buildCandidateBriefingScopeKey(scopeCodes)
   resetCandidateAiBriefingCopyState()
   candidateAiBriefingLoading.value = true
   candidateAiBriefingError.value = null
   try {
-    const briefing = await quantApi.generateCandidateAiBriefing()
-    if (requestId === candidateAiBriefingRequestId)
+    const briefing = await quantApi.generateCandidateAiBriefing(scopeCodes)
+    if (canApplyCandidateBriefingResponse(requestId, candidateAiBriefingRequestId, scopeKey, candidateBriefingScopeKey.value)) {
       candidateAiBriefing.value = briefing
+      candidateAiBriefingScopeCount.value = scopeCodes.length
+    }
   }
   catch (error) {
-    if (requestId === candidateAiBriefingRequestId)
+    if (canApplyCandidateBriefingResponse(requestId, candidateAiBriefingRequestId, scopeKey, candidateBriefingScopeKey.value))
       candidateAiBriefingError.value = error
   }
   finally {
@@ -1519,7 +1539,8 @@ function downloadCandidateAiBriefing(): void {
   if (!briefing)
     return
 
-  const blob = new Blob([buildCandidateAiBriefingMarkdown(briefing, candidateItems.value.length)], { type: 'text/markdown;charset=utf-8' })
+  const candidateCount = candidateAiBriefingScopeCount.value ?? filteredCandidateItems.value.length
+  const blob = new Blob([buildCandidateAiBriefingMarkdown(briefing, candidateCount)], { type: 'text/markdown;charset=utf-8' })
   const objectUrl = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = objectUrl
@@ -1540,7 +1561,8 @@ async function copyCandidateAiBriefing(): Promise<void> {
   candidateAiBriefingCopyOutcome.value = null
   candidateAiBriefingCopyMessage.value = ''
   const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined
-  const result = await copyResearchReportMarkdown(buildCandidateAiBriefingMarkdown(briefing, candidateItems.value.length), clipboard)
+  const candidateCount = candidateAiBriefingScopeCount.value ?? filteredCandidateItems.value.length
+  const result = await copyResearchReportMarkdown(buildCandidateAiBriefingMarkdown(briefing, candidateCount), clipboard)
   if (requestId !== candidateAiBriefingCopyRequestId)
     return
 
@@ -1971,6 +1993,7 @@ async function saveResearchMarker() {
     researchMarkers.value = researchMarkers.value.some(item => item.tsCode === marker.tsCode)
       ? researchMarkers.value.map(item => item.tsCode === marker.tsCode ? marker : item)
       : [...researchMarkers.value, marker]
+    resetCandidateAiBriefingState()
     researchSaveMessage.value = '研究记录已保存'
   }
   catch (error) {
@@ -3356,6 +3379,9 @@ onUnmounted(() => {
             v-if="candidateItems.length"
             :briefing="candidateAiBriefing"
             :candidate-count="candidateItems.length"
+            :filtered-candidate-count="filteredCandidateItems.length"
+            :briefing-available-candidate-count="candidateBriefingScopeItems.length"
+            :briefing-candidate-count="candidateAiBriefingScopeCount"
             :available="Boolean(snapshot?.generatedAt)"
             :loading="candidateAiBriefingLoading"
             :error-message="candidateAiBriefingError ? parsedError(candidateAiBriefingError).message : null"

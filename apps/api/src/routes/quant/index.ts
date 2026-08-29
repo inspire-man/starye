@@ -54,6 +54,7 @@ import { syncQuantDaily } from '../../domain/quant/sync'
 import { readQuantValueSelection } from '../../domain/quant/value-selection-service'
 import { requireAuth } from '../../middleware/guard'
 import {
+  QuantAiCandidateBriefingRequestSchema,
   QuantAiConfigUpdateSchema,
   QuantDailyQuerySchema,
   QuantFinancialHistoryQuerySchema,
@@ -334,6 +335,44 @@ function snapshotIncludesCode(snapshot: { readonly inputTsCodesJson: string }, t
   }
 }
 
+function parseSnapshotInputTsCodes(snapshot: { readonly inputTsCodesJson: string } | undefined): readonly string[] {
+  if (!snapshot)
+    return []
+  try {
+    const parsed: unknown = JSON.parse(snapshot.inputTsCodesJson)
+    if (!Array.isArray(parsed))
+      return []
+    return [...new Set(parsed
+      .filter((code): code is string => typeof code === 'string')
+      .map(code => code.trim().toUpperCase())
+      .filter(code => /^[A-Z0-9.-]{1,20}$/u.test(code)))]
+  }
+  catch {
+    return []
+  }
+}
+
+function scopeCurrentQuantCandidates(snapshot: CurrentQuantCandidateSnapshot, tsCodes: readonly string[] | undefined): CurrentQuantCandidateSnapshot {
+  if (tsCodes === undefined)
+    return snapshot
+
+  const normalizedCodes = [...new Set(tsCodes.map(normalizeTsCode))]
+  if (!normalizedCodes.length)
+    throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_INPUT', 'Candidate briefing scope must contain at least one candidate', 422)
+
+  const candidatesByCode = new Map(snapshot.candidates.map(candidate => [candidate.tsCode.toUpperCase(), candidate] as const))
+  const snapshotCodes = new Set(snapshot.inputTsCodes)
+  const unknownCodes = normalizedCodes.filter(tsCode => !snapshotCodes.has(tsCode) || !candidatesByCode.has(tsCode))
+  if (unknownCodes.length)
+    throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_INPUT', 'Candidate briefing scope contains a candidate outside the current snapshot', 422, { tsCodes: unknownCodes })
+
+  return {
+    ...snapshot,
+    inputTsCodes: normalizedCodes,
+    candidates: normalizedCodes.map(tsCode => candidatesByCode.get(tsCode)!),
+  }
+}
+
 async function readCurrentQuantCandidates(db: AppEnv['Variables']['db'], userId: string): Promise<CurrentQuantCandidateSnapshot> {
   const [watchlist, snapshotHistory] = await Promise.all([
     listQuantWatchlist(db, userId),
@@ -418,7 +457,7 @@ async function readCurrentQuantCandidates(db: AppEnv['Variables']['db'], userId:
     generatedAt: snapshot?.generatedAt ?? null,
     fromDate: snapshot?.fromDate ?? null,
     toDate: snapshot?.toDate ?? null,
-    inputTsCodes: watchlist.map(item => item.tsCode),
+    inputTsCodes: parseSnapshotInputTsCodes(snapshot),
     candidates,
   }
 }
@@ -789,15 +828,17 @@ quantRoutes.post('/research/comparison', validator('json', QuantResearchComparis
   return c.json({ success: true as const, data: researchComparisonView(comparison) })
 })
 
-quantRoutes.post('/candidates/ai-briefing', async (c) => {
+quantRoutes.post('/candidates/ai-briefing', validator('json', QuantAiCandidateBriefingRequestSchema), async (c) => {
   const userId = currentQuantUserId(c)
+  const { ts_codes: tsCodes } = c.req.valid('json')
   const snapshot = await readCurrentQuantCandidates(c.get('db'), userId)
   if (!snapshot.candidates.length || snapshot.id === 'pending' || !snapshot.generatedAt)
     throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_INPUT', 'Candidate snapshot is not available', 422)
+  const scopedSnapshot = scopeCurrentQuantCandidates(snapshot, tsCodes)
   const config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env?.QUANT_AI_ENCRYPTION_KEY)
   if (!config)
     throw new QuantError('QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION', 'AI candidate briefing configuration is not available', 503)
-  const facts = await readCandidateBriefingFacts(c.get('db'), userId, c.env, snapshot)
+  const facts = await readCandidateBriefingFacts(c.get('db'), userId, c.env, scopedSnapshot)
   const briefing = await generateQuantAiCandidateBriefing({
     candidates: facts,
     config,
