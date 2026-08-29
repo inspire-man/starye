@@ -35,6 +35,7 @@ import {
   createQuantResearchRun,
   createQuantResearchSummary,
   createQuantWatchlistItem,
+  deleteQuantCandidateAiSession,
   deleteQuantWatchlistItem,
   ensureQuantStarterWatchlist,
   getQuantCandidateAiSession,
@@ -1058,6 +1059,14 @@ quantRoutes.get('/candidates/ai-sessions/:sessionId', validator('param', QuantAi
   if (!session)
     throw new QuantError('QUANT_NOT_FOUND', 'Candidate AI session not found', 404)
   return c.json({ success: true as const, data: candidateAiSessionView(session) })
+})
+
+quantRoutes.delete('/candidates/ai-sessions/:sessionId', validator('param', QuantAiCandidateBriefingSessionIdParamSchema), async (c) => {
+  const { sessionId } = c.req.valid('param')
+  const deleted = await deleteQuantCandidateAiSession(c.get('db'), currentQuantUserId(c), sessionId)
+  if (!deleted)
+    throw new QuantError('QUANT_NOT_FOUND', 'Candidate AI session not found', 404)
+  return c.json({ success: true as const, data: { deleted: true as const, sessionId } })
 })
 
 quantRoutes.post('/candidates/ai-briefing', validator('json', QuantAiCandidateBriefingRequestSchema), async (c) => {

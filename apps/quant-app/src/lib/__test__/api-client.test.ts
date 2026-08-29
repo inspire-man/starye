@@ -731,6 +731,35 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/candidates/ai-sessions?limit=5`)
   })
 
+  it('deletes a candidate AI session through the scoped endpoint and validates the returned id', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      deleted: true,
+      session_id: 'session-1',
+    } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.deleteCandidateAiSession(' session-1 ')).resolves.toEqual({
+      deleted: true,
+      sessionId: 'session-1',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/candidates/ai-sessions/session-1`, expect.objectContaining({
+      method: 'DELETE',
+      credentials: 'include',
+    }))
+  })
+
+  it('rejects malformed candidate AI session deletion responses', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      deleted: true,
+      session_id: 'other-session',
+    } }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(quantApi.deleteCandidateAiSession('session-1')).rejects.toMatchObject({
+      status: 502,
+      code: 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE',
+    })
+  })
+
   it('normalizes structured research runs and requests history by stock code', async () => {
     const run = {
       id: 'run-1',

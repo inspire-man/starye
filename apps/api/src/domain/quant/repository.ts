@@ -677,6 +677,25 @@ export async function listQuantCandidateAiSessions(db: Database, userId: string,
   return db.select().from(quantCandidateAiSessions).where(eq(quantCandidateAiSessions.userId, ownerId)).orderBy(desc(quantCandidateAiSessions.updatedAt), desc(quantCandidateAiSessions.id)).limit(boundedCandidateAiSessionLimit(limit)).all()
 }
 
+export async function deleteQuantCandidateAiSession(db: Database, userId: string, id: string): Promise<boolean> {
+  const ownerId = normalizeQuantUserId(userId)
+  const normalizedId = id.trim()
+  if (!normalizedId)
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INPUT', 'Candidate AI session id is required', 400)
+  const existing = await getQuantCandidateAiSession(db, ownerId, normalizedId)
+  if (!existing)
+    return false
+
+  await db.delete(quantCandidateAiSessions).where(and(
+    eq(quantCandidateAiSessions.id, normalizedId),
+    eq(quantCandidateAiSessions.userId, ownerId),
+  )).run()
+  const persisted = await getQuantCandidateAiSession(db, ownerId, normalizedId)
+  if (persisted)
+    throw new QuantError('QUANT_AI_CANDIDATE_SESSION_INVALID', 'Candidate AI session delete readback failed', 500)
+  return true
+}
+
 export async function appendQuantCandidateAiSessionQuestion(db: Database, input: {
   readonly userId: string
   readonly sessionId: string

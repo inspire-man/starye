@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingQuestion, QuantAiCandidateBriefingSession } from '../lib/quant-types'
-import { AlertCircle, BrainCircuit, CircleHelp, Copy, Download, RefreshCw } from 'lucide-vue-next'
+import { AlertCircle, BrainCircuit, Check, CircleHelp, Copy, Download, RefreshCw, Trash2, X } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { quantApi, QuantApiError } from '../lib/api-client'
 
@@ -54,6 +54,7 @@ const emit = defineEmits<{
   'askQuestion': [question: string]
   'copy': []
   'export': []
+  'sessionDeleted': [sessionId: string]
 }>()
 
 const hasCandidates = computed(() => props.candidateCount > 0)
@@ -73,7 +74,17 @@ const historyDetailLoading = ref(false)
 const historyDetailErrorMessage = ref<string | null>(null)
 const historyListRequestId = ref(0)
 const historyRequestId = ref(0)
-const visibleSessionHistory = computed(() => props.sessionHistory ?? loadedSessionHistory.value)
+const historyDeleteRequestId = ref(0)
+const deleteConfirmSessionId = ref<string | null>(null)
+const deletingSessionId = ref<string | null>(null)
+const sessionDeleteTargetId = ref<string | null>(null)
+const sessionDeleteErrorMessage = ref<string | null>(null)
+const sessionDeleteSuccessMessage = ref<string | null>(null)
+const hiddenSessionIds = ref<Set<string>>(new Set())
+const visibleSessionHistory = computed(() => {
+  const sessions = props.sessionHistory ?? loadedSessionHistory.value
+  return sessions.filter(session => !hiddenSessionIds.value.has(session.id))
+})
 const visibleHistoryError = computed(() => props.sessionHistoryErrorMessage ?? historyErrorMessage.value)
 
 const generateButtonLabel = computed(() => {
@@ -141,8 +152,11 @@ async function loadSessionHistory(): Promise<void> {
   historyErrorMessage.value = null
   try {
     const result = await quantApi.getCandidateAiSessions(5)
-    if (historyListRequestId.value === requestId)
+    if (historyListRequestId.value === requestId) {
       loadedSessionHistory.value = result.items
+      const resultIds = new Set(result.items.map(session => session.id))
+      hiddenSessionIds.value = new Set([...hiddenSessionIds.value].filter(id => resultIds.has(id)))
+    }
   }
   catch (error) {
     if (historyListRequestId.value === requestId)
@@ -178,6 +192,68 @@ async function viewHistory(session: QuantAiCandidateBriefingSession): Promise<vo
   }
 }
 
+function beginSessionDeletion(sessionId: string): void {
+  if (deletingSessionId.value)
+    return
+  sessionDeleteTargetId.value = sessionId
+  sessionDeleteErrorMessage.value = null
+  sessionDeleteSuccessMessage.value = null
+  deleteConfirmSessionId.value = deleteConfirmSessionId.value === sessionId ? null : sessionId
+}
+
+function cancelSessionDeletion(): void {
+  if (deletingSessionId.value)
+    return
+  deleteConfirmSessionId.value = null
+  sessionDeleteTargetId.value = null
+  sessionDeleteErrorMessage.value = null
+}
+
+function retrySessionDeletion(): void {
+  if (sessionDeleteTargetId.value)
+    void deleteSession(sessionDeleteTargetId.value)
+}
+
+async function deleteSession(sessionId: string): Promise<void> {
+  if (deletingSessionId.value)
+    return
+  const requestId = historyDeleteRequestId.value + 1
+  historyDeleteRequestId.value = requestId
+  deletingSessionId.value = sessionId
+  deleteConfirmSessionId.value = null
+  sessionDeleteTargetId.value = sessionId
+  sessionDeleteErrorMessage.value = null
+  sessionDeleteSuccessMessage.value = null
+  try {
+    await quantApi.deleteCandidateAiSession(sessionId)
+    if (historyDeleteRequestId.value !== requestId)
+      return
+    hiddenSessionIds.value = new Set([...hiddenSessionIds.value, sessionId])
+    loadedSessionHistory.value = loadedSessionHistory.value.filter(session => session.id !== sessionId)
+    if (selectedHistorySession.value?.id === sessionId) {
+      selectedHistorySession.value = null
+      historyDetailErrorMessage.value = null
+      historyDetailLoading.value = false
+      historyRequestId.value++
+    }
+    sessionDeleteTargetId.value = null
+    sessionDeleteSuccessMessage.value = '候选 AI 会话已删除'
+    emit('sessionDeleted', sessionId)
+    if (props.sessionHistory === undefined)
+      await loadSessionHistory()
+  }
+  catch (error) {
+    if (historyDeleteRequestId.value === requestId) {
+      sessionDeleteErrorMessage.value = historyError(error)
+      deleteConfirmSessionId.value = sessionId
+    }
+  }
+  finally {
+    if (historyDeleteRequestId.value === requestId)
+      deletingSessionId.value = null
+  }
+}
+
 function formatSessionRange(session: QuantAiCandidateBriefingSession): string {
   if (session.fromDate && session.toDate)
     return `${formatDate(session.fromDate)} ~ ${formatDate(session.toDate)}`
@@ -207,8 +283,15 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   selectedHistorySession.value = null
   historyDetailErrorMessage.value = null
   historyDetailLoading.value = false
+  deleteConfirmSessionId.value = null
+  deletingSessionId.value = null
+  sessionDeleteTargetId.value = null
+  sessionDeleteErrorMessage.value = null
+  sessionDeleteSuccessMessage.value = null
+  hiddenSessionIds.value = new Set()
   historyListRequestId.value++
   historyRequestId.value++
+  historyDeleteRequestId.value++
 })
 </script>
 
@@ -290,6 +373,10 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
           {{ historyOpen ? '收起历史' : '查看历史' }}
         </button>
       </div>
+      <div v-if="sessionDeleteSuccessMessage" class="quant-ai-briefing-history-state quant-ai-briefing-history-delete-success" role="status">
+        <Check :size="14" aria-hidden="true" />
+        {{ sessionDeleteSuccessMessage }}
+      </div>
       <div v-if="historyOpen" class="quant-ai-briefing-history-body">
         <div v-if="historyLoading" class="quant-ai-briefing-history-state" role="status">
           <RefreshCw :size="14" class="animate-spin" aria-hidden="true" />
@@ -307,21 +394,69 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
           暂无已保存的候选 AI 会话
         </div>
         <div v-else class="quant-ai-briefing-history-list">
-          <button
+          <div
             v-for="session in visibleSessionHistory"
             :key="session.id"
-            class="quant-ai-briefing-history-item"
-            :class="{ 'quant-ai-briefing-history-item-active': selectedHistorySession?.id === session.id }"
-            type="button"
-            @click="viewHistory(session)"
+            class="quant-ai-briefing-history-row"
+            :class="{ 'quant-ai-briefing-history-row-active': selectedHistorySession?.id === session.id }"
+            :aria-busy="deletingSessionId === session.id"
           >
-            <span class="quant-ai-briefing-history-item-heading">
-              <strong>{{ sessionTitle(session) }}</strong>
-              <span class="quant-ai-briefing-history-badge">历史 · 查看历史</span>
-            </span>
-            <span class="quant-ai-briefing-history-item-meta quant-ai-briefing-wrap-anywhere">
-              快照 {{ sessionSnapshotDate(session) }} · 范围 {{ formatSessionRange(session) }} · {{ session.scopeKey }}
-            </span>
+            <button
+              class="quant-ai-briefing-history-item"
+              :class="{ 'quant-ai-briefing-history-item-active': selectedHistorySession?.id === session.id }"
+              type="button"
+              @click="viewHistory(session)"
+            >
+              <span class="quant-ai-briefing-history-item-heading">
+                <strong>{{ sessionTitle(session) }}</strong>
+                <span class="quant-ai-briefing-history-badge">历史 · 查看历史</span>
+              </span>
+              <span class="quant-ai-briefing-history-item-meta quant-ai-briefing-wrap-anywhere">
+                快照 {{ sessionSnapshotDate(session) }} · 范围 {{ formatSessionRange(session) }} · {{ session.scopeKey }}
+              </span>
+            </button>
+            <div class="quant-ai-briefing-history-item-actions">
+              <button
+                class="quant-ai-briefing-history-delete"
+                type="button"
+                aria-label="删除候选 AI 会话"
+                title="删除候选 AI 会话"
+                :disabled="deletingSessionId !== null"
+                @click.stop="beginSessionDeletion(session.id)"
+              >
+                <RefreshCw v-if="deletingSessionId === session.id" :size="14" class="animate-spin" aria-hidden="true" />
+                <Trash2 v-else :size="14" aria-hidden="true" />
+              </button>
+              <div v-if="deleteConfirmSessionId === session.id" class="quant-ai-briefing-history-delete-confirm" role="group" aria-label="确认删除候选 AI 会话">
+                <span>确认删除？</span>
+                <button
+                  class="text-button quant-ai-briefing-history-delete-confirm-action"
+                  type="button"
+                  :disabled="deletingSessionId !== null"
+                  @click.stop="deleteSession(session.id)"
+                >
+                  <Check :size="13" aria-hidden="true" />
+                  确认
+                </button>
+                <button
+                  class="text-button quant-ai-briefing-history-delete-cancel-action"
+                  type="button"
+                  :disabled="deletingSessionId !== null"
+                  @click.stop="cancelSessionDeletion"
+                >
+                  <X :size="13" aria-hidden="true" />
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="sessionDeleteErrorMessage" class="quant-ai-briefing-history-state quant-ai-briefing-history-state-error" role="alert">
+          <AlertCircle :size="14" aria-hidden="true" />
+          <span class="quant-ai-briefing-wrap-anywhere">{{ sessionDeleteErrorMessage }}</span>
+          <button class="text-button" type="button" :disabled="deletingSessionId !== null" @click="retrySessionDeletion">
+            重试删除
           </button>
         </div>
 
@@ -795,13 +930,28 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
   padding-right: 0.15rem;
 }
 
+.quant-ai-briefing-history-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--card));
+}
+
+.quant-ai-briefing-history-row:hover,
+.quant-ai-briefing-history-row-active {
+  border-color: hsl(var(--primary) / 0.55);
+  background: hsl(var(--primary) / 0.05);
+}
+
 .quant-ai-briefing-history-item {
   display: grid;
   min-width: 0;
   gap: 0.25rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--ui-radius-sm, 0.25rem);
-  background: hsl(var(--card));
+  border: 0;
+  background: transparent;
   padding: 0.45rem 0.55rem;
   color: hsl(var(--foreground));
   text-align: left;
@@ -809,8 +959,67 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
 
 .quant-ai-briefing-history-item:hover,
 .quant-ai-briefing-history-item-active {
-  border-color: hsl(var(--primary) / 0.55);
-  background: hsl(var(--primary) / 0.05);
+  background: transparent;
+}
+
+.quant-ai-briefing-history-item-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  padding: 0.3rem;
+}
+
+.quant-ai-briefing-history-delete {
+  display: inline-flex;
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+}
+
+.quant-ai-briefing-history-delete:hover:not(:disabled) {
+  border-color: hsl(var(--status-danger) / 0.55);
+  color: hsl(var(--status-danger));
+}
+
+.quant-ai-briefing-history-delete:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.quant-ai-briefing-history-delete-confirm {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  color: hsl(var(--status-danger));
+  font-size: 0.625rem;
+}
+
+.quant-ai-briefing-history-delete-confirm-action,
+.quant-ai-briefing-history-delete-cancel-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
+.quant-ai-briefing-history-delete-confirm-action {
+  color: hsl(var(--status-danger));
+}
+
+.quant-ai-briefing-history-delete-success {
+  color: hsl(var(--status-success));
 }
 
 .quant-ai-briefing-history-item-heading,
@@ -1188,6 +1397,16 @@ button:focus-visible {
     align-items: flex-start;
     flex-direction: column;
     gap: 0.25rem;
+  }
+
+  .quant-ai-briefing-history-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quant-ai-briefing-history-item-actions {
+    align-items: center;
+    justify-content: flex-end;
+    border-top: 1px solid hsl(var(--border));
   }
 
   .quant-ai-briefing-focus-arrow {

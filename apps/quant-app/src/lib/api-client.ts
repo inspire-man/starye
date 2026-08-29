@@ -10,6 +10,7 @@ import type {
   QuantAiCandidateBriefing,
   QuantAiCandidateBriefingQuestion,
   QuantAiCandidateBriefingSession,
+  QuantAiCandidateBriefingSessionDeletion,
   QuantAiCandidateBriefingSessionList,
   QuantAiConfig,
   QuantAiConnectionTest,
@@ -884,6 +885,14 @@ function parseCandidateAiBriefingSessionList(payload: unknown): QuantAiCandidate
   return { items: data.items.map(parseCandidateAiBriefingSession), limit }
 }
 
+function parseCandidateAiBriefingSessionDeletion(payload: unknown): QuantAiCandidateBriefingSessionDeletion {
+  const data = unwrapData(payload)
+  const sessionId = isRecord(data) ? readString(data, 'sessionId', 'session_id') : null
+  if (!isRecord(data) || data.deleted !== true || !sessionId || sessionId.length > 128)
+    throw new QuantApiError('AI 候选会话删除响应格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+  return { deleted: true, sessionId }
+}
+
 function parseSyncResult(payload: unknown): SyncResult {
   const data = unwrapData(payload, true)
   const record = isRecord(data) ? data : {}
@@ -1521,6 +1530,18 @@ export const quantApi = {
     if (!normalizedSessionId)
       throw new QuantApiError('候选 AI 会话标识无效', 400, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
     return parseCandidateAiBriefingSession(await requestJson(`/candidates/ai-sessions/${encodeURIComponent(normalizedSessionId)}`))
+  },
+
+  async deleteCandidateAiSession(sessionId: string): Promise<QuantAiCandidateBriefingSessionDeletion> {
+    const normalizedSessionId = sessionId.trim()
+    if (!normalizedSessionId)
+      throw new QuantApiError('候选 AI 会话标识无效', 400, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+    const result = parseCandidateAiBriefingSessionDeletion(await requestJson(`/candidates/ai-sessions/${encodeURIComponent(normalizedSessionId)}`, {
+      method: 'DELETE',
+    }))
+    if (result.sessionId !== normalizedSessionId)
+      throw new QuantApiError('AI 候选会话删除响应标识无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE')
+    return result
   },
 
   async updateResearchMarker(tsCode: string, input: { status: ResearchMarkerStatus, note: string | null, reviewDate: string | null }): Promise<QuantResearchMarker> {

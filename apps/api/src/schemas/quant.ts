@@ -455,6 +455,16 @@ export const QuantAiCandidateBriefingSessionResponseSchema = v.strictObject({
   data: QuantAiCandidateBriefingSessionSchema,
 })
 
+export const QuantAiCandidateBriefingSessionDeleteResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.strictObject({
+    deleted: v.literal(true),
+    sessionId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  }),
+})
+
+export type QuantAiCandidateBriefingSessionDeleteResponse = v.InferOutput<typeof QuantAiCandidateBriefingSessionDeleteResponseSchema>
+
 export const QuantResearchSummaryQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })

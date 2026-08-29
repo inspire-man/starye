@@ -1,12 +1,14 @@
 // @vitest-environment happy-dom
 
 import type { QuantAiCandidateBriefingSession } from '../../lib/quant-types'
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quantApi } from '../../lib/api-client'
 import QuantAiCandidateBriefing from '../QuantAiCandidateBriefing.vue'
 
 const briefing = {
   briefingVersion: 'candidate-briefing-v1' as const,
+  sessionId: 'session-1',
   provider: 'openai_compatible' as const,
   model: 'gpt-5.4',
   generatedAt: '2026-08-29T01:00:00.000Z',
@@ -84,6 +86,10 @@ const historySession: QuantAiCandidateBriefingSession = {
 }
 
 describe('quant ai candidate briefing', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('renders the idle state and enables generation when candidates exist', async () => {
     const wrapper = mount(QuantAiCandidateBriefing, { props: baseProps })
 
@@ -198,7 +204,7 @@ describe('quant ai candidate briefing', () => {
 
   it('shows recent sessions with historical snapshot metadata and restores a read-only session', async () => {
     const wrapper = mount(QuantAiCandidateBriefing, {
-      props: { ...baseProps, sessionHistory: [historySession] },
+      props: { ...baseProps, briefing, sessionHistory: [historySession] },
     })
 
     expect(wrapper.text()).toContain('最近会话')
@@ -242,6 +248,59 @@ describe('quant ai candidate briefing', () => {
     expect(wrapper.text()).toContain('当前回答')
     expect(wrapper.text()).toContain('历史简报：先核对数据完整性。')
     expect(wrapper.text()).toContain('历史会话只读恢复')
+  })
+
+  it('requires confirmation and removes a self-loaded session without nested row controls', async () => {
+    const getSessions = vi.spyOn(quantApi, 'getCandidateAiSessions')
+      .mockResolvedValueOnce({ items: [historySession], limit: 5 })
+      .mockResolvedValueOnce({ items: [], limit: 5 })
+    vi.spyOn(quantApi, 'getCandidateAiSession').mockResolvedValue(historySession)
+    const deleteSession = vi.spyOn(quantApi, 'deleteCandidateAiSession').mockResolvedValue({ deleted: true, sessionId: historySession.id })
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, sessionHistory: undefined },
+    })
+
+    await flushPromises()
+    expect(wrapper.get('.quant-ai-briefing-history-row').element.tagName).toBe('DIV')
+    await wrapper.get('.quant-ai-briefing-history-item').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.quant-ai-briefing-history-detail').exists()).toBe(true)
+
+    await wrapper.get('.quant-ai-briefing-history-delete').trigger('click')
+    expect(wrapper.text()).toContain('确认删除？')
+    expect(deleteSession).not.toHaveBeenCalled()
+
+    await wrapper.get('.quant-ai-briefing-history-delete-confirm-action').trigger('click')
+    await flushPromises()
+
+    expect(deleteSession).toHaveBeenCalledWith(historySession.id)
+    expect(getSessions).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.quant-ai-briefing-history-row').exists()).toBe(false)
+    expect(wrapper.find('.quant-ai-briefing-history-detail').exists()).toBe(false)
+    expect(wrapper.text()).toContain('候选 AI 会话已删除')
+    expect(wrapper.emitted('sessionDeleted')).toEqual([[historySession.id]])
+  })
+
+  it('keeps a failed session and retries deletion from an accessible error state', async () => {
+    const deleteSession = vi.spyOn(quantApi, 'deleteCandidateAiSession')
+      .mockRejectedValueOnce(new Error('删除会话失败'))
+      .mockResolvedValueOnce({ deleted: true, sessionId: historySession.id })
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, briefing, sessionHistory: [historySession] },
+    })
+
+    await wrapper.get('.quant-ai-briefing-history-delete').trigger('click')
+    await wrapper.get('.quant-ai-briefing-history-delete-confirm-action').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('删除会话失败')
+    expect(wrapper.find('.quant-ai-briefing-history-row').exists()).toBe(true)
+
+    await wrapper.get('.quant-ai-briefing-history-delete-confirm-action').trigger('click')
+    await flushPromises()
+    expect(deleteSession).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('候选 AI 会话已删除')
+    expect(wrapper.text()).toContain('当前候选集中，高优先级标的需要先补齐风险核对')
+    expect(wrapper.emitted('sessionDeleted')).toEqual([[historySession.id]])
   })
 
   it('exposes export and copy actions only in success state and reports copy progress', async () => {
