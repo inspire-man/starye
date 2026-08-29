@@ -9,6 +9,7 @@ import type {
   CandidateSnapshot,
   DailyBar,
   QuantAiCandidateBriefing,
+  QuantAiCandidateBriefingQuestion,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -147,6 +148,10 @@ const researchChangeExplanationError = ref<unknown | null>(null)
 const candidateAiBriefing = ref<QuantAiCandidateBriefing | null>(null)
 const candidateAiBriefingLoading = ref(false)
 const candidateAiBriefingError = ref<unknown | null>(null)
+const candidateAiBriefingQuestionInput = ref('')
+const candidateAiBriefingQuestion = ref<QuantAiCandidateBriefingQuestion | null>(null)
+const candidateAiBriefingQuestionLoading = ref(false)
+const candidateAiBriefingQuestionError = ref<unknown | null>(null)
 const candidateAiBriefingCopying = ref(false)
 const candidateAiBriefingCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const candidateAiBriefingCopyMessage = ref('')
@@ -202,6 +207,7 @@ let researchSummaryRequestId = 0
 let researchQuestionRequestId = 0
 let researchChangeExplanationRequestId = 0
 let candidateAiBriefingRequestId = 0
+let candidateAiBriefingQuestionRequestId = 0
 let candidateAiBriefingCopyRequestId = 0
 let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
@@ -402,6 +408,7 @@ const researchSummaryConfigurationError = computed(() => researchSummaryError.va
 const researchQuestionConfigurationError = computed(() => researchQuestionError.value instanceof QuantApiError && researchQuestionError.value.code === 'QUANT_AI_QUESTION_CONFIGURATION')
 const researchChangeExplanationConfigurationError = computed(() => researchChangeExplanationError.value instanceof QuantApiError && researchChangeExplanationError.value.code === 'QUANT_AI_CHANGE_EXPLANATION_CONFIGURATION')
 const candidateAiBriefingConfigurationError = computed(() => candidateAiBriefingError.value instanceof QuantApiError && candidateAiBriefingError.value.code === 'QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION')
+const candidateAiBriefingQuestionConfigurationError = computed(() => candidateAiBriefingQuestionError.value instanceof QuantApiError && candidateAiBriefingQuestionError.value.code === 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_CONFIGURATION')
 const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
 const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
 const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
@@ -1278,10 +1285,15 @@ function resetCandidateAiBriefingCopyState(): void {
 
 function resetCandidateAiBriefingState(): void {
   candidateAiBriefingRequestId++
+  candidateAiBriefingQuestionRequestId++
   candidateAiBriefing.value = null
   candidateAiBriefingLoading.value = false
   candidateAiBriefingError.value = null
   candidateAiBriefingScopeCount.value = null
+  candidateAiBriefingQuestionInput.value = ''
+  candidateAiBriefingQuestion.value = null
+  candidateAiBriefingQuestionLoading.value = false
+  candidateAiBriefingQuestionError.value = null
   resetCandidateAiBriefingCopyState()
 }
 
@@ -1531,6 +1543,33 @@ async function generateCandidateAiBriefing(): Promise<void> {
   finally {
     if (requestId === candidateAiBriefingRequestId)
       candidateAiBriefingLoading.value = false
+  }
+}
+
+async function askCandidateAiBriefingQuestion(question: string): Promise<void> {
+  const scopeCodes = [...candidateBriefingScopeCodes.value]
+  const normalizedQuestion = question.trim()
+  if (!snapshot.value?.generatedAt || !scopeCodes.length || !normalizedQuestion || normalizedQuestion.length > 500 || candidateAiBriefingQuestionLoading.value)
+    return
+
+  const requestId = ++candidateAiBriefingQuestionRequestId
+  const scopeKey = buildCandidateBriefingScopeKey(scopeCodes)
+  candidateAiBriefingQuestionInput.value = normalizedQuestion
+  candidateAiBriefingQuestion.value = null
+  candidateAiBriefingQuestionLoading.value = true
+  candidateAiBriefingQuestionError.value = null
+  try {
+    const result = await quantApi.askCandidateAiBriefingQuestion(scopeCodes, normalizedQuestion)
+    if (canApplyCandidateBriefingResponse(requestId, candidateAiBriefingQuestionRequestId, scopeKey, candidateBriefingScopeKey.value))
+      candidateAiBriefingQuestion.value = result
+  }
+  catch (error) {
+    if (canApplyCandidateBriefingResponse(requestId, candidateAiBriefingQuestionRequestId, scopeKey, candidateBriefingScopeKey.value))
+      candidateAiBriefingQuestionError.value = error
+  }
+  finally {
+    if (requestId === candidateAiBriefingQuestionRequestId)
+      candidateAiBriefingQuestionLoading.value = false
   }
 }
 
@@ -3386,10 +3425,17 @@ onUnmounted(() => {
             :loading="candidateAiBriefingLoading"
             :error-message="candidateAiBriefingError ? parsedError(candidateAiBriefingError).message : null"
             :configuration-error="candidateAiBriefingConfigurationError"
+            :question-input="candidateAiBriefingQuestionInput"
+            :question-result="candidateAiBriefingQuestion"
+            :question-loading="candidateAiBriefingQuestionLoading"
+            :question-error-message="candidateAiBriefingQuestionError ? parsedError(candidateAiBriefingQuestionError).message : null"
+            :question-configuration-error="candidateAiBriefingQuestionConfigurationError"
             :copying="candidateAiBriefingCopying"
             :copy-outcome="candidateAiBriefingCopyOutcome"
             :copy-message="candidateAiBriefingCopyMessage"
             @generate="generateCandidateAiBriefing"
+            @update:question-input="candidateAiBriefingQuestionInput = $event"
+            @ask-question="askCandidateAiBriefingQuestion"
             @open-settings="aiSettingsOpen = true"
             @focus-candidate="focusCandidateFromBriefing"
             @copy="copyCandidateAiBriefing"

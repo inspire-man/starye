@@ -350,6 +350,11 @@ export const QuantAiCandidateBriefingRequestSchema = v.strictObject({
   ts_codes: v.optional(v.pipe(v.array(QuantTsCodeSchema), v.maxLength(50))),
 })
 
+export const QuantAiCandidateBriefingQuestionRequestSchema = v.strictObject({
+  ts_codes: v.pipe(v.array(QuantTsCodeSchema), v.minLength(1), v.maxLength(50)),
+  question: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(500)),
+})
+
 export const QuantAiCandidateBriefingFocusItemSchema = v.strictObject({
   tsCode: QuantTsCodeSchema,
   name: v.nullable(v.string()),
@@ -374,6 +379,19 @@ export const QuantAiCandidateBriefingResponseSchema = v.strictObject({
   }),
 })
 
+export const QuantAiCandidateBriefingQuestionResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.strictObject({
+    questionVersion: v.literal('candidate-briefing-question-v1'),
+    provider: QuantAiProviderSchema,
+    model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    generatedAt: v.string(),
+    question: v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
+    answer: v.pipe(v.string(), v.minLength(1), v.maxLength(8000)),
+    citedCandidateCodes: v.pipe(v.array(QuantTsCodeSchema), v.maxLength(16)),
+  }),
+})
+
 export const QuantResearchSummaryQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })
@@ -385,6 +403,7 @@ export type QuantDailyQuery = v.InferOutput<typeof QuantDailyQuerySchema>
 export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>
 export type QuantAiConfigUpdate = v.InferOutput<typeof QuantAiConfigUpdateSchema>
 export type QuantAiCandidateBriefingRequest = v.InferOutput<typeof QuantAiCandidateBriefingRequestSchema>
+export type QuantAiCandidateBriefingQuestionRequest = v.InferOutput<typeof QuantAiCandidateBriefingQuestionRequestSchema>
 export type QuantResearchRunCreate = v.InferOutput<typeof QuantResearchRunCreateSchema>
 export type QuantResearchRunsQuery = v.InferOutput<typeof QuantResearchRunsQuerySchema>
 export type QuantResearchRunIdParam = v.InferOutput<typeof QuantResearchRunIdParamSchema>

@@ -177,6 +177,16 @@ export interface QuantAiCandidateBriefing {
   citedCandidateCodes: string[]
 }
 
+export interface QuantAiCandidateBriefingQuestion {
+  questionVersion: 'candidate-briefing-question-v1'
+  provider: QuantAiProvider
+  model: string
+  generatedAt: string
+  question: string
+  answer: string
+  citedCandidateCodes: string[]
+}
+
 export type SyncStatus = 'completed' | 'partial' | 'rejected'
 export type ResearchMarkerStatus = 'unreviewed' | 'priority' | 'paused' | 'excluded'
 

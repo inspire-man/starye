@@ -67,7 +67,7 @@ describe('quant ai candidate briefing', () => {
       props: { ...baseProps, loading: true },
     })
 
-    expect(wrapper.get('[role="status"]').text()).toContain('AI 正在整理当前候选简报')
+    expect(wrapper.get('.quant-ai-briefing-state[role="status"]').text()).toContain('AI 正在整理当前候选简报')
     expect(wrapper.get('.quant-ai-briefing-generate').attributes('disabled')).toBeDefined()
   })
 
@@ -112,6 +112,53 @@ describe('quant ai candidate briefing', () => {
 
     expect(wrapper.text()).toContain('当前筛选候选尚未进入最新快照')
     expect(wrapper.get('.quant-ai-briefing-generate').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.quant-ai-briefing-question-submit').attributes('disabled')).toBeDefined()
+  })
+
+  it('submits a trimmed question and renders cited candidates without changing briefing facts', async () => {
+    const wrapper = mount(QuantAiCandidateBriefing, {
+      props: {
+        ...baseProps,
+        questionInput: '  当前范围内先核对什么？  ',
+        questionResult: {
+          questionVersion: 'candidate-briefing-question-v1',
+          provider: 'openai_compatible',
+          model: 'gpt-5.4',
+          generatedAt: '2026-08-29T02:00:00.000Z',
+          question: '当前范围内先核对什么？',
+          answer: '当前事实显示应先核对数据完整性和研究标记。',
+          citedCandidateCodes: ['601899.SH'],
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('当前事实显示应先核对数据完整性')
+    expect(wrapper.text()).toContain('范围内追问')
+    await wrapper.get('.quant-ai-briefing-question-form').trigger('submit')
+    expect(wrapper.emitted('askQuestion')).toEqual([['当前范围内先核对什么？']])
+
+    await wrapper.get('.quant-ai-briefing-question .quant-ai-briefing-citation').trigger('click')
+    expect(wrapper.emitted('focusCandidate')).toContainEqual(['601899.SH'])
+  })
+
+  it('renders question loading, configuration error, and retry states', async () => {
+    const loading = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, questionInput: '问题', questionLoading: true },
+    })
+    expect(loading.get('.quant-ai-briefing-question-state[role="status"]').text()).toContain('正在基于当前候选范围整理回答')
+    expect((loading.get('.quant-ai-briefing-question-input').element as HTMLTextAreaElement).disabled).toBe(true)
+
+    const settings = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, questionInput: '问题', questionErrorMessage: 'AI 配置未就绪', questionConfigurationError: true },
+    })
+    await settings.get('.quant-ai-briefing-question-error-action').trigger('click')
+    expect(settings.emitted('openSettings')).toHaveLength(1)
+
+    const retry = mount(QuantAiCandidateBriefing, {
+      props: { ...baseProps, questionInput: '问题', questionErrorMessage: 'AI 请求失败' },
+    })
+    await retry.get('.quant-ai-briefing-question-error-action').trigger('click')
+    expect(retry.emitted('askQuestion')).toEqual([['问题']])
   })
 
   it('exposes export and copy actions only in success state and reports copy progress', async () => {

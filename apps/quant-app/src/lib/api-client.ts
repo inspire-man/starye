@@ -8,6 +8,7 @@ import type {
   CapabilityKey,
   DailyBar,
   QuantAiCandidateBriefing,
+  QuantAiCandidateBriefingQuestion,
   QuantAiConfig,
   QuantAiConnectionTest,
   QuantAiProvider,
@@ -791,6 +792,35 @@ function parseCandidateAiBriefing(payload: unknown): QuantAiCandidateBriefing {
   }
 }
 
+function parseCandidateAiBriefingQuestion(payload: unknown): QuantAiCandidateBriefingQuestion {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('AI 候选简报追问数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INVALID_RESPONSE')
+  const questionVersion = readString(data, 'questionVersion', 'question_version')
+  const provider = readString(data, 'provider')
+  const model = readString(data, 'model')
+  const generatedAt = readString(data, 'generatedAt', 'generated_at')
+  const question = readString(data, 'question')
+  const answer = readString(data, 'answer')
+  if (questionVersion !== 'candidate-briefing-question-v1' || !provider || !model || !generatedAt || !question || !answer || question.length > 500 || answer.length > 8000)
+    throw new QuantApiError('AI 候选简报追问数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INVALID_RESPONSE')
+  if (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    throw new QuantApiError('AI 候选简报追问 provider 数据格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INVALID_RESPONSE')
+  const rawCodes = data.citedCandidateCodes !== undefined ? data.citedCandidateCodes : data.cited_candidate_codes
+  if (!Array.isArray(rawCodes) || rawCodes.length > 16 || rawCodes.some(item => typeof item !== 'string' || !item.trim() || item.length > 20))
+    throw new QuantApiError('AI 候选简报追问引用格式无效', 502, 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_INVALID_RESPONSE')
+  const citedCandidateCodes = [...new Set(rawCodes.map(item => (item as string).trim().toUpperCase()))]
+  return {
+    questionVersion: 'candidate-briefing-question-v1',
+    provider,
+    model,
+    generatedAt,
+    question,
+    answer,
+    citedCandidateCodes,
+  }
+}
+
 function parseSyncResult(payload: unknown): SyncResult {
   const data = unwrapData(payload, true)
   const record = isRecord(data) ? data : {}
@@ -1405,6 +1435,13 @@ export const quantApi = {
     return parseCandidateAiBriefing(await requestJson('/candidates/ai-briefing', {
       method: 'POST',
       body: JSON.stringify(tsCodes === undefined ? {} : { ts_codes: [...tsCodes] }),
+    }))
+  },
+
+  async askCandidateAiBriefingQuestion(tsCodes: readonly string[], question: string): Promise<QuantAiCandidateBriefingQuestion> {
+    return parseCandidateAiBriefingQuestion(await requestJson('/candidates/ai-briefing/question', {
+      method: 'POST',
+      body: JSON.stringify({ ts_codes: [...tsCodes], question: question.trim() }),
     }))
   },
 
