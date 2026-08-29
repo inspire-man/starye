@@ -36,9 +36,11 @@ import {
   createQuantResearchSummary,
   createQuantWatchlistItem,
   deleteQuantCandidateAiSession,
+  deleteQuantFactorConfiguration,
   deleteQuantWatchlistItem,
   ensureQuantStarterWatchlist,
   getQuantCandidateAiSession,
+  getQuantFactorConfiguration,
   getQuantResearchRun,
   getQuantSyncState,
   getQuantWatchlistItem,
@@ -51,6 +53,7 @@ import {
   listQuantWatchlist,
   listQuantWatchlistWithStats,
   normalizeTsCode,
+  saveQuantFactorConfiguration,
   updateQuantWatchlistItem,
   upsertQuantResearchMarker,
 } from '../../domain/quant/repository'
@@ -67,6 +70,7 @@ import {
   QuantAiCandidateBriefingSessionQuerySchema,
   QuantAiConfigUpdateSchema,
   QuantDailyQuerySchema,
+  QuantFactorConfigUpdateSchema,
   QuantFinancialHistoryQuerySchema,
   QuantResearchChangeExplanationSchema,
   QuantResearchComparisonSchema,
@@ -872,6 +876,25 @@ quantRoutes.get('/ai-config', async (c) => {
   return c.json({ success: true as const, data })
 })
 
+quantRoutes.get('/factor-config', async (c) => {
+  const data = await getQuantFactorConfiguration(c.get('db'), currentQuantUserId(c))
+  return c.json({ success: true as const, data })
+})
+
+quantRoutes.put('/factor-config', validator('json', QuantFactorConfigUpdateSchema), async (c) => {
+  const input = c.req.valid('json')
+  const data = await saveQuantFactorConfiguration(c.get('db'), {
+    userId: currentQuantUserId(c),
+    weights: input.weights,
+  })
+  return c.json({ success: true as const, data })
+})
+
+quantRoutes.delete('/factor-config', async (c) => {
+  const data = await deleteQuantFactorConfiguration(c.get('db'), currentQuantUserId(c))
+  return c.json({ success: true as const, data })
+})
+
 quantRoutes.put('/ai-config', validator('json', QuantAiConfigUpdateSchema), async (c) => {
   const input = c.req.valid('json')
   const data = await saveQuantAiConfig(c.get('db'), {
@@ -936,6 +959,7 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
     ? snapshots[0].id
     : null
   const candidate = screenMomentum({ [tsCode]: dailyBars }).find(item => item.tsCode === tsCode) ?? null
+  const factorConfiguration = await getQuantFactorConfiguration(c.get('db'), userId)
   const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
   const financialProvider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
   const dividendSourceProvider = dividendProvider(c.env)
@@ -962,6 +986,7 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
     akshare: akshareResult.status === 'fulfilled' ? akshareResult.value : null,
     akshareConfigured: akshareBridge.isConfigured,
     akshareErrorCode: akshareResult.status === 'rejected' ? akshareBridgeErrorCode(akshareResult.reason) : null,
+    factorConfiguration,
   })
   const persisted = await createQuantResearchRun(c.get('db'), {
     userId,

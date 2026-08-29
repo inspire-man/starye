@@ -934,6 +934,19 @@ export const quantAiConfigs = sqliteTable('quant_ai_config', {
 export type QuantAiConfig = InferSelectModel<typeof quantAiConfigs>
 export type NewQuantAiConfig = InferInsertModel<typeof quantAiConfigs>
 
+// --- Quant 用户级因子配置 ---
+export const quantFactorConfigs = sqliteTable('quant_factor_config', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
+  version: text('version').notNull(),
+  weightsJson: text('weights_json').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+})
+
+export type QuantFactorConfig = InferSelectModel<typeof quantFactorConfigs>
+export type NewQuantFactorConfig = InferInsertModel<typeof quantFactorConfigs>
+
 // --- 量化工作台 ---
 export const quantWatchlist = sqliteTable('quant_watchlist', {
   id: text('id').primaryKey(),
@@ -1121,6 +1134,13 @@ export const quantAiConfigsRelations = relations(quantAiConfigs, ({ one }) => ({
   }),
 }))
 
+export const quantFactorConfigsRelations = relations(quantFactorConfigs, ({ one }) => ({
+  user: one(user, {
+    fields: [quantFactorConfigs.userId],
+    references: [user.id],
+  }),
+}))
+
 export const quantWatchlistRelations = relations(quantWatchlist, ({ one }) => ({
   user: one(user, {
     fields: [quantWatchlist.userId],
@@ -1186,6 +1206,7 @@ export const userRelations = relations(user, ({ many }) => ({
   ratings: many(ratings),
   aria2Config: many(aria2Configs),
   quantAiConfigs: many(quantAiConfigs),
+  quantFactorConfigs: many(quantFactorConfigs),
   quantWatchlists: many(quantWatchlist),
   quantResearchMarkers: many(quantResearchMarkers),
   quantScanSnapshots: many(quantScanSnapshots),

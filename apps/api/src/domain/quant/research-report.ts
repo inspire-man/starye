@@ -1,5 +1,6 @@
 import type { QuantAkshareBridgeResult } from './akshare-bridge'
 import type { QuantDecisionProjection, QuantFactorModel } from './decision-recommendation'
+import type { QuantFactorConfiguration } from './factor-configuration'
 import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './provider'
 import type { QuantShareholderReturnItem } from './shareholder-return'
 import type { DailyBar, MomentumCandidate } from './types'
@@ -71,6 +72,7 @@ export interface QuantResearchReportInput {
   readonly akshare?: QuantAkshareBridgeResult | null
   readonly akshareConfigured?: boolean
   readonly akshareErrorCode?: string | null
+  readonly factorConfiguration?: QuantFactorConfiguration
 }
 
 function finite(value: number | null | undefined): number | null {
@@ -442,6 +444,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
   const { factorModel, decision } = buildQuantDecisionProjection({
     evidence: evidenceItems,
     dailyBars: input.dailyBars,
+    factorConfiguration: input.factorConfiguration,
   })
 
   return {

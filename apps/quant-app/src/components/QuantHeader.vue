@@ -9,6 +9,7 @@ import {
   Menu,
   RefreshCw,
   Settings2,
+  SlidersHorizontal,
   X,
 } from 'lucide-vue-next'
 import { ref } from 'vue'
@@ -23,6 +24,7 @@ const emit = defineEmits<{
   navigate: [view: QuantView]
   refresh: []
   settings: []
+  factorSettings: []
 }>()
 
 const mobileMenuOpen = ref(false)
@@ -79,6 +81,9 @@ function selectView(view: QuantView): void {
         <button class="quant-settings-button" type="button" title="AI 配置" aria-label="打开 AI 配置" @click="emit('settings')">
           <Settings2 :size="16" aria-hidden="true" />
         </button>
+        <button class="quant-factor-settings-button" type="button" title="因子权重配置" aria-label="打开因子权重配置" @click="emit('factorSettings')">
+          <SlidersHorizontal :size="16" aria-hidden="true" />
+        </button>
         <button class="quant-mobile-menu-button" type="button" :aria-expanded="mobileMenuOpen" aria-controls="quant-mobile-nav" :aria-label="mobileMenuOpen ? '关闭导航菜单' : '打开导航菜单'" :title="mobileMenuOpen ? '关闭导航菜单' : '打开导航菜单'" @click="mobileMenuOpen = !mobileMenuOpen">
           <X v-if="mobileMenuOpen" :size="19" aria-hidden="true" />
           <Menu v-else :size="19" aria-hidden="true" />
@@ -109,6 +114,20 @@ function selectView(view: QuantView): void {
           <small>返回内容与数据运管</small>
         </span>
       </a>
+      <button class="quant-mobile-nav-link" type="button" @click="emit('factorSettings'); mobileMenuOpen = false">
+        <SlidersHorizontal :size="16" aria-hidden="true" />
+        <span>
+          <strong>因子权重</strong>
+          <small>调整研究模型配置</small>
+        </span>
+      </button>
+      <button class="quant-mobile-nav-link" type="button" @click="emit('settings'); mobileMenuOpen = false">
+        <Settings2 :size="16" aria-hidden="true" />
+        <span>
+          <strong>AI 配置</strong>
+          <small>管理研究模型连接</small>
+        </span>
+      </button>
     </nav>
   </header>
 </template>
@@ -169,6 +188,7 @@ function selectView(view: QuantView): void {
 .quant-mobile-nav-link,
 .quant-refresh-button,
 .quant-settings-button,
+.quant-factor-settings-button,
 .quant-mobile-menu-button,
 .quant-ops-link {
   display: inline-flex;
@@ -241,6 +261,7 @@ function selectView(view: QuantView): void {
 
 .quant-refresh-button,
 .quant-settings-button,
+.quant-factor-settings-button,
 .quant-mobile-menu-button {
   width: 2.25rem;
   height: 2.25rem;
@@ -258,7 +279,18 @@ function selectView(view: QuantView): void {
   background: transparent;
 }
 
+.quant-factor-settings-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  background: transparent;
+}
+
 .quant-settings-button:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.quant-factor-settings-button:hover {
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
 }
@@ -302,6 +334,11 @@ function selectView(view: QuantView): void {
   }
 
   .quant-ops-link {
+    display: none;
+  }
+
+  .quant-settings-button,
+  .quant-factor-settings-button {
     display: none;
   }
 

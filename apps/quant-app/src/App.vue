@@ -84,6 +84,7 @@ import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantDecisionRecommendation from './components/QuantDecisionRecommendation.vue'
+import QuantFactorSettingsDrawer from './components/QuantFactorSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from './lib/candidate-briefing-export'
@@ -213,6 +214,7 @@ const syncState = ref<SyncResult | null>(null)
 const syncStateError = ref<unknown | null>(null)
 const detailDrawerOpen = ref(false)
 const aiSettingsOpen = ref(false)
+const factorSettingsOpen = ref(false)
 let valuationRequestId = 0
 let financialRequestId = 0
 let valueQualityRequestId = 0
@@ -2942,8 +2944,9 @@ onUnmounted(() => {
 
 <template>
   <div class="quant-shell min-h-screen">
-    <QuantHeader :active-view="activeView" :latest-date="latestWatchlistDate" :busy="pageBusy" @navigate="setActiveView" @refresh="loadWorkspace" @settings="aiSettingsOpen = true" />
+    <QuantHeader :active-view="activeView" :latest-date="latestWatchlistDate" :busy="pageBusy" @navigate="setActiveView" @refresh="loadWorkspace" @settings="aiSettingsOpen = true" @factor-settings="factorSettingsOpen = true" />
     <QuantAiSettingsDrawer v-model:open="aiSettingsOpen" />
+    <QuantFactorSettingsDrawer v-model:open="factorSettingsOpen" />
     <main class="quant-page">
       <header class="quant-view-heading">
         <div class="min-w-0">

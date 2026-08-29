@@ -106,6 +106,12 @@ describe('research report Markdown export', () => {
           evidenceKeys: ['shareholder-yield'],
           missingEvidenceKeys: [],
         }],
+        configuration: {
+          version: 'research-factor-config-v1',
+          weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },
+          source: 'user',
+          updatedAt: '2026-08-29T00:00:00.000Z',
+        },
       },
       decision: {
         decisionVersion: 'research-decision-v1',
@@ -134,6 +140,7 @@ describe('research report Markdown export', () => {
     expect(markdown).toContain('推荐：看多')
     expect(markdown).toContain('参考买入区间：10 - 11 元')
     expect(markdown).toContain('## 因子模型')
+    expect(markdown).toContain('配置快照：当前用户配置')
     expect(markdown).toContain('股东回报：权重 0.15')
     expect(markdown).toContain('Tushare 实施分红 + 本地最新收盘价')
   })

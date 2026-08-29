@@ -2,6 +2,7 @@ import type { QuantResearchEvidence } from '../research-report'
 import type { DailyBar } from '../types'
 import { describe, expect, it } from 'vitest'
 import { buildQuantDecisionProjection } from '../decision-recommendation'
+import { createQuantFactorConfiguration } from '../factor-configuration'
 
 function bars(count: number): DailyBar[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -104,5 +105,43 @@ describe('quant decision recommendation', () => {
     expect(result.decision.buyPriceRange).not.toBeNull()
     expect(result.decision.sellPriceRange).not.toBeNull()
     expect(result.decision.invalidationConditions).toEqual(expect.arrayContaining(['risk-volume：fixture failure', 'risk-streak：fixture failure']))
+  })
+
+  it('uses the configured weights for the score and recommendation', () => {
+    const defaultResult = buildQuantDecisionProjection({
+      evidence: completeEvidence.map(item => item.key.startsWith('valuation-') ? evidence(item.key, 'fail') : item),
+      dailyBars: bars(80),
+    })
+    const valuationHeavy = createQuantFactorConfiguration({
+      weights: { 'trend': 0.05, 'valuation': 0.8, 'quality': 0.05, 'shareholder-return': 0.05, 'risk': 0.05 },
+      source: 'user',
+    })
+    const configuredResult = buildQuantDecisionProjection({
+      evidence: completeEvidence.map(item => item.key.startsWith('valuation-') ? evidence(item.key, 'fail') : item),
+      dailyBars: bars(80),
+      factorConfiguration: valuationHeavy,
+    })
+
+    expect(defaultResult.factorModel.score).toBe(80)
+    expect(configuredResult.factorModel).toMatchObject({ configuration: valuationHeavy, score: 20 })
+    expect(defaultResult.decision.recommendation).toBe('bullish')
+    expect(configuredResult.decision.recommendation).toBe('bearish')
+  })
+
+  it('does not let a zero-weight missing factor block a complete recommendation', () => {
+    const configuration = createQuantFactorConfiguration({
+      weights: { 'trend': 0.3, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.3, 'risk': 0 },
+      source: 'user',
+    })
+    const result = buildQuantDecisionProjection({
+      evidence: completeEvidence.map(item => item.key.startsWith('risk-') ? evidence(item.key, 'missing') : item),
+      dailyBars: bars(80),
+      factorConfiguration: configuration,
+    })
+
+    expect(result.factorModel.coverage).toBe(100)
+    expect(result.factorModel.factors.find(factor => factor.key === 'risk')).toMatchObject({ weight: 0, status: 'missing', score: null })
+    expect(result.decision).toMatchObject({ recommendation: 'bullish', confidence: 100 })
+    expect(result.decision.invalidationConditions).not.toContain('补齐风险因子：risk-volume、risk-streak')
   })
 })

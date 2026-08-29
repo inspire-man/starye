@@ -212,4 +212,30 @@ describe('quant AI comparison', () => {
     expect(() => JSON.parse(jsonPayload!)).not.toThrow()
     expect(prompt.length).toBeLessThanOrEqual(24_000)
   })
+
+  it('includes each report factor snapshot when comparing research runs', () => {
+    const prompt = buildQuantAiComparisonPrompt([{
+      runId: 'configured-run',
+      report: {
+        ...reports[0].report,
+        factorModel: {
+          modelVersion: 'research-factors-v1',
+          totalWeight: 1,
+          coveredWeight: 1,
+          coverage: 100,
+          score: 82,
+          factors: [],
+          configuration: {
+            version: 'research-factor-config-v1',
+            weights: { 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 },
+            source: 'user',
+            updatedAt: '2026-08-29T00:00:00.000Z',
+          },
+        },
+      },
+    }, reports[1]])
+
+    expect(prompt).toContain('research-factor-config-v1')
+    expect(prompt).toContain('0.4')
+  })
 })

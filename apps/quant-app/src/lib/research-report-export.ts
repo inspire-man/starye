@@ -41,6 +41,14 @@ function priceRangeValue(value: { low: number, high: number } | null | undefined
   return value && Number.isFinite(value.low) && Number.isFinite(value.high) ? `${value.low} - ${value.high} 元` : '暂无参考区间'
 }
 
+function factorConfigurationValue(factorModel: QuantResearchRun['report']['factorModel']): string {
+  const configuration = factorModel?.configuration
+  if (!configuration)
+    return '历史报告未记录'
+  const weights = configuration.weights
+  return `${configuration.source === 'user' ? '当前用户配置' : '内置默认配置'} · ${configuration.version} · 趋势 ${(weights.trend * 100).toFixed(0)}% · 估值 ${(weights.valuation * 100).toFixed(0)}% · 盈利质量 ${(weights.quality * 100).toFixed(0)}% · 股东回报 ${(weights['shareholder-return'] * 100).toFixed(0)}% · 风险 ${(weights.risk * 100).toFixed(0)}%`
+}
+
 export function buildResearchReportMarkdown(run: QuantResearchRun, aiSummary: QuantResearchSummary | null = null): string {
   const report = run.report
   const evidence = report.evidence.length
@@ -100,6 +108,7 @@ export function buildResearchReportMarkdown(run: QuantResearchRun, aiSummary: Qu
           [
             '## 因子模型',
             `- 模型版本：${inline(factorModel.modelVersion)}`,
+            `- 配置快照：${factorConfigurationValue(factorModel)}`,
             `- 覆盖权重：${factorModel.coveredWeight}`,
             `- 覆盖度：${factorModel.coverage}%`,
             ...factorModel.factors.map(factor => `- ${inline(factor.label)}：权重 ${factor.weight} · 状态 ${inline(factor.status)} · 分数 ${numberValue(factor.score)} · 来源 ${inline(factor.source)} · evidence ${factor.evidenceKeys.join('、')}`),

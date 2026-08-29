@@ -39,6 +39,12 @@ function report(overrides: Partial<QuantResearchReport> = {}): QuantResearchRepo
         evidenceKeys: ['trend-sample'],
         missingEvidenceKeys: [],
       }],
+      configuration: {
+        version: 'research-factor-config-v1',
+        weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },
+        source: 'user',
+        updatedAt: '2026-08-29T00:00:00.000Z',
+      },
     },
     decision: {
       decisionVersion: 'research-decision-v1',
@@ -114,6 +120,7 @@ describe('quant decision recommendation', () => {
     expect(wrapper.text()).toContain('12.00 - 14.00 元')
     expect(wrapper.text()).toContain('确定性因子模型')
     expect(wrapper.text()).toContain('查看因子来源、权重和失效条件')
+    expect(wrapper.text()).toContain('当前用户配置')
   })
 
   it('uses an accepted AI review for the final label while retaining deterministic prices', () => {

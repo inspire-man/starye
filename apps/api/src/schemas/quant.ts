@@ -242,6 +242,43 @@ export const QuantAiConfigDeleteResponseSchema = v.object({
   data: v.object({ deleted: v.boolean() }),
 })
 
+const QuantFactorWeightSchema = v.pipe(
+  v.number(),
+  v.check(value => Number.isFinite(value), 'Factor weight must be finite'),
+  v.minValue(0),
+  v.maxValue(1),
+)
+
+export const QuantFactorWeightsSchema = v.strictObject({
+  'trend': QuantFactorWeightSchema,
+  'valuation': QuantFactorWeightSchema,
+  'quality': QuantFactorWeightSchema,
+  'shareholder-return': QuantFactorWeightSchema,
+  'risk': QuantFactorWeightSchema,
+})
+
+export const QuantFactorConfigUpdateSchema = v.strictObject({
+  weights: v.pipe(
+    QuantFactorWeightsSchema,
+    v.check((weights) => {
+      const total = weights.trend + weights.valuation + weights.quality + weights['shareholder-return'] + weights.risk
+      return Math.abs(total - 1) <= 0.0001
+    }, 'Factor weights must sum to 1'),
+  ),
+})
+
+export const QuantFactorConfigurationSchema = v.strictObject({
+  version: v.literal('research-factor-config-v1'),
+  weights: QuantFactorWeightsSchema,
+  source: v.picklist(['default', 'user']),
+  updatedAt: v.nullable(v.string()),
+})
+
+export const QuantFactorConfigurationResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: QuantFactorConfigurationSchema,
+})
+
 export const QuantResearchRunCreateSchema = v.object({
   ts_code: QuantTsCodeSchema,
 })
@@ -475,6 +512,7 @@ export type QuantResearchMarkerUpdate = v.InferOutput<typeof QuantResearchMarker
 export type QuantDailyQuery = v.InferOutput<typeof QuantDailyQuerySchema>
 export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>
 export type QuantAiConfigUpdate = v.InferOutput<typeof QuantAiConfigUpdateSchema>
+export type QuantFactorConfigUpdate = v.InferOutput<typeof QuantFactorConfigUpdateSchema>
 export type QuantAiCandidateBriefingRequest = v.InferOutput<typeof QuantAiCandidateBriefingRequestSchema>
 export type QuantAiCandidateBriefingQuestionRequest = v.InferOutput<typeof QuantAiCandidateBriefingQuestionRequestSchema>
 export type QuantAiCandidateBriefingSessionQuery = v.InferOutput<typeof QuantAiCandidateBriefingSessionQuerySchema>

@@ -21,6 +21,7 @@ const knowledgeSeedMigrationPath = new URL('../../../../../../packages/db/drizzl
 const userScopeMigrationPath = new URL('../../../../../../packages/db/drizzle/0041_quant_user_scope.sql', import.meta.url)
 const researchRunMigrationPath = new URL('../../../../../../packages/db/drizzle/0042_quant_research_run.sql', import.meta.url)
 const researchSummaryMigrationPath = new URL('../../../../../../packages/db/drizzle/0043_quant_research_summary.sql', import.meta.url)
+const factorConfigMigrationPath = new URL('../../../../../../packages/db/drizzle/0045_quant_factor_config.sql', import.meta.url)
 
 async function prepareUsers(client: ReturnType<typeof createClient>) {
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
@@ -30,7 +31,7 @@ async function prepareUsers(client: ReturnType<typeof createClient>) {
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, factorConfigMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -42,7 +43,7 @@ async function createDatabase(): Promise<{ client: ReturnType<typeof createClien
 async function createSeedDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath, factorConfigMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -171,6 +172,47 @@ describe('quant watchlist CRUD contract', () => {
     const remove = await app.request('/api/quant/watchlist/000001.SZ', { method: 'DELETE' })
     expect(remove.status).toBe(200)
     await expect(client.execute('SELECT count(*) AS count FROM quant_watchlist')).resolves.toMatchObject({ rows: [{ count: 0 }] })
+  })
+
+  it('keeps factor configuration isolated per user and restores defaults after reset', async () => {
+    const { client, db } = await createDatabase()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const userB = createApp(db, { user: { id: 'user-2', role: 'user' } })
+    const defaultWeights = { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 }
+    const customWeights = { 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 }
+
+    await expect((await userA.request('/api/quant/factor-config')).json()).resolves.toMatchObject({
+      data: { source: 'default', updatedAt: null, weights: defaultWeights },
+    })
+
+    const saved = await userA.request('/api/quant/factor-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ weights: customWeights }),
+    })
+    expect(saved.status).toBe(200)
+    await expect(saved.json()).resolves.toMatchObject({ data: { source: 'user', weights: customWeights, updatedAt: expect.any(String) } })
+
+    await expect((await userB.request('/api/quant/factor-config')).json()).resolves.toMatchObject({
+      data: { source: 'default', weights: defaultWeights },
+    })
+    await expect(client.execute('SELECT user_id, weights_json FROM quant_factor_config')).resolves.toMatchObject({
+      rows: [{ user_id: 'user-1', weights_json: JSON.stringify(customWeights) }],
+    })
+
+    const invalid = await userA.request('/api/quant/factor-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ weights: { ...customWeights, risk: 0.3 } }),
+    })
+    expect(invalid.status).toBe(400)
+    await expect((await userA.request('/api/quant/factor-config')).json()).resolves.toMatchObject({ data: { weights: customWeights } })
+
+    const reset = await userA.request('/api/quant/factor-config', { method: 'DELETE' })
+    expect(reset.status).toBe(200)
+    await expect(reset.json()).resolves.toMatchObject({ data: { source: 'default', updatedAt: null, weights: defaultWeights } })
+    await expect(client.execute('SELECT count(*) AS count FROM quant_factor_config WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 0 }] })
   })
 
   it('backfills a code-only watchlist name from the public stock identity provider', async () => {
@@ -502,6 +544,12 @@ describe('quant watchlist CRUD contract', () => {
     await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
     const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
     const userB = createApp(db, { user: { id: 'user-2', role: 'user' } })
+    const factorConfig = await userA.request('/api/quant/factor-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ weights: { 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 } }),
+    })
+    expect(factorConfig.status).toBe(200)
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -522,7 +570,11 @@ describe('quant watchlist CRUD contract', () => {
       report: {
         reportVersion: 'research-report-v2',
         evidence: expect.arrayContaining([expect.objectContaining({ key: 'trend-sample' })]),
-        factorModel: expect.objectContaining({ modelVersion: 'research-factors-v1', totalWeight: 1 }),
+        factorModel: expect.objectContaining({
+          modelVersion: 'research-factors-v1',
+          totalWeight: 1,
+          configuration: expect.objectContaining({ source: 'user', weights: { 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 } }),
+        }),
         decision: expect.objectContaining({ recommendation: 'watch', buyPriceRange: null, sellPriceRange: null }),
       },
     })

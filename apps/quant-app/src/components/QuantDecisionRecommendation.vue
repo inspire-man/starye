@@ -35,6 +35,10 @@ function factorStatusLabel(value: string): string {
 function factorStatusClass(value: string): string {
   return `quant-decision-factor-${value}`
 }
+
+function configurationSourceLabel(value: string | undefined): string {
+  return value === 'user' ? '当前用户配置' : value === 'default' ? '内置默认配置' : '历史报告未记录'
+}
 </script>
 
 <template>
@@ -107,6 +111,11 @@ function factorStatusClass(value: string): string {
               <strong>{{ factor.score === null ? '--' : `${factor.score.toFixed(0)} 分` }}</strong>
             </div>
           </div>
+        </div>
+        <div class="quant-decision-configuration">
+          <span>配置快照</span>
+          <strong>{{ configurationSourceLabel(report?.factorModel?.configuration?.source) }}</strong>
+          <small>{{ report?.factorModel?.configuration?.version || '旧报告未记录配置版本' }} · {{ report?.factorModel?.configuration?.updatedAt || '生成时使用默认权重' }}</small>
         </div>
         <div class="quant-decision-invalidations">
           <span>失效条件</span>
@@ -346,6 +355,31 @@ function factorStatusClass(value: string): string {
 
 .quant-decision-factor-unavailable {
   color: hsl(var(--status-danger)) !important;
+}
+
+.quant-decision-configuration {
+  display: grid;
+  gap: 0.12rem;
+  margin-top: 0.45rem;
+  border-left: 2px solid hsl(var(--primary) / 0.35);
+  padding: 0.25rem 0.45rem;
+}
+
+.quant-decision-configuration span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6rem;
+}
+
+.quant-decision-configuration strong {
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+}
+
+.quant-decision-configuration small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .quant-decision-invalidations ul {

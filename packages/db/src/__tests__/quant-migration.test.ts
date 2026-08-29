@@ -11,13 +11,14 @@ const userScopeMigrationPath = new URL('../../drizzle/0041_quant_user_scope.sql'
 const researchRunMigrationPath = new URL('../../drizzle/0042_quant_research_run.sql', import.meta.url)
 const researchSummaryMigrationPath = new URL('../../drizzle/0043_quant_research_summary.sql', import.meta.url)
 const candidateAiSessionMigrationPath = new URL('../../drizzle/0044_quant_candidate_ai_session.sql', import.meta.url)
+const factorConfigMigrationPath = new URL('../../drizzle/0045_quant_factor_config.sql', import.meta.url)
 
 async function createMigratedClient() {
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
   await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-1\', 1)')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath, factorConfigMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -44,6 +45,7 @@ describe('quant workbench migration', () => {
       'quant_ai_config',
       'quant_candidate_ai_session',
       'quant_daily_bar',
+      'quant_factor_config',
       'quant_research_marker',
       'quant_research_run',
       'quant_research_summary',
@@ -75,6 +77,34 @@ describe('quant workbench migration', () => {
       { ts_code: '600938.SH', name: '中国海油' },
       { ts_code: '601899.SH', name: '紫金矿业' },
     ])
+  })
+
+  it('enforces one factor configuration per user and keeps the weight snapshot', async () => {
+    const client = await createMigratedClient()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const weights = '{"trend":0.4,"valuation":0.1,"quality":0.2,"shareholder-return":0.1,"risk":0.2}'
+
+    await client.execute({
+      sql: 'INSERT INTO quant_factor_config (id, user_id, version, weights_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      args: ['factor-1', 'user-1', 'research-factor-config-v1', weights, 10, 10],
+    })
+    await expect(client.execute({
+      sql: 'INSERT INTO quant_factor_config (id, user_id, version, weights_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      args: ['factor-duplicate', 'user-1', 'research-factor-config-v1', weights, 11, 11],
+    })).rejects.toThrow(/UNIQUE constraint failed/u)
+    await client.execute({
+      sql: 'INSERT INTO quant_factor_config (id, user_id, version, weights_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      args: ['factor-2', 'user-2', 'research-factor-config-v1', weights, 12, 12],
+    })
+
+    await expect(client.execute('SELECT user_id, version, weights_json FROM quant_factor_config ORDER BY user_id')).resolves.toMatchObject({
+      rows: [
+        { user_id: 'user-1', version: 'research-factor-config-v1', weights_json: weights },
+        { user_id: 'user-2', version: 'research-factor-config-v1', weights_json: weights },
+      ],
+    })
+    await client.execute('DELETE FROM user WHERE id = \'user-1\'')
+    await expect(client.execute('SELECT count(*) AS count FROM quant_factor_config WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 0 }] })
   })
 
   it('enforces watchlist and daily-bar identities', async () => {

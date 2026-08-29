@@ -22,6 +22,23 @@ export interface QuantAiConnectionTest {
   latencyMs: number
 }
 
+export type QuantFactorConfigurationKey = 'trend' | 'valuation' | 'quality' | 'shareholder-return' | 'risk'
+
+export interface QuantFactorWeights {
+  'trend': number
+  'valuation': number
+  'quality': number
+  'shareholder-return': number
+  'risk': number
+}
+
+export interface QuantFactorConfiguration {
+  version: string
+  weights: QuantFactorWeights
+  source: 'default' | 'user'
+  updatedAt: string | null
+}
+
 export type QuantResearchRunStatus = 'ready' | 'partial' | 'insufficient_data'
 export type QuantResearchEvidenceStatus = 'pass' | 'caution' | 'fail' | 'missing'
 export type QuantResearchAction = 'research-window' | 'wait-confirmation' | 'reassess' | 'complete-data'
@@ -47,6 +64,7 @@ export interface QuantFactorModel {
   coverage: number
   score: number | null
   factors: QuantResearchFactor[]
+  configuration?: QuantFactorConfiguration
 }
 
 export interface QuantReferencePriceRange {

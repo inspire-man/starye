@@ -579,6 +579,38 @@ describe('quantApi', () => {
     }))
   })
 
+  it('normalizes factor configuration reads, updates, and resets', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        version: 'research-factor-config-v1',
+        weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },
+        source: 'default',
+        updated_at: null,
+      } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        version: 'research-factor-config-v1',
+        weights: { 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 },
+        source: 'user',
+        updated_at: '2026-08-30T00:00:00.000Z',
+      } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        version: 'research-factor-config-v1',
+        weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },
+        source: 'default',
+        updatedAt: null,
+      } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getFactorConfiguration()).resolves.toMatchObject({ source: 'default', updatedAt: null })
+    await expect(quantApi.updateFactorConfiguration({ 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 })).resolves.toMatchObject({
+      source: 'user',
+      weights: { 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 },
+    })
+    await expect(quantApi.resetFactorConfiguration()).resolves.toMatchObject({ source: 'default', updatedAt: null })
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ weights: { 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 } }))
+    expect(fetchMock.mock.calls[2]?.[1]?.method).toBe('DELETE')
+  })
+
   it('normalizes AI connection test metadata without sending a client-side key', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
       provider: 'openai_compatible',

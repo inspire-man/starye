@@ -103,6 +103,7 @@ export function buildQuantAiSummaryPrompt(report: QuantResearchReport): string {
     'overview 用 1-3 句说明当前证据代表什么；supports、concerns、nextChecks 都写成可核对的短句。',
     'decisionReview 必须是对象或 null。对象字段必须是 decisionVersion、recommendation、confidence、rationale、invalidationConditions、citedEvidenceKeys；recommendation 只能是 bullish、bearish、watch，confidence 为 0-100 的数字。',
     'decisionReview 只能复核报告已有证据；如果报告确定性推荐为 watch 或数据覆盖度不足，不得升级为 bullish/bearish。不要添加报告中不存在的数值、来源或证据 key。',
+    '如果报告包含 factorModel.configuration，必须按该报告快照解释权重和确定性分数，不要用当前配置替换历史报告配置。',
     '对于 optional 的 AkShare 证据，必须保留 source、observedAt 和 formulaVersion；报告期不同或 provider 数值不同只能表述为交叉核对线索，并明确需要人工核对。',
     '不要生成买入/卖出价格，不要写目标价、未来收益预测或直接交易指令；价格区间只能使用报告中的确定性字段。',
     `研究报告：${reportPrompt(report)}`,

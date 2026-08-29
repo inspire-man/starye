@@ -17,7 +17,9 @@ import type {
   QuantAiDecisionReview,
   QuantAiProvider,
   QuantDecisionProjection,
+  QuantFactorConfiguration,
   QuantFactorModel,
+  QuantFactorWeights,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -259,6 +261,31 @@ function parseAiConfig(payload: unknown): QuantAiConfig | null {
     hasApiKey: data.hasApiKey === true || data.has_api_key === true,
     apiKeyHint: readString(data, 'apiKeyHint', 'api_key_hint'),
     createdAt: readString(data, 'createdAt', 'created_at'),
+    updatedAt: readString(data, 'updatedAt', 'updated_at'),
+  }
+}
+
+function parseFactorConfiguration(payload: unknown): QuantFactorConfiguration {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('因子配置数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const version = readString(data, 'version')
+  const source = readString(data, 'source')
+  const weights = isRecord(data.weights) ? data.weights : null
+  const trend = weights ? readNumber(weights, 'trend') : null
+  const valuation = weights ? readNumber(weights, 'valuation') : null
+  const quality = weights ? readNumber(weights, 'quality') : null
+  const shareholderReturn = weights ? readNumber(weights, 'shareholder-return') : null
+  const risk = weights ? readNumber(weights, 'risk') : null
+  const values = [trend, valuation, quality, shareholderReturn, risk]
+  const total = values.every(value => value !== null) ? values.reduce((sum, value) => sum + value!, 0) : null
+  if (!version || (source !== 'default' && source !== 'user') || values.some(value => value === null || value < 0 || value > 1) || total === null || Math.abs(total - 1) > 0.0001) {
+    throw new QuantApiError('因子配置数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  }
+  return {
+    version,
+    weights: { 'trend': trend!, 'valuation': valuation!, 'quality': quality!, 'shareholder-return': shareholderReturn!, 'risk': risk! },
+    source,
     updatedAt: readString(data, 'updatedAt', 'updated_at'),
   }
 }
@@ -526,7 +553,17 @@ function parseFactorModel(value: unknown): QuantFactorModel | undefined {
     || !factors.length) {
     return undefined
   }
-  return { modelVersion, totalWeight, coveredWeight, coverage, score, factors }
+  const factorConfiguration = value.configuration ?? value.factorConfiguration ?? value.factor_configuration
+  let parsedConfiguration: QuantFactorConfiguration | undefined
+  if (factorConfiguration !== undefined) {
+    try {
+      parsedConfiguration = parseFactorConfiguration({ data: factorConfiguration })
+    }
+    catch {
+      parsedConfiguration = undefined
+    }
+  }
+  return { modelVersion, totalWeight, coveredWeight, coverage, score, factors, configuration: parsedConfiguration }
 }
 
 function parseReferencePriceRange(value: unknown): QuantReferencePriceRange | null {
@@ -1555,6 +1592,21 @@ export const quantApi = {
 
   async getAiConfig(): Promise<QuantAiConfig | null> {
     return parseAiConfig(await requestJson('/ai-config'))
+  },
+
+  async getFactorConfiguration(): Promise<QuantFactorConfiguration> {
+    return parseFactorConfiguration(await requestJson('/factor-config'))
+  },
+
+  async updateFactorConfiguration(weights: QuantFactorWeights): Promise<QuantFactorConfiguration> {
+    return parseFactorConfiguration(await requestJson('/factor-config', {
+      method: 'PUT',
+      body: JSON.stringify({ weights }),
+    }))
+  },
+
+  async resetFactorConfiguration(): Promise<QuantFactorConfiguration> {
+    return parseFactorConfiguration(await requestJson('/factor-config', { method: 'DELETE' }))
   },
 
   async updateAiConfig(input: UpdateAiConfigInput): Promise<QuantAiConfig> {
