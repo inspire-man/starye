@@ -87,6 +87,7 @@ import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from './lib/candidate-briefing-export'
 import { buildCandidateBriefingScopeKey, canApplyCandidateBriefingResponse } from './lib/candidate-briefing-scope'
 import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
+import { buildResearchComparisonFilename, buildResearchComparisonMarkdown } from './lib/comparison-ai-export'
 import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
@@ -185,6 +186,12 @@ const comparisonAiComparison = ref<QuantResearchComparison | null>(null)
 const comparisonAiComparisonLoading = ref(false)
 const comparisonAiComparisonError = ref<unknown | null>(null)
 const comparisonAiEvidenceTarget = ref<QuantResearchComparisonCitation | null>(null)
+const comparisonAiComparisonExporting = ref(false)
+const comparisonAiComparisonExportMessage = ref('')
+const comparisonAiComparisonExportError = ref(false)
+const comparisonAiComparisonCopying = ref(false)
+const comparisonAiComparisonCopyOutcome = ref<ResearchReportCopyOutcome>(null)
+const comparisonAiComparisonCopyMessage = ref('')
 const researchFormStatus = ref<ResearchMarkerStatus>('unreviewed')
 const researchFormNote = ref('')
 const researchFormReviewDate = ref('')
@@ -214,6 +221,7 @@ let researchReportCopyRequestId = 0
 let comparisonResearchCopyRequestId = 0
 let comparisonResearchAiSummaryRequestId = 0
 let comparisonAiComparisonRequestId = 0
+let comparisonAiComparisonCopyRequestId = 0
 let comparisonResearchHistoryRequestId = 0
 const comparisonResearchHistoryRequestIds = new Map<string, number>()
 const loading = reactive({
@@ -1309,6 +1317,8 @@ watch(
   [candidateFilter, candidateMinScore, candidateCompleteOnly, candidateSort, candidateResearchStatus, candidateReviewDue],
   () => resetCandidateAiBriefingState(),
 )
+
+watch(comparisonAiComparison, () => resetComparisonAiComparisonTransferState(), { flush: 'sync' })
 
 function researchPriorityDetail(item: CandidateItem): string {
   const priority = candidatePriorityFor(item)
@@ -2533,6 +2543,16 @@ function resetComparisonAiComparisonState() {
   comparisonAiEvidenceTarget.value = null
 }
 
+function resetComparisonAiComparisonTransferState(): void {
+  comparisonAiComparisonCopyRequestId++
+  comparisonAiComparisonExporting.value = false
+  comparisonAiComparisonExportMessage.value = ''
+  comparisonAiComparisonExportError.value = false
+  comparisonAiComparisonCopying.value = false
+  comparisonAiComparisonCopyOutcome.value = null
+  comparisonAiComparisonCopyMessage.value = ''
+}
+
 function comparisonAiComparisonErrorMessage(): string {
   return parsedError(comparisonAiComparisonError.value).message
 }
@@ -2542,6 +2562,7 @@ async function generateComparisonAiComparison(): Promise<void> {
     return
 
   const requestId = ++comparisonAiComparisonRequestId
+  resetComparisonAiComparisonTransferState()
   comparisonAiComparisonLoading.value = true
   comparisonAiComparisonError.value = null
   try {
@@ -2556,6 +2577,71 @@ async function generateComparisonAiComparison(): Promise<void> {
   finally {
     if (requestId === comparisonAiComparisonRequestId)
       comparisonAiComparisonLoading.value = false
+  }
+}
+
+function downloadComparisonAiComparison(): void {
+  const comparison = comparisonAiComparison.value
+  if (!comparison || comparisonAiComparisonLoading.value || comparisonAiComparisonExporting.value)
+    return
+
+  comparisonAiComparisonExporting.value = true
+  comparisonAiComparisonExportMessage.value = ''
+  comparisonAiComparisonExportError.value = false
+  try {
+    const markdown = buildResearchComparisonMarkdown(comparison)
+    const objectUrl = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = buildResearchComparisonFilename(comparison)
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+    comparisonAiComparisonExportMessage.value = 'AI 对比研究已导出'
+  }
+  catch {
+    comparisonAiComparisonExportError.value = true
+    comparisonAiComparisonExportMessage.value = 'AI 对比研究导出失败，请稍后重试'
+  }
+  finally {
+    comparisonAiComparisonExporting.value = false
+  }
+}
+
+async function copyComparisonAiComparison(): Promise<void> {
+  const comparison = comparisonAiComparison.value
+  if (!comparison || comparisonAiComparisonLoading.value || comparisonAiComparisonCopying.value)
+    return
+
+  const requestId = ++comparisonAiComparisonCopyRequestId
+  comparisonAiComparisonCopying.value = true
+  comparisonAiComparisonCopyOutcome.value = null
+  comparisonAiComparisonCopyMessage.value = ''
+  let result: ResearchReportCopyResult
+  try {
+    const markdown = buildResearchComparisonMarkdown(comparison)
+    const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined
+    result = await copyResearchReportMarkdown(markdown, clipboard)
+  }
+  catch {
+    result = 'failed'
+  }
+  if (requestId !== comparisonAiComparisonCopyRequestId)
+    return
+
+  comparisonAiComparisonCopying.value = false
+  if (result === 'copied') {
+    comparisonAiComparisonCopyOutcome.value = 'success'
+    comparisonAiComparisonCopyMessage.value = 'AI 对比研究已复制到剪贴板'
+  }
+  else if (result === 'unavailable') {
+    comparisonAiComparisonCopyOutcome.value = 'error'
+    comparisonAiComparisonCopyMessage.value = '当前浏览器不支持剪贴板写入'
+  }
+  else {
+    comparisonAiComparisonCopyOutcome.value = 'error'
+    comparisonAiComparisonCopyMessage.value = 'AI 对比研究复制失败，请检查剪贴板权限后重试'
   }
 }
 
@@ -5106,8 +5192,26 @@ onUnmounted(() => {
               </button>
             </div>
             <div v-else-if="comparisonAiComparison" class="comparison-ai-result">
-              <p class="comparison-ai-meta">
-                {{ comparisonAiComparison.provider }} · {{ comparisonAiComparison.model }} · {{ formatDateTime(comparisonAiComparison.generatedAt) }}
+              <div class="comparison-ai-result-heading">
+                <p class="comparison-ai-meta">
+                  {{ comparisonAiComparison.provider }} · {{ comparisonAiComparison.model }} · {{ formatDateTime(comparisonAiComparison.generatedAt) }}
+                </p>
+                <div class="comparison-ai-result-actions">
+                  <button class="secondary-button comparison-ai-export" type="button" :disabled="comparisonAiComparisonExporting || comparisonAiComparisonCopying" title="将 AI 对比研究导出为 Markdown 文件" aria-label="导出 AI 对比研究为 Markdown 文件" @click="downloadComparisonAiComparison">
+                    <Download :size="14" aria-hidden="true" />
+                    {{ comparisonAiComparisonExporting ? '导出中' : '导出 Markdown' }}
+                  </button>
+                  <button class="secondary-button comparison-ai-copy" type="button" :disabled="comparisonAiComparisonExporting || comparisonAiComparisonCopying" title="将 AI 对比研究 Markdown 复制到剪贴板" aria-label="复制 AI 对比研究 Markdown" @click="copyComparisonAiComparison">
+                    <Copy :size="14" aria-hidden="true" />
+                    {{ comparisonAiComparisonCopying ? '复制中' : '复制 Markdown' }}
+                  </button>
+                </div>
+              </div>
+              <p v-if="comparisonAiComparisonExportMessage" class="comparison-ai-transfer-message" :class="{ 'comparison-ai-transfer-message-error': comparisonAiComparisonExportError }" role="status">
+                {{ comparisonAiComparisonExportMessage }}
+              </p>
+              <p v-if="comparisonAiComparisonCopyMessage" class="comparison-ai-transfer-message" :class="{ 'comparison-ai-transfer-message-error': comparisonAiComparisonCopyOutcome === 'error' }" role="status">
+                {{ comparisonAiComparisonCopyMessage }}
               </p>
               <p class="comparison-ai-overview">
                 {{ comparisonAiComparison.overview }}
