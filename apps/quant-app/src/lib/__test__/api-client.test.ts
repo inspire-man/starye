@@ -612,7 +612,7 @@ describe('quantApi', () => {
     } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(quantApi.generateCandidateAiBriefing()).resolves.toMatchObject({
+    await expect(quantApi.generateCandidateAiBriefing(['601899.SH', '000001.SZ'])).resolves.toMatchObject({
       briefingVersion: 'candidate-briefing-v1',
       provider: 'openai_compatible',
       model: 'gpt-5.4',
@@ -623,7 +623,8 @@ describe('quantApi', () => {
       method: 'POST',
       credentials: 'include',
     }))
-    expect(fetchMock.mock.calls[0]?.[1]?.body).toBeUndefined()
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ ts_codes: ['601899.SH', '000001.SZ'] }))
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).not.toContain('priorityScore')
   })
 
   it('normalizes structured research runs and requests history by stock code', async () => {

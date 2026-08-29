@@ -346,6 +346,10 @@ export const QuantResearchChangeExplanationResponseSchema = v.strictObject({
 
 export const QuantAiCandidateBriefingPriorityLevelSchema = v.picklist(['urgent', 'high', 'normal', 'low'])
 
+export const QuantAiCandidateBriefingRequestSchema = v.strictObject({
+  ts_codes: v.optional(v.pipe(v.array(QuantTsCodeSchema), v.maxLength(50))),
+})
+
 export const QuantAiCandidateBriefingFocusItemSchema = v.strictObject({
   tsCode: QuantTsCodeSchema,
   name: v.nullable(v.string()),
@@ -380,6 +384,7 @@ export type QuantResearchMarkerUpdate = v.InferOutput<typeof QuantResearchMarker
 export type QuantDailyQuery = v.InferOutput<typeof QuantDailyQuerySchema>
 export type QuantSyncInput = v.InferOutput<typeof QuantSyncSchema>
 export type QuantAiConfigUpdate = v.InferOutput<typeof QuantAiConfigUpdateSchema>
+export type QuantAiCandidateBriefingRequest = v.InferOutput<typeof QuantAiCandidateBriefingRequestSchema>
 export type QuantResearchRunCreate = v.InferOutput<typeof QuantResearchRunCreateSchema>
 export type QuantResearchRunsQuery = v.InferOutput<typeof QuantResearchRunsQuerySchema>
 export type QuantResearchRunIdParam = v.InferOutput<typeof QuantResearchRunIdParamSchema>

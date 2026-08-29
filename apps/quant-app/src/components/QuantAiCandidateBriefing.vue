@@ -8,6 +8,9 @@ type CopyOutcome = 'success' | 'error' | null
 const props = withDefaults(defineProps<{
   briefing: QuantAiCandidateBriefing | null
   candidateCount: number
+  filteredCandidateCount: number
+  briefingAvailableCandidateCount: number
+  briefingCandidateCount?: number | null
   available?: boolean
   loading: boolean
   errorMessage: string | null
@@ -17,6 +20,7 @@ const props = withDefaults(defineProps<{
   copyMessage?: string
 }>(), {
   available: true,
+  briefingCandidateCount: null,
   copying: false,
   copyOutcome: null,
   copyMessage: '',
@@ -31,7 +35,9 @@ const emit = defineEmits<{
 }>()
 
 const hasCandidates = computed(() => props.candidateCount > 0)
-const canGenerate = computed(() => props.available !== false && hasCandidates.value)
+const hasFilteredCandidates = computed(() => props.filteredCandidateCount > 0)
+const hasBriefingCandidates = computed(() => props.briefingAvailableCandidateCount > 0)
+const canGenerate = computed(() => props.available !== false && hasFilteredCandidates.value && hasBriefingCandidates.value)
 const showBriefingActions = computed(() => Boolean(props.briefing && !props.loading && !props.errorMessage))
 const visibleFocusItems = computed(() => props.briefing?.focusItems.slice(0, 5) || [])
 const visibleNextChecks = computed(() => props.briefing?.nextChecks.slice(0, 6) || [])
@@ -39,8 +45,14 @@ const visibleNextChecks = computed(() => props.briefing?.nextChecks.slice(0, 6) 
 const generateButtonLabel = computed(() => {
   if (props.loading)
     return '生成中'
-  if (!canGenerate.value)
+  if (!hasCandidates.value)
     return '暂无候选'
+  if (!hasFilteredCandidates.value)
+    return '暂无筛选候选'
+  if (!hasBriefingCandidates.value)
+    return '暂无快照候选'
+  if (!canGenerate.value)
+    return '快照未就绪'
   return props.briefing ? '重新生成简报' : '生成 AI 简报'
 })
 
@@ -131,7 +143,10 @@ function focusCandidate(tsCode: string): void {
     </div>
 
     <div class="quant-ai-briefing-scope quant-ai-briefing-wrap-anywhere" aria-label="候选简报范围">
-      <span>当前候选 <strong>{{ candidateCount }}</strong> 个</span>
+      <span>当前筛选 <strong>{{ filteredCandidateCount }}</strong> 个</span>
+      <span>观察池 <strong>{{ candidateCount }}</strong> 个</span>
+      <span>可生成范围 <strong>{{ briefingAvailableCandidateCount }}</strong> 个</span>
+      <span v-if="briefingCandidateCount !== null">本次简报 <strong>{{ briefingCandidateCount }}</strong> 个</span>
       <span v-if="briefing">版本 {{ briefing.briefingVersion }}</span>
       <span v-if="briefing">{{ briefing.provider }} · {{ briefing.model }} · {{ formatDate(briefing.generatedAt) }}</span>
     </div>
@@ -157,6 +172,8 @@ function focusCandidate(tsCode: string): void {
     <div v-else-if="!briefing" class="quant-ai-briefing-state" role="status">
       <CircleHelp :size="15" aria-hidden="true" />
       <span v-if="!hasCandidates">当前没有候选数据，加载候选后即可生成简报。</span>
+      <span v-else-if="!hasFilteredCandidates">当前筛选没有候选，调整筛选后即可生成简报。</span>
+      <span v-else-if="!hasBriefingCandidates">当前筛选候选尚未进入最新快照，完成日线更新后即可生成简报。</span>
       <span v-else-if="!canGenerate">候选快照尚未准备好，完成一次日线更新后即可生成简报。</span>
       <span v-else>还没有生成候选简报，按需读取当前研究重点。</span>
     </div>
