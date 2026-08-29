@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { QuantResearchReport } from '../../lib/quant-types'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import QuantAiResearchQuestion from '../QuantAiResearchQuestion.vue'
 
@@ -99,5 +99,30 @@ describe('quant AI research question', () => {
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).disabled).toBe(true)
     expect((wrapper.get('button[type="submit"]').element as HTMLButtonElement).disabled).toBe(true)
     expect(wrapper.text()).toContain('正在基于当前报告整理回答')
+  })
+
+  it('exposes a prompt bridge that updates and focuses the input without asking', async () => {
+    const wrapper = mount(QuantAiResearchQuestion, {
+      props: baseProps,
+      attachTo: document.body,
+    })
+    const exposed = wrapper.vm as unknown as { useQuestionPrompt: (prompt: string) => void }
+
+    exposed.useQuestionPrompt('  围绕摘要核对项追问  ')
+    await flushPromises()
+
+    expect(wrapper.emitted('update:input')).toEqual([['围绕摘要核对项追问']])
+    expect(wrapper.emitted('ask')).toBeUndefined()
+    expect(document.activeElement).toBe(wrapper.get('textarea').element)
+    wrapper.unmount()
+  })
+
+  it('ignores prompt reuse while a question is loading', () => {
+    const wrapper = mount(QuantAiResearchQuestion, { props: { ...baseProps, loading: true } })
+    const exposed = wrapper.vm as unknown as { useQuestionPrompt: (prompt: string) => void }
+
+    exposed.useQuestionPrompt('问题')
+
+    expect(wrapper.emitted('update:input')).toBeUndefined()
   })
 })

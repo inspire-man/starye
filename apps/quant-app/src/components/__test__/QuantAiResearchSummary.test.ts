@@ -65,6 +65,7 @@ const baseProps = {
   generating: false,
   errorMessage: null,
   configurationError: false,
+  questionPromptReady: true,
 }
 
 describe('quant ai research summary', () => {
@@ -101,5 +102,32 @@ describe('quant ai research summary', () => {
     expect(wrapper.text()).toContain('补齐数据')
     expect(wrapper.text()).toContain('确定性分数')
     expect(wrapper.text()).toContain('还没有生成解释')
+  })
+
+  it('offers a same-level next-check action without submitting a question', async () => {
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, report: report(), summary: summary(['akshare-roe']) },
+    })
+
+    const nextCheck = wrapper.get('.quant-ai-summary-next-check')
+    expect(nextCheck.findAll('button')).toHaveLength(1)
+    expect(nextCheck.get('button').attributes('aria-label')).toContain('等待下一期报告')
+    expect(nextCheck.get('button').attributes('title')).toBe('将摘要核对项转换为当前追问')
+
+    await nextCheck.get('button').trigger('click')
+
+    expect(wrapper.emitted('useNextCheck')).toEqual([['等待下一期报告']])
+    expect(wrapper.emitted('generate')).toBeUndefined()
+  })
+
+  it('disables summary reuse while the question flow is unavailable', async () => {
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, questionPromptReady: false, report: report(), summary: summary([]) },
+    })
+
+    const button = wrapper.get('.quant-ai-summary-next-prompt')
+    expect((button.element as HTMLButtonElement).disabled).toBe(true)
+    await button.trigger('click')
+    expect(wrapper.emitted('useNextCheck')).toBeUndefined()
   })
 })

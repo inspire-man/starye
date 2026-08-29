@@ -10,11 +10,13 @@ const props = defineProps<{
   generating: boolean
   errorMessage: string | null
   configurationError: boolean
+  questionPromptReady: boolean
 }>()
 
 const emit = defineEmits<{
   generate: []
   openSettings: []
+  useNextCheck: [check: string]
 }>()
 
 const evidenceByKey = computed(() => new Map(props.report.evidence.map(item => [item.key, item])))
@@ -141,8 +143,19 @@ function formatEvidenceDate(value: string | null): string {
         <div class="quant-ai-summary-column quant-ai-summary-column-next">
           <span>下一步核对</span>
           <ul>
-            <li v-for="item in summary.summary.nextChecks" :key="`next-${item}`">
-              {{ item }}
+            <li v-for="item in summary.summary.nextChecks" :key="`next-${item}`" class="quant-ai-summary-next-check">
+              <span class="quant-ai-summary-next-check-text">{{ item }}</span>
+              <button
+                class="text-button quant-ai-summary-next-prompt"
+                type="button"
+                :disabled="!questionPromptReady || !item.trim()"
+                :aria-label="`将摘要核对项带入当前追问：${item}`"
+                title="将摘要核对项转换为当前追问"
+                @click="emit('useNextCheck', item)"
+              >
+                <BrainCircuit :size="13" aria-hidden="true" />
+                带入追问
+              </button>
             </li>
           </ul>
         </div>
@@ -322,6 +335,36 @@ function formatEvidenceDate(value: string | null): string {
   line-height: 1.45;
 }
 
+.quant-ai-summary-next-check {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.35rem;
+}
+
+.quant-ai-summary-next-check-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-summary-next-prompt {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
+.quant-ai-summary-next-prompt:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.quant-ai-summary-next-prompt:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .quant-ai-summary-citations {
   display: grid;
   gap: 0.45rem;
@@ -488,6 +531,14 @@ function formatEvidenceDate(value: string | null): string {
 
   .quant-ai-summary-citation-title strong {
     white-space: normal;
+  }
+
+  .quant-ai-summary-next-check {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quant-ai-summary-next-prompt {
+    justify-self: start;
   }
 }
 </style>
