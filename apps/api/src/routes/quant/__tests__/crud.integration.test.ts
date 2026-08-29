@@ -522,6 +522,8 @@ describe('quant watchlist CRUD contract', () => {
       report: {
         reportVersion: 'research-report-v2',
         evidence: expect.arrayContaining([expect.objectContaining({ key: 'trend-sample' })]),
+        factorModel: expect.objectContaining({ modelVersion: 'research-factors-v1', totalWeight: 1 }),
+        decision: expect.objectContaining({ recommendation: 'watch', buyPriceRange: null, sellPriceRange: null }),
       },
     })
     expect(fetchMock.mock.calls.filter(([input]) => String(input) === 'https://tushare.fixture.test')).toHaveLength(1)
@@ -595,6 +597,19 @@ describe('quant watchlist CRUD contract', () => {
         detail: '最近一期 ROE 达到研究门槛。',
       }],
       sources: [],
+      decision: {
+        decisionVersion: 'research-decision-v1',
+        recommendation: 'bullish',
+        label: '看多',
+        deterministicScore: 78,
+        confidence: 78,
+        coverage: 100,
+        buyPriceRange: null,
+        sellPriceRange: null,
+        evidenceKeys: ['quality-roe'],
+        invalidationConditions: [],
+        headline: '看多：证据覆盖充分',
+      },
     })
     await client.execute({
       sql: `INSERT INTO quant_research_run (
@@ -626,6 +641,14 @@ describe('quant watchlist CRUD contract', () => {
         concerns: ['当前证据范围仍有限'],
         nextChecks: ['等待下一期财报并复核'],
         citedEvidenceKeys: ['quality-roe'],
+        decisionReview: {
+          decisionVersion: 'ai-decision-v1',
+          recommendation: 'bearish',
+          confidence: 82,
+          rationale: '估值仍需优先核对。',
+          invalidationConditions: ['下一期财报改善后复核'],
+          citedEvidenceKeys: ['quality-roe'],
+        },
       }) } }] }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
         overview: '引用了不存在的证据。',
@@ -637,8 +660,8 @@ describe('quant watchlist CRUD contract', () => {
 
     const generated = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)
     expect(generated.status).toBe(201)
-    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[] }, provider: string } }
-    expect(generatedPayload.data).toMatchObject({ provider: 'openai_compatible', summary: { citedEvidenceKeys: ['quality-roe'] } })
+    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[], decisionReview: { recommendation: string, accepted: boolean } }, provider: string } }
+    expect(generatedPayload.data).toMatchObject({ provider: 'openai_compatible', summary: { citedEvidenceKeys: ['quality-roe'], decisionReview: { recommendation: 'bearish', accepted: true } } })
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(expect.objectContaining({ authorization: 'Bearer sk-user-one-1234' }))
     await expect(client.execute('SELECT summary_json, cited_evidence_keys_json FROM quant_research_summary')).resolves.toMatchObject({
       rows: [{ summary_json: expect.not.stringContaining('sk-user-one-1234'), cited_evidence_keys_json: '["quality-roe"]' }],

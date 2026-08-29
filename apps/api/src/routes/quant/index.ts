@@ -5,7 +5,7 @@ import type { QuantAiCandidateBriefingQuestionResult } from '../../domain/quant/
 import type { QuantAiChangeExplanationResult } from '../../domain/quant/ai-change-explanation'
 import type { QuantAiComparisonResult } from '../../domain/quant/ai-comparison'
 import type { QuantAiQuestionResult } from '../../domain/quant/ai-question'
-import type { QuantAiSummary } from '../../domain/quant/ai-summary'
+import type { QuantAiDecisionReview, QuantAiSummary } from '../../domain/quant/ai-summary'
 import type { EastmoneyProviderOptions, TushareProviderOptions } from '../../domain/quant/provider'
 import type { QuantResearchReport } from '../../domain/quant/research-report'
 import type { QuantSignalHistoryCandidate, QuantSignalHistorySnapshot } from '../../domain/quant/signal-persistence'
@@ -20,7 +20,7 @@ import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
 import { testQuantAiConnection } from '../../domain/quant/ai-connection'
 import { generateQuantAiQuestion } from '../../domain/quant/ai-question'
-import { generateQuantAiSummary } from '../../domain/quant/ai-summary'
+import { generateQuantAiSummary, QUANT_AI_DECISION_VERSION } from '../../domain/quant/ai-summary'
 import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
@@ -184,7 +184,7 @@ function researchRunView(row: QuantResearchRunRecord) {
 function parseStoredAiSummary(value: string, report: QuantResearchReport): QuantAiSummary {
   try {
     const parsed: unknown = JSON.parse(value)
-    if (!isRecord(parsed) || parsed.summaryVersion !== 'research-summary-v1')
+    if (!isRecord(parsed) || (parsed.summaryVersion !== 'research-summary-v1' && parsed.summaryVersion !== 'research-summary-v2'))
       throw new Error('invalid summary')
     const stringList = (field: string, max: number): string[] => {
       const items = parsed[field]
@@ -198,13 +198,47 @@ function parseStoredAiSummary(value: string, report: QuantResearchReport): Quant
       throw new Error('unknown evidence key')
     if (typeof parsed.overview !== 'string' || !parsed.overview.trim())
       throw new Error('invalid overview')
+    let decisionReview: QuantAiDecisionReview | null = null
+    if (parsed.decisionReview !== undefined && parsed.decisionReview !== null) {
+      if (!isRecord(parsed.decisionReview) || parsed.decisionReview.decisionVersion !== QUANT_AI_DECISION_VERSION) {
+        throw new Error('invalid decision review')
+      }
+      const confidence = parsed.decisionReview.confidence
+      const recommendation = parsed.decisionReview.recommendation
+      const rationale = parsed.decisionReview.rationale
+      const invalidationConditions = parsed.decisionReview.invalidationConditions
+      if ((recommendation !== 'bullish' && recommendation !== 'bearish' && recommendation !== 'watch')
+        || typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100
+        || typeof rationale !== 'string' || !rationale.trim()
+        || !Array.isArray(invalidationConditions) || invalidationConditions.length > 6
+        || invalidationConditions.some(item => typeof item !== 'string' || !item.trim())) {
+        throw new Error('invalid decision review')
+      }
+      const decisionCitedEvidenceKeys = parsed.decisionReview.citedEvidenceKeys
+      if (!Array.isArray(decisionCitedEvidenceKeys) || decisionCitedEvidenceKeys.length > 16 || decisionCitedEvidenceKeys.some(key => typeof key !== 'string' || !allowed.has(key))) {
+        throw new Error('invalid decision citations')
+      }
+      const deterministicWatch = report.decision?.recommendation === 'watch' || (report.decision?.coverage ?? 0) < 80
+      const accepted = confidence >= 60 && !deterministicWatch
+      decisionReview = {
+        decisionVersion: QUANT_AI_DECISION_VERSION,
+        recommendation,
+        confidence,
+        accepted,
+        rejectionReason: accepted ? null : deterministicWatch ? 'deterministic-watch' : 'low-confidence',
+        rationale: rationale.trim(),
+        invalidationConditions: invalidationConditions.map(item => item.trim()),
+        citedEvidenceKeys: [...new Set(decisionCitedEvidenceKeys.map(key => (key as string).trim()))],
+      }
+    }
     return {
-      summaryVersion: 'research-summary-v1',
+      summaryVersion: parsed.summaryVersion,
       overview: parsed.overview,
       supports: stringList('supports', 6),
       concerns: stringList('concerns', 6),
       nextChecks: stringList('nextChecks', 6),
       citedEvidenceKeys,
+      decisionReview,
     }
   }
   catch {

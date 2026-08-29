@@ -33,6 +33,14 @@ function numberValue(value: number | null): string {
   return value !== null && Number.isFinite(value) ? String(value) : '暂无数据'
 }
 
+function recommendationLabel(value: string): string {
+  return value === 'bullish' ? '看多' : value === 'bearish' ? '看空' : '观望'
+}
+
+function priceRangeValue(value: { low: number, high: number } | null | undefined): string {
+  return value && Number.isFinite(value.low) && Number.isFinite(value.high) ? `${value.low} - ${value.high} 元` : '暂无参考区间'
+}
+
 export function buildResearchReportMarkdown(run: QuantResearchRun, aiSummary: QuantResearchSummary | null = null): string {
   const report = run.report
   const evidence = report.evidence.length
@@ -53,6 +61,8 @@ export function buildResearchReportMarkdown(run: QuantResearchRun, aiSummary: Qu
   const sources = report.sources.length
     ? report.sources.map(source => `- ${inline(source.name)} · 观察时间 ${inline(source.observedAt, '未记录')} · 公式版本 ${inline(source.formulaVersion)}`).join('\n')
     : '- 暂无来源快照'
+  const decision = report.decision
+  const factorModel = report.factorModel
   const sections = [
     '# Quant 研究报告',
     [
@@ -69,6 +79,33 @@ export function buildResearchReportMarkdown(run: QuantResearchRun, aiSummary: Qu
     `## 风险核对\n\n${list(report.risks)}`,
     `## 数据缺口\n\n${list(report.gaps)}`,
     `## 下一步\n\n${list(report.nextActions)}`,
+    ...(decision
+      ? [
+          [
+            '## 简化推荐',
+            `- 推荐：${recommendationLabel(decision.recommendation)}`,
+            `- 确定性分数：${numberValue(decision.deterministicScore)}`,
+            `- 数据覆盖度：${decision.coverage}%`,
+            `- 参考买入区间：${priceRangeValue(decision.buyPriceRange)}`,
+            `- 参考卖出区间：${priceRangeValue(decision.sellPriceRange)}`,
+            `- 结论：${inline(decision.headline)}`,
+            '',
+            '### 失效条件',
+            list(decision.invalidationConditions),
+          ].join('\n'),
+        ]
+      : []),
+    ...(factorModel
+      ? [
+          [
+            '## 因子模型',
+            `- 模型版本：${inline(factorModel.modelVersion)}`,
+            `- 覆盖权重：${factorModel.coveredWeight}`,
+            `- 覆盖度：${factorModel.coverage}%`,
+            ...factorModel.factors.map(factor => `- ${inline(factor.label)}：权重 ${factor.weight} · 状态 ${inline(factor.status)} · 分数 ${numberValue(factor.score)} · 来源 ${inline(factor.source)} · evidence ${factor.evidenceKeys.join('、')}`),
+          ].join('\n'),
+        ]
+      : []),
     `## 证据链\n\n${evidence}`,
     `## 来源快照\n\n${sources}`,
   ]
@@ -92,6 +129,19 @@ export function buildResearchReportMarkdown(run: QuantResearchRun, aiSummary: Qu
       '',
       '### 引用证据 Key',
       list(aiSummary.citedEvidenceKeys),
+      ...(aiSummary.summary.decisionReview
+        ? [
+            '',
+            '### AI 决策复核',
+            `- 推荐：${recommendationLabel(aiSummary.summary.decisionReview.recommendation)}`,
+            `- 置信度：${aiSummary.summary.decisionReview.confidence}`,
+            `- 是否采用：${aiSummary.summary.decisionReview.accepted ? '是' : '否'}`,
+            `- 理由：${inline(aiSummary.summary.decisionReview.rationale)}`,
+            '- 失效条件',
+            list(aiSummary.summary.decisionReview.invalidationConditions),
+            `- 引用证据 Key：${aiSummary.summary.decisionReview.citedEvidenceKeys.join('、') || '暂无'}`,
+          ]
+        : []),
     ].join('\n'))
   }
 

@@ -14,7 +14,10 @@ import type {
   QuantAiCandidateBriefingSessionList,
   QuantAiConfig,
   QuantAiConnectionTest,
+  QuantAiDecisionReview,
   QuantAiProvider,
+  QuantDecisionProjection,
+  QuantFactorModel,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -23,9 +26,11 @@ import type {
   QuantKnowledgeFactor,
   QuantKnowledgeSource,
   QuantProviderName,
+  QuantReferencePriceRange,
   QuantResearchChangeExplanation,
   QuantResearchComparison,
   QuantResearchEvidence,
+  QuantResearchFactor,
   QuantResearchMarker,
   QuantResearchQuestion,
   QuantResearchReport,
@@ -473,6 +478,101 @@ function parseResearchSource(value: unknown): QuantResearchSource | null {
   }
 }
 
+function parseResearchFactor(value: unknown): QuantResearchFactor | null {
+  if (!isRecord(value))
+    return null
+  const key = readString(value, 'key')
+  const label = readString(value, 'label')
+  const weight = readNumber(value, 'weight')
+  const sourceId = readString(value, 'sourceId', 'source_id')
+  const source = readString(value, 'source')
+  const status = readString(value, 'status')
+  const score = readNumber(value, 'score')
+  if ((key !== 'trend' && key !== 'valuation' && key !== 'quality' && key !== 'shareholder-return' && key !== 'risk')
+    || !label || weight === null || weight < 0 || !sourceId || !source
+    || (status !== 'ready' && status !== 'partial' && status !== 'missing' && status !== 'unavailable')
+    || (score !== null && (score < 0 || score > 100))) {
+    return null
+  }
+  return {
+    key,
+    label,
+    weight,
+    sourceId,
+    source,
+    status,
+    score,
+    evidenceKeys: readStringList(value, 'evidenceKeys', 'evidence_keys'),
+    missingEvidenceKeys: readStringList(value, 'missingEvidenceKeys', 'missing_evidence_keys'),
+  }
+}
+
+function parseFactorModel(value: unknown): QuantFactorModel | undefined {
+  if (!isRecord(value))
+    return undefined
+  const modelVersion = readString(value, 'modelVersion', 'model_version')
+  const totalWeight = readNumber(value, 'totalWeight', 'total_weight')
+  const coveredWeight = readNumber(value, 'coveredWeight', 'covered_weight')
+  const coverage = readNumber(value, 'coverage')
+  const score = readNumber(value, 'score')
+  const factors = Array.isArray(value.factors)
+    ? value.factors.flatMap((item) => {
+        const factor = parseResearchFactor(item)
+        return factor ? [factor] : []
+      })
+    : []
+  if (!modelVersion || totalWeight === null || totalWeight < 0 || coveredWeight === null || coveredWeight < 0 || coveredWeight > totalWeight
+    || coverage === null || coverage < 0 || coverage > 100 || (score !== null && (score < 0 || score > 100))
+    || !factors.length) {
+    return undefined
+  }
+  return { modelVersion, totalWeight, coveredWeight, coverage, score, factors }
+}
+
+function parseReferencePriceRange(value: unknown): QuantReferencePriceRange | null {
+  if (!isRecord(value))
+    return null
+  const low = readNumber(value, 'low')
+  const high = readNumber(value, 'high')
+  const currency = readString(value, 'currency')
+  const formulaVersion = readString(value, 'formulaVersion', 'formula_version')
+  const source = readString(value, 'source')
+  const observedAt = readString(value, 'observedAt', 'observed_at')
+  if (low === null || high === null || low < 0 || high < low || currency !== 'CNY' || !formulaVersion || !source || !observedAt)
+    return null
+  return { low, high, currency, formulaVersion, source, observedAt, evidenceKeys: readStringList(value, 'evidenceKeys', 'evidence_keys') }
+}
+
+function parseResearchDecision(value: unknown): QuantDecisionProjection | undefined {
+  if (!isRecord(value))
+    return undefined
+  const decisionVersion = readString(value, 'decisionVersion', 'decision_version')
+  const recommendation = readString(value, 'recommendation')
+  const label = readString(value, 'label')
+  const deterministicScore = readNumber(value, 'deterministicScore', 'deterministic_score')
+  const confidence = readNumber(value, 'confidence')
+  const coverage = readNumber(value, 'coverage')
+  const headline = readString(value, 'headline')
+  if (!decisionVersion || (recommendation !== 'bullish' && recommendation !== 'bearish' && recommendation !== 'watch')
+    || (label !== '看多' && label !== '看空' && label !== '观望') || (deterministicScore !== null && (deterministicScore < 0 || deterministicScore > 100))
+    || (confidence !== null && (confidence < 0 || confidence > 100)) || coverage === null || coverage < 0 || coverage > 100 || !headline) {
+    return undefined
+  }
+  return {
+    decisionVersion,
+    recommendation,
+    label,
+    deterministicScore,
+    confidence,
+    coverage,
+    buyPriceRange: parseReferencePriceRange(value.buyPriceRange ?? value.buy_price_range),
+    sellPriceRange: parseReferencePriceRange(value.sellPriceRange ?? value.sell_price_range),
+    evidenceKeys: readStringList(value, 'evidenceKeys', 'evidence_keys'),
+    invalidationConditions: readStringList(value, 'invalidationConditions', 'invalidation_conditions'),
+    headline,
+  }
+}
+
 function parseResearchReport(value: unknown): QuantResearchReport | null {
   if (!isRecord(value))
     return null
@@ -508,6 +608,8 @@ function parseResearchReport(value: unknown): QuantResearchReport | null {
     nextActions: readStringList(value, 'nextActions', 'next_actions'),
     evidence,
     sources,
+    factorModel: parseFactorModel(value.factorModel ?? value.factor_model),
+    decision: parseResearchDecision(value.decision),
   }
 }
 
@@ -561,6 +663,34 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
   if (!overview)
     return null
   const citedEvidenceKeys = parseSummaryList('citedEvidenceKeys')
+  const rawDecisionReview = rawSummary.decisionReview ?? rawSummary.decision_review
+  const decisionReview: QuantAiDecisionReview | null = isRecord(rawDecisionReview)
+    ? (() => {
+        const decisionVersion = readString(rawDecisionReview, 'decisionVersion', 'decision_version')
+        const recommendation = readString(rawDecisionReview, 'recommendation')
+        const confidence = readNumber(rawDecisionReview, 'confidence')
+        const rationale = readString(rawDecisionReview, 'rationale')
+        const invalidationConditions = readStringList(rawDecisionReview, 'invalidationConditions', 'invalidation_conditions')
+        const accepted = readBoolean(rawDecisionReview, 'accepted')
+        const rejectionReason = readString(rawDecisionReview, 'rejectionReason', 'rejection_reason')
+        const reviewCitations = readStringList(rawDecisionReview, 'citedEvidenceKeys', 'cited_evidence_keys')
+        if (!decisionVersion || !recommendation || confidence === null || confidence < 0 || confidence > 100 || !rationale || accepted === null
+          || (rejectionReason !== null && rejectionReason !== 'low-confidence' && rejectionReason !== 'deterministic-watch')
+          || (recommendation !== 'bullish' && recommendation !== 'bearish' && recommendation !== 'watch')) {
+          return null
+        }
+        return {
+          decisionVersion,
+          recommendation,
+          confidence,
+          accepted,
+          rejectionReason,
+          rationale,
+          invalidationConditions,
+          citedEvidenceKeys: reviewCitations,
+        }
+      })()
+    : null
   return {
     id,
     researchRunId,
@@ -577,6 +707,7 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
       concerns: parseSummaryList('concerns'),
       nextChecks: parseSummaryList('nextChecks', 'next_checks'),
       citedEvidenceKeys,
+      decisionReview,
     },
     citedEvidenceKeys: readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys').length
       ? readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys')
