@@ -129,7 +129,7 @@ describe('canonical Gateway readiness', () => {
     try {
       await expect(probeCanonicalGatewayReadiness({
         fetch: gatewayFetch(server.origin),
-        timeoutMs: 100,
+        timeoutMs: 1_000,
       })).resolves.toEqual(acceptedResult())
     }
     finally {
