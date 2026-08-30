@@ -132,6 +132,33 @@ describe('quant decision recommendation', () => {
     expect(wrapper.text()).toContain('10.00 - 11.00 元')
   })
 
+  it('exposes a one-click AI review event when no structured review exists', async () => {
+    const wrapper = mount(QuantDecisionRecommendation, { props: { report: report(), summary: null } })
+
+    const button = wrapper.get('.quant-decision-ai-review-button')
+    expect(button.text()).toContain('让 AI 复核')
+    await button.trigger('click')
+
+    expect(wrapper.emitted('requestAiReview')).toEqual([[]])
+  })
+
+  it('keeps the review entry for legacy summaries without decisionReview', () => {
+    const legacy = summary()
+    legacy.summary.decisionReview = null
+    const wrapper = mount(QuantDecisionRecommendation, { props: { report: report(), summary: legacy } })
+
+    expect(wrapper.text()).toContain('摘要已有，尚无结构化 AI 决策复核')
+    expect(wrapper.get('.quant-decision-ai-review-button').text()).toContain('重新复核')
+  })
+
+  it('disables the entry while an AI review is running', () => {
+    const wrapper = mount(QuantDecisionRecommendation, { props: { report: report(), summary: null, aiReviewGenerating: true } })
+
+    const button = wrapper.get('.quant-decision-ai-review-button')
+    expect(button.text()).toContain('AI 复核中')
+    expect((button.element as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('keeps the no-report decision state explicit', () => {
     const wrapper = mount(QuantDecisionRecommendation, { props: { report: report({ decision: undefined }), summary: null } })
 
