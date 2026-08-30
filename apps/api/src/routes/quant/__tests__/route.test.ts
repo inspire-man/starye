@@ -38,6 +38,18 @@ describe('quant route contract', () => {
     expect(response.status).toBe(401)
   })
 
+  it('requires authentication for factor configuration reads and writes', async () => {
+    const read = await createApp(null).request('/api/quant/factor-config')
+    const write = await createApp(null).request('/api/quant/factor-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 } }),
+    })
+
+    expect(read.status).toBe(401)
+    expect(write.status).toBe(401)
+  })
+
   it('requires authentication for shareholder returns', async () => {
     const response = await createApp(null).request('/api/quant/shareholder-returns')
     expect(response.status).toBe(401)

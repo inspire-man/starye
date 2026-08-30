@@ -78,6 +78,31 @@ function reportPrompt(report: QuantResearchReport): Record<string, unknown> {
     action: boundedText(report.action, 40),
     score: report.score,
     headline: boundedText(report.headline, 480),
+    factorModel: report.factorModel
+      ? {
+          modelVersion: boundedText(report.factorModel.modelVersion, 80),
+          score: report.factorModel.score,
+          coverage: report.factorModel.coverage,
+          configuration: report.factorModel.configuration ?? null,
+          factors: report.factorModel.factors.slice(0, 8).map(factor => ({
+            key: factor.key,
+            label: boundedText(factor.label, 80),
+            weight: factor.weight,
+            source: boundedText(factor.source, 180),
+            status: factor.status,
+            score: factor.score,
+          })),
+        }
+      : null,
+    decision: report.decision
+      ? {
+          recommendation: report.decision.recommendation,
+          deterministicScore: report.decision.deterministicScore,
+          confidence: report.decision.confidence,
+          coverage: report.decision.coverage,
+          headline: boundedText(report.decision.headline, 480),
+        }
+      : null,
     sources: report.sources.slice(0, 16).map(source => ({
       id: boundedText(source.id, 80),
       name: boundedText(source.name, 180),
@@ -118,6 +143,21 @@ export function buildQuantAiQuestionPrompt(report: QuantResearchReport, question
         tsCode: report.tsCode,
         status: report.status,
         action: report.action,
+        factorModel: report.factorModel
+          ? {
+              modelVersion: report.factorModel.modelVersion,
+              score: report.factorModel.score,
+              coverage: report.factorModel.coverage,
+              configuration: report.factorModel.configuration ?? null,
+            }
+          : null,
+        decision: report.decision
+          ? {
+              recommendation: report.decision.recommendation,
+              deterministicScore: report.decision.deterministicScore,
+              coverage: report.decision.coverage,
+            }
+          : null,
         evidence: report.evidence.slice(0, 4).map(item => ({
           key: boundedText(item.key, 80),
           status: boundedText(item.status, 40),

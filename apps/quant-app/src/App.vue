@@ -84,6 +84,7 @@ import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
 import QuantDecisionRecommendation from './components/QuantDecisionRecommendation.vue'
+import QuantFactorSettingsDrawer from './components/QuantFactorSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from './lib/candidate-briefing-export'
@@ -94,6 +95,7 @@ import { buildComparisonAiNextCheckPrompt } from './lib/comparison-ai-prompts'
 import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
+import { isQuantAiAutoReviewReady } from './lib/research-ai-auto-review'
 import { runResearchBatch } from './lib/research-batch'
 import {
   applyBatchAiSummaryProgress,
@@ -213,6 +215,7 @@ const syncState = ref<SyncResult | null>(null)
 const syncStateError = ref<unknown | null>(null)
 const detailDrawerOpen = ref(false)
 const aiSettingsOpen = ref(false)
+const factorSettingsOpen = ref(false)
 let valuationRequestId = 0
 let financialRequestId = 0
 let valueQualityRequestId = 0
@@ -1816,14 +1819,29 @@ async function loadResearchRuns(tsCode: string) {
   }
 }
 
-async function loadResearchSummary(runId: string) {
+async function loadResearchSummary(runId: string, options: { autoGenerate?: boolean } = {}) {
   const requestId = ++researchSummaryRequestId
   researchSummaryLoading.value = true
+  researchSummaryGenerating.value = false
   researchSummaryError.value = null
   try {
     const summaries = await quantApi.getResearchSummaries(runId, 1)
-    if (requestId === researchSummaryRequestId)
+    if (requestId !== researchSummaryRequestId)
+      return
+    if (summaries[0]) {
       researchAiSummary.value = summaries[0] || null
+      return
+    }
+    if (!options.autoGenerate)
+      return
+    const config = await quantApi.getAiConfig()
+    if (requestId !== researchSummaryRequestId || !isQuantAiAutoReviewReady(config))
+      return
+    researchSummaryLoading.value = false
+    researchSummaryGenerating.value = true
+    const summary = await quantApi.generateResearchSummary(runId)
+    if (requestId === researchSummaryRequestId)
+      researchAiSummary.value = summary
   }
   catch (error) {
     if (requestId === researchSummaryRequestId) {
@@ -1851,7 +1869,7 @@ async function generateResearchReport() {
     researchSummaryRequestId++
     researchAiSummary.value = null
     researchSummaryError.value = null
-    await loadResearchSummary(run.id)
+    await loadResearchSummary(run.id, { autoGenerate: true })
   }
   catch (error) {
     researchRunError.value = error
@@ -2942,8 +2960,9 @@ onUnmounted(() => {
 
 <template>
   <div class="quant-shell min-h-screen">
-    <QuantHeader :active-view="activeView" :latest-date="latestWatchlistDate" :busy="pageBusy" @navigate="setActiveView" @refresh="loadWorkspace" @settings="aiSettingsOpen = true" />
+    <QuantHeader :active-view="activeView" :latest-date="latestWatchlistDate" :busy="pageBusy" @navigate="setActiveView" @refresh="loadWorkspace" @settings="aiSettingsOpen = true" @factor-settings="factorSettingsOpen = true" />
     <QuantAiSettingsDrawer v-model:open="aiSettingsOpen" />
+    <QuantFactorSettingsDrawer v-model:open="factorSettingsOpen" />
     <main class="quant-page">
       <header class="quant-view-heading">
         <div class="min-w-0">
@@ -3940,6 +3959,8 @@ onUnmounted(() => {
               <QuantDecisionRecommendation
                 :report="latestResearchReport"
                 :summary="researchAiSummary"
+                :current-price="latestDailyBar?.close ?? selectedStock.latestClose"
+                :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
               />
               <div class="research-run-summary">
                 <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">

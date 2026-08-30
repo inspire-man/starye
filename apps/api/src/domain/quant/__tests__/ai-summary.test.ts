@@ -46,6 +46,20 @@ const report: QuantResearchReport = {
     observedAt: '2026-08-26T00:00:00.000Z',
     formulaVersion: 'eastmoney-financial-v1',
   }],
+  factorModel: {
+    modelVersion: 'research-factors-v1',
+    totalWeight: 1,
+    coveredWeight: 1,
+    coverage: 100,
+    score: 72.5,
+    factors: [],
+    configuration: {
+      version: 'research-factor-config-v1',
+      weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },
+      source: 'user',
+      updatedAt: '2026-08-26T00:00:00.000Z',
+    },
+  },
 }
 
 const config: QuantDecryptedAiConfig = {
@@ -93,6 +107,7 @@ describe('quant AI summary', () => {
     }))
     const requestInit = fetchImpl.mock.calls[0]?.[1]
     expect(String(requestInit?.body)).toContain('quality-roe')
+    expect(String(requestInit?.body)).toContain('research-factor-config-v1')
     expect(String(requestInit?.body)).not.toContain('sk-user-secret')
   })
 

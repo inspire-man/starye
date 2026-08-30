@@ -1,5 +1,7 @@
+import type { QuantFactorConfiguration } from './factor-configuration'
 import type { QuantResearchEvidence } from './research-report'
 import type { DailyBar } from './types'
+import { defaultQuantFactorConfiguration } from './factor-configuration'
 
 export const QUANT_FACTOR_MODEL_VERSION = 'research-factors-v1' as const
 export const QUANT_DECISION_VERSION = 'research-decision-v1' as const
@@ -28,6 +30,8 @@ export interface QuantFactorModel {
   readonly coverage: number
   readonly score: number | null
   readonly factors: readonly QuantResearchFactor[]
+  /** Missing on historical reports written before user-level factor configuration existed. */
+  readonly configuration?: QuantFactorConfiguration
 }
 
 export interface QuantReferencePriceRange {
@@ -134,7 +138,7 @@ function factorSourceId(definition: FactorDefinition, items: readonly QuantResea
   return definition.sourceId
 }
 
-function buildFactorModel(evidence: readonly QuantResearchEvidence[]): QuantFactorModel {
+function buildFactorModel(evidence: readonly QuantResearchEvidence[], configuration: QuantFactorConfiguration): QuantFactorModel {
   const evidenceByKey = new Map(evidence.map(item => [item.key, item] as const))
   const factors = QUANT_FACTOR_DEFINITIONS.map((definition) => {
     const items = definition.evidenceKeys.flatMap((key) => {
@@ -148,7 +152,7 @@ function buildFactorModel(evidence: readonly QuantResearchEvidence[]): QuantFact
     return {
       key: definition.key,
       label: definition.label,
-      weight: definition.weight,
+      weight: configuration.weights[definition.key],
       sourceId: factorSourceId(definition, items),
       source: items[0]?.source ?? definition.source,
       status,
@@ -171,6 +175,7 @@ function buildFactorModel(evidence: readonly QuantResearchEvidence[]): QuantFact
     coverage: round(coveredWeight * 100),
     score,
     factors: factors.map(({ coveredRatio: _coveredRatio, ...factor }) => factor),
+    configuration,
   }
 }
 
@@ -232,9 +237,11 @@ function recommendationLabel(value: QuantRecommendation): '看多' | '看空' | 
 export function buildQuantDecisionProjection(input: {
   readonly evidence: readonly QuantResearchEvidence[]
   readonly dailyBars: readonly DailyBar[]
+  readonly factorConfiguration?: QuantFactorConfiguration
 }): { readonly factorModel: QuantFactorModel, readonly decision: QuantDecisionProjection } {
-  const factorModel = buildFactorModel(input.evidence)
-  const missingFactors = factorModel.factors.filter(factor => factor.status !== 'ready')
+  const factorConfiguration = input.factorConfiguration ?? defaultQuantFactorConfiguration()
+  const factorModel = buildFactorModel(input.evidence, factorConfiguration)
+  const missingFactors = factorModel.factors.filter(factor => factor.weight > 0 && factor.status !== 'ready')
   const riskScore = factorByKey(factorModel, 'risk')?.score ?? null
   const score = factorModel.score
   const enoughData = factorModel.coverage >= 80 && missingFactors.length === 0 && score !== null

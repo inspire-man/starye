@@ -109,6 +109,29 @@ function reportPrompt({ report }: QuantAiComparisonReport, evidenceLimit = 32, d
     action: boundedText(report.action, 40),
     score: report.score,
     headline: boundedText(report.headline, 480),
+    factorModel: report.factorModel
+      ? {
+          modelVersion: boundedText(report.factorModel.modelVersion, 80),
+          score: report.factorModel.score,
+          coverage: report.factorModel.coverage,
+          configuration: report.factorModel.configuration ?? null,
+          factors: report.factorModel.factors.slice(0, 8).map(factor => ({
+            key: factor.key,
+            label: boundedText(factor.label, 80),
+            weight: factor.weight,
+            status: factor.status,
+            score: factor.score,
+          })),
+        }
+      : null,
+    decision: report.decision
+      ? {
+          recommendation: report.decision.recommendation,
+          deterministicScore: report.decision.deterministicScore,
+          coverage: report.decision.coverage,
+          headline: boundedText(report.decision.headline, 480),
+        }
+      : null,
     evidence: report.evidence.slice(0, evidenceLimit).map(item => ({
       key: boundedText(item.key, 80),
       dimension: boundedText(item.dimension, 80),
@@ -137,6 +160,20 @@ export function buildQuantAiComparisonPrompt(reports: readonly QuantAiComparison
   const minimalPayload = JSON.stringify(reports.slice(0, 3).map(({ report }) => ({
     tsCode: boundedText(report.tsCode, 20),
     status: boundedText(report.status, 40),
+    factorModel: report.factorModel
+      ? {
+          score: report.factorModel.score,
+          coverage: report.factorModel.coverage,
+          configuration: report.factorModel.configuration ?? null,
+        }
+      : null,
+    decision: report.decision
+      ? {
+          recommendation: report.decision.recommendation,
+          deterministicScore: report.decision.deterministicScore,
+          coverage: report.decision.coverage,
+        }
+      : null,
     evidence: report.evidence.slice(0, 1).map(item => ({
       key: boundedText(item.key, 80),
       status: boundedText(item.status, 40),

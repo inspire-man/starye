@@ -1,8 +1,10 @@
 import type { Database } from '@starye/db'
+import type { QuantFactorConfiguration, QuantFactorWeights } from './factor-configuration'
 import type { DailyBar, MomentumCandidate, QuantSyncStatus } from './types'
 import {
   quantCandidateAiSessions,
   quantDailyBars,
+  quantFactorConfigs,
   quantResearchMarkers,
   quantResearchRuns,
   quantResearchSummaries,
@@ -13,6 +15,7 @@ import {
 import { and, asc, desc, eq, gt, gte, lte, sql } from 'drizzle-orm'
 import { nanoid } from 'nanoid'
 import { QuantError } from './errors'
+import { createQuantFactorConfiguration, defaultQuantFactorConfiguration, QUANT_FACTOR_CONFIGURATION_VERSION } from './factor-configuration'
 
 export const QUANT_SYNC_STATE_ID = 'daily'
 export const MAX_WATCHLIST_SIZE = 50
@@ -24,6 +27,96 @@ export const QUANT_CANDIDATE_AI_SESSION_RETENTION = 10
 export const QUANT_CANDIDATE_AI_QUESTION_RETENTION = 10
 export const QUANT_RESEARCH_STATUSES = ['unreviewed', 'priority', 'paused', 'excluded'] as const
 export type QuantResearchStatus = typeof QUANT_RESEARCH_STATUSES[number]
+
+function parseQuantFactorWeights(value: string): QuantFactorWeights {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      throw new Error('weights must be an object')
+  }
+  catch {
+    throw new QuantError('QUANT_FACTOR_CONFIGURATION', 'Stored factor configuration is invalid', 500)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new QuantError('QUANT_FACTOR_CONFIGURATION', 'Stored factor configuration is invalid', 500)
+  const record = parsed as Record<string, unknown>
+  try {
+    return {
+      'trend': record.trend as number,
+      'valuation': record.valuation as number,
+      'quality': record.quality as number,
+      'shareholder-return': record['shareholder-return'] as number,
+      'risk': record.risk as number,
+    }
+  }
+  catch {
+    throw new QuantError('QUANT_FACTOR_CONFIGURATION', 'Stored factor configuration is invalid', 500)
+  }
+}
+
+function factorConfigView(row: typeof quantFactorConfigs.$inferSelect): QuantFactorConfiguration {
+  try {
+    if (row.version !== QUANT_FACTOR_CONFIGURATION_VERSION)
+      throw new QuantError('QUANT_FACTOR_CONFIGURATION', 'Stored factor configuration version is invalid', 500)
+    return createQuantFactorConfiguration({
+      weights: parseQuantFactorWeights(row.weightsJson),
+      source: 'user',
+      updatedAt: row.updatedAt,
+    })
+  }
+  catch (error) {
+    if (error instanceof QuantError && error.code === 'QUANT_FACTOR_CONFIGURATION')
+      throw new QuantError('QUANT_FACTOR_CONFIGURATION', 'Stored factor configuration is invalid', 500)
+    throw error
+  }
+}
+
+export async function getQuantFactorConfiguration(db: Database, userId: string): Promise<QuantFactorConfiguration> {
+  const ownerId = normalizeQuantUserId(userId)
+  const row = await db.select().from(quantFactorConfigs).where(eq(quantFactorConfigs.userId, ownerId)).get()
+  return row ? factorConfigView(row) : defaultQuantFactorConfiguration()
+}
+
+export async function saveQuantFactorConfiguration(db: Database, input: {
+  readonly userId: string
+  readonly weights: QuantFactorWeights
+}): Promise<QuantFactorConfiguration> {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const configuration = createQuantFactorConfiguration({ weights: input.weights, source: 'user' })
+  const existing = await db.select({ id: quantFactorConfigs.id }).from(quantFactorConfigs).where(eq(quantFactorConfigs.userId, ownerId)).get()
+  const now = new Date()
+  if (existing) {
+    await db.update(quantFactorConfigs).set({
+      version: configuration.version,
+      weightsJson: JSON.stringify(configuration.weights),
+      updatedAt: now,
+    }).where(and(eq(quantFactorConfigs.id, existing.id), eq(quantFactorConfigs.userId, ownerId)))
+  }
+  else {
+    await db.insert(quantFactorConfigs).values({
+      id: nanoid(),
+      userId: ownerId,
+      version: configuration.version,
+      weightsJson: JSON.stringify(configuration.weights),
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
+  const persisted = await db.select().from(quantFactorConfigs).where(eq(quantFactorConfigs.userId, ownerId)).get()
+  if (!persisted)
+    throw new QuantError('QUANT_FACTOR_CONFIGURATION', 'Factor configuration readback failed', 500)
+  return factorConfigView(persisted)
+}
+
+export async function deleteQuantFactorConfiguration(db: Database, userId: string): Promise<QuantFactorConfiguration> {
+  const ownerId = normalizeQuantUserId(userId)
+  await db.delete(quantFactorConfigs).where(eq(quantFactorConfigs.userId, ownerId))
+  const persisted = await db.select().from(quantFactorConfigs).where(eq(quantFactorConfigs.userId, ownerId)).get()
+  if (persisted)
+    throw new QuantError('QUANT_FACTOR_CONFIGURATION', 'Factor configuration reset failed', 500)
+  return defaultQuantFactorConfiguration()
+}
 
 export const QUANT_STARTER_WATCHLIST = [
   { tsCode: '601899.SH', name: '紫金矿业' },

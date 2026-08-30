@@ -154,4 +154,28 @@ describe('quant AI question', () => {
     expect(prompt.length).toBeLessThanOrEqual(16_000)
     expect(prompt).toContain('quality-roe')
   })
+
+  it('passes the report factor configuration and deterministic decision into follow-up context', () => {
+    const prompt = buildQuantAiQuestionPrompt({
+      ...report,
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 1,
+        coverage: 100,
+        score: 78,
+        factors: [],
+        configuration: {
+          version: 'research-factor-config-v1',
+          weights: { 'trend': 0.4, 'valuation': 0.1, 'quality': 0.2, 'shareholder-return': 0.1, 'risk': 0.2 },
+          source: 'user',
+          updatedAt: '2026-08-29T00:00:00.000Z',
+        },
+      },
+    }, '因子权重如何影响分数？')
+
+    expect(prompt).toContain('research-factor-config-v1')
+    expect(prompt).toContain('0.4')
+    expect(prompt).toContain('因子权重如何影响分数？')
+  })
 })
