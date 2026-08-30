@@ -13,4 +13,4 @@
 ## 3. 验收与交付
 
 - [x] 3.1 补纯函数/组件测试，运行 Quant type-check、test、build、lint 和 OpenSpec strict。
-- [ ] 3.2 运行 staged GitNexus detect_changes，提交功能并确认工作树状态。
+- [x] 3.2 运行 staged GitNexus detect_changes，提交功能并确认工作树状态。
