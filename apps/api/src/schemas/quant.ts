@@ -291,6 +291,75 @@ export const QuantResearchRunIdParamSchema = v.object({
   runId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64), v.regex(/^[\w-]+$/u)),
 })
 
+export const QuantDecisionRecordActionSchema = v.picklist(['watch', 'plan-buy', 'holding', 'sold'])
+
+export const QuantDecisionRecordUpdateSchema = v.strictObject({
+  action: QuantDecisionRecordActionSchema,
+  note: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(500)))),
+})
+
+export const QuantDecisionRecordQuerySchema = v.object({
+  limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
+})
+
+const QuantDecisionRecordPriceRangeSchema = v.strictObject({
+  low: v.number(),
+  high: v.number(),
+  currency: v.literal('CNY'),
+  formulaVersion: v.string(),
+  source: v.string(),
+  observedAt: v.string(),
+  evidenceKeys: v.array(v.string()),
+})
+
+const QuantDecisionRecordAiReviewSchema = v.strictObject({
+  decisionVersion: v.string(),
+  recommendation: v.picklist(['bullish', 'bearish', 'watch']),
+  confidence: v.number(),
+  accepted: v.boolean(),
+  rejectionReason: v.nullable(v.picklist(['low-confidence', 'deterministic-watch'])),
+  rationale: v.string(),
+  invalidationConditions: v.array(v.string()),
+  citedEvidenceKeys: v.array(v.string()),
+})
+
+export const QuantDecisionRecordSnapshotSchema = v.strictObject({
+  snapshotVersion: v.literal('decision-record-v1'),
+  reportVersion: v.string(),
+  generatedAt: v.string(),
+  recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+  confidence: v.nullable(v.number()),
+  coverage: v.nullable(v.number()),
+  evidenceKeys: v.array(v.string()),
+  currentPrice: v.nullable(v.number()),
+  currentPriceObservedAt: v.nullable(v.string()),
+  buyPriceRange: v.nullable(QuantDecisionRecordPriceRangeSchema),
+  sellPriceRange: v.nullable(QuantDecisionRecordPriceRangeSchema),
+  aiDecisionReview: v.nullable(QuantDecisionRecordAiReviewSchema),
+  factorConfiguration: v.nullable(QuantFactorConfigurationSchema),
+})
+
+export const QuantDecisionRecordSchema = v.strictObject({
+  id: v.string(),
+  researchRunId: v.string(),
+  tsCode: v.string(),
+  action: QuantDecisionRecordActionSchema,
+  note: v.nullable(v.string()),
+  snapshot: QuantDecisionRecordSnapshotSchema,
+  createdAt: v.string(),
+  updatedAt: v.string(),
+})
+
+export const QuantDecisionRecordResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.nullable(QuantDecisionRecordSchema),
+})
+
+export const QuantDecisionRecordsResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.array(QuantDecisionRecordSchema),
+})
+
 export const QuantResearchComparisonSchema = v.strictObject({
   run_ids: v.pipe(
     v.array(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64), v.regex(/^[\w-]+$/u))),

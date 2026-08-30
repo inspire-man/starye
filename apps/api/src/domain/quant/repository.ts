@@ -1,9 +1,11 @@
 import type { Database } from '@starye/db'
+import type { QuantDecisionRecordAction } from './decision-record'
 import type { QuantFactorConfiguration, QuantFactorWeights } from './factor-configuration'
 import type { DailyBar, MomentumCandidate, QuantSyncStatus } from './types'
 import {
   quantCandidateAiSessions,
   quantDailyBars,
+  quantDecisionRecords,
   quantFactorConfigs,
   quantResearchMarkers,
   quantResearchRuns,
@@ -24,6 +26,7 @@ export const QUANT_SYNC_SNAPSHOT_RETENTION = 30
 export const QUANT_RESEARCH_RUN_RETENTION = 30
 export const QUANT_RESEARCH_SUMMARY_RETENTION = 10
 export const QUANT_CANDIDATE_AI_SESSION_RETENTION = 10
+export const QUANT_DECISION_RECORD_RETENTION = 30
 export const QUANT_CANDIDATE_AI_QUESTION_RETENTION = 10
 export const QUANT_RESEARCH_STATUSES = ['unreviewed', 'priority', 'paused', 'excluded'] as const
 export type QuantResearchStatus = typeof QUANT_RESEARCH_STATUSES[number]
@@ -465,6 +468,14 @@ export async function listQuantDailyBars(db: Database, options: {
   }))
 }
 
+export async function getLatestQuantDailyBar(db: Database, tsCode: string): Promise<{ readonly close: number, readonly tradeDate: string } | null> {
+  const row = await db.select({
+    close: quantDailyBars.close,
+    tradeDate: quantDailyBars.tradeDate,
+  }).from(quantDailyBars).where(eq(quantDailyBars.tsCode, normalizeTsCode(tsCode))).orderBy(desc(quantDailyBars.tradeDate)).limit(1).get()
+  return row ?? null
+}
+
 export async function saveQuantScanSnapshot(db: Database, input: {
   readonly userId: string
   readonly status: Extract<QuantSyncStatus, 'completed' | 'partial'>
@@ -590,6 +601,67 @@ export async function getQuantResearchRun(db: Database, userId: string, id: stri
     eq(quantResearchRuns.id, normalizedId),
     eq(quantResearchRuns.userId, ownerId),
   )).get()
+}
+
+export async function getQuantDecisionRecord(db: Database, userId: string, researchRunId: string) {
+  const ownerId = normalizeQuantUserId(userId)
+  const normalizedRunId = researchRunId.trim()
+  if (!normalizedRunId)
+    throw new QuantError('QUANT_INVALID_INPUT', 'Research run id is required', 400)
+  return db.select().from(quantDecisionRecords).where(and(
+    eq(quantDecisionRecords.userId, ownerId),
+    eq(quantDecisionRecords.researchRunId, normalizedRunId),
+  )).get()
+}
+
+export async function listQuantDecisionRecords(db: Database, userId: string, tsCode: string, limit = QUANT_DECISION_RECORD_RETENTION) {
+  const ownerId = normalizeQuantUserId(userId)
+  const normalizedCode = normalizeTsCode(tsCode)
+  const boundedLimit = Math.min(QUANT_DECISION_RECORD_RETENTION, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : QUANT_DECISION_RECORD_RETENTION))
+  return db.select().from(quantDecisionRecords).where(and(
+    eq(quantDecisionRecords.userId, ownerId),
+    eq(quantDecisionRecords.tsCode, normalizedCode),
+  )).orderBy(desc(quantDecisionRecords.updatedAt), desc(quantDecisionRecords.id)).limit(boundedLimit).all()
+}
+
+export async function upsertQuantDecisionRecord(db: Database, input: {
+  readonly userId: string
+  readonly researchRunId: string
+  readonly tsCode: string
+  readonly action: QuantDecisionRecordAction
+  readonly note: string | null
+  readonly snapshotJson: string
+}) {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const normalizedRunId = input.researchRunId.trim()
+  if (!normalizedRunId)
+    throw new QuantError('QUANT_INVALID_INPUT', 'Research run id is required', 400)
+  const normalizedCode = normalizeTsCode(input.tsCode)
+  const now = new Date()
+  await db.insert(quantDecisionRecords).values({
+    id: nanoid(),
+    userId: ownerId,
+    researchRunId: normalizedRunId,
+    tsCode: normalizedCode,
+    action: input.action,
+    note: input.note,
+    snapshotJson: input.snapshotJson,
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoUpdate({
+    target: [quantDecisionRecords.userId, quantDecisionRecords.researchRunId],
+    set: {
+      tsCode: normalizedCode,
+      action: input.action,
+      note: input.note,
+      snapshotJson: input.snapshotJson,
+      updatedAt: now,
+    },
+  })
+  const persisted = await getQuantDecisionRecord(db, ownerId, normalizedRunId)
+  if (!persisted)
+    throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Decision record readback failed', 500)
+  return persisted
 }
 
 export async function createQuantResearchSummary(db: Database, input: {

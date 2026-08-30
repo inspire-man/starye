@@ -176,6 +176,35 @@ export interface QuantResearchSummary {
   citedEvidenceKeys: string[]
 }
 
+export type QuantDecisionRecordAction = 'watch' | 'plan-buy' | 'holding' | 'sold'
+
+export interface QuantDecisionRecordSnapshot {
+  snapshotVersion: 'decision-record-v1'
+  reportVersion: string
+  generatedAt: string
+  recommendation: QuantRecommendation | null
+  confidence: number | null
+  coverage: number | null
+  evidenceKeys: string[]
+  currentPrice: number | null
+  currentPriceObservedAt: string | null
+  buyPriceRange: QuantReferencePriceRange | null
+  sellPriceRange: QuantReferencePriceRange | null
+  aiDecisionReview: QuantAiDecisionReview | null
+  factorConfiguration: QuantFactorConfiguration | null
+}
+
+export interface QuantDecisionRecord {
+  id: string
+  researchRunId: string
+  tsCode: string
+  action: QuantDecisionRecordAction
+  note: string | null
+  snapshot: QuantDecisionRecordSnapshot
+  createdAt: string
+  updatedAt: string
+}
+
 export interface QuantResearchComparisonDifference {
   tsCode: string
   point: string

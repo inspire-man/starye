@@ -10,6 +10,8 @@ import type {
   DailyBar,
   QuantAiCandidateBriefing,
   QuantAiCandidateBriefingQuestion,
+  QuantDecisionRecord,
+  QuantDecisionRecordAction,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -83,6 +85,7 @@ import QuantAiResearchChangeExplanation from './components/QuantAiResearchChange
 import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
+import QuantDecisionJournal from './components/QuantDecisionJournal.vue'
 import QuantDecisionRecommendation from './components/QuantDecisionRecommendation.vue'
 import QuantFactorSettingsDrawer from './components/QuantFactorSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
@@ -139,6 +142,15 @@ const shareholderReturns = ref<QuantShareholderReturnSelection | null>(null)
 const investmentKnowledge = ref<QuantInvestmentKnowledge | null>(null)
 const researchMarkers = ref<QuantResearchMarker[]>([])
 const researchRuns = ref<QuantResearchRun[]>([])
+const researchDecisionRecord = ref<QuantDecisionRecord | null>(null)
+const researchDecisionHistory = ref<QuantDecisionRecord[]>([])
+const researchDecisionLoading = ref(false)
+const researchDecisionHistoryLoading = ref(false)
+const researchDecisionSaving = ref(false)
+const researchDecisionLoadError = ref<unknown | null>(null)
+const researchDecisionHistoryError = ref<unknown | null>(null)
+const researchDecisionSaveError = ref<unknown | null>(null)
+const researchDecisionSaveMessage = ref('')
 const researchAiSummary = ref<QuantResearchSummary | null>(null)
 const researchRunLoading = ref(false)
 const researchRunGenerating = ref(false)
@@ -221,6 +233,7 @@ let financialRequestId = 0
 let valueQualityRequestId = 0
 let shareholderReturnRequestId = 0
 let researchRunRequestId = 0
+let researchDecisionRequestId = 0
 let researchSummaryRequestId = 0
 let researchQuestionRequestId = 0
 let researchChangeExplanationRequestId = 0
@@ -1542,6 +1555,7 @@ async function loadWatchlist() {
     errors.shareholderReturns = null
     researchRunRequestId++
     researchRuns.value = []
+    resetResearchDecisionState()
     researchRunError.value = null
     researchSummaryRequestId++
     researchAiSummary.value = null
@@ -1784,8 +1798,58 @@ async function loadResearchMarkers() {
   }
 }
 
+function resetResearchDecisionState(): void {
+  researchDecisionRequestId++
+  researchDecisionRecord.value = null
+  researchDecisionHistory.value = []
+  researchDecisionLoading.value = false
+  researchDecisionHistoryLoading.value = false
+  researchDecisionLoadError.value = null
+  researchDecisionHistoryError.value = null
+  researchDecisionSaveError.value = null
+  researchDecisionSaveMessage.value = ''
+}
+
+function researchDecisionRequestIsCurrent(requestId: number, tsCode: string, runId: string | null): boolean {
+  return requestId === researchDecisionRequestId
+    && selectedTsCode.value === tsCode
+    && (runId === null || latestResearchRun.value?.id === runId)
+}
+
+async function loadResearchDecisionJournal(tsCode: string, runId: string | null, options: { preserveCurrent?: boolean } = {}): Promise<void> {
+  const requestId = ++researchDecisionRequestId
+  researchDecisionLoading.value = true
+  researchDecisionHistoryLoading.value = true
+  researchDecisionLoadError.value = null
+  researchDecisionHistoryError.value = null
+  researchDecisionSaveError.value = null
+  if (!options.preserveCurrent) {
+    researchDecisionRecord.value = null
+    researchDecisionHistory.value = []
+  }
+
+  const [recordResult, historyResult] = await Promise.allSettled([
+    runId ? quantApi.getResearchDecisionRecord(runId) : Promise.resolve(null),
+    quantApi.getResearchDecisionRecords(tsCode, 10),
+  ])
+  if (!researchDecisionRequestIsCurrent(requestId, tsCode, runId))
+    return
+
+  if (recordResult.status === 'fulfilled')
+    researchDecisionRecord.value = recordResult.value
+  else
+    researchDecisionLoadError.value = recordResult.reason
+  if (historyResult.status === 'fulfilled')
+    researchDecisionHistory.value = historyResult.value
+  else
+    researchDecisionHistoryError.value = historyResult.reason
+  researchDecisionLoading.value = false
+  researchDecisionHistoryLoading.value = false
+}
+
 async function loadResearchRuns(tsCode: string) {
   const requestId = ++researchRunRequestId
+  resetResearchDecisionState()
   resetResearchReportCopyState()
   resetResearchQuestionState()
   resetResearchChangeExplanationState()
@@ -1800,6 +1864,7 @@ async function loadResearchRuns(tsCode: string) {
     const runs = await quantApi.getResearchRuns(tsCode)
     if (requestId === researchRunRequestId) {
       researchRuns.value = runs
+      void loadResearchDecisionJournal(tsCode, runs[0]?.id || null)
       if (runs[0])
         await loadResearchSummary(runs[0].id)
       const evidenceTarget = comparisonAiEvidenceTarget.value
@@ -1856,16 +1921,21 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
 }
 
 async function generateResearchReport() {
-  if (!selectedStock.value || researchRunGenerating.value)
+  const stock = selectedStock.value
+  if (!stock || researchRunGenerating.value)
     return
+  const tsCode = stock.tsCode
   resetResearchReportCopyState()
   resetResearchQuestionState()
   resetResearchChangeExplanationState()
   researchRunGenerating.value = true
   researchRunError.value = null
   try {
-    const run = await quantApi.generateResearchRun(selectedStock.value.tsCode)
+    const run = await quantApi.generateResearchRun(tsCode)
+    if (selectedTsCode.value !== tsCode)
+      return
     researchRuns.value = [run, ...researchRuns.value.filter(item => item.id !== run.id)].slice(0, 5)
+    void loadResearchDecisionJournal(tsCode, run.id)
     researchSummaryRequestId++
     researchAiSummary.value = null
     researchSummaryError.value = null
@@ -1876,6 +1946,36 @@ async function generateResearchReport() {
   }
   finally {
     researchRunGenerating.value = false
+  }
+}
+
+async function saveResearchDecision(action: QuantDecisionRecordAction, note: string | null): Promise<void> {
+  const stock = selectedStock.value
+  const run = latestResearchRun.value
+  if (!stock || !run || researchDecisionSaving.value)
+    return
+
+  const tsCode = stock.tsCode
+  const runId = run.id
+  researchDecisionSaving.value = true
+  researchDecisionSaveError.value = null
+  researchDecisionSaveMessage.value = ''
+  try {
+    await quantApi.saveResearchDecisionRecord(runId, action, note)
+    await loadResearchDecisionJournal(tsCode, runId, { preserveCurrent: true })
+    if (selectedTsCode.value !== tsCode || latestResearchRun.value?.id !== runId)
+      return
+    if (researchDecisionLoadError.value || researchDecisionHistoryError.value)
+      researchDecisionSaveMessage.value = '决策已保存，但部分复盘数据刷新失败'
+    else
+      researchDecisionSaveMessage.value = '决策记录已保存，快照已回读'
+  }
+  catch (error) {
+    if (selectedTsCode.value === tsCode && latestResearchRun.value?.id === runId)
+      researchDecisionSaveError.value = error
+  }
+  finally {
+    researchDecisionSaving.value = false
   }
 }
 
@@ -3963,6 +4063,19 @@ onUnmounted(() => {
                 :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
                 :ai-review-generating="researchSummaryLoading || researchSummaryGenerating"
                 @request-ai-review="generateResearchSummary"
+              />
+              <QuantDecisionJournal
+                :run="latestResearchRun"
+                :record="researchDecisionRecord"
+                :history="researchDecisionHistory"
+                :loading="researchDecisionLoading"
+                :history-loading="researchDecisionHistoryLoading"
+                :saving="researchDecisionSaving"
+                :load-error-message="researchDecisionLoadError ? parsedError(researchDecisionLoadError).message : null"
+                :history-error-message="researchDecisionHistoryError ? parsedError(researchDecisionHistoryError).message : null"
+                :save-error-message="researchDecisionSaveError ? parsedError(researchDecisionSaveError).message : null"
+                :save-message="researchDecisionSaveMessage"
+                @save="saveResearchDecision"
               />
               <div class="research-run-summary">
                 <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">

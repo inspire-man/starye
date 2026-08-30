@@ -1,4 +1,4 @@
-import type { QuantCandidateAiSession as QuantCandidateAiSessionRecord, QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
+import type { QuantCandidateAiSession as QuantCandidateAiSessionRecord, QuantDecisionRecord as QuantDecisionRecordRecord, QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
 import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingResult, QuantCandidateBriefingCandidate, QuantCandidateBriefingMarker } from '../../domain/quant/ai-candidate-briefing'
 import type { QuantAiCandidateBriefingQuestionResult } from '../../domain/quant/ai-candidate-briefing-question'
@@ -24,6 +24,7 @@ import { generateQuantAiSummary, QUANT_AI_DECISION_VERSION } from '../../domain/
 import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
+import { buildQuantDecisionRecordSnapshot, parseQuantDecisionRecordSnapshot } from '../../domain/quant/decision-record'
 import { QuantError } from '../../domain/quant/errors'
 import { screenMomentum } from '../../domain/quant/factor'
 import { buildQuantFinancialQualityComparison } from '../../domain/quant/financial-comparison'
@@ -39,13 +40,16 @@ import {
   deleteQuantFactorConfiguration,
   deleteQuantWatchlistItem,
   ensureQuantStarterWatchlist,
+  getLatestQuantDailyBar,
   getQuantCandidateAiSession,
+  getQuantDecisionRecord,
   getQuantFactorConfiguration,
   getQuantResearchRun,
   getQuantSyncState,
   getQuantWatchlistItem,
   listQuantCandidateAiSessions,
   listQuantDailyBars,
+  listQuantDecisionRecords,
   listQuantResearchMarkers,
   listQuantResearchRuns,
   listQuantResearchSummaries,
@@ -55,6 +59,7 @@ import {
   normalizeTsCode,
   saveQuantFactorConfiguration,
   updateQuantWatchlistItem,
+  upsertQuantDecisionRecord,
   upsertQuantResearchMarker,
 } from '../../domain/quant/repository'
 import { buildQuantResearchReport } from '../../domain/quant/research-report'
@@ -70,6 +75,8 @@ import {
   QuantAiCandidateBriefingSessionQuerySchema,
   QuantAiConfigUpdateSchema,
   QuantDailyQuerySchema,
+  QuantDecisionRecordQuerySchema,
+  QuantDecisionRecordUpdateSchema,
   QuantFactorConfigUpdateSchema,
   QuantFinancialHistoryQuerySchema,
   QuantResearchChangeExplanationSchema,
@@ -276,6 +283,21 @@ function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResea
     createdAt: row.createdAt,
     summary,
     citedEvidenceKeys,
+  }
+}
+
+function decisionRecordView(row: QuantDecisionRecordRecord) {
+  if (!['watch', 'plan-buy', 'holding', 'sold'].includes(row.action))
+    throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted decision record action is invalid', 500)
+  return {
+    id: row.id,
+    researchRunId: row.researchRunId,
+    tsCode: row.tsCode,
+    action: row.action,
+    note: row.note,
+    snapshot: parseQuantDecisionRecordSnapshot(row.snapshotJson),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   }
 }
 
@@ -1030,6 +1052,47 @@ quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResear
   return c.json({ success: true as const, data: researchSummaryView(persisted, report) }, 201)
 })
 
+quantRoutes.get('/research/runs/:runId/decision', validator('param', QuantResearchRunIdParamSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { runId } = c.req.valid('param')
+  const run = await getQuantResearchRun(c.get('db'), userId, runId)
+  if (!run)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+  const record = await getQuantDecisionRecord(c.get('db'), userId, runId)
+  return c.json({ success: true as const, data: record ? decisionRecordView(record) : null })
+})
+
+quantRoutes.put('/research/runs/:runId/decision', validator('param', QuantResearchRunIdParamSchema), validator('json', QuantDecisionRecordUpdateSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { runId } = c.req.valid('param')
+  const input = c.req.valid('json')
+  const run = await getQuantResearchRun(c.get('db'), userId, runId)
+  if (!run)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+  const report = parseResearchReport(run.reportJson)
+  if (report.tsCode !== run.tsCode || report.status !== run.status || report.reportVersion !== run.reportVersion)
+    throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted research run does not match its report', 500)
+
+  const [latestDailyBar, summaries] = await Promise.all([
+    getLatestQuantDailyBar(c.get('db'), run.tsCode),
+    listQuantResearchSummaries(c.get('db'), userId, run.id, 1),
+  ])
+  const latestSummary = summaries[0]
+  const aiDecisionReview = latestSummary
+    ? researchSummaryView(latestSummary, report).summary.decisionReview
+    : null
+  const snapshot = buildQuantDecisionRecordSnapshot({ report, latestDailyBar, aiDecisionReview })
+  const persisted = await upsertQuantDecisionRecord(c.get('db'), {
+    userId,
+    researchRunId: run.id,
+    tsCode: run.tsCode,
+    action: input.action,
+    note: input.note?.trim() || null,
+    snapshotJson: JSON.stringify(snapshot),
+  })
+  return c.json({ success: true as const, data: decisionRecordView(persisted) })
+})
+
 quantRoutes.post('/research/runs/:runId/question', validator('param', QuantResearchRunIdParamSchema), validator('json', QuantResearchQuestionSchema), async (c) => {
   const userId = currentQuantUserId(c)
   const { runId } = c.req.valid('param')
@@ -1238,6 +1301,13 @@ quantRoutes.get('/research/runs/:runId/summary', validator('param', QuantResearc
   const report = parseResearchReport(run.reportJson)
   const summaries = await listQuantResearchSummaries(c.get('db'), userId, run.id, limit ? Number(limit) : 10)
   return c.json({ success: true as const, data: summaries.map(summary => researchSummaryView(summary, report)) })
+})
+
+quantRoutes.get('/research/decisions/:tsCode', validator('param', QuantWatchlistParamSchema), validator('query', QuantDecisionRecordQuerySchema), async (c) => {
+  const { tsCode } = c.req.valid('param')
+  const { limit } = c.req.valid('query')
+  const data = await listQuantDecisionRecords(c.get('db'), currentQuantUserId(c), tsCode, limit ? Number(limit) : 10)
+  return c.json({ success: true as const, data: data.map(decisionRecordView) })
 })
 
 quantRoutes.get('/research/runs/:tsCode', validator('param', QuantWatchlistParamSchema), validator('query', QuantResearchRunsQuerySchema), async (c) => {

@@ -12,13 +12,14 @@ const researchRunMigrationPath = new URL('../../drizzle/0042_quant_research_run.
 const researchSummaryMigrationPath = new URL('../../drizzle/0043_quant_research_summary.sql', import.meta.url)
 const candidateAiSessionMigrationPath = new URL('../../drizzle/0044_quant_candidate_ai_session.sql', import.meta.url)
 const factorConfigMigrationPath = new URL('../../drizzle/0045_quant_factor_config.sql', import.meta.url)
+const decisionRecordMigrationPath = new URL('../../drizzle/0046_quant_decision_record.sql', import.meta.url)
 
 async function createMigratedClient() {
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
   await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-1\', 1)')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath, factorConfigMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -45,6 +46,7 @@ describe('quant workbench migration', () => {
       'quant_ai_config',
       'quant_candidate_ai_session',
       'quant_daily_bar',
+      'quant_decision_record',
       'quant_factor_config',
       'quant_research_marker',
       'quant_research_run',
@@ -57,6 +59,8 @@ describe('quant workbench migration', () => {
       'idx_quant_daily_bar_identity',
       'idx_quant_candidate_ai_session_user_created_at',
       'idx_quant_candidate_ai_session_user_snapshot_generated_at',
+      'idx_quant_decision_record_user_run',
+      'idx_quant_decision_record_user_ts_code_updated_at',
       'idx_quant_research_marker_user_ts_code',
       'idx_quant_research_run_user_ts_code_generated_at',
       'idx_quant_research_summary_user_run_generated_at',
@@ -227,5 +231,37 @@ describe('quant workbench migration', () => {
       WHERE user_id = 'user-1' AND research_run_id = 'run-1'
     `)).resolves.toMatchObject({ rows: [{ user_id: 'user-1', research_run_id: 'run-1', summary_json: summary }] })
     await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary WHERE user_id = \'user-2\'')).resolves.toMatchObject({ rows: [{ count: 0 }] })
+  })
+
+  it('enforces one decision record per user and research run and cascades with the owner', async () => {
+    const client = await createMigratedClient()
+    const report = JSON.stringify({ reportVersion: 'research-report-v2', evidence: [] })
+    await client.execute({
+      sql: `INSERT INTO quant_research_run (
+        id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+        report_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['decision-run-1', 'user-1', '601899.SH', '紫金矿业', 'ready', 'research-report-v2', null, report, 10, 10],
+    })
+
+    const snapshot = JSON.stringify({ snapshotVersion: 'decision-record-v1', recommendation: 'bullish', currentPrice: null })
+    await client.execute({
+      sql: `INSERT INTO quant_decision_record (
+        id, user_id, research_run_id, ts_code, action, note, snapshot_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['decision-1', 'user-1', 'decision-run-1', '601899.SH', 'plan-buy', null, snapshot, 20, 20],
+    })
+    await expect(client.execute({
+      sql: `INSERT INTO quant_decision_record (
+        id, user_id, research_run_id, ts_code, action, snapshot_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['decision-duplicate', 'user-1', 'decision-run-1', '601899.SH', 'watch', snapshot, 21, 21],
+    })).rejects.toThrow(/UNIQUE constraint failed/u)
+
+    await expect(client.execute('SELECT user_id, research_run_id, ts_code, action, note, snapshot_json FROM quant_decision_record')).resolves.toMatchObject({
+      rows: [{ user_id: 'user-1', research_run_id: 'decision-run-1', ts_code: '601899.SH', action: 'plan-buy', note: null, snapshot_json: snapshot }],
+    })
+    await client.execute('DELETE FROM user WHERE id = \'user-1\'')
+    await expect(client.execute('SELECT count(*) AS count FROM quant_decision_record')).resolves.toMatchObject({ rows: [{ count: 0 }] })
   })
 })

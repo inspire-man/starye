@@ -17,6 +17,9 @@ import type {
   QuantAiDecisionReview,
   QuantAiProvider,
   QuantDecisionProjection,
+  QuantDecisionRecord,
+  QuantDecisionRecordAction,
+  QuantDecisionRecordSnapshot,
   QuantFactorConfiguration,
   QuantFactorModel,
   QuantFactorWeights,
@@ -750,6 +753,117 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
       ? readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys')
       : citedEvidenceKeys,
   }
+}
+
+function parseDecisionRecordAiReview(value: unknown): QuantAiDecisionReview | null {
+  if (value === null)
+    return null
+  if (!isRecord(value))
+    return null
+  const decisionVersion = readString(value, 'decisionVersion', 'decision_version')
+  const recommendation = readString(value, 'recommendation')
+  const confidence = readNumber(value, 'confidence')
+  const accepted = readBoolean(value, 'accepted')
+  const rejectionReason = readString(value, 'rejectionReason', 'rejection_reason')
+  const rationale = readString(value, 'rationale')
+  if (!decisionVersion || (recommendation !== 'bullish' && recommendation !== 'bearish' && recommendation !== 'watch')
+    || confidence === null || confidence < 0 || confidence > 100 || accepted === null || !rationale
+    || (rejectionReason !== null && rejectionReason !== 'low-confidence' && rejectionReason !== 'deterministic-watch')) {
+    return null
+  }
+  return {
+    decisionVersion,
+    recommendation,
+    confidence,
+    accepted,
+    rejectionReason,
+    rationale,
+    invalidationConditions: readStringList(value, 'invalidationConditions', 'invalidation_conditions'),
+    citedEvidenceKeys: readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys'),
+  }
+}
+
+function parseDecisionRecordSnapshot(value: unknown): QuantDecisionRecordSnapshot | null {
+  if (!isRecord(value) || readString(value, 'snapshotVersion', 'snapshot_version') !== 'decision-record-v1')
+    return null
+  const reportVersion = readString(value, 'reportVersion', 'report_version')
+  const generatedAt = readString(value, 'generatedAt', 'generated_at')
+  const rawRecommendation = readString(value, 'recommendation')
+  const recommendation = rawRecommendation === null ? null : rawRecommendation
+  const confidence = value.confidence === null ? null : readNumber(value, 'confidence')
+  const coverage = value.coverage === null ? null : readNumber(value, 'coverage')
+  const currentPrice = value.currentPrice === null ? null : readNumber(value, 'currentPrice', 'current_price')
+  const currentPriceObservedAt = value.currentPriceObservedAt === null ? null : readString(value, 'currentPriceObservedAt', 'current_price_observed_at')
+  const factorConfiguration = value.factorConfiguration === null || value.factorConfiguration === undefined
+    ? null
+    : (() => {
+        try {
+          return parseFactorConfiguration({ data: value.factorConfiguration })
+        }
+        catch {
+          return null
+        }
+      })()
+  const rawBuyPriceRange = value.buyPriceRange
+  const rawSellPriceRange = value.sellPriceRange
+  const buyPriceRange = rawBuyPriceRange === null ? null : parseReferencePriceRange(rawBuyPriceRange)
+  const sellPriceRange = rawSellPriceRange === null ? null : parseReferencePriceRange(rawSellPriceRange)
+  const aiDecisionReview = parseDecisionRecordAiReview(value.aiDecisionReview)
+  if (!reportVersion || !generatedAt
+    || (recommendation !== null && recommendation !== 'bullish' && recommendation !== 'bearish' && recommendation !== 'watch')
+    || (value.confidence !== null && (confidence === null || confidence < 0 || confidence > 100))
+    || (value.coverage !== null && (coverage === null || coverage < 0 || coverage > 100))
+    || !Array.isArray(value.evidenceKeys)
+    || (value.currentPrice !== null && (currentPrice === null || currentPrice < 0))
+    || (value.currentPriceObservedAt !== null && currentPriceObservedAt === null)
+    || (rawBuyPriceRange !== null && buyPriceRange === null)
+    || (rawSellPriceRange !== null && sellPriceRange === null)
+    || (value.aiDecisionReview !== null && aiDecisionReview === null)
+    || (value.factorConfiguration !== null && value.factorConfiguration !== undefined && factorConfiguration === null)) {
+    return null
+  }
+  return {
+    snapshotVersion: 'decision-record-v1',
+    reportVersion,
+    generatedAt,
+    recommendation,
+    confidence,
+    coverage,
+    evidenceKeys: readStringList(value, 'evidenceKeys', 'evidence_keys'),
+    currentPrice,
+    currentPriceObservedAt,
+    buyPriceRange,
+    sellPriceRange,
+    aiDecisionReview,
+    factorConfiguration,
+  }
+}
+
+function parseDecisionRecord(value: unknown): QuantDecisionRecord | null {
+  if (!isRecord(value))
+    return null
+  const id = readString(value, 'id')
+  const researchRunId = readString(value, 'researchRunId', 'research_run_id')
+  const tsCode = readString(value, 'tsCode', 'ts_code')
+  const action = readString(value, 'action')
+  const note = value.note === null ? null : readString(value, 'note')
+  const snapshot = parseDecisionRecordSnapshot(value.snapshot)
+  const createdAt = readString(value, 'createdAt', 'created_at')
+  const updatedAt = readString(value, 'updatedAt', 'updated_at')
+  if (!id || !researchRunId || !tsCode || !createdAt || !updatedAt || !snapshot
+    || (action !== 'watch' && action !== 'plan-buy' && action !== 'holding' && action !== 'sold')
+    || (value.note !== null && value.note !== undefined && note === null)) {
+    return null
+  }
+  return { id, researchRunId, tsCode, action, note, snapshot, createdAt, updatedAt }
+}
+
+function parseDecisionRecords(payload: unknown): QuantDecisionRecord[] {
+  const data = unwrapData(payload)
+  return readList(data, 'items', 'records', 'decisionRecords', 'decision_records').flatMap((value) => {
+    const record = parseDecisionRecord(value)
+    return record ? [record] : []
+  })
 }
 
 function parseResearchSummaries(payload: unknown): QuantResearchSummary[] {
@@ -1671,6 +1785,30 @@ export const quantApi = {
 
   async getResearchSummaries(runId: string, limit = 1): Promise<QuantResearchSummary[]> {
     return parseResearchSummaries(await requestJson(`/research/runs/${encodeURIComponent(runId)}/summary?limit=${encodeURIComponent(String(limit))}`))
+  },
+
+  async getResearchDecisionRecord(runId: string): Promise<QuantDecisionRecord | null> {
+    const data = unwrapData(await requestJson(`/research/runs/${encodeURIComponent(runId)}/decision`))
+    if (data === null)
+      return null
+    const record = parseDecisionRecord(data)
+    if (!record)
+      throw new QuantApiError('决策记录数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+    return record
+  },
+
+  async saveResearchDecisionRecord(runId: string, action: QuantDecisionRecordAction, note?: string | null): Promise<QuantDecisionRecord> {
+    const record = parseDecisionRecord(unwrapData(await requestJson(`/research/runs/${encodeURIComponent(runId)}/decision`, {
+      method: 'PUT',
+      body: JSON.stringify({ action, note }),
+    })))
+    if (!record)
+      throw new QuantApiError('决策记录数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+    return record
+  },
+
+  async getResearchDecisionRecords(tsCode: string, limit = 10): Promise<QuantDecisionRecord[]> {
+    return parseDecisionRecords(await requestJson(`/research/decisions/${encodeURIComponent(tsCode)}?limit=${encodeURIComponent(String(limit))}`))
   },
 
   async generateResearchComparison(runIds: string[]): Promise<QuantResearchComparison> {
