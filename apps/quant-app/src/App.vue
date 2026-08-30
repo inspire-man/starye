@@ -3961,6 +3961,8 @@ onUnmounted(() => {
                 :summary="researchAiSummary"
                 :current-price="latestDailyBar?.close ?? selectedStock.latestClose"
                 :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
+                :ai-review-generating="researchSummaryLoading || researchSummaryGenerating"
+                @request-ai-review="generateResearchSummary"
               />
               <div class="research-run-summary">
                 <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">

@@ -9,6 +9,11 @@ const props = defineProps<{
   summary: QuantResearchSummary | null
   currentPrice?: number | null
   currentPriceObservedAt?: string | null
+  aiReviewGenerating?: boolean
+}>()
+
+const emit = defineEmits<{
+  requestAiReview: []
 }>()
 
 const reportDecision = computed(() => props.report?.decision || null)
@@ -18,6 +23,7 @@ const activeRecommendation = computed<QuantRecommendation | null>(() => appliedA
 const activeLabel = computed(() => recommendationLabel(activeRecommendation.value))
 const activeSource = computed(() => appliedAiReview.value ? 'AI 决策复核' : '确定性因子模型')
 const activeConfidence = computed(() => appliedAiReview.value?.confidence ?? reportDecision.value?.confidence ?? null)
+const aiReviewActionLabel = computed(() => props.aiReviewGenerating ? 'AI 复核中' : props.summary ? '重新复核' : '让 AI 复核')
 const decisionGuide = computed(() => {
   if (!props.report)
     return null
@@ -132,7 +138,11 @@ function configurationSourceLabel(value: string | undefined): string {
       </div>
       <div v-else class="quant-decision-ai-pending">
         <Info :size="14" aria-hidden="true" />
-        <span>尚未进行 AI 决策复核</span>
+        <span>{{ props.summary ? '摘要已有，尚无结构化 AI 决策复核' : '尚未进行 AI 决策复核' }}</span>
+        <button class="text-button quant-decision-ai-review-button" type="button" :disabled="aiReviewGenerating" :title="aiReviewGenerating ? 'AI 复核正在进行' : '使用当前报告证据请求 AI 决策复核'" @click="emit('requestAiReview')">
+          <BrainCircuit :size="13" aria-hidden="true" />
+          {{ aiReviewActionLabel }}
+        </button>
       </div>
 
       <details class="quant-decision-details">
@@ -218,9 +228,17 @@ function configurationSourceLabel(value: string | undefined): string {
 
 .quant-decision-empty,
 .quant-decision-ai-pending {
+  flex-wrap: wrap;
   color: hsl(var(--muted-foreground));
   font-size: 0.6875rem;
   line-height: 1.4;
+}
+
+.quant-decision-ai-review-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .quant-decision-hero {
