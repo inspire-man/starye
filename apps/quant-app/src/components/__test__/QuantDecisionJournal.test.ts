@@ -64,6 +64,8 @@ const baseProps = {
   loading: false,
   historyLoading: false,
   saving: false,
+  latestPrice: null,
+  latestPriceObservedAt: null,
   loadErrorMessage: null,
   historyErrorMessage: null,
   saveErrorMessage: null,

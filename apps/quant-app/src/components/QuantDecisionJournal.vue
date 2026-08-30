@@ -2,6 +2,7 @@
 import type { QuantDecisionRecord, QuantDecisionRecordAction, QuantResearchRun } from '../lib/quant-types'
 import { AlertCircle, CalendarClock, CheckCircle2, CircleHelp, History, Save } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
+import QuantDecisionOutcome from './QuantDecisionOutcome.vue'
 
 const props = defineProps<{
   run: QuantResearchRun | null
@@ -10,6 +11,8 @@ const props = defineProps<{
   loading: boolean
   historyLoading: boolean
   saving: boolean
+  latestPrice: number | null
+  latestPriceObservedAt: string | null
   loadErrorMessage: string | null
   historyErrorMessage: string | null
   saveErrorMessage: string | null
@@ -248,6 +251,12 @@ watch(
         </article>
       </div>
     </section>
+
+    <QuantDecisionOutcome
+      :history="history"
+      :latest-price="latestPrice"
+      :latest-price-observed-at="latestPriceObservedAt"
+    />
   </section>
 </template>
 
