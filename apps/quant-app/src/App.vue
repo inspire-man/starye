@@ -3959,6 +3959,8 @@ onUnmounted(() => {
               <QuantDecisionRecommendation
                 :report="latestResearchReport"
                 :summary="researchAiSummary"
+                :current-price="latestDailyBar?.close ?? selectedStock.latestClose"
+                :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
               />
               <div class="research-run-summary">
                 <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">

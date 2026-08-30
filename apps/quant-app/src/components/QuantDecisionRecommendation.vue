@@ -2,10 +2,13 @@
 import type { QuantAiDecisionReview, QuantRecommendation, QuantReferencePriceRange, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
 import { BrainCircuit, CircleHelp, Info } from 'lucide-vue-next'
 import { computed } from 'vue'
+import { buildQuantDecisionGuide } from '../lib/decision-trust-guide'
 
 const props = defineProps<{
   report: QuantResearchReport | null
   summary: QuantResearchSummary | null
+  currentPrice?: number | null
+  currentPriceObservedAt?: string | null
 }>()
 
 const reportDecision = computed(() => props.report?.decision || null)
@@ -15,6 +18,17 @@ const activeRecommendation = computed<QuantRecommendation | null>(() => appliedA
 const activeLabel = computed(() => recommendationLabel(activeRecommendation.value))
 const activeSource = computed(() => appliedAiReview.value ? 'AI 决策复核' : '确定性因子模型')
 const activeConfidence = computed(() => appliedAiReview.value?.confidence ?? reportDecision.value?.confidence ?? null)
+const decisionGuide = computed(() => {
+  if (!props.report)
+    return null
+  return buildQuantDecisionGuide({
+    report: props.report,
+    recommendation: activeRecommendation.value,
+    aiReview: aiReview.value,
+    currentPrice: props.currentPrice,
+    currentPriceObservedAt: props.currentPriceObservedAt,
+  })
+})
 
 function recommendationLabel(value: QuantRecommendation | null): string {
   return value === 'bullish' ? '看多' : value === 'bearish' ? '看空' : '观望'
@@ -85,6 +99,29 @@ function configurationSourceLabel(value: string | undefined): string {
           <small>{{ reportDecision.sellPriceRange ? `${reportDecision.sellPriceRange.source} · ${reportDecision.sellPriceRange.observedAt}` : '关键数据齐备后生成' }}</small>
         </div>
       </div>
+
+      <section class="quant-decision-guide" aria-label="今日参考与信任检查">
+        <div class="quant-decision-guide-heading">
+          <div>
+            <span>今天怎么参考</span>
+            <strong>{{ decisionGuide?.priceLabel }}</strong>
+          </div>
+          <span class="quant-decision-trust-status" :class="`quant-decision-trust-${decisionGuide?.trustStatus || 'insufficient'}`">
+            {{ decisionGuide?.trustLabel }}
+          </span>
+        </div>
+        <p class="quant-decision-guide-price-detail">
+          {{ decisionGuide?.priceDetail }}
+        </p>
+        <div class="quant-decision-guide-checks">
+          <span v-for="check in decisionGuide?.checks || []" :key="check">{{ check }}</span>
+        </div>
+        <ol class="quant-decision-guide-steps">
+          <li v-for="step in decisionGuide?.steps || []" :key="step">
+            {{ step }}
+          </li>
+        </ol>
+      </section>
 
       <div v-if="aiReview" class="quant-decision-ai-review" :class="{ 'quant-decision-ai-review-accepted': aiReview.accepted }">
         <div>
@@ -273,6 +310,97 @@ function configurationSourceLabel(value: string | undefined): string {
 
 .quant-decision-price-grid small {
   overflow-wrap: anywhere;
+}
+
+.quant-decision-guide {
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.6rem;
+}
+
+.quant-decision-guide-heading,
+.quant-decision-guide-heading > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.quant-decision-guide-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.quant-decision-guide-heading > div {
+  display: grid;
+  align-items: start;
+  gap: 0.15rem;
+}
+
+.quant-decision-guide-heading span,
+.quant-decision-guide-price-detail,
+.quant-decision-guide-checks span,
+.quant-decision-guide-steps {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.45;
+}
+
+.quant-decision-guide-heading strong {
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+}
+
+.quant-decision-trust-status {
+  flex: 0 0 auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  padding: 0.2rem 0.35rem;
+  font-weight: 700;
+}
+
+.quant-decision-trust-complete {
+  border-color: hsl(var(--status-success) / 0.3);
+  color: hsl(var(--status-success)) !important;
+}
+
+.quant-decision-trust-review {
+  border-color: hsl(var(--status-warning) / 0.35);
+  color: hsl(var(--status-warning)) !important;
+}
+
+.quant-decision-trust-insufficient {
+  border-color: hsl(var(--status-danger) / 0.3);
+  color: hsl(var(--status-danger)) !important;
+}
+
+.quant-decision-guide-price-detail {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.quant-decision-guide-checks {
+  display: grid;
+  gap: 0.2rem;
+  border-left: 2px solid hsl(var(--primary) / 0.32);
+  padding-left: 0.5rem;
+}
+
+.quant-decision-guide-checks span {
+  overflow-wrap: anywhere;
+}
+
+.quant-decision-guide-steps {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.quant-decision-guide-steps li {
+  padding-left: 0.1rem;
 }
 
 .quant-decision-ai-review {
