@@ -2,6 +2,7 @@ import type { QuantAiProvider, QuantDecryptedAiConfig } from './ai-config'
 import type { QuantDecisionProjection, QuantRecommendation, QuantReferencePriceRange, QuantResearchFactor, QuantResearchFactorKey } from './decision-recommendation'
 import type { QuantResearchEvidence, QuantResearchReport, QuantResearchSource } from './research-report'
 import { resolveQuantAiGenerationTimeout } from './ai-timeout'
+import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
 
 export const QUANT_DECISION_ASSISTANT_VERSION = 'decision-assistant-v1' as const
@@ -808,19 +809,6 @@ export function buildQuantAiDecisionAssistantPrompt(input: Pick<QuantAiDecisionA
   ].join('\n')
 }
 
-function assistantBaseUrl(config: QuantDecryptedAiConfig): string {
-  const value = config.baseUrl?.trim() || (config.provider === 'openai_compatible' ? 'https://api.openai.com/v1' : config.provider === 'deepseek' ? 'https://api.deepseek.com/v1' : config.provider === 'qwen' ? 'https://dashscope.aliyuncs.com/compatible-mode/v1' : config.provider === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta/openai' : 'http://localhost:11434/v1')
-  try {
-    const parsed = new URL(value)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
-      throw new Error('protocol')
-  }
-  catch {
-    throw assistantError('QUANT_DECISION_ASSISTANT_CONFIGURATION', 'AI base URL is invalid', 503)
-  }
-  return value.replace(/\/+$/u, '')
-}
-
 function stripJsonFence(value: string): string {
   const trimmed = value.trim()
   return trimmed.startsWith('```')
@@ -828,64 +816,36 @@ function stripJsonFence(value: string): string {
     : trimmed
 }
 
-function responseContent(value: unknown): string {
-  const root = record(value)
-  const choices = root?.choices
-  const message = Array.isArray(choices) && choices.length ? record(record(choices[0])?.message) : null
-  const content = message?.content
-  if (typeof content !== 'string' || !content.trim() || content.length > 8_000)
-    throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI decision assistant response content is invalid', 502)
-  return content
-}
-
 export async function generateQuantAiDecisionAssistant(input: QuantAiDecisionAssistantRequest): Promise<QuantAiDecisionAssistantGenerated> {
   if (!input.config.apiKey && input.config.provider !== 'ollama')
     throw assistantError('QUANT_DECISION_ASSISTANT_CONFIGURATION', 'AI API key is not configured', 503)
   const timeoutMs = resolveQuantAiGenerationTimeout(input.timeoutMs)
-  const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const { content } = await requestQuantAiCompletion({
+    config: input.config,
+    timeoutMs,
+    fetchImpl: input.fetchImpl,
+    maxCompletionTokens: 3_500,
+    maxResponseLength: 8_000,
+    temperature: 0.1,
+    responseFormat: 'json_object',
+    messages: [
+      { role: 'system', content: '你只返回符合要求的 JSON，并且只解释已有证据。' },
+      { role: 'user', content: buildQuantAiDecisionAssistantPrompt(input) },
+    ],
+    errorCodes: {
+      configuration: 'QUANT_DECISION_ASSISTANT_CONFIGURATION',
+      timeout: 'QUANT_DECISION_ASSISTANT_TIMEOUT',
+      upstream: 'QUANT_DECISION_ASSISTANT_UPSTREAM',
+      invalid_response: 'QUANT_DECISION_ASSISTANT_INVALID_RESPONSE',
+    },
+  })
   try {
-    const headers: Record<string, string> = { 'accept': 'application/json', 'content-type': 'application/json' }
-    if (input.config.apiKey)
-      headers.authorization = `Bearer ${input.config.apiKey}`
-    const response = await fetchImpl(`${assistantBaseUrl(input.config)}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: input.config.model,
-        temperature: 0.1,
-        max_tokens: 1200,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: '你只返回符合要求的 JSON，并且只解释已有证据。' },
-          { role: 'user', content: buildQuantAiDecisionAssistantPrompt(input) },
-        ],
-      }),
-      signal: controller.signal,
-    })
-    if (response.status === 408 || response.status === 504)
-      throw assistantError('QUANT_DECISION_ASSISTANT_TIMEOUT', 'AI decision assistant request timed out', 504)
-    if (!response.ok)
-      throw assistantError('QUANT_DECISION_ASSISTANT_UPSTREAM', `AI decision assistant endpoint returned HTTP ${response.status}`, 502)
-    let payload: unknown
-    try {
-      payload = await response.json()
-    }
-    catch {
-      throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI decision assistant response is not JSON', 502)
-    }
-    return parseQuantAiDecisionAssistant(JSON.parse(stripJsonFence(responseContent(payload))), input.report)
+    return parseQuantAiDecisionAssistant(JSON.parse(stripJsonFence(content)), input.report)
   }
   catch (error) {
     if (error instanceof QuantError)
       throw error
-    if (controller.signal.aborted)
-      throw assistantError('QUANT_DECISION_ASSISTANT_TIMEOUT', 'AI decision assistant request timed out', 504)
-    throw assistantError('QUANT_DECISION_ASSISTANT_UPSTREAM', 'AI decision assistant request failed', 502)
-  }
-  finally {
-    clearTimeout(timer)
+    throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI decision assistant content is not valid JSON', 502)
   }
 }
 

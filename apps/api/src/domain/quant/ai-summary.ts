@@ -2,6 +2,7 @@ import type { QuantDecryptedAiConfig } from './ai-config'
 import type { QuantRecommendation, QuantResearchFactor, QuantResearchFactorKey } from './decision-recommendation'
 import type { QuantResearchReport } from './research-report'
 import { resolveQuantAiGenerationTimeout } from './ai-timeout'
+import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
 
 export const QUANT_AI_SUMMARY_VERSION = 'research-summary-v2' as const
@@ -50,34 +51,8 @@ export interface QuantAiSummaryRequest {
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 }
 
-const DEFAULT_BASE_URLS: Record<QuantDecryptedAiConfig['provider'], string> = {
-  openai_compatible: 'https://api.openai.com/v1',
-  deepseek: 'https://api.deepseek.com/v1',
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
-  ollama: 'http://localhost:11434/v1',
-}
-
 function summaryError(code: 'QUANT_AI_SUMMARY_CONFIGURATION' | 'QUANT_AI_SUMMARY_TIMEOUT' | 'QUANT_AI_SUMMARY_UPSTREAM' | 'QUANT_AI_SUMMARY_INVALID_RESPONSE', message: string, status: 502 | 503 | 504): QuantError {
   return new QuantError(code, message, status)
-}
-
-function baseUrl(config: QuantDecryptedAiConfig): string {
-  const value = config.baseUrl?.trim() || DEFAULT_BASE_URLS[config.provider]
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:')
-      throw new Error('protocol')
-  }
-  catch {
-    throw summaryError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI base URL is invalid', 503)
-  }
-  return value.replace(/\/+$/u, '')
-}
-
-export function chatCompletionsUrl(config: QuantDecryptedAiConfig): string {
-  const value = baseUrl(config)
-  return value.endsWith('/chat/completions') ? value : `${value}/chat/completions`
 }
 
 function reportPrompt(report: QuantResearchReport): string {
@@ -324,65 +299,29 @@ export function parseQuantAiSummary(value: string, report: QuantResearchReport):
   }
 }
 
-function responseContent(value: unknown): string {
-  const root = record(value)
-  const choices = root?.choices
-  if (!Array.isArray(choices) || !choices.length)
-    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI response has no choices', 502)
-  const message = record(choices[0] && record(choices[0])?.message)
-  return stringValue(message?.content, 'content', QUANT_AI_SUMMARY_MAX_RESPONSE_LENGTH)
-}
-
 export async function generateQuantAiSummary(input: QuantAiSummaryRequest): Promise<QuantAiSummary> {
   const { report, config } = input
   if (!config.apiKey && config.provider !== 'ollama')
     throw summaryError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI API key is not configured', 503)
   const timeoutMs = resolveQuantAiGenerationTimeout(input.timeoutMs)
-  const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const headers: Record<string, string> = {
-      'accept': 'application/json',
-      'content-type': 'application/json',
-    }
-    if (config.apiKey)
-      headers.authorization = `Bearer ${config.apiKey}`
-    const response = await fetchImpl(chatCompletionsUrl(config), {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: config.model,
-        temperature: 0.2,
-        max_tokens: 1000,
-        messages: [
-          { role: 'system', content: '你是严格的证据解释器和决策复核器，只能使用给定研究报告，不得创造事实、价格或直接交易指令。' },
-          { role: 'user', content: buildQuantAiSummaryPrompt(report) },
-        ],
-      }),
-      signal: controller.signal,
-    })
-    if (response.status === 408 || response.status === 504)
-      throw summaryError('QUANT_AI_SUMMARY_TIMEOUT', 'AI summary request timed out', 504)
-    if (!response.ok)
-      throw summaryError('QUANT_AI_SUMMARY_UPSTREAM', `AI summary endpoint returned HTTP ${response.status}`, 502)
-    let payload: unknown
-    try {
-      payload = await response.json()
-    }
-    catch {
-      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary response is not JSON', 502)
-    }
-    return parseQuantAiSummary(stripJsonFence(responseContent(payload)), report)
-  }
-  catch (error) {
-    if (error instanceof QuantError)
-      throw error
-    if (controller.signal.aborted)
-      throw summaryError('QUANT_AI_SUMMARY_TIMEOUT', 'AI summary request timed out', 504)
-    throw summaryError('QUANT_AI_SUMMARY_UPSTREAM', 'AI summary request failed', 502)
-  }
-  finally {
-    clearTimeout(timer)
-  }
+  const { content } = await requestQuantAiCompletion({
+    config,
+    timeoutMs,
+    fetchImpl: input.fetchImpl,
+    maxCompletionTokens: 4_000,
+    maxResponseLength: QUANT_AI_SUMMARY_MAX_RESPONSE_LENGTH,
+    temperature: 0.2,
+    responseFormat: 'json_object',
+    messages: [
+      { role: 'system', content: '你是严格的证据解释器和决策复核器，只能使用给定研究报告，不得创造事实、价格或直接交易指令。' },
+      { role: 'user', content: buildQuantAiSummaryPrompt(report) },
+    ],
+    errorCodes: {
+      configuration: 'QUANT_AI_SUMMARY_CONFIGURATION',
+      timeout: 'QUANT_AI_SUMMARY_TIMEOUT',
+      upstream: 'QUANT_AI_SUMMARY_UPSTREAM',
+      invalid_response: 'QUANT_AI_SUMMARY_INVALID_RESPONSE',
+    },
+  })
+  return parseQuantAiSummary(stripJsonFence(content), report)
 }

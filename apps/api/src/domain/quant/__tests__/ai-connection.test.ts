@@ -42,10 +42,13 @@ describe('quant AI connection test', () => {
     const requestBody = JSON.parse(String(requestInit?.body)) as Record<string, unknown>
     expect(requestBody).toMatchObject({
       model: 'gpt-5.4',
-      temperature: 0,
-      max_tokens: 8,
+      max_completion_tokens: 64,
+      stream: false,
+      reasoning_effort: 'low',
       messages: [{ role: 'user', content: 'Reply with OK only.' }],
     })
+    expect(requestBody).not.toHaveProperty('max_tokens')
+    expect(requestBody).not.toHaveProperty('temperature')
     expect(String(requestInit?.body)).not.toContain('sk-test-secret')
   })
 
