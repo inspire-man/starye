@@ -510,7 +510,7 @@ describe('quant watchlist CRUD contract', () => {
     }, env)
     expect(save.status).toBe(200)
 
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }))

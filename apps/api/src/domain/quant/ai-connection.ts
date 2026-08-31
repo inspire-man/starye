@@ -32,14 +32,15 @@ export async function testQuantAiConnection(input: QuantAiConnectionTestRequest)
   const nowMs = input.nowMs ?? (() => Date.now())
   const now = input.now ?? (() => new Date())
   const startedAt = nowMs()
-  await requestQuantAiCompletion({
+  const { content } = await requestQuantAiCompletion({
     config,
     timeoutMs,
     fetchImpl,
-    maxCompletionTokens: 64,
-    maxResponseLength: 256,
+    maxCompletionTokens: 256,
+    maxResponseLength: 512,
     temperature: 0,
-    messages: [{ role: 'user', content: 'Reply with OK only.' }],
+    responseFormat: 'json_object',
+    messages: [{ role: 'user', content: 'Return exactly one JSON object: {"ok":true}.' }],
     errorCodes: {
       configuration: 'QUANT_AI_SUMMARY_CONFIGURATION',
       timeout: 'QUANT_AI_SUMMARY_TIMEOUT',
@@ -47,6 +48,14 @@ export async function testQuantAiConnection(input: QuantAiConnectionTestRequest)
       invalid_response: 'QUANT_AI_SUMMARY_INVALID_RESPONSE',
     },
   })
+  try {
+    const parsed = JSON.parse(content) as unknown
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+      throw new Error('object required')
+  }
+  catch {
+    throw connectionError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI connection response content is not a JSON object', 502)
+  }
   return {
     provider: config.provider,
     model: config.model,
