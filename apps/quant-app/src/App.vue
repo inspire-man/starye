@@ -1974,8 +1974,10 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
     }
   }
   finally {
-    if (requestId === researchSummaryRequestId)
+    if (requestId === researchSummaryRequestId) {
       researchSummaryLoading.value = false
+      researchSummaryGenerating.value = false
+    }
   }
 }
 
