@@ -1,5 +1,6 @@
 import type { QuantDecryptedAiConfig } from './ai-config'
 import type { MomentumFactors } from './types'
+import { resolveQuantAiGenerationTimeout } from './ai-timeout'
 import { QuantError } from './errors'
 
 export const QUANT_AI_CANDIDATE_BRIEFING_VERSION = 'candidate-briefing-v1' as const
@@ -560,7 +561,7 @@ export async function generateQuantAiCandidateBriefing(input: QuantAiCandidateBr
     throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_INPUT', 'Candidate snapshot is not available', 422)
   if (!config.apiKey && config.provider !== 'ollama')
     throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION', 'AI API key is not configured', 503)
-  const timeoutMs = Number.isFinite(input.timeoutMs) && (input.timeoutMs ?? 0) > 0 ? Math.min(input.timeoutMs!, 30_000) : 20_000
+  const timeoutMs = resolveQuantAiGenerationTimeout(input.timeoutMs)
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)

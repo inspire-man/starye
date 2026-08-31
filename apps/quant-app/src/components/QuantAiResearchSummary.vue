@@ -42,6 +42,30 @@ function recommendationLabel(value: string): string {
   return value === 'bullish' ? '看多' : value === 'bearish' ? '看空' : '观望'
 }
 
+function factorLabel(value: string): string {
+  return {
+    'trend': '趋势',
+    'valuation': '估值',
+    'quality': '盈利质量',
+    'shareholder-return': '股东回报',
+    'risk': '风险',
+  }[value] || value
+}
+
+function factorStanceLabel(value: string): string {
+  return { support: '支持', caution: '注意', oppose: '反对', insufficient: '数据不足' }[value] || value
+}
+
+function factorStanceClass(value: string): string {
+  return `quant-ai-summary-factor-${value}`
+}
+
+function factorReviewDecisionLabel(accepted: boolean, stance: string): string {
+  if (accepted)
+    return '已计入 AI 复核'
+  return stance === 'insufficient' ? '数据不足，未计入' : '未达到纳入门槛'
+}
+
 function evidenceStatusLabel(status: QuantResearchEvidence['status']): string {
   return { pass: '通过', caution: '注意', fail: '未通过', missing: '数据不足' }[status]
 }
@@ -135,11 +159,12 @@ function formatEvidenceDate(value: string | null): string {
             <strong>{{ recommendationLabel(summary.summary.decisionReview.recommendation) }}</strong>
           </div>
           <span class="quant-ai-summary-decision-status" :class="summary.summary.decisionReview.accepted ? 'quant-ai-summary-decision-accepted' : 'quant-ai-summary-decision-not-accepted'">
-            {{ summary.summary.decisionReview.accepted ? '已纳入最终推荐' : summary.summary.decisionReview.rejectionReason === 'deterministic-watch' ? '数据不足，保持观望' : '低置信度，保留确定性结论' }}
+            {{ summary.summary.decisionReview.accepted ? '已纳入最终推荐' : summary.summary.decisionReview.rejectionReason === 'deterministic-watch' ? '数据不足，保持观望' : summary.summary.decisionReview.rejectionReason === 'factor-review-incomplete' ? '因子复核不足，保留确定性结论' : summary.summary.decisionReview.rejectionReason === 'factor-conflict' ? '因子方向冲突，保留确定性结论' : '低置信度，保留确定性结论' }}
           </span>
         </div>
         <div class="quant-ai-summary-decision-meta">
           <span>置信度 {{ summary.summary.decisionReview.confidence.toFixed(0) }}</span>
+          <span>因子复核 {{ summary.summary.decisionReview.factorReviewCoverage.toFixed(0) }}%</span>
           <span>{{ summary.summary.decisionReview.citedEvidenceKeys.length }} 条引用证据</span>
           <span>{{ summary.model }} · {{ summary.generatedAt || '时间未记录' }}</span>
         </div>
@@ -151,6 +176,23 @@ function formatEvidenceDate(value: string | null): string {
               {{ item }}
             </li>
           </ul>
+        </div>
+      </section>
+      <section v-if="summary.summary.factorReviews.length" class="quant-ai-summary-factors" aria-label="AI 因子复核">
+        <div class="quant-ai-summary-factors-heading">
+          <span>因子级复核</span>
+          <small>服务端按证据、覆盖和置信度重算纳入状态</small>
+        </div>
+        <div class="quant-ai-summary-factor-list">
+          <article v-for="review in summary.summary.factorReviews" :key="review.factor" class="quant-ai-summary-factor-row">
+            <div class="quant-ai-summary-factor-title">
+              <strong>{{ factorLabel(review.factor) }}</strong>
+              <span class="quant-ai-summary-factor-stance" :class="factorStanceClass(review.stance)">{{ factorStanceLabel(review.stance) }}</span>
+              <span class="quant-ai-summary-factor-accepted" :class="review.accepted ? 'quant-ai-summary-factor-accepted-yes' : 'quant-ai-summary-factor-accepted-no'">{{ factorReviewDecisionLabel(review.accepted, review.stance) }}</span>
+            </div>
+            <p>{{ review.rationale }}</p>
+            <small>置信度 {{ review.confidence.toFixed(0) }} · {{ review.citedEvidenceKeys.length }} 条因子证据引用</small>
+          </article>
         </div>
       </section>
       <p class="quant-ai-summary-overview">
@@ -405,6 +447,96 @@ function formatEvidenceDate(value: string | null): string {
   color: hsl(var(--muted-foreground));
   font-size: 0.625rem;
   line-height: 1.4;
+}
+
+.quant-ai-summary-factors {
+  display: grid;
+  gap: 0.4rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.6rem;
+}
+
+.quant-ai-summary-factors-heading,
+.quant-ai-summary-factor-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.quant-ai-summary-factors-heading {
+  justify-content: space-between;
+}
+
+.quant-ai-summary-factors-heading > span {
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  font-weight: 720;
+}
+
+.quant-ai-summary-factors-heading small,
+.quant-ai-summary-factor-row > small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
+
+.quant-ai-summary-factor-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.quant-ai-summary-factor-row {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  border-left: 2px solid hsl(var(--border));
+  padding: 0.35rem 0.5rem;
+}
+
+.quant-ai-summary-factor-title strong {
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+}
+
+.quant-ai-summary-factor-stance,
+.quant-ai-summary-factor-accepted {
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  padding: 0.12rem 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 720;
+}
+
+.quant-ai-summary-factor-support,
+.quant-ai-summary-factor-accepted-yes {
+  background: hsl(var(--status-success-soft));
+  color: hsl(var(--status-success));
+}
+
+.quant-ai-summary-factor-caution {
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
+}
+
+.quant-ai-summary-factor-oppose,
+.quant-ai-summary-factor-insufficient,
+.quant-ai-summary-factor-accepted-no {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.quant-ai-summary-factor-oppose {
+  background: hsl(var(--status-danger-soft));
+  color: hsl(var(--status-danger));
+}
+
+.quant-ai-summary-factor-row p {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .quant-ai-summary-grid {

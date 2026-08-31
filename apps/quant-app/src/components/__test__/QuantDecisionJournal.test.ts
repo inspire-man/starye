@@ -40,10 +40,12 @@ function record(overrides: Partial<QuantDecisionRecord> = {}): QuantDecisionReco
         confidence: 82,
         accepted: true,
         rejectionReason: null,
+        factorReviewCoverage: 100,
         rationale: '正向证据占优。',
         invalidationConditions: ['趋势转弱后复核'],
         citedEvidenceKeys: ['quality-roe'],
       },
+      aiFactorReviews: [],
       factorConfiguration: {
         version: 'research-factor-config-v1',
         weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },

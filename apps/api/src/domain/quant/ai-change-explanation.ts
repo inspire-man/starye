@@ -1,5 +1,6 @@
 import type { QuantDecryptedAiConfig } from './ai-config'
 import type { QuantResearchEvidence, QuantResearchReport } from './research-report'
+import { resolveQuantAiGenerationTimeout } from './ai-timeout'
 import { QuantError } from './errors'
 
 export const QUANT_AI_CHANGE_EXPLANATION_VERSION = 'research-change-explanation-v1' as const
@@ -371,7 +372,7 @@ export async function generateQuantAiChangeExplanation(input: QuantAiChangeExpla
   if (!config.apiKey && config.provider !== 'ollama')
     throw changeError('QUANT_AI_CHANGE_EXPLANATION_CONFIGURATION', 'AI API key is not configured', 503)
   const comparison = buildChangeComparison(currentReport, previousReport)
-  const timeoutMs = Number.isFinite(input.timeoutMs) && (input.timeoutMs ?? 0) > 0 ? Math.min(input.timeoutMs!, 30_000) : 20_000
+  const timeoutMs = resolveQuantAiGenerationTimeout(input.timeoutMs)
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)

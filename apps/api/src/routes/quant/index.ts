@@ -1,11 +1,13 @@
-import type { QuantCandidateAiSession as QuantCandidateAiSessionRecord, QuantDecisionRecord as QuantDecisionRecordRecord, QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
+import type { Database } from '@starye/db'
+import type { QuantCandidateAiSession as QuantCandidateAiSessionRecord, QuantDecisionAssessment as QuantDecisionAssessmentRecord, QuantDecisionRecord as QuantDecisionRecordRecord, QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
 import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingResult, QuantCandidateBriefingCandidate, QuantCandidateBriefingMarker } from '../../domain/quant/ai-candidate-briefing'
 import type { QuantAiCandidateBriefingQuestionResult } from '../../domain/quant/ai-candidate-briefing-question'
 import type { QuantAiChangeExplanationResult } from '../../domain/quant/ai-change-explanation'
 import type { QuantAiComparisonResult } from '../../domain/quant/ai-comparison'
 import type { QuantAiQuestionResult } from '../../domain/quant/ai-question'
-import type { QuantAiDecisionReview, QuantAiSummary } from '../../domain/quant/ai-summary'
+import type { QuantAiSummary } from '../../domain/quant/ai-summary'
+import type { QuantDecisionAssistantMarketInput, QuantDecisionAssistantSnapshot } from '../../domain/quant/decision-assistant'
 import type { EastmoneyProviderOptions, TushareProviderOptions } from '../../domain/quant/provider'
 import type { QuantResearchReport } from '../../domain/quant/research-report'
 import type { QuantSignalHistoryCandidate, QuantSignalHistorySnapshot } from '../../domain/quant/signal-persistence'
@@ -20,19 +22,21 @@ import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
 import { testQuantAiConnection } from '../../domain/quant/ai-connection'
 import { generateQuantAiQuestion } from '../../domain/quant/ai-question'
-import { generateQuantAiSummary, QUANT_AI_DECISION_VERSION } from '../../domain/quant/ai-summary'
+import { generateQuantAiSummary, parseQuantAiSummary } from '../../domain/quant/ai-summary'
 import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
+import { applyQuantDecisionAssistantAiReview, buildQuantDecisionAssistant, buildQuantDecisionAssistantAiFailure, buildQuantDecisionAssistantAiReview, buildQuantDecisionAssistantAiUnavailable, generateQuantAiDecisionAssistant, parseQuantDecisionAssistantSnapshot } from '../../domain/quant/decision-assistant'
 import { buildQuantDecisionRecordSnapshot, parseQuantDecisionRecordSnapshot } from '../../domain/quant/decision-record'
 import { QuantError } from '../../domain/quant/errors'
 import { screenMomentum } from '../../domain/quant/factor'
 import { buildQuantFinancialQualityComparison } from '../../domain/quant/financial-comparison'
 import { getQuantInvestmentKnowledge } from '../../domain/quant/investment-knowledge'
-import { createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantDividendProviderChain, createTushareDividendProvider, createTushareStockBasicProvider, mapQuantProviderError, resolveQuantProviderName } from '../../domain/quant/provider'
+import { createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantDividendProviderChain, createTushareDividendProvider, createTushareStockBasicProvider, mapQuantProviderError, resolveQuantProviderName } from '../../domain/quant/provider'
 import {
   appendQuantCandidateAiSessionQuestion,
   createQuantCandidateAiSession,
+  createQuantDecisionAssessment,
   createQuantResearchRun,
   createQuantResearchSummary,
   createQuantWatchlistItem,
@@ -49,6 +53,8 @@ import {
   getQuantWatchlistItem,
   listQuantCandidateAiSessions,
   listQuantDailyBars,
+  listQuantDecisionAssessments,
+  listQuantDecisionQueue,
   listQuantDecisionRecords,
   listQuantResearchMarkers,
   listQuantResearchRuns,
@@ -75,6 +81,7 @@ import {
   QuantAiCandidateBriefingSessionQuerySchema,
   QuantAiConfigUpdateSchema,
   QuantDailyQuerySchema,
+  QuantDecisionAssistantCreateSchema,
   QuantDecisionRecordQuerySchema,
   QuantDecisionRecordUpdateSchema,
   QuantFactorConfigUpdateSchema,
@@ -194,63 +201,7 @@ function researchRunView(row: QuantResearchRunRecord) {
 
 function parseStoredAiSummary(value: string, report: QuantResearchReport): QuantAiSummary {
   try {
-    const parsed: unknown = JSON.parse(value)
-    if (!isRecord(parsed) || (parsed.summaryVersion !== 'research-summary-v1' && parsed.summaryVersion !== 'research-summary-v2'))
-      throw new Error('invalid summary')
-    const stringList = (field: string, max: number): string[] => {
-      const items = parsed[field]
-      if (!Array.isArray(items) || items.length > max || items.some(item => typeof item !== 'string'))
-        throw new Error(`invalid ${field}`)
-      return items as string[]
-    }
-    const citedEvidenceKeys = stringList('citedEvidenceKeys', 16)
-    const allowed = new Set(report.evidence.map(item => item.key))
-    if (citedEvidenceKeys.some(key => !allowed.has(key)))
-      throw new Error('unknown evidence key')
-    if (typeof parsed.overview !== 'string' || !parsed.overview.trim())
-      throw new Error('invalid overview')
-    let decisionReview: QuantAiDecisionReview | null = null
-    if (parsed.decisionReview !== undefined && parsed.decisionReview !== null) {
-      if (!isRecord(parsed.decisionReview) || parsed.decisionReview.decisionVersion !== QUANT_AI_DECISION_VERSION) {
-        throw new Error('invalid decision review')
-      }
-      const confidence = parsed.decisionReview.confidence
-      const recommendation = parsed.decisionReview.recommendation
-      const rationale = parsed.decisionReview.rationale
-      const invalidationConditions = parsed.decisionReview.invalidationConditions
-      if ((recommendation !== 'bullish' && recommendation !== 'bearish' && recommendation !== 'watch')
-        || typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100
-        || typeof rationale !== 'string' || !rationale.trim()
-        || !Array.isArray(invalidationConditions) || invalidationConditions.length > 6
-        || invalidationConditions.some(item => typeof item !== 'string' || !item.trim())) {
-        throw new Error('invalid decision review')
-      }
-      const decisionCitedEvidenceKeys = parsed.decisionReview.citedEvidenceKeys
-      if (!Array.isArray(decisionCitedEvidenceKeys) || decisionCitedEvidenceKeys.length > 16 || decisionCitedEvidenceKeys.some(key => typeof key !== 'string' || !allowed.has(key))) {
-        throw new Error('invalid decision citations')
-      }
-      const deterministicWatch = report.decision?.recommendation === 'watch' || (report.decision?.coverage ?? 0) < 80
-      const accepted = confidence >= 60 && !deterministicWatch
-      decisionReview = {
-        decisionVersion: QUANT_AI_DECISION_VERSION,
-        recommendation,
-        confidence,
-        accepted,
-        rejectionReason: accepted ? null : deterministicWatch ? 'deterministic-watch' : 'low-confidence',
-        rationale: rationale.trim(),
-        invalidationConditions: invalidationConditions.map(item => item.trim()),
-        citedEvidenceKeys: [...new Set(decisionCitedEvidenceKeys.map(key => (key as string).trim()))],
-      }
-    }
-    return {
-      summaryVersion: parsed.summaryVersion,
-      overview: parsed.overview,
-      supports: stringList('supports', 6),
-      concerns: stringList('concerns', 6),
-      nextChecks: stringList('nextChecks', 6),
-      citedEvidenceKeys,
-      decisionReview,
-    }
+    return parseQuantAiSummary(value, report)
   }
   catch {
     throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI summary is invalid', 500)
@@ -298,6 +249,24 @@ function decisionRecordView(row: QuantDecisionRecordRecord) {
     snapshot: parseQuantDecisionRecordSnapshot(row.snapshotJson),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  }
+}
+
+function decisionAssistantView(row: QuantDecisionAssessmentRecord, report?: QuantResearchReport) {
+  const snapshot = parseQuantDecisionAssistantSnapshot(row.snapshotJson, report)
+  const sameNumber = (left: number | null, right: number | null) => left === right
+  if (snapshot.tsCode !== row.tsCode
+    || snapshot.researchRunId !== row.researchRunId
+    || snapshot.scenario.mode !== row.mode
+    || !sameNumber(snapshot.scenario.currentPrice, row.currentPrice)
+    || !sameNumber(snapshot.scenario.costBasis, row.costBasis)
+    || !sameNumber(snapshot.scenario.quantity, row.quantity)) {
+    throw new QuantError('QUANT_DECISION_ASSISTANT_INVALID_SNAPSHOT', 'Persisted decision assistant identity does not match its row', 500)
+  }
+  return {
+    id: row.id,
+    createdAt: row.createdAt,
+    ...snapshot,
   }
 }
 
@@ -827,8 +796,8 @@ function akshareBridgeErrorCode(error: unknown): string {
   return error instanceof QuantAkshareBridgeError ? `BRIDGE_${error.code}` : 'BRIDGE_UPSTREAM'
 }
 
-function aiSummaryTimeoutMs(env?: AppEnv['Bindings']): number | undefined {
-  const timeoutMs = Number(env?.QUANT_AI_SUMMARY_TIMEOUT_MS)
+function aiGenerationTimeoutMs(env?: AppEnv['Bindings']): number | undefined {
+  const timeoutMs = Number(env?.QUANT_AI_GENERATION_TIMEOUT_MS)
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined
 }
 
@@ -837,6 +806,64 @@ function stockBasicProvider(env?: AppEnv['Bindings']) {
   return resolveQuantProviderName(env) === 'tushare'
     ? createTushareStockBasicProvider(options)
     : createEastmoneyStockBasicProvider(eastmoneyProviderOptions(env))
+}
+
+async function resolveDecisionAssistantMarket(env: AppEnv['Bindings'] | undefined, db: Database, tsCode: string): Promise<{ readonly latestDailyBar: Awaited<ReturnType<typeof getLatestQuantDailyBar>>, readonly market: QuantDecisionAssistantMarketInput }> {
+  const [dailyResult, quoteResult] = await Promise.allSettled([
+    getLatestQuantDailyBar(db, tsCode),
+    createEastmoneyMarketQuoteProvider(eastmoneyProviderOptions(env)).fetchMarketQuote({ tsCode }),
+  ])
+  if (dailyResult.status === 'rejected')
+    throw dailyResult.reason
+
+  if (quoteResult.status === 'fulfilled' && isCurrentMarketDate(quoteResult.value.observedAt)) {
+    return {
+      latestDailyBar: dailyResult.value,
+      market: {
+        currentPrice: quoteResult.value.price,
+        currentPriceSource: 'eastmoney-realtime',
+        currentPriceStatus: 'realtime',
+        currentPriceObservedAt: quoteResult.value.observedAt,
+        currentPriceChangePercent: quoteResult.value.changePercent,
+        quoteErrorCode: null,
+      },
+    }
+  }
+
+  const quoteError = quoteResult.status === 'rejected' ? mapQuantProviderError(quoteResult.reason) : null
+  const quoteFallbackCode = quoteError?.code ?? 'QUANT_MARKET_QUOTE_STALE'
+  if (dailyResult.value && Number.isFinite(dailyResult.value.close) && dailyResult.value.close > 0) {
+    return {
+      latestDailyBar: dailyResult.value,
+      market: {
+        currentPrice: dailyResult.value.close,
+        currentPriceSource: 'local-daily-bars',
+        currentPriceStatus: 'latest-close',
+        currentPriceObservedAt: dailyResult.value.tradeDate,
+        currentPriceChangePercent: null,
+        quoteErrorCode: quoteFallbackCode,
+      },
+    }
+  }
+
+  throw new QuantError('QUANT_DECISION_ASSISTANT_MARKET_UNAVAILABLE', 'Automatic market price is unavailable and no local latest close exists', 503, {
+    provider: 'eastmoney',
+    errorCode: quoteFallbackCode,
+  })
+}
+
+function isCurrentMarketDate(observedAt: string, now = new Date()): boolean {
+  const observed = new Date(observedAt)
+  if (Number.isNaN(observed.getTime()) || observed.getTime() > now.getTime() + 5 * 60 * 1_000)
+    return false
+  const dateKey = (value: Date): string => {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value)
+    const year = parts.find(part => part.type === 'year')?.value ?? ''
+    const month = parts.find(part => part.type === 'month')?.value ?? ''
+    const day = parts.find(part => part.type === 'day')?.value ?? ''
+    return `${year}-${month}-${day}`
+  }
+  return dateKey(observed) === dateKey(now)
 }
 
 function dividendProvider(env?: AppEnv['Bindings']) {
@@ -937,7 +964,6 @@ quantRoutes.post('/ai-config/test', async (c) => {
     throw new QuantError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI summary configuration is not available', 503)
   const data = await testQuantAiConnection({
     config,
-    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
   })
   return c.json({ success: true as const, data })
 })
@@ -1023,6 +1049,105 @@ quantRoutes.post('/research/runs', validator('json', QuantResearchRunCreateSchem
   return c.json({ success: true as const, data: researchRunView(persisted) }, 201)
 })
 
+quantRoutes.post('/decision-assistant', validator('json', QuantDecisionAssistantCreateSchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const input = c.req.valid('json')
+  const run = await getQuantResearchRun(c.get('db'), userId, input.research_run_id)
+  if (!run)
+    throw new QuantError('QUANT_DECISION_ASSISTANT_RESEARCH_REQUIRED', 'Research run is required before creating a decision assistant assessment', 422)
+  const report = parseResearchReport(run.reportJson)
+  if (report.tsCode !== run.tsCode || report.status !== run.status || report.reportVersion !== run.reportVersion)
+    throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted research run does not match its report', 500)
+  if (input.mode === 'holding' && (input.cost_basis === undefined || input.cost_basis === null))
+    throw new QuantError('QUANT_DECISION_ASSISTANT_INPUT', 'Holding assessment requires a cost basis', 422)
+
+  const marketResolution = await resolveDecisionAssistantMarket(c.env, c.get('db'), run.tsCode)
+  const scenario = {
+    mode: input.mode,
+    currentPrice: marketResolution.market.currentPrice,
+    costBasis: input.cost_basis ?? null,
+    quantity: input.quantity ?? null,
+  } as const
+  const deterministic = buildQuantDecisionAssistant({
+    report,
+    researchRunId: run.id,
+    tsCode: run.tsCode,
+    name: run.name,
+    scenario,
+    latestDailyBar: marketResolution.latestDailyBar,
+    market: marketResolution.market,
+  })
+  let assessment: QuantDecisionAssistantSnapshot = deterministic
+  if (input.include_ai !== false) {
+    let config: Awaited<ReturnType<typeof getDecryptedQuantAiConfig>> = null
+    try {
+      config = await getDecryptedQuantAiConfig(c.get('db'), userId, c.env.QUANT_AI_ENCRYPTION_KEY)
+    }
+    catch (error) {
+      assessment = applyQuantDecisionAssistantAiReview(assessment, buildQuantDecisionAssistantAiFailure(error))
+    }
+    if (!config && assessment.ai.status === 'not-requested')
+      assessment = applyQuantDecisionAssistantAiReview(assessment, buildQuantDecisionAssistantAiUnavailable())
+    if (config) {
+      try {
+        const generated = await generateQuantAiDecisionAssistant({
+          report,
+          deterministic: assessment.deterministic,
+          scenario,
+          market: assessment.market,
+          config,
+          ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
+        })
+        assessment = applyQuantDecisionAssistantAiReview(assessment, buildQuantDecisionAssistantAiReview({
+          generated,
+          config,
+          report,
+          deterministic: assessment.deterministic,
+          scenario,
+        }))
+      }
+      catch (error) {
+        assessment = applyQuantDecisionAssistantAiReview(assessment, buildQuantDecisionAssistantAiFailure(error, config))
+      }
+    }
+  }
+  const persisted = await createQuantDecisionAssessment(c.get('db'), {
+    userId,
+    researchRunId: run.id,
+    tsCode: run.tsCode,
+    mode: scenario.mode,
+    currentPrice: scenario.currentPrice,
+    costBasis: scenario.costBasis,
+    quantity: scenario.quantity,
+    snapshotJson: JSON.stringify(assessment),
+  })
+  return c.json({ success: true as const, data: decisionAssistantView(persisted, report) }, 201)
+})
+
+quantRoutes.get('/decision-assistant/:tsCode', validator('param', QuantWatchlistParamSchema), validator('query', QuantDecisionRecordQuerySchema), async (c) => {
+  const { tsCode } = c.req.valid('param')
+  const { limit } = c.req.valid('query')
+  const boundedLimit = limit ? Number(limit) : 10
+  const userId = currentQuantUserId(c)
+  const assessments = await listQuantDecisionAssessments(c.get('db'), userId, tsCode, boundedLimit)
+  const items = await Promise.all(assessments.map(async (assessment) => {
+    const run = await getQuantResearchRun(c.get('db'), userId, assessment.researchRunId)
+    if (!run)
+      throw new QuantError('QUANT_DECISION_ASSISTANT_INVALID_SNAPSHOT', 'Decision assistant research run readback failed', 500)
+    const report = parseResearchReport(run.reportJson)
+    if (report.tsCode !== run.tsCode || report.status !== run.status || report.reportVersion !== run.reportVersion)
+      throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted research run does not match its report', 500)
+    return decisionAssistantView(assessment, report)
+  }))
+  return c.json({
+    success: true as const,
+    data: {
+      items,
+      limit: Math.min(30, Math.max(1, Math.floor(boundedLimit))),
+    },
+  })
+})
+
 quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResearchRunIdParamSchema), async (c) => {
   const userId = currentQuantUserId(c)
   const { runId } = c.req.valid('param')
@@ -1036,7 +1161,7 @@ quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResear
   const summary = await generateQuantAiSummary({
     report,
     config,
-    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
   })
   const persisted = await createQuantResearchSummary(c.get('db'), {
     userId,
@@ -1078,10 +1203,13 @@ quantRoutes.put('/research/runs/:runId/decision', validator('param', QuantResear
     listQuantResearchSummaries(c.get('db'), userId, run.id, 1),
   ])
   const latestSummary = summaries[0]
-  const aiDecisionReview = latestSummary
-    ? researchSummaryView(latestSummary, report).summary.decisionReview
-    : null
-  const snapshot = buildQuantDecisionRecordSnapshot({ report, latestDailyBar, aiDecisionReview })
+  const latestSummaryView = latestSummary ? researchSummaryView(latestSummary, report) : null
+  const snapshot = buildQuantDecisionRecordSnapshot({
+    report,
+    latestDailyBar,
+    aiDecisionReview: latestSummaryView?.summary.decisionReview,
+    aiFactorReviews: latestSummaryView?.summary.factorReviews,
+  })
   const persisted = await upsertQuantDecisionRecord(c.get('db'), {
     userId,
     researchRunId: run.id,
@@ -1110,7 +1238,7 @@ quantRoutes.post('/research/runs/:runId/question', validator('param', QuantResea
     report,
     question,
     config,
-    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
   })
   return c.json({ success: true as const, data: researchQuestionView(generated) })
 })
@@ -1142,7 +1270,7 @@ quantRoutes.post('/research/runs/:runId/change-explanation', validator('param', 
     currentReport,
     previousReport,
     config,
-    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
   })
   return c.json({ success: true as const, data: researchChangeExplanationView(explanation) })
 })
@@ -1171,7 +1299,7 @@ quantRoutes.post('/research/comparison', validator('json', QuantResearchComparis
   const comparison = await generateQuantAiComparison({
     reports,
     config,
-    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
   })
   return c.json({ success: true as const, data: researchComparisonView(comparison) })
 })
@@ -1220,7 +1348,7 @@ quantRoutes.post('/candidates/ai-briefing', validator('json', QuantAiCandidateBr
   const briefing = await generateQuantAiCandidateBriefing({
     candidates: facts,
     config,
-    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
   })
   const identity = candidateSessionIdentity(scopedSnapshot)
   const persisted = await createQuantCandidateAiSession(c.get('db'), {
@@ -1261,7 +1389,7 @@ quantRoutes.post('/candidates/ai-briefing/question', validator('json', QuantAiCa
     candidates: facts,
     question,
     config,
-    ...(aiSummaryTimeoutMs(c.env) ? { timeoutMs: aiSummaryTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
   })
   let persistedSession: QuantCandidateAiSessionRecord
   if (existingSession) {
@@ -1301,6 +1429,12 @@ quantRoutes.get('/research/runs/:runId/summary', validator('param', QuantResearc
   const report = parseResearchReport(run.reportJson)
   const summaries = await listQuantResearchSummaries(c.get('db'), userId, run.id, limit ? Number(limit) : 10)
   return c.json({ success: true as const, data: summaries.map(summary => researchSummaryView(summary, report)) })
+})
+
+quantRoutes.get('/research/decisions', validator('query', QuantDecisionRecordQuerySchema), async (c) => {
+  const { limit } = c.req.valid('query')
+  const data = await listQuantDecisionQueue(c.get('db'), currentQuantUserId(c), limit ? Number(limit) : undefined)
+  return c.json({ success: true as const, data: data.map(decisionRecordView) })
 })
 
 quantRoutes.get('/research/decisions/:tsCode', validator('param', QuantWatchlistParamSchema), validator('query', QuantDecisionRecordQuerySchema), async (c) => {

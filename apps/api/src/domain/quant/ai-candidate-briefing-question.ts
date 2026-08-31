@@ -1,5 +1,6 @@
 import type { QuantCandidateBriefingPriorityFact } from './ai-candidate-briefing'
 import type { QuantDecryptedAiConfig } from './ai-config'
+import { resolveQuantAiGenerationTimeout } from './ai-timeout'
 import { QuantError } from './errors'
 
 export const QUANT_AI_CANDIDATE_BRIEFING_QUESTION_VERSION = 'candidate-briefing-question-v1' as const
@@ -224,7 +225,7 @@ export async function generateQuantAiCandidateBriefingQuestion(
   if (!input.config.apiKey && input.config.provider !== 'ollama')
     throw questionError('QUANT_AI_CANDIDATE_BRIEFING_QUESTION_CONFIGURATION', 'AI API key is not configured', 503)
 
-  const timeoutMs = Number.isFinite(input.timeoutMs) && (input.timeoutMs ?? 0) > 0 ? Math.min(input.timeoutMs!, 30_000) : 20_000
+  const timeoutMs = resolveQuantAiGenerationTimeout(input.timeoutMs)
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)

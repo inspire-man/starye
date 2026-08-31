@@ -69,7 +69,7 @@ export interface Env {
   QUANT_AKSHARE_BRIDGE_URL?: string
   QUANT_AKSHARE_BRIDGE_TOKEN?: string
   QUANT_AKSHARE_BRIDGE_TIMEOUT_MS?: string
-  QUANT_AI_SUMMARY_TIMEOUT_MS?: string
+  QUANT_AI_GENERATION_TIMEOUT_MS?: string
   ADMIN_GITHUB_ID?: string // 逗号分隔的 GitHub ID 白名单
   SENTRY_DSN?: string
   SENTRY_RELEASE?: string

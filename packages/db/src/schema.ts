@@ -1102,6 +1102,25 @@ export const quantDecisionRecords = sqliteTable('quant_decision_record', {
 export type QuantDecisionRecord = InferSelectModel<typeof quantDecisionRecords>
 export type NewQuantDecisionRecord = InferInsertModel<typeof quantDecisionRecords>
 
+export const quantDecisionAssessments = sqliteTable('quant_decision_assessment', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  researchRunId: text('research_run_id').notNull().references(() => quantResearchRuns.id, { onDelete: 'cascade' }),
+  tsCode: text('ts_code').notNull(),
+  mode: text('mode', { enum: ['buy', 'holding'] }).notNull(),
+  currentPrice: real('current_price').notNull(),
+  costBasis: real('cost_basis'),
+  quantity: real('quantity'),
+  snapshotJson: text('snapshot_json').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_quant_decision_assessment_user_ts_code_created_at').on(table.userId, table.tsCode, table.createdAt),
+  index('idx_quant_decision_assessment_user_run_created_at').on(table.userId, table.researchRunId, table.createdAt),
+])
+
+export type QuantDecisionAssessment = InferSelectModel<typeof quantDecisionAssessments>
+export type NewQuantDecisionAssessment = InferInsertModel<typeof quantDecisionAssessments>
+
 export const quantCandidateAiSessions = sqliteTable('quant_candidate_ai_session', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -1194,6 +1213,7 @@ export const quantResearchRunsRelations = relations(quantResearchRuns, ({ one, m
   }),
   summaries: many(quantResearchSummaries),
   decisionRecords: many(quantDecisionRecords),
+  decisionAssessments: many(quantDecisionAssessments),
 }))
 
 export const quantResearchSummariesRelations = relations(quantResearchSummaries, ({ one }) => ({
@@ -1214,6 +1234,17 @@ export const quantDecisionRecordsRelations = relations(quantDecisionRecords, ({ 
   }),
   researchRun: one(quantResearchRuns, {
     fields: [quantDecisionRecords.researchRunId],
+    references: [quantResearchRuns.id],
+  }),
+}))
+
+export const quantDecisionAssessmentsRelations = relations(quantDecisionAssessments, ({ one }) => ({
+  user: one(user, {
+    fields: [quantDecisionAssessments.userId],
+    references: [user.id],
+  }),
+  researchRun: one(quantResearchRuns, {
+    fields: [quantDecisionAssessments.researchRunId],
     references: [quantResearchRuns.id],
   }),
 }))
@@ -1244,6 +1275,7 @@ export const userRelations = relations(user, ({ many }) => ({
   quantResearchRuns: many(quantResearchRuns),
   quantResearchSummaries: many(quantResearchSummaries),
   quantDecisionRecords: many(quantDecisionRecords),
+  quantDecisionAssessments: many(quantDecisionAssessments),
   quantCandidateAiSessions: many(quantCandidateAiSessions),
   crawlerTasks: many(crawlerTasks),
 }))

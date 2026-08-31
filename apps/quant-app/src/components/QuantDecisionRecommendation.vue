@@ -59,6 +59,18 @@ function factorStatusClass(value: string): string {
 function configurationSourceLabel(value: string | undefined): string {
   return value === 'user' ? '当前用户配置' : value === 'default' ? '内置默认配置' : '历史报告未记录'
 }
+
+function aiReviewStatusLabel(review: QuantAiDecisionReview): string {
+  if (review.accepted)
+    return '已影响最终推荐'
+  if (review.rejectionReason === 'deterministic-watch')
+    return '数据不足，保持确定性观望'
+  if (review.rejectionReason === 'factor-review-incomplete')
+    return '因子复核不足，保留确定性推荐'
+  if (review.rejectionReason === 'factor-conflict')
+    return '因子方向冲突，保留确定性推荐'
+  return '置信度不足，保留确定性推荐'
+}
 </script>
 
 <template>
@@ -134,7 +146,7 @@ function configurationSourceLabel(value: string | undefined): string {
           <span>AI 复核</span>
           <strong>{{ recommendationLabel(aiReview.recommendation) }}</strong>
         </div>
-        <small>{{ aiReview.accepted ? '已影响最终推荐' : aiReview.rejectionReason === 'deterministic-watch' ? '数据不足，保持确定性观望' : '置信度不足，保留确定性推荐' }} · {{ aiReview.confidence.toFixed(0) }}</small>
+        <small>{{ aiReviewStatusLabel(aiReview) }} · 置信度 {{ aiReview.confidence.toFixed(0) }} · 因子复核 {{ aiReview.factorReviewCoverage.toFixed(0) }}%</small>
       </div>
       <div v-else class="quant-decision-ai-pending">
         <Info :size="14" aria-hidden="true" />

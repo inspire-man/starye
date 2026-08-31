@@ -20,4 +20,4 @@
 ## 4. 验收与交付
 
 - [x] 4.1 运行 DB/API/Quant 定向测试、type-check、build、lint 和 OpenSpec strict。
-- [ ] 4.2 通过 Gateway 验证研究详情和 390px 页面，运行 staged GitNexus detect_changes，完成提交。
+- [x] 4.2 通过 Gateway 验证研究详情和 390px 页面，运行 staged GitNexus detect_changes，完成提交。

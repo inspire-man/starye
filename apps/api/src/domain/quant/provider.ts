@@ -449,6 +449,21 @@ export interface QuantStockBasicProvider {
   fetchStockBasic: (request: { readonly tsCode: string }) => Promise<QuantStockBasic>
 }
 
+export interface QuantMarketQuote {
+  readonly tsCode: string
+  readonly price: number
+  readonly previousClose: number | null
+  readonly change: number | null
+  readonly changePercent: number | null
+  readonly observedAt: string
+}
+
+export interface QuantMarketQuoteProvider {
+  readonly name: QuantProviderName
+  readonly isConfigured: boolean
+  fetchMarketQuote: (request: { readonly tsCode: string }) => Promise<QuantMarketQuote>
+}
+
 export interface QuantFinancialQualitySnapshot {
   readonly tsCode: string
   readonly observedAt: string
@@ -577,6 +592,17 @@ function eastmoneyQuoteNumber(value: unknown, field: string): number | null {
   return numeric
 }
 
+function eastmoneyQuoteObservedAt(value: unknown, fallback: Date): string {
+  const timestamp = eastmoneyQuoteNumber(value, 'observedAt')
+  if (timestamp === null)
+    return fallback.toISOString()
+  const milliseconds = timestamp >= 1_000_000_000_000 ? timestamp : timestamp * 1_000
+  const observedAt = new Date(milliseconds)
+  if (Number.isNaN(observedAt.getTime()))
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Invalid Eastmoney quote timestamp')
+  return observedAt.toISOString()
+}
+
 export function createEastmoneyStockBasicProvider(options: EastmoneyProviderOptions = {}): QuantStockBasicProvider {
   const baseUrl = options.baseUrl?.trim() || 'https://push2.eastmoney.com'
   const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
@@ -634,6 +660,76 @@ export function createEastmoneyStockBasicProvider(options: EastmoneyProviderOpti
     name: 'eastmoney',
     isConfigured: true,
     fetchStockBasic,
+  }
+}
+
+export function createEastmoneyMarketQuoteProvider(options: EastmoneyProviderOptions = {}): QuantMarketQuoteProvider {
+  const baseUrl = options.baseUrl?.trim() || 'https://push2.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const now = options.now ?? (() => new Date())
+
+  async function fetchMarketQuote(request: { readonly tsCode: string }): Promise<QuantMarketQuote> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    const requestedCode = tsCode.split('.')[0]
+    const url = new URL('/api/qt/stock/get', baseUrl)
+    url.searchParams.set('secid', eastmoneyMarket(tsCode))
+    url.searchParams.set('invt', '2')
+    url.searchParams.set('fltt', '2')
+    url.searchParams.set('fields', 'f43,f57,f58,f60,f169,f170,f86')
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney market quote request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney market quote request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney market quote HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney market quote response is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyQuoteResponseSchema, payload)
+    if (!parsed.success || parsed.output.rc !== 0 || !isRecord(parsed.output.data))
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney market quote response schema is invalid')
+
+    const returnedCode = parsed.output.data.f57
+    if ((typeof returnedCode !== 'string' && typeof returnedCode !== 'number') || String(returnedCode).padStart(6, '0') !== requestedCode)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney market quote code is missing or mismatched')
+
+    const price = eastmoneyQuoteNumber(parsed.output.data.f43, 'price')
+    if (price === null || price <= 0)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney market quote price is missing or invalid')
+
+    return {
+      tsCode,
+      price,
+      previousClose: eastmoneyQuoteNumber(parsed.output.data.f60, 'previousClose'),
+      change: eastmoneyQuoteNumber(parsed.output.data.f169, 'change'),
+      changePercent: eastmoneyQuoteNumber(parsed.output.data.f170, 'changePercent'),
+      observedAt: eastmoneyQuoteObservedAt(parsed.output.data.f86, now()),
+    }
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    fetchMarketQuote,
   }
 }
 

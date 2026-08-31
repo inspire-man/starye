@@ -22,6 +22,7 @@ function record(id: string, action: QuantDecisionRecordAction, price: number | n
       buyPriceRange: null,
       sellPriceRange: null,
       aiDecisionReview: null,
+      aiFactorReviews: [],
       factorConfiguration: null,
     },
     createdAt: observedAt,

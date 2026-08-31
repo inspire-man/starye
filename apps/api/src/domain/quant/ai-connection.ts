@@ -1,5 +1,6 @@
 import type { QuantDecryptedAiConfig } from './ai-config'
 import { chatCompletionsUrl } from './ai-summary'
+import { resolveQuantAiConnectionTimeout } from './ai-timeout'
 import { QuantError } from './errors'
 
 export interface QuantAiConnectionTestRequest {
@@ -43,7 +44,7 @@ export async function testQuantAiConnection(input: QuantAiConnectionTestRequest)
   if (!config.apiKey && config.provider !== 'ollama')
     throw connectionError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI API key is not configured', 503)
 
-  const timeoutMs = Number.isFinite(input.timeoutMs) && (input.timeoutMs ?? 0) > 0 ? Math.min(input.timeoutMs!, 30_000) : 10_000
+  const timeoutMs = resolveQuantAiConnectionTimeout(input.timeoutMs)
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const nowMs = input.nowMs ?? (() => Date.now())
   const now = input.now ?? (() => new Date())

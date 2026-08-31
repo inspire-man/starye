@@ -88,6 +88,37 @@ function validContent(overrides: Record<string, unknown> = {}): string {
   })
 }
 
+const factorReport: QuantResearchReport = {
+  ...report,
+  factorModel: {
+    ...report.factorModel!,
+    factors: [{
+      key: 'quality',
+      label: '盈利质量',
+      weight: 1,
+      sourceId: 'eastmoney-financial',
+      source: 'Eastmoney 最新财报',
+      status: 'ready',
+      score: 90,
+      evidenceKeys: ['quality-roe'],
+      missingEvidenceKeys: [],
+    }],
+  },
+  decision: {
+    decisionVersion: 'research-decision-v1',
+    recommendation: 'bullish',
+    label: '看多',
+    deterministicScore: 90,
+    confidence: 90,
+    coverage: 100,
+    buyPriceRange: null,
+    sellPriceRange: null,
+    evidenceKeys: ['quality-roe'],
+    invalidationConditions: [],
+    headline: '看多：因子覆盖充分',
+  },
+}
+
 describe('quant AI summary', () => {
   it('generates a bounded evidence-grounded summary without exposing the key in the prompt', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent()))
@@ -99,6 +130,7 @@ describe('quant AI summary', () => {
       concerns: ['TTM PE 需要结合行业比较'],
       nextChecks: ['等待下一期财报并复核'],
       citedEvidenceKeys: ['quality-roe', 'valuation-pe'],
+      factorReviews: [],
       decisionReview: null,
     })
     expect(fetchImpl).toHaveBeenCalledWith('https://ai.example.test/v1/chat/completions', expect.objectContaining({
@@ -191,6 +223,102 @@ describe('quant AI summary', () => {
       recommendation: 'bullish',
       accepted: false,
       rejectionReason: 'deterministic-watch',
+    })
+  })
+
+  it('accepts factor reviews only when their evidence belongs to the reviewed factor', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: 88,
+        rationale: '盈利质量因子有明确的 ROE 证据支持。',
+        citedEvidenceKeys: ['quality-roe'],
+      }],
+      decisionReview: {
+        decisionVersion: 'ai-decision-v1',
+        recommendation: 'bullish',
+        confidence: 84,
+        rationale: '因子复核与确定性方向一致。',
+        invalidationConditions: ['ROE 转弱后复核'],
+        citedEvidenceKeys: ['quality-roe'],
+      },
+    })))
+
+    const result = await generateQuantAiSummary({ report: factorReport, config, fetchImpl })
+    expect(result.factorReviews).toMatchObject([{
+      factor: 'quality',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      citedEvidenceKeys: ['quality-roe'],
+    }])
+    expect(result.decisionReview).toMatchObject({ accepted: true, factorReviewCoverage: 100 })
+  })
+
+  it('rejects cross-factor citations and records direction conflicts without applying them', async () => {
+    const invalidCitation = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: 88,
+        rationale: '引用了错误因子。',
+        citedEvidenceKeys: ['valuation-pe'],
+      }],
+    })))
+    await expect(generateQuantAiSummary({ report: factorReport, config, fetchImpl: invalidCitation })).rejects.toMatchObject({
+      code: 'QUANT_AI_SUMMARY_INVALID_RESPONSE',
+    })
+
+    const conflict = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'oppose',
+        confidence: 88,
+        rationale: '盈利质量因子与看多方向相反。',
+        citedEvidenceKeys: ['quality-roe'],
+      }],
+      decisionReview: {
+        decisionVersion: 'ai-decision-v1',
+        recommendation: 'bullish',
+        confidence: 84,
+        rationale: '总体结论需要保留。',
+        invalidationConditions: ['盈利质量改善后复核'],
+        citedEvidenceKeys: ['quality-roe'],
+      },
+    })))
+    await expect(generateQuantAiSummary({ report: factorReport, config, fetchImpl: conflict })).resolves.toMatchObject({
+      factorReviews: [{ accepted: true, stance: 'oppose' }],
+      decisionReview: { accepted: false, rejectionReason: 'factor-conflict', factorReviewCoverage: 100 },
+    })
+  })
+
+  it('does not count a missing evidence value toward factor review acceptance', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: 88,
+        rationale: '引用的指标仍未返回有效值。',
+        citedEvidenceKeys: ['quality-roe'],
+      }],
+      decisionReview: {
+        decisionVersion: 'ai-decision-v1',
+        recommendation: 'bullish',
+        confidence: 84,
+        rationale: '因子数据仍需补齐。',
+        invalidationConditions: ['ROE 返回有效值后复核'],
+        citedEvidenceKeys: ['quality-roe'],
+      },
+    })))
+    const missingReport = {
+      ...factorReport,
+      evidence: factorReport.evidence.map(item => item.key === 'quality-roe' ? { ...item, status: 'missing' as const, value: null } : item),
+    }
+
+    await expect(generateQuantAiSummary({ report: missingReport, config, fetchImpl })).resolves.toMatchObject({
+      factorReviews: [{ accepted: false }],
+      decisionReview: { accepted: false, rejectionReason: 'factor-review-incomplete' },
     })
   })
 

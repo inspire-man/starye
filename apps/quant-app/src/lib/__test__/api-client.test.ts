@@ -943,6 +943,7 @@ describe('quantApi', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: null }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: record }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: [record] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [record] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(quantApi.getResearchDecisionRecord('run-1')).resolves.toBeNull()
@@ -958,6 +959,7 @@ describe('quantApi', () => {
       },
     })
     await expect(quantApi.getResearchDecisionRecords('601899.SH', 10)).resolves.toMatchObject([{ id: 'decision-1', tsCode: '601899.SH' }])
+    await expect(quantApi.getResearchDecisionQueue(20)).resolves.toMatchObject([{ id: 'decision-1', tsCode: '601899.SH' }])
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/decision`)
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/decision`)
@@ -965,6 +967,7 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ action: 'plan-buy', note: '等待价格回到参考区间' }))
     expect(fetchMock.mock.calls[1]?.[1]?.body).not.toContain('snapshot')
     expect(fetchMock.mock.calls[2]?.[0]).toBe(`${QUANT_API_PREFIX}/research/decisions/601899.SH?limit=10`)
+    expect(fetchMock.mock.calls[3]?.[0]).toBe(`${QUANT_API_PREFIX}/research/decisions?limit=20`)
   })
 
   it('normalizes saved AI research summaries and keeps generation separate from report history', async () => {

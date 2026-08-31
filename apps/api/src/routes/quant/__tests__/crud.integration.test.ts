@@ -1634,7 +1634,17 @@ describe('quant watchlist CRUD contract', () => {
         coveredWeight: 1,
         coverage: 100,
         score: 82,
-        factors: [],
+        factors: [{
+          key: 'trend',
+          label: '趋势',
+          weight: 1,
+          sourceId: 'local-daily-bars',
+          source: 'Quant 日线',
+          status: 'ready',
+          score: 82,
+          evidenceKeys: ['decision-evidence'],
+          missingEvidenceKeys: [],
+        }],
         configuration: {
           version: 'research-factor-config-v1',
           weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },
@@ -1709,6 +1719,13 @@ describe('quant watchlist CRUD contract', () => {
           concerns: [],
           nextChecks: ['复核最新价格'],
           citedEvidenceKeys: ['decision-evidence'],
+          factorReviews: [{
+            factor: 'trend',
+            stance: 'support',
+            confidence: 88,
+            rationale: '趋势因子有日线样本支持。',
+            citedEvidenceKeys: ['decision-evidence'],
+          }],
           decisionReview: {
             decisionVersion: 'ai-decision-v1',
             recommendation: 'bullish',
@@ -1741,9 +1758,13 @@ describe('quant watchlist CRUD contract', () => {
         recommendation: 'bullish',
         currentPrice: 15.5,
         currentPriceObservedAt: '20260830',
-        aiDecisionReview: { recommendation: 'bullish', accepted: true, confidence: 84 },
+        aiDecisionReview: { recommendation: 'bullish', accepted: true, confidence: 84, factorReviewCoverage: 100 },
+        aiFactorReviews: [{ factor: 'trend', stance: 'support', accepted: true, confidence: 88 }],
         factorConfiguration: { source: 'user', version: 'research-factor-config-v1' },
       },
+    })
+    await expect(client.execute('SELECT snapshot_json FROM quant_decision_record WHERE id = ?', [savedPayload.data.id])).resolves.toMatchObject({
+      rows: [{ snapshot_json: expect.stringContaining('"aiFactorReviews"') }],
     })
 
     const updated = await userA.request('/api/quant/research/runs/decision-run-1/decision', {
@@ -1772,10 +1793,15 @@ describe('quant watchlist CRUD contract', () => {
       expect.objectContaining({ action: 'watch' }),
     ]) })
     await expect(userB.request('/api/quant/research/decisions/601899.SH').then(response => response.json())).resolves.toMatchObject({ data: [expect.objectContaining({ action: 'sold' })] })
+    const queueA = await userA.request('/api/quant/research/decisions?limit=99')
+    expect(queueA.status).toBe(200)
+    await expect(queueA.json()).resolves.toMatchObject({ data: [expect.objectContaining({ tsCode: '601899.SH' })] })
+    expect((await userB.request('/api/quant/research/decisions?limit=20')).status).toBe(200)
     expect((await userA.request('/api/quant/research/runs/decision-run-foreign/decision')).status).toBe(404)
     await expect(client.execute('SELECT count(*) AS count FROM quant_decision_record')).resolves.toMatchObject({ rows: [{ count: 3 }] })
 
-    await client.execute(`UPDATE quant_decision_record SET snapshot_json = '{}' WHERE id = '${savedPayload.data.id}'`)
+    await client.execute(`UPDATE quant_decision_record SET snapshot_json = '{}', updated_at = 9999999999999 WHERE id = '${savedPayload.data.id}'`)
     expect((await userA.request('/api/quant/research/runs/decision-run-1/decision')).status).toBe(500)
+    expect((await userA.request('/api/quant/research/decisions?limit=20')).status).toBe(500)
   })
 })

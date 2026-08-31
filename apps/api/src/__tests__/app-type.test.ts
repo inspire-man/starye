@@ -20,9 +20,22 @@ describe('appType Export', () => {
     expect(adminMainRoutes.routes.some(route => route.path === '/crawler-tasks')).toBe(true)
   })
 
-  it('only bypasses the generic timeout for POST quant sync requests', () => {
+  it('bypasses the generic timeout for POST quant sync and long AI generation requests', () => {
     expect(shouldBypassApiTimeout(new Request('http://localhost/api/quant/sync', { method: 'POST' }))).toBe(true)
     expect(shouldBypassApiTimeout(new Request('http://localhost/api/quant/sync', { method: 'GET' }))).toBe(false)
     expect(shouldBypassApiTimeout(new Request('http://localhost/api/quant/capabilities', { method: 'POST' }))).toBe(false)
+    for (const path of [
+      '/api/quant/decision-assistant',
+      '/api/quant/research/runs/run-1/summary',
+      '/api/quant/research/runs/run-1/question',
+      '/api/quant/research/runs/run-1/change-explanation',
+      '/api/quant/research/comparison',
+      '/api/quant/candidates/ai-briefing',
+      '/api/quant/candidates/ai-briefing/question',
+    ]) {
+      expect(shouldBypassApiTimeout(new Request(`http://localhost${path}`, { method: 'POST' }))).toBe(true)
+      expect(shouldBypassApiTimeout(new Request(`http://localhost${path}`, { method: 'GET' }))).toBe(false)
+    }
+    expect(shouldBypassApiTimeout(new Request('http://localhost/api/quant/ai-config/test', { method: 'POST' }))).toBe(false)
   })
 })

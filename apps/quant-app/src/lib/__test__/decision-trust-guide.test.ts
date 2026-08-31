@@ -109,6 +109,7 @@ describe('buildQuantDecisionGuide', () => {
         confidence: 86,
         accepted: true,
         rejectionReason: null,
+        factorReviewCoverage: 100,
         rationale: '证据一致。',
         invalidationConditions: [],
         citedEvidenceKeys: ['trend-sample'],

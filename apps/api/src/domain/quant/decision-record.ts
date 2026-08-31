@@ -1,4 +1,4 @@
-import type { QuantAiDecisionReview } from './ai-summary'
+import type { QuantAiDecisionReview, QuantAiFactorReview } from './ai-summary'
 import type { QuantDecisionProjection, QuantRecommendation, QuantReferencePriceRange } from './decision-recommendation'
 import type { QuantFactorConfiguration } from './factor-configuration'
 import type { QuantResearchReport } from './research-report'
@@ -13,7 +13,8 @@ export interface QuantDecisionRecordAiReviewSnapshot {
   readonly recommendation: QuantRecommendation
   readonly confidence: number
   readonly accepted: boolean
-  readonly rejectionReason: 'low-confidence' | 'deterministic-watch' | null
+  readonly rejectionReason: 'low-confidence' | 'deterministic-watch' | 'factor-review-incomplete' | 'factor-conflict' | null
+  readonly factorReviewCoverage: number
   readonly rationale: string
   readonly invalidationConditions: readonly string[]
   readonly citedEvidenceKeys: readonly string[]
@@ -32,6 +33,7 @@ export interface QuantDecisionRecordSnapshot {
   readonly buyPriceRange: QuantReferencePriceRange | null
   readonly sellPriceRange: QuantReferencePriceRange | null
   readonly aiDecisionReview: QuantDecisionRecordAiReviewSnapshot | null
+  readonly aiFactorReviews: readonly QuantAiFactorReview[]
   readonly factorConfiguration: QuantFactorConfiguration | null
 }
 
@@ -74,6 +76,7 @@ function cloneAiDecisionReview(value: QuantAiDecisionReview | null | undefined):
     confidence: value.confidence,
     accepted: value.accepted,
     rejectionReason: value.rejectionReason,
+    factorReviewCoverage: value.factorReviewCoverage ?? 0,
     rationale: value.rationale,
     invalidationConditions: [...value.invalidationConditions],
     citedEvidenceKeys: [...value.citedEvidenceKeys],
@@ -84,6 +87,7 @@ export function buildQuantDecisionRecordSnapshot(input: {
   readonly report: QuantResearchReport
   readonly latestDailyBar?: { readonly close: number, readonly tradeDate: string } | null
   readonly aiDecisionReview?: QuantAiDecisionReview | null
+  readonly aiFactorReviews?: readonly QuantAiFactorReview[]
 }): QuantDecisionRecordSnapshot {
   const decision: QuantDecisionProjection | undefined = input.report.decision
   return {
@@ -99,6 +103,12 @@ export function buildQuantDecisionRecordSnapshot(input: {
     buyPriceRange: clonePriceRange(decision?.buyPriceRange),
     sellPriceRange: clonePriceRange(decision?.sellPriceRange),
     aiDecisionReview: cloneAiDecisionReview(input.aiDecisionReview),
+    aiFactorReviews: input.aiFactorReviews
+      ? input.aiFactorReviews.map(review => ({
+          ...review,
+          citedEvidenceKeys: [...review.citedEvidenceKeys],
+        }))
+      : [],
     factorConfiguration: cloneFactorConfiguration(input.report.factorModel?.configuration),
   }
 }
@@ -156,11 +166,13 @@ function parseAiDecisionReview(value: unknown): QuantDecisionRecordAiReviewSnaps
   const rejectionReason = value.rejectionReason === null
     ? null
     : text(value.rejectionReason)
+  const factorReviewCoverage = value.factorReviewCoverage === undefined ? 0 : finite(value.factorReviewCoverage)
   const invalidationConditions = textList(value.invalidationConditions)
   const citedEvidenceKeys = textList(value.citedEvidenceKeys)
   if (!decisionVersion || (recommendation !== 'bullish' && recommendation !== 'bearish' && recommendation !== 'watch')
     || confidence === null || confidence < 0 || confidence > 100 || typeof value.accepted !== 'boolean'
-    || (rejectionReason !== null && rejectionReason !== 'low-confidence' && rejectionReason !== 'deterministic-watch')
+    || (rejectionReason !== null && rejectionReason !== 'low-confidence' && rejectionReason !== 'deterministic-watch' && rejectionReason !== 'factor-review-incomplete' && rejectionReason !== 'factor-conflict')
+    || factorReviewCoverage === null || factorReviewCoverage < 0 || factorReviewCoverage > 100
     || !rationale || !invalidationConditions || !citedEvidenceKeys) {
     throw new Error('invalid AI decision review')
   }
@@ -170,10 +182,43 @@ function parseAiDecisionReview(value: unknown): QuantDecisionRecordAiReviewSnaps
     confidence,
     accepted: value.accepted,
     rejectionReason,
+    factorReviewCoverage,
     rationale,
     invalidationConditions,
     citedEvidenceKeys,
   }
+}
+
+function parseAiFactorReviews(value: unknown): QuantAiFactorReview[] {
+  if (value === undefined)
+    return []
+  if (!Array.isArray(value) || value.length > 5)
+    throw new Error('invalid AI factor reviews')
+  const seen = new Set<string>()
+  return value.map((item) => {
+    if (!isRecord(item))
+      throw new Error('invalid AI factor review')
+    const factor = text(item.factor)
+    const stance = text(item.stance)
+    const confidence = finite(item.confidence)
+    const rationale = text(item.rationale)
+    const citedEvidenceKeys = textList(item.citedEvidenceKeys)
+    if ((factor !== 'trend' && factor !== 'valuation' && factor !== 'quality' && factor !== 'shareholder-return' && factor !== 'risk')
+      || (stance !== 'support' && stance !== 'caution' && stance !== 'oppose' && stance !== 'insufficient')
+      || confidence === null || confidence < 0 || confidence > 100
+      || seen.has(factor) || typeof item.accepted !== 'boolean' || !rationale || rationale.length > 600 || !citedEvidenceKeys || citedEvidenceKeys.length > 16) {
+      throw new Error('invalid AI factor review')
+    }
+    seen.add(factor)
+    return {
+      factor,
+      stance,
+      confidence,
+      accepted: item.accepted,
+      rationale,
+      citedEvidenceKeys,
+    }
+  })
 }
 
 export function parseQuantDecisionRecordSnapshot(value: string): QuantDecisionRecordSnapshot {
@@ -211,6 +256,7 @@ export function parseQuantDecisionRecordSnapshot(value: string): QuantDecisionRe
       buyPriceRange: parsePriceRange(parsed.buyPriceRange),
       sellPriceRange: parsePriceRange(parsed.sellPriceRange),
       aiDecisionReview: parseAiDecisionReview(parsed.aiDecisionReview),
+      aiFactorReviews: parseAiFactorReviews(parsed.aiFactorReviews),
       factorConfiguration: parseFactorConfiguration(parsed.factorConfiguration),
     }
   }

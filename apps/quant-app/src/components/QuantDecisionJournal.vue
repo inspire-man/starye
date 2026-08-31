@@ -79,7 +79,13 @@ function aiReviewLabel(record: QuantDecisionRecord): string {
     return '未生成'
   if (review.accepted)
     return '已纳入推荐'
-  return review.rejectionReason === 'deterministic-watch' ? '数据不足，保持观望' : '低置信度，保留确定性结论'
+  if (review.rejectionReason === 'deterministic-watch')
+    return '数据不足，保持观望'
+  if (review.rejectionReason === 'factor-review-incomplete')
+    return '因子复核不足'
+  if (review.rejectionReason === 'factor-conflict')
+    return '因子方向冲突'
+  return '低置信度，保留确定性结论'
 }
 
 function aiReviewClass(record: QuantDecisionRecord): string {
@@ -161,13 +167,14 @@ watch(
         <div>
           <span>AI 复核</span>
           <strong :class="aiReviewClass(record)">{{ aiReviewLabel(record) }}</strong>
-          <small>{{ record.snapshot.aiDecisionReview ? `置信度 ${record.snapshot.aiDecisionReview.confidence.toFixed(0)}` : '当前快照未保存 AI 复核' }}</small>
+          <small>{{ record.snapshot.aiDecisionReview ? `置信度 ${record.snapshot.aiDecisionReview.confidence.toFixed(0)} · 因子复核 ${record.snapshot.aiDecisionReview.factorReviewCoverage.toFixed(0)}%` : '当前快照未保存 AI 复核' }}</small>
         </div>
       </div>
       <div v-if="record" class="quant-decision-price-row">
         <span>参考买入区间 <strong>{{ formatPriceRange(record.snapshot.buyPriceRange) }}</strong></span>
         <span>参考卖出区间 <strong>{{ formatPriceRange(record.snapshot.sellPriceRange) }}</strong></span>
         <span v-if="record.snapshot.factorConfiguration">因子配置 <strong>{{ record.snapshot.factorConfiguration.source === 'user' ? '当前用户配置' : '内置默认' }}</strong></span>
+        <span v-if="record.snapshot.aiFactorReviews.length">AI 因子复核 <strong>{{ record.snapshot.aiFactorReviews.length }} 项</strong></span>
       </div>
       <div v-if="record?.note" class="quant-decision-current-note">
         <span>当时备注</span>

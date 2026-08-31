@@ -1,10 +1,12 @@
 import type { Database } from '@starye/db'
+import type { QuantDecisionAssistantMode } from './decision-assistant'
 import type { QuantDecisionRecordAction } from './decision-record'
 import type { QuantFactorConfiguration, QuantFactorWeights } from './factor-configuration'
 import type { DailyBar, MomentumCandidate, QuantSyncStatus } from './types'
 import {
   quantCandidateAiSessions,
   quantDailyBars,
+  quantDecisionAssessments,
   quantDecisionRecords,
   quantFactorConfigs,
   quantResearchMarkers,
@@ -27,6 +29,8 @@ export const QUANT_RESEARCH_RUN_RETENTION = 30
 export const QUANT_RESEARCH_SUMMARY_RETENTION = 10
 export const QUANT_CANDIDATE_AI_SESSION_RETENTION = 10
 export const QUANT_DECISION_RECORD_RETENTION = 30
+export const QUANT_DECISION_QUEUE_LIMIT = 20
+export const QUANT_DECISION_ASSESSMENT_RETENTION = 30
 export const QUANT_CANDIDATE_AI_QUESTION_RETENTION = 10
 export const QUANT_RESEARCH_STATUSES = ['unreviewed', 'priority', 'paused', 'excluded'] as const
 export type QuantResearchStatus = typeof QUANT_RESEARCH_STATUSES[number]
@@ -624,6 +628,20 @@ export async function listQuantDecisionRecords(db: Database, userId: string, tsC
   )).orderBy(desc(quantDecisionRecords.updatedAt), desc(quantDecisionRecords.id)).limit(boundedLimit).all()
 }
 
+export async function listQuantDecisionQueue(db: Database, userId: string, limit = QUANT_DECISION_QUEUE_LIMIT) {
+  const ownerId = normalizeQuantUserId(userId)
+  const boundedLimit = Math.min(QUANT_DECISION_QUEUE_LIMIT, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : QUANT_DECISION_QUEUE_LIMIT))
+  const records = await db.select().from(quantDecisionRecords).where(
+    eq(quantDecisionRecords.userId, ownerId),
+  ).orderBy(desc(quantDecisionRecords.updatedAt), desc(quantDecisionRecords.id)).all()
+  const latestByCode = new Map<string, typeof records[number]>()
+  for (const record of records) {
+    if (!latestByCode.has(record.tsCode))
+      latestByCode.set(record.tsCode, record)
+  }
+  return [...latestByCode.values()].slice(0, boundedLimit)
+}
+
 export async function upsertQuantDecisionRecord(db: Database, input: {
   readonly userId: string
   readonly researchRunId: string
@@ -662,6 +680,73 @@ export async function upsertQuantDecisionRecord(db: Database, input: {
   if (!persisted)
     throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Decision record readback failed', 500)
   return persisted
+}
+
+export async function createQuantDecisionAssessment(db: Database, input: {
+  readonly userId: string
+  readonly researchRunId: string
+  readonly tsCode: string
+  readonly mode: QuantDecisionAssistantMode
+  readonly currentPrice: number
+  readonly costBasis: number | null
+  readonly quantity: number | null
+  readonly snapshotJson: string
+}) {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const normalizedRunId = input.researchRunId.trim()
+  const normalizedCode = normalizeTsCode(input.tsCode)
+  if (!normalizedRunId || (input.mode !== 'buy' && input.mode !== 'holding') || !Number.isFinite(input.currentPrice) || input.currentPrice <= 0 || (input.costBasis !== null && (!Number.isFinite(input.costBasis) || input.costBasis <= 0)) || (input.quantity !== null && (!Number.isFinite(input.quantity) || input.quantity <= 0)))
+    throw new QuantError('QUANT_DECISION_ASSISTANT_INPUT', 'Decision assistant assessment input is invalid', 422)
+  const run = await getQuantResearchRun(db, ownerId, normalizedRunId)
+  if (!run || run.tsCode !== normalizedCode)
+    throw new QuantError('QUANT_DECISION_ASSISTANT_RESEARCH_REQUIRED', 'Research run is not available for this stock', 422)
+  const createdAt = new Date()
+  const id = nanoid()
+  await db.insert(quantDecisionAssessments).values({
+    id,
+    userId: ownerId,
+    researchRunId: normalizedRunId,
+    tsCode: normalizedCode,
+    mode: input.mode,
+    currentPrice: input.currentPrice,
+    costBasis: input.costBasis,
+    quantity: input.quantity,
+    snapshotJson: input.snapshotJson,
+    createdAt,
+  })
+  const persisted = await db.select().from(quantDecisionAssessments).where(and(
+    eq(quantDecisionAssessments.id, id),
+    eq(quantDecisionAssessments.userId, ownerId),
+    eq(quantDecisionAssessments.researchRunId, normalizedRunId),
+  )).get()
+  if (!persisted)
+    throw new QuantError('QUANT_DECISION_ASSISTANT_INVALID_SNAPSHOT', 'Decision assistant assessment readback failed', 500)
+  try {
+    await db.run(sql`
+      DELETE FROM quant_decision_assessment
+      WHERE rowid IN (
+        SELECT rowid
+        FROM quant_decision_assessment
+        WHERE user_id = ${ownerId} AND ts_code = ${normalizedCode}
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT -1 OFFSET ${QUANT_DECISION_ASSESSMENT_RETENTION}
+      )
+    `)
+  }
+  catch {
+    // The current assessment is already authoritative; retention is best effort.
+  }
+  return persisted
+}
+
+export async function listQuantDecisionAssessments(db: Database, userId: string, tsCode: string, limit = 10) {
+  const ownerId = normalizeQuantUserId(userId)
+  const normalizedCode = normalizeTsCode(tsCode)
+  const boundedLimit = Math.min(QUANT_DECISION_ASSESSMENT_RETENTION, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 10))
+  return db.select().from(quantDecisionAssessments).where(and(
+    eq(quantDecisionAssessments.userId, ownerId),
+    eq(quantDecisionAssessments.tsCode, normalizedCode),
+  )).orderBy(desc(quantDecisionAssessments.createdAt), desc(quantDecisionAssessments.id)).limit(boundedLimit).all()
 }
 
 export async function createQuantResearchSummary(db: Database, input: {

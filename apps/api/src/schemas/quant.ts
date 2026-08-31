@@ -302,6 +302,169 @@ export const QuantDecisionRecordQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })
 
+const QuantDecisionAssistantPositiveNumberSchema = v.pipe(
+  v.number(),
+  v.check(value => Number.isFinite(value), 'Number must be finite'),
+  v.minValue(0.0001),
+  v.maxValue(100_000_000),
+)
+
+export const QuantDecisionAssistantModeSchema = v.picklist(['buy', 'holding'])
+
+export const QuantDecisionAssistantCreateSchema = v.strictObject({
+  research_run_id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64), v.regex(/^[\w-]+$/u)),
+  mode: QuantDecisionAssistantModeSchema,
+  cost_basis: v.optional(v.nullable(QuantDecisionAssistantPositiveNumberSchema)),
+  quantity: v.optional(v.nullable(QuantDecisionAssistantPositiveNumberSchema)),
+  include_ai: v.optional(v.boolean()),
+})
+
+const QuantDecisionAssistantSourceSchema = v.object({
+  id: v.string(),
+  name: v.string(),
+  observedAt: v.nullable(v.string()),
+  formulaVersion: v.string(),
+})
+
+const QuantDecisionAssistantPriceRangeSchema = v.nullable(v.object({
+  low: v.number(),
+  high: v.number(),
+  currency: v.literal('CNY'),
+  formulaVersion: v.string(),
+  source: v.string(),
+  observedAt: v.string(),
+  evidenceKeys: v.array(v.string()),
+}))
+
+const QuantDecisionAssistantEvidenceSchema = v.object({
+  total: v.number(),
+  usable: v.number(),
+  missing: v.number(),
+  failed: v.number(),
+})
+
+const QuantDecisionAssistantTrustSchema = v.object({
+  level: v.picklist(['high', 'medium', 'low']),
+  score: v.number(),
+  coverage: v.number(),
+  evidenceCoverage: v.number(),
+  sourceCount: v.number(),
+  latestObservedAt: v.nullable(v.string()),
+  freshnessDays: v.nullable(v.number()),
+  missingEvidenceCount: v.number(),
+  failedEvidenceCount: v.number(),
+  crossSourceAlertCount: v.number(),
+  reasons: v.array(v.string()),
+})
+
+const QuantDecisionAssistantDeterministicSchema = v.object({
+  recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+  label: v.picklist(['看多', '看空', '观望']),
+  action: v.picklist(['consider-buy', 'wait', 'avoid', 'hold', 'reduce-review', 'add-review', 'verify-price', 'review-data']),
+  actionLabel: v.string(),
+  rationale: v.string(),
+  priceStatus: v.picklist(['within', 'below', 'above', 'unavailable']),
+  priceLabel: v.string(),
+  priceDetail: v.string(),
+  score: v.nullable(v.number()),
+  coverage: v.number(),
+  buyPriceRange: QuantDecisionAssistantPriceRangeSchema,
+  sellPriceRange: QuantDecisionAssistantPriceRangeSchema,
+  unrealizedPnlPercent: v.nullable(v.number()),
+  recoveryPercent: v.nullable(v.number()),
+  trust: QuantDecisionAssistantTrustSchema,
+  evidence: QuantDecisionAssistantEvidenceSchema,
+  evidenceKeys: v.array(v.string()),
+  sources: v.array(QuantDecisionAssistantSourceSchema),
+  checks: v.array(v.string()),
+  invalidationConditions: v.array(v.string()),
+})
+
+const QuantDecisionAssistantAiFactorReviewSchema = v.object({
+  factor: v.picklist(['trend', 'valuation', 'quality', 'shareholder-return', 'risk']),
+  stance: v.picklist(['support', 'caution', 'oppose', 'insufficient']),
+  confidence: v.number(),
+  accepted: v.boolean(),
+  rationale: v.string(),
+  citedEvidenceKeys: v.array(v.string()),
+})
+
+const QuantDecisionAssistantAiSchema = v.object({
+  aiVersion: v.string(),
+  status: v.picklist(['accepted', 'rejected', 'failed', 'unavailable', 'not-requested']),
+  provider: v.nullable(QuantAiProviderSchema),
+  model: v.nullable(v.string()),
+  recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+  action: v.nullable(v.picklist(['consider-buy', 'wait', 'avoid', 'hold', 'reduce-review', 'add-review', 'verify-price', 'review-data'])),
+  confidence: v.nullable(v.number()),
+  accepted: v.boolean(),
+  rejectionReason: v.nullable(v.picklist(['low-confidence', 'deterministic-watch', 'factor-review-incomplete', 'factor-conflict', 'missing-citation', 'invalid-action'])),
+  factorReviewCoverage: v.number(),
+  rationale: v.nullable(v.string()),
+  risks: v.array(v.string()),
+  invalidationConditions: v.array(v.string()),
+  citedEvidenceKeys: v.array(v.string()),
+  factorReviews: v.array(QuantDecisionAssistantAiFactorReviewSchema),
+  errorCode: v.nullable(v.string()),
+})
+
+const QuantDecisionAssistantFinalSchema = v.object({
+  recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+  label: v.picklist(['看多', '看空', '观望']),
+  action: v.picklist(['consider-buy', 'wait', 'avoid', 'hold', 'reduce-review', 'add-review', 'verify-price', 'review-data']),
+  actionLabel: v.string(),
+  confidence: v.nullable(v.number()),
+  source: v.picklist(['ai', 'deterministic']),
+  rationale: v.string(),
+})
+
+export const QuantDecisionAssistantSchema = v.object({
+  id: v.string(),
+  snapshotVersion: v.literal('decision-assistant-v1'),
+  tsCode: v.string(),
+  name: v.nullable(v.string()),
+  researchRunId: v.string(),
+  assessedAt: v.string(),
+  createdAt: v.union([v.string(), v.date()]),
+  reportGeneratedAt: v.string(),
+  scenario: v.object({
+    mode: QuantDecisionAssistantModeSchema,
+    currentPrice: v.number(),
+    costBasis: v.nullable(v.number()),
+    quantity: v.nullable(v.number()),
+  }),
+  market: v.object({
+    currentPrice: v.number(),
+    currentPriceSource: v.picklist(['eastmoney-realtime', 'local-daily-bars', 'user-input']),
+    currentPriceStatus: v.picklist(['realtime', 'latest-close', 'user-input']),
+    currentPriceObservedAt: v.string(),
+    currentPriceChangePercent: v.nullable(v.number()),
+    quoteErrorCode: v.nullable(v.string()),
+    latestClose: v.nullable(v.number()),
+    latestTradeDate: v.nullable(v.string()),
+    latestCloseSource: v.nullable(v.literal('local-daily-bars')),
+    priceDeltaPercent: v.nullable(v.number()),
+  }),
+  evidence: QuantDecisionAssistantEvidenceSchema,
+  sources: v.array(QuantDecisionAssistantSourceSchema),
+  deterministic: QuantDecisionAssistantDeterministicSchema,
+  ai: QuantDecisionAssistantAiSchema,
+  final: QuantDecisionAssistantFinalSchema,
+})
+
+export const QuantDecisionAssistantResponseSchema = v.object({
+  success: v.literal(true),
+  data: QuantDecisionAssistantSchema,
+})
+
+export const QuantDecisionAssistantListResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    items: v.array(QuantDecisionAssistantSchema),
+    limit: v.number(),
+  }),
+})
+
 const QuantDecisionRecordPriceRangeSchema = v.strictObject({
   low: v.number(),
   high: v.number(),
@@ -312,12 +475,22 @@ const QuantDecisionRecordPriceRangeSchema = v.strictObject({
   evidenceKeys: v.array(v.string()),
 })
 
+const QuantDecisionRecordAiFactorReviewSchema = v.strictObject({
+  factor: v.picklist(['trend', 'valuation', 'quality', 'shareholder-return', 'risk']),
+  stance: v.picklist(['support', 'caution', 'oppose', 'insufficient']),
+  confidence: v.number(),
+  accepted: v.boolean(),
+  rationale: v.string(),
+  citedEvidenceKeys: v.array(v.string()),
+})
+
 const QuantDecisionRecordAiReviewSchema = v.strictObject({
   decisionVersion: v.string(),
   recommendation: v.picklist(['bullish', 'bearish', 'watch']),
   confidence: v.number(),
   accepted: v.boolean(),
-  rejectionReason: v.nullable(v.picklist(['low-confidence', 'deterministic-watch'])),
+  rejectionReason: v.nullable(v.picklist(['low-confidence', 'deterministic-watch', 'factor-review-incomplete', 'factor-conflict'])),
+  factorReviewCoverage: v.number(),
   rationale: v.string(),
   invalidationConditions: v.array(v.string()),
   citedEvidenceKeys: v.array(v.string()),
@@ -336,6 +509,7 @@ export const QuantDecisionRecordSnapshotSchema = v.strictObject({
   buyPriceRange: v.nullable(QuantDecisionRecordPriceRangeSchema),
   sellPriceRange: v.nullable(QuantDecisionRecordPriceRangeSchema),
   aiDecisionReview: v.nullable(QuantDecisionRecordAiReviewSchema),
+  aiFactorReviews: v.array(QuantDecisionRecordAiFactorReviewSchema),
   factorConfiguration: v.nullable(QuantFactorConfigurationSchema),
 })
 
@@ -588,6 +762,7 @@ export type QuantAiCandidateBriefingSessionQuery = v.InferOutput<typeof QuantAiC
 export type QuantResearchRunCreate = v.InferOutput<typeof QuantResearchRunCreateSchema>
 export type QuantResearchRunsQuery = v.InferOutput<typeof QuantResearchRunsQuerySchema>
 export type QuantResearchRunIdParam = v.InferOutput<typeof QuantResearchRunIdParamSchema>
+export type QuantDecisionAssistantCreate = v.InferOutput<typeof QuantDecisionAssistantCreateSchema>
 export type QuantResearchComparison = v.InferOutput<typeof QuantResearchComparisonSchema>
 export type QuantResearchComparisonResponse = v.InferOutput<typeof QuantResearchComparisonResponseSchema>
 export type QuantResearchQuestion = v.InferOutput<typeof QuantResearchQuestionSchema>
