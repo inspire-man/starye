@@ -23,6 +23,7 @@ import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQ
 import { testQuantAiConnection } from '../../domain/quant/ai-connection'
 import { generateQuantAiQuestion } from '../../domain/quant/ai-question'
 import { buildQuantAiFactorImpact, generateQuantAiSummary, parseQuantAiFactorImpactSnapshot, parseQuantAiSummary } from '../../domain/quant/ai-summary'
+import { resolveQuantAiGenerationTimeout } from '../../domain/quant/ai-timeout'
 import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
@@ -814,9 +815,11 @@ function akshareBridgeErrorCode(error: unknown): string {
   return error instanceof QuantAkshareBridgeError ? `BRIDGE_${error.code}` : 'BRIDGE_UPSTREAM'
 }
 
-function aiGenerationTimeoutMs(env?: AppEnv['Bindings']): number | undefined {
+function aiGenerationTimeoutMs(env?: AppEnv['Bindings'], configuredTimeoutMs?: number): number | undefined {
   const timeoutMs = Number(env?.QUANT_AI_GENERATION_TIMEOUT_MS)
-  return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined
+  const candidates = [configuredTimeoutMs, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined]
+    .filter((value): value is number => value !== undefined)
+  return candidates.length ? resolveQuantAiGenerationTimeout(Math.min(...candidates)) : undefined
 }
 
 function stockBasicProvider(env?: AppEnv['Bindings']) {
@@ -971,6 +974,8 @@ quantRoutes.put('/ai-config', validator('json', QuantAiConfigUpdateSchema), asyn
     baseUrl: input.base_url,
     apiKey: input.api_key,
     clearApiKey: input.clear_api_key,
+    responseMode: input.response_mode,
+    generationTimeoutMs: input.generation_timeout_ms,
   }, c.env.QUANT_AI_ENCRYPTION_KEY)
   return c.json({ success: true as const, data })
 })
@@ -1114,7 +1119,7 @@ quantRoutes.post('/decision-assistant', validator('json', QuantDecisionAssistant
           scenario,
           market: assessment.market,
           config,
-          ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
+          ...(aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) ? { timeoutMs: aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) } : {}),
         })
         assessment = applyQuantDecisionAssistantAiReview(assessment, buildQuantDecisionAssistantAiReview({
           generated,
@@ -1184,7 +1189,7 @@ quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResear
   const summary = await generateQuantAiSummary({
     report,
     config,
-    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) ? { timeoutMs: aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) } : {}),
   })
   const generatedAt = new Date()
   const factorImpactSnapshot = buildQuantAiFactorImpact(report, summary.factorReviews, generatedAt)
@@ -1267,7 +1272,7 @@ quantRoutes.post('/research/runs/:runId/question', validator('param', QuantResea
     report,
     question,
     config,
-    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) ? { timeoutMs: aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) } : {}),
   })
   return c.json({ success: true as const, data: researchQuestionView(generated) })
 })
@@ -1299,7 +1304,7 @@ quantRoutes.post('/research/runs/:runId/change-explanation', validator('param', 
     currentReport,
     previousReport,
     config,
-    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) ? { timeoutMs: aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) } : {}),
   })
   return c.json({ success: true as const, data: researchChangeExplanationView(explanation) })
 })
@@ -1328,7 +1333,7 @@ quantRoutes.post('/research/comparison', validator('json', QuantResearchComparis
   const comparison = await generateQuantAiComparison({
     reports,
     config,
-    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) ? { timeoutMs: aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) } : {}),
   })
   return c.json({ success: true as const, data: researchComparisonView(comparison) })
 })
@@ -1377,7 +1382,7 @@ quantRoutes.post('/candidates/ai-briefing', validator('json', QuantAiCandidateBr
   const briefing = await generateQuantAiCandidateBriefing({
     candidates: facts,
     config,
-    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) ? { timeoutMs: aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) } : {}),
   })
   const identity = candidateSessionIdentity(scopedSnapshot)
   const persisted = await createQuantCandidateAiSession(c.get('db'), {
@@ -1418,7 +1423,7 @@ quantRoutes.post('/candidates/ai-briefing/question', validator('json', QuantAiCa
     candidates: facts,
     question,
     config,
-    ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
+    ...(aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) ? { timeoutMs: aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) } : {}),
   })
   let persistedSession: QuantCandidateAiSessionRecord
   if (existingSession) {

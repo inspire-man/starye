@@ -8,6 +8,7 @@ const leaseMigrationPath = new URL('../../drizzle/0037_quant_sync_lease.sql', im
 const seedMigrationPath = new URL('../../drizzle/0038_quant_watchlist_seed.sql', import.meta.url)
 const researchMigrationPath = new URL('../../drizzle/0039_quant_research_marker.sql', import.meta.url)
 const userScopeMigrationPath = new URL('../../drizzle/0041_quant_user_scope.sql', import.meta.url)
+const aiRuntimeMigrationPath = new URL('../../drizzle/0048_quant_ai_runtime_reliability.sql', import.meta.url)
 const researchRunMigrationPath = new URL('../../drizzle/0042_quant_research_run.sql', import.meta.url)
 const researchSummaryMigrationPath = new URL('../../drizzle/0043_quant_research_summary.sql', import.meta.url)
 const candidateAiSessionMigrationPath = new URL('../../drizzle/0044_quant_candidate_ai_session.sql', import.meta.url)
@@ -19,7 +20,7 @@ async function createMigratedClient() {
   await client.execute('PRAGMA foreign_keys = ON')
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
   await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-1\', 1)')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -81,6 +82,14 @@ describe('quant workbench migration', () => {
       { ts_code: '600938.SH', name: '中国海油' },
       { ts_code: '601899.SH', name: '紫金矿业' },
     ])
+  })
+
+  it('adds bounded AI runtime defaults to existing user configurations', async () => {
+    const client = await createMigratedClient()
+    const columns = await client.execute('PRAGMA table_info(quant_ai_config)')
+    expect(columns.rows.map(row => String(row.name))).toEqual(expect.arrayContaining(['response_mode', 'generation_timeout_ms']))
+    await client.execute('INSERT INTO quant_ai_config (id, user_id, provider, model) VALUES (\'ai-1\', \'user-1\', \'openai_compatible\', \'gpt-5.4\')')
+    await expect(client.execute('SELECT response_mode, generation_timeout_ms FROM quant_ai_config WHERE id = \'ai-1\'')).resolves.toMatchObject({ rows: [{ response_mode: 'stream', generation_timeout_ms: 300000 }] })
   })
 
   it('enforces one factor configuration per user and keeps the weight snapshot', async () => {

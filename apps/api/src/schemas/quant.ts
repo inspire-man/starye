@@ -212,12 +212,15 @@ export const QuantCapabilitiesResponseSchema = v.object({
 })
 
 export const QuantAiProviderSchema = v.picklist(['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'])
+export const QuantAiResponseModeSchema = v.picklist(['stream', 'json'])
 
 export const QuantAiConfigSchema = v.object({
   id: v.string(),
   provider: QuantAiProviderSchema,
   model: v.string(),
   baseUrl: v.nullable(v.string()),
+  responseMode: QuantAiResponseModeSchema,
+  generationTimeoutMs: v.pipe(v.number(), v.integer(), v.minValue(300000), v.maxValue(600000)),
   hasApiKey: v.boolean(),
   apiKeyHint: v.nullable(v.string()),
   createdAt: v.union([v.string(), v.date()]),
@@ -233,6 +236,8 @@ export const QuantAiConfigUpdateSchema = v.object({
   provider: QuantAiProviderSchema,
   model: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
   base_url: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2048)))),
+  response_mode: v.optional(QuantAiResponseModeSchema),
+  generation_timeout_ms: v.optional(v.pipe(v.number(), v.integer(), v.minValue(300000), v.maxValue(600000))),
   api_key: v.optional(v.pipe(v.string(), v.maxLength(1024))),
   clear_api_key: v.optional(v.boolean()),
 })

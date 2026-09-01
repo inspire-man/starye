@@ -17,6 +17,7 @@ const migrationPaths = [
   new URL('../../../../../../packages/db/drizzle/0041_quant_user_scope.sql', import.meta.url),
   new URL('../../../../../../packages/db/drizzle/0042_quant_research_run.sql', import.meta.url),
   new URL('../../../../../../packages/db/drizzle/0043_quant_research_summary.sql', import.meta.url),
+  new URL('../../../../../../packages/db/drizzle/0048_quant_ai_runtime_reliability.sql', import.meta.url),
 ]
 
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {

@@ -19,6 +19,7 @@ const seedMigrationPath = new URL('../../../../../../packages/db/drizzle/0038_qu
 const researchMigrationPath = new URL('../../../../../../packages/db/drizzle/0039_quant_research_marker.sql', import.meta.url)
 const knowledgeSeedMigrationPath = new URL('../../../../../../packages/db/drizzle/0040_quant_investment_knowledge_seed.sql', import.meta.url)
 const userScopeMigrationPath = new URL('../../../../../../packages/db/drizzle/0041_quant_user_scope.sql', import.meta.url)
+const aiRuntimeMigrationPath = new URL('../../../../../../packages/db/drizzle/0048_quant_ai_runtime_reliability.sql', import.meta.url)
 const researchRunMigrationPath = new URL('../../../../../../packages/db/drizzle/0042_quant_research_run.sql', import.meta.url)
 const researchSummaryMigrationPath = new URL('../../../../../../packages/db/drizzle/0043_quant_research_summary.sql', import.meta.url)
 const factorConfigMigrationPath = new URL('../../../../../../packages/db/drizzle/0045_quant_factor_config.sql', import.meta.url)
@@ -32,7 +33,7 @@ async function prepareUsers(client: ReturnType<typeof createClient>) {
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -44,7 +45,7 @@ async function createDatabase(): Promise<{ client: ReturnType<typeof createClien
 async function createSeedDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -478,17 +479,19 @@ describe('quant watchlist CRUD contract', () => {
         provider: 'openai_compatible',
         model: 'gpt-5.5',
         base_url: 'https://ai.example.test/v1',
+        response_mode: 'json',
+        generation_timeout_ms: 600000,
         api_key: 'sk-user-one-1234',
       }),
     }, env)
     expect(save.status).toBe(200)
     const savePayload = await save.json() as { data: Record<string, unknown> }
-    expect(savePayload.data).toMatchObject({ provider: 'openai_compatible', model: 'gpt-5.5', hasApiKey: true, apiKeyHint: '1234' })
+    expect(savePayload.data).toMatchObject({ provider: 'openai_compatible', model: 'gpt-5.5', responseMode: 'json', generationTimeoutMs: 600000, hasApiKey: true, apiKeyHint: '1234' })
     expect(JSON.stringify(savePayload)).not.toContain('sk-user-one-1234')
 
     const read = await app.request('/api/quant/ai-config', {}, env)
     expect(read.status).toBe(200)
-    await expect(read.json()).resolves.toMatchObject({ data: { hasApiKey: true, apiKeyHint: '1234' } })
+    await expect(read.json()).resolves.toMatchObject({ data: { responseMode: 'json', generationTimeoutMs: 600000, hasApiKey: true, apiKeyHint: '1234' } })
     await expect(client.execute('SELECT user_id, encrypted_api_key FROM quant_ai_config')).resolves.toMatchObject({
       rows: [{ user_id: 'user-1', encrypted_api_key: expect.stringMatching(/^v1:/u) }],
     })

@@ -14,6 +14,7 @@ const migrationPaths = [
   new URL('../../drizzle/0044_quant_candidate_ai_session.sql', import.meta.url),
   new URL('../../drizzle/0045_quant_factor_config.sql', import.meta.url),
   new URL('../../drizzle/0046_quant_decision_record.sql', import.meta.url),
+  new URL('../../drizzle/0048_quant_ai_runtime_reliability.sql', import.meta.url),
 ]
 
 async function createMigratedClient() {

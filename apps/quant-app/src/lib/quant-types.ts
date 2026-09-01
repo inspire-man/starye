@@ -3,12 +3,15 @@ export const CAPABILITY_ORDER = ['daily', 'stock_basic', 'trade_cal', 'daily_bas
 export type CapabilityKey = typeof CAPABILITY_ORDER[number]
 export type QuantProviderName = 'tushare' | 'eastmoney'
 export type QuantAiProvider = 'openai_compatible' | 'deepseek' | 'qwen' | 'gemini' | 'ollama'
+export type QuantAiResponseMode = 'stream' | 'json'
 
 export interface QuantAiConfig {
   id: string
   provider: QuantAiProvider
   model: string
   baseUrl: string | null
+  responseMode: QuantAiResponseMode
+  generationTimeoutMs: number
   hasApiKey: boolean
   apiKeyHint: string | null
   createdAt: string | null

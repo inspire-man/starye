@@ -925,6 +925,8 @@ export const quantAiConfigs = sqliteTable('quant_ai_config', {
   provider: text('provider', { enum: ['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'] }).notNull(),
   model: text('model').notNull(),
   baseUrl: text('base_url'),
+  responseMode: text('response_mode', { enum: ['stream', 'json'] }).notNull().default('stream'),
+  generationTimeoutMs: integer('generation_timeout_ms').notNull().default(300000),
   encryptedApiKey: text('encrypted_api_key'),
   apiKeyHint: text('api_key_hint'),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
