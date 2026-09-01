@@ -1,9 +1,11 @@
 import type { QuantDecryptedAiConfig } from './ai-config'
 import type { QuantRecommendation, QuantResearchFactor, QuantResearchFactorKey } from './decision-recommendation'
+import type { QuantFactorFreshness } from './factor-freshness'
 import type { QuantResearchReport } from './research-report'
 import { resolveQuantAiGenerationTimeout } from './ai-timeout'
 import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
+import { buildQuantFactorFreshness, isQuantFactorFreshForAi } from './factor-freshness'
 
 export const QUANT_AI_SUMMARY_VERSION = 'research-summary-v2' as const
 export const QUANT_AI_DECISION_VERSION = 'ai-decision-v1' as const
@@ -45,10 +47,14 @@ export interface QuantAiFactorImpactItem {
   readonly aiConfidence: number | null
   readonly aiAccepted: boolean
   readonly aiWeight: number
+  readonly freshness: QuantFactorFreshness
+  readonly aiFreshnessEligible: boolean
 }
 
 export interface QuantAiFactorImpact {
   readonly modelVersion: string
+  readonly freshnessVersion: QuantFactorFreshness['version']
+  readonly freshnessBlockedFactors: readonly string[]
   readonly totalWeight: number
   readonly deterministicScore: number | null
   readonly scoredWeight: number
@@ -199,7 +205,7 @@ function factorStance(value: unknown): QuantAiFactorReviewStance {
   throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review stance is invalid', 502)
 }
 
-function factorReview(value: unknown, report: QuantResearchReport): QuantAiFactorReview[] {
+function factorReview(value: unknown, report: QuantResearchReport, evaluatedAt: Date): QuantAiFactorReview[] {
   if (value === undefined)
     return []
   if (!Array.isArray(value) || value.length > 5)
@@ -226,6 +232,7 @@ function factorReview(value: unknown, report: QuantResearchReport): QuantAiFacto
     if (cited.some(key => !factorEvidenceKeys.has(key)))
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review cited evidence from another factor', 502)
     const stance = factorStance(parsed.stance)
+    const freshness = buildQuantFactorFreshness(factor, report.evidence, evaluatedAt)
     const citedUsable = cited.some((key) => {
       const evidence = report.evidence.find(item => item.key === key)
       return evidence?.status === 'pass' || evidence?.status === 'caution'
@@ -236,6 +243,7 @@ function factorReview(value: unknown, report: QuantResearchReport): QuantAiFacto
       && cited.length > 0
       && citedUsable
       && stance !== 'insufficient'
+      && isQuantFactorFreshForAi(freshness)
     return {
       factor: parsed.factor,
       stance,
@@ -262,9 +270,27 @@ function deterministicStance(score: number | null): QuantAiFactorImpactStance {
   return 'caution'
 }
 
+function acceptedFactorReview(
+  factor: QuantResearchFactor,
+  review: QuantAiFactorReview | undefined,
+  report: QuantResearchReport,
+  freshness: QuantFactorFreshness,
+): boolean {
+  if (!review || !review.accepted || factor.status !== 'ready' || factor.score === null || !Number.isFinite(factor.score) || review.confidence < 60 || review.stance === 'insufficient' || !isQuantFactorFreshForAi(freshness) || review.citedEvidenceKeys.length === 0)
+    return false
+  const factorEvidenceKeys = new Set(factor.evidenceKeys)
+  if (review.citedEvidenceKeys.some(key => !factorEvidenceKeys.has(key)))
+    return false
+  return review.citedEvidenceKeys.some((key) => {
+    const item = report.evidence.find(evidence => evidence.key === key)
+    return item?.status === 'pass' || item?.status === 'caution'
+  })
+}
+
 export function buildQuantAiFactorImpact(
   report: QuantResearchReport,
   reviews: readonly QuantAiFactorReview[],
+  evaluatedAt: Date = new Date(),
 ): QuantAiFactorImpact | null {
   const factors = (report.factorModel?.factors ?? []).filter(factor => factor.weight > 0 && Number.isFinite(factor.weight))
   if (!factors.length)
@@ -276,7 +302,9 @@ export function buildQuantAiFactorImpact(
   const impactFactors = factors.map((factor): QuantAiFactorImpactItem => {
     const review = reviewByFactor.get(factor.key)
     const score = factor.score !== null && Number.isFinite(factor.score) ? factor.score : null
-    const accepted = review?.accepted === true
+    const freshness = buildQuantFactorFreshness(factor, report.evidence, evaluatedAt)
+    const aiFreshnessEligible = isQuantFactorFreshForAi(freshness)
+    const accepted = acceptedFactorReview(factor, review, report, freshness)
     return {
       factor: factor.key,
       label: factor.label,
@@ -288,6 +316,8 @@ export function buildQuantAiFactorImpact(
       aiConfidence: review?.confidence ?? null,
       aiAccepted: accepted,
       aiWeight: accepted ? impactRound(factor.weight) : 0,
+      freshness,
+      aiFreshnessEligible,
     }
   })
   const acceptedReviews = impactFactors.filter(factor => factor.aiAccepted)
@@ -297,6 +327,8 @@ export function buildQuantAiFactorImpact(
 
   return {
     modelVersion: report.factorModel?.modelVersion ?? 'unknown',
+    freshnessVersion: impactFactors[0]!.freshness.version,
+    freshnessBlockedFactors: impactFactors.filter(factor => !factor.aiFreshnessEligible).map(factor => factor.factor),
     totalWeight: impactRound(totalWeight),
     deterministicScore: report.factorModel?.score ?? null,
     scoredWeight: impactRound(scoredWeight),
@@ -315,6 +347,7 @@ function factorReviewAssessment(
   reviews: readonly QuantAiFactorReview[],
   reviewsFieldPresent: boolean,
   recommendation: QuantRecommendation,
+  evaluatedAt: Date,
 ): { readonly coverage: number, readonly incomplete: boolean, readonly conflict: boolean } {
   const factors = report.factorModel?.factors ?? []
   const requiredFactors = factors.filter(factor => factor.weight > 0)
@@ -324,9 +357,8 @@ function factorReviewAssessment(
     return { coverage: 0, incomplete: true, conflict: false }
 
   const requiredFactorKeys = new Set(requiredFactors.map(factor => factor.key))
-  const accepted = reviews.filter(review => review.accepted && requiredFactorKeys.has(review.factor))
-  const acceptedFactorKeys = new Set(accepted.map(review => review.factor))
-  const impact = buildQuantAiFactorImpact(report, reviews)
+  const impact = buildQuantAiFactorImpact(report, reviews, evaluatedAt)
+  const acceptedFactorKeys = new Set(impact?.factors.filter(factor => factor.aiAccepted && requiredFactorKeys.has(factor.factor)).map(factor => factor.factor))
   const coverage = impact?.reviewCoverage ?? 0
   const conflict = recommendation === 'bullish'
     ? (impact?.opposeWeight ?? 0) > (impact?.supportWeight ?? 0)
@@ -335,12 +367,12 @@ function factorReviewAssessment(
       : false
   return {
     coverage,
-    incomplete: acceptedFactorKeys.size < requiredFactors.length || coverage < 100,
+    incomplete: acceptedFactorKeys.size < requiredFactors.length || coverage < 100 || Boolean(impact?.freshnessBlockedFactors.length),
     conflict,
   }
 }
 
-function decisionReview(value: unknown, report: QuantResearchReport, reviews: readonly QuantAiFactorReview[], reviewsFieldPresent: boolean): QuantAiDecisionReview | null {
+function decisionReview(value: unknown, report: QuantResearchReport, reviews: readonly QuantAiFactorReview[], reviewsFieldPresent: boolean, evaluatedAt: Date): QuantAiDecisionReview | null {
   if (value === undefined || value === null)
     return null
   const parsed = record(value)
@@ -354,7 +386,7 @@ function decisionReview(value: unknown, report: QuantResearchReport, reviews: re
   const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
   const normalizedRecommendation = recommendation(parsed.recommendation)
   const deterministicWatch = report.decision?.recommendation === 'watch' || (report.decision?.coverage ?? 0) < 80
-  const factorAssessment = factorReviewAssessment(report, reviews, reviewsFieldPresent, normalizedRecommendation)
+  const factorAssessment = factorReviewAssessment(report, reviews, reviewsFieldPresent, normalizedRecommendation, evaluatedAt)
   const accepted = confidence >= 60 && cited.length > 0 && !deterministicWatch && !factorAssessment.incomplete && !factorAssessment.conflict
   const rejectionReason = accepted
     ? null
@@ -378,7 +410,7 @@ function decisionReview(value: unknown, report: QuantResearchReport, reviews: re
   }
 }
 
-function validateSummary(value: unknown, report: QuantResearchReport): QuantAiSummary {
+function validateSummary(value: unknown, report: QuantResearchReport, evaluatedAt: Date): QuantAiSummary {
   const parsed = record(value)
   if (!parsed)
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary is not an object', 502)
@@ -388,8 +420,8 @@ function validateSummary(value: unknown, report: QuantResearchReport): QuantAiSu
   const nextChecks = stringList(parsed.nextChecks, 'nextChecks')
   const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
   const reviewsFieldPresent = Object.hasOwn(parsed, 'factorReviews')
-  const reviews = factorReview(parsed.factorReviews, report)
-  const review = decisionReview(parsed.decisionReview, report, reviews, reviewsFieldPresent)
+  const reviews = factorReview(parsed.factorReviews, report, evaluatedAt)
+  const review = decisionReview(parsed.decisionReview, report, reviews, reviewsFieldPresent, evaluatedAt)
   const text = [overview, ...supports, ...concerns, ...nextChecks, review?.rationale ?? '', ...(review?.invalidationConditions ?? [])].join('\n')
   if (/目标价|收益预测|未来收益|price\s*target|return\s+forecast|直接(?:买入|卖出)|建议(?:买入|卖出)/iu.test(text))
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary contains a prohibited trading conclusion', 502)
@@ -405,9 +437,9 @@ function validateSummary(value: unknown, report: QuantResearchReport): QuantAiSu
   }
 }
 
-export function parseQuantAiSummary(value: string, report: QuantResearchReport): QuantAiSummary {
+export function parseQuantAiSummary(value: string, report: QuantResearchReport, evaluatedAt: Date = new Date()): QuantAiSummary {
   try {
-    return validateSummary(JSON.parse(value), report)
+    return validateSummary(JSON.parse(value), report, evaluatedAt)
   }
   catch (error) {
     if (error instanceof QuantError)
@@ -440,5 +472,5 @@ export async function generateQuantAiSummary(input: QuantAiSummaryRequest): Prom
       invalid_response: 'QUANT_AI_SUMMARY_INVALID_RESPONSE',
     },
   })
-  return parseQuantAiSummary(stripJsonFence(content), report)
+  return parseQuantAiSummary(stripJsonFence(content), report, new Date())
 }

@@ -4,6 +4,7 @@ import type { QuantResearchEvidence, QuantResearchReport, QuantResearchSource } 
 import { resolveQuantAiGenerationTimeout } from './ai-timeout'
 import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
+import { buildQuantFactorFreshness, isQuantFactorFreshForAi } from './factor-freshness'
 
 export const QUANT_DECISION_ASSISTANT_VERSION = 'decision-assistant-v1' as const
 export const QUANT_DECISION_ASSISTANT_AI_VERSION = 'decision-assistant-ai-v1' as const
@@ -684,7 +685,7 @@ export function parseQuantAiDecisionAssistant(value: unknown, report: QuantResea
   }
 }
 
-function factorAssessment(report: QuantResearchReport, reviews: readonly QuantDecisionAssistantAiFactorReview[], recommendation: QuantRecommendation): { readonly coverage: number, readonly incomplete: boolean, readonly conflict: boolean, readonly reviews: readonly QuantDecisionAssistantAiFactorReview[] } {
+function factorAssessment(report: QuantResearchReport, reviews: readonly QuantDecisionAssistantAiFactorReview[], recommendation: QuantRecommendation, evaluatedAt: Date): { readonly coverage: number, readonly incomplete: boolean, readonly conflict: boolean, readonly reviews: readonly QuantDecisionAssistantAiFactorReview[] } {
   const factors = report.factorModel?.factors ?? []
   const requiredFactors = factors.filter(factor => factor.weight > 0)
   const totalWeight = requiredFactors.reduce((total, factor) => total + factor.weight, 0)
@@ -695,7 +696,8 @@ function factorAssessment(report: QuantResearchReport, reviews: readonly QuantDe
       const item = report.evidence.find(evidenceItem => evidenceItem.key === key)
       return item?.status === 'pass' || item?.status === 'caution'
     })
-    const accepted = Boolean(factor && factor.status === 'ready' && factor.score !== null && review.confidence >= 60 && review.citedEvidenceKeys.length > 0 && citedUsable && review.stance !== 'insufficient')
+    const freshness = factor ? buildQuantFactorFreshness(factor, report.evidence, evaluatedAt) : null
+    const accepted = Boolean(factor && factor.status === 'ready' && factor.score !== null && review.confidence >= 60 && review.citedEvidenceKeys.length > 0 && citedUsable && review.stance !== 'insufficient' && freshness && isQuantFactorFreshForAi(freshness))
     return { ...review, accepted }
   })
   const acceptedReviews = reviewed.filter(review => review.accepted && requiredFactorKeys.has(review.factor))
@@ -719,9 +721,10 @@ export function buildQuantDecisionAssistantAiReview(input: {
   readonly report: QuantResearchReport
   readonly deterministic: QuantDecisionAssistantDeterministic
   readonly scenario: QuantDecisionAssistantScenario
+  readonly evaluatedAt?: Date
 }): QuantDecisionAssistantAiReview {
   const generated = input.generated
-  const factor = factorAssessment(input.report, generated.factorReviews, generated.recommendation)
+  const factor = factorAssessment(input.report, generated.factorReviews, generated.recommendation, input.evaluatedAt ?? new Date())
   const allowedAction = input.scenario.mode === 'buy'
     ? ['consider-buy', 'wait', 'avoid', 'verify-price', 'review-data'].includes(generated.action)
     : ['hold', 'reduce-review', 'add-review', 'wait', 'review-data'].includes(generated.action)

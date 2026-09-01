@@ -145,11 +145,19 @@ function aiImpactStanceLabel(value: DecisionFactorImpactItem['aiStance']): strin
 }
 
 function factorImpactStatusLabel(value: DecisionFactorImpactItem): string {
+  if (value.freshness && value.freshness.status !== 'fresh')
+    return value.freshness.status === 'unknown' ? '时间未知，未计入' : '数据时效不足，未计入'
   return value.aiAccepted ? 'AI 已计入' : value.aiStance === null ? 'AI 未复核' : 'AI 已复核，未计入'
 }
 
 function factorImpactStatusClass(value: DecisionFactorImpactItem): string {
+  if (value.freshness && value.freshness.status !== 'fresh')
+    return 'factor-impact-freshness-blocked'
   return value.aiAccepted ? 'factor-impact-accepted' : value.aiStance === null ? 'factor-impact-unreviewed' : 'factor-impact-not-included'
+}
+
+function factorFreshnessLabel(value: DecisionFactorImpactItem['freshness']): string {
+  return value?.status === 'fresh' ? '最新' : value?.status === 'aging' ? '需复核' : value?.status === 'stale' ? '已过期' : '时间未知'
 }
 </script>
 
@@ -363,6 +371,9 @@ function factorImpactStatusClass(value: DecisionFactorImpactItem): string {
         <p class="quant-decision-assistant-factor-impact-note" role="note">
           确定性贡献来自本次报告的因子分数和权重；AI 权重只统计服务端接受的因子复核，未复核或未达门槛的因子不会被计入。
         </p>
+        <p v-if="assessment.factorImpact.freshnessBlockedFactors?.length" class="quant-decision-assistant-factor-impact-note quant-decision-assistant-factor-impact-warning" role="status">
+          新鲜度闸门阻断：{{ assessment.factorImpact.freshnessBlockedFactors.map(factorLabel).join('、') }}；请先刷新对应数据。
+        </p>
         <div class="quant-decision-assistant-factor-impact-list">
           <div v-for="factor in assessment.factorImpact.factors" :key="factor.factor" class="quant-decision-assistant-factor-impact-row">
             <div class="quant-decision-assistant-factor-impact-heading">
@@ -375,6 +386,7 @@ function factorImpactStatusClass(value: DecisionFactorImpactItem): string {
               <span>确定性倾向 {{ deterministicImpactStanceLabel(factor.deterministicStance) }}</span>
               <span>AI 倾向 {{ aiImpactStanceLabel(factor.aiStance) }}</span>
               <span>AI 权重 {{ formatWeight(factor.aiWeight) }}</span>
+              <span v-if="factor.freshness">数据时效 {{ factorFreshnessLabel(factor.freshness) }} · {{ factor.freshness.detail }}</span>
             </div>
           </div>
         </div>
@@ -911,6 +923,10 @@ function factorImpactStatusClass(value: DecisionFactorImpactItem): string {
   line-height: 1.5;
 }
 
+.quant-decision-assistant-factor-impact-warning {
+  color: hsl(var(--status-warning));
+}
+
 .quant-decision-assistant-factor-impact-list {
   display: grid;
   gap: 0.25rem;
@@ -954,6 +970,7 @@ function factorImpactStatusClass(value: DecisionFactorImpactItem): string {
 .factor-impact-accepted { color: hsl(var(--status-success)); }
 .factor-impact-not-included { color: hsl(var(--status-warning)); }
 .factor-impact-unreviewed { color: hsl(var(--muted-foreground)); }
+.factor-impact-freshness-blocked { color: hsl(var(--status-warning)); }
 
 .quant-decision-assistant-factor-impact-details {
   display: flex;

@@ -227,4 +227,40 @@ describe('buildQuantDecisionReadiness', () => {
     expect(stale.checks.find(check => check.key === 'freshness')).toMatchObject({ status: 'blocked', detail: '1 个数据域已超过 7 天，先刷新后再判断' })
     expect(unknown.checks.find(check => check.key === 'freshness')).toMatchObject({ status: 'blocked', detail: '没有可验证的数据观察时间' })
   })
+
+  it('blocks an accepted legacy review when parsed factor freshness is unknown', () => {
+    const complete = factorImpact()
+    const result = buildQuantDecisionReadiness({
+      report: report(),
+      aiReview: aiReview(),
+      factorImpact: {
+        ...complete,
+        freshnessVersion: 'unknown',
+        freshnessBlockedFactors: ['quality'],
+        factors: complete.factors.map(factor => factor.factor === 'quality'
+          ? {
+              ...factor,
+              freshness: {
+                version: 'unknown',
+                status: 'unknown',
+                observedAt: null,
+                ageDays: null,
+                freshWithinDays: 0,
+                agingWithinDays: 0,
+                detail: '历史响应未记录因子新鲜度',
+                missingEvidenceKeys: [],
+                unverifiableEvidenceKeys: [],
+              },
+              aiFreshnessEligible: false,
+            }
+          : factor),
+      },
+      currentPrice: 32,
+      dataFreshness: 'fresh',
+    })
+
+    expect(result).toMatchObject({ status: 'review', label: '仅供参考' })
+    expect(result.checks.find(check => check.key === 'ai')).toMatchObject({ status: 'review', detail: expect.stringContaining('证据时间不足') })
+    expect(result.unresolvedFactors).toContain('盈利质量')
+  })
 })

@@ -265,6 +265,32 @@ describe('quant decision assistant', () => {
     })
   })
 
+  it('does not let an aging factor enter the final AI action', () => {
+    const base = buildQuantDecisionAssistant({
+      report: report(),
+      researchRunId: 'run-1',
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      scenario: { mode: 'buy', costBasis: null, quantity: null },
+      market: marketInput(33.4),
+      latestDailyBar: { close: 33.2, tradeDate: '20260829' },
+      assessedAt: new Date('2026-09-15T01:00:00.000Z'),
+    })
+    const generated = parseQuantAiDecisionAssistant(assistantPayload(), report())
+    const review = buildQuantDecisionAssistantAiReview({
+      generated,
+      config: { provider: 'openai_compatible', model: 'gpt-5.4' },
+      report: report(),
+      deterministic: base.deterministic,
+      scenario: base.scenario,
+      evaluatedAt: new Date('2026-09-15T01:00:00.000Z'),
+    })
+
+    expect(review).toMatchObject({ status: 'rejected', accepted: false, rejectionReason: 'factor-review-incomplete' })
+    expect(review.factorReviewCoverage).toBeLessThan(100)
+    expect(review.factorReviews.find(item => item.factor === 'trend')).toMatchObject({ accepted: false })
+  })
+
   it('calls the configured OpenAI-compatible chat endpoint with a JSON response contract', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify(assistantPayload()) } }],

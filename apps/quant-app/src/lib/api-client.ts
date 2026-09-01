@@ -33,6 +33,7 @@ import type {
   QuantDecisionRecordAction,
   QuantDecisionRecordSnapshot,
   QuantFactorConfiguration,
+  QuantFactorFreshness,
   QuantFactorModel,
   QuantFactorWeights,
   QuantFinancialQualityComparison,
@@ -191,6 +192,50 @@ function readStringList(record: JsonRecord, ...keys: string[]): string[] {
       return record[key].filter((item): item is string => typeof item === 'string')
   }
   return []
+}
+
+function unknownFactorFreshness(): QuantFactorFreshness {
+  return {
+    version: 'unknown',
+    status: 'unknown',
+    observedAt: null,
+    ageDays: null,
+    freshWithinDays: 0,
+    agingWithinDays: 0,
+    detail: '历史响应未记录因子新鲜度',
+    missingEvidenceKeys: [],
+    unverifiableEvidenceKeys: [],
+  }
+}
+
+function parseFactorFreshness(value: unknown): QuantFactorFreshness | null {
+  if (value === undefined || value === null)
+    return unknownFactorFreshness()
+  if (!isRecord(value))
+    return null
+  const version = readString(value, 'version')
+  const status = readString(value, 'status')
+  const observedAt = value.observedAt === null ? null : readString(value, 'observedAt', 'observed_at')
+  const ageDays = value.ageDays === null ? null : readNumber(value, 'ageDays', 'age_days')
+  const freshWithinDays = readNumber(value, 'freshWithinDays', 'fresh_within_days')
+  const agingWithinDays = readNumber(value, 'agingWithinDays', 'aging_within_days')
+  const detail = readString(value, 'detail')
+  if (!version || (status !== 'fresh' && status !== 'aging' && status !== 'stale' && status !== 'unknown')
+    || (value.observedAt !== null && !observedAt) || (value.ageDays !== null && ageDays === null)
+    || freshWithinDays === null || freshWithinDays < 0 || agingWithinDays === null || agingWithinDays < freshWithinDays || !detail) {
+    return null
+  }
+  return {
+    version,
+    status,
+    observedAt,
+    ageDays,
+    freshWithinDays,
+    agingWithinDays,
+    detail,
+    missingEvidenceKeys: readStringList(value, 'missingEvidenceKeys', 'missing_evidence_keys'),
+    unverifiableEvidenceKeys: readStringList(value, 'unverifiableEvidenceKeys', 'unverifiable_evidence_keys'),
+  }
 }
 
 function capabilityLabel(key: CapabilityKey): string {
@@ -744,6 +789,8 @@ function parseAiFactorImpact(value: unknown): QuantAiFactorImpact | null {
     return null
 
   const modelVersion = readString(value, 'modelVersion', 'model_version')
+  const freshnessVersion = readString(value, 'freshnessVersion', 'freshness_version') || 'unknown'
+  const freshnessBlockedFactors = readStringList(value, 'freshnessBlockedFactors', 'freshness_blocked_factors')
   const deterministicScore = value.deterministicScore === null ? null : readNumber(value, 'deterministicScore', 'deterministic_score')
   const totalWeight = readNumber(value, 'totalWeight', 'total_weight')
   const scoredWeight = readNumber(value, 'scoredWeight', 'scored_weight')
@@ -771,20 +818,23 @@ function parseAiFactorImpact(value: unknown): QuantAiFactorImpact | null {
     const aiConfidence = item.aiConfidence === null ? null : readNumber(item, 'aiConfidence', 'ai_confidence')
     const aiAccepted = readBoolean(item, 'aiAccepted', 'ai_accepted')
     const aiWeight = readNumber(item, 'aiWeight', 'ai_weight')
+    const freshnessValue = item.freshness ?? item.factorFreshness ?? item.factor_freshness
+    const freshness = parseFactorFreshness(freshnessValue)
+    const aiFreshnessEligible = readBoolean(item, 'aiFreshnessEligible', 'ai_freshness_eligible') ?? false
     if ((factor !== 'trend' && factor !== 'valuation' && factor !== 'quality' && factor !== 'shareholder-return' && factor !== 'risk')
       || !label || weight === null || weight < 0 || weight > 1
       || (deterministicStance !== 'support' && deterministicStance !== 'caution' && deterministicStance !== 'oppose' && deterministicStance !== 'insufficient')
       || (aiStance !== null && aiStance !== 'support' && aiStance !== 'caution' && aiStance !== 'oppose' && aiStance !== 'insufficient')
       || (deterministicContribution !== null && (deterministicContribution < 0 || deterministicContribution > 100))
       || (aiConfidence !== null && (aiConfidence < 0 || aiConfidence > 100))
-      || aiAccepted === null || aiWeight === null || aiWeight < 0 || aiWeight > 1) {
+      || aiAccepted === null || aiWeight === null || aiWeight < 0 || aiWeight > 1 || !freshness) {
       return []
     }
-    return [{ factor, label, weight, deterministicScore, deterministicStance, deterministicContribution, aiStance, aiConfidence, aiAccepted, aiWeight } as QuantAiFactorImpact['factors'][number]]
+    return [{ factor, label, weight, deterministicScore, deterministicStance, deterministicContribution, aiStance, aiConfidence, aiAccepted, aiWeight, freshness, aiFreshnessEligible } as QuantAiFactorImpact['factors'][number]]
   })
   if (!factors.length || factors.length > 5)
     return null
-  return { modelVersion, totalWeight, deterministicScore, scoredWeight, reviewedWeight, reviewCoverage, supportWeight, cautionWeight, opposeWeight, unacceptedWeight, factors }
+  return { modelVersion, freshnessVersion, freshnessBlockedFactors, totalWeight, deterministicScore, scoredWeight, reviewedWeight, reviewCoverage, supportWeight, cautionWeight, opposeWeight, unacceptedWeight, factors }
 }
 
 function parseResearchSummary(value: unknown): QuantResearchSummary | null {

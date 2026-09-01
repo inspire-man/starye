@@ -39,6 +39,20 @@ export interface QuantFactorConfiguration {
   updatedAt: string | null
 }
 
+export type QuantFactorFreshnessStatus = 'fresh' | 'aging' | 'stale' | 'unknown'
+
+export interface QuantFactorFreshness {
+  version: string
+  status: QuantFactorFreshnessStatus
+  observedAt: string | null
+  ageDays: number | null
+  freshWithinDays: number
+  agingWithinDays: number
+  detail: string
+  missingEvidenceKeys: string[]
+  unverifiableEvidenceKeys: string[]
+}
+
 export type QuantResearchRunStatus = 'ready' | 'partial' | 'insufficient_data'
 export type QuantResearchEvidenceStatus = 'pass' | 'caution' | 'fail' | 'missing'
 export type QuantResearchAction = 'research-window' | 'wait-confirmation' | 'reassess' | 'complete-data'
@@ -68,10 +82,18 @@ export interface QuantAiFactorImpactItem {
   aiConfidence: number | null
   aiAccepted: boolean
   aiWeight: number
+  /** Optional on historical factor-impact responses written before freshness gating. */
+  freshness?: QuantFactorFreshness
+  /** Optional on historical factor-impact responses written before freshness gating. */
+  aiFreshnessEligible?: boolean
 }
 
 export interface QuantAiFactorImpact {
   modelVersion: string
+  /** Optional on historical factor-impact responses written before freshness gating. */
+  freshnessVersion?: string
+  /** Optional on historical factor-impact responses written before freshness gating. */
+  freshnessBlockedFactors?: string[]
   totalWeight: number
   deterministicScore: number | null
   scoredWeight: number

@@ -1021,6 +1021,8 @@ describe('quantApi', () => {
       cited_evidence_keys: ['quality-roe'],
       factor_impact: {
         model_version: 'research-factors-v1',
+        freshness_version: 'quant-factor-freshness-v1',
+        freshness_blocked_factors: ['valuation'],
         total_weight: 1,
         deterministic_score: 82,
         scored_weight: 1,
@@ -1041,6 +1043,18 @@ describe('quantApi', () => {
           ai_confidence: 88,
           ai_accepted: true,
           ai_weight: 0.5,
+          freshness: {
+            version: 'quant-factor-freshness-v1',
+            status: 'fresh',
+            observed_at: '2026-08-29',
+            age_days: 3,
+            fresh_within_days: 180,
+            aging_within_days: 365,
+            detail: '3 天前观测，处于 180 天最新窗口',
+            missing_evidence_keys: [],
+            unverifiable_evidence_keys: [],
+          },
+          ai_freshness_eligible: true,
         }, {
           factor: 'valuation',
           label: '估值',
@@ -1052,6 +1066,18 @@ describe('quantApi', () => {
           ai_confidence: null,
           ai_accepted: false,
           ai_weight: 0,
+          freshness: {
+            version: 'quant-factor-freshness-v1',
+            status: 'stale',
+            observed_at: '2026-06-01',
+            age_days: 92,
+            fresh_within_days: 14,
+            aging_within_days: 60,
+            detail: '92 天前观测，超过 60 天复核窗口，先刷新数据',
+            missing_evidence_keys: [],
+            unverifiable_evidence_keys: [],
+          },
+          ai_freshness_eligible: false,
         }],
       },
       summary: {
@@ -1070,8 +1096,8 @@ describe('quantApi', () => {
         reviewCoverage: 50,
         unacceptedWeight: 0.5,
         factors: [
-          { factor: 'quality', deterministicContribution: 45, aiAccepted: true, aiWeight: 0.5 },
-          { factor: 'valuation', aiAccepted: false, aiWeight: 0 },
+          { factor: 'quality', deterministicContribution: 45, aiAccepted: true, aiWeight: 0.5, freshness: { status: 'fresh' }, aiFreshnessEligible: true },
+          { factor: 'valuation', aiAccepted: false, aiWeight: 0, freshness: { status: 'stale' }, aiFreshnessEligible: false },
         ],
       },
     })

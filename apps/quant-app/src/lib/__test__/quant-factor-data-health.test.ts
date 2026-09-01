@@ -90,7 +90,7 @@ describe('buildQuantFactorDataHealth', () => {
       readyWeight: 1,
       coverage: 100,
     })
-    expect(result.items[0]).toMatchObject({ status: 'ready', score: 20, evidenceCount: 1, usableEvidenceCount: 1, nextAction: expect.stringContaining('已具备原始证据') })
+    expect(result.items[0]).toMatchObject({ status: 'ready', score: 20, freshness: { status: 'fresh', observedAt: '20260829', freshWithinDays: 180 }, evidenceCount: 1, usableEvidenceCount: 1, nextAction: expect.stringContaining('已具备原始证据') })
   })
 
   it('reports partial coverage and preserves missing and failed evidence keys', () => {
