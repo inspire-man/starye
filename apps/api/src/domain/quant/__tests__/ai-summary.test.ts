@@ -1,7 +1,7 @@
 import type { QuantDecryptedAiConfig } from '../ai-config'
 import type { QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { generateQuantAiSummary } from '../ai-summary'
+import { buildQuantAiFactorImpact, generateQuantAiSummary } from '../ai-summary'
 
 const report: QuantResearchReport = {
   reportVersion: 'research-report-v2',
@@ -305,6 +305,40 @@ describe('quant AI summary', () => {
       factorReviews: [{ factor: 'quality', accepted: true }],
       decisionReview: { accepted: false, rejectionReason: 'factor-review-incomplete', factorReviewCoverage: 50 },
     })
+  })
+
+  it('calculates deterministic factor contributions and only accepted AI weights', () => {
+    const impact = buildQuantAiFactorImpact(multiFactorReport, [{
+      factor: 'quality',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      rationale: '盈利质量证据可核对。',
+      citedEvidenceKeys: ['quality-roe'],
+    }, {
+      factor: 'valuation',
+      stance: 'oppose',
+      confidence: 42,
+      accepted: false,
+      rationale: '估值复核置信度不足。',
+      citedEvidenceKeys: ['valuation-pe'],
+    }])
+
+    expect(impact).toMatchObject({
+      modelVersion: 'research-factors-v1',
+      deterministicScore: 72.5,
+      scoredWeight: 1,
+      reviewedWeight: 0.5,
+      reviewCoverage: 50,
+      supportWeight: 0.5,
+      cautionWeight: 0,
+      opposeWeight: 0,
+      unacceptedWeight: 0.5,
+    })
+    expect(impact?.factors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ factor: 'quality', deterministicContribution: 45, aiAccepted: true, aiWeight: 0.5 }),
+      expect.objectContaining({ factor: 'valuation', deterministicContribution: 35, aiAccepted: false, aiWeight: 0, aiStance: 'oppose' }),
+    ]))
   })
 
   it('includes factor evidence ownership and missing keys in the AI prompt', async () => {

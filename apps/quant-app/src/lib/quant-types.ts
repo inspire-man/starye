@@ -55,6 +55,35 @@ export interface QuantAiFactorReview {
   citedEvidenceKeys: string[]
 }
 
+export type QuantAiFactorImpactStance = QuantAiFactorReviewStance | 'unreviewed'
+
+export interface QuantAiFactorImpactItem {
+  factor: QuantFactorConfigurationKey
+  label: string
+  weight: number
+  deterministicScore: number | null
+  deterministicStance: QuantAiFactorImpactStance
+  deterministicContribution: number | null
+  aiStance: QuantAiFactorReviewStance | null
+  aiConfidence: number | null
+  aiAccepted: boolean
+  aiWeight: number
+}
+
+export interface QuantAiFactorImpact {
+  modelVersion: string
+  totalWeight: number
+  deterministicScore: number | null
+  scoredWeight: number
+  reviewedWeight: number
+  reviewCoverage: number
+  supportWeight: number
+  cautionWeight: number
+  opposeWeight: number
+  unacceptedWeight: number
+  factors: QuantAiFactorImpactItem[]
+}
+
 export interface QuantResearchFactor {
   key: 'trend' | 'valuation' | 'quality' | 'shareholder-return' | 'risk'
   label: string
@@ -185,6 +214,7 @@ export interface QuantResearchSummary {
     factorReviews: QuantAiFactorReview[]
     decisionReview?: QuantAiDecisionReview | null
   }
+  factorImpact?: QuantAiFactorImpact | null
   citedEvidenceKeys: string[]
 }
 

@@ -32,6 +32,35 @@ export interface QuantAiFactorReview {
   readonly citedEvidenceKeys: readonly string[]
 }
 
+export type QuantAiFactorImpactStance = QuantAiFactorReviewStance | 'unreviewed'
+
+export interface QuantAiFactorImpactItem {
+  readonly factor: QuantResearchFactorKey
+  readonly label: string
+  readonly weight: number
+  readonly deterministicScore: number | null
+  readonly deterministicStance: QuantAiFactorImpactStance
+  readonly deterministicContribution: number | null
+  readonly aiStance: QuantAiFactorReviewStance | null
+  readonly aiConfidence: number | null
+  readonly aiAccepted: boolean
+  readonly aiWeight: number
+}
+
+export interface QuantAiFactorImpact {
+  readonly modelVersion: string
+  readonly totalWeight: number
+  readonly deterministicScore: number | null
+  readonly scoredWeight: number
+  readonly reviewedWeight: number
+  readonly reviewCoverage: number
+  readonly supportWeight: number
+  readonly cautionWeight: number
+  readonly opposeWeight: number
+  readonly unacceptedWeight: number
+  readonly factors: readonly QuantAiFactorImpactItem[]
+}
+
 export interface QuantAiDecisionReview {
   readonly decisionVersion: typeof QUANT_AI_DECISION_VERSION
   readonly recommendation: QuantRecommendation
@@ -218,6 +247,69 @@ function factorReview(value: unknown, report: QuantResearchReport): QuantAiFacto
   })
 }
 
+function impactRound(value: number, digits = 4): number {
+  const factor = 10 ** digits
+  return Math.round(value * factor) / factor
+}
+
+function deterministicStance(score: number | null): QuantAiFactorImpactStance {
+  if (score === null || !Number.isFinite(score))
+    return 'insufficient'
+  if (score >= 66)
+    return 'support'
+  if (score <= 40)
+    return 'oppose'
+  return 'caution'
+}
+
+export function buildQuantAiFactorImpact(
+  report: QuantResearchReport,
+  reviews: readonly QuantAiFactorReview[],
+): QuantAiFactorImpact | null {
+  const factors = (report.factorModel?.factors ?? []).filter(factor => factor.weight > 0 && Number.isFinite(factor.weight))
+  if (!factors.length)
+    return null
+
+  const totalWeight = factors.reduce((total, factor) => total + factor.weight, 0)
+  const scoredWeight = factors.reduce((total, factor) => total + (factor.score !== null && Number.isFinite(factor.score) ? factor.weight : 0), 0)
+  const reviewByFactor = new Map(reviews.map(review => [review.factor, review]))
+  const impactFactors = factors.map((factor): QuantAiFactorImpactItem => {
+    const review = reviewByFactor.get(factor.key)
+    const score = factor.score !== null && Number.isFinite(factor.score) ? factor.score : null
+    const accepted = review?.accepted === true
+    return {
+      factor: factor.key,
+      label: factor.label,
+      weight: impactRound(factor.weight),
+      deterministicScore: score,
+      deterministicStance: deterministicStance(score),
+      deterministicContribution: score !== null && scoredWeight > 0 ? impactRound(score * factor.weight / scoredWeight, 2) : null,
+      aiStance: review?.stance ?? null,
+      aiConfidence: review?.confidence ?? null,
+      aiAccepted: accepted,
+      aiWeight: accepted ? impactRound(factor.weight) : 0,
+    }
+  })
+  const acceptedReviews = impactFactors.filter(factor => factor.aiAccepted)
+  const weightByFactor = new Map(factors.map(factor => [factor.key, factor.weight]))
+  const stanceWeight = (stance: QuantAiFactorReviewStance): number => acceptedReviews.reduce((total, factor) => total + (factor.aiStance === stance ? weightByFactor.get(factor.factor) ?? 0 : 0), 0)
+  const reviewedWeight = acceptedReviews.reduce((total, factor) => total + (weightByFactor.get(factor.factor) ?? 0), 0)
+
+  return {
+    modelVersion: report.factorModel?.modelVersion ?? 'unknown',
+    totalWeight: impactRound(totalWeight),
+    deterministicScore: report.factorModel?.score ?? null,
+    scoredWeight: impactRound(scoredWeight),
+    reviewedWeight: impactRound(reviewedWeight),
+    reviewCoverage: totalWeight > 0 ? impactRound(reviewedWeight / totalWeight * 100, 2) : 0,
+    supportWeight: impactRound(stanceWeight('support')),
+    cautionWeight: impactRound(stanceWeight('caution')),
+    opposeWeight: impactRound(stanceWeight('oppose')),
+    unacceptedWeight: impactRound(Math.max(0, totalWeight - reviewedWeight)),
+    factors: impactFactors,
+  }
+}
+
 function factorReviewAssessment(
   report: QuantResearchReport,
   reviews: readonly QuantAiFactorReview[],
@@ -232,18 +324,14 @@ function factorReviewAssessment(
     return { coverage: 0, incomplete: true, conflict: false }
 
   const requiredFactorKeys = new Set(requiredFactors.map(factor => factor.key))
-  const totalWeight = requiredFactors.reduce((total, factor) => total + factor.weight, 0)
   const accepted = reviews.filter(review => review.accepted && requiredFactorKeys.has(review.factor))
   const acceptedFactorKeys = new Set(accepted.map(review => review.factor))
-  const weightFor = (review: QuantAiFactorReview): number => requiredFactors.find(factor => factor.key === review.factor)?.weight ?? 0
-  const reviewedWeight = accepted.reduce((total, review) => total + weightFor(review), 0)
-  const supportWeight = accepted.reduce((total, review) => total + (review.stance === 'support' ? weightFor(review) : 0), 0)
-  const opposeWeight = accepted.reduce((total, review) => total + (review.stance === 'oppose' ? weightFor(review) : 0), 0)
-  const coverage = totalWeight > 0 ? Math.round(reviewedWeight / totalWeight * 10000) / 100 : 0
+  const impact = buildQuantAiFactorImpact(report, reviews)
+  const coverage = impact?.reviewCoverage ?? 0
   const conflict = recommendation === 'bullish'
-    ? opposeWeight > supportWeight
+    ? (impact?.opposeWeight ?? 0) > (impact?.supportWeight ?? 0)
     : recommendation === 'bearish'
-      ? supportWeight > opposeWeight
+      ? (impact?.supportWeight ?? 0) > (impact?.opposeWeight ?? 0)
       : false
   return {
     coverage,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantAiFactorReview, QuantResearchEvidence, QuantResearchFactor, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
+import type { QuantAiFactorImpact, QuantAiFactorReview, QuantResearchEvidence, QuantResearchFactor, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
 import { AlertCircle, BrainCircuit, CheckCircle2, CircleHelp, RefreshCw } from 'lucide-vue-next'
 import { computed } from 'vue'
 import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
@@ -27,22 +27,24 @@ interface FactorRow {
   readonly label: string
   readonly factor: QuantResearchFactor | null
   readonly review: QuantAiFactorReview | null
+  readonly impact: QuantAiFactorImpact['factors'][number] | null
 }
 
 const factorRows = computed<FactorRow[]>(() => {
   const reviews = props.summary?.summary.factorReviews ?? []
   const reviewByKey = new Map(reviews.map(review => [review.factor, review]))
+  const impactByKey = new Map(props.summary?.factorImpact?.factors.map(factor => [factor.factor, factor]) || [])
   const rows: FactorRow[] = []
   const seen = new Set<string>()
   for (const factor of props.report.factorModel?.factors ?? []) {
     if (factor.weight <= 0)
       continue
-    rows.push({ key: factor.key, label: factor.label, factor, review: reviewByKey.get(factor.key) || null })
+    rows.push({ key: factor.key, label: factor.label, factor, review: reviewByKey.get(factor.key) || null, impact: impactByKey.get(factor.key) || null })
     seen.add(factor.key)
   }
   for (const review of reviews) {
     if (!seen.has(review.factor))
-      rows.push({ key: review.factor, label: factorLabel(review.factor), factor: null, review })
+      rows.push({ key: review.factor, label: factorLabel(review.factor), factor: null, review, impact: impactByKey.get(review.factor) || null })
   }
   return rows
 })
@@ -53,6 +55,7 @@ const factorReviewIncomplete = computed(() => Boolean(props.summary && requiredF
 const factorCoverageLabel = computed(() => requiredFactorRows.value.length
   ? `${acceptedFactorCount.value} / ${requiredFactorRows.value.length} 个有权重因子已纳入`
   : '当前报告没有可展示的有权重因子')
+const factorImpact = computed(() => props.summary?.factorImpact ?? null)
 
 function citedEvidence(key: string): QuantResearchEvidence | null {
   return evidenceByKey.value.get(key) || null
@@ -89,6 +92,10 @@ function factorStanceLabel(value: string): string {
   return { support: '支持', caution: '注意', oppose: '反对', insufficient: '数据不足' }[value] || value
 }
 
+function factorImpactStanceLabel(value: string): string {
+  return value === 'unreviewed' ? '未复核' : factorStanceLabel(value)
+}
+
 function factorStanceClass(value: string): string {
   return `quant-ai-summary-factor-${value}`
 }
@@ -123,6 +130,14 @@ function factorEvidenceCoverage(factor: QuantResearchFactor): string {
     return '无证据定义'
   const covered = Math.max(0, total - factor.missingEvidenceKeys.length)
   return `${covered} / ${total} 条证据`
+}
+
+function formatFactorContribution(value: number | null): string {
+  return value === null ? '--' : `${value.toFixed(1)} 分`
+}
+
+function formatWeight(value: number): string {
+  return `${(value * 100).toFixed(0)}%`
 }
 
 function evidenceStatusLabel(status: QuantResearchEvidence['status']): string {
@@ -203,6 +218,27 @@ function formatEvidenceDate(value: string | null): string {
         </div>
         <small v-if="!summary">等待生成 AI 复核</small>
       </div>
+      <div v-if="factorImpact" class="quant-ai-summary-impact" aria-label="因子贡献与 AI 影响">
+        <h4>因子贡献与 AI 影响</h4>
+        <div>
+          <span>确定性分数</span>
+          <strong>{{ formatFactorContribution(factorImpact.deterministicScore) }}</strong>
+          <small>有分数权重 {{ formatWeight(factorImpact.scoredWeight) }}</small>
+        </div>
+        <div>
+          <span>AI 已纳入权重</span>
+          <strong>{{ factorImpact.reviewCoverage.toFixed(0) }}%</strong>
+          <small>未纳入 {{ formatWeight(factorImpact.unacceptedWeight) }}</small>
+        </div>
+        <div>
+          <span>AI 方向权重</span>
+          <strong>支持 {{ formatWeight(factorImpact.supportWeight) }}</strong>
+          <small>注意 {{ formatWeight(factorImpact.cautionWeight) }} · 反对 {{ formatWeight(factorImpact.opposeWeight) }}</small>
+        </div>
+      </div>
+      <p v-if="factorImpact" class="quant-ai-summary-impact-note" role="note">
+        AI 加权影响只表示已接受复核的因子权重，不改写确定性分数或参考价格区间。
+      </p>
       <p v-if="factorReviewIncomplete" class="quant-ai-summary-factor-warning" role="status">
         AI 尚未完成全部有权重因子的证据复核，当前推荐仍以确定性结论为准。
       </p>
@@ -218,6 +254,12 @@ function formatEvidenceDate(value: string | null): string {
           <div v-if="row.factor" class="quant-ai-summary-factor-meta">
             <span>证据覆盖 {{ factorEvidenceCoverage(row.factor) }}</span>
             <span>{{ row.factor.source }}</span>
+          </div>
+          <div v-if="row.impact" class="quant-ai-summary-factor-impact">
+            <span>确定性贡献 {{ formatFactorContribution(row.impact.deterministicContribution) }}</span>
+            <span>模型倾向 {{ factorImpactStanceLabel(row.impact.deterministicStance) }}</span>
+            <span v-if="row.impact.aiStance">AI {{ factorImpactStanceLabel(row.impact.aiStance) }} · {{ row.impact.aiAccepted ? `计入 ${formatWeight(row.impact.aiWeight)}` : '未计入' }}</span>
+            <span v-else>AI 未复核</span>
           </div>
           <p v-if="row.factor?.missingEvidenceKeys.length" class="quant-ai-summary-factor-missing">
             待补证据：{{ row.factor.missingEvidenceKeys.join('、') }}
@@ -569,6 +611,53 @@ function formatEvidenceDate(value: string | null): string {
   gap: 0.35rem;
 }
 
+.quant-ai-summary-impact {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  border: 1px solid hsl(var(--status-info) / 0.24);
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  background: hsl(var(--status-info) / 0.05);
+  padding: 0.5rem 0.6rem;
+}
+
+.quant-ai-summary-impact > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.quant-ai-summary-impact h4 {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.quant-ai-summary-impact span,
+.quant-ai-summary-impact small,
+.quant-ai-summary-impact-note,
+.quant-ai-summary-factor-impact {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
+
+.quant-ai-summary-impact strong {
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-summary-impact-note {
+  margin: 0;
+  border-left: 2px solid hsl(var(--status-info) / 0.55);
+  padding-left: 0.45rem;
+  overflow-wrap: anywhere;
+}
+
 .quant-ai-summary-factor-row {
   display: grid;
   gap: 0.25rem;
@@ -647,6 +736,18 @@ function formatEvidenceDate(value: string | null): string {
 }
 
 .quant-ai-summary-factor-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.quant-ai-summary-factor-impact {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.65rem;
+}
+
+.quant-ai-summary-factor-impact span {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -898,6 +999,10 @@ function formatEvidenceDate(value: string | null): string {
   }
 
   .quant-ai-summary-deterministic {
+    grid-template-columns: 1fr;
+  }
+
+  .quant-ai-summary-impact {
     grid-template-columns: 1fr;
   }
 
