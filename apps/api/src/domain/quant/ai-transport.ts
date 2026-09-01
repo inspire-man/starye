@@ -25,6 +25,8 @@ export interface QuantAiCompletionRequest {
   readonly maxResponseLength: number
   readonly timeoutMs: number
   readonly responseMode?: QuantAiResponseMode
+  readonly onTextDelta?: (delta: string, receivedLength: number) => void
+  readonly signal?: AbortSignal
   readonly temperature?: number
   readonly responseFormat?: 'json_object'
   readonly errorCodes: QuantAiTransportErrorCodes
@@ -211,10 +213,13 @@ async function responseStreamContent(
       throw transportError(input, 'invalid_response', 'AI stream event is not valid JSON', 502)
     }
     const chunk = streamChunkContent(payload, input)
-    content += chunk.content
+    if (chunk.content) {
+      content += chunk.content
+      if (content.length > input.maxResponseLength)
+        throw transportError(input, 'invalid_response', 'AI response content exceeds the allowed length', 502)
+      input.onTextDelta?.(chunk.content, content.length)
+    }
     finishReason = chunk.finishReason ?? finishReason
-    if (content.length > input.maxResponseLength)
-      throw transportError(input, 'invalid_response', 'AI response content exceeds the allowed length', 502)
   }
 
   while (true) {
@@ -241,14 +246,18 @@ async function responseStreamContent(
     await reader.cancel()
 
   if (!sawSseEvent) {
+    let result: QuantAiCompletionResult
     try {
-      return responseContent(JSON.parse(raw.trim()), input)
+      result = responseContent(JSON.parse(raw.trim()), input)
     }
     catch (error) {
       if (error instanceof QuantError)
         throw error
       throw transportError(input, 'invalid_response', 'AI response is not valid JSON', 502)
     }
+    if (result.content)
+      input.onTextDelta?.(result.content, result.content.length)
+    return result
   }
   if (finishReason === 'length' || finishReason === 'max_tokens')
     throw transportError(input, 'invalid_response', 'AI response was truncated before completion', 502)
@@ -259,7 +268,15 @@ export async function requestQuantAiCompletion(input: QuantAiCompletionRequest):
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const responseMode = input.responseMode ?? input.config.responseMode ?? 'json'
   const controller = new AbortController()
+  const abortFromInput = () => controller.abort()
   const timer = setTimeout(() => controller.abort(), input.timeoutMs)
+
+  if (input.signal) {
+    if (input.signal.aborted)
+      controller.abort()
+    else
+      input.signal.addEventListener('abort', abortFromInput, { once: true })
+  }
 
   try {
     let endpoint: string
@@ -276,6 +293,9 @@ export async function requestQuantAiCompletion(input: QuantAiCompletionRequest):
     }
     if (input.config.apiKey)
       headers.authorization = `Bearer ${input.config.apiKey}`
+
+    if (input.signal?.aborted)
+      throw transportError(input, 'timeout', 'AI request was cancelled', 504)
 
     const body: Record<string, unknown> = {
       model: input.config.model,
@@ -319,11 +339,14 @@ export async function requestQuantAiCompletion(input: QuantAiCompletionRequest):
   catch (error) {
     if (error instanceof QuantError)
       throw error
+    if (input.signal?.aborted)
+      throw transportError(input, 'timeout', 'AI request was cancelled', 504)
     if (controller.signal.aborted)
       throw transportError(input, 'timeout', 'AI request timed out', 504)
     throw transportError(input, 'upstream', 'AI request failed', 502)
   }
   finally {
     clearTimeout(timer)
+    input.signal?.removeEventListener('abort', abortFromInput)
   }
 }

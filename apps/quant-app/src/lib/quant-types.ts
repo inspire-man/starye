@@ -253,6 +253,11 @@ export interface QuantResearchSummary {
   citedEvidenceKeys: string[]
 }
 
+export type QuantAiSummaryStreamProgress
+  = | { type: 'started', researchRunId: string, responseMode: QuantAiResponseMode, generationTimeoutMs: number }
+    | { type: 'delta', text: string, receivedLength: number }
+    | { type: 'completed', data: QuantResearchSummary }
+
 export type QuantDecisionRecordAction = 'watch' | 'plan-buy' | 'holding' | 'sold'
 
 export interface QuantDecisionRecordSnapshot {

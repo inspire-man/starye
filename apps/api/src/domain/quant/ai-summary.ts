@@ -89,6 +89,8 @@ export interface QuantAiSummaryRequest {
   readonly report: QuantResearchReport
   readonly config: QuantDecryptedAiConfig
   readonly timeoutMs?: number
+  readonly onTextDelta?: (delta: string, receivedLength: number) => void
+  readonly signal?: AbortSignal
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 }
 
@@ -588,6 +590,8 @@ export async function generateQuantAiSummary(input: QuantAiSummaryRequest): Prom
   const { content } = await requestQuantAiCompletion({
     config,
     timeoutMs,
+    onTextDelta: input.onTextDelta,
+    signal: input.signal,
     fetchImpl: input.fetchImpl,
     maxCompletionTokens: 4_000,
     maxResponseLength: QUANT_AI_SUMMARY_MAX_RESPONSE_LENGTH,
