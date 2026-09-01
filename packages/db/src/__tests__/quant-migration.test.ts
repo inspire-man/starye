@@ -9,6 +9,7 @@ const seedMigrationPath = new URL('../../drizzle/0038_quant_watchlist_seed.sql',
 const researchMigrationPath = new URL('../../drizzle/0039_quant_research_marker.sql', import.meta.url)
 const userScopeMigrationPath = new URL('../../drizzle/0041_quant_user_scope.sql', import.meta.url)
 const aiRuntimeMigrationPath = new URL('../../drizzle/0048_quant_ai_runtime_reliability.sql', import.meta.url)
+const aiRunAuditMigrationPath = new URL('../../drizzle/0049_quant_ai_run_audit.sql', import.meta.url)
 const researchRunMigrationPath = new URL('../../drizzle/0042_quant_research_run.sql', import.meta.url)
 const researchSummaryMigrationPath = new URL('../../drizzle/0043_quant_research_summary.sql', import.meta.url)
 const candidateAiSessionMigrationPath = new URL('../../drizzle/0044_quant_candidate_ai_session.sql', import.meta.url)
@@ -20,7 +21,7 @@ async function createMigratedClient() {
   await client.execute('PRAGMA foreign_keys = ON')
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
   await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-1\', 1)')
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, candidateAiSessionMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath, aiRunAuditMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -45,6 +46,7 @@ describe('quant workbench migration', () => {
 
     expect(tables.rows.map(row => String(row.name))).toEqual([
       'quant_ai_config',
+      'quant_ai_run_audit',
       'quant_candidate_ai_session',
       'quant_daily_bar',
       'quant_decision_record',
@@ -62,6 +64,8 @@ describe('quant workbench migration', () => {
       'idx_quant_candidate_ai_session_user_snapshot_generated_at',
       'idx_quant_decision_record_user_run',
       'idx_quant_decision_record_user_ts_code_updated_at',
+      'idx_quant_ai_run_audit_user_run_completed_at',
+      'idx_quant_ai_run_audit_user_completed_at',
       'idx_quant_research_marker_user_ts_code',
       'idx_quant_research_run_user_ts_code_generated_at',
       'idx_quant_research_summary_user_run_generated_at',
@@ -90,6 +94,66 @@ describe('quant workbench migration', () => {
     expect(columns.rows.map(row => String(row.name))).toEqual(expect.arrayContaining(['response_mode', 'generation_timeout_ms']))
     await client.execute('INSERT INTO quant_ai_config (id, user_id, provider, model) VALUES (\'ai-1\', \'user-1\', \'openai_compatible\', \'gpt-5.4\')')
     await expect(client.execute('SELECT response_mode, generation_timeout_ms FROM quant_ai_config WHERE id = \'ai-1\'')).resolves.toMatchObject({ rows: [{ response_mode: 'stream', generation_timeout_ms: 300000 }] })
+  })
+
+  it('keeps AI run audits bounded, isolated, and linked to completed summaries', async () => {
+    const client = await createMigratedClient()
+    await client.execute({
+      sql: `INSERT INTO quant_research_run (
+        id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+        report_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['audit-run-1', 'user-1', '601899.SH', '紫金矿业', 'partial', 'research-report-v2', null, '{}', 10, 10],
+    })
+    await client.execute({
+      sql: `INSERT INTO quant_research_summary (
+        id, user_id, research_run_id, summary_version, report_version, provider, model,
+        summary_json, cited_evidence_keys_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['audit-summary-1', 'user-1', 'audit-run-1', 'research-summary-v2', 'research-report-v2', 'openai_compatible', 'gpt-5.4', '{}', '[]', 20, 20],
+    })
+    await client.execute({
+      sql: `INSERT INTO quant_ai_run_audit (
+        id, user_id, research_run_id, summary_id, operation, provider, model,
+        response_mode, generation_timeout_ms, status, received_chars, duration_ms,
+        finish_reason, error_code, error_message, started_at, completed_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['audit-1', 'user-1', 'audit-run-1', 'audit-summary-1', 'research-summary', 'openai_compatible', 'gpt-5.4', 'stream', 300000, 'completed', 128, 2400, 'completed', null, null, 30, 33, 33],
+    })
+    await client.execute({
+      sql: `INSERT INTO quant_ai_run_audit (
+        id, user_id, research_run_id, operation, provider, model,
+        response_mode, generation_timeout_ms, status, received_chars, duration_ms,
+        error_code, error_message, started_at, completed_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['audit-2', 'user-1', 'audit-run-1', 'research-summary', 'openai_compatible', 'gpt-5.4', 'stream', 300000, 'failed', 64, 300000, 'QUANT_AI_SUMMARY_TIMEOUT', 'AI request timed out', 40, 340, 340],
+    })
+
+    await expect(client.execute(`
+      SELECT status, summary_id, response_mode, generation_timeout_ms,
+        received_chars, duration_ms, error_code
+      FROM quant_ai_run_audit
+      WHERE user_id = 'user-1' AND research_run_id = 'audit-run-1'
+      ORDER BY completed_at DESC
+    `)).resolves.toMatchObject({
+      rows: [
+        { status: 'failed', summary_id: null, received_chars: 64, error_code: 'QUANT_AI_SUMMARY_TIMEOUT' },
+        { status: 'completed', summary_id: 'audit-summary-1', response_mode: 'stream', generation_timeout_ms: 300000, received_chars: 128, duration_ms: 2400, error_code: null },
+      ],
+    })
+
+    await expect(client.execute(`
+      INSERT INTO quant_ai_run_audit (
+        id, user_id, research_run_id, operation, provider, model,
+        response_mode, generation_timeout_ms, status, received_chars, duration_ms,
+        started_at, completed_at, created_at
+      ) VALUES ('audit-invalid', 'user-1', 'audit-run-1', 'research-summary', 'openai_compatible', 'gpt-5.4', 'stream', 120000, 'completed', 0, 0, 1, 1, 1)
+    `)).rejects.toThrow(/CHECK constraint failed/u)
+
+    await client.execute('DELETE FROM quant_research_summary WHERE id = \'audit-summary-1\'')
+    await expect(client.execute('SELECT summary_id FROM quant_ai_run_audit WHERE id = \'audit-1\'')).resolves.toMatchObject({ rows: [{ summary_id: null }] })
+    await client.execute('DELETE FROM user WHERE id = \'user-1\'')
+    await expect(client.execute('SELECT count(*) AS count FROM quant_ai_run_audit')).resolves.toMatchObject({ rows: [{ count: 0 }] })
   })
 
   it('enforces one factor configuration per user and keeps the weight snapshot', async () => {

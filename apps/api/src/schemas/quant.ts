@@ -754,6 +754,31 @@ export const QuantResearchSummaryQuerySchema = v.object({
   limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
 })
 
+export const QuantAiRunAuditSchema = v.strictObject({
+  id: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  researchRunId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  summaryId: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  operation: v.literal('research-summary'),
+  provider: QuantAiProviderSchema,
+  model: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  responseMode: QuantAiResponseModeSchema,
+  generationTimeoutMs: v.pipe(v.number(), v.integer(), v.minValue(300000), v.maxValue(600000)),
+  status: v.picklist(['completed', 'failed', 'cancelled']),
+  receivedChars: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(8000)),
+  durationMs: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(86400000)),
+  finishReason: v.nullable(v.pipe(v.string(), v.maxLength(64))),
+  errorCode: v.nullable(v.pipe(v.string(), v.maxLength(128))),
+  errorMessage: v.nullable(v.pipe(v.string(), v.maxLength(240))),
+  startedAt: v.string(),
+  completedAt: v.string(),
+  createdAt: v.string(),
+})
+
+export const QuantAiRunAuditsResponseSchema = v.strictObject({
+  success: v.literal(true),
+  data: v.array(QuantAiRunAuditSchema),
+})
+
 export type QuantWatchlistCreate = v.InferOutput<typeof QuantWatchlistCreateSchema>
 export type QuantWatchlistUpdate = v.InferOutput<typeof QuantWatchlistUpdateSchema>
 export type QuantResearchMarkerUpdate = v.InferOutput<typeof QuantResearchMarkerUpdateSchema>
@@ -774,3 +799,4 @@ export type QuantResearchQuestion = v.InferOutput<typeof QuantResearchQuestionSc
 export type QuantResearchQuestionResponse = v.InferOutput<typeof QuantResearchQuestionResponseSchema>
 export type QuantResearchChangeExplanationInput = v.InferOutput<typeof QuantResearchChangeExplanationSchema>
 export type QuantResearchSummaryQuery = v.InferOutput<typeof QuantResearchSummaryQuerySchema>
+export type QuantAiRunAudit = v.InferOutput<typeof QuantAiRunAuditSchema>

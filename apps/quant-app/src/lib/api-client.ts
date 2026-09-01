@@ -19,6 +19,8 @@ import type {
   QuantAiFactorReview,
   QuantAiProvider,
   QuantAiResponseMode,
+  QuantAiRunAudit,
+  QuantAiRunAuditStatus,
   QuantAiSummaryStreamProgress,
   QuantDecisionAssistant,
   QuantDecisionAssistantAction,
@@ -196,6 +198,14 @@ function readStringList(record: JsonRecord, ...keys: string[]): string[] {
       return record[key].filter((item): item is string => typeof item === 'string')
   }
   return []
+}
+
+function readNullableBoundedString(record: JsonRecord, maxLength: number, ...keys: string[]): string | null | undefined {
+  const key = keys.find(candidate => Object.hasOwn(record, candidate))
+  if (!key || record[key] === null || record[key] === undefined)
+    return null
+  const value = asString(record[key])
+  return value && value.length <= maxLength ? value : undefined
 }
 
 function unknownFactorFreshness(): QuantFactorFreshness {
@@ -865,6 +875,59 @@ function parseAiFactorImpact(value: unknown): QuantAiFactorImpact | null {
   return { modelVersion, ...(evaluatedAt ? { evaluatedAt } : {}), freshnessVersion, freshnessBlockedFactors, totalWeight, deterministicScore, ...(aiScore !== undefined ? { aiScore } : {}), ...(aiScoreDelta !== undefined ? { aiScoreDelta } : {}), scoredWeight, reviewedWeight, reviewCoverage, supportWeight, cautionWeight, opposeWeight, unacceptedWeight, factors }
 }
 
+function parseQuantAiRunAudit(value: unknown): QuantAiRunAudit | null {
+  if (!isRecord(value))
+    return null
+  const id = readString(value, 'id')
+  const researchRunId = readString(value, 'researchRunId', 'research_run_id')
+  const summaryId = readNullableBoundedString(value, 128, 'summaryId', 'summary_id')
+  const operation = readString(value, 'operation')
+  const provider = readString(value, 'provider')
+  const model = readString(value, 'model')
+  const responseMode = readString(value, 'responseMode', 'response_mode')
+  const generationTimeoutMs = readNumber(value, 'generationTimeoutMs', 'generation_timeout_ms')
+  const status = readString(value, 'status')
+  const receivedChars = readNumber(value, 'receivedChars', 'received_chars')
+  const durationMs = readNumber(value, 'durationMs', 'duration_ms')
+  const finishReason = readNullableBoundedString(value, 64, 'finishReason', 'finish_reason')
+  const errorCode = readNullableBoundedString(value, 128, 'errorCode', 'error_code')
+  const errorMessage = readNullableBoundedString(value, 240, 'errorMessage', 'error_message')
+  const startedAt = readString(value, 'startedAt', 'started_at')
+  const completedAt = readString(value, 'completedAt', 'completed_at')
+  const createdAt = readString(value, 'createdAt', 'created_at')
+  if (!id || !researchRunId || summaryId === undefined || operation !== 'research-summary'
+    || (provider !== 'openai_compatible' && provider !== 'deepseek' && provider !== 'qwen' && provider !== 'gemini' && provider !== 'ollama')
+    || !model || model.length > 128
+    || (responseMode !== 'stream' && responseMode !== 'json')
+    || generationTimeoutMs === null || !Number.isInteger(generationTimeoutMs) || generationTimeoutMs < 300_000 || generationTimeoutMs > 600_000
+    || (status !== 'completed' && status !== 'failed' && status !== 'cancelled')
+    || receivedChars === null || !Number.isInteger(receivedChars) || receivedChars < 0 || receivedChars > 8_000
+    || durationMs === null || !Number.isInteger(durationMs) || durationMs < 0 || durationMs > 86_400_000
+    || finishReason === undefined || errorCode === undefined || errorMessage === undefined
+    || !startedAt || !completedAt || !createdAt) {
+    return null
+  }
+  return {
+    id,
+    researchRunId,
+    summaryId,
+    operation: 'research-summary',
+    provider: provider as QuantAiRunAudit['provider'],
+    model,
+    responseMode: responseMode as QuantAiRunAudit['responseMode'],
+    generationTimeoutMs,
+    status: status as QuantAiRunAuditStatus,
+    receivedChars,
+    durationMs,
+    finishReason,
+    errorCode,
+    errorMessage,
+    startedAt,
+    completedAt,
+    createdAt,
+  }
+}
+
 function parseResearchSummary(value: unknown): QuantResearchSummary | null {
   if (!isRecord(value))
     return null
@@ -890,6 +953,10 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
     return null
   const factorImpact = parseAiFactorImpact(value.factorImpact ?? value.factor_impact)
   const factorImpactSnapshot = parseAiFactorImpact(value.factorImpactSnapshot ?? value.factor_impact_snapshot)
+  const rawAudit = value.audit
+  const audit = rawAudit === undefined || rawAudit === null ? null : parseQuantAiRunAudit(rawAudit)
+  if (rawAudit !== undefined && rawAudit !== null && !audit)
+    return null
   const rawDecisionReview = rawSummary.decisionReview ?? rawSummary.decision_review
   const decisionReview: QuantAiDecisionReview | null = isRecord(rawDecisionReview)
     ? (() => {
@@ -947,6 +1014,7 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
     citedEvidenceKeys: readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys').length
       ? readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys')
       : citedEvidenceKeys,
+    ...(rawAudit !== undefined ? { audit } : {}),
   }
 }
 
@@ -1348,6 +1416,14 @@ function parseResearchSummaries(payload: unknown): QuantResearchSummary[] {
   return readList(data, 'items', 'summaries', 'researchSummaries', 'research_summaries').flatMap((value) => {
     const summary = parseResearchSummary(value)
     return summary ? [summary] : []
+  })
+}
+
+function parseResearchAiAudits(payload: unknown): QuantAiRunAudit[] {
+  const data = unwrapData(payload)
+  return readList(data, 'items', 'audits', 'aiAudits', 'ai_audits').flatMap((value) => {
+    const audit = parseQuantAiRunAudit(value)
+    return audit ? [audit] : []
   })
 }
 
@@ -2438,6 +2514,10 @@ export const quantApi = {
 
   async getResearchSummaries(runId: string, limit = 1): Promise<QuantResearchSummary[]> {
     return parseResearchSummaries(await requestJson(`/research/runs/${encodeURIComponent(runId)}/summary?limit=${encodeURIComponent(String(limit))}`))
+  },
+
+  async getResearchAiAudits(runId: string, limit = 10): Promise<QuantAiRunAudit[]> {
+    return parseResearchAiAudits(await requestJson(`/research/runs/${encodeURIComponent(runId)}/ai-audits?limit=${encodeURIComponent(String(limit))}`))
   },
 
   async getResearchDecisionRecord(runId: string): Promise<QuantDecisionRecord | null> {

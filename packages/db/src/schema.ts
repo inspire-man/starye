@@ -1086,6 +1086,33 @@ export const quantResearchSummaries = sqliteTable('quant_research_summary', {
 export type QuantResearchSummary = InferSelectModel<typeof quantResearchSummaries>
 export type NewQuantResearchSummary = InferInsertModel<typeof quantResearchSummaries>
 
+export const quantAiRunAudits = sqliteTable('quant_ai_run_audit', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  researchRunId: text('research_run_id').notNull().references(() => quantResearchRuns.id, { onDelete: 'cascade' }),
+  summaryId: text('summary_id').references(() => quantResearchSummaries.id, { onDelete: 'set null' }),
+  operation: text('operation', { enum: ['research-summary'] }).default('research-summary').notNull(),
+  provider: text('provider', { enum: ['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'] }).notNull(),
+  model: text('model').notNull(),
+  responseMode: text('response_mode', { enum: ['stream', 'json'] }).notNull(),
+  generationTimeoutMs: integer('generation_timeout_ms').notNull(),
+  status: text('status', { enum: ['completed', 'failed', 'cancelled'] }).notNull(),
+  receivedChars: integer('received_chars').default(0).notNull(),
+  durationMs: integer('duration_ms').notNull(),
+  finishReason: text('finish_reason'),
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  startedAt: integer('started_at', { mode: 'timestamp' }).notNull(),
+  completedAt: integer('completed_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_quant_ai_run_audit_user_run_completed_at').on(table.userId, table.researchRunId, table.completedAt),
+  index('idx_quant_ai_run_audit_user_completed_at').on(table.userId, table.completedAt),
+])
+
+export type QuantAiRunAudit = InferSelectModel<typeof quantAiRunAudits>
+export type NewQuantAiRunAudit = InferInsertModel<typeof quantAiRunAudits>
+
 export const quantDecisionRecords = sqliteTable('quant_decision_record', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -1214,6 +1241,7 @@ export const quantResearchRunsRelations = relations(quantResearchRuns, ({ one, m
     references: [user.id],
   }),
   summaries: many(quantResearchSummaries),
+  aiRunAudits: many(quantAiRunAudits),
   decisionRecords: many(quantDecisionRecords),
   decisionAssessments: many(quantDecisionAssessments),
 }))
@@ -1226,6 +1254,21 @@ export const quantResearchSummariesRelations = relations(quantResearchSummaries,
   researchRun: one(quantResearchRuns, {
     fields: [quantResearchSummaries.researchRunId],
     references: [quantResearchRuns.id],
+  }),
+}))
+
+export const quantAiRunAuditsRelations = relations(quantAiRunAudits, ({ one }) => ({
+  user: one(user, {
+    fields: [quantAiRunAudits.userId],
+    references: [user.id],
+  }),
+  researchRun: one(quantResearchRuns, {
+    fields: [quantAiRunAudits.researchRunId],
+    references: [quantResearchRuns.id],
+  }),
+  summary: one(quantResearchSummaries, {
+    fields: [quantAiRunAudits.summaryId],
+    references: [quantResearchSummaries.id],
   }),
 }))
 
@@ -1276,6 +1319,7 @@ export const userRelations = relations(user, ({ many }) => ({
   quantSyncStates: many(quantSyncState),
   quantResearchRuns: many(quantResearchRuns),
   quantResearchSummaries: many(quantResearchSummaries),
+  quantAiRunAudits: many(quantAiRunAudits),
   quantDecisionRecords: many(quantDecisionRecords),
   quantDecisionAssessments: many(quantDecisionAssessments),
   quantCandidateAiSessions: many(quantCandidateAiSessions),

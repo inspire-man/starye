@@ -24,6 +24,7 @@ const researchRunMigrationPath = new URL('../../../../../../packages/db/drizzle/
 const researchSummaryMigrationPath = new URL('../../../../../../packages/db/drizzle/0043_quant_research_summary.sql', import.meta.url)
 const factorConfigMigrationPath = new URL('../../../../../../packages/db/drizzle/0045_quant_factor_config.sql', import.meta.url)
 const decisionRecordMigrationPath = new URL('../../../../../../packages/db/drizzle/0046_quant_decision_record.sql', import.meta.url)
+const aiRunAuditMigrationPath = new URL('../../../../../../packages/db/drizzle/0049_quant_ai_run_audit.sql', import.meta.url)
 
 async function prepareUsers(client: ReturnType<typeof createClient>) {
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
@@ -33,7 +34,7 @@ async function prepareUsers(client: ReturnType<typeof createClient>) {
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath, aiRunAuditMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -45,7 +46,7 @@ async function createDatabase(): Promise<{ client: ReturnType<typeof createClien
 async function createSeedDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath, aiRuntimeMigrationPath, aiRunAuditMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -814,7 +815,7 @@ describe('quant watchlist CRUD contract', () => {
 
     const generated = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)
     expect(generated.status).toBe(201)
-    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[], decisionReview: { recommendation: string, accepted: boolean } }, factorImpact: { deterministicScore: number, aiScore: number, aiScoreDelta: number, evaluatedAt: string, reviewCoverage: number, opposeWeight: number, factors: Array<{ factor: string, deterministicContribution: number, aiAccepted: boolean, aiWeight: number, aiContribution: number | null }> }, factorImpactSnapshot: { evaluatedAt: string, aiScore: number } | null, provider: string } }
+    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[], decisionReview: { recommendation: string, accepted: boolean } }, factorImpact: { deterministicScore: number, aiScore: number, aiScoreDelta: number, evaluatedAt: string, reviewCoverage: number, opposeWeight: number, factors: Array<{ factor: string, deterministicContribution: number, aiAccepted: boolean, aiWeight: number, aiContribution: number | null }> }, factorImpactSnapshot: { evaluatedAt: string, aiScore: number } | null, provider: string, audit: { status: string, researchRunId: string, summaryId: string | null, responseMode: string, generationTimeoutMs: number, receivedChars: number, durationMs: number, errorCode: string | null } } }
     expect(generatedPayload.data).toMatchObject({
       provider: 'openai_compatible',
       summary: { citedEvidenceKeys: ['quality-roe'], decisionReview: { recommendation: 'bearish', accepted: true } },
@@ -828,6 +829,16 @@ describe('quant watchlist CRUD contract', () => {
         factors: [expect.objectContaining({ factor: 'quality', deterministicContribution: 72.5, aiAccepted: true, aiWeight: 1, aiContribution: 0 })],
       },
       factorImpactSnapshot: { evaluatedAt: expect.any(String), aiScore: 0 },
+      audit: {
+        status: 'completed',
+        researchRunId: 'summary-run-1',
+        summaryId: expect.any(String),
+        responseMode: 'stream',
+        generationTimeoutMs: 300000,
+        receivedChars: expect.any(Number),
+        durationMs: expect.any(Number),
+        errorCode: null,
+      },
     })
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(expect.objectContaining({ authorization: 'Bearer sk-user-one-1234' }))
     await expect(client.execute('SELECT summary_json, cited_evidence_keys_json FROM quant_research_summary')).resolves.toMatchObject({
@@ -850,6 +861,16 @@ describe('quant watchlist CRUD contract', () => {
     const rejected = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)
     expect(rejected.status).toBe(502)
     await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+
+    const audits = await userA.request('/api/quant/research/runs/summary-run-1/ai-audits?limit=10', {}, env)
+    expect(audits.status).toBe(200)
+    const auditsPayload = await audits.json() as { data: Array<Record<string, unknown>> }
+    expect(auditsPayload.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: 'failed', summaryId: null, errorCode: 'QUANT_AI_SUMMARY_INVALID_RESPONSE', receivedChars: expect.any(Number) }),
+      expect.objectContaining({ status: 'completed', summaryId: expect.any(String), errorCode: null }),
+    ]))
+    expect(JSON.stringify(auditsPayload)).not.toContain('sk-user-one-1234')
+    expect((await userB.request('/api/quant/research/runs/summary-run-1/ai-audits', {}, env)).status).toBe(404)
   })
 
   it('streams summary lifecycle events and persists only after completed validation', async () => {
@@ -908,6 +929,28 @@ describe('quant watchlist CRUD contract', () => {
     expect(failedBody).toContain('event: error')
     expect(failedBody).toContain('QUANT_AI_SUMMARY_INVALID_RESPONSE')
     await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+
+    upstream.mockImplementationOnce((_input, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+    }))
+    const cancelledResponse = await user.request('/api/quant/research/runs/stream-run-1/summary/stream', { method: 'POST' }, env)
+    const reader = cancelledResponse.body?.getReader()
+    expect(reader).toBeDefined()
+    await reader?.read()
+    for (let attempt = 0; attempt < 20 && upstream.mock.calls.length < 3; attempt++)
+      await new Promise(resolve => setTimeout(resolve, 0))
+    expect(upstream).toHaveBeenCalledTimes(3)
+    await reader?.cancel()
+    let cancelledAudit: { status: string, summary_id: string | null, error_code: string | null } | undefined
+    for (let attempt = 0; attempt < 20 && !cancelledAudit; attempt++) {
+      const result = await client.execute('SELECT status, summary_id, error_code FROM quant_ai_run_audit WHERE research_run_id = ? ORDER BY completed_at DESC, rowid DESC LIMIT 1', ['stream-run-1'])
+      const row = result.rows[0]
+      if (row && row.status === 'cancelled')
+        cancelledAudit = { status: String(row.status), summary_id: row.summary_id === null ? null : String(row.summary_id), error_code: row.error_code === null ? null : String(row.error_code) }
+      if (!cancelledAudit)
+        await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    expect(cancelledAudit).toEqual({ status: 'cancelled', summary_id: null, error_code: 'QUANT_AI_SUMMARY_TIMEOUT' })
   })
 
   it('generates an in-memory AI comparison from current-user runs without writing research data', async () => {

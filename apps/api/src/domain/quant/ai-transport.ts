@@ -26,6 +26,7 @@ export interface QuantAiCompletionRequest {
   readonly timeoutMs: number
   readonly responseMode?: QuantAiResponseMode
   readonly onTextDelta?: (delta: string, receivedLength: number) => void
+  readonly onFinishReason?: (finishReason: string | null) => void
   readonly signal?: AbortSignal
   readonly temperature?: number
   readonly responseFormat?: 'json_object'
@@ -257,10 +258,12 @@ async function responseStreamContent(
     }
     if (result.content)
       input.onTextDelta?.(result.content, result.content.length)
+    input.onFinishReason?.(result.finishReason)
     return result
   }
   if (finishReason === 'length' || finishReason === 'max_tokens')
     throw transportError(input, 'invalid_response', 'AI response was truncated before completion', 502)
+  input.onFinishReason?.(finishReason)
   return { content: boundedResponseContent(content, input.maxResponseLength, input), finishReason }
 }
 
