@@ -158,6 +158,9 @@ describe('quant decision recommendation', () => {
     expect(wrapper.text()).toContain('确定性因子模型')
     expect(wrapper.text()).toContain('查看因子来源、权重和失效条件')
     expect(wrapper.text()).toContain('当前用户配置')
+    expect(wrapper.text()).toContain('因子数据健康')
+    expect(wrapper.text()).toContain('字段覆盖 100%')
+    expect(wrapper.text()).toContain('证据 1 / 1 可用')
   })
 
   it('uses an accepted AI review for the final label while retaining deterministic prices', () => {
@@ -217,5 +220,34 @@ describe('quant decision recommendation', () => {
     expect(wrapper.text()).toContain('可参考')
     expect(wrapper.text()).toContain('数据完整性')
     expect(wrapper.text()).toContain('AI 复核')
+  })
+
+  it('shows missing evidence and fallback source guidance without changing the recommendation', () => {
+    const base = report()
+    const wrapper = mount(QuantDecisionRecommendation, {
+      props: {
+        report: {
+          ...base,
+          factorModel: {
+            ...base.factorModel!,
+            factors: [{
+              ...base.factorModel!.factors[0]!,
+              status: 'partial',
+              source: 'Eastmoney 财务，回退链：备用来源',
+              evidenceKeys: ['trend-sample', 'quality-cashflow'],
+              missingEvidenceKeys: ['quality-cashflow'],
+            }],
+          },
+        },
+        summary: null,
+      },
+    })
+
+    expect(wrapper.text()).toContain('部分可用')
+    expect(wrapper.text()).toContain('来源需复核')
+    expect(wrapper.text()).toContain('待补证据：quality-cashflow')
+    expect(wrapper.text()).toContain('下一步：补齐证据：quality-cashflow')
+    expect(wrapper.text()).toContain('看多')
+    expect(wrapper.text()).toContain('10.00 - 11.00 元')
   })
 })
