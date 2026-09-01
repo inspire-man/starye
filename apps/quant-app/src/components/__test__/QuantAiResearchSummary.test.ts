@@ -174,8 +174,11 @@ describe('quant ai research summary', () => {
     const current = summary(['akshare-roe'])
     current.factorImpact = {
       modelVersion: 'research-factors-v1',
+      evaluatedAt: '2026-09-01T08:00:00.000Z',
       totalWeight: 1,
       deterministicScore: 82,
+      aiScore: 100,
+      aiScoreDelta: 18,
       scoredWeight: 1,
       reviewedWeight: 0.5,
       reviewCoverage: 50,
@@ -194,6 +197,7 @@ describe('quant ai research summary', () => {
         aiConfidence: 88,
         aiAccepted: true,
         aiWeight: 0.5,
+        aiContribution: 100,
       }, {
         factor: 'valuation',
         label: '估值',
@@ -205,6 +209,7 @@ describe('quant ai research summary', () => {
         aiConfidence: null,
         aiAccepted: false,
         aiWeight: 0,
+        aiContribution: null,
       }],
     }
     current.summary.factorReviews = [{
@@ -222,8 +227,12 @@ describe('quant ai research summary', () => {
     expect(wrapper.text()).toContain('因子贡献与 AI 影响')
     expect(wrapper.text()).toContain('AI 已纳入权重')
     expect(wrapper.text()).toContain('AI 方向权重')
+    expect(wrapper.text()).toContain('AI 影响分')
+    expect(wrapper.text()).toContain('100.0 分')
+    expect(wrapper.text()).toContain('相对确定性 +18.0 分')
     expect(wrapper.text()).toContain('确定性贡献 45.0 分')
     expect(wrapper.text()).toContain('AI 支持 · 计入 50%')
+    expect(wrapper.text()).toContain('AI 贡献 100.0 分')
     expect(wrapper.text()).toContain('确定性贡献 37.0 分')
     expect(wrapper.text()).toContain('AI 未复核')
     expect(wrapper.text()).toContain('不改写确定性分数或参考价格区间')

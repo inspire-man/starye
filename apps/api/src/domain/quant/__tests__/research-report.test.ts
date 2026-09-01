@@ -47,7 +47,7 @@ const valuation: QuantValuationSnapshot = {
   peStatic: null,
   pb: 1.4,
   ps: 1,
-  peg: null,
+  peg: 1.2,
   marketCap: null,
 }
 
@@ -164,6 +164,13 @@ describe('quant research report', () => {
     })
     expect(report.evidence).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'valuation-pe', value: 12, source: 'Eastmoney 估值', formulaVersion: 'eastmoney-valuation-v1' }),
+      expect.objectContaining({ key: 'valuation-ps', value: 1 }),
+      expect.objectContaining({ key: 'valuation-peg', value: 1.2 }),
+      expect.objectContaining({ key: 'quality-revenue-growth', value: 12 }),
+      expect.objectContaining({ key: 'quality-adjusted-profit', value: 13 }),
+      expect.objectContaining({ key: 'quality-gross-margin', value: 30 }),
+      expect.objectContaining({ key: 'quality-net-margin', value: 12 }),
+      expect.objectContaining({ key: 'quality-debt-asset', value: 42 }),
       expect.objectContaining({ key: 'quality-roe', status: 'pass', threshold: '至少 10%' }),
       expect.objectContaining({ key: 'shareholder-yield', status: 'pass', optional: true }),
     ]))
@@ -235,6 +242,29 @@ describe('quant research report', () => {
     ]))
     expect(report.gaps.length).toBeGreaterThan(0)
     expect(report.risks.length).toBeGreaterThan(0)
+  })
+
+  it('keeps newly mapped valuation and financial evidence missing instead of zero-filling it', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-partial',
+      candidate,
+      dailyBars: bars(80),
+      valuation: { ...valuation, peg: null },
+      financialReports: [{ ...financial, grossMargin: null, debtAssetRatio: null }],
+      shareholderReturn,
+    })
+
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'valuation-peg', value: null, status: 'missing' }),
+      expect.objectContaining({ key: 'quality-gross-margin', value: null, status: 'missing' }),
+      expect.objectContaining({ key: 'quality-debt-asset', value: null, status: 'missing' }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'valuation')).toMatchObject({ status: 'ready', missingEvidenceKeys: ['valuation-peg'] })
+    expect(report.factorModel?.factors.find(factor => factor.key === 'quality')).toMatchObject({ status: 'partial', missingEvidenceKeys: ['quality-gross-margin', 'quality-debt-asset'] })
+    expect(report.decision?.recommendation).toBe('watch')
   })
 
   it('keeps AkShare factors optional and makes cross-source differences explicit', () => {

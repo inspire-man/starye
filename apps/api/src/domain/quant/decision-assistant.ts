@@ -1,6 +1,8 @@
 import type { QuantAiProvider, QuantDecryptedAiConfig } from './ai-config'
+import type { QuantAiFactorImpact } from './ai-summary'
 import type { QuantDecisionProjection, QuantRecommendation, QuantReferencePriceRange, QuantResearchFactor, QuantResearchFactorKey } from './decision-recommendation'
 import type { QuantResearchEvidence, QuantResearchReport, QuantResearchSource } from './research-report'
+import { parseQuantAiFactorImpactSnapshot } from './ai-summary'
 import { resolveQuantAiGenerationTimeout } from './ai-timeout'
 import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
@@ -148,6 +150,8 @@ export interface QuantDecisionAssistantSnapshot {
   readonly sources: readonly QuantResearchSource[]
   readonly deterministic: QuantDecisionAssistantDeterministic
   readonly ai: QuantDecisionAssistantAiReview
+  /** Optional on historical snapshots written before factor impact persistence. */
+  readonly factorImpact?: QuantAiFactorImpact | null
   readonly final: QuantDecisionAssistantFinal
 }
 
@@ -585,6 +589,14 @@ function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
 
+function fieldValue(value: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const key of keys) {
+    if (Object.hasOwn(value, key))
+      return value[key]
+  }
+  return undefined
+}
+
 function stringList(value: unknown, field: string, maxItems: number, maxLength: number): string[] {
   if (!Array.isArray(value) || value.length > maxItems || value.some(item => typeof item !== 'string' || !item.trim() || item.length > maxLength))
     throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', `AI decision assistant field ${field} is invalid`, 502)
@@ -610,23 +622,23 @@ function factorReviews(value: unknown, report: QuantResearchReport): QuantDecisi
   const seen = new Set<QuantResearchFactorKey>()
   return value.map((item) => {
     const parsed = record(item)
-    const factor = parsed?.factor
-    const stance = parsed?.stance
-    const confidence = finite(parsed?.confidence)
-    if (!parsed || !factorKey(factor) || seen.has(factor) || (stance !== 'support' && stance !== 'caution' && stance !== 'oppose' && stance !== 'insufficient') || confidence === null || confidence < 0 || confidence > 100)
+    const factorValue = parsed ? fieldValue(parsed, 'factor') : undefined
+    const stance = parsed ? fieldValue(parsed, 'stance') : undefined
+    const confidence = finite(parsed ? fieldValue(parsed, 'confidence') as number | null : null)
+    if (!parsed || !factorKey(factorValue) || seen.has(factorValue) || (stance !== 'support' && stance !== 'caution' && stance !== 'oppose' && stance !== 'insufficient') || confidence === null || confidence < 0 || confidence > 100)
       throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI factor review values are invalid', 502)
-    const modelFactor = factors.get(factor)
+    const modelFactor = factors.get(factorValue)
     if (!modelFactor)
       throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI factor review references an unknown factor', 502)
-    const rationale = text(parsed.rationale)
+    const rationale = text(fieldValue(parsed, 'rationale'))
     if (!rationale || rationale.length > 600)
       throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI factor review rationale is invalid', 502)
-    const cited = assistantEvidenceKeys(parsed.citedEvidenceKeys, report)
+    const cited = assistantEvidenceKeys(fieldValue(parsed, 'citedEvidenceKeys', 'cited_evidence_keys'), report)
     const allowed = new Set(modelFactor.evidenceKeys)
     if (cited.some(key => !allowed.has(key)))
       throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI factor review cited evidence from another factor', 502)
-    seen.add(factor)
-    return { factor, stance: stance as QuantDecisionAssistantAiFactorReview['stance'], confidence, accepted: false, rationale, citedEvidenceKeys: cited }
+    seen.add(factorValue)
+    return { factor: factorValue, stance: stance as QuantDecisionAssistantAiFactorReview['stance'], confidence, accepted: false, rationale, citedEvidenceKeys: cited }
   })
 }
 
@@ -650,18 +662,18 @@ export function parseQuantAiDecisionAssistant(value: unknown, report: QuantResea
   const parsed = record(value)
   if (!parsed)
     throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI decision assistant response is not an object', 502)
-  const recommendation = assistantRecommendation(parsed.recommendation)
-  const action = assistantAction(parsed.action)
-  const confidence = finite(parsed.confidence)
+  const recommendation = assistantRecommendation(fieldValue(parsed, 'recommendation'))
+  const action = assistantAction(fieldValue(parsed, 'action'))
+  const confidence = finite(fieldValue(parsed, 'confidence'))
   if (confidence === null || confidence < 0 || confidence > 100)
     throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI decision assistant confidence is invalid', 502)
-  const rationale = text(parsed.rationale)
+  const rationale = text(fieldValue(parsed, 'rationale'))
   if (!rationale || rationale.length > 800)
     throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI decision assistant rationale is invalid', 502)
-  const risks = stringList(parsed.risks, 'risks', 6, 360)
-  const invalidationConditions = stringList(parsed.invalidationConditions, 'invalidationConditions', 6, 360)
-  const citedEvidenceKeys = assistantEvidenceKeys(parsed.citedEvidenceKeys, report)
-  const parsedFactorReviews = factorReviews(parsed.factorReviews, report)
+  const risks = stringList(fieldValue(parsed, 'risks'), 'risks', 6, 360)
+  const invalidationConditions = stringList(fieldValue(parsed, 'invalidationConditions', 'invalidation_conditions'), 'invalidationConditions', 6, 360)
+  const citedEvidenceKeys = assistantEvidenceKeys(fieldValue(parsed, 'citedEvidenceKeys', 'cited_evidence_keys'), report)
+  const parsedFactorReviews = factorReviews(fieldValue(parsed, 'factorReviews', 'factor_reviews'), report)
   const allText = [rationale, ...risks, ...invalidationConditions].join('\n')
   if (/目标价|收益预测|未来收益|建议(?:买入|卖出)|直接(?:买入|卖出)|立即(?:买入|卖出)|price\s*target|return\s+forecast/iu.test(allText))
     throw assistantError('QUANT_DECISION_ASSISTANT_INVALID_RESPONSE', 'AI decision assistant contains unsupported price or return forecast', 502)
@@ -1130,6 +1142,9 @@ export function parseQuantDecisionAssistantSnapshot(value: string, report?: Quan
     if (deterministic.coverage < 0 || deterministic.coverage > 100 || (deterministic.score !== null && (deterministic.score < 0 || deterministic.score > 100)) || deterministic.evidence.total !== evidence.total || deterministic.evidence.usable !== evidence.usable || deterministic.evidence.missing !== evidence.missing || deterministic.evidence.failed !== evidence.failed || !sourcesMatch)
       throw new Error('deterministic values')
     const ai = parseSnapshotAi(root.ai)
+    const factorImpact = root.factorImpact === undefined || root.factorImpact === null
+      ? root.factorImpact === null ? null : undefined
+      : parseQuantAiFactorImpactSnapshot(root.factorImpact)
     const finalValue = record(root.final)
     if (!finalValue)
       throw new Error('final')
@@ -1149,7 +1164,7 @@ export function parseQuantDecisionAssistantSnapshot(value: string, report?: Quan
     }
     if ((final.source === 'ai' && !ai.accepted) || (final.source === 'deterministic' && ai.accepted))
       throw new Error('final source mismatch')
-    const snapshot = { snapshotVersion: QUANT_DECISION_ASSISTANT_VERSION, tsCode, name, researchRunId, assessedAt, reportGeneratedAt, scenario, market, evidence, sources, deterministic, ai, final }
+    const snapshot = { snapshotVersion: QUANT_DECISION_ASSISTANT_VERSION, tsCode, name, researchRunId, assessedAt, reportGeneratedAt, scenario, market, evidence, sources, deterministic, ai, ...(factorImpact !== undefined ? { factorImpact } : {}), final }
     if (report)
       validateSnapshotEvidenceReferences(snapshot, report)
     return snapshot

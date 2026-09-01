@@ -1021,10 +1021,13 @@ describe('quantApi', () => {
       cited_evidence_keys: ['quality-roe'],
       factor_impact: {
         model_version: 'research-factors-v1',
+        evaluated_at: '2026-09-01T00:00:00.000Z',
         freshness_version: 'quant-factor-freshness-v1',
         freshness_blocked_factors: ['valuation'],
         total_weight: 1,
         deterministic_score: 82,
+        ai_score: 100,
+        ai_score_delta: 18,
         scored_weight: 1,
         reviewed_weight: 0.5,
         review_coverage: 50,
@@ -1043,6 +1046,7 @@ describe('quantApi', () => {
           ai_confidence: 88,
           ai_accepted: true,
           ai_weight: 0.5,
+          ai_contribution: 100,
           freshness: {
             version: 'quant-factor-freshness-v1',
             status: 'fresh',
@@ -1066,6 +1070,7 @@ describe('quantApi', () => {
           ai_confidence: null,
           ai_accepted: false,
           ai_weight: 0,
+          ai_contribution: null,
           freshness: {
             version: 'quant-factor-freshness-v1',
             status: 'stale',
@@ -1089,10 +1094,15 @@ describe('quantApi', () => {
         cited_evidence_keys: ['quality-roe'],
       },
     }
-    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: summary }), { status: 201, headers: { 'Content-Type': 'application/json' } })))
+    const responsePayload = { ...summary, factor_impact_snapshot: summary.factor_impact }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: responsePayload }), { status: 201, headers: { 'Content-Type': 'application/json' } })))
 
-    await expect(quantApi.generateResearchSummary('run-impact-1')).resolves.toMatchObject({
+    const result = await quantApi.generateResearchSummary('run-impact-1')
+    expect(result).toMatchObject({
       factorImpact: {
+        evaluatedAt: '2026-09-01T00:00:00.000Z',
+        aiScore: 100,
+        aiScoreDelta: 18,
         reviewCoverage: 50,
         unacceptedWeight: 0.5,
         factors: [
@@ -1100,7 +1110,12 @@ describe('quantApi', () => {
           { factor: 'valuation', aiAccepted: false, aiWeight: 0, freshness: { status: 'stale' }, aiFreshnessEligible: false },
         ],
       },
+      factorImpactSnapshot: {
+        evaluatedAt: '2026-09-01T00:00:00.000Z',
+        aiScore: 100,
+      },
     })
+    expect(result.factorImpactSnapshot?.factors).toEqual(expect.arrayContaining([expect.objectContaining({ factor: 'quality', aiContribution: 100 })]))
   })
 
   it('normalizes an accepted AI decision review without accepting model-generated prices', async () => {

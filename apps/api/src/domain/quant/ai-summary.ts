@@ -5,7 +5,7 @@ import type { QuantResearchReport } from './research-report'
 import { resolveQuantAiGenerationTimeout } from './ai-timeout'
 import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
-import { buildQuantFactorFreshness, isQuantFactorFreshForAi } from './factor-freshness'
+import { buildQuantFactorFreshness, isQuantFactorFreshForAi, QUANT_FACTOR_FRESHNESS_VERSION } from './factor-freshness'
 
 export const QUANT_AI_SUMMARY_VERSION = 'research-summary-v2' as const
 export const QUANT_AI_DECISION_VERSION = 'ai-decision-v1' as const
@@ -21,6 +21,8 @@ export interface QuantAiSummary {
   readonly citedEvidenceKeys: readonly string[]
   readonly factorReviews: readonly QuantAiFactorReview[]
   readonly decisionReview: QuantAiDecisionReview | null
+  /** Server-computed impact captured when the summary was persisted. */
+  readonly factorImpactSnapshot?: QuantAiFactorImpact | null
 }
 
 export type QuantAiFactorReviewStance = 'support' | 'caution' | 'oppose' | 'insufficient'
@@ -47,16 +49,20 @@ export interface QuantAiFactorImpactItem {
   readonly aiConfidence: number | null
   readonly aiAccepted: boolean
   readonly aiWeight: number
+  readonly aiContribution: number | null
   readonly freshness: QuantFactorFreshness
   readonly aiFreshnessEligible: boolean
 }
 
 export interface QuantAiFactorImpact {
   readonly modelVersion: string
+  readonly evaluatedAt: string
   readonly freshnessVersion: QuantFactorFreshness['version']
   readonly freshnessBlockedFactors: readonly string[]
   readonly totalWeight: number
   readonly deterministicScore: number | null
+  readonly aiScore: number | null
+  readonly aiScoreDelta: number | null
   readonly scoredWeight: number
   readonly reviewedWeight: number
   readonly reviewCoverage: number
@@ -167,6 +173,14 @@ function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
 
+function fieldValue(value: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const key of keys) {
+    if (Object.hasOwn(value, key))
+      return value[key]
+  }
+  return undefined
+}
+
 function stringValue(value: unknown, field: string, maxLength: number): string {
   if (typeof value !== 'string' || !value.trim() || value.length > maxLength)
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `AI summary field ${field} is invalid`, 502)
@@ -217,21 +231,22 @@ function factorReview(value: unknown, report: QuantResearchReport, evaluatedAt: 
   const seen = new Set<QuantResearchFactorKey>()
   return value.map((item) => {
     const parsed = record(item)
-    if (!parsed || !factorKey(parsed.factor) || seen.has(parsed.factor))
+    const factorValue = parsed ? fieldValue(parsed, 'factor') : undefined
+    if (!parsed || !factorKey(factorValue) || seen.has(factorValue))
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review key is invalid', 502)
-    const factor = factors.get(parsed.factor)
+    const factor = factors.get(factorValue)
     if (!factor)
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review references an unknown factor', 502)
-    seen.add(parsed.factor)
-    const confidence = parsed.confidence
+    seen.add(factorValue)
+    const confidence = fieldValue(parsed, 'confidence')
     if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100)
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review confidence is invalid', 502)
-    const rationale = stringValue(parsed.rationale, 'factorReviews.rationale', 600)
-    const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
+    const rationale = stringValue(fieldValue(parsed, 'rationale'), 'factorReviews.rationale', 600)
+    const cited = citedEvidenceKeys(fieldValue(parsed, 'citedEvidenceKeys', 'cited_evidence_keys'), report)
     const factorEvidenceKeys = new Set(factor.evidenceKeys)
     if (cited.some(key => !factorEvidenceKeys.has(key)))
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review cited evidence from another factor', 502)
-    const stance = factorStance(parsed.stance)
+    const stance = factorStance(fieldValue(parsed, 'stance'))
     const freshness = buildQuantFactorFreshness(factor, report.evidence, evaluatedAt)
     const citedUsable = cited.some((key) => {
       const evidence = report.evidence.find(item => item.key === key)
@@ -245,7 +260,7 @@ function factorReview(value: unknown, report: QuantResearchReport, evaluatedAt: 
       && stance !== 'insufficient'
       && isQuantFactorFreshForAi(freshness)
     return {
-      factor: parsed.factor,
+      factor: factorValue,
       stance,
       confidence,
       accepted,
@@ -268,6 +283,10 @@ function deterministicStance(score: number | null): QuantAiFactorImpactStance {
   if (score <= 40)
     return 'oppose'
   return 'caution'
+}
+
+function aiStanceScore(stance: QuantAiFactorReviewStance | null): number | null {
+  return stance === 'support' ? 100 : stance === 'caution' ? 50 : stance === 'oppose' ? 0 : null
 }
 
 function acceptedFactorReview(
@@ -316,6 +335,7 @@ export function buildQuantAiFactorImpact(
       aiConfidence: review?.confidence ?? null,
       aiAccepted: accepted,
       aiWeight: accepted ? impactRound(factor.weight) : 0,
+      aiContribution: null,
       freshness,
       aiFreshnessEligible,
     }
@@ -324,13 +344,31 @@ export function buildQuantAiFactorImpact(
   const weightByFactor = new Map(factors.map(factor => [factor.key, factor.weight]))
   const stanceWeight = (stance: QuantAiFactorReviewStance): number => acceptedReviews.reduce((total, factor) => total + (factor.aiStance === stance ? weightByFactor.get(factor.factor) ?? 0 : 0), 0)
   const reviewedWeight = acceptedReviews.reduce((total, factor) => total + (weightByFactor.get(factor.factor) ?? 0), 0)
+  const aiScore = reviewedWeight > 0
+    ? impactRound(acceptedReviews.reduce((total, factor) => total + (aiStanceScore(factor.aiStance) ?? 50) * (weightByFactor.get(factor.factor) ?? 0), 0) / reviewedWeight, 2)
+    : null
+  const deterministicScore = report.factorModel?.score !== null && report.factorModel?.score !== undefined && Number.isFinite(report.factorModel.score)
+    ? report.factorModel.score
+    : null
+  const aiScoreDelta = aiScore !== null && deterministicScore !== null
+    ? impactRound(aiScore - deterministicScore, 2)
+    : null
+  const finalizedFactors = impactFactors.map(factor => ({
+    ...factor,
+    aiContribution: factor.aiAccepted && aiScore !== null && reviewedWeight > 0
+      ? impactRound((aiStanceScore(factor.aiStance) ?? 50) * (weightByFactor.get(factor.factor) ?? 0) / reviewedWeight, 2)
+      : null,
+  }))
 
   return {
     modelVersion: report.factorModel?.modelVersion ?? 'unknown',
-    freshnessVersion: impactFactors[0]!.freshness.version,
-    freshnessBlockedFactors: impactFactors.filter(factor => !factor.aiFreshnessEligible).map(factor => factor.factor),
+    evaluatedAt: evaluatedAt.toISOString(),
+    freshnessVersion: finalizedFactors[0]!.freshness.version,
+    freshnessBlockedFactors: finalizedFactors.filter(factor => !factor.aiFreshnessEligible).map(factor => factor.factor),
     totalWeight: impactRound(totalWeight),
-    deterministicScore: report.factorModel?.score ?? null,
+    deterministicScore,
+    aiScore,
+    aiScoreDelta,
     scoredWeight: impactRound(scoredWeight),
     reviewedWeight: impactRound(reviewedWeight),
     reviewCoverage: totalWeight > 0 ? impactRound(reviewedWeight / totalWeight * 100, 2) : 0,
@@ -338,8 +376,101 @@ export function buildQuantAiFactorImpact(
     cautionWeight: impactRound(stanceWeight('caution')),
     opposeWeight: impactRound(stanceWeight('oppose')),
     unacceptedWeight: impactRound(Math.max(0, totalWeight - reviewedWeight)),
-    factors: impactFactors,
+    factors: finalizedFactors,
   }
+}
+
+function impactText(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !value.trim() || value.length > 240)
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `Persisted AI factor impact field ${field} is invalid`, 502)
+  return value.trim()
+}
+
+function impactTextList(value: unknown, field: string, maxItems = 16): string[] {
+  if (!Array.isArray(value) || value.length > maxItems || value.some(item => typeof item !== 'string' || !item.trim() || item.length > 160))
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `Persisted AI factor impact field ${field} is invalid`, 502)
+  return [...new Set(value.map(item => (item as string).trim()))]
+}
+
+function impactNumber(value: unknown, field: string, options: { readonly nullable?: boolean, readonly min?: number, readonly max?: number } = {}): number | null {
+  if (value === null && options.nullable)
+    return null
+  if (typeof value !== 'number' || !Number.isFinite(value) || (options.min !== undefined && value < options.min) || (options.max !== undefined && value > options.max))
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `Persisted AI factor impact field ${field} is invalid`, 502)
+  return value
+}
+
+function parseImpactFreshness(value: unknown): QuantFactorFreshness {
+  const parsed = record(value)
+  if (!parsed)
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI factor freshness is invalid', 502)
+  const version = impactText(parsed.version, 'freshness.version')
+  const status = parsed.status
+  const observedAt = parsed.observedAt === null ? null : impactText(parsed.observedAt, 'freshness.observedAt')
+  const ageDays = impactNumber(parsed.ageDays, 'freshness.ageDays', { nullable: true, min: 0 })
+  const freshWithinDays = impactNumber(parsed.freshWithinDays, 'freshness.freshWithinDays', { min: 0 })!
+  const agingWithinDays = impactNumber(parsed.agingWithinDays, 'freshness.agingWithinDays', { min: freshWithinDays })!
+  const detail = impactText(parsed.detail, 'freshness.detail')
+  const missingEvidenceKeys = impactTextList(parsed.missingEvidenceKeys, 'freshness.missingEvidenceKeys')
+  const unverifiableEvidenceKeys = impactTextList(parsed.unverifiableEvidenceKeys, 'freshness.unverifiableEvidenceKeys')
+  if (version !== QUANT_FACTOR_FRESHNESS_VERSION || (status !== 'fresh' && status !== 'aging' && status !== 'stale' && status !== 'unknown'))
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI factor freshness status is invalid', 502)
+  return { version: QUANT_FACTOR_FRESHNESS_VERSION, status, observedAt, ageDays, freshWithinDays, agingWithinDays, detail, missingEvidenceKeys, unverifiableEvidenceKeys }
+}
+
+export function parseQuantAiFactorImpactSnapshot(value: unknown): QuantAiFactorImpact {
+  const parsed = record(value)
+  if (!parsed)
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI factor impact is invalid', 502)
+  const modelVersion = impactText(parsed.modelVersion, 'modelVersion')
+  const evaluatedAt = impactText(parsed.evaluatedAt, 'evaluatedAt')
+  if (!Number.isFinite(new Date(evaluatedAt).getTime()))
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI factor impact evaluation time is invalid', 502)
+  const freshnessVersion = impactText(parsed.freshnessVersion, 'freshnessVersion')
+  const freshnessBlockedFactors = impactTextList(parsed.freshnessBlockedFactors, 'freshnessBlockedFactors', 5)
+  const totalWeight = impactNumber(parsed.totalWeight, 'totalWeight', { min: 0, max: 1 })!
+  const deterministicScore = impactNumber(parsed.deterministicScore, 'deterministicScore', { nullable: true, min: 0, max: 100 })
+  const aiScore = impactNumber(parsed.aiScore, 'aiScore', { nullable: true, min: 0, max: 100 })
+  const aiScoreDelta = impactNumber(parsed.aiScoreDelta, 'aiScoreDelta', { nullable: true, min: -100, max: 100 })
+  const scoredWeight = impactNumber(parsed.scoredWeight, 'scoredWeight', { min: 0, max: 1 })!
+  const reviewedWeight = impactNumber(parsed.reviewedWeight, 'reviewedWeight', { min: 0, max: 1 })!
+  const reviewCoverage = impactNumber(parsed.reviewCoverage, 'reviewCoverage', { min: 0, max: 100 })!
+  const supportWeight = impactNumber(parsed.supportWeight, 'supportWeight', { min: 0, max: 1 })!
+  const cautionWeight = impactNumber(parsed.cautionWeight, 'cautionWeight', { min: 0, max: 1 })!
+  const opposeWeight = impactNumber(parsed.opposeWeight, 'opposeWeight', { min: 0, max: 1 })!
+  const unacceptedWeight = impactNumber(parsed.unacceptedWeight, 'unacceptedWeight', { min: 0, max: 1 })!
+  if (freshnessVersion !== QUANT_FACTOR_FRESHNESS_VERSION || !Array.isArray(parsed.factors) || parsed.factors.length === 0 || parsed.factors.length > 5)
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI factor impact factors are invalid', 502)
+  const seen = new Set<string>()
+  const factors = parsed.factors.map((value): QuantAiFactorImpactItem => {
+    const factor = record(value)
+    if (!factor)
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI factor impact item is invalid', 502)
+    const key = factor.factor
+    if (!factorKey(key) || seen.has(key))
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI factor impact key is invalid', 502)
+    seen.add(key)
+    const label = impactText(factor.label, 'factors.label')
+    const weight = impactNumber(factor.weight, 'factors.weight', { min: 0, max: 1 })!
+    const factorDeterministicScore = impactNumber(factor.deterministicScore, 'factors.deterministicScore', { nullable: true, min: 0, max: 100 })
+    const deterministicStance = factor.deterministicStance
+    const deterministicContribution = impactNumber(factor.deterministicContribution, 'factors.deterministicContribution', { nullable: true, min: 0, max: 100 })
+    const aiStance = factor.aiStance === null ? null : factor.aiStance
+    const aiConfidence = impactNumber(factor.aiConfidence, 'factors.aiConfidence', { nullable: true, min: 0, max: 100 })
+    const aiAccepted = factor.aiAccepted
+    const aiWeight = impactNumber(factor.aiWeight, 'factors.aiWeight', { min: 0, max: 1 })!
+    const aiContribution = impactNumber(factor.aiContribution, 'factors.aiContribution', { nullable: true, min: 0, max: 100 })
+    const freshness = parseImpactFreshness(factor.freshness)
+    const aiFreshnessEligible = factor.aiFreshnessEligible
+    if (deterministicStance !== 'support' && deterministicStance !== 'caution' && deterministicStance !== 'oppose' && deterministicStance !== 'insufficient')
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI deterministic stance is invalid', 502)
+    if (aiStance !== null && aiStance !== 'support' && aiStance !== 'caution' && aiStance !== 'oppose' && aiStance !== 'insufficient')
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI stance is invalid', 502)
+    if (typeof aiAccepted !== 'boolean' || typeof aiFreshnessEligible !== 'boolean')
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI factor impact flags are invalid', 502)
+    return { factor: key, label, weight, deterministicScore: factorDeterministicScore, deterministicStance, deterministicContribution, aiStance, aiConfidence, aiAccepted, aiWeight, aiContribution, freshness, aiFreshnessEligible }
+  })
+  return { modelVersion, evaluatedAt, freshnessVersion: QUANT_FACTOR_FRESHNESS_VERSION, freshnessBlockedFactors, totalWeight, deterministicScore, aiScore, aiScoreDelta, scoredWeight, reviewedWeight, reviewCoverage, supportWeight, cautionWeight, opposeWeight, unacceptedWeight, factors }
 }
 
 function factorReviewAssessment(
@@ -376,15 +507,16 @@ function decisionReview(value: unknown, report: QuantResearchReport, reviews: re
   if (value === undefined || value === null)
     return null
   const parsed = record(value)
-  if (!parsed || parsed.decisionVersion !== QUANT_AI_DECISION_VERSION)
+  const decisionVersion = parsed ? fieldValue(parsed, 'decisionVersion', 'decision_version') : undefined
+  if (!parsed || decisionVersion !== QUANT_AI_DECISION_VERSION)
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision review version is invalid', 502)
-  const confidence = parsed.confidence
+  const confidence = fieldValue(parsed, 'confidence')
   if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100)
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision confidence is invalid', 502)
-  const rationale = stringValue(parsed.rationale, 'decisionReview.rationale', 600)
-  const invalidationConditions = stringList(parsed.invalidationConditions, 'decisionReview.invalidationConditions')
-  const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
-  const normalizedRecommendation = recommendation(parsed.recommendation)
+  const rationale = stringValue(fieldValue(parsed, 'rationale'), 'decisionReview.rationale', 600)
+  const invalidationConditions = stringList(fieldValue(parsed, 'invalidationConditions', 'invalidation_conditions'), 'decisionReview.invalidationConditions')
+  const cited = citedEvidenceKeys(fieldValue(parsed, 'citedEvidenceKeys', 'cited_evidence_keys'), report)
+  const normalizedRecommendation = recommendation(fieldValue(parsed, 'recommendation'))
   const deterministicWatch = report.decision?.recommendation === 'watch' || (report.decision?.coverage ?? 0) < 80
   const factorAssessment = factorReviewAssessment(report, reviews, reviewsFieldPresent, normalizedRecommendation, evaluatedAt)
   const accepted = confidence >= 60 && cited.length > 0 && !deterministicWatch && !factorAssessment.incomplete && !factorAssessment.conflict
@@ -414,14 +546,14 @@ function validateSummary(value: unknown, report: QuantResearchReport, evaluatedA
   const parsed = record(value)
   if (!parsed)
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary is not an object', 502)
-  const overview = stringValue(parsed.overview, 'overview', 800)
-  const supports = stringList(parsed.supports, 'supports')
-  const concerns = stringList(parsed.concerns, 'concerns')
-  const nextChecks = stringList(parsed.nextChecks, 'nextChecks')
-  const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
-  const reviewsFieldPresent = Object.hasOwn(parsed, 'factorReviews')
-  const reviews = factorReview(parsed.factorReviews, report, evaluatedAt)
-  const review = decisionReview(parsed.decisionReview, report, reviews, reviewsFieldPresent, evaluatedAt)
+  const overview = stringValue(fieldValue(parsed, 'overview'), 'overview', 800)
+  const supports = stringList(fieldValue(parsed, 'supports'), 'supports')
+  const concerns = stringList(fieldValue(parsed, 'concerns'), 'concerns')
+  const nextChecks = stringList(fieldValue(parsed, 'nextChecks', 'next_checks'), 'nextChecks')
+  const cited = citedEvidenceKeys(fieldValue(parsed, 'citedEvidenceKeys', 'cited_evidence_keys'), report)
+  const reviewsFieldPresent = Object.hasOwn(parsed, 'factorReviews') || Object.hasOwn(parsed, 'factor_reviews')
+  const reviews = factorReview(fieldValue(parsed, 'factorReviews', 'factor_reviews'), report, evaluatedAt)
+  const review = decisionReview(fieldValue(parsed, 'decisionReview', 'decision_review'), report, reviews, reviewsFieldPresent, evaluatedAt)
   const text = [overview, ...supports, ...concerns, ...nextChecks, review?.rationale ?? '', ...(review?.invalidationConditions ?? [])].join('\n')
   if (/目标价|收益预测|未来收益|price\s*target|return\s+forecast|直接(?:买入|卖出)|建议(?:买入|卖出)/iu.test(text))
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary contains a prohibited trading conclusion', 502)

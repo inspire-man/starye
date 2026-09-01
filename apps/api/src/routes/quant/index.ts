@@ -22,7 +22,7 @@ import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
 import { testQuantAiConnection } from '../../domain/quant/ai-connection'
 import { generateQuantAiQuestion } from '../../domain/quant/ai-question'
-import { buildQuantAiFactorImpact, generateQuantAiSummary, parseQuantAiSummary } from '../../domain/quant/ai-summary'
+import { buildQuantAiFactorImpact, generateQuantAiSummary, parseQuantAiFactorImpactSnapshot, parseQuantAiSummary } from '../../domain/quant/ai-summary'
 import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
@@ -201,7 +201,18 @@ function researchRunView(row: QuantResearchRunRecord) {
 
 function parseStoredAiSummary(value: string, report: QuantResearchReport, evaluatedAt: Date): QuantAiSummary {
   try {
-    return parseQuantAiSummary(value, report, evaluatedAt)
+    const summary = parseQuantAiSummary(value, report, evaluatedAt)
+    const parsed: unknown = JSON.parse(value)
+    if (!isRecord(parsed) || !Object.hasOwn(parsed, 'factorImpactSnapshot'))
+      return summary
+    if (parsed.factorImpactSnapshot === null)
+      return { ...summary, factorImpactSnapshot: null }
+    const persistedImpact = parseQuantAiFactorImpactSnapshot(parsed.factorImpactSnapshot)
+    const snapshotAt = new Date(persistedImpact.evaluatedAt)
+    const factorImpactSnapshot = buildQuantAiFactorImpact(report, summary.factorReviews, snapshotAt)
+    if (!factorImpactSnapshot)
+      throw new Error('Persisted AI factor impact snapshot has no report factors')
+    return { ...summary, factorImpactSnapshot }
   }
   catch {
     throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI summary is invalid', 500)
@@ -223,6 +234,7 @@ function parseStoredEvidenceKeys(value: string): readonly string[] {
 function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResearchReport, evaluatedAt: Date = new Date()) {
   const summary = parseStoredAiSummary(row.summaryJson, report, evaluatedAt)
   const citedEvidenceKeys = parseStoredEvidenceKeys(row.citedEvidenceKeysJson)
+  const { factorImpactSnapshot, ...summaryView } = summary
   return {
     id: row.id,
     researchRunId: row.researchRunId,
@@ -232,8 +244,9 @@ function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResea
     model: row.model,
     generatedAt: row.generatedAt,
     createdAt: row.createdAt,
-    summary,
+    summary: summaryView,
     factorImpact: buildQuantAiFactorImpact(report, summary.factorReviews, evaluatedAt),
+    factorImpactSnapshot: factorImpactSnapshot ?? null,
     citedEvidenceKeys,
   }
 }
@@ -264,11 +277,14 @@ function decisionAssistantView(row: QuantDecisionAssessmentRecord, report?: Quan
     || !sameNumber(snapshot.scenario.quantity, row.quantity)) {
     throw new QuantError('QUANT_DECISION_ASSISTANT_INVALID_SNAPSHOT', 'Persisted decision assistant identity does not match its row', 500)
   }
+  const factorImpact = snapshot.factorImpact !== undefined
+    ? snapshot.factorImpact
+    : report ? buildQuantAiFactorImpact(report, snapshot.ai.factorReviews, new Date(snapshot.assessedAt)) : null
   return {
     id: row.id,
     createdAt: row.createdAt,
     ...snapshot,
-    factorImpact: report ? buildQuantAiFactorImpact(report, snapshot.ai.factorReviews, new Date(snapshot.assessedAt)) : null,
+    factorImpact,
   }
 }
 
@@ -1114,6 +1130,10 @@ quantRoutes.post('/decision-assistant', validator('json', QuantDecisionAssistant
       }
     }
   }
+  assessment = {
+    ...assessment,
+    factorImpact: buildQuantAiFactorImpact(report, assessment.ai.factorReviews, new Date(assessment.assessedAt)),
+  }
   const persisted = await createQuantDecisionAssessment(c.get('db'), {
     userId,
     researchRunId: run.id,
@@ -1166,6 +1186,11 @@ quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResear
     config,
     ...(aiGenerationTimeoutMs(c.env) ? { timeoutMs: aiGenerationTimeoutMs(c.env) } : {}),
   })
+  const generatedAt = new Date()
+  const factorImpactSnapshot = buildQuantAiFactorImpact(report, summary.factorReviews, generatedAt)
+  const persistedSummary = factorImpactSnapshot
+    ? { ...summary, factorImpactSnapshot }
+    : summary
   const persisted = await createQuantResearchSummary(c.get('db'), {
     userId,
     researchRunId: run.id,
@@ -1173,9 +1198,9 @@ quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResear
     reportVersion: report.reportVersion,
     provider: config.provider,
     model: config.model,
-    summaryJson: JSON.stringify(summary),
+    summaryJson: JSON.stringify(persistedSummary),
     citedEvidenceKeys: summary.citedEvidenceKeys,
-    generatedAt: new Date(),
+    generatedAt,
   })
   return c.json({ success: true as const, data: researchSummaryView(persisted, report) }, 201)
 })
@@ -1212,6 +1237,7 @@ quantRoutes.put('/research/runs/:runId/decision', validator('param', QuantResear
     latestDailyBar,
     aiDecisionReview: latestSummaryView?.summary.decisionReview,
     aiFactorReviews: latestSummaryView?.summary.factorReviews,
+    aiFactorImpact: latestSummaryView?.factorImpact,
   })
   const persisted = await upsertQuantDecisionRecord(c.get('db'), {
     userId,
