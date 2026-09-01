@@ -2,16 +2,21 @@ import type { Database } from '@starye/db'
 import { quantAiConfigs } from '@starye/db/schema'
 import { eq } from 'drizzle-orm'
 import { nanoid } from 'nanoid'
+import { QUANT_AI_GENERATION_TIMEOUT_DEFAULT_MS, QUANT_AI_GENERATION_TIMEOUT_MAX_MS } from './ai-timeout'
 import { QuantError } from './errors'
 
 export const QUANT_AI_PROVIDERS = ['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'] as const
 export type QuantAiProvider = typeof QUANT_AI_PROVIDERS[number]
+export const QUANT_AI_RESPONSE_MODES = ['stream', 'json'] as const
+export type QuantAiResponseMode = typeof QUANT_AI_RESPONSE_MODES[number]
 
 export interface QuantAiConfigView {
   readonly id: string
   readonly provider: QuantAiProvider
   readonly model: string
   readonly baseUrl: string | null
+  readonly responseMode: QuantAiResponseMode
+  readonly generationTimeoutMs: number
   readonly hasApiKey: boolean
   readonly apiKeyHint: string | null
   readonly createdAt: Date
@@ -23,6 +28,8 @@ export interface QuantAiConfigInput {
   readonly provider: string
   readonly model: string
   readonly baseUrl?: string | null
+  readonly responseMode?: string
+  readonly generationTimeoutMs?: number
   readonly apiKey?: string
   readonly clearApiKey?: boolean
 }
@@ -32,6 +39,8 @@ export interface QuantDecryptedAiConfig {
   readonly provider: QuantAiProvider
   readonly model: string
   readonly baseUrl: string | null
+  readonly responseMode?: QuantAiResponseMode
+  readonly generationTimeoutMs?: number
   readonly apiKey: string | null
 }
 
@@ -71,6 +80,20 @@ function normalizedBaseUrl(value: string | null | undefined): string | null {
   if (baseUrl.length > 2048)
     throw new QuantError('QUANT_AI_CONFIGURATION', 'AI base URL is too long', 400)
   return baseUrl
+}
+
+function normalizedResponseMode(value: string | undefined): QuantAiResponseMode {
+  const mode = value?.trim().toLowerCase() || 'stream'
+  if (!(QUANT_AI_RESPONSE_MODES as readonly string[]).includes(mode))
+    throw new QuantError('QUANT_AI_CONFIGURATION', 'AI response mode is not supported', 400)
+  return mode as QuantAiResponseMode
+}
+
+function normalizedGenerationTimeout(value: number | undefined): number {
+  const timeoutMs = value ?? QUANT_AI_GENERATION_TIMEOUT_DEFAULT_MS
+  if (!Number.isFinite(timeoutMs) || timeoutMs < QUANT_AI_GENERATION_TIMEOUT_DEFAULT_MS || timeoutMs > QUANT_AI_GENERATION_TIMEOUT_MAX_MS)
+    throw new QuantError('QUANT_AI_CONFIGURATION', 'AI generation timeout must be between five and ten minutes', 400)
+  return Math.floor(timeoutMs)
 }
 
 function encodeBase64(bytes: Uint8Array): string {
@@ -139,6 +162,8 @@ function toView(config: typeof quantAiConfigs.$inferSelect): QuantAiConfigView {
     provider: config.provider as QuantAiProvider,
     model: config.model,
     baseUrl: config.baseUrl,
+    responseMode: config.responseMode as QuantAiResponseMode,
+    generationTimeoutMs: config.generationTimeoutMs,
     hasApiKey: Boolean(config.encryptedApiKey),
     apiKeyHint: config.apiKeyHint,
     createdAt: config.createdAt,
@@ -164,6 +189,8 @@ export async function saveQuantAiConfig(
     throw new QuantError('QUANT_AI_CONFIGURATION', 'AI API key is too long', 400)
 
   const existing = await db.select().from(quantAiConfigs).where(eq(quantAiConfigs.userId, userId)).get()
+  const responseMode = normalizedResponseMode(input.responseMode ?? existing?.responseMode)
+  const generationTimeoutMs = normalizedGenerationTimeout(input.generationTimeoutMs ?? existing?.generationTimeoutMs)
   let encryptedApiKey = existing?.encryptedApiKey ?? null
   let apiKeyHint = existing?.apiKeyHint ?? null
   if (input.clearApiKey) {
@@ -181,6 +208,8 @@ export async function saveQuantAiConfig(
       provider,
       model,
       baseUrl,
+      responseMode,
+      generationTimeoutMs,
       encryptedApiKey,
       apiKeyHint,
       updatedAt: now,
@@ -193,6 +222,8 @@ export async function saveQuantAiConfig(
       provider,
       model,
       baseUrl,
+      responseMode,
+      generationTimeoutMs,
       encryptedApiKey,
       apiKeyHint,
       createdAt: now,
@@ -231,6 +262,8 @@ export async function getDecryptedQuantAiConfig(
     provider: config.provider as QuantAiProvider,
     model: config.model,
     baseUrl: config.baseUrl,
+    responseMode: config.responseMode as QuantAiResponseMode,
+    generationTimeoutMs: config.generationTimeoutMs,
     apiKey: config.encryptedApiKey ? await decryptApiKey(config.encryptedApiKey, encryptionSecret) : null,
   }
 }

@@ -1,4 +1,4 @@
-import type { QuantAiProvider, QuantDecryptedAiConfig } from './ai-config'
+import type { QuantAiProvider, QuantAiResponseMode, QuantDecryptedAiConfig } from './ai-config'
 import type { QuantErrorCode } from './errors'
 import { QuantError } from './errors'
 
@@ -24,6 +24,7 @@ export interface QuantAiCompletionRequest {
   readonly maxCompletionTokens: number
   readonly maxResponseLength: number
   readonly timeoutMs: number
+  readonly responseMode?: QuantAiResponseMode
   readonly temperature?: number
   readonly responseFormat?: 'json_object'
   readonly errorCodes: QuantAiTransportErrorCodes
@@ -149,8 +150,114 @@ function responseContent(
   throw transportError(input, 'invalid_response', 'AI response has no choices or output content', 502)
 }
 
+function streamChunkContent(
+  value: unknown,
+  input: QuantAiCompletionRequest,
+): { readonly content: string, readonly finishReason: string | null } {
+  const root = record(value)
+  if (!root)
+    throw transportError(input, 'invalid_response', 'AI stream event is not an object', 502)
+  const choices = root.choices
+  if (Array.isArray(choices) && choices.length) {
+    const firstChoice = record(choices[0])
+    const finishReason = typeof firstChoice?.finish_reason === 'string' ? firstChoice.finish_reason : null
+    const delta = record(firstChoice?.delta)
+    const message = record(firstChoice?.message)
+    const content = textFromContent(delta?.content) ?? textFromContent(delta?.text) ?? textFromContent(message?.content) ?? textFromContent(firstChoice?.text) ?? ''
+    return { content, finishReason }
+  }
+
+  const outputText = textFromContent(root.output_text)
+  if (outputText)
+    return { content: outputText, finishReason: 'completed' }
+  return { content: '', finishReason: null }
+}
+
+function eventData(event: string): string | null {
+  const lines = event.split(/\r?\n/u)
+  const data = lines
+    .filter(line => line.startsWith('data:'))
+    .map(line => line.slice(5).trimStart())
+  return data.length ? data.join('\n').trim() : null
+}
+
+async function responseStreamContent(
+  body: ReadableStream<Uint8Array>,
+  input: QuantAiCompletionRequest,
+): Promise<QuantAiCompletionResult> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let raw = ''
+  let content = ''
+  let finishReason: string | null = null
+  let sawSseEvent = false
+  let doneMarker = false
+
+  const consumeEvent = (event: string): void => {
+    const data = eventData(event)
+    if (data === null)
+      return
+    sawSseEvent = true
+    if (data === '[DONE]') {
+      doneMarker = true
+      return
+    }
+    let payload: unknown
+    try {
+      payload = JSON.parse(data)
+    }
+    catch {
+      throw transportError(input, 'invalid_response', 'AI stream event is not valid JSON', 502)
+    }
+    const chunk = streamChunkContent(payload, input)
+    content += chunk.content
+    finishReason = chunk.finishReason ?? finishReason
+    if (content.length > input.maxResponseLength)
+      throw transportError(input, 'invalid_response', 'AI response content exceeds the allowed length', 502)
+  }
+
+  while (true) {
+    const next = await reader.read()
+    if (next.done || doneMarker)
+      break
+    const chunk = decoder.decode(next.value, { stream: true })
+    raw += chunk
+    buffer += chunk
+    const events = buffer.split(/\r?\n\r?\n/u)
+    buffer = events.pop() || ''
+    for (const event of events) {
+      consumeEvent(event)
+      if (doneMarker)
+        break
+    }
+    if (doneMarker)
+      break
+  }
+  raw += decoder.decode()
+  if (!doneMarker && buffer.trim())
+    consumeEvent(buffer)
+  if (doneMarker)
+    await reader.cancel()
+
+  if (!sawSseEvent) {
+    try {
+      return responseContent(JSON.parse(raw.trim()), input)
+    }
+    catch (error) {
+      if (error instanceof QuantError)
+        throw error
+      throw transportError(input, 'invalid_response', 'AI response is not valid JSON', 502)
+    }
+  }
+  if (finishReason === 'length' || finishReason === 'max_tokens')
+    throw transportError(input, 'invalid_response', 'AI response was truncated before completion', 502)
+  return { content: boundedResponseContent(content, input.maxResponseLength, input), finishReason }
+}
+
 export async function requestQuantAiCompletion(input: QuantAiCompletionRequest): Promise<QuantAiCompletionResult> {
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const responseMode = input.responseMode ?? input.config.responseMode ?? 'json'
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), input.timeoutMs)
 
@@ -173,7 +280,7 @@ export async function requestQuantAiCompletion(input: QuantAiCompletionRequest):
     const body: Record<string, unknown> = {
       model: input.config.model,
       max_completion_tokens: input.maxCompletionTokens,
-      stream: false,
+      stream: responseMode === 'stream',
       messages: input.messages,
     }
     if (input.responseFormat)
@@ -189,10 +296,16 @@ export async function requestQuantAiCompletion(input: QuantAiCompletionRequest):
       body: JSON.stringify(body),
       signal: controller.signal,
     })
-    if (response.status === 408 || response.status === 504)
-      throw transportError(input, 'timeout', 'AI request timed out upstream', 504)
+    if (response.status === 408 || response.status === 504 || response.status === 524)
+      throw transportError(input, 'timeout', `AI request timed out upstream (HTTP ${response.status})`, 504)
     if (!response.ok)
       throw transportError(input, 'upstream', `AI endpoint returned HTTP ${response.status}`, 502)
+
+    if (responseMode === 'stream') {
+      if (!response.body)
+        throw transportError(input, 'invalid_response', 'AI stream response has no body', 502)
+      return await responseStreamContent(response.body, input)
+    }
 
     let payload: unknown
     try {

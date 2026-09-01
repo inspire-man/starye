@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { QuantAiConfig, QuantAiConnectionTest, QuantAiProvider } from '../lib/quant-types'
+import type { QuantAiConfig, QuantAiConnectionTest, QuantAiProvider, QuantAiResponseMode } from '../lib/quant-types'
 import { DetailDrawer } from '@starye/ui'
-import { AlertCircle, KeyRound, RefreshCw, Save, ShieldCheck } from 'lucide-vue-next'
+import { AlertCircle, Braces, KeyRound, Radio, RefreshCw, Save, ShieldCheck } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { quantApi, QuantApiError } from '../lib/api-client'
 
@@ -33,12 +33,16 @@ const form = reactive<{
   provider: QuantAiProvider
   model: string
   baseUrl: string
+  responseMode: QuantAiResponseMode
+  generationTimeoutMs: number
   apiKey: string
   clearApiKey: boolean
 }>({
   provider: 'openai_compatible',
   model: '',
   baseUrl: '',
+  responseMode: 'stream',
+  generationTimeoutMs: 300000,
   apiKey: '',
   clearApiKey: false,
 })
@@ -50,6 +54,8 @@ const hasUnsavedConfig = computed(() => {
     || saved.provider !== form.provider
     || saved.model !== form.model.trim()
     || (saved.baseUrl || '') !== form.baseUrl.trim()
+    || saved.responseMode !== form.responseMode
+    || saved.generationTimeoutMs !== form.generationTimeoutMs
     || Boolean(form.apiKey.trim())
     || form.clearApiKey
 })
@@ -63,6 +69,8 @@ function resetForm(value: QuantAiConfig | null): void {
   form.provider = value?.provider || 'openai_compatible'
   form.model = value?.model || ''
   form.baseUrl = value?.baseUrl || ''
+  form.responseMode = value?.responseMode || 'stream'
+  form.generationTimeoutMs = value?.generationTimeoutMs || 300000
   form.apiKey = ''
   form.clearApiKey = false
   connectionResult.value = null
@@ -73,6 +81,14 @@ function errorText(error: unknown): string {
   if (error instanceof QuantApiError)
     return error.message
   return error instanceof Error ? error.message : 'AI 配置加载失败'
+}
+
+function responseModeLabel(value: QuantAiResponseMode): string {
+  return value === 'stream' ? '流式响应' : '完整 JSON'
+}
+
+function timeoutLabel(value: number): string {
+  return `${Math.round(value / 60000)} 分钟`
 }
 
 async function loadConfig(): Promise<void> {
@@ -103,6 +119,8 @@ async function saveConfig(): Promise<void> {
       provider: form.provider,
       model: form.model.trim(),
       baseUrl: form.baseUrl.trim() || null,
+      responseMode: form.responseMode,
+      generationTimeoutMs: form.generationTimeoutMs,
       ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
       clearApiKey: form.clearApiKey,
     })
@@ -139,7 +157,7 @@ watch(() => props.open, (open) => {
     void loadConfig()
 })
 
-watch(() => [form.provider, form.model, form.baseUrl, form.apiKey, form.clearApiKey], () => {
+watch(() => [form.provider, form.model, form.baseUrl, form.responseMode, form.generationTimeoutMs, form.apiKey, form.clearApiKey], () => {
   connectionResult.value = null
   connectionErrorMessage.value = ''
 })
@@ -189,6 +207,44 @@ watch(() => [form.provider, form.model, form.baseUrl, form.apiKey, form.clearApi
           <input v-model="form.baseUrl" class="field-control" type="url" maxlength="2048" autocomplete="url" placeholder="https://api.example.com/v1">
         </label>
 
+        <fieldset class="quant-ai-runtime-field">
+          <legend>响应方式</legend>
+          <div class="quant-ai-segmented" role="group" aria-label="AI 响应方式">
+            <button
+              class="quant-ai-segment"
+              :class="{ 'quant-ai-segment-active': form.responseMode === 'stream' }"
+              type="button"
+              :aria-pressed="form.responseMode === 'stream'"
+              title="让 AI 逐步返回内容，适合较长研究响应"
+              @click="form.responseMode = 'stream'"
+            >
+              <Radio :size="14" aria-hidden="true" />
+              流式响应
+            </button>
+            <button
+              class="quant-ai-segment"
+              :class="{ 'quant-ai-segment-active': form.responseMode === 'json' }"
+              type="button"
+              :aria-pressed="form.responseMode === 'json'"
+              title="等待服务端一次返回完整 JSON"
+              @click="form.responseMode = 'json'"
+            >
+              <Braces :size="14" aria-hidden="true" />
+              完整 JSON
+            </button>
+          </div>
+          <small class="quant-ai-runtime-help">当前选择：{{ responseModeLabel(form.responseMode) }}；流式模式会在完成后再进入结构化校验。</small>
+        </fieldset>
+
+        <label class="quant-ai-field">
+          <span>生成预算</span>
+          <select v-model.number="form.generationTimeoutMs" class="field-control">
+            <option :value="300000">5 分钟</option>
+            <option :value="600000">10 分钟</option>
+          </select>
+          <small>{{ hasUnsavedConfig ? '待保存' : '已保存' }} {{ timeoutLabel(form.generationTimeoutMs) }}；部署环境仍可设置更低的上限。</small>
+        </label>
+
         <div class="quant-ai-key-state" :class="hasApiKey ? 'quant-ai-key-ready' : 'quant-ai-key-empty'">
           <KeyRound :size="16" aria-hidden="true" />
           <span v-if="hasApiKey">已保存 API key{{ config?.apiKeyHint ? ` · 末四位 ${config.apiKeyHint}` : '' }}</span>
@@ -220,7 +276,7 @@ watch(() => [form.provider, form.model, form.baseUrl, form.apiKey, form.clearApi
         </div>
         <div v-else-if="connectionResult" class="quant-ai-settings-alert quant-ai-settings-alert-success" role="status">
           <ShieldCheck :size="16" aria-hidden="true" />
-          <span>连接成功 · {{ connectionResult.model }} · {{ connectionResult.latencyMs }} ms</span>
+          <span>连接成功 · {{ connectionResult.model }} · {{ responseModeLabel(form.responseMode) }} · {{ connectionResult.latencyMs }} ms</span>
         </div>
         <div v-else-if="connectionErrorMessage" class="quant-ai-settings-alert quant-ai-settings-alert-error" role="alert">
           <AlertCircle :size="16" aria-hidden="true" />
@@ -284,6 +340,64 @@ watch(() => [form.provider, form.model, form.baseUrl, form.apiKey, form.clearApi
   color: hsl(var(--muted-foreground));
   font-size: 0.6875rem;
   font-weight: 500;
+}
+
+.quant-ai-runtime-field {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.quant-ai-runtime-field legend {
+  padding: 0;
+}
+
+.quant-ai-segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.quant-ai-segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 0;
+  min-height: 2.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.375rem);
+  background: hsl(var(--background));
+  padding: 0.45rem 0.6rem;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  cursor: pointer;
+}
+
+.quant-ai-segment:hover,
+.quant-ai-segment:focus-visible {
+  border-color: hsl(var(--primary) / 0.55);
+  color: hsl(var(--foreground));
+}
+
+.quant-ai-segment-active {
+  border-color: hsl(var(--primary) / 0.65);
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+.quant-ai-runtime-help {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .quant-ai-key-state,

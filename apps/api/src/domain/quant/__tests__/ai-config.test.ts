@@ -17,6 +17,8 @@ async function createDatabase(): Promise<{ client: ReturnType<typeof createClien
       provider TEXT NOT NULL,
       model TEXT NOT NULL,
       base_url TEXT,
+      response_mode TEXT NOT NULL DEFAULT 'stream',
+      generation_timeout_ms INTEGER NOT NULL DEFAULT 300000,
       encrypted_api_key TEXT,
       api_key_hint TEXT,
       created_at INTEGER NOT NULL,
@@ -34,6 +36,8 @@ describe('quant AI config', () => {
       provider: 'openai_compatible',
       model: 'gpt-5.5',
       baseUrl: 'https://ai.example.test/v1',
+      responseMode: 'json',
+      generationTimeoutMs: 600000,
       apiKey: 'sk-user-one-1234',
     }, 'test-encryption-secret')
 
@@ -41,6 +45,8 @@ describe('quant AI config', () => {
       provider: 'openai_compatible',
       model: 'gpt-5.5',
       baseUrl: 'https://ai.example.test/v1',
+      responseMode: 'json',
+      generationTimeoutMs: 600000,
       hasApiKey: true,
       apiKeyHint: '1234',
     })
@@ -60,7 +66,13 @@ describe('quant AI config', () => {
       provider: 'deepseek',
       model: 'deepseek-chat',
     }, 'test-encryption-secret')
-    expect(updated).toMatchObject({ provider: 'deepseek', model: 'deepseek-chat', hasApiKey: true, apiKeyHint: '1234' })
+    expect(updated).toMatchObject({ provider: 'deepseek', model: 'deepseek-chat', responseMode: 'json', generationTimeoutMs: 600000, hasApiKey: true, apiKeyHint: '1234' })
+  })
+
+  it('rejects unsupported response modes and out-of-range generation budgets', async () => {
+    const { db } = await createDatabase()
+    await expect(saveQuantAiConfig(db, { userId: 'user-1', provider: 'ollama', model: 'qwen3', responseMode: 'sse' }, 'test-encryption-secret')).rejects.toMatchObject({ code: 'QUANT_AI_CONFIGURATION', status: 400 })
+    await expect(saveQuantAiConfig(db, { userId: 'user-1', provider: 'ollama', model: 'qwen3', generationTimeoutMs: 120000 }, 'test-encryption-secret')).rejects.toMatchObject({ code: 'QUANT_AI_CONFIGURATION', status: 400 })
   })
 
   it('clears a key explicitly and rejects new keys without the encryption secret', async () => {

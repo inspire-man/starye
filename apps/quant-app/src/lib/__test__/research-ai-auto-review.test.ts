@@ -8,6 +8,8 @@ function config(overrides: Partial<QuantAiConfig> = {}): QuantAiConfig {
     provider: 'openai_compatible',
     model: 'gpt-5.4',
     baseUrl: 'https://api.example.com/v1',
+    responseMode: 'stream',
+    generationTimeoutMs: 300000,
     hasApiKey: true,
     apiKeyHint: '1234',
     createdAt: '2026-08-30T00:00:00.000Z',

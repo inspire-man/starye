@@ -18,6 +18,7 @@ import type {
   QuantAiFactorImpact,
   QuantAiFactorReview,
   QuantAiProvider,
+  QuantAiResponseMode,
   QuantDecisionAssistant,
   QuantDecisionAssistantAction,
   QuantDecisionAssistantAiFactorReview,
@@ -100,6 +101,8 @@ export interface UpdateAiConfigInput {
   provider: QuantAiProvider
   model: string
   baseUrl?: string | null
+  responseMode?: QuantAiResponseMode
+  generationTimeoutMs?: number
   apiKey?: string
   clearApiKey?: boolean
 }
@@ -321,11 +324,17 @@ function parseAiConfig(payload: unknown): QuantAiConfig | null {
   const model = readString(data, 'model')
   if (!id || !model)
     throw new QuantApiError('AI 配置数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const responseMode = readString(data, 'responseMode', 'response_mode') || 'stream'
+  const generationTimeoutMs = readNumber(data, 'generationTimeoutMs', 'generation_timeout_ms') ?? 300000
+  if ((responseMode !== 'stream' && responseMode !== 'json') || !Number.isInteger(generationTimeoutMs) || generationTimeoutMs < 300000 || generationTimeoutMs > 600000)
+    throw new QuantApiError('AI 运行参数数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
   return {
     id,
     provider,
     model,
     baseUrl: readString(data, 'baseUrl', 'base_url'),
+    responseMode,
+    generationTimeoutMs,
     hasApiKey: data.hasApiKey === true || data.has_api_key === true,
     apiKeyHint: readString(data, 'apiKeyHint', 'api_key_hint'),
     createdAt: readString(data, 'createdAt', 'created_at'),
@@ -2197,6 +2206,8 @@ export const quantApi = {
         provider: input.provider,
         model: input.model,
         base_url: input.baseUrl,
+        ...(input.responseMode !== undefined ? { response_mode: input.responseMode } : {}),
+        ...(input.generationTimeoutMs !== undefined ? { generation_timeout_ms: input.generationTimeoutMs } : {}),
         api_key: input.apiKey,
         clear_api_key: input.clearApiKey,
       }),

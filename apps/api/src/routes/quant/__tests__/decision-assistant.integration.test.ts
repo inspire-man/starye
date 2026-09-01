@@ -24,6 +24,7 @@ const migrationNames = [
   '0045_quant_factor_config.sql',
   '0046_quant_decision_record.sql',
   '0047_quant_decision_assessment.sql',
+  '0048_quant_ai_runtime_reliability.sql',
 ].map(name => new URL(`../../../../../../packages/db/drizzle/${name}`, import.meta.url))
 
 function report(): QuantResearchReport {

@@ -24,6 +24,21 @@ function response(payload: unknown, status = 200): Response {
   })
 }
 
+function streamResponse(chunks: readonly string[], status = 200): Response {
+  const encoder = new TextEncoder()
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks)
+        controller.enqueue(encoder.encode(chunk))
+      controller.close()
+    },
+  })
+  return new Response(body, {
+    status,
+    headers: { 'content-type': 'text/event-stream' },
+  })
+}
+
 function request(fetchImpl: typeof fetch, overrides: Partial<QuantDecryptedAiConfig> = {}) {
   return requestQuantAiCompletion({
     config: { ...config, ...overrides },
@@ -68,6 +83,34 @@ describe('quant AI transport', () => {
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
     expect(body).toMatchObject({ temperature: 0.2, stream: false, max_completion_tokens: 512 })
     expect(body).not.toHaveProperty('reasoning_effort')
+  })
+
+  it('assembles streamed Chat Completions deltas and sends stream true', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(streamResponse([
+      'data: {"choices":[{"delta":{"content":"{\\"ok\\":"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"true}"},"finish_reason":"stop"}]}\n\n',
+      'data: [DONE]\n\n',
+    ]))
+
+    await expect(request(fetchImpl, { responseMode: 'stream' })).resolves.toMatchObject({ content: '{"ok":true}', finishReason: 'stop' })
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
+    expect(body).toMatchObject({ stream: true, response_format: { type: 'json_object' } })
+  })
+
+  it('accepts a complete JSON body when a compatible gateway ignores stream mode', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response({
+      choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }],
+    }))
+
+    await expect(request(fetchImpl, { responseMode: 'stream' })).resolves.toMatchObject({ content: '{"ok":true}', finishReason: 'stop' })
+  })
+
+  it('rejects malformed streamed events and classifies 524 as timeout', async () => {
+    const malformed = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(['data: {"choices":\n\n']))
+    await expect(request(malformed, { responseMode: 'stream' })).rejects.toMatchObject({ code: 'QUANT_AI_SUMMARY_INVALID_RESPONSE', status: 502 })
+
+    const gatewayTimeout = vi.fn<typeof fetch>().mockResolvedValue(response({}, 524))
+    await expect(request(gatewayTimeout)).rejects.toMatchObject({ code: 'QUANT_AI_SUMMARY_TIMEOUT', status: 504, message: expect.stringContaining('524') })
   })
 
   it('normalizes Chat content arrays and Responses output shapes', async () => {
