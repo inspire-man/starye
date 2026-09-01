@@ -132,6 +132,23 @@ function formatContribution(value: number | null): string {
   return value === null || !Number.isFinite(value) ? '--' : `${value.toFixed(1)} 分`
 }
 
+function formatImpactScore(value: number | null | undefined): string {
+  return value === null || value === undefined || !Number.isFinite(value) ? '--' : `${value.toFixed(1)} 分`
+}
+
+function formatImpactDelta(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value))
+    return '--'
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)} 分`
+}
+
+function formatImpactTime(value: string | undefined): string {
+  if (!value)
+    return '时间未记录'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value.slice(0, 16) : date.toISOString().replace('T', ' ').slice(0, 16)
+}
+
 function formatWeight(value: number): string {
   return `${(value * 100).toFixed(0)}%`
 }
@@ -367,9 +384,17 @@ function factorFreshnessLabel(value: DecisionFactorImpactItem['freshness']): str
             <strong>支持 {{ formatWeight(assessment.factorImpact.supportWeight) }}</strong>
             <small>注意 {{ formatWeight(assessment.factorImpact.cautionWeight) }} · 反对 {{ formatWeight(assessment.factorImpact.opposeWeight) }}</small>
           </div>
+          <div v-if="assessment.factorImpact.aiScore !== undefined" role="listitem">
+            <span>AI 影响分</span>
+            <strong>{{ formatImpactScore(assessment.factorImpact.aiScore) }}</strong>
+            <small>相对确定性 {{ formatImpactDelta(assessment.factorImpact.aiScoreDelta) }}</small>
+          </div>
         </div>
         <p class="quant-decision-assistant-factor-impact-note" role="note">
           确定性贡献来自本次报告的因子分数和权重；AI 权重只统计服务端接受的因子复核，未复核或未达门槛的因子不会被计入。
+        </p>
+        <p v-if="assessment.factorImpact.evaluatedAt" class="quant-decision-assistant-factor-impact-note" role="note">
+          AI 影响快照评估于 {{ formatImpactTime(assessment.factorImpact.evaluatedAt) }}；当前行情和数据时效仍需单独核对。
         </p>
         <p v-if="assessment.factorImpact.freshnessBlockedFactors?.length" class="quant-decision-assistant-factor-impact-note quant-decision-assistant-factor-impact-warning" role="status">
           新鲜度闸门阻断：{{ assessment.factorImpact.freshnessBlockedFactors.map(factorLabel).join('、') }}；请先刷新对应数据。
@@ -386,6 +411,7 @@ function factorFreshnessLabel(value: DecisionFactorImpactItem['freshness']): str
               <span>确定性倾向 {{ deterministicImpactStanceLabel(factor.deterministicStance) }}</span>
               <span>AI 倾向 {{ aiImpactStanceLabel(factor.aiStance) }}</span>
               <span>AI 权重 {{ formatWeight(factor.aiWeight) }}</span>
+              <span v-if="factor.aiContribution !== undefined">AI 贡献 {{ formatContribution(factor.aiContribution) }}</span>
               <span v-if="factor.freshness">数据时效 {{ factorFreshnessLabel(factor.freshness) }} · {{ factor.freshness.detail }}</span>
             </div>
           </div>

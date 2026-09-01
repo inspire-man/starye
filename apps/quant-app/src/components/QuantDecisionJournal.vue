@@ -58,6 +58,16 @@ function formatCoverage(value: number | null): string {
   return value === null ? '--' : `${value.toFixed(0)}%`
 }
 
+function formatImpactScore(value: number | null | undefined): string {
+  return value === null || value === undefined ? '--' : value.toFixed(1)
+}
+
+function formatImpactDelta(value: number | null | undefined): string {
+  if (value === null || value === undefined)
+    return '--'
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`
+}
+
 function formatDateTime(value: string | null): string {
   if (!value)
     return '时间未记录'
@@ -175,6 +185,8 @@ watch(
         <span>参考卖出区间 <strong>{{ formatPriceRange(record.snapshot.sellPriceRange) }}</strong></span>
         <span v-if="record.snapshot.factorConfiguration">因子配置 <strong>{{ record.snapshot.factorConfiguration.source === 'user' ? '当前用户配置' : '内置默认' }}</strong></span>
         <span v-if="record.snapshot.aiFactorReviews.length">AI 因子复核 <strong>{{ record.snapshot.aiFactorReviews.length }} 项</strong></span>
+        <span v-if="record.snapshot.factorImpact">AI 影响分 <strong>{{ formatImpactScore(record.snapshot.factorImpact.aiScore) }}</strong> · 分差 {{ formatImpactDelta(record.snapshot.factorImpact.aiScoreDelta) }}</span>
+        <span v-if="record.snapshot.factorImpact?.evaluatedAt">AI 影响快照 <strong>{{ formatDateTime(record.snapshot.factorImpact.evaluatedAt) }}</strong></span>
       </div>
       <div v-if="record?.note" class="quant-decision-current-note">
         <span>当时备注</span>

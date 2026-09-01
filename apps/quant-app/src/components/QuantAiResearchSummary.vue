@@ -156,6 +156,16 @@ function formatFactorContribution(value: number | null): string {
   return value === null ? '--' : `${value.toFixed(1)} 分`
 }
 
+function formatImpactScore(value: number | null | undefined): string {
+  return value === null || value === undefined ? '--' : `${value.toFixed(1)} 分`
+}
+
+function formatImpactDelta(value: number | null | undefined): string {
+  if (value === null || value === undefined)
+    return '--'
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)} 分`
+}
+
 function formatWeight(value: number): string {
   return `${(value * 100).toFixed(0)}%`
 }
@@ -193,6 +203,13 @@ function formatEvidenceDate(value: string | null): string {
   if (/^\d{8}$/u.test(compact))
     return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`
   return value.slice(0, 10)
+}
+
+function formatImpactTime(value: string | undefined): string {
+  if (!value)
+    return '时间未记录'
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? value.slice(0, 16) : parsed.toISOString().replace('T', ' ').slice(0, 16)
 }
 </script>
 
@@ -255,9 +272,17 @@ function formatEvidenceDate(value: string | null): string {
           <strong>支持 {{ formatWeight(factorImpact.supportWeight) }}</strong>
           <small>注意 {{ formatWeight(factorImpact.cautionWeight) }} · 反对 {{ formatWeight(factorImpact.opposeWeight) }}</small>
         </div>
+        <div v-if="factorImpact.aiScore !== undefined">
+          <span>AI 影响分</span>
+          <strong>{{ formatImpactScore(factorImpact.aiScore) }}</strong>
+          <small>相对确定性 {{ formatImpactDelta(factorImpact.aiScoreDelta) }}</small>
+        </div>
       </div>
       <p v-if="factorImpact" class="quant-ai-summary-impact-note" role="note">
         AI 加权影响只表示已接受复核的因子权重，不改写确定性分数或参考价格区间。
+      </p>
+      <p v-if="factorImpact?.evaluatedAt || summary?.factorImpactSnapshot?.evaluatedAt" class="quant-ai-summary-impact-note" role="note">
+        当前时效评估 {{ formatImpactTime(factorImpact?.evaluatedAt) }}<span v-if="summary?.factorImpactSnapshot?.evaluatedAt"> · AI 快照评估 {{ formatImpactTime(summary.factorImpactSnapshot.evaluatedAt) }}</span>
       </p>
       <p v-if="factorImpact?.freshnessBlockedFactors?.length" class="quant-ai-summary-factor-warning" role="status">
         新鲜度闸门阻断：{{ factorImpact.freshnessBlockedFactors?.map(factorLabel).join('、') }}；这些因子仍可查看 AI 解释，但不会进入最终推荐。
@@ -285,6 +310,7 @@ function formatEvidenceDate(value: string | null): string {
             <span>模型倾向 {{ factorImpactStanceLabel(row.impact.deterministicStance) }}</span>
             <span v-if="row.impact.aiStance">AI {{ factorImpactStanceLabel(row.impact.aiStance) }} · {{ row.impact.aiAccepted ? `计入 ${formatWeight(row.impact.aiWeight)}` : '未计入' }}</span>
             <span v-else>AI 未复核</span>
+            <span v-if="row.impact.aiContribution !== undefined">AI 贡献 {{ formatFactorContribution(row.impact.aiContribution) }}</span>
           </div>
           <p v-if="row.factor?.missingEvidenceKeys.length" class="quant-ai-summary-factor-missing">
             待补证据：{{ row.factor.missingEvidenceKeys.join('、') }}

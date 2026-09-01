@@ -16,7 +16,7 @@ const emit = defineEmits<{
 const factorOptions: readonly { key: QuantFactorConfigurationKey, label: string, description: string }[] = [
   { key: 'trend', label: '趋势', description: '日线结构、均线和 20 日方向' },
   { key: 'valuation', label: '估值', description: 'TTM PE 与 PB 的当前有效值' },
-  { key: 'quality', label: '盈利质量', description: '利润、ROE、现金流和财报连续性' },
+  { key: 'quality', label: '盈利质量', description: '营收、利润、利润率、ROE、现金流、负债和财报连续性' },
   { key: 'shareholder-return', label: '股东回报', description: '近 12 个月实施分红与股息率' },
   { key: 'risk', label: '风险', description: '成交量异常与连续上涨过热' },
 ]

@@ -789,9 +789,19 @@ function parseAiFactorImpact(value: unknown): QuantAiFactorImpact | null {
     return null
 
   const modelVersion = readString(value, 'modelVersion', 'model_version')
+  const hasEvaluatedAt = value.evaluatedAt !== undefined || value.evaluated_at !== undefined
+  const evaluatedAt = hasEvaluatedAt ? readString(value, 'evaluatedAt', 'evaluated_at') : undefined
   const freshnessVersion = readString(value, 'freshnessVersion', 'freshness_version') || 'unknown'
   const freshnessBlockedFactors = readStringList(value, 'freshnessBlockedFactors', 'freshness_blocked_factors')
   const deterministicScore = value.deterministicScore === null ? null : readNumber(value, 'deterministicScore', 'deterministic_score')
+  const hasAiScore = value.aiScore !== undefined || value.ai_score !== undefined
+  const aiScore = hasAiScore
+    ? value.aiScore === null || value.ai_score === null ? null : readNumber(value, 'aiScore', 'ai_score')
+    : undefined
+  const hasAiScoreDelta = value.aiScoreDelta !== undefined || value.ai_score_delta !== undefined
+  const aiScoreDelta = hasAiScoreDelta
+    ? value.aiScoreDelta === null || value.ai_score_delta === null ? null : readNumber(value, 'aiScoreDelta', 'ai_score_delta')
+    : undefined
   const totalWeight = readNumber(value, 'totalWeight', 'total_weight')
   const scoredWeight = readNumber(value, 'scoredWeight', 'scored_weight')
   const reviewedWeight = readNumber(value, 'reviewedWeight', 'reviewed_weight')
@@ -800,8 +810,10 @@ function parseAiFactorImpact(value: unknown): QuantAiFactorImpact | null {
   const cautionWeight = readNumber(value, 'cautionWeight', 'caution_weight')
   const opposeWeight = readNumber(value, 'opposeWeight', 'oppose_weight')
   const unacceptedWeight = readNumber(value, 'unacceptedWeight', 'unaccepted_weight')
-  if (!modelVersion || totalWeight === null || scoredWeight === null || reviewedWeight === null || reviewCoverage === null || supportWeight === null || cautionWeight === null || opposeWeight === null || unacceptedWeight === null
-    || totalWeight < 0 || scoredWeight < 0 || reviewedWeight < 0 || reviewCoverage < 0 || reviewCoverage > 100 || supportWeight < 0 || cautionWeight < 0 || opposeWeight < 0 || unacceptedWeight < 0) {
+  if (!modelVersion || (hasEvaluatedAt && !evaluatedAt) || totalWeight === null || scoredWeight === null || reviewedWeight === null || reviewCoverage === null || supportWeight === null || cautionWeight === null || opposeWeight === null || unacceptedWeight === null
+    || (aiScore !== undefined && aiScore !== null && (aiScore < 0 || aiScore > 100))
+    || (aiScoreDelta !== undefined && aiScoreDelta !== null && (aiScoreDelta < -100 || aiScoreDelta > 100))
+    || totalWeight < 0 || totalWeight > 1 || scoredWeight < 0 || scoredWeight > 1 || reviewedWeight < 0 || reviewedWeight > 1 || reviewCoverage < 0 || reviewCoverage > 100 || supportWeight < 0 || supportWeight > 1 || cautionWeight < 0 || cautionWeight > 1 || opposeWeight < 0 || opposeWeight > 1 || unacceptedWeight < 0 || unacceptedWeight > 1) {
     return null
   }
 
@@ -818,23 +830,29 @@ function parseAiFactorImpact(value: unknown): QuantAiFactorImpact | null {
     const aiConfidence = item.aiConfidence === null ? null : readNumber(item, 'aiConfidence', 'ai_confidence')
     const aiAccepted = readBoolean(item, 'aiAccepted', 'ai_accepted')
     const aiWeight = readNumber(item, 'aiWeight', 'ai_weight')
+    const hasAiContribution = item.aiContribution !== undefined || item.ai_contribution !== undefined
+    const aiContribution = hasAiContribution
+      ? item.aiContribution === null || item.ai_contribution === null ? null : readNumber(item, 'aiContribution', 'ai_contribution')
+      : undefined
     const freshnessValue = item.freshness ?? item.factorFreshness ?? item.factor_freshness
-    const freshness = parseFactorFreshness(freshnessValue)
-    const aiFreshnessEligible = readBoolean(item, 'aiFreshnessEligible', 'ai_freshness_eligible') ?? false
+    const freshness = freshnessValue === undefined || freshnessValue === null ? undefined : parseFactorFreshness(freshnessValue)
+    const hasAiFreshnessEligible = item.aiFreshnessEligible !== undefined || item.ai_freshness_eligible !== undefined
+    const aiFreshnessEligible = hasAiFreshnessEligible ? readBoolean(item, 'aiFreshnessEligible', 'ai_freshness_eligible') : undefined
     if ((factor !== 'trend' && factor !== 'valuation' && factor !== 'quality' && factor !== 'shareholder-return' && factor !== 'risk')
       || !label || weight === null || weight < 0 || weight > 1
       || (deterministicStance !== 'support' && deterministicStance !== 'caution' && deterministicStance !== 'oppose' && deterministicStance !== 'insufficient')
       || (aiStance !== null && aiStance !== 'support' && aiStance !== 'caution' && aiStance !== 'oppose' && aiStance !== 'insufficient')
       || (deterministicContribution !== null && (deterministicContribution < 0 || deterministicContribution > 100))
       || (aiConfidence !== null && (aiConfidence < 0 || aiConfidence > 100))
-      || aiAccepted === null || aiWeight === null || aiWeight < 0 || aiWeight > 1 || !freshness) {
+      || (aiContribution !== undefined && aiContribution !== null && (aiContribution < 0 || aiContribution > 100))
+      || aiAccepted === null || aiWeight === null || aiWeight < 0 || aiWeight > 1 || (hasAiFreshnessEligible && aiFreshnessEligible === null) || (freshnessValue !== undefined && freshnessValue !== null && !freshness)) {
       return []
     }
-    return [{ factor, label, weight, deterministicScore, deterministicStance, deterministicContribution, aiStance, aiConfidence, aiAccepted, aiWeight, freshness, aiFreshnessEligible } as QuantAiFactorImpact['factors'][number]]
+    return [{ factor, label, weight, deterministicScore, deterministicStance, deterministicContribution, aiStance, aiConfidence, aiAccepted, aiWeight, ...(aiContribution !== undefined ? { aiContribution } : {}), ...(freshness ? { freshness } : {}), ...(aiFreshnessEligible !== undefined ? { aiFreshnessEligible } : {}) } as QuantAiFactorImpact['factors'][number]]
   })
   if (!factors.length || factors.length > 5)
     return null
-  return { modelVersion, freshnessVersion, freshnessBlockedFactors, totalWeight, deterministicScore, scoredWeight, reviewedWeight, reviewCoverage, supportWeight, cautionWeight, opposeWeight, unacceptedWeight, factors }
+  return { modelVersion, ...(evaluatedAt ? { evaluatedAt } : {}), freshnessVersion, freshnessBlockedFactors, totalWeight, deterministicScore, ...(aiScore !== undefined ? { aiScore } : {}), ...(aiScoreDelta !== undefined ? { aiScoreDelta } : {}), scoredWeight, reviewedWeight, reviewCoverage, supportWeight, cautionWeight, opposeWeight, unacceptedWeight, factors }
 }
 
 function parseResearchSummary(value: unknown): QuantResearchSummary | null {
@@ -861,6 +879,7 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
   if (!factorReviews)
     return null
   const factorImpact = parseAiFactorImpact(value.factorImpact ?? value.factor_impact)
+  const factorImpactSnapshot = parseAiFactorImpact(value.factorImpactSnapshot ?? value.factor_impact_snapshot)
   const rawDecisionReview = rawSummary.decisionReview ?? rawSummary.decision_review
   const decisionReview: QuantAiDecisionReview | null = isRecord(rawDecisionReview)
     ? (() => {
@@ -914,6 +933,7 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
       decisionReview,
     },
     factorImpact,
+    factorImpactSnapshot,
     citedEvidenceKeys: readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys').length
       ? readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys')
       : citedEvidenceKeys,
@@ -980,6 +1000,7 @@ function parseDecisionRecordSnapshot(value: unknown): QuantDecisionRecordSnapsho
   const sellPriceRange = rawSellPriceRange === null ? null : parseReferencePriceRange(rawSellPriceRange)
   const aiDecisionReview = parseDecisionRecordAiReview(value.aiDecisionReview)
   const aiFactorReviews = parseAiFactorReviews(value.aiFactorReviews)
+  const factorImpact = parseAiFactorImpact(value.factorImpact ?? value.factor_impact)
   if (!reportVersion || !generatedAt
     || (recommendation !== null && recommendation !== 'bullish' && recommendation !== 'bearish' && recommendation !== 'watch')
     || (value.confidence !== null && (confidence === null || confidence < 0 || confidence > 100))
@@ -991,6 +1012,7 @@ function parseDecisionRecordSnapshot(value: unknown): QuantDecisionRecordSnapsho
     || (rawSellPriceRange !== null && sellPriceRange === null)
     || (value.aiDecisionReview !== null && aiDecisionReview === null)
     || aiFactorReviews === null
+    || (value.factorImpact !== undefined && value.factorImpact !== null && factorImpact === null)
     || (value.factorConfiguration !== null && value.factorConfiguration !== undefined && factorConfiguration === null)) {
     return null
   }
@@ -1008,6 +1030,7 @@ function parseDecisionRecordSnapshot(value: unknown): QuantDecisionRecordSnapsho
     sellPriceRange,
     aiDecisionReview,
     aiFactorReviews,
+    factorImpact,
     factorConfiguration,
   }
 }

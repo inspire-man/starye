@@ -260,7 +260,7 @@ describe('quant decision assistant API', () => {
     await expect(client.execute('SELECT count(*) AS count FROM quant_decision_assessment WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
   })
 
-  it('derives accepted AI factor impact for create and history without persisting the derived field', async () => {
+  it('derives and persists accepted AI factor impact for create and history', async () => {
     const { client, db } = await createDatabase()
     const research = await createQuantResearchRun(db, {
       userId: 'user-1',
@@ -345,7 +345,15 @@ describe('quant decision assistant API', () => {
     })
 
     const stored = await client.execute('SELECT snapshot_json FROM quant_decision_assessment WHERE user_id = \'user-1\'')
-    expect(JSON.parse(String(stored.rows[0]?.snapshot_json)).factorImpact).toBeUndefined()
+    expect(JSON.parse(String(stored.rows[0]?.snapshot_json)).factorImpact).toMatchObject({
+      evaluatedAt: expect.any(String),
+      aiScore: 80,
+      aiScoreDelta: 2,
+      factors: expect.arrayContaining([
+        expect.objectContaining({ factor: 'quality', aiContribution: 60 }),
+        expect.objectContaining({ factor: 'valuation', aiContribution: 20 }),
+      ]),
+    })
 
     const history = await app.request('/api/quant/decision-assistant/601899.SH?limit=10', {}, env)
     expect(history.status).toBe(200)

@@ -112,6 +112,7 @@ function withAkshareCrossSourceCheck(item: QuantResearchEvidence, latestFinancia
     'akshare-roe': latestFinancial?.roe,
     'akshare-revenue-yoy': latestFinancial?.revenueYoY,
     'akshare-net-profit-yoy': latestFinancial?.netProfitYoY,
+    'akshare-adjusted-net-profit-yoy': latestFinancial?.adjustedNetProfitYoY,
     'akshare-gross-margin': latestFinancial?.grossMargin,
     'akshare-net-margin': latestFinancial?.netMargin,
     'akshare-debt-asset-ratio': latestFinancial?.debtAssetRatio,
@@ -282,10 +283,55 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     formulaVersion: 'eastmoney-valuation-v1',
     detail: pb !== null && pb > 0 ? '已有当前 PB，不能单独证明低估' : '缺少有效 PB',
   }))
+  const ps = finite(input.valuation?.ps)
+  const peg = finite(input.valuation?.peg)
+  evidenceItems.push(evidence({
+    key: 'valuation-ps',
+    dimension: 'valuation',
+    label: 'PS',
+    status: statusForValue(ps, value => value > 0),
+    value: ps,
+    threshold: '有效且大于 0；需结合行业比较',
+    source: 'Eastmoney 估值',
+    observedAt: input.valuation?.observedAt ?? null,
+    formulaVersion: 'eastmoney-valuation-v1',
+    detail: ps !== null && ps > 0 ? '已有当前 PS，仍需结合行业与历史区间' : '缺少有效 PS',
+    optional: true,
+  }))
+  evidenceItems.push(evidence({
+    key: 'valuation-peg',
+    dimension: 'valuation',
+    label: 'PEG',
+    status: statusForValue(peg, value => value > 0),
+    value: peg,
+    threshold: '有效且大于 0；需结合增长口径比较',
+    source: 'Eastmoney 估值',
+    observedAt: input.valuation?.observedAt ?? null,
+    formulaVersion: 'eastmoney-valuation-v1',
+    detail: peg !== null && peg > 0 ? '已有当前 PEG，仍需核对增长口径' : '缺少有效 PEG',
+    optional: true,
+  }))
 
+  const revenueYoY = finite(latestFinancial?.revenueYoY)
   const netProfitYoY = finite(latestFinancial?.netProfitYoY)
+  const adjustedNetProfitYoY = finite(latestFinancial?.adjustedNetProfitYoY)
   const roe = finite(latestFinancial?.roe)
+  const grossMargin = finite(latestFinancial?.grossMargin)
+  const netMargin = finite(latestFinancial?.netMargin)
   const cashflowToRevenue = finite(latestFinancial?.operatingCashflowToRevenue)
+  const debtAssetRatio = finite(latestFinancial?.debtAssetRatio)
+  evidenceItems.push(evidence({
+    key: 'quality-revenue-growth',
+    dimension: 'quality',
+    label: '营收同比',
+    status: statusForValue(revenueYoY, value => value >= 0, value => value >= -10),
+    value: revenueYoY,
+    threshold: '不低于 0%，低于 -10% 为未通过',
+    source: 'Eastmoney 最新财报',
+    observedAt: latestFinancial?.reportDate ?? null,
+    formulaVersion: 'eastmoney-financial-v1',
+    detail: revenueYoY !== null && revenueYoY >= 0 ? '最新报告期营收方向未转负' : '营收同比需要进一步核对',
+  }))
   evidenceItems.push(evidence({
     key: 'quality-profit',
     dimension: 'quality',
@@ -297,6 +343,18 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     observedAt: latestFinancial?.reportDate ?? null,
     formulaVersion: 'eastmoney-financial-v1',
     detail: netProfitYoY !== null && netProfitYoY >= 0 ? '最新报告期利润方向未转负' : '利润同比需要进一步核对',
+  }))
+  evidenceItems.push(evidence({
+    key: 'quality-adjusted-profit',
+    dimension: 'quality',
+    label: '扣非净利润同比',
+    status: statusForValue(adjustedNetProfitYoY, value => value >= 0, value => value >= -10),
+    value: adjustedNetProfitYoY,
+    threshold: '不低于 0%，低于 -10% 为未通过',
+    source: 'Eastmoney 最新财报',
+    observedAt: latestFinancial?.reportDate ?? null,
+    formulaVersion: 'eastmoney-financial-v1',
+    detail: adjustedNetProfitYoY !== null && adjustedNetProfitYoY >= 0 ? '扣非利润方向未转负' : '扣非利润同比需要进一步核对',
   }))
   evidenceItems.push(evidence({
     key: 'quality-roe',
@@ -311,6 +369,30 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     detail: roe !== null && roe >= 10 ? '资本回报达到研究门槛' : '资本回报仍需核对持续性',
   }))
   evidenceItems.push(evidence({
+    key: 'quality-gross-margin',
+    dimension: 'quality',
+    label: '毛利率',
+    status: statusForValue(grossMargin, value => value > 0),
+    value: grossMargin,
+    threshold: '有效且大于 0%',
+    source: 'Eastmoney 最新财报',
+    observedAt: latestFinancial?.reportDate ?? null,
+    formulaVersion: 'eastmoney-financial-v1',
+    detail: grossMargin !== null && grossMargin > 0 ? '毛利率为正，可继续核对稳定性' : '缺少有效毛利率',
+  }))
+  evidenceItems.push(evidence({
+    key: 'quality-net-margin',
+    dimension: 'quality',
+    label: '净利率',
+    status: statusForValue(netMargin, value => value > 0),
+    value: netMargin,
+    threshold: '有效且大于 0%',
+    source: 'Eastmoney 最新财报',
+    observedAt: latestFinancial?.reportDate ?? null,
+    formulaVersion: 'eastmoney-financial-v1',
+    detail: netMargin !== null && netMargin > 0 ? '净利率为正，可继续核对稳定性' : '缺少有效净利率',
+  }))
+  evidenceItems.push(evidence({
     key: 'quality-cashflow',
     dimension: 'quality',
     label: '经营现金流 / 营收',
@@ -321,6 +403,18 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     observedAt: latestFinancial?.reportDate ?? null,
     formulaVersion: 'eastmoney-financial-v1',
     detail: cashflowToRevenue !== null && cashflowToRevenue >= 0 ? '经营现金流未低于 0' : '利润需要现金流复核',
+  }))
+  evidenceItems.push(evidence({
+    key: 'quality-debt-asset',
+    dimension: 'quality',
+    label: '资产负债率',
+    status: statusForValue(debtAssetRatio, value => value <= 60, value => value <= 75),
+    value: debtAssetRatio,
+    threshold: '不高于 60%，高于 75% 为未通过',
+    source: 'Eastmoney 最新财报',
+    observedAt: latestFinancial?.reportDate ?? null,
+    formulaVersion: 'eastmoney-financial-v1',
+    detail: debtAssetRatio !== null && debtAssetRatio <= 60 ? '资产负债率处于当前研究门槛内' : '资产负债率需要结合行业结构核对',
   }))
   evidenceItems.push(evidence({
     key: 'quality-history',

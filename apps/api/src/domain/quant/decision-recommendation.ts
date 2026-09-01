@@ -65,6 +65,7 @@ interface FactorDefinition {
   readonly sourceId: string
   readonly source: string
   readonly evidenceKeys: readonly string[]
+  readonly optionalEvidenceKeys?: readonly string[]
 }
 
 export const QUANT_FACTOR_DEFINITIONS: readonly FactorDefinition[] = [
@@ -82,7 +83,8 @@ export const QUANT_FACTOR_DEFINITIONS: readonly FactorDefinition[] = [
     weight: 0.2,
     sourceId: 'eastmoney-valuation',
     source: 'Eastmoney 估值',
-    evidenceKeys: ['valuation-pe', 'valuation-pb'],
+    evidenceKeys: ['valuation-pe', 'valuation-pb', 'valuation-ps', 'valuation-peg'],
+    optionalEvidenceKeys: ['valuation-ps', 'valuation-peg'],
   },
   {
     key: 'quality',
@@ -90,7 +92,17 @@ export const QUANT_FACTOR_DEFINITIONS: readonly FactorDefinition[] = [
     weight: 0.2,
     sourceId: 'eastmoney-financial',
     source: 'Eastmoney 最新财报',
-    evidenceKeys: ['quality-profit', 'quality-roe', 'quality-cashflow', 'quality-history'],
+    evidenceKeys: [
+      'quality-revenue-growth',
+      'quality-profit',
+      'quality-adjusted-profit',
+      'quality-roe',
+      'quality-gross-margin',
+      'quality-net-margin',
+      'quality-cashflow',
+      'quality-debt-asset',
+      'quality-history',
+    ],
   },
   {
     key: 'shareholder-return',
@@ -121,12 +133,17 @@ function evidenceScore(item: QuantResearchEvidence): number | null {
   return item.status === 'pass' ? 100 : item.status === 'caution' ? 50 : 0
 }
 
-function factorStatus(items: readonly QuantResearchEvidence[], expectedCount: number): QuantResearchFactorStatus {
-  const usable = items.filter(item => evidenceScore(item) !== null)
+function factorStatus(items: readonly QuantResearchEvidence[], requiredEvidenceKeys: readonly string[]): QuantResearchFactorStatus {
+  const itemsByKey = new Map(items.map(item => [item.key, item] as const))
+  const requiredItems = requiredEvidenceKeys.flatMap((key) => {
+    const item = itemsByKey.get(key)
+    return item ? [item] : []
+  })
+  const usable = requiredItems.filter(item => evidenceScore(item) !== null)
   if (!usable.length) {
     return items.some(item => /失败|不可用|未配置/u.test(item.detail)) ? 'unavailable' : 'missing'
   }
-  return usable.length === expectedCount ? 'ready' : 'partial'
+  return usable.length === requiredEvidenceKeys.length ? 'ready' : 'partial'
 }
 
 function factorSourceId(definition: FactorDefinition, items: readonly QuantResearchEvidence[]): string {
@@ -141,11 +158,13 @@ function factorSourceId(definition: FactorDefinition, items: readonly QuantResea
 function buildFactorModel(evidence: readonly QuantResearchEvidence[], configuration: QuantFactorConfiguration): QuantFactorModel {
   const evidenceByKey = new Map(evidence.map(item => [item.key, item] as const))
   const factors = QUANT_FACTOR_DEFINITIONS.map((definition) => {
+    const optionalEvidenceKeys = new Set(definition.optionalEvidenceKeys ?? [])
+    const requiredEvidenceKeys = definition.evidenceKeys.filter(key => !optionalEvidenceKeys.has(key))
     const items = definition.evidenceKeys.flatMap((key) => {
       const item = evidenceByKey.get(key)
       return item ? [item] : []
     })
-    const status = factorStatus(items, definition.evidenceKeys.length)
+    const status = factorStatus(items, requiredEvidenceKeys)
     const scored = items.map(evidenceScore).filter((value): value is number => value !== null)
     const score = scored.length ? round(scored.reduce((total, value) => total + value, 0) / scored.length) : null
     const coveredRatio = definition.evidenceKeys.length > 0 ? scored.length / definition.evidenceKeys.length : 0

@@ -738,21 +738,27 @@ describe('quant watchlist CRUD contract', () => {
 
     const generated = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)
     expect(generated.status).toBe(201)
-    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[], decisionReview: { recommendation: string, accepted: boolean } }, factorImpact: { deterministicScore: number, reviewCoverage: number, opposeWeight: number, factors: Array<{ factor: string, deterministicContribution: number, aiAccepted: boolean, aiWeight: number }> }, provider: string } }
+    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[], decisionReview: { recommendation: string, accepted: boolean } }, factorImpact: { deterministicScore: number, aiScore: number, aiScoreDelta: number, evaluatedAt: string, reviewCoverage: number, opposeWeight: number, factors: Array<{ factor: string, deterministicContribution: number, aiAccepted: boolean, aiWeight: number, aiContribution: number | null }> }, factorImpactSnapshot: { evaluatedAt: string, aiScore: number } | null, provider: string } }
     expect(generatedPayload.data).toMatchObject({
       provider: 'openai_compatible',
       summary: { citedEvidenceKeys: ['quality-roe'], decisionReview: { recommendation: 'bearish', accepted: true } },
       factorImpact: {
         deterministicScore: 72.5,
+        aiScore: 0,
+        aiScoreDelta: -72.5,
+        evaluatedAt: expect.any(String),
         reviewCoverage: 100,
         opposeWeight: 1,
-        factors: [expect.objectContaining({ factor: 'quality', deterministicContribution: 72.5, aiAccepted: true, aiWeight: 1 })],
+        factors: [expect.objectContaining({ factor: 'quality', deterministicContribution: 72.5, aiAccepted: true, aiWeight: 1, aiContribution: 0 })],
       },
+      factorImpactSnapshot: { evaluatedAt: expect.any(String), aiScore: 0 },
     })
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(expect.objectContaining({ authorization: 'Bearer sk-user-one-1234' }))
     await expect(client.execute('SELECT summary_json, cited_evidence_keys_json FROM quant_research_summary')).resolves.toMatchObject({
-      rows: [{ summary_json: expect.not.stringContaining('sk-user-one-1234'), cited_evidence_keys_json: '["quality-roe"]' }],
+      rows: [{ summary_json: expect.stringContaining('"factorImpactSnapshot"'), cited_evidence_keys_json: '["quality-roe"]' }],
     })
+    const storedSummary = await client.execute('SELECT summary_json FROM quant_research_summary')
+    expect(String(storedSummary.rows[0]?.summary_json)).not.toContain('sk-user-one-1234')
 
     const history = await userA.request('/api/quant/research/runs/summary-run-1/summary?limit=1', {}, env)
     expect(history.status).toBe(200)
@@ -1800,11 +1806,12 @@ describe('quant watchlist CRUD contract', () => {
         currentPriceObservedAt: '20260830',
         aiDecisionReview: { recommendation: 'bullish', accepted: true, confidence: 84, factorReviewCoverage: 100 },
         aiFactorReviews: [{ factor: 'trend', stance: 'support', accepted: true, confidence: 88 }],
+        factorImpact: { aiScore: 100, aiScoreDelta: 18, factors: [expect.objectContaining({ factor: 'trend', aiContribution: 100 })] },
         factorConfiguration: { source: 'user', version: 'research-factor-config-v1' },
       },
     })
     await expect(client.execute('SELECT snapshot_json FROM quant_decision_record WHERE id = ?', [savedPayload.data.id])).resolves.toMatchObject({
-      rows: [{ snapshot_json: expect.stringContaining('"aiFactorReviews"') }],
+      rows: [{ snapshot_json: expect.stringContaining('"factorImpact"') }],
     })
 
     const updated = await userA.request('/api/quant/research/runs/decision-run-1/decision', {

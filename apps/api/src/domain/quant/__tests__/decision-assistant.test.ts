@@ -229,6 +229,22 @@ describe('quant decision assistant', () => {
     expect(incomplete).toMatchObject({ status: 'rejected', accepted: false, rejectionReason: 'factor-review-incomplete', factorReviewCoverage: 80 })
   })
 
+  it('normalizes snake_case AI response fields without weakening validation', () => {
+    const { invalidationConditions, citedEvidenceKeys, factorReviews, ...rest } = assistantPayload()
+    const parsed = parseQuantAiDecisionAssistant({
+      ...rest,
+      invalidation_conditions: invalidationConditions,
+      cited_evidence_keys: citedEvidenceKeys,
+      factor_reviews: factorReviews.map(({ citedEvidenceKeys: reviewEvidence, ...review }) => ({
+        ...review,
+        cited_evidence_keys: reviewEvidence,
+      })),
+    }, report())
+
+    expect(parsed).toMatchObject({ recommendation: 'bullish', action: 'consider-buy' })
+    expect(parsed.factorReviews[0]).toMatchObject({ factor: 'trend' })
+  })
+
   it('rejects cross-factor evidence and round-trips the persisted snapshot', () => {
     expect(() => parseQuantAiDecisionAssistant({
       ...assistantPayload(),

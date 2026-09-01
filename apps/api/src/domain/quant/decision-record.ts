@@ -1,7 +1,8 @@
-import type { QuantAiDecisionReview, QuantAiFactorReview } from './ai-summary'
+import type { QuantAiDecisionReview, QuantAiFactorImpact, QuantAiFactorReview } from './ai-summary'
 import type { QuantDecisionProjection, QuantRecommendation, QuantReferencePriceRange } from './decision-recommendation'
 import type { QuantFactorConfiguration } from './factor-configuration'
 import type { QuantResearchReport } from './research-report'
+import { parseQuantAiFactorImpactSnapshot } from './ai-summary'
 import { QuantError } from './errors'
 
 export const QUANT_DECISION_RECORD_VERSION = 'decision-record-v1' as const
@@ -34,6 +35,7 @@ export interface QuantDecisionRecordSnapshot {
   readonly sellPriceRange: QuantReferencePriceRange | null
   readonly aiDecisionReview: QuantDecisionRecordAiReviewSnapshot | null
   readonly aiFactorReviews: readonly QuantAiFactorReview[]
+  readonly factorImpact: QuantAiFactorImpact | null
   readonly factorConfiguration: QuantFactorConfiguration | null
 }
 
@@ -83,11 +85,29 @@ function cloneAiDecisionReview(value: QuantAiDecisionReview | null | undefined):
   }
 }
 
+function cloneAiFactorImpact(value: QuantAiFactorImpact | null | undefined): QuantAiFactorImpact | null {
+  if (!value)
+    return null
+  return {
+    ...value,
+    freshnessBlockedFactors: [...value.freshnessBlockedFactors],
+    factors: value.factors.map(factor => ({
+      ...factor,
+      freshness: {
+        ...factor.freshness,
+        missingEvidenceKeys: [...factor.freshness.missingEvidenceKeys],
+        unverifiableEvidenceKeys: [...factor.freshness.unverifiableEvidenceKeys],
+      },
+    })),
+  }
+}
+
 export function buildQuantDecisionRecordSnapshot(input: {
   readonly report: QuantResearchReport
   readonly latestDailyBar?: { readonly close: number, readonly tradeDate: string } | null
   readonly aiDecisionReview?: QuantAiDecisionReview | null
   readonly aiFactorReviews?: readonly QuantAiFactorReview[]
+  readonly aiFactorImpact?: QuantAiFactorImpact | null
 }): QuantDecisionRecordSnapshot {
   const decision: QuantDecisionProjection | undefined = input.report.decision
   return {
@@ -109,6 +129,7 @@ export function buildQuantDecisionRecordSnapshot(input: {
           citedEvidenceKeys: [...review.citedEvidenceKeys],
         }))
       : [],
+    factorImpact: cloneAiFactorImpact(input.aiFactorImpact),
     factorConfiguration: cloneFactorConfiguration(input.report.factorModel?.configuration),
   }
 }
@@ -257,6 +278,9 @@ export function parseQuantDecisionRecordSnapshot(value: string): QuantDecisionRe
       sellPriceRange: parsePriceRange(parsed.sellPriceRange),
       aiDecisionReview: parseAiDecisionReview(parsed.aiDecisionReview),
       aiFactorReviews: parseAiFactorReviews(parsed.aiFactorReviews),
+      factorImpact: parsed.factorImpact === undefined || parsed.factorImpact === null
+        ? null
+        : parseQuantAiFactorImpactSnapshot(parsed.factorImpact),
       factorConfiguration: parseFactorConfiguration(parsed.factorConfiguration),
     }
   }

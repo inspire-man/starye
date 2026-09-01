@@ -82,6 +82,8 @@ export interface QuantAiFactorImpactItem {
   aiConfidence: number | null
   aiAccepted: boolean
   aiWeight: number
+  /** Optional on historical factor-impact responses written before AI scoring. */
+  aiContribution?: number | null
   /** Optional on historical factor-impact responses written before freshness gating. */
   freshness?: QuantFactorFreshness
   /** Optional on historical factor-impact responses written before freshness gating. */
@@ -90,12 +92,18 @@ export interface QuantAiFactorImpactItem {
 
 export interface QuantAiFactorImpact {
   modelVersion: string
+  /** Optional on historical factor-impact responses written before AI scoring. */
+  evaluatedAt?: string
   /** Optional on historical factor-impact responses written before freshness gating. */
   freshnessVersion?: string
   /** Optional on historical factor-impact responses written before freshness gating. */
   freshnessBlockedFactors?: string[]
   totalWeight: number
   deterministicScore: number | null
+  /** Optional on historical factor-impact responses written before AI scoring. */
+  aiScore?: number | null
+  /** Optional on historical factor-impact responses written before AI scoring. */
+  aiScoreDelta?: number | null
   scoredWeight: number
   reviewedWeight: number
   reviewCoverage: number
@@ -237,6 +245,8 @@ export interface QuantResearchSummary {
     decisionReview?: QuantAiDecisionReview | null
   }
   factorImpact?: QuantAiFactorImpact | null
+  /** Optional on historical research summaries written before impact persistence. */
+  factorImpactSnapshot?: QuantAiFactorImpact | null
   citedEvidenceKeys: string[]
 }
 
@@ -256,6 +266,8 @@ export interface QuantDecisionRecordSnapshot {
   sellPriceRange: QuantReferencePriceRange | null
   aiDecisionReview: QuantAiDecisionReview | null
   aiFactorReviews: QuantAiFactorReview[]
+  /** Optional on historical decision records written before impact persistence. */
+  factorImpact?: QuantAiFactorImpact | null
   factorConfiguration: QuantFactorConfiguration | null
 }
 

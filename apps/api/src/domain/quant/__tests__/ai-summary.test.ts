@@ -1,7 +1,7 @@
 import type { QuantDecryptedAiConfig } from '../ai-config'
 import type { QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { buildQuantAiFactorImpact, generateQuantAiSummary, parseQuantAiSummary } from '../ai-summary'
+import { buildQuantAiFactorImpact, generateQuantAiSummary, parseQuantAiFactorImpactSnapshot, parseQuantAiSummary } from '../ai-summary'
 
 const report: QuantResearchReport = {
   reportVersion: 'research-report-v2',
@@ -162,6 +162,37 @@ describe('quant AI summary', () => {
     expect(String(requestInit?.body)).toContain('quality-roe')
     expect(String(requestInit?.body)).toContain('research-factor-config-v1')
     expect(String(requestInit?.body)).not.toContain('sk-user-secret')
+  })
+
+  it('normalizes snake_case fields returned by compatible AI gateways', () => {
+    const result = parseQuantAiSummary(JSON.stringify({
+      overview: '当前证据有一项明确支持。',
+      supports: ['ROE 达到报告门槛'],
+      concerns: [],
+      next_checks: ['继续核对财报'],
+      cited_evidence_keys: ['quality-roe'],
+      factor_reviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: 88,
+        rationale: '盈利质量有可核对证据。',
+        cited_evidence_keys: ['quality-roe'],
+      }],
+      decision_review: {
+        decision_version: 'ai-decision-v1',
+        recommendation: 'bullish',
+        confidence: 84,
+        rationale: '因子方向一致。',
+        invalidation_conditions: ['ROE 转弱后复核'],
+        cited_evidence_keys: ['quality-roe'],
+      },
+    }), factorReport, new Date('2026-08-26T00:00:00.000Z'))
+
+    expect(result).toMatchObject({
+      nextChecks: ['继续核对财报'],
+      factorReviews: [{ factor: 'quality', accepted: true }],
+      decisionReview: { decisionVersion: 'ai-decision-v1', accepted: true },
+    })
   })
 
   it('rejects invented evidence references', async () => {
@@ -326,7 +357,10 @@ describe('quant AI summary', () => {
 
     expect(impact).toMatchObject({
       modelVersion: 'research-factors-v1',
+      evaluatedAt: expect.any(String),
       deterministicScore: 72.5,
+      aiScore: 100,
+      aiScoreDelta: 27.5,
       scoredWeight: 1,
       reviewedWeight: 0.5,
       reviewCoverage: 50,
@@ -336,9 +370,24 @@ describe('quant AI summary', () => {
       unacceptedWeight: 0.5,
     })
     expect(impact?.factors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ factor: 'quality', deterministicContribution: 45, aiAccepted: true, aiWeight: 0.5 }),
-      expect.objectContaining({ factor: 'valuation', deterministicContribution: 35, aiAccepted: false, aiWeight: 0, aiStance: 'oppose' }),
+      expect.objectContaining({ factor: 'quality', deterministicContribution: 45, aiAccepted: true, aiWeight: 0.5, aiContribution: 100 }),
+      expect.objectContaining({ factor: 'valuation', deterministicContribution: 35, aiAccepted: false, aiWeight: 0, aiContribution: null, aiStance: 'oppose' }),
     ]))
+  })
+
+  it('round-trips the server-owned factor impact snapshot and rejects corruption', () => {
+    const impact = buildQuantAiFactorImpact(multiFactorReport, [{
+      factor: 'quality',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      rationale: '盈利质量证据可核对。',
+      citedEvidenceKeys: ['quality-roe'],
+    }], new Date('2026-08-29T08:00:00.000Z'))!
+
+    expect(parseQuantAiFactorImpactSnapshot(JSON.parse(JSON.stringify(impact)))).toEqual(impact)
+    expect(() => parseQuantAiFactorImpactSnapshot({ ...impact, evaluatedAt: 'not-a-date' })).toThrow('Persisted AI factor impact evaluation time is invalid')
+    expect(() => parseQuantAiFactorImpactSnapshot({ ...impact, factors: [] })).toThrow('Persisted AI factor impact factors are invalid')
   })
 
   it('recomputes persisted factor acceptance from evidence and freshness', () => {
