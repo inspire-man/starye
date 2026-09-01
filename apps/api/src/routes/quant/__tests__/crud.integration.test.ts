@@ -650,6 +650,24 @@ describe('quant watchlist CRUD contract', () => {
         detail: '最近一期 ROE 达到研究门槛。',
       }],
       sources: [],
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 1,
+        coverage: 100,
+        score: 72.5,
+        factors: [{
+          key: 'quality',
+          label: '盈利质量',
+          weight: 1,
+          sourceId: 'eastmoney-financial',
+          source: 'Eastmoney 最新财报',
+          status: 'ready',
+          score: 72.5,
+          evidenceKeys: ['quality-roe'],
+          missingEvidenceKeys: [],
+        }],
+      },
       decision: {
         decisionVersion: 'research-decision-v1',
         recommendation: 'bullish',
@@ -694,6 +712,13 @@ describe('quant watchlist CRUD contract', () => {
         concerns: ['当前证据范围仍有限'],
         nextChecks: ['等待下一期财报并复核'],
         citedEvidenceKeys: ['quality-roe'],
+        factorReviews: [{
+          factor: 'quality',
+          stance: 'oppose',
+          confidence: 82,
+          rationale: '盈利质量方向需要保留。',
+          citedEvidenceKeys: ['quality-roe'],
+        }],
         decisionReview: {
           decisionVersion: 'ai-decision-v1',
           recommendation: 'bearish',
@@ -713,8 +738,17 @@ describe('quant watchlist CRUD contract', () => {
 
     const generated = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)
     expect(generated.status).toBe(201)
-    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[], decisionReview: { recommendation: string, accepted: boolean } }, provider: string } }
-    expect(generatedPayload.data).toMatchObject({ provider: 'openai_compatible', summary: { citedEvidenceKeys: ['quality-roe'], decisionReview: { recommendation: 'bearish', accepted: true } } })
+    const generatedPayload = await generated.json() as { data: { summary: { citedEvidenceKeys: string[], decisionReview: { recommendation: string, accepted: boolean } }, factorImpact: { deterministicScore: number, reviewCoverage: number, opposeWeight: number, factors: Array<{ factor: string, deterministicContribution: number, aiAccepted: boolean, aiWeight: number }> }, provider: string } }
+    expect(generatedPayload.data).toMatchObject({
+      provider: 'openai_compatible',
+      summary: { citedEvidenceKeys: ['quality-roe'], decisionReview: { recommendation: 'bearish', accepted: true } },
+      factorImpact: {
+        deterministicScore: 72.5,
+        reviewCoverage: 100,
+        opposeWeight: 1,
+        factors: [expect.objectContaining({ factor: 'quality', deterministicContribution: 72.5, aiAccepted: true, aiWeight: 1 })],
+      },
+    })
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(expect.objectContaining({ authorization: 'Bearer sk-user-one-1234' }))
     await expect(client.execute('SELECT summary_json, cited_evidence_keys_json FROM quant_research_summary')).resolves.toMatchObject({
       rows: [{ summary_json: expect.not.stringContaining('sk-user-one-1234'), cited_evidence_keys_json: '["quality-roe"]' }],
@@ -722,7 +756,13 @@ describe('quant watchlist CRUD contract', () => {
 
     const history = await userA.request('/api/quant/research/runs/summary-run-1/summary?limit=1', {}, env)
     expect(history.status).toBe(200)
-    await expect(history.json()).resolves.toMatchObject({ data: [{ researchRunId: 'summary-run-1', citedEvidenceKeys: ['quality-roe'] }] })
+    await expect(history.json()).resolves.toMatchObject({
+      data: [{
+        researchRunId: 'summary-run-1',
+        citedEvidenceKeys: ['quality-roe'],
+        factorImpact: { deterministicScore: 72.5, reviewCoverage: 100, factors: [expect.objectContaining({ factor: 'quality', aiAccepted: true })] },
+      }],
+    })
     expect((await userB.request('/api/quant/research/runs/summary-run-1/summary', {}, env)).status).toBe(404)
 
     const rejected = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)

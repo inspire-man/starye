@@ -22,7 +22,7 @@ import { generateQuantAiComparison } from '../../domain/quant/ai-comparison'
 import { deleteQuantAiConfig, getDecryptedQuantAiConfig, getQuantAiConfig, saveQuantAiConfig } from '../../domain/quant/ai-config'
 import { testQuantAiConnection } from '../../domain/quant/ai-connection'
 import { generateQuantAiQuestion } from '../../domain/quant/ai-question'
-import { generateQuantAiSummary, parseQuantAiSummary } from '../../domain/quant/ai-summary'
+import { buildQuantAiFactorImpact, generateQuantAiSummary, parseQuantAiSummary } from '../../domain/quant/ai-summary'
 import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../../domain/quant/akshare-bridge'
 import { createQuantCapabilityRegistryFromEnv } from '../../domain/quant/capabilities'
 import { buildQuantValuationComparison } from '../../domain/quant/comparison'
@@ -233,6 +233,7 @@ function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResea
     generatedAt: row.generatedAt,
     createdAt: row.createdAt,
     summary,
+    factorImpact: buildQuantAiFactorImpact(report, summary.factorReviews),
     citedEvidenceKeys,
   }
 }

@@ -138,6 +138,97 @@ describe('quant ai research summary', () => {
     expect(wrapper.text()).toContain('当前推荐仍以确定性结论为准')
   })
 
+  it('shows deterministic contributions separately from accepted AI weight', () => {
+    const factorReport = report({
+      status: 'ready',
+      score: 82,
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 1,
+        coverage: 100,
+        score: 82,
+        factors: [{
+          key: 'quality',
+          label: '盈利质量',
+          weight: 0.5,
+          sourceId: 'eastmoney-financial',
+          source: 'Eastmoney 最新财报',
+          status: 'ready',
+          score: 90,
+          evidenceKeys: ['akshare-roe'],
+          missingEvidenceKeys: [],
+        }, {
+          key: 'valuation',
+          label: '估值',
+          weight: 0.5,
+          sourceId: 'eastmoney-valuation',
+          source: 'Eastmoney 估值',
+          status: 'ready',
+          score: 74,
+          evidenceKeys: ['valuation-pe'],
+          missingEvidenceKeys: [],
+        }],
+      },
+    })
+    const current = summary(['akshare-roe'])
+    current.factorImpact = {
+      modelVersion: 'research-factors-v1',
+      totalWeight: 1,
+      deterministicScore: 82,
+      scoredWeight: 1,
+      reviewedWeight: 0.5,
+      reviewCoverage: 50,
+      supportWeight: 0.5,
+      cautionWeight: 0,
+      opposeWeight: 0,
+      unacceptedWeight: 0.5,
+      factors: [{
+        factor: 'quality',
+        label: '盈利质量',
+        weight: 0.5,
+        deterministicScore: 90,
+        deterministicStance: 'support',
+        deterministicContribution: 45,
+        aiStance: 'support',
+        aiConfidence: 88,
+        aiAccepted: true,
+        aiWeight: 0.5,
+      }, {
+        factor: 'valuation',
+        label: '估值',
+        weight: 0.5,
+        deterministicScore: 74,
+        deterministicStance: 'support',
+        deterministicContribution: 37,
+        aiStance: null,
+        aiConfidence: null,
+        aiAccepted: false,
+        aiWeight: 0,
+      }],
+    }
+    current.summary.factorReviews = [{
+      factor: 'quality',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      rationale: '盈利质量有可核对证据。',
+      citedEvidenceKeys: ['akshare-roe'],
+    }]
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, report: factorReport, summary: current },
+    })
+
+    expect(wrapper.text()).toContain('因子贡献与 AI 影响')
+    expect(wrapper.text()).toContain('AI 已纳入权重')
+    expect(wrapper.text()).toContain('AI 方向权重')
+    expect(wrapper.text()).toContain('确定性贡献 45.0 分')
+    expect(wrapper.text()).toContain('AI 支持 · 计入 50%')
+    expect(wrapper.text()).toContain('确定性贡献 37.0 分')
+    expect(wrapper.text()).toContain('AI 未复核')
+    expect(wrapper.text()).toContain('不改写确定性分数或参考价格区间')
+  })
+
   it('shows factor gaps before an AI summary has been generated', () => {
     const factorReport = report({
       factorModel: {

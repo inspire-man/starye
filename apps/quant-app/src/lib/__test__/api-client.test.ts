@@ -1008,6 +1008,75 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary?limit=1`)
   })
 
+  it('normalizes the server-computed factor impact audit without requiring it on legacy summaries', async () => {
+    const summary = {
+      id: 'summary-impact-1',
+      research_run_id: 'run-impact-1',
+      summary_version: 'research-summary-v2',
+      report_version: 'research-report-v2',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-09-01T00:00:00.000Z',
+      created_at: '2026-09-01T00:00:00.000Z',
+      cited_evidence_keys: ['quality-roe'],
+      factor_impact: {
+        model_version: 'research-factors-v1',
+        total_weight: 1,
+        deterministic_score: 82,
+        scored_weight: 1,
+        reviewed_weight: 0.5,
+        review_coverage: 50,
+        support_weight: 0.5,
+        caution_weight: 0,
+        oppose_weight: 0,
+        unaccepted_weight: 0.5,
+        factors: [{
+          factor: 'quality',
+          label: '盈利质量',
+          weight: 0.5,
+          deterministic_score: 90,
+          deterministic_stance: 'support',
+          deterministic_contribution: 45,
+          ai_stance: 'support',
+          ai_confidence: 88,
+          ai_accepted: true,
+          ai_weight: 0.5,
+        }, {
+          factor: 'valuation',
+          label: '估值',
+          weight: 0.5,
+          deterministic_score: 74,
+          deterministic_stance: 'support',
+          deterministic_contribution: 37,
+          ai_stance: null,
+          ai_confidence: null,
+          ai_accepted: false,
+          ai_weight: 0,
+        }],
+      },
+      summary: {
+        summary_version: 'research-summary-v2',
+        overview: 'AI 已完成部分因子核对。',
+        supports: [],
+        concerns: [],
+        next_checks: [],
+        cited_evidence_keys: ['quality-roe'],
+      },
+    }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: summary }), { status: 201, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(quantApi.generateResearchSummary('run-impact-1')).resolves.toMatchObject({
+      factorImpact: {
+        reviewCoverage: 50,
+        unacceptedWeight: 0.5,
+        factors: [
+          { factor: 'quality', deterministicContribution: 45, aiAccepted: true, aiWeight: 0.5 },
+          { factor: 'valuation', aiAccepted: false, aiWeight: 0 },
+        ],
+      },
+    })
+  })
+
   it('normalizes an accepted AI decision review without accepting model-generated prices', async () => {
     const summary = {
       id: 'summary-decision-1',

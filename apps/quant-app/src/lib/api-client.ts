@@ -15,6 +15,7 @@ import type {
   QuantAiConfig,
   QuantAiConnectionTest,
   QuantAiDecisionReview,
+  QuantAiFactorImpact,
   QuantAiFactorReview,
   QuantAiProvider,
   QuantDecisionAssistant,
@@ -736,6 +737,56 @@ function parseAiFactorReviews(value: unknown): QuantAiFactorReview[] | null {
   return reviews
 }
 
+function parseAiFactorImpact(value: unknown): QuantAiFactorImpact | null {
+  if (value === undefined || value === null)
+    return null
+  if (!isRecord(value))
+    return null
+
+  const modelVersion = readString(value, 'modelVersion', 'model_version')
+  const deterministicScore = value.deterministicScore === null ? null : readNumber(value, 'deterministicScore', 'deterministic_score')
+  const totalWeight = readNumber(value, 'totalWeight', 'total_weight')
+  const scoredWeight = readNumber(value, 'scoredWeight', 'scored_weight')
+  const reviewedWeight = readNumber(value, 'reviewedWeight', 'reviewed_weight')
+  const reviewCoverage = readNumber(value, 'reviewCoverage', 'review_coverage')
+  const supportWeight = readNumber(value, 'supportWeight', 'support_weight')
+  const cautionWeight = readNumber(value, 'cautionWeight', 'caution_weight')
+  const opposeWeight = readNumber(value, 'opposeWeight', 'oppose_weight')
+  const unacceptedWeight = readNumber(value, 'unacceptedWeight', 'unaccepted_weight')
+  if (!modelVersion || totalWeight === null || scoredWeight === null || reviewedWeight === null || reviewCoverage === null || supportWeight === null || cautionWeight === null || opposeWeight === null || unacceptedWeight === null
+    || totalWeight < 0 || scoredWeight < 0 || reviewedWeight < 0 || reviewCoverage < 0 || reviewCoverage > 100 || supportWeight < 0 || cautionWeight < 0 || opposeWeight < 0 || unacceptedWeight < 0) {
+    return null
+  }
+
+  const factors = readList(value, 'factors').flatMap((item): QuantAiFactorImpact['factors'] => {
+    if (!isRecord(item))
+      return []
+    const factor = readString(item, 'factor')
+    const label = readString(item, 'label')
+    const weight = readNumber(item, 'weight')
+    const deterministicScore = item.deterministicScore === null ? null : readNumber(item, 'deterministicScore', 'deterministic_score')
+    const deterministicStance = readString(item, 'deterministicStance', 'deterministic_stance')
+    const deterministicContribution = item.deterministicContribution === null ? null : readNumber(item, 'deterministicContribution', 'deterministic_contribution')
+    const aiStance = item.aiStance === null ? null : readString(item, 'aiStance', 'ai_stance')
+    const aiConfidence = item.aiConfidence === null ? null : readNumber(item, 'aiConfidence', 'ai_confidence')
+    const aiAccepted = readBoolean(item, 'aiAccepted', 'ai_accepted')
+    const aiWeight = readNumber(item, 'aiWeight', 'ai_weight')
+    if ((factor !== 'trend' && factor !== 'valuation' && factor !== 'quality' && factor !== 'shareholder-return' && factor !== 'risk')
+      || !label || weight === null || weight < 0 || weight > 1
+      || (deterministicStance !== 'support' && deterministicStance !== 'caution' && deterministicStance !== 'oppose' && deterministicStance !== 'insufficient')
+      || (aiStance !== null && aiStance !== 'support' && aiStance !== 'caution' && aiStance !== 'oppose' && aiStance !== 'insufficient')
+      || (deterministicContribution !== null && (deterministicContribution < 0 || deterministicContribution > 100))
+      || (aiConfidence !== null && (aiConfidence < 0 || aiConfidence > 100))
+      || aiAccepted === null || aiWeight === null || aiWeight < 0 || aiWeight > 1) {
+      return []
+    }
+    return [{ factor, label, weight, deterministicScore, deterministicStance, deterministicContribution, aiStance, aiConfidence, aiAccepted, aiWeight } as QuantAiFactorImpact['factors'][number]]
+  })
+  if (!factors.length || factors.length > 5)
+    return null
+  return { modelVersion, totalWeight, deterministicScore, scoredWeight, reviewedWeight, reviewCoverage, supportWeight, cautionWeight, opposeWeight, unacceptedWeight, factors }
+}
+
 function parseResearchSummary(value: unknown): QuantResearchSummary | null {
   if (!isRecord(value))
     return null
@@ -759,6 +810,7 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
   const factorReviews = parseAiFactorReviews(rawSummary.factorReviews ?? rawSummary.factor_reviews)
   if (!factorReviews)
     return null
+  const factorImpact = parseAiFactorImpact(value.factorImpact ?? value.factor_impact)
   const rawDecisionReview = rawSummary.decisionReview ?? rawSummary.decision_review
   const decisionReview: QuantAiDecisionReview | null = isRecord(rawDecisionReview)
     ? (() => {
@@ -811,6 +863,7 @@ function parseResearchSummary(value: unknown): QuantResearchSummary | null {
       factorReviews,
       decisionReview,
     },
+    factorImpact,
     citedEvidenceKeys: readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys').length
       ? readStringList(value, 'citedEvidenceKeys', 'cited_evidence_keys')
       : citedEvidenceKeys,
