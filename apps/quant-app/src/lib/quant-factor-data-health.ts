@@ -1,4 +1,5 @@
-import type { QuantResearchEvidence, QuantResearchEvidenceStatus, QuantResearchFactor, QuantResearchReport } from './quant-types'
+import type { QuantFactorFreshness, QuantResearchEvidence, QuantResearchEvidenceStatus, QuantResearchFactor, QuantResearchReport } from './quant-types'
+import { buildQuantFactorFreshness } from './quant-factor-freshness'
 
 export const QUANT_FACTOR_DATA_HEALTH_VERSION = 'quant-factor-data-health-v1' as const
 
@@ -19,6 +20,7 @@ export interface QuantFactorDataHealthItem {
   readonly label: string
   readonly weight: number
   readonly score: number | null
+  readonly freshness: QuantFactorFreshness
   readonly status: QuantFactorDataHealthStatus
   readonly source: string
   readonly sourceHealth: QuantFactorSourceHealth
@@ -108,7 +110,7 @@ function nextAction(
   return '已具备原始证据，可进入因子复核'
 }
 
-function itemForFactor(factor: QuantResearchFactor, evidenceByKey: ReadonlyMap<string, QuantResearchEvidence>): QuantFactorDataHealthItem {
+function itemForFactor(factor: QuantResearchFactor, evidenceByKey: ReadonlyMap<string, QuantResearchEvidence>, evaluatedAt: Date): QuantFactorDataHealthItem {
   const evidence = factor.evidenceKeys.flatMap((key): QuantFactorDataHealthEvidence[] => {
     const item = evidenceByKey.get(key)
     if (!item)
@@ -129,6 +131,7 @@ function itemForFactor(factor: QuantResearchFactor, evidenceByKey: ReadonlyMap<s
     ...evidence.filter(item => item.status === 'missing').map(item => item.key),
   ])]
   const failedEvidenceKeys = [...new Set(evidence.filter(item => item.status === 'fail').map(item => item.key))]
+  const freshness = buildQuantFactorFreshness(factor, [...evidenceByKey.values()], evaluatedAt)
   const usableEvidenceCount = evidence.filter(item => item.status === 'pass' || item.status === 'caution').length
   const factorSourceHealth = sourceHealth(factor.source)
   const sourceHealthValue = mergeSourceHealth(factorSourceHealth, evidenceSourceHealth(evidence))
@@ -145,6 +148,7 @@ function itemForFactor(factor: QuantResearchFactor, evidenceByKey: ReadonlyMap<s
     label: factor.label,
     weight: round(factor.weight),
     score: finite(factor.score),
+    freshness,
     status,
     source: factor.source,
     sourceHealth: sourceHealthValue,
@@ -169,10 +173,10 @@ function aggregateSourceHealth(items: readonly QuantFactorDataHealthItem[]): Qua
   return 'unknown'
 }
 
-export function buildQuantFactorDataHealth(report: QuantResearchReport): QuantFactorDataHealth {
+export function buildQuantFactorDataHealth(report: QuantResearchReport, evaluatedAt: Date = new Date()): QuantFactorDataHealth {
   const factors = (report.factorModel?.factors ?? []).filter(factor => factor.weight > 0 && Number.isFinite(factor.weight))
   const evidenceByKey = new Map(report.evidence.map(item => [item.key, item]))
-  const items = factors.map(factor => itemForFactor(factor, evidenceByKey))
+  const items = factors.map(factor => itemForFactor(factor, evidenceByKey, evaluatedAt))
   const totalWeight = items.reduce((total, item) => total + item.weight, 0)
   const readyWeight = items.reduce((total, item) => total + (item.status === 'ready' ? item.weight : 0), 0)
   const hasUnavailable = items.some(item => item.status === 'unavailable')

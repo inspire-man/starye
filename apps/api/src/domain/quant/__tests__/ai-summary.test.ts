@@ -1,7 +1,7 @@
 import type { QuantDecryptedAiConfig } from '../ai-config'
 import type { QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { buildQuantAiFactorImpact, generateQuantAiSummary } from '../ai-summary'
+import { buildQuantAiFactorImpact, generateQuantAiSummary, parseQuantAiSummary } from '../ai-summary'
 
 const report: QuantResearchReport = {
   reportVersion: 'research-report-v2',
@@ -341,6 +341,34 @@ describe('quant AI summary', () => {
     ]))
   })
 
+  it('recomputes persisted factor acceptance from evidence and freshness', () => {
+    const staleReport: QuantResearchReport = {
+      ...multiFactorReport,
+      evidence: multiFactorReport.evidence.map(item => item.key === 'valuation-pe' ? { ...item, observedAt: '2026-05-01' } : item),
+    }
+    const impact = buildQuantAiFactorImpact(staleReport, [{
+      factor: 'quality',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      rationale: '盈利质量证据可核对。',
+      citedEvidenceKeys: ['quality-roe'],
+    }, {
+      factor: 'valuation',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      rationale: '估值证据可核对。',
+      citedEvidenceKeys: ['valuation-pe'],
+    }], new Date('2026-09-01T00:00:00.000Z'))
+
+    expect(impact).toMatchObject({ freshnessBlockedFactors: ['valuation'], reviewedWeight: 0.5, reviewCoverage: 50 })
+    expect(impact?.factors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ factor: 'quality', aiAccepted: true, aiFreshnessEligible: true, freshness: expect.objectContaining({ status: 'fresh' }) }),
+      expect.objectContaining({ factor: 'valuation', aiAccepted: false, aiFreshnessEligible: false, freshness: expect.objectContaining({ status: 'stale' }) }),
+    ]))
+  })
+
   it('includes factor evidence ownership and missing keys in the AI prompt', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
       factorReviews: [{
@@ -424,6 +452,34 @@ describe('quant AI summary', () => {
       factorReviews: [{ accepted: false }],
       decisionReview: { accepted: false, rejectionReason: 'factor-review-incomplete' },
     })
+  })
+
+  it('keeps an AI explanation but blocks its factor and decision when evidence freshness is insufficient', () => {
+    const agingReport: QuantResearchReport = {
+      ...factorReport,
+      evidence: factorReport.evidence.map(item => ({ ...item, observedAt: '20260101' })),
+    }
+    const content = validContent({
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: 88,
+        rationale: '盈利质量有可核对证据，但数据时间需要复核。',
+        citedEvidenceKeys: ['quality-roe'],
+      }],
+      decisionReview: {
+        decisionVersion: 'ai-decision-v1',
+        recommendation: 'bullish',
+        confidence: 84,
+        rationale: '仅根据历史证据给出解释。',
+        invalidationConditions: ['刷新数据后重新评估'],
+        citedEvidenceKeys: ['quality-roe'],
+      },
+    })
+
+    const result = parseQuantAiSummary(content, agingReport, new Date('2026-09-01T00:00:00.000Z'))
+    expect(result.factorReviews).toMatchObject([{ factor: 'quality', stance: 'support', accepted: false }])
+    expect(result.decisionReview).toMatchObject({ accepted: false, rejectionReason: 'factor-review-incomplete', factorReviewCoverage: 0 })
   })
 
   it('classifies missing key and timeout separately', async () => {

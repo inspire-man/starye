@@ -58,7 +58,7 @@ function freshnessCheck(freshness: QuantDataHealthFreshness, detail: string | un
 }
 
 function factorLabels(factorImpact: QuantAiFactorImpact | null | undefined): string[] {
-  return factorImpact?.factors.filter(factor => !factor.aiAccepted).map(factor => factor.label) ?? []
+  return factorImpact?.factors.filter(factor => !factor.aiAccepted || (factor.freshness !== undefined && factor.freshness.status !== 'fresh')).map(factor => factor.label) ?? []
 }
 
 function dataCheck(report: QuantResearchReport): { readonly check: QuantDecisionReadinessCheck, readonly unresolvedFactors: string[] } {
@@ -136,6 +136,19 @@ function aiCheck(
   if (!factorImpact) {
     return {
       check: { key: 'ai', status: 'review', label: 'AI 复核', detail: 'AI 最终复核已接受，但历史摘要缺少因子影响审计' },
+      unresolvedFactors,
+    }
+  }
+
+  const freshnessBlocked = factorImpact.factors.filter(factor => factor.freshness !== undefined && factor.freshness.status !== 'fresh')
+  if (freshnessBlocked.length || factorImpact.freshnessBlockedFactors?.length) {
+    return {
+      check: {
+        key: 'ai',
+        status: 'review',
+        label: 'AI 复核',
+        detail: `AI 已复核，但 ${freshnessBlocked.map(factor => factor.label).join('、') || factorImpact.freshnessBlockedFactors?.join('、')} 的证据时间不足，未纳入最终判断`,
+      },
       unresolvedFactors,
     }
   }

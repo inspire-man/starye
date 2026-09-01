@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { QuantAiFactorImpact, QuantAiFactorReview, QuantResearchEvidence, QuantResearchFactor, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
+import type { QuantAiFactorImpact, QuantAiFactorReview, QuantFactorFreshness, QuantResearchEvidence, QuantResearchFactor, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
 import { AlertCircle, BrainCircuit, CheckCircle2, CircleHelp, RefreshCw } from 'lucide-vue-next'
 import { computed } from 'vue'
+import { buildQuantFactorFreshness } from '../lib/quant-factor-freshness'
 import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
 
 const props = defineProps<{
@@ -106,6 +107,22 @@ function factorReviewDecisionLabel(accepted: boolean, stance: string): string {
   return stance === 'insufficient' ? '数据不足，未计入' : '未达到纳入门槛'
 }
 
+function factorFreshness(row: FactorRow): QuantFactorFreshness | null {
+  if (row.impact)
+    return row.impact.freshness ?? null
+  return row.factor ? buildQuantFactorFreshness(row.factor, props.report.evidence) : null
+}
+
+function factorFreshnessLabel(value: QuantFactorFreshness | null): string {
+  if (!value)
+    return '时间未知'
+  return value.status === 'fresh' ? '最新' : value.status === 'aging' ? '需复核' : value.status === 'stale' ? '已过期' : '时间未知'
+}
+
+function factorFreshnessClass(value: QuantFactorFreshness | null): string {
+  return `quant-ai-summary-factor-freshness-${value?.status || 'unknown'}`
+}
+
 function factorStatusLabel(value: string): string {
   return { ready: '数据完整', partial: '部分覆盖', missing: '数据缺失', unavailable: '来源不可用' }[value] || value
 }
@@ -117,6 +134,9 @@ function factorStatusClass(value: string): string {
 function factorReviewStatusLabel(row: FactorRow): string {
   if (!row.review)
     return 'AI 未返回复核'
+  const freshness = factorFreshness(row)
+  if (freshness && freshness.status !== 'fresh')
+    return freshness.status === 'unknown' ? '时间未知，未计入' : '数据时效不足，未计入'
   return factorReviewDecisionLabel(row.review.accepted, row.review.stance)
 }
 
@@ -239,6 +259,9 @@ function formatEvidenceDate(value: string | null): string {
       <p v-if="factorImpact" class="quant-ai-summary-impact-note" role="note">
         AI 加权影响只表示已接受复核的因子权重，不改写确定性分数或参考价格区间。
       </p>
+      <p v-if="factorImpact?.freshnessBlockedFactors?.length" class="quant-ai-summary-factor-warning" role="status">
+        新鲜度闸门阻断：{{ factorImpact.freshnessBlockedFactors?.map(factorLabel).join('、') }}；这些因子仍可查看 AI 解释，但不会进入最终推荐。
+      </p>
       <p v-if="factorReviewIncomplete" class="quant-ai-summary-factor-warning" role="status">
         AI 尚未完成全部有权重因子的证据复核，当前推荐仍以确定性结论为准。
       </p>
@@ -249,11 +272,13 @@ function formatEvidenceDate(value: string | null): string {
             <span v-if="row.factor" class="quant-ai-summary-factor-stance" :class="factorStatusClass(row.factor.status)">{{ factorStatusLabel(row.factor.status) }}</span>
             <span v-if="row.factor" class="quant-ai-summary-factor-weight">权重 {{ (row.factor.weight * 100).toFixed(0) }}%</span>
             <span v-if="row.review" class="quant-ai-summary-factor-stance" :class="factorStanceClass(row.review.stance)">{{ factorStanceLabel(row.review.stance) }}</span>
+            <span v-if="factorFreshness(row)" class="quant-ai-summary-factor-freshness" :class="factorFreshnessClass(factorFreshness(row))">{{ factorFreshnessLabel(factorFreshness(row)) }}</span>
             <span class="quant-ai-summary-factor-accepted" :class="factorReviewStatusClass(row)">{{ factorReviewStatusLabel(row) }}</span>
           </div>
           <div v-if="row.factor" class="quant-ai-summary-factor-meta">
             <span>证据覆盖 {{ factorEvidenceCoverage(row.factor) }}</span>
             <span>{{ row.factor.source }}</span>
+            <span v-if="factorFreshness(row)">新鲜度 {{ factorFreshnessLabel(factorFreshness(row)) }} · {{ factorFreshness(row)?.detail }}</span>
           </div>
           <div v-if="row.impact" class="quant-ai-summary-factor-impact">
             <span>确定性贡献 {{ formatFactorContribution(row.impact.deterministicContribution) }}</span>
@@ -672,11 +697,28 @@ function formatEvidenceDate(value: string | null): string {
 }
 
 .quant-ai-summary-factor-stance,
-.quant-ai-summary-factor-accepted {
+.quant-ai-summary-factor-accepted,
+.quant-ai-summary-factor-freshness {
   border-radius: var(--ui-radius-sm, 0.25rem);
   padding: 0.12rem 0.3rem;
   font-size: 0.6rem;
   font-weight: 720;
+}
+
+.quant-ai-summary-factor-freshness-fresh {
+  background: hsl(var(--status-success-soft));
+  color: hsl(var(--status-success));
+}
+
+.quant-ai-summary-factor-freshness-aging {
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
+}
+
+.quant-ai-summary-factor-freshness-stale,
+.quant-ai-summary-factor-freshness-unknown {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
 }
 
 .quant-ai-summary-factor-support,

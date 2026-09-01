@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { QuantDataHealthFreshness } from '../lib/data-health'
 import type { QuantFactorDataHealthItem, QuantFactorSourceHealth } from '../lib/quant-factor-data-health'
-import type { QuantAiDecisionReview, QuantRecommendation, QuantReferencePriceRange, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
+import type { QuantAiDecisionReview, QuantFactorFreshness, QuantRecommendation, QuantReferencePriceRange, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
 import { BrainCircuit, CircleHelp, Info } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { buildQuantDecisionReadiness } from '../lib/decision-readiness'
@@ -25,7 +25,13 @@ const emit = defineEmits<{
 const reportDecision = computed(() => props.report?.decision || null)
 const aiReview = computed<QuantAiDecisionReview | null>(() => props.summary?.summary.decisionReview || null)
 const dataFreshness = computed<QuantDataHealthFreshness>(() => props.dataFreshness || 'unknown')
-const appliedAiReview = computed(() => aiReview.value?.accepted && dataFreshness.value === 'fresh' ? aiReview.value : null)
+const aiFactorFreshnessReady = computed(() => {
+  const impact = props.summary?.factorImpact
+  return Boolean(impact
+    && !impact.freshnessBlockedFactors?.length
+    && impact.factors.every(factor => factor.freshness === undefined || factor.freshness.status === 'fresh'))
+})
+const appliedAiReview = computed(() => aiReview.value?.accepted && dataFreshness.value === 'fresh' && aiFactorFreshnessReady.value ? aiReview.value : null)
 const activeRecommendation = computed<QuantRecommendation | null>(() => appliedAiReview.value?.recommendation || reportDecision.value?.recommendation || null)
 const activeLabel = computed(() => recommendationLabel(activeRecommendation.value))
 const activeSource = computed(() => appliedAiReview.value ? 'AI 决策复核' : '确定性因子模型')
@@ -122,6 +128,18 @@ function factorSourceHealthClass(value: QuantFactorSourceHealth): string {
   return `quant-factor-health-source-${value}`
 }
 
+function factorFreshness(value: string): QuantFactorFreshness | null {
+  return factorDataHealth.value?.items.find(item => item.factor === value)?.freshness || null
+}
+
+function factorFreshnessLabel(value: QuantFactorFreshness | null): string {
+  return value?.status === 'fresh' ? '最新' : value?.status === 'aging' ? '需复核' : value?.status === 'stale' ? '已过期' : '时间未知'
+}
+
+function factorFreshnessClass(value: QuantFactorFreshness | null): string {
+  return `quant-factor-health-freshness-${value?.status || 'unknown'}`
+}
+
 function factorObservedAt(value: string | null): string {
   if (!value)
     return '观察时间未记录'
@@ -194,10 +212,12 @@ function factorObservedAt(value: string | null): string {
               <strong>{{ factor.label }}</strong>
               <span>权重 {{ (factor.weight * 100).toFixed(0) }}%</span>
               <span class="quant-factor-data-health-status" :class="factorHealthStatusClass(factor.status)">{{ factorHealthStatusLabel(factor.status) }}</span>
+              <span class="quant-factor-data-health-freshness" :class="factorFreshnessClass(factorFreshness(factor.factor))">{{ factorFreshnessLabel(factorFreshness(factor.factor)) }}</span>
             </div>
             <div class="quant-factor-data-health-meta">
               <span>证据 {{ factor.usableEvidenceCount }} / {{ factor.evidenceCount }} 可用</span>
               <span>观察 {{ factorObservedAt(factor.observedAt) }}</span>
+              <span>时效 {{ factorFreshness(factor.factor)?.detail || '没有可核验因子证据时间' }}</span>
               <span :class="factorSourceHealthClass(factor.sourceHealth)">{{ factorSourceHealthLabel(factor.sourceHealth) }}：{{ factor.source || '来源未记录' }}</span>
             </div>
             <small v-if="factor.missingEvidenceKeys.length" class="quant-factor-data-health-missing">待补证据：{{ factor.missingEvidenceKeys.join('、') }}</small>
@@ -479,7 +499,7 @@ function factorObservedAt(value: string | null): string {
 .quant-factor-data-health-heading small,
 .quant-factor-data-health-note,
 .quant-factor-data-health-meta,
-.quant-factor-data-health-row-heading > span:not(.quant-factor-data-health-status),
+.quant-factor-data-health-row-heading > span:not(.quant-factor-data-health-status):not(.quant-factor-data-health-freshness),
 .quant-factor-data-health-row small {
   overflow-wrap: anywhere;
   color: hsl(var(--muted-foreground));
@@ -533,6 +553,30 @@ function factorObservedAt(value: string | null): string {
   overflow-wrap: anywhere;
   font-size: 0.625rem;
   font-weight: 700;
+}
+
+.quant-factor-data-health-freshness {
+  flex: 0 0 auto;
+  border-radius: var(--ui-radius-sm, 0.25rem);
+  padding: 0.12rem 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 720;
+}
+
+.quant-factor-health-freshness-fresh {
+  background: hsl(var(--status-success-soft));
+  color: hsl(var(--status-success));
+}
+
+.quant-factor-health-freshness-aging {
+  background: hsl(var(--status-warning-soft));
+  color: hsl(var(--status-warning));
+}
+
+.quant-factor-health-freshness-stale,
+.quant-factor-health-freshness-unknown {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
 }
 
 .quant-factor-data-health-meta {

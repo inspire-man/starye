@@ -161,6 +161,7 @@ describe('quant decision recommendation', () => {
     expect(wrapper.text()).toContain('因子数据健康')
     expect(wrapper.text()).toContain('字段覆盖 100%')
     expect(wrapper.text()).toContain('证据 1 / 1 可用')
+    expect(wrapper.text()).toContain('最新')
   })
 
   it('uses an accepted AI review for the final label while retaining deterministic prices', () => {

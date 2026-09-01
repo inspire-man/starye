@@ -199,9 +199,9 @@ function researchRunView(row: QuantResearchRunRecord) {
   }
 }
 
-function parseStoredAiSummary(value: string, report: QuantResearchReport): QuantAiSummary {
+function parseStoredAiSummary(value: string, report: QuantResearchReport, evaluatedAt: Date): QuantAiSummary {
   try {
-    return parseQuantAiSummary(value, report)
+    return parseQuantAiSummary(value, report, evaluatedAt)
   }
   catch {
     throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI summary is invalid', 500)
@@ -220,8 +220,8 @@ function parseStoredEvidenceKeys(value: string): readonly string[] {
   }
 }
 
-function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResearchReport) {
-  const summary = parseStoredAiSummary(row.summaryJson, report)
+function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResearchReport, evaluatedAt: Date = new Date()) {
+  const summary = parseStoredAiSummary(row.summaryJson, report, evaluatedAt)
   const citedEvidenceKeys = parseStoredEvidenceKeys(row.citedEvidenceKeysJson)
   return {
     id: row.id,
@@ -233,7 +233,7 @@ function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResea
     generatedAt: row.generatedAt,
     createdAt: row.createdAt,
     summary,
-    factorImpact: buildQuantAiFactorImpact(report, summary.factorReviews),
+    factorImpact: buildQuantAiFactorImpact(report, summary.factorReviews, evaluatedAt),
     citedEvidenceKeys,
   }
 }
@@ -268,7 +268,7 @@ function decisionAssistantView(row: QuantDecisionAssessmentRecord, report?: Quan
     id: row.id,
     createdAt: row.createdAt,
     ...snapshot,
-    factorImpact: report ? buildQuantAiFactorImpact(report, snapshot.ai.factorReviews) : null,
+    factorImpact: report ? buildQuantAiFactorImpact(report, snapshot.ai.factorReviews, new Date(snapshot.assessedAt)) : null,
   }
 }
 
@@ -1106,6 +1106,7 @@ quantRoutes.post('/decision-assistant', validator('json', QuantDecisionAssistant
           report,
           deterministic: assessment.deterministic,
           scenario,
+          evaluatedAt: new Date(assessment.assessedAt),
         }))
       }
       catch (error) {
