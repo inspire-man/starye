@@ -119,6 +119,27 @@ const factorReport: QuantResearchReport = {
   },
 }
 
+const multiFactorReport: QuantResearchReport = {
+  ...factorReport,
+  factorModel: {
+    ...factorReport.factorModel!,
+    factors: [
+      { ...factorReport.factorModel!.factors[0]!, weight: 0.5 },
+      {
+        key: 'valuation',
+        label: '估值',
+        weight: 0.5,
+        sourceId: 'eastmoney-valuation',
+        source: 'Eastmoney 估值',
+        status: 'ready',
+        score: 70,
+        evidenceKeys: ['valuation-pe'],
+        missingEvidenceKeys: [],
+      },
+    ],
+  },
+}
+
 describe('quant AI summary', () => {
   it('generates a bounded evidence-grounded summary without exposing the key in the prompt', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent()))
@@ -254,6 +275,55 @@ describe('quant AI summary', () => {
       citedEvidenceKeys: ['quality-roe'],
     }])
     expect(result.decisionReview).toMatchObject({ accepted: true, factorReviewCoverage: 100 })
+  })
+
+  it('requires every positive-weight factor before accepting an AI decision review', async () => {
+    const decisionReview = {
+      decisionVersion: 'ai-decision-v1',
+      recommendation: 'bullish',
+      confidence: 84,
+      rationale: '当前因子复核仍需补齐。',
+      invalidationConditions: ['估值复核完成后重新评估'],
+      citedEvidenceKeys: ['quality-roe'],
+    }
+    const omittedFactorReviews = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({ decisionReview })))
+    await expect(generateQuantAiSummary({ report: factorReport, config, fetchImpl: omittedFactorReviews })).resolves.toMatchObject({
+      decisionReview: { accepted: false, rejectionReason: 'factor-review-incomplete', factorReviewCoverage: 0 },
+    })
+
+    const partialFactorReviews = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: 88,
+        rationale: '盈利质量有可核对证据。',
+        citedEvidenceKeys: ['quality-roe'],
+      }],
+      decisionReview,
+    })))
+    await expect(generateQuantAiSummary({ report: multiFactorReport, config, fetchImpl: partialFactorReviews })).resolves.toMatchObject({
+      factorReviews: [{ factor: 'quality', accepted: true }],
+      decisionReview: { accepted: false, rejectionReason: 'factor-review-incomplete', factorReviewCoverage: 50 },
+    })
+  })
+
+  it('includes factor evidence ownership and missing keys in the AI prompt', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: 88,
+        rationale: '盈利质量有可核对证据。',
+        citedEvidenceKeys: ['quality-roe'],
+      }],
+    })))
+    await generateQuantAiSummary({ report: factorReport, config, fetchImpl })
+
+    const requestBody = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as { messages: Array<{ content: string }> }
+    expect(requestBody.messages[1]?.content).toContain('"sourceId":"eastmoney-financial"')
+    expect(requestBody.messages[1]?.content).toContain('"evidenceKeys":["quality-roe"]')
+    expect(requestBody.messages[1]?.content).toContain('"missingEvidenceKeys":[]')
+    expect(requestBody.messages[1]?.content).toContain('权重大于 0')
   })
 
   it('rejects cross-factor citations and records direction conflicts without applying them', async () => {

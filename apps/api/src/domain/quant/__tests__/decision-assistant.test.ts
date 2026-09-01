@@ -215,6 +215,18 @@ describe('quant decision assistant', () => {
       scenario: base.scenario,
     })
     expect(lowConfidence).toMatchObject({ status: 'rejected', accepted: false, rejectionReason: 'low-confidence' })
+
+    const incomplete = buildQuantDecisionAssistantAiReview({
+      generated: parseQuantAiDecisionAssistant({
+        ...assistantPayload(),
+        factorReviews: assistantPayload().factorReviews.filter(review => review.factor !== 'risk'),
+      }, report()),
+      config: { provider: 'openai_compatible', model: 'gpt-5.4' },
+      report: report(),
+      deterministic: base.deterministic,
+      scenario: base.scenario,
+    })
+    expect(incomplete).toMatchObject({ status: 'rejected', accepted: false, rejectionReason: 'factor-review-incomplete', factorReviewCoverage: 80 })
   })
 
   it('rejects cross-factor evidence and round-trips the persisted snapshot', () => {

@@ -84,6 +84,90 @@ describe('quant ai research summary', () => {
     expect(wrapper.text()).toContain('2026-06-30 · akshare-adapter-v1')
   })
 
+  it('shows deterministic factor coverage and missing AI factor reviews', () => {
+    const factorReport = report({
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 0.5,
+        coverage: 50,
+        score: 80,
+        factors: [{
+          key: 'quality',
+          label: '盈利质量',
+          weight: 0.5,
+          sourceId: 'eastmoney-financial',
+          source: 'Eastmoney 最新财报',
+          status: 'ready',
+          score: 90,
+          evidenceKeys: ['akshare-roe'],
+          missingEvidenceKeys: [],
+        }, {
+          key: 'valuation',
+          label: '估值',
+          weight: 0.5,
+          sourceId: 'eastmoney-valuation',
+          source: 'Eastmoney 估值',
+          status: 'missing',
+          score: null,
+          evidenceKeys: ['valuation-pe'],
+          missingEvidenceKeys: ['valuation-pe'],
+        }],
+      },
+    })
+    const current = summary(['akshare-roe'])
+    current.summary.factorReviews = [{
+      factor: 'quality',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      rationale: '盈利质量有可核对证据。',
+      citedEvidenceKeys: ['akshare-roe'],
+    }]
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, report: factorReport, summary: current },
+    })
+
+    expect(wrapper.text()).toContain('因子覆盖与 AI 复核')
+    expect(wrapper.text()).toContain('1 / 2 个有权重因子已纳入')
+    expect(wrapper.text()).toContain('盈利质量')
+    expect(wrapper.text()).toContain('估值')
+    expect(wrapper.text()).toContain('数据缺失')
+    expect(wrapper.text()).toContain('待补证据：valuation-pe')
+    expect(wrapper.text()).toContain('AI 未返回复核')
+    expect(wrapper.text()).toContain('当前推荐仍以确定性结论为准')
+  })
+
+  it('shows factor gaps before an AI summary has been generated', () => {
+    const factorReport = report({
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 1,
+        coverage: 100,
+        score: 90,
+        factors: [{
+          key: 'quality',
+          label: '盈利质量',
+          weight: 1,
+          sourceId: 'eastmoney-financial',
+          source: 'Eastmoney 最新财报',
+          status: 'ready',
+          score: 90,
+          evidenceKeys: ['akshare-roe'],
+          missingEvidenceKeys: [],
+        }],
+      },
+    })
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, report: factorReport, summary: null },
+    })
+
+    expect(wrapper.text()).toContain('0 / 1 个有权重因子已纳入')
+    expect(wrapper.text()).toContain('AI 未返回复核')
+    expect(wrapper.text()).toContain('等待生成 AI 复核')
+  })
+
   it('keeps unknown historical citation keys visible without a fabricated value', () => {
     const wrapper = mount(QuantAiResearchSummary, {
       props: { ...baseProps, report: report(), summary: summary(['old-evidence-key']) },
@@ -147,7 +231,7 @@ describe('quant ai research summary', () => {
       props: { ...baseProps, report: report(), summary: current },
     })
 
-    expect(wrapper.text()).toContain('因子级复核')
+    expect(wrapper.text()).toContain('因子覆盖与 AI 复核')
     expect(wrapper.text()).toContain('盈利质量')
     expect(wrapper.text()).toContain('已计入 AI 复核')
     expect(wrapper.text()).toContain('数据不足，未计入')

@@ -64,7 +64,27 @@ function reportPrompt(report: QuantResearchReport): string {
     action: report.action,
     score: report.score,
     headline: report.headline,
-    factorModel: report.factorModel ?? null,
+    factorModel: report.factorModel
+      ? {
+          modelVersion: report.factorModel.modelVersion,
+          totalWeight: report.factorModel.totalWeight,
+          coveredWeight: report.factorModel.coveredWeight,
+          coverage: report.factorModel.coverage,
+          score: report.factorModel.score,
+          configuration: report.factorModel.configuration ?? null,
+          factors: report.factorModel.factors.map(factor => ({
+            key: factor.key,
+            label: factor.label,
+            weight: factor.weight,
+            sourceId: factor.sourceId,
+            source: factor.source,
+            status: factor.status,
+            score: factor.score,
+            evidenceKeys: factor.evidenceKeys,
+            missingEvidenceKeys: factor.missingEvidenceKeys,
+          })),
+        }
+      : null,
     decision: report.decision ?? null,
     sources: report.sources,
     evidence: report.evidence.slice(0, 32).map(item => ({
@@ -90,7 +110,7 @@ export function buildQuantAiSummaryPrompt(report: QuantResearchReport): string {
     '请把下面这份 Quant 确定性研究报告解释给金融初学者，并复核其中的结构化推荐。只使用 JSON 中已有的事实和 evidence key。',
     '返回一个 JSON 对象，字段必须是 overview、supports、concerns、nextChecks、citedEvidenceKeys、factorReviews、decisionReview；数组最多各 6 项。',
     'overview 用 1-3 句说明当前证据代表什么；supports、concerns、nextChecks 都写成可核对的短句。',
-    'factorReviews 必须逐项复核 factorModel 中的每个因子；每项字段是 factor、stance、confidence、rationale、citedEvidenceKeys。stance 只能是 support、caution、oppose、insufficient；引用只能使用该因子自己的 evidenceKeys。',
+    'factorReviews 必须逐项复核 factorModel 中每个权重大于 0 的因子，不得遗漏；每项字段是 factor、stance、confidence、rationale、citedEvidenceKeys。stance 只能是 support、caution、oppose、insufficient；引用只能使用该因子自己的 evidenceKeys。',
     '因子数据缺失、来源不可用或无法核对时使用 insufficient，不要猜测；不要输出 accepted，accepted 会由服务端根据数据、引用和置信度重新计算。',
     'decisionReview 必须是对象或 null。对象字段必须是 decisionVersion、recommendation、confidence、rationale、invalidationConditions、citedEvidenceKeys；recommendation 只能是 bullish、bearish、watch，confidence 为 0-100 的数字。',
     'decisionReview 只能复核报告已有证据；如果报告确定性推荐为 watch 或数据覆盖度不足，不得升级为 bullish/bearish。不要添加报告中不存在的数值、来源或证据 key。',
@@ -177,7 +197,10 @@ function factorReview(value: unknown, report: QuantResearchReport): QuantAiFacto
     if (cited.some(key => !factorEvidenceKeys.has(key)))
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review cited evidence from another factor', 502)
     const stance = factorStance(parsed.stance)
-    const citedUsable = cited.some(key => report.evidence.find(item => item.key === key)?.status !== 'missing')
+    const citedUsable = cited.some((key) => {
+      const evidence = report.evidence.find(item => item.key === key)
+      return evidence?.status === 'pass' || evidence?.status === 'caution'
+    })
     const accepted = factor.status === 'ready'
       && factor.score !== null
       && confidence >= 60
@@ -202,14 +225,20 @@ function factorReviewAssessment(
   recommendation: QuantRecommendation,
 ): { readonly coverage: number, readonly incomplete: boolean, readonly conflict: boolean } {
   const factors = report.factorModel?.factors ?? []
-  if (!reviewsFieldPresent || !factors.length)
+  const requiredFactors = factors.filter(factor => factor.weight > 0)
+  if (!requiredFactors.length)
     return { coverage: 0, incomplete: false, conflict: false }
+  if (!reviewsFieldPresent)
+    return { coverage: 0, incomplete: true, conflict: false }
 
-  const totalWeight = factors.reduce((total, factor) => total + factor.weight, 0)
-  const accepted = reviews.filter(review => review.accepted)
-  const reviewedWeight = accepted.reduce((total, review) => total + (factors.find(factor => factor.key === review.factor)?.weight ?? 0), 0)
-  const supportWeight = accepted.reduce((total, review) => total + (review.stance === 'support' ? factors.find(factor => factor.key === review.factor)?.weight ?? 0 : 0), 0)
-  const opposeWeight = accepted.reduce((total, review) => total + (review.stance === 'oppose' ? factors.find(factor => factor.key === review.factor)?.weight ?? 0 : 0), 0)
+  const requiredFactorKeys = new Set(requiredFactors.map(factor => factor.key))
+  const totalWeight = requiredFactors.reduce((total, factor) => total + factor.weight, 0)
+  const accepted = reviews.filter(review => review.accepted && requiredFactorKeys.has(review.factor))
+  const acceptedFactorKeys = new Set(accepted.map(review => review.factor))
+  const weightFor = (review: QuantAiFactorReview): number => requiredFactors.find(factor => factor.key === review.factor)?.weight ?? 0
+  const reviewedWeight = accepted.reduce((total, review) => total + weightFor(review), 0)
+  const supportWeight = accepted.reduce((total, review) => total + (review.stance === 'support' ? weightFor(review) : 0), 0)
+  const opposeWeight = accepted.reduce((total, review) => total + (review.stance === 'oppose' ? weightFor(review) : 0), 0)
   const coverage = totalWeight > 0 ? Math.round(reviewedWeight / totalWeight * 10000) / 100 : 0
   const conflict = recommendation === 'bullish'
     ? opposeWeight > supportWeight
@@ -218,7 +247,7 @@ function factorReviewAssessment(
       : false
   return {
     coverage,
-    incomplete: accepted.length === 0 || coverage < 60,
+    incomplete: acceptedFactorKeys.size < requiredFactors.length || coverage < 100,
     conflict,
   }
 }

@@ -686,7 +686,9 @@ export function parseQuantAiDecisionAssistant(value: unknown, report: QuantResea
 
 function factorAssessment(report: QuantResearchReport, reviews: readonly QuantDecisionAssistantAiFactorReview[], recommendation: QuantRecommendation): { readonly coverage: number, readonly incomplete: boolean, readonly conflict: boolean, readonly reviews: readonly QuantDecisionAssistantAiFactorReview[] } {
   const factors = report.factorModel?.factors ?? []
-  const totalWeight = factors.reduce((total, factor) => total + factor.weight, 0)
+  const requiredFactors = factors.filter(factor => factor.weight > 0)
+  const totalWeight = requiredFactors.reduce((total, factor) => total + factor.weight, 0)
+  const requiredFactorKeys = new Set(requiredFactors.map(factor => factor.key))
   const reviewed = reviews.map((review) => {
     const factor = factors.find(item => item.key === review.factor)
     const citedUsable = review.citedEvidenceKeys.some((key) => {
@@ -696,14 +698,16 @@ function factorAssessment(report: QuantResearchReport, reviews: readonly QuantDe
     const accepted = Boolean(factor && factor.status === 'ready' && factor.score !== null && review.confidence >= 60 && review.citedEvidenceKeys.length > 0 && citedUsable && review.stance !== 'insufficient')
     return { ...review, accepted }
   })
-  const acceptedReviews = reviewed.filter(review => review.accepted)
-  const reviewedWeight = acceptedReviews.reduce((total, review) => total + (factors.find(factor => factor.key === review.factor)?.weight ?? 0), 0)
-  const supportWeight = acceptedReviews.reduce((total, review) => total + (review.stance === 'support' ? factors.find(factor => factor.key === review.factor)?.weight ?? 0 : 0), 0)
-  const opposeWeight = acceptedReviews.reduce((total, review) => total + (review.stance === 'oppose' ? factors.find(factor => factor.key === review.factor)?.weight ?? 0 : 0), 0)
+  const acceptedReviews = reviewed.filter(review => review.accepted && requiredFactorKeys.has(review.factor))
+  const acceptedFactorKeys = new Set(acceptedReviews.map(review => review.factor))
+  const weightFor = (review: QuantDecisionAssistantAiFactorReview): number => requiredFactors.find(factor => factor.key === review.factor)?.weight ?? 0
+  const reviewedWeight = acceptedReviews.reduce((total, review) => total + weightFor(review), 0)
+  const supportWeight = acceptedReviews.reduce((total, review) => total + (review.stance === 'support' ? weightFor(review) : 0), 0)
+  const opposeWeight = acceptedReviews.reduce((total, review) => total + (review.stance === 'oppose' ? weightFor(review) : 0), 0)
   const coverage = totalWeight > 0 ? round(reviewedWeight / totalWeight * 100) : 0
   return {
     coverage,
-    incomplete: !factors.length || acceptedReviews.length === 0 || coverage < 60,
+    incomplete: !requiredFactors.length || acceptedFactorKeys.size < requiredFactors.length || coverage < 100,
     conflict: recommendation === 'bullish' ? opposeWeight > supportWeight : recommendation === 'bearish' ? supportWeight > opposeWeight : true,
     reviews: reviewed,
   }
@@ -781,7 +785,27 @@ function assistantPromptFacts(report: QuantResearchReport, deterministic: QuantD
     },
     market,
     scenario,
-    factorModel: report.factorModel ?? null,
+    factorModel: report.factorModel
+      ? {
+          modelVersion: report.factorModel.modelVersion,
+          totalWeight: report.factorModel.totalWeight,
+          coveredWeight: report.factorModel.coveredWeight,
+          coverage: report.factorModel.coverage,
+          score: report.factorModel.score,
+          configuration: report.factorModel.configuration ?? null,
+          factors: report.factorModel.factors.map(factor => ({
+            key: factor.key,
+            label: factor.label,
+            weight: factor.weight,
+            sourceId: factor.sourceId,
+            source: factor.source,
+            status: factor.status,
+            score: factor.score,
+            evidenceKeys: factor.evidenceKeys,
+            missingEvidenceKeys: factor.missingEvidenceKeys,
+          })),
+        }
+      : null,
     evidence: report.evidence.slice(0, 32).map(item => ({
       key: item.key,
       dimension: item.dimension,
@@ -802,7 +826,7 @@ export function buildQuantAiDecisionAssistantPrompt(input: Pick<QuantAiDecisionA
     '你是 Quant 的证据交叉核对器。请针对用户场景复核确定性研究结果，只能使用给定 JSON 中的报告、因子、证据和场景数字。',
     '返回 JSON 对象，字段必须是 recommendation、action、confidence、rationale、risks、invalidationConditions、citedEvidenceKeys、factorReviews。',
     'recommendation 只能是 bullish、bearish、watch；confidence 是 0-100 数字；action 必须与 mode 匹配：buy 可用 consider-buy/wait/avoid/verify-price/review-data，holding 可用 hold/reduce-review/add-review/wait/review-data。',
-    'factorReviews 逐项使用 factorModel 中存在的因子，字段为 factor、stance、confidence、rationale、citedEvidenceKeys；stance 只能是 support、caution、oppose、insufficient。引用只能来自对应因子的 evidenceKeys。',
+    'factorReviews 必须逐项复核 factorModel 中每个权重大于 0 的因子，不得遗漏，字段为 factor、stance、confidence、rationale、citedEvidenceKeys；stance 只能是 support、caution、oppose、insufficient。引用只能来自对应因子的 evidenceKeys。',
     '不要输出 accepted，服务端会根据覆盖、引用、置信度和方向冲突重新计算；不要改变原始分数、因子权重、证据状态或参考买卖区间。',
     'currentPrice 由服务端 market 快照提供，必须结合 currentPriceSource、currentPriceStatus 和 currentPriceObservedAt 判断新鲜度；costBasis 是用户场景输入，不是来源证据。不要生成目标价、收益预测或自动下单指令。',
     `事实包：${assistantPromptFacts(input.report, input.deterministic, input.scenario, input.market)}`,

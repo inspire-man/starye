@@ -2,6 +2,7 @@
 import type { QuantDecisionAssistant, QuantDecisionAssistantAction, QuantDecisionAssistantMode, QuantDecisionAssistantTrustLevel, QuantResearchRun } from '../lib/quant-types'
 import { AlertCircle, CheckCircle2, CircleHelp, ExternalLink, RefreshCw, Sparkles } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
+import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
 
 const props = defineProps<{
   run: QuantResearchRun
@@ -203,6 +204,7 @@ function stanceLabel(value: string): string {
       <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
       正在读取最近评估
     </div>
+    <QuantAiProgressStatus v-else-if="generating" class="quant-decision-assistant-loading" :active="generating" label="正在生成今日判断并请求 AI 复核" />
 
     <template v-if="assessment && !loading">
       <div class="quant-decision-assistant-result-heading">
@@ -341,7 +343,7 @@ function stanceLabel(value: string): string {
         </div>
       </details>
     </template>
-    <p v-else-if="!loading" class="quant-decision-assistant-empty">
+    <p v-else-if="!loading && !generating" class="quant-decision-assistant-empty">
       <CheckCircle2 :size="15" aria-hidden="true" />
       生成一次评估后，这里会保留你的场景数据和判断依据。
     </p>

@@ -3,6 +3,7 @@ import type { AutomatedResearchCandidate, AutomatedResearchItemState } from '../
 import { CheckCircle2, ChevronRight, CircleAlert, CircleHelp, RefreshCw, Sparkles } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { automatedResearchAiStatusLabel, automatedResearchStageLabel } from '../lib/research-automation'
+import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
 
 const props = defineProps<{
   candidates: AutomatedResearchCandidate[]
@@ -96,6 +97,7 @@ function hasReport(candidate: AutomatedResearchCandidate): boolean {
       <CircleAlert :size="15" aria-hidden="true" />
       <span>{{ errorMessage }}</span>
     </p>
+    <QuantAiProgressStatus v-if="running" :active="running" label="自动研究闭环正在处理候选" />
     <p v-if="!candidates.length" class="quant-research-automation-state" role="status">
       <CircleHelp :size="15" aria-hidden="true" />
       <span>当前筛选没有可处理的候选。</span>
