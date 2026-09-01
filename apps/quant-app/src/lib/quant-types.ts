@@ -371,6 +371,7 @@ export interface QuantDecisionAssistant {
   sources: QuantResearchSource[]
   deterministic: QuantDecisionAssistantDeterministic
   ai: QuantDecisionAssistantAiReview
+  factorImpact?: QuantAiFactorImpact | null
   final: QuantDecisionAssistantFinal
 }
 

@@ -268,6 +268,7 @@ function decisionAssistantView(row: QuantDecisionAssessmentRecord, report?: Quan
     id: row.id,
     createdAt: row.createdAt,
     ...snapshot,
+    factorImpact: report ? buildQuantAiFactorImpact(report, snapshot.ai.factorReviews) : null,
   }
 }
 
