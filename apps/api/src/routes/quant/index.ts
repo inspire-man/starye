@@ -1,5 +1,5 @@
 import type { Database } from '@starye/db'
-import type { QuantCandidateAiSession as QuantCandidateAiSessionRecord, QuantDecisionAssessment as QuantDecisionAssessmentRecord, QuantDecisionRecord as QuantDecisionRecordRecord, QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
+import type { QuantAiRunAudit as QuantAiRunAuditRecord, QuantCandidateAiSession as QuantCandidateAiSessionRecord, QuantDecisionAssessment as QuantDecisionAssessmentRecord, QuantDecisionRecord as QuantDecisionRecordRecord, QuantResearchRun as QuantResearchRunRecord, QuantResearchSummary as QuantResearchSummaryRecord } from '@starye/db/schema'
 import type { Context } from 'hono'
 import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingResult, QuantCandidateBriefingCandidate, QuantCandidateBriefingMarker } from '../../domain/quant/ai-candidate-briefing'
 import type { QuantAiCandidateBriefingQuestionResult } from '../../domain/quant/ai-candidate-briefing-question'
@@ -15,7 +15,7 @@ import type { QuantSignalHistoryCandidate, QuantSignalHistorySnapshot } from '..
 import type { MomentumCandidate } from '../../domain/quant/types'
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
-import { validator } from 'hono-openapi'
+import { describeRoute, resolver, validator } from 'hono-openapi'
 import { buildQuantCandidateBriefingFacts, generateQuantAiCandidateBriefing } from '../../domain/quant/ai-candidate-briefing'
 import { generateQuantAiCandidateBriefingQuestion } from '../../domain/quant/ai-candidate-briefing-question'
 import { generateQuantAiChangeExplanation } from '../../domain/quant/ai-change-explanation'
@@ -37,6 +37,7 @@ import { getQuantInvestmentKnowledge } from '../../domain/quant/investment-knowl
 import { createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantDividendProviderChain, createTushareDividendProvider, createTushareStockBasicProvider, mapQuantProviderError, resolveQuantProviderName } from '../../domain/quant/provider'
 import {
   appendQuantCandidateAiSessionQuestion,
+  createQuantAiRunAudit,
   createQuantCandidateAiSession,
   createQuantDecisionAssessment,
   createQuantResearchRun,
@@ -53,6 +54,7 @@ import {
   getQuantResearchRun,
   getQuantSyncState,
   getQuantWatchlistItem,
+  listQuantAiRunAudits,
   listQuantCandidateAiSessions,
   listQuantDailyBars,
   listQuantDecisionAssessments,
@@ -82,6 +84,7 @@ import {
   QuantAiCandidateBriefingSessionIdParamSchema,
   QuantAiCandidateBriefingSessionQuerySchema,
   QuantAiConfigUpdateSchema,
+  QuantAiRunAuditsResponseSchema,
   QuantDailyQuerySchema,
   QuantDecisionAssistantCreateSchema,
   QuantDecisionRecordQuerySchema,
@@ -101,6 +104,7 @@ import {
   QuantWatchlistParamSchema,
   QuantWatchlistUpdateSchema,
 } from '../../schemas/quant'
+import { ErrorResponseSchema } from '../../schemas/responses'
 
 export const quantRoutes = new Hono<AppEnv>()
 
@@ -233,7 +237,40 @@ function parseStoredEvidenceKeys(value: string): readonly string[] {
   }
 }
 
-function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResearchReport, evaluatedAt: Date = new Date()) {
+function quantAiRunAuditView(row: QuantAiRunAuditRecord) {
+  if (row.operation !== 'research-summary'
+    || !['openai_compatible', 'deepseek', 'qwen', 'gemini', 'ollama'].includes(row.provider)
+    || !['stream', 'json'].includes(row.responseMode)
+    || !['completed', 'failed', 'cancelled'].includes(row.status)
+    || !Number.isInteger(row.generationTimeoutMs) || row.generationTimeoutMs < 300_000 || row.generationTimeoutMs > 600_000
+    || !Number.isInteger(row.receivedChars) || row.receivedChars < 0 || row.receivedChars > 8_000
+    || !Number.isInteger(row.durationMs) || row.durationMs < 0
+    || !(row.startedAt instanceof Date) || Number.isNaN(row.startedAt.getTime())
+    || !(row.completedAt instanceof Date) || Number.isNaN(row.completedAt.getTime())) {
+    throw new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'Persisted AI run audit is invalid', 500)
+  }
+  return {
+    id: row.id,
+    researchRunId: row.researchRunId,
+    summaryId: row.summaryId,
+    operation: row.operation,
+    provider: row.provider,
+    model: row.model,
+    responseMode: row.responseMode,
+    generationTimeoutMs: row.generationTimeoutMs,
+    status: row.status,
+    receivedChars: row.receivedChars,
+    durationMs: row.durationMs,
+    finishReason: row.finishReason,
+    errorCode: row.errorCode,
+    errorMessage: row.errorMessage,
+    startedAt: row.startedAt,
+    completedAt: row.completedAt,
+    createdAt: row.createdAt,
+  }
+}
+
+function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResearchReport, evaluatedAt: Date = new Date(), audit?: QuantAiRunAuditRecord | null) {
   const summary = parseStoredAiSummary(row.summaryJson, report, evaluatedAt)
   const citedEvidenceKeys = parseStoredEvidenceKeys(row.citedEvidenceKeysJson)
   const { factorImpactSnapshot, ...summaryView } = summary
@@ -250,6 +287,7 @@ function researchSummaryView(row: QuantResearchSummaryRecord, report: QuantResea
     factorImpact: buildQuantAiFactorImpact(report, summary.factorReviews, evaluatedAt),
     factorImpactSnapshot: factorImpactSnapshot ?? null,
     citedEvidenceKeys,
+    audit: audit ? quantAiRunAuditView(audit) : null,
   }
 }
 
@@ -831,34 +869,128 @@ interface QuantAiSummaryGenerationInput {
   readonly config: QuantDecryptedAiConfig
   readonly env?: AppEnv['Bindings']
   readonly onTextDelta?: (delta: string, receivedLength: number) => void
+  readonly onFinishReason?: (finishReason: string | null) => void
   readonly signal?: AbortSignal
 }
 
-async function generateAndPersistQuantAiSummary(input: QuantAiSummaryGenerationInput): Promise<QuantResearchSummaryRecord> {
-  const timeoutMs = aiGenerationTimeoutMs(input.env, input.config.generationTimeoutMs)
-  const summary = await generateQuantAiSummary({
-    report: input.report,
-    config: input.config,
-    ...(timeoutMs ? { timeoutMs } : {}),
-    ...(input.onTextDelta ? { onTextDelta: input.onTextDelta } : {}),
-    ...(input.signal ? { signal: input.signal } : {}),
-  })
-  const generatedAt = new Date()
-  const factorImpactSnapshot = buildQuantAiFactorImpact(input.report, summary.factorReviews, generatedAt)
-  const persistedSummary = factorImpactSnapshot
-    ? { ...summary, factorImpactSnapshot }
-    : summary
-  return createQuantResearchSummary(input.db, {
-    userId: input.userId,
-    researchRunId: input.run.id,
-    summaryVersion: summary.summaryVersion,
-    reportVersion: input.report.reportVersion,
-    provider: input.config.provider,
-    model: input.config.model,
-    summaryJson: JSON.stringify(persistedSummary),
-    citedEvidenceKeys: summary.citedEvidenceKeys,
-    generatedAt,
-  })
+async function recordQuantAiRunAudit(input: {
+  readonly db: Database
+  readonly userId: string
+  readonly runId: string
+  readonly config: QuantDecryptedAiConfig
+  readonly generationTimeoutMs: number
+  readonly status: 'completed' | 'failed' | 'cancelled'
+  readonly receivedChars: number
+  readonly durationMs: number
+  readonly finishReason: string | null
+  readonly errorCode: string | null
+  readonly errorMessage: string | null
+  readonly startedAt: Date
+  readonly completedAt: Date
+  readonly summaryId?: string | null
+}): Promise<QuantAiRunAuditRecord | null> {
+  try {
+    return await createQuantAiRunAudit(input.db, {
+      userId: input.userId,
+      researchRunId: input.runId,
+      summaryId: input.summaryId,
+      provider: input.config.provider,
+      model: input.config.model,
+      responseMode: input.config.responseMode ?? 'json',
+      generationTimeoutMs: input.generationTimeoutMs,
+      status: input.status,
+      receivedChars: input.receivedChars,
+      durationMs: input.durationMs,
+      finishReason: input.finishReason,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      startedAt: input.startedAt,
+      completedAt: input.completedAt,
+    })
+  }
+  catch (error) {
+    console.error('[Quant] AI run audit persistence failed', error)
+    return null
+  }
+}
+
+async function generateAndPersistQuantAiSummary(input: QuantAiSummaryGenerationInput): Promise<{ readonly summary: QuantResearchSummaryRecord, readonly audit: QuantAiRunAuditRecord | null }> {
+  const startedAt = new Date()
+  const generationTimeoutMs = aiGenerationTimeoutMs(input.env, input.config.generationTimeoutMs) ?? resolveQuantAiGenerationTimeout()
+  let receivedChars = 0
+  let finishReason: string | null = null
+  try {
+    const summary = await generateQuantAiSummary({
+      report: input.report,
+      config: input.config,
+      timeoutMs: generationTimeoutMs,
+      onTextDelta: (delta, receivedLength) => {
+        receivedChars = receivedLength
+        input.onTextDelta?.(delta, receivedLength)
+      },
+      onFinishReason: (value) => {
+        finishReason = value
+        input.onFinishReason?.(value)
+      },
+      ...(input.signal ? { signal: input.signal } : {}),
+    })
+    if (input.signal?.aborted)
+      throw new QuantError('QUANT_AI_SUMMARY_TIMEOUT', 'AI request was cancelled', 504)
+    const generatedAt = new Date()
+    const factorImpactSnapshot = buildQuantAiFactorImpact(input.report, summary.factorReviews, generatedAt)
+    const persistedSummary = factorImpactSnapshot
+      ? { ...summary, factorImpactSnapshot }
+      : summary
+    const persisted = await createQuantResearchSummary(input.db, {
+      userId: input.userId,
+      researchRunId: input.run.id,
+      summaryVersion: summary.summaryVersion,
+      reportVersion: input.report.reportVersion,
+      provider: input.config.provider,
+      model: input.config.model,
+      summaryJson: JSON.stringify(persistedSummary),
+      citedEvidenceKeys: summary.citedEvidenceKeys,
+      generatedAt,
+    })
+    const completedAt = new Date()
+    const audit = await recordQuantAiRunAudit({
+      db: input.db,
+      userId: input.userId,
+      runId: input.run.id,
+      config: input.config,
+      generationTimeoutMs,
+      status: 'completed',
+      receivedChars,
+      durationMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+      finishReason,
+      errorCode: null,
+      errorMessage: null,
+      startedAt,
+      completedAt,
+      summaryId: persisted.id,
+    })
+    return { summary: persisted, audit }
+  }
+  catch (error) {
+    const completedAt = new Date()
+    const cancelled = input.signal?.aborted === true
+    const audit = await recordQuantAiRunAudit({
+      db: input.db,
+      userId: input.userId,
+      runId: input.run.id,
+      config: input.config,
+      generationTimeoutMs,
+      status: cancelled ? 'cancelled' : 'failed',
+      receivedChars,
+      durationMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+      finishReason,
+      errorCode: error instanceof QuantError ? error.code : 'QUANT_AI_SUMMARY_UPSTREAM',
+      errorMessage: error instanceof QuantError ? error.message : 'AI summary generation failed',
+      startedAt,
+      completedAt,
+    })
+    throw Object.assign(error instanceof Error ? error : new Error('AI summary generation failed'), { quantAiRunAudit: audit })
+  }
 }
 
 type QuantAiSummaryStreamEvent
@@ -929,7 +1061,7 @@ function createQuantAiSummaryStream(input: QuantAiSummaryGenerationInput & { rea
             onTextDelta: (text, receivedLength) => emit({ type: 'delta', text, receivedLength }),
             signal: generationAbort.signal,
           })
-          emit({ type: 'completed', data: researchSummaryView(persisted, input.report) })
+          emit({ type: 'completed', data: researchSummaryView(persisted.summary, input.report, new Date(), persisted.audit) })
         }
         catch (error) {
           if (!cancelled)
@@ -1332,7 +1464,7 @@ quantRoutes.post('/research/runs/:runId/summary', validator('param', QuantResear
     config,
     env: c.env,
   })
-  return c.json({ success: true as const, data: researchSummaryView(persisted, report) }, 201)
+  return c.json({ success: true as const, data: researchSummaryView(persisted.summary, report, new Date(), persisted.audit) }, 201)
 })
 
 quantRoutes.post('/research/runs/:runId/summary/stream', validator('param', QuantResearchRunIdParamSchema), async (c) => {
@@ -1608,7 +1740,48 @@ quantRoutes.get('/research/runs/:runId/summary', validator('param', QuantResearc
     throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
   const report = parseResearchReport(run.reportJson)
   const summaries = await listQuantResearchSummaries(c.get('db'), userId, run.id, limit ? Number(limit) : 10)
-  return c.json({ success: true as const, data: summaries.map(summary => researchSummaryView(summary, report)) })
+  let audits: QuantAiRunAuditRecord[] = []
+  try {
+    audits = await listQuantAiRunAudits(c.get('db'), userId, run.id, 10)
+  }
+  catch {
+    // AI audit metadata is additive; an unavailable audit table must not hide saved summaries.
+  }
+  return c.json({ success: true as const, data: summaries.map(summary => researchSummaryView(summary, report, new Date(), audits.find(audit => audit.summaryId === summary.id) || null)) })
+})
+
+quantRoutes.get('/research/runs/:runId/ai-audits', describeRoute({
+  summary: '获取 AI 研究运行审计',
+  description: '返回当前用户指定研究运行的 AI 摘要生成状态、耗时、预算和接收量，不返回提示词或模型原文',
+  tags: ['Quant'],
+  operationId: 'getQuantAiRunAudits',
+  responses: {
+    200: {
+      description: '成功返回 AI 运行审计历史',
+      content: {
+        'application/json': {
+          schema: resolver(QuantAiRunAuditsResponseSchema),
+        },
+      },
+    },
+    404: {
+      description: '研究运行不存在',
+      content: {
+        'application/json': {
+          schema: resolver(ErrorResponseSchema),
+        },
+      },
+    },
+  },
+}), validator('param', QuantResearchRunIdParamSchema), validator('query', QuantResearchSummaryQuerySchema), async (c) => {
+  const userId = currentQuantUserId(c)
+  const { runId } = c.req.valid('param')
+  const { limit } = c.req.valid('query')
+  const run = await getQuantResearchRun(c.get('db'), userId, runId)
+  if (!run)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+  const audits = await listQuantAiRunAudits(c.get('db'), userId, run.id, limit ? Number(limit) : 10)
+  return c.json({ success: true as const, data: audits.map(quantAiRunAuditView) })
 })
 
 quantRoutes.get('/research/decisions', validator('query', QuantDecisionRecordQuerySchema), async (c) => {

@@ -4,6 +4,7 @@ import type { QuantDecisionRecordAction } from './decision-record'
 import type { QuantFactorConfiguration, QuantFactorWeights } from './factor-configuration'
 import type { DailyBar, MomentumCandidate, QuantSyncStatus } from './types'
 import {
+  quantAiRunAudits,
   quantCandidateAiSessions,
   quantDailyBars,
   quantDecisionAssessments,
@@ -32,6 +33,8 @@ export const QUANT_DECISION_RECORD_RETENTION = 30
 export const QUANT_DECISION_QUEUE_LIMIT = 20
 export const QUANT_DECISION_ASSESSMENT_RETENTION = 30
 export const QUANT_CANDIDATE_AI_QUESTION_RETENTION = 10
+export const QUANT_AI_RUN_AUDIT_RETENTION = 30
+export const QUANT_AI_RUN_AUDIT_MAX_LIST = 10
 export const QUANT_RESEARCH_STATUSES = ['unreviewed', 'priority', 'paused', 'excluded'] as const
 export type QuantResearchStatus = typeof QUANT_RESEARCH_STATUSES[number]
 
@@ -813,6 +816,137 @@ export async function listQuantResearchSummaries(db: Database, userId: string, r
     eq(quantResearchSummaries.userId, ownerId),
     eq(quantResearchSummaries.researchRunId, researchRun.id),
   )).orderBy(desc(quantResearchSummaries.generatedAt), desc(quantResearchSummaries.id)).limit(boundedLimit).all()
+}
+
+export type QuantAiRunAuditProvider = 'openai_compatible' | 'deepseek' | 'qwen' | 'gemini' | 'ollama'
+export type QuantAiRunAuditResponseMode = 'stream' | 'json'
+export type QuantAiRunAuditStatus = 'completed' | 'failed' | 'cancelled'
+
+export interface QuantAiRunAuditInput {
+  readonly userId: string
+  readonly researchRunId: string
+  readonly summaryId?: string | null
+  readonly provider: QuantAiRunAuditProvider
+  readonly model: string
+  readonly responseMode: QuantAiRunAuditResponseMode
+  readonly generationTimeoutMs: number
+  readonly status: QuantAiRunAuditStatus
+  readonly receivedChars: number
+  readonly durationMs: number
+  readonly finishReason?: string | null
+  readonly errorCode?: string | null
+  readonly errorMessage?: string | null
+  readonly startedAt: Date
+  readonly completedAt: Date
+}
+
+function boundedAuditText(value: string | null | undefined, field: string, maxLength: number): string | null {
+  if (value === null || value === undefined || !value.trim())
+    return null
+  const normalized = value.trim()
+  if (normalized.length > maxLength)
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `AI run audit ${field} is too long`, 500)
+  return normalized
+}
+
+function boundedAuditInteger(value: number, field: string, min: number, max: number): number {
+  if (!Number.isInteger(value) || value < min || value > max)
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `AI run audit ${field} is invalid`, 500)
+  return value
+}
+
+function auditDate(value: Date, field: string): Date {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime()))
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `AI run audit ${field} is invalid`, 500)
+  return value
+}
+
+export async function createQuantAiRunAudit(db: Database, input: QuantAiRunAuditInput): Promise<typeof quantAiRunAudits.$inferSelect> {
+  const ownerId = normalizeQuantUserId(input.userId)
+  const researchRun = await getQuantResearchRun(db, ownerId, input.researchRunId)
+  if (!researchRun)
+    throw new QuantError('QUANT_NOT_FOUND', 'Research run not found', 404)
+
+  const summaryId = input.summaryId?.trim() || null
+  if (input.status === 'completed' && !summaryId)
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Completed AI run audit requires a persisted summary', 500)
+  if (input.status !== 'completed' && summaryId)
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Failed AI run audit cannot reference a summary', 500)
+  if (summaryId) {
+    const summary = await db.select({ id: quantResearchSummaries.id }).from(quantResearchSummaries).where(and(
+      eq(quantResearchSummaries.id, summaryId),
+      eq(quantResearchSummaries.userId, ownerId),
+      eq(quantResearchSummaries.researchRunId, researchRun.id),
+    )).get()
+    if (!summary)
+      throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI run audit summary link is invalid', 500)
+  }
+
+  const startedAt = auditDate(input.startedAt, 'startedAt')
+  const completedAt = auditDate(input.completedAt, 'completedAt')
+  if (completedAt.getTime() < startedAt.getTime())
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI run audit completion time is before start time', 500)
+  const model = input.model.trim()
+  if (!model || model.length > 128)
+    throw new QuantError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI run audit model is invalid', 500)
+
+  const id = nanoid()
+  await db.insert(quantAiRunAudits).values({
+    id,
+    userId: ownerId,
+    researchRunId: researchRun.id,
+    summaryId,
+    operation: 'research-summary',
+    provider: input.provider,
+    model,
+    responseMode: input.responseMode,
+    generationTimeoutMs: boundedAuditInteger(input.generationTimeoutMs, 'generationTimeoutMs', 300_000, 600_000),
+    status: input.status,
+    receivedChars: boundedAuditInteger(input.receivedChars, 'receivedChars', 0, 8_000),
+    durationMs: boundedAuditInteger(input.durationMs, 'durationMs', 0, 86_400_000),
+    finishReason: boundedAuditText(input.finishReason, 'finishReason', 64),
+    errorCode: boundedAuditText(input.errorCode, 'errorCode', 128),
+    errorMessage: boundedAuditText(input.errorMessage, 'errorMessage', 240),
+    startedAt,
+    completedAt,
+    createdAt: completedAt,
+  })
+  const persisted = await db.select().from(quantAiRunAudits).where(and(
+    eq(quantAiRunAudits.id, id),
+    eq(quantAiRunAudits.userId, ownerId),
+    eq(quantAiRunAudits.researchRunId, researchRun.id),
+  )).get()
+  if (!persisted)
+    throw new QuantError('QUANT_NOT_FOUND', 'AI run audit readback failed', 500)
+
+  try {
+    await db.run(sql`
+      DELETE FROM quant_ai_run_audit
+      WHERE rowid IN (
+        SELECT rowid
+        FROM quant_ai_run_audit
+        WHERE user_id = ${ownerId} AND research_run_id = ${researchRun.id}
+        ORDER BY completed_at DESC, rowid DESC
+        LIMIT -1 OFFSET ${QUANT_AI_RUN_AUDIT_RETENTION}
+      )
+    `)
+  }
+  catch {
+    // The current audit is already persisted; retention is best effort.
+  }
+  return persisted
+}
+
+export async function listQuantAiRunAudits(db: Database, userId: string, researchRunId: string, limit = QUANT_AI_RUN_AUDIT_MAX_LIST) {
+  const ownerId = normalizeQuantUserId(userId)
+  const researchRun = await getQuantResearchRun(db, ownerId, researchRunId)
+  if (!researchRun)
+    return []
+  const boundedLimit = Math.min(QUANT_AI_RUN_AUDIT_MAX_LIST, Math.max(1, Math.floor(limit)))
+  return db.select().from(quantAiRunAudits).where(and(
+    eq(quantAiRunAudits.userId, ownerId),
+    eq(quantAiRunAudits.researchRunId, researchRun.id),
+  )).orderBy(desc(quantAiRunAudits.completedAt), desc(quantAiRunAudits.id)).limit(boundedLimit).all()
 }
 
 function boundedCandidateAiSessionLimit(value: number): number {

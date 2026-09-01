@@ -1000,10 +1000,30 @@ describe('quantApi', () => {
         next_checks: ['等待下一期财报并复核'],
         cited_evidence_keys: ['quality-roe'],
       },
+      audit: {
+        id: 'audit-1',
+        research_run_id: 'run-1',
+        summary_id: 'summary-1',
+        operation: 'research-summary',
+        provider: 'deepseek',
+        model: 'deepseek-chat',
+        response_mode: 'json',
+        generation_timeout_ms: 600000,
+        status: 'completed',
+        received_chars: 2775,
+        duration_ms: 83000,
+        finish_reason: 'stop',
+        error_code: null,
+        error_message: null,
+        started_at: '2026-08-26T00:59:00.000Z',
+        completed_at: '2026-08-26T01:00:23.000Z',
+        created_at: '2026-08-26T01:00:23.000Z',
+      },
     }
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: summary }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: [summary] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [summary.audit] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(quantApi.generateResearchSummary('run-1')).resolves.toMatchObject({
@@ -1012,11 +1032,14 @@ describe('quantApi', () => {
       provider: 'deepseek',
       summary: { overview: '基本面有一项明确支持，但仍应继续核对。', nextChecks: ['等待下一期财报并复核'] },
       citedEvidenceKeys: ['quality-roe'],
+      audit: { id: 'audit-1', status: 'completed', responseMode: 'json', receivedChars: 2775, generationTimeoutMs: 600000 },
     })
     await expect(quantApi.getResearchSummaries('run-1', 1)).resolves.toMatchObject([{ id: 'summary-1', reportVersion: 'research-report-v2' }])
+    await expect(quantApi.getResearchAiAudits('run-1', 2)).resolves.toMatchObject([{ id: 'audit-1', status: 'completed', responseMode: 'json', receivedChars: 2775 }])
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary`)
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary?limit=1`)
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/ai-audits?limit=2`)
   })
 
   it('reads chunked AI summary SSE events and only returns the validated completed summary', async () => {

@@ -11,6 +11,7 @@ import type {
   QuantAiCandidateBriefing,
   QuantAiCandidateBriefingQuestion,
   QuantAiResponseMode,
+  QuantAiRunAudit,
   QuantAiSummaryStreamProgress,
   QuantDecisionAssistant,
   QuantDecisionRecord,
@@ -188,6 +189,9 @@ const researchSummaryGenerating = ref(false)
 const researchSummaryError = ref<unknown | null>(null)
 const researchSummaryStreamMode = ref<QuantAiResponseMode | null>(null)
 const researchSummaryStreamReceivedChars = ref(0)
+const researchAiAudits = ref<QuantAiRunAudit[]>([])
+const researchAiAuditsLoading = ref(false)
+const researchAiAuditError = ref<unknown | null>(null)
 const researchQuestionInput = ref('')
 const researchQuestion = ref<QuantResearchQuestion | null>(null)
 const researchQuestionLoading = ref(false)
@@ -1627,6 +1631,9 @@ async function loadWatchlist() {
     researchSummaryGenerating.value = false
     researchSummaryStreamMode.value = null
     researchSummaryStreamReceivedChars.value = 0
+    researchAiAudits.value = []
+    researchAiAuditsLoading.value = false
+    researchAiAuditError.value = null
     resetResearchQuestionState()
     resetResearchChangeExplanationState()
     loading.valuation = false
@@ -1950,6 +1957,9 @@ async function loadResearchRuns(tsCode: string) {
   researchSummaryGenerating.value = false
   researchSummaryStreamMode.value = null
   researchSummaryStreamReceivedChars.value = 0
+  researchAiAudits.value = []
+  researchAiAuditsLoading.value = false
+  researchAiAuditError.value = null
   researchRunLoading.value = true
   researchRunError.value = null
   try {
@@ -1977,6 +1987,26 @@ async function loadResearchRuns(tsCode: string) {
   }
 }
 
+async function loadResearchAiAudits(runId: string, requestId: number): Promise<void> {
+  if (requestId !== researchSummaryRequestId)
+    return
+  researchAiAuditsLoading.value = true
+  researchAiAuditError.value = null
+  try {
+    const audits = await quantApi.getResearchAiAudits(runId)
+    if (requestId === researchSummaryRequestId)
+      researchAiAudits.value = audits
+  }
+  catch (error) {
+    if (requestId === researchSummaryRequestId)
+      researchAiAuditError.value = error
+  }
+  finally {
+    if (requestId === researchSummaryRequestId)
+      researchAiAuditsLoading.value = false
+  }
+}
+
 async function loadResearchSummary(runId: string, options: { autoGenerate?: boolean } = {}) {
   const requestId = ++researchSummaryRequestId
   researchSummaryLoading.value = true
@@ -1984,6 +2014,9 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
   researchSummaryError.value = null
   researchSummaryStreamMode.value = null
   researchSummaryStreamReceivedChars.value = 0
+  researchAiAudits.value = []
+  researchAiAuditError.value = null
+  void loadResearchAiAudits(runId, requestId)
   try {
     const summaries = await quantApi.getResearchSummaries(runId, 1)
     if (requestId !== researchSummaryRequestId)
@@ -2000,13 +2033,16 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
     researchSummaryLoading.value = false
     researchSummaryGenerating.value = true
     const summary = await quantApi.generateResearchSummaryStream(runId, event => applyResearchSummaryStreamProgress(requestId, event))
-    if (requestId === researchSummaryRequestId)
+    if (requestId === researchSummaryRequestId) {
       researchAiSummary.value = summary
+      void loadResearchAiAudits(runId, requestId)
+    }
   }
   catch (error) {
     if (requestId === researchSummaryRequestId) {
       researchSummaryError.value = error
       researchAiSummary.value = null
+      void loadResearchAiAudits(runId, requestId)
     }
   }
   finally {
@@ -2150,12 +2186,16 @@ async function generateResearchSummary() {
   researchSummaryStreamReceivedChars.value = 0
   try {
     const summary = await quantApi.generateResearchSummaryStream(run.id, event => applyResearchSummaryStreamProgress(requestId, event))
-    if (requestId === researchSummaryRequestId)
+    if (requestId === researchSummaryRequestId) {
       researchAiSummary.value = summary
+      void loadResearchAiAudits(run.id, requestId)
+    }
   }
   catch (error) {
-    if (requestId === researchSummaryRequestId)
+    if (requestId === researchSummaryRequestId) {
       researchSummaryError.value = error
+      void loadResearchAiAudits(run.id, requestId)
+    }
   }
   finally {
     researchSummaryGenerating.value = false
@@ -4578,6 +4618,9 @@ onUnmounted(() => {
                 :generating="researchSummaryGenerating"
                 :stream-mode="researchSummaryStreamMode"
                 :stream-received-chars="researchSummaryStreamReceivedChars"
+                :audit-history="researchAiAudits"
+                :audit-history-loading="researchAiAuditsLoading"
+                :audit-history-error="researchAiAuditError ? parsedError(researchAiAuditError).message : null"
                 :error-message="researchSummaryError ? parsedError(researchSummaryError).message : null"
                 :configuration-error="researchSummaryConfigurationError"
                 :question-prompt-ready="researchQuestionPromptReady"

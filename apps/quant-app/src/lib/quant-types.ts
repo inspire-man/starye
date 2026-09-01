@@ -4,6 +4,27 @@ export type CapabilityKey = typeof CAPABILITY_ORDER[number]
 export type QuantProviderName = 'tushare' | 'eastmoney'
 export type QuantAiProvider = 'openai_compatible' | 'deepseek' | 'qwen' | 'gemini' | 'ollama'
 export type QuantAiResponseMode = 'stream' | 'json'
+export type QuantAiRunAuditStatus = 'completed' | 'failed' | 'cancelled'
+
+export interface QuantAiRunAudit {
+  id: string
+  researchRunId: string
+  summaryId: string | null
+  operation: 'research-summary'
+  provider: QuantAiProvider
+  model: string
+  responseMode: QuantAiResponseMode
+  generationTimeoutMs: number
+  status: QuantAiRunAuditStatus
+  receivedChars: number
+  durationMs: number
+  finishReason: string | null
+  errorCode: string | null
+  errorMessage: string | null
+  startedAt: string
+  completedAt: string
+  createdAt: string
+}
 
 export interface QuantAiConfig {
   id: string
@@ -251,6 +272,8 @@ export interface QuantResearchSummary {
   /** Optional on historical research summaries written before impact persistence. */
   factorImpactSnapshot?: QuantAiFactorImpact | null
   citedEvidenceKeys: string[]
+  /** Optional when the summary predates AI run auditing or the audit readback is unavailable. */
+  audit?: QuantAiRunAudit | null
 }
 
 export type QuantAiSummaryStreamProgress

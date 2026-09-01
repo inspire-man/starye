@@ -39,7 +39,7 @@ function streamResponse(chunks: readonly string[], status = 200): Response {
   })
 }
 
-function request(fetchImpl: typeof fetch, overrides: Partial<QuantDecryptedAiConfig> = {}, transportOverrides: { onTextDelta?: (delta: string, receivedLength: number) => void, signal?: AbortSignal } = {}) {
+function request(fetchImpl: typeof fetch, overrides: Partial<QuantDecryptedAiConfig> = {}, transportOverrides: { onTextDelta?: (delta: string, receivedLength: number) => void, onFinishReason?: (finishReason: string | null) => void, signal?: AbortSignal } = {}) {
   return requestQuantAiCompletion({
     config: { ...config, ...overrides },
     messages: [{ role: 'user', content: 'Return a JSON object.' }],
@@ -105,14 +105,17 @@ describe('quant AI transport', () => {
       'data: [DONE]\n\n',
     ]))
     const deltas: Array<{ delta: string, receivedLength: number }> = []
+    const finishReasons: Array<string | null> = []
 
     await expect(request(fetchImpl, { responseMode: 'stream' }, {
       onTextDelta: (delta, receivedLength) => deltas.push({ delta, receivedLength }),
+      onFinishReason: finishReason => finishReasons.push(finishReason),
     })).resolves.toMatchObject({ content: '{"ok":true}' })
     expect(deltas).toEqual([
       { delta: '{"ok":', receivedLength: 6 },
       { delta: 'true}', receivedLength: 11 },
     ])
+    expect(finishReasons).toEqual(['stop'])
   })
 
   it('accepts a complete JSON body when a compatible gateway ignores stream mode', async () => {

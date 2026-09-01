@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { QuantResearchReport, QuantResearchSummary } from '../../lib/quant-types'
+import type { QuantAiRunAudit, QuantResearchReport, QuantResearchSummary } from '../../lib/quant-types'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import QuantAiResearchSummary from '../QuantAiResearchSummary.vue'
@@ -66,6 +66,9 @@ const baseProps = {
   generating: false,
   streamMode: null,
   streamReceivedChars: 0,
+  auditHistory: [] as QuantAiRunAudit[],
+  auditHistoryLoading: false,
+  auditHistoryError: null,
   errorMessage: null,
   configurationError: false,
   questionPromptReady: true,
@@ -348,6 +351,59 @@ describe('quant ai research summary', () => {
     expect(wrapper.text()).toContain('已计入 AI 复核')
     expect(wrapper.text()).toContain('数据不足，未计入')
     expect(wrapper.text()).toContain('因子复核 20%')
+  })
+
+  it('shows successful and failed AI run metadata without model content', () => {
+    const audits: QuantAiRunAudit[] = [{
+      id: 'audit-failed',
+      researchRunId: 'run-1',
+      summaryId: null,
+      operation: 'research-summary',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      responseMode: 'stream',
+      generationTimeoutMs: 300000,
+      status: 'failed',
+      receivedChars: 1493,
+      durationMs: 121774,
+      finishReason: null,
+      errorCode: 'QUANT_AI_SUMMARY_UPSTREAM',
+      errorMessage: 'AI summary generation failed',
+      startedAt: '2026-09-01T00:00:00.000Z',
+      completedAt: '2026-09-01T00:02:01.774Z',
+      createdAt: '2026-09-01T00:02:01.774Z',
+    }, {
+      id: 'audit-completed',
+      researchRunId: 'run-1',
+      summaryId: 'summary-1',
+      operation: 'research-summary',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      responseMode: 'stream',
+      generationTimeoutMs: 600000,
+      status: 'completed',
+      receivedChars: 2775,
+      durationMs: 83000,
+      finishReason: 'stop',
+      errorCode: null,
+      errorMessage: null,
+      startedAt: '2026-09-01T00:03:00.000Z',
+      completedAt: '2026-09-01T00:04:23.000Z',
+      createdAt: '2026-09-01T00:04:23.000Z',
+    }]
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, auditHistory: audits, report: report(), summary: summary(['akshare-roe']) },
+    })
+
+    expect(wrapper.text()).toContain('AI 运行审计')
+    expect(wrapper.text()).toContain('失败')
+    expect(wrapper.text()).toContain('已完成')
+    expect(wrapper.text()).toContain('耗时 2.0 分钟')
+    expect(wrapper.text()).toContain('5 分钟预算')
+    expect(wrapper.text()).toContain('10 分钟预算')
+    expect(wrapper.text()).toContain('接收 1493 字')
+    expect(wrapper.text()).toContain('AI summary generation failed')
+    expect(wrapper.text()).not.toContain('summary-1')
   })
 
   it('offers a same-level next-check action without submitting a question', async () => {
