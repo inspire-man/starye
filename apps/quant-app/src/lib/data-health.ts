@@ -132,6 +132,20 @@ function freshnessFor(observedAt: string | null, nowValue: string | Date | undef
   }
 }
 
+export type QuantDataHealthFreshnessResult = ReturnType<typeof freshnessFor>
+
+export function classifyQuantDataHealthFreshness(observedAt: string | null, nowValue?: string | Date): QuantDataHealthFreshnessResult {
+  return freshnessFor(observedAt, nowValue)
+}
+
+function freshnessRank(freshness: QuantDataHealthFreshness): number {
+  return { fresh: 0, aging: 1, unknown: 2, stale: 3 }[freshness]
+}
+
+export function mergeQuantDataHealthFreshness(left: QuantDataHealthFreshness, right: QuantDataHealthFreshness): QuantDataHealthFreshness {
+  return freshnessRank(left) >= freshnessRank(right) ? left : right
+}
+
 function resultCounts(selection: QuantValueSelection | QuantShareholderReturnSelection): { ready: number, partial: number, insufficient: number, total: number } {
   const total = Number.isFinite(selection.sampleCount) ? Math.max(0, Math.floor(selection.sampleCount)) : 0
   const ready = boundedCount(selection.readyCount, total)
@@ -305,19 +319,19 @@ function freshnessSummary(items: readonly QuantDataHealthItem[], watchlistCount:
       freshnessDetail: `${count} 个数据域已超过 7 天，先刷新后再判断`,
     }
   }
+  if (items.some(item => item.freshness === 'unknown')) {
+    return {
+      freshness: 'unknown',
+      freshnessLabel: freshnessLabel('unknown'),
+      freshnessDetail: '部分数据域没有可验证观察时间',
+    }
+  }
   if (items.some(item => item.freshness === 'aging')) {
     const count = items.filter(item => item.freshness === 'aging').length
     return {
       freshness: 'aging',
       freshnessLabel: freshnessLabel('aging'),
       freshnessDetail: `${count} 个数据域已超过 48 小时，建议复核`,
-    }
-  }
-  if (items.some(item => item.freshness === 'unknown')) {
-    return {
-      freshness: 'unknown',
-      freshnessLabel: freshnessLabel('unknown'),
-      freshnessDetail: '部分数据域没有可验证观察时间',
     }
   }
   return {

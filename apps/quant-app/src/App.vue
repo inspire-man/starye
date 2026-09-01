@@ -100,7 +100,7 @@ import { buildCandidateBriefingScopeKey, canApplyCandidateBriefingResponse } fro
 import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildResearchComparisonFilename, buildResearchComparisonMarkdown } from './lib/comparison-ai-export'
 import { buildComparisonAiNextCheckPrompt } from './lib/comparison-ai-prompts'
-import { buildQuantDataHealth } from './lib/data-health'
+import { buildQuantDataHealth, classifyQuantDataHealthFreshness, mergeQuantDataHealthFreshness } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { isQuantAiAutoReviewReady } from './lib/research-ai-auto-review'
@@ -618,6 +618,13 @@ const dataHealthSummary = computed(() => buildQuantDataHealth({
   shareholderLoading: loading.shareholderReturns,
   shareholderError: Boolean(errors.shareholderReturns),
 }))
+const researchReportFreshness = computed(() => classifyQuantDataHealthFreshness(latestResearchReport.value?.generatedAt ?? null))
+const decisionFreshness = computed(() => mergeQuantDataHealthFreshness(dataHealthSummary.value.freshness, researchReportFreshness.value.freshness))
+const decisionFreshnessDetail = computed(() => {
+  if (researchReportFreshness.value.freshness !== 'fresh' && decisionFreshness.value === researchReportFreshness.value.freshness)
+    return `研究报告${researchReportFreshness.value.freshnessLabel}：${researchReportFreshness.value.freshnessDetail}`
+  return dataHealthSummary.value.freshnessDetail
+})
 const dataCoverageCount = computed(() => watchlist.value.filter(item => item.barCount > 0 || item.latestTradeDate !== null).length)
 const dataCoverageLabel = computed(() => watchlist.value.length ? `${dataCoverageCount.value} / ${watchlist.value.length}` : '--')
 const activeViewCopy = computed(() => viewCopy[activeView.value])
@@ -4356,6 +4363,8 @@ onUnmounted(() => {
                 :summary="researchAiSummary"
                 :current-price="latestDailyBar?.close ?? selectedStock.latestClose"
                 :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
+                :data-freshness="decisionFreshness"
+                :data-freshness-detail="decisionFreshnessDetail"
                 :ai-review-generating="researchSummaryLoading || researchSummaryGenerating"
                 @request-ai-review="generateResearchSummary"
               />
