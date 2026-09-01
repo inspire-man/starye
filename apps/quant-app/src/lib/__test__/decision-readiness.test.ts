@@ -139,10 +139,10 @@ function factorImpact(overrides: Partial<QuantAiFactorImpact> = {}): QuantAiFact
 
 describe('buildQuantDecisionReadiness', () => {
   it('returns ready only when data, price, and accepted AI factor coverage pass', () => {
-    const result = buildQuantDecisionReadiness({ report: report(), aiReview: aiReview(), factorImpact: factorImpact(), currentPrice: 32 })
+    const result = buildQuantDecisionReadiness({ report: report(), aiReview: aiReview(), factorImpact: factorImpact(), currentPrice: 32, dataFreshness: 'fresh' })
 
     expect(result).toMatchObject({ version: 'decision-readiness-v1', status: 'ready', label: '可参考', unresolvedFactors: [] })
-    expect(result.checks.map(check => check.status)).toEqual(['pass', 'pass', 'pass'])
+    expect(result.checks.map(check => check.status)).toEqual(['pass', 'pass', 'pass', 'pass'])
   })
 
   it('keeps a readable deterministic result at review status when AI coverage is incomplete', () => {
@@ -157,6 +157,7 @@ describe('buildQuantDecisionReadiness', () => {
         factors: completeImpact.factors.map(factor => factor.factor === 'valuation' ? { ...factor, aiStance: null, aiAccepted: false, aiWeight: 0 } : factor),
       },
       currentPrice: 32,
+      dataFreshness: 'fresh',
     })
 
     expect(result).toMatchObject({ status: 'review', label: '仅供参考', unresolvedFactors: ['估值'] })
@@ -172,10 +173,11 @@ describe('buildQuantDecisionReadiness', () => {
         factorModel: { ...baseReport.factorModel!, coverage: 50, coveredWeight: 0.5, factors: [{ ...baseReport.factorModel!.factors[0]!, status: 'partial' }, baseReport.factorModel!.factors[1]!] },
       },
       currentPrice: null,
+      dataFreshness: 'fresh',
     })
 
     expect(result).toMatchObject({ status: 'blocked', label: '暂不可用' })
-    expect(result.checks.map(check => check.status)).toEqual(['blocked', 'review', 'blocked'])
+    expect(result.checks.map(check => check.status)).toEqual(['blocked', 'review', 'blocked', 'pass'])
     expect(result.unresolvedFactors).toContain('盈利质量')
   })
 
@@ -185,6 +187,7 @@ describe('buildQuantDecisionReadiness', () => {
       aiReview: aiReview({ accepted: false, rejectionReason: 'factor-conflict' }),
       factorImpact: factorImpact(),
       currentPrice: 32,
+      dataFreshness: 'fresh',
     })
 
     expect(result).toMatchObject({ status: 'review', label: '仅供参考' })
@@ -192,7 +195,7 @@ describe('buildQuantDecisionReadiness', () => {
   })
 
   it('does not claim full readiness for a legacy accepted AI review without factor impact audit', () => {
-    const result = buildQuantDecisionReadiness({ report: report(), aiReview: aiReview(), currentPrice: 32 })
+    const result = buildQuantDecisionReadiness({ report: report(), aiReview: aiReview(), currentPrice: 32, dataFreshness: 'fresh' })
 
     expect(result).toMatchObject({ status: 'review', label: '仅供参考' })
     expect(result.checks[1].detail).toContain('缺少因子影响审计')
@@ -206,8 +209,22 @@ describe('buildQuantDecisionReadiness', () => {
       aiReview: aiReview(),
       factorImpact: factorImpact(),
       currentPrice: 32,
+      dataFreshness: 'fresh',
     })
 
     expect(result.status).toBe('ready')
+  })
+
+  it('gates readiness independently for aging, stale, and unknown data freshness', () => {
+    const base = { report: report(), aiReview: aiReview(), factorImpact: factorImpact(), currentPrice: 32 }
+    const aging = buildQuantDecisionReadiness({ ...base, dataFreshness: 'aging', dataFreshnessDetail: '1 个数据域已超过 48 小时，建议复核' })
+    const stale = buildQuantDecisionReadiness({ ...base, dataFreshness: 'stale', dataFreshnessDetail: '1 个数据域已超过 7 天，先刷新后再判断' })
+    const unknown = buildQuantDecisionReadiness({ ...base, dataFreshness: 'unknown' })
+
+    expect(aging).toMatchObject({ status: 'review', label: '仅供参考' })
+    expect(aging.checks.find(check => check.key === 'freshness')).toMatchObject({ status: 'review', detail: '1 个数据域已超过 48 小时，建议复核' })
+    expect(stale).toMatchObject({ status: 'blocked', label: '暂不可用' })
+    expect(stale.checks.find(check => check.key === 'freshness')).toMatchObject({ status: 'blocked', detail: '1 个数据域已超过 7 天，先刷新后再判断' })
+    expect(unknown.checks.find(check => check.key === 'freshness')).toMatchObject({ status: 'blocked', detail: '没有可验证的数据观察时间' })
   })
 })

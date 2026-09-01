@@ -1,6 +1,6 @@
 import type { QuantShareholderReturnSelection, QuantValueSelection, SyncResult, WatchlistItem } from '../quant-types'
 import { describe, expect, it } from 'vitest'
-import { buildQuantDataHealth } from '../data-health'
+import { buildQuantDataHealth, classifyQuantDataHealthFreshness, mergeQuantDataHealthFreshness } from '../data-health'
 
 function watchlist(tsCode: string, covered = true): WatchlistItem {
   return {
@@ -259,6 +259,15 @@ describe('buildQuantDataHealth', () => {
       freshness: 'stale',
       detail: '本次读取失败 · 保留上次 3 / 3 只完整',
     })
+  })
+
+  it('reuses the same freshness policy when combining base data and report snapshots', () => {
+    expect(classifyQuantDataHealthFreshness('2026-08-30T12:00:00.000Z', '2026-09-01T12:00:00.000Z')).toMatchObject({ freshness: 'fresh' })
+    expect(mergeQuantDataHealthFreshness('fresh', 'aging')).toBe('aging')
+    expect(mergeQuantDataHealthFreshness('aging', 'unknown')).toBe('unknown')
+    expect(mergeQuantDataHealthFreshness('aging', 'stale')).toBe('stale')
+    expect(mergeQuantDataHealthFreshness('stale', 'unknown')).toBe('stale')
+    expect(mergeQuantDataHealthFreshness('fresh', 'unknown')).toBe('unknown')
   })
 
   it('does not invent coverage for an empty watchlist or invalid counts', () => {

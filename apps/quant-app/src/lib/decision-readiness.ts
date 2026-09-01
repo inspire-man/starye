@@ -1,9 +1,10 @@
+import type { QuantDataHealthFreshness } from './data-health'
 import type { QuantAiDecisionReview, QuantAiFactorImpact, QuantRecommendation, QuantResearchReport } from './quant-types'
 
 export const QUANT_DECISION_READINESS_VERSION = 'decision-readiness-v1' as const
 export type QuantDecisionReadinessStatus = 'ready' | 'review' | 'blocked'
 export type QuantDecisionReadinessCheckStatus = 'pass' | 'review' | 'blocked'
-export type QuantDecisionReadinessCheckKey = 'data' | 'ai' | 'price'
+export type QuantDecisionReadinessCheckKey = 'data' | 'freshness' | 'ai' | 'price'
 
 export interface QuantDecisionReadinessCheck {
   readonly key: QuantDecisionReadinessCheckKey
@@ -39,6 +40,21 @@ function rejectionReasonLabel(value: QuantAiDecisionReview['rejectionReason']): 
         : value === 'low-confidence'
           ? 'AI 置信度不足'
           : 'AI 尚未达到纳入条件'
+}
+
+function freshnessCheck(freshness: QuantDataHealthFreshness, detail: string | undefined): QuantDecisionReadinessCheck {
+  const fallback = {
+    fresh: '数据观察时间在 48 小时内',
+    aging: '数据观察时间超过 48 小时，建议刷新',
+    stale: '数据观察时间超过 7 天，先刷新数据',
+    unknown: '没有可验证的数据观察时间',
+  }[freshness]
+  return {
+    key: 'freshness',
+    status: freshness === 'fresh' ? 'pass' : freshness === 'aging' ? 'review' : 'blocked',
+    label: '数据时效',
+    detail: detail || fallback,
+  }
 }
 
 function factorLabels(factorImpact: QuantAiFactorImpact | null | undefined): string[] {
@@ -164,11 +180,14 @@ export function buildQuantDecisionReadiness(input: {
   readonly aiReview?: QuantAiDecisionReview | null
   readonly factorImpact?: QuantAiFactorImpact | null
   readonly currentPrice?: number | null
+  readonly dataFreshness: QuantDataHealthFreshness
+  readonly dataFreshnessDetail?: string
 }): QuantDecisionReadiness {
   const data = dataCheck(input.report)
+  const freshness = freshnessCheck(input.dataFreshness, input.dataFreshnessDetail)
   const ai = aiCheck(input.aiReview, input.factorImpact, input.report)
   const price = priceCheck(input.report, input.currentPrice)
-  const checks = [data.check, ai.check, price]
+  const checks = [data.check, ai.check, price, freshness]
   const status: QuantDecisionReadinessStatus = checks.some(check => check.status === 'blocked')
     ? 'blocked'
     : checks.some(check => check.status === 'review')

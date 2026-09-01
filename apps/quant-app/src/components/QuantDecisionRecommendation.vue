@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { QuantDataHealthFreshness } from '../lib/data-health'
 import type { QuantFactorDataHealthItem, QuantFactorSourceHealth } from '../lib/quant-factor-data-health'
 import type { QuantAiDecisionReview, QuantRecommendation, QuantReferencePriceRange, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
 import { BrainCircuit, CircleHelp, Info } from 'lucide-vue-next'
@@ -12,6 +13,8 @@ const props = defineProps<{
   summary: QuantResearchSummary | null
   currentPrice?: number | null
   currentPriceObservedAt?: string | null
+  dataFreshness?: QuantDataHealthFreshness
+  dataFreshnessDetail?: string
   aiReviewGenerating?: boolean
 }>()
 
@@ -21,7 +24,8 @@ const emit = defineEmits<{
 
 const reportDecision = computed(() => props.report?.decision || null)
 const aiReview = computed<QuantAiDecisionReview | null>(() => props.summary?.summary.decisionReview || null)
-const appliedAiReview = computed(() => aiReview.value?.accepted ? aiReview.value : null)
+const dataFreshness = computed<QuantDataHealthFreshness>(() => props.dataFreshness || 'unknown')
+const appliedAiReview = computed(() => aiReview.value?.accepted && dataFreshness.value === 'fresh' ? aiReview.value : null)
 const activeRecommendation = computed<QuantRecommendation | null>(() => appliedAiReview.value?.recommendation || reportDecision.value?.recommendation || null)
 const activeLabel = computed(() => recommendationLabel(activeRecommendation.value))
 const activeSource = computed(() => appliedAiReview.value ? 'AI 决策复核' : '确定性因子模型')
@@ -33,7 +37,7 @@ const decisionGuide = computed(() => {
   return buildQuantDecisionGuide({
     report: props.report,
     recommendation: activeRecommendation.value,
-    aiReview: aiReview.value,
+    aiReview: appliedAiReview.value,
     currentPrice: props.currentPrice,
     currentPriceObservedAt: props.currentPriceObservedAt,
   })
@@ -46,6 +50,8 @@ const decisionReadiness = computed(() => {
     aiReview: aiReview.value,
     factorImpact: props.summary?.factorImpact,
     currentPrice: props.currentPrice,
+    dataFreshness: dataFreshness.value,
+    dataFreshnessDetail: props.dataFreshnessDetail,
   })
 })
 const factorDataHealth = computed(() => props.report ? buildQuantFactorDataHealth(props.report) : null)
@@ -84,6 +90,20 @@ function aiReviewStatusLabel(review: QuantAiDecisionReview): string {
   if (review.rejectionReason === 'factor-conflict')
     return '因子方向冲突，保留确定性推荐'
   return '置信度不足，保留确定性推荐'
+}
+
+function freshnessLabel(value: QuantDataHealthFreshness): string {
+  return value === 'fresh' ? '最新' : value === 'aging' ? '需复核' : value === 'stale' ? '已过期' : '时间未知'
+}
+
+function aiReviewDisplayStatusLabel(review: QuantAiDecisionReview): string {
+  if (review.accepted && !appliedAiReview.value)
+    return `已复核，但数据${freshnessLabel(dataFreshness.value)}，未纳入最终推荐`
+  return aiReviewStatusLabel(review)
+}
+
+function aiReviewGateDetail(): string {
+  return props.dataFreshnessDetail || `当前数据${freshnessLabel(dataFreshness.value)}，刷新后再让 AI 影响最终推荐`
 }
 
 function factorHealthStatusLabel(value: QuantFactorDataHealthItem['status']): string {
@@ -230,12 +250,15 @@ function factorObservedAt(value: string | null): string {
         </p>
       </section>
 
-      <div v-if="aiReview" class="quant-decision-ai-review" :class="{ 'quant-decision-ai-review-accepted': aiReview.accepted }">
+      <div v-if="aiReview" class="quant-decision-ai-review" :class="{ 'quant-decision-ai-review-accepted': aiReview.accepted, 'quant-decision-ai-review-gated': aiReview.accepted && !appliedAiReview }">
         <div>
           <span>AI 复核</span>
           <strong>{{ recommendationLabel(aiReview.recommendation) }}</strong>
         </div>
-        <small>{{ aiReviewStatusLabel(aiReview) }} · 置信度 {{ aiReview.confidence.toFixed(0) }} · 因子复核 {{ aiReview.factorReviewCoverage.toFixed(0) }}%</small>
+        <small>{{ aiReviewDisplayStatusLabel(aiReview) }} · 置信度 {{ aiReview.confidence.toFixed(0) }} · 因子复核 {{ aiReview.factorReviewCoverage.toFixed(0) }}%</small>
+        <p v-if="aiReview.accepted && !appliedAiReview" class="quant-decision-ai-review-gate-note">
+          {{ aiReviewGateDetail() }}；AI 复核仍保留供核对。
+        </p>
       </div>
       <div v-else class="quant-decision-ai-pending">
         <Info :size="14" aria-hidden="true" />
@@ -689,6 +712,7 @@ function factorObservedAt(value: string | null): string {
 }
 
 .quant-decision-ai-review {
+  flex-wrap: wrap;
   justify-content: space-between;
   border-top: 1px solid hsl(var(--status-info) / 0.24);
   padding-top: 0.5rem;
@@ -705,6 +729,23 @@ function factorObservedAt(value: string | null): string {
 
 .quant-decision-ai-review-accepted strong {
   color: hsl(var(--status-info));
+}
+
+.quant-decision-ai-review-gated {
+  border-top-color: hsl(var(--status-warning) / 0.3);
+}
+
+.quant-decision-ai-review-gated strong {
+  color: hsl(var(--status-warning));
+}
+
+.quant-decision-ai-review-gate-note {
+  flex: 0 0 100%;
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  color: hsl(var(--status-warning));
+  font-size: 0.625rem;
+  line-height: 1.45;
 }
 
 .quant-decision-details {

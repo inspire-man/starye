@@ -164,7 +164,7 @@ describe('quant decision recommendation', () => {
   })
 
   it('uses an accepted AI review for the final label while retaining deterministic prices', () => {
-    const wrapper = mount(QuantDecisionRecommendation, { props: { report: report(), summary: summary() } })
+    const wrapper = mount(QuantDecisionRecommendation, { props: { report: report(), summary: summary(), dataFreshness: 'fresh' } })
 
     expect(wrapper.text()).toContain('看空')
     expect(wrapper.text()).toContain('AI 决策复核')
@@ -213,6 +213,8 @@ describe('quant decision recommendation', () => {
         summary: summary(),
         currentPrice: 10.5,
         currentPriceObservedAt: '20260829',
+        dataFreshness: 'fresh',
+        dataFreshnessDetail: '全部数据域均在 48 小时内观测',
       },
     })
 
@@ -220,6 +222,26 @@ describe('quant decision recommendation', () => {
     expect(wrapper.text()).toContain('可参考')
     expect(wrapper.text()).toContain('数据完整性')
     expect(wrapper.text()).toContain('AI 复核')
+  })
+
+  it('keeps an accepted AI review visible but gates it when data is stale', () => {
+    const wrapper = mount(QuantDecisionRecommendation, {
+      props: {
+        report: report(),
+        summary: summary(),
+        currentPrice: 10.5,
+        currentPriceObservedAt: '20260829',
+        dataFreshness: 'stale',
+        dataFreshnessDetail: '1 个数据域已超过 7 天，先刷新后再判断',
+      },
+    })
+
+    expect(wrapper.get('.quant-decision-source').text()).toContain('确定性因子模型')
+    expect(wrapper.text()).toContain('已复核，但数据已过期，未纳入最终推荐')
+    expect(wrapper.text()).toContain('1 个数据域已超过 7 天，先刷新后再判断')
+    expect(wrapper.text()).toContain('数据时效')
+    expect(wrapper.text()).toContain('暂不可用')
+    expect(wrapper.get('.quant-decision-ai-review').classes()).toContain('quant-decision-ai-review-gated')
   })
 
   it('shows missing evidence and fallback source guidance without changing the recommendation', () => {
