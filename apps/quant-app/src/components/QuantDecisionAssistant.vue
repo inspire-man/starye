@@ -4,6 +4,8 @@ import { AlertCircle, CheckCircle2, CircleHelp, ExternalLink, RefreshCw, Sparkle
 import { computed, ref, watch } from 'vue'
 import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
 
+type DecisionFactorImpactItem = NonNullable<QuantDecisionAssistant['factorImpact']>['factors'][number]
+
 const props = defineProps<{
   run: QuantResearchRun
   latestClose: number | null
@@ -124,6 +126,30 @@ function factorLabel(value: string): string {
 
 function stanceLabel(value: string): string {
   return { support: '支持', caution: '注意', oppose: '反对', insufficient: '数据不足' }[value] || value
+}
+
+function formatContribution(value: number | null): string {
+  return value === null || !Number.isFinite(value) ? '--' : `${value.toFixed(1)} 分`
+}
+
+function formatWeight(value: number): string {
+  return `${(value * 100).toFixed(0)}%`
+}
+
+function deterministicImpactStanceLabel(value: DecisionFactorImpactItem['deterministicStance']): string {
+  return value === 'support' ? '支持' : value === 'caution' ? '注意' : value === 'oppose' ? '反对' : '数据不足'
+}
+
+function aiImpactStanceLabel(value: DecisionFactorImpactItem['aiStance']): string {
+  return value === null ? '未复核' : stanceLabel(value)
+}
+
+function factorImpactStatusLabel(value: DecisionFactorImpactItem): string {
+  return value.aiAccepted ? 'AI 已计入' : value.aiStance === null ? 'AI 未复核' : 'AI 已复核，未计入'
+}
+
+function factorImpactStatusClass(value: DecisionFactorImpactItem): string {
+  return value.aiAccepted ? 'factor-impact-accepted' : value.aiStance === null ? 'factor-impact-unreviewed' : 'factor-impact-not-included'
 }
 </script>
 
@@ -310,6 +336,48 @@ function stanceLabel(value: string): string {
             引用证据：{{ assessment.ai.citedEvidenceKeys.join('、') }}
           </p>
         </template>
+      </div>
+
+      <div v-if="assessment.factorImpact" class="quant-decision-assistant-factor-impact" aria-label="因子影响审计">
+        <div class="quant-decision-assistant-subheading">
+          <strong>因子影响审计</strong>
+          <span>AI 实际纳入范围，不改写确定性判断</span>
+        </div>
+        <div class="quant-decision-assistant-factor-impact-summary" role="list" aria-label="因子影响汇总">
+          <div role="listitem">
+            <span>确定性分数</span>
+            <strong>{{ formatContribution(assessment.factorImpact.deterministicScore) }}</strong>
+            <small>有分数权重 {{ formatWeight(assessment.factorImpact.scoredWeight) }}</small>
+          </div>
+          <div role="listitem">
+            <span>AI 已纳入</span>
+            <strong>{{ assessment.factorImpact.reviewCoverage.toFixed(0) }}%</strong>
+            <small>{{ formatWeight(assessment.factorImpact.reviewedWeight) }} / {{ formatWeight(assessment.factorImpact.totalWeight) }} 权重</small>
+          </div>
+          <div role="listitem">
+            <span>AI 方向权重</span>
+            <strong>支持 {{ formatWeight(assessment.factorImpact.supportWeight) }}</strong>
+            <small>注意 {{ formatWeight(assessment.factorImpact.cautionWeight) }} · 反对 {{ formatWeight(assessment.factorImpact.opposeWeight) }}</small>
+          </div>
+        </div>
+        <p class="quant-decision-assistant-factor-impact-note" role="note">
+          确定性贡献来自本次报告的因子分数和权重；AI 权重只统计服务端接受的因子复核，未复核或未达门槛的因子不会被计入。
+        </p>
+        <div class="quant-decision-assistant-factor-impact-list">
+          <div v-for="factor in assessment.factorImpact.factors" :key="factor.factor" class="quant-decision-assistant-factor-impact-row">
+            <div class="quant-decision-assistant-factor-impact-heading">
+              <strong>{{ factor.label }}</strong>
+              <span>报告权重 {{ formatWeight(factor.weight) }}</span>
+              <span class="quant-decision-assistant-factor-impact-status" :class="factorImpactStatusClass(factor)">{{ factorImpactStatusLabel(factor) }}</span>
+            </div>
+            <div class="quant-decision-assistant-factor-impact-details">
+              <span>确定性贡献 {{ formatContribution(factor.deterministicContribution) }}</span>
+              <span>确定性倾向 {{ deterministicImpactStanceLabel(factor.deterministicStance) }}</span>
+              <span>AI 倾向 {{ aiImpactStanceLabel(factor.aiStance) }}</span>
+              <span>AI 权重 {{ formatWeight(factor.aiWeight) }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <details class="quant-decision-assistant-details">
@@ -720,7 +788,8 @@ function stanceLabel(value: string): string {
 }
 
 .quant-decision-assistant-trust,
-.quant-decision-assistant-ai {
+.quant-decision-assistant-ai,
+.quant-decision-assistant-factor-impact {
   display: grid;
   gap: 0.45rem;
   border-top: 1px solid hsl(var(--border));
@@ -803,6 +872,96 @@ function stanceLabel(value: string): string {
 .factor-accepted { color: hsl(var(--status-success)); }
 .factor-rejected { color: hsl(var(--status-warning)); }
 
+.quant-decision-assistant-factor-impact-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.quant-decision-assistant-factor-impact-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+  border-left: 2px solid hsl(var(--status-info) / 0.45);
+  padding: 0.25rem 0.45rem;
+}
+
+.quant-decision-assistant-factor-impact-summary span,
+.quant-decision-assistant-factor-impact-summary small,
+.quant-decision-assistant-factor-impact-details {
+  overflow-wrap: anywhere;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6rem;
+  line-height: 1.4;
+}
+
+.quant-decision-assistant-factor-impact-summary strong {
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.quant-decision-assistant-factor-impact-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  line-height: 1.5;
+}
+
+.quant-decision-assistant-factor-impact-list {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.quant-decision-assistant-factor-impact-row {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.65);
+  padding: 0.25rem 0;
+}
+
+.quant-decision-assistant-factor-impact-heading {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+}
+
+.quant-decision-assistant-factor-impact-heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+}
+
+.quant-decision-assistant-factor-impact-heading > span:not(.quant-decision-assistant-factor-impact-status) {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6rem;
+}
+
+.quant-decision-assistant-factor-impact-status {
+  margin-left: auto;
+  overflow-wrap: anywhere;
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.factor-impact-accepted { color: hsl(var(--status-success)); }
+.factor-impact-not-included { color: hsl(var(--status-warning)); }
+.factor-impact-unreviewed { color: hsl(var(--muted-foreground)); }
+
+.quant-decision-assistant-factor-impact-details {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.85rem;
+}
+
 .quant-decision-assistant-details {
   border-top: 1px solid hsl(var(--border));
   padding-top: 0.55rem;
@@ -858,6 +1017,10 @@ function stanceLabel(value: string): string {
   .quant-decision-assistant-details-grid {
     grid-template-columns: 1fr;
   }
+
+  .quant-decision-assistant-factor-impact-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 480px) {
@@ -873,7 +1036,8 @@ function stanceLabel(value: string): string {
 
   .quant-decision-assistant-form,
   .quant-decision-assistant-metrics,
-  .quant-decision-assistant-price-row {
+  .quant-decision-assistant-price-row,
+  .quant-decision-assistant-factor-impact-summary {
     grid-template-columns: 1fr;
   }
 
@@ -893,6 +1057,10 @@ function stanceLabel(value: string): string {
 
   .quant-decision-assistant-factor-row > small {
     grid-column: 1 / -1;
+  }
+
+  .quant-decision-assistant-factor-impact-status {
+    margin-left: 0;
   }
 }
 </style>

@@ -78,6 +78,76 @@ function report(): QuantResearchReport {
   }
 }
 
+function factorReport(): QuantResearchReport {
+  const base = report()
+  return {
+    ...base,
+    evidence: [
+      ...base.evidence,
+      {
+        key: 'quality-roe',
+        dimension: 'quality',
+        label: 'ROE',
+        status: 'pass',
+        value: 18,
+        threshold: '至少 10%',
+        source: 'Eastmoney 最新财报',
+        observedAt: '20260829',
+        formulaVersion: 'quality-v1',
+        detail: 'ROE 达到研究门槛。',
+      },
+      {
+        key: 'valuation-pe',
+        dimension: 'valuation',
+        label: '市盈率',
+        status: 'pass',
+        value: 12,
+        threshold: '估值可核对',
+        source: 'Eastmoney 估值',
+        observedAt: '20260829',
+        formulaVersion: 'valuation-v1',
+        detail: '估值数据可核对。',
+      },
+    ],
+    sources: [
+      ...base.sources,
+      { id: 'eastmoney-financial', name: 'Eastmoney 最新财报', observedAt: '20260829', formulaVersion: 'quality-v1' },
+      { id: 'eastmoney-valuation', name: 'Eastmoney 估值', observedAt: '20260829', formulaVersion: 'valuation-v1' },
+    ],
+    factorModel: {
+      modelVersion: 'research-factors-v1',
+      totalWeight: 1,
+      coveredWeight: 1,
+      coverage: 100,
+      score: 78,
+      factors: [
+        {
+          key: 'quality',
+          label: '盈利质量',
+          weight: 0.6,
+          sourceId: 'eastmoney-financial',
+          source: 'Eastmoney 最新财报',
+          status: 'ready',
+          score: 88,
+          evidenceKeys: ['quality-roe'],
+          missingEvidenceKeys: [],
+        },
+        {
+          key: 'valuation',
+          label: '估值',
+          weight: 0.4,
+          sourceId: 'eastmoney-valuation',
+          source: 'Eastmoney 估值',
+          status: 'ready',
+          score: 63,
+          evidenceKeys: ['valuation-pe'],
+          missingEvidenceKeys: [],
+        },
+      ],
+    },
+  }
+}
+
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await client.execute('PRAGMA foreign_keys = ON')
@@ -121,7 +191,7 @@ describe('quant decision assistant API', () => {
       status: 'ready',
       reportVersion: 'research-report-v2',
       sourceSnapshotId: null,
-      reportJson: JSON.stringify(report()),
+      reportJson: JSON.stringify(factorReport()),
       generatedAt: new Date('2026-08-29T00:00:00.000Z'),
     })
     const bar: DailyBar = {
@@ -160,6 +230,16 @@ describe('quant decision assistant API', () => {
         market: { currentPrice: 28.8, currentPriceSource: 'eastmoney-realtime', currentPriceStatus: 'realtime' },
         deterministic: { unrealizedPnlPercent: -13.77, recoveryPercent: 15.97 },
         ai: { status: 'not-requested', accepted: false },
+        factorImpact: {
+          totalWeight: 1,
+          reviewedWeight: 0,
+          reviewCoverage: 0,
+          unacceptedWeight: 1,
+          factors: [
+            { factor: 'quality', deterministicContribution: 52.8, aiAccepted: false, aiWeight: 0 },
+            { factor: 'valuation', deterministicContribution: 25.2, aiAccepted: false, aiWeight: 0 },
+          ],
+        },
         final: { source: 'deterministic' },
       },
     })
@@ -167,8 +247,111 @@ describe('quant decision assistant API', () => {
 
     const history = await app.request('/api/quant/decision-assistant/601899.SH?limit=10')
     expect(history.status).toBe(200)
-    await expect(history.json()).resolves.toMatchObject({ data: { items: [{ researchRunId: research.id, scenario: { currentPrice: 28.8 } }], limit: 10 } })
+    await expect(history.json()).resolves.toMatchObject({
+      data: {
+        items: [{
+          researchRunId: research.id,
+          scenario: { currentPrice: 28.8 },
+          factorImpact: { reviewCoverage: 0, unacceptedWeight: 1 },
+        }],
+        limit: 10,
+      },
+    })
     await expect(client.execute('SELECT count(*) AS count FROM quant_decision_assessment WHERE user_id = \'user-1\'')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+  })
+
+  it('derives accepted AI factor impact for create and history without persisting the derived field', async () => {
+    const { client, db } = await createDatabase()
+    const research = await createQuantResearchRun(db, {
+      userId: 'user-1',
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      status: 'ready',
+      reportVersion: 'research-report-v2',
+      sourceSnapshotId: null,
+      reportJson: JSON.stringify(factorReport()),
+      generatedAt: new Date('2026-08-29T00:00:00.000Z'),
+    })
+    await upsertQuantDailyBars(db, [{
+      tsCode: '601899.SH',
+      tradeDate: '20260829',
+      open: 33,
+      high: 34,
+      low: 32,
+      close: 33.2,
+      preClose: 32.8,
+      change: 0.4,
+      pctChg: 1.2,
+      volume: 1_000,
+      amount: 10_000,
+    }])
+    await saveQuantAiConfig(db, {
+      userId: 'user-1',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      baseUrl: 'https://ai.fixture.test/v1',
+      apiKey: 'fixture-key',
+    }, 'fixture-encryption-secret')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).includes('/api/qt/stock/get'))
+        return marketQuoteResponse(28.8)
+      return new Response(JSON.stringify({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              recommendation: 'bullish',
+              action: 'verify-price',
+              confidence: 84,
+              rationale: '两个有权重因子均有可核对证据。',
+              risks: ['估值和盈利质量仍需随新数据复核'],
+              invalidationConditions: ['财报或估值证据失效时复核'],
+              citedEvidenceKeys: ['quality-roe'],
+              factorReviews: [
+                { factor: 'quality', stance: 'support', confidence: 84, rationale: '盈利质量证据通过。', citedEvidenceKeys: ['quality-roe'] },
+                { factor: 'valuation', stance: 'caution', confidence: 82, rationale: '估值证据可核对。', citedEvidenceKeys: ['valuation-pe'] },
+              ],
+            }),
+          },
+        }],
+      }), { status: 200 })
+    })
+
+    const app = createApp(db, 'user-1')
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'fixture-encryption-secret' } as AppEnv['Bindings']
+    const create = await app.request('/api/quant/decision-assistant', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ research_run_id: research.id, mode: 'buy' }),
+    }, env)
+    expect(create.status).toBe(201)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await expect(create.json()).resolves.toMatchObject({
+      data: {
+        ai: { status: 'accepted', accepted: true, factorReviewCoverage: 100 },
+        factorImpact: {
+          reviewedWeight: 1,
+          reviewCoverage: 100,
+          supportWeight: 0.6,
+          cautionWeight: 0.4,
+          opposeWeight: 0,
+          unacceptedWeight: 0,
+          factors: [
+            { factor: 'quality', deterministicContribution: 52.8, aiAccepted: true, aiWeight: 0.6 },
+            { factor: 'valuation', deterministicContribution: 25.2, aiAccepted: true, aiWeight: 0.4 },
+          ],
+        },
+        final: { source: 'ai' },
+      },
+    })
+
+    const stored = await client.execute('SELECT snapshot_json FROM quant_decision_assessment WHERE user_id = \'user-1\'')
+    expect(JSON.parse(String(stored.rows[0]?.snapshot_json)).factorImpact).toBeUndefined()
+
+    const history = await app.request('/api/quant/decision-assistant/601899.SH?limit=10', {}, env)
+    expect(history.status).toBe(200)
+    await expect(history.json()).resolves.toMatchObject({
+      data: { items: [{ factorImpact: { reviewCoverage: 100, reviewedWeight: 1, supportWeight: 0.6, cautionWeight: 0.4 } }] },
+    })
   })
 
   it('uses the latest local close when the automatic market quote is unavailable', async () => {

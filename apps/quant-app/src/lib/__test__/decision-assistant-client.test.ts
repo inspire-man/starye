@@ -94,4 +94,58 @@ describe('decision assistant API client', () => {
 
     await expect(quantApi.getDecisionAssistants('601899.SH', 10)).resolves.toMatchObject([{ id: 'assessment-1', ai: { status: 'rejected' } }])
   })
+
+  it('parses the optional factor impact and keeps legacy assessments valid', async () => {
+    const payload = assessmentPayload() as Record<string, unknown>
+    payload.factorImpact = {
+      modelVersion: 'research-factors-v1',
+      totalWeight: 1,
+      deterministicScore: 78,
+      scoredWeight: 1,
+      reviewedWeight: 0.5,
+      reviewCoverage: 50,
+      supportWeight: 0.5,
+      cautionWeight: 0,
+      opposeWeight: 0,
+      unacceptedWeight: 0.5,
+      factors: [{
+        factor: 'quality',
+        label: '盈利质量',
+        weight: 0.5,
+        deterministicScore: 90,
+        deterministicStance: 'support',
+        deterministicContribution: 45,
+        aiStance: 'support',
+        aiConfidence: 88,
+        aiAccepted: true,
+        aiWeight: 0.5,
+      }, {
+        factor: 'valuation',
+        label: '估值',
+        weight: 0.5,
+        deterministicScore: 66,
+        deterministicStance: 'support',
+        deterministicContribution: 33,
+        aiStance: null,
+        aiConfidence: null,
+        aiAccepted: false,
+        aiWeight: 0,
+      }],
+    }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: payload }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    await expect(quantApi.createDecisionAssistant({ researchRunId: 'run-1', mode: 'holding', costBasis: 33.4, includeAi: true })).resolves.toMatchObject({
+      factorImpact: { reviewCoverage: 50, factors: [{ factor: 'quality', aiAccepted: true }, { factor: 'valuation', aiAccepted: false }] },
+    })
+
+    const legacy = assessmentPayload()
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: { items: [legacy], limit: 10 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+    await expect(quantApi.getDecisionAssistants('601899.SH', 10)).resolves.toMatchObject([{ id: 'assessment-1', factorImpact: null }])
+  })
 })

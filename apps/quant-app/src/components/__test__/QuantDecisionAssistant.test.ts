@@ -73,6 +73,41 @@ function assessment(overrides: Partial<QuantDecisionAssistant> = {}): QuantDecis
       factorReviews: [],
       errorCode: 'QUANT_DECISION_ASSISTANT_TIMEOUT',
     },
+    factorImpact: {
+      modelVersion: 'research-factors-v1',
+      totalWeight: 1,
+      deterministicScore: 78,
+      scoredWeight: 1,
+      reviewedWeight: 0.5,
+      reviewCoverage: 50,
+      supportWeight: 0.5,
+      cautionWeight: 0,
+      opposeWeight: 0,
+      unacceptedWeight: 0.5,
+      factors: [{
+        factor: 'quality',
+        label: '盈利质量',
+        weight: 0.5,
+        deterministicScore: 90,
+        deterministicStance: 'support',
+        deterministicContribution: 45,
+        aiStance: 'support',
+        aiConfidence: 88,
+        aiAccepted: true,
+        aiWeight: 0.5,
+      }, {
+        factor: 'valuation',
+        label: '估值',
+        weight: 0.5,
+        deterministicScore: 66,
+        deterministicStance: 'support',
+        deterministicContribution: 33,
+        aiStance: null,
+        aiConfidence: null,
+        aiAccepted: false,
+        aiWeight: 0,
+      }],
+    },
     final: { recommendation: 'bullish', label: '看多', action: 'add-review', actionLabel: '加仓复核', confidence: 92, source: 'deterministic', rationale: '低价本身不是加仓理由。' },
     ...overrides,
   }
@@ -120,5 +155,16 @@ describe('quant decision assistant panel', () => {
 
     expect((wrapper.get('input[aria-label="持仓成本"]').element as HTMLInputElement).value).toBe('33.4')
     expect(wrapper.get('.quant-decision-assistant-mode button:nth-child(2)').attributes('aria-pressed')).toBe('true')
+  })
+
+  it('shows deterministic contribution separately from accepted and unreviewed AI weight', () => {
+    const wrapper = mount(QuantDecisionAssistantPanel, { props: { ...baseProps, assessment: assessment() } })
+
+    expect(wrapper.text()).toContain('因子影响审计')
+    expect(wrapper.text()).toContain('AI 已纳入')
+    expect(wrapper.text()).toContain('确定性贡献 45.0 分')
+    expect(wrapper.text()).toContain('AI 已计入')
+    expect(wrapper.text()).toContain('AI 未复核')
+    expect(wrapper.text()).toContain('不改写确定性判断')
   })
 })

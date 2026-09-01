@@ -1225,6 +1225,7 @@ function parseDecisionAssistant(value: unknown): QuantDecisionAssistant | null {
     : []
   const deterministic = parseDecisionAssistantDeterministic(value.deterministic)
   const ai = parseDecisionAssistantAi(value.ai)
+  const factorImpact = parseAiFactorImpact(value.factorImpact ?? value.factor_impact)
   const final = parseDecisionAssistantFinal(value.final)
   if (!id || snapshotVersion !== 'decision-assistant-v1' || !tsCode || !researchRunId || !assessedAt || !createdAt || !reportGeneratedAt || !scenarioValue || (scenarioValue.mode !== 'buy' && scenarioValue.mode !== 'holding') || (readNumber(scenarioValue, 'currentPrice') ?? 0) <= 0 || (scenarioValue.costBasis !== null && (readNumber(scenarioValue, 'costBasis') ?? 0) <= 0) || (scenarioValue.quantity !== null && (readNumber(scenarioValue, 'quantity') ?? 0) <= 0) || !marketValue || (currentPriceSource !== 'eastmoney-realtime' && currentPriceSource !== 'local-daily-bars' && currentPriceSource !== 'user-input') || (currentPriceStatus !== 'realtime' && currentPriceStatus !== 'latest-close' && currentPriceStatus !== 'user-input' && currentPriceStatus !== null) || !currentPriceObservedAt || readNumber(marketValue, 'currentPrice') === null || !evidence || !sources.length || !deterministic || !ai || !final)
     return null
@@ -1246,7 +1247,7 @@ function parseDecisionAssistant(value: unknown): QuantDecisionAssistant | null {
     latestCloseSource: marketValue.latestCloseSource === null ? null : readString(marketValue, 'latestCloseSource', 'latest_close_source') === 'local-daily-bars' ? 'local-daily-bars' : null,
     priceDeltaPercent: marketValue.priceDeltaPercent === null ? null : readNumber(marketValue, 'priceDeltaPercent', 'price_delta_percent'),
   }
-  return { id, snapshotVersion: 'decision-assistant-v1', tsCode, name: value.name === null ? null : readString(value, 'name'), researchRunId, assessedAt, createdAt, reportGeneratedAt, scenario, market, evidence, sources, deterministic, ai, final }
+  return { id, snapshotVersion: 'decision-assistant-v1', tsCode, name: value.name === null ? null : readString(value, 'name'), researchRunId, assessedAt, createdAt, reportGeneratedAt, scenario, market, evidence, sources, deterministic, ai, factorImpact, final }
 }
 
 function parseDecisionAssistants(payload: unknown): QuantDecisionAssistantList {
