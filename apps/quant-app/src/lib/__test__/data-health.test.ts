@@ -15,7 +15,7 @@ function watchlist(tsCode: string, covered = true): WatchlistItem {
   }
 }
 
-function sync(status: SyncResult['status'] = 'completed'): SyncResult {
+function sync(status: SyncResult['status'] = 'completed', overrides: Partial<SyncResult> = {}): SyncResult {
   return {
     status,
     requestedCount: 3,
@@ -29,6 +29,7 @@ function sync(status: SyncResult['status'] = 'completed'): SyncResult {
     snapshotId: 'snapshot-1',
     startedAt: '2026-08-28T09:58:29.000Z',
     completedAt: '2026-08-28T09:58:31.000Z',
+    ...overrides,
   }
 }
 
@@ -76,7 +77,7 @@ describe('buildQuantDataHealth', () => {
     })
 
     expect(result).toMatchObject({
-      formulaVersion: 'quant-data-health-v2',
+      formulaVersion: 'quant-data-health-v3',
       status: 'ready',
       label: '数据完整',
     })
@@ -162,6 +163,102 @@ describe('buildQuantDataHealth', () => {
       expect.objectContaining({ key: 'value-quality', action: 'refresh-value-quality', actionLabel: '重新读取价值质量' }),
       expect.objectContaining({ key: 'shareholder-returns', action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' }),
     ]))
+  })
+
+  it('classifies fresh, aging, stale, and unknown observations without changing completeness', () => {
+    const result = buildQuantDataHealth({
+      watchlist: [watchlist('A')],
+      sync: sync('completed', { completedAt: '2026-09-01T12:00:00.000Z' }),
+      syncLoading: false,
+      syncError: false,
+      valueSelection: valueSelection({ observedAt: '2026-08-30T11:59:00.000Z' }),
+      valueLoading: false,
+      valueError: false,
+      shareholderReturns: shareholderReturns({ observedAt: '2026-08-24T12:00:00.000Z' }),
+      shareholderLoading: false,
+      shareholderError: false,
+      now: '2026-09-01T12:00:00.000Z',
+    })
+
+    expect(result).toMatchObject({ status: 'ready', freshness: 'stale', freshnessLabel: '已过期' })
+    expect(result.freshnessDetail).toContain('1 个数据域已超过 7 天')
+    expect(result.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'daily', freshness: 'fresh', freshnessLabel: '最新', freshnessDetail: '刚刚观测' }),
+      expect.objectContaining({ key: 'value-quality', freshness: 'aging', freshnessLabel: '需复核' }),
+      expect.objectContaining({ key: 'shareholder-returns', freshness: 'stale', freshnessLabel: '已过期' }),
+    ]))
+
+    const unknown = buildQuantDataHealth({
+      watchlist: [watchlist('A')],
+      sync: sync('completed', { completedAt: '20260901' }),
+      syncLoading: false,
+      syncError: false,
+      valueSelection: valueSelection({ observedAt: '2026-09-02T12:00:00.000Z' }),
+      valueLoading: false,
+      valueError: false,
+      shareholderReturns: null,
+      shareholderLoading: false,
+      shareholderError: false,
+      now: '2026-09-01T12:00:00.000Z',
+    })
+
+    expect(unknown.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'daily', freshness: 'fresh', freshnessLabel: '最新' }),
+      expect.objectContaining({ key: 'value-quality', freshness: 'unknown', freshnessLabel: '时间未知', freshnessDetail: '观察时间晚于当前时间，暂不判断' }),
+    ]))
+    expect(unknown.freshness).toBe('unknown')
+  })
+
+  it('retains the previous observation time while a refresh is loading or has failed', () => {
+    const loading = buildQuantDataHealth({
+      watchlist: [watchlist('A')],
+      sync: sync('completed', { completedAt: '2026-09-01T11:00:00.000Z' }),
+      syncLoading: true,
+      syncError: false,
+      valueSelection: valueSelection({ observedAt: '2026-08-31T12:00:00.000Z' }),
+      valueLoading: true,
+      valueError: false,
+      shareholderReturns: shareholderReturns({ observedAt: '2026-08-31T12:00:00.000Z' }),
+      shareholderLoading: false,
+      shareholderError: false,
+      now: '2026-09-01T12:00:00.000Z',
+    })
+    expect(loading.items.find(item => item.key === 'value-quality')).toMatchObject({
+      status: 'loading',
+      readyCount: 3,
+      totalCount: 3,
+      observedAt: '2026-08-31T12:00:00.000Z',
+      freshness: 'fresh',
+      detail: '正在刷新 · 上次 3 / 3 只完整',
+    })
+
+    const failed = buildQuantDataHealth({
+      watchlist: [watchlist('A')],
+      sync: sync('completed', { completedAt: '2026-09-01T11:00:00.000Z' }),
+      syncLoading: false,
+      syncError: true,
+      valueSelection: valueSelection({ observedAt: '2026-08-24T12:00:00.000Z' }),
+      valueLoading: false,
+      valueError: true,
+      shareholderReturns: shareholderReturns({ observedAt: '2026-08-31T12:00:00.000Z' }),
+      shareholderLoading: false,
+      shareholderError: false,
+      now: '2026-09-01T12:00:00.000Z',
+    })
+    expect(failed.items.find(item => item.key === 'daily')).toMatchObject({
+      status: 'error',
+      observedAt: '2026-09-01T11:00:00.000Z',
+      freshness: 'fresh',
+      detail: '同步状态读取失败 · 保留最近一次结果 · 当前覆盖 1 / 1 只',
+    })
+    expect(failed.items.find(item => item.key === 'value-quality')).toMatchObject({
+      status: 'error',
+      readyCount: 3,
+      totalCount: 3,
+      observedAt: '2026-08-24T12:00:00.000Z',
+      freshness: 'stale',
+      detail: '本次读取失败 · 保留上次 3 / 3 只完整',
+    })
   })
 
   it('does not invent coverage for an empty watchlist or invalid counts', () => {

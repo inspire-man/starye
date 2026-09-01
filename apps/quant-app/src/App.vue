@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
 import type { CandidateEvidenceScore } from './lib/candidate-evidence-score'
-import type { QuantDataHealthAction, QuantDataHealthStatus } from './lib/data-health'
+import type { QuantDataHealthAction, QuantDataHealthFreshness, QuantDataHealthStatus } from './lib/data-health'
 import type { DecisionEvidenceStatus } from './lib/decision-evidence'
 import type {
   CandidateItem,
@@ -1505,6 +1505,15 @@ function dataHealthStatusClass(status: QuantDataHealthStatus): string {
     loading: 'status-info',
     error: 'status-disabled',
   }[status]
+}
+
+function dataHealthFreshnessClass(freshness: QuantDataHealthFreshness): string {
+  return {
+    fresh: 'status-enabled',
+    aging: 'status-partial',
+    stale: 'status-disabled',
+    unknown: 'status-info',
+  }[freshness]
 }
 
 function dataHealthSummaryClass(status: QuantDataHealthStatus): string {
@@ -3386,9 +3395,14 @@ onUnmounted(() => {
                 数据健康
               </h2>
             </div>
-            <span class="status-chip" :class="dataHealthStatusClass(dataHealthSummary.status)">
-              {{ dataHealthStatusLabel(dataHealthSummary.status) }}
-            </span>
+            <div class="data-health-heading-status">
+              <span class="status-chip" :class="dataHealthStatusClass(dataHealthSummary.status)">
+                {{ dataHealthStatusLabel(dataHealthSummary.status) }}
+              </span>
+              <span class="status-chip" :class="dataHealthFreshnessClass(dataHealthSummary.freshness)">
+                {{ dataHealthSummary.freshnessLabel }}
+              </span>
+            </div>
           </div>
           <div class="data-health-layout">
             <div class="data-health-summary" :class="dataHealthSummaryClass(dataHealthSummary.status)">
@@ -3397,6 +3411,7 @@ onUnmounted(() => {
               </div>
               <strong>{{ dataHealthSummary.headline }}</strong>
               <p>{{ dataHealthSummary.scopeNote }}</p>
+              <small class="data-health-freshness-summary">{{ dataHealthSummary.freshnessDetail }}</small>
             </div>
             <div class="data-health-list" role="list" aria-label="数据健康状态">
               <div v-for="item in dataHealthSummary.items" :key="item.key" class="data-health-item" role="listitem">
@@ -3407,7 +3422,14 @@ onUnmounted(() => {
                   </span>
                 </div>
                 <p>{{ item.detail }}</p>
-                <small v-if="item.observedAt">观测 {{ formatDateTime(item.observedAt) }}</small>
+                <div class="data-health-item-meta">
+                  <small v-if="item.observedAt">观测 {{ formatDateTime(item.observedAt) }}</small>
+                  <small v-else>未记录观察时间</small>
+                  <span class="status-chip data-health-freshness-chip" :class="dataHealthFreshnessClass(item.freshness)">
+                    {{ item.freshnessLabel }}
+                  </span>
+                  <small>{{ item.freshnessDetail }}</small>
+                </div>
                 <button
                   v-if="item.action && item.actionLabel"
                   class="text-button data-health-action"

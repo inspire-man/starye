@@ -453,6 +453,41 @@ textarea:focus-visible {
   font-size: 0.68rem;
 }
 
+.data-health-heading-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.data-health-freshness-summary {
+  display: block;
+  overflow-wrap: anywhere;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.data-health-item-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.45rem;
+  margin-top: 0.25rem;
+}
+
+.data-health-item-meta small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+.data-health-freshness-chip {
+  font-size: 0.58rem;
+}
+
 .data-refresh-feedback {
   display: flex;
   min-width: 0;
