@@ -39,7 +39,7 @@ function streamResponse(chunks: readonly string[], status = 200): Response {
   })
 }
 
-function request(fetchImpl: typeof fetch, overrides: Partial<QuantDecryptedAiConfig> = {}) {
+function request(fetchImpl: typeof fetch, overrides: Partial<QuantDecryptedAiConfig> = {}, transportOverrides: { onTextDelta?: (delta: string, receivedLength: number) => void, signal?: AbortSignal } = {}) {
   return requestQuantAiCompletion({
     config: { ...config, ...overrides },
     messages: [{ role: 'user', content: 'Return a JSON object.' }],
@@ -50,6 +50,7 @@ function request(fetchImpl: typeof fetch, overrides: Partial<QuantDecryptedAiCon
     responseFormat: 'json_object',
     errorCodes,
     fetchImpl,
+    ...transportOverrides,
   })
 }
 
@@ -95,6 +96,23 @@ describe('quant AI transport', () => {
     await expect(request(fetchImpl, { responseMode: 'stream' })).resolves.toMatchObject({ content: '{"ok":true}', finishReason: 'stop' })
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
     expect(body).toMatchObject({ stream: true, response_format: { type: 'json_object' } })
+  })
+
+  it('reports bounded streamed deltas while retaining the complete result', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(streamResponse([
+      'data: {"choices":[{"delta":{"content":"{\\"ok\\":"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"true}"},"finish_reason":"stop"}]}\n\n',
+      'data: [DONE]\n\n',
+    ]))
+    const deltas: Array<{ delta: string, receivedLength: number }> = []
+
+    await expect(request(fetchImpl, { responseMode: 'stream' }, {
+      onTextDelta: (delta, receivedLength) => deltas.push({ delta, receivedLength }),
+    })).resolves.toMatchObject({ content: '{"ok":true}' })
+    expect(deltas).toEqual([
+      { delta: '{"ok":', receivedLength: 6 },
+      { delta: 'true}', receivedLength: 11 },
+    ])
   })
 
   it('accepts a complete JSON body when a compatible gateway ignores stream mode', async () => {

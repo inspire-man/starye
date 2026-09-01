@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantAiFactorImpact, QuantAiFactorReview, QuantFactorFreshness, QuantResearchEvidence, QuantResearchFactor, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
+import type { QuantAiFactorImpact, QuantAiFactorReview, QuantAiResponseMode, QuantFactorFreshness, QuantResearchEvidence, QuantResearchFactor, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
 import { AlertCircle, BrainCircuit, CheckCircle2, CircleHelp, RefreshCw } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { buildQuantFactorFreshness } from '../lib/quant-factor-freshness'
@@ -10,6 +10,8 @@ const props = defineProps<{
   summary: QuantResearchSummary | null
   loading: boolean
   generating: boolean
+  streamMode: QuantAiResponseMode | null
+  streamReceivedChars: number
   errorMessage: string | null
   configurationError: boolean
   questionPromptReady: boolean
@@ -328,7 +330,12 @@ function formatImpactTime(value: string | undefined): string {
       <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
       <span>正在读取已保存的解读</span>
     </div>
-    <QuantAiProgressStatus v-else-if="generating" class="quant-ai-summary-state" :active="generating" label="正在生成 AI 决策复核" />
+    <div v-else-if="generating" class="quant-ai-summary-state quant-ai-summary-streaming-state" role="status">
+      <QuantAiProgressStatus :active="generating" :label="streamMode === 'json' ? '正在等待 AI 完整响应' : '正在生成 AI 决策复核'" />
+      <small v-if="streamMode === 'stream' && streamReceivedChars > 0">已接收 {{ streamReceivedChars }} 字，结构校验通过后显示结论</small>
+      <small v-else-if="streamMode === 'stream'">已建立流式连接，等待 AI 首段内容</small>
+      <small v-else>等待 AI 返回完整响应，完成后统一校验</small>
+    </div>
     <div v-else-if="errorMessage" class="quant-ai-summary-state quant-ai-summary-state-error" role="alert">
       <AlertCircle :size="15" aria-hidden="true" />
       <span>{{ errorMessage }}</span>
@@ -522,6 +529,16 @@ function formatImpactTime(value: string | undefined): string {
   color: hsl(var(--muted-foreground));
   font-size: 0.6875rem;
   text-align: center;
+}
+
+.quant-ai-summary-streaming-state {
+  flex-direction: column;
+  min-height: 3.5rem;
+}
+
+.quant-ai-summary-streaming-state small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
 }
 
 .quant-ai-summary-state-error {

@@ -64,6 +64,8 @@ function summary(citedEvidenceKeys: string[]): QuantResearchSummary {
 const baseProps = {
   loading: false,
   generating: false,
+  streamMode: null,
+  streamReceivedChars: 0,
   errorMessage: null,
   configurationError: false,
   questionPromptReady: true,
@@ -297,6 +299,16 @@ describe('quant ai research summary', () => {
     expect(wrapper.text()).toContain('正在生成 AI 决策复核')
     expect(wrapper.get('.quant-ai-summary-button').text()).toContain('AI 复核中')
     expect((wrapper.get('.quant-ai-summary-button').element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('shows verified streaming progress without rendering partial conclusions', () => {
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, generating: true, streamMode: 'stream', streamReceivedChars: 128, report: report(), summary: null },
+    })
+
+    expect(wrapper.text()).toContain('已接收 128 字')
+    expect(wrapper.text()).toContain('结构校验通过后显示结论')
+    expect(wrapper.text()).not.toContain('AI 研究摘要')
   })
 
   it('shows accepted and rejected states for persisted factor reviews', () => {

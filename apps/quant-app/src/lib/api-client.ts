@@ -19,6 +19,7 @@ import type {
   QuantAiFactorReview,
   QuantAiProvider,
   QuantAiResponseMode,
+  QuantAiSummaryStreamProgress,
   QuantDecisionAssistant,
   QuantDecisionAssistantAction,
   QuantDecisionAssistantAiFactorReview,
@@ -2159,6 +2160,131 @@ async function requestJson(path: string, init?: RequestInit, options: { readonly
   return payload
 }
 
+type QuantAiSummaryStreamEventPayload
+  = | { readonly type: 'started', readonly researchRunId: string, readonly responseMode: QuantAiResponseMode, readonly generationTimeoutMs: number }
+    | { readonly type: 'delta', readonly text: string, readonly receivedLength: number }
+    | { readonly type: 'completed', readonly data: unknown }
+    | { readonly type: 'error', readonly code: string, readonly error: string, readonly details: unknown }
+
+function parseQuantAiSummaryStreamEvent(value: unknown): QuantAiSummaryStreamEventPayload | null {
+  if (!isRecord(value))
+    return null
+  const type = readString(value, 'type')
+  if (type === 'started') {
+    const researchRunId = readString(value, 'researchRunId', 'research_run_id')
+    const responseMode = readString(value, 'responseMode', 'response_mode')
+    const generationTimeoutMs = readNumber(value, 'generationTimeoutMs', 'generation_timeout_ms')
+    if (!researchRunId || (responseMode !== 'stream' && responseMode !== 'json') || generationTimeoutMs === null || !Number.isInteger(generationTimeoutMs))
+      return null
+    return { type, researchRunId, responseMode, generationTimeoutMs }
+  }
+  if (type === 'delta') {
+    const text = readString(value, 'text')
+    const receivedLength = readNumber(value, 'receivedLength', 'received_length')
+    if (!text || receivedLength === null || !Number.isInteger(receivedLength) || receivedLength < text.length)
+      return null
+    return { type, text, receivedLength }
+  }
+  if (type === 'completed')
+    return { type, data: value.data }
+  if (type === 'error') {
+    const code = readString(value, 'code')
+    const error = readString(value, 'error', 'message')
+    if (!code || !error)
+      return null
+    return { type, code, error, details: value.details ?? null }
+  }
+  return null
+}
+
+function streamErrorStatus(code: string): number {
+  if (code.includes('CONFIGURATION'))
+    return 503
+  if (code.includes('TIMEOUT'))
+    return 504
+  return 502
+}
+
+async function readQuantAiSummaryStream(
+  response: Response,
+  onProgress?: (event: QuantAiSummaryStreamProgress) => void,
+): Promise<QuantResearchSummary> {
+  if (!response.body)
+    throw new QuantApiError('AI 流式响应没有可读取的数据', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let started = false
+  let completed: QuantResearchSummary | null = null
+
+  const consumeFrame = (frame: string): void => {
+    const data = frame.split(/\r?\n/u)
+      .filter(line => line.startsWith('data:'))
+      .map(line => line.slice(5).trimStart())
+      .join('\n')
+      .trim()
+    if (!data)
+      return
+
+    let payload: unknown
+    try {
+      payload = JSON.parse(data)
+    }
+    catch {
+      throw new QuantApiError('AI 流式事件不是有效 JSON', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+    }
+    const event = parseQuantAiSummaryStreamEvent(payload)
+    if (!event)
+      throw new QuantApiError('AI 流式事件格式无效', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+    if (event.type === 'started') {
+      if (started)
+        throw new QuantApiError('AI 流式响应重复开始', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+      started = true
+      onProgress?.(event)
+      return
+    }
+    if (!started)
+      throw new QuantApiError('AI 流式响应缺少开始事件', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+    if (event.type === 'delta') {
+      onProgress?.(event)
+      return
+    }
+    if (event.type === 'error')
+      throw new QuantApiError(event.error, streamErrorStatus(event.code), event.code)
+    if (completed)
+      throw new QuantApiError('AI 流式响应重复完成', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+    const summary = parseResearchSummary(event.data)
+    if (!summary)
+      throw new QuantApiError('AI 研究摘要数据格式无效', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+    completed = summary
+    onProgress?.({ type: 'completed', data: summary })
+  }
+
+  try {
+    while (true) {
+      const next = await reader.read()
+      if (next.done)
+        break
+      buffer += decoder.decode(next.value, { stream: true })
+      const frames = buffer.split(/\r?\n\r?\n/u)
+      buffer = frames.pop() || ''
+      frames.forEach(consumeFrame)
+    }
+    buffer += decoder.decode()
+    if (buffer.trim())
+      consumeFrame(buffer)
+  }
+  catch (error) {
+    if (error instanceof QuantApiError)
+      throw error
+    throw new QuantApiError('AI 流式响应读取失败', 502, 'QUANT_AI_SUMMARY_UPSTREAM')
+  }
+  if (!started || !completed)
+    throw new QuantApiError('AI 流式响应未完成', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+  return completed
+}
+
 function queryString(query: DailyBarQuery): string {
   const params = new URLSearchParams()
   if (query.from)
@@ -2279,6 +2405,35 @@ export const quantApi = {
     if (!summary)
       throw new QuantApiError('AI 研究摘要数据格式无效', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
     return summary
+  },
+
+  async generateResearchSummaryStream(runId: string, onProgress?: (event: QuantAiSummaryStreamProgress) => void): Promise<QuantResearchSummary> {
+    const response = await fetch(`${QUANT_API_PREFIX}/research/runs/${encodeURIComponent(runId)}/summary/stream`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Accept': 'text/event-stream',
+        'Content-Type': 'application/json',
+      },
+    })
+    if (!response.ok) {
+      let payload: unknown = null
+      try {
+        payload = await response.json() as unknown
+      }
+      catch {
+        payload = null
+      }
+      const record = isRecord(payload) ? payload : {}
+      throw new QuantApiError(
+        readString(record, 'error', 'message') || `量化接口请求失败（${response.status}）`,
+        response.status,
+        readString(record, 'code'),
+      )
+    }
+    if (!response.headers.get('content-type')?.toLowerCase().includes('text/event-stream'))
+      throw new QuantApiError('AI 流式响应类型无效', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
+    return readQuantAiSummaryStream(response, onProgress)
   },
 
   async getResearchSummaries(runId: string, limit = 1): Promise<QuantResearchSummary[]> {

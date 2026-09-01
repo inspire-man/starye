@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QUANT_API_PREFIX, quantApi } from '../api-client'
 
+function streamResponse(chunks: readonly string[]): Response {
+  const encoder = new TextEncoder()
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      chunks.forEach(chunk => controller.enqueue(encoder.encode(chunk)))
+      controller.close()
+    },
+  })
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream; charset=utf-8' } })
+}
+
 describe('quantApi', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -1006,6 +1017,45 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary`)
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/summary?limit=1`)
+  })
+
+  it('reads chunked AI summary SSE events and only returns the validated completed summary', async () => {
+    const summary = {
+      id: 'summary-stream-1',
+      research_run_id: 'run-stream-1',
+      summary_version: 'research-summary-v1',
+      report_version: 'research-report-v2',
+      provider: 'openai_compatible',
+      model: 'gpt-5.4',
+      generated_at: '2026-09-01T00:00:00.000Z',
+      created_at: '2026-09-01T00:00:00.000Z',
+      cited_evidence_keys: ['quality-roe'],
+      summary: {
+        summary_version: 'research-summary-v1',
+        overview: '流式结果经过完整校验。',
+        supports: ['ROE 证据可用'],
+        concerns: ['仍需关注报告期'],
+        next_checks: ['复核下一期财报'],
+        cited_evidence_keys: ['quality-roe'],
+      },
+    }
+    const events = [
+      { type: 'started', researchRunId: 'run-stream-1', responseMode: 'stream', generationTimeoutMs: 300000 },
+      { type: 'delta', text: '{"overview":', receivedLength: 12 },
+      { type: 'completed', data: summary },
+    ]
+    const payload = events.map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('')
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(streamResponse([payload.slice(0, 41), payload.slice(41)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const progress: string[] = []
+
+    await expect(quantApi.generateResearchSummaryStream('run-stream-1', event => progress.push(event.type))).resolves.toMatchObject({
+      id: 'summary-stream-1',
+      summary: { overview: '流式结果经过完整校验。' },
+    })
+    expect(progress).toEqual(['started', 'delta', 'completed'])
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-stream-1/summary/stream`)
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', credentials: 'include' })
   })
 
   it('normalizes the server-computed factor impact audit without requiring it on legacy summaries', async () => {

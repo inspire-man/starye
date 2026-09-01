@@ -10,6 +10,8 @@ import type {
   DailyBar,
   QuantAiCandidateBriefing,
   QuantAiCandidateBriefingQuestion,
+  QuantAiResponseMode,
+  QuantAiSummaryStreamProgress,
   QuantDecisionAssistant,
   QuantDecisionRecord,
   QuantDecisionRecordAction,
@@ -184,6 +186,8 @@ const researchRunError = ref<unknown | null>(null)
 const researchSummaryLoading = ref(false)
 const researchSummaryGenerating = ref(false)
 const researchSummaryError = ref<unknown | null>(null)
+const researchSummaryStreamMode = ref<QuantAiResponseMode | null>(null)
+const researchSummaryStreamReceivedChars = ref(0)
 const researchQuestionInput = ref('')
 const researchQuestion = ref<QuantResearchQuestion | null>(null)
 const researchQuestionLoading = ref(false)
@@ -1621,6 +1625,8 @@ async function loadWatchlist() {
     researchSummaryError.value = null
     researchSummaryLoading.value = false
     researchSummaryGenerating.value = false
+    researchSummaryStreamMode.value = null
+    researchSummaryStreamReceivedChars.value = 0
     resetResearchQuestionState()
     resetResearchChangeExplanationState()
     loading.valuation = false
@@ -1942,6 +1948,8 @@ async function loadResearchRuns(tsCode: string) {
   researchSummaryError.value = null
   researchSummaryLoading.value = false
   researchSummaryGenerating.value = false
+  researchSummaryStreamMode.value = null
+  researchSummaryStreamReceivedChars.value = 0
   researchRunLoading.value = true
   researchRunError.value = null
   try {
@@ -1974,6 +1982,8 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
   researchSummaryLoading.value = true
   researchSummaryGenerating.value = false
   researchSummaryError.value = null
+  researchSummaryStreamMode.value = null
+  researchSummaryStreamReceivedChars.value = 0
   try {
     const summaries = await quantApi.getResearchSummaries(runId, 1)
     if (requestId !== researchSummaryRequestId)
@@ -1989,7 +1999,7 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
       return
     researchSummaryLoading.value = false
     researchSummaryGenerating.value = true
-    const summary = await quantApi.generateResearchSummary(runId)
+    const summary = await quantApi.generateResearchSummaryStream(runId, event => applyResearchSummaryStreamProgress(requestId, event))
     if (requestId === researchSummaryRequestId)
       researchAiSummary.value = summary
   }
@@ -2136,8 +2146,10 @@ async function generateResearchSummary() {
   const requestId = ++researchSummaryRequestId
   researchSummaryGenerating.value = true
   researchSummaryError.value = null
+  researchSummaryStreamMode.value = null
+  researchSummaryStreamReceivedChars.value = 0
   try {
-    const summary = await quantApi.generateResearchSummary(run.id)
+    const summary = await quantApi.generateResearchSummaryStream(run.id, event => applyResearchSummaryStreamProgress(requestId, event))
     if (requestId === researchSummaryRequestId)
       researchAiSummary.value = summary
   }
@@ -2147,6 +2159,18 @@ async function generateResearchSummary() {
   }
   finally {
     researchSummaryGenerating.value = false
+  }
+}
+
+function applyResearchSummaryStreamProgress(requestId: number, event: QuantAiSummaryStreamProgress): void {
+  if (requestId !== researchSummaryRequestId)
+    return
+  if (event.type === 'started') {
+    researchSummaryStreamMode.value = event.responseMode
+    researchSummaryStreamReceivedChars.value = 0
+  }
+  else if (event.type === 'delta') {
+    researchSummaryStreamReceivedChars.value = event.receivedLength
   }
 }
 
@@ -4552,6 +4576,8 @@ onUnmounted(() => {
                 :summary="researchAiSummary"
                 :loading="researchSummaryLoading"
                 :generating="researchSummaryGenerating"
+                :stream-mode="researchSummaryStreamMode"
+                :stream-received-chars="researchSummaryStreamReceivedChars"
                 :error-message="researchSummaryError ? parsedError(researchSummaryError).message : null"
                 :configuration-error="researchSummaryConfigurationError"
                 :question-prompt-ready="researchQuestionPromptReady"

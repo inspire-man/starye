@@ -53,6 +53,79 @@ async function createSeedDatabase(): Promise<{ client: ReturnType<typeof createC
   return { client, db: drizzle(client, { schema }) as unknown as Database }
 }
 
+function streamResponse(chunks: readonly string[]): Response {
+  const encoder = new TextEncoder()
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      chunks.forEach(chunk => controller.enqueue(encoder.encode(chunk)))
+      controller.close()
+    },
+  })
+  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+}
+
+function streamResearchReport(): string {
+  return JSON.stringify({
+    reportVersion: 'research-report-v2',
+    tsCode: '601899.SH',
+    name: '紫金矿业',
+    generatedAt: '2026-08-26T00:00:00.000Z',
+    sourceSnapshotId: null,
+    status: 'partial',
+    action: 'wait-confirmation',
+    score: 72.5,
+    headline: '等待确认：部分证据可用',
+    strengths: [],
+    risks: [],
+    gaps: [],
+    nextActions: [],
+    evidence: [{
+      key: 'quality-roe',
+      dimension: 'quality',
+      label: 'ROE',
+      status: 'pass',
+      value: 18,
+      threshold: '至少 10%',
+      source: 'Quant fixture',
+      observedAt: '2026-06-30',
+      formulaVersion: 'fixture-v1',
+      detail: '最近一期 ROE 达到研究门槛。',
+    }],
+    sources: [],
+    factorModel: {
+      modelVersion: 'research-factors-v1',
+      totalWeight: 1,
+      coveredWeight: 1,
+      coverage: 100,
+      score: 72.5,
+      factors: [{
+        key: 'quality',
+        label: '盈利质量',
+        weight: 1,
+        sourceId: 'quant-fixture',
+        source: 'Quant fixture',
+        status: 'ready',
+        score: 72.5,
+        evidenceKeys: ['quality-roe'],
+        missingEvidenceKeys: [],
+      }],
+    },
+    decision: {
+      decisionVersion: 'research-decision-v1',
+      recommendation: 'bullish',
+      label: '看多',
+      deterministicScore: 78,
+      confidence: 78,
+      coverage: 100,
+      buyPriceRange: null,
+      sellPriceRange: null,
+      evidenceKeys: ['quality-roe'],
+      invalidationConditions: [],
+      headline: '看多：证据覆盖充分',
+    },
+  })
+}
+
 function createApp(db: Database, session: unknown) {
   const normalizedSession = normalizeSession(session)
   const app = new Hono<AppEnv>()
@@ -776,6 +849,64 @@ describe('quant watchlist CRUD contract', () => {
 
     const rejected = await userA.request('/api/quant/research/runs/summary-run-1/summary', { method: 'POST' }, env)
     expect(rejected.status).toBe(502)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+  })
+
+  it('streams summary lifecycle events and persists only after completed validation', async () => {
+    const { client, db } = await createDatabase()
+    await client.execute({
+      sql: `INSERT INTO quant_research_run (
+        id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+        report_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: ['stream-run-1', 'user-1', '601899.SH', '紫金矿业', 'partial', 'research-report-v2', null, streamResearchReport(), 10, 10],
+    })
+    const user = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const env = { QUANT_AI_ENCRYPTION_KEY: 'stream-encryption-secret' } as AppEnv['Bindings']
+    const config = await user.request('/api/quant/ai-config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'openai_compatible',
+        model: 'gpt-5.4',
+        base_url: 'https://ai.example.test/v1',
+        api_key: 'sk-stream-test',
+        response_mode: 'stream',
+        generation_timeout_ms: 300000,
+      }),
+    }, env)
+    expect(config.status).toBe(200)
+
+    const aiContent = JSON.stringify({
+      overview: '流式摘要已完成完整校验。',
+      supports: ['ROE 证据可用'],
+      concerns: ['仍需关注报告期'],
+      nextChecks: ['复核下一期财报'],
+      citedEvidenceKeys: ['quality-roe'],
+    })
+    const upstream = vi.spyOn(globalThis, 'fetch').mockResolvedValue(streamResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: aiContent.slice(0, 18) } }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: { content: aiContent.slice(18) }, finish_reason: 'stop' }] })}\n\n`,
+      'data: [DONE]\n\n',
+    ]))
+
+    const response = await user.request('/api/quant/research/runs/stream-run-1/summary/stream', { method: 'POST' }, env)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/event-stream')
+    const body = await response.text()
+    expect(body).toContain('event: started')
+    expect(body).toContain('event: delta')
+    expect(body).toContain('event: completed')
+    expect(body).toContain('流式摘要已完成完整校验。')
+    expect(JSON.parse(String(upstream.mock.calls[0]?.[1]?.body))).toMatchObject({ stream: true, model: 'gpt-5.4' })
+    await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 1 }] })
+
+    upstream.mockResolvedValueOnce(streamResponse(['data: {"choices":\n\n']))
+    const failed = await user.request('/api/quant/research/runs/stream-run-1/summary/stream', { method: 'POST' }, env)
+    expect(failed.status).toBe(200)
+    const failedBody = await failed.text()
+    expect(failedBody).toContain('event: error')
+    expect(failedBody).toContain('QUANT_AI_SUMMARY_INVALID_RESPONSE')
     await expect(client.execute('SELECT count(*) AS count FROM quant_research_summary')).resolves.toMatchObject({ rows: [{ count: 1 }] })
   })
 
