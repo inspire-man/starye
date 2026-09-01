@@ -453,6 +453,41 @@ textarea:focus-visible {
   font-size: 0.68rem;
 }
 
+.data-refresh-feedback {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.375rem);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.data-refresh-feedback > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.data-refresh-feedback .text-button {
+  flex: 0 0 auto;
+}
+
+.data-refresh-feedback-loading {
+  border-color: hsl(var(--status-info) / 0.24);
+  background: hsl(var(--status-info-soft));
+  color: hsl(var(--status-info));
+}
+
+.data-refresh-feedback-error {
+  border-color: hsl(var(--status-danger) / 0.22);
+  background: hsl(var(--status-danger-soft));
+  color: hsl(var(--status-danger));
+}
+
 .environment-section {
   margin-top: 1.25rem;
   border-top: 1px solid hsl(var(--border));
