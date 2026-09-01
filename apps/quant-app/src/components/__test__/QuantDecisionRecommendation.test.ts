@@ -20,8 +20,19 @@ function report(overrides: Partial<QuantResearchReport> = {}): QuantResearchRepo
     risks: [],
     gaps: [],
     nextActions: [],
-    evidence: [],
-    sources: [],
+    evidence: [{
+      key: 'trend-sample',
+      dimension: 'trend',
+      label: '日线样本',
+      status: 'pass',
+      value: 125,
+      threshold: '至少 60 根',
+      source: '本地 Quant 日线库',
+      observedAt: '20260829',
+      formulaVersion: 'daily-v1',
+      detail: '样本完整',
+    }],
+    sources: [{ id: 'daily', name: '本地 Quant 日线库', observedAt: '20260829', formulaVersion: 'daily-v1' }],
     factorModel: {
       modelVersion: 'research-factors-v1',
       totalWeight: 1,
@@ -109,6 +120,30 @@ function summary(): QuantResearchSummary {
         citedEvidenceKeys: ['trend-sample'],
       },
     },
+    factorImpact: {
+      modelVersion: 'research-factors-v1',
+      totalWeight: 0.25,
+      deterministicScore: 78,
+      scoredWeight: 0.25,
+      reviewedWeight: 0.25,
+      reviewCoverage: 100,
+      supportWeight: 0.25,
+      cautionWeight: 0,
+      opposeWeight: 0,
+      unacceptedWeight: 0,
+      factors: [{
+        factor: 'trend',
+        label: '趋势',
+        weight: 0.25,
+        deterministicScore: 80,
+        deterministicStance: 'support',
+        deterministicContribution: 80,
+        aiStance: 'support',
+        aiConfidence: 86,
+        aiAccepted: true,
+        aiWeight: 0.25,
+      }],
+    },
     citedEvidenceKeys: [],
   }
 }
@@ -166,5 +201,21 @@ describe('quant decision recommendation', () => {
 
     expect(wrapper.text()).toContain('生成新版研究报告')
     expect(wrapper.text()).not.toContain('参考买入区间')
+  })
+
+  it('shows a ready status only when the AI factor audit is complete', () => {
+    const wrapper = mount(QuantDecisionRecommendation, {
+      props: {
+        report: report(),
+        summary: summary(),
+        currentPrice: 10.5,
+        currentPriceObservedAt: '20260829',
+      },
+    })
+
+    expect(wrapper.text()).toContain('判断就绪度')
+    expect(wrapper.text()).toContain('可参考')
+    expect(wrapper.text()).toContain('数据完整性')
+    expect(wrapper.text()).toContain('AI 复核')
   })
 })
