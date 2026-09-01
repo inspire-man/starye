@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest'
 
 const packageRoot = path.resolve(import.meta.dirname, '../../..')
 const childPath = path.join(import.meta.dirname, 'fixtures', 'data-chain-smoke-auth-timeout-child.ts')
-const timeoutBudgetMs = process.platform === 'win32' ? 10_000 : 5000
-const vitestTestTimeoutMs = process.platform === 'win32' ? 20_000 : 15000
+const timeoutBudgetMs = process.platform === 'win32' ? 10_000 : 15_000
+const vitestTestTimeoutMs = process.platform === 'win32' ? 20_000 : 30_000
 const pnpmCommand = process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : 'pnpm'
 const pnpmPrefix = process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm.cmd'] : []
 

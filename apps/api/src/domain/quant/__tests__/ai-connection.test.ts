@@ -18,8 +18,8 @@ function response(payload: unknown, status = 200): Response {
 }
 
 describe('quant AI connection test', () => {
-  it('sends a minimal authenticated request and returns only connection metadata', async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response({ choices: [{ message: { content: 'OK' } }] }))
+  it('sends an authenticated JSON contract probe and returns only connection metadata', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response({ choices: [{ message: { content: '{"ok":true}' } }] }))
     let clockCall = 0
 
     await expect(testQuantAiConnection({
@@ -42,11 +42,23 @@ describe('quant AI connection test', () => {
     const requestBody = JSON.parse(String(requestInit?.body)) as Record<string, unknown>
     expect(requestBody).toMatchObject({
       model: 'gpt-5.4',
-      temperature: 0,
-      max_tokens: 8,
-      messages: [{ role: 'user', content: 'Reply with OK only.' }],
+      max_completion_tokens: 256,
+      stream: false,
+      reasoning_effort: 'low',
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: 'Return exactly one JSON object: {"ok":true}.' }],
     })
+    expect(requestBody).not.toHaveProperty('max_tokens')
+    expect(requestBody).not.toHaveProperty('temperature')
     expect(String(requestInit?.body)).not.toContain('sk-test-secret')
+  })
+
+  it('rejects a successful HTTP response with non-object model content', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response({ choices: [{ message: { content: 'OK' } }] }))
+    await expect(testQuantAiConnection({ config, fetchImpl })).rejects.toMatchObject({
+      code: 'QUANT_AI_SUMMARY_INVALID_RESPONSE',
+      status: 502,
+    })
   })
 
   it('rejects missing keys without making an upstream request', async () => {

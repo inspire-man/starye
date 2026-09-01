@@ -2,6 +2,7 @@
 import type { QuantResearchEvidence, QuantResearchQuestion, QuantResearchReport } from '../lib/quant-types'
 import { AlertCircle, BrainCircuit, CircleHelp, RefreshCw } from 'lucide-vue-next'
 import { computed, nextTick, ref } from 'vue'
+import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
 
 const props = defineProps<{
   report: QuantResearchReport
@@ -82,10 +83,7 @@ defineExpose({ useQuestionPrompt })
       </div>
     </form>
 
-    <div v-if="loading" class="quant-ai-question-state" role="status">
-      <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
-      <span>正在基于当前报告整理回答</span>
-    </div>
+    <QuantAiProgressStatus v-if="loading" class="quant-ai-question-state" :active="loading" label="正在基于当前报告整理回答" />
     <div v-else-if="errorMessage" class="quant-ai-question-state quant-ai-question-state-error" role="alert">
       <AlertCircle :size="15" aria-hidden="true" />
       <span>{{ errorMessage }}</span>

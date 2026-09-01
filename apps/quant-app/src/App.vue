@@ -10,6 +10,9 @@ import type {
   DailyBar,
   QuantAiCandidateBriefing,
   QuantAiCandidateBriefingQuestion,
+  QuantDecisionAssistant,
+  QuantDecisionRecord,
+  QuantDecisionRecordAction,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -36,6 +39,7 @@ import type {
   WatchlistItem,
 } from './lib/quant-types'
 import type { QuantView } from './lib/quant-view'
+import type { AutomatedResearchCandidate, AutomatedResearchItemState } from './lib/research-automation'
 import type { BatchResearchProgress } from './lib/research-batch'
 import type { BatchAiSummaryProgress, BatchAiSummaryState } from './lib/research-batch-ai-summary'
 import type { BatchResearchFollowUpState } from './lib/research-batch-follow-up'
@@ -83,9 +87,13 @@ import QuantAiResearchChangeExplanation from './components/QuantAiResearchChange
 import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
+import QuantDecisionAssistantPanel from './components/QuantDecisionAssistant.vue'
+import QuantDecisionJournal from './components/QuantDecisionJournal.vue'
+import QuantDecisionQueue from './components/QuantDecisionQueue.vue'
 import QuantDecisionRecommendation from './components/QuantDecisionRecommendation.vue'
 import QuantFactorSettingsDrawer from './components/QuantFactorSettingsDrawer.vue'
 import QuantHeader from './components/QuantHeader.vue'
+import QuantResearchAutomation from './components/QuantResearchAutomation.vue'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from './lib/candidate-briefing-export'
 import { buildCandidateBriefingScopeKey, canApplyCandidateBriefingResponse } from './lib/candidate-briefing-scope'
@@ -96,6 +104,12 @@ import { buildQuantDataHealth } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { isQuantAiAutoReviewReady } from './lib/research-ai-auto-review'
+import {
+  applyAutomatedResearchProgress,
+  initialAutomatedResearchStates,
+  markAutomatedResearchItemPending,
+  runAutomatedResearch,
+} from './lib/research-automation'
 import { runResearchBatch } from './lib/research-batch'
 import {
   applyBatchAiSummaryProgress,
@@ -139,6 +153,30 @@ const shareholderReturns = ref<QuantShareholderReturnSelection | null>(null)
 const investmentKnowledge = ref<QuantInvestmentKnowledge | null>(null)
 const researchMarkers = ref<QuantResearchMarker[]>([])
 const researchRuns = ref<QuantResearchRun[]>([])
+const researchDecisionRecord = ref<QuantDecisionRecord | null>(null)
+const researchDecisionHistory = ref<QuantDecisionRecord[]>([])
+const researchDecisionLoading = ref(false)
+const researchDecisionHistoryLoading = ref(false)
+const researchDecisionSaving = ref(false)
+const researchDecisionLoadError = ref<unknown | null>(null)
+const researchDecisionHistoryError = ref<unknown | null>(null)
+const researchDecisionSaveError = ref<unknown | null>(null)
+const researchDecisionSaveMessage = ref('')
+const decisionQueueRecords = ref<QuantDecisionRecord[]>([])
+const decisionQueueLoading = ref(false)
+const decisionQueueError = ref<unknown | null>(null)
+const decisionAssistant = ref<QuantDecisionAssistant | null>(null)
+const decisionAssistantHistory = ref<QuantDecisionAssistant[]>([])
+const decisionAssistantLoading = ref(false)
+const decisionAssistantGenerating = ref(false)
+const decisionAssistantError = ref<unknown | null>(null)
+const decisionAssistantAiConfigAvailable = ref<boolean | null>(null)
+const automatedResearchTargets = ref<AutomatedResearchCandidate[]>([])
+const automatedResearchStates = ref<Record<string, AutomatedResearchItemState>>({})
+const automatedResearchRunning = ref(false)
+const automatedResearchError = ref<unknown | null>(null)
+const automatedResearchAiReady = ref<boolean | null>(null)
+const automatedResearchAiConfigError = ref<unknown | null>(null)
 const researchAiSummary = ref<QuantResearchSummary | null>(null)
 const researchRunLoading = ref(false)
 const researchRunGenerating = ref(false)
@@ -221,6 +259,8 @@ let financialRequestId = 0
 let valueQualityRequestId = 0
 let shareholderReturnRequestId = 0
 let researchRunRequestId = 0
+let researchDecisionRequestId = 0
+let decisionAssistantRequestId = 0
 let researchSummaryRequestId = 0
 let researchQuestionRequestId = 0
 let researchChangeExplanationRequestId = 0
@@ -462,6 +502,13 @@ const selectedResearchMarker = computed<QuantResearchMarker>(() => researchMarke
 const selectedResearchReview = computed(() => researchReviewFor(selectedTsCode.value || ''))
 const selectedCandidateItems = computed(() => candidateItems.value.filter(item => selectedCandidateIds.value.has(item.id)).slice(0, 3))
 const canCompareCandidates = computed(() => selectedCandidateItems.value.length >= 2)
+const automatedResearchCandidates = computed<AutomatedResearchCandidate[]>(() => {
+  const source = selectedCandidateItems.value.length ? selectedCandidateItems.value : filteredCandidateItems.value
+  return source.slice(0, 3).map(item => ({ tsCode: item.tsCode, name: item.name }))
+})
+const automatedResearchDisplayCandidates = computed<AutomatedResearchCandidate[]>(() => automatedResearchTargets.value.length
+  ? automatedResearchTargets.value
+  : automatedResearchCandidates.value)
 const comparisonStatusLabel = computed(() => comparisonLoading.value ? '正在读取估值与财务数据' : `${selectedCandidateItems.value.length} 只股票`)
 const comparisonResearchSummary = computed(() => {
   const states = selectedCandidateItems.value.map(item => comparisonResearchStates.value[item.tsCode]?.status || 'idle')
@@ -1542,6 +1589,7 @@ async function loadWatchlist() {
     errors.shareholderReturns = null
     researchRunRequestId++
     researchRuns.value = []
+    resetResearchDecisionState()
     researchRunError.value = null
     researchSummaryRequestId++
     researchAiSummary.value = null
@@ -1575,6 +1623,20 @@ async function loadCandidates() {
   }
   finally {
     loading.candidates = false
+  }
+}
+
+async function loadDecisionQueue(): Promise<void> {
+  decisionQueueLoading.value = true
+  decisionQueueError.value = null
+  try {
+    decisionQueueRecords.value = await quantApi.getResearchDecisionQueue(20)
+  }
+  catch (error) {
+    decisionQueueError.value = error
+  }
+  finally {
+    decisionQueueLoading.value = false
   }
 }
 
@@ -1784,8 +1846,68 @@ async function loadResearchMarkers() {
   }
 }
 
+function resetResearchDecisionState(): void {
+  researchDecisionRequestId++
+  researchDecisionRecord.value = null
+  researchDecisionHistory.value = []
+  researchDecisionLoading.value = false
+  researchDecisionHistoryLoading.value = false
+  researchDecisionLoadError.value = null
+  researchDecisionHistoryError.value = null
+  researchDecisionSaveError.value = null
+  researchDecisionSaveMessage.value = ''
+}
+
+function resetDecisionAssistantState(): void {
+  decisionAssistantRequestId++
+  decisionAssistant.value = null
+  decisionAssistantHistory.value = []
+  decisionAssistantLoading.value = false
+  decisionAssistantError.value = null
+  decisionAssistantAiConfigAvailable.value = null
+}
+
+function researchDecisionRequestIsCurrent(requestId: number, tsCode: string, runId: string | null): boolean {
+  return requestId === researchDecisionRequestId
+    && selectedTsCode.value === tsCode
+    && (runId === null || latestResearchRun.value?.id === runId)
+}
+
+async function loadResearchDecisionJournal(tsCode: string, runId: string | null, options: { preserveCurrent?: boolean } = {}): Promise<void> {
+  const requestId = ++researchDecisionRequestId
+  researchDecisionLoading.value = true
+  researchDecisionHistoryLoading.value = true
+  researchDecisionLoadError.value = null
+  researchDecisionHistoryError.value = null
+  researchDecisionSaveError.value = null
+  if (!options.preserveCurrent) {
+    researchDecisionRecord.value = null
+    researchDecisionHistory.value = []
+  }
+
+  const [recordResult, historyResult] = await Promise.allSettled([
+    runId ? quantApi.getResearchDecisionRecord(runId) : Promise.resolve(null),
+    quantApi.getResearchDecisionRecords(tsCode, 10),
+  ])
+  if (!researchDecisionRequestIsCurrent(requestId, tsCode, runId))
+    return
+
+  if (recordResult.status === 'fulfilled')
+    researchDecisionRecord.value = recordResult.value
+  else
+    researchDecisionLoadError.value = recordResult.reason
+  if (historyResult.status === 'fulfilled')
+    researchDecisionHistory.value = historyResult.value
+  else
+    researchDecisionHistoryError.value = historyResult.reason
+  researchDecisionLoading.value = false
+  researchDecisionHistoryLoading.value = false
+}
+
 async function loadResearchRuns(tsCode: string) {
   const requestId = ++researchRunRequestId
+  resetResearchDecisionState()
+  resetDecisionAssistantState()
   resetResearchReportCopyState()
   resetResearchQuestionState()
   resetResearchChangeExplanationState()
@@ -1800,6 +1922,8 @@ async function loadResearchRuns(tsCode: string) {
     const runs = await quantApi.getResearchRuns(tsCode)
     if (requestId === researchRunRequestId) {
       researchRuns.value = runs
+      void loadResearchDecisionJournal(tsCode, runs[0]?.id || null)
+      void loadDecisionAssistant(tsCode, runs[0]?.id || null)
       if (runs[0])
         await loadResearchSummary(runs[0].id)
       const evidenceTarget = comparisonAiEvidenceTarget.value
@@ -1850,22 +1974,30 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
     }
   }
   finally {
-    if (requestId === researchSummaryRequestId)
+    if (requestId === researchSummaryRequestId) {
       researchSummaryLoading.value = false
+      researchSummaryGenerating.value = false
+    }
   }
 }
 
 async function generateResearchReport() {
-  if (!selectedStock.value || researchRunGenerating.value)
+  const stock = selectedStock.value
+  if (!stock || researchRunGenerating.value)
     return
+  const tsCode = stock.tsCode
   resetResearchReportCopyState()
   resetResearchQuestionState()
   resetResearchChangeExplanationState()
   researchRunGenerating.value = true
   researchRunError.value = null
   try {
-    const run = await quantApi.generateResearchRun(selectedStock.value.tsCode)
+    const run = await quantApi.generateResearchRun(tsCode)
+    if (selectedTsCode.value !== tsCode)
+      return
     researchRuns.value = [run, ...researchRuns.value.filter(item => item.id !== run.id)].slice(0, 5)
+    void loadResearchDecisionJournal(tsCode, run.id)
+    void loadDecisionAssistant(tsCode, run.id)
     researchSummaryRequestId++
     researchAiSummary.value = null
     researchSummaryError.value = null
@@ -1876,6 +2008,98 @@ async function generateResearchReport() {
   }
   finally {
     researchRunGenerating.value = false
+  }
+}
+
+async function loadDecisionAssistant(tsCode: string, runId: string | null): Promise<void> {
+  const requestId = ++decisionAssistantRequestId
+  decisionAssistant.value = null
+  decisionAssistantHistory.value = []
+  decisionAssistantError.value = null
+  decisionAssistantLoading.value = true
+  const [historyResult, configResult] = await Promise.allSettled([
+    quantApi.getDecisionAssistants(tsCode, 10),
+    quantApi.getAiConfig(),
+  ])
+  if (requestId !== decisionAssistantRequestId || selectedTsCode.value !== tsCode)
+    return
+  if (historyResult.status === 'fulfilled') {
+    decisionAssistantHistory.value = historyResult.value
+    decisionAssistant.value = runId ? historyResult.value.find(item => item.researchRunId === runId) || null : null
+  }
+  else {
+    decisionAssistantError.value = historyResult.reason
+  }
+  if (configResult.status === 'fulfilled')
+    decisionAssistantAiConfigAvailable.value = Boolean(configResult.value && (configResult.value.hasApiKey || configResult.value.provider === 'ollama'))
+  else if (!decisionAssistantError.value)
+    decisionAssistantAiConfigAvailable.value = null
+  decisionAssistantLoading.value = false
+}
+
+async function createDecisionAssistant(input: { mode: 'buy' | 'holding', costBasis: number | null, quantity: number | null, includeAi: boolean }): Promise<void> {
+  const run = latestResearchRun.value
+  const stock = selectedStock.value
+  if (!run || !stock || decisionAssistantGenerating.value)
+    return
+  const requestId = ++decisionAssistantRequestId
+  decisionAssistantGenerating.value = true
+  decisionAssistantError.value = null
+  try {
+    const assessment = await quantApi.createDecisionAssistant({
+      researchRunId: run.id,
+      mode: input.mode,
+      costBasis: input.costBasis,
+      quantity: input.quantity,
+      includeAi: input.includeAi,
+    })
+    if (requestId !== decisionAssistantRequestId || selectedTsCode.value !== stock.tsCode || latestResearchRun.value?.id !== run.id)
+      return
+    decisionAssistant.value = assessment
+    decisionAssistantHistory.value = [assessment, ...decisionAssistantHistory.value.filter(item => item.id !== assessment.id)].slice(0, 10)
+    if (assessment.ai.status === 'unavailable')
+      decisionAssistantAiConfigAvailable.value = false
+    else if (assessment.ai.status !== 'not-requested')
+      decisionAssistantAiConfigAvailable.value = true
+  }
+  catch (error) {
+    if (requestId === decisionAssistantRequestId && selectedTsCode.value === stock.tsCode)
+      decisionAssistantError.value = error
+  }
+  finally {
+    if (requestId === decisionAssistantRequestId)
+      decisionAssistantGenerating.value = false
+  }
+}
+
+async function saveResearchDecision(action: QuantDecisionRecordAction, note: string | null): Promise<void> {
+  const stock = selectedStock.value
+  const run = latestResearchRun.value
+  if (!stock || !run || researchDecisionSaving.value)
+    return
+
+  const tsCode = stock.tsCode
+  const runId = run.id
+  researchDecisionSaving.value = true
+  researchDecisionSaveError.value = null
+  researchDecisionSaveMessage.value = ''
+  try {
+    await quantApi.saveResearchDecisionRecord(runId, action, note)
+    await loadResearchDecisionJournal(tsCode, runId, { preserveCurrent: true })
+    void loadDecisionQueue()
+    if (selectedTsCode.value !== tsCode || latestResearchRun.value?.id !== runId)
+      return
+    if (researchDecisionLoadError.value || researchDecisionHistoryError.value)
+      researchDecisionSaveMessage.value = '决策已保存，但部分复盘数据刷新失败'
+    else
+      researchDecisionSaveMessage.value = '决策记录已保存，快照已回读'
+  }
+  catch (error) {
+    if (selectedTsCode.value === tsCode && latestResearchRun.value?.id === runId)
+      researchDecisionSaveError.value = error
+  }
+  finally {
+    researchDecisionSaving.value = false
   }
 }
 
@@ -2453,6 +2677,85 @@ async function openComparisonDrawer() {
   comparisonLoading.value = false
 }
 
+async function executeAutomatedResearch(targets: readonly AutomatedResearchCandidate[], replaceTargets: boolean): Promise<void> {
+  const normalizedTargets = targets
+    .map(candidate => ({ tsCode: candidate.tsCode.trim().toUpperCase(), name: candidate.name?.trim() || null }))
+    .filter(candidate => candidate.tsCode)
+    .slice(0, 3)
+  if (!normalizedTargets.length || automatedResearchRunning.value)
+    return
+
+  if (replaceTargets) {
+    automatedResearchTargets.value = normalizedTargets
+    automatedResearchStates.value = initialAutomatedResearchStates(normalizedTargets)
+  }
+  else {
+    for (const candidate of normalizedTargets)
+      automatedResearchStates.value = markAutomatedResearchItemPending(automatedResearchStates.value, candidate.tsCode)
+  }
+  automatedResearchRunning.value = true
+  automatedResearchError.value = null
+  automatedResearchAiConfigError.value = null
+
+  let aiReady = false
+  try {
+    aiReady = isQuantAiAutoReviewReady(await quantApi.getAiConfig())
+  }
+  catch (error) {
+    automatedResearchAiConfigError.value = error
+  }
+  automatedResearchAiReady.value = aiReady
+
+  try {
+    const results = await runAutomatedResearch(normalizedTargets, {
+      aiReady,
+      ensureWatchlist: async (candidate) => {
+        if (watchlist.value.some(item => item.tsCode === candidate.tsCode))
+          return
+        const persisted = await quantApi.addWatchlist({
+          tsCode: candidate.tsCode,
+          ...(candidate.name ? { name: candidate.name } : {}),
+        })
+        if (!persisted)
+          throw new QuantApiError('观察池写入后没有返回已保存记录', 500, 'QUANT_WATCHLIST_READBACK_FAILED')
+      },
+      generateResearch: candidate => quantApi.generateResearchRun(candidate.tsCode),
+      generateAiSummary: run => quantApi.generateResearchSummary(run.id),
+    }, (progress) => {
+      automatedResearchStates.value = applyAutomatedResearchProgress(automatedResearchStates.value, progress)
+    })
+
+    await Promise.all([
+      loadWatchlist(),
+      loadCandidates(),
+      loadResearchMarkers(),
+      loadDecisionQueue(),
+      loadValueSelection(),
+      loadShareholderReturns(),
+    ])
+    const focusResult = results.find(result => result.run)
+    const focusStock = focusResult ? watchlist.value.find(item => item.tsCode === focusResult.candidate.tsCode) : null
+    if (focusStock)
+      selectStock(focusStock)
+  }
+  catch (error) {
+    automatedResearchError.value = error
+  }
+  finally {
+    automatedResearchRunning.value = false
+  }
+}
+
+async function startAutomatedResearch(): Promise<void> {
+  await executeAutomatedResearch(automatedResearchCandidates.value, true)
+}
+
+async function retryAutomatedResearchItem(tsCode: string): Promise<void> {
+  const candidate = automatedResearchTargets.value.find(item => item.tsCode === tsCode)
+  if (candidate)
+    await executeAutomatedResearch([candidate], false)
+}
+
 async function startBatchResearch() {
   if (!canCompareCandidates.value || comparisonResearchRunning.value || comparisonResearchAiSummaryRunning.value)
     return
@@ -2816,12 +3119,16 @@ async function retryComparisonResearchAiSummary(item: CandidateItem) {
 async function loadWorkspace() {
   errors.action = null
   syncResult.value = null
-  await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState()])
+  await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState()])
   await Promise.all([loadValueSelection(), loadShareholderReturns()])
 }
 
 function selectStock(item: Pick<WatchlistItem, 'tsCode' | 'name'>) {
   selectedTsCode.value = item.tsCode
+  decisionAssistantRequestId++
+  decisionAssistant.value = null
+  decisionAssistantHistory.value = []
+  decisionAssistantError.value = null
   syncResearchForm(item.tsCode)
   detailDrawerOpen.value = true
   void Promise.all([loadDailyBars(item.tsCode), loadValuation(item.tsCode), loadFinancialQuality(item.tsCode), loadResearchRuns(item.tsCode)])
@@ -2833,12 +3140,18 @@ function focusCandidateFromBriefing(tsCode: string): void {
     selectStock(item)
 }
 
-async function addToWatchlist() {
+function focusDecisionQueue(tsCode: string): void {
+  const item = watchlist.value.find(stock => stock.tsCode === tsCode)
+  if (item)
+    selectStock(item)
+}
+
+async function addToWatchlist(): Promise<boolean> {
   const tsCode = watchCode.value.trim().toUpperCase()
   const name = watchName.value.trim()
   if (!/^\d{6}\.(?:SZ|SH|BJ)$/.test(tsCode)) {
     errors.action = new QuantApiError('请输入形如 000001.SZ 的股票代码', 422, 'INVALID_TS_CODE')
-    return
+    return false
   }
   adding.value = true
   errors.action = null
@@ -2867,13 +3180,27 @@ async function addToWatchlist() {
       errors.action = new QuantApiError('股票已加入，但名称解析暂不可用；可补充名称后再次提交', 503, 'QUANT_STOCK_BASIC_UNAVAILABLE')
     await Promise.all([loadWatchlist(), loadCandidates(), loadResearchMarkers()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
+    return true
   }
   catch (error) {
     errors.action = error
+    return false
   }
   finally {
     adding.value = false
   }
+}
+
+async function addToWatchlistAndResearch(): Promise<void> {
+  const tsCode = watchCode.value.trim().toUpperCase()
+  const added = await addToWatchlist()
+  if (!added)
+    return
+  const saved = watchlist.value.find(item => item.tsCode === tsCode)
+  await executeAutomatedResearch([{
+    tsCode,
+    name: saved?.name || null,
+  }], true)
 }
 
 function requestRemoveFromWatchlist(tsCode: string) {
@@ -3409,7 +3736,7 @@ onUnmounted(() => {
               去更新
             </button>
           </div>
-          <form class="candidate-add-form" aria-label="从候选研究新增观察股" @submit.prevent="addToWatchlist">
+          <form class="candidate-add-form" aria-label="从候选研究新增观察股" @submit.prevent="addToWatchlistAndResearch">
             <label class="sr-only" for="candidate-quant-code">新增股票代码</label>
             <input id="candidate-quant-code" v-model="watchCode" class="field-control field-code" inputmode="text" autocomplete="off" placeholder="输入代码，如 600000.SH" maxlength="9">
             <label class="sr-only" for="candidate-quant-name">新增股票名称</label>
@@ -3540,6 +3867,18 @@ onUnmounted(() => {
             </div>
             <p>仅衡量原始字段是否齐全；价值质量分仍单独表示指标表现。</p>
           </section>
+          <QuantResearchAutomation
+            :candidates="automatedResearchDisplayCandidates"
+            :states="automatedResearchStates"
+            :running="automatedResearchRunning"
+            :ai-ready="automatedResearchAiReady"
+            :ai-config-error-message="automatedResearchAiConfigError ? parsedError(automatedResearchAiConfigError).message : null"
+            :error-message="automatedResearchError ? parsedError(automatedResearchError).message : null"
+            @start="startAutomatedResearch"
+            @retry="retryAutomatedResearchItem"
+            @focus="focusDecisionQueue"
+            @open-settings="aiSettingsOpen = true"
+          />
           <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
             <span>观察窗口</span>
             <strong>{{ formatTradeDate(snapshot.fromDate || null) }} → {{ formatTradeDate(snapshot.toDate || null) }}</strong>
@@ -3609,6 +3948,16 @@ onUnmounted(() => {
               还有 {{ researchPriorityTotal - visibleResearchPriorityQueue.length }} 条记录，请使用研究优先排序查看
             </p>
           </section>
+          <QuantDecisionQueue
+            v-if="candidateItems.length || decisionQueueRecords.length"
+            :records="decisionQueueRecords"
+            :candidates="candidateItems"
+            :watchlist="watchlist"
+            :candidate-trade-date="snapshot?.toDate || null"
+            :loading="decisionQueueLoading"
+            :error-message="decisionQueueError ? parsedError(decisionQueueError).message : null"
+            @focus="focusDecisionQueue"
+          />
           <QuantAiCandidateBriefingPanel
             v-if="candidateItems.length"
             ref="candidateAiBriefingPanel"
@@ -3963,6 +4312,34 @@ onUnmounted(() => {
                 :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
                 :ai-review-generating="researchSummaryLoading || researchSummaryGenerating"
                 @request-ai-review="generateResearchSummary"
+              />
+              <QuantDecisionAssistantPanel
+                :run="latestResearchRun"
+                :latest-close="latestDailyBar?.close ?? selectedStock.latestClose"
+                :latest-trade-date="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
+                :assessment="decisionAssistant"
+                :history="decisionAssistantHistory"
+                :loading="decisionAssistantLoading"
+                :generating="decisionAssistantGenerating"
+                :error-message="decisionAssistantError ? parsedError(decisionAssistantError).message : null"
+                :ai-config-available="decisionAssistantAiConfigAvailable"
+                @assess="createDecisionAssistant"
+                @open-settings="aiSettingsOpen = true"
+              />
+              <QuantDecisionJournal
+                :run="latestResearchRun"
+                :record="researchDecisionRecord"
+                :history="researchDecisionHistory"
+                :loading="researchDecisionLoading"
+                :history-loading="researchDecisionHistoryLoading"
+                :saving="researchDecisionSaving"
+                :latest-price="latestDailyBar?.close ?? selectedStock.latestClose"
+                :latest-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
+                :load-error-message="researchDecisionLoadError ? parsedError(researchDecisionLoadError).message : null"
+                :history-error-message="researchDecisionHistoryError ? parsedError(researchDecisionHistoryError).message : null"
+                :save-error-message="researchDecisionSaveError ? parsedError(researchDecisionSaveError).message : null"
+                :save-message="researchDecisionSaveMessage"
+                @save="saveResearchDecision"
               />
               <div class="research-run-summary">
                 <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">

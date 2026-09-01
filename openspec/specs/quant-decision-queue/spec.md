@@ -1,0 +1,52 @@
+# quant-decision-queue Specification
+
+## Purpose
+TBD - created by archiving change 2026-08-30-quant-decision-queue. Update Purpose after archive.
+
+## Requirements
+
+### Requirement: 最新决策队列读取
+
+系统 MUST 为认证用户提供 `GET /api/quant/research/decisions`，返回当前用户每个 `ts_code` 最新更新的一条决策记录。结果 MUST 按 `updatedAt` 倒序返回，并支持 `limit` 查询参数，服务端返回数量最多为 20 条；空队列返回成功包络和空数组。
+
+#### Scenario: 汇总每只股票的最新判断
+
+- **WHEN** 当前用户在多个研究 run 上保存了同一股票的决策
+- **THEN** 队列只返回该股票 `updatedAt` 最新的一条记录
+- **AND** 记录保留服务端生成的完整 snapshot，不改变已有决策记录响应结构
+
+#### Scenario: 用户隔离
+
+- **WHEN** 两个用户分别保存了决策记录并读取队列
+- **THEN** 每个用户只看到自己的最新记录
+- **AND** 查询参数、股票代码和客户端输入不改变用户范围
+
+#### Scenario: 读取上限和空状态
+
+- **WHEN** 用户传入合法 `limit` 或没有任何决策记录
+- **THEN** 服务端按上限返回最新记录，空结果返回 `data: []`
+
+### Requirement: 候选页决策待办
+
+候选研究页 MUST 展示最新决策队列中的动作、报告推荐、记录时价格和当前价格观察状态。队列 MUST 与信号分、证据覆盖、价值质量和研究优先级分开显示，读取失败时 MUST 保留候选快照并显示可识别的局部错误。
+
+#### Scenario: 从队列打开研究详情
+
+- **WHEN** 用户点击队列中的股票
+- **THEN** 页面打开该股票现有研究详情和决策记录区域
+- **AND** 不触发新的决策写入或 AI 生成请求
+
+#### Scenario: 同日价格观察
+
+- **WHEN** 决策记录价格日期与当前候选快照交易日相同
+- **THEN** 队列显示等待新的日线，不计算价格变化百分比
+
+#### Scenario: 价格或候选缺失
+
+- **WHEN** 记录快照没有有限价格、当前价格缺失，或股票不在当前候选快照
+- **THEN** 队列显示对应的数据状态，不生成伪造的涨跌幅，并保持其他候选内容可用
+
+#### Scenario: 移动端队列
+
+- **WHEN** 用户在 390px 宽度查看候选研究页
+- **THEN** 决策队列的条目、状态文本和详情入口在容器内换行，不造成页面级横向溢出

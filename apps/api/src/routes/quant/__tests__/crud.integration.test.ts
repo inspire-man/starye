@@ -22,6 +22,7 @@ const userScopeMigrationPath = new URL('../../../../../../packages/db/drizzle/00
 const researchRunMigrationPath = new URL('../../../../../../packages/db/drizzle/0042_quant_research_run.sql', import.meta.url)
 const researchSummaryMigrationPath = new URL('../../../../../../packages/db/drizzle/0043_quant_research_summary.sql', import.meta.url)
 const factorConfigMigrationPath = new URL('../../../../../../packages/db/drizzle/0045_quant_factor_config.sql', import.meta.url)
+const decisionRecordMigrationPath = new URL('../../../../../../packages/db/drizzle/0046_quant_decision_record.sql', import.meta.url)
 
 async function prepareUsers(client: ReturnType<typeof createClient>) {
   await client.execute('CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)')
@@ -31,7 +32,7 @@ async function prepareUsers(client: ReturnType<typeof createClient>) {
 async function createDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, factorConfigMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, userScopeMigrationPath, researchRunMigrationPath, researchSummaryMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -43,7 +44,7 @@ async function createDatabase(): Promise<{ client: ReturnType<typeof createClien
 async function createSeedDatabase(): Promise<{ client: ReturnType<typeof createClient>, db: Database }> {
   const client = createClient({ url: 'file::memory:' })
   await prepareUsers(client)
-  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath, factorConfigMigrationPath]) {
+  for (const migrationPathname of [migrationPath, leaseMigrationPath, seedMigrationPath, researchMigrationPath, knowledgeSeedMigrationPath, userScopeMigrationPath, researchRunMigrationPath, factorConfigMigrationPath, decisionRecordMigrationPath]) {
     const migration = await readFile(fileURLToPath(migrationPathname.href), 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean))
       await client.execute(statement)
@@ -509,7 +510,7 @@ describe('quant watchlist CRUD contract', () => {
     }, env)
     expect(save.status).toBe(200)
 
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }))
@@ -1595,5 +1596,212 @@ describe('quant watchlist CRUD contract', () => {
     })
     expect(JSON.stringify(payload)).not.toContain('fixture-token')
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('records an owned decision with a server-built snapshot and isolated history', async () => {
+    const { client, db } = await createDatabase()
+    await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
+    const report = JSON.stringify({
+      reportVersion: 'research-report-v2',
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: '2026-08-30T00:00:00.000Z',
+      sourceSnapshotId: 'snapshot-1',
+      status: 'ready',
+      action: 'research-window',
+      score: 82,
+      headline: '证据完整',
+      strengths: [],
+      risks: [],
+      gaps: [],
+      nextActions: [],
+      evidence: [{
+        key: 'decision-evidence',
+        dimension: 'trend',
+        label: '趋势样本',
+        status: 'pass',
+        value: 80,
+        threshold: '至少 20 根',
+        source: 'Quant 日线',
+        observedAt: '20260830',
+        formulaVersion: 'trend-v1',
+        detail: '趋势样本充足。',
+      }],
+      sources: [],
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 1,
+        coverage: 100,
+        score: 82,
+        factors: [{
+          key: 'trend',
+          label: '趋势',
+          weight: 1,
+          sourceId: 'local-daily-bars',
+          source: 'Quant 日线',
+          status: 'ready',
+          score: 82,
+          evidenceKeys: ['decision-evidence'],
+          missingEvidenceKeys: [],
+        }],
+        configuration: {
+          version: 'research-factor-config-v1',
+          weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },
+          source: 'user',
+          updatedAt: '2026-08-29T00:00:00.000Z',
+        },
+      },
+      decision: {
+        decisionVersion: 'research-decision-v1',
+        recommendation: 'bullish',
+        label: '看多',
+        deterministicScore: 82,
+        confidence: 82,
+        coverage: 100,
+        buyPriceRange: {
+          low: 15,
+          high: 16,
+          currency: 'CNY',
+          formulaVersion: 'reference-price-v1',
+          source: 'Quant 日线',
+          observedAt: '20260830',
+          evidenceKeys: ['decision-evidence'],
+        },
+        sellPriceRange: null,
+        evidenceKeys: ['decision-evidence'],
+        invalidationConditions: ['趋势转弱'],
+        headline: '看多：证据完整',
+      },
+    })
+    const insertRun = async (id: string, userId: string) => {
+      await client.execute({
+        sql: `INSERT INTO quant_research_run (
+          id, user_id, ts_code, name, status, report_version, source_snapshot_id,
+          report_json, generated_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [id, userId, '601899.SH', '紫金矿业', 'ready', 'research-report-v2', 'snapshot-1', report, 10, 10],
+      })
+    }
+    await insertRun('decision-run-1', 'user-1')
+    await insertRun('decision-run-2', 'user-1')
+    await insertRun('decision-run-foreign', 'user-2')
+    await upsertQuantDailyBars(db, [{
+      tsCode: '601899.SH',
+      tradeDate: '20260830',
+      open: 15,
+      high: 16,
+      low: 14,
+      close: 15.5,
+      preClose: 15,
+      change: 0.5,
+      pctChg: 3.33,
+      volume: 1000,
+      amount: 15500,
+    }])
+    await client.execute({
+      sql: `INSERT INTO quant_research_summary (
+        id, user_id, research_run_id, summary_version, report_version, provider, model,
+        summary_json, cited_evidence_keys_json, generated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        'decision-summary-1',
+        'user-1',
+        'decision-run-1',
+        'research-summary-v2',
+        'research-report-v2',
+        'openai_compatible',
+        'gpt-5.4',
+        JSON.stringify({
+          summaryVersion: 'research-summary-v2',
+          overview: '证据支持继续观察。',
+          supports: ['趋势样本充足'],
+          concerns: [],
+          nextChecks: ['复核最新价格'],
+          citedEvidenceKeys: ['decision-evidence'],
+          factorReviews: [{
+            factor: 'trend',
+            stance: 'support',
+            confidence: 88,
+            rationale: '趋势因子有日线样本支持。',
+            citedEvidenceKeys: ['decision-evidence'],
+          }],
+          decisionReview: {
+            decisionVersion: 'ai-decision-v1',
+            recommendation: 'bullish',
+            confidence: 84,
+            rationale: '报告证据相互支持。',
+            invalidationConditions: ['趋势转弱'],
+            citedEvidenceKeys: ['decision-evidence'],
+          },
+        }),
+        '["decision-evidence"]',
+        20,
+        20,
+      ],
+    })
+
+    const userA = createApp(db, { user: { id: 'user-1', role: 'user' } })
+    const userB = createApp(db, { user: { id: 'user-2', role: 'user' } })
+    await expect(userA.request('/api/quant/research/runs/decision-run-1/decision').then(response => response.json())).resolves.toMatchObject({ success: true, data: null })
+
+    const saved = await userA.request('/api/quant/research/runs/decision-run-1/decision', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'plan-buy', note: '等待价格进入参考区间' }),
+    })
+    expect(saved.status).toBe(200)
+    const savedPayload = await saved.json() as { data: { id: string, action: string, snapshot: Record<string, unknown> } }
+    expect(savedPayload.data).toMatchObject({
+      action: 'plan-buy',
+      snapshot: {
+        recommendation: 'bullish',
+        currentPrice: 15.5,
+        currentPriceObservedAt: '20260830',
+        aiDecisionReview: { recommendation: 'bullish', accepted: true, confidence: 84, factorReviewCoverage: 100 },
+        aiFactorReviews: [{ factor: 'trend', stance: 'support', accepted: true, confidence: 88 }],
+        factorConfiguration: { source: 'user', version: 'research-factor-config-v1' },
+      },
+    })
+    await expect(client.execute('SELECT snapshot_json FROM quant_decision_record WHERE id = ?', [savedPayload.data.id])).resolves.toMatchObject({
+      rows: [{ snapshot_json: expect.stringContaining('"aiFactorReviews"') }],
+    })
+
+    const updated = await userA.request('/api/quant/research/runs/decision-run-1/decision', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'holding', note: null }),
+    })
+    const updatedPayload = await updated.json() as { data: { id: string, action: string, note: string | null } }
+    expect(updatedPayload.data).toMatchObject({ id: savedPayload.data.id, action: 'holding', note: null })
+
+    await userA.request('/api/quant/research/runs/decision-run-2/decision', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'watch' }),
+    })
+    await userB.request('/api/quant/research/runs/decision-run-foreign/decision', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'sold' }),
+    })
+
+    const historyA = await userA.request('/api/quant/research/decisions/601899.SH?limit=2')
+    expect(historyA.status).toBe(200)
+    await expect(historyA.json()).resolves.toMatchObject({ data: expect.arrayContaining([
+      expect.objectContaining({ action: 'holding' }),
+      expect.objectContaining({ action: 'watch' }),
+    ]) })
+    await expect(userB.request('/api/quant/research/decisions/601899.SH').then(response => response.json())).resolves.toMatchObject({ data: [expect.objectContaining({ action: 'sold' })] })
+    const queueA = await userA.request('/api/quant/research/decisions?limit=99')
+    expect(queueA.status).toBe(200)
+    await expect(queueA.json()).resolves.toMatchObject({ data: [expect.objectContaining({ tsCode: '601899.SH' })] })
+    expect((await userB.request('/api/quant/research/decisions?limit=20')).status).toBe(200)
+    expect((await userA.request('/api/quant/research/runs/decision-run-foreign/decision')).status).toBe(404)
+    await expect(client.execute('SELECT count(*) AS count FROM quant_decision_record')).resolves.toMatchObject({ rows: [{ count: 3 }] })
+
+    await client.execute(`UPDATE quant_decision_record SET snapshot_json = '{}', updated_at = 9999999999999 WHERE id = '${savedPayload.data.id}'`)
+    expect((await userA.request('/api/quant/research/runs/decision-run-1/decision')).status).toBe(500)
+    expect((await userA.request('/api/quant/research/decisions?limit=20')).status).toBe(500)
   })
 })

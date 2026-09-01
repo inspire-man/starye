@@ -44,6 +44,16 @@ export type QuantResearchEvidenceStatus = 'pass' | 'caution' | 'fail' | 'missing
 export type QuantResearchAction = 'research-window' | 'wait-confirmation' | 'reassess' | 'complete-data'
 export type QuantRecommendation = 'bullish' | 'bearish' | 'watch'
 export type QuantResearchFactorStatus = 'ready' | 'partial' | 'missing' | 'unavailable'
+export type QuantAiFactorReviewStance = 'support' | 'caution' | 'oppose' | 'insufficient'
+
+export interface QuantAiFactorReview {
+  factor: QuantFactorConfigurationKey
+  stance: QuantAiFactorReviewStance
+  confidence: number
+  accepted: boolean
+  rationale: string
+  citedEvidenceKeys: string[]
+}
 
 export interface QuantResearchFactor {
   key: 'trend' | 'valuation' | 'quality' | 'shareholder-return' | 'risk'
@@ -137,7 +147,8 @@ export interface QuantAiDecisionReview {
   recommendation: QuantRecommendation
   confidence: number
   accepted: boolean
-  rejectionReason: 'low-confidence' | 'deterministic-watch' | null
+  rejectionReason: 'low-confidence' | 'deterministic-watch' | 'factor-review-incomplete' | 'factor-conflict' | null
+  factorReviewCoverage: number
   rationale: string
   invalidationConditions: string[]
   citedEvidenceKeys: string[]
@@ -171,9 +182,171 @@ export interface QuantResearchSummary {
     concerns: string[]
     nextChecks: string[]
     citedEvidenceKeys: string[]
+    factorReviews: QuantAiFactorReview[]
     decisionReview?: QuantAiDecisionReview | null
   }
   citedEvidenceKeys: string[]
+}
+
+export type QuantDecisionRecordAction = 'watch' | 'plan-buy' | 'holding' | 'sold'
+
+export interface QuantDecisionRecordSnapshot {
+  snapshotVersion: 'decision-record-v1'
+  reportVersion: string
+  generatedAt: string
+  recommendation: QuantRecommendation | null
+  confidence: number | null
+  coverage: number | null
+  evidenceKeys: string[]
+  currentPrice: number | null
+  currentPriceObservedAt: string | null
+  buyPriceRange: QuantReferencePriceRange | null
+  sellPriceRange: QuantReferencePriceRange | null
+  aiDecisionReview: QuantAiDecisionReview | null
+  aiFactorReviews: QuantAiFactorReview[]
+  factorConfiguration: QuantFactorConfiguration | null
+}
+
+export interface QuantDecisionRecord {
+  id: string
+  researchRunId: string
+  tsCode: string
+  action: QuantDecisionRecordAction
+  note: string | null
+  snapshot: QuantDecisionRecordSnapshot
+  createdAt: string
+  updatedAt: string
+}
+
+export type QuantDecisionAssistantMode = 'buy' | 'holding'
+export type QuantDecisionAssistantAction = 'consider-buy' | 'wait' | 'avoid' | 'hold' | 'reduce-review' | 'add-review' | 'verify-price' | 'review-data'
+export type QuantDecisionAssistantPriceStatus = 'within' | 'below' | 'above' | 'unavailable'
+export type QuantDecisionAssistantTrustLevel = 'high' | 'medium' | 'low'
+export type QuantDecisionAssistantAiStatus = 'accepted' | 'rejected' | 'failed' | 'unavailable' | 'not-requested'
+
+export interface QuantDecisionAssistantScenario {
+  mode: QuantDecisionAssistantMode
+  currentPrice: number
+  costBasis: number | null
+  quantity: number | null
+}
+
+export interface QuantDecisionAssistantMarket {
+  currentPrice: number
+  currentPriceSource: 'eastmoney-realtime' | 'local-daily-bars' | 'user-input'
+  currentPriceStatus: 'realtime' | 'latest-close' | 'user-input'
+  currentPriceObservedAt: string
+  currentPriceChangePercent: number | null
+  quoteErrorCode: string | null
+  latestClose: number | null
+  latestTradeDate: string | null
+  latestCloseSource: 'local-daily-bars' | null
+  priceDeltaPercent: number | null
+}
+
+export interface QuantDecisionAssistantEvidenceSummary {
+  total: number
+  usable: number
+  missing: number
+  failed: number
+}
+
+export interface QuantDecisionAssistantTrust {
+  level: QuantDecisionAssistantTrustLevel
+  score: number
+  coverage: number
+  evidenceCoverage: number
+  sourceCount: number
+  latestObservedAt: string | null
+  freshnessDays: number | null
+  missingEvidenceCount: number
+  failedEvidenceCount: number
+  crossSourceAlertCount: number
+  reasons: string[]
+}
+
+export interface QuantDecisionAssistantDeterministic {
+  recommendation: QuantRecommendation | null
+  label: '看多' | '看空' | '观望'
+  action: QuantDecisionAssistantAction
+  actionLabel: string
+  rationale: string
+  priceStatus: QuantDecisionAssistantPriceStatus
+  priceLabel: string
+  priceDetail: string
+  score: number | null
+  coverage: number
+  buyPriceRange: QuantReferencePriceRange | null
+  sellPriceRange: QuantReferencePriceRange | null
+  unrealizedPnlPercent: number | null
+  recoveryPercent: number | null
+  trust: QuantDecisionAssistantTrust
+  evidence: QuantDecisionAssistantEvidenceSummary
+  evidenceKeys: string[]
+  sources: QuantResearchSource[]
+  checks: string[]
+  invalidationConditions: string[]
+}
+
+export interface QuantDecisionAssistantAiFactorReview {
+  factor: QuantFactorConfigurationKey
+  stance: QuantAiFactorReviewStance
+  confidence: number
+  accepted: boolean
+  rationale: string
+  citedEvidenceKeys: string[]
+}
+
+export interface QuantDecisionAssistantAiReview {
+  aiVersion: string
+  status: QuantDecisionAssistantAiStatus
+  provider: QuantAiProvider | null
+  model: string | null
+  recommendation: QuantRecommendation | null
+  action: QuantDecisionAssistantAction | null
+  confidence: number | null
+  accepted: boolean
+  rejectionReason: 'low-confidence' | 'deterministic-watch' | 'factor-review-incomplete' | 'factor-conflict' | 'missing-citation' | 'invalid-action' | null
+  factorReviewCoverage: number
+  rationale: string | null
+  risks: string[]
+  invalidationConditions: string[]
+  citedEvidenceKeys: string[]
+  factorReviews: QuantDecisionAssistantAiFactorReview[]
+  errorCode: string | null
+}
+
+export interface QuantDecisionAssistantFinal {
+  recommendation: QuantRecommendation | null
+  label: '看多' | '看空' | '观望'
+  action: QuantDecisionAssistantAction
+  actionLabel: string
+  confidence: number | null
+  source: 'ai' | 'deterministic'
+  rationale: string
+}
+
+export interface QuantDecisionAssistant {
+  id: string
+  snapshotVersion: 'decision-assistant-v1'
+  tsCode: string
+  name: string | null
+  researchRunId: string
+  assessedAt: string
+  createdAt: string
+  reportGeneratedAt: string
+  scenario: QuantDecisionAssistantScenario
+  market: QuantDecisionAssistantMarket
+  evidence: QuantDecisionAssistantEvidenceSummary
+  sources: QuantResearchSource[]
+  deterministic: QuantDecisionAssistantDeterministic
+  ai: QuantDecisionAssistantAiReview
+  final: QuantDecisionAssistantFinal
+}
+
+export interface QuantDecisionAssistantList {
+  items: QuantDecisionAssistant[]
+  limit: number
 }
 
 export interface QuantResearchComparisonDifference {

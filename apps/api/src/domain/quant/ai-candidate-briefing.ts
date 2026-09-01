@@ -1,5 +1,7 @@
 import type { QuantDecryptedAiConfig } from './ai-config'
 import type { MomentumFactors } from './types'
+import { resolveQuantAiGenerationTimeout } from './ai-timeout'
+import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
 
 export const QUANT_AI_CANDIDATE_BRIEFING_VERSION = 'candidate-briefing-v1' as const
@@ -96,14 +98,6 @@ export interface QuantAiCandidateBriefingRequest {
   readonly config: QuantDecryptedAiConfig
   readonly timeoutMs?: number
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-}
-
-const DEFAULT_BASE_URLS: Record<QuantDecryptedAiConfig['provider'], string> = {
-  openai_compatible: 'https://api.openai.com/v1',
-  deepseek: 'https://api.deepseek.com/v1',
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
-  ollama: 'http://localhost:11434/v1',
 }
 
 const PROHIBITED_TRADING_LANGUAGE = /买入|卖出|做多|做空|建议买|建议卖|目标价|价格目标|止损价|止盈|止损|涨到|跌到|收益预测|price[-\s]*target|target[-\s]*price|return[-\s]+forecast|\bbuy(?:ing)?\b|\bsell(?:ing)?\b|\blong\b|\bshort\b|stop[-\s]*loss|take[-\s]*profit/iu
@@ -371,24 +365,6 @@ export function compareQuantCandidateBriefingFacts(left: QuantCandidateBriefingP
   return left.tsCode.localeCompare(right.tsCode)
 }
 
-function baseUrl(config: QuantDecryptedAiConfig): string {
-  const value = config.baseUrl?.trim() || DEFAULT_BASE_URLS[config.provider]
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:')
-      throw new Error('protocol')
-  }
-  catch {
-    throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION', 'AI base URL is invalid', 503)
-  }
-  return value.replace(/\/+$/u, '')
-}
-
-function chatCompletionsUrl(config: QuantDecryptedAiConfig): string {
-  const value = baseUrl(config)
-  return value.endsWith('/chat/completions') ? value : `${value}/chat/completions`
-}
-
 function boundedText(value: string, maxLength: number): string {
   return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}…`
 }
@@ -500,15 +476,6 @@ function stringList(value: unknown, field: string, maxItems: number, maxLength: 
   return value.map(item => stringValue(item, field, maxLength))
 }
 
-function responseContent(value: unknown): string {
-  const root = record(value)
-  const choices = root?.choices
-  if (!Array.isArray(choices) || !choices.length)
-    invalid('AI candidate briefing response has no choices')
-  const message = record(record(choices[0])?.message)
-  return stringValue(message?.content, 'content', QUANT_AI_CANDIDATE_BRIEFING_MAX_RESPONSE_LENGTH)
-}
-
 function validateBriefing(value: unknown, facts: readonly QuantCandidateBriefingPriorityFact[]): QuantAiCandidateBriefing {
   const parsed = record(value)
   if (!parsed)
@@ -560,68 +527,41 @@ export async function generateQuantAiCandidateBriefing(input: QuantAiCandidateBr
     throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_INPUT', 'Candidate snapshot is not available', 422)
   if (!config.apiKey && config.provider !== 'ollama')
     throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION', 'AI API key is not configured', 503)
-  const timeoutMs = Number.isFinite(input.timeoutMs) && (input.timeoutMs ?? 0) > 0 ? Math.min(input.timeoutMs!, 30_000) : 20_000
-  const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const timeoutMs = resolveQuantAiGenerationTimeout(input.timeoutMs)
+  const { content } = await requestQuantAiCompletion({
+    config,
+    timeoutMs,
+    fetchImpl: input.fetchImpl,
+    maxCompletionTokens: 4_000,
+    maxResponseLength: QUANT_AI_CANDIDATE_BRIEFING_MAX_RESPONSE_LENGTH,
+    temperature: 0.2,
+    responseFormat: 'json_object',
+    messages: [
+      { role: 'system', content: '你是严格的 Quant 研究简报器，只能解释给定候选事实，不得创造事实、因果关系或交易指令。' },
+      { role: 'user', content: buildQuantAiCandidateBriefingPrompt(facts) },
+    ],
+    errorCodes: {
+      configuration: 'QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION',
+      timeout: 'QUANT_AI_CANDIDATE_BRIEFING_TIMEOUT',
+      upstream: 'QUANT_AI_CANDIDATE_BRIEFING_UPSTREAM',
+      invalid_response: 'QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE',
+    },
+  })
+  let parsed: unknown
   try {
-    const headers: Record<string, string> = {
-      'accept': 'application/json',
-      'content-type': 'application/json',
-    }
-    if (config.apiKey)
-      headers.authorization = `Bearer ${config.apiKey}`
-    const response = await fetchImpl(chatCompletionsUrl(config), {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: config.model,
-        temperature: 0.2,
-        max_tokens: 1400,
-        messages: [
-          { role: 'system', content: '你是严格的 Quant 研究简报器，只能解释给定候选事实，不得创造事实、因果关系或交易指令。' },
-          { role: 'user', content: buildQuantAiCandidateBriefingPrompt(facts) },
-        ],
-      }),
-      signal: controller.signal,
-    })
-    if (response.status === 408 || response.status === 504)
-      throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_TIMEOUT', 'AI candidate briefing request timed out', 504)
-    if (!response.ok)
-      throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_UPSTREAM', `AI candidate briefing endpoint returned HTTP ${response.status}`, 502)
-    let payload: unknown
-    try {
-      payload = await response.json()
-    }
-    catch {
-      throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE', 'AI candidate briefing response is not JSON', 502)
-    }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(stripJsonFence(responseContent(payload)))
-    }
-    catch (error) {
-      if (error instanceof QuantError)
-        throw error
-      throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE', 'AI candidate briefing content is not valid JSON', 502)
-    }
-    const briefing = validateBriefing(parsed, promptFacts)
-    return {
-      briefingVersion: QUANT_AI_CANDIDATE_BRIEFING_VERSION,
-      provider: config.provider,
-      model: config.model,
-      generatedAt: new Date().toISOString(),
-      ...briefing,
-    }
+    parsed = JSON.parse(stripJsonFence(content))
   }
   catch (error) {
     if (error instanceof QuantError)
       throw error
-    if (controller.signal.aborted)
-      throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_TIMEOUT', 'AI candidate briefing request timed out', 504)
-    throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_UPSTREAM', 'AI candidate briefing request failed', 502)
+    throw briefingError('QUANT_AI_CANDIDATE_BRIEFING_INVALID_RESPONSE', 'AI candidate briefing content is not valid JSON', 502)
   }
-  finally {
-    clearTimeout(timer)
+  const briefing = validateBriefing(parsed, promptFacts)
+  return {
+    briefingVersion: QUANT_AI_CANDIDATE_BRIEFING_VERSION,
+    provider: config.provider,
+    model: config.model,
+    generatedAt: new Date().toISOString(),
+    ...briefing,
   }
 }

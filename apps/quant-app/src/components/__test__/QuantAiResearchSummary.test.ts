@@ -55,6 +55,7 @@ function summary(citedEvidenceKeys: string[]): QuantResearchSummary {
       concerns: ['估值仍需比较'],
       nextChecks: ['等待下一期报告'],
       citedEvidenceKeys,
+      factorReviews: [],
     },
     citedEvidenceKeys,
   }
@@ -81,6 +82,90 @@ describe('quant ai research summary', () => {
     expect(wrapper.text()).toContain('至少 10%')
     expect(wrapper.text()).toContain('AkShare stock_financial_analysis_indicator')
     expect(wrapper.text()).toContain('2026-06-30 · akshare-adapter-v1')
+  })
+
+  it('shows deterministic factor coverage and missing AI factor reviews', () => {
+    const factorReport = report({
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 0.5,
+        coverage: 50,
+        score: 80,
+        factors: [{
+          key: 'quality',
+          label: '盈利质量',
+          weight: 0.5,
+          sourceId: 'eastmoney-financial',
+          source: 'Eastmoney 最新财报',
+          status: 'ready',
+          score: 90,
+          evidenceKeys: ['akshare-roe'],
+          missingEvidenceKeys: [],
+        }, {
+          key: 'valuation',
+          label: '估值',
+          weight: 0.5,
+          sourceId: 'eastmoney-valuation',
+          source: 'Eastmoney 估值',
+          status: 'missing',
+          score: null,
+          evidenceKeys: ['valuation-pe'],
+          missingEvidenceKeys: ['valuation-pe'],
+        }],
+      },
+    })
+    const current = summary(['akshare-roe'])
+    current.summary.factorReviews = [{
+      factor: 'quality',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      rationale: '盈利质量有可核对证据。',
+      citedEvidenceKeys: ['akshare-roe'],
+    }]
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, report: factorReport, summary: current },
+    })
+
+    expect(wrapper.text()).toContain('因子覆盖与 AI 复核')
+    expect(wrapper.text()).toContain('1 / 2 个有权重因子已纳入')
+    expect(wrapper.text()).toContain('盈利质量')
+    expect(wrapper.text()).toContain('估值')
+    expect(wrapper.text()).toContain('数据缺失')
+    expect(wrapper.text()).toContain('待补证据：valuation-pe')
+    expect(wrapper.text()).toContain('AI 未返回复核')
+    expect(wrapper.text()).toContain('当前推荐仍以确定性结论为准')
+  })
+
+  it('shows factor gaps before an AI summary has been generated', () => {
+    const factorReport = report({
+      factorModel: {
+        modelVersion: 'research-factors-v1',
+        totalWeight: 1,
+        coveredWeight: 1,
+        coverage: 100,
+        score: 90,
+        factors: [{
+          key: 'quality',
+          label: '盈利质量',
+          weight: 1,
+          sourceId: 'eastmoney-financial',
+          source: 'Eastmoney 最新财报',
+          status: 'ready',
+          score: 90,
+          evidenceKeys: ['akshare-roe'],
+          missingEvidenceKeys: [],
+        }],
+      },
+    })
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, report: factorReport, summary: null },
+    })
+
+    expect(wrapper.text()).toContain('0 / 1 个有权重因子已纳入')
+    expect(wrapper.text()).toContain('AI 未返回复核')
+    expect(wrapper.text()).toContain('等待生成 AI 复核')
   })
 
   it('keeps unknown historical citation keys visible without a fabricated value', () => {
@@ -112,6 +197,45 @@ describe('quant ai research summary', () => {
     expect(wrapper.text()).toContain('正在生成 AI 决策复核')
     expect(wrapper.get('.quant-ai-summary-button').text()).toContain('AI 复核中')
     expect((wrapper.get('.quant-ai-summary-button').element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('shows accepted and rejected states for persisted factor reviews', () => {
+    const current = summary(['akshare-roe'])
+    current.summary.factorReviews = [{
+      factor: 'quality',
+      stance: 'support',
+      confidence: 88,
+      accepted: true,
+      rationale: '盈利质量有报告证据支持。',
+      citedEvidenceKeys: ['akshare-roe'],
+    }, {
+      factor: 'valuation',
+      stance: 'insufficient',
+      confidence: 42,
+      accepted: false,
+      rationale: '估值证据尚未充分覆盖。',
+      citedEvidenceKeys: [],
+    }]
+    current.summary.decisionReview = {
+      decisionVersion: 'ai-decision-v1',
+      recommendation: 'watch',
+      confidence: 64,
+      accepted: false,
+      rejectionReason: 'factor-review-incomplete',
+      factorReviewCoverage: 20,
+      rationale: '因子复核覆盖不足。',
+      invalidationConditions: [],
+      citedEvidenceKeys: ['akshare-roe'],
+    }
+    const wrapper = mount(QuantAiResearchSummary, {
+      props: { ...baseProps, report: report(), summary: current },
+    })
+
+    expect(wrapper.text()).toContain('因子覆盖与 AI 复核')
+    expect(wrapper.text()).toContain('盈利质量')
+    expect(wrapper.text()).toContain('已计入 AI 复核')
+    expect(wrapper.text()).toContain('数据不足，未计入')
+    expect(wrapper.text()).toContain('因子复核 20%')
   })
 
   it('offers a same-level next-check action without submitting a question', async () => {

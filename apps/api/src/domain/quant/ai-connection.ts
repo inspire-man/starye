@@ -1,5 +1,6 @@
 import type { QuantDecryptedAiConfig } from './ai-config'
-import { chatCompletionsUrl } from './ai-summary'
+import { resolveQuantAiConnectionTimeout } from './ai-timeout'
+import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
 
 export interface QuantAiConnectionTestRequest {
@@ -21,82 +22,44 @@ function connectionError(code: 'QUANT_AI_SUMMARY_CONFIGURATION' | 'QUANT_AI_SUMM
   return new QuantError(code, message, status)
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null
-}
-
-function responseContent(value: unknown): string {
-  const root = record(value)
-  const choices = root?.choices
-  if (!Array.isArray(choices) || !choices.length)
-    throw connectionError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI connection response has no choices', 502)
-  const firstChoice = record(choices[0])
-  const message = record(firstChoice?.message)
-  const content = message?.content
-  if (typeof content !== 'string' || !content.trim())
-    throw connectionError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI connection response has no message content', 502)
-  return content.trim()
-}
-
 export async function testQuantAiConnection(input: QuantAiConnectionTestRequest): Promise<QuantAiConnectionTestResult> {
   const { config } = input
   if (!config.apiKey && config.provider !== 'ollama')
     throw connectionError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI API key is not configured', 503)
 
-  const timeoutMs = Number.isFinite(input.timeoutMs) && (input.timeoutMs ?? 0) > 0 ? Math.min(input.timeoutMs!, 30_000) : 10_000
+  const timeoutMs = resolveQuantAiConnectionTimeout(input.timeoutMs)
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const nowMs = input.nowMs ?? (() => Date.now())
   const now = input.now ?? (() => new Date())
   const startedAt = nowMs()
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
+  const { content } = await requestQuantAiCompletion({
+    config,
+    timeoutMs,
+    fetchImpl,
+    maxCompletionTokens: 256,
+    maxResponseLength: 512,
+    temperature: 0,
+    responseFormat: 'json_object',
+    messages: [{ role: 'user', content: 'Return exactly one JSON object: {"ok":true}.' }],
+    errorCodes: {
+      configuration: 'QUANT_AI_SUMMARY_CONFIGURATION',
+      timeout: 'QUANT_AI_SUMMARY_TIMEOUT',
+      upstream: 'QUANT_AI_SUMMARY_UPSTREAM',
+      invalid_response: 'QUANT_AI_SUMMARY_INVALID_RESPONSE',
+    },
+  })
   try {
-    const headers: Record<string, string> = {
-      'accept': 'application/json',
-      'content-type': 'application/json',
-    }
-    if (config.apiKey)
-      headers.authorization = `Bearer ${config.apiKey}`
-    const response = await fetchImpl(chatCompletionsUrl(config), {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: config.model,
-        temperature: 0,
-        max_tokens: 8,
-        messages: [{ role: 'user', content: 'Reply with OK only.' }],
-      }),
-      signal: controller.signal,
-    })
-    if (response.status === 408 || response.status === 504)
-      throw connectionError('QUANT_AI_SUMMARY_TIMEOUT', 'AI connection request timed out', 504)
-    if (!response.ok)
-      throw connectionError('QUANT_AI_SUMMARY_UPSTREAM', `AI connection endpoint returned HTTP ${response.status}`, 502)
-
-    let payload: unknown
-    try {
-      payload = await response.json()
-    }
-    catch {
-      throw connectionError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI connection response is not JSON', 502)
-    }
-    responseContent(payload)
-    return {
-      provider: config.provider,
-      model: config.model,
-      testedAt: now().toISOString(),
-      latencyMs: Math.max(0, nowMs() - startedAt),
-    }
+    const parsed = JSON.parse(content) as unknown
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+      throw new Error('object required')
   }
-  catch (error) {
-    if (error instanceof QuantError)
-      throw error
-    if (controller.signal.aborted)
-      throw connectionError('QUANT_AI_SUMMARY_TIMEOUT', 'AI connection request timed out', 504)
-    throw connectionError('QUANT_AI_SUMMARY_UPSTREAM', 'AI connection request failed', 502)
+  catch {
+    throw connectionError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI connection response content is not a JSON object', 502)
   }
-  finally {
-    clearTimeout(timer)
+  return {
+    provider: config.provider,
+    model: config.model,
+    testedAt: now().toISOString(),
+    latencyMs: Math.max(0, nowMs() - startedAt),
   }
 }

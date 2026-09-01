@@ -1,6 +1,8 @@
 import type { QuantDecryptedAiConfig } from './ai-config'
-import type { QuantRecommendation } from './decision-recommendation'
+import type { QuantRecommendation, QuantResearchFactor, QuantResearchFactorKey } from './decision-recommendation'
 import type { QuantResearchReport } from './research-report'
+import { resolveQuantAiGenerationTimeout } from './ai-timeout'
+import { requestQuantAiCompletion } from './ai-transport'
 import { QuantError } from './errors'
 
 export const QUANT_AI_SUMMARY_VERSION = 'research-summary-v2' as const
@@ -15,7 +17,19 @@ export interface QuantAiSummary {
   readonly concerns: readonly string[]
   readonly nextChecks: readonly string[]
   readonly citedEvidenceKeys: readonly string[]
+  readonly factorReviews: readonly QuantAiFactorReview[]
   readonly decisionReview: QuantAiDecisionReview | null
+}
+
+export type QuantAiFactorReviewStance = 'support' | 'caution' | 'oppose' | 'insufficient'
+
+export interface QuantAiFactorReview {
+  readonly factor: QuantResearchFactorKey
+  readonly stance: QuantAiFactorReviewStance
+  readonly confidence: number
+  readonly accepted: boolean
+  readonly rationale: string
+  readonly citedEvidenceKeys: readonly string[]
 }
 
 export interface QuantAiDecisionReview {
@@ -23,7 +37,8 @@ export interface QuantAiDecisionReview {
   readonly recommendation: QuantRecommendation
   readonly confidence: number
   readonly accepted: boolean
-  readonly rejectionReason: 'low-confidence' | 'deterministic-watch' | null
+  readonly rejectionReason: 'low-confidence' | 'deterministic-watch' | 'factor-review-incomplete' | 'factor-conflict' | null
+  readonly factorReviewCoverage: number
   readonly rationale: string
   readonly invalidationConditions: readonly string[]
   readonly citedEvidenceKeys: readonly string[]
@@ -36,34 +51,8 @@ export interface QuantAiSummaryRequest {
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 }
 
-const DEFAULT_BASE_URLS: Record<QuantDecryptedAiConfig['provider'], string> = {
-  openai_compatible: 'https://api.openai.com/v1',
-  deepseek: 'https://api.deepseek.com/v1',
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
-  ollama: 'http://localhost:11434/v1',
-}
-
 function summaryError(code: 'QUANT_AI_SUMMARY_CONFIGURATION' | 'QUANT_AI_SUMMARY_TIMEOUT' | 'QUANT_AI_SUMMARY_UPSTREAM' | 'QUANT_AI_SUMMARY_INVALID_RESPONSE', message: string, status: 502 | 503 | 504): QuantError {
   return new QuantError(code, message, status)
-}
-
-function baseUrl(config: QuantDecryptedAiConfig): string {
-  const value = config.baseUrl?.trim() || DEFAULT_BASE_URLS[config.provider]
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:')
-      throw new Error('protocol')
-  }
-  catch {
-    throw summaryError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI base URL is invalid', 503)
-  }
-  return value.replace(/\/+$/u, '')
-}
-
-export function chatCompletionsUrl(config: QuantDecryptedAiConfig): string {
-  const value = baseUrl(config)
-  return value.endsWith('/chat/completions') ? value : `${value}/chat/completions`
 }
 
 function reportPrompt(report: QuantResearchReport): string {
@@ -75,7 +64,27 @@ function reportPrompt(report: QuantResearchReport): string {
     action: report.action,
     score: report.score,
     headline: report.headline,
-    factorModel: report.factorModel ?? null,
+    factorModel: report.factorModel
+      ? {
+          modelVersion: report.factorModel.modelVersion,
+          totalWeight: report.factorModel.totalWeight,
+          coveredWeight: report.factorModel.coveredWeight,
+          coverage: report.factorModel.coverage,
+          score: report.factorModel.score,
+          configuration: report.factorModel.configuration ?? null,
+          factors: report.factorModel.factors.map(factor => ({
+            key: factor.key,
+            label: factor.label,
+            weight: factor.weight,
+            sourceId: factor.sourceId,
+            source: factor.source,
+            status: factor.status,
+            score: factor.score,
+            evidenceKeys: factor.evidenceKeys,
+            missingEvidenceKeys: factor.missingEvidenceKeys,
+          })),
+        }
+      : null,
     decision: report.decision ?? null,
     sources: report.sources,
     evidence: report.evidence.slice(0, 32).map(item => ({
@@ -99,8 +108,10 @@ function reportPrompt(report: QuantResearchReport): string {
 export function buildQuantAiSummaryPrompt(report: QuantResearchReport): string {
   return [
     '请把下面这份 Quant 确定性研究报告解释给金融初学者，并复核其中的结构化推荐。只使用 JSON 中已有的事实和 evidence key。',
-    '返回一个 JSON 对象，字段必须是 overview、supports、concerns、nextChecks、citedEvidenceKeys、decisionReview；数组最多各 6 项。',
+    '返回一个 JSON 对象，字段必须是 overview、supports、concerns、nextChecks、citedEvidenceKeys、factorReviews、decisionReview；数组最多各 6 项。',
     'overview 用 1-3 句说明当前证据代表什么；supports、concerns、nextChecks 都写成可核对的短句。',
+    'factorReviews 必须逐项复核 factorModel 中每个权重大于 0 的因子，不得遗漏；每项字段是 factor、stance、confidence、rationale、citedEvidenceKeys。stance 只能是 support、caution、oppose、insufficient；引用只能使用该因子自己的 evidenceKeys。',
+    '因子数据缺失、来源不可用或无法核对时使用 insufficient，不要猜测；不要输出 accepted，accepted 会由服务端根据数据、引用和置信度重新计算。',
     'decisionReview 必须是对象或 null。对象字段必须是 decisionVersion、recommendation、confidence、rationale、invalidationConditions、citedEvidenceKeys；recommendation 只能是 bullish、bearish、watch，confidence 为 0-100 的数字。',
     'decisionReview 只能复核报告已有证据；如果报告确定性推荐为 watch 或数据覆盖度不足，不得升级为 bullish/bearish。不要添加报告中不存在的数值、来源或证据 key。',
     '如果报告包含 factorModel.configuration，必须按该报告快照解释权重和确定性分数，不要用当前配置替换历史报告配置。',
@@ -149,7 +160,99 @@ function recommendation(value: unknown): QuantRecommendation {
   throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision recommendation is invalid', 502)
 }
 
-function decisionReview(value: unknown, report: QuantResearchReport): QuantAiDecisionReview | null {
+function factorKey(value: unknown): value is QuantResearchFactorKey {
+  return value === 'trend' || value === 'valuation' || value === 'quality' || value === 'shareholder-return' || value === 'risk'
+}
+
+function factorStance(value: unknown): QuantAiFactorReviewStance {
+  if (value === 'support' || value === 'caution' || value === 'oppose' || value === 'insufficient')
+    return value
+  throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review stance is invalid', 502)
+}
+
+function factorReview(value: unknown, report: QuantResearchReport): QuantAiFactorReview[] {
+  if (value === undefined)
+    return []
+  if (!Array.isArray(value) || value.length > 5)
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor reviews are invalid', 502)
+
+  const factors = new Map<QuantResearchFactorKey, QuantResearchFactor>(
+    (report.factorModel?.factors ?? []).map(factor => [factor.key, factor]),
+  )
+  const seen = new Set<QuantResearchFactorKey>()
+  return value.map((item) => {
+    const parsed = record(item)
+    if (!parsed || !factorKey(parsed.factor) || seen.has(parsed.factor))
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review key is invalid', 502)
+    const factor = factors.get(parsed.factor)
+    if (!factor)
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review references an unknown factor', 502)
+    seen.add(parsed.factor)
+    const confidence = parsed.confidence
+    if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100)
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review confidence is invalid', 502)
+    const rationale = stringValue(parsed.rationale, 'factorReviews.rationale', 600)
+    const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
+    const factorEvidenceKeys = new Set(factor.evidenceKeys)
+    if (cited.some(key => !factorEvidenceKeys.has(key)))
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review cited evidence from another factor', 502)
+    const stance = factorStance(parsed.stance)
+    const citedUsable = cited.some((key) => {
+      const evidence = report.evidence.find(item => item.key === key)
+      return evidence?.status === 'pass' || evidence?.status === 'caution'
+    })
+    const accepted = factor.status === 'ready'
+      && factor.score !== null
+      && confidence >= 60
+      && cited.length > 0
+      && citedUsable
+      && stance !== 'insufficient'
+    return {
+      factor: parsed.factor,
+      stance,
+      confidence,
+      accepted,
+      rationale,
+      citedEvidenceKeys: cited,
+    }
+  })
+}
+
+function factorReviewAssessment(
+  report: QuantResearchReport,
+  reviews: readonly QuantAiFactorReview[],
+  reviewsFieldPresent: boolean,
+  recommendation: QuantRecommendation,
+): { readonly coverage: number, readonly incomplete: boolean, readonly conflict: boolean } {
+  const factors = report.factorModel?.factors ?? []
+  const requiredFactors = factors.filter(factor => factor.weight > 0)
+  if (!requiredFactors.length)
+    return { coverage: 0, incomplete: false, conflict: false }
+  if (!reviewsFieldPresent)
+    return { coverage: 0, incomplete: true, conflict: false }
+
+  const requiredFactorKeys = new Set(requiredFactors.map(factor => factor.key))
+  const totalWeight = requiredFactors.reduce((total, factor) => total + factor.weight, 0)
+  const accepted = reviews.filter(review => review.accepted && requiredFactorKeys.has(review.factor))
+  const acceptedFactorKeys = new Set(accepted.map(review => review.factor))
+  const weightFor = (review: QuantAiFactorReview): number => requiredFactors.find(factor => factor.key === review.factor)?.weight ?? 0
+  const reviewedWeight = accepted.reduce((total, review) => total + weightFor(review), 0)
+  const supportWeight = accepted.reduce((total, review) => total + (review.stance === 'support' ? weightFor(review) : 0), 0)
+  const opposeWeight = accepted.reduce((total, review) => total + (review.stance === 'oppose' ? weightFor(review) : 0), 0)
+  const coverage = totalWeight > 0 ? Math.round(reviewedWeight / totalWeight * 10000) / 100 : 0
+  const conflict = recommendation === 'bullish'
+    ? opposeWeight > supportWeight
+    : recommendation === 'bearish'
+      ? supportWeight > opposeWeight
+      : false
+  return {
+    coverage,
+    incomplete: acceptedFactorKeys.size < requiredFactors.length || coverage < 100,
+    conflict,
+  }
+}
+
+function decisionReview(value: unknown, report: QuantResearchReport, reviews: readonly QuantAiFactorReview[], reviewsFieldPresent: boolean): QuantAiDecisionReview | null {
   if (value === undefined || value === null)
     return null
   const parsed = record(value)
@@ -163,13 +266,24 @@ function decisionReview(value: unknown, report: QuantResearchReport): QuantAiDec
   const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
   const normalizedRecommendation = recommendation(parsed.recommendation)
   const deterministicWatch = report.decision?.recommendation === 'watch' || (report.decision?.coverage ?? 0) < 80
-  const accepted = confidence >= 60 && !deterministicWatch
+  const factorAssessment = factorReviewAssessment(report, reviews, reviewsFieldPresent, normalizedRecommendation)
+  const accepted = confidence >= 60 && cited.length > 0 && !deterministicWatch && !factorAssessment.incomplete && !factorAssessment.conflict
+  const rejectionReason = accepted
+    ? null
+    : deterministicWatch
+      ? 'deterministic-watch'
+      : factorAssessment.conflict
+        ? 'factor-conflict'
+        : factorAssessment.incomplete
+          ? 'factor-review-incomplete'
+          : 'low-confidence'
   return {
     decisionVersion: QUANT_AI_DECISION_VERSION,
     recommendation: normalizedRecommendation,
     confidence,
     accepted,
-    rejectionReason: accepted ? null : deterministicWatch ? 'deterministic-watch' : 'low-confidence',
+    rejectionReason,
+    factorReviewCoverage: factorAssessment.coverage,
     rationale,
     invalidationConditions,
     citedEvidenceKeys: cited,
@@ -185,7 +299,9 @@ function validateSummary(value: unknown, report: QuantResearchReport): QuantAiSu
   const concerns = stringList(parsed.concerns, 'concerns')
   const nextChecks = stringList(parsed.nextChecks, 'nextChecks')
   const cited = citedEvidenceKeys(parsed.citedEvidenceKeys, report)
-  const review = decisionReview(parsed.decisionReview, report)
+  const reviewsFieldPresent = Object.hasOwn(parsed, 'factorReviews')
+  const reviews = factorReview(parsed.factorReviews, report)
+  const review = decisionReview(parsed.decisionReview, report, reviews, reviewsFieldPresent)
   const text = [overview, ...supports, ...concerns, ...nextChecks, review?.rationale ?? '', ...(review?.invalidationConditions ?? [])].join('\n')
   if (/目标价|收益预测|未来收益|price\s*target|return\s+forecast|直接(?:买入|卖出)|建议(?:买入|卖出)/iu.test(text))
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary contains a prohibited trading conclusion', 502)
@@ -196,76 +312,45 @@ function validateSummary(value: unknown, report: QuantResearchReport): QuantAiSu
     concerns,
     nextChecks,
     citedEvidenceKeys: [...new Set([...cited, ...(review?.citedEvidenceKeys ?? [])])],
+    factorReviews: reviews,
     decisionReview: review,
   }
 }
 
-function responseContent(value: unknown): string {
-  const root = record(value)
-  const choices = root?.choices
-  if (!Array.isArray(choices) || !choices.length)
-    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI response has no choices', 502)
-  const message = record(choices[0] && record(choices[0])?.message)
-  return stringValue(message?.content, 'content', QUANT_AI_SUMMARY_MAX_RESPONSE_LENGTH)
+export function parseQuantAiSummary(value: string, report: QuantResearchReport): QuantAiSummary {
+  try {
+    return validateSummary(JSON.parse(value), report)
+  }
+  catch (error) {
+    if (error instanceof QuantError)
+      throw error
+    throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'Persisted AI summary is invalid', 502)
+  }
 }
 
 export async function generateQuantAiSummary(input: QuantAiSummaryRequest): Promise<QuantAiSummary> {
   const { report, config } = input
   if (!config.apiKey && config.provider !== 'ollama')
     throw summaryError('QUANT_AI_SUMMARY_CONFIGURATION', 'AI API key is not configured', 503)
-  const timeoutMs = Number.isFinite(input.timeoutMs) && (input.timeoutMs ?? 0) > 0 ? Math.min(input.timeoutMs!, 30_000) : 20_000
-  const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const headers: Record<string, string> = {
-      'accept': 'application/json',
-      'content-type': 'application/json',
-    }
-    if (config.apiKey)
-      headers.authorization = `Bearer ${config.apiKey}`
-    const response = await fetchImpl(chatCompletionsUrl(config), {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: config.model,
-        temperature: 0.2,
-        max_tokens: 1000,
-        messages: [
-          { role: 'system', content: '你是严格的证据解释器和决策复核器，只能使用给定研究报告，不得创造事实、价格或直接交易指令。' },
-          { role: 'user', content: buildQuantAiSummaryPrompt(report) },
-        ],
-      }),
-      signal: controller.signal,
-    })
-    if (response.status === 408 || response.status === 504)
-      throw summaryError('QUANT_AI_SUMMARY_TIMEOUT', 'AI summary request timed out', 504)
-    if (!response.ok)
-      throw summaryError('QUANT_AI_SUMMARY_UPSTREAM', `AI summary endpoint returned HTTP ${response.status}`, 502)
-    let payload: unknown
-    try {
-      payload = await response.json()
-    }
-    catch {
-      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary response is not JSON', 502)
-    }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(stripJsonFence(responseContent(payload)))
-    }
-    catch {
-      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary content is not valid JSON', 502)
-    }
-    return validateSummary(parsed, report)
-  }
-  catch (error) {
-    if (error instanceof QuantError)
-      throw error
-    if (controller.signal.aborted)
-      throw summaryError('QUANT_AI_SUMMARY_TIMEOUT', 'AI summary request timed out', 504)
-    throw summaryError('QUANT_AI_SUMMARY_UPSTREAM', 'AI summary request failed', 502)
-  }
-  finally {
-    clearTimeout(timer)
-  }
+  const timeoutMs = resolveQuantAiGenerationTimeout(input.timeoutMs)
+  const { content } = await requestQuantAiCompletion({
+    config,
+    timeoutMs,
+    fetchImpl: input.fetchImpl,
+    maxCompletionTokens: 4_000,
+    maxResponseLength: QUANT_AI_SUMMARY_MAX_RESPONSE_LENGTH,
+    temperature: 0.2,
+    responseFormat: 'json_object',
+    messages: [
+      { role: 'system', content: '你是严格的证据解释器和决策复核器，只能使用给定研究报告，不得创造事实、价格或直接交易指令。' },
+      { role: 'user', content: buildQuantAiSummaryPrompt(report) },
+    ],
+    errorCodes: {
+      configuration: 'QUANT_AI_SUMMARY_CONFIGURATION',
+      timeout: 'QUANT_AI_SUMMARY_TIMEOUT',
+      upstream: 'QUANT_AI_SUMMARY_UPSTREAM',
+      invalid_response: 'QUANT_AI_SUMMARY_INVALID_RESPONSE',
+    },
+  })
+  return parseQuantAiSummary(stripJsonFence(content), report)
 }

@@ -68,6 +68,7 @@ function summary(): QuantResearchSummary {
       concerns: ['现金流字段缺失'],
       nextChecks: ['等待下一期报告'],
       citedEvidenceKeys: ['pe-ttm'],
+      factorReviews: [],
     },
     citedEvidenceKeys: ['pe-ttm'],
   }

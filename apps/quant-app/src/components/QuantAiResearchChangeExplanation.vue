@@ -2,6 +2,7 @@
 import type { QuantResearchChangeExplanation } from '../lib/quant-types'
 import type { ResearchEvidenceHistoryComparison } from '../lib/research-evidence-history'
 import { AlertCircle, ArrowDown, ArrowUp, BrainCircuit, CircleHelp, Minus, RefreshCw } from 'lucide-vue-next'
+import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
 
 const props = defineProps<{
   comparison: ResearchEvidenceHistoryComparison | null
@@ -81,10 +82,7 @@ const isBusy = () => props.loading || props.generating
         <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
         <span>正在读取已保存的变化解释</span>
       </div>
-      <div v-else-if="generating" class="quant-ai-change-state" role="status">
-        <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
-        <span>AI 正在整理最值得关注的变化</span>
-      </div>
+      <QuantAiProgressStatus v-else-if="generating" class="quant-ai-change-state" :active="generating" label="AI 正在整理最值得关注的变化" />
       <div v-else-if="errorMessage" class="quant-ai-change-state quant-ai-change-state-error" role="alert">
         <AlertCircle :size="15" aria-hidden="true" />
         <span>{{ errorMessage }}</span>

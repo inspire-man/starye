@@ -1,6 +1,6 @@
 import type { TushareProviderError } from '../provider'
 import { describe, expect, it, vi } from 'vitest'
-import { createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantDividendProviderChain, createTushareDividendProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
+import { createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantDividendProviderChain, createTushareDividendProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
 
 describe('quant daily providers', () => {
   it('normalizes the declared daily response and keeps the token server-side', async () => {
@@ -611,6 +611,42 @@ describe('quant stock identity provider', () => {
     })
 
     await expect(provider.fetchStockBasic({ tsCode: '600000.SH' })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  })
+
+  it('normalizes an Eastmoney realtime market quote and its upstream timestamp', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      rc: 0,
+      data: { f43: '34.65', f57: '601899', f58: '紫金矿业', f60: '34.57', f169: '0.08', f170: '0.23', f86: 1787904693 },
+    }), { status: 200 }))
+    const provider = createEastmoneyMarketQuoteProvider({
+      baseUrl: 'https://eastmoney.fixture.test',
+      fetchImpl,
+    })
+
+    await expect(provider.fetchMarketQuote({ tsCode: '601899.SH' })).resolves.toEqual({
+      tsCode: '601899.SH',
+      price: 34.65,
+      previousClose: 34.57,
+      change: 0.08,
+      changePercent: 0.23,
+      observedAt: new Date(1787904693 * 1000).toISOString(),
+    })
+    const requestUrl = new URL(String(fetchImpl.mock.calls[0]?.[0]))
+    expect(requestUrl.pathname).toBe('/api/qt/stock/get')
+    expect(requestUrl.searchParams.get('secid')).toBe('1.601899')
+    expect(requestUrl.searchParams.get('fields')).toBe('f43,f57,f58,f60,f169,f170,f86')
+  })
+
+  it('rejects a missing or mismatched Eastmoney market quote price', async () => {
+    const missing = createEastmoneyMarketQuoteProvider({
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ rc: 0, data: { f57: '601899', f43: 0 } }), { status: 200 })),
+    })
+    await expect(missing.fetchMarketQuote({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+
+    const mismatched = createEastmoneyMarketQuoteProvider({
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ rc: 0, data: { f57: '600000', f43: 34.65 } }), { status: 200 })),
+    })
+    await expect(mismatched.fetchMarketQuote({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
   })
 
   it('uses Tushare stock_basic when a server token is configured', async () => {

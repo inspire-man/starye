@@ -27,6 +27,7 @@ function summary(runId: string): QuantResearchSummary {
       concerns: [],
       nextChecks: [],
       citedEvidenceKeys: [],
+      factorReviews: [],
     },
     citedEvidenceKeys: [],
   }

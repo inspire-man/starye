@@ -892,6 +892,84 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/601899.SH?limit=3`)
   })
 
+  it('reads, saves, and lists user-scoped decision records without accepting client snapshots', async () => {
+    const record = {
+      id: 'decision-1',
+      research_run_id: 'run-1',
+      ts_code: '601899.SH',
+      action: 'plan-buy',
+      note: '等待价格回到参考区间',
+      created_at: '2026-08-30T00:00:00.000Z',
+      updated_at: '2026-08-30T00:05:00.000Z',
+      snapshot: {
+        snapshotVersion: 'decision-record-v1',
+        reportVersion: 'research-report-v2',
+        generatedAt: '2026-08-29T00:00:00.000Z',
+        recommendation: 'bullish',
+        confidence: 82,
+        coverage: 92,
+        evidenceKeys: ['quality-roe'],
+        currentPrice: 34.54,
+        currentPriceObservedAt: '20260829',
+        buyPriceRange: {
+          low: 32.1,
+          high: 33.6,
+          currency: 'CNY',
+          formulaVersion: 'reference-price-v1',
+          source: 'deterministic-research',
+          observedAt: '2026-08-29T00:00:00.000Z',
+          evidenceKeys: ['quality-roe'],
+        },
+        sellPriceRange: null,
+        aiDecisionReview: {
+          decisionVersion: 'ai-decision-v1',
+          recommendation: 'bullish',
+          confidence: 82,
+          accepted: true,
+          rejectionReason: null,
+          rationale: '正向证据占优。',
+          invalidationConditions: ['趋势转弱后复核'],
+          citedEvidenceKeys: ['quality-roe'],
+        },
+        factorConfiguration: {
+          version: 'research-factor-config-v1',
+          source: 'user',
+          updatedAt: '2026-08-28T00:00:00.000Z',
+          weights: { 'trend': 0.25, 'valuation': 0.2, 'quality': 0.2, 'shareholder-return': 0.15, 'risk': 0.2 },
+        },
+      },
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: null }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: record }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [record] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [record] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getResearchDecisionRecord('run-1')).resolves.toBeNull()
+    await expect(quantApi.saveResearchDecisionRecord('run-1', 'plan-buy', '等待价格回到参考区间')).resolves.toMatchObject({
+      id: 'decision-1',
+      action: 'plan-buy',
+      snapshot: {
+        currentPrice: 34.54,
+        currentPriceObservedAt: '20260829',
+        buyPriceRange: { low: 32.1, high: 33.6 },
+        aiDecisionReview: { accepted: true, recommendation: 'bullish' },
+        factorConfiguration: { source: 'user', weights: { trend: 0.25 } },
+      },
+    })
+    await expect(quantApi.getResearchDecisionRecords('601899.SH', 10)).resolves.toMatchObject([{ id: 'decision-1', tsCode: '601899.SH' }])
+    await expect(quantApi.getResearchDecisionQueue(20)).resolves.toMatchObject([{ id: 'decision-1', tsCode: '601899.SH' }])
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/decision`)
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${QUANT_API_PREFIX}/research/runs/run-1/decision`)
+    expect(fetchMock.mock.calls[1]?.[1]?.method).toBe('PUT')
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ action: 'plan-buy', note: '等待价格回到参考区间' }))
+    expect(fetchMock.mock.calls[1]?.[1]?.body).not.toContain('snapshot')
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(`${QUANT_API_PREFIX}/research/decisions/601899.SH?limit=10`)
+    expect(fetchMock.mock.calls[3]?.[0]).toBe(`${QUANT_API_PREFIX}/research/decisions?limit=20`)
+  })
+
   it('normalizes saved AI research summaries and keeps generation separate from report history', async () => {
     const summary = {
       id: 'summary-1',

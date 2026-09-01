@@ -5,6 +5,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { quantApi, QuantApiError } from '../lib/api-client'
 import { buildCandidateAiSessionFilename, buildCandidateAiSessionMarkdown } from '../lib/candidate-briefing-export'
 import { copyResearchReportMarkdown } from '../lib/research-report-copy'
+import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
 
 type CopyOutcome = 'success' | 'error' | null
 
@@ -800,10 +801,7 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
           </button>
         </div>
       </form>
-      <div v-if="questionLoading" class="quant-ai-briefing-question-state" role="status">
-        <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
-        <span>正在基于当前候选范围整理回答</span>
-      </div>
+      <QuantAiProgressStatus v-if="questionLoading" class="quant-ai-briefing-question-state" :active="questionLoading" label="正在基于当前候选范围整理回答" />
       <div v-else-if="questionErrorMessage" class="quant-ai-briefing-question-state quant-ai-briefing-question-state-error" role="alert">
         <AlertCircle :size="15" aria-hidden="true" />
         <span class="quant-ai-briefing-wrap-anywhere">{{ questionErrorMessage }}</span>
@@ -858,10 +856,7 @@ watch(() => [props.currentScopeKey, props.currentSnapshotId, props.historyResetK
       {{ copyMessage }}
     </p>
 
-    <div v-if="loading" class="quant-ai-briefing-state" role="status">
-      <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
-      <span>AI 正在整理当前候选简报</span>
-    </div>
+    <QuantAiProgressStatus v-if="loading" class="quant-ai-briefing-state" :active="loading" label="AI 正在整理当前候选简报" />
     <div v-else-if="errorMessage" class="quant-ai-briefing-state quant-ai-briefing-state-error" role="alert">
       <AlertCircle :size="15" aria-hidden="true" />
       <span class="quant-ai-briefing-wrap-anywhere">{{ errorMessage }}</span>
