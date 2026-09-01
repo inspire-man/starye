@@ -1,10 +1,10 @@
 import type { QuantShareholderReturnSelection, QuantValueSelection, SyncResult, WatchlistItem } from './quant-types'
 
-export const QUANT_DATA_HEALTH_VERSION = 'quant-data-health-v1' as const
+export const QUANT_DATA_HEALTH_VERSION = 'quant-data-health-v2' as const
 
 export type QuantDataHealthStatus = 'ready' | 'partial' | 'missing' | 'loading' | 'error'
 export type QuantDataHealthKey = 'daily' | 'value-quality' | 'shareholder-returns'
-export type QuantDataHealthActionView = 'watchlist' | 'candidates'
+export type QuantDataHealthAction = 'open-watchlist' | 'refresh-value-quality' | 'refresh-shareholder-returns'
 
 export interface QuantDataHealthItem {
   key: QuantDataHealthKey
@@ -14,7 +14,7 @@ export interface QuantDataHealthItem {
   totalCount: number | null
   detail: string
   observedAt: string | null
-  actionView: QuantDataHealthActionView | null
+  action: QuantDataHealthAction | null
   actionLabel: string | null
 }
 
@@ -62,15 +62,15 @@ function resultCounts(selection: QuantValueSelection | QuantShareholderReturnSel
   }
 }
 
-const DATA_HEALTH_ACTIONS: Record<QuantDataHealthKey, { actionView: QuantDataHealthActionView, actionLabel: string }> = {
-  'daily': { actionView: 'watchlist', actionLabel: '去更新日线' },
-  'value-quality': { actionView: 'candidates', actionLabel: '去看候选研究' },
-  'shareholder-returns': { actionView: 'candidates', actionLabel: '去看候选研究' },
+const DATA_HEALTH_ACTIONS: Record<QuantDataHealthKey, { action: QuantDataHealthAction, actionLabel: string }> = {
+  'daily': { action: 'open-watchlist', actionLabel: '去更新日线' },
+  'value-quality': { action: 'refresh-value-quality', actionLabel: '重新读取价值质量' },
+  'shareholder-returns': { action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' },
 }
 
-function dataHealthActionFor(key: QuantDataHealthKey, status: QuantDataHealthStatus): Pick<QuantDataHealthItem, 'actionView' | 'actionLabel'> {
+function dataHealthActionFor(key: QuantDataHealthKey, status: QuantDataHealthStatus): Pick<QuantDataHealthItem, 'action' | 'actionLabel'> {
   if (status === 'ready' || status === 'loading')
-    return { actionView: null, actionLabel: null }
+    return { action: null, actionLabel: null }
   return DATA_HEALTH_ACTIONS[key]
 }
 
@@ -78,7 +78,7 @@ function createDataHealthItem(
   key: QuantDataHealthKey,
   label: string,
   status: QuantDataHealthStatus,
-  details: Omit<QuantDataHealthItem, 'key' | 'label' | 'status' | 'actionView' | 'actionLabel'>,
+  details: Omit<QuantDataHealthItem, 'key' | 'label' | 'status' | 'action' | 'actionLabel'>,
 ): QuantDataHealthItem {
   return { key, label, status, ...details, ...dataHealthActionFor(key, status) }
 }
@@ -94,7 +94,7 @@ function buildSelectionItem(
     return createDataHealthItem(key, label, 'loading', { readyCount: null, totalCount: null, detail: '正在读取当前数据', observedAt: null })
   }
   if (error) {
-    return createDataHealthItem(key, label, 'error', { readyCount: null, totalCount: null, detail: '数据读取失败，请打开详情重试', observedAt: null })
+    return createDataHealthItem(key, label, 'error', { readyCount: null, totalCount: null, detail: '数据读取失败，点击下一步重试', observedAt: null })
   }
   if (!selection) {
     return createDataHealthItem(key, label, 'missing', { readyCount: 0, totalCount: 0, detail: '当前没有可用结果', observedAt: null })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Column, ErrorType, ParsedError } from '@starye/ui'
 import type { CandidateEvidenceScore } from './lib/candidate-evidence-score'
-import type { QuantDataHealthActionView, QuantDataHealthStatus } from './lib/data-health'
+import type { QuantDataHealthAction, QuantDataHealthStatus } from './lib/data-health'
 import type { DecisionEvidenceStatus } from './lib/decision-evidence'
 import type {
   CandidateItem,
@@ -258,6 +258,7 @@ let valuationRequestId = 0
 let financialRequestId = 0
 let valueQualityRequestId = 0
 let shareholderReturnRequestId = 0
+let syncStateRequestId = 0
 let researchRunRequestId = 0
 let researchDecisionRequestId = 0
 let decisionAssistantRequestId = 0
@@ -1510,9 +1511,17 @@ function dataHealthSummaryClass(status: QuantDataHealthStatus): string {
   return `data-health-summary-${status}`
 }
 
-function openDataHealthAction(view: QuantDataHealthActionView | null): void {
-  if (view)
-    setActiveView(view)
+async function runDataHealthAction(action: QuantDataHealthAction | null): Promise<void> {
+  if (action === 'open-watchlist') {
+    setActiveView('watchlist')
+    return
+  }
+  if (action === 'refresh-value-quality') {
+    await loadValueSelection()
+    return
+  }
+  if (action === 'refresh-shareholder-returns')
+    await loadShareholderReturns()
 }
 
 function focusSignal(item: CandidateItem): string {
@@ -1771,7 +1780,6 @@ async function loadValueSelection() {
   catch (error) {
     if (requestId === valueQualityRequestId) {
       errors.valueQuality = error
-      valueSelection.value = null
     }
   }
   finally {
@@ -1792,7 +1800,6 @@ async function loadShareholderReturns() {
   catch (error) {
     if (requestId === shareholderReturnRequestId) {
       errors.shareholderReturns = error
-      shareholderReturns.value = null
     }
   }
   finally {
@@ -1817,18 +1824,21 @@ async function loadInvestmentKnowledge() {
 }
 
 async function loadSyncState() {
+  const requestId = ++syncStateRequestId
   loading.syncState = true
   syncStateError.value = null
-  syncState.value = null
   try {
-    syncState.value = await quantApi.getSyncState()
+    const result = await quantApi.getSyncState()
+    if (requestId === syncStateRequestId)
+      syncState.value = result
   }
   catch (error) {
-    syncState.value = null
-    syncStateError.value = error
+    if (requestId === syncStateRequestId)
+      syncStateError.value = error
   }
   finally {
-    loading.syncState = false
+    if (requestId === syncStateRequestId)
+      loading.syncState = false
   }
 }
 
@@ -3399,11 +3409,11 @@ onUnmounted(() => {
                 <p>{{ item.detail }}</p>
                 <small v-if="item.observedAt">观测 {{ formatDateTime(item.observedAt) }}</small>
                 <button
-                  v-if="item.actionView && item.actionLabel"
+                  v-if="item.action && item.actionLabel"
                   class="text-button data-health-action"
                   type="button"
                   :aria-label="`${item.label}：${item.actionLabel}`"
-                  @click="openDataHealthAction(item.actionView)"
+                  @click="runDataHealthAction(item.action)"
                 >
                   <ChevronRight :size="13" aria-hidden="true" />
                   {{ item.actionLabel }}
@@ -3682,6 +3692,17 @@ onUnmounted(() => {
                 <span>跳过 <strong>{{ displayedSyncResult.skipped }}</strong></span>
               </div>
             </div>
+            <div v-if="loading.syncState && displayedSyncResult" class="data-refresh-feedback data-refresh-feedback-loading" role="status">
+              <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
+              <span>正在刷新同步状态，先显示最近一次有效结果</span>
+            </div>
+            <div v-else-if="syncStateError && displayedSyncResult" class="data-refresh-feedback data-refresh-feedback-error" role="alert">
+              <AlertCircle :size="15" aria-hidden="true" />
+              <span>同步状态读取失败，以上为最近一次有效结果：{{ parsedError(syncStateError).message }}</span>
+              <button class="text-button" type="button" @click="loadSyncState">
+                重试
+              </button>
+            </div>
             <div v-else-if="loading.syncState" class="empty-state sync-empty" role="status">
               <RefreshCw :size="18" class="animate-spin" aria-hidden="true" />
               <span>正在读取最近一次同步状态</span>
@@ -3689,6 +3710,9 @@ onUnmounted(() => {
             <div v-else-if="syncStateError" class="empty-state sync-empty sync-empty-error" role="alert">
               <AlertCircle :size="18" aria-hidden="true" />
               <span>同步状态读取失败：{{ parsedError(syncStateError).message }}</span>
+              <button class="text-button" type="button" @click="loadSyncState">
+                重试
+              </button>
             </div>
             <div v-else class="empty-state sync-empty">
               <RotateCcw :size="18" aria-hidden="true" />
@@ -4845,13 +4869,15 @@ onUnmounted(() => {
                 </p>
                 <h2>中长线价值质量</h2>
               </div>
-              <span v-if="selectedValueQuality" class="section-meta">{{ valueQualityStatusLabel(selectedValueQuality) }}</span>
+              <span v-if="loading.valueQuality" class="section-meta">刷新中</span>
+              <span v-else-if="errors.valueQuality && selectedValueQuality" class="section-meta text-status-danger">上次结果</span>
+              <span v-else-if="selectedValueQuality" class="section-meta">{{ valueQualityStatusLabel(selectedValueQuality) }}</span>
               <span v-else-if="selectedStock" class="section-meta">读取中</span>
             </div>
-            <div v-if="loading.valueQuality" class="value-quality-state" role="status">
+            <div v-if="loading.valueQuality && !selectedValueQuality" class="value-quality-state" role="status">
               <SkeletonCard variant="content" />
             </div>
-            <div v-else-if="errors.valueQuality" class="value-quality-state" role="status">
+            <div v-else-if="errors.valueQuality && !selectedValueQuality" class="value-quality-state" role="alert">
               <Info :size="17" aria-hidden="true" />
               <span>价值质量暂时不可用</span>
               <button class="text-button" type="button" @click="loadValueSelection">
@@ -4859,6 +4885,17 @@ onUnmounted(() => {
               </button>
             </div>
             <template v-else-if="selectedValueQuality">
+              <div v-if="loading.valueQuality" class="data-refresh-feedback data-refresh-feedback-loading" role="status">
+                <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
+                <span>正在刷新价值质量，先显示上次成功结果</span>
+              </div>
+              <div v-else-if="errors.valueQuality" class="data-refresh-feedback data-refresh-feedback-error" role="alert">
+                <Info :size="15" aria-hidden="true" />
+                <span>价值质量刷新失败，以下为上次成功结果：{{ parsedError(errors.valueQuality).message }}</span>
+                <button class="text-button" type="button" @click="loadValueSelection">
+                  重试
+                </button>
+              </div>
               <div class="value-quality-score-row">
                 <div>
                   <span>研究评分</span>
@@ -5295,10 +5332,10 @@ onUnmounted(() => {
                 </div>
                 <small>{{ shareholderReturnHeaderLabel() }}</small>
               </div>
-              <div v-if="loading.shareholderReturns" class="shareholder-return-state" role="status">
+              <div v-if="loading.shareholderReturns && !selectedShareholderReturn" class="shareholder-return-state" role="status">
                 <SkeletonCard variant="content" />
               </div>
-              <div v-else-if="errors.shareholderReturns" class="shareholder-return-state" role="status">
+              <div v-else-if="errors.shareholderReturns && !selectedShareholderReturn" class="shareholder-return-state" role="alert">
                 <Info :size="16" aria-hidden="true" />
                 <span>股东回报暂时不可用</span>
                 <button class="text-button" type="button" @click="loadShareholderReturns">
@@ -5306,6 +5343,17 @@ onUnmounted(() => {
                 </button>
               </div>
               <template v-else-if="selectedShareholderReturn">
+                <div v-if="loading.shareholderReturns" class="data-refresh-feedback data-refresh-feedback-loading" role="status">
+                  <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
+                  <span>正在刷新股东回报，先显示上次成功结果</span>
+                </div>
+                <div v-else-if="errors.shareholderReturns" class="data-refresh-feedback data-refresh-feedback-error" role="alert">
+                  <Info :size="15" aria-hidden="true" />
+                  <span>股东回报刷新失败，以下为上次成功结果：{{ parsedError(errors.shareholderReturns).message }}</span>
+                  <button class="text-button" type="button" @click="loadShareholderReturns">
+                    重试
+                  </button>
+                </div>
                 <div class="shareholder-return-grid">
                   <div class="shareholder-return-item shareholder-return-item-primary">
                     <span>近 12 个月股息率</span>

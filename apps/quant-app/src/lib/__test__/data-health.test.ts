@@ -76,14 +76,14 @@ describe('buildQuantDataHealth', () => {
     })
 
     expect(result).toMatchObject({
-      formulaVersion: 'quant-data-health-v1',
+      formulaVersion: 'quant-data-health-v2',
       status: 'ready',
       label: '数据完整',
     })
     expect(result.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'daily', status: 'ready', readyCount: 3, totalCount: 3, actionView: null, actionLabel: null }),
-      expect.objectContaining({ key: 'value-quality', status: 'ready', readyCount: 3, totalCount: 3, actionView: null, actionLabel: null }),
-      expect.objectContaining({ key: 'shareholder-returns', status: 'ready', readyCount: 3, totalCount: 3, actionView: null, actionLabel: null }),
+      expect.objectContaining({ key: 'daily', status: 'ready', readyCount: 3, totalCount: 3, action: null, actionLabel: null }),
+      expect.objectContaining({ key: 'value-quality', status: 'ready', readyCount: 3, totalCount: 3, action: null, actionLabel: null }),
+      expect.objectContaining({ key: 'shareholder-returns', status: 'ready', readyCount: 3, totalCount: 3, action: null, actionLabel: null }),
     ]))
   })
 
@@ -103,9 +103,9 @@ describe('buildQuantDataHealth', () => {
 
     expect(result.status).toBe('partial')
     expect(result.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'daily', status: 'partial', readyCount: 1, totalCount: 2, detail: '最近一次同步部分完成 · 1 / 2 只', actionView: 'watchlist', actionLabel: '去更新日线' }),
-      expect.objectContaining({ key: 'value-quality', status: 'partial', detail: '1 / 3 只完整 · 0 只部分 · 2 只数据不足', actionView: 'candidates', actionLabel: '去看候选研究' }),
-      expect.objectContaining({ key: 'shareholder-returns', status: 'partial', detail: '0 / 3 只完整 · 3 只部分 · 0 只数据不足', actionView: 'candidates', actionLabel: '去看候选研究' }),
+      expect.objectContaining({ key: 'daily', status: 'partial', readyCount: 1, totalCount: 2, detail: '最近一次同步部分完成 · 1 / 2 只', action: 'open-watchlist', actionLabel: '去更新日线' }),
+      expect.objectContaining({ key: 'value-quality', status: 'partial', detail: '1 / 3 只完整 · 0 只部分 · 2 只数据不足', action: 'refresh-value-quality', actionLabel: '重新读取价值质量' }),
+      expect.objectContaining({ key: 'shareholder-returns', status: 'partial', detail: '0 / 3 只完整 · 3 只部分 · 0 只数据不足', action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' }),
     ]))
   })
 
@@ -123,8 +123,8 @@ describe('buildQuantDataHealth', () => {
       shareholderError: false,
     })
     expect(loading).toMatchObject({ status: 'loading', label: '读取中' })
-    expect(loading.items.find(item => item.key === 'value-quality')).toMatchObject({ status: 'loading', detail: '正在读取当前数据', actionView: null, actionLabel: null })
-    expect(loading.items.find(item => item.key === 'daily')).toMatchObject({ status: 'ready', actionView: null, actionLabel: null })
+    expect(loading.items.find(item => item.key === 'value-quality')).toMatchObject({ status: 'loading', detail: '正在读取当前数据', action: null, actionLabel: null })
+    expect(loading.items.find(item => item.key === 'daily')).toMatchObject({ status: 'ready', action: null, actionLabel: null })
 
     const failed = buildQuantDataHealth({
       watchlist: [watchlist('A')],
@@ -139,8 +139,29 @@ describe('buildQuantDataHealth', () => {
       shareholderError: true,
     })
     expect(failed).toMatchObject({ status: 'error', label: '读取失败' })
-    expect(failed.items.find(item => item.key === 'shareholder-returns')).toMatchObject({ status: 'error', detail: '数据读取失败，请打开详情重试', actionView: 'candidates', actionLabel: '去看候选研究' })
-    expect(failed.items.find(item => item.key === 'value-quality')).toMatchObject({ status: 'ready', actionView: null, actionLabel: null })
+    expect(failed.items.find(item => item.key === 'shareholder-returns')).toMatchObject({ status: 'error', detail: '数据读取失败，点击下一步重试', action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' })
+    expect(failed.items.find(item => item.key === 'value-quality')).toMatchObject({ status: 'ready', action: null, actionLabel: null })
+  })
+
+  it('exposes a retry action for each failed data domain', () => {
+    const result = buildQuantDataHealth({
+      watchlist: [watchlist('A', false)],
+      sync: sync('rejected'),
+      syncLoading: false,
+      syncError: true,
+      valueSelection: null,
+      valueLoading: false,
+      valueError: true,
+      shareholderReturns: null,
+      shareholderLoading: false,
+      shareholderError: true,
+    })
+
+    expect(result.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'daily', action: 'open-watchlist', actionLabel: '去更新日线' }),
+      expect.objectContaining({ key: 'value-quality', action: 'refresh-value-quality', actionLabel: '重新读取价值质量' }),
+      expect.objectContaining({ key: 'shareholder-returns', action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' }),
+    ]))
   })
 
   it('does not invent coverage for an empty watchlist or invalid counts', () => {
