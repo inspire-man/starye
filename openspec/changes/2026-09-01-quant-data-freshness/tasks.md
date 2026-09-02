@@ -12,5 +12,5 @@
 ## 3. Verification
 
 - [x] 3.1 运行 Quant 测试、type-check、lint 和 build；完成标准：全部通过。
-- [ ] 3.2 运行 OpenSpec strict 与 GitNexus staged 变更检测；完成标准：规格有效且只影响预期 Quant 流程。
+- [x] 3.2 运行 OpenSpec strict 与 GitNexus staged 变更检测；完成标准：规格有效且只影响预期 Quant 流程。
 - [x] 3.3 通过 Gateway 验证双轴状态、错误保留和 390px 页面；完成标准：页面状态与纯函数结果一致。

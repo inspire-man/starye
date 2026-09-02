@@ -1100,9 +1100,10 @@ function stockBasicProvider(env?: AppEnv['Bindings']) {
 }
 
 async function resolveDecisionAssistantMarket(env: AppEnv['Bindings'] | undefined, db: Database, tsCode: string): Promise<{ readonly latestDailyBar: Awaited<ReturnType<typeof getLatestQuantDailyBar>>, readonly market: QuantDecisionAssistantMarketInput }> {
+  const quoteBaseUrl = env?.EASTMONEY_QUOTE_BASE_URL?.trim() || 'https://push2.eastmoney.com'
   const [dailyResult, quoteResult] = await Promise.allSettled([
     getLatestQuantDailyBar(db, tsCode),
-    createEastmoneyMarketQuoteProvider(eastmoneyProviderOptions(env)).fetchMarketQuote({ tsCode }),
+    createEastmoneyMarketQuoteProvider({ ...eastmoneyProviderOptions(env), baseUrl: quoteBaseUrl }).fetchMarketQuote({ tsCode }),
   ])
   if (dailyResult.status === 'rejected')
     throw dailyResult.reason

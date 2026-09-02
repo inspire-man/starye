@@ -19,6 +19,7 @@ TUSHARE_POINTS_TIER=120
 TUSHARE_BASE_URL="https://api.tushare.pro"
 TUSHARE_TIMEOUT_MS=10000
 EASTMONEY_BASE_URL="https://push2his.eastmoney.com"
+EASTMONEY_QUOTE_BASE_URL="https://push2.eastmoney.com"
 EASTMONEY_TIMEOUT_MS=10000
 
 # Quant full AI generation timeout (5 minutes by default, maximum 10 minutes)

@@ -6,7 +6,7 @@
 
 - `buy`：服务端在提交评估时读取行情快照，返回当前价与参考买入区间的关系、确定性推荐和“分批考虑/等待/先核对”动作。
 - `holding`：服务端读取当前价，用户输入成本价，可选输入持仓数量；返回浮亏百分比、回本所需涨幅、继续持有/减仓复核/等待/加仓复核等动作。
-- 当前价来源标记为 `eastmoney-realtime` 或 `local-daily-bars`，并保存观察时间、涨跌幅和回退错误码；历史旧快照继续保留 `user-input` 审计标记。最新日线、报告和证据保留其原始 `source`、`observedAt` 和公式版本。
+- 当前价来源标记为 `eastmoney-realtime` 或 `local-daily-bars`，并保存观察时间、涨跌幅和回退错误码；实时行情使用独立的 `EASTMONEY_QUOTE_BASE_URL`（默认 `https://push2.eastmoney.com`），历史日线继续使用 `EASTMONEY_BASE_URL`。历史旧快照继续保留 `user-input` 审计标记。最新日线、报告和证据保留其原始 `source`、`observedAt` 和公式版本。
 - 可信度独立为 `high`、`medium`、`low`，由因子覆盖、证据可用度、来源状态、数据新鲜度和跨源核对提示组成，不等同于推荐分数。
 
 ## API
