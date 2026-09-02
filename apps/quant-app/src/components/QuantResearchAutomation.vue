@@ -2,7 +2,7 @@
 import type { AutomatedResearchCandidate, AutomatedResearchItemState } from '../lib/research-automation'
 import { CheckCircle2, ChevronRight, CircleAlert, CircleHelp, RefreshCw, Sparkles } from 'lucide-vue-next'
 import { computed } from 'vue'
-import { automatedResearchAiStatusLabel, automatedResearchStageLabel } from '../lib/research-automation'
+import { automatedResearchAiStatusLabel, automatedResearchErrorCode, automatedResearchStageLabel } from '../lib/research-automation'
 import QuantAiProgressStatus from './QuantAiProgressStatus.vue'
 
 const props = defineProps<{
@@ -52,11 +52,26 @@ function detail(candidate: AutomatedResearchCandidate): string {
   const state = stateFor(candidate)
   if (!state)
     return '选择后启动'
-  if (state.stage === 'error')
-    return state.errorStage === 'ai' ? '报告已保存，AI 复核失败' : '可重试该项'
+  if (state.stage === 'error') {
+    if (state.errorStage === 'ai')
+      return '报告已保存，AI 复核失败'
+    if (state.errorStage === 'watchlist')
+      return '观察池确认失败，可重试该项'
+    if (state.errorStage === 'research')
+      return '研究报告生成失败，可重试该项'
+    return '该项处理失败，可重试'
+  }
   if (state.stage === 'completed')
     return state.aiStatus === 'skipped' ? '确定性报告已保存' : '报告与 AI 复核已保存'
   return state.stage === 'ai' ? '报告已保存，正在请求 AI' : '正在处理'
+}
+
+function diagnostic(candidate: AutomatedResearchCandidate): string | null {
+  const state = stateFor(candidate)
+  if (!state || state.stage !== 'error')
+    return null
+  const code = automatedResearchErrorCode(state.error)
+  return code ? `错误码：${code}` : null
 }
 
 function hasReport(candidate: AutomatedResearchCandidate): boolean {
@@ -116,6 +131,7 @@ function hasReport(candidate: AutomatedResearchCandidate): boolean {
             {{ stageLabel(candidate) }}
           </span>
           <small>{{ detail(candidate) }} · AI {{ aiLabel(candidate) }}</small>
+          <small v-if="diagnostic(candidate)" class="quant-research-automation-diagnostic">{{ diagnostic(candidate) }}</small>
         </div>
         <div class="quant-research-automation-actions">
           <button v-if="hasReport(candidate)" class="text-button" type="button" :aria-label="`查看 ${candidate.name || candidate.tsCode} 研究报告`" title="打开已保存研究报告" @click="emit('focus', candidate.tsCode)">
@@ -265,6 +281,10 @@ function hasReport(candidate: AutomatedResearchCandidate): boolean {
   font-size: 0.625rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.quant-research-automation-diagnostic {
+  color: hsl(var(--status-danger));
 }
 
 .quant-research-automation-stock small {

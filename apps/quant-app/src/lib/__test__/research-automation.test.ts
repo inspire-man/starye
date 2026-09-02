@@ -2,6 +2,7 @@ import type { QuantResearchRun, QuantResearchSummary } from '../quant-types'
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyAutomatedResearchProgress,
+  automatedResearchErrorCode,
   initialAutomatedResearchStates,
   runAutomatedResearch,
 } from '../research-automation'
@@ -123,5 +124,21 @@ describe('runAutomatedResearch', () => {
     })
 
     expect(result[0]).toMatchObject({ status: 'completed', aiStatus: 'skipped', run: { tsCode: '601899.SH' } })
+  })
+})
+
+describe('automatedResearchErrorCode', () => {
+  it('returns only bounded structured error codes', () => {
+    expect(automatedResearchErrorCode({ code: 'QUANT_AI_SUMMARY_UPSTREAM' })).toBe('QUANT_AI_SUMMARY_UPSTREAM')
+    expect(automatedResearchErrorCode({ code: '  QUANT_RESEARCH_TIMEOUT  ' })).toBe('QUANT_RESEARCH_TIMEOUT')
+  })
+
+  it('rejects unstructured, oversized and unsafe values', () => {
+    expect(automatedResearchErrorCode(null)).toBeNull()
+    expect(automatedResearchErrorCode(new Error('raw upstream message'))).toBeNull()
+    expect(automatedResearchErrorCode({ code: '' })).toBeNull()
+    expect(automatedResearchErrorCode({ code: 'quant_ai_failure' })).toBeNull()
+    expect(automatedResearchErrorCode({ code: 'QUANT AI FAILURE' })).toBeNull()
+    expect(automatedResearchErrorCode({ code: `QUANT_${'X'.repeat(100)}` })).toBeNull()
   })
 })
