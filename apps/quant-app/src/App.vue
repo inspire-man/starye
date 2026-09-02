@@ -90,6 +90,7 @@ import QuantAiResearchChangeExplanation from './components/QuantAiResearchChange
 import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
+import QuantAiTrustOverview from './components/QuantAiTrustOverview.vue'
 import QuantDecisionAssistantPanel from './components/QuantDecisionAssistant.vue'
 import QuantDecisionJournal from './components/QuantDecisionJournal.vue'
 import QuantDecisionQueue from './components/QuantDecisionQueue.vue'
@@ -4066,6 +4067,16 @@ onUnmounted(() => {
             </p>
           </section>
           <QuantDecisionQueue
+            v-if="candidateItems.length || decisionQueueRecords.length"
+            :records="decisionQueueRecords"
+            :candidates="candidateItems"
+            :watchlist="watchlist"
+            :candidate-trade-date="snapshot?.toDate || null"
+            :loading="decisionQueueLoading"
+            :error-message="decisionQueueError ? parsedError(decisionQueueError).message : null"
+            @focus="focusDecisionQueue"
+          />
+          <QuantAiTrustOverview
             v-if="candidateItems.length || decisionQueueRecords.length"
             :records="decisionQueueRecords"
             :candidates="candidateItems"
