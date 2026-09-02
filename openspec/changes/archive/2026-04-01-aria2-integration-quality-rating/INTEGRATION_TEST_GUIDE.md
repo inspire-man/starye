@@ -384,6 +384,6 @@ A: 检查用户是否登录，评分范围是否正确（1-5 星），是否触�
 
 ### 相关文档
 
-- [Aria2 配置指南](./docs/aria2-setup.md)
+- [Aria2 配置指南](../../../../apps/movie-app/docs/ARIA2_SETUP_GUIDE.md)
 - [评分系统设计](./design.md)
-- [API 文档](./specs/api-spec.md)
+- [API 文档](../../../../docs/archive/api-documentation-2026-03-31.md)

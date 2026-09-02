@@ -1,5 +1,7 @@
 # Starye
 
+架构总览见 [ARCHITECTURE.md](./ARCHITECTURE.md)，文档分类与写入边界见 [docs/README.md](./docs/README.md)。
+
 个人内容中台，包含 movie、comic、blog、dashboard、crawler、auth、gateway 和 api，部署在 Cloudflare Workers/Pages + D1/R2/KV。
 
 ## 当前状态

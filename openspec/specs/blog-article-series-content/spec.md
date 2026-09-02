@@ -6,7 +6,7 @@
 
 系列 slug：`ts-fullstack-ai-chronicle`
 
-初始发布批次（#00～#05），素材来源为 `DEVLOG.md`：
+初始发布批次（#00～#05），素材来源为 `docs/archive/development-history-2026-01.md`：
 
 | seriesOrder | 文章标题 | 核心主题 |
 |-------------|----------|----------|

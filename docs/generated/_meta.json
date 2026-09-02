@@ -1,0 +1,79 @@
+{
+  "better-auth": {
+    "local_path": "docs/references/frameworks/better-auth/llms.txt",
+    "file_size": "21.9KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://better-auth.com/llms.txt",
+    "content_hash": "d2ecfe33b69f989afd52d0f21f716027598a83cbeb0ae2bb583102b967245939"
+  },
+  "drizzle": {
+    "local_path": "docs/references/frameworks/drizzle/llms.txt",
+    "file_size": "36.5KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://orm.drizzle.team/llms.txt",
+    "content_hash": "452aa6f96361733e1eaaad728a2cc12c7a7f57a88755039b583cfec8022763d8"
+  },
+  "hono": {
+    "local_path": "docs/references/frameworks/hono/llms.txt",
+    "file_size": "5.5KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://hono.dev/llms.txt",
+    "content_hash": "5037e72b7fd84a743aebf732e00e1b23d6f9b30c04984eac435fff4c89c3735a"
+  },
+  "nuxt": {
+    "local_path": "docs/references/frameworks/nuxt/llms.txt",
+    "file_size": "55.3KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://nuxt.com/llms.txt",
+    "content_hash": "c7edff03e5e0c615bc34cf406d86aeab78fec1d4604b5f7bd0229d03e2490d15"
+  },
+  "scalar": {
+    "local_path": "docs/references/frameworks/scalar/llms.txt",
+    "file_size": "41.7KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://scalar.com/llms.txt",
+    "content_hash": "d5f452de861cd53192073f0e6dede4c878592ceeea8de084f57c07e2c107e360"
+  },
+  "turborepo": {
+    "local_path": "docs/references/frameworks/turborepo/llms.txt",
+    "file_size": "11.1KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://turbo.build/llms.txt",
+    "content_hash": "d8e775cfb30ddffdd951c5efb24b7b9c5b91b26585d1acbdd8933881af0ebaf6"
+  },
+  "valibot": {
+    "local_path": "docs/references/frameworks/valibot/llms.txt",
+    "file_size": "49.5KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://valibot.dev/llms.txt",
+    "content_hash": "89d5d83330685b1bb55cb67c3d833cfac4c3bee512744279a2a13f6f4ddc4014"
+  },
+  "vite": {
+    "local_path": "docs/references/frameworks/vite/llms.txt",
+    "file_size": "3.4KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://vite.dev/llms.txt",
+    "content_hash": "0aa6f17eaa748d9c920d0930d33ffdd2e2cb7a81337ae56c8254e7df3e14810e"
+  },
+  "vitest": {
+    "local_path": "docs/references/frameworks/vitest/llms.txt",
+    "file_size": "9.8KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://vitest.dev/llms.txt",
+    "content_hash": "5ff8cb4957d5a581d2bc505e9ddcfedc30618989734c42774a2c0cf1ba5a6b93"
+  },
+  "vue": {
+    "local_path": "docs/references/frameworks/vue/llms.txt",
+    "file_size": "7.2KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://vuejs.org/llms.txt",
+    "content_hash": "9c809aaef890551d1579b1e7760289b99ce96570354dc99e7a71b9353fb79555"
+  },
+  "zod": {
+    "local_path": "docs/references/frameworks/zod/llms.txt",
+    "file_size": "21.1KB",
+    "last_updated": "2026-08-14",
+    "source_url": "https://zod.dev/llms.txt",
+    "content_hash": "236750cb16a20da86375b2cc4e1a56dc8f820d53c7df04112bd60f519494e6ac"
+  }
+}

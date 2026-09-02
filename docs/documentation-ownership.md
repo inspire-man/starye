@@ -7,13 +7,17 @@
 | 主题 | Canonical owner | 边界 |
 |------|-----------------|------|
 | 人类入口、最小本地启动 | [README.md](../README.md) | 项目简介、里程碑摘要、启动命令和短索引 |
+| 稳定架构顶层地图 | [ARCHITECTURE.md](../ARCHITECTURE.md) | 可部署表面、共享包、关键数据流和不变量 |
 | Agent 规则、工程原则、GitNexus guardrails | [AGENTS.md](../AGENTS.md) | 唯一的 agent 规则来源 |
 | Claude 兼容入口 | [CLAUDE.md](../CLAUDE.md) | 只保留适配说明和读取顺序 |
 | 生产运维、rollback、D1、R2 policy | [RUNBOOK.md](../RUNBOOK.md) | 长期有效的运维契约 |
-| 当前 milestone / phase 真相 | [`.planning/PROJECT.md`](../.planning/PROJECT.md)、[`.planning/ROADMAP.md`](../.planning/ROADMAP.md)、[`.planning/STATE.md`](../.planning/STATE.md)、[`.planning/phases/`](../.planning/phases/) | 执行期状态和决策 |
-| 稳定专题说明 | [`docs/`](./) | 当前仍有长期参考价值的专题文档 |
+| 当前 milestone / phase 真相 | [`.planning/PROJECT.md`](../.planning/PROJECT.md)、[`.planning/ROADMAP.md`](../.planning/ROADMAP.md)、[`.planning/STATE.md`](../.planning/STATE.md)、[`.planning/`](../.planning/) | 执行期状态和决策 |
+| docs 导航和写入边界 | [`docs/README.md`](./README.md) | docs 分类、入口和维护命令 |
+| 稳定专题说明 | [`docs/design-docs/`](./design-docs/)、[`docs/guides/`](./guides/) | 当前仍有长期参考价值的设计和专题文档 |
+| 外部框架参考 | [`docs/references/`](./references/) | 可追踪来源的 llms.txt 和非托管参考 |
+| 生成索引 | [`docs/generated/`](./generated/) | 由脚本生成的元数据和章节索引 |
 | 历史或已取代材料 | [`docs/archive/`](./archive/) | 一次性报告、旧手册和完成总结 |
-| phase / milestone 证据 | [`.planning/milestones/`](../.planning/milestones/)、[`.planning/phases/`](../.planning/phases/) | 执行证据，不回写 root docs |
+| phase / milestone 证据 | [`.planning/milestones/`](../.planning/milestones/)、[`.planning/`](../.planning/) | 执行证据，不回写 root docs |
 | OpenSpec 使用入口 | [`openspec/README.md`](../openspec/README.md) | 最小命令流、何时建 change、token 读取规则 |
 | spec / change history | [`openspec/`](../openspec/) | spec、proposal、change 历史 |
 

@@ -275,7 +275,7 @@ aria2c --enable-rpc --rpc-listen-all  # Aria2 服务
 - [集成测试指南](./INTEGRATION_TEST_GUIDE.md)
 - [设计文档](./design.md)
 - [任务清单](./tasks.md)
-- [API 规范](./specs/api-spec.md)
+- [API 规范](../../../../docs/archive/api-documentation-2026-03-31.md)
 
 ---
 

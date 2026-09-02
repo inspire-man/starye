@@ -7,6 +7,7 @@
 | 主题 | Canonical owner | 何时读取 |
 |------|-----------------|----------|
 | 人类入口、最小本地启动 | [README.md](./README.md) | 了解项目与启动方式 |
+| 架构地图、文档总入口 | [ARCHITECTURE.md](./ARCHITECTURE.md)、[docs/README.md](./docs/README.md) | 了解系统结构和知识分类 |
 | Agent 规则 | [AGENTS.md](./AGENTS.md) | 执行仓库内任何任务 |
 | 文档 owner 边界 | [`docs/documentation-ownership.md`](./docs/documentation-ownership.md) | 判断文档归属或更新位置 |
 | 当前 milestone / phase | [`.planning/PROJECT.md`](./.planning/PROJECT.md)、[`.planning/ROADMAP.md`](./.planning/ROADMAP.md)、[`.planning/STATE.md`](./.planning/STATE.md) | 了解项目计划与状态 |
@@ -45,7 +46,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **starye** (29078 symbols, 42163 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **starye** (30932 symbols, 44994 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

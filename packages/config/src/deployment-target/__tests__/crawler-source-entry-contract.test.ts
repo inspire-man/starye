@@ -17,7 +17,6 @@ const trackedEntries = [
   'scripts/audit-r2-storage.ts',
   'scripts/configure-user-permissions.ts',
   'scripts/test-api.ts',
-  'scripts/test-api-auth.ts',
   'scripts/test-full-flow.ts',
   'scripts/test-image-upload.ts',
   'scripts/test-movie-sync.ts',
@@ -43,7 +42,6 @@ const directEntryClassifications = {
   'scripts/run-publisher.ts': 'blocked-import-only',
   'scripts/configure-user-permissions.ts': 'blocked-import-only',
   'scripts/test-api.ts': 'blocked-import-only',
-  'scripts/test-api-auth.ts': 'blocked-import-only',
   'scripts/test-full-flow.ts': 'blocked-import-only',
   'scripts/test-image-upload.ts': 'blocked-import-only',
   'scripts/test-movie-sync.ts': 'blocked-import-only',
@@ -53,11 +51,9 @@ const directEntryClassifications = {
   'scripts/verify-data-integrity.ts': 'blocked-import-only',
   'scripts/verify-r2-upload.ts': 'blocked-import-only',
   'scripts/debug-javbus-magnet.ts': 'blocked-import-only',
-  'scripts/diagnose-seesaawiki-parser.ts': 'blocked-import-only',
   'src/scripts/enrich-players.ts': 'blocked-import-only',
   'src/task-runner/actions-event-client.ts': 'prepared-remote-operation',
   'src/scripts/enrich-players-javbus.ts': 'blocked-import-only',
-  'src/scripts/crawl-seesaawiki-index.ts': 'blocked-import-only',
 } as const
 
 function crawlerProgram(): ts.Program {

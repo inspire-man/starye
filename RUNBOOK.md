@@ -6,13 +6,13 @@
 
 - `RUNBOOK.md` 是长期有效的运维与 storage-policy canonical owner。
 - 当前 phase 执行中的新规则先落在 `.planning/*`；只有在规则稳定后才回写这里。
-- [`06-STORAGE-POLICY.md`](.planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md) 与 [`08-VERIFICATION.md`](.planning/phases/08-cost-guardrails/08-VERIFICATION.md) 保留为历史快照 / 验证证据，不反向覆盖本手册。
+- 早期 phase 的 storage policy 和验证材料保留在 .planning/milestones/ 或对应的 OpenSpec archive 中，不反向覆盖本手册。
 
 ---
 
 ## 1. Operations ownership and local entry
 
-- `RUNBOOK.md` 只保存稳定的操作步骤；当前 phase 的结果、证据对和 requirement matrix 仍留在 `.planning/phases/`。
+- `RUNBOOK.md` 只保存稳定的操作步骤；当前 phase 的结果、证据对和 requirement matrix 仍留在 `.planning/` 对应 owner 中。
 - 每次远程操作都从明确的 `TargetProfile` 开始。域名、账户、资源和 Pages 项目均由 profile 解析，不能从本手册复制或手填。
 - 所有本地浏览器验证统一经由 Gateway：
   - `http://localhost:8080/dashboard/`
@@ -343,7 +343,7 @@ Worker `beforeSend` 第一轮过滤目标：
 以下动作前必须先跑一次 R2 成本审计：`storage policy change`、cleanup、migration、bulk import。
 
 ```bash
-pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts --dry-run --strict-env --md-out .planning/phases/08-cost-guardrails/08-r2-audit.md --json-out .planning/phases/08-cost-guardrails/08-r2-audit.json --csv-out .planning/phases/08-cost-guardrails/08-r2-audit.csv
+pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts --dry-run --strict-env --md-out .planning/tmp/r2-audit.md --json-out .planning/tmp/r2-audit.json --csv-out .planning/tmp/r2-audit.csv
 ```
 
 将以下结果视为 stop condition，不得继续 cleanup / lifecycle 变更：
@@ -387,9 +387,7 @@ pnpm --filter @starye/crawler exec tsx scripts/audit-r2-storage.ts --dry-run --s
 ### 7.5 Storage Policy Ownership Note
 
 - 长期有效的 storage policy、cleanup procedure、rollback note、accidental upload remediation 都以本手册为准。
-- phase 级文档只保留历史语境：
-  - [`06-STORAGE-POLICY.md`](.planning/phases/06-storage-policy-audit/06-STORAGE-POLICY.md) 是 policy snapshot
-  - [`08-VERIFICATION.md`](.planning/phases/08-cost-guardrails/08-VERIFICATION.md) 是 verification evidence
+- phase 级文档只保留历史语境，当前入口见 `.planning/milestones/` 和对应的 OpenSpec archive。
 - 后续若规则变化，先在当前 phase 的 `.planning` 工件中锁定，再在 closeout 时回写本手册。
 
 ---

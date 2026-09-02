@@ -68,11 +68,6 @@ coverage/
 # Husky
 .husky/_/
 
-# Documentation (generated files)
-docs/_meta.json
-docs/_sections.json
-docs/*/.version
-
 # Local crawler reference repositories
 /packages/crawler/examples/
 

@@ -148,8 +148,8 @@ pnpm --filter @starye/db run generate
 # 应用迁移
 pnpm --filter @starye/db run migrate
 
-# 运行数据迁移脚本
-pnpm tsx packages/db/scripts/migrate-movies-metadata.ts
+# 运行 selected-target 数据迁移
+pnpm --filter @starye/db d1-migrate-movies-metadata -- --target TARGET
 
 # 打开 Drizzle Studio（可视化工具）
 pnpm --filter @starye/db run studio

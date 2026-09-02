@@ -31,9 +31,10 @@
     "smoke:data-chain:verify": "node packages/crawler/scripts/data-chain-cli.mjs verify",
     "smoke:data-chain:handoff": "node packages/crawler/scripts/data-chain-cli.mjs handoff",
     "type-check": "turbo run type-check",
-    "docs:sync": "pwsh -ExecutionPolicy Bypass -File ./scripts/sync-docs.ps1",
+    "docs:sync": "node scripts/sync-docs.mjs",
     "docs:meta": "node scripts/generate-meta.js",
     "docs:index": "node scripts/generate-sections.js",
+    "docs:check": "node scripts/check-docs.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

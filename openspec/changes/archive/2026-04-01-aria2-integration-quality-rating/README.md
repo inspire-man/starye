@@ -40,13 +40,13 @@
 
 ### 用户指南
 
-- [Aria2 配置指南](../../apps/movie-app/docs/ARIA2_SETUP_GUIDE.md) - 详细的安装和配置教程
-- [评分系统使用指南](../../apps/movie-app/docs/RATING_SYSTEM_GUIDE.md) - 如何使用评分功能
-- [故障排查指南](../../apps/movie-app/docs/TROUBLESHOOTING.md) - 常见问题解决方案
+- [Aria2 配置指南](../../../../apps/movie-app/docs/ARIA2_SETUP_GUIDE.md) - 详细的安装和配置教程
+- [评分系统使用指南](../../../../apps/movie-app/docs/RATING_SYSTEM_GUIDE.md) - 如何使用评分功能
+- [故障排查指南](../../../../apps/movie-app/docs/TROUBLESHOOTING.md) - 常见问题解决方案
 
 ### 开发者文档
 
-- [API 文档](../../apps/api/docs/API_DOCUMENTATION.md) - 完整的 API 端点说明
+- [API 文档](../../../../docs/archive/api-documentation-2026-03-31.md) - 历史 API 快照
 - [E2E 测试指南](./E2E_README.md) - 自动化测试使用方法
 - [任务清单](./tasks.md) - 详细的实施任务和进度
 

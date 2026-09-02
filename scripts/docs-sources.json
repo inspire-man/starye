@@ -1,0 +1,68 @@
+[
+  {
+    "id": "better-auth",
+    "name": "Better Auth",
+    "url": "https://better-auth.com/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "drizzle",
+    "name": "Drizzle ORM",
+    "url": "https://orm.drizzle.team/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "hono",
+    "name": "Hono",
+    "url": "https://hono.dev/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "nuxt",
+    "name": "Nuxt",
+    "url": "https://nuxt.com/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "scalar",
+    "name": "Scalar",
+    "url": "https://scalar.com/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "turborepo",
+    "name": "Turborepo",
+    "url": "https://turbo.build/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "valibot",
+    "name": "Valibot",
+    "url": "https://valibot.dev/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "vite",
+    "name": "Vite",
+    "url": "https://vite.dev/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "vitest",
+    "name": "Vitest",
+    "url": "https://vitest.dev/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "vue",
+    "name": "Vue",
+    "url": "https://vuejs.org/llms.txt",
+    "filename": "llms.txt"
+  },
+  {
+    "id": "zod",
+    "name": "Zod",
+    "url": "https://zod.dev/llms.txt",
+    "filename": "llms.txt"
+  }
+]

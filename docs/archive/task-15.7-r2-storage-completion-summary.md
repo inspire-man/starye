@@ -269,19 +269,19 @@ pnpm tsx scripts/test-r2-mapping-storage.ts
 
 ### 优化计划
 
-详见 [R2 存储实施报告](./r2-mapping-storage-implementation-report.md) 中的"已知限制和后续优化"章节。
+长期 R2 storage policy、cleanup 和 rollback 规则已收口到 ../../RUNBOOK.md。
 
 ## 部署指南
 
 ### 快速开始
 
-**推荐**: 按照 [R2 映射存储快速部署指南](./r2-mapping-quick-deploy-guide.md) 操作（15-20 分钟）
+当前操作入口：../../RUNBOOK.md 与 ../guides/name-mapping/maintenance.md。
 
 ### 详细配置
 
 如需深入了解技术细节，参考：
-- [R2 映射存储配置指南](./r2-mapping-storage-setup-guide.md)
-- [环境变量配置说明](./r2-mapping-env-vars-guide.md)
+- [名字映射维护](../guides/name-mapping/maintenance.md)
+- [RUNBOOK](../../RUNBOOK.md)
 
 ## 后续任务
 

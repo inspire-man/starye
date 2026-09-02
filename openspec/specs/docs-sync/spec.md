@@ -1,90 +1,85 @@
-## ADDED Requirements
+## Purpose
+
+定义托管官方 llms.txt 资料的来源清单、跨平台同步、增量更新、失败保留、版本记录和可重复校验行为。
+
+## Requirements
 
 ### Requirement: 系统能够从官方源下载 llms.txt 文档
 
-系统 SHALL 支持从预定义的框架官方 URL 列表下载 llms.txt 格式的文档到本地 `docs/{framework}/` 目录。
+系统 SHALL 从 scripts/docs-sources.json 定义的官方 URL 下载文档到 docs/references/frameworks/{framework}/llms.txt。同步 SHALL 使用 SHA256 进行增量判断；下载失败时保留已有文件和版本记录，并继续处理其他来源。
 
 #### Scenario: 首次下载文档
-- **WHEN** 运行 `pnpm docs:sync` 且本地不存在该框架文档
-- **THEN** 系统从官方 URL 下载文档到 `docs/{framework}/llms-full.txt`
-- **AND** 系统创建 `.version` 文件记录下载时间、URL、内容哈希和文件大小
+
+- **WHEN** 运行 pnpm docs:sync 且本地不存在某个托管资料
+- **THEN** 系统下载到 docs/references/frameworks/{framework}/llms.txt
+- **AND** 系统创建包含 source_url、downloaded_at、content_hash、file_size 的 .version
 
 #### Scenario: 文档已存在且未变化
-- **WHEN** 运行 `pnpm docs:sync` 且本地文档的内容哈希与新下载内容相同
-- **THEN** 系统跳过下载并显示 "✓ {framework} is up to date" 消息
-- **AND** 系统不修改现有文档和 `.version` 文件
+
+- **WHEN** 新下载内容的 SHA256 与 .version 的 content_hash 相同
+- **THEN** 系统显示该资料为 up to date
+- **AND** 系统不替换正文或更新时间
 
 #### Scenario: 文档已存在但有更新
-- **WHEN** 运行 `pnpm docs:sync` 且本地文档的内容哈希与新下载内容不同
-- **THEN** 系统用新内容覆盖旧文档
-- **AND** 系统更新 `.version` 文件记录新的下载时间和内容哈希
-- **AND** 系统显示 "✓ {framework} updated" 消息
+
+- **WHEN** 新下载内容的 SHA256 与 .version 的 content_hash 不同
+- **THEN** 系统替换 docs/references/frameworks/{framework}/llms.txt
+- **AND** 系统写入新的 .version
 
 #### Scenario: 官方 URL 失效
-- **WHEN** 运行 `pnpm docs:sync` 但无法访问官方 URL（404 或网络错误）
-- **THEN** 系统显示 "✗ Failed to download {framework}" 错误消息
-- **AND** 系统保留现有文档不删除（如果存在）
-- **AND** 系统继续处理其他框架的下载
+
+- **WHEN** 某个 URL 返回非成功状态或网络错误
+- **THEN** 系统标记该资料失败并保留已有文件
+- **AND** 系统继续同步其他资料，随后仍尝试生成索引
 
 ### Requirement: 系统能够计算文档内容哈希用于版本跟踪
 
-系统 SHALL 使用 SHA256 算法计算下载文档的内容哈希，用于检测文档是否有更新。
+系统 SHALL 使用 SHA256 算法计算托管文档内容的哈希，并将结果写入对应 references/frameworks/{framework}/.version 的 content_hash 字段。
 
 #### Scenario: 计算新下载文档的哈希
+
 - **WHEN** 系统成功下载一个文档文件
 - **THEN** 系统计算文件的 SHA256 哈希值
-- **AND** 系统将哈希值存储在 `.version` 文件的 `content_hash` 字段
+- **AND** 系统将哈希值存储在 .version 的 content_hash 字段
 
 #### Scenario: 比对哈希判断是否需要更新
-- **WHEN** 系统准备下载文档且本地已有 `.version` 文件
-- **THEN** 系统读取旧的 `content_hash` 值
-- **AND** 系统计算新下载内容的哈希值
-- **AND** 系统比对两个哈希值以决定是否更新文件
+
+- **WHEN** 系统准备下载文档且本地已有 .version 文件
+- **THEN** 系统读取旧的 content_hash 值并与新内容哈希比较
+- **AND** 系统据此决定是否替换文件
 
 ### Requirement: 系统必须支持以下 9 个技术栈的文档同步
 
-系统 MUST 预配置以下框架的 llms.txt 文档源 URL：
-
-- Hono: `https://hono.dev/llms-full.txt`
-- Better Auth: `https://better-auth.com/llms.txt`
-- Nuxt: `https://nuxt.com/llms-full.txt`
-- Zod: `https://zod.dev/llms.txt`
-- Vite: `https://vite.dev/llms.txt`
-- Vitest: `https://vitest.dev/llms.txt`
-- Vue: `https://vuejs.org/llms.txt`
-- Turborepo: `https://turbo.build/llms.txt`
-- Drizzle ORM: `https://orm.drizzle.team/llms-full.txt`
+系统 MUST 通过共享来源清单支持 Hono、Better Auth、Nuxt、Zod、Vite、Vitest、Vue、Turborepo、Drizzle ORM、Scalar 和 Valibot。未纳入清单的资料 MUST 放入 references/unmanaged，不得伪装成托管版本。
 
 #### Scenario: 验证所有预配置框架可同步
-- **WHEN** 运行 `pnpm docs:sync` 且所有 URL 可访问
-- **THEN** 系统成功下载所有 9 个框架的文档
-- **AND** 系统在 `docs/` 目录下创建 9 个子目录，每个包含 `llms-full.txt` 和 `.version` 文件
+
+- **WHEN** 运行 pnpm docs:sync 且所有清单 URL 可访问
+- **THEN** 系统为 11 个托管技术栈生成 references/frameworks/{framework}/llms.txt 和 .version
+- **AND** 系统生成对应的元数据和章节索引
 
 #### Scenario: 部分框架 URL 失效时的容错
-- **WHEN** 运行 `pnpm docs:sync` 但某个框架 URL 无法访问
-- **THEN** 系统继续处理其他框架的同步
-- **AND** 系统在输出中明确标记失败的框架
-- **AND** 系统退出码为 0（不阻塞 CI/CD 流程）
+
+- **WHEN** 运行 pnpm docs:sync 但某个清单 URL 无法访问
+- **THEN** 系统继续处理其他框架
+- **AND** 系统保留失败框架的现有文件并报告失败来源
+- **AND** 同步过程不因单个来源失败而中断
 
 ### Requirement: .version 文件格式规范
 
-系统 SHALL 为每个下载的文档生成 JSON 格式的 `.version` 文件，包含以下字段：
-
-- `source_url` (string): 文档来源 URL
-- `downloaded_at` (string): ISO 8601 格式的下载时间戳
-- `content_hash` (string): SHA256 哈希值（小写十六进制）
-- `file_size` (number): 文件大小（字节）
+系统 SHALL 为每个托管文档目录生成 JSON 格式的 .version 文件，包含 source_url、downloaded_at、content_hash 和 file_size。
 
 #### Scenario: 生成标准 .version 文件
-- **WHEN** 系统下载一个新文档
-- **THEN** 系统创建 `.version` 文件包含所有 4 个必需字段
-- **AND** `downloaded_at` 字段使用 UTC 时区
-- **AND** JSON 格式化为 2 空格缩进便于阅读
+
+- **WHEN** 系统下载或更新一个托管文档
+- **THEN** 系统创建包含 4 个必需字段的 .version
+- **AND** downloaded_at 使用 UTC ISO 8601 格式，JSON 使用 2 空格缩进
 
 #### Scenario: .version 文件可被后续流程读取
-- **WHEN** 其他脚本（如 `generate-meta.js`）需要读取版本信息
-- **THEN** 系统能够解析 `.version` 文件为有效 JSON 对象
-- **AND** 所有字段类型符合规范（string/number）
+
+- **WHEN** generate-meta.js 或 check-docs.mjs 读取版本信息
+- **THEN** 系统能够解析有效 JSON
+- **AND** 字段类型符合 string 或 number 约束
 
 ### Requirement: 同步脚本必须输出清晰的进度信息
 

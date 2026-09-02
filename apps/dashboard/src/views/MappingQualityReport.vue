@@ -348,7 +348,7 @@ onMounted(() => {
             前往映射管理
           </router-link>
           <a
-            href="https://github.com/your-repo/docs/name-mapping-maintenance-guide.md"
+            href="https://github.com/inspire-man/starye/blob/main/docs/guides/name-mapping/maintenance.md"
             target="_blank"
             class="btn-secondary"
           >

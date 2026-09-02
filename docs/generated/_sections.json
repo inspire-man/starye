@@ -1,0 +1,1998 @@
+{
+  "better-auth": {
+    "file": "docs/references/frameworks/better-auth/llms.txt",
+    "sections": [
+      {
+        "title": "Better Auth",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 229,
+        "keywords": [
+          "better",
+          "auth"
+        ],
+        "subsections": [
+          {
+            "title": "Table of Contents",
+            "level": 2,
+            "start_line": 5,
+            "end_line": 229,
+            "keywords": [
+              "table",
+              "contents"
+            ],
+            "subsections": [
+              {
+                "title": "Adapters",
+                "level": 3,
+                "start_line": 7,
+                "end_line": 18,
+                "keywords": [
+                  "adapters"
+                ]
+              },
+              {
+                "title": "Ai Resources",
+                "level": 3,
+                "start_line": 19,
+                "end_line": 24,
+                "keywords": [
+                  "resources"
+                ]
+              },
+              {
+                "title": "Authentication",
+                "level": 3,
+                "start_line": 25,
+                "end_line": 64,
+                "keywords": [
+                  "authentication"
+                ]
+              },
+              {
+                "title": "Basic Usage",
+                "level": 3,
+                "start_line": 65,
+                "end_line": 68,
+                "keywords": [
+                  "basic",
+                  "usage"
+                ]
+              },
+              {
+                "title": "Comparison",
+                "level": 3,
+                "start_line": 69,
+                "end_line": 72,
+                "keywords": [
+                  "comparison"
+                ]
+              },
+              {
+                "title": "Concepts",
+                "level": 3,
+                "start_line": 73,
+                "end_line": 88,
+                "keywords": [
+                  "concepts"
+                ]
+              },
+              {
+                "title": "Examples",
+                "level": 3,
+                "start_line": 89,
+                "end_line": 96,
+                "keywords": [
+                  "examples"
+                ]
+              },
+              {
+                "title": "Guides",
+                "level": 3,
+                "start_line": 97,
+                "end_line": 111,
+                "keywords": [
+                  "guides"
+                ]
+              },
+              {
+                "title": "Infrastructure",
+                "level": 3,
+                "start_line": 112,
+                "end_line": 122,
+                "keywords": [
+                  "infrastructure"
+                ]
+              },
+              {
+                "title": "Installation",
+                "level": 3,
+                "start_line": 123,
+                "end_line": 126,
+                "keywords": [
+                  "installation"
+                ]
+              },
+              {
+                "title": "Integrations",
+                "level": 3,
+                "start_line": 127,
+                "end_line": 148,
+                "keywords": [
+                  "integrations"
+                ]
+              },
+              {
+                "title": "Introduction",
+                "level": 3,
+                "start_line": 149,
+                "end_line": 152,
+                "keywords": [
+                  "introduction"
+                ]
+              },
+              {
+                "title": "Plugins",
+                "level": 3,
+                "start_line": 153,
+                "end_line": 198,
+                "keywords": [
+                  "plugins"
+                ]
+              },
+              {
+                "title": "Reference",
+                "level": 3,
+                "start_line": 199,
+                "end_line": 229,
+                "keywords": [
+                  "reference"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "drizzle": {
+    "file": "docs/references/frameworks/drizzle/llms.txt",
+    "sections": [
+      {
+        "title": "Drizzle",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 698,
+        "keywords": [
+          "drizzle"
+        ],
+        "subsections": [
+          {
+            "title": "meet drizzle",
+            "level": 2,
+            "start_line": 5,
+            "end_line": 65,
+            "keywords": [
+              "meet",
+              "drizzle"
+            ]
+          },
+          {
+            "title": "Upgrade to v1.0 RC",
+            "level": 2,
+            "start_line": 66,
+            "end_line": 69,
+            "keywords": [
+              "upgrade",
+              "v1.0"
+            ]
+          },
+          {
+            "title": "Fundamentals",
+            "level": 2,
+            "start_line": 70,
+            "end_line": 74,
+            "keywords": [
+              "fundamentals"
+            ]
+          },
+          {
+            "title": "Connect",
+            "level": 2,
+            "start_line": 75,
+            "end_line": 78,
+            "keywords": [
+              "connect"
+            ]
+          },
+          {
+            "title": "Manage schema",
+            "level": 2,
+            "start_line": 79,
+            "end_line": 84,
+            "keywords": [
+              "manage",
+              "schema"
+            ]
+          },
+          {
+            "title": "Migrations",
+            "level": 2,
+            "start_line": 85,
+            "end_line": 90,
+            "keywords": [
+              "migrations"
+            ]
+          },
+          {
+            "title": "Seeding",
+            "level": 2,
+            "start_line": 91,
+            "end_line": 94,
+            "keywords": [
+              "seeding"
+            ]
+          },
+          {
+            "title": "Access your data",
+            "level": 2,
+            "start_line": 95,
+            "end_line": 97,
+            "keywords": [
+              "access",
+              "your",
+              "data"
+            ]
+          },
+          {
+            "title": "Performance",
+            "level": 2,
+            "start_line": 98,
+            "end_line": 101,
+            "keywords": [
+              "performance"
+            ]
+          },
+          {
+            "title": "Advanced",
+            "level": 2,
+            "start_line": 102,
+            "end_line": 104,
+            "keywords": [
+              "advanced"
+            ]
+          },
+          {
+            "title": "Validations",
+            "level": 2,
+            "start_line": 105,
+            "end_line": 113,
+            "keywords": [
+              "validations"
+            ]
+          },
+          {
+            "title": "Extensions",
+            "level": 2,
+            "start_line": 114,
+            "end_line": 118,
+            "keywords": [
+              "extensions"
+            ]
+          },
+          {
+            "title": "cockroach/meet drizzle",
+            "level": 2,
+            "start_line": 119,
+            "end_line": 122,
+            "keywords": [
+              "cockroach",
+              "meet",
+              "drizzle"
+            ]
+          },
+          {
+            "title": "cockroach/Fundamentals",
+            "level": 2,
+            "start_line": 123,
+            "end_line": 130,
+            "keywords": [
+              "cockroach",
+              "fundamentals"
+            ]
+          },
+          {
+            "title": "cockroach/Connect",
+            "level": 2,
+            "start_line": 131,
+            "end_line": 134,
+            "keywords": [
+              "cockroach",
+              "connect"
+            ]
+          },
+          {
+            "title": "cockroach/Manage schema",
+            "level": 2,
+            "start_line": 135,
+            "end_line": 144,
+            "keywords": [
+              "cockroach",
+              "manage",
+              "schema"
+            ]
+          },
+          {
+            "title": "cockroach/Migrations",
+            "level": 2,
+            "start_line": 145,
+            "end_line": 158,
+            "keywords": [
+              "cockroach",
+              "migrations"
+            ]
+          },
+          {
+            "title": "cockroach/Seeding",
+            "level": 2,
+            "start_line": 159,
+            "end_line": 164,
+            "keywords": [
+              "cockroach",
+              "seeding"
+            ]
+          },
+          {
+            "title": "cockroach/Access your data",
+            "level": 2,
+            "start_line": 165,
+            "end_line": 177,
+            "keywords": [
+              "cockroach",
+              "access",
+              "your",
+              "data"
+            ]
+          },
+          {
+            "title": "cockroach/Performance",
+            "level": 2,
+            "start_line": 178,
+            "end_line": 181,
+            "keywords": [
+              "cockroach",
+              "performance"
+            ]
+          },
+          {
+            "title": "cockroach/Advanced",
+            "level": 2,
+            "start_line": 182,
+            "end_line": 191,
+            "keywords": [
+              "cockroach",
+              "advanced"
+            ]
+          },
+          {
+            "title": "cockroach/Validations",
+            "level": 2,
+            "start_line": 192,
+            "end_line": 200,
+            "keywords": [
+              "cockroach",
+              "validations"
+            ]
+          },
+          {
+            "title": "cockroach/Extensions",
+            "level": 2,
+            "start_line": 201,
+            "end_line": 203,
+            "keywords": [
+              "cockroach",
+              "extensions"
+            ]
+          },
+          {
+            "title": "mssql/meet drizzle",
+            "level": 2,
+            "start_line": 204,
+            "end_line": 207,
+            "keywords": [
+              "mssql",
+              "meet",
+              "drizzle"
+            ]
+          },
+          {
+            "title": "mssql/Fundamentals",
+            "level": 2,
+            "start_line": 208,
+            "end_line": 215,
+            "keywords": [
+              "mssql",
+              "fundamentals"
+            ]
+          },
+          {
+            "title": "mssql/Connect",
+            "level": 2,
+            "start_line": 216,
+            "end_line": 219,
+            "keywords": [
+              "mssql",
+              "connect"
+            ]
+          },
+          {
+            "title": "mssql/Manage schema",
+            "level": 2,
+            "start_line": 220,
+            "end_line": 228,
+            "keywords": [
+              "mssql",
+              "manage",
+              "schema"
+            ]
+          },
+          {
+            "title": "mssql/Migrations",
+            "level": 2,
+            "start_line": 229,
+            "end_line": 242,
+            "keywords": [
+              "mssql",
+              "migrations"
+            ]
+          },
+          {
+            "title": "mssql/Seeding",
+            "level": 2,
+            "start_line": 243,
+            "end_line": 248,
+            "keywords": [
+              "mssql",
+              "seeding"
+            ]
+          },
+          {
+            "title": "mssql/Access your data",
+            "level": 2,
+            "start_line": 249,
+            "end_line": 261,
+            "keywords": [
+              "mssql",
+              "access",
+              "your",
+              "data"
+            ]
+          },
+          {
+            "title": "mssql/Performance",
+            "level": 2,
+            "start_line": 262,
+            "end_line": 265,
+            "keywords": [
+              "mssql",
+              "performance"
+            ]
+          },
+          {
+            "title": "mssql/Advanced",
+            "level": 2,
+            "start_line": 266,
+            "end_line": 275,
+            "keywords": [
+              "mssql",
+              "advanced"
+            ]
+          },
+          {
+            "title": "mssql/Validations",
+            "level": 2,
+            "start_line": 276,
+            "end_line": 284,
+            "keywords": [
+              "mssql",
+              "validations"
+            ]
+          },
+          {
+            "title": "mssql/Extensions",
+            "level": 2,
+            "start_line": 285,
+            "end_line": 287,
+            "keywords": [
+              "mssql",
+              "extensions"
+            ]
+          },
+          {
+            "title": "mysql/meet drizzle",
+            "level": 2,
+            "start_line": 288,
+            "end_line": 291,
+            "keywords": [
+              "mysql",
+              "meet",
+              "drizzle"
+            ]
+          },
+          {
+            "title": "mysql/Upgrade to v1.0",
+            "level": 2,
+            "start_line": 292,
+            "end_line": 297,
+            "keywords": [
+              "mysql",
+              "upgrade",
+              "v1.0"
+            ]
+          },
+          {
+            "title": "mysql/Fundamentals",
+            "level": 2,
+            "start_line": 298,
+            "end_line": 305,
+            "keywords": [
+              "mysql",
+              "fundamentals"
+            ]
+          },
+          {
+            "title": "mysql/Connect",
+            "level": 2,
+            "start_line": 306,
+            "end_line": 314,
+            "keywords": [
+              "mysql",
+              "connect"
+            ]
+          },
+          {
+            "title": "mysql/Manage schema",
+            "level": 2,
+            "start_line": 315,
+            "end_line": 323,
+            "keywords": [
+              "mysql",
+              "manage",
+              "schema"
+            ]
+          },
+          {
+            "title": "mysql/Migrations",
+            "level": 2,
+            "start_line": 324,
+            "end_line": 337,
+            "keywords": [
+              "mysql",
+              "migrations"
+            ]
+          },
+          {
+            "title": "mysql/Seeding",
+            "level": 2,
+            "start_line": 338,
+            "end_line": 343,
+            "keywords": [
+              "mysql",
+              "seeding"
+            ]
+          },
+          {
+            "title": "mysql/Access your data",
+            "level": 2,
+            "start_line": 344,
+            "end_line": 357,
+            "keywords": [
+              "mysql",
+              "access",
+              "your",
+              "data"
+            ]
+          },
+          {
+            "title": "mysql/Performance",
+            "level": 2,
+            "start_line": 358,
+            "end_line": 361,
+            "keywords": [
+              "mysql",
+              "performance"
+            ]
+          },
+          {
+            "title": "mysql/Advanced",
+            "level": 2,
+            "start_line": 362,
+            "end_line": 371,
+            "keywords": [
+              "mysql",
+              "advanced"
+            ]
+          },
+          {
+            "title": "mysql/Validations",
+            "level": 2,
+            "start_line": 372,
+            "end_line": 380,
+            "keywords": [
+              "mysql",
+              "validations"
+            ]
+          },
+          {
+            "title": "mysql/Extensions",
+            "level": 2,
+            "start_line": 381,
+            "end_line": 383,
+            "keywords": [
+              "mysql",
+              "extensions"
+            ]
+          },
+          {
+            "title": "pg/meet drizzle",
+            "level": 2,
+            "start_line": 384,
+            "end_line": 387,
+            "keywords": [
+              "meet",
+              "drizzle"
+            ]
+          },
+          {
+            "title": "pg/Upgrade to v1.0",
+            "level": 2,
+            "start_line": 388,
+            "end_line": 393,
+            "keywords": [
+              "upgrade",
+              "v1.0"
+            ]
+          },
+          {
+            "title": "pg/Fundamentals",
+            "level": 2,
+            "start_line": 394,
+            "end_line": 401,
+            "keywords": [
+              "fundamentals"
+            ]
+          },
+          {
+            "title": "pg/Connect",
+            "level": 2,
+            "start_line": 402,
+            "end_line": 418,
+            "keywords": [
+              "connect"
+            ]
+          },
+          {
+            "title": "pg/Manage schema",
+            "level": 2,
+            "start_line": 419,
+            "end_line": 429,
+            "keywords": [
+              "manage",
+              "schema"
+            ]
+          },
+          {
+            "title": "pg/Migrations",
+            "level": 2,
+            "start_line": 430,
+            "end_line": 443,
+            "keywords": [
+              "migrations"
+            ]
+          },
+          {
+            "title": "pg/Seeding",
+            "level": 2,
+            "start_line": 444,
+            "end_line": 448,
+            "keywords": [
+              "seeding"
+            ]
+          },
+          {
+            "title": "pg/Access your data",
+            "level": 2,
+            "start_line": 449,
+            "end_line": 462,
+            "keywords": [
+              "access",
+              "your",
+              "data"
+            ]
+          },
+          {
+            "title": "pg/Performance",
+            "level": 2,
+            "start_line": 463,
+            "end_line": 466,
+            "keywords": [
+              "performance"
+            ]
+          },
+          {
+            "title": "pg/Advanced",
+            "level": 2,
+            "start_line": 467,
+            "end_line": 478,
+            "keywords": [
+              "advanced"
+            ]
+          },
+          {
+            "title": "pg/Validations",
+            "level": 2,
+            "start_line": 479,
+            "end_line": 487,
+            "keywords": [
+              "validations"
+            ]
+          },
+          {
+            "title": "pg/Extensions",
+            "level": 2,
+            "start_line": 488,
+            "end_line": 490,
+            "keywords": [
+              "extensions"
+            ]
+          },
+          {
+            "title": "singlestore/meet drizzle",
+            "level": 2,
+            "start_line": 491,
+            "end_line": 493,
+            "keywords": [
+              "singlestore",
+              "meet",
+              "drizzle"
+            ]
+          },
+          {
+            "title": "singlestore/Upgrade to v1.0 RC",
+            "level": 2,
+            "start_line": 494,
+            "end_line": 497,
+            "keywords": [
+              "singlestore",
+              "upgrade",
+              "v1.0"
+            ]
+          },
+          {
+            "title": "singlestore/Fundamentals",
+            "level": 2,
+            "start_line": 498,
+            "end_line": 503,
+            "keywords": [
+              "singlestore",
+              "fundamentals"
+            ]
+          },
+          {
+            "title": "singlestore/Connect",
+            "level": 2,
+            "start_line": 504,
+            "end_line": 507,
+            "keywords": [
+              "singlestore",
+              "connect"
+            ]
+          },
+          {
+            "title": "singlestore/Manage schema",
+            "level": 2,
+            "start_line": 508,
+            "end_line": 515,
+            "keywords": [
+              "singlestore",
+              "manage",
+              "schema"
+            ]
+          },
+          {
+            "title": "singlestore/Migrations",
+            "level": 2,
+            "start_line": 516,
+            "end_line": 529,
+            "keywords": [
+              "singlestore",
+              "migrations"
+            ]
+          },
+          {
+            "title": "singlestore/Seeding",
+            "level": 2,
+            "start_line": 530,
+            "end_line": 535,
+            "keywords": [
+              "singlestore",
+              "seeding"
+            ]
+          },
+          {
+            "title": "singlestore/Access your data",
+            "level": 2,
+            "start_line": 536,
+            "end_line": 548,
+            "keywords": [
+              "singlestore",
+              "access",
+              "your",
+              "data"
+            ]
+          },
+          {
+            "title": "singlestore/Performance",
+            "level": 2,
+            "start_line": 549,
+            "end_line": 552,
+            "keywords": [
+              "singlestore",
+              "performance"
+            ]
+          },
+          {
+            "title": "singlestore/Advanced",
+            "level": 2,
+            "start_line": 553,
+            "end_line": 561,
+            "keywords": [
+              "singlestore",
+              "advanced"
+            ]
+          },
+          {
+            "title": "singlestore/Validations",
+            "level": 2,
+            "start_line": 562,
+            "end_line": 570,
+            "keywords": [
+              "singlestore",
+              "validations"
+            ]
+          },
+          {
+            "title": "singlestore/Extensions",
+            "level": 2,
+            "start_line": 571,
+            "end_line": 573,
+            "keywords": [
+              "singlestore",
+              "extensions"
+            ]
+          },
+          {
+            "title": "sqlite/meet drizzle",
+            "level": 2,
+            "start_line": 574,
+            "end_line": 577,
+            "keywords": [
+              "sqlite",
+              "meet",
+              "drizzle"
+            ]
+          },
+          {
+            "title": "sqlite/Upgrade to v1.0 RC",
+            "level": 2,
+            "start_line": 578,
+            "end_line": 583,
+            "keywords": [
+              "sqlite",
+              "upgrade",
+              "v1.0"
+            ]
+          },
+          {
+            "title": "sqlite/Fundamentals",
+            "level": 2,
+            "start_line": 584,
+            "end_line": 591,
+            "keywords": [
+              "sqlite",
+              "fundamentals"
+            ]
+          },
+          {
+            "title": "sqlite/Connect",
+            "level": 2,
+            "start_line": 592,
+            "end_line": 608,
+            "keywords": [
+              "sqlite",
+              "connect"
+            ]
+          },
+          {
+            "title": "sqlite/Manage schema",
+            "level": 2,
+            "start_line": 609,
+            "end_line": 616,
+            "keywords": [
+              "sqlite",
+              "manage",
+              "schema"
+            ]
+          },
+          {
+            "title": "sqlite/Migrations",
+            "level": 2,
+            "start_line": 617,
+            "end_line": 630,
+            "keywords": [
+              "sqlite",
+              "migrations"
+            ]
+          },
+          {
+            "title": "sqlite/Seeding",
+            "level": 2,
+            "start_line": 631,
+            "end_line": 636,
+            "keywords": [
+              "sqlite",
+              "seeding"
+            ]
+          },
+          {
+            "title": "sqlite/Access your data",
+            "level": 2,
+            "start_line": 637,
+            "end_line": 649,
+            "keywords": [
+              "sqlite",
+              "access",
+              "your",
+              "data"
+            ]
+          },
+          {
+            "title": "sqlite/Performance",
+            "level": 2,
+            "start_line": 650,
+            "end_line": 653,
+            "keywords": [
+              "sqlite",
+              "performance"
+            ]
+          },
+          {
+            "title": "sqlite/Advanced",
+            "level": 2,
+            "start_line": 654,
+            "end_line": 664,
+            "keywords": [
+              "sqlite",
+              "advanced"
+            ]
+          },
+          {
+            "title": "sqlite/Validations",
+            "level": 2,
+            "start_line": 665,
+            "end_line": 673,
+            "keywords": [
+              "sqlite",
+              "validations"
+            ]
+          },
+          {
+            "title": "sqlite/Extensions",
+            "level": 2,
+            "start_line": 674,
+            "end_line": 676,
+            "keywords": [
+              "sqlite",
+              "extensions"
+            ]
+          },
+          {
+            "title": "Guides",
+            "level": 2,
+            "start_line": 677,
+            "end_line": 680,
+            "keywords": [
+              "guides"
+            ]
+          },
+          {
+            "title": "Tutorials",
+            "level": 2,
+            "start_line": 681,
+            "end_line": 698,
+            "keywords": [
+              "tutorials"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "hono": {
+    "file": "docs/references/frameworks/hono/llms.txt",
+    "sections": [
+      {
+        "title": "Hono",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 101,
+        "keywords": [
+          "hono"
+        ],
+        "subsections": [
+          {
+            "title": "Docs",
+            "level": 2,
+            "start_line": 5,
+            "end_line": 9,
+            "keywords": [
+              "docs"
+            ]
+          },
+          {
+            "title": "Examples",
+            "level": 2,
+            "start_line": 10,
+            "end_line": 13,
+            "keywords": [
+              "examples"
+            ]
+          },
+          {
+            "title": "Optional",
+            "level": 2,
+            "start_line": 14,
+            "end_line": 101,
+            "keywords": [
+              "optional"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "nuxt": {
+    "file": "docs/references/frameworks/nuxt/llms.txt",
+    "sections": [
+      {
+        "title": "Nuxt Docs",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 370,
+        "keywords": [
+          "nuxt",
+          "docs"
+        ],
+        "subsections": [
+          {
+            "title": "Documentation Sets",
+            "level": 2,
+            "start_line": 5,
+            "end_line": 8,
+            "keywords": [
+              "documentation",
+              "sets"
+            ]
+          },
+          {
+            "title": "Nuxt v4 Documentation",
+            "level": 2,
+            "start_line": 9,
+            "end_line": 292,
+            "keywords": [
+              "nuxt",
+              "documentation"
+            ]
+          },
+          {
+            "title": "Deployment Guides",
+            "level": 2,
+            "start_line": 293,
+            "end_line": 318,
+            "keywords": [
+              "deployment",
+              "guides"
+            ]
+          },
+          {
+            "title": "Blog",
+            "level": 2,
+            "start_line": 319,
+            "end_line": 370,
+            "keywords": [
+              "blog"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scalar": {
+    "file": "docs/references/frameworks/scalar/llms.txt",
+    "sections": []
+  },
+  "turborepo": {
+    "file": "docs/references/frameworks/turborepo/llms.txt",
+    "sections": [
+      {
+        "title": "Turborepo documentation",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 111,
+        "keywords": [
+          "turborepo",
+          "documentation"
+        ],
+        "subsections": [
+          {
+            "title": "Turborepo",
+            "level": 2,
+            "start_line": 5,
+            "end_line": 8,
+            "keywords": [
+              "turborepo"
+            ]
+          },
+          {
+            "title": "Docs",
+            "level": 2,
+            "start_line": 9,
+            "end_line": 111,
+            "keywords": [
+              "docs"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "valibot": {
+    "file": "docs/references/frameworks/valibot/llms.txt",
+    "sections": [
+      {
+        "title": "Valibot",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 883,
+        "keywords": [
+          "valibot"
+        ],
+        "subsections": [
+          {
+            "title": "Guides",
+            "level": 2,
+            "start_line": 7,
+            "end_line": 59,
+            "keywords": [
+              "guides"
+            ],
+            "subsections": [
+              {
+                "title": "Get started",
+                "level": 3,
+                "start_line": 9,
+                "end_line": 18,
+                "keywords": [
+                  "get",
+                  "started"
+                ]
+              },
+              {
+                "title": "Main concepts",
+                "level": 3,
+                "start_line": 19,
+                "end_line": 28,
+                "keywords": [
+                  "main",
+                  "concepts"
+                ]
+              },
+              {
+                "title": "Schemas",
+                "level": 3,
+                "start_line": 29,
+                "end_line": 38,
+                "keywords": [
+                  "schemas"
+                ]
+              },
+              {
+                "title": "Advanced",
+                "level": 3,
+                "start_line": 39,
+                "end_line": 48,
+                "keywords": [
+                  "advanced"
+                ]
+              },
+              {
+                "title": "Migration",
+                "level": 3,
+                "start_line": 49,
+                "end_line": 59,
+                "keywords": [
+                  "migration"
+                ]
+              }
+            ]
+          },
+          {
+            "title": "API reference",
+            "level": 2,
+            "start_line": 60,
+            "end_line": 855,
+            "keywords": [
+              "api",
+              "reference"
+            ],
+            "subsections": [
+              {
+                "title": "Schemas",
+                "level": 3,
+                "start_line": 62,
+                "end_line": 110,
+                "keywords": [
+                  "schemas"
+                ]
+              },
+              {
+                "title": "Methods",
+                "level": 3,
+                "start_line": 111,
+                "end_line": 141,
+                "keywords": [
+                  "methods"
+                ]
+              },
+              {
+                "title": "Actions",
+                "level": 3,
+                "start_line": 142,
+                "end_line": 272,
+                "keywords": [
+                  "actions"
+                ]
+              },
+              {
+                "title": "Storages",
+                "level": 3,
+                "start_line": 273,
+                "end_line": 287,
+                "keywords": [
+                  "storages"
+                ]
+              },
+              {
+                "title": "Utils",
+                "level": 3,
+                "start_line": 288,
+                "end_line": 297,
+                "keywords": [
+                  "utils"
+                ]
+              },
+              {
+                "title": "Async",
+                "level": 3,
+                "start_line": 298,
+                "end_line": 346,
+                "keywords": [
+                  "async"
+                ]
+              },
+              {
+                "title": "Types",
+                "level": 3,
+                "start_line": 347,
+                "end_line": 855,
+                "keywords": [
+                  "types"
+                ]
+              }
+            ]
+          },
+          {
+            "title": "Blog",
+            "level": 2,
+            "start_line": 856,
+            "end_line": 883,
+            "keywords": [
+              "blog"
+            ],
+            "subsections": [
+              {
+                "title": "Posts of 2026",
+                "level": 3,
+                "start_line": 858,
+                "end_line": 867,
+                "keywords": [
+                  "posts",
+                  "2026"
+                ]
+              },
+              {
+                "title": "Posts of 2025",
+                "level": 3,
+                "start_line": 868,
+                "end_line": 876,
+                "keywords": [
+                  "posts",
+                  "2025"
+                ]
+              },
+              {
+                "title": "Posts of 2024",
+                "level": 3,
+                "start_line": 877,
+                "end_line": 883,
+                "keywords": [
+                  "posts",
+                  "2024"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "vite": {
+    "file": "docs/references/frameworks/vite/llms.txt",
+    "sections": [
+      {
+        "title": "Vite",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 85,
+        "keywords": [
+          "vite"
+        ],
+        "subsections": [
+          {
+            "title": "Table of Contents",
+            "level": 2,
+            "start_line": 20,
+            "end_line": 85,
+            "keywords": [
+              "table",
+              "contents"
+            ],
+            "subsections": [
+              {
+                "title": "Introduction",
+                "level": 3,
+                "start_line": 22,
+                "end_line": 27,
+                "keywords": [
+                  "introduction"
+                ]
+              },
+              {
+                "title": "Guide",
+                "level": 3,
+                "start_line": 28,
+                "end_line": 44,
+                "keywords": [
+                  "guide"
+                ]
+              },
+              {
+                "title": "APIs",
+                "level": 3,
+                "start_line": 45,
+                "end_line": 51,
+                "keywords": [
+                  "apis"
+                ]
+              },
+              {
+                "title": "Environment API",
+                "level": 3,
+                "start_line": 52,
+                "end_line": 59,
+                "keywords": [
+                  "environment",
+                  "api"
+                ]
+              },
+              {
+                "title": "Config",
+                "level": 3,
+                "start_line": 60,
+                "end_line": 70,
+                "keywords": [
+                  "config"
+                ]
+              },
+              {
+                "title": "Future",
+                "level": 3,
+                "start_line": 71,
+                "end_line": 78,
+                "keywords": [
+                  "future"
+                ]
+              },
+              {
+                "title": "Other",
+                "level": 3,
+                "start_line": 79,
+                "end_line": 85,
+                "keywords": [
+                  "other"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "vitest": {
+    "file": "docs/references/frameworks/vitest/llms.txt",
+    "sections": [
+      {
+        "title": "Vitest",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 243,
+        "keywords": [
+          "vitest"
+        ],
+        "subsections": [
+          {
+            "title": "Table of Contents",
+            "level": 2,
+            "start_line": 5,
+            "end_line": 243,
+            "keywords": [
+              "table",
+              "contents"
+            ],
+            "subsections": [
+              {
+                "title": "Config Reference",
+                "level": 3,
+                "start_line": 7,
+                "end_line": 87,
+                "keywords": [
+                  "config",
+                  "reference"
+                ]
+              },
+              {
+                "title": "Browser Mode",
+                "level": 3,
+                "start_line": 88,
+                "end_line": 115,
+                "keywords": [
+                  "browser",
+                  "mode"
+                ],
+                "subsections": [
+                  {
+                    "title": "Providers",
+                    "level": 4,
+                    "start_line": 110,
+                    "end_line": 115,
+                    "keywords": [
+                      "providers"
+                    ]
+                  }
+                ]
+              },
+              {
+                "title": "Introduction",
+                "level": 3,
+                "start_line": 116,
+                "end_line": 121,
+                "keywords": [
+                  "introduction"
+                ]
+              },
+              {
+                "title": "Learn",
+                "level": 3,
+                "start_line": 122,
+                "end_line": 133,
+                "keywords": [
+                  "learn"
+                ]
+              },
+              {
+                "title": "Browser Mode",
+                "level": 3,
+                "start_line": 134,
+                "end_line": 143,
+                "keywords": [
+                  "browser",
+                  "mode"
+                ]
+              },
+              {
+                "title": "Guides",
+                "level": 3,
+                "start_line": 144,
+                "end_line": 184,
+                "keywords": [
+                  "guides"
+                ],
+                "subsections": [
+                  {
+                    "title": "Mocking",
+                    "level": 4,
+                    "start_line": 169,
+                    "end_line": 179,
+                    "keywords": [
+                      "mocking"
+                    ]
+                  },
+                  {
+                    "title": "Performance",
+                    "level": 4,
+                    "start_line": 180,
+                    "end_line": 184,
+                    "keywords": [
+                      "performance"
+                    ]
+                  }
+                ]
+              },
+              {
+                "title": "Advanced",
+                "level": 3,
+                "start_line": 185,
+                "end_line": 194,
+                "keywords": [
+                  "advanced"
+                ]
+              },
+              {
+                "title": "Test API Reference",
+                "level": 3,
+                "start_line": 195,
+                "end_line": 200,
+                "keywords": [
+                  "test",
+                  "api",
+                  "reference"
+                ]
+              },
+              {
+                "title": "Browser Mode",
+                "level": 3,
+                "start_line": 201,
+                "end_line": 214,
+                "keywords": [
+                  "browser",
+                  "mode"
+                ],
+                "subsections": [
+                  {
+                    "title": "Render Function",
+                    "level": 4,
+                    "start_line": 209,
+                    "end_line": 214,
+                    "keywords": [
+                      "render",
+                      "function"
+                    ]
+                  }
+                ]
+              },
+              {
+                "title": "Advanced",
+                "level": 3,
+                "start_line": 215,
+                "end_line": 229,
+                "keywords": [
+                  "advanced"
+                ]
+              },
+              {
+                "title": "Other",
+                "level": 3,
+                "start_line": 230,
+                "end_line": 243,
+                "keywords": [
+                  "other"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "vue": {
+    "file": "docs/references/frameworks/vue/llms.txt",
+    "sections": [
+      {
+        "title": "Vue.js",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 154,
+        "keywords": [
+          "vue.js"
+        ],
+        "subsections": [
+          {
+            "title": "Table of Contents",
+            "level": 2,
+            "start_line": 5,
+            "end_line": 154,
+            "keywords": [
+              "table",
+              "contents"
+            ],
+            "subsections": [
+              {
+                "title": "Getting Started",
+                "level": 3,
+                "start_line": 7,
+                "end_line": 11,
+                "keywords": [
+                  "getting",
+                  "started"
+                ]
+              },
+              {
+                "title": "Essentials",
+                "level": 3,
+                "start_line": 12,
+                "end_line": 27,
+                "keywords": [
+                  "essentials"
+                ]
+              },
+              {
+                "title": "Components In-Depth",
+                "level": 3,
+                "start_line": 28,
+                "end_line": 38,
+                "keywords": [
+                  "components",
+                  "depth"
+                ]
+              },
+              {
+                "title": "Reusability",
+                "level": 3,
+                "start_line": 39,
+                "end_line": 44,
+                "keywords": [
+                  "reusability"
+                ]
+              },
+              {
+                "title": "Built-in Components",
+                "level": 3,
+                "start_line": 45,
+                "end_line": 52,
+                "keywords": [
+                  "built",
+                  "components"
+                ]
+              },
+              {
+                "title": "Scaling Up",
+                "level": 3,
+                "start_line": 53,
+                "end_line": 61,
+                "keywords": [
+                  "scaling"
+                ]
+              },
+              {
+                "title": "Best Practices",
+                "level": 3,
+                "start_line": 62,
+                "end_line": 68,
+                "keywords": [
+                  "best",
+                  "practices"
+                ]
+              },
+              {
+                "title": "TypeScript",
+                "level": 3,
+                "start_line": 69,
+                "end_line": 74,
+                "keywords": [
+                  "typescript"
+                ]
+              },
+              {
+                "title": "Extra Topics",
+                "level": 3,
+                "start_line": 75,
+                "end_line": 84,
+                "keywords": [
+                  "extra",
+                  "topics"
+                ]
+              },
+              {
+                "title": "Global API",
+                "level": 3,
+                "start_line": 85,
+                "end_line": 89,
+                "keywords": [
+                  "global",
+                  "api"
+                ]
+              },
+              {
+                "title": "Composition API",
+                "level": 3,
+                "start_line": 90,
+                "end_line": 99,
+                "keywords": [
+                  "composition",
+                  "api"
+                ]
+              },
+              {
+                "title": "Options API",
+                "level": 3,
+                "start_line": 100,
+                "end_line": 108,
+                "keywords": [
+                  "options",
+                  "api"
+                ]
+              },
+              {
+                "title": "Built-ins",
+                "level": 3,
+                "start_line": 109,
+                "end_line": 115,
+                "keywords": [
+                  "built",
+                  "ins"
+                ]
+              },
+              {
+                "title": "Single-File Component",
+                "level": 3,
+                "start_line": 116,
+                "end_line": 121,
+                "keywords": [
+                  "single",
+                  "file",
+                  "component"
+                ]
+              },
+              {
+                "title": "Advanced APIs",
+                "level": 3,
+                "start_line": 122,
+                "end_line": 133,
+                "keywords": [
+                  "advanced",
+                  "apis"
+                ]
+              },
+              {
+                "title": "Style Guide",
+                "level": 3,
+                "start_line": 134,
+                "end_line": 141,
+                "keywords": [
+                  "style",
+                  "guide"
+                ]
+              },
+              {
+                "title": "Other",
+                "level": 3,
+                "start_line": 142,
+                "end_line": 154,
+                "keywords": [
+                  "other"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "zod": {
+    "file": "docs/references/frameworks/zod/llms.txt",
+    "sections": [
+      {
+        "title": "Zod",
+        "level": 1,
+        "start_line": 1,
+        "end_line": 389,
+        "keywords": [
+          "zod"
+        ],
+        "subsections": [
+          {
+            "title": "Defining schemas",
+            "level": 2,
+            "start_line": 5,
+            "end_line": 96,
+            "keywords": [
+              "defining",
+              "schemas"
+            ]
+          },
+          {
+            "title": "Basic usage",
+            "level": 2,
+            "start_line": 97,
+            "end_line": 105,
+            "keywords": [
+              "basic",
+              "usage"
+            ]
+          },
+          {
+            "title": "Codecs",
+            "level": 2,
+            "start_line": 106,
+            "end_line": 139,
+            "keywords": [
+              "codecs"
+            ]
+          },
+          {
+            "title": "Ecosystem",
+            "level": 2,
+            "start_line": 140,
+            "end_line": 152,
+            "keywords": [
+              "ecosystem"
+            ]
+          },
+          {
+            "title": "Customizing errors",
+            "level": 2,
+            "start_line": 153,
+            "end_line": 164,
+            "keywords": [
+              "customizing",
+              "errors"
+            ]
+          },
+          {
+            "title": "Formatting errors",
+            "level": 2,
+            "start_line": 165,
+            "end_line": 173,
+            "keywords": [
+              "formatting",
+              "errors"
+            ]
+          },
+          {
+            "title": "Intro",
+            "level": 2,
+            "start_line": 174,
+            "end_line": 189,
+            "keywords": [
+              "intro"
+            ]
+          },
+          {
+            "title": "JSON Schema",
+            "level": 2,
+            "start_line": 190,
+            "end_line": 210,
+            "keywords": [
+              "json",
+              "schema"
+            ]
+          },
+          {
+            "title": "For library authors",
+            "level": 2,
+            "start_line": 211,
+            "end_line": 221,
+            "keywords": [
+              "for",
+              "library",
+              "authors"
+            ]
+          },
+          {
+            "title": "Metadata and registries",
+            "level": 2,
+            "start_line": 222,
+            "end_line": 235,
+            "keywords": [
+              "metadata",
+              "and",
+              "registries"
+            ]
+          },
+          {
+            "title": "Joining Clerk as an OSS Fellow to work on Zod 4",
+            "level": 2,
+            "start_line": 236,
+            "end_line": 244,
+            "keywords": [
+              "joining",
+              "clerk",
+              "oss",
+              "fellow",
+              "work",
+              "zod"
+            ]
+          },
+          {
+            "title": "Zod Core",
+            "level": 2,
+            "start_line": 245,
+            "end_line": 255,
+            "keywords": [
+              "zod",
+              "core"
+            ]
+          },
+          {
+            "title": "Zod Mini",
+            "level": 2,
+            "start_line": 256,
+            "end_line": 272,
+            "keywords": [
+              "zod",
+              "mini"
+            ]
+          },
+          {
+            "title": "Zod",
+            "level": 2,
+            "start_line": 273,
+            "end_line": 276,
+            "keywords": [
+              "zod"
+            ]
+          },
+          {
+            "title": "Migration guide",
+            "level": 2,
+            "start_line": 277,
+            "end_line": 341,
+            "keywords": [
+              "migration",
+              "guide"
+            ]
+          },
+          {
+            "title": "Release notes",
+            "level": 2,
+            "start_line": 342,
+            "end_line": 376,
+            "keywords": [
+              "release",
+              "notes"
+            ]
+          },
+          {
+            "title": "Versioning",
+            "level": 2,
+            "start_line": 377,
+            "end_line": 389,
+            "keywords": [
+              "versioning"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

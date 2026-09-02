@@ -1,31 +1,25 @@
 # Docs Archive
 
-这里存放 historical / superseded 文档。
+这里存放 historical 或 superseded 文档。历史材料用于追溯，不作为当前操作入口。
 
-## 何时放进来
+当前归档材料：
 
-- 一次性测试报告
-- 已完成任务总结
-- 被当前 `RUNBOOK.md`、`.planning/*` 或稳定专题文档取代的旧部署/运维手册
-- 不再属于 live docs 的旧实现说明
+- api-documentation-2026-03-31.md：旧手写 API 快照，当前契约由 API 路由和 OpenAPI 提供。
+- data-completeness-improvement-report-2026-03-31.md：数据完整度历史报告。
+- data-quality-dashboard-2026-03-31.md：未进入 active plan 的数据质量仪表板提案。
+- development-history-2026-01.md：早期开发日志，部分内容作为博客素材保留。
+- initial-setup-guide.md：早期本地环境准备记录。
+- local-test-report-2026-03-31.md：历史测试报告。
+- seesaawiki-rollback-plan-2026-03-31.md：已由 RUNBOOK 取代的专项回滚计划。
+- series-publisher-separation-report-2026-03-31.md：系列/厂商分离历史报告。
+- task-15.7-r2-storage-completion-summary.md：R2 映射存储完成总结。
 
-## 何时不要放进来
+R2 映射的多个旧部署、配置、使用和实现手册已合并到完成总结与 RUNBOOK，重复文件已清除。
 
-- 当前 milestone / phase 执行证据
-  - 这些继续留在 [`.planning/phases/`](../../.planning/phases/) 和 [`.planning/milestones/`](../../.planning/milestones/)
-- 仍然具有稳定参考价值的专题文档
-  - 这些继续留在 [`docs/`](../)
+## 归档边界
 
-## 2026-07-13 迁档批次
+- 当前 milestone、phase 和验收证据继续留在 ../../.planning/milestones/。
+- 长期部署、回滚、D1、R2 和 storage cleanup 以 ../../RUNBOOK.md 为准。
+- 稳定专题说明继续留在 ../guides/ 或 ../design-docs/。
 
-| File | Status | Current Owner |
-|------|--------|---------------|
-| `local-test-report-2026-03-31.md` | historical | [`docs/documentation-ownership.md`](../documentation-ownership.md) |
-| `task-15.7-r2-storage-completion-summary.md` | historical | [`RUNBOOK.md`](../../RUNBOOK.md), [`.planning/milestones/`](../../.planning/milestones/) |
-| `series-publisher-separation-report-2026-03-31.md` | historical | [`docs/documentation-ownership.md`](../documentation-ownership.md) |
-| `r2-mapping-storage-implementation-report.md` | superseded | [`RUNBOOK.md`](../../RUNBOOK.md) |
-| `r2-mapping-storage-setup-guide.md` | superseded | [`RUNBOOK.md`](../../RUNBOOK.md) |
-| `r2-mapping-quick-deploy-guide.md` | superseded | [`RUNBOOK.md`](../../RUNBOOK.md) |
-| `r2-mapping-env-vars-guide.md` | superseded | [`RUNBOOK.md`](../../RUNBOOK.md) |
-| `r2-mapping-deployment-checklist.md` | superseded | [`RUNBOOK.md`](../../RUNBOOK.md) |
-| `r2-mapping-usage-examples.md` | superseded | [`RUNBOOK.md`](../../RUNBOOK.md) |
+归档文件不进入 live docs 的日常导航；保留历史时应在文件头注明 Status 和 Replaced by。
