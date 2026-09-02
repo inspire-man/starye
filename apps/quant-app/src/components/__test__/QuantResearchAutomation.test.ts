@@ -48,6 +48,7 @@ describe('quant research automation', () => {
   })
 
   it('keeps a saved report actionable when the AI stage fails', async () => {
+    const error = Object.assign(new Error('raw upstream URL must stay hidden'), { code: 'QUANT_AI_SUMMARY_UPSTREAM' })
     const wrapper = mount(QuantResearchAutomation, {
       props: {
         candidates: [candidates[0]],
@@ -57,7 +58,7 @@ describe('quant research automation', () => {
             aiStatus: 'error',
             errorStage: 'ai',
             run: { id: 'run-1' } as AutomatedResearchItemState['run'],
-            error: new Error('AI upstream'),
+            error,
           }),
         },
         running: false,
@@ -69,12 +70,38 @@ describe('quant research automation', () => {
 
     expect(wrapper.text()).toContain('报告已保存，AI 复核失败')
     expect(wrapper.text()).toContain('AI 复核失败')
+    expect(wrapper.text()).toContain('错误码：QUANT_AI_SUMMARY_UPSTREAM')
+    expect(wrapper.text()).not.toContain('raw upstream URL must stay hidden')
     expect(wrapper.html()).toContain('aria-label="查看 紫金矿业 研究报告"')
     expect(wrapper.html()).toContain('aria-label="重试 紫金矿业 自动研究"')
     await wrapper.get('button[aria-label="查看 紫金矿业 研究报告"]').trigger('click')
     await wrapper.get('button[aria-label="重试 紫金矿业 自动研究"]').trigger('click')
     expect(wrapper.emitted('focus')).toEqual([['601899.SH']])
     expect(wrapper.emitted('retry')).toEqual([['601899.SH']])
+  })
+
+  it('shows the research failure stage and falls back without exposing invalid errors', () => {
+    const wrapper = mount(QuantResearchAutomation, {
+      props: {
+        candidates: [candidates[0]],
+        states: {
+          '601899.SH': state({
+            stage: 'error',
+            errorStage: 'research',
+            error: { code: 'research failure with details' },
+          }),
+        },
+        running: false,
+        aiReady: true,
+        aiConfigErrorMessage: null,
+        errorMessage: null,
+      },
+    })
+
+    expect(wrapper.text()).toContain('研究报告生成失败，可重试该项')
+    expect(wrapper.text()).toContain('该项失败')
+    expect(wrapper.text()).not.toContain('research failure with details')
+    expect(wrapper.html()).not.toContain('错误码：')
   })
 
   it('shows local configuration and pipeline errors without hiding the rows', () => {

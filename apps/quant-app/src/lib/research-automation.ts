@@ -8,6 +8,9 @@ export type AutomatedResearchErrorStage = 'watchlist' | 'research' | 'ai' | null
 
 export type AutomatedResearchCandidate = Pick<CandidateItem, 'tsCode' | 'name'>
 
+const AUTOMATED_RESEARCH_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_-]*$/u
+const AUTOMATED_RESEARCH_ERROR_CODE_MAX_LENGTH = 96
+
 export interface AutomatedResearchItemState {
   tsCode: string
   name: string | null
@@ -131,6 +134,20 @@ export function automatedResearchAiStatusLabel(status: AutomatedResearchAiStatus
     skipped: '未配置',
     error: '复核失败',
   }[status]
+}
+
+export function automatedResearchErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object')
+    return null
+  const code = (error as { readonly code?: unknown }).code
+  if (typeof code !== 'string')
+    return null
+  const normalized = code.trim()
+  return normalized.length > 0
+    && normalized.length <= AUTOMATED_RESEARCH_ERROR_CODE_MAX_LENGTH
+    && AUTOMATED_RESEARCH_ERROR_CODE_PATTERN.test(normalized)
+    ? normalized
+    : null
 }
 
 export async function runAutomatedResearch(

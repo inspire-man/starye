@@ -19,6 +19,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - Reader 生产匿名 R18 状态未作为完整 UI 证明；完整 tuple 在 v1.5 Phase 28 归档中。
 - Quant 今日决策助手第 4 组已在当前工作树完成：服务端 Eastmoney 实时行情与本地收盘回退、服务端现价请求收敛、AI checkbox 样式回归和紫金矿业 Gateway/D1 验证均通过；OpenSpec `2026-08-30-quant-daily-decision-assistant` 为 14/14，当前改动尚未提交。
 - Quant 自动研究闭环与数据新鲜度验收已完成：OpenSpec strict 77/77；Gateway 候选页确认真实 AI 配置、3 项闭环逐项状态、AI 失败保留确定性报告、详情回看、390px 无横向溢出且无浏览器 error/warn；对应 OpenSpec `2026-08-30-quant-automated-research-loop` 和 `2026-09-01-quant-data-freshness` 的剩余验证项已勾选，当前改动尚未提交。
+- Quant 自动研究闭环诊断已完成：失败项按入池、研究、AI 阶段展示安全错误码，保留报告回看与重试；OpenSpec `2026-09-03-quant-research-pipeline-diagnostics` 已通过 strict，Gateway 真实 AI 失败和 390px 页面验证通过，当前改动尚未提交。
 
 ## 延后事项
 
