@@ -184,6 +184,7 @@ describe('quant decision assistant', () => {
   })
 
   it('only accepts an AI review when direction, factor coverage and citations agree', () => {
+    const evaluatedAt = new Date('2026-08-30T01:00:00.000Z')
     const base = buildQuantDecisionAssistant({
       report: report(),
       researchRunId: 'run-1',
@@ -201,6 +202,7 @@ describe('quant decision assistant', () => {
       report: report(),
       deterministic: base.deterministic,
       scenario: base.scenario,
+      evaluatedAt,
     })
     const merged = { ...base, ai: accepted } as typeof base
 
@@ -213,6 +215,7 @@ describe('quant decision assistant', () => {
       report: report(),
       deterministic: base.deterministic,
       scenario: base.scenario,
+      evaluatedAt,
     })
     expect(lowConfidence).toMatchObject({ status: 'rejected', accepted: false, rejectionReason: 'low-confidence' })
 
@@ -225,6 +228,7 @@ describe('quant decision assistant', () => {
       report: report(),
       deterministic: base.deterministic,
       scenario: base.scenario,
+      evaluatedAt,
     })
     expect(incomplete).toMatchObject({ status: 'rejected', accepted: false, rejectionReason: 'factor-review-incomplete', factorReviewCoverage: 80 })
   })
