@@ -225,7 +225,7 @@ function factorFreshnessLabel(value: DecisionFactorImpactItem['freshness']): str
       <label class="quant-decision-assistant-ai-toggle">
         <span>AI 交叉核对</span>
         <span class="quant-decision-assistant-checkbox-row">
-          <input v-model="includeAi" type="checkbox" aria-label="使用 AI 交叉核对">
+          <input v-model="includeAi" class="quant-decision-assistant-checkbox" type="checkbox" aria-label="使用 AI 交叉核对">
           <strong>{{ includeAi ? '开启' : '关闭' }}</strong>
         </span>
         <small>{{ includeAi ? '合格时才影响最终动作' : '仅使用确定性数据' }}</small>
@@ -610,8 +610,12 @@ function factorFreshnessLabel(value: DecisionFactorImpactItem['freshness']): str
 .quant-decision-assistant-checkbox-row input {
   flex: 0 0 auto;
   width: 0.95rem;
+  min-width: 0.95rem;
+  height: 0.95rem;
   min-height: 0.95rem;
   margin: 0;
+  padding: 0;
+  border: 0;
   accent-color: hsl(var(--primary));
 }
 

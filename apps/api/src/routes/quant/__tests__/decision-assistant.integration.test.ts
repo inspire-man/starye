@@ -210,7 +210,7 @@ describe('quant decision assistant API', () => {
     }
     await upsertQuantDailyBars(db, [bar])
     const app = createApp(db, 'user-1')
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(marketQuoteResponse())
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(marketQuoteResponse())
 
     const create = await app.request('/api/quant/decision-assistant', {
       method: 'POST',
@@ -221,8 +221,12 @@ describe('quant decision assistant API', () => {
         cost_basis: 33.4,
         include_ai: false,
       }),
-    })
+    }, {
+      EASTMONEY_BASE_URL: 'https://eastmoney-history.fixture.test',
+      EASTMONEY_QUOTE_BASE_URL: 'https://eastmoney-quote.fixture.test',
+    } as AppEnv['Bindings'])
     expect(create.status).toBe(201)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('https://eastmoney-quote.fixture.test/api/qt/stock/get')
     await expect(create.json()).resolves.toMatchObject({
       success: true,
       data: {
@@ -403,6 +407,17 @@ describe('quant decision assistant API', () => {
         deterministic: { priceDetail: expect.stringContaining('本地最新收盘回退') },
       },
     })
+  })
+
+  it('rejects a user-provided current price before creating an assessment', async () => {
+    const { db } = await createDatabase()
+    const response = await createApp(db, 'user-1').request('/api/quant/decision-assistant', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ research_run_id: 'run-1', mode: 'buy', current_price: 1 }),
+    })
+
+    expect(response.status).toBe(400)
   })
 
   it('does not label an old upstream quote as realtime', async () => {

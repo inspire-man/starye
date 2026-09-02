@@ -122,7 +122,10 @@ describe('quant decision assistant panel', () => {
     await wrapper.get('.quant-decision-assistant-submit').trigger('click')
 
     expect(wrapper.emitted('assess')).toEqual([[{ mode: 'buy', costBasis: null, quantity: null, includeAi: true }]])
-    expect(wrapper.get('input[aria-label="使用 AI 交叉核对"]').attributes('type')).toBe('checkbox')
+    const aiToggle = wrapper.get('input[aria-label="使用 AI 交叉核对"]')
+    expect(aiToggle.attributes('type')).toBe('checkbox')
+    expect(aiToggle.classes()).toContain('quant-decision-assistant-checkbox')
+    expect(aiToggle.element.closest('.quant-decision-assistant-field')).toBeNull()
   })
 
   it('requires cost basis for holding mode and shows the loss/recovery result', async () => {
