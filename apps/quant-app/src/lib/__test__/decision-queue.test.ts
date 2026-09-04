@@ -1,4 +1,4 @@
-import type { CandidateItem, QuantDecisionRecord, QuantDecisionRecordAction, WatchlistItem } from '../quant-types'
+import type { CandidateItem, QuantDecisionRecord, QuantDecisionRecordAction, WatchlistItem } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildQuantDecisionQueue } from '../decision-queue'
 

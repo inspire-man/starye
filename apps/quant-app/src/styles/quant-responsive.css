@@ -1,0 +1,634 @@
+/* Quant responsive styles. Keep feature selectors with their view boundary. */
+
+@media (max-width: 1000px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .focus-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .environment-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .risk-summary {
+    border-top: 1px solid hsl(var(--border));
+    border-left: 0;
+    padding-top: 1rem;
+    padding-left: 0;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .research-path-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sync-panel {
+    min-height: auto;
+  }
+
+  .valuation-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .financial-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .financial-trend-grid,
+  .financial-comparison-grid,
+  .financial-context-grid,
+  .shareholder-return-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .valuation-item-wide {
+    grid-column: span 2;
+  }
+
+  .valuation-comparison-row {
+    grid-template-columns: 1fr auto;
+    gap: 0.35rem 0.6rem;
+  }
+
+  .valuation-comparison-row small {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    text-align: right;
+  }
+
+  .knowledge-factor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .knowledge-context-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-heading-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .quant-page {
+    padding-top: 1.25rem;
+  }
+
+  .quant-view-heading {
+    align-items: flex-start;
+  }
+
+  .quant-view-heading-meta {
+    display: none;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .metric-card {
+    min-height: 7.25rem;
+    padding: 0.8rem;
+  }
+
+  .environment-section {
+    padding: 0.9rem 0;
+  }
+
+  .data-health-section {
+    padding: 0.9rem 0;
+  }
+
+  .data-health-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .data-health-list {
+    gap: 0.75rem;
+  }
+
+  .environment-metrics {
+    gap: 0.75rem;
+  }
+
+  .metric-value {
+    margin-top: 0.7rem;
+    font-size: 1.5rem;
+  }
+
+  .metric-value-date {
+    font-size: 1rem;
+  }
+
+  .knowledge-heading {
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .knowledge-meta {
+    justify-content: flex-start;
+  }
+
+  .knowledge-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .data-health-list {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-factor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .watchlist-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .watchlist-form .primary-button {
+    grid-column: 1 / -1;
+  }
+
+  .candidate-add-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .candidate-add-form .primary-button {
+    grid-column: 1 / -1;
+  }
+
+  .candidate-pending-callout {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .candidate-pending-callout .text-button {
+    margin-left: 1.35rem;
+  }
+
+  .daily-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .valuation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .financial-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .financial-subheading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .financial-trend-grid,
+  .financial-comparison-grid,
+  .financial-context-grid,
+  .shareholder-return-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .shareholder-distribution-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .shareholder-distribution-row small {
+    grid-column: 2;
+    text-align: right;
+  }
+
+  .trend-structure-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trend-structure-conclusion {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .research-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+  }
+
+  .research-dimensions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .research-summary-column,
+  .research-summary-column:first-child {
+    padding: 0;
+  }
+
+  .research-summary-column + .research-summary-column {
+    border-top: 1px solid hsl(var(--border));
+    border-left: 0;
+    padding-top: 0.8rem;
+  }
+
+  .valuation-comparison-error .text-button {
+    margin-left: 0;
+  }
+
+  .valuation-item-wide {
+    grid-column: span 2;
+  }
+
+  .chart-area {
+    border-top: 1px solid hsl(var(--border));
+    border-left: 0;
+  }
+
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .section-meta,
+  .snapshot-meta {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .candidate-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .candidate-query-controls {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .candidate-query-field {
+    flex: 1 1 8rem;
+  }
+
+  .candidate-query-check {
+    flex: 1 1 8rem;
+  }
+
+  .candidate-reset-button {
+    flex: 0 0 auto;
+  }
+
+  .candidate-toolbar-meta {
+    justify-content: flex-start;
+  }
+
+  .candidate-evidence-overview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-queue-row {
+    grid-template-columns: max-content minmax(0, 1fr) auto;
+    gap: 0.5rem;
+  }
+
+  .review-queue-detail {
+    grid-column: 2;
+  }
+
+  .review-queue-row > svg {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .research-priority-heading {
+    align-items: flex-start;
+  }
+
+  .research-priority-heading-meta {
+    font-size: 0.625rem;
+  }
+
+  .research-priority-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .research-priority-summary-item:nth-child(odd) {
+    border-right: 1px solid hsl(var(--border));
+  }
+
+  .research-priority-summary-item:nth-child(even) {
+    border-right: 0;
+  }
+
+  .research-priority-row {
+    grid-template-columns: max-content minmax(0, 1fr) auto;
+    gap: 0.5rem;
+  }
+
+  .research-priority-detail {
+    grid-column: 2;
+  }
+
+  .research-priority-row > svg {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .detail-review-status {
+    justify-content: flex-start;
+  }
+
+  .decision-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .signal-persistence-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .timing-window-headline,
+  .timing-window-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .timing-window-metric p {
+    min-height: 0;
+  }
+
+  .timing-history-current-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .timing-history-table-row {
+    grid-template-columns: minmax(5rem, 1.2fr) repeat(4, minmax(3rem, 0.8fr));
+    gap: 0.3rem;
+    padding-right: 0.2rem;
+    padding-left: 0.35rem;
+    font-size: 0.625rem;
+  }
+
+  .signal-persistence-evidence-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .signal-persistence-evidence-tags {
+    grid-column: 1 / -1;
+  }
+
+  .decision-evidence-action,
+  .decision-evidence-guidance {
+    grid-template-columns: 1fr;
+  }
+
+  .research-run-heading,
+  .research-run-summary,
+  .research-run-guidance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .research-run-heading {
+    flex-direction: column;
+  }
+
+  .research-run-timeline-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .research-run-timeline-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .research-run-timeline-row {
+    grid-template-columns: 1.2rem minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .research-run-timeline-score {
+    grid-column: 2;
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .research-run-generate-button {
+    width: 100%;
+  }
+
+  .research-run-heading-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .research-run-heading-actions > button {
+    width: 100%;
+  }
+
+  .quant-ai-question-heading,
+  .quant-ai-question-answer-heading,
+  .quant-ai-question-citations-heading {
+    flex-direction: column;
+  }
+
+  .quant-ai-question-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quant-ai-question-actions > button {
+    width: 100%;
+  }
+
+  .comparison-research-heading {
+    flex-direction: column;
+  }
+
+  .comparison-research-button {
+    width: 100%;
+  }
+
+  .comparison-research-export-button,
+  .comparison-research-copy-button,
+  .comparison-research-ai-summary-button {
+    width: 100%;
+  }
+
+  .comparison-ai-heading {
+    flex-direction: column;
+  }
+
+  .comparison-ai-button {
+    width: 100%;
+  }
+
+  .comparison-ai-result-heading {
+    flex-direction: column;
+  }
+
+  .comparison-ai-result-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .comparison-ai-result-actions button {
+    width: 100%;
+  }
+
+  .comparison-ai-next-check {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .comparison-ai-next-prompt {
+    justify-self: start;
+  }
+
+  .comparison-research-item {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-research-actions {
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .research-run-evidence-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .research-run-evidence-value {
+    text-align: left;
+  }
+
+  .research-run-evidence-meta {
+    justify-content: flex-start;
+  }
+
+  .research-evidence-history-heading {
+    flex-direction: column;
+  }
+
+  .research-evidence-history-count {
+    align-self: flex-start;
+  }
+
+  .research-evidence-history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .research-evidence-history-row {
+    grid-template-columns: 1fr;
+  }
+
+  .research-evidence-history-values {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .research-evidence-history-values em {
+    grid-column: 1 / -1;
+  }
+
+  .decision-evidence-list {
+    grid-template-columns: 1fr;
+  }
+
+  .value-quality-score-row,
+  .value-quality-dimension-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .decision-signal-row {
+    grid-template-columns: 1fr;
+    gap: 0.45rem;
+  }
+
+  .decision-action-row {
+    grid-template-columns: auto auto;
+  }
+
+  .decision-action-row small {
+    grid-column: 1 / -1;
+  }
+
+  .research-marker-form {
+    grid-template-columns: 1fr;
+  }
+
+  .research-save-button {
+    width: 100%;
+  }
+
+  .selection-guide {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .focus-row {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    gap: 0.5rem;
+  }
+
+  .focus-signal {
+    display: block;
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .focus-stock {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .focus-rank {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .focus-score {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  .focus-row .status-chip {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: start;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .focus-row > svg {
+    grid-column: 3;
+    grid-row: 3;
+    justify-self: end;
+  }
+
+  .quant-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

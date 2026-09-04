@@ -1,4 +1,4 @@
-import type { DailyBar } from './quant-types'
+import type { DailyBar } from './quant-view-models'
 import type { TrendStructure } from './trend-analysis'
 
 export type TimingWindowState = 'constructive' | 'pullback_watch' | 'extended' | 'weak' | 'insufficient'

@@ -1,4 +1,4 @@
-import type { QuantShareholderReturnSelection, QuantValueSelection, SyncResult, WatchlistItem } from '../quant-types'
+import type { QuantShareholderReturnSelection, QuantValueSelection, SyncResult, WatchlistItem } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildQuantDataHealth, classifyQuantDataHealthFreshness, mergeQuantDataHealthFreshness } from '../data-health'
 

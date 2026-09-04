@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { CandidateItem, QuantDecisionRecord, WatchlistItem } from '../../lib/quant-types'
+import type { CandidateItem, QuantDecisionRecord, WatchlistItem } from '../../lib/quant-view-models'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import QuantDecisionQueue from '../QuantDecisionQueue.vue'

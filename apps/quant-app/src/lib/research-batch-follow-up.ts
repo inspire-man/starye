@@ -1,4 +1,4 @@
-import type { QuantResearchRun } from './quant-types'
+import type { QuantResearchRun } from './quant-view-models'
 import type { BatchResearchItemStatus, BatchResearchProgress } from './research-batch'
 
 export interface BatchResearchFollowUpState {

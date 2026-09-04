@@ -1,4 +1,4 @@
-import type { CandidateItem, WatchlistItem } from '../quant-types'
+import type { CandidateItem, WatchlistItem } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildWatchlistEnvironment } from '../watchlist-environment'
 

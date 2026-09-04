@@ -1,4 +1,4 @@
-import type { CandidateItem, QuantFinancialQualitySnapshot } from '../quant-types'
+import type { CandidateItem, QuantFinancialQualitySnapshot } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildResearchSummary } from '../research-summary'
 

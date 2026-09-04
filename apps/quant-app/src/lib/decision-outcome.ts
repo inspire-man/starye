@@ -1,4 +1,4 @@
-import type { QuantDecisionRecord, QuantDecisionRecordAction } from './quant-types'
+import type { QuantDecisionRecord, QuantDecisionRecordAction } from './quant-view-models'
 
 export type DecisionOutcomeKind = 'sold' | 'recorded' | 'current'
 export type DecisionOutcomeStatus = 'empty' | 'pending' | 'observed' | 'completed'

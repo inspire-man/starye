@@ -1,4 +1,4 @@
-import type { CandidateItem, ResearchMarkerStatus } from './quant-types'
+import type { CandidateItem, ResearchMarkerStatus } from './quant-view-models'
 import { getResearchReviewMeta } from './research-review'
 
 export type ResearchPriorityLevel = 'urgent' | 'high' | 'normal' | 'low'

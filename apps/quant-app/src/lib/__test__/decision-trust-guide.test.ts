@@ -1,4 +1,4 @@
-import type { QuantResearchReport } from '../quant-types'
+import type { QuantResearchReport } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildQuantDecisionGuide } from '../decision-trust-guide'
 

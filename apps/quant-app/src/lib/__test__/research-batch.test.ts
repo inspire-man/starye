@@ -1,4 +1,4 @@
-import type { QuantResearchRun } from '../quant-types'
+import type { QuantResearchRun } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { MAX_BATCH_RESEARCH_CONCURRENCY, MAX_BATCH_RESEARCH_ITEMS, runResearchBatch } from '../research-batch'
 

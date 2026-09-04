@@ -1,5 +1,5 @@
 import type { QuantDataHealthFreshness } from './data-health'
-import type { QuantAiDecisionReview, QuantAiFactorImpact, QuantRecommendation, QuantResearchReport } from './quant-types'
+import type { QuantAiDecisionReview, QuantAiFactorImpact, QuantRecommendation, QuantResearchReport } from './quant-view-models'
 
 export const QUANT_DECISION_READINESS_VERSION = 'decision-readiness-v1' as const
 export type QuantDecisionReadinessStatus = 'ready' | 'review' | 'blocked'

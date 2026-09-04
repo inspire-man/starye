@@ -1,4 +1,4 @@
-import type { QuantResearchEvidence, QuantResearchReport } from './quant-types'
+import type { QuantResearchEvidence, QuantResearchReport } from './quant-view-models'
 
 export type ResearchEvidenceChangeKind = 'improved' | 'weakened' | 'restored' | 'newly-missing' | 'persistent-missing' | 'changed' | 'incomparable' | 'unchanged' | 'added' | 'removed'
 export type ResearchEvidenceValueDirection = 'up' | 'down' | 'flat' | 'none'

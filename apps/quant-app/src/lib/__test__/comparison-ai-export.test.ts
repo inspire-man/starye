@@ -1,4 +1,4 @@
-import type { QuantResearchComparison } from '../quant-types'
+import type { QuantResearchComparison } from '../quant-view-models'
 import { describe, expect, it, vi } from 'vitest'
 import { buildResearchComparisonFilename, buildResearchComparisonMarkdown } from '../comparison-ai-export'
 import { copyResearchReportMarkdown } from '../research-report-copy'

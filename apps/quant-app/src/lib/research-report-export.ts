@@ -1,4 +1,4 @@
-import type { QuantResearchRun, QuantResearchSummary } from './quant-types'
+import type { QuantResearchRun, QuantResearchSummary } from './quant-view-models'
 
 const REPORT_STATUS_LABELS: Record<string, string> = {
   ready: '证据完整',

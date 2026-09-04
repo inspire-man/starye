@@ -1,4 +1,4 @@
-import type { CandidateItem, QuantFinancialQualitySnapshot, QuantShareholderReturnItem, QuantValuationComparison, QuantValuationSnapshot, QuantValueQualityItem } from '../quant-types'
+import type { CandidateItem, QuantFinancialQualitySnapshot, QuantShareholderReturnItem, QuantValuationComparison, QuantValuationSnapshot, QuantValueQualityItem } from '../quant-view-models'
 import type { TrendStructure } from '../trend-analysis'
 import { describe, expect, it } from 'vitest'
 import { buildDecisionEvidence } from '../decision-evidence'

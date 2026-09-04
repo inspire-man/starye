@@ -1,4 +1,4 @@
-import type { CandidateItem, QuantValueQualityDimension, QuantValueQualityItem, ValueQualityDimensionKey } from './quant-types'
+import type { CandidateItem, QuantValueQualityDimension, QuantValueQualityItem, ValueQualityDimensionKey } from './quant-view-models'
 
 export const CANDIDATE_EVIDENCE_SCORE_VERSION = 'candidate-evidence-v1' as const
 

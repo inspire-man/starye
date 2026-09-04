@@ -1,4 +1,4 @@
-import type { QuantAiConfig } from '../quant-types'
+import type { QuantAiConfig } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { isQuantAiAutoReviewReady } from '../research-ai-auto-review'
 

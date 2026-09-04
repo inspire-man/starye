@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { QuantResearchChangeExplanation } from '../../lib/quant-types'
+import type { QuantResearchChangeExplanation } from '../../lib/quant-view-models'
 import type { ResearchEvidenceHistoryComparison } from '../../lib/research-evidence-history'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'

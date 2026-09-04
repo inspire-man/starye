@@ -1,4 +1,4 @@
-import type { QuantResearchRun } from './quant-types'
+import type { QuantResearchRun } from './quant-view-models'
 import { buildResearchReportMarkdown } from './research-report-export'
 
 function reportDate(run: QuantResearchRun): string {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantFactorConfiguration, QuantFactorConfigurationKey, QuantFactorWeights } from '../lib/quant-types'
+import type { QuantFactorConfiguration, QuantFactorConfigurationKey, QuantFactorWeights } from '../lib/quant-view-models'
 import { DetailDrawer } from '@starye/ui'
 import { AlertCircle, RotateCcw, Save, ShieldCheck, SlidersHorizontal } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'

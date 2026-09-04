@@ -1,4 +1,4 @@
-import type { CandidateItem, QuantAiDecisionReview, QuantDecisionRecord, QuantDecisionRecordAction, WatchlistItem } from '../quant-types'
+import type { CandidateItem, QuantAiDecisionReview, QuantDecisionRecord, QuantDecisionRecordAction, WatchlistItem } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildQuantAiTrustOverview } from '../ai-trust-overview'
 

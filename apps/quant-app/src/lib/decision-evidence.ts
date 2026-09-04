@@ -6,7 +6,7 @@ import type {
   QuantValuationComparison,
   QuantValuationSnapshot,
   QuantValueQualityItem,
-} from './quant-types'
+} from './quant-view-models'
 import type { TrendStructure } from './trend-analysis'
 
 export const DECISION_EVIDENCE_VERSION = 'decision-evidence-v1' as const

@@ -1,4 +1,4 @@
-import type { QuantResearchRun, QuantResearchSummary } from '../quant-types'
+import type { QuantResearchRun, QuantResearchSummary } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildResearchReportFilename, buildResearchReportMarkdown } from '../research-report-export'
 

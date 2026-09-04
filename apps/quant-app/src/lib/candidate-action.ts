@@ -1,4 +1,4 @@
-import type { CandidateItem } from './quant-types'
+import type { CandidateItem } from './quant-view-models'
 
 export type CandidateAction = 'complete-data' | 'check-risk' | 'continue-research' | 'observe'
 export type CandidateActionTone = 'neutral' | 'warning' | 'positive' | 'info'

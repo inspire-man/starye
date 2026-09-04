@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantAiConfig, QuantAiConnectionTest, QuantAiProvider, QuantAiResponseMode } from '../lib/quant-types'
+import type { QuantAiConfig, QuantAiConnectionTest, QuantAiProvider, QuantAiResponseMode } from '../lib/quant-view-models'
 import { DetailDrawer } from '@starye/ui'
 import { AlertCircle, Braces, KeyRound, Radio, RefreshCw, Save, ShieldCheck } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'

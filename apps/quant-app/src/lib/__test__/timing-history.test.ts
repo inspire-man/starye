@@ -1,4 +1,4 @@
-import type { DailyBar } from '../quant-types'
+import type { DailyBar } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildTimingHistory } from '../timing-history'
 

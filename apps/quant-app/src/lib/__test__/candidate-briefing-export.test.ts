@@ -1,4 +1,4 @@
-import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingSession } from '../quant-types'
+import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingSession } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import {
   buildCandidateAiBriefingFilename,

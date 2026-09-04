@@ -1,4 +1,4 @@
-import type { QuantAiConfig } from './quant-types'
+import type { QuantAiConfig } from './quant-view-models'
 
 export function isQuantAiAutoReviewReady(config: QuantAiConfig | null | undefined): boolean {
   const model = config?.model.trim()

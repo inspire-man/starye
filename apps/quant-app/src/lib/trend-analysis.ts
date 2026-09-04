@@ -1,4 +1,4 @@
-import type { DailyBar } from './quant-types'
+import type { DailyBar } from './quant-view-models'
 
 export type TrendStructureTone = 'positive' | 'warning' | 'danger' | 'neutral'
 

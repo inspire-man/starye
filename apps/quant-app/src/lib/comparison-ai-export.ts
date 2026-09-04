@@ -1,4 +1,4 @@
-import type { QuantResearchComparison } from './quant-types'
+import type { QuantResearchComparison } from './quant-view-models'
 
 function inline(value: string | null | undefined, fallback = '暂无记录'): string {
   const normalized = value?.trim().replace(/\r?\n/gu, ' ')

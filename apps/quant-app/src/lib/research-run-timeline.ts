@@ -1,4 +1,4 @@
-import type { QuantResearchAction, QuantResearchRun, QuantResearchRunStatus } from './quant-types'
+import type { QuantResearchAction, QuantResearchRun, QuantResearchRunStatus } from './quant-view-models'
 
 export type ResearchRunScoreDirection = 'up' | 'down' | 'flat' | 'none'
 

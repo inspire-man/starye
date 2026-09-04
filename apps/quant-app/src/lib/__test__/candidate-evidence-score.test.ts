@@ -1,4 +1,4 @@
-import type { CandidateItem, QuantValueQualityDimension, QuantValueQualityItem, QuantValueQualityMetric } from '../quant-types'
+import type { CandidateItem, QuantValueQualityDimension, QuantValueQualityItem, QuantValueQualityMetric } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildCandidateEvidenceScore } from '../candidate-evidence-score'
 

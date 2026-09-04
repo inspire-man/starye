@@ -1,4 +1,4 @@
-import type { QuantResearchRun } from './quant-types'
+import type { QuantResearchRun } from './quant-view-models'
 
 export const MAX_BATCH_RESEARCH_ITEMS = 3
 export const MAX_BATCH_RESEARCH_CONCURRENCY = 2

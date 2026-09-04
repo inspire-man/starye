@@ -21,6 +21,7 @@
     "check:services": "pwsh -ExecutionPolicy Bypass -File ./scripts/check-services.ps1",
     "local:task-runner:e2e": "tsx scripts/local-task-runner.e2e.ts",
     "check:legacy-domain": "node --import tsx scripts/audit-legacy-domain.ts",
+    "check:quant-boundaries": "node scripts/check-quant-boundaries.mjs",
     "test": "turbo run test",
     "test:e2e": "vitest run test/e2e/flow.test.ts",
     "target-profile": "pnpm --filter @starye/crawler exec node --import tsx ../../scripts/target-profile.ts",

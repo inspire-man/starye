@@ -1,5 +1,5 @@
 import type { QuantDecisionQueueItem } from './decision-queue'
-import type { CandidateItem, QuantAiDecisionReview, QuantDecisionRecord, QuantRecommendation, WatchlistItem } from './quant-types'
+import type { CandidateItem, QuantAiDecisionReview, QuantDecisionRecord, QuantRecommendation, WatchlistItem } from './quant-view-models'
 import { buildQuantDecisionQueue } from './decision-queue'
 
 export type QuantAiTrustOverviewItemStatus = 'aligned' | 'opposed' | 'flat' | 'pending' | 'unavailable' | 'not-accepted' | 'inactive'

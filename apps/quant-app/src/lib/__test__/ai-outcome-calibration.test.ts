@@ -1,4 +1,4 @@
-import type { QuantAiDecisionReview, QuantAiFactorReview, QuantDecisionRecord, QuantDecisionRecordAction } from '../quant-types'
+import type { QuantAiDecisionReview, QuantAiFactorReview, QuantDecisionRecord, QuantDecisionRecordAction } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildQuantAiOutcomeCalibration } from '../ai-outcome-calibration'
 
