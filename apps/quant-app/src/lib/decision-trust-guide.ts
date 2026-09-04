@@ -1,4 +1,4 @@
-import type { QuantAiDecisionReview, QuantRecommendation, QuantResearchReport } from './quant-types'
+import type { QuantAiDecisionReview, QuantRecommendation, QuantResearchReport } from './quant-view-models'
 
 export type QuantDecisionPriceStatus = 'within' | 'above' | 'below' | 'not-buying' | 'unavailable'
 export type QuantDecisionTrustStatus = 'complete' | 'review' | 'insufficient'

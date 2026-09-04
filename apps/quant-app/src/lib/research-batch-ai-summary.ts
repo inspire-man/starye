@@ -1,4 +1,4 @@
-import type { QuantResearchSummary } from './quant-types'
+import type { QuantResearchSummary } from './quant-view-models'
 import { MAX_BATCH_RESEARCH_CONCURRENCY, MAX_BATCH_RESEARCH_ITEMS } from './research-batch'
 
 export const MAX_BATCH_AI_SUMMARY_ITEMS = MAX_BATCH_RESEARCH_ITEMS

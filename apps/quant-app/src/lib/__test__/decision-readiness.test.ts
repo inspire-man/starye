@@ -1,4 +1,4 @@
-import type { QuantAiDecisionReview, QuantAiFactorImpact, QuantResearchReport } from '../quant-types'
+import type { QuantAiDecisionReview, QuantAiFactorImpact, QuantResearchReport } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildQuantDecisionReadiness } from '../decision-readiness'
 

@@ -1,4 +1,4 @@
-import type { CandidateItem, QuantDecisionRecord, QuantDecisionRecordAction, QuantRecommendation, WatchlistItem } from './quant-types'
+import type { CandidateItem, QuantDecisionRecord, QuantDecisionRecordAction, QuantRecommendation, WatchlistItem } from './quant-view-models'
 
 export type QuantDecisionQueueObservation = 'newer-price' | 'same-day' | 'missing-price' | 'outside-candidate'
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantResearchEvidence, QuantResearchQuestion, QuantResearchReport } from '../lib/quant-types'
+import type { QuantResearchEvidence, QuantResearchQuestion, QuantResearchReport } from '../lib/quant-view-models'
 import { AlertCircle, BrainCircuit, CircleHelp, RefreshCw } from 'lucide-vue-next'
 import { computed, nextTick, ref } from 'vue'
 import QuantAiProgressStatus from './QuantAiProgressStatus.vue'

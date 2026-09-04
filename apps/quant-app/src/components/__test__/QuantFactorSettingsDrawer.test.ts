@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { QuantFactorConfiguration } from '../../lib/quant-types'
+import type { QuantFactorConfiguration } from '../../lib/quant-view-models'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { quantApi } from '../../lib/api-client'

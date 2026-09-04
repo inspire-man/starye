@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { QuantAiOutcomeCalibrationAlignment, QuantAiOutcomeCalibrationStatus } from '../lib/ai-outcome-calibration'
-import type { QuantDecisionRecord } from '../lib/quant-types'
+import type { QuantDecisionRecord } from '../lib/quant-view-models'
 import { BrainCircuit, CheckCircle2, CircleHelp, Minus, XCircle } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { buildQuantAiOutcomeCalibration } from '../lib/ai-outcome-calibration'

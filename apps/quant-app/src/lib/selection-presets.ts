@@ -1,4 +1,4 @@
-import type { CandidateItem, ResearchMarkerStatus } from './quant-types'
+import type { CandidateItem, ResearchMarkerStatus } from './quant-view-models'
 import type { ResearchPriorityMetadata, ResearchPriorityValueQuality } from './research-priority'
 import { buildResearchPriority, getResearchPriorityLevelRank } from './research-priority'
 import { getResearchReviewState, getReviewDueRank, getTodayDate, normalizeReviewDate } from './research-review'

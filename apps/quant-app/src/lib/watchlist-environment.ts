@@ -1,4 +1,4 @@
-import type { CandidateItem, WatchlistItem } from './quant-types'
+import type { CandidateItem, WatchlistItem } from './quant-view-models'
 
 export const WATCHLIST_ENVIRONMENT_VERSION = 'watchlist-environment-v1' as const
 

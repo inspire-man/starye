@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantResearchChangeExplanation } from '../lib/quant-types'
+import type { QuantResearchChangeExplanation } from '../lib/quant-view-models'
 import type { ResearchEvidenceHistoryComparison } from '../lib/research-evidence-history'
 import { AlertCircle, ArrowDown, ArrowUp, BrainCircuit, CircleHelp, Minus, RefreshCw } from 'lucide-vue-next'
 import QuantAiProgressStatus from './QuantAiProgressStatus.vue'

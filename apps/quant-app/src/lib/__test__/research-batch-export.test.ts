@@ -1,4 +1,4 @@
-import type { QuantResearchRun } from '../quant-types'
+import type { QuantResearchRun } from '../quant-view-models'
 import { describe, expect, it, vi } from 'vitest'
 import { buildResearchBatchFilename, buildResearchBatchMarkdown } from '../research-batch-export'
 import { copyResearchReportMarkdown } from '../research-report-copy'

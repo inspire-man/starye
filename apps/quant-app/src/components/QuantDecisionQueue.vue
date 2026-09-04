@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CandidateItem, QuantDecisionRecord, WatchlistItem } from '../lib/quant-types'
+import type { CandidateItem, QuantDecisionRecord, WatchlistItem } from '../lib/quant-view-models'
 import { ArrowRight, ChevronRight, CircleHelp, History, RefreshCw, Target } from 'lucide-vue-next'
 import { computed } from 'vue'
 import {

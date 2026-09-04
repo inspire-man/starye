@@ -1,4 +1,4 @@
-import type { QuantResearchRun } from '../quant-types'
+import type { QuantResearchRun } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildResearchRunTimeline } from '../research-run-timeline'
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantDecisionRecord, QuantDecisionRecordAction } from '../lib/quant-types'
+import type { QuantDecisionRecord, QuantDecisionRecordAction } from '../lib/quant-view-models'
 import { CircleHelp, GitCompareArrows, Target } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { buildDecisionOutcome } from '../lib/decision-outcome'

@@ -1,4 +1,4 @@
-import type { CandidateItem, QuantResearchRun, QuantResearchSummary } from './quant-types'
+import type { CandidateItem, QuantResearchRun, QuantResearchSummary } from './quant-view-models'
 
 export const MAX_AUTOMATED_RESEARCH_ITEMS = 3
 

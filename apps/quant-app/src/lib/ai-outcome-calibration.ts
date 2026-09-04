@@ -1,5 +1,5 @@
 import type { DecisionOutcomeEntry } from './decision-outcome'
-import type { QuantAiFactorReviewStance, QuantDecisionRecord, QuantFactorConfigurationKey } from './quant-types'
+import type { QuantAiFactorReviewStance, QuantDecisionRecord, QuantFactorConfigurationKey } from './quant-view-models'
 import { buildDecisionOutcome } from './decision-outcome'
 
 export type QuantAiOutcomeCalibrationStatus = 'empty' | 'pending' | 'observed'

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { QuantDataHealthFreshness } from '../lib/data-health'
-import type { QuantFactorDataHealthItem, QuantFactorSourceHealth } from '../lib/quant-factor-data-health'
-import type { QuantAiDecisionReview, QuantFactorFreshness, QuantRecommendation, QuantReferencePriceRange, QuantResearchReport, QuantResearchSummary } from '../lib/quant-types'
+import type { QuantAiDecisionReview, QuantRecommendation, QuantReferencePriceRange, QuantResearchReport, QuantResearchSummary } from '../lib/quant-view-models'
 import { BrainCircuit, CircleHelp, Info } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { buildQuantDecisionReadiness } from '../lib/decision-readiness'
 import { buildQuantDecisionGuide } from '../lib/decision-trust-guide'
 import { buildQuantFactorDataHealth } from '../lib/quant-factor-data-health'
+import QuantDecisionGuide from './quant-detail/QuantDecisionGuide.vue'
+import QuantDecisionReadiness from './quant-detail/QuantDecisionReadiness.vue'
+import QuantFactorDataHealth from './quant-detail/QuantFactorDataHealth.vue'
 
 const props = defineProps<{
   report: QuantResearchReport | null
@@ -65,7 +67,6 @@ const factorDataHealth = computed(() => props.report ? buildQuantFactorDataHealt
 function recommendationLabel(value: QuantRecommendation | null): string {
   return value === 'bullish' ? '看多' : value === 'bearish' ? '看空' : '观望'
 }
-
 function recommendationTone(value: QuantRecommendation | null): string {
   return value ? `quant-decision-${value}` : 'quant-decision-watch'
 }
@@ -110,41 +111,6 @@ function aiReviewDisplayStatusLabel(review: QuantAiDecisionReview): string {
 
 function aiReviewGateDetail(): string {
   return props.dataFreshnessDetail || `当前数据${freshnessLabel(dataFreshness.value)}，刷新后再让 AI 影响最终推荐`
-}
-
-function factorHealthStatusLabel(value: QuantFactorDataHealthItem['status']): string {
-  return value === 'ready' ? '字段完整' : value === 'partial' ? '部分可用' : value === 'missing' ? '待补数据' : '来源不可用'
-}
-
-function factorHealthStatusClass(value: QuantFactorDataHealthItem['status']): string {
-  return `quant-factor-health-status-${value}`
-}
-
-function factorSourceHealthLabel(value: QuantFactorSourceHealth): string {
-  return value === 'primary' ? '主来源' : value === 'fallback' ? '来源需复核' : value === 'unavailable' ? '来源不可用' : '来源状态未知'
-}
-
-function factorSourceHealthClass(value: QuantFactorSourceHealth): string {
-  return `quant-factor-health-source-${value}`
-}
-
-function factorFreshness(value: string): QuantFactorFreshness | null {
-  return factorDataHealth.value?.items.find(item => item.factor === value)?.freshness || null
-}
-
-function factorFreshnessLabel(value: QuantFactorFreshness | null): string {
-  return value?.status === 'fresh' ? '最新' : value?.status === 'aging' ? '需复核' : value?.status === 'stale' ? '已过期' : '时间未知'
-}
-
-function factorFreshnessClass(value: QuantFactorFreshness | null): string {
-  return `quant-factor-health-freshness-${value?.status || 'unknown'}`
-}
-
-function factorObservedAt(value: string | null): string {
-  if (!value)
-    return '观察时间未记录'
-  const compact = value.replace(/-/gu, '').slice(0, 8)
-  return /^\d{8}$/u.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}` : value.slice(0, 16)
 }
 </script>
 
@@ -193,82 +159,12 @@ function factorObservedAt(value: string | null): string {
         </div>
       </div>
 
-      <section v-if="factorDataHealth?.items.length" class="quant-factor-data-health" aria-label="因子数据健康">
-        <div class="quant-factor-data-health-heading">
-          <div>
-            <span>因子数据健康</span>
-            <strong :class="factorHealthStatusClass(factorDataHealth.status)">{{ factorDataHealth.label }}</strong>
-          </div>
-          <small>字段覆盖 {{ factorDataHealth.coverage.toFixed(0) }}% · {{ factorDataHealth.readyWeight.toFixed(2) }} / {{ factorDataHealth.totalWeight.toFixed(2) }} 权重已具备</small>
-        </div>
-        <p class="quant-factor-data-health-note">
-          只检查原始字段和来源状态，不代表因子表现或买卖判断。
-          <span v-if="factorDataHealth.sourceHealth === 'fallback'">当前至少一个来源使用回退链，需要复核来源时间。</span>
-          <span v-else-if="factorDataHealth.sourceHealth === 'unavailable'">当前至少一个来源不可用，需要重试或补充来源。</span>
-        </p>
-        <div class="quant-factor-data-health-list">
-          <div v-for="factor in factorDataHealth.items" :key="factor.factor" class="quant-factor-data-health-row">
-            <div class="quant-factor-data-health-row-heading">
-              <strong>{{ factor.label }}</strong>
-              <span>权重 {{ (factor.weight * 100).toFixed(0) }}%</span>
-              <span class="quant-factor-data-health-status" :class="factorHealthStatusClass(factor.status)">{{ factorHealthStatusLabel(factor.status) }}</span>
-              <span class="quant-factor-data-health-freshness" :class="factorFreshnessClass(factorFreshness(factor.factor))">{{ factorFreshnessLabel(factorFreshness(factor.factor)) }}</span>
-            </div>
-            <div class="quant-factor-data-health-meta">
-              <span>证据 {{ factor.usableEvidenceCount }} / {{ factor.evidenceCount }} 可用</span>
-              <span>观察 {{ factorObservedAt(factor.observedAt) }}</span>
-              <span>时效 {{ factorFreshness(factor.factor)?.detail || '没有可核验因子证据时间' }}</span>
-              <span :class="factorSourceHealthClass(factor.sourceHealth)">{{ factorSourceHealthLabel(factor.sourceHealth) }}：{{ factor.source || '来源未记录' }}</span>
-            </div>
-            <small v-if="factor.missingEvidenceKeys.length" class="quant-factor-data-health-missing">待补证据：{{ factor.missingEvidenceKeys.join('、') }}</small>
-            <small v-if="factor.failedEvidenceKeys.length" class="quant-factor-data-health-failed">失败证据：{{ factor.failedEvidenceKeys.join('、') }}</small>
-            <small class="quant-factor-data-health-action">下一步：{{ factor.nextAction }}</small>
-          </div>
-        </div>
-      </section>
+      <QuantFactorDataHealth
+        :factor-data-health="factorDataHealth"
+      />
 
-      <section class="quant-decision-guide" aria-label="今日参考与信任检查">
-        <div class="quant-decision-guide-heading">
-          <div>
-            <span>今天怎么参考</span>
-            <strong>{{ decisionGuide?.priceLabel }}</strong>
-          </div>
-          <span class="quant-decision-trust-status" :class="`quant-decision-trust-${decisionGuide?.trustStatus || 'insufficient'}`">
-            {{ decisionGuide?.trustLabel }}
-          </span>
-        </div>
-        <p class="quant-decision-guide-price-detail">
-          {{ decisionGuide?.priceDetail }}
-        </p>
-        <div class="quant-decision-guide-checks">
-          <span v-for="check in decisionGuide?.checks || []" :key="check">{{ check }}</span>
-        </div>
-        <ol class="quant-decision-guide-steps">
-          <li v-for="step in decisionGuide?.steps || []" :key="step">
-            {{ step }}
-          </li>
-        </ol>
-      </section>
-
-      <section v-if="decisionReadiness" class="quant-decision-readiness" aria-label="判断就绪度">
-        <div class="quant-decision-readiness-heading">
-          <div>
-            <span>判断就绪度</span>
-            <strong :class="`quant-decision-readiness-${decisionReadiness.status}`">{{ decisionReadiness.label }}</strong>
-          </div>
-          <small>{{ decisionReadiness.detail }}</small>
-        </div>
-        <div class="quant-decision-readiness-checks" role="list" aria-label="判断就绪度检查项">
-          <div v-for="check in decisionReadiness.checks" :key="check.key" role="listitem" :class="`quant-decision-readiness-check-${check.status}`">
-            <span>{{ check.label }}</span>
-            <strong>{{ check.status === 'pass' ? '通过' : check.status === 'review' ? '需核对' : '阻断' }}</strong>
-            <small>{{ check.detail }}</small>
-          </div>
-        </div>
-        <p v-if="decisionReadiness.unresolvedFactors.length" class="quant-decision-readiness-factors">
-          待核对因子：{{ decisionReadiness.unresolvedFactors.join('、') }}
-        </p>
-      </section>
+      <QuantDecisionGuide :decision-guide="decisionGuide" />
+      <QuantDecisionReadiness :decision-readiness="decisionReadiness" />
 
       <div v-if="aiReview" class="quant-decision-ai-review" :class="{ 'quant-decision-ai-review-accepted': aiReview.accepted, 'quant-decision-ai-review-gated': aiReview.accepted && !appliedAiReview }">
         <div>
@@ -474,287 +370,6 @@ function factorObservedAt(value: string | null): string {
   overflow-wrap: anywhere;
 }
 
-.quant-factor-data-health {
-  display: grid;
-  gap: 0.45rem;
-  border-top: 1px solid hsl(var(--border));
-  padding-top: 0.6rem;
-}
-
-.quant-factor-data-health-heading {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.65rem;
-}
-
-.quant-factor-data-health-heading > div {
-  display: grid;
-  min-width: 0;
-  gap: 0.15rem;
-}
-
-.quant-factor-data-health-heading span,
-.quant-factor-data-health-heading small,
-.quant-factor-data-health-note,
-.quant-factor-data-health-meta,
-.quant-factor-data-health-row-heading > span:not(.quant-factor-data-health-status):not(.quant-factor-data-health-freshness),
-.quant-factor-data-health-row small {
-  overflow-wrap: anywhere;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.625rem;
-  line-height: 1.45;
-}
-
-.quant-factor-data-health-heading strong {
-  font-size: 0.8125rem;
-}
-
-.quant-factor-health-status-ready { color: hsl(var(--status-success)); }
-.quant-factor-health-status-partial { color: hsl(var(--status-warning)); }
-.quant-factor-health-status-missing { color: hsl(var(--status-warning)); }
-.quant-factor-health-status-unavailable { color: hsl(var(--status-danger)); }
-
-.quant-factor-data-health-note {
-  margin: 0;
-}
-
-.quant-factor-data-health-list {
-  display: grid;
-  gap: 0.3rem;
-}
-
-.quant-factor-data-health-row {
-  display: grid;
-  min-width: 0;
-  gap: 0.18rem;
-  border-left: 2px solid hsl(var(--border));
-  padding: 0.25rem 0.45rem;
-}
-
-.quant-factor-data-health-row-heading {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.65rem;
-}
-
-.quant-factor-data-health-row-heading strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: hsl(var(--foreground));
-  font-size: 0.6875rem;
-}
-
-.quant-factor-data-health-status {
-  margin-left: auto;
-  overflow-wrap: anywhere;
-  font-size: 0.625rem;
-  font-weight: 700;
-}
-
-.quant-factor-data-health-freshness {
-  flex: 0 0 auto;
-  border-radius: var(--ui-radius-sm, 0.25rem);
-  padding: 0.12rem 0.3rem;
-  font-size: 0.6rem;
-  font-weight: 720;
-}
-
-.quant-factor-health-freshness-fresh {
-  background: hsl(var(--status-success-soft));
-  color: hsl(var(--status-success));
-}
-
-.quant-factor-health-freshness-aging {
-  background: hsl(var(--status-warning-soft));
-  color: hsl(var(--status-warning));
-}
-
-.quant-factor-health-freshness-stale,
-.quant-factor-health-freshness-unknown {
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
-}
-
-.quant-factor-data-health-meta {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.85rem;
-}
-
-.quant-factor-health-source-primary { color: hsl(var(--muted-foreground)); }
-.quant-factor-health-source-fallback { color: hsl(var(--status-warning)); }
-.quant-factor-health-source-unavailable { color: hsl(var(--status-danger)); }
-.quant-factor-health-source-unknown { color: hsl(var(--muted-foreground)); }
-
-.quant-factor-data-health-missing { color: hsl(var(--status-warning)) !important; }
-.quant-factor-data-health-failed { color: hsl(var(--status-danger)) !important; }
-.quant-factor-data-health-action { color: hsl(var(--foreground)) !important; }
-
-.quant-decision-guide {
-  display: grid;
-  gap: 0.45rem;
-  border-top: 1px solid hsl(var(--border));
-  padding-top: 0.6rem;
-}
-
-.quant-decision-guide-heading,
-.quant-decision-guide-heading > div {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 0.45rem;
-}
-
-.quant-decision-guide-heading {
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.65rem;
-}
-
-.quant-decision-guide-heading > div {
-  display: grid;
-  align-items: start;
-  gap: 0.15rem;
-}
-
-.quant-decision-guide-heading span,
-.quant-decision-guide-price-detail,
-.quant-decision-guide-checks span,
-.quant-decision-guide-steps {
-  color: hsl(var(--muted-foreground));
-  font-size: 0.625rem;
-  line-height: 1.45;
-}
-
-.quant-decision-guide-heading strong {
-  color: hsl(var(--foreground));
-  font-size: 0.75rem;
-}
-
-.quant-decision-trust-status {
-  flex: 0 0 auto;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--ui-radius-sm, 0.25rem);
-  padding: 0.2rem 0.35rem;
-  font-weight: 700;
-}
-
-.quant-decision-trust-complete {
-  border-color: hsl(var(--status-success) / 0.3);
-  color: hsl(var(--status-success)) !important;
-}
-
-.quant-decision-trust-review {
-  border-color: hsl(var(--status-warning) / 0.35);
-  color: hsl(var(--status-warning)) !important;
-}
-
-.quant-decision-trust-insufficient {
-  border-color: hsl(var(--status-danger) / 0.3);
-  color: hsl(var(--status-danger)) !important;
-}
-
-.quant-decision-guide-price-detail {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.quant-decision-guide-checks {
-  display: grid;
-  gap: 0.2rem;
-  border-left: 2px solid hsl(var(--primary) / 0.32);
-  padding-left: 0.5rem;
-}
-
-.quant-decision-guide-checks span {
-  overflow-wrap: anywhere;
-}
-
-.quant-decision-guide-steps {
-  display: grid;
-  gap: 0.2rem;
-  margin: 0;
-  padding-left: 1rem;
-}
-
-.quant-decision-guide-steps li {
-  padding-left: 0.1rem;
-}
-
-.quant-decision-readiness {
-  display: grid;
-  gap: 0.45rem;
-  border-top: 1px solid hsl(var(--border));
-  padding-top: 0.6rem;
-}
-
-.quant-decision-readiness-heading {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.65rem;
-}
-
-.quant-decision-readiness-heading > div {
-  display: grid;
-  min-width: 0;
-  gap: 0.15rem;
-}
-
-.quant-decision-readiness-heading span,
-.quant-decision-readiness-heading small,
-.quant-decision-readiness-checks span,
-.quant-decision-readiness-checks small,
-.quant-decision-readiness-factors {
-  overflow-wrap: anywhere;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.625rem;
-  line-height: 1.45;
-}
-
-.quant-decision-readiness-heading strong {
-  font-size: 0.8125rem;
-}
-
-.quant-decision-readiness-ready { color: hsl(var(--status-success)); }
-.quant-decision-readiness-review { color: hsl(var(--status-warning)); }
-.quant-decision-readiness-blocked { color: hsl(var(--status-danger)); }
-
-.quant-decision-readiness-checks {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-
-.quant-decision-readiness-checks > div {
-  display: grid;
-  min-width: 0;
-  gap: 0.15rem;
-  border-left: 2px solid hsl(var(--border));
-  padding: 0.2rem 0.45rem;
-}
-
-.quant-decision-readiness-checks strong {
-  font-size: 0.625rem;
-}
-
-.quant-decision-readiness-check-pass { border-left-color: hsl(var(--status-success) / 0.55) !important; }
-.quant-decision-readiness-check-pass strong { color: hsl(var(--status-success)); }
-.quant-decision-readiness-check-review { border-left-color: hsl(var(--status-warning) / 0.55) !important; }
-.quant-decision-readiness-check-review strong { color: hsl(var(--status-warning)); }
-.quant-decision-readiness-check-blocked { border-left-color: hsl(var(--status-danger) / 0.55) !important; }
-.quant-decision-readiness-check-blocked strong { color: hsl(var(--status-danger)); }
-
-.quant-decision-readiness-factors {
-  margin: 0;
-}
-
 .quant-decision-ai-review {
   flex-wrap: wrap;
   justify-content: space-between;
@@ -897,8 +512,7 @@ function factorObservedAt(value: string | null): string {
 @media (max-width: 520px) {
   .quant-decision-heading,
   .quant-decision-hero,
-  .quant-decision-ai-review,
-  .quant-decision-readiness-heading {
+  .quant-decision-ai-review {
     display: grid;
   }
 
@@ -913,16 +527,5 @@ function factorObservedAt(value: string | null): string {
     grid-template-columns: 1fr;
   }
 
-  .quant-factor-data-health-heading {
-    display: grid;
-  }
-
-  .quant-factor-data-health-status {
-    margin-left: 0;
-  }
-
-  .quant-decision-readiness-checks {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

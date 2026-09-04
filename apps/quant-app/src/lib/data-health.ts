@@ -1,4 +1,4 @@
-import type { QuantShareholderReturnSelection, QuantValueSelection, SyncResult, WatchlistItem } from './quant-types'
+import type { QuantShareholderReturnSelection, QuantValueSelection, SyncResult, WatchlistItem } from './quant-view-models'
 
 export const QUANT_DATA_HEALTH_VERSION = 'quant-data-health-v3' as const
 

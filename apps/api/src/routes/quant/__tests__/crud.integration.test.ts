@@ -9,7 +9,7 @@ import { createClient } from '@libsql/client'
 import * as schema from '@starye/db/schema'
 import { drizzle } from 'drizzle-orm/libsql'
 import { Hono } from 'hono'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQuantWatchlistItem, upsertQuantDailyBars } from '../../../domain/quant/repository'
 import { quantRoutes } from '../index'
 
@@ -213,6 +213,7 @@ async function startTushareFixture(): Promise<{ url: string, close: () => Promis
 
 describe('quant watchlist CRUD contract', () => {
   beforeEach(() => vi.restoreAllMocks())
+  afterEach(() => vi.useRealTimers())
 
   it('supports idempotent admin create, update, list, and delete', async () => {
     const { client, db } = await createDatabase()
@@ -1822,6 +1823,8 @@ describe('quant watchlist CRUD contract', () => {
   })
 
   it('records an owned decision with a server-built snapshot and isolated history', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-30T12:00:00.000Z'))
     const { client, db } = await createDatabase()
     await client.execute('INSERT INTO user (id, created_at) VALUES (\'user-2\', 2)')
     const report = JSON.stringify({

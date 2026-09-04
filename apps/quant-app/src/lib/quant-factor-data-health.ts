@@ -1,4 +1,4 @@
-import type { QuantFactorFreshness, QuantResearchEvidence, QuantResearchEvidenceStatus, QuantResearchFactor, QuantResearchReport } from './quant-types'
+import type { QuantFactorFreshness, QuantResearchEvidence, QuantResearchEvidenceStatus, QuantResearchFactor, QuantResearchReport } from './quant-view-models'
 import { buildQuantFactorFreshness } from './quant-factor-freshness'
 
 export const QUANT_FACTOR_DATA_HEALTH_VERSION = 'quant-factor-data-health-v1' as const

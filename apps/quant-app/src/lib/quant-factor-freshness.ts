@@ -1,4 +1,4 @@
-import type { QuantFactorConfigurationKey, QuantFactorFreshness, QuantResearchEvidence, QuantResearchFactor } from './quant-types'
+import type { QuantFactorConfigurationKey, QuantFactorFreshness, QuantResearchEvidence, QuantResearchFactor } from './quant-view-models'
 
 export const QUANT_FACTOR_FRESHNESS_VERSION = 'quant-factor-freshness-v1' as const
 

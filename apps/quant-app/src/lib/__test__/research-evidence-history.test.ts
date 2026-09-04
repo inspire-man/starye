@@ -1,4 +1,4 @@
-import type { QuantResearchEvidence, QuantResearchReport } from '../quant-types'
+import type { QuantResearchEvidence, QuantResearchReport } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildResearchEvidenceComparison } from '../research-evidence-history'
 

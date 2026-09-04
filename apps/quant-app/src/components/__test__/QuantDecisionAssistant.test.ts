@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { QuantDecisionAssistant, QuantResearchRun } from '../../lib/quant-types'
+import type { QuantDecisionAssistant, QuantResearchRun } from '../../lib/quant-view-models'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import QuantDecisionAssistantPanel from '../QuantDecisionAssistant.vue'

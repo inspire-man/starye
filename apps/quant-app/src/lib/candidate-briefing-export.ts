@@ -1,4 +1,4 @@
-import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingFocusItem, QuantAiCandidateBriefingSession } from './quant-types'
+import type { QuantAiCandidateBriefing, QuantAiCandidateBriefingFocusItem, QuantAiCandidateBriefingSession } from './quant-view-models'
 
 function inline(value: string | null | undefined, fallback = '暂无数据'): string {
   const normalized = value?.trim().replace(/\r?\n/gu, ' ')

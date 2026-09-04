@@ -4,7 +4,7 @@ import type {
   QuantFinancialQualitySnapshot,
   QuantValuationComparison,
   QuantValuationSnapshot,
-} from './quant-types'
+} from './quant-view-models'
 
 export type ResearchSummaryStatus = 'research' | 'observe' | 'incomplete'
 export type ResearchSummaryTone = 'positive' | 'warning' | 'neutral'

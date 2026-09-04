@@ -1,4 +1,4 @@
-import type { QuantResearchSummary } from '../quant-types'
+import type { QuantResearchSummary } from '../quant-view-models'
 import type { BatchAiSummaryState } from '../research-batch-ai-summary'
 import { describe, expect, it } from 'vitest'
 import {

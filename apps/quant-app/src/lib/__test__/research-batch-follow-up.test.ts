@@ -1,4 +1,4 @@
-import type { QuantResearchRun } from '../quant-types'
+import type { QuantResearchRun } from '../quant-view-models'
 import type { BatchResearchFollowUpState } from '../research-batch-follow-up'
 import { describe, expect, it } from 'vitest'
 import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from '../research-batch-follow-up'

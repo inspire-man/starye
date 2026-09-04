@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { QuantResearchReport, QuantResearchSummary } from '../../lib/quant-types'
+import type { QuantResearchReport, QuantResearchSummary } from '../../lib/quant-view-models'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import QuantDecisionRecommendation from '../QuantDecisionRecommendation.vue'

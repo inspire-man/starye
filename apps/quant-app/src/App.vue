@@ -3,6 +3,7 @@ import type { Column, ErrorType, ParsedError } from '@starye/ui'
 import type { CandidateEvidenceScore } from './lib/candidate-evidence-score'
 import type { QuantDataHealthAction, QuantDataHealthFreshness, QuantDataHealthStatus } from './lib/data-health'
 import type { DecisionEvidenceStatus } from './lib/decision-evidence'
+import type { QuantView } from './lib/quant-view'
 import type {
   CandidateItem,
   CandidateSignalPersistence,
@@ -19,8 +20,6 @@ import type {
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
-  QuantInvestmentKnowledge,
-  QuantKnowledgeFactor,
   QuantResearchChangeExplanation,
   QuantResearchComparison,
   QuantResearchComparisonCitation,
@@ -30,18 +29,14 @@ import type {
   QuantResearchRun,
   QuantResearchSummary,
   QuantShareholderReturnItem,
-  QuantShareholderReturnSelection,
   QuantValuationComparison,
   QuantValuationSnapshot,
   QuantValueQualityDimension,
   QuantValueQualityItem,
-  QuantValueSelection,
   ResearchMarkerStatus,
   SyncResult,
-  SyncStatus,
   WatchlistItem,
-} from './lib/quant-types'
-import type { QuantView } from './lib/quant-view'
+} from './lib/quant-view-models'
 import type { AutomatedResearchCandidate, AutomatedResearchItemState } from './lib/research-automation'
 import type { BatchResearchProgress } from './lib/research-batch'
 import type { BatchAiSummaryProgress, BatchAiSummaryState } from './lib/research-batch-ai-summary'
@@ -52,52 +47,24 @@ import type { ResearchPriority, ResearchPriorityValueQuality } from './lib/resea
 import type { ResearchReportCopyResult } from './lib/research-report-copy'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { ResearchRunScoreDirection } from './lib/research-run-timeline'
-import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey, SelectionPresetKey } from './lib/selection-presets'
+import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey } from './lib/selection-presets'
 import type { TimingHistoryBucket } from './lib/timing-history'
 import type { TimingWindow, TimingWindowMetricStatus, TimingWindowState } from './lib/timing-window'
 import type { WatchlistEnvironmentStatus } from './lib/watchlist-environment'
-import { ConfirmDialog, DataTable, DetailDrawer, ErrorDisplay, SkeletonCard } from '@starye/ui'
+import { DetailDrawer } from '@starye/ui'
 import {
-  AlertCircle,
   ArrowUpRight,
-  BarChart3,
-  BookOpen,
-  BrainCircuit,
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  Copy,
-  DatabaseZap,
-  Download,
-  ExternalLink,
-  Eye,
   Filter,
-  Info,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  Save,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
-  Tags,
-  Trash2,
-  X,
 } from 'lucide-vue-next'
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import QuantAiCandidateBriefingPanel from './components/QuantAiCandidateBriefing.vue'
-import QuantAiResearchChangeExplanation from './components/QuantAiResearchChangeExplanation.vue'
-import QuantAiResearchQuestion from './components/QuantAiResearchQuestion.vue'
-import QuantAiResearchSummary from './components/QuantAiResearchSummary.vue'
+import { storeToRefs } from 'pinia'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import QuantAiSettingsDrawer from './components/QuantAiSettingsDrawer.vue'
-import QuantAiTrustOverview from './components/QuantAiTrustOverview.vue'
-import QuantDecisionAssistantPanel from './components/QuantDecisionAssistant.vue'
-import QuantDecisionJournal from './components/QuantDecisionJournal.vue'
-import QuantDecisionQueue from './components/QuantDecisionQueue.vue'
-import QuantDecisionRecommendation from './components/QuantDecisionRecommendation.vue'
 import QuantFactorSettingsDrawer from './components/QuantFactorSettingsDrawer.vue'
-import QuantHeader from './components/QuantHeader.vue'
-import QuantResearchAutomation from './components/QuantResearchAutomation.vue'
+import QuantOverviewView from './components/QuantOverviewView.vue'
+import QuantShell from './components/QuantShell.vue'
+import { useQuantWorkspace } from './composables/use-quant-workspace'
 import { quantApi, QuantApiError } from './lib/api-client'
 import { buildCandidateAiBriefingFilename, buildCandidateAiBriefingMarkdown } from './lib/candidate-briefing-export'
 import { buildCandidateBriefingScopeKey, canApplyCandidateBriefingResponse } from './lib/candidate-briefing-scope'
@@ -106,7 +73,6 @@ import { buildResearchComparisonFilename, buildResearchComparisonMarkdown } from
 import { buildComparisonAiNextCheckPrompt } from './lib/comparison-ai-prompts'
 import { buildQuantDataHealth, classifyQuantDataHealthFreshness, mergeQuantDataHealthFreshness } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
-import { parseQuantView, quantViewHash } from './lib/quant-view'
 import { isQuantAiAutoReviewReady } from './lib/research-ai-auto-review'
 import {
   applyAutomatedResearchProgress,
@@ -138,6 +104,15 @@ import { buildTimingHistory } from './lib/timing-history'
 import { buildTimingWindow } from './lib/timing-window'
 import { buildTrendStructure } from './lib/trend-analysis'
 import { buildWatchlistEnvironment } from './lib/watchlist-environment'
+import { useQuantCandidatesStore } from './stores/quant-candidates'
+import { useQuantNavigationStore } from './stores/quant-navigation'
+import { useQuantWorkspaceLifecycleStore } from './stores/quant-workspace-lifecycle'
+
+const QuantCandidatesView = defineAsyncComponent(() => import('./components/QuantCandidatesView.vue'))
+const QuantComparisonView = defineAsyncComponent(() => import('./components/QuantComparisonView.vue'))
+const QuantKnowledgeView = defineAsyncComponent(() => import('./components/QuantKnowledgeView.vue'))
+const QuantResearchDetailView = defineAsyncComponent(() => import('./components/QuantResearchDetailView.vue'))
+const QuantWatchlistView = defineAsyncComponent(() => import('./components/QuantWatchlistView.vue'))
 
 type ComparisonResearchItemState = BatchResearchFollowUpState
 type ResearchReportCopyOutcome = 'success' | 'error' | null
@@ -152,10 +127,6 @@ const financialQuality = ref<QuantFinancialQualitySnapshot | null>(null)
 const financialHistory = ref<QuantFinancialQualityHistory | null>(null)
 const financialComparison = ref<QuantFinancialQualityComparison | null>(null)
 const financialComparisonError = ref<unknown | null>(null)
-const valueSelection = ref<QuantValueSelection | null>(null)
-const shareholderReturns = ref<QuantShareholderReturnSelection | null>(null)
-const investmentKnowledge = ref<QuantInvestmentKnowledge | null>(null)
-const researchMarkers = ref<QuantResearchMarker[]>([])
 const researchRuns = ref<QuantResearchRun[]>([])
 const researchDecisionRecord = ref<QuantDecisionRecord | null>(null)
 const researchDecisionHistory = ref<QuantDecisionRecord[]>([])
@@ -166,9 +137,6 @@ const researchDecisionLoadError = ref<unknown | null>(null)
 const researchDecisionHistoryError = ref<unknown | null>(null)
 const researchDecisionSaveError = ref<unknown | null>(null)
 const researchDecisionSaveMessage = ref('')
-const decisionQueueRecords = ref<QuantDecisionRecord[]>([])
-const decisionQueueLoading = ref(false)
-const decisionQueueError = ref<unknown | null>(null)
 const decisionAssistant = ref<QuantDecisionAssistant | null>(null)
 const decisionAssistantHistory = ref<QuantDecisionAssistant[]>([])
 const decisionAssistantLoading = ref(false)
@@ -217,7 +185,6 @@ const candidateAiBriefingHistoryResetKey = ref(0)
 const researchReportCopying = ref(false)
 const researchReportCopyOutcome = ref<ResearchReportCopyOutcome>(null)
 const researchReportCopyMessage = ref('')
-const selectedCandidateIds = ref<Set<string>>(new Set())
 const comparisonDrawerOpen = ref(false)
 const comparisonLoading = ref(false)
 const comparisonValuations = ref<Record<string, QuantValuationSnapshot | null>>({})
@@ -258,16 +225,11 @@ const selectedTsCode = ref<string | null>(null)
 const watchCode = ref('')
 const watchName = ref('')
 const syncResult = ref<SyncResult | null>(null)
-const syncState = ref<SyncResult | null>(null)
-const syncStateError = ref<unknown | null>(null)
 const detailDrawerOpen = ref(false)
 const aiSettingsOpen = ref(false)
 const factorSettingsOpen = ref(false)
 let valuationRequestId = 0
 let financialRequestId = 0
-let valueQualityRequestId = 0
-let shareholderReturnRequestId = 0
-let syncStateRequestId = 0
 let researchRunRequestId = 0
 let researchDecisionRequestId = 0
 let decisionAssistantRequestId = 0
@@ -309,16 +271,42 @@ const errors = reactive<Record<'watchlist' | 'candidates' | 'daily' | 'valuation
   research: null,
   action: null,
 })
+const {
+  decisionQueueRecords,
+  decisionQueueLoading,
+  decisionQueueError,
+  valueSelection,
+  shareholderReturns,
+  investmentKnowledge,
+  researchMarkers,
+  syncState,
+  syncStateError,
+  loadDecisionQueue,
+  loadValueSelection,
+  invalidateValueSelection,
+  loadShareholderReturns,
+  invalidateShareholderReturns,
+  loadInvestmentKnowledge,
+  loadSyncState,
+  loadResearchMarkers,
+  cancelWorkspaceRequests,
+} = useQuantWorkspace({ loading, errors })
 const deletingCode = ref<string | null>(null)
 const pendingDeleteCode = ref<string | null>(null)
 const adding = ref(false)
-const activeView = ref<QuantView>('overview')
-const candidateFilter = ref<SelectionPresetKey>('balanced')
-const candidateMinScore = ref(0)
-const candidateCompleteOnly = ref(false)
-const candidateSort = ref<CandidateSortKey>('researchPriority')
-const candidateResearchStatus = ref<CandidateResearchStatus>('all')
-const candidateReviewDue = ref<CandidateReviewFilter>('all')
+const candidatesStore = useQuantCandidatesStore()
+const {
+  candidateFilter,
+  candidateMinScore,
+  candidateCompleteOnly,
+  candidateSort,
+  candidateResearchStatus,
+  candidateReviewDue,
+  selectedCandidateIds,
+} = storeToRefs(candidatesStore)
+const navigationStore = useQuantNavigationStore()
+const workspaceLifecycleStore = useQuantWorkspaceLifecycleStore()
+const activeView = computed(() => navigationStore.activeView)
 const candidateFilterOptions = [
   { ...selectionPresets[0], icon: ShieldCheck },
   { ...selectionPresets[1], icon: ArrowUpRight },
@@ -485,11 +473,6 @@ const researchQuestionPromptReady = computed(() => Boolean(
 const researchChangeExplanationConfigurationError = computed(() => researchChangeExplanationError.value instanceof QuantApiError && researchChangeExplanationError.value.code === 'QUANT_AI_CHANGE_EXPLANATION_CONFIGURATION')
 const candidateAiBriefingConfigurationError = computed(() => candidateAiBriefingError.value instanceof QuantApiError && candidateAiBriefingError.value.code === 'QUANT_AI_CANDIDATE_BRIEFING_CONFIGURATION')
 const candidateAiBriefingQuestionConfigurationError = computed(() => candidateAiBriefingQuestionError.value instanceof QuantApiError && candidateAiBriefingQuestionError.value.code === 'QUANT_AI_CANDIDATE_BRIEFING_QUESTION_CONFIGURATION')
-const activeKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'active') || [])
-const partialKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'partial') || [])
-const plannedKnowledgeFactors = computed(() => investmentKnowledge.value?.factors.filter(factor => factor.status === 'planned' || factor.status === 'context') || [])
-const mappedKnowledgeAliases = computed(() => investmentKnowledge.value?.aliases.filter(alias => alias.status === 'mapped') || [])
-const contextKnowledgeAliases = computed(() => investmentKnowledge.value?.aliases.filter(alias => alias.status !== 'mapped') || [])
 const researchMarkerMap = computed(() => new Map(researchMarkers.value.map(marker => [marker.tsCode, marker])))
 const researchPriorityMap = computed<Map<string, ResearchPriority>>(() => new Map(candidateItems.value.map((item) => {
   const marker = researchMarkerMap.value.get(item.tsCode)
@@ -1231,127 +1214,6 @@ function candidateEvidenceFor(item: CandidateItem): CandidateEvidenceScore {
   return candidateEvidenceMap.value.get(item.tsCode) || buildCandidateEvidenceScore(item, valueQualityResultsLoaded.value ? valueQualityMap.value.get(item.tsCode) || null : undefined)
 }
 
-function candidateEvidenceStatusLabel(item: CandidateEvidenceScore): string {
-  if (item.status === 'ready')
-    return '证据充分'
-  if (item.status === 'partial')
-    return '部分覆盖'
-  if (item.status === 'missing')
-    return '待补证据'
-  if (loading.valueQuality)
-    return '读取中'
-  if (errors.valueQuality)
-    return '暂不可用'
-  return '待加载'
-}
-
-function candidateEvidenceStatusClass(item: CandidateEvidenceScore): string {
-  return `candidate-evidence-status-${item.status}`
-}
-
-function formatCandidateEvidenceScore(item: CandidateEvidenceScore): string {
-  return item.score === null ? '--' : `${item.score} / 100`
-}
-
-function candidateEvidenceCoverage(item: CandidateEvidenceScore): string {
-  return item.score === null ? '--' : `${item.coveredMetricCount} / ${item.totalMetricCount} 字段`
-}
-
-function candidateEvidenceDetail(item: CandidateItem): string {
-  const result = candidateEvidenceFor(item)
-  const reason = result.missingReasons[0]
-  return reason ? `${result.summary} · ${reason}` : result.summary
-}
-
-function knowledgeStatusLabel(status: QuantKnowledgeFactor['status']): string {
-  return {
-    active: '已进入评分',
-    partial: '部分接通',
-    planned: '待接数据',
-    context: '知识参考',
-  }[status]
-}
-
-function knowledgeStatusClass(status: QuantKnowledgeFactor['status']): string {
-  return `knowledge-status-${status}`
-}
-
-function knowledgeFieldLabel(field: string): string {
-  return {
-    peTtm: 'TTM PE',
-    pb: 'PB',
-    ps: 'PS',
-    peg: 'PEG',
-    netProfitYoY: '净利润同比',
-    adjustedNetProfitYoY: '扣非净利润同比',
-    operatingCashflowToRevenue: '经营现金流 / 营收',
-    roe: 'ROE',
-    roic: 'ROIC',
-    grossMargin: '毛利率',
-    netMargin: '净利率',
-    debtAssetRatio: '资产负债率',
-    operatingCashflowPerShare: '经营现金流 / 股',
-    fcffBack: 'FCFF（历史）',
-    fcffForward: 'FCFF（前瞻）',
-    interestCoverage: '利息覆盖倍数',
-    interestBearingDebtRatio: '带息负债率',
-    cashRatio: '现金比率',
-    totalLiability: '负债规模',
-    revenueYoY: '营收同比',
-    reportDate: '报告期',
-    dailyBars: '日线',
-    return60: '60 日表现',
-    ma60Gap: '距 60 日均线',
-    drawdown60: '60 日回撤',
-    operatingCashflow: '经营现金流',
-    capitalExpenditure: '资本开支',
-    interestExpense: '利息支出',
-    interestBearingDebt: '有息负债',
-    orderBacklog: '订单金额',
-    contractLiabilities: '合同负债',
-    segmentRevenue: '分部收入',
-    segmentGrossMargin: '分部毛利率',
-    volume: '销量',
-    realizedPrice: '实现价格',
-    commodityPrice: '商品价格',
-    unitCost: '单位成本',
-    output: '产量',
-    longTermContractRatio: '长协比例',
-    dividendYield: '股息率',
-    payoutRatio: '分红支付率',
-    freeCashflow: '自由现金流',
-    buybackAmount: '回购金额',
-    sharesOutstandingChange: '股本变化',
-    industry: '行业分类',
-    industryProfitYoY: '行业利润同比',
-    industryIndexReturn: '行业指数表现',
-    companyProfitYoY: '公司利润同比',
-    consensusRevenue: '一致预期营收',
-    consensusProfit: '一致预期利润',
-    earningsSurprise: '业绩超预期',
-    forwardPe: '前瞻 PE',
-    priceBeforeReport: '报告前价格',
-    cash: '现金',
-    profitVolatility: '利润波动',
-  }[field] || field
-}
-
-function formatKnowledgeFields(fields: readonly string[]): string {
-  return fields.map(knowledgeFieldLabel).join('、')
-}
-
-function knowledgeAliasStatusLabel(status: 'mapped' | 'ambiguous' | 'context_only'): string {
-  return {
-    mapped: '已映射',
-    ambiguous: '待确认',
-    context_only: '跨市场 / 语境样本',
-  }[status]
-}
-
-function knowledgeConfidenceLabel(confidence: 'high' | 'medium' | 'low'): string {
-  return { high: '高置信度', medium: '中置信度', low: '低置信度' }[confidence]
-}
-
 function formatLowerComparisonPosition(value: number | null): string {
   return value === null ? '暂无足够样本' : `低于观察池 ${value}%`
 }
@@ -1491,18 +1353,6 @@ function valuationErrorMessage(error: unknown): string {
   return '估值请求失败，请稍后重试'
 }
 
-function statusLabel(status: SyncStatus): string {
-  return { completed: '已完成', partial: '部分完成', rejected: '已拒绝' }[status]
-}
-
-function syncStatusClass(status: SyncStatus): string {
-  return {
-    completed: 'status-enabled',
-    partial: 'status-partial',
-    rejected: 'status-disabled',
-  }[status]
-}
-
 function dataHealthStatusLabel(status: QuantDataHealthStatus): string {
   return {
     ready: '完整',
@@ -1589,18 +1439,14 @@ function riskToneClass(tone: RiskTone): string {
 }
 
 function resetCandidateQuery(): void {
-  candidateMinScore.value = 0
-  candidateCompleteOnly.value = false
-  candidateSort.value = 'researchPriority'
-  candidateResearchStatus.value = 'all'
-  candidateReviewDue.value = 'all'
+  candidatesStore.resetQuery()
 }
 
 async function loadWatchlist() {
   resetCandidateAiBriefingState()
   loading.watchlist = true
   errors.watchlist = null
-  valueQualityRequestId++
+  invalidateValueSelection()
   try {
     watchlist.value = await quantApi.getWatchlist()
     if (!selectedTsCode.value || !watchlist.value.some(item => item.tsCode === selectedTsCode.value))
@@ -1616,11 +1462,7 @@ async function loadWatchlist() {
     financialHistory.value = null
     financialComparison.value = null
     financialComparisonError.value = null
-    valueSelection.value = null
-    errors.valueQuality = null
-    shareholderReturnRequestId++
-    shareholderReturns.value = null
-    errors.shareholderReturns = null
+    invalidateShareholderReturns()
     researchRunRequestId++
     researchRuns.value = []
     resetResearchDecisionState()
@@ -1655,27 +1497,13 @@ async function loadCandidates() {
   try {
     snapshot.value = await quantApi.getCandidates()
     const candidateIds = new Set(candidateItems.value.map(item => item.id))
-    selectedCandidateIds.value = new Set([...selectedCandidateIds.value].filter(id => candidateIds.has(id)))
+    candidatesStore.pruneSelection(candidateIds)
   }
   catch (error) {
     errors.candidates = error
   }
   finally {
     loading.candidates = false
-  }
-}
-
-async function loadDecisionQueue(): Promise<void> {
-  decisionQueueLoading.value = true
-  decisionQueueError.value = null
-  try {
-    decisionQueueRecords.value = await quantApi.getResearchDecisionQueue(20)
-  }
-  catch (error) {
-    decisionQueueError.value = error
-  }
-  finally {
-    decisionQueueLoading.value = false
   }
 }
 
@@ -1795,94 +1623,6 @@ async function copyCandidateAiBriefing(): Promise<void> {
   else {
     candidateAiBriefingCopyOutcome.value = 'error'
     candidateAiBriefingCopyMessage.value = '复制失败，请检查剪贴板权限后重试'
-  }
-}
-
-async function loadValueSelection() {
-  const requestId = ++valueQualityRequestId
-  loading.valueQuality = true
-  errors.valueQuality = null
-  try {
-    const result = await quantApi.getValueSelection()
-    if (requestId === valueQualityRequestId)
-      valueSelection.value = result
-  }
-  catch (error) {
-    if (requestId === valueQualityRequestId) {
-      errors.valueQuality = error
-    }
-  }
-  finally {
-    if (requestId === valueQualityRequestId)
-      loading.valueQuality = false
-  }
-}
-
-async function loadShareholderReturns() {
-  const requestId = ++shareholderReturnRequestId
-  loading.shareholderReturns = true
-  errors.shareholderReturns = null
-  try {
-    const result = await quantApi.getShareholderReturns()
-    if (requestId === shareholderReturnRequestId)
-      shareholderReturns.value = result
-  }
-  catch (error) {
-    if (requestId === shareholderReturnRequestId) {
-      errors.shareholderReturns = error
-    }
-  }
-  finally {
-    if (requestId === shareholderReturnRequestId)
-      loading.shareholderReturns = false
-  }
-}
-
-async function loadInvestmentKnowledge() {
-  loading.knowledge = true
-  errors.knowledge = null
-  try {
-    investmentKnowledge.value = await quantApi.getInvestmentKnowledge()
-  }
-  catch (error) {
-    errors.knowledge = error
-    investmentKnowledge.value = null
-  }
-  finally {
-    loading.knowledge = false
-  }
-}
-
-async function loadSyncState() {
-  const requestId = ++syncStateRequestId
-  loading.syncState = true
-  syncStateError.value = null
-  try {
-    const result = await quantApi.getSyncState()
-    if (requestId === syncStateRequestId)
-      syncState.value = result
-  }
-  catch (error) {
-    if (requestId === syncStateRequestId)
-      syncStateError.value = error
-  }
-  finally {
-    if (requestId === syncStateRequestId)
-      loading.syncState = false
-  }
-}
-
-async function loadResearchMarkers() {
-  loading.research = true
-  errors.research = null
-  try {
-    researchMarkers.value = await quantApi.getResearchMarkers()
-  }
-  catch (error) {
-    errors.research = error
-  }
-  finally {
-    loading.research = false
   }
 }
 
@@ -2467,15 +2207,8 @@ async function saveResearchMarker() {
 }
 
 function toggleCandidateSelection(item: CandidateItem) {
-  const next = new Set(selectedCandidateIds.value)
-  if (next.has(item.id)) {
-    next.delete(item.id)
-  }
-  else if (next.size < 3) {
-    next.add(item.id)
-  }
+  candidatesStore.toggleSelection(item.id)
   resetComparisonAiComparisonState()
-  selectedCandidateIds.value = next
 }
 
 function handleCandidateToggle(id: string) {
@@ -2487,23 +2220,12 @@ function handleCandidateToggle(id: string) {
 function toggleAllCandidateSelection() {
   resetComparisonAiComparisonState()
   const visibleIds = filteredCandidateItems.value.map(item => item.id)
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedCandidateIds.value.has(id))
-  const next = new Set(selectedCandidateIds.value)
-  if (allVisibleSelected) {
-    visibleIds.forEach(id => next.delete(id))
-  }
-  else {
-    visibleIds.forEach((id) => {
-      if (next.size < 3)
-        next.add(id)
-    })
-  }
-  selectedCandidateIds.value = next
+  candidatesStore.toggleAllSelection(visibleIds)
 }
 
 function clearCandidateSelection() {
   resetComparisonAiComparisonState()
-  selectedCandidateIds.value = new Set()
+  candidatesStore.clearSelection()
 }
 
 function handleComparisonDrawerOpenChange(open: boolean): void {
@@ -3207,11 +2929,14 @@ async function retryComparisonResearchAiSummary(item: CandidateItem) {
   }
 }
 
-async function loadWorkspace() {
-  errors.action = null
-  syncResult.value = null
-  await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState()])
-  await Promise.all([loadValueSelection(), loadShareholderReturns()])
+async function loadWorkspace(force = false) {
+  const loader = async () => {
+    errors.action = null
+    syncResult.value = null
+    await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState()])
+    await Promise.all([loadValueSelection(), loadShareholderReturns()])
+  }
+  await (force ? workspaceLifecycleStore.run(loader) : workspaceLifecycleStore.initialize(loader))
 }
 
 function selectStock(item: Pick<WatchlistItem, 'tsCode' | 'name'>) {
@@ -3346,2587 +3071,467 @@ async function syncDaily() {
   }
 }
 
-function syncViewFromHash(): void {
-  const view = parseQuantView(window.location.hash)
-  activeView.value = view
-  const normalizedHash = quantViewHash(view)
-  if (window.location.hash !== normalizedHash) {
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${normalizedHash}`)
-  }
-}
-
 function setActiveView(view: QuantView): void {
-  activeView.value = view
-  const normalizedHash = quantViewHash(view)
-  if (window.location.hash !== normalizedHash) {
-    window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${normalizedHash}`)
-  }
+  void navigationStore.navigate(view)
 }
 
 onMounted(() => {
-  syncViewFromHash()
-  window.addEventListener('hashchange', syncViewFromHash)
-  window.addEventListener('popstate', syncViewFromHash)
+  void navigationStore.initialize()
   void loadWorkspace()
 })
 
 onUnmounted(() => {
-  window.removeEventListener('hashchange', syncViewFromHash)
-  window.removeEventListener('popstate', syncViewFromHash)
+  cancelWorkspaceRequests()
+  navigationStore.dispose()
 })
 </script>
 
 <template>
-  <div class="quant-shell min-h-screen">
-    <QuantHeader :active-view="activeView" :latest-date="latestWatchlistDate" :busy="pageBusy" @navigate="setActiveView" @refresh="loadWorkspace" @settings="aiSettingsOpen = true" @factor-settings="factorSettingsOpen = true" />
-    <QuantAiSettingsDrawer v-model:open="aiSettingsOpen" />
-    <QuantFactorSettingsDrawer v-model:open="factorSettingsOpen" />
-    <main class="quant-page">
-      <header class="quant-view-heading">
-        <div class="min-w-0">
-          <p class="quant-eyebrow">
-            {{ activeViewCopy.eyebrow }}
-          </p>
-          <div class="quant-view-title-row">
-            <h1 class="quant-title">
-              {{ activeViewCopy.title }}
-            </h1>
-          </div>
-          <p class="quant-subtitle">
-            {{ activeViewCopy.subtitle }}
-          </p>
-        </div>
-        <div class="quant-view-heading-meta">
-          <span>当前视图</span>
-          <strong>{{ activeViewCopy.title }}</strong>
-        </div>
-      </header>
+  <QuantShell
+    :active-view="activeView"
+    :active-view-copy="activeViewCopy"
+    :latest-date="latestWatchlistDate"
+    :busy="pageBusy"
+    :overall-error="overallError ? parsedError(overallError) : null"
+    :action-error-message="errors.action ? parsedError(errors.action).message : null"
+    @navigate="setActiveView"
+    @refresh="loadWorkspace(true)"
+    @settings="aiSettingsOpen = true"
+    @factor-settings="factorSettingsOpen = true"
+    @clear-error="errors.action = null"
+  >
+    <template #drawers>
+      <QuantAiSettingsDrawer v-model:open="aiSettingsOpen" />
+      <QuantFactorSettingsDrawer v-model:open="factorSettingsOpen" />
+    </template>
 
-      <ErrorDisplay
-        v-if="overallError && !pageBusy"
-        :error="parsedError(overallError)"
-        mode="banner"
-        :show-actions="false"
+    <QuantOverviewView
+      v-if="activeView === 'overview'"
+      :page-busy="pageBusy"
+      :candidates-loading="loading.candidates"
+      :watchlist-count="watchlist.length"
+      :up-count="upCount"
+      :down-count="downCount"
+      :signal-candidate-count="signalCandidateCount"
+      :data-coverage-label="dataCoverageLabel"
+      :latest-watchlist-date="latestWatchlistDate"
+      :data-health-summary="dataHealthSummary"
+      :watchlist-environment="watchlistEnvironment"
+      :top-candidates="topCandidates"
+      :risk-items="riskItems"
+      :data-health-status-class="dataHealthStatusClass"
+      :data-health-status-label="dataHealthStatusLabel"
+      :data-health-freshness-class="dataHealthFreshnessClass"
+      :data-health-summary-class="dataHealthSummaryClass"
+      :environment-status-class="environmentStatusClass"
+      :format-environment-ratio="formatEnvironmentRatio"
+      :format-date-time="formatDateTime"
+      :focus-tone="focusTone"
+      :display-stock-name="displayStockName"
+      :focus-signal="focusSignal"
+      :format-signal-score="formatSignalScore"
+      :signal-score-percent="signalScorePercent"
+      :candidate-risk-tone="candidateRiskTone"
+      :risk-tone-class="riskToneClass"
+      :risk-label="riskLabel"
+      :research-priority-detail="researchPriorityDetail"
+      @navigate="setActiveView"
+      @select-stock="selectStock"
+      @run-data-health-action="runDataHealthAction"
+    />
+
+    <QuantWatchlistView
+      v-else-if="activeView === 'watchlist'"
+      v-model:watch-code="watchCode"
+      v-model:watch-name="watchName"
+      :watchlist="watchlist"
+      :columns="watchlistColumns"
+      :watchlist-loading="loading.watchlist"
+      :adding="adding"
+      :deleting-code="deletingCode"
+      :pending-delete-code="pendingDeleteCode"
+      :delete-dialog-message="deleteDialogMessage"
+      :sync-result="syncResult"
+      :sync-state="syncState"
+      :syncing="loading.sync"
+      :sync-state-loading="loading.syncState"
+      :sync-state-error-message="syncStateError ? parsedError(syncStateError).message : null"
+      :can-sync="canSync"
+      :latest-watchlist-date="latestWatchlistDate"
+      :displayed-sync-result-message="displayedSyncResultMessage"
+      :displayed-sync-result-time="displayedSyncResultTime ? formatDateTime(displayedSyncResultTime) : null"
+      @add="addToWatchlist"
+      @select="selectStock"
+      @request-remove="requestRemoveFromWatchlist"
+      @cancel-remove="cancelRemoveFromWatchlist"
+      @confirm-remove="confirmRemoveFromWatchlist"
+      @sync="syncDaily"
+      @refresh-sync-state="loadSyncState"
+    />
+
+    <QuantCandidatesView
+      v-else-if="activeView === 'candidates'"
+      ref="candidateAiBriefingPanel"
+      v-model:candidate-filter="candidateFilter"
+      v-model:candidate-min-score="candidateMinScore"
+      v-model:candidate-complete-only="candidateCompleteOnly"
+      v-model:candidate-sort="candidateSort"
+      v-model:candidate-research-status="candidateResearchStatus"
+      v-model:candidate-review-due="candidateReviewDue"
+      v-model:watch-code="watchCode"
+      v-model:watch-name="watchName"
+      :candidate-items="candidateItems"
+      :snapshot="snapshot"
+      :scanned-candidate-count="scannedCandidateCount"
+      :pending-candidate-count="pendingCandidateCount"
+      :watchlist="watchlist"
+      :adding="adding"
+      :candidate-filter-options="candidateFilterOptions"
+      :candidate-sort-options="candidateSortOptions"
+      :candidate-research-status-options="candidateResearchStatusOptions"
+      :candidate-review-due-options="candidateReviewDueOptions"
+      :candidate-query-active="candidateQueryActive"
+      :filtered-candidate-items="filteredCandidateItems"
+      :active-candidate-preset="activeCandidatePreset"
+      :signal-rule-count="SIGNAL_RULE_COUNT"
+      :candidate-evidence-summary="candidateEvidenceSummary"
+      :value-quality-loading="loading.valueQuality"
+      :value-quality-error="Boolean(errors.valueQuality)"
+      :automated-research-display-candidates="automatedResearchDisplayCandidates"
+      :automated-research-states="automatedResearchStates"
+      :automated-research-running="automatedResearchRunning"
+      :automated-research-ai-ready="automatedResearchAiReady"
+      :automated-research-ai-config-error-message="automatedResearchAiConfigError ? parsedError(automatedResearchAiConfigError).message : null"
+      :automated-research-error-message="automatedResearchError ? parsedError(automatedResearchError).message : null"
+      :research-priority-total="researchPriorityTotal"
+      :research-priority-highest-label="researchPriorityHighestLabel"
+      :research-priority-summary="researchPrioritySummary"
+      :visible-research-priority-queue="visibleResearchPriorityQueue"
+      :decision-queue-records="decisionQueueRecords"
+      :decision-queue-loading="decisionQueueLoading"
+      :decision-queue-error-message="decisionQueueError ? parsedError(decisionQueueError).message : null"
+      :candidate-ai-briefing="candidateAiBriefing"
+      :candidate-briefing-scope-items-count="candidateBriefingScopeItems.length"
+      :candidate-ai-briefing-scope-count="candidateAiBriefingScopeCount"
+      :candidate-briefing-scope-key="candidateBriefingScopeKey"
+      :current-candidate-codes="currentCandidateCodes"
+      :candidate-ai-briefing-history-reset-key="candidateAiBriefingHistoryResetKey"
+      :candidate-ai-briefing-available="Boolean(snapshot?.generatedAt)"
+      :candidate-ai-briefing-loading="candidateAiBriefingLoading"
+      :candidate-ai-briefing-error-message="candidateAiBriefingError ? parsedError(candidateAiBriefingError).message : null"
+      :candidate-ai-briefing-configuration-error="candidateAiBriefingConfigurationError"
+      :candidate-ai-briefing-question-input="candidateAiBriefingQuestionInput"
+      :candidate-ai-briefing-question="candidateAiBriefingQuestion"
+      :candidate-ai-briefing-question-loading="candidateAiBriefingQuestionLoading"
+      :candidate-ai-briefing-question-error-message="candidateAiBriefingQuestionError ? parsedError(candidateAiBriefingQuestionError).message : null"
+      :candidate-ai-briefing-question-configuration-error="candidateAiBriefingQuestionConfigurationError"
+      :candidate-ai-briefing-copying="candidateAiBriefingCopying"
+      :candidate-ai-briefing-copy-outcome="candidateAiBriefingCopyOutcome"
+      :candidate-ai-briefing-copy-message="candidateAiBriefingCopyMessage"
+      :candidate-columns="candidateColumns"
+      :candidates-loading="loading.candidates"
+      :selected-candidate-ids="selectedCandidateIds"
+      :selected-candidate-items="selectedCandidateItems"
+      :can-compare-candidates="canCompareCandidates"
+      :candidate-evidence-for="candidateEvidenceFor"
+      :candidate-persistence-label="candidatePersistenceLabel"
+      :candidate-persistence-class="candidatePersistenceClass"
+      :candidate-persistence-detail="candidatePersistenceDetail"
+      :candidate-priority-for="candidatePriorityFor"
+      :research-priority-detail="researchPriorityDetail"
+      :research-priority-class="researchPriorityClass"
+      :research-priority-action-class="researchPriorityActionClass"
+      :value-quality-for="valueQualityFor"
+      :value-quality-status-label="valueQualityStatusLabel"
+      :value-quality-status-class="valueQualityStatusClass"
+      :value-quality-summary="valueQualitySummary"
+      :research-review-for="researchReviewFor"
+      :research-marker-map="researchMarkerMap"
+      :display-stock-name="displayStockName"
+      @navigate-watchlist="setActiveView('watchlist')"
+      @add-to-watchlist-and-research="addToWatchlistAndResearch"
+      @reset-candidate-query="resetCandidateQuery"
+      @open-comparison-drawer="openComparisonDrawer"
+      @clear-candidate-selection="clearCandidateSelection"
+      @start-automated-research="startAutomatedResearch"
+      @retry-automated-research-item="retryAutomatedResearchItem"
+      @focus-decision-queue="focusDecisionQueue"
+      @open-settings="aiSettingsOpen = true"
+      @select-stock="selectStock"
+      @toggle-candidate-selection="handleCandidateToggle"
+      @toggle-all-candidate-selection="toggleAllCandidateSelection"
+      @generate-candidate-ai-briefing="generateCandidateAiBriefing"
+      @update-candidate-ai-briefing-question-input="candidateAiBriefingQuestionInput = $event"
+      @ask-candidate-ai-briefing-question="askCandidateAiBriefingQuestion"
+      @focus-candidate-from-briefing="focusCandidateFromBriefing"
+      @copy-candidate-ai-briefing="copyCandidateAiBriefing"
+      @download-candidate-ai-briefing="downloadCandidateAiBriefing"
+      @handle-candidate-ai-session-deleted="handleCandidateAiSessionDeleted"
+    />
+
+    <QuantKnowledgeView
+      :investment-knowledge="investmentKnowledge"
+      :loading="loading.knowledge"
+      :has-error="Boolean(errors.knowledge)"
+      @retry="loadInvestmentKnowledge"
+    />
+
+    <DetailDrawer
+      :open="detailDrawerOpen && !!selectedStock"
+      :title="selectedStock ? `${selectedStock.name || selectedStock.tsCode} · 分析详情` : '分析详情'"
+      :description="selectedStock ? `${selectedStock.tsCode} · 走势、估值、财务质量与研究摘要` : ''"
+      width="lg"
+      @update:open="detailDrawerOpen = $event"
+    >
+      <QuantResearchDetailView
+        ref="researchQuestionPanel"
+        v-model:research-form-status="researchFormStatus"
+        v-model:research-form-note="researchFormNote"
+        v-model:research-form-review-date="researchFormReviewDate"
+        v-model:research-question-input="researchQuestionInput"
+        :selected-stock="selectedStock"
+        :selected-candidate="selectedCandidate"
+        :selected-research-marker="selectedResearchMarker"
+        :selected-research-review="selectedResearchReview"
+        :research-status-options="researchStatusOptions"
+        :signal-rule-count="SIGNAL_RULE_COUNT"
+        :latest-research-run="latestResearchRun"
+        :latest-research-report="latestResearchReport"
+        :research-runs="researchRuns"
+        :research-run-loading="researchRunLoading"
+        :research-run-generating="researchRunGenerating"
+        :research-run-error-message="researchRunError ? parsedError(researchRunError).message : null"
+        :research-summary="researchSummary"
+        :research-ai-summary="researchAiSummary"
+        :research-summary-loading="researchSummaryLoading"
+        :research-summary-generating="researchSummaryGenerating"
+        :research-summary-error-message="researchSummaryError ? parsedError(researchSummaryError).message : null"
+        :research-summary-stream-mode="researchSummaryStreamMode"
+        :research-summary-stream-received-chars="researchSummaryStreamReceivedChars"
+        :research-summary-configuration-error="researchSummaryConfigurationError"
+        :research-ai-audits="researchAiAudits"
+        :research-ai-audits-loading="researchAiAuditsLoading"
+        :research-ai-audit-error-message="researchAiAuditError ? parsedError(researchAiAuditError).message : null"
+        :research-question="researchQuestion"
+        :research-question-loading="researchQuestionLoading"
+        :research-question-error-message="researchQuestionError ? parsedError(researchQuestionError).message : null"
+        :research-question-configuration-error="researchQuestionConfigurationError"
+        :research-question-prompt-ready="researchQuestionPromptReady"
+        :research-change-explanation="researchChangeExplanation"
+        :research-change-explanation-generating="researchChangeExplanationGenerating"
+        :research-change-explanation-error-message="researchChangeExplanationError ? parsedError(researchChangeExplanationError).message : null"
+        :research-change-explanation-configuration-error="researchChangeExplanationConfigurationError"
+        :research-decision-record="researchDecisionRecord"
+        :research-decision-history="researchDecisionHistory"
+        :research-decision-loading="researchDecisionLoading"
+        :research-decision-history-loading="researchDecisionHistoryLoading"
+        :research-decision-saving="researchDecisionSaving"
+        :research-decision-load-error-message="researchDecisionLoadError ? parsedError(researchDecisionLoadError).message : null"
+        :research-decision-history-error-message="researchDecisionHistoryError ? parsedError(researchDecisionHistoryError).message : null"
+        :research-decision-save-error-message="researchDecisionSaveError ? parsedError(researchDecisionSaveError).message : null"
+        :research-decision-save-message="researchDecisionSaveMessage"
+        :research-saving="researchSaving"
+        :research-save-message="researchSaveMessage"
+        :research-save-error-message="researchSaveError ? parsedError(researchSaveError).message : null"
+        :decision-assistant="decisionAssistant"
+        :decision-assistant-history="decisionAssistantHistory"
+        :decision-assistant-loading="decisionAssistantLoading"
+        :decision-assistant-generating="decisionAssistantGenerating"
+        :decision-assistant-error-message="decisionAssistantError ? parsedError(decisionAssistantError).message : null"
+        :decision-assistant-ai-config-available="decisionAssistantAiConfigAvailable"
+        :daily-bars="dailyBars"
+        :daily-columns="dailyColumns"
+        :chart-bars="chartBars"
+        :latest-daily-bar="latestDailyBar"
+        :latest-date="latestDate"
+        :trend-structure="trendStructure"
+        :timing-window="timingWindow"
+        :timing-history="timingHistory"
+        :timing-history-current-bucket="timingHistoryCurrentBucket"
+        :decision-evidence="decisionEvidence"
+        :valuation="valuation"
+        :valuation-comparison="valuationComparison"
+        :valuation-error-message="valuationErrorMessage(errors.valuation)"
+        :valuation-comparison-error-message="valuationComparisonError ? valuationErrorMessage(valuationComparisonError) : null"
+        :has-valuation-data="hasValuationData"
+        :financial-quality="financialQuality"
+        :financial-history="financialHistory"
+        :financial-comparison="financialComparison"
+        :financial-comparison-error="financialComparisonError"
+        :has-financial-data="hasFinancialData"
+        :financial-trend-items="financialTrendItems"
+        :selected-value-quality="selectedValueQuality"
+        :selected-shareholder-return="selectedShareholderReturn"
+        :loading="loading"
+        :errors="errors"
+        :decision-freshness="decisionFreshness"
+        :decision-freshness-detail="decisionFreshnessDetail"
+        :research-evidence-groups="researchEvidenceGroups"
+        :research-evidence-comparison="researchEvidenceComparison"
+        :research-run-timeline="researchRunTimeline"
+        :research-report-copying="researchReportCopying"
+        :research-report-copy-outcome="researchReportCopyOutcome"
+        :research-report-copy-message="researchReportCopyMessage"
+        :selected-ts-code="selectedTsCode"
+        :format-number="formatNumber"
+        :format-percent="formatPercent"
+        :format-signal-score="formatSignalScore"
+        :format-factor-label="formatFactorLabel"
+        :format-date-time="formatDateTime"
+        :format-trade-date="formatTradeDate"
+        :format-evidence-date="formatEvidenceDate"
+        :format-comparison-position="formatComparisonPosition"
+        :format-lower-comparison-position="formatLowerComparisonPosition"
+        :format-market-cap="formatMarketCap"
+        :format-financial-amount="formatFinancialAmount"
+        :format-metric-percent="formatMetricPercent"
+        :format-ratio-percent="formatRatioPercent"
+        :format-multiple="formatMultiple"
+        :format-dividend-yield="formatDividendYield"
+        :format-trend-delta="formatTrendDelta"
+        :format-persistence-rate="formatPersistenceRate"
+        :format-score-delta="formatScoreDelta"
+        :score-delta-class="scoreDeltaClass"
+        :candidate-persistence-for="candidatePersistenceFor"
+        :candidate-persistence-label="candidatePersistenceLabel"
+        :candidate-persistence-class="candidatePersistenceClass"
+        :candidate-priority-for="candidatePriorityFor"
+        :research-priority-detail="researchPriorityDetail"
+        :research-priority-action-class="researchPriorityActionClass"
+        :research-run-status-label="researchRunStatusLabel"
+        :research-run-status-class="researchRunStatusClass"
+        :research-run-action-label="researchRunActionLabel"
+        :research-evidence-status-label="researchEvidenceStatusLabel"
+        :research-evidence-status-class="researchEvidenceStatusClass"
+        :format-research-evidence-value="formatResearchEvidenceValue"
+        :research-evidence-change-class="researchEvidenceChangeClass"
+        :format-research-evidence-delta="formatResearchEvidenceDelta"
+        :research-evidence-history-value="researchEvidenceHistoryValue"
+        :research-evidence-history-status="researchEvidenceHistoryStatus"
+        :research-run-timeline-score-class="researchRunTimelineScoreClass"
+        :format-research-run-timeline-score="formatResearchRunTimelineScore"
+        :format-research-run-timeline-delta="formatResearchRunTimelineDelta"
+        :format-research-run-source-date="formatResearchRunSourceDate"
+        :timing-window-class="timingWindowClass"
+        :timing-window-metric-class="timingWindowMetricClass"
+        :timing-window-metric-status-label="timingWindowMetricStatusLabel"
+        :format-timing-window-metric="formatTimingWindowMetric"
+        :timing-history-state-class="timingHistoryStateClass"
+        :format-timing-history-rate="formatTimingHistoryRate"
+        :format-timing-history-percent="formatTimingHistoryPercent"
+        :timing-history-bucket-title="timingHistoryBucketTitle"
+        :decision-evidence-status-label="decisionEvidenceStatusLabel"
+        :decision-evidence-status-class="decisionEvidenceStatusClass"
+        :decision-evidence-action-class="decisionEvidenceActionClass"
+        :shareholder-return-status-label="shareholderReturnStatusLabel"
+        :shareholder-return-status-class="shareholderReturnStatusClass"
+        :shareholder-return-header-label="shareholderReturnHeaderLabel"
+        :shareholder-return-source-label="shareholderReturnSourceLabel"
+        :value-quality-status-label="valueQualityStatusLabel"
+        :value-quality-status-class="valueQualityStatusClass"
+        :format-value-quality-score="formatValueQualityScore"
+        :format-value-quality-dimension="formatValueQualityDimension"
+        :value-quality-dimension-samples="valueQualityDimensionSamples"
+        :research-evidence-dom-id="researchEvidenceDomId"
+        :parsed-error="parsedError"
+        :focus-research-question-evidence="focusResearchQuestionEvidence"
+        :generate-research-report="generateResearchReport"
+        :download-research-report="downloadResearchReport"
+        :copy-research-report="copyResearchReport"
+        :load-research-runs="loadResearchRuns"
+        :generate-research-summary="generateResearchSummary"
+        :create-decision-assistant="createDecisionAssistant"
+        :save-research-decision="saveResearchDecision"
+        :load-daily-bars="loadDailyBars"
+        :load-valuation="loadValuation"
+        :load-financial-quality="loadFinancialQuality"
+        :load-value-selection="loadValueSelection"
+        :load-shareholder-returns="loadShareholderReturns"
+        :save-research-marker="saveResearchMarker"
+        :ask-research-question="askResearchQuestion"
+        :generate-research-change-explanation="generateResearchChangeExplanation"
+        :use-research-summary-next-check="useResearchSummaryNextCheck"
+        :use-research-change-next-check="useResearchChangeNextCheck"
+        @open-settings="aiSettingsOpen = true"
       />
-      <div v-if="errors.action" class="inline-alert" role="alert">
-        <AlertCircle :size="16" aria-hidden="true" />
-        <span>{{ parsedError(errors.action).message }}</span>
-        <button class="alert-close" type="button" aria-label="关闭错误" title="关闭错误" @click="errors.action = null">
-          <X :size="15" aria-hidden="true" />
-        </button>
-      </div>
+    </DetailDrawer>
 
-      <template v-if="activeView === 'overview'">
-        <section class="metric-grid" aria-label="工作台概览">
-          <template v-if="pageBusy">
-            <SkeletonCard v-for="index in 4" :key="index" variant="stat" />
-          </template>
-          <template v-else>
-            <article class="metric-card">
-              <div class="metric-card-heading">
-                <span class="metric-icon metric-icon-teal"><Eye :size="17" aria-hidden="true" /></span>
-                <span>观察池</span>
-              </div>
-              <strong class="metric-value">{{ watchlist.length }}<small>/ 50</small></strong>
-              <span class="metric-note">当前关注标的</span>
-            </article>
-            <article class="metric-card">
-              <div class="metric-card-heading">
-                <span class="metric-icon metric-icon-green"><ArrowUpRight :size="17" aria-hidden="true" /></span>
-                <span>今日涨跌</span>
-              </div>
-              <strong class="metric-value metric-value-split"><span class="text-status-success">+{{ upCount }}</span><small>/ 跌 {{ downCount }}</small></strong>
-              <span class="metric-note">观察池最新日线</span>
-            </article>
-            <article class="metric-card">
-              <div class="metric-card-heading">
-                <span class="metric-icon metric-icon-amber"><Sparkles :size="17" aria-hidden="true" /></span>
-                <span>有信号</span>
-              </div>
-              <strong class="metric-value">{{ signalCandidateCount }}</strong>
-              <span class="metric-note">候选快照中的标的</span>
-            </article>
-            <article class="metric-card">
-              <div class="metric-card-heading">
-                <span class="metric-icon metric-icon-blue"><CalendarDays :size="17" aria-hidden="true" /></span>
-                <span>数据覆盖</span>
-              </div>
-              <strong class="metric-value metric-value-date">{{ dataCoverageLabel }}</strong>
-              <span class="metric-note">最新 {{ latestWatchlistDate }}</span>
-            </article>
-          </template>
-        </section>
-
-        <section class="data-health-section" aria-labelledby="data-health-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                DATA HEALTH
-              </p>
-              <h2 id="data-health-title" class="section-title">
-                数据健康
-              </h2>
-            </div>
-            <div class="data-health-heading-status">
-              <span class="status-chip" :class="dataHealthStatusClass(dataHealthSummary.status)">
-                {{ dataHealthStatusLabel(dataHealthSummary.status) }}
-              </span>
-              <span class="status-chip" :class="dataHealthFreshnessClass(dataHealthSummary.freshness)">
-                {{ dataHealthSummary.freshnessLabel }}
-              </span>
-            </div>
-          </div>
-          <div class="data-health-layout">
-            <div class="data-health-summary" :class="dataHealthSummaryClass(dataHealthSummary.status)">
-              <div class="data-health-summary-icon" aria-hidden="true">
-                <DatabaseZap :size="18" />
-              </div>
-              <strong>{{ dataHealthSummary.headline }}</strong>
-              <p>{{ dataHealthSummary.scopeNote }}</p>
-              <small class="data-health-freshness-summary">{{ dataHealthSummary.freshnessDetail }}</small>
-            </div>
-            <div class="data-health-list" role="list" aria-label="数据健康状态">
-              <div v-for="item in dataHealthSummary.items" :key="item.key" class="data-health-item" role="listitem">
-                <div class="data-health-item-heading">
-                  <strong>{{ item.label }}</strong>
-                  <span class="status-chip" :class="dataHealthStatusClass(item.status)">
-                    {{ dataHealthStatusLabel(item.status) }}
-                  </span>
-                </div>
-                <p>{{ item.detail }}</p>
-                <div class="data-health-item-meta">
-                  <small v-if="item.observedAt">观测 {{ formatDateTime(item.observedAt) }}</small>
-                  <small v-else>未记录观察时间</small>
-                  <span class="status-chip data-health-freshness-chip" :class="dataHealthFreshnessClass(item.freshness)">
-                    {{ item.freshnessLabel }}
-                  </span>
-                  <small>{{ item.freshnessDetail }}</small>
-                </div>
-                <button
-                  v-if="item.action && item.actionLabel"
-                  class="text-button data-health-action"
-                  type="button"
-                  :aria-label="`${item.label}：${item.actionLabel}`"
-                  @click="runDataHealthAction(item.action)"
-                >
-                  <ChevronRight :size="13" aria-hidden="true" />
-                  {{ item.actionLabel }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="environment-section" aria-labelledby="environment-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                WATCHLIST CONTEXT
-              </p>
-              <h2 id="environment-title" class="section-title">
-                观察池环境
-              </h2>
-            </div>
-            <span class="section-meta">只看当前样本，不代表大盘</span>
-          </div>
-          <div class="environment-layout">
-            <div class="environment-summary" :class="environmentStatusClass(watchlistEnvironment.status)">
-              <div class="environment-summary-heading">
-                <span class="status-chip" :class="environmentStatusClass(watchlistEnvironment.status)">{{ watchlistEnvironment.label }}</span>
-                <strong>{{ watchlistEnvironment.headline }}</strong>
-              </div>
-              <p>{{ watchlistEnvironment.scopeNote }}</p>
-              <ul v-if="watchlistEnvironment.cautions.length" class="environment-cautions">
-                <li v-for="caution in watchlistEnvironment.cautions" :key="caution">
-                  {{ caution }}
-                </li>
-              </ul>
-            </div>
-            <div class="environment-metrics" role="list" aria-label="观察池环境指标">
-              <div v-for="metric in watchlistEnvironment.metrics" :key="metric.key" class="environment-metric" role="listitem">
-                <div class="environment-metric-heading">
-                  <span>{{ metric.label }}</span>
-                  <strong>{{ formatEnvironmentRatio(metric.ratio) }}</strong>
-                </div>
-                <div class="environment-meter" role="progressbar" :aria-label="metric.label" :aria-valuenow="metric.ratio === null ? undefined : Math.round(metric.ratio * 100)" aria-valuemin="0" aria-valuemax="100">
-                  <span :style="{ width: `${metric.ratio === null ? 0 : Math.round(metric.ratio * 100)}%` }" />
-                </div>
-                <small>{{ metric.detail }}</small>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="focus-section" aria-labelledby="focus-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                TODAY'S FOCUS
-              </p>
-              <h2 id="focus-title" class="section-title">
-                今日优先关注
-              </h2>
-            </div>
-            <span class="section-meta">按当前信号分排序 · {{ latestWatchlistDate }}</span>
-          </div>
-          <div class="focus-layout">
-            <div class="focus-list">
-              <div v-if="loading.candidates" class="focus-empty" aria-label="优先关注加载中">
-                <SkeletonCard variant="content" />
-              </div>
-              <button
-                v-for="(item, index) in topCandidates"
-                :key="item.tsCode"
-                class="focus-row"
-                :class="focusTone(item)"
-                type="button"
-                @click="selectStock(item)"
-              >
-                <span class="focus-rank">0{{ index + 1 }}</span>
-                <span class="focus-stock">
-                  <strong>{{ displayStockName(item) }}</strong>
-                  <small>{{ item.tsCode }}</small>
-                </span>
-                <span class="focus-signal" :title="researchPriorityDetail(item)">{{ focusSignal(item) }}</span>
-                <span class="focus-score">
-                  <strong>{{ formatSignalScore(item.score) }}</strong>
-                  <span class="focus-score-meter" aria-hidden="true"><span class="focus-score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
-                  <small>命中规则</small>
-                </span>
-                <span class="status-chip" :class="riskToneClass(candidateRiskTone(item))">{{ riskLabel(item) }}</span>
-                <ChevronRight :size="15" aria-hidden="true" />
-              </button>
-              <div v-if="!loading.candidates && !topCandidates.length" class="focus-empty">
-                <Sparkles :size="18" aria-hidden="true" />
-                <span>完成一次日线更新后，这里会出现可比较的信号</span>
-              </div>
-            </div>
-            <aside class="risk-summary" aria-labelledby="risk-title">
-              <div class="risk-summary-heading">
-                <div>
-                  <p class="section-kicker">
-                    CHECK BEFORE DECISION
-                  </p>
-                  <h3 id="risk-title">
-                    风险提示
-                  </h3>
-                </div>
-                <ShieldAlert :size="18" aria-hidden="true" />
-              </div>
-              <div class="risk-list">
-                <div v-for="item in riskItems" :key="item.key" class="risk-note" :class="riskToneClass(item.tone)">
-                  <span class="risk-note-mark" aria-hidden="true" />
-                  <div>
-                    <strong>{{ item.title }}</strong>
-                    <span>{{ item.detail }}</span>
-                  </div>
-                </div>
-              </div>
-              <span class="risk-footnote" role="img" tabindex="0" aria-label="信号是筛选线索，不是买入指令" title="信号是筛选线索，不是买入指令">
-                <Info :size="14" aria-hidden="true" />
-              </span>
-            </aside>
-          </div>
-        </section>
-
-        <section class="research-path-section" aria-labelledby="research-path-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                RESEARCH PATH
-              </p>
-              <h2 id="research-path-title" class="section-title">
-                下一步怎么做
-              </h2>
-            </div>
-            <span class="section-meta">按顺序完成一次研究</span>
-          </div>
-          <div class="research-path-grid">
-            <button class="research-path-card" type="button" @click="setActiveView('candidates')">
-              <span class="research-path-index">01</span>
-              <span class="research-path-copy">
-                <strong>筛选候选</strong>
-                <small>先用预设和数据完整度缩小范围</small>
-              </span>
-              <ChevronRight :size="16" aria-hidden="true" />
-            </button>
-            <button class="research-path-card" type="button" @click="setActiveView('watchlist')">
-              <span class="research-path-index">02</span>
-              <span class="research-path-copy">
-                <strong>维护观察池</strong>
-                <small>确认标的并更新最近 120 个交易日</small>
-              </span>
-              <ChevronRight :size="16" aria-hidden="true" />
-            </button>
-            <button class="research-path-card" type="button" @click="setActiveView('knowledge')">
-              <span class="research-path-index">03</span>
-              <span class="research-path-copy">
-                <strong>核对因子</strong>
-                <small>理解信号、估值和财务数据的边界</small>
-              </span>
-              <ChevronRight :size="16" aria-hidden="true" />
-            </button>
-          </div>
-        </section>
-      </template>
-
-      <template v-else-if="activeView === 'watchlist'">
-        <section class="workspace-grid">
-          <article class="surface-panel" aria-labelledby="watchlist-title">
-            <div class="section-heading">
-              <div>
-                <p class="section-kicker">
-                  WATCHLIST
-                </p>
-                <h2 id="watchlist-title" class="section-title">
-                  观察池
-                </h2>
-              </div>
-              <span class="section-meta">{{ watchlist.length }} / 50</span>
-            </div>
-            <form class="watchlist-form" @submit.prevent="addToWatchlist">
-              <label class="sr-only" for="quant-code">股票代码</label>
-              <input id="quant-code" v-model="watchCode" class="field-control field-code" inputmode="text" autocomplete="off" placeholder="000001.SZ" maxlength="9">
-              <label class="sr-only" for="quant-name">股票名称</label>
-              <input id="quant-name" v-model="watchName" class="field-control" autocomplete="off" placeholder="名称（可选）" maxlength="40">
-              <button class="primary-button" type="submit" :disabled="adding || watchlist.length >= 50">
-                <Plus :size="16" aria-hidden="true" />
-                {{ adding ? '加入中' : '加入观察池' }}
-              </button>
-            </form>
-            <div class="quant-table-frame watchlist-table-frame">
-              <DataTable
-                :data="watchlist"
-                :columns="watchlistColumns"
-                :loading="loading.watchlist"
-                min-width="760px"
-                empty-message="观察池为空，先加入一只股票"
-                @row-click="selectStock"
-              >
-                <template #cell-tsCode="{ item }">
-                  <button class="stock-code-button" type="button" @click.stop="selectStock(item)">
-                    {{ item.tsCode }}
-                    <ChevronRight :size="14" aria-hidden="true" />
-                  </button>
-                </template>
-                <template #cell-latestClose="{ item }">
-                  <span class="quant-table-number quant-table-number-emphasis" :class="item.latestClose === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.latestClose) }}</span>
-                </template>
-                <template #cell-latestChangePercent="{ item }">
-                  <span class="quant-table-number" :class="item.latestChangePercent === null ? 'text-status-neutral' : item.latestChangePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.latestChangePercent) }}</span>
-                </template>
-                <template #cell-latestTradeDate="{ item }">
-                  <span class="quant-table-date">{{ formatTradeDate(item.latestTradeDate) }}</span>
-                </template>
-                <template #cell-barCount="{ item }">
-                  <span class="quant-table-number">{{ item.barCount }}</span>
-                </template>
-                <template #cell-actions="{ item }">
-                  <button class="icon-button icon-button-danger watchlist-action-button" type="button" :disabled="deletingCode === item.tsCode" :aria-label="`删除 ${item.tsCode}`" :title="`删除 ${item.tsCode}`" @click.stop="requestRemoveFromWatchlist(item.tsCode)">
-                    <Trash2 :size="15" aria-hidden="true" />
-                  </button>
-                </template>
-              </DataTable>
-            </div>
-          </article>
-
-          <ConfirmDialog
-            :open="pendingDeleteCode !== null"
-            mobile-placement="center"
-            title="移除观察池代码"
-            :message="deleteDialogMessage"
-            confirm-text="确认移除"
-            cancel-text="取消"
-            variant="danger"
-            :loading="deletingCode !== null"
-            @update:open="value => !value && cancelRemoveFromWatchlist()"
-            @cancel="cancelRemoveFromWatchlist"
-            @confirm="confirmRemoveFromWatchlist"
-          />
-
-          <article class="surface-panel sync-panel" aria-labelledby="sync-title">
-            <div class="section-heading">
-              <div>
-                <p class="section-kicker">
-                  DATA UPDATE
-                </p>
-                <h2 id="sync-title" class="section-title">
-                  更新数据
-                </h2>
-              </div>
-              <span v-if="displayedSyncResult" class="status-chip" :class="syncStatusClass(displayedSyncResult.status)">
-                {{ statusLabel(displayedSyncResult.status) }}
-              </span>
-            </div>
-            <div class="sync-copy">
-              <div class="sync-window">
-                <span>股票</span><strong>{{ watchlist.length }} 只</strong>
-              </div>
-              <div class="sync-window">
-                <span>历史范围</span><strong>最近 120 个交易日</strong>
-              </div>
-              <div class="sync-window">
-                <span>数据截至</span><strong>{{ latestWatchlistDate }}</strong>
-              </div>
-            </div>
-            <button class="sync-button" type="button" :disabled="!canSync" @click="syncDaily">
-              <RefreshCw :size="17" :class="loading.sync ? 'animate-spin' : ''" aria-hidden="true" />
-              {{ loading.sync ? '更新中' : '更新观察池' }}
-            </button>
-            <div v-if="displayedSyncResult" class="sync-result" :class="syncStatusClass(displayedSyncResult.status)">
-              <div class="sync-result-main">
-                <span class="sync-status-dot" aria-hidden="true" />
-                <strong>{{ statusLabel(displayedSyncResult.status) }}</strong>
-                <span>{{ displayedSyncResultMessage }}</span>
-                <small v-if="displayedSyncResultTime">完成于 {{ formatDateTime(displayedSyncResultTime) }}</small>
-              </div>
-              <div class="sync-result-stats">
-                <span>请求 <strong>{{ displayedSyncResult.requested }}</strong></span>
-                <span>写入 <strong>{{ displayedSyncResult.written }}</strong></span>
-                <span>跳过 <strong>{{ displayedSyncResult.skipped }}</strong></span>
-              </div>
-            </div>
-            <div v-if="loading.syncState && displayedSyncResult" class="data-refresh-feedback data-refresh-feedback-loading" role="status">
-              <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
-              <span>正在刷新同步状态，先显示最近一次有效结果</span>
-            </div>
-            <div v-else-if="syncStateError && displayedSyncResult" class="data-refresh-feedback data-refresh-feedback-error" role="alert">
-              <AlertCircle :size="15" aria-hidden="true" />
-              <span>同步状态读取失败，以上为最近一次有效结果：{{ parsedError(syncStateError).message }}</span>
-              <button class="text-button" type="button" @click="loadSyncState">
-                重试
-              </button>
-            </div>
-            <div v-else-if="loading.syncState" class="empty-state sync-empty" role="status">
-              <RefreshCw :size="18" class="animate-spin" aria-hidden="true" />
-              <span>正在读取最近一次同步状态</span>
-            </div>
-            <div v-else-if="syncStateError" class="empty-state sync-empty sync-empty-error" role="alert">
-              <AlertCircle :size="18" aria-hidden="true" />
-              <span>同步状态读取失败：{{ parsedError(syncStateError).message }}</span>
-              <button class="text-button" type="button" @click="loadSyncState">
-                重试
-              </button>
-            </div>
-            <div v-else class="empty-state sync-empty">
-              <RotateCcw :size="18" aria-hidden="true" />
-              <span>尚未更新日线数据</span>
-            </div>
-          </article>
-        </section>
-      </template>
-
-      <template v-else-if="activeView === 'candidates'">
-        <section class="surface-panel" aria-labelledby="candidate-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                SELECTION SIGNALS
-              </p>
-              <h2 id="candidate-title" class="section-title">
-                择股信号
-              </h2>
-            </div>
-            <div class="candidate-heading-actions">
-              <button class="secondary-button" type="button" title="打开观察池并新增股票" @click="setActiveView('watchlist')">
-                <Plus :size="14" aria-hidden="true" />
-                添加观察股
-              </button>
-              <button class="secondary-button" type="button" title="打开观察池并更新日线数据" @click="setActiveView('watchlist')">
-                <RefreshCw :size="14" aria-hidden="true" />
-                更新数据
-              </button>
-            </div>
-            <div class="snapshot-meta">
-              <span>数据截至 {{ formatTradeDate(snapshot?.toDate || null) }}</span>
-              <span>计算 {{ formatDateTime(snapshot?.generatedAt || null) }}</span>
-            </div>
-          </div>
-          <div class="candidate-sync-summary" aria-label="候选数据覆盖状态">
-            <span>当前观察池 <strong>{{ candidateItems.length }}</strong> 只</span>
-            <span>已计算 <strong>{{ scannedCandidateCount }}</strong> 只</span>
-            <span :class="pendingCandidateCount ? 'candidate-sync-summary-warning' : ''">待更新 <strong>{{ pendingCandidateCount }}</strong> 只</span>
-          </div>
-          <div v-if="pendingCandidateCount" class="candidate-pending-callout" role="status">
-            <Info :size="16" aria-hidden="true" />
-            <span>{{ pendingCandidateCount }} 只新加入的股票还没有进入最近一次日线快照，更新观察池后才会计算信号、趋势和价值质量。</span>
-            <button class="text-button" type="button" @click="setActiveView('watchlist')">
-              去更新
-            </button>
-          </div>
-          <form class="candidate-add-form" aria-label="从候选研究新增观察股" @submit.prevent="addToWatchlistAndResearch">
-            <label class="sr-only" for="candidate-quant-code">新增股票代码</label>
-            <input id="candidate-quant-code" v-model="watchCode" class="field-control field-code" inputmode="text" autocomplete="off" placeholder="输入代码，如 600000.SH" maxlength="9">
-            <label class="sr-only" for="candidate-quant-name">新增股票名称</label>
-            <input id="candidate-quant-name" v-model="watchName" class="field-control" autocomplete="off" placeholder="名称可留空，系统会解析" maxlength="40">
-            <button class="primary-button" type="submit" :disabled="adding || watchlist.length >= 50">
-              <Plus :size="15" aria-hidden="true" />
-              {{ adding ? '加入中' : '加入观察池并研究' }}
-            </button>
-          </form>
-          <div class="candidate-toolbar">
-            <div class="candidate-filter-group" role="group" aria-label="择股预设">
-              <button
-                v-for="option in candidateFilterOptions"
-                :key="option.key"
-                class="candidate-filter-button"
-                :class="candidateFilter === option.key ? 'candidate-filter-button-active' : ''"
-                type="button"
-                :aria-pressed="candidateFilter === option.key"
-                :title="option.detail"
-                @click="candidateFilter = option.key"
-              >
-                <component :is="option.icon" :size="14" aria-hidden="true" />
-                {{ option.label }}
-              </button>
-            </div>
-            <div class="candidate-query-controls" aria-label="候选筛选">
-              <label class="candidate-query-field">
-                <span>最低信号分</span>
-                <select v-model.number="candidateMinScore" class="candidate-query-select">
-                  <option :value="0">
-                    不限
-                  </option>
-                  <option :value="2">
-                    2 分以上
-                  </option>
-                  <option :value="4">
-                    4 分以上
-                  </option>
-                </select>
-              </label>
-              <label class="candidate-query-field">
-                <span>排序</span>
-                <select v-model="candidateSort" class="candidate-query-select">
-                  <option v-for="option in candidateSortOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="candidate-query-field">
-                <span>研究状态</span>
-                <select v-model="candidateResearchStatus" class="candidate-query-select">
-                  <option v-for="option in candidateResearchStatusOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="candidate-query-field">
-                <span>复查状态</span>
-                <select v-model="candidateReviewDue" class="candidate-query-select">
-                  <option v-for="option in candidateReviewDueOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="candidate-query-check">
-                <input v-model="candidateCompleteOnly" type="checkbox">
-                <span>只看数据完整</span>
-              </label>
-              <button v-if="candidateQueryActive" class="candidate-reset-button" type="button" title="重置自定义筛选" @click="resetCandidateQuery">
-                <RotateCcw :size="14" aria-hidden="true" />
-                重置
-              </button>
-            </div>
-            <div class="candidate-toolbar-meta">
-              <span class="section-meta">显示 {{ filteredCandidateItems.length }} / {{ candidateItems.length }}</span>
-              <button class="compare-button" type="button" :disabled="!canCompareCandidates" @click="openComparisonDrawer">
-                <BarChart3 :size="14" aria-hidden="true" />
-                对比 {{ selectedCandidateItems.length }} 只
-              </button>
-              <button v-if="selectedCandidateItems.length" class="text-button candidate-clear-button" type="button" @click="clearCandidateSelection">
-                清除选择
-              </button>
-            </div>
-          </div>
-          <div class="selection-guide" aria-label="择股预设说明">
-            <div class="selection-guide-copy">
-              <span class="section-kicker">START WITH A PRESET</span>
-              <strong>{{ activeCandidatePreset.label }}</strong>
-              <span>{{ activeCandidatePreset.description }}</span>
-            </div>
-            <span class="selection-guide-count">命中 {{ filteredCandidateItems.length }} 只</span>
-          </div>
-          <div class="selection-legend" aria-label="指标释义">
-            <span><strong>信号分</strong>命中规则 / {{ SIGNAL_RULE_COUNT }} 条</span>
-            <span><strong>20 日表现</strong>近 20 个交易日收益</span>
-            <span><strong>成交活跃度</strong>相对近 5 日均量</span>
-            <span><strong>价值质量</strong>估值、经营、增长、趋势四维观察</span>
-          </div>
-          <section v-if="candidateItems.length" class="candidate-evidence-overview" aria-label="候选证据就绪度">
-            <div class="candidate-evidence-overview-heading">
-              <div>
-                <p class="section-kicker">
-                  EVIDENCE READINESS
-                </p>
-                <h3>证据就绪度</h3>
-              </div>
-              <span class="candidate-evidence-overview-info" role="img" tabindex="0" aria-label="证据就绪度只统计五个研究维度的原始字段覆盖，不代表价值质量好坏或买卖判断" title="只统计五个研究维度的原始字段覆盖，不代表价值质量好坏或买卖判断">
-                <Info :size="14" aria-hidden="true" />
-              </span>
-            </div>
-            <div class="candidate-evidence-overview-stats" role="list" aria-label="证据就绪统计">
-              <div role="listitem">
-                <strong class="candidate-evidence-overview-ready">{{ candidateEvidenceSummary.ready }}</strong>
-                <span>可直接核对</span>
-              </div>
-              <div role="listitem">
-                <strong class="candidate-evidence-overview-partial">{{ candidateEvidenceSummary.partial }}</strong>
-                <span>部分覆盖</span>
-              </div>
-              <div role="listitem">
-                <strong class="candidate-evidence-overview-missing">{{ candidateEvidenceSummary.missing }}</strong>
-                <span>待补证据</span>
-              </div>
-              <div role="listitem">
-                <strong class="candidate-evidence-overview-unavailable">{{ candidateEvidenceSummary.unavailable }}</strong>
-                <span>{{ loading.valueQuality ? '读取中' : errors.valueQuality ? '暂不可用' : '待加载' }}</span>
-              </div>
-            </div>
-            <p>仅衡量原始字段是否齐全；价值质量分仍单独表示指标表现。</p>
-          </section>
-          <QuantResearchAutomation
-            :candidates="automatedResearchDisplayCandidates"
-            :states="automatedResearchStates"
-            :running="automatedResearchRunning"
-            :ai-ready="automatedResearchAiReady"
-            :ai-config-error-message="automatedResearchAiConfigError ? parsedError(automatedResearchAiConfigError).message : null"
-            :error-message="automatedResearchError ? parsedError(automatedResearchError).message : null"
-            @start="startAutomatedResearch"
-            @retry="retryAutomatedResearchItem"
-            @focus="focusDecisionQueue"
-            @open-settings="aiSettingsOpen = true"
-          />
-          <div v-if="snapshot && snapshot.candidates.length" class="snapshot-range">
-            <span>观察窗口</span>
-            <strong>{{ formatTradeDate(snapshot.fromDate || null) }} → {{ formatTradeDate(snapshot.toDate || null) }}</strong>
-            <span class="snapshot-range-divider">·</span>
-            <span>{{ snapshot.factorVersion || '动量信号' }}</span>
-          </div>
-          <section v-if="researchPriorityTotal" class="research-priority-queue" aria-labelledby="research-priority-title">
-            <div class="research-priority-heading">
-              <div>
-                <p class="section-kicker">
-                  RESEARCH PRIORITY
-                </p>
-                <h3 id="research-priority-title">
-                  研究优先队列
-                </h3>
-              </div>
-              <div class="research-priority-heading-meta">
-                <span>{{ researchPriorityTotal }} 只候选</span>
-                <span class="research-priority-info" role="img" tabindex="0" aria-label="研究优先级只用于安排核对顺序，不代表买卖指令" title="研究优先级只用于安排核对顺序，不代表买卖指令">
-                  <Info :size="14" aria-hidden="true" />
-                </span>
-              </div>
-            </div>
-            <div class="research-priority-summary" role="list" aria-label="研究队列统计">
-              <div class="research-priority-summary-item" role="listitem">
-                <strong>{{ researchPriorityHighestLabel }}</strong>
-                <span>最高优先</span>
-              </div>
-              <div class="research-priority-summary-item" role="listitem">
-                <strong>{{ researchPrioritySummary.dataGap }}</strong>
-                <span>待补数据</span>
-              </div>
-              <div class="research-priority-summary-item" role="listitem">
-                <strong>{{ researchPrioritySummary.review }}</strong>
-                <span>待复查</span>
-              </div>
-              <div class="research-priority-summary-item" role="listitem">
-                <strong>{{ researchPrioritySummary.risk }}</strong>
-                <span>核对风险</span>
-              </div>
-              <div class="research-priority-summary-item" role="listitem">
-                <strong>{{ researchPrioritySummary.valueQuality }}</strong>
-                <span>补看价值</span>
-              </div>
-            </div>
-            <div class="research-priority-list">
-              <button
-                v-for="entry in visibleResearchPriorityQueue"
-                :key="entry.item.tsCode"
-                class="research-priority-row"
-                type="button"
-                @click="selectStock(entry.item)"
-              >
-                <span class="research-priority-badge" :class="researchPriorityClass(entry.item)">{{ entry.priority.levelLabel }}</span>
-                <span class="research-priority-stock">
-                  <strong>{{ displayStockName(entry.item) }}</strong>
-                  <small>{{ entry.item.tsCode }} · {{ entry.priority.score }} 分</small>
-                </span>
-                <span class="research-priority-detail">
-                  <strong :class="researchPriorityActionClass(entry.item)">{{ entry.priority.actionLabel }}</strong>
-                  <small>{{ entry.priority.reasons.join('；') }}</small>
-                </span>
-                <ChevronRight :size="15" aria-hidden="true" />
-              </button>
-            </div>
-            <p v-if="researchPriorityTotal > visibleResearchPriorityQueue.length" class="research-priority-more">
-              还有 {{ researchPriorityTotal - visibleResearchPriorityQueue.length }} 条记录，请使用研究优先排序查看
-            </p>
-          </section>
-          <QuantDecisionQueue
-            v-if="candidateItems.length || decisionQueueRecords.length"
-            :records="decisionQueueRecords"
-            :candidates="candidateItems"
-            :watchlist="watchlist"
-            :candidate-trade-date="snapshot?.toDate || null"
-            :loading="decisionQueueLoading"
-            :error-message="decisionQueueError ? parsedError(decisionQueueError).message : null"
-            @focus="focusDecisionQueue"
-          />
-          <QuantAiTrustOverview
-            v-if="candidateItems.length || decisionQueueRecords.length"
-            :records="decisionQueueRecords"
-            :candidates="candidateItems"
-            :watchlist="watchlist"
-            :candidate-trade-date="snapshot?.toDate || null"
-            :loading="decisionQueueLoading"
-            :error-message="decisionQueueError ? parsedError(decisionQueueError).message : null"
-            @focus="focusDecisionQueue"
-          />
-          <QuantAiCandidateBriefingPanel
-            v-if="candidateItems.length"
-            ref="candidateAiBriefingPanel"
-            :briefing="candidateAiBriefing"
-            :candidate-count="candidateItems.length"
-            :filtered-candidate-count="filteredCandidateItems.length"
-            :briefing-available-candidate-count="candidateBriefingScopeItems.length"
-            :briefing-candidate-count="candidateAiBriefingScopeCount"
-            :current-scope-key="candidateBriefingScopeKey"
-            :current-snapshot-id="snapshot?.id || null"
-            :current-candidate-codes="currentCandidateCodes"
-            :history-reset-key="candidateAiBriefingHistoryResetKey"
-            :available="Boolean(snapshot?.generatedAt)"
-            :loading="candidateAiBriefingLoading"
-            :error-message="candidateAiBriefingError ? parsedError(candidateAiBriefingError).message : null"
-            :configuration-error="candidateAiBriefingConfigurationError"
-            :question-input="candidateAiBriefingQuestionInput"
-            :question-result="candidateAiBriefingQuestion"
-            :question-loading="candidateAiBriefingQuestionLoading"
-            :question-error-message="candidateAiBriefingQuestionError ? parsedError(candidateAiBriefingQuestionError).message : null"
-            :question-configuration-error="candidateAiBriefingQuestionConfigurationError"
-            :copying="candidateAiBriefingCopying"
-            :copy-outcome="candidateAiBriefingCopyOutcome"
-            :copy-message="candidateAiBriefingCopyMessage"
-            @generate="generateCandidateAiBriefing"
-            @update:question-input="candidateAiBriefingQuestionInput = $event"
-            @ask-question="askCandidateAiBriefingQuestion"
-            @open-settings="aiSettingsOpen = true"
-            @focus-candidate="focusCandidateFromBriefing"
-            @copy="copyCandidateAiBriefing"
-            @export="downloadCandidateAiBriefing"
-            @session-deleted="handleCandidateAiSessionDeleted"
-          />
-          <div class="quant-table-frame candidate-table-frame">
-            <DataTable
-              :data="filteredCandidateItems"
-              :columns="candidateColumns"
-              :loading="loading.candidates"
-              selectable
-              :selected-ids="selectedCandidateIds"
-              min-width="1580px"
-              :empty-message="candidateItems.length ? '当前筛选没有候选' : '暂无候选快照，完成一次日线同步后查看'"
-              @toggle-select="handleCandidateToggle"
-              @toggle-select-all="toggleAllCandidateSelection"
-              @row-click="selectStock"
-            >
-              <template #cell-tsCode="{ item }">
-                <span class="font-mono text-xs font-semibold text-foreground">{{ item.tsCode }}</span>
-              </template>
-              <template #cell-score="{ item }">
-                <div class="score-cell" :aria-label="`命中 ${formatSignalScore(item.score)} 条规则`">
-                  <strong class="score-value" :class="item.score === null ? 'quant-table-value-muted' : ''">{{ formatSignalScore(item.score) }}</strong>
-                  <span class="score-meter" aria-hidden="true"><span class="score-meter-fill" :style="{ width: `${signalScorePercent(item.score)}%` }" /></span>
-                </div>
-              </template>
-              <template #cell-priority="{ item }">
-                <div class="research-priority-cell" :title="researchPriorityDetail(item)">
-                  <span class="research-priority-badge" :class="researchPriorityClass(item)">{{ candidatePriorityFor(item).levelLabel }}</span>
-                  <small>{{ candidatePriorityFor(item).score }} 分</small>
-                </div>
-              </template>
-              <template #cell-persistence="{ item }">
-                <div class="candidate-persistence-cell" :title="candidatePersistenceDetail(item)">
-                  <span class="candidate-persistence-state" :class="candidatePersistenceClass(item)">{{ candidatePersistenceLabel(item) }}</span>
-                  <small>{{ item.persistence?.sampleSize ? `${item.persistence.appearanceCount} / ${item.persistence.sampleSize} 次` : '暂无历史快照' }}</small>
-                </div>
-              </template>
-              <template #cell-return20="{ item }">
-                <span class="quant-table-number" :class="item.return20 === null ? 'text-status-neutral' : item.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.return20) }}</span>
-              </template>
-              <template #cell-ma20="{ item }">
-                <span class="quant-table-number" :class="item.ma20 === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.ma20) }}</span>
-              </template>
-              <template #cell-volumeRatio="{ item }">
-                <span class="quant-table-number" :class="item.volumeRatio === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.volumeRatio) }}</span>
-              </template>
-              <template #cell-relativeStrength="{ item }">
-                <span class="quant-table-number" :class="item.relativeStrength === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.relativeStrength) }}</span>
-              </template>
-              <template #cell-valueQuality="{ item }">
-                <div class="value-quality-table-cell" :title="valueQualitySummary(valueQualityFor(item.tsCode))">
-                  <strong :class="valueQualityStatusClass(valueQualityFor(item.tsCode))">{{ formatValueQualityScore(valueQualityFor(item.tsCode)) }}</strong>
-                  <small>{{ valueQualityStatusLabel(valueQualityFor(item.tsCode)) }}</small>
-                </div>
-              </template>
-              <template #cell-evidence="{ item }">
-                <div class="candidate-evidence-cell" :title="candidateEvidenceDetail(item)" :aria-label="`${candidateEvidenceStatusLabel(candidateEvidenceFor(item))}，${candidateEvidenceDetail(item)}`">
-                  <div class="candidate-evidence-cell-heading">
-                    <strong :class="candidateEvidenceStatusClass(candidateEvidenceFor(item))">{{ formatCandidateEvidenceScore(candidateEvidenceFor(item)) }}</strong>
-                    <span :class="candidateEvidenceStatusClass(candidateEvidenceFor(item))">{{ candidateEvidenceStatusLabel(candidateEvidenceFor(item)) }}</span>
-                  </div>
-                  <small>{{ candidateEvidenceCoverage(candidateEvidenceFor(item)) }}</small>
-                </div>
-              </template>
-              <template #cell-review="{ item }">
-                <div class="review-cell" :title="researchReviewFor(item.tsCode).detail" :aria-label="`${researchReviewFor(item.tsCode).label}，${researchReviewFor(item.tsCode).date || '未设置日期'}`">
-                  <span class="review-cell-label" :class="`review-state-text-${researchReviewFor(item.tsCode).state}`">{{ researchReviewFor(item.tsCode).label }}</span>
-                  <small>{{ researchReviewFor(item.tsCode).date || '--' }}</small>
-                </div>
-              </template>
-              <template #cell-action="{ item }">
-                <div class="candidate-action-cell" :title="researchPriorityDetail(item)" :aria-label="`${candidatePriorityFor(item).actionLabel}：${researchPriorityDetail(item)}`">
-                  <span class="candidate-action-badge" :class="`research-priority-action-${candidatePriorityFor(item).tone}`">{{ candidatePriorityFor(item).actionLabel }}</span>
-                  <small>{{ candidatePriorityFor(item).reasons[0] || '按当前数据保持观察' }}</small>
-                </div>
-              </template>
-              <template #cell-signals="{ item }">
-                <div class="signal-list candidate-signal-list">
-                  <span v-if="researchMarkerMap.get(item.tsCode)?.status && researchMarkerMap.get(item.tsCode)?.status !== 'unreviewed'" class="research-status-dot" :class="`research-status-${researchMarkerMap.get(item.tsCode)?.status}`" :title="researchStatusOptions.find(option => option.value === researchMarkerMap.get(item.tsCode)?.status)?.label" aria-hidden="true" />
-                  <span v-if="item.pendingSync" class="signal-tag signal-tag-warning">待更新数据</span>
-                  <span v-for="signal in item.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
-                  <span v-if="!item.pendingSync && item.quality !== 'ready'" class="signal-tag signal-tag-muted">数据不足</span>
-                  <span v-if="!item.signals.length && item.quality === 'ready'" class="muted-inline">暂无明确信号</span>
-                </div>
-              </template>
-            </DataTable>
-          </div>
-        </section>
-      </template>
-
-      <template v-else-if="activeView === 'knowledge'">
-        <section class="knowledge-section" aria-labelledby="knowledge-title">
-          <div class="knowledge-heading">
-            <div>
-              <p class="section-kicker">
-                INVESTMENT KNOWLEDGE
-              </p>
-              <h2 id="knowledge-title" class="section-title">
-                投资因子框架
-              </h2>
-              <p class="knowledge-intro">
-                把文章中的判断拆成可验证的因子；当前只有“已进入评分”的因子影响价值质量分。
-              </p>
-            </div>
-            <div v-if="investmentKnowledge" class="knowledge-meta">
-              <span>知识库 {{ investmentKnowledge.version }}</span>
-              <span>{{ investmentKnowledge.sources.length }} 篇来源</span>
-            </div>
-          </div>
-          <div v-if="loading.knowledge" class="knowledge-state" role="status">
-            <SkeletonCard variant="content" />
-          </div>
-          <div v-else-if="errors.knowledge" class="knowledge-state" role="status">
-            <Info :size="17" aria-hidden="true" />
-            <span>投资知识暂时不可用</span>
-            <button class="text-button" type="button" @click="loadInvestmentKnowledge">
-              重试
-            </button>
-          </div>
-          <template v-else-if="investmentKnowledge">
-            <div class="knowledge-summary-grid" aria-label="因子状态统计">
-              <div class="knowledge-summary-item knowledge-summary-active">
-                <DatabaseZap :size="16" aria-hidden="true" />
-                <strong>{{ activeKnowledgeFactors.length }}</strong>
-                <span>已进入评分</span>
-              </div>
-              <div class="knowledge-summary-item knowledge-summary-partial">
-                <Sparkles :size="16" aria-hidden="true" />
-                <strong>{{ partialKnowledgeFactors.length }}</strong>
-                <span>部分接通</span>
-              </div>
-              <div class="knowledge-summary-item knowledge-summary-planned">
-                <BookOpen :size="16" aria-hidden="true" />
-                <strong>{{ plannedKnowledgeFactors.length }}</strong>
-                <span>待接或定性</span>
-              </div>
-              <div class="knowledge-summary-item knowledge-summary-alias">
-                <Tags :size="16" aria-hidden="true" />
-                <strong>{{ mappedKnowledgeAliases.length }}</strong>
-                <span>已映射别名</span>
-              </div>
-            </div>
-            <div class="knowledge-factor-grid">
-              <article v-for="factor in investmentKnowledge.factors" :key="factor.id" class="knowledge-factor" :class="knowledgeStatusClass(factor.status)">
-                <div class="knowledge-factor-heading">
-                  <div>
-                    <span class="knowledge-factor-category">{{ factor.category }}</span>
-                    <h3>{{ factor.title }}</h3>
-                  </div>
-                  <span class="knowledge-status-badge" :class="knowledgeStatusClass(factor.status)">{{ knowledgeStatusLabel(factor.status) }}</span>
-                </div>
-                <p>{{ factor.interpretation }}</p>
-                <div class="knowledge-factor-measurement">
-                  <strong>量化方向</strong>
-                  <span>{{ factor.measurement }}</span>
-                </div>
-                <div class="knowledge-factor-fields">
-                  <span v-if="factor.availableFields.length">已接：{{ formatKnowledgeFields(factor.availableFields) }}</span>
-                  <span v-if="factor.missingFields.length">待接：{{ formatKnowledgeFields(factor.missingFields) }}</span>
-                </div>
-                <div class="knowledge-factor-foot">
-                  <span v-if="factor.eligibleInValueQuality">当前价值质量评分使用</span>
-                  <span v-else>先作为研究假设</span>
-                  <span>{{ factor.sourceIds.length }} 篇关联来源</span>
-                </div>
-              </article>
-            </div>
-            <details class="knowledge-details">
-              <summary>
-                <BookOpen :size="15" aria-hidden="true" />
-                查看文章来源与股票别名映射
-              </summary>
-              <div class="knowledge-context-grid">
-                <div class="knowledge-context-column">
-                  <div class="knowledge-context-heading">
-                    <strong>文章来源</strong>
-                    <span>{{ investmentKnowledge.sources.length }} 篇</span>
-                  </div>
-                  <div class="knowledge-source-list">
-                    <a v-for="source in investmentKnowledge.sources" :key="source.id" class="knowledge-source-row" :href="source.url" target="_blank" rel="noreferrer" :title="source.url">
-                      <span class="knowledge-source-access" :class="source.access === 'preview' ? 'knowledge-source-preview' : 'knowledge-source-full'">{{ source.access === 'preview' ? '试读' : '全文' }}</span>
-                      <span class="knowledge-source-copy">
-                        <strong>{{ source.title }}</strong>
-                        <small>{{ source.publishedAt || '日期未读取' }} · {{ source.summary }}</small>
-                      </span>
-                      <ExternalLink :size="13" aria-hidden="true" />
-                    </a>
-                  </div>
-                </div>
-                <div class="knowledge-context-column">
-                  <div class="knowledge-context-heading">
-                    <strong>文章别名映射</strong>
-                    <span>{{ investmentKnowledge.aliases.length }} 条 · {{ contextKnowledgeAliases.length }} 待确认</span>
-                  </div>
-                  <div class="knowledge-alias-grid">
-                    <div v-for="alias in investmentKnowledge.aliases" :key="alias.alias" class="knowledge-alias-row" :title="alias.note">
-                      <span class="knowledge-alias-name">{{ alias.alias }}</span>
-                      <strong>{{ alias.name || alias.candidates.join(' / ') || '待确认' }}</strong>
-                      <small>{{ knowledgeAliasStatusLabel(alias.status) }} · {{ knowledgeConfidenceLabel(alias.confidence) }}</small>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <p class="knowledge-details-note">
-                已映射的 A 股研究样本已通过幂等 migration 加入观察池；港股、未上市主体和待确认别名保留在知识层，不进入当前 A 股日线同步。
-              </p>
-            </details>
-          </template>
-        </section>
-      </template>
-
-      <DetailDrawer
-        :open="detailDrawerOpen && !!selectedStock"
-        :title="selectedStock ? `${selectedStock.name || selectedStock.tsCode} · 分析详情` : '分析详情'"
-        :description="selectedStock ? `${selectedStock.tsCode} · 走势、估值、财务质量与研究摘要` : ''"
-        width="lg"
-        @update:open="detailDrawerOpen = $event"
-      >
-        <section class="quant-detail-content" aria-labelledby="daily-title">
-          <section class="decision-card" aria-label="候选决策卡">
-            <div class="decision-card-heading">
-              <div>
-                <p class="section-kicker">
-                  DECISION CARD
-                </p>
-                <h2>先看依据，再做判断</h2>
-              </div>
-              <div class="detail-review-status">
-                <span v-if="selectedResearchMarker.status !== 'unreviewed'" class="research-status-badge" :class="`research-status-${selectedResearchMarker.status}`">
-                  {{ researchStatusOptions.find(option => option.value === selectedResearchMarker.status)?.label }}
-                </span>
-                <span v-if="selectedResearchReview.state !== 'unscheduled'" class="review-state-badge" :class="`review-state-${selectedResearchReview.state}`">
-                  {{ selectedResearchReview.label }}
-                </span>
-              </div>
-            </div>
-            <div v-if="selectedCandidate" class="decision-card-grid">
-              <div class="decision-card-item decision-card-item-primary">
-                <span>信号覆盖</span>
-                <strong>{{ formatSignalScore(selectedCandidate.score) }}</strong>
-                <small>命中规则 / {{ SIGNAL_RULE_COUNT }} 条</small>
-              </div>
-              <div class="decision-card-item">
-                <span>20 日表现</span>
-                <strong :class="selectedCandidate.return20 === null ? 'text-status-neutral' : selectedCandidate.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(selectedCandidate.return20) }}</strong>
-                <small>历史窗口收益，不代表未来</small>
-              </div>
-              <div class="decision-card-item">
-                <span>数据状态</span>
-                <strong>{{ selectedCandidate.quality === 'ready' ? '数据完整' : '需要补齐' }}</strong>
-                <small>{{ selectedCandidate.factorVersion || '当前快照' }}</small>
-              </div>
-              <div class="decision-card-item">
-                <span>研究优先</span>
-                <strong :class="researchPriorityActionClass(selectedCandidate)">{{ candidatePriorityFor(selectedCandidate).levelLabel }}</strong>
-                <small>{{ candidatePriorityFor(selectedCandidate).score }} 分 · {{ candidatePriorityFor(selectedCandidate).actionLabel }}</small>
-              </div>
-            </div>
-            <div v-else class="decision-card-empty">
-              <Info :size="16" aria-hidden="true" />
-              <span>当前股票不在最新候选快照中，先看日线、估值和基本面。</span>
-            </div>
-            <div v-if="selectedCandidate" class="decision-signal-row">
-              <span class="decision-signal-label">入选依据</span>
-              <div class="signal-list decision-signal-list">
-                <span v-for="signal in selectedCandidate.signals" :key="signal" class="signal-tag signal-tag-teal">{{ formatFactorLabel(signal) }}</span>
-                <span v-if="!selectedCandidate.signals.length" class="muted-inline">暂无明确信号</span>
-              </div>
-            </div>
-            <div v-if="selectedCandidate" class="decision-action-row">
-              <span>研究动作</span>
-              <strong :class="researchPriorityActionClass(selectedCandidate)">{{ candidatePriorityFor(selectedCandidate).actionLabel }}</strong>
-              <small>{{ researchPriorityDetail(selectedCandidate) }}</small>
-            </div>
-            <p class="decision-card-note">
-              技术信号用于缩小研究范围；估值和财务数据需要结合报告期与样本完整度人工核对。
-            </p>
-          </section>
-          <section v-if="selectedStock" class="research-run-panel" aria-label="结构化研究报告">
-            <div class="research-run-heading">
-              <div>
-                <p class="section-kicker">
-                  RESEARCH RUN V1
-                </p>
-                <h2>结构化研究报告</h2>
-                <small v-if="latestResearchReport">最近生成 {{ formatDateTime(latestResearchReport.generatedAt) }}</small>
-              </div>
-              <div class="research-run-heading-actions">
-                <button class="secondary-button research-run-generate-button" type="button" :disabled="researchRunGenerating || researchRunLoading" title="按当前已保存数据生成一份可回看的研究快照" @click="generateResearchReport">
-                  <RotateCcw :size="15" :class="researchRunGenerating ? 'animate-spin' : ''" aria-hidden="true" />
-                  {{ researchRunGenerating ? '生成中' : latestResearchReport ? '重新生成' : '生成报告' }}
-                </button>
-                <button v-if="latestResearchReport" class="secondary-button research-run-export-button" type="button" title="将当前研究报告下载为 Markdown 文件" aria-label="导出当前研究报告为 Markdown 文件" @click="downloadResearchReport">
-                  <Download :size="15" aria-hidden="true" />
-                  导出 Markdown
-                </button>
-                <button v-if="latestResearchReport" class="secondary-button research-run-copy-button" type="button" :disabled="researchReportCopying" title="将当前研究报告复制到剪贴板" aria-label="复制当前研究报告 Markdown" @click="copyResearchReport">
-                  <Copy :size="15" aria-hidden="true" />
-                  {{ researchReportCopying ? '复制中' : '复制 Markdown' }}
-                </button>
-              </div>
-            </div>
-            <p v-if="researchReportCopyMessage" class="research-report-copy-message" :class="{ 'research-report-copy-message-error': researchReportCopyOutcome === 'error' }" role="status">
-              {{ researchReportCopyMessage }}
-            </p>
-            <div v-if="researchRunLoading" class="research-run-state" role="status">
-              <RefreshCw :size="16" class="animate-spin" aria-hidden="true" />
-              <span>正在读取研究历史</span>
-            </div>
-            <div v-else-if="researchRunError" class="research-run-state research-run-state-error" role="status">
-              <Info :size="16" aria-hidden="true" />
-              <span>{{ parsedError(researchRunError).message }}</span>
-              <button class="text-button" type="button" @click="selectedStock && loadResearchRuns(selectedStock.tsCode)">
-                重试
-              </button>
-            </div>
-            <template v-else-if="latestResearchReport">
-              <QuantDecisionRecommendation
-                :report="latestResearchReport"
-                :summary="researchAiSummary"
-                :current-price="latestDailyBar?.close ?? selectedStock.latestClose"
-                :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
-                :data-freshness="decisionFreshness"
-                :data-freshness-detail="decisionFreshnessDetail"
-                :ai-review-generating="researchSummaryLoading || researchSummaryGenerating"
-                @request-ai-review="generateResearchSummary"
-              />
-              <QuantDecisionAssistantPanel
-                :run="latestResearchRun"
-                :latest-close="latestDailyBar?.close ?? selectedStock.latestClose"
-                :latest-trade-date="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
-                :assessment="decisionAssistant"
-                :history="decisionAssistantHistory"
-                :loading="decisionAssistantLoading"
-                :generating="decisionAssistantGenerating"
-                :error-message="decisionAssistantError ? parsedError(decisionAssistantError).message : null"
-                :ai-config-available="decisionAssistantAiConfigAvailable"
-                @assess="createDecisionAssistant"
-                @open-settings="aiSettingsOpen = true"
-              />
-              <QuantDecisionJournal
-                :run="latestResearchRun"
-                :record="researchDecisionRecord"
-                :history="researchDecisionHistory"
-                :loading="researchDecisionLoading"
-                :history-loading="researchDecisionHistoryLoading"
-                :saving="researchDecisionSaving"
-                :latest-price="latestDailyBar?.close ?? selectedStock.latestClose"
-                :latest-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
-                :load-error-message="researchDecisionLoadError ? parsedError(researchDecisionLoadError).message : null"
-                :history-error-message="researchDecisionHistoryError ? parsedError(researchDecisionHistoryError).message : null"
-                :save-error-message="researchDecisionSaveError ? parsedError(researchDecisionSaveError).message : null"
-                :save-message="researchDecisionSaveMessage"
-                @save="saveResearchDecision"
-              />
-              <div class="research-run-summary">
-                <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">
-                  <span>当前状态</span>
-                  <strong>{{ researchRunStatusLabel(latestResearchReport.status) }}</strong>
-                  <small>{{ latestResearchReport.reportVersion }}</small>
-                </div>
-                <div>
-                  <span>研究动作</span>
-                  <strong>{{ researchRunActionLabel(latestResearchReport.action) }}</strong>
-                  <small>{{ latestResearchReport.score === null ? '--' : `${latestResearchReport.score.toFixed(1)} / 100` }}</small>
-                </div>
-                <div>
-                  <span>证据条数</span>
-                  <strong>{{ latestResearchReport.evidence.length }}</strong>
-                  <small>{{ latestResearchReport.sources.length }} 个来源</small>
-                </div>
-              </div>
-              <p class="research-run-headline">
-                {{ latestResearchReport.headline }}
-              </p>
-              <div class="research-run-guidance-grid">
-                <div v-if="latestResearchReport.strengths.length" class="research-run-guidance research-run-guidance-positive">
-                  <span>支持依据</span>
-                  <ul>
-                    <li v-for="item in latestResearchReport.strengths" :key="`strength-${item}`">
-                      {{ item }}
-                    </li>
-                  </ul>
-                </div>
-                <div v-if="latestResearchReport.risks.length" class="research-run-guidance research-run-guidance-danger">
-                  <span>风险核对</span>
-                  <ul>
-                    <li v-for="item in latestResearchReport.risks" :key="`risk-${item}`">
-                      {{ item }}
-                    </li>
-                  </ul>
-                </div>
-                <div v-if="latestResearchReport.gaps.length" class="research-run-guidance research-run-guidance-warning">
-                  <span>数据缺口</span>
-                  <ul>
-                    <li v-for="item in latestResearchReport.gaps" :key="`gap-${item}`">
-                      {{ item }}
-                    </li>
-                  </ul>
-                </div>
-                <div class="research-run-guidance research-run-guidance-neutral">
-                  <span>下一步</span>
-                  <ul>
-                    <li v-for="item in latestResearchReport.nextActions" :key="`next-${item}`">
-                      {{ item }}
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <section class="research-run-timeline-panel" aria-label="研究决策轨迹">
-                <div class="research-run-timeline-heading">
-                  <div>
-                    <p class="section-kicker">
-                      DECISION TIMELINE
-                    </p>
-                    <h3>研究决策轨迹</h3>
-                  </div>
-                  <div class="research-run-timeline-heading-meta">
-                    <span>{{ researchRunTimeline.points.length }} / {{ researchRunTimeline.totalRunCount }} 次</span>
-                    <span class="research-run-timeline-info" role="img" tabindex="0" aria-label="轨迹只记录已保存研究快照的变化，不替代当前报告的研究动作" title="轨迹只记录已保存研究快照的变化，不替代当前报告的研究动作">
-                      <Info :size="14" aria-hidden="true" />
-                    </span>
-                  </div>
-                </div>
-                <div v-if="researchRunTimeline.points.length < 2" class="research-run-timeline-state" role="status">
-                  <Info :size="15" aria-hidden="true" />
-                  <span>当前只有 1 份研究快照，再生成 1 份后可观察分数和动作轨迹。</span>
-                </div>
-                <template v-else>
-                  <div class="research-run-timeline-summary" role="list" aria-label="研究轨迹统计">
-                    <div role="listitem">
-                      <span>最近分数</span>
-                      <strong>{{ formatResearchRunTimelineScore(researchRunTimeline.latestScore) }}</strong>
-                      <small>当前报告</small>
-                    </div>
-                    <div role="listitem">
-                      <span>相邻变化</span>
-                      <strong :class="researchRunTimelineScoreClass(researchRunTimeline.latestScoreDirection)">{{ formatResearchRunTimelineDelta(researchRunTimeline.latestScoreDelta, researchRunTimeline.latestScoreDirection) }}</strong>
-                      <small>仅比较有限数值</small>
-                    </div>
-                    <div role="listitem">
-                      <span>状态 / 动作变化</span>
-                      <strong>{{ researchRunTimeline.statusChangeCount }} / {{ researchRunTimeline.actionChangeCount }}</strong>
-                      <small>最近可见快照</small>
-                    </div>
-                  </div>
-                  <div class="research-run-timeline-list">
-                    <article v-for="point in researchRunTimeline.points" :key="point.id" class="research-run-timeline-row">
-                      <div class="research-run-timeline-rail" aria-hidden="true">
-                        <span />
-                      </div>
-                      <div class="research-run-timeline-date">
-                        <time>{{ formatDateTime(point.generatedAt) }}</time>
-                        <small>{{ point.id.slice(0, 8) }}</small>
-                      </div>
-                      <div class="research-run-timeline-main">
-                        <div class="research-run-timeline-title">
-                          <span class="research-run-timeline-status" :class="`research-run-timeline-status-${point.status}`">{{ researchRunStatusLabel(point.status) }}</span>
-                          <strong>{{ researchRunActionLabel(point.action) }}</strong>
-                          <span v-if="point.statusChanged || point.actionChanged" class="research-run-timeline-change">结论变化</span>
-                        </div>
-                        <p>{{ point.headline }}</p>
-                        <small>{{ point.evidenceCount }} 条证据</small>
-                      </div>
-                      <div class="research-run-timeline-score" :class="researchRunTimelineScoreClass(point.scoreDirection)">
-                        <strong>{{ formatResearchRunTimelineScore(point.score) }}</strong>
-                        <span>{{ point.scoreDelta === null ? '无可比分数' : `相邻 ${formatResearchRunTimelineDelta(point.scoreDelta, point.scoreDirection)}` }}</span>
-                      </div>
-                    </article>
-                  </div>
-                </template>
-              </section>
-              <div class="research-run-evidence-groups">
-                <section v-for="group in researchEvidenceGroups" :key="group.dimension" class="research-run-evidence-group" :aria-labelledby="`research-evidence-${group.dimension}`">
-                  <div class="research-run-evidence-group-heading">
-                    <strong :id="`research-evidence-${group.dimension}`">{{ group.label }}</strong>
-                    <small>{{ group.items.length }} 条证据</small>
-                  </div>
-                  <div class="research-run-evidence-list">
-                    <div v-for="item in group.items" :id="researchEvidenceDomId(latestResearchReport.tsCode, item.key)" :key="item.key" class="research-run-evidence-row" :class="researchEvidenceStatusClass(item.status)" :title="`${item.source} · ${item.formulaVersion}`">
-                      <div class="research-run-evidence-main">
-                        <div class="research-run-evidence-title">
-                          <strong>{{ item.label }}</strong>
-                          <span>{{ researchEvidenceStatusLabel(item.status) }}</span>
-                          <small v-if="item.optional">可选证据</small>
-                        </div>
-                        <p>{{ item.detail }}</p>
-                      </div>
-                      <div class="research-run-evidence-value">
-                        <strong>{{ formatResearchEvidenceValue(item) }}</strong>
-                        <small>阈值 {{ item.threshold }}</small>
-                      </div>
-                      <div class="research-run-evidence-meta">
-                        <span>{{ item.source }}</span>
-                        <small>{{ formatResearchRunSourceDate(item.observedAt) }} · {{ item.formulaVersion }}</small>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </div>
-              <div class="research-run-sources">
-                <span>来源快照</span>
-                <span v-for="source in latestResearchReport.sources" :key="source.id" :title="source.formulaVersion">
-                  {{ source.name }} · {{ formatResearchRunSourceDate(source.observedAt) }}
-                </span>
-              </div>
-              <QuantAiResearchSummary
-                :report="latestResearchReport"
-                :summary="researchAiSummary"
-                :loading="researchSummaryLoading"
-                :generating="researchSummaryGenerating"
-                :stream-mode="researchSummaryStreamMode"
-                :stream-received-chars="researchSummaryStreamReceivedChars"
-                :audit-history="researchAiAudits"
-                :audit-history-loading="researchAiAuditsLoading"
-                :audit-history-error="researchAiAuditError ? parsedError(researchAiAuditError).message : null"
-                :error-message="researchSummaryError ? parsedError(researchSummaryError).message : null"
-                :configuration-error="researchSummaryConfigurationError"
-                :question-prompt-ready="researchQuestionPromptReady"
-                @generate="generateResearchSummary"
-                @open-settings="aiSettingsOpen = true"
-                @use-next-check="useResearchSummaryNextCheck"
-              />
-              <QuantAiResearchQuestion
-                v-if="!researchRunGenerating"
-                ref="researchQuestionPanel"
-                :report="latestResearchReport"
-                :input="researchQuestionInput"
-                :result="researchQuestion"
-                :loading="researchQuestionLoading"
-                :error-message="researchQuestionError ? parsedError(researchQuestionError).message : null"
-                :configuration-error="researchQuestionConfigurationError"
-                @update:input="researchQuestionInput = $event"
-                @ask="askResearchQuestion"
-                @open-settings="aiSettingsOpen = true"
-                @focus-evidence="focusResearchQuestionEvidence"
-              />
-              <section class="research-evidence-history-panel" aria-label="研究证据变化">
-                <div class="research-evidence-history-heading">
-                  <div>
-                    <p class="section-kicker">
-                      HISTORY DIFF
-                    </p>
-                    <h3>与上次快照相比</h3>
-                    <small v-if="researchEvidenceComparison">
-                      本次 {{ formatDateTime(researchEvidenceComparison.currentGeneratedAt) }} · 上次 {{ formatDateTime(researchEvidenceComparison.previousGeneratedAt) }}
-                    </small>
-                  </div>
-                  <span v-if="researchEvidenceComparison" class="research-evidence-history-count">
-                    {{ researchEvidenceComparison.changedCount }} 项变化
-                  </span>
-                </div>
-                <div v-if="researchRuns.length < 2" class="research-evidence-history-state" role="status">
-                  <Info :size="15" aria-hidden="true" />
-                  <span>当前只有 1 份研究快照，再生成 1 份后可比较证据变化。</span>
-                </div>
-                <template v-else-if="researchEvidenceComparison">
-                  <div class="research-evidence-history-summary">
-                    <div>
-                      <span>变化项</span>
-                      <strong>{{ researchEvidenceComparison.changedCount }}</strong>
-                      <small>共 {{ researchEvidenceComparison.totalEvidenceCount }} 项证据</small>
-                    </div>
-                    <div>
-                      <span>改善 / 恢复</span>
-                      <strong class="research-evidence-history-positive">{{ researchEvidenceComparison.improvedCount }}</strong>
-                      <small>状态或数据可用性变好</small>
-                    </div>
-                    <div>
-                      <span>转弱 / 缺失</span>
-                      <strong class="research-evidence-history-negative">{{ researchEvidenceComparison.weakenedCount }}</strong>
-                      <small>需要优先核对</small>
-                    </div>
-                    <div>
-                      <span>仍缺失</span>
-                      <strong>{{ researchEvidenceComparison.missingCount }}</strong>
-                      <small>没有用零值补齐</small>
-                    </div>
-                  </div>
-                  <div v-if="researchEvidenceComparison.items.length" class="research-evidence-history-list">
-                    <article v-for="change in researchEvidenceComparison.items" :key="change.key" class="research-evidence-history-row" :class="researchEvidenceChangeClass(change.kind)">
-                      <div class="research-evidence-history-main">
-                        <div class="research-evidence-history-title">
-                          <strong>{{ change.label }}</strong>
-                          <span>{{ change.kindLabel }}</span>
-                        </div>
-                        <small>{{ change.key }}</small>
-                      </div>
-                      <div class="research-evidence-history-values">
-                        <div>
-                          <small>上次</small>
-                          <strong>{{ researchEvidenceHistoryValue(change, false) }}</strong>
-                          <span>{{ researchEvidenceHistoryStatus(change, false) }}</span>
-                        </div>
-                        <ChevronRight :size="14" aria-hidden="true" />
-                        <div>
-                          <small>本次</small>
-                          <strong>{{ researchEvidenceHistoryValue(change, true) }}</strong>
-                          <span>{{ researchEvidenceHistoryStatus(change, true) }}</span>
-                        </div>
-                        <em v-if="change.valueDelta !== null">变化 {{ formatResearchEvidenceDelta(change) }}</em>
-                      </div>
-                      <p>{{ (change.current || change.previous)?.detail || '当前没有可补充的解释。' }}</p>
-                    </article>
-                  </div>
-                  <div v-else class="research-evidence-history-state" role="status">
-                    <CheckCircle2 :size="15" aria-hidden="true" />
-                    <span>最近两份报告的证据状态和数值没有明显变化。</span>
-                  </div>
-                </template>
-              </section>
-              <QuantAiResearchChangeExplanation
-                v-if="researchEvidenceComparison"
-                :comparison="researchEvidenceComparison"
-                :explanation="researchChangeExplanation"
-                :loading="false"
-                :generating="researchChangeExplanationGenerating"
-                :error-message="researchChangeExplanationError ? parsedError(researchChangeExplanationError).message : null"
-                :configuration-error="researchChangeExplanationConfigurationError"
-                :question-prompt-ready="researchQuestionPromptReady"
-                @generate="generateResearchChangeExplanation"
-                @open-settings="aiSettingsOpen = true"
-                @use-next-check="useResearchChangeNextCheck"
-                @focus-evidence="focusResearchQuestionEvidence"
-              />
-              <p class="research-run-note">
-                这是基于已保存数据的版本化研究快照；报告用于整理核对顺序，不是买入、卖出或收益预测。
-              </p>
-            </template>
-            <div v-else class="research-run-state" role="status">
-              <Info :size="16" aria-hidden="true" />
-              <span>还没有研究运行，生成一份报告后可在这里回看证据链。</span>
-            </div>
-          </section>
-          <section v-if="selectedCandidate" class="signal-persistence-panel" aria-label="信号持续性证据">
-            <div class="signal-persistence-heading">
-              <div>
-                <p class="section-kicker">
-                  SIGNAL PERSISTENCE
-                </p>
-                <h2>信号是否持续</h2>
-              </div>
-              <span class="candidate-persistence-state" :class="candidatePersistenceClass(selectedCandidate)">{{ candidatePersistenceLabel(selectedCandidate) }}</span>
-            </div>
-            <div class="signal-persistence-summary">
-              <div>
-                <span>出现比例</span>
-                <strong>{{ formatPersistenceRate(candidatePersistenceFor(selectedCandidate).persistenceRate) }}</strong>
-                <small>最近 {{ candidatePersistenceFor(selectedCandidate).sampleSize }} 次快照</small>
-              </div>
-              <div>
-                <span>相邻分数</span>
-                <strong :class="scoreDeltaClass(candidatePersistenceFor(selectedCandidate).scoreDelta)">{{ formatScoreDelta(candidatePersistenceFor(selectedCandidate).scoreDelta) }}</strong>
-                <small>最新对比前次</small>
-              </div>
-              <div>
-                <span>首末变化</span>
-                <strong :class="scoreDeltaClass(candidatePersistenceFor(selectedCandidate).scoreChange)">{{ formatScoreDelta(candidatePersistenceFor(selectedCandidate).scoreChange) }}</strong>
-                <small>当前窗口内</small>
-              </div>
-            </div>
-            <div class="signal-persistence-factors">
-              <div class="signal-persistence-subheading">
-                <span>因子出现频次</span>
-                <small>出现次数 / 快照样本</small>
-              </div>
-              <div v-if="candidatePersistenceFor(selectedCandidate).factorPersistence.length" class="signal-persistence-factor-list">
-                <span v-for="factor in candidatePersistenceFor(selectedCandidate).factorPersistence" :key="factor.factor" class="signal-persistence-factor" :title="`${formatFactorLabel(factor.factor)}出现比例 ${formatPersistenceRate(factor.rate)}`">
-                  <strong>{{ formatFactorLabel(factor.factor) }}</strong>
-                  <small>{{ factor.appearances }} / {{ candidatePersistenceFor(selectedCandidate).sampleSize || '--' }}</small>
-                </span>
-              </div>
-              <span v-else class="muted-inline">暂无可比较的历史因子</span>
-            </div>
-            <div class="signal-persistence-evidence">
-              <div class="signal-persistence-subheading">
-                <span>最近快照证据</span>
-                <small>服务端已保存记录</small>
-              </div>
-              <div v-if="candidatePersistenceFor(selectedCandidate).evidence.length" class="signal-persistence-evidence-list">
-                <div v-for="evidence in candidatePersistenceFor(selectedCandidate).evidence" :key="evidence.snapshotId" class="signal-persistence-evidence-row">
-                  <span class="signal-persistence-evidence-date">{{ formatDateTime(evidence.generatedAt) }}</span>
-                  <strong>{{ evidence.present ? `命中 ${formatSignalScore(evidence.score)}` : '未出现在快照' }}</strong>
-                  <span v-if="evidence.present" class="signal-list signal-persistence-evidence-tags">
-                    <span v-for="factor in evidence.matchedFactors" :key="`${evidence.snapshotId}-${factor}`" class="signal-tag signal-tag-teal">{{ formatFactorLabel(factor) }}</span>
-                  </span>
-                </div>
-              </div>
-              <span v-else class="muted-inline">暂无历史快照，请完成一次日线同步</span>
-            </div>
-            <span class="signal-persistence-note" title="持续性只描述当前观察池中已保存的快照样本；它是筛选线索，不是买入或卖出指令。" aria-label="信号持续性口径说明">
-              <Info :size="15" aria-hidden="true" />
-            </span>
-          </section>
-          <section v-if="selectedStock" class="timing-window-panel" aria-label="中长线时机窗口">
-            <div class="timing-window-heading">
-              <div>
-                <p class="section-kicker">
-                  TIMING WINDOW V1
-                </p>
-                <h2>中长线时机窗口</h2>
-              </div>
-              <span class="timing-window-state" :class="timingWindowClass(timingWindow)">{{ timingWindow.label }}</span>
-            </div>
-            <div class="timing-window-headline" :class="timingWindowClass(timingWindow)">
-              <strong>{{ timingWindow.label }}</strong>
-              <p>{{ timingWindow.headline }}</p>
-            </div>
-            <div class="timing-window-metrics">
-              <div v-for="metric in timingWindow.metrics" :key="metric.key" class="timing-window-metric" :class="timingWindowMetricClass(metric.status)">
-                <div class="timing-window-metric-heading">
-                  <span>{{ metric.label }}</span>
-                  <small>{{ timingWindowMetricStatusLabel(metric.status) }}</small>
-                </div>
-                <strong>{{ formatTimingWindowMetric(metric) }}</strong>
-                <p>{{ metric.detail }}</p>
-                <small class="timing-window-threshold">阈值：{{ metric.threshold }}</small>
-              </div>
-            </div>
-            <span class="timing-window-note" title="按最近 N 根有效日线计算：MA20、MA60、20 日高点回撤和近 20 个收益波动率。状态只用于研究排序，不是买入或卖出指令。" aria-label="时机窗口口径说明">
-              <Info :size="15" aria-hidden="true" />
-            </span>
-          </section>
-          <section v-if="selectedStock" class="timing-history-panel" aria-label="时机条件历史回看">
-            <div class="timing-history-heading">
-              <div>
-                <p class="section-kicker">
-                  HISTORY CHECK V1
-                </p>
-                <h2>历史条件回看</h2>
-              </div>
-              <span class="timing-history-current" :class="timingHistoryStateClass(timingHistory.currentState)">
-                当前：{{ timingHistory.currentLabel }}
-              </span>
-            </div>
-            <div class="timing-history-meta">
-              <span>有效日线 <strong>{{ timingHistory.availableBars }}</strong> 根</span>
-              <span>可回看 <strong>{{ timingHistory.evaluatedWindows }}</strong> 个截点</span>
-              <span v-if="timingHistory.dataStartDate && timingHistory.dataEndDate">数据范围 {{ formatTradeDate(timingHistory.dataStartDate) }} → {{ formatTradeDate(timingHistory.dataEndDate) }}</span>
-            </div>
-            <div v-if="timingHistoryCurrentBucket && timingHistory.evaluatedWindows" class="timing-history-current-grid">
-              <div>
-                <span>当前状态样本</span>
-                <strong>{{ timingHistoryCurrentBucket.sampleSize }}</strong>
-                <small>历史截点</small>
-              </div>
-              <div>
-                <span>未来 20 日上涨比例</span>
-                <strong>{{ formatTimingHistoryRate(timingHistoryCurrentBucket.positiveRate) }}</strong>
-                <small>{{ timingHistoryCurrentBucket.positiveCount }} / {{ timingHistoryCurrentBucket.sampleSize }} 个样本</small>
-              </div>
-              <div>
-                <span>中位数收益</span>
-                <strong :class="timingHistoryCurrentBucket.medianForwardReturn20 === null ? 'text-status-neutral' : timingHistoryCurrentBucket.medianForwardReturn20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatTimingHistoryPercent(timingHistoryCurrentBucket.medianForwardReturn20) }}</strong>
-                <small>未来 20 个有效交易日</small>
-              </div>
-              <div>
-                <span>平均收益</span>
-                <strong :class="timingHistoryCurrentBucket.averageForwardReturn20 === null ? 'text-status-neutral' : timingHistoryCurrentBucket.averageForwardReturn20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatTimingHistoryPercent(timingHistoryCurrentBucket.averageForwardReturn20) }}</strong>
-                <small>重叠历史窗口</small>
-              </div>
-            </div>
-            <div v-if="timingHistory.evaluatedWindows" class="timing-history-table" role="table" aria-label="四类时机状态历史对照">
-              <div class="timing-history-table-row timing-history-table-head" role="row">
-                <span role="columnheader">状态</span>
-                <span role="columnheader">样本</span>
-                <span role="columnheader">上涨比例</span>
-                <span role="columnheader">中位数</span>
-                <span role="columnheader">最好 / 最差</span>
-              </div>
-              <div v-for="bucket in timingHistory.buckets" :key="bucket.state" class="timing-history-table-row" :class="timingHistoryStateClass(bucket.state)" role="row" :title="timingHistoryBucketTitle(bucket)">
-                <strong role="cell">{{ bucket.label }}</strong>
-                <span role="cell">{{ bucket.sampleSize || '--' }}</span>
-                <span role="cell">{{ formatTimingHistoryRate(bucket.positiveRate) }}</span>
-                <span role="cell" :class="bucket.medianForwardReturn20 === null ? 'text-status-neutral' : bucket.medianForwardReturn20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatTimingHistoryPercent(bucket.medianForwardReturn20) }}</span>
-                <span role="cell">{{ formatTimingHistoryPercent(bucket.bestForwardReturn20) }} / {{ formatTimingHistoryPercent(bucket.worstForwardReturn20) }}</span>
-              </div>
-            </div>
-            <div v-else class="timing-history-empty" role="status">
-              <Info :size="15" aria-hidden="true" />
-              <span>至少需要 80 根有效日线，才能回看未来 20 个交易日结果</span>
-            </div>
-            <span class="timing-history-note" title="统计只使用当前股票已保存的本地有效日线；状态窗口与未来收益窗口分离，但历史截点可能重叠。结果不是预测，也不是买入或卖出指令。" aria-label="历史回看口径说明">
-              <Info :size="15" aria-hidden="true" />
-            </span>
-          </section>
-          <section v-if="decisionEvidence" class="decision-evidence-panel" aria-label="中长线决策证据链">
-            <div class="decision-evidence-heading">
-              <div>
-                <p class="section-kicker">
-                  DECISION EVIDENCE V1
-                </p>
-                <h2>中长线时机证据链</h2>
-              </div>
-              <div class="decision-evidence-score" :class="decisionEvidenceActionClass(decisionEvidence.action)">
-                <strong>{{ decisionEvidence.gateScore === null ? '--' : `${decisionEvidence.gateScore}%` }}</strong>
-                <span>门槛通过率</span>
-              </div>
-            </div>
-            <div class="decision-evidence-action" :class="decisionEvidenceActionClass(decisionEvidence.action)">
-              <div>
-                <span>研究动作</span>
-                <strong>{{ decisionEvidence.label }}</strong>
-              </div>
-              <p>{{ decisionEvidence.headline }}</p>
-            </div>
-            <div class="decision-evidence-counts" aria-label="证据链统计">
-              <span><strong>{{ decisionEvidence.passedCount }}</strong> 项通过</span>
-              <span><strong>{{ decisionEvidence.cautionCount }}</strong> 项注意</span>
-              <span><strong>{{ decisionEvidence.failedCount }}</strong> 项未通过</span>
-              <span><strong>{{ decisionEvidence.missingCount }}</strong> 项缺失</span>
-            </div>
-            <div class="decision-evidence-list">
-              <div v-for="item in decisionEvidence.evidence" :key="item.key" class="decision-evidence-row" :class="decisionEvidenceStatusClass(item.status)">
-                <div class="decision-evidence-row-main">
-                  <div class="decision-evidence-row-title">
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ decisionEvidenceStatusLabel(item.status) }}</span>
-                  </div>
-                  <div class="decision-evidence-values">
-                    <strong>{{ item.value }}</strong>
-                    <small>门槛 {{ item.threshold }}</small>
-                  </div>
-                  <p>{{ item.detail }}</p>
-                </div>
-                <div class="decision-evidence-meta">
-                  <span>{{ item.source }}</span>
-                  <small>{{ item.observedAt?.length === 8 ? formatEvidenceDate(item.observedAt) : item.observedAt ? formatDateTime(item.observedAt) : '未记录' }}</small>
-                </div>
-              </div>
-            </div>
-            <div class="decision-evidence-guidance">
-              <div>
-                <span>等待条件</span>
-                <ul>
-                  <li v-for="condition in decisionEvidence.waitConditions" :key="`wait-${condition}`">
-                    {{ condition }}
-                  </li>
-                  <li v-if="!decisionEvidence.waitConditions.length">
-                    当前没有额外等待条件
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <span>重新评估条件</span>
-                <ul>
-                  <li v-for="condition in decisionEvidence.reassessmentConditions" :key="`reassess-${condition}`">
-                    {{ condition }}
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <p class="decision-evidence-note">
-              公式 {{ decisionEvidence.formulaVersion }} · 这是一套可复核的研究时机框架，不是买入、卖出或收益承诺；所有门槛均基于当前观察池与已返回数据。
-            </p>
-          </section>
-          <section class="value-quality-panel" aria-label="中长线价值质量评分">
-            <div class="value-quality-heading">
-              <div>
-                <p class="section-kicker">
-                  VALUE QUALITY V2
-                </p>
-                <h2>中长线价值质量</h2>
-              </div>
-              <span v-if="loading.valueQuality" class="section-meta">刷新中</span>
-              <span v-else-if="errors.valueQuality && selectedValueQuality" class="section-meta text-status-danger">上次结果</span>
-              <span v-else-if="selectedValueQuality" class="section-meta">{{ valueQualityStatusLabel(selectedValueQuality) }}</span>
-              <span v-else-if="selectedStock" class="section-meta">读取中</span>
-            </div>
-            <div v-if="loading.valueQuality && !selectedValueQuality" class="value-quality-state" role="status">
-              <SkeletonCard variant="content" />
-            </div>
-            <div v-else-if="errors.valueQuality && !selectedValueQuality" class="value-quality-state" role="alert">
-              <Info :size="17" aria-hidden="true" />
-              <span>价值质量暂时不可用</span>
-              <button class="text-button" type="button" @click="loadValueSelection">
-                重试
-              </button>
-            </div>
-            <template v-else-if="selectedValueQuality">
-              <div v-if="loading.valueQuality" class="data-refresh-feedback data-refresh-feedback-loading" role="status">
-                <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
-                <span>正在刷新价值质量，先显示上次成功结果</span>
-              </div>
-              <div v-else-if="errors.valueQuality" class="data-refresh-feedback data-refresh-feedback-error" role="alert">
-                <Info :size="15" aria-hidden="true" />
-                <span>价值质量刷新失败，以下为上次成功结果：{{ parsedError(errors.valueQuality).message }}</span>
-                <button class="text-button" type="button" @click="loadValueSelection">
-                  重试
-                </button>
-              </div>
-              <div class="value-quality-score-row">
-                <div>
-                  <span>研究评分</span>
-                  <strong :class="valueQualityStatusClass(selectedValueQuality)">{{ formatValueQualityScore(selectedValueQuality) }}</strong>
-                </div>
-                <div>
-                  <span>风险扣分</span>
-                  <strong :class="selectedValueQuality.riskDeduction > 0 ? 'value-quality-status-partial' : 'text-status-success'">-{{ selectedValueQuality.riskDeduction.toFixed(1) }}</strong>
-                </div>
-                <div>
-                  <span>报告期</span>
-                  <strong>{{ formatTradeDate(selectedValueQuality.financialReportDate) }}</strong>
-                </div>
-              </div>
-              <div class="value-quality-dimension-grid">
-                <div v-for="dimension in selectedValueQuality.dimensions" :key="dimension.key" class="value-quality-dimension" :class="`value-quality-dimension-${dimension.status}`">
-                  <div>
-                    <span>{{ dimension.label }}</span>
-                    <strong>{{ formatValueQualityDimension(selectedValueQuality, dimension.key) }}</strong>
-                  </div>
-                  <div class="value-quality-meter" aria-hidden="true">
-                    <span :style="{ width: `${dimension.score === null ? 0 : (dimension.score / dimension.maxScore) * 100}%` }" />
-                  </div>
-                  <small>{{ dimension.status === 'ready' ? '样本可比较' : dimension.status === 'partial' ? '部分指标可用' : '暂无可比数据' }} · {{ valueQualityDimensionSamples(dimension) }} 只</small>
-                </div>
-              </div>
-              <div v-if="selectedValueQuality.riskNotes.length" class="value-quality-notes value-quality-notes-warning">
-                <strong>先核对</strong>
-                <span v-for="note in selectedValueQuality.riskNotes" :key="note">{{ note }}</span>
-              </div>
-              <div v-if="selectedValueQuality.missingFields.length" class="value-quality-notes value-quality-notes-muted">
-                <strong>数据缺口</strong>
-                <span v-for="field in selectedValueQuality.missingFields" :key="field">{{ field }}</span>
-              </div>
-              <p class="value-quality-note">
-                估值、质量、增长、韧性、趋势分别占 30 / 30 / 20 / 15 / 5 分；百分位只代表当前观察池，评分用于研究排序，不代表未来收益。观察 {{ formatDateTime(selectedValueQuality.observedAt) }}
-              </p>
-            </template>
-            <div v-else class="value-quality-state">
-              <Info :size="17" aria-hidden="true" />
-              <span>当前股票暂无价值质量数据</span>
-              <button class="text-button" type="button" @click="loadValueSelection">
-                重试
-              </button>
-            </div>
-          </section>
-          <section class="research-marker-editor" aria-label="研究记录">
-            <div class="research-marker-heading">
-              <div>
-                <p class="section-kicker">
-                  RESEARCH LOG
-                </p>
-                <h2>我的研究记录</h2>
-              </div>
-              <span class="section-meta">只保存你的工作状态，不影响信号分</span>
-            </div>
-            <div class="research-marker-form">
-              <label class="research-field">
-                <span>状态</span>
-                <select v-model="researchFormStatus" class="field-control">
-                  <option v-for="option in researchStatusOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-                </select>
-              </label>
-              <label class="research-field research-field-date">
-                <span>复查日期</span>
-                <input v-model="researchFormReviewDate" class="field-control" type="date">
-              </label>
-              <label class="research-field research-field-note">
-                <span>备注</span>
-                <textarea v-model="researchFormNote" class="field-control research-note-input" maxlength="1000" placeholder="记录需要核对的事项、假设或下一步动作" />
-              </label>
-              <button class="primary-button research-save-button" type="button" :disabled="researchSaving" @click="saveResearchMarker">
-                <Save :size="15" aria-hidden="true" />
-                {{ researchSaving ? '保存中' : '保存记录' }}
-              </button>
-            </div>
-            <p v-if="researchSaveMessage" class="research-save-message" role="status">
-              {{ researchSaveMessage }}
-            </p>
-            <p v-if="researchSaveError" class="research-save-error" role="alert">
-              {{ parsedError(researchSaveError).message }}
-            </p>
-          </section>
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">
-                PRICE & DAILY DATA
-              </p>
-              <h2 id="daily-title" class="section-title">
-                走势与日线
-              </h2>
-            </div>
-            <span class="section-meta">{{ selectedStock?.tsCode || '未选择股票' }}</span>
-          </div>
-          <div
-            v-if="selectedStock && researchSummary"
-            class="research-summary"
-            :class="`research-summary-${researchSummary.tone}`"
-            aria-label="研究摘要"
-          >
-            <div class="research-summary-heading">
-              <div>
-                <p class="section-kicker">
-                  RESEARCH READOUT
-                </p>
-                <h3>
-                  研究摘要
-                </h3>
-              </div>
-              <span
-                class="status-chip"
-                :class="researchSummary.tone === 'positive' ? 'status-enabled' : researchSummary.tone === 'warning' ? 'status-partial' : 'status-info'"
-              >
-                {{ researchSummary.label }}
-              </span>
-            </div>
-            <p class="research-summary-headline">
-              {{ researchSummary.headline }}
-            </p>
-            <div class="research-dimensions" aria-label="四维研究判断">
-              <div
-                v-for="dimension in researchSummary.dimensions"
-                :key="dimension.key"
-                class="research-dimension"
-                :class="`research-dimension-${dimension.state}`"
-              >
-                <span>{{ dimension.label }}</span>
-                <strong>{{ dimension.detail }}</strong>
-              </div>
-            </div>
-            <div class="research-summary-grid">
-              <div class="research-summary-column">
-                <span class="research-summary-label">支持依据</span>
-                <ul v-if="researchSummary.support.length">
-                  <li
-                    v-for="item in researchSummary.support"
-                    :key="`support-${item}`"
-                  >
-                    {{ item }}
-                  </li>
-                </ul>
-                <span v-else class="muted-inline">暂无明确支持依据</span>
-              </div>
-              <div class="research-summary-column">
-                <span class="research-summary-label">需要核对</span>
-                <ul v-if="researchSummary.watchouts.length">
-                  <li
-                    v-for="item in researchSummary.watchouts"
-                    :key="`watchout-${item}`"
-                  >
-                    {{ item }}
-                  </li>
-                </ul>
-                <span v-else class="muted-inline">暂未发现额外核对项</span>
-              </div>
-              <div class="research-summary-column">
-                <span class="research-summary-label">下一步核对</span>
-                <ul>
-                  <li
-                    v-for="item in researchSummary.nextChecks"
-                    :key="`check-${item}`"
-                  >
-                    {{ item }}
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <p class="valuation-note">
-              研究状态只由当前观察池可用数据生成，不代表买入、卖出或收益判断
-            </p>
-          </div>
-          <div class="valuation-section" aria-label="估值速览">
-            <div class="valuation-heading">
-              <div>
-                <p class="section-kicker">
-                  VALUATION SNAPSHOT
-                </p>
-                <h3>
-                  估值速览
-                </h3>
-              </div>
-              <span v-if="valuation" class="section-meta">观察 {{ formatDateTime(valuation.observedAt) }}</span>
-              <span v-else-if="selectedStock" class="section-meta">读取中</span>
-            </div>
-            <div v-if="loading.valuation" class="valuation-state" aria-label="估值数据加载中">
-              <SkeletonCard variant="content" />
-            </div>
-            <div v-else-if="errors.valuation" class="valuation-state" role="status">
-              <Info :size="17" aria-hidden="true" />
-              <span class="valuation-state-copy">估值数据暂时不可用：{{ valuationErrorMessage(errors.valuation) }}</span>
-              <button class="text-button" type="button" @click="selectedTsCode && loadValuation(selectedTsCode)">
-                重试
-              </button>
-            </div>
-            <div v-else-if="valuation && hasValuationData" class="valuation-grid">
-              <div class="valuation-item">
-                <span>动态 PE</span>
-                <strong>{{ formatNumber(valuation.dynamicPe) }}</strong>
-              </div>
-              <div class="valuation-item">
-                <span>TTM PE</span>
-                <strong>{{ formatNumber(valuation.peTtm) }}</strong>
-              </div>
-              <div class="valuation-item">
-                <span>静态 PE</span>
-                <strong>{{ formatNumber(valuation.peStatic) }}</strong>
-              </div>
-              <div class="valuation-item">
-                <span>PB</span>
-                <strong>{{ formatNumber(valuation.pb) }}</strong>
-              </div>
-              <div class="valuation-item">
-                <span>PS</span>
-                <strong>{{ formatNumber(valuation.ps) }}</strong>
-              </div>
-              <div class="valuation-item">
-                <span>PEG</span>
-                <strong>{{ formatNumber(valuation.peg) }}</strong>
-              </div>
-              <div class="valuation-item valuation-item-wide">
-                <span>总市值</span>
-                <strong>{{ formatMarketCap(valuation.marketCap) }}</strong>
-              </div>
-            </div>
-            <div v-else class="valuation-state">
-              <Info :size="17" aria-hidden="true" />
-              <span>{{ selectedStock ? '当前没有可比较的估值字段' : '选择一只股票后查看估值' }}</span>
-            </div>
-            <div v-if="valuationComparison" class="valuation-comparison">
-              <div class="valuation-comparison-row">
-                <span>TTM PE 相对观察池</span>
-                <strong>{{ formatComparisonPosition(valuationComparison.ttmPeHigherThanPercent) }}</strong>
-                <small>样本 {{ valuationComparison.ttmPeSampleCount }} 只</small>
-              </div>
-              <div class="valuation-comparison-row">
-                <span>PB 相对观察池</span>
-                <strong>{{ formatComparisonPosition(valuationComparison.pbHigherThanPercent) }}</strong>
-                <small>样本 {{ valuationComparison.pbSampleCount }} 只</small>
-              </div>
-              <p>比较范围：当前观察池 {{ valuationComparison.sampleCount }} 只，可用估值 {{ valuationComparison.availableSampleCount }} 只</p>
-            </div>
-            <div v-else-if="valuationComparisonError && valuation" class="valuation-comparison valuation-comparison-error">
-              <div class="financial-comparison-empty">
-                <Info :size="15" aria-hidden="true" />
-                <span>观察池相对位置暂不可用：{{ valuationErrorMessage(valuationComparisonError) }}</span>
-                <button class="text-button" type="button" @click="selectedTsCode && loadValuation(selectedTsCode)">
-                  重试
-                </button>
-              </div>
-            </div>
-            <p class="valuation-note">
-              估值只用于同口径横向比较；相对位置仅代表当前观察池，不代表行业估值
-            </p>
-          </div>
-          <div class="financial-section" aria-label="基本面速览">
-            <div class="valuation-heading">
-              <div>
-                <p class="section-kicker">
-                  FINANCIAL QUALITY
-                </p>
-                <h3>
-                  基本面速览
-                </h3>
-              </div>
-              <span v-if="financialQuality" class="section-meta">最近已披露报告 · {{ financialQuality.reportDateName || formatTradeDate(financialQuality.reportDate) }}</span>
-              <span v-else-if="selectedStock" class="section-meta">读取中</span>
-            </div>
-            <div v-if="financialQuality" class="financial-report-meta">
-              <span>报告期 <strong>{{ formatTradeDate(financialQuality.reportDate) }}</strong></span>
-              <span>公告日期 <strong>{{ formatTradeDate(financialQuality.noticeDate) }}</strong></span>
-              <span>报告口径 <strong>{{ financialQuality.reportType || '最近已披露' }}</strong></span>
-            </div>
-            <div v-if="loading.financial" class="valuation-state" aria-label="基本面数据加载中">
-              <SkeletonCard variant="content" />
-            </div>
-            <div v-else-if="errors.financial" class="valuation-state" role="status">
-              <Info :size="17" aria-hidden="true" />
-              <span>基本面数据暂时不可用</span>
-              <button class="text-button" type="button" @click="selectedTsCode && loadFinancialQuality(selectedTsCode)">
-                重试
-              </button>
-            </div>
-            <div v-else-if="financialQuality && hasFinancialData" class="financial-grid">
-              <div class="financial-item">
-                <span>营业收入</span>
-                <strong>{{ formatFinancialAmount(financialQuality.revenue) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>归母净利润</span>
-                <strong>{{ formatFinancialAmount(financialQuality.netProfit) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>营收同比</span>
-                <strong :class="financialQuality.revenueYoY !== null && financialQuality.revenueYoY >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(financialQuality.revenueYoY) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>净利润同比</span>
-                <strong :class="financialQuality.netProfitYoY !== null && financialQuality.netProfitYoY >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(financialQuality.netProfitYoY) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>ROE 股东回报</span>
-                <strong>{{ formatMetricPercent(financialQuality.roe) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>毛利率</span>
-                <strong>{{ formatMetricPercent(financialQuality.grossMargin) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>净利率</span>
-                <strong>{{ formatMetricPercent(financialQuality.netMargin) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>资产负债率</span>
-                <strong>{{ formatMetricPercent(financialQuality.debtAssetRatio) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>经营现金流 / 营收</span>
-                <strong>{{ formatRatioPercent(financialQuality.operatingCashflowToRevenue) }}</strong>
-              </div>
-              <div class="financial-item">
-                <span>ROIC 投入资本回报</span>
-                <strong>{{ formatMetricPercent(financialQuality.roic) }}</strong>
-              </div>
-            </div>
-            <div v-else class="valuation-state">
-              <Info :size="17" aria-hidden="true" />
-              <span>{{ selectedStock ? '报告已找到，但当前指标暂缺' : '选择一只股票后查看基本面' }}</span>
-            </div>
-            <div v-if="financialTrendItems.length" class="financial-trend" aria-label="财务质量趋势">
-              <div class="financial-subheading">
-                <div>
-                  <span class="section-kicker">RECENT TREND</span>
-                  <strong>最近几期变化</strong>
-                </div>
-                <small>比较最近两期报告 · {{ financialHistory?.reports.length || 0 }} 期可读</small>
-              </div>
-              <div class="financial-trend-grid">
-                <div v-for="item in financialTrendItems" :key="item.key" class="financial-trend-item">
-                  <span>{{ item.label }}</span>
-                  <strong>{{ item.format === 'growth' ? formatPercent(item.current) : formatMetricPercent(item.current) }}</strong>
-                  <span class="financial-trend-delta" :class="`trend-${item.tone}`">{{ item.state }} · {{ formatTrendDelta(item.delta) }}</span>
-                </div>
-              </div>
-            </div>
-            <div v-if="financialComparison || financialComparisonError" class="financial-comparison" aria-label="观察池财务质量比较">
-              <div class="financial-subheading">
-                <div>
-                  <span class="section-kicker">QUALITY POSITION</span>
-                  <strong>观察池质量位置</strong>
-                </div>
-                <small>仅当前观察池</small>
-              </div>
-              <div v-if="financialComparisonError" class="financial-comparison-empty">
-                <Info :size="15" aria-hidden="true" />
-                <span>同池质量比较暂时不可用</span>
-              </div>
-              <div v-else-if="financialComparison" class="financial-comparison-grid">
-                <div class="financial-comparison-item">
-                  <span>营收同比</span>
-                  <strong>{{ formatComparisonPosition(financialComparison?.revenueYoYHigherThanPercent ?? null) }}</strong>
-                  <small>样本 {{ financialComparison?.revenueYoYSampleCount ?? 0 }} 只</small>
-                </div>
-                <div class="financial-comparison-item">
-                  <span>净利润同比</span>
-                  <strong>{{ formatComparisonPosition(financialComparison?.netProfitYoYHigherThanPercent ?? null) }}</strong>
-                  <small>样本 {{ financialComparison?.netProfitYoYSampleCount ?? 0 }} 只</small>
-                </div>
-                <div class="financial-comparison-item">
-                  <span>ROE 股东回报</span>
-                  <strong>{{ formatComparisonPosition(financialComparison?.roeHigherThanPercent ?? null) }}</strong>
-                  <small>样本 {{ financialComparison?.roeSampleCount ?? 0 }} 只</small>
-                </div>
-                <div class="financial-comparison-item">
-                  <span>资产负债率</span>
-                  <strong>{{ formatLowerComparisonPosition(financialComparison?.debtAssetRatioLowerThanPercent ?? null) }}</strong>
-                  <small>样本 {{ financialComparison?.debtAssetRatioSampleCount ?? 0 }} 只</small>
-                </div>
-              </div>
-              <p class="financial-comparison-note">
-                可用报告 {{ financialComparison?.availableSampleCount ?? 0 }} / {{ financialComparison?.sampleCount ?? 0 }} 只；相对位置不代表行业排名或未来收益
-              </p>
-            </div>
-            <div v-if="financialQuality" class="financial-context-panel" aria-label="现金流韧性">
-              <div class="financial-subheading">
-                <div>
-                  <span class="section-kicker">CASHFLOW RESILIENCE</span>
-                  <strong>现金流韧性</strong>
-                </div>
-                <small>报告期 {{ formatTradeDate(financialQuality.reportDate) }}</small>
-              </div>
-              <div class="financial-context-grid">
-                <div class="financial-context-item">
-                  <span>经营现金流 / 营收</span>
-                  <strong>{{ formatRatioPercent(financialQuality.operatingCashflowToRevenue) }}</strong>
-                </div>
-                <div class="financial-context-item">
-                  <span>经营现金流 / 股</span>
-                  <strong>{{ formatNumber(financialQuality.operatingCashflowPerShare) }}</strong>
-                </div>
-                <div class="financial-context-item">
-                  <span>FCFF（历史）</span>
-                  <strong>{{ formatFinancialAmount(financialQuality.fcffBack) }}</strong>
-                </div>
-                <div class="financial-context-item">
-                  <span>FCFF（前瞻）</span>
-                  <strong>{{ formatFinancialAmount(financialQuality.fcffForward) }}</strong>
-                </div>
-                <div class="financial-context-item">
-                  <span>利息覆盖倍数</span>
-                  <strong>{{ formatMultiple(financialQuality.interestCoverage) }}</strong>
-                </div>
-                <div class="financial-context-item">
-                  <span>带息负债率</span>
-                  <strong>{{ formatMetricPercent(financialQuality.interestBearingDebtRatio) }}</strong>
-                </div>
-                <div class="financial-context-item">
-                  <span>现金比率</span>
-                  <strong>{{ formatRatioPercent(financialQuality.cashRatio) }}</strong>
-                </div>
-                <div class="financial-context-item">
-                  <span>负债规模</span>
-                  <strong>{{ formatFinancialAmount(financialQuality.totalLiability) }}</strong>
-                </div>
-              </div>
-              <p class="financial-context-note">
-                这些指标用于判断现金流和偿债韧性；资本开支逐项数据、回购和分红支付率暂未接通，不进入价值质量总分。
-              </p>
-            </div>
-            <div class="shareholder-return-panel" aria-label="股东回报">
-              <div class="financial-subheading">
-                <div>
-                  <span class="section-kicker">SHAREHOLDER RETURNS</span>
-                  <strong>股东回报</strong>
-                </div>
-                <small>{{ shareholderReturnHeaderLabel() }}</small>
-              </div>
-              <div v-if="loading.shareholderReturns && !selectedShareholderReturn" class="shareholder-return-state" role="status">
-                <SkeletonCard variant="content" />
-              </div>
-              <div v-else-if="errors.shareholderReturns && !selectedShareholderReturn" class="shareholder-return-state" role="alert">
-                <Info :size="16" aria-hidden="true" />
-                <span>股东回报暂时不可用</span>
-                <button class="text-button" type="button" @click="loadShareholderReturns">
-                  重试
-                </button>
-              </div>
-              <template v-else-if="selectedShareholderReturn">
-                <div v-if="loading.shareholderReturns" class="data-refresh-feedback data-refresh-feedback-loading" role="status">
-                  <RefreshCw :size="15" class="animate-spin" aria-hidden="true" />
-                  <span>正在刷新股东回报，先显示上次成功结果</span>
-                </div>
-                <div v-else-if="errors.shareholderReturns" class="data-refresh-feedback data-refresh-feedback-error" role="alert">
-                  <Info :size="15" aria-hidden="true" />
-                  <span>股东回报刷新失败，以下为上次成功结果：{{ parsedError(errors.shareholderReturns).message }}</span>
-                  <button class="text-button" type="button" @click="loadShareholderReturns">
-                    重试
-                  </button>
-                </div>
-                <div class="shareholder-return-grid">
-                  <div class="shareholder-return-item shareholder-return-item-primary">
-                    <span>近 12 个月股息率</span>
-                    <strong :class="shareholderReturnStatusClass(selectedShareholderReturn)">{{ formatDividendYield(selectedShareholderReturn.trailingDividendYield) }}</strong>
-                  </div>
-                  <div class="shareholder-return-item">
-                    <span>每股现金分红</span>
-                    <strong>{{ selectedShareholderReturn.trailingCashDividendPerShare === null ? '--' : selectedShareholderReturn.trailingCashDividendPerShare.toFixed(3) }}</strong>
-                  </div>
-                  <div class="shareholder-return-item">
-                    <span>近 5 年有分红</span>
-                    <strong>{{ selectedShareholderReturn.dividendYears }} 年</strong>
-                  </div>
-                  <div class="shareholder-return-item">
-                    <span>最新收盘价</span>
-                    <strong>{{ formatNumber(selectedShareholderReturn.latestClose) }}</strong>
-                  </div>
-                </div>
-                <div class="shareholder-return-provenance">
-                  <strong>{{ shareholderReturnSourceLabel(selectedShareholderReturn) }}</strong>
-                  <small v-if="selectedShareholderReturn.providerChain.length > 1">来源链：{{ selectedShareholderReturn.providerChain.join(' -> ') }}</small>
-                  <small v-if="selectedShareholderReturn.providerErrorCode">来源错误：{{ selectedShareholderReturn.providerErrorCode }}</small>
-                </div>
-                <div v-if="selectedShareholderReturn.distributions.length" class="shareholder-distribution-list">
-                  <div class="financial-subheading">
-                    <div>
-                      <strong>最近实施记录</strong>
-                    </div>
-                    <small>{{ shareholderReturnStatusLabel(selectedShareholderReturn) }}</small>
-                  </div>
-                  <div v-for="distribution in selectedShareholderReturn.distributions.slice(0, 4)" :key="`${distribution.endDate}-${distribution.payDate || distribution.exDate || 'pending'}`" class="shareholder-distribution-row">
-                    <span>{{ formatTradeDate(distribution.endDate) }}</span>
-                    <strong>每股 {{ distribution.cashDividendPerShare.toFixed(3) }} 元</strong>
-                    <small>{{ distribution.payDate ? `派息 ${formatTradeDate(distribution.payDate)}` : distribution.exDate ? `除息 ${formatTradeDate(distribution.exDate)}` : '日期待确认' }}</small>
-                  </div>
-                </div>
-                <div v-if="selectedShareholderReturn.missingFields.length" class="value-quality-notes value-quality-notes-muted">
-                  <strong>数据缺口</strong>
-                  <span v-for="field in selectedShareholderReturn.missingFields" :key="field">{{ field }}</span>
-                </div>
-                <p class="valuation-note">
-                  仅统计已实施现金分红；股息率按近 12 个月现金分红 / 最新本地收盘价计算。该指标用于研究上下文，不代表未来收益。
-                </p>
-              </template>
-              <div v-else class="shareholder-return-state">
-                <Info :size="16" aria-hidden="true" />
-                <span>选择一只股票后查看股东回报</span>
-              </div>
-            </div>
-            <p class="valuation-note">
-              金额单位：元；比例单位：%；数据来自最近已披露报告，指标用于观察，不代表未来收益
-            </p>
-          </div>
-          <div v-if="selectedStock && dailyBars.length" class="daily-overview">
-            <div class="daily-overview-copy">
-              <span class="daily-code">{{ selectedStock.tsCode }}</span>
-              <strong>{{ selectedStock.name || '未命名股票' }}</strong>
-              <span>最新交易日 {{ latestDate }}</span>
-              <span class="daily-latest">最新收盘 <strong>{{ formatNumber(latestDailyBar?.close ?? selectedStock.latestClose) }}</strong> <em :class="(latestDailyBar?.changePercent ?? selectedStock.latestChangePercent ?? 0) >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(latestDailyBar?.changePercent ?? selectedStock.latestChangePercent) }}</em></span>
-            </div>
-            <div class="chart-area" aria-label="收盘价轻量趋势图">
-              <div class="chart-grid-line chart-grid-line-top" />
-              <div class="chart-grid-line chart-grid-line-mid" />
-              <div class="chart-grid-line chart-grid-line-bottom" />
-              <div class="chart-bars">
-                <div v-for="bar in chartBars" :key="bar.date" class="chart-bar-column" :title="`${bar.date} ${formatNumber(bar.close)}`">
-                  <span class="chart-bar" :class="bar.positive ? 'chart-bar-positive' : 'chart-bar-negative'" :style="{ height: `${bar.height}%` }" />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div v-if="selectedStock && dailyBars.length" class="trend-structure" aria-label="多周期趋势结构">
-            <div class="trend-structure-heading">
-              <div>
-                <span class="section-kicker">MULTI-PERIOD STRUCTURE</span>
-                <strong>多周期趋势</strong>
-              </div>
-              <small>有效日线 {{ trendStructure.availableBars }} 根</small>
-            </div>
-            <div class="trend-structure-grid">
-              <div class="trend-structure-item">
-                <span>5 日表现</span>
-                <strong :class="trendStructure.return5 === null ? 'text-status-neutral' : trendStructure.return5 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.return5) }}</strong>
-              </div>
-              <div class="trend-structure-item">
-                <span>20 日表现</span>
-                <strong :class="trendStructure.return20 === null ? 'text-status-neutral' : trendStructure.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.return20) }}</strong>
-              </div>
-              <div class="trend-structure-item">
-                <span>60 日表现</span>
-                <strong :class="trendStructure.return60 === null ? 'text-status-neutral' : trendStructure.return60 >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.return60) }}</strong>
-              </div>
-              <div class="trend-structure-item">
-                <span>距 20 日均线</span>
-                <strong :class="trendStructure.ma20Gap === null ? 'text-status-neutral' : trendStructure.ma20Gap >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.ma20Gap) }}</strong>
-              </div>
-              <div class="trend-structure-item">
-                <span>60 日回撤</span>
-                <strong :class="trendStructure.drawdown60 === null ? 'text-status-neutral' : trendStructure.drawdown60 >= -0.05 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(trendStructure.drawdown60) }}</strong>
-              </div>
-            </div>
-            <div class="trend-structure-conclusion" :class="`trend-structure-${trendStructure.tone}`">
-              <span>结构结论</span>
-              <strong>{{ trendStructure.conclusion }}</strong>
-            </div>
-            <p class="valuation-note">
-              表现按价格间隔计算；指标用于观察当前结构，不代表未来收益
-            </p>
-          </div>
-          <div v-if="errors.daily && !loading.daily" class="inline-alert" role="alert">
-            <AlertCircle :size="16" aria-hidden="true" />
-            <span>{{ parsedError(errors.daily).message }}</span>
-            <button class="text-button" type="button" @click="selectedTsCode && loadDailyBars(selectedTsCode)">
-              重试
-            </button>
-          </div>
-          <DataTable
-            :data="dailyBars"
-            :columns="dailyColumns"
-            :loading="loading.daily"
-            min-width="820px"
-            empty-message="选择观察池中的股票后查看日线数据"
-          >
-            <template #cell-tradeDate="{ item }">
-              <span class="font-mono text-xs text-muted-foreground">{{ formatTradeDate(item.tradeDate) }}</span>
-            </template>
-            <template #cell-changePercent="{ item }">
-              <span :class="item.changePercent !== null && item.changePercent >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatPercent(item.changePercent) }}</span>
-            </template>
-          </DataTable>
-        </section>
-      </DetailDrawer>
-
-      <DetailDrawer
-        :open="comparisonDrawerOpen"
-        title="候选对比"
-        :description="`技术信号、估值和基本面 · ${comparisonStatusLabel}`"
-        width="lg"
-        @update:open="handleComparisonDrawerOpenChange"
-      >
-        <section class="comparison-content" aria-label="候选股票对比">
-          <div class="comparison-intro">
-            <p class="section-kicker">
-              COMPARE BEFORE RESEARCH
-            </p>
-            <h2>把候选放在同一张表里</h2>
-            <p>先比较技术事实，再看估值和最近已披露报告。缺失数据保留为空，不生成排名。</p>
-          </div>
-          <div v-if="comparisonLoading" class="comparison-loading" role="status">
-            正在读取估值与财务数据...
-          </div>
-          <div v-else class="comparison-table-wrap">
-            <table class="comparison-table">
-              <thead>
-                <tr>
-                  <th>指标</th>
-                  <th v-for="item in selectedCandidateItems" :key="item.id">
-                    <strong>{{ displayStockName(item) }}</strong>
-                    <small>{{ item.tsCode }}</small>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr class="comparison-group-row">
-                  <th :colspan="selectedCandidateItems.length + 1">
-                    技术信号
-                  </th>
-                </tr>
-                <tr>
-                  <th>信号覆盖</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-score`">
-                    {{ formatSignalScore(item.score) }}
-                  </td>
-                </tr>
-                <tr>
-                  <th>20 日表现</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-return20`" :class="item.return20 === null ? 'text-status-neutral' : item.return20 >= 0 ? 'text-status-success' : 'text-status-danger'">
-                    {{ formatPercent(item.return20) }}
-                  </td>
-                </tr>
-                <tr>
-                  <th>20 日均线</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-ma20`">
-                    {{ formatNumber(item.ma20) }}
-                  </td>
-                </tr>
-                <tr>
-                  <th>成交活跃度</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-volume`">
-                    {{ formatNumber(item.volumeRatio) }}
-                  </td>
-                </tr>
-                <tr>
-                  <th>池内强度</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-strength`">
-                    {{ formatNumber(item.relativeStrength) }}
-                  </td>
-                </tr>
-                <tr class="comparison-group-row">
-                  <th :colspan="selectedCandidateItems.length + 1">
-                    估值快照
-                  </th>
-                </tr>
-                <tr>
-                  <th>TTM PE</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-pe`">
-                    {{ comparisonErrors[item.tsCode]?.valuation ? '暂不可用' : formatNumber(comparisonValuations[item.tsCode]?.peTtm ?? null) }}
-                  </td>
-                </tr>
-                <tr>
-                  <th>PB</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-pb`">
-                    {{ comparisonErrors[item.tsCode]?.valuation ? '暂不可用' : formatNumber(comparisonValuations[item.tsCode]?.pb ?? null) }}
-                  </td>
-                </tr>
-                <tr class="comparison-group-row">
-                  <th :colspan="selectedCandidateItems.length + 1">
-                    基本面快照
-                  </th>
-                </tr>
-                <tr>
-                  <th>营收同比</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-revenue`">
-                    {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatPercent(comparisonFinancials[item.tsCode]?.revenueYoY ?? null) }}
-                  </td>
-                </tr>
-                <tr>
-                  <th>净利润同比</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-profit`">
-                    {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatPercent(comparisonFinancials[item.tsCode]?.netProfitYoY ?? null) }}
-                  </td>
-                </tr>
-                <tr>
-                  <th>ROE</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-roe`">
-                    {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatMetricPercent(comparisonFinancials[item.tsCode]?.roe ?? null) }}
-                  </td>
-                </tr>
-                <tr>
-                  <th>资产负债率</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-debt`">
-                    {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatMetricPercent(comparisonFinancials[item.tsCode]?.debtAssetRatio ?? null) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <section class="comparison-research-panel" aria-labelledby="comparison-research-title">
-            <div class="comparison-research-heading">
-              <div>
-                <p class="section-kicker">
-                  RESEARCH RUNS
-                </p>
-                <h3 id="comparison-research-title">
-                  批量进入研究
-                </h3>
-                <p>为当前选中的候选分别生成研究快照，结果会保留在各自的研究历史中。</p>
-              </div>
-              <button class="primary-button comparison-research-button" type="button" :disabled="!canCompareCandidates || comparisonLoading || comparisonResearchRunning" @click="startBatchResearch">
-                <RotateCcw :size="15" :class="comparisonResearchRunning ? 'animate-spin' : ''" aria-hidden="true" />
-                {{ comparisonResearchButtonLabel }}
-              </button>
-              <button v-if="comparisonResearchSummary.success" class="secondary-button comparison-research-export-button" type="button" :disabled="!comparisonResearchExportReady || comparisonResearchExporting" title="导出当前批次已经成功生成的研究报告" :aria-label="`导出 ${comparisonResearchSummary.success} 份成功研究报告`" @click="downloadComparisonResearchReports">
-                <Download :size="15" aria-hidden="true" />
-                {{ comparisonResearchExporting ? '导出中' : `导出 ${comparisonResearchSummary.success} 份` }}
-              </button>
-              <button v-if="comparisonResearchSummary.success" class="secondary-button comparison-research-copy-button" type="button" :disabled="!comparisonResearchExportReady || comparisonResearchCopying" title="将当前批次研究报告复制到剪贴板" :aria-label="`复制 ${comparisonResearchSummary.success} 份研究报告 Markdown`" @click="copyComparisonResearchReports">
-                <Copy :size="15" aria-hidden="true" />
-                {{ comparisonResearchCopying ? '复制中' : `复制 ${comparisonResearchSummary.success} 份` }}
-              </button>
-              <button v-if="comparisonResearchAiSummaryReady" class="secondary-button comparison-research-ai-summary-button" type="button" :disabled="comparisonResearchAiSummaryRunning" title="为当前批次已经完成的研究报告生成 AI 摘要" :aria-label="comparisonResearchAiSummaryButtonLabel" @click="startBatchResearchAiSummary">
-                <Sparkles :size="15" :class="comparisonResearchAiSummaryRunning ? 'animate-spin' : ''" aria-hidden="true" />
-                {{ comparisonResearchAiSummaryRunning ? '摘要生成中' : comparisonResearchAiSummaryButtonLabel }}
-              </button>
-            </div>
-            <p v-if="comparisonResearchExportMessage" class="comparison-research-export-message" :class="{ 'comparison-research-export-message-error': comparisonResearchExportError }" role="status">
-              {{ comparisonResearchExportMessage }}
-            </p>
-            <p v-if="comparisonResearchCopyMessage" class="comparison-research-copy-message" :class="{ 'comparison-research-copy-message-error': comparisonResearchCopyOutcome === 'error' }" role="status">
-              {{ comparisonResearchCopyMessage }}
-            </p>
-            <p v-if="comparisonResearchAiSummaryMessage" class="comparison-research-ai-summary-message" :class="{ 'comparison-research-ai-summary-message-error': comparisonResearchAiSummaryError }" role="status">
-              {{ comparisonResearchAiSummaryMessage }}
-            </p>
-            <div class="comparison-research-list" role="list" aria-live="polite">
-              <div v-for="item in selectedCandidateItems" :key="`research-${item.id}`" class="comparison-research-item" :class="comparisonResearchItemClass(item)" role="listitem">
-                <div class="comparison-research-stock">
-                  <strong>{{ displayStockName(item) }}</strong>
-                  <small>{{ item.tsCode }}</small>
-                </div>
-                <div class="comparison-research-detail">
-                  <span>{{ comparisonResearchStatusLabelFor(item) }}</span>
-                  <small>{{ comparisonResearchStatusDetailFor(item) }}</small>
-                  <small v-if="comparisonResearchHistoryMetaFor(item)" class="comparison-research-history-meta">{{ comparisonResearchHistoryMetaFor(item) }}</small>
-                  <div v-if="comparisonResearchStateFor(item).status === 'success'" class="comparison-research-ai-summary" :class="`comparison-research-ai-summary-${comparisonResearchAiSummaryStateFor(item).status}`">
-                    <span>AI 摘要 · {{ comparisonResearchAiSummaryStatusLabel(comparisonResearchAiSummaryStateFor(item)) }}</span>
-                    <small>{{ comparisonResearchAiSummaryStatusDetail(comparisonResearchAiSummaryStateFor(item)) }}</small>
-                  </div>
-                </div>
-                <div class="comparison-research-actions">
-                  <button
-                    v-if="comparisonResearchActionFor(item) === 'view'"
-                    class="text-button comparison-research-action"
-                    type="button"
-                    :aria-label="`查看 ${displayStockName(item)} 的研究详情`"
-                    title="重新读取并打开研究详情"
-                    @click="openBatchResearchResult(item)"
-                  >
-                    <Eye :size="14" aria-hidden="true" />
-                    查看详情
-                  </button>
-                  <button
-                    v-else-if="comparisonResearchActionFor(item) === 'retry'"
-                    class="text-button comparison-research-action"
-                    type="button"
-                    :disabled="comparisonResearchRunning"
-                    :aria-label="`重试 ${displayStockName(item)} 的研究`"
-                    title="只重试这一只股票"
-                    @click="retryBatchResearchItem(item)"
-                  >
-                    <RotateCcw :size="14" aria-hidden="true" />
-                    单项重试
-                  </button>
-                  <button
-                    v-if="comparisonResearchHistoryErrorFor(item)"
-                    class="text-button comparison-research-action"
-                    type="button"
-                    :disabled="comparisonResearchHistoryLoadingFor(item)"
-                    :aria-label="`重试读取 ${displayStockName(item)} 的研究历史`"
-                    title="只重试读取这一只股票的研究历史"
-                    @click="retryComparisonResearchHistory(item)"
-                  >
-                    <RefreshCw :size="14" :class="comparisonResearchHistoryLoadingFor(item) ? 'animate-spin' : ''" aria-hidden="true" />
-                    {{ comparisonResearchHistoryLoadingFor(item) ? '读取中' : '重试读取' }}
-                  </button>
-                  <button
-                    v-if="comparisonResearchAiSummaryActionFor(item) === 'retry'"
-                    class="text-button comparison-research-action"
-                    type="button"
-                    :disabled="comparisonResearchAiSummaryRunning"
-                    :aria-label="`重试 ${displayStockName(item)} 的 AI 摘要`"
-                    title="只重试这一只股票的 AI 摘要"
-                    @click="retryComparisonResearchAiSummary(item)"
-                  >
-                    <RotateCcw :size="14" :class="comparisonResearchAiSummaryRunning ? 'animate-spin' : ''" aria-hidden="true" />
-                    重试摘要
-                  </button>
-                </div>
-              </div>
-            </div>
-            <p class="comparison-research-summary" role="status">
-              {{ comparisonResearchSummaryLabel }}
-            </p>
-          </section>
-          <section v-if="comparisonAiComparisonReady" class="comparison-ai-panel" aria-labelledby="comparison-ai-title">
-            <div class="comparison-ai-heading">
-              <div>
-                <p class="section-kicker">
-                  AI RESEARCH
-                </p>
-                <h3 id="comparison-ai-title">
-                  AI 对比研究助手
-                </h3>
-                <p>基于当前已完成的 {{ comparisonResearchSuccessfulRuns.length }} 份研究报告，提炼共同点、差异和下一步核对项。</p>
-              </div>
-              <button class="primary-button comparison-ai-button" type="button" :disabled="comparisonAiComparisonLoading" :aria-label="comparisonAiComparisonLoading ? 'AI 对比研究生成中' : comparisonAiComparison ? '重新生成 AI 对比研究' : '生成 AI 对比研究'" @click="generateComparisonAiComparison">
-                <Sparkles :size="15" :class="comparisonAiComparisonLoading ? 'animate-spin' : ''" aria-hidden="true" />
-                {{ comparisonAiComparisonLoading ? '对比生成中' : comparisonAiComparison ? '重新生成对比' : '生成 AI 对比' }}
-              </button>
-            </div>
-            <div v-if="comparisonAiComparisonLoading" class="comparison-ai-state" role="status">
-              正在读取已完成的研究报告并生成对比...
-            </div>
-            <div v-else-if="comparisonAiComparisonError" class="comparison-ai-state comparison-ai-state-error" role="alert">
-              <span>{{ comparisonAiComparisonErrorMessage() }}</span>
-              <button class="text-button" type="button" @click="generateComparisonAiComparison">
-                重试
-              </button>
-            </div>
-            <div v-else-if="comparisonAiComparison" class="comparison-ai-result">
-              <div class="comparison-ai-result-heading">
-                <p class="comparison-ai-meta">
-                  {{ comparisonAiComparison.provider }} · {{ comparisonAiComparison.model }} · {{ formatDateTime(comparisonAiComparison.generatedAt) }}
-                </p>
-                <div class="comparison-ai-result-actions">
-                  <button class="secondary-button comparison-ai-export" type="button" :disabled="comparisonAiComparisonExporting || comparisonAiComparisonCopying" title="将 AI 对比研究导出为 Markdown 文件" aria-label="导出 AI 对比研究为 Markdown 文件" @click="downloadComparisonAiComparison">
-                    <Download :size="14" aria-hidden="true" />
-                    {{ comparisonAiComparisonExporting ? '导出中' : '导出 Markdown' }}
-                  </button>
-                  <button class="secondary-button comparison-ai-copy" type="button" :disabled="comparisonAiComparisonExporting || comparisonAiComparisonCopying" title="将 AI 对比研究 Markdown 复制到剪贴板" aria-label="复制 AI 对比研究 Markdown" @click="copyComparisonAiComparison">
-                    <Copy :size="14" aria-hidden="true" />
-                    {{ comparisonAiComparisonCopying ? '复制中' : '复制 Markdown' }}
-                  </button>
-                </div>
-              </div>
-              <p v-if="comparisonAiComparisonExportMessage" class="comparison-ai-transfer-message" :class="{ 'comparison-ai-transfer-message-error': comparisonAiComparisonExportError }" role="status">
-                {{ comparisonAiComparisonExportMessage }}
-              </p>
-              <p v-if="comparisonAiComparisonCopyMessage" class="comparison-ai-transfer-message" :class="{ 'comparison-ai-transfer-message-error': comparisonAiComparisonCopyOutcome === 'error' }" role="status">
-                {{ comparisonAiComparisonCopyMessage }}
-              </p>
-              <p class="comparison-ai-overview">
-                {{ comparisonAiComparison.overview }}
-              </p>
-              <div v-if="comparisonAiComparison.commonGround.length" class="comparison-ai-block">
-                <strong>共同点</strong>
-                <ul>
-                  <li v-for="item in comparisonAiComparison.commonGround" :key="`common-${item}`">
-                    {{ item }}
-                  </li>
-                </ul>
-              </div>
-              <div v-if="comparisonAiComparison.differences.length" class="comparison-ai-block">
-                <strong>关键差异</strong>
-                <ul>
-                  <li v-for="(item, index) in comparisonAiComparison.differences" :key="`difference-${item.tsCode}-${index}`">
-                    <span class="comparison-ai-stock-label">{{ item.tsCode }}</span>{{ item.point }}
-                    <span v-if="item.evidenceKeys.length" class="comparison-ai-evidence-keys">
-                      证据：
-                      <button v-for="evidenceKey in item.evidenceKeys" :key="`${item.tsCode}-${evidenceKey}`" class="text-button comparison-ai-inline-citation" type="button" :aria-label="`打开 ${item.tsCode} 的证据 ${evidenceKey}`" @click="openComparisonAiCitation({ tsCode: item.tsCode, evidenceKey })">
-                        {{ evidenceKey }}
-                      </button>
-                    </span>
-                  </li>
-                </ul>
-              </div>
-              <div v-if="comparisonAiComparison.risks.length" class="comparison-ai-block comparison-ai-block-risk">
-                <strong>风险</strong>
-                <ul>
-                  <li v-for="item in comparisonAiComparison.risks" :key="`risk-${item}`">
-                    {{ item }}
-                  </li>
-                </ul>
-              </div>
-              <div v-if="comparisonAiComparison.nextChecks.length" class="comparison-ai-block">
-                <strong>下一步核对</strong>
-                <ul>
-                  <li v-for="item in comparisonAiComparison.nextChecks" :key="`next-${item}`" class="comparison-ai-next-check">
-                    <span>{{ item }}</span>
-                    <button
-                      class="text-button comparison-ai-next-prompt"
-                      type="button"
-                      :disabled="!comparisonAiNextCheckPromptReady || !item.trim()"
-                      :aria-label="`将对比核对项带入当前追问：${item}`"
-                      title="将对比核对项带入候选 AI 追问"
-                      @click="useComparisonAiNextCheck(item)"
-                    >
-                      <BrainCircuit :size="13" aria-hidden="true" />
-                      带入追问
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div v-if="comparisonAiComparisonCitations.length" class="comparison-ai-citations">
-                <strong>引用证据</strong>
-                <div class="comparison-ai-citation-list">
-                  <button v-for="citation in comparisonAiComparisonCitations" :key="`${citation.tsCode}-${citation.evidenceKey}`" class="text-button comparison-ai-citation" type="button" :aria-label="`打开 ${citation.tsCode} 的证据 ${citation.evidenceKey}`" @click="openComparisonAiCitation(citation)">
-                    {{ citation.tsCode }} · {{ citation.evidenceKey }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-          <p class="comparison-note">
-            估值和财务指标来自当前接口的最近可用快照；不同报告期不做强行横比。
-          </p>
-        </section>
-      </DetailDrawer>
-
-      <footer class="quant-footer">
-        <span><BarChart3 :size="14" aria-hidden="true" /> 数据口径：日线收盘价</span>
-        <span>信号用于观察与比较，不代表未来收益</span>
-      </footer>
-    </main>
-  </div>
+    <DetailDrawer
+      :open="comparisonDrawerOpen"
+      title="候选对比"
+      :description="`技术信号、估值和基本面 · ${comparisonStatusLabel}`"
+      width="lg"
+      @update:open="handleComparisonDrawerOpenChange"
+    >
+      <QuantComparisonView
+        :selected-candidate-items="selectedCandidateItems"
+        :comparison-loading="comparisonLoading"
+        :comparison-valuations="comparisonValuations"
+        :comparison-financials="comparisonFinancials"
+        :comparison-errors="comparisonErrors"
+        :comparison-research-button-label="comparisonResearchButtonLabel"
+        :can-compare-candidates="canCompareCandidates"
+        :comparison-research-running="comparisonResearchRunning"
+        :comparison-research-summary="comparisonResearchSummary"
+        :comparison-research-export-ready="comparisonResearchExportReady"
+        :comparison-research-exporting="comparisonResearchExporting"
+        :comparison-research-copying="comparisonResearchCopying"
+        :comparison-research-copy-outcome="comparisonResearchCopyOutcome"
+        :comparison-research-export-message="comparisonResearchExportMessage"
+        :comparison-research-export-error="comparisonResearchExportError"
+        :comparison-research-copy-message="comparisonResearchCopyMessage"
+        :comparison-research-ai-summary-ready="comparisonResearchAiSummaryReady"
+        :comparison-research-ai-summary-running="comparisonResearchAiSummaryRunning"
+        :comparison-research-ai-summary-button-label="comparisonResearchAiSummaryButtonLabel"
+        :comparison-research-ai-summary-message="comparisonResearchAiSummaryMessage"
+        :comparison-research-ai-summary-error="comparisonResearchAiSummaryError"
+        :comparison-research-summary-label="comparisonResearchSummaryLabel"
+        :comparison-research-successful-runs="comparisonResearchSuccessfulRuns"
+        :comparison-ai-comparison-ready="comparisonAiComparisonReady"
+        :comparison-ai-comparison-loading="comparisonAiComparisonLoading"
+        :comparison-ai-comparison="comparisonAiComparison"
+        :comparison-ai-comparison-error="comparisonAiComparisonError"
+        :comparison-ai-comparison-error-message="comparisonAiComparisonErrorMessage()"
+        :comparison-ai-comparison-exporting="comparisonAiComparisonExporting"
+        :comparison-ai-comparison-copying="comparisonAiComparisonCopying"
+        :comparison-ai-comparison-export-message="comparisonAiComparisonExportMessage"
+        :comparison-ai-comparison-export-error="comparisonAiComparisonExportError"
+        :comparison-ai-comparison-copy-message="comparisonAiComparisonCopyMessage"
+        :comparison-ai-comparison-copy-outcome="comparisonAiComparisonCopyOutcome"
+        :comparison-ai-next-check-prompt-ready="comparisonAiNextCheckPromptReady"
+        :comparison-ai-comparison-citations="comparisonAiComparisonCitations"
+        :comparison-research-ai-summary-state-for="comparisonResearchAiSummaryStateFor"
+        :comparison-research-ai-summary-status-label="comparisonResearchAiSummaryStatusLabel"
+        :comparison-research-ai-summary-status-detail="comparisonResearchAiSummaryStatusDetail"
+        :comparison-research-status-label-for="comparisonResearchStatusLabelFor"
+        :comparison-research-status-detail-for="comparisonResearchStatusDetailFor"
+        :comparison-research-history-meta-for="comparisonResearchHistoryMetaFor"
+        :comparison-research-action-for="comparisonResearchActionFor"
+        :comparison-research-history-error-for="comparisonResearchHistoryErrorFor"
+        :comparison-research-history-loading-for="comparisonResearchHistoryLoadingFor"
+        :comparison-research-ai-summary-action-for="comparisonResearchAiSummaryActionFor"
+        :comparison-research-item-class="comparisonResearchItemClass"
+        :comparison-research-state-for="comparisonResearchStateFor"
+        :display-stock-name="displayStockName"
+        :format-number="formatNumber"
+        :format-percent="formatPercent"
+        :format-signal-score="formatSignalScore"
+        :format-metric-percent="formatMetricPercent"
+        :format-date-time="formatDateTime"
+        :start-batch-research="startBatchResearch"
+        :download-comparison-research-reports="downloadComparisonResearchReports"
+        :copy-comparison-research-reports="copyComparisonResearchReports"
+        :start-batch-research-ai-summary="startBatchResearchAiSummary"
+        :open-batch-research-result="openBatchResearchResult"
+        :retry-batch-research-item="retryBatchResearchItem"
+        :retry-comparison-research-history="retryComparisonResearchHistory"
+        :retry-comparison-research-ai-summary="retryComparisonResearchAiSummary"
+        :generate-comparison-ai-comparison="generateComparisonAiComparison"
+        :download-comparison-ai-comparison="downloadComparisonAiComparison"
+        :copy-comparison-ai-comparison="copyComparisonAiComparison"
+        :open-comparison-ai-citation="openComparisonAiCitation"
+        :use-comparison-ai-next-check="useComparisonAiNextCheck"
+      />
+    </DetailDrawer>
+  </QuantShell>
 </template>

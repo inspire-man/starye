@@ -1,4 +1,4 @@
-import type { QuantDecisionRecord, QuantDecisionRecordAction } from '../quant-types'
+import type { QuantDecisionRecord, QuantDecisionRecordAction } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildDecisionOutcome } from '../decision-outcome'
 

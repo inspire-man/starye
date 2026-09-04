@@ -3,6 +3,10 @@
   "compilerOptions": {
     "composite": true,
     "moduleResolution": "Bundler",
+    "paths": {
+      "@starye/quant-contracts": ["../../packages/quant-contracts/dist/index.d.ts"],
+      "@starye/*": ["../../packages/*/src"]
+    },
     "types": ["@cloudflare/workers-types", "node"],
     "declaration": true,
     "declarationMap": true,
@@ -11,7 +15,8 @@
   },
   "references": [
     { "path": "../../packages/config" },
-    { "path": "../../packages/db" }
+    { "path": "../../packages/db" },
+    { "path": "../../packages/quant-contracts" }
   ],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts"]

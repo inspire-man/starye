@@ -1,4 +1,4 @@
-import type { DailyBar } from '../quant-types'
+import type { DailyBar } from '../quant-view-models'
 import type { TrendStructure } from '../trend-analysis'
 import { describe, expect, it } from 'vitest'
 import { buildTimingWindow } from '../timing-window'

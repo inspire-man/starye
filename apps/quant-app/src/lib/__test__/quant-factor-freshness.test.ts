@@ -1,4 +1,4 @@
-import type { QuantResearchEvidence, QuantResearchFactor } from '../quant-types'
+import type { QuantResearchEvidence, QuantResearchFactor } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { buildQuantFactorFreshness } from '../quant-factor-freshness'
 

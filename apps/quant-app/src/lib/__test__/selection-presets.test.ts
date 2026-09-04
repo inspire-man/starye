@@ -1,4 +1,4 @@
-import type { CandidateItem } from '../quant-types'
+import type { CandidateItem } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
 import { filterAndSortCandidates, filterCandidatesBySelectionPreset, getSelectionReasons, matchesSelectionPreset } from '../selection-presets'
 
