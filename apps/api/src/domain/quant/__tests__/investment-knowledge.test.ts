@@ -40,6 +40,34 @@ describe('quant investment knowledge catalog', () => {
     expect(planned.every(factor => factor.missingFields.length > 0 && !factor.eligibleInValueQuality)).toBe(true)
   })
 
+  it('records cashflow, share-count, and executed buyback evidence', () => {
+    const shareholderReturn = QUANT_KNOWLEDGE_FACTORS.find(factor => factor.id === 'shareholder-return')!
+
+    expect(shareholderReturn.availableFields).toEqual(expect.arrayContaining([
+      'dividendYield',
+      'payoutRatio',
+      'freeCashflow',
+      'buybackAmount',
+      'sharesOutstandingChange',
+    ]))
+    expect(shareholderReturn.missingFields).toEqual([])
+    expect(shareholderReturn.eligibleInValueQuality).toBe(false)
+  })
+
+  it('marks the interest-aware cashflow factor fields as connected context', () => {
+    const factor = QUANT_KNOWLEDGE_FACTORS.find(item => item.id === 'cashflow-capex-coverage')!
+
+    expect(factor.availableFields).toEqual(expect.arrayContaining([
+      'operatingCashflow',
+      'capitalExpenditure',
+      'interestExpense',
+      'interestBearingDebt',
+      'freeCashflowAfterInterest',
+    ]))
+    expect(factor.missingFields).toEqual([])
+    expect(factor.eligibleInValueQuality).toBe(false)
+  })
+
   it('maps clear nicknames while retaining ambiguous and cross-market context', () => {
     expect(QUANT_KNOWLEDGE_ALIASES).toEqual(expect.arrayContaining([
       expect.objectContaining({ alias: '变变', tsCode: '600089.SH', name: '特变电工', confidence: 'high' }),

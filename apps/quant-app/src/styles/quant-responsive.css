@@ -197,12 +197,31 @@
   .financial-trend-grid,
   .financial-comparison-grid,
   .financial-context-grid,
-  .shareholder-return-grid {
+  .shareholder-return-grid,
+  .shareholder-cashflow-grid,
+  .shareholder-capital-grid,
+  .shareholder-repurchase-grid {
     grid-template-columns: 1fr;
   }
 
   .shareholder-distribution-row {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .shareholder-capital-change-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .shareholder-capital-change-row small {
+    grid-column: 1 / -1;
+  }
+
+  .shareholder-repurchase-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .shareholder-repurchase-row small {
+    grid-column: 1 / -1;
   }
 
   .shareholder-distribution-row small {

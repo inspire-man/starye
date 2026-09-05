@@ -953,6 +953,10 @@ function formatFinancialAmount(value: number | null): string {
   return value.toFixed(0)
 }
 
+function formatResearchShareCount(value: number): string {
+  return `${value.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} 股`
+}
+
 function formatRatioPercent(value: number | null): string {
   return value === null ? '--' : `${(value * 100).toFixed(2)}%`
 }
@@ -1013,6 +1017,14 @@ function formatResearchEvidenceValue(item: QuantResearchEvidence): string {
     return `${item.value.toFixed(0)} 天`
   if (item.key === 'quality-history')
     return `${item.value.toFixed(0)} 期`
+  if (item.key === 'shareholder-free-cashflow' || item.key === 'shareholder-interest-expense' || item.key === 'shareholder-interest-bearing-debt' || item.key === 'shareholder-free-cashflow-after-interest')
+    return formatFinancialAmount(item.value)
+  if (item.key === 'shareholder-cashflow-coverage')
+    return `${item.value.toFixed(2)}x`
+  if (item.key === 'shareholder-payout-ratio')
+    return `${item.value.toFixed(2)}%`
+  if (item.key === 'shareholder-shares-outstanding-change' || item.key === 'shareholder-repurchase-shares')
+    return formatResearchShareCount(item.value)
   if (item.key === 'akshare-daily-sample')
     return `${item.value.toFixed(0)} 根`
   if (item.key === 'akshare-financial-sample')
@@ -1040,6 +1052,16 @@ function formatResearchEvidenceDelta(change: ResearchEvidenceChange): string {
     return `${prefix}${value.toFixed(0)} 根`
   if (evidence.key === 'quality-history' || evidence.key === 'akshare-financial-sample')
     return `${prefix}${value.toFixed(0)} 期`
+  if (evidence.key === 'shareholder-cashflow-coverage')
+    return `${prefix}${value.toFixed(2)}x`
+  if (evidence.key === 'shareholder-payout-ratio')
+    return `${prefix}${value.toFixed(2)}%`
+  if (evidence.key === 'shareholder-free-cashflow' || evidence.key === 'shareholder-interest-expense' || evidence.key === 'shareholder-interest-bearing-debt' || evidence.key === 'shareholder-free-cashflow-after-interest')
+    return `${prefix}${formatFinancialAmount(value)}`
+  if (evidence.key === 'shareholder-shares-outstanding-change' || evidence.key === 'shareholder-repurchase-shares') {
+    const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+    return `${sign}${formatResearchShareCount(Math.abs(value))}`
+  }
   if (evidence.key === 'risk-volume')
     return `${prefix}${value.toFixed(2)} 倍`
   if (evidence.key === 'risk-streak')

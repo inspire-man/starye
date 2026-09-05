@@ -278,7 +278,7 @@ export function parseInvestmentKnowledge(payload: unknown): QuantInvestmentKnowl
   const data = unwrapData(payload)
   const record = isRecord(data) ? data : {}
   return {
-    version: readString(record, 'version') || 'investment-knowledge-v3',
+    version: readString(record, 'version') || 'investment-knowledge-v4',
     observedAt: readString(record, 'observedAt', 'observed_at') || '',
     sources: Array.isArray(record.sources)
       ? record.sources.flatMap((value) => {

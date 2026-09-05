@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import QuantKnowledgeView from '../QuantKnowledgeView.vue'
 
 const knowledge: QuantInvestmentKnowledge = {
-  version: 'investment-knowledge-v3',
+  version: 'investment-knowledge-v4',
   observedAt: '2026-09-03T00:00:00.000Z',
   sources: [{
     id: 'source-1',
@@ -75,7 +75,7 @@ describe('quant knowledge view', () => {
       props: { investmentKnowledge: knowledge, loading: false, hasError: false },
     })
 
-    expect(wrapper.text()).toContain('知识库 investment-knowledge-v3')
+    expect(wrapper.text()).toContain('知识库 investment-knowledge-v4')
     expect(wrapper.text()).toContain('趋势结构')
     expect(wrapper.text()).toContain('已进入评分')
     expect(wrapper.text()).toContain('中国平安')

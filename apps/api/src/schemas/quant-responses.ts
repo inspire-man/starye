@@ -153,7 +153,150 @@ export const QuantAiConnectionTestResponseSchema = v.object({
 })
 
 export const QuantValueSelectionResponseSchema = QuantUnknownDataResponseSchema
-export const QuantShareholderReturnsResponseSchema = QuantUnknownDataResponseSchema
+
+const QuantShareholderReturnDistributionSchema = v.object({
+  endDate: v.string(),
+  annDate: v.nullable(v.string()),
+  cashDividendPerShare: v.number(),
+  exDate: v.nullable(v.string()),
+  payDate: v.nullable(v.string()),
+})
+
+const QuantInterestBearingDebtComponentsSchema = v.object({
+  shortLoan: v.nullable(v.number()),
+  shortBondPayable: v.nullable(v.number()),
+  shortFinancePayable: v.nullable(v.number()),
+  acceptDepositInterbank: v.nullable(v.number()),
+  borrowFund: v.nullable(v.number()),
+  loanPbc: v.nullable(v.number()),
+  currentMaturityDebt: v.nullable(v.number()),
+  amortizedCostFinancialLiability: v.nullable(v.number()),
+  longLoan: v.nullable(v.number()),
+  amortizedCostNoncurrentFinancialLiability: v.nullable(v.number()),
+  bondPayable: v.nullable(v.number()),
+  perpetualBond: v.nullable(v.number()),
+  perpetualBondPayable: v.nullable(v.number()),
+  leaseLiability: v.nullable(v.number()),
+})
+
+const QuantShareholderCashflowEvidenceSchema = v.object({
+  formulaVersion: v.string(),
+  status: v.picklist(['ready', 'partial', 'insufficient_data', 'unavailable']),
+  provider: v.nullable(v.picklist(['tushare', 'eastmoney'])),
+  providerErrorCode: v.nullable(v.string()),
+  observedAt: v.string(),
+  reportDate: v.nullable(v.string()),
+  reportType: v.nullable(v.string()),
+  reportDateName: v.nullable(v.string()),
+  noticeDate: v.nullable(v.string()),
+  operatingCashflow: v.nullable(v.number()),
+  capitalExpenditure: v.nullable(v.number()),
+  netProfit: v.nullable(v.number()),
+  cashDividendsPaid: v.nullable(v.number()),
+  freeCashflow: v.nullable(v.number()),
+  freeCashflowCoverage: v.nullable(v.number()),
+  interestExpense: v.nullable(v.number()),
+  interestExpenseSourceField: v.nullable(v.picklist(['FE_INTEREST_EXPENSE', 'INTEREST_EXPENSE'])),
+  interestExpenseProviderErrorCode: v.nullable(v.string()),
+  interestBearingDebt: v.nullable(v.number()),
+  interestBearingDebtComponents: QuantInterestBearingDebtComponentsSchema,
+  interestBearingDebtProviderErrorCode: v.nullable(v.string()),
+  freeCashflowAfterInterest: v.nullable(v.number()),
+  payoutRatio: v.nullable(v.number()),
+  payoutRatioReportDate: v.nullable(v.string()),
+  missingFields: v.array(v.string()),
+})
+
+const QuantShareholderCapitalChangeSchema = v.object({
+  reportDate: v.string(),
+  totalShares: v.nullable(v.number()),
+  changeReason: v.nullable(v.string()),
+  sharesOutstandingChange: v.nullable(v.number()),
+  sharesOutstandingChangeRatio: v.nullable(v.number()),
+})
+
+const QuantShareholderCapitalEvidenceSchema = v.object({
+  formulaVersion: v.string(),
+  status: v.picklist(['ready', 'partial', 'insufficient_data', 'unavailable']),
+  provider: v.nullable(v.picklist(['tushare', 'eastmoney'])),
+  providerErrorCode: v.nullable(v.string()),
+  observedAt: v.string(),
+  latestReportDate: v.nullable(v.string()),
+  latestTotalShares: v.nullable(v.number()),
+  latestChangeReason: v.nullable(v.string()),
+  previousReportDate: v.nullable(v.string()),
+  previousTotalShares: v.nullable(v.number()),
+  sharesOutstandingChange: v.nullable(v.number()),
+  sharesOutstandingChangeRatio: v.nullable(v.number()),
+  repurchaseSharesRetired: v.nullable(v.number()),
+  changes: v.array(QuantShareholderCapitalChangeSchema),
+  missingFields: v.array(v.string()),
+})
+
+const QuantShareholderRepurchaseRecordSchema = v.object({
+  repurchaseCode: v.nullable(v.string()),
+  announcementDate: v.nullable(v.string()),
+  startDate: v.nullable(v.string()),
+  endDate: v.nullable(v.string()),
+  finishDate: v.nullable(v.string()),
+  progress: v.nullable(v.string()),
+  plannedAmountLower: v.nullable(v.number()),
+  plannedAmountUpper: v.nullable(v.number()),
+  repurchaseAmount: v.nullable(v.number()),
+  repurchaseShares: v.nullable(v.number()),
+})
+
+const QuantShareholderRepurchaseEvidenceSchema = v.object({
+  formulaVersion: v.string(),
+  status: v.picklist(['ready', 'partial', 'insufficient_data', 'unavailable']),
+  provider: v.nullable(v.picklist(['tushare', 'eastmoney'])),
+  providerErrorCode: v.nullable(v.string()),
+  observedAt: v.string(),
+  latestAnnouncementDate: v.nullable(v.string()),
+  latestProgress: v.nullable(v.string()),
+  repurchaseAmount: v.nullable(v.number()),
+  plannedAmountLower: v.nullable(v.number()),
+  plannedAmountUpper: v.nullable(v.number()),
+  records: v.array(QuantShareholderRepurchaseRecordSchema),
+  missingFields: v.array(v.string()),
+})
+
+const QuantShareholderReturnItemSchema = v.object({
+  tsCode: v.string(),
+  name: v.nullable(v.string()),
+  formulaVersion: v.string(),
+  status: v.picklist(['ready', 'partial', 'insufficient_data']),
+  provider: v.nullable(v.picklist(['tushare', 'eastmoney'])),
+  providerChain: v.array(v.picklist(['tushare', 'eastmoney'])),
+  fallbackUsed: v.boolean(),
+  fallbackReason: v.nullable(v.string()),
+  providerErrorCode: v.nullable(v.string()),
+  observedAt: v.string(),
+  latestClose: v.nullable(v.number()),
+  trailingCashDividendPerShare: v.nullable(v.number()),
+  trailingDividendYield: v.nullable(v.number()),
+  dividendYears: v.number(),
+  distributions: v.array(QuantShareholderReturnDistributionSchema),
+  missingFields: v.array(v.string()),
+  cashflowEvidence: v.optional(QuantShareholderCashflowEvidenceSchema),
+  capitalStructureEvidence: v.optional(QuantShareholderCapitalEvidenceSchema),
+  repurchaseEvidence: v.optional(QuantShareholderRepurchaseEvidenceSchema),
+})
+
+export const QuantShareholderReturnsResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    formulaVersion: v.string(),
+    observedAt: v.string(),
+    provider: v.nullable(v.picklist(['tushare', 'eastmoney'])),
+    providerChain: v.array(v.picklist(['tushare', 'eastmoney'])),
+    sampleCount: v.number(),
+    readyCount: v.number(),
+    partialCount: v.number(),
+    insufficientCount: v.number(),
+    items: v.array(QuantShareholderReturnItemSchema),
+  }),
+})
 
 const QuantResearchRunSchema = v.object({
   id: v.string(),

@@ -618,6 +618,7 @@ defineExpose({ useQuestionPrompt })
       :loading="loading"
       :errors="errors"
       :format-number="formatNumber"
+      :format-financial-amount="formatFinancialAmount"
       :format-trade-date="formatTradeDate"
       :format-dividend-yield="formatDividendYield"
       :shareholder-return-status-label="shareholderReturnStatusLabel"

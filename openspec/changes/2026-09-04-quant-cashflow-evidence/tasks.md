@@ -1,0 +1,6 @@
+- [x] 1.1 增加 Eastmoney 现金流量表 provider 和报告归一化；完成标准：报告期、四个原始字段、空值和 provider 错误均有测试。
+- [x] 1.2 扩展股东回报 domain service；完成标准：最新现金流、年度支付率、自由现金流、覆盖倍数和固定数据缺口按公式输出，分红与现金流失败相互隔离。
+- [x] 2.1 扩展 API response schema、market/research handler 和契约测试；完成标准：新 item 返回嵌套证据，旧结果可读，认证和用户隔离行为保持通过。
+- [x] 2.2 扩展 Quant client/view model/parser；完成标准：camelCase/snake_case、null、状态和缺口归一化测试通过。
+- [x] 3.1 更新股东回报详情 UI 和响应式样式；完成标准：ready/partial/insufficient/unavailable/loading/error 与 390px 页面无溢出，评分和推荐无变化。
+- [x] 4.1 完成定向测试、API/Quant type-check、build、OpenSpec strict、GitNexus detect_changes 和 Gateway 验收；完成标准：记录真实源字段、浏览器结果和未接通字段。

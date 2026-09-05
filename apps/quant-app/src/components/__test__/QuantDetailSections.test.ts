@@ -201,6 +201,93 @@ const shareholderReturn: QuantShareholderReturnItem = {
   dividendYears: 3,
   distributions: [],
   missingFields: [],
+  cashflowEvidence: {
+    formulaVersion: 'shareholder-cashflow-v2',
+    status: 'ready',
+    provider: 'eastmoney',
+    providerErrorCode: null,
+    observedAt: '2026-09-03T00:00:00.000Z',
+    reportDate: '2026-06-30',
+    reportType: '中报',
+    reportDateName: '2026中报',
+    noticeDate: '2026-08-22',
+    operatingCashflow: 100,
+    capitalExpenditure: 30,
+    netProfit: 80,
+    cashDividendsPaid: 20,
+    freeCashflow: 70,
+    freeCashflowCoverage: 3.5,
+    interestExpense: 10,
+    interestExpenseSourceField: 'FE_INTEREST_EXPENSE',
+    interestExpenseProviderErrorCode: null,
+    interestBearingDebt: 200,
+    interestBearingDebtComponents: {
+      shortLoan: 100,
+      shortBondPayable: null,
+      shortFinancePayable: null,
+      acceptDepositInterbank: null,
+      borrowFund: null,
+      loanPbc: null,
+      currentMaturityDebt: 20,
+      amortizedCostFinancialLiability: null,
+      longLoan: 50,
+      amortizedCostNoncurrentFinancialLiability: null,
+      bondPayable: 20,
+      perpetualBond: null,
+      perpetualBondPayable: null,
+      leaseLiability: 10,
+    },
+    interestBearingDebtProviderErrorCode: null,
+    freeCashflowAfterInterest: 60,
+    payoutRatio: 25,
+    payoutRatioReportDate: '2025-12-31',
+    missingFields: ['回购金额（当前数据源未接通）'],
+  },
+  capitalStructureEvidence: {
+    formulaVersion: 'shareholder-capital-v1',
+    status: 'ready',
+    provider: 'eastmoney',
+    providerErrorCode: null,
+    observedAt: '2026-09-03T00:00:00.000Z',
+    latestReportDate: '2026-03-31',
+    latestTotalShares: 1200,
+    latestChangeReason: '债转股上市',
+    previousReportDate: '2025-12-18',
+    previousTotalShares: 1100,
+    sharesOutstandingChange: 100,
+    sharesOutstandingChangeRatio: 9.09,
+    repurchaseSharesRetired: 50,
+    changes: [
+      { reportDate: '2026-03-31', totalShares: 1200, changeReason: '债转股上市', sharesOutstandingChange: 100, sharesOutstandingChangeRatio: 9.09 },
+      { reportDate: '2025-12-18', totalShares: 1100, changeReason: '回购', sharesOutstandingChange: -50, sharesOutstandingChangeRatio: -4.35 },
+    ],
+    missingFields: ['回购金额（当前数据源未接通）'],
+  },
+  repurchaseEvidence: {
+    formulaVersion: 'shareholder-repurchase-v1',
+    status: 'ready',
+    provider: 'eastmoney',
+    providerErrorCode: null,
+    observedAt: '2026-09-03T00:00:00.000Z',
+    latestAnnouncementDate: '2026-04-15',
+    latestProgress: '006',
+    repurchaseAmount: 200,
+    plannedAmountLower: 150,
+    plannedAmountUpper: 250,
+    records: [{
+      repurchaseCode: 'plan-1',
+      announcementDate: '2026-04-15',
+      startDate: '2026-03-20',
+      endDate: '2027-03-20',
+      finishDate: '2026-04-14',
+      progress: '006',
+      plannedAmountLower: 150,
+      plannedAmountUpper: 250,
+      repurchaseAmount: 200,
+      repurchaseShares: 1000,
+    }],
+    missingFields: [],
+  },
 }
 
 const dailyBar: DailyBar = {
@@ -441,6 +528,7 @@ describe('quant detail feature sections', () => {
         loading,
         errors: { ...errors, shareholderReturns: new Error('provider unavailable') },
         formatNumber,
+        formatFinancialAmount: formatNumber,
         formatTradeDate,
         formatDividendYield: formatPercent,
         shareholderReturnStatusLabel: () => '数据部分可用',
@@ -454,6 +542,17 @@ describe('quant detail feature sections', () => {
 
     expect(wrapper.text()).toContain('以下为上次成功结果')
     expect(wrapper.text()).toContain('10.00')
+    expect(wrapper.text()).toContain('现金流与分红覆盖')
+    expect(wrapper.text()).toContain('70.00')
+    expect(wrapper.text()).toContain('利息后自由现金流')
+    expect(wrapper.text()).toContain('有息负债')
+    expect(wrapper.text()).toContain('股本变化与回购股数')
+    expect(wrapper.text()).toContain('回购导致减少')
+    expect(wrapper.text()).toContain('50 股')
+    expect(wrapper.text()).toContain('回购计划与已实施金额')
+    expect(wrapper.text()).toContain('样本内已实施回购金额')
+    expect(wrapper.text()).toContain('200.00')
+    expect(wrapper.text()).toContain('完成实施')
     await wrapper.get('.data-refresh-feedback-error .text-button').trigger('click')
     expect(loadShareholderReturns).toHaveBeenCalledOnce()
   })

@@ -2357,6 +2357,177 @@
   overflow-wrap: anywhere;
 }
 
+.shareholder-cashflow-evidence {
+  margin-top: 0.85rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.75rem;
+}
+
+.shareholder-capital-evidence,
+.shareholder-repurchase-evidence {
+  margin-top: 0.85rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.75rem;
+}
+
+.shareholder-cashflow-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.shareholder-cashflow-item {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+  border-left: 2px solid hsl(var(--status-info) / 0.26);
+  padding: 0.25rem 0.6rem;
+}
+
+.shareholder-cashflow-item span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
+.shareholder-cashflow-item strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shareholder-cashflow-item-primary {
+  border-left-color: hsl(var(--status-success) / 0.46);
+}
+
+.shareholder-cashflow-item-primary strong {
+  color: hsl(var(--status-success));
+}
+
+.shareholder-cashflow-status-ready {
+  color: hsl(var(--status-success));
+}
+
+.shareholder-cashflow-status-partial {
+  color: hsl(var(--status-warning));
+}
+
+.shareholder-cashflow-status-insufficient_data,
+.shareholder-cashflow-status-unavailable {
+  color: hsl(var(--muted-foreground));
+}
+
+.shareholder-capital-status-ready {
+  color: hsl(var(--status-success));
+}
+
+.shareholder-capital-status-partial {
+  color: hsl(var(--status-warning));
+}
+
+.shareholder-capital-status-insufficient_data,
+.shareholder-capital-status-unavailable {
+  color: hsl(var(--muted-foreground));
+}
+
+.shareholder-repurchase-status-ready {
+  color: hsl(var(--status-success));
+}
+
+.shareholder-repurchase-status-partial {
+  color: hsl(var(--status-warning));
+}
+
+.shareholder-repurchase-status-insufficient_data,
+.shareholder-repurchase-status-unavailable {
+  color: hsl(var(--muted-foreground));
+}
+
+.shareholder-capital-history {
+  margin-top: 0.8rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.7rem;
+}
+
+.shareholder-capital-history .financial-subheading {
+  margin-bottom: 0.45rem;
+}
+
+.shareholder-repurchase-history {
+  margin-top: 0.8rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.7rem;
+}
+
+.shareholder-repurchase-history .financial-subheading {
+  margin-bottom: 0.45rem;
+}
+
+.shareholder-capital-change-row {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1.2fr;
+  align-items: baseline;
+  gap: 0.5rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  padding: 0.4rem 0;
+}
+
+.shareholder-capital-change-row span,
+.shareholder-capital-change-row small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+}
+
+.shareholder-capital-change-row strong {
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+}
+
+.shareholder-capital-change-row small {
+  overflow-wrap: anywhere;
+}
+
+.shareholder-repurchase-row {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1.5fr;
+  align-items: baseline;
+  gap: 0.5rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  padding: 0.4rem 0;
+}
+
+.shareholder-repurchase-row span,
+.shareholder-repurchase-row small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+}
+
+.shareholder-repurchase-row strong {
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+}
+
+.shareholder-repurchase-row small {
+  overflow-wrap: anywhere;
+}
+
+.shareholder-cashflow-note {
+  margin: 0.7rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  line-height: 1.45;
+}
+
 .financial-context-note {
   margin: 0.7rem 0 0;
   color: hsl(var(--muted-foreground));

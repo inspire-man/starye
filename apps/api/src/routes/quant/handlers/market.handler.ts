@@ -11,7 +11,7 @@ import { readQuantValueSelection } from '../../../domain/quant/value-selection-s
 import { QuantFinancialHistoryQuerySchema, QuantWatchlistParamSchema } from '../../../schemas/quant'
 import { quantRouteDocs } from '../contract-docs'
 import { currentQuantUserId, eastmoneyProviderOptions } from '../route-context'
-import { dividendProvider } from './market-support'
+import { capitalStructureProvider, cashflowProvider, dividendProvider, repurchaseProvider } from './market-support'
 
 export const quantMarketRoutes = new Hono<AppEnv>()
 
@@ -140,6 +140,9 @@ quantMarketRoutes.get('/shareholder-returns', quantRouteDocs('market.shareholder
     c.get('db'),
     userId,
     dividendProvider(c.env),
+    cashflowProvider(c.env),
+    capitalStructureProvider(c.env),
+    repurchaseProvider(c.env),
   )
   return c.json({ success: true as const, data })
 })

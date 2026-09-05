@@ -287,4 +287,158 @@ describe('quant research report', () => {
       expect.objectContaining({ key: 'akshare-net-profit-yoy', optional: true, status: 'caution', detail: expect.stringContaining('报告期不同') }),
     ]))
   })
+
+  it('keeps cashflow evidence optional while exposing its source and formulas', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-cashflow',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial],
+      shareholderReturn: {
+        ...shareholderReturn,
+        cashflowEvidence: {
+          formulaVersion: 'shareholder-cashflow-v2',
+          status: 'ready',
+          provider: 'eastmoney',
+          providerErrorCode: null,
+          observedAt: '2026-08-26T00:00:00.000Z',
+          reportDate: '2026-06-30',
+          reportType: '中报',
+          reportDateName: '2026中报',
+          noticeDate: '2026-08-22',
+          operatingCashflow: 100,
+          capitalExpenditure: 30,
+          netProfit: 80,
+          cashDividendsPaid: 20,
+          freeCashflow: 70,
+          freeCashflowCoverage: 3.5,
+          interestExpense: 10,
+          interestExpenseSourceField: 'FE_INTEREST_EXPENSE',
+          interestExpenseProviderErrorCode: null,
+          interestBearingDebt: 200,
+          interestBearingDebtComponents: {
+            shortLoan: 100,
+            shortBondPayable: null,
+            shortFinancePayable: null,
+            acceptDepositInterbank: null,
+            borrowFund: null,
+            loanPbc: null,
+            currentMaturityDebt: 20,
+            amortizedCostFinancialLiability: null,
+            longLoan: 50,
+            amortizedCostNoncurrentFinancialLiability: null,
+            bondPayable: 20,
+            perpetualBond: null,
+            perpetualBondPayable: null,
+            leaseLiability: 10,
+          },
+          interestBearingDebtProviderErrorCode: null,
+          freeCashflowAfterInterest: 60,
+          payoutRatio: 25,
+          payoutRatioReportDate: '2025-12-31',
+          missingFields: ['回购金额（当前数据源未接通）'],
+        },
+      },
+    })
+
+    expect(report.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'eastmoney-cashflow', formulaVersion: 'shareholder-cashflow-v2' }),
+    ]))
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'shareholder-free-cashflow', value: 70, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'shareholder-cashflow-coverage', value: 3.5, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'shareholder-interest-expense', value: 10, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'shareholder-interest-bearing-debt', value: 200, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'shareholder-free-cashflow-after-interest', value: 60, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'shareholder-payout-ratio', value: 25, optional: true, status: 'pass' }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'shareholder-return')?.evidenceKeys).toEqual(['shareholder-yield'])
+  })
+
+  it('keeps capital structure evidence optional and separate from scoring', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-capital',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial],
+      shareholderReturn: {
+        ...shareholderReturn,
+        capitalStructureEvidence: {
+          formulaVersion: 'shareholder-capital-v1',
+          status: 'ready',
+          provider: 'eastmoney',
+          providerErrorCode: null,
+          observedAt: '2026-08-26T00:00:00.000Z',
+          latestReportDate: '2026-03-31',
+          latestTotalShares: 1200,
+          latestChangeReason: '债转股上市',
+          previousReportDate: '2025-12-18',
+          previousTotalShares: 1100,
+          sharesOutstandingChange: 100,
+          sharesOutstandingChangeRatio: 9.09,
+          repurchaseSharesRetired: 50,
+          changes: [
+            { reportDate: '2026-03-31', totalShares: 1200, changeReason: '债转股上市', sharesOutstandingChange: 100, sharesOutstandingChangeRatio: 9.09 },
+            { reportDate: '2025-12-18', totalShares: 1100, changeReason: '回购', sharesOutstandingChange: -50, sharesOutstandingChangeRatio: -4.35 },
+          ],
+          missingFields: ['回购金额（当前数据源未接通）'],
+        },
+      },
+    })
+
+    expect(report.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'eastmoney-capital-structure', formulaVersion: 'shareholder-capital-v1' }),
+    ]))
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'shareholder-shares-outstanding-change', value: 100, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'shareholder-repurchase-shares', value: 50, optional: true, status: 'pass' }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'shareholder-return')?.evidenceKeys).toEqual(['shareholder-yield'])
+  })
+
+  it('keeps executed repurchase amount optional and separate from scoring', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-repurchase',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial],
+      shareholderReturn: {
+        ...shareholderReturn,
+        repurchaseEvidence: {
+          formulaVersion: 'shareholder-repurchase-v1',
+          status: 'ready',
+          provider: 'eastmoney',
+          providerErrorCode: null,
+          observedAt: '2026-08-26T00:00:00.000Z',
+          latestAnnouncementDate: '2026-04-15',
+          latestProgress: '006',
+          repurchaseAmount: 2499754839.55,
+          plannedAmountLower: 1500000000,
+          plannedAmountUpper: 2500000000,
+          records: [],
+          missingFields: [],
+        },
+      },
+    })
+
+    expect(report.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'eastmoney-repurchase', formulaVersion: 'shareholder-repurchase-v1' }),
+    ]))
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'shareholder-repurchase-amount', value: 2499754839.55, optional: true, status: 'pass' }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'shareholder-return')?.evidenceKeys).toEqual(['shareholder-yield'])
+  })
 })

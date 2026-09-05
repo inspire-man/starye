@@ -1,4 +1,4 @@
-export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v3' as const
+export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v4' as const
 
 export type QuantKnowledgeSourceAccess = 'full' | 'preview'
 export type QuantKnowledgeFactorStatus = 'active' | 'partial' | 'planned' | 'context'
@@ -129,8 +129,8 @@ export const QUANT_KNOWLEDGE_FACTORS: readonly QuantKnowledgeFactor[] = [
     interpretation: '成长和周期行业的投入强度需要与经营现金流、利息和债务一起看。',
     measurement: '经营现金流 - 资本开支 - 利息支出，结合负债规模观察安全边际。',
     requiredFields: ['operatingCashflow', 'capitalExpenditure', 'interestExpense', 'interestBearingDebt'],
-    availableFields: ['operatingCashflowToRevenue', 'operatingCashflowPerShare', 'fcffBack', 'fcffForward', 'interestCoverage', 'interestBearingDebtRatio', 'cashRatio', 'totalLiability'],
-    missingFields: ['operatingCashflow', 'capitalExpenditure', 'interestExpense', 'interestBearingDebt'],
+    availableFields: ['operatingCashflow', 'capitalExpenditure', 'interestExpense', 'interestBearingDebt', 'freeCashflowAfterInterest', 'operatingCashflowToRevenue', 'operatingCashflowPerShare', 'fcffBack', 'fcffForward', 'interestCoverage', 'interestBearingDebtRatio', 'cashRatio', 'totalLiability'],
+    missingFields: [],
     status: 'partial',
     eligibleInValueQuality: false,
     currentDimension: null,
@@ -171,8 +171,8 @@ export const QUANT_KNOWLEDGE_FACTORS: readonly QuantKnowledgeFactor[] = [
     interpretation: '高股息只有在利润、现金流和负债支持下才有长期参考价值。',
     measurement: '股息率、分红支付率、自由现金流覆盖和回购/股本变化联合观察。',
     requiredFields: ['dividendYield', 'payoutRatio', 'freeCashflow', 'buybackAmount', 'sharesOutstandingChange'],
-    availableFields: ['dividendYield'],
-    missingFields: ['payoutRatio', 'freeCashflow', 'buybackAmount', 'sharesOutstandingChange'],
+    availableFields: ['dividendYield', 'payoutRatio', 'freeCashflow', 'buybackAmount', 'sharesOutstandingChange'],
+    missingFields: [],
     status: 'partial',
     eligibleInValueQuality: false,
     currentDimension: null,

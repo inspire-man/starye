@@ -163,6 +163,30 @@ function shareholderDividendSource(item: QuantShareholderReturnItem | null): { r
   }
 }
 
+function shareholderCashflowSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
+  const provider = item?.cashflowEvidence?.provider === 'tushare' ? 'Tushare' : item?.cashflowEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  return {
+    id: item?.cashflowEvidence?.provider === 'eastmoney' ? 'eastmoney-cashflow' : 'quant-cashflow-provider',
+    name: `${provider} 现金流量表`,
+  }
+}
+
+function shareholderCapitalSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
+  const provider = item?.capitalStructureEvidence?.provider === 'tushare' ? 'Tushare' : item?.capitalStructureEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  return {
+    id: item?.capitalStructureEvidence?.provider === 'eastmoney' ? 'eastmoney-capital-structure' : 'quant-capital-structure-provider',
+    name: `${provider} 股本结构`,
+  }
+}
+
+function shareholderRepurchaseSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
+  const provider = item?.repurchaseEvidence?.provider === 'tushare' ? 'Tushare' : item?.repurchaseEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  return {
+    id: item?.repurchaseEvidence?.provider === 'eastmoney' ? 'eastmoney-repurchase' : 'quant-repurchase-provider',
+    name: `${provider} 回购计划`,
+  }
+}
+
 function buildSources(input: QuantResearchReportInput, latestTradeDate: string | null): readonly QuantResearchSource[] {
   const sources: QuantResearchSource[] = [
     {
@@ -195,6 +219,33 @@ function buildSources(input: QuantResearchReportInput, latestTradeDate: string |
       name: source.name,
       observedAt: input.shareholderReturn.observedAt,
       formulaVersion: input.shareholderReturn.formulaVersion,
+    })
+  }
+  if (input.shareholderReturn?.cashflowEvidence) {
+    const source = shareholderCashflowSource(input.shareholderReturn)
+    sources.push({
+      id: source.id,
+      name: source.name,
+      observedAt: input.shareholderReturn.cashflowEvidence.observedAt,
+      formulaVersion: input.shareholderReturn.cashflowEvidence.formulaVersion,
+    })
+  }
+  if (input.shareholderReturn?.capitalStructureEvidence) {
+    const source = shareholderCapitalSource(input.shareholderReturn)
+    sources.push({
+      id: source.id,
+      name: source.name,
+      observedAt: input.shareholderReturn.capitalStructureEvidence.observedAt,
+      formulaVersion: input.shareholderReturn.capitalStructureEvidence.formulaVersion,
+    })
+  }
+  if (input.shareholderReturn?.repurchaseEvidence) {
+    const source = shareholderRepurchaseSource(input.shareholderReturn)
+    sources.push({
+      id: source.id,
+      name: source.name,
+      observedAt: input.shareholderReturn.repurchaseEvidence.observedAt,
+      formulaVersion: input.shareholderReturn.repurchaseEvidence.formulaVersion,
     })
   }
   if (input.akshare || input.akshareConfigured || input.akshareErrorCode) {
@@ -448,6 +499,166 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
       : '股东回报数据不完整，不以零值代替',
     optional: true,
   }))
+
+  const cashflowEvidence = input.shareholderReturn?.cashflowEvidence
+  if (cashflowEvidence) {
+    const cashflowSource = shareholderCashflowSource(input.shareholderReturn)
+    const freeCashflow = finite(cashflowEvidence.freeCashflow)
+    const coverage = finite(cashflowEvidence.freeCashflowCoverage)
+    const payoutRatio = finite(cashflowEvidence.payoutRatio)
+    evidenceItems.push(evidence({
+      key: 'shareholder-free-cashflow',
+      dimension: 'shareholder-return',
+      label: '自由现金流',
+      status: statusForValue(freeCashflow, value => value >= 0, value => value < 0),
+      value: freeCashflow,
+      threshold: '经营活动净现金流减购建长期资产支出',
+      source: cashflowSource.name,
+      observedAt: cashflowEvidence.reportDate,
+      formulaVersion: cashflowEvidence.formulaVersion,
+      detail: cashflowEvidence.status === 'ready'
+        ? freeCashflow !== null && freeCashflow >= 0 ? '经营现金流覆盖当前资本开支' : '自由现金流为负，需要复核再投资压力'
+        : '自由现金流字段尚未完整返回',
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'shareholder-cashflow-coverage',
+      dimension: 'shareholder-return',
+      label: '自由现金流分红覆盖',
+      status: statusForValue(coverage, value => value >= 1, value => value >= 0),
+      value: coverage,
+      threshold: '自由现金流 / 同报告期现金分红，至少 1 倍为覆盖',
+      source: cashflowSource.name,
+      observedAt: cashflowEvidence.reportDate,
+      formulaVersion: cashflowEvidence.formulaVersion,
+      detail: coverage === null ? '同报告期没有可计算的现金分红覆盖倍数' : coverage >= 1 ? '自由现金流覆盖同报告期现金分红' : '自由现金流未完全覆盖同报告期现金分红',
+      optional: true,
+    }))
+    const interestExpense = finite(cashflowEvidence.interestExpense)
+    const interestBearingDebt = finite(cashflowEvidence.interestBearingDebt)
+    const freeCashflowAfterInterest = finite(cashflowEvidence.freeCashflowAfterInterest)
+    evidenceItems.push(evidence({
+      key: 'shareholder-interest-expense',
+      dimension: 'shareholder-return',
+      label: '利息支出',
+      status: statusForValue(interestExpense, () => true),
+      value: interestExpense,
+      threshold: '同报告期利润表披露的利息支出',
+      source: cashflowSource.name,
+      observedAt: cashflowEvidence.reportDate,
+      formulaVersion: cashflowEvidence.formulaVersion,
+      detail: interestExpense === null
+        ? cashflowEvidence.interestExpenseProviderErrorCode
+          ? `利息支出来源暂不可用（${cashflowEvidence.interestExpenseProviderErrorCode}）`
+          : '缺少同报告期的利息支出'
+        : `同报告期利息支出为 ${interestExpense.toFixed(2)} 元${cashflowEvidence.interestExpenseSourceField ? `（${cashflowEvidence.interestExpenseSourceField}）` : ''}`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'shareholder-interest-bearing-debt',
+      dimension: 'shareholder-return',
+      label: '有息负债',
+      status: statusForValue(interestBearingDebt, () => true),
+      value: interestBearingDebt,
+      threshold: '明确借款、债券、租赁及一年内到期非流动负债行项目合计',
+      source: cashflowSource.name,
+      observedAt: cashflowEvidence.reportDate,
+      formulaVersion: cashflowEvidence.formulaVersion,
+      detail: interestBearingDebt === null
+        ? cashflowEvidence.interestBearingDebtProviderErrorCode
+          ? `有息负债来源暂不可用（${cashflowEvidence.interestBearingDebtProviderErrorCode}）`
+          : '缺少可核对的有息负债行项目'
+        : `同报告期有息负债合计为 ${interestBearingDebt.toFixed(2)} 元`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'shareholder-free-cashflow-after-interest',
+      dimension: 'shareholder-return',
+      label: '利息后自由现金流',
+      status: statusForValue(freeCashflowAfterInterest, value => value >= 0, value => value < 0),
+      value: freeCashflowAfterInterest,
+      threshold: '经营活动净现金流 - 资本开支 - 利息支出，不低于 0 为正向观察',
+      source: cashflowSource.name,
+      observedAt: cashflowEvidence.reportDate,
+      formulaVersion: cashflowEvidence.formulaVersion,
+      detail: freeCashflowAfterInterest === null ? '缺少经营现金流、资本开支或利息支出，暂不能计算' : freeCashflowAfterInterest >= 0 ? '利息后自由现金流保持为正' : '利息后自由现金流为负，需要复核现金安全边际',
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'shareholder-payout-ratio',
+      dimension: 'shareholder-return',
+      label: '年度分红支付率',
+      status: statusForValue(payoutRatio, value => value >= 0 && value <= 100, value => value <= 120),
+      value: payoutRatio,
+      threshold: '最近完整年度已分配股利 / 净利润，0% - 100% 为常规观察区间',
+      source: cashflowSource.name,
+      observedAt: cashflowEvidence.payoutRatioReportDate,
+      formulaVersion: cashflowEvidence.formulaVersion,
+      detail: payoutRatio === null ? '缺少最近完整年度的支付率计算条件' : payoutRatio <= 100 ? `最近完整年度支付率为 ${payoutRatio.toFixed(2)}%` : '支付率高于 100%，需要复核利润与分红时点',
+      optional: true,
+    }))
+  }
+
+  const capitalStructureEvidence = input.shareholderReturn?.capitalStructureEvidence
+  if (capitalStructureEvidence) {
+    const capitalSource = shareholderCapitalSource(input.shareholderReturn)
+    const sharesOutstandingChange = finite(capitalStructureEvidence.sharesOutstandingChange)
+    const repurchaseSharesRetired = finite(capitalStructureEvidence.repurchaseSharesRetired)
+    const changeDetail = sharesOutstandingChange === null
+      ? '最近相邻股本变化暂时无法计算'
+      : sharesOutstandingChange < 0
+        ? `最近相邻事件总股本减少 ${Math.abs(sharesOutstandingChange).toFixed(0)} 股`
+        : sharesOutstandingChange > 0
+          ? `最近相邻事件总股本增加 ${sharesOutstandingChange.toFixed(0)} 股`
+          : '最近相邻事件总股本未变化'
+    evidenceItems.push(evidence({
+      key: 'shareholder-shares-outstanding-change',
+      dimension: 'shareholder-return',
+      label: '相邻股本变化',
+      status: statusForValue(sharesOutstandingChange, () => true),
+      value: sharesOutstandingChange,
+      threshold: '最近两条股本事件均有有效总股本',
+      source: capitalSource.name,
+      observedAt: capitalStructureEvidence.latestReportDate,
+      formulaVersion: capitalStructureEvidence.formulaVersion,
+      detail: capitalStructureEvidence.status === 'ready' ? `${changeDetail}；${capitalStructureEvidence.latestChangeReason || '变动原因待补'}` : '股本事件字段尚未完整返回',
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'shareholder-repurchase-shares',
+      dimension: 'shareholder-return',
+      label: '回购注销股数',
+      status: statusForValue(repurchaseSharesRetired, value => value >= 0),
+      value: repurchaseSharesRetired,
+      threshold: '仅累计原因含回购且总股本下降的事件',
+      source: capitalSource.name,
+      observedAt: capitalStructureEvidence.latestReportDate,
+      formulaVersion: capitalStructureEvidence.formulaVersion,
+      detail: repurchaseSharesRetired === null ? '暂无可核对的股本事件' : repurchaseSharesRetired > 0 ? `样本内识别到 ${repurchaseSharesRetired.toFixed(0)} 股回购导致的总股本减少` : '样本内未识别到回购导致的总股本减少',
+      optional: true,
+    }))
+  }
+
+  const repurchaseEvidence = input.shareholderReturn?.repurchaseEvidence
+  if (repurchaseEvidence) {
+    const repurchaseSource = shareholderRepurchaseSource(input.shareholderReturn)
+    const repurchaseAmount = finite(repurchaseEvidence.repurchaseAmount)
+    evidenceItems.push(evidence({
+      key: 'shareholder-repurchase-amount',
+      dimension: 'shareholder-return',
+      label: '已实施回购金额',
+      status: statusForValue(repurchaseAmount, value => value >= 0, value => value >= 0),
+      value: repurchaseAmount,
+      threshold: '仅汇总回购计划已实施金额，计划区间单独观察',
+      source: repurchaseSource.name,
+      observedAt: repurchaseEvidence.latestAnnouncementDate,
+      formulaVersion: repurchaseEvidence.formulaVersion,
+      detail: repurchaseAmount === null
+        ? '回购计划存在，但已实施金额暂未返回'
+        : `样本内已实施回购金额为 ${repurchaseAmount.toFixed(2)} 元`,
+      optional: true,
+    }))
+  }
 
   if (input.akshare?.evidence.length) {
     evidenceItems.push(...input.akshare.evidence.map(item => withAkshareCrossSourceCheck({

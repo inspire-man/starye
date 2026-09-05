@@ -89,6 +89,97 @@ export interface QuantDividendProvider {
   fetchDividends: (request: QuantDividendRequest) => Promise<QuantDividendFetchResult>
 }
 
+export type QuantInterestExpenseSourceField = 'FE_INTEREST_EXPENSE' | 'INTEREST_EXPENSE'
+
+export interface QuantInterestBearingDebtComponents {
+  readonly shortLoan: number | null
+  readonly shortBondPayable: number | null
+  readonly shortFinancePayable: number | null
+  readonly acceptDepositInterbank: number | null
+  readonly borrowFund: number | null
+  readonly loanPbc: number | null
+  readonly currentMaturityDebt: number | null
+  readonly amortizedCostFinancialLiability: number | null
+  readonly longLoan: number | null
+  readonly amortizedCostNoncurrentFinancialLiability: number | null
+  readonly bondPayable: number | null
+  readonly perpetualBond: number | null
+  readonly perpetualBondPayable: number | null
+  readonly leaseLiability: number | null
+}
+
+export interface QuantCashflowReport {
+  readonly tsCode: string
+  readonly reportDate: string
+  readonly reportType: string | null
+  readonly reportDateName: string | null
+  readonly noticeDate: string | null
+  readonly operatingCashflow: number | null
+  readonly capitalExpenditure: number | null
+  readonly netProfit: number | null
+  readonly cashDividendsPaid: number | null
+  readonly interestExpense: number | null
+  readonly interestExpenseSourceField: QuantInterestExpenseSourceField | null
+  readonly interestExpenseProviderErrorCode: string | null
+  readonly interestBearingDebt: number | null
+  readonly interestBearingDebtComponents: QuantInterestBearingDebtComponents
+  readonly interestBearingDebtProviderErrorCode: string | null
+}
+
+export interface QuantCashflowRequest {
+  readonly tsCode: string
+  readonly limit?: number
+}
+
+export interface QuantCashflowProvider {
+  readonly name: QuantProviderName
+  readonly isConfigured: boolean
+  fetchCashflowHistory: (request: QuantCashflowRequest) => Promise<readonly QuantCashflowReport[]>
+}
+
+export interface QuantCapitalStructureReport {
+  readonly tsCode: string
+  readonly reportDate: string
+  readonly totalShares: number | null
+  readonly changeReason: string | null
+}
+
+export interface QuantCapitalStructureRequest {
+  readonly tsCode: string
+  readonly limit?: number
+}
+
+export interface QuantCapitalStructureProvider {
+  readonly name: QuantProviderName
+  readonly isConfigured: boolean
+  fetchCapitalStructureHistory: (request: QuantCapitalStructureRequest) => Promise<readonly QuantCapitalStructureReport[]>
+}
+
+export interface QuantRepurchaseReport {
+  readonly tsCode: string
+  readonly repurchaseCode: string | null
+  readonly announcementDate: string | null
+  readonly startDate: string | null
+  readonly endDate: string | null
+  readonly finishDate: string | null
+  readonly progress: string | null
+  readonly plannedAmountLower: number | null
+  readonly plannedAmountUpper: number | null
+  readonly repurchaseAmount: number | null
+  readonly repurchaseShares: number | null
+}
+
+export interface QuantRepurchaseRequest {
+  readonly tsCode: string
+  readonly limit?: number
+}
+
+export interface QuantRepurchaseProvider {
+  readonly name: QuantProviderName
+  readonly isConfigured: boolean
+  fetchRepurchaseHistory: (request: QuantRepurchaseRequest) => Promise<readonly QuantRepurchaseReport[]>
+}
+
 export class QuantDividendProviderChainError extends Error {
   readonly primaryError: unknown
   readonly fallbackError: unknown | null
@@ -409,6 +500,7 @@ export class EastmoneyProviderError extends Error {
 export interface EastmoneyProviderOptions {
   readonly baseUrl?: string
   readonly dividendBaseUrl?: string
+  readonly repurchaseBaseUrl?: string
   readonly valuationFallbackBaseUrl?: string
   readonly timeoutMs?: number
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -527,6 +619,18 @@ const EastmoneyValuationHistoryResponseSchema = v.object({
 
 const EastmoneyFinancialResponseSchema = v.object({
   data: v.array(v.unknown()),
+})
+
+const EastmoneyCapitalStructureResponseSchema = v.object({
+  lngbbd: v.nullable(v.array(v.unknown())),
+})
+
+const EastmoneyRepurchaseResponseSchema = v.object({
+  code: v.number(),
+  success: v.boolean(),
+  result: v.optional(v.nullable(v.object({
+    data: v.array(v.unknown()),
+  }))),
 })
 
 const EastmoneyShareBonusResponseSchema = v.object({
@@ -1168,6 +1272,166 @@ function normalizeFinancialReport(tsCode: string, record: Record<string, unknown
   }
 }
 
+function eastmoneySafeErrorCode(error: unknown): string {
+  if (error instanceof EastmoneyProviderError) {
+    if (error.code === 'TIMEOUT')
+      return 'QUANT_PROVIDER_TIMEOUT'
+    if (error.code === 'INVALID_RESPONSE')
+      return 'QUANT_PROVIDER_INVALID_RESPONSE'
+  }
+  return 'QUANT_PROVIDER_UPSTREAM'
+}
+
+function normalizeEastmoneyStatementRows(
+  tsCode: string,
+  rows: readonly Record<string, unknown>[],
+  statement: string,
+): ReadonlyMap<string, Record<string, unknown>> {
+  const requestedCode = tsCode.split('.')[0]
+  const byDate = new Map<string, Record<string, unknown>>()
+  for (const record of rows) {
+    const returnedCode = financialString(record, 'SECURITY_CODE')
+    if (!returnedCode || returnedCode.padStart(6, '0') !== requestedCode)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', `Eastmoney ${statement} code is missing or mismatched`)
+    const reportDate = normalizeFinancialDate(record.REPORT_DATE, `${statement} report date`, true)
+    if (!reportDate)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', `Eastmoney ${statement} report date is missing`)
+    if (!byDate.has(reportDate))
+      byDate.set(reportDate, record)
+  }
+  return byDate
+}
+
+function normalizeEastmoneyInterestExpense(record: Record<string, unknown> | undefined): { readonly value: number | null, readonly sourceField: QuantInterestExpenseSourceField | null } {
+  const financeExpenseInterest = eastmoneyQuoteNumber(record?.FE_INTEREST_EXPENSE, 'interestExpense')
+  if (financeExpenseInterest !== null)
+    return { value: financeExpenseInterest, sourceField: 'FE_INTEREST_EXPENSE' }
+  const incomeStatementInterest = eastmoneyQuoteNumber(record?.INTEREST_EXPENSE, 'interestExpense')
+  return {
+    value: incomeStatementInterest,
+    sourceField: incomeStatementInterest !== null ? 'INTEREST_EXPENSE' : null,
+  }
+}
+
+function normalizeEastmoneyInterestBearingDebtComponents(record: Record<string, unknown> | undefined): QuantInterestBearingDebtComponents {
+  return {
+    shortLoan: eastmoneyQuoteNumber(record?.SHORT_LOAN, 'shortLoan'),
+    shortBondPayable: eastmoneyQuoteNumber(record?.SHORT_BOND_PAYABLE, 'shortBondPayable'),
+    shortFinancePayable: eastmoneyQuoteNumber(record?.SHORT_FIN_PAYABLE, 'shortFinancePayable'),
+    acceptDepositInterbank: eastmoneyQuoteNumber(record?.ACCEPT_DEPOSIT_INTERBANK, 'acceptDepositInterbank'),
+    borrowFund: eastmoneyQuoteNumber(record?.BORROW_FUND, 'borrowFund'),
+    loanPbc: eastmoneyQuoteNumber(record?.LOAN_PBC, 'loanPbc'),
+    currentMaturityDebt: eastmoneyQuoteNumber(record?.NONCURRENT_LIAB_1YEAR, 'currentMaturityDebt'),
+    amortizedCostFinancialLiability: eastmoneyQuoteNumber(record?.AMORTIZE_COST_FINLIAB, 'amortizedCostFinancialLiability'),
+    longLoan: eastmoneyQuoteNumber(record?.LONG_LOAN, 'longLoan'),
+    amortizedCostNoncurrentFinancialLiability: eastmoneyQuoteNumber(record?.AMORTIZE_COST_NCFINLIAB, 'amortizedCostNoncurrentFinancialLiability'),
+    bondPayable: eastmoneyQuoteNumber(record?.BOND_PAYABLE, 'bondPayable'),
+    perpetualBond: eastmoneyQuoteNumber(record?.PERPETUAL_BOND, 'perpetualBond'),
+    perpetualBondPayable: eastmoneyQuoteNumber(record?.PERPETUAL_BOND_PAYBALE, 'perpetualBondPayable'),
+    leaseLiability: eastmoneyQuoteNumber(record?.LEASE_LIAB, 'leaseLiability'),
+  }
+}
+
+function sumEastmoneyInterestBearingDebt(components: QuantInterestBearingDebtComponents): number | null {
+  const values = Object.values(components).filter((value): value is number => value !== null)
+  return values.length ? values.reduce((total, value) => total + value, 0) : null
+}
+
+function normalizeEastmoneyCashflowReport(
+  tsCode: string,
+  record: Record<string, unknown>,
+  incomeRecord: Record<string, unknown> | undefined,
+  balanceRecord: Record<string, unknown> | undefined,
+  interestExpenseProviderErrorCode: string | null,
+  interestBearingDebtProviderErrorCode: string | null,
+): QuantCashflowReport {
+  const requestedCode = tsCode.split('.')[0]
+  const returnedCode = financialString(record, 'SECURITY_CODE')
+  if (!returnedCode || returnedCode.padStart(6, '0') !== requestedCode)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney cashflow code is missing or mismatched')
+
+  const reportDate = normalizeFinancialDate(record.REPORT_DATE, 'cashflow report date', true)
+  if (!reportDate)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney cashflow report date is missing')
+
+  const interestExpense = normalizeEastmoneyInterestExpense(incomeRecord)
+  const interestBearingDebtComponents = normalizeEastmoneyInterestBearingDebtComponents(balanceRecord)
+  return {
+    tsCode,
+    reportDate,
+    reportType: financialString(record, 'REPORT_TYPE'),
+    reportDateName: financialString(record, 'REPORT_DATE_NAME'),
+    noticeDate: normalizeFinancialDate(record.NOTICE_DATE, 'cashflow notice date', false),
+    operatingCashflow: eastmoneyQuoteNumber(record.NETCASH_OPERATE, 'operatingCashflow'),
+    capitalExpenditure: eastmoneyQuoteNumber(record.CONSTRUCT_LONG_ASSET, 'capitalExpenditure'),
+    netProfit: eastmoneyQuoteNumber(record.NETPROFIT, 'netProfit'),
+    cashDividendsPaid: eastmoneyQuoteNumber(record.ASSIGN_DIVIDEND_PORFIT, 'cashDividendsPaid'),
+    interestExpense: interestExpense.value,
+    interestExpenseSourceField: interestExpense.sourceField,
+    interestExpenseProviderErrorCode,
+    interestBearingDebt: sumEastmoneyInterestBearingDebt(interestBearingDebtComponents),
+    interestBearingDebtComponents,
+    interestBearingDebtProviderErrorCode,
+  }
+}
+
+function normalizeEastmoneyCapitalStructureReport(tsCode: string, record: Record<string, unknown>): QuantCapitalStructureReport {
+  const requestedCode = tsCode.split('.')[0]
+  const returnedCode = record.SECURITY_CODE
+  const normalizedCode = typeof returnedCode === 'string' || typeof returnedCode === 'number'
+    ? String(returnedCode).split('.')[0].padStart(6, '0')
+    : null
+  if (normalizedCode !== requestedCode)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney capital structure code is missing or mismatched')
+
+  const reportDate = normalizeFinancialDate(record.END_DATE, 'capital structure report date', true)
+  if (!reportDate)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney capital structure report date is missing')
+
+  return {
+    tsCode,
+    reportDate,
+    totalShares: eastmoneyQuoteNumber(record.TOTAL_SHARES, 'totalShares'),
+    changeReason: financialString(record, 'CHANGE_REASON'),
+  }
+}
+
+function eastmoneyRepurchaseText(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim())
+    return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value))
+    return String(value)
+  return null
+}
+
+function eastmoneyRepurchaseCode(value: unknown): string | null {
+  const text = eastmoneyRepurchaseText(value)
+  return text ? text.split('.')[0]!.padStart(6, '0') : null
+}
+
+function normalizeEastmoneyRepurchaseReport(tsCode: string, record: Record<string, unknown>): QuantRepurchaseReport {
+  const requestedCode = tsCode.split('.')[0]
+  const returnedCode = [record.DIM_SCODE, record.SECURITY_CODE, record.SECUCODE]
+    .map(eastmoneyRepurchaseCode)
+    .find(value => value !== null) ?? null
+  if (returnedCode !== requestedCode)
+    throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney repurchase code is missing or mismatched')
+
+  return {
+    tsCode,
+    repurchaseCode: eastmoneyRepurchaseText(record.REPURCODE),
+    announcementDate: normalizeFinancialDate(record.UPD, 'repurchase announcement date', false),
+    startDate: normalizeFinancialDate(record.REPURSTARTDATE, 'repurchase start date', false),
+    endDate: normalizeFinancialDate(record.REPURENDDATE, 'repurchase end date', false),
+    finishDate: normalizeFinancialDate(record.FINISHDATE, 'repurchase finish date', false),
+    progress: eastmoneyRepurchaseText(record.REPURPROGRESS),
+    plannedAmountLower: eastmoneyQuoteNumber(record.REPURAMOUNTLOWER, 'plannedAmountLower'),
+    plannedAmountUpper: eastmoneyQuoteNumber(record.REPURAMOUNTLIMIT, 'plannedAmountUpper'),
+    repurchaseAmount: eastmoneyQuoteNumber(record.REPURAMOUNT, 'repurchaseAmount'),
+    repurchaseShares: eastmoneyQuoteNumber(record.REPURNUM, 'repurchaseShares'),
+  }
+}
+
 export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptions = {}): QuantFinancialQualityProvider {
   const baseUrl = options.baseUrl?.trim() || 'https://emweb.securities.eastmoney.com'
   const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
@@ -1241,6 +1505,257 @@ export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptio
     isConfigured: true,
     fetchFinancialQuality,
     fetchFinancialQualityHistory,
+  }
+}
+
+export function createEastmoneyCashflowProvider(options: EastmoneyProviderOptions = {}): QuantCashflowProvider {
+  const baseUrl = options.baseUrl?.trim() || 'https://emweb.securities.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+
+  async function fetchRows(url: URL, statement = 'cashflow'): Promise<readonly Record<string, unknown>[]> {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', `Eastmoney ${statement} request timed out`)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney ${statement} request failed`)
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney ${statement} HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', `Eastmoney ${statement} response is not JSON`)
+    }
+
+    const parsed = v.safeParse(EastmoneyFinancialResponseSchema, payload)
+    if (!parsed.success)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', `Eastmoney ${statement} response schema is invalid`)
+
+    return parsed.output.data.map((value) => {
+      if (!isRecord(value))
+        throw new EastmoneyProviderError('INVALID_RESPONSE', `Eastmoney ${statement} row is not an object`)
+      return value
+    })
+  }
+
+  async function fetchCashflowHistory(request: QuantCashflowRequest): Promise<readonly QuantCashflowReport[]> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    eastmoneyFinancialCode(tsCode)
+    const rawLimit = request.limit ?? 8
+    const limit = Number.isInteger(rawLimit) ? Math.min(8, Math.max(1, rawLimit)) : 8
+
+    const dateUrl = new URL('/PC_HSF10/NewFinanceAnalysis/xjllbDateAjaxNew', baseUrl)
+    dateUrl.searchParams.set('companyType', '4')
+    dateUrl.searchParams.set('reportDateType', '0')
+    dateUrl.searchParams.set('code', tsCode)
+    const dateRows = await fetchRows(dateUrl)
+    const dates = dateRows.slice(0, limit).map((record) => {
+      if (typeof record.REPORT_DATE !== 'string' || !record.REPORT_DATE.trim())
+        throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney cashflow report date is missing')
+      return record.REPORT_DATE
+    })
+    if (!dates.length)
+      return []
+
+    const createStatementUrl = (statement: string): URL => {
+      const url = new URL(`/PC_HSF10/NewFinanceAnalysis/${statement}AjaxNew`, baseUrl)
+      url.searchParams.set('companyType', '4')
+      url.searchParams.set('reportDateType', '0')
+      url.searchParams.set('reportType', '1')
+      url.searchParams.set('dates', dates.join(','))
+      url.searchParams.set('code', tsCode)
+      return url
+    }
+    const [cashflowResult, incomeResult, balanceResult] = await Promise.allSettled([
+      fetchRows(createStatementUrl('xjllb'), 'cashflow'),
+      fetchRows(createStatementUrl('lrb'), 'income statement'),
+      fetchRows(createStatementUrl('zcfzb'), 'balance sheet'),
+    ])
+    if (cashflowResult.status === 'rejected')
+      throw cashflowResult.reason
+
+    const auxiliaryRows = (result: PromiseSettledResult<readonly Record<string, unknown>[]>, statement: string): { readonly rows: ReadonlyMap<string, Record<string, unknown>>, readonly errorCode: string | null } => {
+      if (result.status === 'rejected')
+        return { rows: new Map(), errorCode: eastmoneySafeErrorCode(result.reason) }
+      try {
+        return { rows: normalizeEastmoneyStatementRows(tsCode, result.value, statement), errorCode: null }
+      }
+      catch (error) {
+        return { rows: new Map(), errorCode: eastmoneySafeErrorCode(error) }
+      }
+    }
+    const incomeRows = auxiliaryRows(incomeResult, 'income statement')
+    const balanceRows = auxiliaryRows(balanceResult, 'balance sheet')
+    const reports = cashflowResult.value.map((record) => {
+      const reportDate = normalizeFinancialDate(record.REPORT_DATE, 'cashflow report date', true)
+      if (!reportDate)
+        throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney cashflow report date is missing')
+      return normalizeEastmoneyCashflowReport(
+        tsCode,
+        record,
+        incomeRows.rows.get(reportDate),
+        balanceRows.rows.get(reportDate),
+        incomeRows.errorCode,
+        balanceRows.errorCode,
+      )
+    })
+    return [...new Map(reports.map(report => [`${report.reportDate}:${report.reportType ?? ''}`, report])).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    fetchCashflowHistory,
+  }
+}
+
+export function createEastmoneyCapitalStructureProvider(options: EastmoneyProviderOptions = {}): QuantCapitalStructureProvider {
+  const baseUrl = options.baseUrl?.trim() || 'https://emweb.securities.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+
+  async function fetchCapitalStructureHistory(request: QuantCapitalStructureRequest): Promise<readonly QuantCapitalStructureReport[]> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    const code = eastmoneyFinancialCode(tsCode)
+    const rawLimit = request.limit ?? 12
+    const limit = Number.isInteger(rawLimit) ? Math.min(20, Math.max(1, rawLimit)) : 12
+    const url = new URL('/PC_HSF10/CapitalStockStructure/PageAjax', baseUrl)
+    url.searchParams.set('code', code)
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney capital structure request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney capital structure request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney capital structure HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney capital structure response is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyCapitalStructureResponseSchema, payload)
+    if (!parsed.success)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney capital structure response schema is invalid')
+
+    const reports = (parsed.output.lngbbd ?? []).map((value) => {
+      if (!isRecord(value))
+        throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney capital structure row is not an object')
+      return normalizeEastmoneyCapitalStructureReport(tsCode, value)
+    })
+    return [...new Map(reports.map(report => [
+      `${report.reportDate}:${report.totalShares ?? ''}:${report.changeReason ?? ''}`,
+      report,
+    ])).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+      .slice(0, limit)
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    fetchCapitalStructureHistory,
+  }
+}
+
+export function createEastmoneyRepurchaseProvider(options: EastmoneyProviderOptions = {}): QuantRepurchaseProvider {
+  const baseUrl = options.repurchaseBaseUrl?.trim() || 'https://datacenter-web.eastmoney.com'
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? options.timeoutMs! : 10000
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+
+  async function fetchRepurchaseHistory(request: QuantRepurchaseRequest): Promise<readonly QuantRepurchaseReport[]> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    const code = eastmoneyFinancialCode(tsCode).slice(2)
+    const rawLimit = request.limit ?? 12
+    const limit = Number.isInteger(rawLimit) ? Math.min(20, Math.max(1, rawLimit)) : 12
+    const url = new URL('/api/data/v1/get', baseUrl)
+    url.searchParams.set('reportName', 'RPTA_WEB_GETHGLIST_NEW')
+    url.searchParams.set('columns', 'ALL')
+    url.searchParams.set('source', 'WEB')
+    url.searchParams.set('filter', `(DIM_SCODE="${code}")`)
+    url.searchParams.set('sortColumns', 'UPD,DIM_DATE,DIM_SCODE')
+    url.searchParams.set('sortTypes', '-1,-1,1')
+    url.searchParams.set('pageNumber', '1')
+    url.searchParams.set('pageSize', String(limit))
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney repurchase request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney repurchase request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney repurchase HTTP ${response.status}`)
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney repurchase response is not JSON')
+    }
+
+    const parsed = v.safeParse(EastmoneyRepurchaseResponseSchema, payload)
+    if (!parsed.success || parsed.output.code !== 0 || !parsed.output.success)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney repurchase response schema is invalid')
+
+    const reports = (parsed.output.result?.data ?? []).map((value) => {
+      if (!isRecord(value))
+        throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney repurchase row is not an object')
+      return normalizeEastmoneyRepurchaseReport(tsCode, value)
+    })
+    const deduplicated = new Map<string, QuantRepurchaseReport>()
+    for (const report of reports) {
+      const key = report.repurchaseCode ?? `${report.announcementDate ?? ''}:${report.startDate ?? ''}:${report.plannedAmountLower ?? ''}:${report.plannedAmountUpper ?? ''}`
+      if (!deduplicated.has(key))
+        deduplicated.set(key, report)
+    }
+    return [...deduplicated.values()]
+      .sort((left, right) => `${right.announcementDate ?? ''}:${right.startDate ?? ''}`.localeCompare(`${left.announcementDate ?? ''}:${left.startDate ?? ''}`))
+      .slice(0, limit)
+  }
+
+  return {
+    name: 'eastmoney',
+    isConfigured: true,
+    fetchRepurchaseHistory,
   }
 }
 
