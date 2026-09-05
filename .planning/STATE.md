@@ -25,6 +25,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - 2026-09-05 Quant 股东回报现金流、股本/回购股数、已实施回购金额、利息与有息负债四个 evidence change 已合入 `main`（PR #76，merge SHA `e309e8851d80069c16afc6670346f147f747bc5d`）；合并 SHA 的 CI `33942993937`、API 部署 `33942993878`/`33942993884` 和 Quant 部署 `33942993934` 均通过。
 
 - 2026-09-05 Quant 股东回报可持续性 evidence change 已合入 `main`（PR #77，merge SHA `acc0f633d1934929e3380b45a262a1090eff0b22`）：定向 API 269 项、Quant 317 项、root lint、type-check、build、OpenSpec strict 84/84、GitNexus 变更检查通过；PR test、合并 SHA 的 CI、Deploy API、Deploy API After PR Merge、Deploy Quant 全部通过。合并后 Gateway 已确认匿名 `/quant/` 为 302、股东回报 API 为 401，认证态紫金矿业详情显示 5 期历史和覆盖统计，1280px/390px 无页面级横向溢出且 console error/warn 为 0。API 全量本地单 worker run 未完成。
+- 2026-09-05 Quant 价值质量边界文案修复已合入 `main`（PR #78，merge SHA `9a0174e44e039c06526ec3b44a564799c3d2cb73`）：过期的“资本开支、回购和分红支付率暂未接通”提示已改为独立展示边界；组件 11/11、Quant type-check/build、认证态 Gateway 文案和 console 验收通过，合并 SHA 的 CI 与 Deploy Quant 均通过。
 
 ## 延后事项
 
