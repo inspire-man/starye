@@ -128,6 +128,10 @@ export interface QuantResearchDetailProps {
   errors: QuantDetailErrorState
   decisionFreshness: QuantDataHealthFreshness
   decisionFreshnessDetail: string
+  refreshEvidence?: (evidenceKey: string) => void | Promise<void>
+  refreshingEvidenceKey?: string | null
+  refreshEvidenceErrorMessage?: string | null
+  refreshEvidenceMessage?: string | null
   researchEvidenceGroups: { dimension: string, label: string, items: QuantResearchEvidence[] }[]
   researchEvidenceComparison: ResearchEvidenceHistoryComparison | null
   researchRunTimeline: ResearchRunTimeline
@@ -294,6 +298,10 @@ const {
   errors,
   decisionFreshness,
   decisionFreshnessDetail,
+  refreshEvidence,
+  refreshingEvidenceKey,
+  refreshEvidenceErrorMessage,
+  refreshEvidenceMessage,
   researchEvidenceGroups,
   researchEvidenceComparison,
   researchRunTimeline,
@@ -464,6 +472,10 @@ defineExpose({ useQuestionPrompt })
       :decision-assistant-ai-config-available="decisionAssistantAiConfigAvailable"
       :decision-freshness="decisionFreshness"
       :decision-freshness-detail="decisionFreshnessDetail"
+      :refresh-evidence="refreshEvidence"
+      :refreshing-evidence-key="refreshingEvidenceKey"
+      :refresh-evidence-error-message="refreshEvidenceErrorMessage"
+      :refresh-evidence-message="refreshEvidenceMessage"
       :research-evidence-groups="researchEvidenceGroups"
       :research-evidence-comparison="researchEvidenceComparison"
       :research-run-timeline="researchRunTimeline"

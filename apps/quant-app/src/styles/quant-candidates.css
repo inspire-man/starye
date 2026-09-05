@@ -278,6 +278,15 @@
   white-space: nowrap;
 }
 
+.candidate-evidence-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  justify-self: start;
+  padding: 0;
+  font-size: 0.625rem;
+}
+
 .review-state-badge {
   display: inline-flex;
   align-items: center;

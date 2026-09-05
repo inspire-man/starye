@@ -1,12 +1,24 @@
 <script setup lang="ts">
 import type { QuantFactorDataHealth, QuantFactorDataHealthItem, QuantFactorSourceHealth } from '../../lib/quant-factor-data-health'
 import type { QuantFactorFreshness } from '../../lib/quant-view-models'
+import { RefreshCw } from 'lucide-vue-next'
+import { quantEvidenceLabelForKey, quantEvidenceRefreshActionLabelForKey, quantEvidenceRefreshTargetForKey } from '../../lib/quant-evidence-refresh'
 
 export interface QuantFactorDataHealthProps {
   factorDataHealth: QuantFactorDataHealth | null
+  refreshEvidence?: (evidenceKey: string) => void | Promise<void>
+  refreshingEvidenceKey?: string | null
+  refreshEvidenceErrorMessage?: string | null
+  refreshEvidenceMessage?: string | null
 }
 
-const { factorDataHealth } = defineProps<QuantFactorDataHealthProps>()
+const {
+  factorDataHealth,
+  refreshEvidence,
+  refreshingEvidenceKey,
+  refreshEvidenceErrorMessage,
+  refreshEvidenceMessage,
+} = defineProps<QuantFactorDataHealthProps>()
 
 function factorHealthStatusLabel(value: QuantFactorDataHealthItem['status']): string {
   return value === 'ready' ? '字段完整' : value === 'partial' ? '部分可用' : value === 'missing' ? '待补数据' : '来源不可用'
@@ -42,6 +54,34 @@ function factorObservedAt(value: string | null): string {
   const compact = value.replace(/-/gu, '').slice(0, 8)
   return /^\d{8}$/u.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}` : value.slice(0, 16)
 }
+
+function refreshTargetsForFactor(factor: QuantFactorDataHealthItem): { key: string, label: string, actionLabel: string }[] {
+  const missingKeys = [...new Set([...factor.missingEvidenceKeys, ...factor.failedEvidenceKeys])]
+  const shouldRefreshCurrentEvidence = factor.status === 'unavailable'
+    || factor.sourceHealth === 'unavailable'
+    || factor.sourceHealth === 'fallback'
+    || ['aging', 'stale'].includes(factor.freshness.status)
+  const keys = missingKeys.length ? missingKeys : shouldRefreshCurrentEvidence ? factor.evidence.map(item => item.key) : []
+  const seen = new Set<string>()
+  return keys.flatMap((key) => {
+    const target = quantEvidenceRefreshTargetForKey(key)
+    const actionLabel = quantEvidenceRefreshActionLabelForKey(key)
+    if (!target || !actionLabel || seen.has(target.domain))
+      return []
+    seen.add(target.domain)
+    return [{ key, label: target.label, actionLabel }]
+  })
+}
+
+function evidenceLabel(factor: QuantFactorDataHealthItem, key: string): string {
+  return factor.evidence.find(item => item.key === key)?.label || quantEvidenceLabelForKey(key)
+}
+
+function requestEvidenceRefresh(key: string): void {
+  if (!refreshEvidence || refreshingEvidenceKey)
+    return
+  void refreshEvidence(key)
+}
 </script>
 
 <template>
@@ -72,10 +112,35 @@ function factorObservedAt(value: string | null): string {
           <span>时效 {{ freshnessForFactor(factor.factor)?.detail || '没有可核验因子证据时间' }}</span>
           <span :class="factorSourceHealthClass(factor.sourceHealth)">{{ factorSourceHealthLabel(factor.sourceHealth) }}：{{ factor.source || '来源未记录' }}</span>
         </div>
-        <small v-if="factor.missingEvidenceKeys.length" class="quant-factor-data-health-missing">待补证据：{{ factor.missingEvidenceKeys.join('、') }}</small>
-        <small v-if="factor.failedEvidenceKeys.length" class="quant-factor-data-health-failed">失败证据：{{ factor.failedEvidenceKeys.join('、') }}</small>
+        <div v-if="factor.missingEvidenceKeys.length" class="quant-factor-data-health-gap quant-factor-data-health-missing">
+          <span>待补证据：{{ factor.missingEvidenceKeys.map(key => evidenceLabel(factor, key)).join('、') }}</span>
+        </div>
+        <div v-if="factor.failedEvidenceKeys.length" class="quant-factor-data-health-gap quant-factor-data-health-failed">
+          <span>失败证据：{{ factor.failedEvidenceKeys.map(key => evidenceLabel(factor, key)).join('、') }}</span>
+        </div>
+        <div v-if="refreshEvidence && refreshTargetsForFactor(factor).length" class="quant-factor-data-health-refresh-row">
+          <span>数据动作</span>
+          <button
+            v-for="target in refreshTargetsForFactor(factor)"
+            :key="target.label"
+            class="text-button quant-factor-data-health-refresh-button"
+            type="button"
+            :disabled="Boolean(refreshingEvidenceKey)"
+            :title="`${target.actionLabel}：${factor.missingEvidenceKeys.concat(factor.failedEvidenceKeys).join('、') || factor.evidence.map(item => item.key).join('、')}`"
+            @click="requestEvidenceRefresh(target.key)"
+          >
+            <RefreshCw :size="12" :class="refreshingEvidenceKey ? 'animate-spin' : ''" aria-hidden="true" />
+            {{ refreshingEvidenceKey ? '刷新中' : target.actionLabel }}
+          </button>
+        </div>
         <small class="quant-factor-data-health-action">下一步：{{ factor.nextAction }}</small>
       </div>
+    </div>
+    <div v-if="refreshEvidenceMessage" class="quant-factor-data-health-feedback" role="status">
+      {{ refreshEvidenceMessage }}
+    </div>
+    <div v-if="refreshEvidenceErrorMessage" class="quant-factor-data-health-feedback quant-factor-data-health-feedback-error" role="alert">
+      {{ refreshEvidenceErrorMessage }}
     </div>
   </section>
 </template>
@@ -198,9 +263,46 @@ function factorObservedAt(value: string | null): string {
 .quant-factor-health-source-unavailable { color: hsl(var(--status-danger)); }
 .quant-factor-health-source-unknown { color: hsl(var(--muted-foreground)); }
 
+.quant-factor-data-health-gap {
+  display: flex;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.625rem;
+  line-height: 1.45;
+}
+
 .quant-factor-data-health-missing { color: hsl(var(--status-warning)) !important; }
 .quant-factor-data-health-failed { color: hsl(var(--status-danger)) !important; }
 .quant-factor-data-health-action { color: hsl(var(--foreground)) !important; }
+
+.quant-factor-data-health-refresh-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.55rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.quant-factor-data-health-refresh-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.quant-factor-data-health-feedback {
+  border-left: 2px solid hsl(var(--status-success));
+  color: hsl(var(--status-success));
+  font-size: 0.625rem;
+  line-height: 1.45;
+  padding-left: 0.45rem;
+}
+
+.quant-factor-data-health-feedback-error {
+  border-left-color: hsl(var(--status-danger));
+  color: hsl(var(--status-danger));
+}
 
 @media (max-width: 520px) {
   .quant-factor-data-health-heading {
