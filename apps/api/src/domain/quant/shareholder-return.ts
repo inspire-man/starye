@@ -1,5 +1,5 @@
 import type { Database } from '@starye/db'
-import type { QuantDividendProvider, QuantDividendRecord, QuantProviderName } from './provider'
+import type { QuantCapitalStructureProvider, QuantCapitalStructureReport, QuantCashflowProvider, QuantCashflowReport, QuantDividendProvider, QuantDividendRecord, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantProviderName, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
 import type { DailyBar } from './types'
 import { mapQuantProviderError, QuantDividendProviderChainError } from './provider'
 import { getQuantWatchlistItem, listQuantDailyBars, listQuantWatchlist } from './repository'
@@ -15,6 +15,100 @@ export interface QuantShareholderReturnDistribution {
   readonly cashDividendPerShare: number
   readonly exDate: string | null
   readonly payDate: string | null
+}
+
+export const QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION = 'shareholder-cashflow-v2' as const
+
+export type QuantShareholderCashflowStatus = 'ready' | 'partial' | 'insufficient_data' | 'unavailable'
+
+export interface QuantShareholderCashflowEvidence {
+  readonly formulaVersion: typeof QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION
+  readonly status: QuantShareholderCashflowStatus
+  readonly provider: QuantProviderName | null
+  readonly providerErrorCode: string | null
+  readonly observedAt: string
+  readonly reportDate: string | null
+  readonly reportType: string | null
+  readonly reportDateName: string | null
+  readonly noticeDate: string | null
+  readonly operatingCashflow: number | null
+  readonly capitalExpenditure: number | null
+  readonly netProfit: number | null
+  readonly cashDividendsPaid: number | null
+  readonly freeCashflow: number | null
+  readonly freeCashflowCoverage: number | null
+  readonly interestExpense: number | null
+  readonly interestExpenseSourceField: QuantInterestExpenseSourceField | null
+  readonly interestExpenseProviderErrorCode: string | null
+  readonly interestBearingDebt: number | null
+  readonly interestBearingDebtComponents: QuantInterestBearingDebtComponents
+  readonly interestBearingDebtProviderErrorCode: string | null
+  readonly freeCashflowAfterInterest: number | null
+  readonly payoutRatio: number | null
+  readonly payoutRatioReportDate: string | null
+  readonly missingFields: readonly string[]
+}
+
+export const QUANT_SHAREHOLDER_CAPITAL_FORMULA_VERSION = 'shareholder-capital-v1' as const
+
+export type QuantShareholderCapitalStatus = 'ready' | 'partial' | 'insufficient_data' | 'unavailable'
+
+export interface QuantShareholderCapitalChange {
+  readonly reportDate: string
+  readonly totalShares: number | null
+  readonly changeReason: string | null
+  readonly sharesOutstandingChange: number | null
+  readonly sharesOutstandingChangeRatio: number | null
+}
+
+export interface QuantShareholderCapitalEvidence {
+  readonly formulaVersion: typeof QUANT_SHAREHOLDER_CAPITAL_FORMULA_VERSION
+  readonly status: QuantShareholderCapitalStatus
+  readonly provider: QuantProviderName | null
+  readonly providerErrorCode: string | null
+  readonly observedAt: string
+  readonly latestReportDate: string | null
+  readonly latestTotalShares: number | null
+  readonly latestChangeReason: string | null
+  readonly previousReportDate: string | null
+  readonly previousTotalShares: number | null
+  readonly sharesOutstandingChange: number | null
+  readonly sharesOutstandingChangeRatio: number | null
+  readonly repurchaseSharesRetired: number | null
+  readonly changes: readonly QuantShareholderCapitalChange[]
+  readonly missingFields: readonly string[]
+}
+
+export const QUANT_SHAREHOLDER_REPURCHASE_FORMULA_VERSION = 'shareholder-repurchase-v1' as const
+
+export type QuantShareholderRepurchaseStatus = 'ready' | 'partial' | 'insufficient_data' | 'unavailable'
+
+export interface QuantShareholderRepurchaseRecord {
+  readonly repurchaseCode: string | null
+  readonly announcementDate: string | null
+  readonly startDate: string | null
+  readonly endDate: string | null
+  readonly finishDate: string | null
+  readonly progress: string | null
+  readonly plannedAmountLower: number | null
+  readonly plannedAmountUpper: number | null
+  readonly repurchaseAmount: number | null
+  readonly repurchaseShares: number | null
+}
+
+export interface QuantShareholderRepurchaseEvidence {
+  readonly formulaVersion: typeof QUANT_SHAREHOLDER_REPURCHASE_FORMULA_VERSION
+  readonly status: QuantShareholderRepurchaseStatus
+  readonly provider: QuantProviderName | null
+  readonly providerErrorCode: string | null
+  readonly observedAt: string
+  readonly latestAnnouncementDate: string | null
+  readonly latestProgress: string | null
+  readonly repurchaseAmount: number | null
+  readonly plannedAmountLower: number | null
+  readonly plannedAmountUpper: number | null
+  readonly records: readonly QuantShareholderRepurchaseRecord[]
+  readonly missingFields: readonly string[]
 }
 
 export interface QuantShareholderReturnItem {
@@ -34,6 +128,9 @@ export interface QuantShareholderReturnItem {
   readonly dividendYears: number
   readonly distributions: readonly QuantShareholderReturnDistribution[]
   readonly missingFields: readonly string[]
+  readonly cashflowEvidence?: QuantShareholderCashflowEvidence
+  readonly capitalStructureEvidence?: QuantShareholderCapitalEvidence
+  readonly repurchaseEvidence?: QuantShareholderRepurchaseEvidence
 }
 
 export interface QuantShareholderReturnBatchResult {
@@ -58,6 +155,15 @@ export interface ShareholderReturnInput {
   readonly providerChain?: readonly QuantProviderName[]
   readonly fallbackUsed?: boolean
   readonly fallbackReason?: string | null
+  readonly cashflowReports?: readonly QuantCashflowReport[]
+  readonly cashflowProvider?: QuantProviderName | null
+  readonly cashflowErrorCode?: string | null
+  readonly capitalStructureReports?: readonly QuantCapitalStructureReport[]
+  readonly capitalStructureProvider?: QuantProviderName | null
+  readonly capitalStructureErrorCode?: string | null
+  readonly repurchaseReports?: readonly QuantRepurchaseReport[]
+  readonly repurchaseProvider?: QuantProviderName | null
+  readonly repurchaseErrorCode?: string | null
   readonly observedAt: string
 }
 
@@ -105,6 +211,263 @@ function buildDistributions(records: readonly QuantDividendRecord[]): readonly Q
   }))
 }
 
+function isAnnualReport(report: QuantCashflowReport): boolean {
+  return report.reportDate.endsWith('-12-31')
+}
+
+function emptyInterestBearingDebtComponents(): QuantInterestBearingDebtComponents {
+  return {
+    shortLoan: null,
+    shortBondPayable: null,
+    shortFinancePayable: null,
+    acceptDepositInterbank: null,
+    borrowFund: null,
+    loanPbc: null,
+    currentMaturityDebt: null,
+    amortizedCostFinancialLiability: null,
+    longLoan: null,
+    amortizedCostNoncurrentFinancialLiability: null,
+    bondPayable: null,
+    perpetualBond: null,
+    perpetualBondPayable: null,
+    leaseLiability: null,
+  }
+}
+
+function buildCashflowEvidence(input: ShareholderReturnInput): QuantShareholderCashflowEvidence {
+  const reports = input.cashflowReports ?? []
+  const latest = reports[0]
+  const operatingCashflow = finite(latest?.operatingCashflow)
+  const capitalExpenditure = finite(latest?.capitalExpenditure)
+  const netProfit = finite(latest?.netProfit)
+  const cashDividendsPaid = finite(latest?.cashDividendsPaid)
+  const interestExpense = finite(latest?.interestExpense)
+  const interestBearingDebt = finite(latest?.interestBearingDebt)
+  const interestBearingDebtComponents = latest?.interestBearingDebtComponents ?? emptyInterestBearingDebtComponents()
+  const freeCashflow = operatingCashflow !== null && capitalExpenditure !== null
+    ? round(operatingCashflow - capitalExpenditure, 2)
+    : null
+  const freeCashflowCoverage = freeCashflow !== null && cashDividendsPaid !== null && cashDividendsPaid > 0
+    ? round(freeCashflow / cashDividendsPaid, 2)
+    : null
+  const freeCashflowAfterInterest = operatingCashflow !== null && capitalExpenditure !== null && interestExpense !== null
+    ? round(operatingCashflow - capitalExpenditure - interestExpense, 2)
+    : null
+  const annualPayoutReport = reports.find((report) => {
+    const annualProfit = finite(report.netProfit)
+    const annualDividends = finite(report.cashDividendsPaid)
+    return isAnnualReport(report) && annualProfit !== null && annualProfit > 0 && annualDividends !== null
+  })
+  const payoutRatio = annualPayoutReport
+    ? round(annualPayoutReport.cashDividendsPaid! / annualPayoutReport.netProfit! * 100, 2)
+    : null
+  const missingFields: string[] = []
+
+  if (input.cashflowErrorCode)
+    missingFields.push(`现金流量表暂不可用（${input.cashflowErrorCode}）`)
+  if (!latest)
+    missingFields.push('现金流量表报告')
+  if (operatingCashflow === null)
+    missingFields.push('经营活动净现金流')
+  if (capitalExpenditure === null)
+    missingFields.push('购建长期资产支出')
+  if (netProfit === null)
+    missingFields.push('现金流量表净利润')
+  if (cashDividendsPaid === null)
+    missingFields.push('同报告期已分配现金股利')
+  if (interestExpense === null)
+    missingFields.push('利息支出')
+  if (latest?.interestExpenseProviderErrorCode)
+    missingFields.push(`利息支出来源暂不可用（${latest.interestExpenseProviderErrorCode}）`)
+  if (interestBearingDebt === null)
+    missingFields.push('有息负债')
+  if (latest?.interestBearingDebtProviderErrorCode)
+    missingFields.push(`有息负债来源暂不可用（${latest.interestBearingDebtProviderErrorCode}）`)
+  if (payoutRatio === null)
+    missingFields.push('最近完整年度分红支付率')
+  missingFields.push('回购金额（当前数据源未接通）')
+
+  let status: QuantShareholderCashflowStatus
+  if (input.cashflowErrorCode)
+    status = 'unavailable'
+  else if (!latest)
+    status = 'insufficient_data'
+  else if (operatingCashflow !== null && capitalExpenditure !== null)
+    status = 'ready'
+  else
+    status = 'partial'
+
+  return {
+    formulaVersion: QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION,
+    status,
+    provider: input.cashflowProvider ?? null,
+    providerErrorCode: input.cashflowErrorCode ?? null,
+    observedAt: input.observedAt,
+    reportDate: latest?.reportDate ?? null,
+    reportType: latest?.reportType ?? null,
+    reportDateName: latest?.reportDateName ?? null,
+    noticeDate: latest?.noticeDate ?? null,
+    operatingCashflow,
+    capitalExpenditure,
+    netProfit,
+    cashDividendsPaid,
+    freeCashflow,
+    freeCashflowCoverage,
+    interestExpense,
+    interestExpenseSourceField: latest?.interestExpenseSourceField ?? null,
+    interestExpenseProviderErrorCode: latest?.interestExpenseProviderErrorCode ?? null,
+    interestBearingDebt,
+    interestBearingDebtComponents,
+    interestBearingDebtProviderErrorCode: latest?.interestBearingDebtProviderErrorCode ?? null,
+    freeCashflowAfterInterest,
+    payoutRatio,
+    payoutRatioReportDate: annualPayoutReport?.reportDate ?? null,
+    missingFields: [...new Set(missingFields)],
+  }
+}
+
+function buildCapitalStructureEvidence(input: ShareholderReturnInput): QuantShareholderCapitalEvidence {
+  const reports = input.capitalStructureReports ?? []
+  const latest = reports[0]
+  const previous = reports[1]
+  const latestTotalShares = finite(latest?.totalShares)
+  const previousTotalShares = finite(previous?.totalShares)
+  const change = latestTotalShares !== null && previousTotalShares !== null
+    ? round(latestTotalShares - previousTotalShares, 0)
+    : null
+  const changeRatio = change !== null && previousTotalShares !== null && previousTotalShares > 0
+    ? round(change / previousTotalShares * 100, 2)
+    : null
+  const changes = reports.map((report, index) => {
+    const prior = reports[index + 1]
+    const totalShares = finite(report.totalShares)
+    const priorTotalShares = finite(prior?.totalShares)
+    const sharesOutstandingChange = totalShares !== null && priorTotalShares !== null
+      ? round(totalShares - priorTotalShares, 0)
+      : null
+    return {
+      reportDate: report.reportDate,
+      totalShares,
+      changeReason: report.changeReason,
+      sharesOutstandingChange,
+      sharesOutstandingChangeRatio: sharesOutstandingChange !== null && priorTotalShares !== null && priorTotalShares > 0
+        ? round(sharesOutstandingChange / priorTotalShares * 100, 2)
+        : null,
+    }
+  })
+  const repurchaseSharesRetired = reports.length > 0
+    ? round(changes.reduce((total, item) => total + (item.changeReason?.includes('回购') && item.sharesOutstandingChange !== null && item.sharesOutstandingChange < 0 ? Math.abs(item.sharesOutstandingChange) : 0), 0), 0)
+    : null
+  const missingFields: string[] = []
+
+  if (input.capitalStructureErrorCode)
+    missingFields.push(`股本结构暂不可用（${input.capitalStructureErrorCode}）`)
+  if (!latest)
+    missingFields.push('股本变动报告')
+  if (latestTotalShares === null)
+    missingFields.push('最新总股本')
+  if (!previous)
+    missingFields.push('上一条股本变动报告')
+  if (previousTotalShares === null)
+    missingFields.push('上一条总股本')
+  if (change === null)
+    missingFields.push('相邻股本变化')
+  if (latest?.changeReason === null || latest?.changeReason === undefined)
+    missingFields.push('最新股本变动原因')
+  missingFields.push('回购金额（当前数据源未接通）')
+
+  let status: QuantShareholderCapitalStatus
+  if (input.capitalStructureErrorCode)
+    status = 'unavailable'
+  else if (!latest)
+    status = 'insufficient_data'
+  else if (latestTotalShares !== null && previousTotalShares !== null && latest.changeReason !== null)
+    status = 'ready'
+  else
+    status = 'partial'
+
+  return {
+    formulaVersion: QUANT_SHAREHOLDER_CAPITAL_FORMULA_VERSION,
+    status,
+    provider: input.capitalStructureProvider ?? null,
+    providerErrorCode: input.capitalStructureErrorCode ?? null,
+    observedAt: input.observedAt,
+    latestReportDate: latest?.reportDate ?? null,
+    latestTotalShares,
+    latestChangeReason: latest?.changeReason ?? null,
+    previousReportDate: previous?.reportDate ?? null,
+    previousTotalShares,
+    sharesOutstandingChange: change,
+    sharesOutstandingChangeRatio: changeRatio,
+    repurchaseSharesRetired,
+    changes,
+    missingFields: [...new Set(missingFields)],
+  }
+}
+
+function sumFinite(values: readonly (number | null | undefined)[]): number | null {
+  const numbers = values.flatMap((value) => {
+    const numeric = finite(value)
+    return numeric === null ? [] : [numeric]
+  })
+  return numbers.length ? round(numbers.reduce((total, value) => total + value, 0), 2) : null
+}
+
+function buildRepurchaseEvidence(input: ShareholderReturnInput): QuantShareholderRepurchaseEvidence {
+  const reports = input.repurchaseReports ?? []
+  const records = reports.map(report => ({
+    repurchaseCode: report.repurchaseCode,
+    announcementDate: report.announcementDate,
+    startDate: report.startDate,
+    endDate: report.endDate,
+    finishDate: report.finishDate,
+    progress: report.progress,
+    plannedAmountLower: finite(report.plannedAmountLower),
+    plannedAmountUpper: finite(report.plannedAmountUpper),
+    repurchaseAmount: finite(report.repurchaseAmount),
+    repurchaseShares: finite(report.repurchaseShares),
+  } satisfies QuantShareholderRepurchaseRecord))
+  const repurchaseAmount = sumFinite(records.map(record => record.repurchaseAmount))
+  const plannedAmountLower = sumFinite(records.map(record => record.plannedAmountLower))
+  const plannedAmountUpper = sumFinite(records.map(record => record.plannedAmountUpper))
+  const latest = records[0]
+  const missingFields: string[] = []
+
+  if (input.repurchaseErrorCode)
+    missingFields.push(`回购计划暂不可用（${input.repurchaseErrorCode}）`)
+  if (!records.length)
+    missingFields.push('回购计划记录')
+  if (repurchaseAmount === null)
+    missingFields.push('已实施回购金额')
+  if (plannedAmountLower === null || plannedAmountUpper === null)
+    missingFields.push('回购计划金额区间')
+
+  let status: QuantShareholderRepurchaseStatus
+  if (input.repurchaseErrorCode)
+    status = 'unavailable'
+  else if (!records.length)
+    status = 'insufficient_data'
+  else if (repurchaseAmount !== null)
+    status = 'ready'
+  else
+    status = 'partial'
+
+  return {
+    formulaVersion: QUANT_SHAREHOLDER_REPURCHASE_FORMULA_VERSION,
+    status,
+    provider: input.repurchaseProvider ?? null,
+    providerErrorCode: input.repurchaseErrorCode ?? null,
+    observedAt: input.observedAt,
+    latestAnnouncementDate: latest?.announcementDate ?? null,
+    latestProgress: latest?.progress ?? null,
+    repurchaseAmount,
+    plannedAmountLower,
+    plannedAmountUpper,
+    records,
+    missingFields: [...new Set(missingFields)],
+  }
+}
+
 export function buildShareholderReturnResult(input: ShareholderReturnInput): QuantShareholderReturnItem {
   const now = Date.parse(input.observedAt)
   const cutoff = Number.isFinite(now) ? now - 365 * 24 * 60 * 60 * 1000 : null
@@ -146,6 +509,16 @@ export function buildShareholderReturnResult(input: ShareholderReturnInput): Qua
         ? 'partial'
         : 'insufficient_data'
 
+  const cashflowEvidence = input.cashflowReports !== undefined || input.cashflowErrorCode !== undefined
+    ? buildCashflowEvidence(input)
+    : undefined
+  const capitalStructureEvidence = input.capitalStructureReports !== undefined || input.capitalStructureErrorCode !== undefined
+    ? buildCapitalStructureEvidence(input)
+    : undefined
+  const repurchaseEvidence = input.repurchaseReports !== undefined || input.repurchaseErrorCode !== undefined
+    ? buildRepurchaseEvidence(input)
+    : undefined
+
   return {
     tsCode: input.tsCode,
     name: input.name,
@@ -163,6 +536,9 @@ export function buildShareholderReturnResult(input: ShareholderReturnInput): Qua
     dividendYears,
     distributions: buildDistributions(implemented),
     missingFields: [...new Set(missingFields)],
+    ...(cashflowEvidence ? { cashflowEvidence } : {}),
+    ...(capitalStructureEvidence ? { capitalStructureEvidence } : {}),
+    ...(repurchaseEvidence ? { repurchaseEvidence } : {}),
   }
 }
 
@@ -179,41 +555,136 @@ async function readShareholderReturnInput(
   item: { readonly tsCode: string, readonly name: string | null },
   dailyBars: readonly DailyBar[],
   provider: QuantDividendProvider,
+  cashflowProvider: QuantCashflowProvider | undefined,
+  capitalStructureProvider: QuantCapitalStructureProvider | undefined,
+  repurchaseProvider: QuantRepurchaseProvider | undefined,
   observedAt: string,
 ): Promise<ShareholderReturnInput> {
-  let dividends: readonly QuantDividendRecord[] = []
-  let dividendErrorCode: string | null = null
-  let dividendProvider: QuantProviderName | null = provider.isConfigured ? provider.name : null
-  let fallbackUsed = false
-  let fallbackReason: string | null = null
-  if (provider.isConfigured) {
-    try {
-      const result = await provider.fetchDividends({ tsCode: item.tsCode })
-      dividends = result.records
-      dividendProvider = result.provider
-      fallbackUsed = result.fallbackUsed
-      fallbackReason = result.fallbackReason
-    }
-    catch (error) {
-      dividendErrorCode = providerErrorCode(error)
-      dividendProvider = null
-    }
-  }
-  else {
-    dividendErrorCode = 'QUANT_PROVIDER_CONFIGURATION'
-  }
+  const dividendTask = provider.isConfigured
+    ? provider.fetchDividends({ tsCode: item.tsCode })
+        .then(result => ({
+          dividends: result.records,
+          dividendErrorCode: null as string | null,
+          dividendProvider: result.provider as QuantProviderName | null,
+          fallbackUsed: result.fallbackUsed,
+          fallbackReason: result.fallbackReason,
+        }))
+        .catch(error => ({
+          dividends: [] as readonly QuantDividendRecord[],
+          dividendErrorCode: providerErrorCode(error),
+          dividendProvider: null as QuantProviderName | null,
+          fallbackUsed: false,
+          fallbackReason: null as string | null,
+        }))
+    : Promise.resolve({
+        dividends: [] as readonly QuantDividendRecord[],
+        dividendErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
+        dividendProvider: null as QuantProviderName | null,
+        fallbackUsed: false,
+        fallbackReason: null as string | null,
+      })
+
+  const cashflowTask = cashflowProvider
+    ? cashflowProvider.isConfigured
+      ? cashflowProvider.fetchCashflowHistory({ tsCode: item.tsCode, limit: 8 })
+          .then(cashflowReports => ({
+            cashflowReports,
+            cashflowProvider: cashflowProvider.name as QuantProviderName | null,
+            cashflowErrorCode: null as string | null,
+          }))
+          .catch(error => ({
+            cashflowReports: [] as readonly QuantCashflowReport[],
+            cashflowProvider: cashflowProvider.name as QuantProviderName | null,
+            cashflowErrorCode: mapQuantProviderError(error).code,
+          }))
+      : Promise.resolve({
+          cashflowReports: [] as readonly QuantCashflowReport[],
+          cashflowProvider: null as QuantProviderName | null,
+          cashflowErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
+        })
+    : Promise.resolve(null)
+
+  const capitalStructureTask = capitalStructureProvider
+    ? capitalStructureProvider.isConfigured
+      ? capitalStructureProvider.fetchCapitalStructureHistory({ tsCode: item.tsCode, limit: 12 })
+          .then(capitalStructureReports => ({
+            capitalStructureReports,
+            capitalStructureProvider: capitalStructureProvider.name as QuantProviderName | null,
+            capitalStructureErrorCode: null as string | null,
+          }))
+          .catch(error => ({
+            capitalStructureReports: [] as readonly QuantCapitalStructureReport[],
+            capitalStructureProvider: capitalStructureProvider.name as QuantProviderName | null,
+            capitalStructureErrorCode: mapQuantProviderError(error).code,
+          }))
+      : Promise.resolve({
+          capitalStructureReports: [] as readonly QuantCapitalStructureReport[],
+          capitalStructureProvider: null as QuantProviderName | null,
+          capitalStructureErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
+        })
+    : Promise.resolve(null)
+
+  const repurchaseTask = repurchaseProvider
+    ? repurchaseProvider.isConfigured
+      ? repurchaseProvider.fetchRepurchaseHistory({ tsCode: item.tsCode, limit: 12 })
+          .then(repurchaseReports => ({
+            repurchaseReports,
+            repurchaseProvider: repurchaseProvider.name as QuantProviderName | null,
+            repurchaseErrorCode: null as string | null,
+          }))
+          .catch(error => ({
+            repurchaseReports: [] as readonly QuantRepurchaseReport[],
+            repurchaseProvider: repurchaseProvider.name as QuantProviderName | null,
+            repurchaseErrorCode: mapQuantProviderError(error).code,
+          }))
+      : Promise.resolve({
+          repurchaseReports: [] as readonly QuantRepurchaseReport[],
+          repurchaseProvider: null as QuantProviderName | null,
+          repurchaseErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
+        })
+    : Promise.resolve(null)
+
+  const [dividend, cashflow, capitalStructure, repurchase] = await Promise.all([dividendTask, cashflowTask, capitalStructureTask, repurchaseTask])
+
   return {
     tsCode: item.tsCode,
     name: item.name,
-    dividends,
+    dividends: dividend.dividends,
     dailyBars,
-    dividendErrorCode,
-    dividendProvider,
+    dividendErrorCode: dividend.dividendErrorCode,
+    dividendProvider: dividend.dividendProvider,
     providerChain: provider.providerChain,
-    fallbackUsed,
-    fallbackReason,
+    fallbackUsed: dividend.fallbackUsed,
+    fallbackReason: dividend.fallbackReason,
+    ...(cashflow
+      ? {
+          cashflowReports: cashflow.cashflowReports,
+          cashflowProvider: cashflow.cashflowProvider,
+          cashflowErrorCode: cashflow.cashflowErrorCode,
+        }
+      : {}),
+    ...(capitalStructure
+      ? {
+          capitalStructureReports: capitalStructure.capitalStructureReports,
+          capitalStructureProvider: capitalStructure.capitalStructureProvider,
+          capitalStructureErrorCode: capitalStructure.capitalStructureErrorCode,
+        }
+      : {}),
+    ...(repurchase
+      ? {
+          repurchaseReports: repurchase.repurchaseReports,
+          repurchaseProvider: repurchase.repurchaseProvider,
+          repurchaseErrorCode: repurchase.repurchaseErrorCode,
+        }
+      : {}),
     observedAt,
   }
+}
+
+type ShareholderNow = () => Date
+
+function isShareholderNow(value: unknown): value is ShareholderNow {
+  return typeof value === 'function'
 }
 
 export async function readQuantShareholderReturn(
@@ -221,23 +692,53 @@ export async function readQuantShareholderReturn(
   userId: string,
   tsCode: string,
   provider: QuantDividendProvider,
-  now: () => Date = () => new Date(),
+  cashflowProviderOrNow?: QuantCashflowProvider | ShareholderNow,
+  capitalStructureProviderOrNow?: QuantCapitalStructureProvider | ShareholderNow,
+  repurchaseProviderOrNow?: QuantRepurchaseProvider | ShareholderNow,
+  now: ShareholderNow = () => new Date(),
 ): Promise<QuantShareholderReturnItem | null> {
+  const cashflowProvider = isShareholderNow(cashflowProviderOrNow) ? undefined : cashflowProviderOrNow
+  const capitalStructureProvider = isShareholderNow(cashflowProviderOrNow) || isShareholderNow(capitalStructureProviderOrNow)
+    ? undefined
+    : capitalStructureProviderOrNow
+  const repurchaseProvider = isShareholderNow(cashflowProviderOrNow) || isShareholderNow(capitalStructureProviderOrNow) || isShareholderNow(repurchaseProviderOrNow)
+    ? undefined
+    : repurchaseProviderOrNow
+  const resolvedNow = isShareholderNow(cashflowProviderOrNow)
+    ? cashflowProviderOrNow
+    : isShareholderNow(capitalStructureProviderOrNow)
+      ? capitalStructureProviderOrNow
+      : isShareholderNow(repurchaseProviderOrNow) ? repurchaseProviderOrNow : now
   const item = await getQuantWatchlistItem(db, userId, tsCode)
   if (!item)
     return null
-  const observedAt = now().toISOString()
+  const observedAt = resolvedNow().toISOString()
   const dailyBars = await listQuantDailyBars(db, { tsCode: item.tsCode })
-  return buildShareholderReturnResult(await readShareholderReturnInput(item, dailyBars, provider, observedAt))
+  return buildShareholderReturnResult(await readShareholderReturnInput(item, dailyBars, provider, cashflowProvider, capitalStructureProvider, repurchaseProvider, observedAt))
 }
 
 export async function readQuantShareholderReturns(
   db: Database,
   userId: string,
   provider: QuantDividendProvider,
-  now: () => Date = () => new Date(),
+  cashflowProviderOrNow?: QuantCashflowProvider | ShareholderNow,
+  capitalStructureProviderOrNow?: QuantCapitalStructureProvider | ShareholderNow,
+  repurchaseProviderOrNow?: QuantRepurchaseProvider | ShareholderNow,
+  now: ShareholderNow = () => new Date(),
 ): Promise<QuantShareholderReturnBatchResult> {
-  const observedAt = now().toISOString()
+  const cashflowProvider = isShareholderNow(cashflowProviderOrNow) ? undefined : cashflowProviderOrNow
+  const capitalStructureProvider = isShareholderNow(cashflowProviderOrNow) || isShareholderNow(capitalStructureProviderOrNow)
+    ? undefined
+    : capitalStructureProviderOrNow
+  const repurchaseProvider = isShareholderNow(cashflowProviderOrNow) || isShareholderNow(capitalStructureProviderOrNow) || isShareholderNow(repurchaseProviderOrNow)
+    ? undefined
+    : repurchaseProviderOrNow
+  const resolvedNow = isShareholderNow(cashflowProviderOrNow)
+    ? cashflowProviderOrNow
+    : isShareholderNow(capitalStructureProviderOrNow)
+      ? capitalStructureProviderOrNow
+      : isShareholderNow(repurchaseProviderOrNow) ? repurchaseProviderOrNow : now
+  const observedAt = resolvedNow().toISOString()
   const watchlist = await listQuantWatchlist(db, userId)
   if (watchlist.length === 0) {
     return {
@@ -266,7 +767,7 @@ export async function readQuantShareholderReturns(
     while (nextIndex < watchlist.length) {
       const index = nextIndex++
       const item = watchlist[index]!
-      inputs[index] = await readShareholderReturnInput(item, barsByCode.get(item.tsCode) ?? [], provider, observedAt)
+      inputs[index] = await readShareholderReturnInput(item, barsByCode.get(item.tsCode) ?? [], provider, cashflowProvider, capitalStructureProvider, repurchaseProvider, observedAt)
     }
   }))
 

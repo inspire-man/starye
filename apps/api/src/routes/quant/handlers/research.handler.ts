@@ -40,7 +40,7 @@ import {
 } from '../../../schemas/quant'
 import { quantRouteDocs } from '../contract-docs'
 import { currentQuantUserId, eastmoneyProviderOptions } from '../route-context'
-import { dividendProvider } from './market-support'
+import { capitalStructureProvider, cashflowProvider, dividendProvider, repurchaseProvider } from './market-support'
 import {
   isComparableResearchReport,
   parseResearchReport,
@@ -98,11 +98,12 @@ quantResearchRoutes.post('/research/runs', quantRouteDocs('research.runs.create'
   const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
   const financialProvider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
   const dividendSourceProvider = dividendProvider(c.env)
+  const cashflowSourceProvider = cashflowProvider(c.env)
   const akshareBridge = createQuantAkshareBridge(akshareBridgeOptions(c.env))
   const [valuationResult, financialResult, shareholderResult, akshareResult] = await Promise.allSettled([
     valuationProvider.fetchValuation({ tsCode }),
     financialProvider.fetchFinancialQualityHistory({ tsCode, limit: 4 }),
-    readQuantShareholderReturn(c.get('db'), userId, tsCode, dividendSourceProvider),
+    readQuantShareholderReturn(c.get('db'), userId, tsCode, dividendSourceProvider, cashflowSourceProvider, capitalStructureProvider(c.env), repurchaseProvider(c.env)),
     akshareBridge.isConfigured ? akshareBridge.fetchEvidence({ tsCode }) : Promise.resolve(null),
   ])
   const generatedAt = new Date()

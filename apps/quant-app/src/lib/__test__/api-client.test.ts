@@ -383,6 +383,93 @@ describe('quantApi', () => {
           dividend_years: 4,
           distributions: [{ end_date: '20260331', cash_dividend_per_share: 0.42, pay_date: '20260821' }],
           missing_fields: [],
+          cashflow_evidence: {
+            formula_version: 'shareholder-cashflow-v2',
+            status: 'ready',
+            provider: 'eastmoney',
+            provider_error_code: null,
+            observed_at: '2026-08-25T00:00:00.000Z',
+            report_date: '2026-06-30',
+            report_type: '中报',
+            report_date_name: '2026中报',
+            notice_date: '2026-08-22',
+            operating_cashflow: 100,
+            capital_expenditure: 30,
+            net_profit: 80,
+            cash_dividends_paid: 20,
+            free_cashflow: 70,
+            free_cashflow_coverage: 3.5,
+            interest_expense: 10,
+            interest_expense_source_field: 'FE_INTEREST_EXPENSE',
+            interest_expense_provider_error_code: null,
+            interest_bearing_debt: 200,
+            interest_bearing_debt_components: {
+              short_loan: 100,
+              short_bond_payable: null,
+              short_finance_payable: null,
+              accept_deposit_interbank: null,
+              borrow_fund: null,
+              loan_pbc: null,
+              current_maturity_debt: 20,
+              amortized_cost_financial_liability: null,
+              long_loan: 50,
+              amortized_cost_noncurrent_financial_liability: null,
+              bond_payable: 20,
+              perpetual_bond: null,
+              perpetual_bond_payable: null,
+              lease_liability: 10,
+            },
+            interest_bearing_debt_provider_error_code: null,
+            free_cashflow_after_interest: 60,
+            payout_ratio: 25,
+            payout_ratio_report_date: '2025-12-31',
+            missing_fields: ['回购金额（当前数据源未接通）'],
+          },
+          capital_structure_evidence: {
+            formula_version: 'shareholder-capital-v1',
+            status: 'ready',
+            provider: 'eastmoney',
+            provider_error_code: null,
+            observed_at: '2026-08-25T00:00:00.000Z',
+            latest_report_date: '2026-03-31',
+            latest_total_shares: 1200,
+            latest_change_reason: '债转股上市',
+            previous_report_date: '2025-12-18',
+            previous_total_shares: 1100,
+            shares_outstanding_change: 100,
+            shares_outstanding_change_ratio: 9.09,
+            repurchase_shares_retired: 50,
+            changes: [
+              { report_date: '2026-03-31', total_shares: 1200, change_reason: '债转股上市', shares_outstanding_change: 100, shares_outstanding_change_ratio: 9.09 },
+              { report_date: '2025-12-18', total_shares: 1100, change_reason: '回购', shares_outstanding_change: -50, shares_outstanding_change_ratio: -4.35 },
+            ],
+            missing_fields: ['回购金额（当前数据源未接通）'],
+          },
+          repurchase_evidence: {
+            formula_version: 'shareholder-repurchase-v1',
+            status: 'ready',
+            provider: 'eastmoney',
+            provider_error_code: null,
+            observed_at: '2026-08-25T00:00:00.000Z',
+            latest_announcement_date: '2026-04-15',
+            latest_progress: '006',
+            repurchase_amount: 2499754839.55,
+            planned_amount_lower: 1500000000,
+            planned_amount_upper: 2500000000,
+            records: [{
+              repurchase_code: 'plan-2',
+              announcement_date: '2026-04-15',
+              start_date: '2026-03-20',
+              end_date: '2027-03-20',
+              finish_date: '2026-04-14',
+              progress: '006',
+              planned_amount_lower: 1500000000,
+              planned_amount_upper: 2500000000,
+              repurchase_amount: 2499754839.55,
+              repurchase_shares: 77474592,
+            }],
+            missing_fields: [],
+          },
         }],
       },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
@@ -399,9 +486,68 @@ describe('quantApi', () => {
         fallbackReason: 'QUANT_PROVIDER_QUOTA',
         trailingDividendYield: 1.22,
         distributions: [{ endDate: '20260331', cashDividendPerShare: 0.42 }],
+        cashflowEvidence: expect.objectContaining({
+          status: 'ready',
+          freeCashflow: 70,
+          freeCashflowCoverage: 3.5,
+          interestExpense: 10,
+          interestExpenseSourceField: 'FE_INTEREST_EXPENSE',
+          interestBearingDebt: 200,
+          freeCashflowAfterInterest: 60,
+          payoutRatio: 25,
+        }),
+        capitalStructureEvidence: expect.objectContaining({
+          status: 'ready',
+          sharesOutstandingChange: 100,
+          repurchaseSharesRetired: 50,
+          changes: expect.arrayContaining([expect.objectContaining({ changeReason: '回购', sharesOutstandingChange: -50 })]),
+        }),
+        repurchaseEvidence: expect.objectContaining({
+          status: 'ready',
+          repurchaseAmount: 2499754839.55,
+          plannedAmountLower: 1500000000,
+          plannedAmountUpper: 2500000000,
+          records: expect.arrayContaining([expect.objectContaining({ repurchaseCode: 'plan-2', repurchaseAmount: 2499754839.55 })]),
+        }),
       }],
     })
     expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/shareholder-returns`, expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('defaults new interest evidence fields for a legacy cashflow payload', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        items: [{
+          ts_code: '601899.SH',
+          status: 'ready',
+          cashflow_evidence: {
+            status: 'ready',
+            operating_cashflow: 100,
+            capital_expenditure: 30,
+            free_cashflow: 70,
+          },
+        }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getShareholderReturns()).resolves.toMatchObject({
+      items: [{
+        tsCode: '601899.SH',
+        cashflowEvidence: {
+          formulaVersion: 'shareholder-cashflow-v1',
+          interestExpense: null,
+          interestBearingDebt: null,
+          freeCashflowAfterInterest: null,
+          interestBearingDebtComponents: {
+            shortLoan: null,
+            longLoan: null,
+            bondPayable: null,
+            leaseLiability: null,
+          },
+        },
+      }],
+    })
   })
 
   it('normalizes financial history and keeps reports in server order', async () => {
@@ -521,7 +667,7 @@ describe('quantApi', () => {
   it('normalizes the source-backed investment knowledge catalog', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {
-        version: 'investment-knowledge-v3',
+        version: 'investment-knowledge-v4',
         observed_at: '2026-08-25T00:00:00.000Z',
         sources: [{ id: 'article-key-point', title: '重点来了', url: 'https://mp.weixin.qq.com/s/fNOk8LKIqNzdlo8Bm7qTaA', access: 'preview', summary: '公开试读' }],
         factors: [
@@ -535,7 +681,7 @@ describe('quantApi', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(quantApi.getInvestmentKnowledge()).resolves.toMatchObject({
-      version: 'investment-knowledge-v3',
+      version: 'investment-knowledge-v4',
       sources: [{ id: 'article-key-point', access: 'preview' }],
       factors: [
         { id: 'relative-valuation', status: 'active', eligibleInValueQuality: true },

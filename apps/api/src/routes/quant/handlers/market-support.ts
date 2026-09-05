@@ -2,7 +2,7 @@ import type { Database } from '@starye/db'
 import type { QuantDecisionAssistantMarketInput } from '../../../domain/quant/decision-assistant'
 import type { AppEnv } from '../../../types'
 import { QuantError } from '../../../domain/quant/errors'
-import { createEastmoneyDividendProvider, createEastmoneyMarketQuoteProvider, createQuantDividendProviderChain, createTushareDividendProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
+import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantDividendProviderChain, createTushareDividendProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
 import { getLatestQuantDailyBar } from '../../../domain/quant/repository'
 import { eastmoneyProviderOptions, tushareProviderOptions } from '../route-context'
 
@@ -76,4 +76,20 @@ export function dividendProvider(env?: AppEnv['Bindings']) {
       ? tushare
       : undefined
   return createQuantDividendProviderChain(primary, fallback)
+}
+
+export function cashflowProvider(env?: AppEnv['Bindings']) {
+  return createEastmoneyCashflowProvider(eastmoneyProviderOptions(env))
+}
+
+export function capitalStructureProvider(env?: AppEnv['Bindings']) {
+  return createEastmoneyCapitalStructureProvider(eastmoneyProviderOptions(env))
+}
+
+export function repurchaseProvider(env?: AppEnv['Bindings']) {
+  const baseUrl = env?.EASTMONEY_REPURCHASE_BASE_URL?.trim()
+  return createEastmoneyRepurchaseProvider({
+    ...eastmoneyProviderOptions(env),
+    ...(baseUrl ? { repurchaseBaseUrl: baseUrl } : {}),
+  })
 }

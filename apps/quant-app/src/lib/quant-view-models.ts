@@ -766,6 +766,111 @@ export interface QuantShareholderReturnDistribution {
   payDate: string | null
 }
 
+export type QuantShareholderCashflowStatus = 'ready' | 'partial' | 'insufficient_data' | 'unavailable'
+
+export interface QuantInterestBearingDebtComponents {
+  shortLoan: number | null
+  shortBondPayable: number | null
+  shortFinancePayable: number | null
+  acceptDepositInterbank: number | null
+  borrowFund: number | null
+  loanPbc: number | null
+  currentMaturityDebt: number | null
+  amortizedCostFinancialLiability: number | null
+  longLoan: number | null
+  amortizedCostNoncurrentFinancialLiability: number | null
+  bondPayable: number | null
+  perpetualBond: number | null
+  perpetualBondPayable: number | null
+  leaseLiability: number | null
+}
+
+export interface QuantShareholderCashflowEvidence {
+  formulaVersion: string
+  status: QuantShareholderCashflowStatus
+  provider: QuantProviderName | null
+  providerErrorCode: string | null
+  observedAt: string
+  reportDate: string | null
+  reportType: string | null
+  reportDateName: string | null
+  noticeDate: string | null
+  operatingCashflow: number | null
+  capitalExpenditure: number | null
+  netProfit: number | null
+  cashDividendsPaid: number | null
+  freeCashflow: number | null
+  freeCashflowCoverage: number | null
+  interestExpense: number | null
+  interestExpenseSourceField: 'FE_INTEREST_EXPENSE' | 'INTEREST_EXPENSE' | null
+  interestExpenseProviderErrorCode: string | null
+  interestBearingDebt: number | null
+  interestBearingDebtComponents: QuantInterestBearingDebtComponents
+  interestBearingDebtProviderErrorCode: string | null
+  freeCashflowAfterInterest: number | null
+  payoutRatio: number | null
+  payoutRatioReportDate: string | null
+  missingFields: string[]
+}
+
+export type QuantShareholderCapitalStatus = 'ready' | 'partial' | 'insufficient_data' | 'unavailable'
+
+export interface QuantShareholderCapitalChange {
+  reportDate: string
+  totalShares: number | null
+  changeReason: string | null
+  sharesOutstandingChange: number | null
+  sharesOutstandingChangeRatio: number | null
+}
+
+export interface QuantShareholderCapitalEvidence {
+  formulaVersion: string
+  status: QuantShareholderCapitalStatus
+  provider: QuantProviderName | null
+  providerErrorCode: string | null
+  observedAt: string
+  latestReportDate: string | null
+  latestTotalShares: number | null
+  latestChangeReason: string | null
+  previousReportDate: string | null
+  previousTotalShares: number | null
+  sharesOutstandingChange: number | null
+  sharesOutstandingChangeRatio: number | null
+  repurchaseSharesRetired: number | null
+  changes: QuantShareholderCapitalChange[]
+  missingFields: string[]
+}
+
+export type QuantShareholderRepurchaseStatus = 'ready' | 'partial' | 'insufficient_data' | 'unavailable'
+
+export interface QuantShareholderRepurchaseRecord {
+  repurchaseCode: string | null
+  announcementDate: string | null
+  startDate: string | null
+  endDate: string | null
+  finishDate: string | null
+  progress: string | null
+  plannedAmountLower: number | null
+  plannedAmountUpper: number | null
+  repurchaseAmount: number | null
+  repurchaseShares: number | null
+}
+
+export interface QuantShareholderRepurchaseEvidence {
+  formulaVersion: string
+  status: QuantShareholderRepurchaseStatus
+  provider: QuantProviderName | null
+  providerErrorCode: string | null
+  observedAt: string
+  latestAnnouncementDate: string | null
+  latestProgress: string | null
+  repurchaseAmount: number | null
+  plannedAmountLower: number | null
+  plannedAmountUpper: number | null
+  records: QuantShareholderRepurchaseRecord[]
+  missingFields: string[]
+}
+
 export interface QuantShareholderReturnItem {
   tsCode: string
   name: string | null
@@ -783,6 +888,9 @@ export interface QuantShareholderReturnItem {
   dividendYears: number
   distributions: QuantShareholderReturnDistribution[]
   missingFields: string[]
+  cashflowEvidence?: QuantShareholderCashflowEvidence
+  capitalStructureEvidence?: QuantShareholderCapitalEvidence
+  repurchaseEvidence?: QuantShareholderRepurchaseEvidence
 }
 
 export interface QuantShareholderReturnSelection {

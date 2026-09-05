@@ -1,0 +1,6 @@
+- [x] 1.1 增加 Eastmoney 股本结构 provider 和报告归一化；完成标准：`lngbbd` 路径、代码/日期/数字校验、空值、排序、回购原因和 provider 错误均有测试。
+- [x] 1.2 扩展股东回报 domain；完成标准：相邻股本变化、变化比例、回购注销股数、状态和字段缺口均有测试，三路 provider 读取并行且局部失败隔离。
+- [x] 2.1 扩展 API response schema、market/research handler 和 integration contract；完成标准：新嵌套区域、旧结果兼容、认证、用户隔离和研究报告来源通过测试。
+- [x] 2.2 扩展 Quant parser、view model、详情组件和响应式样式；完成标准：camelCase/snake_case、null、ready/partial/unavailable、历史 payload 和窄屏渲染通过测试。
+- [x] 3.1 同步投资知识目录与研究 optional evidence；完成标准：`sharesOutstandingChange` 标记已接通，`buybackAmount` 仍为缺口，评分与推荐回归通过。
+- [x] 4.1 完成定向测试、全量 Quant/API type-check、build、OpenSpec strict、GitNexus detect_changes 和 Gateway 验收；完成标准：记录真实 Eastmoney 股本事件、匿名边界、认证详情和 390px 无溢出结果。

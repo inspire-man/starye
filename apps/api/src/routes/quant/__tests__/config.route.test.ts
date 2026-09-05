@@ -29,7 +29,7 @@ describe('quant config route contract', () => {
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       data: {
-        version: 'investment-knowledge-v3',
+        version: 'investment-knowledge-v4',
         sources: expect.arrayContaining([
           expect.objectContaining({ id: 'article-pingan-20260825', title: '2026半年报业绩增速创七年新高，再谈中国平安' }),
           expect.objectContaining({ id: 'article-key-point', access: 'preview' }),

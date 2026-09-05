@@ -64,6 +64,7 @@ function knowledgeFieldLabel(field: string): string {
     capitalExpenditure: '资本开支',
     interestExpense: '利息支出',
     interestBearingDebt: '有息负债',
+    freeCashflowAfterInterest: '利息后自由现金流',
     orderBacklog: '订单金额',
     contractLiabilities: '合同负债',
     segmentRevenue: '分部收入',

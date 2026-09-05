@@ -65,6 +65,92 @@ function streamResponse(chunks: readonly string[]): Response {
   return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
 }
 
+function cashflowDateResponse(): Response {
+  return new Response(JSON.stringify({
+    data: [
+      { REPORT_DATE: '2026-06-30 00:00:00' },
+      { REPORT_DATE: '2025-12-31 00:00:00' },
+    ],
+  }), { status: 200 })
+}
+
+function cashflowDataResponse(): Response {
+  return new Response(JSON.stringify({
+    data: [
+      {
+        SECURITY_CODE: '601899',
+        REPORT_DATE: '2026-06-30 00:00:00',
+        REPORT_TYPE: '中报',
+        REPORT_DATE_NAME: '2026中报',
+        NOTICE_DATE: '2026-08-22 00:00:00',
+        NETCASH_OPERATE: 55471692934,
+        CONSTRUCT_LONG_ASSET: 12942927636,
+        NETPROFIT: 49812693016,
+        ASSIGN_DIVIDEND_PORFIT: 15826134692,
+        FE_INTEREST_EXPENSE: 1928192503,
+        SHORT_LOAN: 33128451743,
+        NONCURRENT_LIAB_1YEAR: 27055305562,
+        LONG_LOAN: 44827739617,
+        BOND_PAYABLE: 60383274810,
+        LEASE_LIAB: 237400855,
+      },
+      {
+        SECURITY_CODE: '601899',
+        REPORT_DATE: '2025-12-31 00:00:00',
+        REPORT_TYPE: '年报',
+        REPORT_DATE_NAME: '2025年报',
+        NOTICE_DATE: '2026-03-21 00:00:00',
+        NETCASH_OPERATE: 80000000000,
+        CONSTRUCT_LONG_ASSET: 20000000000,
+        NETPROFIT: 40000000000,
+        ASSIGN_DIVIDEND_PORFIT: 10000000000,
+        INTEREST_EXPENSE: 3000000000,
+        SHORT_LOAN: 40000000000,
+        NONCURRENT_LIAB_1YEAR: 15000000000,
+        LONG_LOAN: 25000000000,
+        BOND_PAYABLE: 10000000000,
+        LEASE_LIAB: 400000000,
+      },
+    ],
+  }), { status: 200 })
+}
+
+function capitalStructureResponse(): Response {
+  return new Response(JSON.stringify({
+    gbjg: [],
+    lngbbd: [
+      { SECURITY_CODE: '601899', END_DATE: '2026-03-31 00:00:00', TOTAL_SHARES: 1200, CHANGE_REASON: '债转股上市' },
+      { SECURITY_CODE: '601899', END_DATE: '2025-12-18 00:00:00', TOTAL_SHARES: 1100, CHANGE_REASON: '回购' },
+      { SECURITY_CODE: '601899', END_DATE: '2025-12-15 00:00:00', TOTAL_SHARES: 1150, CHANGE_REASON: '自主行权' },
+    ],
+  }), { status: 200 })
+}
+
+function repurchaseResponse(): Response {
+  return new Response(JSON.stringify({
+    code: 0,
+    success: true,
+    result: {
+      data: [
+        {
+          DIM_SCODE: '601899',
+          SECUCODE: '601899.SH',
+          REPURCODE: 'plan-1',
+          UPD: '2026-04-15 00:00:00',
+          REPURSTARTDATE: '2026-03-20 00:00:00',
+          REPURENDDATE: '2027-03-20 00:00:00',
+          FINISHDATE: '2026-04-14 00:00:00',
+          REPURPROGRESS: '006',
+          REPURAMOUNTLOWER: 1500000000,
+          REPURAMOUNTLIMIT: 2500000000,
+          REPURAMOUNT: 2499754839.55,
+          REPURNUM: 77474592,
+        },
+      ],
+    },
+  }), { status: 200 })
+}
+
 function streamResearchReport(): string {
   return JSON.stringify({
     reportVersion: 'research-report-v2',
@@ -1734,20 +1820,32 @@ describe('quant watchlist CRUD contract', () => {
     const app = createApp(db, { user: { role: 'admin' } })
     await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
     await upsertQuantDailyBars(db, valueFixtureBars('601899.SH'))
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
-      code: 0,
-      data: {
-        fields: ['ts_code', 'end_date', 'ann_date', 'div_proc', 'cash_div', 'ex_date', 'pay_date'],
-        items: [
-          ['601899.SH', '20260331', '20260711', '实施', 0.42, '20260821', '20260821'],
-          ['601899.SH', '20260331', '20260711', '预案', 0, null, null],
-        ],
-      },
-    }), { status: 200 }))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(input.toString())
+      if (url.origin === 'https://tushare.fixture.test') {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            fields: ['ts_code', 'end_date', 'ann_date', 'div_proc', 'cash_div', 'ex_date', 'pay_date'],
+            items: [
+              ['601899.SH', '20260331', '20260711', '实施', 0.42, '20260821', '20260821'],
+              ['601899.SH', '20260331', '20260711', '预案', 0, null, null],
+            ],
+          },
+        }), { status: 200 })
+      }
+      if (url.searchParams.get('reportName') === 'RPTA_WEB_GETHGLIST_NEW')
+        return repurchaseResponse()
+      if (url.pathname.endsWith('/CapitalStockStructure/PageAjax'))
+        return capitalStructureResponse()
+      return url.pathname.endsWith('/xjllbDateAjaxNew') ? cashflowDateResponse() : cashflowDataResponse()
+    })
 
     const response = await app.request('/api/quant/shareholder-returns', {}, {
       TUSHARE_TOKEN: 'fixture-token',
       TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+      EASTMONEY_BASE_URL: 'https://eastmoney-cashflow.fixture.test',
+      EASTMONEY_REPURCHASE_BASE_URL: 'https://eastmoney-repurchase.fixture.test',
     } as AppEnv['Bindings'])
 
     expect(response.status).toBe(200)
@@ -1763,6 +1861,21 @@ describe('quant watchlist CRUD contract', () => {
           status: 'ready',
           trailingCashDividendPerShare: 0.42,
           trailingDividendYield: expect.any(Number),
+          cashflowEvidence: expect.objectContaining({
+            status: 'ready',
+            freeCashflow: expect.any(Number),
+            interestExpense: 1928192503,
+            interestBearingDebt: 165632172587,
+            freeCashflowAfterInterest: 40600572795,
+          }),
+          capitalStructureEvidence: expect.objectContaining({
+            status: 'ready',
+            repurchaseSharesRetired: 50,
+          }),
+          repurchaseEvidence: expect.objectContaining({
+            status: 'ready',
+            repurchaseAmount: 2499754839.55,
+          }),
         }],
       },
     })
@@ -1782,26 +1895,35 @@ describe('quant watchlist CRUD contract', () => {
       const url = new URL(input.toString())
       if (url.origin === 'https://tushare.fixture.test')
         return new Response(JSON.stringify({ code: 402, msg: 'quota exhausted' }), { status: 200 })
-      return new Response(JSON.stringify({
-        code: 0,
-        success: true,
-        result: {
-          data: [{
-            SECURITY_CODE: '601899',
-            REPORT_DATE: '2026-03-31 00:00:00',
-            NOTICE_DATE: '2026-08-13 00:00:00',
-            EX_DIVIDEND_DATE: '2026-08-21 00:00:00',
-            PRETAX_BONUS_RMB: 4.2,
-            ASSIGN_PROGRESS: '实施分配',
-          }],
-        },
-      }), { status: 200 })
+      if (url.origin === 'https://eastmoney-dividend.fixture.test') {
+        return new Response(JSON.stringify({
+          code: 0,
+          success: true,
+          result: {
+            data: [{
+              SECURITY_CODE: '601899',
+              REPORT_DATE: '2026-03-31 00:00:00',
+              NOTICE_DATE: '2026-08-13 00:00:00',
+              EX_DIVIDEND_DATE: '2026-08-21 00:00:00',
+              PRETAX_BONUS_RMB: 4.2,
+              ASSIGN_PROGRESS: '实施分配',
+            }],
+          },
+        }), { status: 200 })
+      }
+      if (url.searchParams.get('reportName') === 'RPTA_WEB_GETHGLIST_NEW')
+        return repurchaseResponse()
+      if (url.pathname.endsWith('/CapitalStockStructure/PageAjax'))
+        return capitalStructureResponse()
+      return url.pathname.endsWith('/xjllbDateAjaxNew') ? cashflowDateResponse() : cashflowDataResponse()
     })
 
     const response = await app.request('/api/quant/shareholder-returns', {}, {
       TUSHARE_TOKEN: 'fixture-token',
       TUSHARE_BASE_URL: 'https://tushare.fixture.test',
       EASTMONEY_DIVIDEND_BASE_URL: 'https://eastmoney-dividend.fixture.test',
+      EASTMONEY_BASE_URL: 'https://eastmoney-cashflow.fixture.test',
+      EASTMONEY_REPURCHASE_BASE_URL: 'https://eastmoney-repurchase.fixture.test',
     } as AppEnv['Bindings'])
     const payload = await response.json() as { data: { provider: string, providerChain: string[], items: Array<Record<string, unknown>> } }
 
@@ -1819,7 +1941,7 @@ describe('quant watchlist CRUD contract', () => {
       }],
     })
     expect(JSON.stringify(payload)).not.toContain('fixture-token')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(8)
   })
 
   it('records an owned decision with a server-built snapshot and isolated history', async () => {

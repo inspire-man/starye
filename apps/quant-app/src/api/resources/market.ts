@@ -2,7 +2,13 @@ import type {
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
+  QuantInterestBearingDebtComponents,
   QuantProviderName,
+  QuantShareholderCapitalChange,
+  QuantShareholderCapitalEvidence,
+  QuantShareholderCashflowEvidence,
+  QuantShareholderRepurchaseEvidence,
+  QuantShareholderRepurchaseRecord,
   QuantShareholderReturnDistribution,
   QuantShareholderReturnItem,
   QuantShareholderReturnSelection,
@@ -169,6 +175,176 @@ function parseShareholderReturnDistribution(value: unknown): QuantShareholderRet
   }
 }
 
+function parseInterestBearingDebtComponents(value: unknown): QuantInterestBearingDebtComponents {
+  const data = isRecord(value) ? value : {}
+  return {
+    shortLoan: readNumber(data, 'shortLoan', 'short_loan'),
+    shortBondPayable: readNumber(data, 'shortBondPayable', 'short_bond_payable'),
+    shortFinancePayable: readNumber(data, 'shortFinancePayable', 'short_finance_payable'),
+    acceptDepositInterbank: readNumber(data, 'acceptDepositInterbank', 'accept_deposit_interbank'),
+    borrowFund: readNumber(data, 'borrowFund', 'borrow_fund'),
+    loanPbc: readNumber(data, 'loanPbc', 'loan_pbc'),
+    currentMaturityDebt: readNumber(data, 'currentMaturityDebt', 'current_maturity_debt'),
+    amortizedCostFinancialLiability: readNumber(data, 'amortizedCostFinancialLiability', 'amortized_cost_financial_liability'),
+    longLoan: readNumber(data, 'longLoan', 'long_loan'),
+    amortizedCostNoncurrentFinancialLiability: readNumber(data, 'amortizedCostNoncurrentFinancialLiability', 'amortized_cost_noncurrent_financial_liability'),
+    bondPayable: readNumber(data, 'bondPayable', 'bond_payable'),
+    perpetualBond: readNumber(data, 'perpetualBond', 'perpetual_bond'),
+    perpetualBondPayable: readNumber(data, 'perpetualBondPayable', 'perpetual_bond_payable'),
+    leaseLiability: readNumber(data, 'leaseLiability', 'lease_liability'),
+  }
+}
+
+function parseShareholderCashflowEvidence(value: unknown): QuantShareholderCashflowEvidence | undefined {
+  if (!isRecord(value))
+    return undefined
+  const status = readString(value, 'status')
+  if (status !== 'ready' && status !== 'partial' && status !== 'insufficient_data' && status !== 'unavailable')
+    return undefined
+  const provider = readString(value, 'provider', 'dataProvider', 'data_provider')
+  const missingFields = Array.isArray(value.missingFields)
+    ? value.missingFields.filter((item): item is string => typeof item === 'string')
+    : Array.isArray(value.missing_fields)
+      ? value.missing_fields.filter((item): item is string => typeof item === 'string')
+      : []
+  return {
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-cashflow-v1',
+    status,
+    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    providerErrorCode: readString(value, 'providerErrorCode', 'provider_error_code'),
+    observedAt: readString(value, 'observedAt', 'observed_at') || '',
+    reportDate: readString(value, 'reportDate', 'report_date'),
+    reportType: readString(value, 'reportType', 'report_type'),
+    reportDateName: readString(value, 'reportDateName', 'report_date_name'),
+    noticeDate: readString(value, 'noticeDate', 'notice_date'),
+    operatingCashflow: readNumber(value, 'operatingCashflow', 'operating_cashflow'),
+    capitalExpenditure: readNumber(value, 'capitalExpenditure', 'capital_expenditure'),
+    netProfit: readNumber(value, 'netProfit', 'net_profit'),
+    cashDividendsPaid: readNumber(value, 'cashDividendsPaid', 'cash_dividends_paid'),
+    freeCashflow: readNumber(value, 'freeCashflow', 'free_cashflow'),
+    freeCashflowCoverage: readNumber(value, 'freeCashflowCoverage', 'free_cashflow_coverage'),
+    interestExpense: readNumber(value, 'interestExpense', 'interest_expense'),
+    interestExpenseSourceField: (() => {
+      const sourceField = readString(value, 'interestExpenseSourceField', 'interest_expense_source_field')
+      return sourceField === 'FE_INTEREST_EXPENSE' || sourceField === 'INTEREST_EXPENSE' ? sourceField : null
+    })(),
+    interestExpenseProviderErrorCode: readString(value, 'interestExpenseProviderErrorCode', 'interest_expense_provider_error_code'),
+    interestBearingDebt: readNumber(value, 'interestBearingDebt', 'interest_bearing_debt'),
+    interestBearingDebtComponents: parseInterestBearingDebtComponents(value.interestBearingDebtComponents ?? value.interest_bearing_debt_components),
+    interestBearingDebtProviderErrorCode: readString(value, 'interestBearingDebtProviderErrorCode', 'interest_bearing_debt_provider_error_code'),
+    freeCashflowAfterInterest: readNumber(value, 'freeCashflowAfterInterest', 'free_cashflow_after_interest'),
+    payoutRatio: readNumber(value, 'payoutRatio', 'payout_ratio'),
+    payoutRatioReportDate: readString(value, 'payoutRatioReportDate', 'payout_ratio_report_date'),
+    missingFields,
+  }
+}
+
+function parseShareholderCapitalChange(value: unknown): QuantShareholderCapitalChange | null {
+  if (!isRecord(value))
+    return null
+  const reportDate = readString(value, 'reportDate', 'report_date')
+  if (!reportDate)
+    return null
+  return {
+    reportDate,
+    totalShares: readNumber(value, 'totalShares', 'total_shares'),
+    changeReason: readString(value, 'changeReason', 'change_reason'),
+    sharesOutstandingChange: readNumber(value, 'sharesOutstandingChange', 'shares_outstanding_change'),
+    sharesOutstandingChangeRatio: readNumber(value, 'sharesOutstandingChangeRatio', 'shares_outstanding_change_ratio'),
+  }
+}
+
+function parseShareholderCapitalEvidence(value: unknown): QuantShareholderCapitalEvidence | undefined {
+  if (!isRecord(value))
+    return undefined
+  const status = readString(value, 'status')
+  if (status !== 'ready' && status !== 'partial' && status !== 'insufficient_data' && status !== 'unavailable')
+    return undefined
+  const provider = readString(value, 'provider', 'dataProvider', 'data_provider')
+  const changes = Array.isArray(value.changes)
+    ? value.changes.flatMap((item) => {
+        const change = parseShareholderCapitalChange(item)
+        return change ? [change] : []
+      })
+    : Array.isArray(value.change_history)
+      ? value.change_history.flatMap((item) => {
+          const change = parseShareholderCapitalChange(item)
+          return change ? [change] : []
+        })
+      : []
+  const missingFields = Array.isArray(value.missingFields)
+    ? value.missingFields.filter((item): item is string => typeof item === 'string')
+    : Array.isArray(value.missing_fields)
+      ? value.missing_fields.filter((item): item is string => typeof item === 'string')
+      : []
+  return {
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-capital-v1',
+    status,
+    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    providerErrorCode: readString(value, 'providerErrorCode', 'provider_error_code'),
+    observedAt: readString(value, 'observedAt', 'observed_at') || '',
+    latestReportDate: readString(value, 'latestReportDate', 'latest_report_date'),
+    latestTotalShares: readNumber(value, 'latestTotalShares', 'latest_total_shares'),
+    latestChangeReason: readString(value, 'latestChangeReason', 'latest_change_reason'),
+    previousReportDate: readString(value, 'previousReportDate', 'previous_report_date'),
+    previousTotalShares: readNumber(value, 'previousTotalShares', 'previous_total_shares'),
+    sharesOutstandingChange: readNumber(value, 'sharesOutstandingChange', 'shares_outstanding_change'),
+    sharesOutstandingChangeRatio: readNumber(value, 'sharesOutstandingChangeRatio', 'shares_outstanding_change_ratio'),
+    repurchaseSharesRetired: readNumber(value, 'repurchaseSharesRetired', 'repurchase_shares_retired'),
+    changes,
+    missingFields,
+  }
+}
+
+function parseShareholderRepurchaseRecord(value: unknown): QuantShareholderRepurchaseRecord | null {
+  if (!isRecord(value))
+    return null
+  return {
+    repurchaseCode: readString(value, 'repurchaseCode', 'repurchase_code'),
+    announcementDate: readString(value, 'announcementDate', 'announcement_date'),
+    startDate: readString(value, 'startDate', 'start_date'),
+    endDate: readString(value, 'endDate', 'end_date'),
+    finishDate: readString(value, 'finishDate', 'finish_date'),
+    progress: readString(value, 'progress'),
+    plannedAmountLower: readNumber(value, 'plannedAmountLower', 'planned_amount_lower'),
+    plannedAmountUpper: readNumber(value, 'plannedAmountUpper', 'planned_amount_upper'),
+    repurchaseAmount: readNumber(value, 'repurchaseAmount', 'repurchase_amount'),
+    repurchaseShares: readNumber(value, 'repurchaseShares', 'repurchase_shares'),
+  }
+}
+
+function parseShareholderRepurchaseEvidence(value: unknown): QuantShareholderRepurchaseEvidence | undefined {
+  if (!isRecord(value))
+    return undefined
+  const status = readString(value, 'status')
+  if (status !== 'ready' && status !== 'partial' && status !== 'insufficient_data' && status !== 'unavailable')
+    return undefined
+  const provider = readString(value, 'provider', 'dataProvider', 'data_provider')
+  const records = (Array.isArray(value.records) ? value.records : Array.isArray(value.plans) ? value.plans : []).flatMap((item) => {
+    const record = parseShareholderRepurchaseRecord(item)
+    return record ? [record] : []
+  })
+  const missingFields = Array.isArray(value.missingFields)
+    ? value.missingFields.filter((item): item is string => typeof item === 'string')
+    : Array.isArray(value.missing_fields)
+      ? value.missing_fields.filter((item): item is string => typeof item === 'string')
+      : []
+  return {
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-repurchase-v1',
+    status,
+    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    providerErrorCode: readString(value, 'providerErrorCode', 'provider_error_code'),
+    observedAt: readString(value, 'observedAt', 'observed_at') || '',
+    latestAnnouncementDate: readString(value, 'latestAnnouncementDate', 'latest_announcement_date'),
+    latestProgress: readString(value, 'latestProgress', 'latest_progress'),
+    repurchaseAmount: readNumber(value, 'repurchaseAmount', 'repurchase_amount'),
+    plannedAmountLower: readNumber(value, 'plannedAmountLower', 'planned_amount_lower'),
+    plannedAmountUpper: readNumber(value, 'plannedAmountUpper', 'planned_amount_upper'),
+    records,
+    missingFields,
+  }
+}
+
 function parseShareholderReturnItem(value: unknown): QuantShareholderReturnItem | null {
   if (!isRecord(value))
     return null
@@ -206,6 +382,15 @@ function parseShareholderReturnItem(value: unknown): QuantShareholderReturnItem 
     dividendYears: readNumber(value, 'dividendYears', 'dividend_years') ?? 0,
     distributions,
     missingFields,
+    ...(value.cashflowEvidence !== undefined || value.cashflow_evidence !== undefined
+      ? { cashflowEvidence: parseShareholderCashflowEvidence(value.cashflowEvidence ?? value.cashflow_evidence) }
+      : {}),
+    ...(value.capitalStructureEvidence !== undefined || value.capital_structure_evidence !== undefined
+      ? { capitalStructureEvidence: parseShareholderCapitalEvidence(value.capitalStructureEvidence ?? value.capital_structure_evidence) }
+      : {}),
+    ...(value.repurchaseEvidence !== undefined || value.repurchase_evidence !== undefined
+      ? { repurchaseEvidence: parseShareholderRepurchaseEvidence(value.repurchaseEvidence ?? value.repurchase_evidence) }
+      : {}),
   }
 }
 
