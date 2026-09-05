@@ -226,6 +226,13 @@ function candidateEvidenceDetail(item: CandidateItem): string {
   return reason ? `${result.summary} · ${reason}` : result.summary
 }
 
+function candidateEvidenceActionLabel(item: CandidateItem): string | null {
+  const result = props.candidateEvidenceFor(item)
+  if (result.status === 'ready')
+    return null
+  return props.valueQualityLoading ? '读取中' : '去补齐'
+}
+
 function formatFactorLabel(value: string): string {
   return {
     ma5: '短线趋势',
@@ -594,6 +601,17 @@ function emitResearchPrioritySelect(entry: ResearchPriorityQueueEntry): void {
               <span :class="candidateEvidenceStatusClass(props.candidateEvidenceFor(item))">{{ candidateEvidenceStatusLabel(props.candidateEvidenceFor(item)) }}</span>
             </div>
             <small>{{ candidateEvidenceCoverage(props.candidateEvidenceFor(item)) }}</small>
+            <button
+              v-if="candidateEvidenceActionLabel(item)"
+              class="text-button candidate-evidence-action"
+              type="button"
+              :disabled="props.valueQualityLoading"
+              title="打开分析详情，按缺失维度刷新数据"
+              @click.stop="emit('selectStock', item)"
+            >
+              <ChevronRight :size="12" aria-hidden="true" />
+              {{ candidateEvidenceActionLabel(item) }}
+            </button>
           </div>
         </template>
         <template #cell-review="{ item }">

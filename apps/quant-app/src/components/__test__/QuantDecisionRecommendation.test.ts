@@ -2,7 +2,7 @@
 
 import type { QuantResearchReport, QuantResearchSummary } from '../../lib/quant-view-models'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import QuantDecisionRecommendation from '../QuantDecisionRecommendation.vue'
 
 function report(overrides: Partial<QuantResearchReport> = {}): QuantResearchReport {
@@ -245,8 +245,9 @@ describe('quant decision recommendation', () => {
     expect(wrapper.get('.quant-decision-ai-review').classes()).toContain('quant-decision-ai-review-gated')
   })
 
-  it('shows missing evidence and fallback source guidance without changing the recommendation', () => {
+  it('shows missing evidence and fallback source guidance without changing the recommendation', async () => {
     const base = report()
+    const refreshEvidence = vi.fn()
     const wrapper = mount(QuantDecisionRecommendation, {
       props: {
         report: {
@@ -263,14 +264,44 @@ describe('quant decision recommendation', () => {
           },
         },
         summary: null,
+        refreshEvidence,
       },
     })
 
     expect(wrapper.text()).toContain('部分可用')
     expect(wrapper.text()).toContain('来源需复核')
-    expect(wrapper.text()).toContain('待补证据：quality-cashflow')
+    expect(wrapper.text()).toContain('待补证据：经营现金流 / 营收')
     expect(wrapper.text()).toContain('下一步：补齐证据：quality-cashflow')
+    expect(wrapper.text()).toContain('刷新基本面并重算')
+    await wrapper.get('.quant-factor-data-health-refresh-button').trigger('click')
+    expect(refreshEvidence).toHaveBeenCalledWith('quality-cashflow')
     expect(wrapper.text()).toContain('看多')
     expect(wrapper.text()).toContain('10.00 - 11.00 元')
+  })
+
+  it('offers a source retry when a factor is unavailable despite having an evidence key', async () => {
+    const base = report()
+    const refreshEvidence = vi.fn()
+    const wrapper = mount(QuantDecisionRecommendation, {
+      props: {
+        report: {
+          ...base,
+          factorModel: {
+            ...base.factorModel!,
+            factors: [{
+              ...base.factorModel!.factors[0]!,
+              status: 'unavailable',
+              source: 'Eastmoney 估值，来源不可用',
+            }],
+          },
+        },
+        summary: null,
+        refreshEvidence,
+      },
+    })
+
+    expect(wrapper.text()).toContain('刷新日线并重算')
+    await wrapper.get('.quant-factor-data-health-refresh-button').trigger('click')
+    expect(refreshEvidence).toHaveBeenCalledWith('trend-sample')
   })
 })

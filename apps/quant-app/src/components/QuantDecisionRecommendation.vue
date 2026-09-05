@@ -18,6 +18,10 @@ const props = defineProps<{
   dataFreshness?: QuantDataHealthFreshness
   dataFreshnessDetail?: string
   aiReviewGenerating?: boolean
+  refreshEvidence?: (evidenceKey: string) => void | Promise<void>
+  refreshingEvidenceKey?: string | null
+  refreshEvidenceErrorMessage?: string | null
+  refreshEvidenceMessage?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -161,6 +165,10 @@ function aiReviewGateDetail(): string {
 
       <QuantFactorDataHealth
         :factor-data-health="factorDataHealth"
+        :refresh-evidence="props.refreshEvidence"
+        :refreshing-evidence-key="props.refreshingEvidenceKey"
+        :refresh-evidence-error-message="props.refreshEvidenceErrorMessage"
+        :refresh-evidence-message="props.refreshEvidenceMessage"
       />
 
       <QuantDecisionGuide :decision-guide="decisionGuide" />

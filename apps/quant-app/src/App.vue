@@ -73,6 +73,7 @@ import { buildResearchComparisonFilename, buildResearchComparisonMarkdown } from
 import { buildComparisonAiNextCheckPrompt } from './lib/comparison-ai-prompts'
 import { buildQuantDataHealth, classifyQuantDataHealthFreshness, mergeQuantDataHealthFreshness } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
+import { quantEvidenceRefreshTargetForKey } from './lib/quant-evidence-refresh'
 import { isQuantAiAutoReviewReady } from './lib/research-ai-auto-review'
 import {
   applyAutomatedResearchProgress,
@@ -158,6 +159,9 @@ const researchSummaryGenerating = ref(false)
 const researchSummaryError = ref<unknown | null>(null)
 const researchSummaryStreamMode = ref<QuantAiResponseMode | null>(null)
 const researchSummaryStreamReceivedChars = ref(0)
+const researchEvidenceRefreshingKey = ref<string | null>(null)
+const researchEvidenceRefreshError = ref<unknown | null>(null)
+const researchEvidenceRefreshMessage = ref('')
 const researchAiAudits = ref<QuantAiRunAudit[]>([])
 const researchAiAuditsLoading = ref(false)
 const researchAiAuditError = ref<unknown | null>(null)
@@ -234,6 +238,7 @@ let researchRunRequestId = 0
 let researchDecisionRequestId = 0
 let decisionAssistantRequestId = 0
 let researchSummaryRequestId = 0
+let researchEvidenceRefreshRequestId = 0
 let researchQuestionRequestId = 0
 let researchChangeExplanationRequestId = 0
 let candidateAiBriefingRequestId = 0
@@ -1315,6 +1320,15 @@ watch(
 
 watch(comparisonAiComparison, () => resetComparisonAiComparisonTransferState(), { flush: 'sync' })
 
+watch(selectedTsCode, (value, previousValue) => {
+  if (value === previousValue)
+    return
+  researchEvidenceRefreshRequestId++
+  researchEvidenceRefreshingKey.value = null
+  researchEvidenceRefreshError.value = null
+  researchEvidenceRefreshMessage.value = ''
+})
+
 function researchPriorityDetail(item: CandidateItem): string {
   const priority = candidatePriorityFor(item)
   return `${priority.reasons.join('；')} · 研究优先级 ${priority.score} 分`
@@ -1818,7 +1832,7 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
   }
 }
 
-async function generateResearchReport() {
+async function generateResearchReport(options: { autoGenerateAi?: boolean } = {}) {
   const stock = selectedStock.value
   if (!stock || researchRunGenerating.value)
     return
@@ -1838,13 +1852,62 @@ async function generateResearchReport() {
     researchSummaryRequestId++
     researchAiSummary.value = null
     researchSummaryError.value = null
-    await loadResearchSummary(run.id, { autoGenerate: true })
+    await loadResearchSummary(run.id, { autoGenerate: options.autoGenerateAi ?? true })
   }
   catch (error) {
     researchRunError.value = error
   }
   finally {
     researchRunGenerating.value = false
+  }
+}
+
+async function refreshResearchEvidence(evidenceKey: string): Promise<void> {
+  const stock = selectedStock.value
+  const target = quantEvidenceRefreshTargetForKey(evidenceKey)
+  if (!stock || !target || researchEvidenceRefreshingKey.value || researchRunGenerating.value)
+    return
+
+  const requestId = ++researchEvidenceRefreshRequestId
+  const tsCode = stock.tsCode
+  researchEvidenceRefreshingKey.value = evidenceKey
+  researchEvidenceRefreshError.value = null
+  researchEvidenceRefreshMessage.value = ''
+  try {
+    if (target.domain === 'daily') {
+      await loadDailyBars(tsCode)
+      if (errors.daily)
+        throw errors.daily
+    }
+    else if (target.domain === 'valuation') {
+      await loadValuation(tsCode)
+      if (errors.valuation)
+        throw errors.valuation
+    }
+    else if (target.domain === 'financial') {
+      await loadFinancialQuality(tsCode)
+      if (errors.financial)
+        throw errors.financial
+    }
+    else {
+      await loadShareholderReturns()
+      if (errors.shareholderReturns)
+        throw errors.shareholderReturns
+    }
+
+    await generateResearchReport({ autoGenerateAi: false })
+    if (researchRunError.value)
+      throw researchRunError.value
+    if (requestId === researchEvidenceRefreshRequestId && selectedTsCode.value === tsCode)
+      researchEvidenceRefreshMessage.value = `${target.label}已刷新，研究报告已按新数据重算；AI 复核未自动提交`
+  }
+  catch (error) {
+    if (requestId === researchEvidenceRefreshRequestId && selectedTsCode.value === tsCode)
+      researchEvidenceRefreshError.value = error
+  }
+  finally {
+    if (requestId === researchEvidenceRefreshRequestId && selectedTsCode.value === tsCode)
+      researchEvidenceRefreshingKey.value = null
   }
 }
 
@@ -3390,6 +3453,10 @@ onUnmounted(() => {
         :errors="errors"
         :decision-freshness="decisionFreshness"
         :decision-freshness-detail="decisionFreshnessDetail"
+        :refresh-evidence="refreshResearchEvidence"
+        :refreshing-evidence-key="researchEvidenceRefreshingKey"
+        :refresh-evidence-error-message="researchEvidenceRefreshError ? parsedError(researchEvidenceRefreshError).message : null"
+        :refresh-evidence-message="researchEvidenceRefreshMessage"
         :research-evidence-groups="researchEvidenceGroups"
         :research-evidence-comparison="researchEvidenceComparison"
         :research-run-timeline="researchRunTimeline"

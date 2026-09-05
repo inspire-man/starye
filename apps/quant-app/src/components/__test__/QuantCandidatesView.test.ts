@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { CandidateEvidenceScore } from '../../lib/candidate-evidence-score'
 import type { CandidateItem } from '../../lib/quant-view-models'
 import { shallowMount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -41,6 +42,14 @@ const candidate: CandidateItem = {
 
 const secondCandidate = { ...candidate, id: 'candidate-2', tsCode: '600000.SH', name: '第二只' }
 
+const evidenceDataTableStub = defineComponent({
+  name: 'DataTable',
+  props: {
+    data: { type: Array, required: true },
+  },
+  template: '<div><slot name="cell-evidence" :item="data[0]" /></div>',
+})
+
 const priority = {
   level: 'normal' as const,
   levelLabel: '常规研究',
@@ -54,7 +63,7 @@ const priority = {
   markerStatus: 'unreviewed' as const,
 }
 
-function mountView() {
+function mountView(options: { candidateEvidenceFor?: (item: CandidateItem) => CandidateEvidenceScore, renderEvidenceSlot?: boolean } = {}) {
   return shallowMount(QuantCandidatesView, {
     props: {
       candidateFilter: 'balanced',
@@ -154,7 +163,7 @@ function mountView() {
       selectedCandidateIds: new Set([candidate.id, secondCandidate.id]),
       selectedCandidateItems: [candidate, secondCandidate],
       canCompareCandidates: true,
-      candidateEvidenceFor: () => ({
+      candidateEvidenceFor: options.candidateEvidenceFor || (() => ({
         tsCode: candidate.tsCode,
         formulaVersion: 'candidate-evidence-v1',
         status: 'ready',
@@ -167,7 +176,7 @@ function mountView() {
         dimensions: [],
         missingReasons: [],
         summary: '证据充分',
-      }),
+      })),
       candidatePersistenceLabel: () => '持续确认',
       candidatePersistenceClass: () => 'candidate-persistence-confirming',
       candidatePersistenceDetail: () => '持续确认',
@@ -183,6 +192,7 @@ function mountView() {
       researchMarkerMap: new Map(),
       displayStockName: item => item.name || item.tsCode,
     },
+    global: options.renderEvidenceSlot ? { stubs: { DataTable: evidenceDataTableStub } } : undefined,
   })
 }
 
@@ -215,5 +225,29 @@ describe('quant candidates view', () => {
   it('exposes the nested question prompt bridge', () => {
     const wrapper = mountView()
     expect(typeof (wrapper.vm as unknown as { useQuestionPrompt: (value: string) => void }).useQuestionPrompt).toBe('function')
+  })
+
+  it('offers a direct detail entry for incomplete evidence', async () => {
+    const wrapper = mountView({
+      renderEvidenceSlot: true,
+      candidateEvidenceFor: () => ({
+        tsCode: candidate.tsCode,
+        formulaVersion: 'candidate-evidence-v1',
+        status: 'partial',
+        score: 75,
+        coveredMetricCount: 16,
+        totalMetricCount: 21,
+        completeDimensionCount: 4,
+        partialDimensionCount: 1,
+        missingDimensionCount: 0,
+        dimensions: [],
+        missingReasons: ['估值：仍有字段待补'],
+        summary: '部分覆盖',
+      }),
+    })
+
+    const button = wrapper.get('.candidate-evidence-action')
+    await button.trigger('click')
+    expect(wrapper.emitted('selectStock')).toEqual([[candidate]])
   })
 })
