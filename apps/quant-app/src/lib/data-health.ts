@@ -164,8 +164,8 @@ const DATA_HEALTH_ACTIONS: Record<QuantDataHealthKey, { action: QuantDataHealthA
   'shareholder-returns': { action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' },
 }
 
-function dataHealthActionFor(key: QuantDataHealthKey, status: QuantDataHealthStatus): Pick<QuantDataHealthItem, 'action' | 'actionLabel'> {
-  if (status === 'ready' || status === 'loading')
+function dataHealthActionFor(key: QuantDataHealthKey, status: QuantDataHealthStatus, freshness: QuantDataHealthFreshness): Pick<QuantDataHealthItem, 'action' | 'actionLabel'> {
+  if (status === 'loading' || (status === 'ready' && freshness !== 'aging' && freshness !== 'stale'))
     return { action: null, actionLabel: null }
   return DATA_HEALTH_ACTIONS[key]
 }
@@ -176,7 +176,7 @@ function createDataHealthItem(
   status: QuantDataHealthStatus,
   details: Omit<QuantDataHealthItem, 'key' | 'label' | 'status' | 'action' | 'actionLabel'>,
 ): QuantDataHealthItem {
-  return { key, label, status, ...details, ...dataHealthActionFor(key, status) }
+  return { key, label, status, ...details, ...dataHealthActionFor(key, status, details.freshness) }
 }
 
 function selectionDetails(selection: QuantValueSelection | QuantShareholderReturnSelection | null, now: string | Date | undefined): Pick<QuantDataHealthItem, 'readyCount' | 'totalCount' | 'observedAt' | 'freshness' | 'freshnessLabel' | 'freshnessDetail'> {
