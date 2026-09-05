@@ -179,6 +179,43 @@ const QuantInterestBearingDebtComponentsSchema = v.object({
   leaseLiability: v.nullable(v.number()),
 })
 
+const QuantShareholderCashflowHistoryItemSchema = v.object({
+  formulaVersion: v.string(),
+  status: v.picklist(['ready', 'partial', 'insufficient_data', 'unavailable']),
+  reportDate: v.string(),
+  reportType: v.nullable(v.string()),
+  reportDateName: v.nullable(v.string()),
+  noticeDate: v.nullable(v.string()),
+  operatingCashflow: v.nullable(v.number()),
+  capitalExpenditure: v.nullable(v.number()),
+  netProfit: v.nullable(v.number()),
+  cashDividendsPaid: v.nullable(v.number()),
+  freeCashflow: v.nullable(v.number()),
+  freeCashflowCoverage: v.nullable(v.number()),
+  interestExpense: v.nullable(v.number()),
+  interestExpenseSourceField: v.nullable(v.picklist(['FE_INTEREST_EXPENSE', 'INTEREST_EXPENSE'])),
+  interestExpenseProviderErrorCode: v.nullable(v.string()),
+  interestBearingDebt: v.nullable(v.number()),
+  interestBearingDebtComponents: QuantInterestBearingDebtComponentsSchema,
+  interestBearingDebtProviderErrorCode: v.nullable(v.string()),
+  freeCashflowAfterInterest: v.nullable(v.number()),
+  payoutRatio: v.nullable(v.number()),
+  missingFields: v.array(v.string()),
+})
+
+const QuantShareholderCashflowHistorySummarySchema = v.object({
+  formulaVersion: v.string(),
+  status: v.picklist(['ready', 'partial', 'insufficient_data', 'unavailable']),
+  periodCount: v.number(),
+  coreReadyPeriodCount: v.number(),
+  positiveFreeCashflowPeriods: v.number(),
+  positiveFreeCashflowAfterInterestPeriods: v.number(),
+  coveredDividendPeriods: v.number(),
+  payoutRatioPeriodCount: v.number(),
+  latestReportDate: v.nullable(v.string()),
+  missingFields: v.array(v.string()),
+})
+
 const QuantShareholderCashflowEvidenceSchema = v.object({
   formulaVersion: v.string(),
   status: v.picklist(['ready', 'partial', 'insufficient_data', 'unavailable']),
@@ -205,6 +242,8 @@ const QuantShareholderCashflowEvidenceSchema = v.object({
   payoutRatio: v.nullable(v.number()),
   payoutRatioReportDate: v.nullable(v.string()),
   missingFields: v.array(v.string()),
+  history: v.optional(v.array(QuantShareholderCashflowHistoryItemSchema)),
+  historySummary: v.optional(QuantShareholderCashflowHistorySummarySchema),
 })
 
 const QuantShareholderCapitalChangeSchema = v.object({

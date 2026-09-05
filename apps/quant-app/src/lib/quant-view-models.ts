@@ -785,6 +785,43 @@ export interface QuantInterestBearingDebtComponents {
   leaseLiability: number | null
 }
 
+export interface QuantShareholderCashflowHistoryItem {
+  formulaVersion: string
+  status: QuantShareholderCashflowStatus
+  reportDate: string
+  reportType: string | null
+  reportDateName: string | null
+  noticeDate: string | null
+  operatingCashflow: number | null
+  capitalExpenditure: number | null
+  netProfit: number | null
+  cashDividendsPaid: number | null
+  freeCashflow: number | null
+  freeCashflowCoverage: number | null
+  interestExpense: number | null
+  interestExpenseSourceField: 'FE_INTEREST_EXPENSE' | 'INTEREST_EXPENSE' | null
+  interestExpenseProviderErrorCode: string | null
+  interestBearingDebt: number | null
+  interestBearingDebtComponents: QuantInterestBearingDebtComponents
+  interestBearingDebtProviderErrorCode: string | null
+  freeCashflowAfterInterest: number | null
+  payoutRatio: number | null
+  missingFields: string[]
+}
+
+export interface QuantShareholderCashflowHistorySummary {
+  formulaVersion: string
+  status: QuantShareholderCashflowStatus
+  periodCount: number
+  coreReadyPeriodCount: number
+  positiveFreeCashflowPeriods: number
+  positiveFreeCashflowAfterInterestPeriods: number
+  coveredDividendPeriods: number
+  payoutRatioPeriodCount: number
+  latestReportDate: string | null
+  missingFields: string[]
+}
+
 export interface QuantShareholderCashflowEvidence {
   formulaVersion: string
   status: QuantShareholderCashflowStatus
@@ -811,6 +848,8 @@ export interface QuantShareholderCashflowEvidence {
   payoutRatio: number | null
   payoutRatioReportDate: string | null
   missingFields: string[]
+  history?: QuantShareholderCashflowHistoryItem[]
+  historySummary?: QuantShareholderCashflowHistorySummary
 }
 
 export type QuantShareholderCapitalStatus = 'ready' | 'partial' | 'insufficient_data' | 'unavailable'

@@ -597,6 +597,31 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
       detail: payoutRatio === null ? '缺少最近完整年度的支付率计算条件' : payoutRatio <= 100 ? `最近完整年度支付率为 ${payoutRatio.toFixed(2)}%` : '支付率高于 100%，需要复核利润与分红时点',
       optional: true,
     }))
+    const historySummary = cashflowEvidence.historySummary
+    const historyPeriodCount = historySummary?.periodCount ?? cashflowEvidence.history?.length ?? 0
+    const historyEvidenceStatus: QuantResearchEvidenceStatus = historySummary?.status === 'ready'
+      ? 'pass'
+      : historySummary?.status === 'partial'
+        ? 'caution'
+        : 'missing'
+    const historyDetail = historySummary
+      ? `已读取 ${historySummary.periodCount} 期；现金流核心完整 ${historySummary.coreReadyPeriodCount} 期，正自由现金流 ${historySummary.positiveFreeCashflowPeriods} 期，正利息后自由现金流 ${historySummary.positiveFreeCashflowAfterInterestPeriods} 期，分红覆盖 ${historySummary.coveredDividendPeriods} 期，可计算支付率 ${historySummary.payoutRatioPeriodCount} 期`
+      : '历史现金流覆盖统计尚未生成'
+    evidenceItems.push(evidence({
+      key: 'shareholder-cashflow-history',
+      dimension: 'shareholder-return',
+      label: '多期现金流覆盖',
+      status: historyEvidenceStatus,
+      value: historyPeriodCount,
+      threshold: '至少两期报告用于观察现金流连续性',
+      source: cashflowSource.name,
+      observedAt: historySummary?.latestReportDate ?? cashflowEvidence.reportDate,
+      formulaVersion: historySummary?.formulaVersion ?? 'shareholder-cashflow-history-v1',
+      detail: historySummary?.missingFields.length
+        ? `${historyDetail}；待补：${historySummary.missingFields.join('、')}`
+        : historyDetail,
+      optional: true,
+    }))
   }
 
   const capitalStructureEvidence = input.shareholderReturn?.capitalStructureEvidence

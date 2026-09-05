@@ -50,6 +50,7 @@ import QuantShareholderReturnsSection from './quant-detail/QuantShareholderRetur
 import QuantSignalPersistenceSection from './quant-detail/QuantSignalPersistenceSection.vue'
 import QuantTimingSection from './quant-detail/QuantTimingSection.vue'
 import QuantValuationSection from './quant-detail/QuantValuationSection.vue'
+import QuantValueQualitySection from './quant-detail/QuantValueQualitySection.vue'
 
 export interface QuantResearchDetailProps {
   selectedStock: WatchlistItem | null

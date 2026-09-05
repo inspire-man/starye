@@ -215,9 +215,78 @@ describe('quant shareholder return formula', () => {
       payoutRatio: 25,
       payoutRatioReportDate: '2025-12-31',
     })
-    expect(result.cashflowEvidence?.missingFields).toEqual(expect.arrayContaining([
-      '回购金额（当前数据源未接通）',
-    ]))
+    expect(result.cashflowEvidence?.missingFields).not.toContain('回购金额（当前数据源未接通）')
+    expect(result.cashflowEvidence?.history).toEqual([
+      expect.objectContaining({
+        reportDate: '2026-06-30',
+        freeCashflow: 70,
+        freeCashflowCoverage: 3.5,
+        freeCashflowAfterInterest: 60,
+        payoutRatio: null,
+      }),
+      expect.objectContaining({
+        reportDate: '2025-12-31',
+        freeCashflow: 150,
+        freeCashflowCoverage: 3,
+        freeCashflowAfterInterest: 140,
+        payoutRatio: 25,
+      }),
+    ])
+    expect(result.cashflowEvidence?.historySummary).toMatchObject({
+      formulaVersion: 'shareholder-cashflow-history-v1',
+      status: 'ready',
+      periodCount: 2,
+      coreReadyPeriodCount: 2,
+      positiveFreeCashflowPeriods: 2,
+      positiveFreeCashflowAfterInterestPeriods: 2,
+      coveredDividendPeriods: 2,
+      payoutRatioPeriodCount: 1,
+      latestReportDate: '2026-06-30',
+    })
+  })
+
+  it('sorts, deduplicates, and bounds the cashflow history by report period', () => {
+    const reportDates = [
+      '2024-12-31',
+      '2025-03-31',
+      '2025-06-30',
+      '2025-09-30',
+      '2025-12-31',
+      '2026-03-31',
+      '2026-06-30',
+      '2026-09-30',
+      '2026-12-31',
+      '2027-03-31',
+    ]
+    const reports = reportDates.map((reportDate, index) => cashflow({
+      reportDate,
+      operatingCashflow: 100 + index,
+      capitalExpenditure: 20,
+    }))
+    const result = buildShareholderReturnResult({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      dividends: [dividend()],
+      dailyBars: bars(34.54),
+      dividendErrorCode: null,
+      cashflowProvider: 'eastmoney',
+      cashflowReports: [...reports].reverse().concat(cashflow({ reportDate: '2026-06-30', operatingCashflow: 999 })),
+      cashflowErrorCode: null,
+      observedAt: '2026-08-25T00:00:00.000Z',
+    })
+
+    expect(result.cashflowEvidence?.history?.map(item => item.reportDate)).toEqual([
+      '2027-03-31',
+      '2026-12-31',
+      '2026-09-30',
+      '2026-06-30',
+      '2026-03-31',
+      '2025-12-31',
+      '2025-09-30',
+      '2025-06-30',
+    ])
+    expect(result.cashflowEvidence?.history?.find(item => item.reportDate === '2026-06-30')?.operatingCashflow).toBe(999)
+    expect(result.cashflowEvidence?.historySummary).toMatchObject({ periodCount: 8, coreReadyPeriodCount: 8, status: 'ready' })
   })
 
   it('preserves null cashflow fields and marks provider failure without affecting dividends', () => {
@@ -235,6 +304,7 @@ describe('quant shareholder return formula', () => {
 
     expect(result).toMatchObject({ status: 'ready', trailingDividendYield: 1.22 })
     expect(result.cashflowEvidence).toMatchObject({ status: 'partial', freeCashflow: null })
+    expect(result.cashflowEvidence?.historySummary).toMatchObject({ status: 'partial', periodCount: 1, coreReadyPeriodCount: 0 })
 
     const unavailable = buildShareholderReturnResult({
       tsCode: '601899.SH',
@@ -248,6 +318,7 @@ describe('quant shareholder return formula', () => {
       observedAt: '2026-08-25T00:00:00.000Z',
     })
     expect(unavailable.cashflowEvidence).toMatchObject({ status: 'unavailable', providerErrorCode: 'QUANT_PROVIDER_TIMEOUT' })
+    expect(unavailable.cashflowEvidence?.historySummary).toMatchObject({ status: 'unavailable', periodCount: 0 })
     expect(unavailable.trailingDividendYield).toBe(1.22)
   })
 
@@ -326,7 +397,7 @@ describe('quant shareholder return formula', () => {
     await expect(resultPromise).resolves.toMatchObject({
       tsCode: '601899.SH',
       status: 'partial',
-      cashflowEvidence: { status: 'insufficient_data' },
+      cashflowEvidence: { status: 'insufficient_data', historySummary: { status: 'insufficient_data', periodCount: 0 } },
     })
   })
 

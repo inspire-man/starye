@@ -7,6 +7,8 @@ import type {
   QuantShareholderCapitalChange,
   QuantShareholderCapitalEvidence,
   QuantShareholderCashflowEvidence,
+  QuantShareholderCashflowHistoryItem,
+  QuantShareholderCashflowHistorySummary,
   QuantShareholderRepurchaseEvidence,
   QuantShareholderRepurchaseRecord,
   QuantShareholderReturnDistribution,
@@ -195,6 +197,78 @@ function parseInterestBearingDebtComponents(value: unknown): QuantInterestBearin
   }
 }
 
+function parseShareholderCashflowHistoryItem(value: unknown): QuantShareholderCashflowHistoryItem | null {
+  if (!isRecord(value))
+    return null
+  const reportDate = readString(value, 'reportDate', 'report_date')
+  const status = readString(value, 'status')
+  if (!reportDate || (status !== 'ready' && status !== 'partial' && status !== 'insufficient_data' && status !== 'unavailable'))
+    return null
+  const sourceField = readString(value, 'interestExpenseSourceField', 'interest_expense_source_field')
+  const missingFields = Array.isArray(value.missingFields)
+    ? value.missingFields.filter((item): item is string => typeof item === 'string')
+    : Array.isArray(value.missing_fields)
+      ? value.missing_fields.filter((item): item is string => typeof item === 'string')
+      : []
+  return {
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-cashflow-v2',
+    status,
+    reportDate,
+    reportType: readString(value, 'reportType', 'report_type'),
+    reportDateName: readString(value, 'reportDateName', 'report_date_name'),
+    noticeDate: readString(value, 'noticeDate', 'notice_date'),
+    operatingCashflow: readNumber(value, 'operatingCashflow', 'operating_cashflow'),
+    capitalExpenditure: readNumber(value, 'capitalExpenditure', 'capital_expenditure'),
+    netProfit: readNumber(value, 'netProfit', 'net_profit'),
+    cashDividendsPaid: readNumber(value, 'cashDividendsPaid', 'cash_dividends_paid'),
+    freeCashflow: readNumber(value, 'freeCashflow', 'free_cashflow'),
+    freeCashflowCoverage: readNumber(value, 'freeCashflowCoverage', 'free_cashflow_coverage'),
+    interestExpense: readNumber(value, 'interestExpense', 'interest_expense'),
+    interestExpenseSourceField: sourceField === 'FE_INTEREST_EXPENSE' || sourceField === 'INTEREST_EXPENSE' ? sourceField : null,
+    interestExpenseProviderErrorCode: readString(value, 'interestExpenseProviderErrorCode', 'interest_expense_provider_error_code'),
+    interestBearingDebt: readNumber(value, 'interestBearingDebt', 'interest_bearing_debt'),
+    interestBearingDebtComponents: parseInterestBearingDebtComponents(value.interestBearingDebtComponents ?? value.interest_bearing_debt_components),
+    interestBearingDebtProviderErrorCode: readString(value, 'interestBearingDebtProviderErrorCode', 'interest_bearing_debt_provider_error_code'),
+    freeCashflowAfterInterest: readNumber(value, 'freeCashflowAfterInterest', 'free_cashflow_after_interest'),
+    payoutRatio: readNumber(value, 'payoutRatio', 'payout_ratio'),
+    missingFields,
+  }
+}
+
+function parseShareholderCashflowHistorySummary(value: unknown): QuantShareholderCashflowHistorySummary | null {
+  if (!isRecord(value))
+    return null
+  const status = readString(value, 'status')
+  const periodCount = readNumber(value, 'periodCount', 'period_count')
+  const coreReadyPeriodCount = readNumber(value, 'coreReadyPeriodCount', 'core_ready_period_count')
+  const positiveFreeCashflowPeriods = readNumber(value, 'positiveFreeCashflowPeriods', 'positive_free_cashflow_periods')
+  const positiveFreeCashflowAfterInterestPeriods = readNumber(value, 'positiveFreeCashflowAfterInterestPeriods', 'positive_free_cashflow_after_interest_periods')
+  const coveredDividendPeriods = readNumber(value, 'coveredDividendPeriods', 'covered_dividend_periods')
+  const payoutRatioPeriodCount = readNumber(value, 'payoutRatioPeriodCount', 'payout_ratio_period_count')
+  if ((status !== 'ready' && status !== 'partial' && status !== 'insufficient_data' && status !== 'unavailable')
+    || periodCount === null || coreReadyPeriodCount === null || positiveFreeCashflowPeriods === null
+    || positiveFreeCashflowAfterInterestPeriods === null || coveredDividendPeriods === null || payoutRatioPeriodCount === null) {
+    return null
+  }
+  const missingFields = Array.isArray(value.missingFields)
+    ? value.missingFields.filter((item): item is string => typeof item === 'string')
+    : Array.isArray(value.missing_fields)
+      ? value.missing_fields.filter((item): item is string => typeof item === 'string')
+      : []
+  return {
+    formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-cashflow-history-v1',
+    status,
+    periodCount,
+    coreReadyPeriodCount,
+    positiveFreeCashflowPeriods,
+    positiveFreeCashflowAfterInterestPeriods,
+    coveredDividendPeriods,
+    payoutRatioPeriodCount,
+    latestReportDate: readString(value, 'latestReportDate', 'latest_report_date'),
+    missingFields,
+  }
+}
+
 function parseShareholderCashflowEvidence(value: unknown): QuantShareholderCashflowEvidence | undefined {
   if (!isRecord(value))
     return undefined
@@ -207,6 +281,22 @@ function parseShareholderCashflowEvidence(value: unknown): QuantShareholderCashf
     : Array.isArray(value.missing_fields)
       ? value.missing_fields.filter((item): item is string => typeof item === 'string')
       : []
+  const history = readList(value, 'history').flatMap((item) => {
+    const parsed = parseShareholderCashflowHistoryItem(item)
+    return parsed ? [parsed] : []
+  })
+  const historySummary = parseShareholderCashflowHistorySummary(value.historySummary ?? value.history_summary) ?? {
+    formulaVersion: 'shareholder-cashflow-history-v1',
+    status: status === 'unavailable' ? 'unavailable' : history.length > 0 ? 'partial' : 'insufficient_data',
+    periodCount: history.length,
+    coreReadyPeriodCount: history.filter(item => item.status === 'ready').length,
+    positiveFreeCashflowPeriods: history.filter(item => item.freeCashflow !== null && item.freeCashflow >= 0).length,
+    positiveFreeCashflowAfterInterestPeriods: history.filter(item => item.freeCashflowAfterInterest !== null && item.freeCashflowAfterInterest >= 0).length,
+    coveredDividendPeriods: history.filter(item => item.freeCashflowCoverage !== null && item.freeCashflowCoverage >= 1).length,
+    payoutRatioPeriodCount: history.filter(item => item.payoutRatio !== null).length,
+    latestReportDate: history[0]?.reportDate ?? readString(value, 'reportDate', 'report_date'),
+    missingFields: history.length > 0 ? ['历史覆盖统计未记录'] : ['至少两期现金流报告'],
+  }
   return {
     formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-cashflow-v1',
     status,
@@ -236,6 +326,8 @@ function parseShareholderCashflowEvidence(value: unknown): QuantShareholderCashf
     payoutRatio: readNumber(value, 'payoutRatio', 'payout_ratio'),
     payoutRatioReportDate: readString(value, 'payoutRatioReportDate', 'payout_ratio_report_date'),
     missingFields,
+    history,
+    historySummary,
   }
 }
 

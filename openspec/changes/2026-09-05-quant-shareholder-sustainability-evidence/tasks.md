@@ -1,0 +1,6 @@
+- [x] 1.1 在 shareholder-return domain 增加现金流历史项和覆盖 summary；完成标准：报告期去重/倒序/上限、三项现金流公式、年度支付率、负值和缺失值边界均有单测。
+- [x] 1.2 扩展最新 cashflow evidence 和清理已实现回购后的旧缺口文本；完成标准：最新字段语义保持不变，回购独立证据不再被现金流/股本区域重复标成未接通，既有回归通过。
+- [x] 2.1 在研究报告增加 optional 多期现金流 evidence；完成标准：summary evidence 可回看且不进入硬证据分数、factor model、recommendation 或 decision assistant。
+- [x] 2.2 更新 API response schema、Quant parser 和 view model；完成标准：camelCase/snake_case、legacy payload、null、错误码、summary 统计均有测试。
+- [x] 3.1 更新股东回报详情历史区域和响应式样式；完成标准：完整/部分/空历史状态可读，390px 无横向溢出，加载和刷新保留上次成功结果。
+- [x] 4.1 执行定向测试、type-check、build、OpenSpec strict、GitNexus detect_changes 和 Gateway 验收；完成标准：API/Quant 通过，真实或稳定 fixture 记录多期报告期与覆盖统计，浏览器 error/warn 为 0。

@@ -18,8 +18,46 @@ export interface QuantShareholderReturnDistribution {
 }
 
 export const QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION = 'shareholder-cashflow-v2' as const
+export const QUANT_SHAREHOLDER_CASHFLOW_HISTORY_FORMULA_VERSION = 'shareholder-cashflow-history-v1' as const
 
 export type QuantShareholderCashflowStatus = 'ready' | 'partial' | 'insufficient_data' | 'unavailable'
+
+export interface QuantShareholderCashflowHistoryItem {
+  readonly formulaVersion: typeof QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION
+  readonly status: QuantShareholderCashflowStatus
+  readonly reportDate: string
+  readonly reportType: string | null
+  readonly reportDateName: string | null
+  readonly noticeDate: string | null
+  readonly operatingCashflow: number | null
+  readonly capitalExpenditure: number | null
+  readonly netProfit: number | null
+  readonly cashDividendsPaid: number | null
+  readonly freeCashflow: number | null
+  readonly freeCashflowCoverage: number | null
+  readonly interestExpense: number | null
+  readonly interestExpenseSourceField: QuantInterestExpenseSourceField | null
+  readonly interestExpenseProviderErrorCode: string | null
+  readonly interestBearingDebt: number | null
+  readonly interestBearingDebtComponents: QuantInterestBearingDebtComponents
+  readonly interestBearingDebtProviderErrorCode: string | null
+  readonly freeCashflowAfterInterest: number | null
+  readonly payoutRatio: number | null
+  readonly missingFields: readonly string[]
+}
+
+export interface QuantShareholderCashflowHistorySummary {
+  readonly formulaVersion: typeof QUANT_SHAREHOLDER_CASHFLOW_HISTORY_FORMULA_VERSION
+  readonly status: QuantShareholderCashflowStatus
+  readonly periodCount: number
+  readonly coreReadyPeriodCount: number
+  readonly positiveFreeCashflowPeriods: number
+  readonly positiveFreeCashflowAfterInterestPeriods: number
+  readonly coveredDividendPeriods: number
+  readonly payoutRatioPeriodCount: number
+  readonly latestReportDate: string | null
+  readonly missingFields: readonly string[]
+}
 
 export interface QuantShareholderCashflowEvidence {
   readonly formulaVersion: typeof QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION
@@ -47,6 +85,10 @@ export interface QuantShareholderCashflowEvidence {
   readonly payoutRatio: number | null
   readonly payoutRatioReportDate: string | null
   readonly missingFields: readonly string[]
+  /** Optional on historical payloads written before multi-period evidence existed. */
+  readonly history?: readonly QuantShareholderCashflowHistoryItem[]
+  /** Optional on historical payloads written before multi-period evidence existed. */
+  readonly historySummary?: QuantShareholderCashflowHistorySummary
 }
 
 export const QUANT_SHAREHOLDER_CAPITAL_FORMULA_VERSION = 'shareholder-capital-v1' as const
@@ -234,11 +276,133 @@ function emptyInterestBearingDebtComponents(): QuantInterestBearingDebtComponent
   }
 }
 
+function sortedCashflowReports(reports: readonly QuantCashflowReport[]): readonly QuantCashflowReport[] {
+  return [...new Map(reports.map(report => [report.reportDate, report] as const)).values()]
+    .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+    .slice(0, 8)
+}
+
+function buildCashflowHistoryItem(report: QuantCashflowReport, cashflowErrorCode: string | null): QuantShareholderCashflowHistoryItem {
+  const operatingCashflow = finite(report.operatingCashflow)
+  const capitalExpenditure = finite(report.capitalExpenditure)
+  const netProfit = finite(report.netProfit)
+  const cashDividendsPaid = finite(report.cashDividendsPaid)
+  const interestExpense = finite(report.interestExpense)
+  const interestBearingDebt = finite(report.interestBearingDebt)
+  const freeCashflow = operatingCashflow !== null && capitalExpenditure !== null
+    ? round(operatingCashflow - capitalExpenditure, 2)
+    : null
+  const freeCashflowCoverage = freeCashflow !== null && cashDividendsPaid !== null && cashDividendsPaid > 0
+    ? round(freeCashflow / cashDividendsPaid, 2)
+    : null
+  const freeCashflowAfterInterest = freeCashflow !== null && interestExpense !== null
+    ? round(freeCashflow - interestExpense, 2)
+    : null
+  const payoutRatio = isAnnualReport(report) && netProfit !== null && netProfit > 0 && cashDividendsPaid !== null
+    ? round(cashDividendsPaid / netProfit * 100, 2)
+    : null
+  const missingFields: string[] = []
+
+  if (cashflowErrorCode)
+    missingFields.push(`现金流量表暂不可用（${cashflowErrorCode}）`)
+  if (operatingCashflow === null)
+    missingFields.push('经营活动净现金流')
+  if (capitalExpenditure === null)
+    missingFields.push('购建长期资产支出')
+  if (netProfit === null)
+    missingFields.push('现金流量表净利润')
+  if (cashDividendsPaid === null)
+    missingFields.push('同报告期已分配现金股利')
+  if (interestExpense === null)
+    missingFields.push('利息支出')
+  if (report.interestExpenseProviderErrorCode)
+    missingFields.push(`利息支出来源暂不可用（${report.interestExpenseProviderErrorCode}）`)
+  if (interestBearingDebt === null)
+    missingFields.push('有息负债')
+  if (report.interestBearingDebtProviderErrorCode)
+    missingFields.push(`有息负债来源暂不可用（${report.interestBearingDebtProviderErrorCode}）`)
+  if (isAnnualReport(report) && payoutRatio === null)
+    missingFields.push('年度分红支付率')
+
+  const status: QuantShareholderCashflowStatus = cashflowErrorCode
+    ? 'unavailable'
+    : operatingCashflow !== null && capitalExpenditure !== null
+      ? 'ready'
+      : 'partial'
+
+  return {
+    formulaVersion: QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION,
+    status,
+    reportDate: report.reportDate,
+    reportType: report.reportType,
+    reportDateName: report.reportDateName,
+    noticeDate: report.noticeDate,
+    operatingCashflow,
+    capitalExpenditure,
+    netProfit,
+    cashDividendsPaid,
+    freeCashflow,
+    freeCashflowCoverage,
+    interestExpense,
+    interestExpenseSourceField: report.interestExpenseSourceField,
+    interestExpenseProviderErrorCode: report.interestExpenseProviderErrorCode,
+    interestBearingDebt,
+    interestBearingDebtComponents: report.interestBearingDebtComponents,
+    interestBearingDebtProviderErrorCode: report.interestBearingDebtProviderErrorCode,
+    freeCashflowAfterInterest,
+    payoutRatio,
+    missingFields: [...new Set(missingFields)],
+  }
+}
+
+function buildCashflowHistorySummary(
+  history: readonly QuantShareholderCashflowHistoryItem[],
+  cashflowErrorCode: string | null,
+): QuantShareholderCashflowHistorySummary {
+  const missingFields: string[] = []
+  if (cashflowErrorCode)
+    missingFields.push(`现金流历史暂不可用（${cashflowErrorCode}）`)
+  if (history.length < 2)
+    missingFields.push('至少两期现金流报告')
+  if (history.filter(item => item.freeCashflow !== null).length < 2)
+    missingFields.push('至少两期自由现金流')
+  if (history.filter(item => item.freeCashflowAfterInterest !== null).length < 2)
+    missingFields.push('至少两期利息后自由现金流')
+  if (history.filter(item => item.freeCashflowCoverage !== null).length < 2)
+    missingFields.push('至少两期同报告期分红覆盖')
+  if (history.filter(item => item.payoutRatio !== null).length < 1)
+    missingFields.push('至少一个完整年度分红支付率')
+
+  const status: QuantShareholderCashflowStatus = cashflowErrorCode
+    ? 'unavailable'
+    : history.length === 0
+      ? 'insufficient_data'
+      : history.length >= 2 && history.filter(item => item.status === 'ready').length >= 2
+        ? 'ready'
+        : 'partial'
+
+  return {
+    formulaVersion: QUANT_SHAREHOLDER_CASHFLOW_HISTORY_FORMULA_VERSION,
+    status,
+    periodCount: history.length,
+    coreReadyPeriodCount: history.filter(item => item.status === 'ready').length,
+    positiveFreeCashflowPeriods: history.filter(item => item.freeCashflow !== null && item.freeCashflow >= 0).length,
+    positiveFreeCashflowAfterInterestPeriods: history.filter(item => item.freeCashflowAfterInterest !== null && item.freeCashflowAfterInterest >= 0).length,
+    coveredDividendPeriods: history.filter(item => item.freeCashflowCoverage !== null && item.freeCashflowCoverage >= 1).length,
+    payoutRatioPeriodCount: history.filter(item => item.payoutRatio !== null).length,
+    latestReportDate: history[0]?.reportDate ?? null,
+    missingFields: [...new Set(missingFields)],
+  }
+}
+
 function buildCashflowEvidence(input: ShareholderReturnInput): QuantShareholderCashflowEvidence {
-  const reports = input.cashflowReports ?? []
+  const reports = sortedCashflowReports(input.cashflowReports ?? [])
+  const history = reports.map(report => buildCashflowHistoryItem(report, input.cashflowErrorCode ?? null))
+  const historySummary = buildCashflowHistorySummary(history, input.cashflowErrorCode ?? null)
   const latest = reports[0]
-  const operatingCashflow = finite(latest?.operatingCashflow)
-  const capitalExpenditure = finite(latest?.capitalExpenditure)
+  const latestPeriod = history[0]
+  const operatingCashflow = latestPeriod?.operatingCashflow ?? null
+  const capitalExpenditure = latestPeriod?.capitalExpenditure ?? null
   const netProfit = finite(latest?.netProfit)
   const cashDividendsPaid = finite(latest?.cashDividendsPaid)
   const interestExpense = finite(latest?.interestExpense)
@@ -285,7 +449,6 @@ function buildCashflowEvidence(input: ShareholderReturnInput): QuantShareholderC
     missingFields.push(`有息负债来源暂不可用（${latest.interestBearingDebtProviderErrorCode}）`)
   if (payoutRatio === null)
     missingFields.push('最近完整年度分红支付率')
-  missingFields.push('回购金额（当前数据源未接通）')
 
   let status: QuantShareholderCashflowStatus
   if (input.cashflowErrorCode)
@@ -323,6 +486,8 @@ function buildCashflowEvidence(input: ShareholderReturnInput): QuantShareholderC
     payoutRatio,
     payoutRatioReportDate: annualPayoutReport?.reportDate ?? null,
     missingFields: [...new Set(missingFields)],
+    history,
+    historySummary,
   }
 }
 
@@ -374,7 +539,6 @@ function buildCapitalStructureEvidence(input: ShareholderReturnInput): QuantShar
     missingFields.push('相邻股本变化')
   if (latest?.changeReason === null || latest?.changeReason === undefined)
     missingFields.push('最新股本变动原因')
-  missingFields.push('回购金额（当前数据源未接通）')
 
   let status: QuantShareholderCapitalStatus
   if (input.capitalStructureErrorCode)
