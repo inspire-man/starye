@@ -9,7 +9,7 @@ last_updated: "2026-09-05"
 
 ## 当前
 
-v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。Quant 下一轮 change `2026-09-05-quant-shareholder-sustainability-evidence` 正在 `codex/quant-shareholder-sustainability` 分支推进。
+v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。Quant 股东回报可持续性 change 已合入 `main`，下一轮开发从合并后的 `main` 开始。
 
 ## 最近验证
 
@@ -24,7 +24,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - 2026-09-04 Quant 模块化 change 已完成并合入 `main`：OpenSpec 17/17；47 个 endpoint 的 runtime route、OpenAPI、输入/输出/status/error contract matrix 对齐；Gateway 匿名访问重定向、普通用户与管理员 session、用户隔离、mutation response 与 D1 readback、AI 配置脱敏、SSE `started/delta/completed`、summary/audit 持久化均通过。Playwright 1280px/390px `/quant/#overview` 均无横向溢出，console error/warn 为 0，截图证据保留于 `output/playwright/quant-modular-20260904/quant-desktop-final.png` 与 `output/playwright/quant-modular-20260904/quant-mobile-final.png`；本地 fixture 已清理，D1 相关计数归零。
 - 2026-09-05 Quant 股东回报现金流、股本/回购股数、已实施回购金额、利息与有息负债四个 evidence change 已合入 `main`（PR #76，merge SHA `e309e8851d80069c16afc6670346f147f747bc5d`）；合并 SHA 的 CI `33942993937`、API 部署 `33942993878`/`33942993884` 和 Quant 部署 `33942993934` 均通过。
 
-- 2026-09-05 Quant 股东回报可持续性 evidence change 已完成 domain、research、API schema、client/view model、详情 UI 和 fixture 实现；定向 API 269 项、Quant 317 项、root lint、type-check、build、OpenSpec strict 84/84、GitNexus 变更检查和 Gateway 匿名边界通过。认证态 Gateway 页面已确认紫金矿业 5 期历史和覆盖统计，1280px/390px 无页面级横向溢出，修复详情视图组件注册 warning 后新增 console error/warn 为 0。API 全量本地单 worker run 未完成。
+- 2026-09-05 Quant 股东回报可持续性 evidence change 已合入 `main`（PR #77，merge SHA `acc0f633d1934929e3380b45a262a1090eff0b22`）：定向 API 269 项、Quant 317 项、root lint、type-check、build、OpenSpec strict 84/84、GitNexus 变更检查通过；PR test、合并 SHA 的 CI、Deploy API、Deploy API After PR Merge、Deploy Quant 全部通过。合并后 Gateway 已确认匿名 `/quant/` 为 302、股东回报 API 为 401，认证态紫金矿业详情显示 5 期历史和覆盖统计，1280px/390px 无页面级横向溢出且 console error/warn 为 0。API 全量本地单 worker run 未完成。
 
 ## 延后事项
 
