@@ -27,6 +27,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - 2026-09-05 Quant 股东回报可持续性 evidence change 已合入 `main`（PR #77，merge SHA `acc0f633d1934929e3380b45a262a1090eff0b22`）：定向 API 269 项、Quant 317 项、root lint、type-check、build、OpenSpec strict 84/84、GitNexus 变更检查通过；PR test、合并 SHA 的 CI、Deploy API、Deploy API After PR Merge、Deploy Quant 全部通过。合并后 Gateway 已确认匿名 `/quant/` 为 302、股东回报 API 为 401，认证态紫金矿业详情显示 5 期历史和覆盖统计，1280px/390px 无页面级横向溢出且 console error/warn 为 0。API 全量本地单 worker run 未完成。
 - 2026-09-05 Quant 价值质量边界文案修复已合入 `main`（PR #78，merge SHA `9a0174e44e039c06526ec3b44a564799c3d2cb73`）：过期的“资本开支、回购和分红支付率暂未接通”提示已改为独立展示边界；组件 11/11、Quant type-check/build、认证态 Gateway 文案和 console 验收通过，合并 SHA 的 CI 与 Deploy Quant 均通过。
 - 2026-09-05 Quant 数据健康刷新入口修复已合入 `main`（PR #79，merge SHA `4df0bde381f7d65a2f91ecb23c3802875c20c959`）：aging/stale 数据域现在显示已有刷新动作，完整度与新鲜度计算保持独立；数据健康/Overview 10 项、Quant 全量 317 项、type-check/build、边界检查通过，认证态 Gateway 已确认“日线同步：去更新日线”，合并 SHA 的 CI 与 Deploy Quant 通过。
+- 2026-09-05 Quant 缺失证据刷新入口已合入 `main`（PR #80，merge SHA `44420cbae32a93bc9a88ecde108fd6d803fc4cac`）：因子数据健康按 evidence key 提供日线、估值、基本面、股东回报的“刷新并重算”入口，候选列表提供“去补齐”直达详情；刷新只重算确定性报告，不自动提交 AI，AkShare bridge 缺口继续保留为来源问题。Quant 全量 321 项、type-check/build、root lint、边界检查、认证态 Gateway loading/success/候选入口验证通过；PR CI `33969770950`、合并 SHA CI `33970002924` 和 Deploy Quant `33970002956` 均通过。
 
 ## 延后事项
 
