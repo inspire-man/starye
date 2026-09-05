@@ -10,6 +10,7 @@ import type {
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
   QuantResearchMarker,
+  QuantShareholderCashflowHistoryItem,
   QuantShareholderReturnItem,
   QuantValuationComparison,
   QuantValuationSnapshot,
@@ -184,6 +185,85 @@ const financialComparison: QuantFinancialQualityComparison = {
   debtAssetRatioLowerThanPercent: 100,
 }
 
+const cashflowHistory: QuantShareholderCashflowHistoryItem[] = [
+  {
+    formulaVersion: 'shareholder-cashflow-v2',
+    status: 'ready',
+    reportDate: '2026-06-30',
+    reportType: '中报',
+    reportDateName: '2026中报',
+    noticeDate: '2026-08-22',
+    operatingCashflow: 100,
+    capitalExpenditure: 30,
+    netProfit: 80,
+    cashDividendsPaid: 20,
+    freeCashflow: 70,
+    freeCashflowCoverage: 3.5,
+    interestExpense: 10,
+    interestExpenseSourceField: 'FE_INTEREST_EXPENSE',
+    interestExpenseProviderErrorCode: null,
+    interestBearingDebt: 200,
+    interestBearingDebtComponents: {
+      shortLoan: 100,
+      shortBondPayable: null,
+      shortFinancePayable: null,
+      acceptDepositInterbank: null,
+      borrowFund: null,
+      loanPbc: null,
+      currentMaturityDebt: 20,
+      amortizedCostFinancialLiability: null,
+      longLoan: 50,
+      amortizedCostNoncurrentFinancialLiability: null,
+      bondPayable: 20,
+      perpetualBond: null,
+      perpetualBondPayable: null,
+      leaseLiability: 10,
+    },
+    interestBearingDebtProviderErrorCode: null,
+    freeCashflowAfterInterest: 60,
+    payoutRatio: null,
+    missingFields: [],
+  },
+  {
+    formulaVersion: 'shareholder-cashflow-v2',
+    status: 'ready',
+    reportDate: '2025-12-31',
+    reportType: '年报',
+    reportDateName: '2025年报',
+    noticeDate: '2026-03-21',
+    operatingCashflow: 200,
+    capitalExpenditure: 50,
+    netProfit: 200,
+    cashDividendsPaid: 50,
+    freeCashflow: 150,
+    freeCashflowCoverage: 3,
+    interestExpense: 10,
+    interestExpenseSourceField: 'FE_INTEREST_EXPENSE',
+    interestExpenseProviderErrorCode: null,
+    interestBearingDebt: 180,
+    interestBearingDebtComponents: {
+      shortLoan: 80,
+      shortBondPayable: null,
+      shortFinancePayable: null,
+      acceptDepositInterbank: null,
+      borrowFund: null,
+      loanPbc: null,
+      currentMaturityDebt: 20,
+      amortizedCostFinancialLiability: null,
+      longLoan: 50,
+      amortizedCostNoncurrentFinancialLiability: null,
+      bondPayable: 20,
+      perpetualBond: null,
+      perpetualBondPayable: null,
+      leaseLiability: 10,
+    },
+    interestBearingDebtProviderErrorCode: null,
+    freeCashflowAfterInterest: 140,
+    payoutRatio: 25,
+    missingFields: [],
+  },
+]
+
 const shareholderReturn: QuantShareholderReturnItem = {
   tsCode: stock.tsCode,
   name: stock.name,
@@ -241,7 +321,20 @@ const shareholderReturn: QuantShareholderReturnItem = {
     freeCashflowAfterInterest: 60,
     payoutRatio: 25,
     payoutRatioReportDate: '2025-12-31',
-    missingFields: ['回购金额（当前数据源未接通）'],
+    missingFields: [],
+    history: cashflowHistory,
+    historySummary: {
+      formulaVersion: 'shareholder-cashflow-history-v1',
+      status: 'ready',
+      periodCount: 2,
+      coreReadyPeriodCount: 2,
+      positiveFreeCashflowPeriods: 2,
+      positiveFreeCashflowAfterInterestPeriods: 2,
+      coveredDividendPeriods: 2,
+      payoutRatioPeriodCount: 1,
+      latestReportDate: '2026-06-30',
+      missingFields: [],
+    },
   },
   capitalStructureEvidence: {
     formulaVersion: 'shareholder-capital-v1',
@@ -261,7 +354,7 @@ const shareholderReturn: QuantShareholderReturnItem = {
       { reportDate: '2026-03-31', totalShares: 1200, changeReason: '债转股上市', sharesOutstandingChange: 100, sharesOutstandingChangeRatio: 9.09 },
       { reportDate: '2025-12-18', totalShares: 1100, changeReason: '回购', sharesOutstandingChange: -50, sharesOutstandingChangeRatio: -4.35 },
     ],
-    missingFields: ['回购金额（当前数据源未接通）'],
+    missingFields: [],
   },
   repurchaseEvidence: {
     formulaVersion: 'shareholder-repurchase-v1',
@@ -546,6 +639,10 @@ describe('quant detail feature sections', () => {
     expect(wrapper.text()).toContain('70.00')
     expect(wrapper.text()).toContain('利息后自由现金流')
     expect(wrapper.text()).toContain('有息负债')
+    expect(wrapper.text()).toContain('多期连续性观察')
+    expect(wrapper.text()).toContain('正自由现金流 2 / 2 期')
+    expect(wrapper.text()).toContain('2026-06-30')
+    expect(wrapper.text()).toContain('利息后 60.00')
     expect(wrapper.text()).toContain('股本变化与回购股数')
     expect(wrapper.text()).toContain('回购导致减少')
     expect(wrapper.text()).toContain('50 股')

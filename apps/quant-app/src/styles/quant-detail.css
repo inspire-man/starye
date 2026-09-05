@@ -2457,6 +2457,63 @@
   margin-bottom: 0.45rem;
 }
 
+.shareholder-cashflow-history {
+  margin-top: 0.8rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.7rem;
+}
+
+.shareholder-cashflow-history .financial-subheading {
+  margin-bottom: 0.45rem;
+}
+
+.shareholder-cashflow-history-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.shareholder-cashflow-history-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.shareholder-cashflow-history-list {
+  margin-top: 0.65rem;
+}
+
+.shareholder-cashflow-history-row {
+  display: grid;
+  grid-template-columns: 0.75fr 1fr 1fr 1.6fr;
+  align-items: baseline;
+  gap: 0.5rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  padding: 0.4rem 0;
+}
+
+.shareholder-cashflow-history-row span,
+.shareholder-cashflow-history-row small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+}
+
+.shareholder-cashflow-history-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+}
+
+.shareholder-cashflow-history-row small {
+  overflow-wrap: anywhere;
+}
+
 .shareholder-repurchase-history {
   margin-top: 0.8rem;
   border-top: 1px solid hsl(var(--border));

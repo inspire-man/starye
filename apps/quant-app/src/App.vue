@@ -1017,6 +1017,8 @@ function formatResearchEvidenceValue(item: QuantResearchEvidence): string {
     return `${item.value.toFixed(0)} 天`
   if (item.key === 'quality-history')
     return `${item.value.toFixed(0)} 期`
+  if (item.key === 'shareholder-cashflow-history')
+    return `${item.value.toFixed(0)} 期`
   if (item.key === 'shareholder-free-cashflow' || item.key === 'shareholder-interest-expense' || item.key === 'shareholder-interest-bearing-debt' || item.key === 'shareholder-free-cashflow-after-interest')
     return formatFinancialAmount(item.value)
   if (item.key === 'shareholder-cashflow-coverage')

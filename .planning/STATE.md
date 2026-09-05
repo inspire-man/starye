@@ -9,7 +9,7 @@ last_updated: "2026-09-05"
 
 ## 当前
 
-v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。下一轮迭代从 OpenSpec change 或小改动直接开始。
+v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。Quant 下一轮 change `2026-09-05-quant-shareholder-sustainability-evidence` 正在 `codex/quant-shareholder-sustainability` 分支推进。
 
 ## 最近验证
 
@@ -22,11 +22,9 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - Quant 自动研究闭环诊断已完成并合入 `main`：失败项按入池、研究、AI 阶段展示安全错误码，保留报告回看与重试；OpenSpec `2026-09-03-quant-research-pipeline-diagnostics` 已通过 strict，Gateway 真实 AI 失败和 390px 页面验证通过。
 - Quant 模块化架构第一阶段已完成并合入 `main`（PR #75，merge SHA `69a12c72c988d692f3590cb8fadb47444d32c770`）：API workspace/candidate service、Quant API resource/transport、Overview/Shell/Watchlist/Candidates/Knowledge/Research Detail/Comparison 视图、Pinia 导航/候选/初始化状态和异步 chunk 已拆出；Quant 前端继续拆分 AI briefing、decision assistant、decision journal、AI trust overview、research summary、recommendation 的职责组件，route tests 已按领域拆分，`quant-types.ts` 已移除并分离为 transport DTO 与 UI view model。Quant 65 个测试文件/316 项测试、API 118 个文件/881 项测试、API/Quant/DB/contract type-check、API/Quant/contract build、边界检查、OpenSpec strict 与 GitNexus 变更分析均通过。
 - 2026-09-04 Quant 模块化 change 已完成并合入 `main`：OpenSpec 17/17；47 个 endpoint 的 runtime route、OpenAPI、输入/输出/status/error contract matrix 对齐；Gateway 匿名访问重定向、普通用户与管理员 session、用户隔离、mutation response 与 D1 readback、AI 配置脱敏、SSE `started/delta/completed`、summary/audit 持久化均通过。Playwright 1280px/390px `/quant/#overview` 均无横向溢出，console error/warn 为 0，截图证据保留于 `output/playwright/quant-modular-20260904/quant-desktop-final.png` 与 `output/playwright/quant-modular-20260904/quant-mobile-final.png`；本地 fixture 已清理，D1 相关计数归零。
-- 2026-09-04 Quant 股东回报现金流证据 change 已在当前交付分支实现：Eastmoney 现金流量表已接入股东回报 item，提供经营现金流、资本开支、自由现金流、同报告期分红覆盖和最近完整年度支付率；回购金额、股本变化、利息支出保留为字段缺口。provider/domain/API/client/UI 定向测试、Quant 全量 65/316、API/Quant type-check/build、DB/contract 检查、OpenSpec strict 和 GitNexus 变更分析通过；Gateway 当前浏览器无认证态，匿名重定向/API 401 与 console error/warn 0 已验证。尚未合入 `main`。
-- 2026-09-05 Quant 股东回报股本与回购股数 evidence change 已在当前交付分支实现：Eastmoney `CapitalStockStructure/PageAjax` 已接入 `lngbbd`，返回总股本、相邻变化、变化比例、变动原因和样本内回购导致的股数减少；回购金额仍保留为字段缺口，知识目录升级至 `investment-knowledge-v4`。API/Quant 定向测试、Quant 全量 65/316、API/Quant type-check/build、DB/contract 检查、OpenSpec strict、GitNexus detect_changes 和 Gateway 匿名边界均通过；当前浏览器无认证态，认证详情由集成与组件 fixture 覆盖。尚未合入 `main`。
-- 2026-09-05 Quant 股东回报回购金额 evidence change 已在当前交付分支实现：Eastmoney `RPTA_WEB_GETHGLIST_NEW` 已接入回购计划，返回计划金额区间、实施状态、已实施金额和已实施股数；`repurchaseAmount` 只汇总有限的已实施金额，计划区间保持独立上下文。API 7 文件 106 项、Quant 全量 65/316、API/Quant/DB type-check、API/Quant build、Quant contracts build、API/Quant lint、边界检查、OpenSpec 三个相关 change strict、GitNexus detect_changes 和 Gateway 服务/匿名边界均通过；真实 provider 已返回紫金矿业 3 条回购计划。认证详情由 integration 与组件 fixture 覆盖；尚未合入 `main`。
+- 2026-09-05 Quant 股东回报现金流、股本/回购股数、已实施回购金额、利息与有息负债四个 evidence change 已合入 `main`（PR #76，merge SHA `e309e8851d80069c16afc6670346f147f747bc5d`）；合并 SHA 的 CI `33942993937`、API 部署 `33942993878`/`33942993884` 和 Quant 部署 `33942993934` 均通过。
 
-- 2026-09-05 Quant 股东回报利息与有息负债 evidence change 已在当前交付分支实现：现金流 provider 按报告期合并 Eastmoney `xjllbAjaxNew`、`lrbAjaxNew` 和 `zcfzbAjaxNew`，返回利息支出来源、有息负债组件、利息后自由现金流，并隔离辅助报表失败；研究报告、知识目录、API schema、Quant parser 和详情 UI 已同步。Quant 全量 65/317、API 全量 118/903、API/Quant type-check、API lint/build、API types/Quant contracts build、边界检查、OpenSpec strict、GitNexus detect_changes 和 Gateway/Playwright 匿名边界均通过；真实 provider 已返回紫金矿业、贵州茅台和宁德时代的同报告期利息与有息负债证据。尚未合入 `main`。
+- 2026-09-05 Quant 股东回报可持续性 evidence change 已完成 domain、research、API schema、client/view model、详情 UI 和 fixture 实现；定向 API 269 项、Quant 317 项、root lint、type-check、build、OpenSpec strict 84/84、GitNexus 变更检查和 Gateway 匿名边界通过。认证态 Gateway 页面已确认紫金矿业 5 期历史和覆盖统计，1280px/390px 无页面级横向溢出，修复详情视图组件注册 warning 后新增 console error/warn 为 0。API 全量本地单 worker run 未完成。
 
 ## 延后事项
 

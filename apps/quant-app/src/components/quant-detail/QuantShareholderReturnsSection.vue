@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { QuantShareholderCapitalStatus, QuantShareholderCashflowStatus, QuantShareholderRepurchaseStatus, QuantShareholderReturnItem } from '../../lib/quant-view-models'
+import type { QuantShareholderCapitalStatus, QuantShareholderCashflowHistorySummary, QuantShareholderCashflowStatus, QuantShareholderRepurchaseStatus, QuantShareholderReturnItem } from '../../lib/quant-view-models'
 import type { QuantDetailErrorState, QuantDetailLoadingState } from './quant-detail-contracts'
 import { SkeletonCard } from '@starye/ui'
 import { Info, RefreshCw } from 'lucide-vue-next'
@@ -47,6 +47,15 @@ function cashflowStatusLabel(status: QuantShareholderCashflowStatus): string {
 
 function cashflowStatusClass(status: QuantShareholderCashflowStatus): string {
   return `shareholder-cashflow-status-${status}`
+}
+
+function cashflowHistoryStatusLabel(summary: QuantShareholderCashflowHistorySummary): string {
+  return {
+    ready: '多期覆盖可用',
+    partial: '多期覆盖部分可用',
+    insufficient_data: '历史报告不足',
+    unavailable: '历史来源暂不可用',
+  }[summary.status]
 }
 
 function formatCashflowCoverage(value: number | null): string {
@@ -229,6 +238,38 @@ function formatRepurchaseRange(lower: number | null, upper: number | null): stri
         <div v-if="selectedShareholderReturn.cashflowEvidence.missingFields.length" class="value-quality-notes value-quality-notes-muted">
           <strong>现金流数据缺口</strong>
           <span v-for="field in selectedShareholderReturn.cashflowEvidence.missingFields" :key="field">{{ field }}</span>
+        </div>
+        <div v-if="selectedShareholderReturn.cashflowEvidence.historySummary" class="shareholder-cashflow-history" aria-label="多期现金流连续性观察">
+          <div class="financial-subheading">
+            <div>
+              <span class="section-kicker">MULTI-PERIOD COVERAGE</span>
+              <strong>多期连续性观察</strong>
+            </div>
+            <small :class="cashflowStatusClass(selectedShareholderReturn.cashflowEvidence.historySummary.status)">
+              {{ selectedShareholderReturn.cashflowEvidence.historySummary.periodCount }} 期 · {{ cashflowHistoryStatusLabel(selectedShareholderReturn.cashflowEvidence.historySummary) }}
+            </small>
+          </div>
+          <div class="shareholder-cashflow-history-summary">
+            <span>正自由现金流 {{ selectedShareholderReturn.cashflowEvidence.historySummary.positiveFreeCashflowPeriods }} / {{ selectedShareholderReturn.cashflowEvidence.historySummary.periodCount }} 期</span>
+            <span>正利息后现金流 {{ selectedShareholderReturn.cashflowEvidence.historySummary.positiveFreeCashflowAfterInterestPeriods }} / {{ selectedShareholderReturn.cashflowEvidence.historySummary.periodCount }} 期</span>
+            <span>分红覆盖 {{ selectedShareholderReturn.cashflowEvidence.historySummary.coveredDividendPeriods }} / {{ selectedShareholderReturn.cashflowEvidence.historySummary.periodCount }} 期</span>
+            <span>支付率可算 {{ selectedShareholderReturn.cashflowEvidence.historySummary.payoutRatioPeriodCount }} 期</span>
+          </div>
+          <div v-if="selectedShareholderReturn.cashflowEvidence.history?.length" class="shareholder-cashflow-history-list">
+            <div v-for="period in selectedShareholderReturn.cashflowEvidence.history" :key="period.reportDate" class="shareholder-cashflow-history-row">
+              <span>{{ formatTradeDate(period.reportDate) }}</span>
+              <strong>自由现金流 {{ formatFinancialAmount(period.freeCashflow) }}</strong>
+              <strong>利息后 {{ formatFinancialAmount(period.freeCashflowAfterInterest) }}</strong>
+              <small>分红覆盖 {{ formatCashflowCoverage(period.freeCashflowCoverage) }} · 支付率 {{ formatPayoutRatio(period.payoutRatio) }} · {{ cashflowStatusLabel(period.status) }}</small>
+            </div>
+          </div>
+          <div v-if="selectedShareholderReturn.cashflowEvidence.historySummary.missingFields.length" class="value-quality-notes value-quality-notes-muted">
+            <strong>多期覆盖缺口</strong>
+            <span v-for="field in selectedShareholderReturn.cashflowEvidence.historySummary.missingFields" :key="field">{{ field }}</span>
+          </div>
+          <p class="shareholder-cashflow-note">
+            这里展示报告期覆盖和同报告期计算值，只用于观察现金流连续性；历史期数、正负方向和覆盖次数均不构成投资判断。
+          </p>
         </div>
         <p class="shareholder-cashflow-note">
           自由现金流 = 经营活动净现金流 - 购建长期资产支出；利息后自由现金流再减同报告期利息支出；有息负债只汇总明确借款、债券、租赁及一年内到期非流动负债。覆盖倍数只比较同报告期现金分红，支付率只比较最近完整年度。该区域用于研究核对，不改变价值质量与决策结果。

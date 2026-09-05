@@ -1867,6 +1867,11 @@ describe('quant watchlist CRUD contract', () => {
             interestExpense: 1928192503,
             interestBearingDebt: 165632172587,
             freeCashflowAfterInterest: 40600572795,
+            history: expect.arrayContaining([
+              expect.objectContaining({ reportDate: '2026-06-30', freeCashflow: expect.any(Number) }),
+              expect.objectContaining({ reportDate: '2025-12-31', freeCashflow: expect.any(Number), payoutRatio: 25 }),
+            ]),
+            historySummary: expect.objectContaining({ status: 'ready', periodCount: 2, coreReadyPeriodCount: 2 }),
           }),
           capitalStructureEvidence: expect.objectContaining({
             status: 'ready',

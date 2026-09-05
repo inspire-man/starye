@@ -340,7 +340,19 @@ describe('quant research report', () => {
           freeCashflowAfterInterest: 60,
           payoutRatio: 25,
           payoutRatioReportDate: '2025-12-31',
-          missingFields: ['回购金额（当前数据源未接通）'],
+          missingFields: [],
+          historySummary: {
+            formulaVersion: 'shareholder-cashflow-history-v1',
+            status: 'ready',
+            periodCount: 2,
+            coreReadyPeriodCount: 2,
+            positiveFreeCashflowPeriods: 2,
+            positiveFreeCashflowAfterInterestPeriods: 2,
+            coveredDividendPeriods: 2,
+            payoutRatioPeriodCount: 1,
+            latestReportDate: '2026-06-30',
+            missingFields: [],
+          },
         },
       },
     })
@@ -355,6 +367,7 @@ describe('quant research report', () => {
       expect.objectContaining({ key: 'shareholder-interest-bearing-debt', value: 200, optional: true, status: 'pass' }),
       expect.objectContaining({ key: 'shareholder-free-cashflow-after-interest', value: 60, optional: true, status: 'pass' }),
       expect.objectContaining({ key: 'shareholder-payout-ratio', value: 25, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'shareholder-cashflow-history', value: 2, optional: true, status: 'pass', formulaVersion: 'shareholder-cashflow-history-v1' }),
     ]))
     expect(report.factorModel?.factors.find(factor => factor.key === 'shareholder-return')?.evidenceKeys).toEqual(['shareholder-yield'])
   })
@@ -389,7 +402,7 @@ describe('quant research report', () => {
             { reportDate: '2026-03-31', totalShares: 1200, changeReason: '债转股上市', sharesOutstandingChange: 100, sharesOutstandingChangeRatio: 9.09 },
             { reportDate: '2025-12-18', totalShares: 1100, changeReason: '回购', sharesOutstandingChange: -50, sharesOutstandingChangeRatio: -4.35 },
           ],
-          missingFields: ['回购金额（当前数据源未接通）'],
+          missingFields: [],
         },
       },
     })

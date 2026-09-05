@@ -200,7 +200,8 @@
   .shareholder-return-grid,
   .shareholder-cashflow-grid,
   .shareholder-capital-grid,
-  .shareholder-repurchase-grid {
+  .shareholder-repurchase-grid,
+  .shareholder-cashflow-history-summary {
     grid-template-columns: 1fr;
   }
 
@@ -218,6 +219,14 @@
 
   .shareholder-repurchase-row {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .shareholder-cashflow-history-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .shareholder-cashflow-history-row small {
+    grid-column: 1 / -1;
   }
 
   .shareholder-repurchase-row small {
