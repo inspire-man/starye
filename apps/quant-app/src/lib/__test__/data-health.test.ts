@@ -74,6 +74,7 @@ describe('buildQuantDataHealth', () => {
       shareholderReturns: shareholderReturns(),
       shareholderLoading: false,
       shareholderError: false,
+      now: '2026-08-28T10:00:00.000Z',
     })
 
     expect(result).toMatchObject({
@@ -122,6 +123,7 @@ describe('buildQuantDataHealth', () => {
       shareholderReturns: shareholderReturns({ sampleCount: 1 }),
       shareholderLoading: false,
       shareholderError: false,
+      now: '2026-08-28T10:00:00.000Z',
     })
     expect(loading).toMatchObject({ status: 'loading', label: '读取中' })
     expect(loading.items.find(item => item.key === 'value-quality')).toMatchObject({ status: 'loading', detail: '正在读取当前数据', action: null, actionLabel: null })
@@ -138,6 +140,7 @@ describe('buildQuantDataHealth', () => {
       shareholderReturns: null,
       shareholderLoading: false,
       shareholderError: true,
+      now: '2026-08-28T10:00:00.000Z',
     })
     expect(failed).toMatchObject({ status: 'error', label: '读取失败' })
     expect(failed.items.find(item => item.key === 'shareholder-returns')).toMatchObject({ status: 'error', detail: '数据读取失败，点击下一步重试', action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' })
@@ -184,9 +187,29 @@ describe('buildQuantDataHealth', () => {
     expect(result.freshnessDetail).toContain('1 个数据域已超过 7 天')
     expect(result.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'daily', freshness: 'fresh', freshnessLabel: '最新', freshnessDetail: '刚刚观测' }),
-      expect.objectContaining({ key: 'value-quality', freshness: 'aging', freshnessLabel: '需复核' }),
-      expect.objectContaining({ key: 'shareholder-returns', freshness: 'stale', freshnessLabel: '已过期' }),
+      expect.objectContaining({ key: 'value-quality', freshness: 'aging', freshnessLabel: '需复核', action: 'refresh-value-quality', actionLabel: '重新读取价值质量' }),
+      expect.objectContaining({ key: 'shareholder-returns', freshness: 'stale', freshnessLabel: '已过期', action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' }),
     ]))
+
+    const staleDaily = buildQuantDataHealth({
+      watchlist: [watchlist('A')],
+      sync: sync('completed', { completedAt: '2026-08-30T11:00:00.000Z' }),
+      syncLoading: false,
+      syncError: false,
+      valueSelection: valueSelection({ observedAt: '2026-09-01T11:00:00.000Z' }),
+      valueLoading: false,
+      valueError: false,
+      shareholderReturns: shareholderReturns({ observedAt: '2026-09-01T11:00:00.000Z' }),
+      shareholderLoading: false,
+      shareholderError: false,
+      now: '2026-09-01T12:00:00.000Z',
+    })
+    expect(staleDaily.items.find(item => item.key === 'daily')).toMatchObject({
+      status: 'ready',
+      freshness: 'aging',
+      action: 'open-watchlist',
+      actionLabel: '去更新日线',
+    })
 
     const unknown = buildQuantDataHealth({
       watchlist: [watchlist('A')],
