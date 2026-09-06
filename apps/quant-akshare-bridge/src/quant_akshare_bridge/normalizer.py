@@ -308,6 +308,9 @@ def normalize_financial_rows(
             "AKSHARE_FINANCIAL_NOTICE_DATE_INVALID",
             source,
         )
+        cashflow_net_profit = _field(row, "现金流量表净利润", "NETPROFIT", "cashflow_net_profit")
+        if cashflow_net_profit is None and source == "stock_financial_report_sina":
+            cashflow_net_profit = _field(row, "净利润")
         result.append({
             "ts_code": normalized_code,
             "observed_at": observed_at,
@@ -324,6 +327,7 @@ def normalize_financial_rows(
             "roe": _number(_field(row, "净资产收益率(%)", "净资产收益率", "ROE", "ROEJQ", "roe")),
             "revenue_yoy": _number(_field(row, "营业总收入同比增长率(%)", "营业收入同比增长率", "TOTAL_OPERATE_INCOME_YOY", "TOTALOPERATEREVETZ", "OPERATE_INCOME_YOY", "revenue_yoy")),
             "net_profit": _number(_field(row, "净利润", "归母净利润", "归属母公司股东的净利润", "PARENT_NETPROFIT", "NETPROFIT", "net_profit")),
+            "cashflow_net_profit": _number(cashflow_net_profit),
             "net_profit_yoy": _number(_field(row, "净利润同比增长率(%)", "净利润同比", "PARENT_NETPROFIT_YOY", "PARENTNETPROFITTZ", "NETPROFIT_YOY", "net_profit_yoy")),
             "adjusted_net_profit": _number(_field(row, "扣非净利润", "扣除非经常性损益后的净利润", "DEDUCT_PARENT_NETPROFIT", "KCFJCXSYJLR", "adjusted_net_profit")),
             "adjusted_net_profit_yoy": _number(_field(row, "扣非净利润同比增长率(%)", "扣非净利润同比", "DEDUCT_PARENT_NETPROFIT_YOY", "KCFJCXSYJLRTZ", "adjusted_net_profit_yoy")),
@@ -391,6 +395,53 @@ def normalize_cashflow_rows(
     deduplicated = {row["report_date"]: row for row in result}
     ordered = sorted(deduplicated.values(), key=lambda item: item["report_date"], reverse=True)
     return ordered[:max(1, min(limit, 12))], errors
+
+
+THS_CASHFLOW_METRIC_FIELDS = {
+    "act_cash_flow_net": "operating_cashflow",
+    "operating_cash_flow_net": "operating_cashflow",
+    "pay_fixed_assets_etc_cash": "capital_expenditure",
+    "construct_long_asset": "capital_expenditure",
+    "cash_net_profit": "net_profit",
+    "pay_dividends_profits_interest_cash": "cash_dividends_paid",
+    "assign_dividend_porfit": "cash_dividends_paid",
+}
+
+
+def normalize_ths_cashflow_rows(
+    ts_code: str,
+    raw: Any,
+    observed_at: str,
+    limit: int = 8,
+    source: str = "stock_financial_cash_new_ths",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+    normalized_code = normalize_ts_code(ts_code)
+    errors: list[BridgeError] = []
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in _rows(raw):
+        metric_name = _text(_field(row, "metric_name", "metricName", "指标名称"))
+        target_field = THS_CASHFLOW_METRIC_FIELDS.get(metric_name.casefold() if metric_name else "")
+        if target_field is None:
+            continue
+        try:
+            report_date = normalize_date(_field(row, "report_date", "REPORT_DATE", "报告期", "报告日期"), "report_date")
+        except ValueError:
+            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_INVALID", "cashflow row has an invalid date", source))
+            continue
+        if not report_date:
+            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_INVALID", "cashflow row has no report date", source))
+            continue
+        normalized = grouped.setdefault(report_date, {
+            "ts_code": normalized_code,
+            "report_date": report_date,
+        })
+        value = _number(_field(row, "value", "VALUE"))
+        if normalized.get(target_field) is None and value is not None:
+            normalized[target_field] = value
+    if not grouped:
+        return [], errors
+    normalized_rows, normalize_errors = normalize_cashflow_rows(normalized_code, grouped.values(), observed_at, limit=limit, source=source)
+    return normalized_rows, [*errors, *normalize_errors]
 
 
 def normalize_repurchase_rows(

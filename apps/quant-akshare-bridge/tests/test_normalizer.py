@@ -1,7 +1,7 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ts_code, validate_date_range
+from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
@@ -176,6 +176,7 @@ class NormalizerTest(unittest.TestCase):
             "TOTAL_OPERATE_INCOME": 1000,
             "TOTAL_OPERATE_INCOME_YOY": 12,
             "PARENT_NETPROFIT": 200,
+            "NETPROFIT": 220,
             "PARENT_NETPROFIT_YOY": 20,
             "DEDUCT_PARENT_NETPROFIT": 180,
             "DEDUCT_PARENT_NETPROFIT_YOY": 18,
@@ -186,6 +187,7 @@ class NormalizerTest(unittest.TestCase):
         self.assertEqual(rows[0]["revenue"], 1000.0)
         self.assertEqual(rows[0]["revenue_yoy"], 12.0)
         self.assertEqual(rows[0]["net_profit"], 200.0)
+        self.assertEqual(rows[0]["cashflow_net_profit"], 220.0)
         self.assertEqual(rows[0]["adjusted_net_profit"], 180.0)
         self.assertEqual(rows[0]["total_liability"], 500.0)
         self.assertIsNone(rows[0]["debt_asset_ratio"])
@@ -329,6 +331,29 @@ class NormalizerTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertIsNone(rows[0]["cash_dividends_paid"])
+
+    def test_normalizes_ths_cashflow_metrics_from_cumulative_value_only(self) -> None:
+        rows, errors = normalize_ths_cashflow_rows("601899.SH", [
+            {"report_date": "2026-06-30", "metric_name": "act_cash_flow_net", "value": "1000", "single": "600"},
+            {"report_date": "2026-06-30", "metric_name": "pay_fixed_assets_etc_cash", "value": 300, "single": 180},
+            {"report_date": "2026-06-30", "metric_name": "cash_net_profit", "value": "NaN", "single": 200},
+            {"report_date": "2026-06-30", "metric_name": "pay_dividends_profits_interest_cash", "value": 120, "single": 80},
+            {"report_date": "2026-06-30", "metric_name": "unknown_metric", "value": 999},
+        ], "2026-09-07T00:00:00Z")
+
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["operating_cashflow"], 1000.0)
+        self.assertEqual(rows[0]["capital_expenditure"], 300.0)
+        self.assertIsNone(rows[0]["net_profit"])
+        self.assertEqual(rows[0]["cash_dividends_paid"], 120.0)
+
+    def test_keeps_ths_cashflow_invalid_dates_as_safe_errors(self) -> None:
+        rows, errors = normalize_ths_cashflow_rows("601899.SH", [
+            {"report_date": "2026-02-30", "metric_name": "act_cash_flow_net", "value": 1000},
+        ], "2026-09-07T00:00:00Z")
+
+        self.assertEqual(rows, [])
+        self.assertEqual(errors[0].code, "AKSHARE_CASHFLOW_ROW_INVALID")
 
     def test_keeps_valid_financial_rows_when_one_row_has_an_invalid_date(self) -> None:
         rows, errors = normalize_financial_rows("601899.SH", [

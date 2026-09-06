@@ -24,6 +24,8 @@ The default listener is `http://127.0.0.1:8091`. Configure `QUANT_AKSHARE_BRIDGE
 - `status` describes unresolved data gaps. A failed endpoint that was replaced successfully by another source remains in `errors` for diagnosis but does not downgrade an otherwise complete response to `partial`.
 - Dividend history uses `stock_history_dividend_detail`; its `派息` field is converted from per-ten-share to per-share cash and its `进度` field remains available for the Worker to select implemented distributions.
 - Cashflow history preserves the statement's `ASSIGN_DIVIDEND_PORFIT` value as `cash_dividends_paid` when present; missing values remain `null`.
+- Cashflow history uses `stock_financial_cash_new_ths` as a last source for report-period `act_cash_flow_net`, `pay_fixed_assets_etc_cash`, `cash_net_profit`, and `pay_dividends_profits_interest_cash`; the cumulative `value` column is used and quarterly `single` values are ignored.
+- When a cashflow row has no `net_profit`, a same-report-date normalized profit statement value may fill that field; no cashflow formula is used to infer it.
 - To enable it in the API, configure both `QUANT_AKSHARE_BRIDGE_URL` and `QUANT_AKSHARE_BRIDGE_TOKEN`; an unconfigured bridge is skipped and does not replace the existing Eastmoney/Tushare result.
 
 The service does not log request bodies, tokens, API keys, or upstream stack traces.

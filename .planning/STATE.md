@@ -33,6 +33,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - 2026-09-06 Quant 来源覆盖语义修复已合入 `main`（PR #85，merge SHA `baa475c45e845a95a657e8b33852ab230b0cf2b6`）：Eastmoney 回购合法空响应（`9201`）归类为 `insufficient_data`，银行/保险 `not_applicable` evidence 不再阻断判断就绪度；真实回购记录仍保持来源独立，未用计划金额或零值补齐。
 - 2026-09-06 Quant AkShare 回购备用来源已合入 `main`（PR #86，merge SHA `d29e904e61330ab5977079c80bb58947419e56ed`）：bridge 接入 `stock_repurchase_em`、按证券过滤并缓存全量表，Eastmoney 空历史/失败时回退 AkShare，API、研究报告和详情保留实际来源与安全回退原因；PR checks、合并 SHA CI、Deploy API、Deploy API After PR Merge、Deploy Quant 均通过，匿名 Gateway `/quant/` 为 302、股东回报 API 为 401。
 - 2026-09-07 Quant AkShare 分红历史备用来源已合入 `main`（PR #87，merge SHA `198eba931fa943515cf8c2c3da15c319d6af33ea`）：bridge 接入 `stock_history_dividend_detail`，按每十股到每股转换现金分红，Tushare/Eastmoney 空历史或失败时回退 AkShare，研究报告 factor provenance 保留 `akshare-dividend`；PR checks、合并 SHA CI、Deploy API、Deploy API After PR Merge、Deploy Quant 均通过，匿名 Gateway `/quant/` 为 302、股东回报 API 为 401。
+- 2026-09-07 Quant AkShare 同报告期现金分红字段已合入 `main`（PR #88，merge SHA `2e4b553bcddba37c4325b94b6f340927f5f88d3f`）：bridge 保留 `ASSIGN_DIVIDEND_PORFIT` 为 `cash_dividends_paid`，API 贯穿 `cashDividendsPaid`，缺失/非有限值保持 `null`；PR CI `34048787892`、合并 SHA CI `34049102211`、Deploy API `34049102223`/`34049102192` 和 Deploy Quant `34049102159` 均通过，Gateway `/quant/` 为 302、匿名股东回报 API 为 401。
 
 ## 延后事项
 
@@ -42,7 +43,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 
 ## 下一步
 
-1. 开发并交付当前 `2026-09-07-quant-akshare-cash-dividend` change；后续来源扩展只针对仍有真实原始字段缺口的候选。
+1. 开发并交付当前 `2026-09-07-quant-akshare-cashflow-coverage` change；优先补同花顺现金流备用来源与同报告期净利润缺口，后续来源扩展只针对仍有真实原始字段缺口的候选。
 2. 小 bug：定位 → 最小修复 → 定向测试 → Gateway 验证。
 3. crawler/D1：补 Gateway、D1 readback、content integrity 和实际消费层证据。
 4. 完成后更新本文件的当前状态；稳定规则回写对应 canonical owner。
