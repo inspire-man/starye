@@ -181,6 +181,9 @@ class NormalizerTest(unittest.TestCase):
             "DEDUCT_PARENT_NETPROFIT": 180,
             "DEDUCT_PARENT_NETPROFIT_YOY": 18,
             "TOTAL_LIABILITIES": 500,
+            "ACCOUNTS_RECE": 120,
+            "INVENTORY": 300,
+            "CONTRACT_LIAB": 80,
         }], "2026-08-26T00:00:00Z", source="stock_profit_sheet_by_report_em")
 
         self.assertEqual(errors, [])
@@ -190,6 +193,9 @@ class NormalizerTest(unittest.TestCase):
         self.assertEqual(rows[0]["cashflow_net_profit"], 220.0)
         self.assertEqual(rows[0]["adjusted_net_profit"], 180.0)
         self.assertEqual(rows[0]["total_liability"], 500.0)
+        self.assertEqual(rows[0]["accounts_receivable"], 120.0)
+        self.assertEqual(rows[0]["inventory"], 300.0)
+        self.assertEqual(rows[0]["contract_liabilities"], 80.0)
         self.assertIsNone(rows[0]["debt_asset_ratio"])
 
     def test_normalizes_expanded_interest_and_debt_fields(self) -> None:

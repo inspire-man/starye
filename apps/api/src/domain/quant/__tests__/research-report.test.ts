@@ -77,6 +77,9 @@ const financial: QuantFinancialQualitySnapshot = {
   cashRatio: 1.2,
   totalLiability: null,
   roic: 10,
+  accountsReceivable: 120,
+  inventory: 300,
+  contractLiabilities: 80,
 }
 
 const shareholderReturn: QuantShareholderReturnItem = {
@@ -420,6 +423,33 @@ describe('quant research report', () => {
       expect.objectContaining({ id: 'akshare-profit-forecast', name: expect.stringContaining('stock_profit_forecast_ths') }),
     ]))
     expect(report.factorModel?.factors.find(factor => factor.key === 'valuation')).toMatchObject({ status: 'ready' })
+  })
+
+  it('keeps working-capital fields as optional operating-driver evidence', () => {
+    const input = {
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-working-capital',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial],
+      shareholderReturn,
+    }
+    const report = buildQuantResearchReport(input)
+    const baseline = buildQuantResearchReport({
+      ...input,
+      financialReports: [{ ...financial, accountsReceivable: undefined, inventory: undefined, contractLiabilities: undefined }],
+    })
+
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'operating-driver-accounts-receivable', value: 120, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'operating-driver-inventory', value: 300, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'operating-driver-contract-liabilities', value: 80, optional: true, status: 'pass' }),
+    ]))
+    expect(report.score).toBe(baseline.score)
+    expect(report.decision?.evidenceKeys).not.toContain('operating-driver-inventory')
   })
 
   it('surfaces partial AkShare endpoint failures as optional source evidence', () => {

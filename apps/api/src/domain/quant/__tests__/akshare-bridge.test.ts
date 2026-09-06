@@ -103,7 +103,11 @@ describe('akShare bridge client', () => {
         net_profit: 200,
         gross_margin: 28,
         roe: 16,
+        accounts_receivable: 120,
+        inventory: 300,
+        contract_liabilities: 80,
       }],
+      errors: [{ code: 'AKSHARE_FINANCIAL_ENDPOINT_FAILED', message: 'endpoint failed', source: 'stock_balance_sheet_by_report_em' }],
       cashflows: [{
         ts_code: '601899.SH',
         report_date: '20260630',
@@ -123,7 +127,8 @@ describe('akShare bridge client', () => {
     })), { status: 200 })))
     const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
 
-    await expect(createQuantAkshareFinancialProvider(bridge).fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+    const financialSnapshot = await createQuantAkshareFinancialProvider(bridge).fetchFinancialQuality({ tsCode: '601899.SH' })
+    expect(financialSnapshot).toMatchObject({
       provider: 'akshare',
       reportDate: '2026-06-30',
       revenue: 1000,
@@ -131,8 +136,12 @@ describe('akShare bridge client', () => {
       netProfit: 200,
       grossMargin: 28,
       roe: 16,
+      accountsReceivable: 120,
+      inventory: 300,
+      contractLiabilities: 80,
       industry: 'bank',
     })
+    expect(financialSnapshot).not.toHaveProperty('workingCapitalErrorCode')
     await expect(createQuantAkshareCashflowProvider(bridge).fetchCashflowHistory({ tsCode: '601899.SH' })).resolves.toMatchObject([{
       provider: 'akshare',
       reportDate: '2026-06-30',
@@ -332,9 +341,16 @@ describe('akShare bridge client', () => {
     await expect(createQuantAkshareDividendProvider(bridge).fetchDividends({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'UPSTREAM' })
   })
 
-  it('supplements only same-period null fields and keeps the primary report', async () => {
+  it('supplements same-period working-capital fields and keeps the primary report', async () => {
     const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(payload({
-      financials: [{ ts_code: '601899.SH', report_date: '20260630', gross_margin: 28 }],
+      financials: [{
+        ts_code: '601899.SH',
+        report_date: '20260630',
+        gross_margin: 28,
+        accounts_receivable: 120,
+        inventory: 300,
+        contract_liabilities: 80,
+      }],
       cashflows: [{
         ts_code: '601899.SH',
         report_date: '20260630',
@@ -367,6 +383,9 @@ describe('akShare bridge client', () => {
         netProfitYoY: null,
         adjustedNetProfit: null,
         adjustedNetProfitYoY: null,
+        accountsReceivable: null,
+        inventory: null,
+        contractLiabilities: null,
         roe: null,
         grossMargin: null,
         netMargin: null,
@@ -380,6 +399,7 @@ describe('akShare bridge client', () => {
         cashRatio: null,
         totalLiability: null,
         roic: null,
+        workingCapitalErrorCode: 'QUANT_PROVIDER_UPSTREAM',
         provider: 'eastmoney' as const,
       }]),
     }
@@ -426,7 +446,50 @@ describe('akShare bridge client', () => {
     expect(financialResult.supplementalProvider).toBe('akshare')
     expect(financialResult.supplementUsed).toBe(true)
     expect(financialResult.grossMargin).toBe(28)
+    expect(financialResult).toMatchObject({
+      accountsReceivable: 120,
+      inventory: 300,
+      contractLiabilities: 80,
+    })
+    expect(financialResult.workingCapitalErrorCode).toBeNull()
 
+    const legacyPrimaryFinancial = {
+      ...primaryFinancial,
+      fetchFinancialQualityHistory: vi.fn().mockResolvedValue([{
+        ...financialResult,
+        revenue: 1000,
+        revenueYoY: 10,
+        netProfit: 200,
+        netProfitYoY: 10,
+        adjustedNetProfit: 190,
+        adjustedNetProfitYoY: 9,
+        roe: 12,
+        grossMargin: 28,
+        netMargin: 20,
+        debtAssetRatio: 50,
+        operatingCashflowToRevenue: 30,
+        operatingCashflowPerShare: 1,
+        fcffBack: 100,
+        fcffForward: 100,
+        interestCoverage: 5,
+        interestBearingDebtRatio: 20,
+        cashRatio: 1,
+        totalLiability: 500,
+        roic: 10,
+        accountsReceivable: undefined,
+        inventory: undefined,
+        contractLiabilities: undefined,
+        supplementalProvider: undefined,
+        supplementUsed: undefined,
+      }]),
+    }
+    await expect(createQuantFinancialProviderChain(legacyPrimaryFinancial, akshareFinancial).fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      accountsReceivable: 120,
+      inventory: 300,
+      contractLiabilities: 80,
+      supplementalProvider: 'akshare',
+      supplementUsed: true,
+    })
     const cashflowResult = await createQuantCashflowProviderChain(primaryCashflow, akshareCashflow).fetchCashflowHistory({ tsCode: '601899.SH' })
     expect(cashflowResult[0]).toMatchObject({
       provider: 'eastmoney',

@@ -40,6 +40,9 @@ class FakeAkShare:
         return [{
             "REPORT_DATE": "2026-06-30",
             "TOTAL_LIABILITIES": 500,
+            "ACCOUNTS_RECE": 120,
+            "INVENTORY": 300,
+            "CONTRACT_LIAB": 80,
             "SHORT_LOAN": 400,
             "LONG_LOAN": 500,
             "LEASE_LIAB": 100,
@@ -76,6 +79,9 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(payload["financials"][0]["net_profit"], 200.0)
         self.assertEqual(payload["financials"][0]["cashflow_net_profit"], 220.0)
         self.assertEqual(payload["financials"][0]["total_liability"], 500.0)
+        self.assertEqual(payload["financials"][0]["accounts_receivable"], 120.0)
+        self.assertEqual(payload["financials"][0]["inventory"], 300.0)
+        self.assertEqual(payload["financials"][0]["contract_liabilities"], 80.0)
         self.assertIn("stock_profit_sheet_by_report_em", payload["source"]["endpoints"])
         self.assertIn("stock_balance_sheet_by_report_em", payload["source"]["endpoints"])
 
@@ -389,6 +395,9 @@ class AdapterTest(unittest.TestCase):
                     "扣非净利润": 180,
                     "扣非净利润同比增长率(%)": 18,
                     "负债合计": 500,
+                    "应收账款": 120,
+                    "存货": 300,
+                    "合同负债": 80,
                     "FE_INTEREST_EXPENSE": 25,
                     "interest_bearing_debt": 500,
                 }]
@@ -515,6 +524,9 @@ class AdapterTest(unittest.TestCase):
                     "SECUCODE": "601899.SH",
                     "REPORT_DATE": "2026-06-30",
                     "TOTAL_LIABILITIES": 500,
+                    "ACCOUNTS_RECE": 120,
+                    "INVENTORY": 300,
+                    "CONTRACT_LIAB": 80,
                     "SHORT_LOAN": 400,
                     "LONG_LOAN": 500,
                 }]

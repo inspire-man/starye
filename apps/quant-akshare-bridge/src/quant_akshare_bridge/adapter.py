@@ -47,6 +47,7 @@ FINANCIAL_PROFIT_FIELDS = (
 )
 FINANCIAL_CASHFLOW_FIELDS = ("cashflow_net_profit",)
 FINANCIAL_BALANCE_FIELDS = ("total_liability", "interest_bearing_debt")
+FINANCIAL_WORKING_CAPITAL_FIELDS = ("accounts_receivable", "inventory", "contract_liabilities")
 FINANCIAL_METADATA_FIELDS = ("notice_date", "report_type", "report_date_name", "industry")
 FINANCIAL_COMPONENT_FIELDS = ("interest_bearing_debt_components",)
 CASHFLOW_REQUIRED_FIELDS = ("operating_cashflow", "capital_expenditure", "net_profit")
@@ -73,7 +74,7 @@ def _merge_financial_rows(
         if existing is None:
             merged_by_date[row["report_date"]] = dict(row)
             continue
-        for field in (*FINANCIAL_PROFIT_FIELDS, *FINANCIAL_CASHFLOW_FIELDS, *FINANCIAL_BALANCE_FIELDS, *FINANCIAL_METADATA_FIELDS):
+        for field in (*FINANCIAL_PROFIT_FIELDS, *FINANCIAL_CASHFLOW_FIELDS, *FINANCIAL_BALANCE_FIELDS, *FINANCIAL_WORKING_CAPITAL_FIELDS, *FINANCIAL_METADATA_FIELDS):
             if existing.get(field) is None and row.get(field) is not None:
                 existing[field] = row[field]
         existing[FINANCIAL_COMPONENT_FIELDS[0]] = _merge_debt_components(
@@ -147,7 +148,7 @@ def _collect_financials(api: Any, ts_code: str, observed_at: str) -> tuple[list[
         errors.append(BridgeError("AKSHARE_FINANCIAL_ENDPOINT_UNAVAILABLE", "AkShare financial endpoint is unavailable", primary_endpoint))
 
     indicator_endpoint = "stock_financial_analysis_indicator_em"
-    if _financial_rows_need(financials, (*FINANCIAL_PROFIT_FIELDS, *FINANCIAL_BALANCE_FIELDS)):
+    if _financial_rows_need(financials, (*FINANCIAL_PROFIT_FIELDS, *FINANCIAL_BALANCE_FIELDS, *FINANCIAL_WORKING_CAPITAL_FIELDS)):
         indicator = getattr(api, indicator_endpoint, None)
         if callable(indicator):
             attempted.append(indicator_endpoint)
@@ -176,7 +177,7 @@ def _collect_financials(api: Any, ts_code: str, observed_at: str) -> tuple[list[
             ),
         ),
         (
-            FINANCIAL_BALANCE_FIELDS,
+            (*FINANCIAL_BALANCE_FIELDS, *FINANCIAL_WORKING_CAPITAL_FIELDS),
             (
                 ("stock_balance_sheet_by_report_em", lambda method: method(symbol=_market_symbol(ts_code))),
                 ("stock_balance_sheet_by_yearly_em", lambda method: method(symbol=_market_symbol(ts_code))),
@@ -213,6 +214,8 @@ def _collect_financials(api: Any, ts_code: str, observed_at: str) -> tuple[list[
         if _financial_rows_need(financials, fields):
             if not callable_endpoint:
                 errors.append(BridgeError("AKSHARE_FINANCIAL_ENDPOINT_UNAVAILABLE", "AkShare financial statement sources are unavailable", candidates[0][0]))
+            elif fields == (*FINANCIAL_BALANCE_FIELDS, *FINANCIAL_WORKING_CAPITAL_FIELDS) and not _financial_rows_need(financials, FINANCIAL_BALANCE_FIELDS):
+                errors.append(BridgeError("AKSHARE_WORKING_CAPITAL_FIELDS_UNAVAILABLE", "AkShare working capital fields remain unavailable", "financial"))
             else:
                 errors.append(BridgeError("AKSHARE_FINANCIAL_FIELDS_UNAVAILABLE", "AkShare financial statement fields remain unavailable", "financial"))
     return financials, errors, attempted

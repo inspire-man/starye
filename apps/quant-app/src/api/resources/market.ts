@@ -109,6 +109,11 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
         bankLoanProvisionRatio: readNumber(industryMetricsRecord, 'bankLoanProvisionRatio', 'bank_loan_provision_ratio'),
       }
     : undefined
+  const accountsReceivable = readNumber(data, 'accountsReceivable', 'accounts_receivable')
+  const inventory = readNumber(data, 'inventory')
+  const contractLiabilities = readNumber(data, 'contractLiabilities', 'contract_liabilities')
+  const workingCapitalErrorCode = readString(data, 'workingCapitalErrorCode', 'working_capital_error_code')
+  const hasField = (...keys: string[]) => keys.some(key => Object.hasOwn(data, key))
   return {
     tsCode,
     observedAt,
@@ -135,6 +140,10 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
     cashRatio: readNumber(data, 'cashRatio', 'cash_ratio'),
     totalLiability: readNumber(data, 'totalLiability', 'total_liability'),
     roic: readNumber(data, 'roic'),
+    ...(hasField('accountsReceivable', 'accounts_receivable') ? { accountsReceivable } : {}),
+    ...(hasField('inventory') ? { inventory } : {}),
+    ...(hasField('contractLiabilities', 'contract_liabilities') ? { contractLiabilities } : {}),
+    ...(workingCapitalErrorCode ? { workingCapitalErrorCode } : {}),
     ...(provider ? { provider } : {}),
     ...(typeof (data.fallbackUsed ?? data.fallback_used) === 'boolean' ? { fallbackUsed: (data.fallbackUsed ?? data.fallback_used) as boolean } : {}),
     ...(readString(data, 'fallbackReason', 'fallback_reason') ? { fallbackReason: readString(data, 'fallbackReason', 'fallback_reason') } : {}),

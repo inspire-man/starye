@@ -304,7 +304,7 @@ describe('quant daily providers', () => {
   })
 
   it('normalizes the latest Eastmoney financial report and preserves nullable metrics', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    const fetchImpl = vi.fn().mockImplementation(async () => new Response(JSON.stringify({
       pages: 2,
       data: [
         {
@@ -387,8 +387,66 @@ describe('quant daily providers', () => {
       cashRatio: 0.777,
       totalLiability: 268266643912,
       roic: 11.75,
+      accountsReceivable: null,
+      inventory: null,
+      contractLiabilities: null,
     })
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('code=SH601899')
+  })
+
+  it('enriches financial reports with same-period Eastmoney balance-sheet fields', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString())
+      if (url.pathname.endsWith('/zcfzbAjaxNew')) {
+        return new Response(JSON.stringify({
+          data: [{
+            SECURITY_CODE: '601899',
+            REPORT_DATE: '2026-06-30 00:00:00',
+            ACCOUNTS_RECE: '120000000',
+            INVENTORY: 300000000,
+            CONTRACT_LIAB: 80000000,
+          }],
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({
+        data: [{
+          SECURITY_CODE: '601899',
+          REPORT_DATE: '2026-06-30 00:00:00',
+          TOTALOPERATEREVE: 1000,
+          PARENTNETPROFIT: 200,
+        }],
+      }), { status: 200 })
+    })
+    const provider = createEastmoneyFinancialProvider({ fetchImpl })
+
+    await expect(provider.fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      reportDate: '2026-06-30',
+      accountsReceivable: 120000000,
+      inventory: 300000000,
+      contractLiabilities: 80000000,
+    })
+    const balanceUrl = new URL(String(fetchImpl.mock.calls[1]?.[0]))
+    expect(balanceUrl.pathname).toBe('/PC_HSF10/NewFinanceAnalysis/zcfzbAjaxNew')
+    expect(balanceUrl.searchParams.get('dates')).toBe('2026-06-30')
+    expect(balanceUrl.searchParams.get('code')).toBe('SH601899')
+  })
+
+  it('keeps the financial report readable and records an auxiliary balance-source error', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString())
+      if (url.pathname.endsWith('/zcfzbAjaxNew'))
+        return new Response('{bad-json', { status: 200 })
+      return new Response(JSON.stringify({
+        data: [{ SECURITY_CODE: '601899', REPORT_DATE: '2026-06-30 00:00:00', TOTALOPERATEREVE: 1000 }],
+      }), { status: 200 })
+    })
+    const provider = createEastmoneyFinancialProvider({ fetchImpl })
+
+    await expect(provider.fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      reportDate: '2026-06-30',
+      revenue: 1000,
+      workingCapitalErrorCode: 'QUANT_PROVIDER_INVALID_RESPONSE',
+    })
   })
 
   it('preserves industry-specific insurance and bank financial metrics', async () => {
@@ -510,7 +568,7 @@ describe('quant daily providers', () => {
       grossMargin: 24.2,
       cashRatio: 1.1,
     })
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
   })
 
   it('falls back to Tushare when the Eastmoney financial provider fails completely', async () => {
@@ -1372,9 +1430,10 @@ describe('quant daily providers', () => {
     await provider.fetchFinancialQuality({ tsCode: '000001.SZ' })
     await provider.fetchFinancialQuality({ tsCode: '430047.BJ' })
 
-    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('code=SH601899')
-    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain('code=SZ000001')
-    expect(String(fetchImpl.mock.calls[2]?.[0])).toContain('code=BJ430047')
+    const requestUrls = fetchImpl.mock.calls.map(call => String(call[0]))
+    expect(requestUrls.some(url => url.includes('code=SH601899'))).toBe(true)
+    expect(requestUrls.some(url => url.includes('code=SZ000001'))).toBe(true)
+    expect(requestUrls.some(url => url.includes('code=BJ430047'))).toBe(true)
   })
 
   it('fails closed for empty, malformed, and mismatched Eastmoney financial responses', async () => {

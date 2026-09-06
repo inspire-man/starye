@@ -121,7 +121,7 @@ describe('quant market route contract', () => {
         roe: 19.6,
       },
     })
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('passes the configured Eastmoney origin to financial reads', async () => {
@@ -178,7 +178,7 @@ describe('quant market route contract', () => {
         grossMargin: 30,
       },
     })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('uses configured AkShare bridge rows to supplement an Eastmoney financial report', async () => {
@@ -228,7 +228,7 @@ describe('quant market route contract', () => {
         roe: 16,
       },
     })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
     const bridgeCall = fetchMock.mock.calls.find(call => String(call[0]).startsWith('https://bridge.fixture.test/'))
     expect((bridgeCall?.[1] as RequestInit | undefined)?.headers).toMatchObject({ authorization: 'Bearer bridge-token' })
   })
@@ -254,7 +254,7 @@ describe('quant market route contract', () => {
         ],
       },
     })
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('maps a financial upstream failure to the Quant route contract', async () => {

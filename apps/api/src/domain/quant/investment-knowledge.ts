@@ -1,4 +1,4 @@
-export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v5' as const
+export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v6' as const
 
 export type QuantKnowledgeSourceAccess = 'full' | 'preview'
 export type QuantKnowledgeFactorStatus = 'active' | 'partial' | 'planned' | 'context'
@@ -143,8 +143,8 @@ export const QUANT_KNOWLEDGE_FACTORS: readonly QuantKnowledgeFactor[] = [
     interpretation: '利润结果之外，订单、合同负债、销量、价格和毛利变化更接近经营过程。',
     measurement: '订单/合同负债趋势 + 收入量价拆分 + 分部毛利变化。',
     requiredFields: ['orderBacklog', 'contractLiabilities', 'segmentRevenue', 'segmentGrossMargin', 'volume', 'realizedPrice'],
-    availableFields: ['revenueYoY', 'grossMargin'],
-    missingFields: ['orderBacklog', 'contractLiabilities', 'segmentRevenue', 'segmentGrossMargin', 'volume', 'realizedPrice'],
+    availableFields: ['revenueYoY', 'grossMargin', 'contractLiabilities', 'accountsReceivable', 'inventory'],
+    missingFields: ['orderBacklog', 'segmentRevenue', 'segmentGrossMargin', 'volume', 'realizedPrice'],
     status: 'partial',
     eligibleInValueQuality: false,
     currentDimension: null,
