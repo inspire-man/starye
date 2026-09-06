@@ -30,7 +30,8 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - 2026-09-05 Quant 缺失证据刷新入口已合入 `main`（PR #80，merge SHA `44420cbae32a93bc9a88ecde108fd6d803fc4cac`）：因子数据健康按 evidence key 提供日线、估值、基本面、股东回报的“刷新并重算”入口，候选列表提供“去补齐”直达详情；刷新只重算确定性报告，不自动提交 AI，AkShare bridge 缺口继续保留为来源问题。Quant 全量 321 项、type-check/build、root lint、边界检查、认证态 Gateway loading/success/候选入口验证通过；PR CI `33969770950`、合并 SHA CI `33970002924` 和 Deploy Quant `33970002956` 均通过。
 - 2026-09-06 Quant 证据来源补全已合入 `main`（PR #81，merge SHA `3723d2baaddd618b5ad9a5c28f01aff3be2d99b2`）：区分阈值失败、真实缺失、来源回退、来源不可用和银行/保险行业不适用字段；Eastmoney PEG 明细、财报 `fina_indicator` 和现金流 `cashflow` 的可选 Tushare 回退链已接通，详情页与研究报告同步来源元数据。PR CI `34000465004`、合并 SHA CI `34000682737`、Deploy API `34000682861`、Deploy API After PR Merge `34000682779`、Deploy Quant `34000682792` 均通过。认证态 Gateway 已验证 601318 保险指标、000001 银行指标、负 PEG、刷新动作和行业不适用历史口径；1920px/390px 无横向溢出且浏览器 error/warn 为 0。
 - 2026-09-06 Quant 现金流来源扩展已合入 `main`（PR #84，merge SHA `5c9ea56467fcc4fa06bf673f9fe5ac6913152dcb`）：现金流接入同报告期利息费用和有息负债分项；AkShare 增加 Eastmoney 指标、季度/年度/Sina 财报、Tencent/Sina 日线和代码名称 fallback；恢复后的完整响应保持 `ready`，端点异常继续保留在 `errors`。本地 bridge 34 项、API 定向 66 项、Quant 330 项、root lint/type-check、Quant/API build、OpenSpec strict 85/85 通过；Gateway 匿名 `/quant/` 为 302、现金流 API 为 401。PR CI `34015267195`、合并 SHA CI `34015480148`、Deploy API `34015480141`、Deploy API After PR Merge `34015480137` 均通过。root 全量 build 仍受既有 `STARYE_PAGES_BUILD_ENV_PATH` 缺失影响。
-- 2026-09-06 Quant 来源覆盖语义修复已在当前分支完成、尚未提交：Eastmoney 回购合法空响应（`9201`）归类为 `insufficient_data`，银行/保险 `not_applicable` evidence 不再阻断判断就绪度；API/Quant 定向测试、Quant 全量 331 项、type-check/build、OpenSpec strict 86/86、GitNexus 变更分析和 Gateway 平安银行详情验证通过。真实回购记录仍保持来源独立，未用计划金额或零值补齐。
+- 2026-09-06 Quant 来源覆盖语义修复已合入 `main`（PR #85，merge SHA `baa475c45e845a95a657e8b33852ab230b0cf2b6`）：Eastmoney 回购合法空响应（`9201`）归类为 `insufficient_data`，银行/保险 `not_applicable` evidence 不再阻断判断就绪度；真实回购记录仍保持来源独立，未用计划金额或零值补齐。
+- 2026-09-06 Quant AkShare 回购备用来源已合入 `main`（PR #86，merge SHA `d29e904e61330ab5977079c80bb58947419e56ed`）：bridge 接入 `stock_repurchase_em`、按证券过滤并缓存全量表，Eastmoney 空历史/失败时回退 AkShare，API、研究报告和详情保留实际来源与安全回退原因；PR checks、合并 SHA CI、Deploy API、Deploy API After PR Merge、Deploy Quant 均通过，匿名 Gateway `/quant/` 为 302、股东回报 API 为 401。
 
 ## 延后事项
 
@@ -40,7 +41,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 
 ## 下一步
 
-1. 提交并审查当前 `2026-09-06-quant-source-coverage-semantics` change，合并后检查 Actions；后续来源扩展只针对仍有真实原始字段缺口的候选。
+1. 开发并交付当前 `2026-09-06-quant-akshare-dividend-fallback` change；后续来源扩展只针对仍有真实原始字段缺口的候选。
 2. 小 bug：定位 → 最小修复 → 定向测试 → Gateway 验证。
 3. crawler/D1：补 Gateway、D1 readback、content integrity 和实际消费层证据。
 4. 完成后更新本文件的当前状态；稳定规则回写对应 canonical owner。

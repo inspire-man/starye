@@ -163,8 +163,8 @@ export interface QuantShareholderReturnItem {
   readonly name: string | null
   readonly formulaVersion: typeof QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION
   readonly status: ShareholderReturnStatus
-  readonly provider: QuantProviderName | null
-  readonly providerChain: readonly QuantProviderName[]
+  readonly provider: QuantSourceName | null
+  readonly providerChain: readonly QuantSourceName[]
   readonly fallbackUsed: boolean
   readonly fallbackReason: string | null
   readonly providerErrorCode: string | null
@@ -183,8 +183,8 @@ export interface QuantShareholderReturnItem {
 export interface QuantShareholderReturnBatchResult {
   readonly formulaVersion: typeof QUANT_SHAREHOLDER_RETURN_FORMULA_VERSION
   readonly observedAt: string
-  readonly provider: QuantProviderName | null
-  readonly providerChain: readonly QuantProviderName[]
+  readonly provider: QuantSourceName | null
+  readonly providerChain: readonly QuantSourceName[]
   readonly sampleCount: number
   readonly readyCount: number
   readonly partialCount: number
@@ -198,8 +198,8 @@ export interface ShareholderReturnInput {
   readonly dividends: readonly QuantDividendRecord[]
   readonly dailyBars: readonly DailyBar[]
   readonly dividendErrorCode: string | null
-  readonly dividendProvider?: QuantProviderName | null
-  readonly providerChain?: readonly QuantProviderName[]
+  readonly dividendProvider?: QuantSourceName | null
+  readonly providerChain?: readonly QuantSourceName[]
   readonly fallbackUsed?: boolean
   readonly fallbackReason?: string | null
   readonly cashflowReports?: readonly QuantCashflowReport[]
@@ -748,21 +748,21 @@ async function readShareholderReturnInput(
         .then(result => ({
           dividends: result.records,
           dividendErrorCode: null as string | null,
-          dividendProvider: result.provider as QuantProviderName | null,
+          dividendProvider: result.provider as QuantSourceName | null,
           fallbackUsed: result.fallbackUsed,
           fallbackReason: result.fallbackReason,
         }))
         .catch(error => ({
           dividends: [] as readonly QuantDividendRecord[],
           dividendErrorCode: providerErrorCode(error),
-          dividendProvider: null as QuantProviderName | null,
+          dividendProvider: null as QuantSourceName | null,
           fallbackUsed: false,
           fallbackReason: null as string | null,
         }))
     : Promise.resolve({
         dividends: [] as readonly QuantDividendRecord[],
         dividendErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
-        dividendProvider: null as QuantProviderName | null,
+        dividendProvider: null as QuantSourceName | null,
         fallbackUsed: false,
         fallbackReason: null as string | null,
       })

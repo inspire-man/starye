@@ -1190,7 +1190,7 @@ function shareholderReturnStatusClass(item: QuantShareholderReturnItem | null): 
 }
 
 function shareholderReturnProviderLabel(provider: QuantShareholderReturnItem['provider']): string {
-  return provider === 'tushare' ? 'Tushare' : provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  return provider === 'tushare' ? 'Tushare' : provider === 'eastmoney' ? 'Eastmoney' : provider === 'akshare' ? 'AkShare' : 'Quant'
 }
 
 function shareholderReturnSourceLabel(item: QuantShareholderReturnItem | null): string {

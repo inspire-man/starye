@@ -1969,6 +1969,76 @@ describe('quant watchlist CRUD contract', () => {
     expect(JSON.stringify(result)).not.toContain('bridge-token')
   })
 
+  it('falls back from an empty Eastmoney dividend history to the configured AkShare bridge', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
+    await upsertQuantDailyBars(db, valueFixtureBars('601899.SH'))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(input.toString())
+      if (url.origin === 'https://eastmoney-dividend.fixture.test')
+        return new Response(JSON.stringify({ code: 0, success: true, result: { data: [] } }), { status: 200 })
+      if (url.origin === 'https://bridge.fixture.test') {
+        return new Response(JSON.stringify({
+          schema_version: 'quant-akshare-v1',
+          provider: 'akshare',
+          request_id: 'bridge-dividend-1',
+          ts_code: '601899.SH',
+          observed_at: '2026-09-06T00:00:00.000Z',
+          status: 'partial',
+          source: { adapter: 'akshare-adapter-v1', endpoints: ['stock_history_dividend_detail'], formula_version: 'akshare-adapter-v1' },
+          identity: { name: '紫金矿业' },
+          daily_bars: [],
+          financials: [],
+          cashflows: [],
+          repurchases: [],
+          dividends: [{
+            ts_code: '601899.SH',
+            end_date: '2026-08-13',
+            ann_date: '2026-08-13',
+            div_proc: '实施',
+            cash_div: 0.42,
+            ex_date: '2026-08-21',
+            pay_date: null,
+          }],
+          evidence: [],
+          errors: [],
+        }), { status: 200 })
+      }
+      if (url.searchParams.get('reportName') === 'RPTA_WEB_GETHGLIST_NEW')
+        return repurchaseResponse()
+      if (url.pathname.endsWith('/CapitalStockStructure/PageAjax'))
+        return capitalStructureResponse()
+      return url.pathname.endsWith('/xjllbDateAjaxNew') ? cashflowDateResponse() : cashflowDataResponse()
+    })
+
+    const response = await app.request('/api/quant/shareholder-returns', {}, {
+      EASTMONEY_DIVIDEND_BASE_URL: 'https://eastmoney-dividend.fixture.test',
+      EASTMONEY_BASE_URL: 'https://eastmoney-cashflow.fixture.test',
+      EASTMONEY_REPURCHASE_BASE_URL: 'https://eastmoney-repurchase.fixture.test',
+      QUANT_AKSHARE_BRIDGE_URL: 'https://bridge.fixture.test',
+      QUANT_AKSHARE_BRIDGE_TOKEN: 'bridge-token',
+    } as AppEnv['Bindings'])
+
+    expect(response.status).toBe(200)
+    const result = await response.json() as { data: { provider: string, providerChain: string[], items: Array<Record<string, unknown>> } }
+    expect(result.data).toMatchObject({
+      provider: 'eastmoney',
+      providerChain: ['eastmoney', 'akshare'],
+      items: [{
+        provider: 'akshare',
+        providerChain: ['eastmoney', 'akshare'],
+        fallbackUsed: true,
+        fallbackReason: 'QUANT_PROVIDER_EMPTY',
+        trailingCashDividendPerShare: 0.42,
+      }],
+    })
+    const bridgeCall = fetchMock.mock.calls.find(call => String(call[0]).startsWith('https://bridge.fixture.test/'))
+    expect(JSON.parse(String(bridgeCall?.[1]?.body))).toMatchObject({ include_financials: false })
+    expect((bridgeCall?.[1] as RequestInit | undefined)?.headers).toMatchObject({ authorization: 'Bearer bridge-token' })
+    expect(JSON.stringify(result)).not.toContain('bridge-token')
+  })
+
   it('falls back from Tushare quota to Eastmoney and keeps provider metadata out of secrets', async () => {
     const { db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })

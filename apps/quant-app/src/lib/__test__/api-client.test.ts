@@ -661,6 +661,45 @@ describe('quantApi', () => {
     })
   })
 
+  it('keeps AkShare dividend provenance and the expanded provider chain', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        provider: 'akshare',
+        provider_chain: ['tushare', 'eastmoney', 'akshare'],
+        items: [{
+          ts_code: '601899.SH',
+          status: 'ready',
+          provider: 'akshare',
+          provider_chain: ['tushare', 'eastmoney', 'akshare'],
+          fallback_used: true,
+          fallback_reason: 'QUANT_PROVIDER_EMPTY',
+          trailing_cash_dividend_per_share: 0.42,
+          trailing_dividend_yield: 1.22,
+          distributions: [{
+            end_date: '2026-08-13',
+            ann_date: '2026-08-13',
+            cash_dividend_per_share: 0.42,
+            ex_date: '2026-08-21',
+            pay_date: null,
+          }],
+        }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getShareholderReturns()).resolves.toMatchObject({
+      provider: 'akshare',
+      providerChain: ['tushare', 'eastmoney', 'akshare'],
+      items: [{
+        provider: 'akshare',
+        providerChain: ['tushare', 'eastmoney', 'akshare'],
+        fallbackUsed: true,
+        fallbackReason: 'QUANT_PROVIDER_EMPTY',
+        distributions: [{ endDate: '2026-08-13', cashDividendPerShare: 0.42 }],
+      }],
+    })
+  })
+
   it('normalizes financial quality peer positions and nullable peers', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {

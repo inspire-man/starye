@@ -98,6 +98,46 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(result.repurchases[0]["repurchase_amount"], 2499754839.55)
         self.assertIn("stock_repurchase_em", result.source.endpoints)
 
+    def test_collects_dividend_detail_for_the_requested_stock(self) -> None:
+        class DividendAkShare(FakeAkShare):
+            def stock_history_dividend_detail(self, **kwargs):
+                self.symbol = kwargs["symbol"]
+                return [{
+                    "公告日期": "2026-08-13",
+                    "派息": 4.2,
+                    "进度": "实施",
+                    "除权除息日": "2026-08-21",
+                    "红利发放日": "NaT",
+                }]
+
+        client = DividendAkShare()
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), client)
+
+        self.assertEqual(client.symbol, "601899")
+        self.assertEqual(len(result.dividends), 1)
+        self.assertEqual(result.dividends[0]["cash_div"], 0.42)
+        self.assertIn("stock_history_dividend_detail", result.source.endpoints)
+
+    def test_keeps_empty_dividend_history_without_endpoint_failure(self) -> None:
+        class EmptyDividendAkShare(FakeAkShare):
+            def stock_history_dividend_detail(self, **_kwargs):
+                return []
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), EmptyDividendAkShare())
+
+        self.assertEqual(result.dividends, [])
+        self.assertNotIn("AKSHARE_DIVIDEND_ENDPOINT_FAILED", {error.code for error in result.errors})
+
+    def test_classifies_a_dividend_endpoint_failure_without_exposing_upstream_text(self) -> None:
+        class BrokenDividendAkShare(FakeAkShare):
+            def stock_history_dividend_detail(self, **_kwargs):
+                raise RuntimeError("dividend upstream secret")
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), BrokenDividendAkShare())
+
+        self.assertTrue(any(error.code == "AKSHARE_DIVIDEND_ENDPOINT_FAILED" for error in result.errors))
+        self.assertNotIn("dividend upstream secret", result.to_dict())
+
     def test_keeps_a_valid_empty_repurchase_history_as_an_optional_gap(self) -> None:
         class EmptyRepurchaseAkShare(FakeAkShare):
             def stock_repurchase_em(self):
