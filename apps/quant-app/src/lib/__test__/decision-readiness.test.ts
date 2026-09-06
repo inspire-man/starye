@@ -215,6 +215,32 @@ describe('buildQuantDecisionReadiness', () => {
     expect(result.status).toBe('ready')
   })
 
+  it('does not let industry-not-applicable evidence block an otherwise complete chain', () => {
+    const baseReport = report()
+    const result = buildQuantDecisionReadiness({
+      report: {
+        ...baseReport,
+        evidence: [
+          ...baseReport.evidence,
+          {
+            ...baseReport.evidence[0],
+            key: 'quality-gross-margin',
+            label: '毛利率',
+            status: 'missing',
+            applicability: 'not_applicable',
+          },
+        ],
+      },
+      aiReview: aiReview(),
+      factorImpact: factorImpact(),
+      currentPrice: 32,
+      dataFreshness: 'fresh',
+    })
+
+    expect(result).toMatchObject({ status: 'ready', label: '可参考' })
+    expect(result.checks.find(check => check.key === 'data')).toMatchObject({ status: 'pass' })
+  })
+
   it('gates readiness independently for aging, stale, and unknown data freshness', () => {
     const base = { report: report(), aiReview: aiReview(), factorImpact: factorImpact(), currentPrice: 32 }
     const aging = buildQuantDecisionReadiness({ ...base, dataFreshness: 'aging', dataFreshnessDetail: '1 个数据域已超过 48 小时，建议复核' })

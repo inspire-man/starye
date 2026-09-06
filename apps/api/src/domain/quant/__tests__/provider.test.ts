@@ -935,6 +935,11 @@ describe('quant daily providers', () => {
     })
     await expect(empty.fetchRepurchaseHistory({ tsCode: '601899.SH' })).resolves.toEqual([])
 
+    const emptyCode = createEastmoneyRepurchaseProvider({
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 9201, success: false, result: null }), { status: 200 })),
+    })
+    await expect(emptyCode.fetchRepurchaseHistory({ tsCode: '000001.SZ' })).resolves.toEqual([])
+
     const malformed = createEastmoneyRepurchaseProvider({
       fetchImpl: vi.fn().mockResolvedValue(new Response('{bad-json', { status: 200 })),
     })
