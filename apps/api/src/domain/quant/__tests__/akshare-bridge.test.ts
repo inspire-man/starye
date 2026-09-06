@@ -1,6 +1,6 @@
 import type { QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareFinancialProvider, QuantAkshareBridgeError } from '../akshare-bridge'
+import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider, QuantAkshareBridgeError } from '../akshare-bridge'
 import { createQuantCashflowProviderChain, createQuantFinancialProviderChain } from '../provider'
 
 const reportEvidence: QuantResearchReport = {
@@ -143,6 +143,60 @@ describe('akShare bridge client', () => {
       interestBearingDebt: 1000,
       interestBearingDebtComponents: expect.objectContaining({ shortLoan: 400, longLoan: 500, leaseLiability: 100 }),
     }])
+  })
+
+  it('maps optional AkShare repurchase rows and keeps legacy bridge payloads valid', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload({
+      repurchases: [{
+        ts_code: '601899.SH',
+        repurchase_code: 'akshare:20260818:20260814:1500000000:2500000000',
+        announcement_date: '20260818',
+        start_date: '20260814',
+        end_date: null,
+        finish_date: null,
+        progress: '完成实施',
+        planned_amount_lower: 1500000000,
+        planned_amount_upper: 2500000000,
+        repurchase_amount: 2499754839.55,
+        repurchase_shares: 77474592,
+      }],
+    })), { status: 200 }))
+    const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
+
+    await expect(createQuantAkshareRepurchaseProvider(bridge).fetchRepurchaseHistory({ tsCode: '601899.SH', limit: 12 })).resolves.toEqual([{
+      tsCode: '601899.SH',
+      repurchaseCode: 'akshare:20260818:20260814:1500000000:2500000000',
+      announcementDate: '2026-08-18',
+      startDate: '2026-08-14',
+      endDate: null,
+      finishDate: null,
+      progress: '完成实施',
+      plannedAmountLower: 1500000000,
+      plannedAmountUpper: 2500000000,
+      repurchaseAmount: 2499754839.55,
+      repurchaseShares: 77474592,
+      provider: 'akshare',
+    }])
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({ include_financials: false })
+
+    const legacyBridge = createQuantAkshareBridge({
+      baseUrl: 'https://bridge.example.test',
+      token: 'secret-token',
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(payload()), { status: 200 })),
+    })
+    await expect(createQuantAkshareRepurchaseProvider(legacyBridge).fetchRepurchaseHistory({ tsCode: '601899.SH' })).resolves.toEqual([])
+  })
+
+  it('surfaces a repurchase endpoint error instead of treating it as an empty history', async () => {
+    const bridge = createQuantAkshareBridge({
+      baseUrl: 'https://bridge.example.test',
+      token: 'secret-token',
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(payload({
+        errors: [{ code: 'AKSHARE_REPURCHASE_ENDPOINT_FAILED', message: 'endpoint failed' }],
+      })), { status: 200 })),
+    })
+
+    await expect(createQuantAkshareRepurchaseProvider(bridge).fetchRepurchaseHistory({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'UPSTREAM' })
   })
 
   it('supplements only same-period null fields and keeps the primary report', async () => {

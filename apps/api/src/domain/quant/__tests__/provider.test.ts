@@ -1,6 +1,6 @@
 import type { TushareProviderError } from '../provider'
 import { describe, expect, it, vi } from 'vitest'
-import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyProvider, createEastmoneyRepurchaseProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
+import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyProvider, createEastmoneyRepurchaseProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createQuantRepurchaseProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
 
 describe('quant daily providers', () => {
   it('normalizes the declared daily response and keeps the token server-side', async () => {
@@ -953,6 +953,89 @@ describe('quant daily providers', () => {
       }), { status: 200 })),
     })
     await expect(mismatched.fetchRepurchaseHistory({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  })
+
+  it('falls back from an Eastmoney empty repurchase history to AkShare', async () => {
+    const primary = {
+      name: 'eastmoney' as const,
+      isConfigured: true,
+      fetchRepurchaseHistory: vi.fn().mockResolvedValue([]),
+    }
+    const fallback = {
+      name: 'akshare' as const,
+      isConfigured: true,
+      fetchRepurchaseHistory: vi.fn().mockResolvedValue([{
+        tsCode: '601899.SH',
+        repurchaseCode: 'akshare:20260818:20260814:1500000000:2500000000',
+        announcementDate: '2026-08-18',
+        startDate: '2026-08-14',
+        endDate: null,
+        finishDate: null,
+        progress: '完成实施',
+        plannedAmountLower: 1500000000,
+        plannedAmountUpper: 2500000000,
+        repurchaseAmount: 2499754839.55,
+        repurchaseShares: 77474592,
+        provider: 'akshare' as const,
+      }]),
+    }
+    const chain = createQuantRepurchaseProviderChain(primary, fallback)
+
+    await expect(chain.fetchRepurchaseHistory({ tsCode: '601899.SH', limit: 12 })).resolves.toMatchObject([{
+      provider: 'akshare',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_EMPTY',
+      repurchaseAmount: 2499754839.55,
+    }])
+    expect(primary.fetchRepurchaseHistory).toHaveBeenCalledOnce()
+    expect(fallback.fetchRepurchaseHistory).toHaveBeenCalledOnce()
+  })
+
+  it('falls back after an Eastmoney repurchase error and keeps the safe error code', async () => {
+    const primary = createEastmoneyRepurchaseProvider({
+      fetchImpl: vi.fn().mockResolvedValue(new Response('upstream failed', { status: 503 })),
+    })
+    const fallback = {
+      name: 'akshare' as const,
+      isConfigured: true,
+      fetchRepurchaseHistory: vi.fn().mockResolvedValue([{
+        tsCode: '601899.SH',
+        repurchaseCode: 'akshare-plan',
+        announcementDate: '2026-08-18',
+        startDate: '2026-08-14',
+        endDate: null,
+        finishDate: null,
+        progress: '完成实施',
+        plannedAmountLower: 150,
+        plannedAmountUpper: 250,
+        repurchaseAmount: 200,
+        repurchaseShares: 1000,
+      }]),
+    }
+    const chain = createQuantRepurchaseProviderChain(primary, fallback)
+
+    await expect(chain.fetchRepurchaseHistory({ tsCode: '601899.SH' })).resolves.toMatchObject([{
+      provider: 'akshare',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_UPSTREAM',
+    }])
+  })
+
+  it('keeps two valid empty repurchase histories as an empty result', async () => {
+    const chain = createQuantRepurchaseProviderChain(
+      {
+        name: 'eastmoney' as const,
+        isConfigured: true,
+        fetchRepurchaseHistory: vi.fn().mockResolvedValue([]),
+      },
+      {
+        name: 'akshare' as const,
+        isConfigured: true,
+        fetchRepurchaseHistory: vi.fn().mockResolvedValue([]),
+      },
+    )
+
+    await expect(chain.fetchRepurchaseHistory({ tsCode: '000001.SZ' })).resolves.toEqual([])
   })
 
   it('normalizes only the requested Tushare dividend fields and keeps implementation status', async () => {

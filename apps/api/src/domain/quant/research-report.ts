@@ -216,11 +216,12 @@ function shareholderCapitalSource(item: QuantShareholderReturnItem | null): { re
 }
 
 function shareholderRepurchaseSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
-  const provider = item?.repurchaseEvidence?.provider === 'tushare' ? 'Tushare' : item?.repurchaseEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  const provider = item?.repurchaseEvidence?.provider === 'tushare' ? 'Tushare' : item?.repurchaseEvidence?.provider === 'akshare' ? 'AkShare' : item?.repurchaseEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
   const unavailable = item?.repurchaseEvidence?.providerErrorCode ? `，来源不可用：${item.repurchaseEvidence.providerErrorCode}` : ''
+  const fallback = item?.repurchaseEvidence?.fallbackUsed && item.repurchaseEvidence.fallbackReason ? `，回退：${item.repurchaseEvidence.fallbackReason}` : ''
   return {
-    id: item?.repurchaseEvidence?.provider === 'eastmoney' ? 'eastmoney-repurchase' : 'quant-repurchase-provider',
-    name: `${provider} 回购计划${unavailable}`,
+    id: item?.repurchaseEvidence?.provider === 'akshare' ? 'akshare-repurchase' : item?.repurchaseEvidence?.provider === 'eastmoney' ? 'eastmoney-repurchase' : 'quant-repurchase-provider',
+    name: `${provider} 回购计划${fallback}${unavailable}`,
   }
 }
 

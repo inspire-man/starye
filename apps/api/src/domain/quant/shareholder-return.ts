@@ -144,8 +144,10 @@ export interface QuantShareholderRepurchaseRecord {
 export interface QuantShareholderRepurchaseEvidence {
   readonly formulaVersion: typeof QUANT_SHAREHOLDER_REPURCHASE_FORMULA_VERSION
   readonly status: QuantShareholderRepurchaseStatus
-  readonly provider: QuantProviderName | null
+  readonly provider: QuantSourceName | null
   readonly providerErrorCode: string | null
+  readonly fallbackUsed: boolean
+  readonly fallbackReason: string | null
   readonly observedAt: string
   readonly latestAnnouncementDate: string | null
   readonly latestProgress: string | null
@@ -210,7 +212,9 @@ export interface ShareholderReturnInput {
   readonly capitalStructureProvider?: QuantProviderName | null
   readonly capitalStructureErrorCode?: string | null
   readonly repurchaseReports?: readonly QuantRepurchaseReport[]
-  readonly repurchaseProvider?: QuantProviderName | null
+  readonly repurchaseProvider?: QuantSourceName | null
+  readonly repurchaseFallbackUsed?: boolean
+  readonly repurchaseFallbackReason?: string | null
   readonly repurchaseErrorCode?: string | null
   readonly observedAt: string
 }
@@ -604,6 +608,10 @@ function buildRepurchaseEvidence(input: ShareholderReturnInput): QuantShareholde
   const plannedAmountLower = sumFinite(records.map(record => record.plannedAmountLower))
   const plannedAmountUpper = sumFinite(records.map(record => record.plannedAmountUpper))
   const latest = records[0]
+  const fallbackReport = reports.find(report => report.fallbackUsed === true)
+  const provider = input.repurchaseProvider ?? fallbackReport?.provider ?? null
+  const fallbackUsed = input.repurchaseFallbackUsed ?? reports.some(report => report.fallbackUsed === true)
+  const fallbackReason = input.repurchaseFallbackReason ?? fallbackReport?.fallbackReason ?? null
   const missingFields: string[] = []
 
   if (input.repurchaseErrorCode)
@@ -628,8 +636,10 @@ function buildRepurchaseEvidence(input: ShareholderReturnInput): QuantShareholde
   return {
     formulaVersion: QUANT_SHAREHOLDER_REPURCHASE_FORMULA_VERSION,
     status,
-    provider: input.repurchaseProvider ?? null,
+    provider,
     providerErrorCode: input.repurchaseErrorCode ?? null,
+    fallbackUsed,
+    fallbackReason,
     observedAt: input.observedAt,
     latestAnnouncementDate: latest?.announcementDate ?? null,
     latestProgress: latest?.progress ?? null,
@@ -809,19 +819,28 @@ async function readShareholderReturnInput(
   const repurchaseTask = repurchaseProvider
     ? repurchaseProvider.isConfigured
       ? repurchaseProvider.fetchRepurchaseHistory({ tsCode: item.tsCode, limit: 12 })
-          .then(repurchaseReports => ({
-            repurchaseReports,
-            repurchaseProvider: repurchaseProvider.name as QuantProviderName | null,
-            repurchaseErrorCode: null as string | null,
-          }))
+          .then((repurchaseReports) => {
+            const fallbackReport = repurchaseReports.find(report => report.fallbackUsed === true)
+            return {
+              repurchaseReports,
+              repurchaseProvider: fallbackReport?.provider ?? repurchaseProvider.name,
+              repurchaseFallbackUsed: repurchaseReports.some(report => report.fallbackUsed === true),
+              repurchaseFallbackReason: fallbackReport?.fallbackReason ?? null,
+              repurchaseErrorCode: null as string | null,
+            }
+          })
           .catch(error => ({
             repurchaseReports: [] as readonly QuantRepurchaseReport[],
-            repurchaseProvider: repurchaseProvider.name as QuantProviderName | null,
+            repurchaseProvider: repurchaseProvider.name as QuantSourceName | null,
+            repurchaseFallbackUsed: false,
+            repurchaseFallbackReason: null as string | null,
             repurchaseErrorCode: mapQuantProviderError(error).code,
           }))
       : Promise.resolve({
           repurchaseReports: [] as readonly QuantRepurchaseReport[],
-          repurchaseProvider: null as QuantProviderName | null,
+          repurchaseProvider: null as QuantSourceName | null,
+          repurchaseFallbackUsed: false,
+          repurchaseFallbackReason: null as string | null,
           repurchaseErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
         })
     : Promise.resolve(null)
@@ -859,6 +878,8 @@ async function readShareholderReturnInput(
       ? {
           repurchaseReports: repurchase.repurchaseReports,
           repurchaseProvider: repurchase.repurchaseProvider,
+          repurchaseFallbackUsed: repurchase.repurchaseFallbackUsed,
+          repurchaseFallbackReason: repurchase.repurchaseFallbackReason,
           repurchaseErrorCode: repurchase.repurchaseErrorCode,
         }
       : {}),

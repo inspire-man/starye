@@ -1891,6 +1891,84 @@ describe('quant watchlist CRUD contract', () => {
     })
   })
 
+  it('falls back from an empty Eastmoney repurchase history to the configured AkShare bridge', async () => {
+    const { db } = await createDatabase()
+    const app = createApp(db, { user: { role: 'admin' } })
+    await createQuantWatchlistItem(db, { userId: 'user-1', tsCode: '601899.SH', name: '紫金矿业' })
+    await upsertQuantDailyBars(db, valueFixtureBars('601899.SH'))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(input.toString())
+      if (url.origin === 'https://tushare.fixture.test') {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            fields: ['ts_code', 'end_date', 'ann_date', 'div_proc', 'cash_div', 'ex_date', 'pay_date'],
+            items: [['601899.SH', '20260331', '20260711', '实施', 0.42, '20260821', '20260821']],
+          },
+        }), { status: 200 })
+      }
+      if (url.origin === 'https://bridge.fixture.test') {
+        return new Response(JSON.stringify({
+          schema_version: 'quant-akshare-v1',
+          provider: 'akshare',
+          request_id: 'bridge-repurchase-1',
+          ts_code: '601899.SH',
+          observed_at: '2026-09-06T00:00:00.000Z',
+          status: 'partial',
+          source: { adapter: 'akshare-adapter-v1', endpoints: ['stock_repurchase_em'], formula_version: 'akshare-adapter-v1' },
+          identity: { name: '紫金矿业' },
+          daily_bars: [],
+          financials: [],
+          cashflows: [],
+          repurchases: [{
+            ts_code: '601899.SH',
+            repurchase_code: 'akshare:20260818:20260814:1500000000:2500000000',
+            announcement_date: '20260818',
+            start_date: '20260814',
+            end_date: null,
+            finish_date: null,
+            progress: '完成实施',
+            planned_amount_lower: 1500000000,
+            planned_amount_upper: 2500000000,
+            repurchase_amount: 2499754839.55,
+            repurchase_shares: 77474592,
+          }],
+          evidence: [],
+          errors: [],
+        }), { status: 200 })
+      }
+      if (url.searchParams.get('reportName') === 'RPTA_WEB_GETHGLIST_NEW')
+        return new Response(JSON.stringify({ code: 0, success: true, result: null }), { status: 200 })
+      if (url.pathname.endsWith('/CapitalStockStructure/PageAjax'))
+        return capitalStructureResponse()
+      return url.pathname.endsWith('/xjllbDateAjaxNew') ? cashflowDateResponse() : cashflowDataResponse()
+    })
+
+    const response = await app.request('/api/quant/shareholder-returns', {}, {
+      TUSHARE_TOKEN: 'fixture-token',
+      TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+      EASTMONEY_BASE_URL: 'https://eastmoney-cashflow.fixture.test',
+      EASTMONEY_REPURCHASE_BASE_URL: 'https://eastmoney-repurchase.fixture.test',
+      QUANT_AKSHARE_BRIDGE_URL: 'https://bridge.fixture.test',
+      QUANT_AKSHARE_BRIDGE_TOKEN: 'bridge-token',
+    } as AppEnv['Bindings'])
+
+    expect(response.status).toBe(200)
+    const result = await response.json() as { data: { items: Array<Record<string, unknown>> } }
+    expect(result.data.items[0]).toMatchObject({
+      repurchaseEvidence: {
+        status: 'ready',
+        provider: 'akshare',
+        fallbackUsed: true,
+        fallbackReason: 'QUANT_PROVIDER_EMPTY',
+        repurchaseAmount: 2499754839.55,
+      },
+    })
+    const bridgeCall = fetchMock.mock.calls.find(call => String(call[0]).startsWith('https://bridge.fixture.test/'))
+    expect((bridgeCall?.[1] as RequestInit | undefined)?.headers).toMatchObject({ authorization: 'Bearer bridge-token' })
+    expect(JSON.stringify(result)).not.toContain('bridge-token')
+  })
+
   it('falls back from Tushare quota to Eastmoney and keeps provider metadata out of secrets', async () => {
     const { db } = await createDatabase()
     const app = createApp(db, { user: { role: 'admin' } })

@@ -1,5 +1,7 @@
 import unittest
+from unittest.mock import patch
 
+import quant_akshare_bridge.adapter as adapter
 from quant_akshare_bridge.adapter import collect_evidence
 from quant_akshare_bridge.contracts import BridgeRequest
 
@@ -74,6 +76,37 @@ class AdapterTest(unittest.TestCase):
         self.assertIn("stock_profit_sheet_by_report_em", payload["source"]["endpoints"])
         self.assertIn("stock_balance_sheet_by_report_em", payload["source"]["endpoints"])
 
+    def test_collects_matching_repurchase_rows_without_leaking_other_stocks(self) -> None:
+        class RepurchaseAkShare(FakeAkShare):
+            def stock_repurchase_em(self):
+                return [
+                    {
+                        "股票代码": "601899",
+                        "计划回购金额区间-下限": 1500000000,
+                        "计划回购金额区间-上限": 2500000000,
+                        "回购起始时间": "2026-04-07",
+                        "实施进度": "完成实施",
+                        "已回购股份数量": 77474592,
+                        "已回购金额": 2499754839.55,
+                        "最新公告日期": "2026-04-15",
+                    },
+                    {"股票代码": "000001", "已回购金额": 999},
+                ]
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), RepurchaseAkShare())
+        self.assertEqual(len(result.repurchases), 1)
+        self.assertEqual(result.repurchases[0]["repurchase_amount"], 2499754839.55)
+        self.assertIn("stock_repurchase_em", result.source.endpoints)
+
+    def test_keeps_a_valid_empty_repurchase_history_as_an_optional_gap(self) -> None:
+        class EmptyRepurchaseAkShare(FakeAkShare):
+            def stock_repurchase_em(self):
+                return [{"股票代码": "601899", "实施进度": "董事会预案"}]
+
+        result = collect_evidence(BridgeRequest(ts_code="000001.SZ"), EmptyRepurchaseAkShare())
+        self.assertEqual(result.repurchases, [])
+        self.assertNotIn("AKSHARE_REPURCHASE_ENDPOINT_FAILED", {error.code for error in result.errors})
+
     def test_marks_provider_failure_as_unavailable(self) -> None:
         class BrokenAkShare:
             def stock_zh_a_hist(self, **_kwargs):
@@ -89,6 +122,37 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(result.status, "unavailable")
         self.assertTrue(result.errors)
         self.assertNotIn("upstream", result.to_dict())
+
+    def test_classifies_a_repurchase_endpoint_failure_without_exposing_upstream_text(self) -> None:
+        class BrokenRepurchaseAkShare(FakeAkShare):
+            def stock_repurchase_em(self):
+                raise RuntimeError("upstream secret")
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), BrokenRepurchaseAkShare())
+        self.assertTrue(any(error.code == "AKSHARE_REPURCHASE_ENDPOINT_FAILED" for error in result.errors))
+        self.assertNotIn("upstream secret", result.to_dict())
+
+    def test_reuses_the_full_repurchase_table_for_default_bridge_requests(self) -> None:
+        class CachedRepurchaseAkShare(FakeAkShare):
+            def __init__(self) -> None:
+                self.repurchase_calls = 0
+
+            def stock_repurchase_em(self):
+                self.repurchase_calls += 1
+                return [{
+                    "股票代码": "601899",
+                    "最新公告日期": "2026-04-15",
+                    "已回购金额": 200,
+                }]
+
+        client = CachedRepurchaseAkShare()
+        adapter._repurchase_cache = None
+        with patch("quant_akshare_bridge.adapter._client", return_value=client):
+            first = collect_evidence(BridgeRequest(ts_code="601899.SH"))
+            second = collect_evidence(BridgeRequest(ts_code="601899.SH"))
+
+        self.assertEqual(first.repurchases, second.repurchases)
+        self.assertEqual(client.repurchase_calls, 1)
 
     def test_omits_financial_endpoint_when_not_requested(self) -> None:
         class DailyOnlyAkShare(FakeAkShare):

@@ -459,8 +459,10 @@ function parseShareholderRepurchaseEvidence(value: unknown): QuantShareholderRep
   return {
     formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-repurchase-v1',
     status,
-    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    provider: provider === 'tushare' || provider === 'eastmoney' || provider === 'akshare' ? provider : null,
     providerErrorCode: readString(value, 'providerErrorCode', 'provider_error_code'),
+    fallbackUsed: value.fallbackUsed === true || value.fallback_used === true,
+    fallbackReason: readString(value, 'fallbackReason', 'fallback_reason'),
     observedAt: readString(value, 'observedAt', 'observed_at') || '',
     latestAnnouncementDate: readString(value, 'latestAnnouncementDate', 'latest_announcement_date'),
     latestProgress: readString(value, 'latestProgress', 'latest_progress'),

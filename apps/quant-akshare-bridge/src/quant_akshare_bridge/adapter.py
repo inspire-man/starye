@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import threading
+import time
 from typing import Any
 
 from .contracts import BridgeError, BridgeRequest, BridgeResponse, BridgeSource, observed_now
-from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_ts_code, validate_date_range
+from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ts_code, validate_date_range
 
 
 def akshare_available() -> bool:
@@ -47,6 +49,9 @@ FINANCIAL_BALANCE_FIELDS = ("total_liability", "interest_bearing_debt")
 FINANCIAL_METADATA_FIELDS = ("notice_date", "report_type", "report_date_name", "industry")
 FINANCIAL_COMPONENT_FIELDS = ("interest_bearing_debt_components",)
 CASHFLOW_REQUIRED_FIELDS = ("operating_cashflow", "capital_expenditure", "net_profit")
+REPURCHASE_CACHE_TTL_SECONDS = 60.0
+_repurchase_cache_lock = threading.Lock()
+_repurchase_cache: tuple[float, Any] | None = None
 
 
 def _financial_rows_need(rows: list[dict[str, Any]], fields: tuple[str, ...]) -> bool:
@@ -304,6 +309,29 @@ def _collect_cashflows(api: Any, ts_code: str, observed_at: str, financials: lis
     return cashflows, errors, attempted
 
 
+def _collect_repurchases(api: Any, ts_code: str, use_cache: bool = False) -> tuple[list[dict[str, Any]], list[BridgeError], list[str]]:
+    endpoint = "stock_repurchase_em"
+    method = getattr(api, endpoint, None)
+    if not callable(method):
+        return [], [BridgeError("AKSHARE_REPURCHASE_ENDPOINT_UNAVAILABLE", "AkShare repurchase endpoint is unavailable", endpoint)], []
+    try:
+        if use_cache:
+            global _repurchase_cache
+            now = time.monotonic()
+            with _repurchase_cache_lock:
+                if _repurchase_cache is not None and now - _repurchase_cache[0] < REPURCHASE_CACHE_TTL_SECONDS:
+                    raw = _repurchase_cache[1]
+                else:
+                    raw = method()
+                    _repurchase_cache = (time.monotonic(), raw)
+        else:
+            raw = method()
+        rows, row_errors = normalize_repurchase_rows(ts_code, raw, source=endpoint)
+        return rows, row_errors, [endpoint]
+    except Exception:
+        return [], [BridgeError("AKSHARE_REPURCHASE_ENDPOINT_FAILED", "AkShare repurchase endpoint failed", endpoint)], [endpoint]
+
+
 def collect_evidence(request: BridgeRequest, client: Any | None = None) -> BridgeResponse:
     ts_code = normalize_ts_code(request.ts_code)
     start_date = normalize_date(request.start_date, "start_date")
@@ -316,11 +344,13 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     daily_bars: list[dict[str, Any]] = []
     financials: list[dict[str, Any]] = []
     cashflows: list[dict[str, Any]] = []
+    repurchases: list[dict[str, Any]] = []
     identity: dict[str, Any] = {}
     daily_endpoints: list[str] = []
     identity_endpoints: list[str] = []
     financial_endpoints: list[str] = []
     cashflow_endpoints: list[str] = []
+    repurchase_endpoints: list[str] = []
 
     from datetime import date, timedelta
 
@@ -376,6 +406,9 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         cashflows, cashflow_errors, cashflow_endpoints = _collect_cashflows(api, ts_code, observed_at, financials)
         errors.extend(cashflow_errors)
 
+    repurchases, repurchase_errors, repurchase_endpoints = _collect_repurchases(api, ts_code, use_cache=client is None)
+    errors.extend(repurchase_errors)
+
     evidence = build_evidence(ts_code, observed_at, daily_bars, financials, cashflows)
     has_data = bool(daily_bars or identity or financials or cashflows)
     status = "ready" if has_data and not _has_unresolved_gaps(request, daily_bars, identity, financials, cashflows, errors) else "partial" if has_data else "unavailable"
@@ -390,6 +423,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
                 *identity_endpoints,
                 *financial_endpoints,
                 *cashflow_endpoints,
+                *repurchase_endpoints,
             ])),
             formula_version=FORMULA_VERSION,
         ),
@@ -397,6 +431,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         daily_bars=daily_bars,
         financials=financials,
         cashflows=cashflows,
+        repurchases=repurchases,
         evidence=evidence,
         errors=errors,
     )

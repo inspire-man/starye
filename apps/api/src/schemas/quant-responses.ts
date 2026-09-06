@@ -291,8 +291,10 @@ const QuantShareholderRepurchaseRecordSchema = v.object({
 const QuantShareholderRepurchaseEvidenceSchema = v.object({
   formulaVersion: v.string(),
   status: v.picklist(['ready', 'partial', 'insufficient_data', 'unavailable']),
-  provider: v.nullable(v.picklist(['tushare', 'eastmoney'])),
+  provider: v.nullable(v.picklist(['tushare', 'eastmoney', 'akshare'])),
   providerErrorCode: v.nullable(v.string()),
+  fallbackUsed: v.boolean(),
+  fallbackReason: v.nullable(v.string()),
   observedAt: v.string(),
   latestAnnouncementDate: v.nullable(v.string()),
   latestProgress: v.nullable(v.string()),

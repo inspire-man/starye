@@ -361,6 +361,8 @@ const shareholderReturn: QuantShareholderReturnItem = {
     status: 'ready',
     provider: 'eastmoney',
     providerErrorCode: null,
+    fallbackUsed: false,
+    fallbackReason: null,
     observedAt: '2026-09-03T00:00:00.000Z',
     latestAnnouncementDate: '2026-04-15',
     latestProgress: '006',
@@ -652,6 +654,37 @@ describe('quant detail feature sections', () => {
     expect(wrapper.text()).toContain('完成实施')
     await wrapper.get('.data-refresh-feedback-error .text-button').trigger('click')
     expect(loadShareholderReturns).toHaveBeenCalledOnce()
+  })
+
+  it('labels an AkShare repurchase fallback and its safe reason', () => {
+    const wrapper = shallowMount(QuantShareholderReturnsSection, {
+      props: {
+        selectedShareholderReturn: {
+          ...shareholderReturn,
+          repurchaseEvidence: {
+            ...shareholderReturn.repurchaseEvidence!,
+            provider: 'akshare',
+            fallbackUsed: true,
+            fallbackReason: 'QUANT_PROVIDER_EMPTY',
+          },
+        },
+        loading,
+        errors,
+        formatNumber,
+        formatFinancialAmount: formatNumber,
+        formatTradeDate,
+        formatDividendYield: formatPercent,
+        shareholderReturnStatusLabel: () => '数据完整',
+        shareholderReturnStatusClass: () => 'value-quality-status-ready',
+        shareholderReturnHeaderLabel: () => '最近观察',
+        shareholderReturnSourceLabel: () => 'Eastmoney 实施分红',
+        parsedError: formatErrors,
+        loadShareholderReturns: vi.fn(),
+      },
+    })
+
+    expect(wrapper.text()).toContain('AkShare 回购计划')
+    expect(wrapper.text()).toContain('已从主源回退：QUANT_PROVIDER_EMPTY')
   })
 
   it('does not surface generic cashflow gaps for specialized financial industries', () => {
