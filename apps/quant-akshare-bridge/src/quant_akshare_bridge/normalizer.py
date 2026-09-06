@@ -32,6 +32,12 @@ def normalize_date(value: str | None, field: str = "date") -> str | None:
         normalized = raw
     elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
         normalized = raw.replace("-", "")
+    elif re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)", raw):
+        try:
+            datetime.fromisoformat(raw.replace(" ", "T"))
+        except ValueError as error:
+            raise ValueError(f"{field} must be a valid calendar date") from error
+        normalized = raw[:10].replace("-", "")
     else:
         raise ValueError(f"{field} must be YYYYMMDD")
     try:
@@ -149,7 +155,13 @@ def normalize_identity_rows(raw: Any) -> dict[str, Any]:
     return result
 
 
-def normalize_financial_rows(ts_code: str, raw: Any, observed_at: str, limit: int = 4) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+def normalize_financial_rows(
+    ts_code: str,
+    raw: Any,
+    observed_at: str,
+    limit: int = 4,
+    source: str = "stock_financial_analysis_indicator",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
     normalized_code = normalize_ts_code(ts_code)
     errors: list[BridgeError] = []
     result: list[dict[str, Any]] = []
@@ -157,40 +169,42 @@ def normalize_financial_rows(ts_code: str, raw: Any, observed_at: str, limit: in
         try:
             report_date = normalize_date(_field(row, "日期", "报告期", "REPORT_DATE", "report_date"), "report_date")
         except ValueError:
-            errors.append(BridgeError("AKSHARE_FINANCIAL_ROW_INVALID", "financial row has an invalid report date", "stock_financial_analysis_indicator"))
+            errors.append(BridgeError("AKSHARE_FINANCIAL_ROW_INVALID", "financial row has an invalid report date", source))
             continue
         if not report_date:
-            errors.append(BridgeError("AKSHARE_FINANCIAL_ROW_INVALID", "financial row has no report date", "stock_financial_analysis_indicator"))
+            errors.append(BridgeError("AKSHARE_FINANCIAL_ROW_INVALID", "financial row has no report date", source))
             continue
         notice_date = _optional_date(
             _field(row, "公告日期", "公告日", "NOTICE_DATE", "notice_date"),
             "notice_date",
             errors,
             "AKSHARE_FINANCIAL_NOTICE_DATE_INVALID",
-            "stock_financial_analysis_indicator",
+            source,
         )
         result.append({
             "ts_code": normalized_code,
             "observed_at": observed_at,
             "report_date": report_date,
             "notice_date": notice_date,
-            "industry": str(_field(row, "行业", "所属行业", "industry") or "").strip() or None,
-            "revenue": _number(_field(row, "营业总收入", "营业收入", "营业总收入(元)", "revenue")),
+            "report_type": str(_field(row, "报告类型", "REPORT_TYPE", "report_type") or "").strip() or None,
+            "report_date_name": str(_field(row, "报告期名称", "REPORT_DATE_NAME", "report_date_name") or "").strip() or None,
+            "industry": str(_field(row, "行业", "所属行业", "ORG_TYPE", "industry") or "").strip() or None,
+            "revenue": _number(_field(row, "营业总收入", "营业收入", "营业总收入(元)", "TOTAL_OPERATE_INCOME", "OPERATE_INCOME", "revenue")),
             "roe": _number(_field(row, "净资产收益率(%)", "净资产收益率", "ROE", "roe")),
-            "revenue_yoy": _number(_field(row, "营业总收入同比增长率(%)", "营业收入同比增长率", "revenue_yoy")),
-            "net_profit": _number(_field(row, "净利润", "归母净利润", "归属母公司股东的净利润", "net_profit")),
-            "net_profit_yoy": _number(_field(row, "净利润同比增长率(%)", "净利润同比", "net_profit_yoy")),
-            "adjusted_net_profit": _number(_field(row, "扣非净利润", "扣除非经常性损益后的净利润", "adjusted_net_profit")),
-            "adjusted_net_profit_yoy": _number(_field(row, "扣非净利润同比增长率(%)", "扣非净利润同比", "adjusted_net_profit_yoy")),
+            "revenue_yoy": _number(_field(row, "营业总收入同比增长率(%)", "营业收入同比增长率", "TOTAL_OPERATE_INCOME_YOY", "OPERATE_INCOME_YOY", "revenue_yoy")),
+            "net_profit": _number(_field(row, "净利润", "归母净利润", "归属母公司股东的净利润", "PARENT_NETPROFIT", "NETPROFIT", "net_profit")),
+            "net_profit_yoy": _number(_field(row, "净利润同比增长率(%)", "净利润同比", "PARENT_NETPROFIT_YOY", "NETPROFIT_YOY", "net_profit_yoy")),
+            "adjusted_net_profit": _number(_field(row, "扣非净利润", "扣除非经常性损益后的净利润", "DEDUCT_PARENT_NETPROFIT", "adjusted_net_profit")),
+            "adjusted_net_profit_yoy": _number(_field(row, "扣非净利润同比增长率(%)", "扣非净利润同比", "DEDUCT_PARENT_NETPROFIT_YOY", "adjusted_net_profit_yoy")),
             "gross_margin": _number(_field(row, "销售毛利率(%)", "毛利率", "gross_margin")),
             "net_margin": _number(_field(row, "销售净利率(%)", "净利率", "net_margin")),
-            "debt_asset_ratio": _number(_field(row, "资产负债率(%)", "资产负债率", "debt_asset_ratio")),
+            "debt_asset_ratio": _number(_field(row, "资产负债率(%)", "资产负债率", "DEBT_ASSET_RATIO", "debt_asset_ratio")),
             "operating_cashflow_to_revenue": _number(_field(row, "经营现金流/营业收入", "经营活动现金流量净额/营业收入", "经营现金流与营业收入比", "ocf_to_or", "operating_cashflow_to_revenue")),
             "operating_cashflow_per_share": _number(_field(row, "每股经营现金流", "每股经营现金流量净额", "经营现金流/股", "ocfps", "operating_cashflow_per_share")),
             "cash_ratio": _number(_field(row, "现金比率", "现金流量比率", "cash_ratio")),
             "interest_coverage": _number(_field(row, "利息保障倍数", "利息覆盖倍数", "interest_coverage")),
             "interest_bearing_debt_ratio": _number(_field(row, "带息负债率", "带息负债比率", "interest_bearing_debt_ratio")),
-            "total_liability": _number(_field(row, "负债合计", "负债总额", "total_liability")),
+            "total_liability": _number(_field(row, "负债合计", "负债总额", "TOTAL_LIABILITIES", "total_liability")),
             "roic": _number(_field(row, "投入资本回报率", "ROIC", "roic")),
         })
     deduplicated = {row["report_date"]: row for row in result}

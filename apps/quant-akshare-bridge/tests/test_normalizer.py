@@ -36,6 +36,8 @@ class NormalizerTest(unittest.TestCase):
 
     def test_rejects_invalid_calendar_dates_and_trailing_text(self) -> None:
         self.assertEqual(normalize_date("2026-08-25"), "20260825")
+        self.assertEqual(normalize_date("2026-06-30 00:00:00"), "20260630")
+        self.assertEqual(normalize_date("2026-06-30T00:00:00.000"), "20260630")
         with self.assertRaises(ValueError):
             normalize_date("2026-02-30")
         with self.assertRaises(ValueError):
@@ -57,6 +59,29 @@ class NormalizerTest(unittest.TestCase):
         self.assertEqual(rows[0]["net_profit_yoy"], 8.0)
         self.assertEqual(rows[0]["revenue"], 100.0)
         self.assertEqual(rows[0]["net_profit"], 20.0)
+
+    def test_normalizes_report_statement_aliases_without_deriving_ratios(self) -> None:
+        rows, errors = normalize_financial_rows("601899.SH", [{
+            "REPORT_DATE": "2026-06-30",
+            "REPORT_TYPE": "中报",
+            "REPORT_DATE_NAME": "2026中报",
+            "ORG_TYPE": "通用",
+            "TOTAL_OPERATE_INCOME": 1000,
+            "TOTAL_OPERATE_INCOME_YOY": 12,
+            "PARENT_NETPROFIT": 200,
+            "PARENT_NETPROFIT_YOY": 20,
+            "DEDUCT_PARENT_NETPROFIT": 180,
+            "DEDUCT_PARENT_NETPROFIT_YOY": 18,
+            "TOTAL_LIABILITIES": 500,
+        }], "2026-08-26T00:00:00Z", source="stock_profit_sheet_by_report_em")
+
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["revenue"], 1000.0)
+        self.assertEqual(rows[0]["revenue_yoy"], 12.0)
+        self.assertEqual(rows[0]["net_profit"], 200.0)
+        self.assertEqual(rows[0]["adjusted_net_profit"], 180.0)
+        self.assertEqual(rows[0]["total_liability"], 500.0)
+        self.assertIsNone(rows[0]["debt_asset_ratio"])
 
     def test_normalizes_cashflow_aliases_and_preserves_unverified_fields_as_null(self) -> None:
         rows, errors = normalize_cashflow_rows("601899.SH", [{

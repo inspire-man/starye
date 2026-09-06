@@ -21,6 +21,20 @@ class FakeAkShare:
     def stock_financial_analysis_indicator(self, **_kwargs):
         return [{"日期": "2026-06-30", "净资产收益率(%)": "12.5"}]
 
+    def stock_profit_sheet_by_report_em(self, **_kwargs):
+        return [{
+            "REPORT_DATE": "2026-06-30",
+            "TOTAL_OPERATE_INCOME": 1000,
+            "TOTAL_OPERATE_INCOME_YOY": 12,
+            "PARENT_NETPROFIT": 200,
+            "PARENT_NETPROFIT_YOY": 20,
+            "DEDUCT_PARENT_NETPROFIT": 180,
+            "DEDUCT_PARENT_NETPROFIT_YOY": 18,
+        }]
+
+    def stock_balance_sheet_by_report_em(self, **_kwargs):
+        return [{"REPORT_DATE": "2026-06-30", "TOTAL_LIABILITIES": 500}]
+
     def stock_cash_flow_sheet_by_report_em(self, **_kwargs):
         return [{
             "报告期": "2026-06-30",
@@ -43,6 +57,11 @@ class AdapterTest(unittest.TestCase):
         self.assertIn("akshare-return20", {item["key"] for item in payload["evidence"]})
         self.assertEqual(payload["cashflows"][0]["operating_cashflow"], 1000.0)
         self.assertIn("stock_cash_flow_sheet_by_report_em", payload["source"]["endpoints"])
+        self.assertEqual(payload["financials"][0]["revenue"], 1000.0)
+        self.assertEqual(payload["financials"][0]["net_profit"], 200.0)
+        self.assertEqual(payload["financials"][0]["total_liability"], 500.0)
+        self.assertIn("stock_profit_sheet_by_report_em", payload["source"]["endpoints"])
+        self.assertIn("stock_balance_sheet_by_report_em", payload["source"]["endpoints"])
 
     def test_marks_provider_failure_as_unavailable(self) -> None:
         class BrokenAkShare:
@@ -85,6 +104,42 @@ class AdapterTest(unittest.TestCase):
         result = collect_evidence(BridgeRequest(ts_code="601899.SH"), SinaCashflowAkShare())
         self.assertEqual(result.cashflows[0]["capital_expenditure"], 300.0)
         self.assertIn("stock_financial_report_sina", result.source.endpoints)
+
+    def test_skips_statement_endpoints_when_financial_targets_are_complete(self) -> None:
+        class CompleteFinancialAkShare(FakeAkShare):
+            def stock_financial_analysis_indicator(self, **_kwargs):
+                return [{
+                    "日期": "2026-06-30",
+                    "营业总收入": 1000,
+                    "营业总收入同比增长率(%)": 12,
+                    "净利润": 200,
+                    "净利润同比增长率(%)": 20,
+                    "扣非净利润": 180,
+                    "扣非净利润同比增长率(%)": 18,
+                    "负债合计": 500,
+                }]
+
+            def stock_profit_sheet_by_report_em(self, **_kwargs):
+                raise AssertionError("profit statement should not be called")
+
+            def stock_balance_sheet_by_report_em(self, **_kwargs):
+                raise AssertionError("balance sheet should not be called")
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), CompleteFinancialAkShare())
+
+        self.assertNotIn("stock_profit_sheet_by_report_em", result.source.endpoints)
+        self.assertNotIn("stock_balance_sheet_by_report_em", result.source.endpoints)
+
+    def test_keeps_profit_statement_data_when_balance_statement_fails(self) -> None:
+        class BrokenBalanceAkShare(FakeAkShare):
+            def stock_balance_sheet_by_report_em(self, **_kwargs):
+                raise RuntimeError("upstream")
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), BrokenBalanceAkShare())
+
+        self.assertEqual(result.financials[0]["revenue"], 1000.0)
+        self.assertIsNone(result.financials[0]["total_liability"])
+        self.assertTrue(any(error.code == "AKSHARE_FINANCIAL_ENDPOINT_FAILED" and error.source == "stock_balance_sheet_by_report_em" for error in result.errors))
 
 
 if __name__ == "__main__":
