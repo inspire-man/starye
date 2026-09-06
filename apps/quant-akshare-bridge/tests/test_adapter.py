@@ -143,6 +143,57 @@ class AdapterTest(unittest.TestCase):
         self.assertRegex(client.capital_kwargs["start_date"], r"^\d{8}$")
         self.assertIn("stock_share_change_cninfo", result.source.endpoints)
 
+    def test_collects_ths_profit_forecast_eps_and_net_profit(self) -> None:
+        class ForecastAkShare(FakeAkShare):
+            def stock_profit_forecast_ths(self, **kwargs):
+                if kwargs["indicator"] == "预测年报净利润":
+                    return [{"年度": "2026", "预测机构数": 23, "最小值": 632.86, "平均值": 816.73, "最大值": 920.22}]
+                return [{"年度": "2026", "预测机构数": 23, "最小值": 2.38, "平均值": 3.07, "最大值": 3.46, "行业平均数": 2.06}]
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), ForecastAkShare())
+
+        self.assertEqual(result.profit_forecasts, [{
+            "ts_code": "601899.SH",
+            "source": "stock_profit_forecast_ths",
+            "forecast_year": "2026",
+            "forecast_eps_low": 2.38,
+            "forecast_eps_average": 3.07,
+            "forecast_eps_high": 3.46,
+            "analyst_count": 23.0,
+            "industry_average_eps": 2.06,
+            "forecast_net_profit_100m_low": 632.86,
+            "forecast_net_profit_100m_average": 816.73,
+            "forecast_net_profit_100m_high": 920.22,
+        }])
+        self.assertIn("stock_profit_forecast_ths", result.source.endpoints)
+
+    def test_falls_back_to_eastmoney_profit_forecast_columns(self) -> None:
+        class EastmoneyForecastAkShare(FakeAkShare):
+            def stock_profit_forecast_ths(self, **_kwargs):
+                raise RuntimeError("ths forecast upstream")
+
+            def stock_profit_forecast_em(self, **_kwargs):
+                return [
+                    {"代码": "601899", "2026预测每股收益": 3.1, "2027预测每股收益": 3.6},
+                    {"代码": "000001", "2026预测每股收益": 1.2},
+                ]
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), EastmoneyForecastAkShare())
+
+        self.assertEqual([row["forecast_year"] for row in result.profit_forecasts], ["2027", "2026"])
+        self.assertTrue(any(error.code == "AKSHARE_PROFIT_FORECAST_ENDPOINT_FAILED" for error in result.errors))
+        self.assertIn("stock_profit_forecast_em", result.source.endpoints)
+
+    def test_omits_profit_forecast_endpoints_when_not_requested(self) -> None:
+        class ForecastDisabledAkShare(FakeAkShare):
+            def stock_profit_forecast_ths(self, **_kwargs):
+                raise AssertionError("profit forecast endpoint should not be called")
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH", include_profit_forecasts=False), ForecastDisabledAkShare())
+
+        self.assertEqual(result.profit_forecasts, [])
+        self.assertNotIn("stock_profit_forecast_ths", result.source.endpoints)
+
     def test_counts_capital_structure_as_available_bridge_data(self) -> None:
         class CapitalOnlyAkShare:
             def stock_share_change_cninfo(self, **_kwargs):

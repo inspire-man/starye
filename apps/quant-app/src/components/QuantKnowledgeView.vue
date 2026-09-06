@@ -89,6 +89,9 @@ function knowledgeFieldLabel(field: string): string {
     earningsSurprise: '业绩超预期',
     forwardPe: '前瞻 PE',
     priceBeforeReport: '报告前价格',
+    forecastEps: '预测每股收益',
+    forecastNetProfit: '预测净利润',
+    forecastAnalystCount: '预测机构数',
     cash: '现金',
     profitVolatility: '利润波动',
   }[field] || field

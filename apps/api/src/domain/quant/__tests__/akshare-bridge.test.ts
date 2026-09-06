@@ -75,6 +75,7 @@ describe('akShare bridge client', () => {
     expect(result).toMatchObject({ schemaVersion: 'quant-akshare-v1', tsCode: '601899.SH', status: 'ready' })
     expect(result.source).toMatchObject({ id: 'akshare-bridge', formulaVersion: 'akshare-adapter-v1' })
     expect(result.evidence[0]).toMatchObject({ key: 'akshare-daily-sample', value: 120 })
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({ include_profit_forecasts: true })
     expect(String(fetchImpl.mock.calls[0]?.[0])).toBe('https://bridge.example.test/v1/evidence')
     expect(fetchImpl).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       headers: expect.objectContaining({ authorization: 'Bearer secret-token' }),
@@ -178,7 +179,7 @@ describe('akShare bridge client', () => {
       repurchaseShares: 77474592,
       provider: 'akshare',
     }])
-    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({ include_financials: false })
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({ include_financials: false, include_profit_forecasts: false })
 
     const legacyBridge = createQuantAkshareBridge({
       baseUrl: 'https://bridge.example.test',
@@ -230,6 +231,43 @@ describe('akShare bridge client', () => {
       reportDate: '2025-12-18',
       provider: 'akshare',
     }])
+  })
+
+  it('maps optional AkShare profit forecasts and preserves legacy payloads', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload({
+      profit_forecasts: [{
+        ts_code: '601899.SH',
+        source: 'stock_profit_forecast_ths',
+        forecast_year: '2026',
+        forecast_eps_low: 2.38,
+        forecast_eps_average: 3.07,
+        forecast_eps_high: 3.46,
+        analyst_count: 23,
+        industry_average_eps: 2.06,
+        forecast_net_profit_100m_low: 632.86,
+        forecast_net_profit_100m_average: 816.73,
+        forecast_net_profit_100m_high: 920.22,
+      }],
+    })), { status: 200 }))
+    const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
+
+    await expect(bridge.fetchEvidence({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      profitForecasts: [{
+        tsCode: '601899.SH',
+        forecastYear: '2026',
+        source: 'stock_profit_forecast_ths',
+        forecastEpsAverage: 3.07,
+        forecastNetProfit100mAverage: 816.73,
+      }],
+    })
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({ include_profit_forecasts: true })
+
+    const legacyBridge = createQuantAkshareBridge({
+      baseUrl: 'https://bridge.example.test',
+      token: 'secret-token',
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(payload()), { status: 200 })),
+    })
+    await expect(legacyBridge.fetchEvidence({ tsCode: '601899.SH' })).resolves.toMatchObject({ profitForecasts: [] })
   })
 
   it('surfaces a repurchase endpoint error instead of treating it as an empty history', async () => {

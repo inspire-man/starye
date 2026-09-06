@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from .contracts import BridgeError, BridgeRequest, BridgeResponse, BridgeSource, observed_now
-from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
+from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_profit_forecast_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
 
 
 def akshare_available() -> bool:
@@ -51,8 +51,11 @@ FINANCIAL_METADATA_FIELDS = ("notice_date", "report_type", "report_date_name", "
 FINANCIAL_COMPONENT_FIELDS = ("interest_bearing_debt_components",)
 CASHFLOW_REQUIRED_FIELDS = ("operating_cashflow", "capital_expenditure", "net_profit")
 REPURCHASE_CACHE_TTL_SECONDS = 60.0
+PROFIT_FORECAST_CACHE_TTL_SECONDS = 60.0
 _repurchase_cache_lock = threading.Lock()
 _repurchase_cache: tuple[float, Any] | None = None
+_profit_forecast_cache_lock = threading.Lock()
+_profit_forecast_cache: tuple[float, Any] | None = None
 
 
 def _financial_rows_need(rows: list[dict[str, Any]], fields: tuple[str, ...]) -> bool:
@@ -369,6 +372,92 @@ def _collect_capital_structures(api: Any, ts_code: str, start_date: str, end_dat
         return [], [BridgeError("AKSHARE_CAPITAL_ENDPOINT_FAILED", "AkShare capital structure endpoint failed", endpoint)], [endpoint]
 
 
+def _merge_profit_forecast_rows(primary_rows: list[dict[str, Any]], supplemental_rows: list[dict[str, Any]], limit: int = 8) -> list[dict[str, Any]]:
+    merged_by_year = {row["forecast_year"]: dict(row) for row in primary_rows}
+    for row in supplemental_rows:
+        existing = merged_by_year.get(row["forecast_year"])
+        if existing is None:
+            merged_by_year[row["forecast_year"]] = dict(row)
+            continue
+        for field in (
+            "forecast_eps_low",
+            "forecast_eps_average",
+            "forecast_eps_high",
+            "analyst_count",
+            "industry_average_eps",
+            "forecast_net_profit_100m_low",
+            "forecast_net_profit_100m_average",
+            "forecast_net_profit_100m_high",
+        ):
+            if existing.get(field) is None and row.get(field) is not None:
+                existing[field] = row[field]
+    ordered = sorted(merged_by_year.values(), key=lambda item: item["forecast_year"], reverse=True)
+    return ordered[:max(1, min(limit, 12))]
+
+
+def _collect_profit_forecasts(api: Any, ts_code: str, use_cache: bool = False) -> tuple[list[dict[str, Any]], list[BridgeError], list[str]]:
+    errors: list[BridgeError] = []
+    attempted: list[str] = []
+    eps_rows: list[dict[str, Any]] = []
+    net_profit_rows: list[dict[str, Any]] = []
+
+    ths_endpoint = "stock_profit_forecast_ths"
+    ths = getattr(api, ths_endpoint, None)
+    if callable(ths):
+        attempted.append(ths_endpoint)
+        try:
+            eps_rows, row_errors = normalize_profit_forecast_rows(
+                ts_code,
+                ths(symbol=akshare_symbol(ts_code), indicator="预测年报每股收益"),
+                source=ths_endpoint,
+                metric="eps",
+            )
+            errors.extend(row_errors)
+            if not eps_rows:
+                errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_EMPTY", "AkShare EPS forecast is empty", ths_endpoint))
+            try:
+                net_profit_rows, net_profit_errors = normalize_profit_forecast_rows(
+                    ts_code,
+                    ths(symbol=akshare_symbol(ts_code), indicator="预测年报净利润"),
+                    source=ths_endpoint,
+                    metric="net_profit_100m",
+                )
+                errors.extend(net_profit_errors)
+            except Exception:
+                errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_ENDPOINT_FAILED", "AkShare net profit forecast endpoint failed", ths_endpoint))
+        except Exception:
+            errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_ENDPOINT_FAILED", "AkShare profit forecast endpoint failed", ths_endpoint))
+
+    if not eps_rows:
+        em_endpoint = "stock_profit_forecast_em"
+        em = getattr(api, em_endpoint, None)
+        if callable(em):
+            attempted.append(em_endpoint)
+            try:
+                global _profit_forecast_cache
+                if use_cache:
+                    now = time.monotonic()
+                    with _profit_forecast_cache_lock:
+                        if _profit_forecast_cache is not None and now - _profit_forecast_cache[0] < PROFIT_FORECAST_CACHE_TTL_SECONDS:
+                            raw = _profit_forecast_cache[1]
+                        else:
+                            raw = em(symbol="")
+                            _profit_forecast_cache = (time.monotonic(), raw)
+                else:
+                    raw = em(symbol="")
+                eps_rows, row_errors = normalize_profit_forecast_rows(ts_code, raw, source=em_endpoint, metric="eps")
+                errors.extend(row_errors)
+                if not eps_rows:
+                    errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_EMPTY", "AkShare Eastmoney profit forecast is empty", em_endpoint))
+            except Exception:
+                errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_ENDPOINT_FAILED", "AkShare Eastmoney profit forecast endpoint failed", em_endpoint))
+
+    rows = _merge_profit_forecast_rows(eps_rows, net_profit_rows)
+    if not rows:
+        errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_UNAVAILABLE", "AkShare profit forecast data is unavailable", attempted[-1] if attempted else "profit_forecast"))
+    return rows, errors, attempted
+
+
 def collect_evidence(request: BridgeRequest, client: Any | None = None) -> BridgeResponse:
     ts_code = normalize_ts_code(request.ts_code)
     start_date = normalize_date(request.start_date, "start_date")
@@ -382,6 +471,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     financials: list[dict[str, Any]] = []
     cashflows: list[dict[str, Any]] = []
     capital_structures: list[dict[str, Any]] = []
+    profit_forecasts: list[dict[str, Any]] = []
     repurchases: list[dict[str, Any]] = []
     dividends: list[dict[str, Any]] = []
     identity: dict[str, Any] = {}
@@ -390,6 +480,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     financial_endpoints: list[str] = []
     cashflow_endpoints: list[str] = []
     capital_endpoints: list[str] = []
+    profit_forecast_endpoints: list[str] = []
     repurchase_endpoints: list[str] = []
     dividend_endpoints: list[str] = []
 
@@ -460,8 +551,12 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         capital_structures, capital_errors, capital_endpoints = _collect_capital_structures(api, ts_code, capital_start_date, capital_end_date)
         errors.extend(capital_errors)
 
+    if request.include_profit_forecasts:
+        profit_forecasts, profit_forecast_errors, profit_forecast_endpoints = _collect_profit_forecasts(api, ts_code, use_cache=client is None)
+        errors.extend(profit_forecast_errors)
+
     evidence = build_evidence(ts_code, observed_at, daily_bars, financials, cashflows)
-    has_data = bool(daily_bars or identity or financials or cashflows or capital_structures)
+    has_data = bool(daily_bars or identity or financials or cashflows or capital_structures or profit_forecasts)
     status = "ready" if has_data and not _has_unresolved_gaps(request, daily_bars, identity, financials, cashflows, errors) else "partial" if has_data else "unavailable"
     return BridgeResponse(
         ts_code=ts_code,
@@ -475,6 +570,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
                 *financial_endpoints,
                 *cashflow_endpoints,
                 *capital_endpoints,
+                *profit_forecast_endpoints,
                 *repurchase_endpoints,
                 *dividend_endpoints,
             ])),
@@ -485,6 +581,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         financials=financials,
         cashflows=cashflows,
         capital_structures=capital_structures,
+        profit_forecasts=profit_forecasts,
         repurchases=repurchases,
         dividends=dividends,
         evidence=evidence,

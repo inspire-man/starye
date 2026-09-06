@@ -796,7 +796,7 @@ describe('quantApi', () => {
   it('normalizes the source-backed investment knowledge catalog', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {
-        version: 'investment-knowledge-v4',
+        version: 'investment-knowledge-v5',
         observed_at: '2026-08-25T00:00:00.000Z',
         sources: [{ id: 'article-key-point', title: '重点来了', url: 'https://mp.weixin.qq.com/s/fNOk8LKIqNzdlo8Bm7qTaA', access: 'preview', summary: '公开试读' }],
         factors: [
@@ -810,7 +810,7 @@ describe('quantApi', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(quantApi.getInvestmentKnowledge()).resolves.toMatchObject({
-      version: 'investment-knowledge-v4',
+      version: 'investment-knowledge-v5',
       sources: [{ id: 'article-key-point', access: 'preview' }],
       factors: [
         { id: 'relative-valuation', status: 'active', eligibleInValueQuality: true },
