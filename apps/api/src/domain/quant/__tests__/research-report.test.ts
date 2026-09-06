@@ -348,6 +348,38 @@ describe('quant research report', () => {
     ]))
   })
 
+  it('surfaces partial AkShare endpoint failures as optional source evidence', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-akshare-partial',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial, { ...financial, reportDate: '2025-12-31' }],
+      shareholderReturn,
+      akshare: {
+        ...akshare,
+        status: 'partial',
+        errors: [{ code: 'AKSHARE_CASHFLOW_UNAVAILABLE', message: 'redacted', source: 'cashflow' }],
+      },
+    })
+
+    expect(report.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'akshare-bridge', name: expect.stringContaining('部分端点失败') }),
+    ]))
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'akshare-error-cashflow-0',
+        dimension: 'shareholder-return',
+        status: 'missing',
+        optional: true,
+        detail: expect.stringContaining('AKSHARE_CASHFLOW_UNAVAILABLE'),
+      }),
+    ]))
+  })
+
   it('keeps cashflow evidence optional while exposing its source and formulas', () => {
     const report = buildQuantResearchReport({
       tsCode: '601899.SH',

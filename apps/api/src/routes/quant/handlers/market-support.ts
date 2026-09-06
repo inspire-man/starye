@@ -1,10 +1,20 @@
 import type { Database } from '@starye/db'
 import type { QuantDecisionAssistantMarketInput } from '../../../domain/quant/decision-assistant'
 import type { AppEnv } from '../../../types'
+import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareFinancialProvider } from '../../../domain/quant/akshare-bridge'
 import { QuantError } from '../../../domain/quant/errors'
 import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
 import { getLatestQuantDailyBar } from '../../../domain/quant/repository'
 import { eastmoneyProviderOptions, tushareProviderOptions } from '../route-context'
+
+function akshareBridge(env?: AppEnv['Bindings']) {
+  const timeoutMs = Number(env?.QUANT_AKSHARE_BRIDGE_TIMEOUT_MS)
+  return createQuantAkshareBridge({
+    baseUrl: env?.QUANT_AKSHARE_BRIDGE_URL,
+    token: env?.QUANT_AKSHARE_BRIDGE_TOKEN,
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
+  })
+}
 
 export async function resolveDecisionAssistantMarket(env: AppEnv['Bindings'] | undefined, db: Database, tsCode: string): Promise<{ readonly latestDailyBar: Awaited<ReturnType<typeof getLatestQuantDailyBar>>, readonly market: QuantDecisionAssistantMarketInput }> {
   const quoteBaseUrl = env?.EASTMONEY_QUOTE_BASE_URL?.trim() || 'https://push2.eastmoney.com'
@@ -88,7 +98,8 @@ export function cashflowProvider(env?: AppEnv['Bindings']) {
     : primary.name === 'eastmoney' && tushare.isConfigured
       ? tushare
       : undefined
-  return createQuantCashflowProviderChain(primary, fallback)
+  const primaryChain = createQuantCashflowProviderChain(primary, fallback)
+  return createQuantCashflowProviderChain(primaryChain, createQuantAkshareCashflowProvider(akshareBridge(env)))
 }
 
 export function financialProvider(env?: AppEnv['Bindings']) {
@@ -101,7 +112,8 @@ export function financialProvider(env?: AppEnv['Bindings']) {
     : primary.name === 'eastmoney' && tushare.isConfigured
       ? tushare
       : undefined
-  return createQuantFinancialProviderChain(primary, fallback)
+  const primaryChain = createQuantFinancialProviderChain(primary, fallback)
+  return createQuantFinancialProviderChain(primaryChain, createQuantAkshareFinancialProvider(akshareBridge(env)))
 }
 
 export function capitalStructureProvider(env?: AppEnv['Bindings']) {

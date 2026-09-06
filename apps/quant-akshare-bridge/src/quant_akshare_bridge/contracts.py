@@ -62,6 +62,7 @@ class BridgeResponse:
     identity: dict[str, Any] = field(default_factory=dict)
     daily_bars: list[dict[str, Any]] = field(default_factory=list)
     financials: list[dict[str, Any]] = field(default_factory=list)
+    cashflows: list[dict[str, Any]] = field(default_factory=list)
     evidence: list[BridgeEvidence] = field(default_factory=list)
     errors: list[BridgeError] = field(default_factory=list)
 

@@ -1,6 +1,7 @@
 import type { QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { createQuantAkshareBridge, QuantAkshareBridgeError } from '../akshare-bridge'
+import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareFinancialProvider, QuantAkshareBridgeError } from '../akshare-bridge'
+import { createQuantCashflowProviderChain, createQuantFinancialProviderChain } from '../provider'
 
 const reportEvidence: QuantResearchReport = {
   reportVersion: 'research-report-v2',
@@ -88,5 +89,234 @@ describe('akShare bridge client', () => {
 
   it('keeps the report evidence type available to callers without sending it to the bridge', () => {
     expect(reportEvidence.evidence[0]?.key).toBe('trend-sample')
+  })
+
+  it('maps expanded financial and cashflow rows into provider contracts', async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(payload({
+      identity: { name: '平安银行', industry: '银行' },
+      financials: [{
+        ts_code: '601899.SH',
+        report_date: '20260630',
+        revenue: 1000,
+        revenue_yoy: 12.5,
+        net_profit: 200,
+        gross_margin: 28,
+        roe: 16,
+      }],
+      cashflows: [{
+        ts_code: '601899.SH',
+        report_date: '20260630',
+        operating_cashflow: 300,
+        capital_expenditure: 80,
+        net_profit: 200,
+      }],
+    })), { status: 200 })))
+    const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
+
+    await expect(createQuantAkshareFinancialProvider(bridge).fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      provider: 'akshare',
+      reportDate: '2026-06-30',
+      revenue: 1000,
+      revenueYoY: 12.5,
+      netProfit: 200,
+      grossMargin: 28,
+      roe: 16,
+      industry: 'bank',
+    })
+    await expect(createQuantAkshareCashflowProvider(bridge).fetchCashflowHistory({ tsCode: '601899.SH' })).resolves.toMatchObject([{
+      provider: 'akshare',
+      reportDate: '2026-06-30',
+      operatingCashflow: 300,
+      capitalExpenditure: 80,
+      netProfit: 200,
+      cashDividendsPaid: null,
+      interestExpense: null,
+    }])
+  })
+
+  it('supplements only same-period null fields and keeps the primary report', async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(payload({
+      financials: [{ ts_code: '601899.SH', report_date: '20260630', gross_margin: 28 }],
+      cashflows: [{ ts_code: '601899.SH', report_date: '20260630', operating_cashflow: 300, capital_expenditure: 80 }],
+    })), { status: 200 })))
+    const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
+    const akshareFinancial = createQuantAkshareFinancialProvider(bridge)
+    const akshareCashflow = createQuantAkshareCashflowProvider(bridge)
+    const primaryFinancial = {
+      name: 'eastmoney' as const,
+      isConfigured: true,
+      fetchFinancialQuality: vi.fn(),
+      fetchFinancialQualityHistory: vi.fn().mockResolvedValue([{
+        tsCode: '601899.SH',
+        observedAt: '2026-09-06T00:00:00.000Z',
+        reportDate: '2026-06-30',
+        reportType: '中报',
+        reportDateName: '2026中报',
+        noticeDate: null,
+        revenue: null,
+        revenueYoY: null,
+        netProfit: null,
+        netProfitYoY: null,
+        adjustedNetProfit: null,
+        adjustedNetProfitYoY: null,
+        roe: null,
+        grossMargin: null,
+        netMargin: null,
+        debtAssetRatio: null,
+        operatingCashflowToRevenue: null,
+        operatingCashflowPerShare: null,
+        fcffBack: null,
+        fcffForward: null,
+        interestCoverage: null,
+        interestBearingDebtRatio: null,
+        cashRatio: null,
+        totalLiability: null,
+        roic: null,
+        provider: 'eastmoney' as const,
+      }]),
+    }
+    const primaryCashflow = {
+      name: 'eastmoney' as const,
+      isConfigured: true,
+      fetchCashflowHistory: vi.fn().mockResolvedValue([{
+        tsCode: '601899.SH',
+        reportDate: '2026-06-30',
+        reportType: '中报',
+        reportDateName: '2026中报',
+        noticeDate: null,
+        operatingCashflow: null,
+        capitalExpenditure: null,
+        netProfit: 200,
+        cashDividendsPaid: null,
+        interestExpense: null,
+        interestExpenseSourceField: null,
+        interestExpenseProviderErrorCode: null,
+        interestBearingDebt: null,
+        interestBearingDebtComponents: {
+          shortLoan: null,
+          shortBondPayable: null,
+          shortFinancePayable: null,
+          acceptDepositInterbank: null,
+          borrowFund: null,
+          loanPbc: null,
+          currentMaturityDebt: null,
+          amortizedCostFinancialLiability: null,
+          longLoan: null,
+          amortizedCostNoncurrentFinancialLiability: null,
+          bondPayable: null,
+          perpetualBond: null,
+          perpetualBondPayable: null,
+          leaseLiability: null,
+        },
+        interestBearingDebtProviderErrorCode: null,
+        provider: 'eastmoney' as const,
+      }]),
+    }
+
+    const financialResult = await createQuantFinancialProviderChain(primaryFinancial, akshareFinancial).fetchFinancialQuality({ tsCode: '601899.SH' })
+    expect(financialResult.provider).toBe('eastmoney')
+    expect(financialResult.supplementalProvider).toBe('akshare')
+    expect(financialResult.supplementUsed).toBe(true)
+    expect(financialResult.grossMargin).toBe(28)
+
+    const cashflowResult = await createQuantCashflowProviderChain(primaryCashflow, akshareCashflow).fetchCashflowHistory({ tsCode: '601899.SH' })
+    expect(cashflowResult[0]).toMatchObject({ provider: 'eastmoney', supplementalProvider: 'akshare', supplementUsed: true, operatingCashflow: 300, capitalExpenditure: 80 })
+  })
+
+  it('keeps unmatched AkShare periods as independent reports without supplement metadata', async () => {
+    const bridgePayload = payload({
+      financials: [{ ts_code: '601899.SH', report_date: '20260930', gross_margin: 31 }],
+      cashflows: [{ ts_code: '601899.SH', report_date: '20260930', operating_cashflow: 420, capital_expenditure: 90 }],
+    })
+    const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(bridgePayload), { status: 200 })))
+    const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
+    const akshareFinancial = createQuantAkshareFinancialProvider(bridge)
+    const akshareCashflow = createQuantAkshareCashflowProvider(bridge)
+    const primaryFinancial = {
+      name: 'eastmoney' as const,
+      isConfigured: true,
+      fetchFinancialQuality: vi.fn(),
+      fetchFinancialQualityHistory: vi.fn().mockResolvedValue([{
+        tsCode: '601899.SH',
+        observedAt: '2026-09-06T00:00:00.000Z',
+        reportDate: '2026-06-30',
+        reportType: '中报',
+        reportDateName: '2026中报',
+        noticeDate: null,
+        revenue: 100,
+        revenueYoY: null,
+        netProfit: 20,
+        netProfitYoY: null,
+        adjustedNetProfit: null,
+        adjustedNetProfitYoY: null,
+        roe: 12,
+        grossMargin: null,
+        netMargin: null,
+        debtAssetRatio: null,
+        operatingCashflowToRevenue: null,
+        operatingCashflowPerShare: null,
+        fcffBack: null,
+        fcffForward: null,
+        interestCoverage: null,
+        interestBearingDebtRatio: null,
+        cashRatio: null,
+        totalLiability: null,
+        roic: null,
+        provider: 'eastmoney' as const,
+      }]),
+    }
+    const primaryCashflow = {
+      name: 'eastmoney' as const,
+      isConfigured: true,
+      fetchCashflowHistory: vi.fn().mockResolvedValue([{
+        tsCode: '601899.SH',
+        reportDate: '2026-06-30',
+        reportType: '中报',
+        reportDateName: '2026中报',
+        noticeDate: null,
+        operatingCashflow: 300,
+        capitalExpenditure: 80,
+        netProfit: null,
+        cashDividendsPaid: null,
+        interestExpense: null,
+        interestExpenseSourceField: null,
+        interestExpenseProviderErrorCode: null,
+        interestBearingDebt: null,
+        interestBearingDebtComponents: {
+          shortLoan: null,
+          shortBondPayable: null,
+          shortFinancePayable: null,
+          acceptDepositInterbank: null,
+          borrowFund: null,
+          loanPbc: null,
+          currentMaturityDebt: null,
+          amortizedCostFinancialLiability: null,
+          longLoan: null,
+          amortizedCostNoncurrentFinancialLiability: null,
+          bondPayable: null,
+          perpetualBond: null,
+          perpetualBondPayable: null,
+          leaseLiability: null,
+        },
+        interestBearingDebtProviderErrorCode: null,
+        provider: 'eastmoney' as const,
+      }]),
+    }
+
+    const financialReports = await createQuantFinancialProviderChain(primaryFinancial, akshareFinancial).fetchFinancialQualityHistory({ tsCode: '601899.SH', limit: 4 })
+    const cashflowReports = await createQuantCashflowProviderChain(primaryCashflow, akshareCashflow).fetchCashflowHistory({ tsCode: '601899.SH', limit: 8 })
+
+    expect(financialReports).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reportDate: '2026-06-30', provider: 'eastmoney' }),
+      expect.objectContaining({ reportDate: '2026-09-30', provider: 'akshare' }),
+    ]))
+    expect(financialReports.find(report => report.reportDate === '2026-09-30')).not.toHaveProperty('supplementalProvider')
+    expect(financialReports.find(report => report.reportDate === '2026-09-30')).not.toHaveProperty('supplementUsed')
+    expect(cashflowReports).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reportDate: '2026-06-30', provider: 'eastmoney' }),
+      expect.objectContaining({ reportDate: '2026-09-30', provider: 'akshare' }),
+    ]))
+    expect(cashflowReports.find(report => report.reportDate === '2026-09-30')).not.toHaveProperty('supplementalProvider')
+    expect(cashflowReports.find(report => report.reportDate === '2026-09-30')).not.toHaveProperty('supplementUsed')
   })
 })

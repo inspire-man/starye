@@ -147,13 +147,11 @@ function itemForFactor(factor: QuantResearchFactor, evidenceByKey: ReadonlyMap<s
   const factorSourceHealth = sourceHealth(factor.source)
   const sourceHealthValue = mergeSourceHealth(factorSourceHealth, evidenceSourceHealth(evidence))
   const usableEvidenceCount = evidence.filter(item => item.applicability !== 'not_applicable' && item.value !== null && item.status !== 'unavailable' && sourceHealth(item.source) !== 'unavailable').length
-  const status: QuantFactorDataHealthStatus = factor.status === 'unavailable' || sourceHealthValue === 'unavailable'
-    ? 'unavailable'
-    : !evidenceKeys.size || usableEvidenceCount === 0
-        ? 'missing'
-        : factor.status === 'ready' && missingEvidenceKeys.length === 0
-          ? 'ready'
-          : 'partial'
+  const status: QuantFactorDataHealthStatus = !evidenceKeys.size || usableEvidenceCount === 0
+    ? sourceHealthValue === 'unavailable' ? 'unavailable' : 'missing'
+    : missingEvidenceKeys.length === 0
+      ? 'ready'
+      : 'partial'
 
   return {
     factor: factor.key,

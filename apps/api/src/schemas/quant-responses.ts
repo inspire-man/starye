@@ -219,8 +219,11 @@ const QuantShareholderCashflowHistorySummarySchema = v.object({
 const QuantShareholderCashflowEvidenceSchema = v.object({
   formulaVersion: v.string(),
   status: v.picklist(['ready', 'partial', 'insufficient_data', 'unavailable']),
-  provider: v.nullable(v.picklist(['tushare', 'eastmoney'])),
+  provider: v.nullable(v.picklist(['tushare', 'eastmoney', 'akshare'])),
   providerErrorCode: v.nullable(v.string()),
+  fallbackUsed: v.optional(v.boolean()),
+  fallbackReason: v.optional(v.nullable(v.string())),
+  supplementalProvider: v.optional(v.picklist(['tushare', 'eastmoney', 'akshare'])),
   observedAt: v.string(),
   reportDate: v.nullable(v.string()),
   reportType: v.nullable(v.string()),

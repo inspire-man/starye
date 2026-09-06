@@ -16,6 +16,7 @@ import type {
   QuantShareholderReturnDistribution,
   QuantShareholderReturnItem,
   QuantShareholderReturnSelection,
+  QuantSourceName,
   QuantValuationComparison,
   QuantValuationComparisonPeer,
   QuantValuationSnapshot,
@@ -27,6 +28,10 @@ import type {
 import type { QuantRequestOptions } from '../http-client'
 import { QuantApiError, requestJson, unwrapData } from '../http-client'
 import { isRecord, readList, readNumber, readString, readStringList } from '../payload'
+
+function parseQuantSourceName(value: unknown): QuantSourceName | null {
+  return value === 'tushare' || value === 'eastmoney' || value === 'akshare' ? value : null
+}
 
 function parseValuation(payload: unknown): QuantValuationSnapshot {
   const data = unwrapData(payload)
@@ -89,7 +94,8 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
   if (!tsCode || !observedAt || !reportDate)
     throw new QuantApiError('基本面数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
   const industry = readString(data, 'industry')
-  const provider = readString(data, 'provider')
+  const provider = parseQuantSourceName(data.provider)
+  const supplementalProvider = parseQuantSourceName(data.supplementalProvider ?? data.supplemental_provider)
   const industryMetricsRecord = isRecord(data.industryMetrics) ? data.industryMetrics : isRecord(data.industry_metrics) ? data.industry_metrics : null
   const normalizedIndustry = industry === 'general' || industry === 'bank' || industry === 'insurance' || industry === 'securities' || industry === 'other'
     ? industry as QuantFinancialIndustry
@@ -130,11 +136,11 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
     cashRatio: readNumber(data, 'cashRatio', 'cash_ratio'),
     totalLiability: readNumber(data, 'totalLiability', 'total_liability'),
     roic: readNumber(data, 'roic'),
-    ...(provider === 'tushare' || provider === 'eastmoney' ? { provider } : {}),
-    ...(typeof data.fallbackUsed === 'boolean' ? { fallbackUsed: data.fallbackUsed } : {}),
+    ...(provider ? { provider } : {}),
+    ...(typeof (data.fallbackUsed ?? data.fallback_used) === 'boolean' ? { fallbackUsed: (data.fallbackUsed ?? data.fallback_used) as boolean } : {}),
     ...(readString(data, 'fallbackReason', 'fallback_reason') ? { fallbackReason: readString(data, 'fallbackReason', 'fallback_reason') } : {}),
-    ...(data.supplementalProvider === 'tushare' || data.supplementalProvider === 'eastmoney' ? { supplementalProvider: data.supplementalProvider } : {}),
-    ...(typeof data.supplementUsed === 'boolean' ? { supplementUsed: data.supplementUsed } : {}),
+    ...(supplementalProvider ? { supplementalProvider } : {}),
+    ...(typeof (data.supplementUsed ?? data.supplement_used) === 'boolean' ? { supplementUsed: (data.supplementUsed ?? data.supplement_used) as boolean } : {}),
     ...(normalizedIndustry ? { industry: normalizedIndustry } : {}),
     ...(industryMetrics ? { industryMetrics } : {}),
   }
@@ -300,7 +306,8 @@ function parseShareholderCashflowEvidence(value: unknown): QuantShareholderCashf
   const status = readString(value, 'status')
   if (status !== 'ready' && status !== 'partial' && status !== 'insufficient_data' && status !== 'unavailable')
     return undefined
-  const provider = readString(value, 'provider', 'dataProvider', 'data_provider')
+  const provider = parseQuantSourceName(value.provider ?? value.dataProvider ?? value.data_provider)
+  const supplementalProvider = parseQuantSourceName(value.supplementalProvider ?? value.supplemental_provider)
   const missingFields = Array.isArray(value.missingFields)
     ? value.missingFields.filter((item): item is string => typeof item === 'string')
     : Array.isArray(value.missing_fields)
@@ -325,11 +332,11 @@ function parseShareholderCashflowEvidence(value: unknown): QuantShareholderCashf
   return {
     formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-cashflow-v1',
     status,
-    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    provider,
     providerErrorCode: readString(value, 'providerErrorCode', 'provider_error_code'),
-    ...(typeof value.fallbackUsed === 'boolean' ? { fallbackUsed: value.fallbackUsed } : {}),
+    ...(typeof (value.fallbackUsed ?? value.fallback_used) === 'boolean' ? { fallbackUsed: (value.fallbackUsed ?? value.fallback_used) as boolean } : {}),
     ...(readString(value, 'fallbackReason', 'fallback_reason') ? { fallbackReason: readString(value, 'fallbackReason', 'fallback_reason') } : {}),
-    ...(value.supplementalProvider === 'tushare' || value.supplementalProvider === 'eastmoney' ? { supplementalProvider: value.supplementalProvider } : {}),
+    ...(supplementalProvider ? { supplementalProvider } : {}),
     observedAt: readString(value, 'observedAt', 'observed_at') || '',
     reportDate: readString(value, 'reportDate', 'report_date'),
     reportType: readString(value, 'reportType', 'report_type'),

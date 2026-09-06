@@ -108,6 +108,30 @@ describe('candidate evidence readiness', () => {
     expect(result.missingReasons).toEqual(expect.arrayContaining(['增长稳定性：暂无可用原始字段 · 共 2 个字段', '最近两期财务增长数据']))
   })
 
+  it('keeps evidence readiness complete when value quality is partial for comparability', () => {
+    const result = buildCandidateEvidenceScore(candidate(), valueQuality({
+      status: 'partial',
+      missingFields: ['行业专用韧性指标暂无足够同业可比样本'],
+      dimensions: [
+        dimension('valuation', 'ready', [12, 1.2]),
+        dimension('quality', 'partial', [12, 9, 25]),
+        dimension('growth', 'ready', [10, 12]),
+        dimension('resilience', 'partial', [8, 1.2]),
+        dimension('trend', 'ready', [0.1, 0.03]),
+      ],
+    }))
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      score: 100,
+      completeDimensionCount: 5,
+      partialDimensionCount: 0,
+      missingDimensionCount: 0,
+      refreshable: false,
+      missingReasons: [],
+    })
+  })
+
   it('distinguishes unloaded results from a loaded missing stock result', () => {
     const unloaded = buildCandidateEvidenceScore(candidate(), undefined)
     const missing = buildCandidateEvidenceScore(candidate(), null)

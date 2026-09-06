@@ -89,7 +89,7 @@ function buildDimension(
     : applicableMetrics.filter(metric => hasFiniteValue(metric.value) && metric.sampleCount >= 2 && metric.favorablePercentile !== null).length
   const totalMetricCount = applicableMetrics.length
   const rawCoverageComplete = totalMetricCount > 0 && coveredMetricCount === totalMetricCount
-  const status: CandidateEvidenceReadinessStatus = source.status === 'ready' && rawCoverageComplete && !trendPending
+  const status: CandidateEvidenceReadinessStatus = rawCoverageComplete && !trendPending
     ? 'ready'
     : coveredMetricCount > 0
       ? 'partial'
@@ -151,7 +151,6 @@ export function buildCandidateEvidenceScore(candidate: CandidateItem, valueQuali
     ? roundPercent(dimensions.reduce((total, dimension) => total + (dimension.coveragePercent ?? 0), 0) / dimensions.length)
     : 0
   const status: CandidateEvidenceReadinessStatus = completeDimensionCount === DIMENSIONS.length
-    && valueQuality.status === 'ready'
     && !candidate.pendingSync
     ? 'ready'
     : coveredMetricCount > 0
@@ -159,7 +158,7 @@ export function buildCandidateEvidenceScore(candidate: CandidateItem, valueQuali
       : 'missing'
   const missingReasons = [
     ...dimensions.filter(dimension => dimension.status !== 'ready').map(dimension => `${dimension.label}：${dimension.detail}`),
-    ...valueQuality.missingFields,
+    ...(coveredMetricCount < totalMetricCount ? valueQuality.missingFields : []),
   ].filter((reason, index, reasons) => reasons.indexOf(reason) === index).slice(0, 5)
   const refreshable = dimensions.some(dimension => dimension.coveredMetricCount < dimension.totalMetricCount)
     || valueQuality.missingFields.some(field => !field.includes('行业专用韧性指标暂无足够同业可比样本'))

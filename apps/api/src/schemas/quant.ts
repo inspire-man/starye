@@ -145,6 +145,20 @@ export const QuantFinancialQualitySnapshotSchema = v.object({
   cashRatio: v.nullable(v.number()),
   totalLiability: v.nullable(v.number()),
   roic: v.nullable(v.number()),
+  provider: v.optional(v.picklist(['tushare', 'eastmoney', 'akshare'])),
+  fallbackUsed: v.optional(v.boolean()),
+  fallbackReason: v.optional(v.nullable(v.string())),
+  supplementalProvider: v.optional(v.picklist(['tushare', 'eastmoney', 'akshare'])),
+  supplementUsed: v.optional(v.boolean()),
+  industry: v.optional(v.picklist(['general', 'bank', 'insurance', 'securities', 'other'])),
+  industryMetrics: v.optional(v.object({
+    insuranceSolvencyRatio: v.nullable(v.number()),
+    insuranceNetInvestmentReturn: v.nullable(v.number()),
+    insuranceNewBusinessValueRate: v.nullable(v.number()),
+    bankCoreTier1CapitalAdequacyRatio: v.nullable(v.number()),
+    bankNetInterestMargin: v.nullable(v.number()),
+    bankLoanProvisionRatio: v.nullable(v.number()),
+  })),
 })
 
 export const QuantFinancialQualityResponseSchema = v.object({

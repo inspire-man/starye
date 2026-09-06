@@ -2,6 +2,7 @@ export const CAPABILITY_ORDER = ['daily', 'stock_basic', 'trade_cal', 'daily_bas
 
 export type CapabilityKey = typeof CAPABILITY_ORDER[number]
 export type QuantProviderName = 'tushare' | 'eastmoney'
+export type QuantSourceName = QuantProviderName | 'akshare'
 export type QuantAiProvider = 'openai_compatible' | 'deepseek' | 'qwen' | 'gemini' | 'ollama'
 export type QuantAiResponseMode = 'stream' | 'json'
 export type QuantAiRunAuditStatus = 'completed' | 'failed' | 'cancelled'
@@ -756,10 +757,10 @@ export interface QuantFinancialQualitySnapshot {
   cashRatio: number | null
   totalLiability: number | null
   roic: number | null
-  provider?: 'tushare' | 'eastmoney'
+  provider?: QuantSourceName
   fallbackUsed?: boolean
   fallbackReason?: string | null
-  supplementalProvider?: 'tushare' | 'eastmoney'
+  supplementalProvider?: QuantSourceName
   supplementUsed?: boolean
   industry?: QuantFinancialIndustry
   industryMetrics?: QuantFinancialIndustryMetrics
@@ -845,11 +846,11 @@ export interface QuantShareholderCashflowHistorySummary {
 export interface QuantShareholderCashflowEvidence {
   formulaVersion: string
   status: QuantShareholderCashflowStatus
-  provider: QuantProviderName | null
+  provider: QuantSourceName | null
   providerErrorCode: string | null
   fallbackUsed?: boolean
   fallbackReason?: string | null
-  supplementalProvider?: QuantProviderName
+  supplementalProvider?: QuantSourceName
   observedAt: string
   reportDate: string | null
   reportType: string | null

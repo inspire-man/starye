@@ -66,9 +66,9 @@ function genericMetricApplicable(value: QuantFinancialQualitySnapshot | null): b
 }
 
 function financialSourceLabel(value: QuantFinancialQualitySnapshot): string {
-  const source = value.provider === 'tushare' ? 'Tushare 财报指标' : 'Eastmoney 财务报告'
+  const source = value.provider === 'tushare' ? 'Tushare 财报指标' : value.provider === 'akshare' ? 'AkShare 财报指标' : 'Eastmoney 财务报告'
   const supplement = value.supplementUsed && value.supplementalProvider
-    ? ` + ${value.supplementalProvider === 'tushare' ? 'Tushare' : 'Eastmoney'} 字段补充`
+    ? ` + ${value.supplementalProvider === 'tushare' ? 'Tushare' : value.supplementalProvider === 'akshare' ? 'AkShare' : 'Eastmoney'} 字段补充`
     : ''
   const fallback = value.fallbackUsed && value.fallbackReason ? `（回退：${value.fallbackReason}）` : ''
   return `${source}${supplement}${fallback}`

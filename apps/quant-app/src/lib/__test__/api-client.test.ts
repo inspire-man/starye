@@ -622,6 +622,45 @@ describe('quantApi', () => {
     expect(fetchMock).toHaveBeenCalledWith(`${QUANT_API_PREFIX}/financial/history/601899.SH?limit=2`, expect.objectContaining({ credentials: 'include' }))
   })
 
+  it('keeps AkShare financial and cashflow provenance in normalized responses', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({
+      data: {
+        ts_code: '601899.SH',
+        observed_at: '2026-09-06T00:00:00.000Z',
+        report_date: '2026-06-30',
+        provider: 'akshare',
+        supplemental_provider: 'akshare',
+        supplement_used: true,
+        revenue: 1000,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })).mockResolvedValueOnce(new Response(JSON.stringify({
+      data: {
+        items: [{
+          ts_code: '601899.SH',
+          status: 'partial',
+          cashflow_evidence: {
+            status: 'ready',
+            provider: 'akshare',
+            supplemental_provider: 'akshare',
+            operating_cashflow: 300,
+            capital_expenditure: 80,
+          },
+        }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(quantApi.getFinancialQuality('601899.SH')).resolves.toMatchObject({
+      provider: 'akshare',
+      supplementalProvider: 'akshare',
+      supplementUsed: true,
+      revenue: 1000,
+    })
+    await expect(quantApi.getShareholderReturns()).resolves.toMatchObject({
+      items: [{ cashflowEvidence: { provider: 'akshare', supplementalProvider: 'akshare', operatingCashflow: 300, capitalExpenditure: 80 } }],
+    })
+  })
+
   it('normalizes financial quality peer positions and nullable peers', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       data: {
