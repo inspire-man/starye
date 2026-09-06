@@ -1,4 +1,4 @@
-import type { QuantCashflowProvider, QuantCashflowReport, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot } from './provider'
+import type { QuantCashflowProvider, QuantCashflowReport, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField } from './provider'
 import type { QuantResearchEvidence, QuantResearchSource } from './research-report'
 import { QuantError } from './errors'
 
@@ -340,23 +340,49 @@ function normalizeBridgeFinancialReport(result: QuantAkshareBridgeResult, record
   }
 }
 
-function emptyBridgeDebtComponents(): QuantCashflowReport['interestBearingDebtComponents'] {
+function bridgeDebtComponents(record: Record<string, unknown>): QuantInterestBearingDebtComponents {
+  const nested = asRecord(record.interest_bearing_debt_components ?? record.interestBearingDebtComponents)
+  const number = (...keys: string[]): number | null => bridgeNumber(record, ...keys) ?? bridgeNumber(nested ?? {}, ...keys)
   return {
-    shortLoan: null,
-    shortBondPayable: null,
-    shortFinancePayable: null,
-    acceptDepositInterbank: null,
-    borrowFund: null,
-    loanPbc: null,
-    currentMaturityDebt: null,
-    amortizedCostFinancialLiability: null,
-    longLoan: null,
-    amortizedCostNoncurrentFinancialLiability: null,
-    bondPayable: null,
-    perpetualBond: null,
-    perpetualBondPayable: null,
-    leaseLiability: null,
+    shortLoan: number('short_loan', 'shortLoan', 'SHORT_LOAN'),
+    shortBondPayable: number('short_bond_payable', 'shortBondPayable', 'SHORT_BOND_PAYABLE'),
+    shortFinancePayable: number('short_finance_payable', 'shortFinancePayable', 'SHORT_FIN_PAYABLE'),
+    acceptDepositInterbank: number('accept_deposit_interbank', 'acceptDepositInterbank', 'ACCEPT_DEPOSIT_INTERBANK'),
+    borrowFund: number('borrow_fund', 'borrowFund', 'BORROW_FUND'),
+    loanPbc: number('loan_pbc', 'loanPbc', 'LOAN_PBC'),
+    currentMaturityDebt: number('current_maturity_debt', 'currentMaturityDebt', 'NONCURRENT_LIAB_1YEAR'),
+    amortizedCostFinancialLiability: number('amortized_cost_financial_liability', 'amortizedCostFinancialLiability', 'AMORTIZE_COST_FINLIAB'),
+    longLoan: number('long_loan', 'longLoan', 'LONG_LOAN'),
+    amortizedCostNoncurrentFinancialLiability: number('amortized_cost_noncurrent_financial_liability', 'amortizedCostNoncurrentFinancialLiability', 'AMORTIZE_COST_NCFINLIAB'),
+    bondPayable: number('bond_payable', 'bondPayable', 'BOND_PAYABLE'),
+    perpetualBond: number('perpetual_bond', 'perpetualBond', 'PERPETUAL_BOND'),
+    perpetualBondPayable: number('perpetual_bond_payable', 'perpetualBondPayable', 'PERPETUAL_BOND_PAYBALE'),
+    leaseLiability: number('lease_liability', 'leaseLiability', 'LEASE_LIAB'),
   }
+}
+
+function bridgeDebtTotal(record: Record<string, unknown>, components: QuantInterestBearingDebtComponents): number | null {
+  const explicit = bridgeNumber(record, 'interest_bearing_debt', 'interestBearingDebt')
+  if (explicit !== null)
+    return explicit
+  const values = Object.values(components).filter((value): value is number => value !== null)
+  return values.length ? values.reduce((total, value) => total + value, 0) : null
+}
+
+function bridgeInterestExpense(record: Record<string, unknown>): { readonly value: number | null, readonly sourceField: QuantInterestExpenseSourceField | null } {
+  const declaredSource = bridgeString(record, 'interest_expense_source_field', 'interestExpenseSourceField')
+  const financeExpenseInterest = bridgeNumber(record, 'FE_INTEREST_EXPENSE', '利息支出', '利息费用')
+  const incomeStatementInterest = bridgeNumber(record, 'INTEREST_EXPENSE', 'interestExpense')
+  const genericInterest = bridgeNumber(record, 'interest_expense', 'interestExpense')
+  if (declaredSource === 'FE_INTEREST_EXPENSE' && (financeExpenseInterest ?? genericInterest) !== null)
+    return { value: financeExpenseInterest ?? genericInterest, sourceField: declaredSource }
+  if (declaredSource === 'INTEREST_EXPENSE' && (incomeStatementInterest ?? genericInterest) !== null)
+    return { value: incomeStatementInterest ?? genericInterest, sourceField: declaredSource }
+  if (financeExpenseInterest !== null)
+    return { value: financeExpenseInterest, sourceField: 'FE_INTEREST_EXPENSE' }
+  if (incomeStatementInterest !== null)
+    return { value: incomeStatementInterest, sourceField: 'INTEREST_EXPENSE' }
+  return { value: genericInterest, sourceField: genericInterest !== null ? 'INTEREST_EXPENSE' : null }
 }
 
 function normalizeBridgeCashflowReport(result: QuantAkshareBridgeResult, record: Record<string, unknown>): QuantCashflowReport | null {
@@ -366,6 +392,8 @@ function normalizeBridgeCashflowReport(result: QuantAkshareBridgeResult, record:
   if (!reportDate)
     return null
   const reportType = reportTypeForDate(reportDate)
+  const interestExpense = bridgeInterestExpense(record)
+  const interestBearingDebtComponents = bridgeDebtComponents(record)
   return {
     tsCode: result.tsCode,
     reportDate,
@@ -376,11 +404,11 @@ function normalizeBridgeCashflowReport(result: QuantAkshareBridgeResult, record:
     capitalExpenditure: bridgeNumber(record, 'capital_expenditure', 'capitalExpenditure', 'c_pay_acq_const_fiolta'),
     netProfit: bridgeNumber(record, 'net_profit', 'netProfit', '净利润'),
     cashDividendsPaid: null,
-    interestExpense: null,
-    interestExpenseSourceField: null,
+    interestExpense: interestExpense.value,
+    interestExpenseSourceField: interestExpense.sourceField,
     interestExpenseProviderErrorCode: null,
-    interestBearingDebt: null,
-    interestBearingDebtComponents: emptyBridgeDebtComponents(),
+    interestBearingDebt: bridgeDebtTotal(record, interestBearingDebtComponents),
+    interestBearingDebtComponents,
     interestBearingDebtProviderErrorCode: null,
     provider: 'akshare',
   }

@@ -686,22 +686,50 @@ export function createTushareCashflowProvider(options: TushareProviderOptions = 
   }
 }
 
-const CASHFLOW_CORE_FIELDS = ['operatingCashflow', 'capitalExpenditure', 'netProfit', 'cashDividendsPaid'] as const
-const CASHFLOW_SUPPLEMENT_FIELDS = ['operatingCashflow', 'capitalExpenditure', 'netProfit'] as const
+const CASHFLOW_CORE_FIELDS = ['operatingCashflow', 'capitalExpenditure', 'netProfit', 'cashDividendsPaid', 'interestExpense', 'interestBearingDebt'] as const
+const CASHFLOW_SUPPLEMENT_FIELDS = ['operatingCashflow', 'capitalExpenditure', 'netProfit', 'interestExpense', 'interestBearingDebt'] as const
 
 function needsCashflowSupplement(report: QuantCashflowReport): boolean {
   return CASHFLOW_SUPPLEMENT_FIELDS.some(field => report[field] === null)
 }
 
 function mergeCashflowReport(primary: QuantCashflowReport, supplement: QuantCashflowReport): QuantCashflowReport {
+  const primaryComponents = primary.interestBearingDebtComponents
+  const supplementComponents = supplement.interestBearingDebtComponents
+  const interestBearingDebtComponents: QuantInterestBearingDebtComponents = {
+    shortLoan: primaryComponents.shortLoan ?? supplementComponents.shortLoan,
+    shortBondPayable: primaryComponents.shortBondPayable ?? supplementComponents.shortBondPayable,
+    shortFinancePayable: primaryComponents.shortFinancePayable ?? supplementComponents.shortFinancePayable,
+    acceptDepositInterbank: primaryComponents.acceptDepositInterbank ?? supplementComponents.acceptDepositInterbank,
+    borrowFund: primaryComponents.borrowFund ?? supplementComponents.borrowFund,
+    loanPbc: primaryComponents.loanPbc ?? supplementComponents.loanPbc,
+    currentMaturityDebt: primaryComponents.currentMaturityDebt ?? supplementComponents.currentMaturityDebt,
+    amortizedCostFinancialLiability: primaryComponents.amortizedCostFinancialLiability ?? supplementComponents.amortizedCostFinancialLiability,
+    longLoan: primaryComponents.longLoan ?? supplementComponents.longLoan,
+    amortizedCostNoncurrentFinancialLiability: primaryComponents.amortizedCostNoncurrentFinancialLiability ?? supplementComponents.amortizedCostNoncurrentFinancialLiability,
+    bondPayable: primaryComponents.bondPayable ?? supplementComponents.bondPayable,
+    perpetualBond: primaryComponents.perpetualBond ?? supplementComponents.perpetualBond,
+    perpetualBondPayable: primaryComponents.perpetualBondPayable ?? supplementComponents.perpetualBondPayable,
+    leaseLiability: primaryComponents.leaseLiability ?? supplementComponents.leaseLiability,
+  }
   const merged: QuantCashflowReport = {
     ...primary,
     operatingCashflow: primary.operatingCashflow ?? supplement.operatingCashflow,
     capitalExpenditure: primary.capitalExpenditure ?? supplement.capitalExpenditure,
     netProfit: primary.netProfit ?? supplement.netProfit,
     cashDividendsPaid: primary.cashDividendsPaid ?? supplement.cashDividendsPaid,
+    interestExpense: primary.interestExpense ?? supplement.interestExpense,
+    interestExpenseSourceField: primary.interestExpenseSourceField ?? supplement.interestExpenseSourceField,
+    interestExpenseProviderErrorCode: primary.interestExpense !== null ? primary.interestExpenseProviderErrorCode : supplement.interestExpense !== null ? supplement.interestExpenseProviderErrorCode : primary.interestExpenseProviderErrorCode ?? supplement.interestExpenseProviderErrorCode,
+    interestBearingDebt: primary.interestBearingDebt ?? supplement.interestBearingDebt,
+    interestBearingDebtComponents,
+    interestBearingDebtProviderErrorCode: primary.interestBearingDebt !== null ? primary.interestBearingDebtProviderErrorCode : supplement.interestBearingDebt !== null ? supplement.interestBearingDebtProviderErrorCode : primary.interestBearingDebtProviderErrorCode ?? supplement.interestBearingDebtProviderErrorCode,
   }
-  const supplemented = CASHFLOW_CORE_FIELDS.some(field => primary[field] === null && supplement[field] !== null)
+  const componentsSupplemented = Object.keys(interestBearingDebtComponents).some((field) => {
+    const key = field as keyof QuantInterestBearingDebtComponents
+    return primaryComponents[key] === null && supplementComponents[key] !== null
+  })
+  const supplemented = CASHFLOW_CORE_FIELDS.some(field => primary[field] === null && supplement[field] !== null) || componentsSupplemented
   return supplemented
     ? { ...merged, supplementalProvider: supplement.provider ?? 'eastmoney', supplementUsed: true }
     : merged

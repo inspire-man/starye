@@ -109,6 +109,14 @@ describe('akShare bridge client', () => {
         operating_cashflow: 300,
         capital_expenditure: 80,
         net_profit: 200,
+        interest_expense: 25,
+        interest_expense_source_field: 'FE_INTEREST_EXPENSE',
+        interest_bearing_debt: 1000,
+        interest_bearing_debt_components: {
+          short_loan: 400,
+          long_loan: 500,
+          lease_liability: 100,
+        },
       }],
     })), { status: 200 })))
     const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
@@ -130,14 +138,26 @@ describe('akShare bridge client', () => {
       capitalExpenditure: 80,
       netProfit: 200,
       cashDividendsPaid: null,
-      interestExpense: null,
+      interestExpense: 25,
+      interestExpenseSourceField: 'FE_INTEREST_EXPENSE',
+      interestBearingDebt: 1000,
+      interestBearingDebtComponents: expect.objectContaining({ shortLoan: 400, longLoan: 500, leaseLiability: 100 }),
     }])
   })
 
   it('supplements only same-period null fields and keeps the primary report', async () => {
     const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(payload({
       financials: [{ ts_code: '601899.SH', report_date: '20260630', gross_margin: 28 }],
-      cashflows: [{ ts_code: '601899.SH', report_date: '20260630', operating_cashflow: 300, capital_expenditure: 80 }],
+      cashflows: [{
+        ts_code: '601899.SH',
+        report_date: '20260630',
+        operating_cashflow: 300,
+        capital_expenditure: 80,
+        interest_expense: 25,
+        interest_expense_source_field: 'FE_INTEREST_EXPENSE',
+        interest_bearing_debt: 1000,
+        interest_bearing_debt_components: { short_loan: 400 },
+      }],
     })), { status: 200 })))
     const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
     const akshareFinancial = createQuantAkshareFinancialProvider(bridge)
@@ -188,12 +208,12 @@ describe('akShare bridge client', () => {
         capitalExpenditure: null,
         netProfit: 200,
         cashDividendsPaid: null,
-        interestExpense: null,
-        interestExpenseSourceField: null,
+        interestExpense: 10,
+        interestExpenseSourceField: 'FE_INTEREST_EXPENSE',
         interestExpenseProviderErrorCode: null,
-        interestBearingDebt: null,
+        interestBearingDebt: 900,
         interestBearingDebtComponents: {
-          shortLoan: null,
+          shortLoan: 300,
           shortBondPayable: null,
           shortFinancePayable: null,
           acceptDepositInterbank: null,
@@ -220,7 +240,17 @@ describe('akShare bridge client', () => {
     expect(financialResult.grossMargin).toBe(28)
 
     const cashflowResult = await createQuantCashflowProviderChain(primaryCashflow, akshareCashflow).fetchCashflowHistory({ tsCode: '601899.SH' })
-    expect(cashflowResult[0]).toMatchObject({ provider: 'eastmoney', supplementalProvider: 'akshare', supplementUsed: true, operatingCashflow: 300, capitalExpenditure: 80 })
+    expect(cashflowResult[0]).toMatchObject({
+      provider: 'eastmoney',
+      supplementalProvider: 'akshare',
+      supplementUsed: true,
+      operatingCashflow: 300,
+      capitalExpenditure: 80,
+      interestExpense: 10,
+      interestExpenseSourceField: 'FE_INTEREST_EXPENSE',
+      interestBearingDebt: 900,
+      interestBearingDebtComponents: expect.objectContaining({ shortLoan: 300 }),
+    })
   })
 
   it('keeps unmatched AkShare periods as independent reports without supplement metadata', async () => {
