@@ -73,12 +73,16 @@ class BridgeHandler(BaseHTTPRequestHandler):
             include_capital_structures = body.get("include_capital_structures", True)
             if not isinstance(include_capital_structures, bool):
                 raise ValueError("include_capital_structures must be a boolean")
+            include_profit_forecasts = body.get("include_profit_forecasts", True)
+            if not isinstance(include_profit_forecasts, bool):
+                raise ValueError("include_profit_forecasts must be a boolean")
             request = BridgeRequest(
                 ts_code=ts_code,
                 start_date=start_date,
                 end_date=end_date,
                 include_financials=include_financials,
                 include_capital_structures=include_capital_structures,
+                include_profit_forecasts=include_profit_forecasts,
             )
             response = collect_evidence(request)
             self._send(HTTPStatus.OK, response.to_dict())

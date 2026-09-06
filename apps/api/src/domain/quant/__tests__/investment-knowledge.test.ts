@@ -54,6 +54,15 @@ describe('quant investment knowledge catalog', () => {
     expect(shareholderReturn.eligibleInValueQuality).toBe(false)
   })
 
+  it('records forecast fields as separate expectation-gap context', () => {
+    const expectationGap = QUANT_KNOWLEDGE_FACTORS.find(factor => factor.id === 'expectation-gap')!
+
+    expect(expectationGap.availableFields).toEqual(expect.arrayContaining(['forecastEps', 'forecastNetProfit', 'forecastAnalystCount']))
+    expect(expectationGap.missingFields).toEqual(expect.arrayContaining(['consensusRevenue', 'earningsSurprise', 'forwardPe', 'priceBeforeReport']))
+    expect(expectationGap.status).toBe('partial')
+    expect(expectationGap.eligibleInValueQuality).toBe(false)
+  })
+
   it('marks the interest-aware cashflow factor fields as connected context', () => {
     const factor = QUANT_KNOWLEDGE_FACTORS.find(item => item.id === 'cashflow-capex-coverage')!
 

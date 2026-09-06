@@ -1,4 +1,4 @@
-import type { QuantAkshareBridgeResult } from './akshare-bridge'
+import type { QuantAkshareBridgeResult, QuantAkshareProfitForecast } from './akshare-bridge'
 import type { QuantDecisionProjection, QuantFactorModel } from './decision-recommendation'
 import type { QuantFactorConfiguration } from './factor-configuration'
 import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './provider'
@@ -135,6 +135,61 @@ function financialSourceFor(report: QuantFinancialQualitySnapshot | null, errorC
 function compactDate(value: string | null | undefined): string | null {
   const normalized = value?.trim()
   return normalized ? normalized.replace(/-/gu, '').slice(0, 8) : null
+}
+
+function forecastStatus(average: number | null, low: number | null, high: number | null): QuantResearchEvidenceStatus {
+  if (average !== null)
+    return 'pass'
+  return low !== null || high !== null ? 'caution' : 'missing'
+}
+
+function forecastNumber(value: number | null): string {
+  return value === null ? '待补' : value.toFixed(2)
+}
+
+function forecastSourceName(input: QuantResearchReportInput, row: QuantAkshareProfitForecast): string {
+  return row.source ? `AkShare ${row.source}` : input.akshare?.source.name ?? 'AkShare 盈利预测'
+}
+
+function appendProfitForecastEvidence(evidenceItems: QuantResearchEvidence[], input: QuantResearchReportInput): void {
+  const rows = input.akshare?.profitForecasts ?? []
+  for (const row of rows) {
+    const source = forecastSourceName(input, row)
+    const observedAt = input.akshare?.observedAt ?? null
+    const formulaVersion = input.akshare?.source.formulaVersion ?? 'akshare-adapter-v1'
+    const epsStatus = forecastStatus(row.forecastEpsAverage, row.forecastEpsLow, row.forecastEpsHigh)
+    if (row.forecastEpsAverage !== null || row.forecastEpsLow !== null || row.forecastEpsHigh !== null) {
+      evidenceItems.push(evidence({
+        key: `akshare-profit-forecast-eps-${row.forecastYear}`,
+        dimension: 'valuation',
+        label: `${row.forecastYear} 年预测每股收益`,
+        status: epsStatus,
+        value: row.forecastEpsAverage,
+        threshold: '仅记录分析师预测原始字段，不进入价值质量评分',
+        source,
+        observedAt,
+        formulaVersion,
+        detail: `预测 EPS 均值 ${forecastNumber(row.forecastEpsAverage)}，区间 ${forecastNumber(row.forecastEpsLow)} - ${forecastNumber(row.forecastEpsHigh)}；预测机构数 ${forecastNumber(row.analystCount)}；行业平均 EPS ${forecastNumber(row.industryAverageEps)}`,
+        optional: true,
+      }))
+    }
+    const netProfitStatus = forecastStatus(row.forecastNetProfit100mAverage, row.forecastNetProfit100mLow, row.forecastNetProfit100mHigh)
+    if (row.forecastNetProfit100mAverage !== null || row.forecastNetProfit100mLow !== null || row.forecastNetProfit100mHigh !== null) {
+      evidenceItems.push(evidence({
+        key: `akshare-profit-forecast-net-profit-${row.forecastYear}`,
+        dimension: 'quality',
+        label: `${row.forecastYear} 年预测净利润`,
+        status: netProfitStatus,
+        value: row.forecastNetProfit100mAverage,
+        threshold: '仅记录分析师预测原始字段，单位为亿元，不进入实际财报口径',
+        source,
+        observedAt,
+        formulaVersion,
+        detail: `预测净利润均值 ${forecastNumber(row.forecastNetProfit100mAverage)} 亿元，区间 ${forecastNumber(row.forecastNetProfit100mLow)} - ${forecastNumber(row.forecastNetProfit100mHigh)} 亿元；该值不是已实现净利润`,
+        optional: true,
+      }))
+    }
+  }
 }
 
 function withAkshareCrossSourceCheck(item: QuantResearchEvidence, latestFinancial: QuantFinancialQualitySnapshot | null): QuantResearchEvidence {
@@ -310,6 +365,16 @@ function buildSources(input: QuantResearchReportInput, latestTradeDate: string |
       observedAt: input.akshare?.observedAt ?? null,
       formulaVersion: input.akshare?.source.formulaVersion ?? 'akshare-adapter-v1',
     })
+    const forecastErrors = bridgeErrors.filter(error => /profit[_-]?forecast/iu.test(`${error.code} ${error.source ?? ''}`))
+    const forecastSources = [...new Set((input.akshare?.profitForecasts ?? []).map(row => row.source).filter((value): value is string => Boolean(value)))]
+    if ((input.akshare?.profitForecasts?.length ?? 0) > 0 || forecastErrors.length > 0) {
+      sources.push({
+        id: 'akshare-profit-forecast',
+        name: `AkShare 盈利预测${forecastSources.length ? ` · ${forecastSources.join(' / ')}` : ''}${forecastErrors.length ? `，来源异常：${[...new Set(forecastErrors.map(error => error.code))].slice(0, 3).join('、')}` : ''}`,
+        observedAt: input.akshare?.observedAt ?? null,
+        formulaVersion: input.akshare?.source.formulaVersion ?? 'akshare-adapter-v1',
+      })
+    }
   }
   return sources
 }
@@ -860,7 +925,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     evidenceItems.push(...akshareErrors.map((error, index) => {
       const endpoint = error.source?.trim() || 'bridge'
       const endpointKey = endpoint.replace(/[^\w-]/gu, '-').slice(0, 40) || 'bridge'
-      const dimension: QuantResearchDimension = /cashflow|cash/u.test(endpoint) ? 'shareholder-return' : /daily|hist/u.test(endpoint) ? 'trend' : 'quality'
+      const dimension: QuantResearchDimension = /cashflow|cash/u.test(endpoint) ? 'shareholder-return' : /daily|hist/u.test(endpoint) ? 'trend' : /forecast|expect|profit/iu.test(`${endpoint} ${error.code}`) ? 'valuation' : 'quality'
       return evidence({
         key: `akshare-error-${endpointKey}-${index}`,
         dimension,
@@ -891,6 +956,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
       optional: true,
     }))
   }
+  appendProfitForecastEvidence(evidenceItems, input)
 
   const volumeRatio = finite(candidate?.factors.volumeRatio)
   const upStreak = finite(candidate?.factors.consecutiveUpDays)

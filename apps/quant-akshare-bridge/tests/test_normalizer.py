@@ -1,7 +1,7 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
+from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_profit_forecast_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
@@ -370,6 +370,32 @@ class NormalizerTest(unittest.TestCase):
         }])
         self.assertEqual(errors[0].code, "AKSHARE_CAPITAL_ROW_MISMATCHED")
         self.assertEqual(errors[1].code, "AKSHARE_CAPITAL_ROW_INVALID")
+
+    def test_normalizes_ths_profit_forecast_eps_and_net_profit_with_explicit_units(self) -> None:
+        eps_rows, eps_errors = normalize_profit_forecast_rows("601899.SH", [
+            {"年度": "2026", "预测机构数": 23, "最小值": 2.38, "平均值": 3.07, "最大值": 3.46, "行业平均数": 2.06},
+        ], source="stock_profit_forecast_ths", metric="eps")
+        net_profit_rows, net_profit_errors = normalize_profit_forecast_rows("601899.SH", [
+            {"年度": "2026", "预测机构数": 23, "最小值": 632.86, "平均值": 816.73, "最大值": 920.22},
+        ], source="stock_profit_forecast_ths", metric="net_profit_100m")
+
+        self.assertEqual(eps_errors, [])
+        self.assertEqual(net_profit_errors, [])
+        self.assertEqual(eps_rows[0]["forecast_eps_average"], 3.07)
+        self.assertEqual(eps_rows[0]["analyst_count"], 23.0)
+        self.assertEqual(eps_rows[0]["source"], "stock_profit_forecast_ths")
+        self.assertEqual(net_profit_rows[0]["forecast_net_profit_100m_average"], 816.73)
+
+    def test_normalizes_eastmoney_dynamic_profit_forecast_columns_and_filters_other_stocks(self) -> None:
+        rows, errors = normalize_profit_forecast_rows("601899.SH", [
+            {"代码": "601899", "2026预测每股收益": 3.10, "2027预测每股收益": 3.66},
+            {"代码": "000001", "2026预测每股收益": 1.2},
+        ], source="stock_profit_forecast_em", metric="eps")
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([row["forecast_year"] for row in rows], ["2027", "2026"])
+        self.assertEqual(rows[0]["forecast_eps_average"], 3.66)
+        self.assertEqual(errors[0].code, "AKSHARE_PROFIT_FORECAST_ROW_MISMATCHED")
 
     def test_keeps_valid_financial_rows_when_one_row_has_an_invalid_date(self) -> None:
         rows, errors = normalize_financial_rows("601899.SH", [

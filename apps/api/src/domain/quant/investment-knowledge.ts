@@ -1,4 +1,4 @@
-export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v4' as const
+export const QUANT_INVESTMENT_KNOWLEDGE_VERSION = 'investment-knowledge-v5' as const
 
 export type QuantKnowledgeSourceAccess = 'full' | 'preview'
 export type QuantKnowledgeFactorStatus = 'active' | 'partial' | 'planned' | 'context'
@@ -199,7 +199,7 @@ export const QUANT_KNOWLEDGE_FACTORS: readonly QuantKnowledgeFactor[] = [
     interpretation: '市场可能提前交易更远期的资本开支、景气或反转预期，当前 PE 不是全部。',
     measurement: '实际业绩/业绩预告 vs 一致预期，并结合报告前后价格变化和前瞻估值。',
     requiredFields: ['consensusRevenue', 'consensusProfit', 'earningsSurprise', 'forwardPe', 'priceBeforeReport'],
-    availableFields: ['peTtm', 'netProfitYoY', 'return60'],
+    availableFields: ['peTtm', 'netProfitYoY', 'return60', 'forecastEps', 'forecastNetProfit', 'forecastAnalystCount'],
     missingFields: ['consensusRevenue', 'consensusProfit', 'earningsSurprise', 'forwardPe', 'priceBeforeReport'],
     status: 'partial',
     eligibleInValueQuality: false,

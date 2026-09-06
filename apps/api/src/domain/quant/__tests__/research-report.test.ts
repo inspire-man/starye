@@ -383,6 +383,45 @@ describe('quant research report', () => {
     ]))
   })
 
+  it('keeps AkShare forecast EPS and net profit as optional expectation evidence', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-akshare-forecast',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial, { ...financial, reportDate: '2025-12-31' }],
+      shareholderReturn,
+      akshare: {
+        ...akshare,
+        profitForecasts: [{
+          tsCode: '601899.SH',
+          source: 'stock_profit_forecast_ths',
+          forecastYear: '2026',
+          forecastEpsLow: 2.38,
+          forecastEpsAverage: 3.07,
+          forecastEpsHigh: 3.46,
+          analystCount: 23,
+          industryAverageEps: 2.06,
+          forecastNetProfit100mLow: 632.86,
+          forecastNetProfit100mAverage: 816.73,
+          forecastNetProfit100mHigh: 920.22,
+        }],
+      },
+    })
+
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'akshare-profit-forecast-eps-2026', value: 3.07, status: 'pass', optional: true, source: expect.stringContaining('stock_profit_forecast_ths') }),
+      expect.objectContaining({ key: 'akshare-profit-forecast-net-profit-2026', value: 816.73, status: 'pass', optional: true, detail: expect.stringContaining('不是已实现净利润') }),
+    ]))
+    expect(report.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'akshare-profit-forecast', name: expect.stringContaining('stock_profit_forecast_ths') }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'valuation')).toMatchObject({ status: 'ready' })
+  })
+
   it('surfaces partial AkShare endpoint failures as optional source evidence', () => {
     const report = buildQuantResearchReport({
       tsCode: '601899.SH',

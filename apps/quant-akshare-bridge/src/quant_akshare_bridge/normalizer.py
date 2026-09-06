@@ -488,6 +488,106 @@ def normalize_capital_structure_rows(
     return ordered[:max(1, min(limit, 20))], errors
 
 
+def _forecast_year(value: Any) -> str | None:
+    text = _text(value)
+    if not text:
+        return None
+    match = re.search(r"(?<!\d)(20\d{2})(?!\d)", text)
+    return match.group(1) if match else None
+
+
+def _forecast_year_columns(row: Mapping[str, Any]) -> list[tuple[str, str]]:
+    columns: list[tuple[str, str]] = []
+    for key in row:
+        match = re.search(r"(?<!\d)(20\d{2})[^\d]*预测每股收益", key)
+        if match:
+            columns.append((match.group(1), key))
+    return columns
+
+
+def normalize_profit_forecast_rows(
+    ts_code: str,
+    raw: Any,
+    limit: int = 8,
+    source: str = "stock_profit_forecast_ths",
+    metric: str = "eps",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+    normalized_code = normalize_ts_code(ts_code)
+    errors: list[BridgeError] = []
+    result: list[dict[str, Any]] = []
+    requested_code = normalized_code.split(".", 1)[0]
+    for row in _rows(raw):
+        returned_code = _field(row, "代码", "证券代码", "SECURITY_CODE", "security_code", "ts_code")
+        if returned_code is not None and _row_code(returned_code) != requested_code:
+            errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_ROW_MISMATCHED", "profit forecast row code does not match the requested stock", source))
+            continue
+
+        direct_year = _forecast_year(_field(row, "年度", "预测年度", "forecast_year", "year"))
+        year_columns = _forecast_year_columns(row) if direct_year is None else [(direct_year, "")]
+        if not year_columns:
+            errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_ROW_INVALID", "profit forecast row has no forecast year", source))
+            continue
+
+        for forecast_year, dynamic_key in year_columns:
+            if metric == "net_profit_100m":
+                average = _number(_field(row, "均值", "平均值", "预测年报净利润", "forecast_net_profit_100m_average"))
+                low = _number(_field(row, "最小值", "forecast_net_profit_100m_low"))
+                high = _number(_field(row, "最大值", "forecast_net_profit_100m_high"))
+                if average is None and low is None and high is None:
+                    errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_ROW_INVALID", "profit forecast row has no usable net profit value", source))
+                    continue
+                result.append({
+                    "ts_code": normalized_code,
+                    "source": source,
+                    "forecast_year": forecast_year,
+                    "forecast_net_profit_100m_low": low,
+                    "forecast_net_profit_100m_average": average,
+                    "forecast_net_profit_100m_high": high,
+                })
+                continue
+
+            average = _number(row.get(dynamic_key)) if dynamic_key else _number(_field(row, "均值", "平均值", "预测每股收益", "forecast_eps_average"))
+            low = _number(_field(row, "最小值", "forecast_eps_low"))
+            high = _number(_field(row, "最大值", "forecast_eps_high"))
+            analyst_count = _number(_field(row, "预测机构数", "机构数", "研报数", "analyst_count"))
+            industry_average = _number(_field(row, "行业平均值", "行业平均数", "industry_average_eps"))
+            if average is None and low is None and high is None:
+                errors.append(BridgeError("AKSHARE_PROFIT_FORECAST_ROW_INVALID", "profit forecast row has no usable EPS value", source))
+                continue
+            result.append({
+                "ts_code": normalized_code,
+                "source": source,
+                "forecast_year": forecast_year,
+                "forecast_eps_low": low,
+                "forecast_eps_average": average,
+                "forecast_eps_high": high,
+                "analyst_count": analyst_count,
+                "industry_average_eps": industry_average,
+            })
+
+    deduplicated: dict[str, dict[str, Any]] = {}
+    for row in result:
+        key = f"{row['forecast_year']}"
+        existing = deduplicated.get(key)
+        if existing is None:
+            deduplicated[key] = row
+            continue
+        for field in (
+            "forecast_eps_low",
+            "forecast_eps_average",
+            "forecast_eps_high",
+            "analyst_count",
+            "industry_average_eps",
+            "forecast_net_profit_100m_low",
+            "forecast_net_profit_100m_average",
+            "forecast_net_profit_100m_high",
+        ):
+            if existing.get(field) is None and row.get(field) is not None:
+                existing[field] = row[field]
+    ordered = sorted(deduplicated.values(), key=lambda item: item["forecast_year"], reverse=True)
+    return ordered[:max(1, min(limit, 12))], errors
+
+
 def normalize_repurchase_rows(
     ts_code: str,
     raw: Any,
