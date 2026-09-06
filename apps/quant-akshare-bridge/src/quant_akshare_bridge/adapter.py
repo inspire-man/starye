@@ -29,6 +29,91 @@ def _sina_symbol(ts_code: str) -> str:
     return f"{market.lower()}{code}"
 
 
+FINANCIAL_PROFIT_FIELDS = (
+    "revenue",
+    "revenue_yoy",
+    "net_profit",
+    "net_profit_yoy",
+    "adjusted_net_profit",
+    "adjusted_net_profit_yoy",
+)
+FINANCIAL_BALANCE_FIELDS = ("total_liability",)
+FINANCIAL_METADATA_FIELDS = ("notice_date", "report_type", "report_date_name", "industry")
+
+
+def _financial_rows_need(rows: list[dict[str, Any]], fields: tuple[str, ...]) -> bool:
+    return not rows or any(row.get(field) is None for row in rows for field in fields)
+
+
+def _merge_financial_rows(
+    primary_rows: list[dict[str, Any]],
+    supplemental_rows: list[dict[str, Any]],
+    limit: int = 12,
+) -> list[dict[str, Any]]:
+    merged_by_date = {row["report_date"]: dict(row) for row in primary_rows}
+    for row in supplemental_rows:
+        existing = merged_by_date.get(row["report_date"])
+        if existing is None:
+            merged_by_date[row["report_date"]] = dict(row)
+            continue
+        for field in (*FINANCIAL_PROFIT_FIELDS, *FINANCIAL_BALANCE_FIELDS, *FINANCIAL_METADATA_FIELDS):
+            if existing.get(field) is None and row.get(field) is not None:
+                existing[field] = row[field]
+    ordered = sorted(merged_by_date.values(), key=lambda row: row["report_date"], reverse=True)
+    return ordered[:max(1, min(limit, 12))]
+
+
+def _collect_financials(api: Any, ts_code: str, observed_at: str) -> tuple[list[dict[str, Any]], list[BridgeError], list[str]]:
+    errors: list[BridgeError] = []
+    attempted: list[str] = []
+    financials: list[dict[str, Any]] = []
+    primary_endpoint = "stock_financial_analysis_indicator"
+    primary = getattr(api, primary_endpoint, None)
+    if callable(primary):
+        attempted.append(primary_endpoint)
+        try:
+            financials, row_errors = normalize_financial_rows(
+                ts_code,
+                primary(symbol=akshare_symbol(ts_code)),
+                observed_at,
+                source=primary_endpoint,
+            )
+            errors.extend(row_errors)
+            if not financials:
+                errors.append(BridgeError("AKSHARE_FINANCIAL_EMPTY", "AkShare financial data is empty", primary_endpoint))
+        except Exception:
+            errors.append(BridgeError("AKSHARE_FINANCIAL_ENDPOINT_FAILED", "AkShare financial endpoint failed", primary_endpoint))
+    else:
+        errors.append(BridgeError("AKSHARE_FINANCIAL_ENDPOINT_UNAVAILABLE", "AkShare financial endpoint is unavailable", primary_endpoint))
+
+    candidates = []
+    if _financial_rows_need(financials, FINANCIAL_PROFIT_FIELDS):
+        candidates.append(("stock_profit_sheet_by_report_em", FINANCIAL_PROFIT_FIELDS))
+    if _financial_rows_need(financials, FINANCIAL_BALANCE_FIELDS):
+        candidates.append(("stock_balance_sheet_by_report_em", FINANCIAL_BALANCE_FIELDS))
+
+    for endpoint, _fields in candidates:
+        method = getattr(api, endpoint, None)
+        if not callable(method):
+            errors.append(BridgeError("AKSHARE_FINANCIAL_ENDPOINT_UNAVAILABLE", "AkShare financial statement endpoint is unavailable", endpoint))
+            continue
+        attempted.append(endpoint)
+        try:
+            rows, row_errors = normalize_financial_rows(
+                ts_code,
+                method(symbol=_market_symbol(ts_code)),
+                observed_at,
+                source=endpoint,
+            )
+            errors.extend(row_errors)
+            if not rows:
+                errors.append(BridgeError("AKSHARE_FINANCIAL_STATEMENT_EMPTY", "AkShare financial statement is empty", endpoint))
+            financials = _merge_financial_rows(financials, rows)
+        except Exception:
+            errors.append(BridgeError("AKSHARE_FINANCIAL_ENDPOINT_FAILED", "AkShare financial statement endpoint failed", endpoint))
+    return financials, errors, attempted
+
+
 def _collect_cashflows(api: Any, ts_code: str, observed_at: str) -> tuple[list[dict[str, Any]], list[BridgeError], list[str]]:
     errors: list[BridgeError] = []
     attempted: list[str] = []
@@ -69,6 +154,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     financials: list[dict[str, Any]] = []
     cashflows: list[dict[str, Any]] = []
     identity: dict[str, Any] = {}
+    financial_endpoints: list[str] = []
     cashflow_endpoints: list[str] = []
 
     from datetime import date, timedelta
@@ -88,12 +174,8 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         errors.append(BridgeError("AKSHARE_IDENTITY_UNAVAILABLE", "AkShare stock identity is unavailable", "stock_individual_info_em"))
 
     if request.include_financials:
-        try:
-            raw_financials = api.stock_financial_analysis_indicator(symbol=symbol)
-            financials, row_errors = normalize_financial_rows(ts_code, raw_financials, observed_at)
-            errors.extend(row_errors)
-        except Exception:
-            errors.append(BridgeError("AKSHARE_FINANCIAL_UNAVAILABLE", "AkShare financial data is unavailable", "stock_financial_analysis_indicator"))
+        financials, financial_errors, financial_endpoints = _collect_financials(api, ts_code, observed_at)
+        errors.extend(financial_errors)
 
         cashflows, cashflow_errors, cashflow_endpoints = _collect_cashflows(api, ts_code, observed_at)
         errors.extend(cashflow_errors)
@@ -110,7 +192,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
             endpoints=[
                 "stock_zh_a_hist",
                 "stock_individual_info_em",
-                *(["stock_financial_analysis_indicator"] if request.include_financials else []),
+                *financial_endpoints,
                 *cashflow_endpoints,
             ],
             formula_version=FORMULA_VERSION,

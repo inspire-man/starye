@@ -1,0 +1,6 @@
+- [x] 1.1 扩展财报 normalizer alias；完成标准：利润表/资产负债表大写列、中文列和 snake_case 字段映射到现有 financials，异常日期/代码保持稳定错误。
+- [x] 1.2 扩展 bridge 按需端点采集；完成标准：目标字段完整时跳过新端点，部分字段按端点补充，单端点失败不影响其他记录。
+- [x] 1.3 补充 bridge fixture 与测试；完成标准：同报告期补充、跨期隔离、空结果、端点失败、请求跳过和 error redaction 均通过。
+- [x] 2.1 更新 bridge README 与 canonical spec；完成标准：记录端点顺序、按需规则、配置前提和空值边界。
+- [x] 3.1 运行 bridge/API/Quant 定向测试、root lint/type-check/build 和 OpenSpec strict；完成标准：全部通过。
+- [x] 3.2 运行 GitNexus detect_changes 与 Gateway 验收；完成标准：只影响预期 bridge/Quant source flow，现有 16/16 数据健康和匿名入口契约不回归。
