@@ -2,7 +2,7 @@
 status: idle
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
-last_updated: "2026-09-06"
+last_updated: "2026-09-07"
 ---
 
 # Project State
@@ -36,6 +36,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - 2026-09-07 Quant AkShare 同报告期现金分红字段已合入 `main`（PR #88，merge SHA `2e4b553bcddba37c4325b94b6f340927f5f88d3f`）：bridge 保留 `ASSIGN_DIVIDEND_PORFIT` 为 `cash_dividends_paid`，API 贯穿 `cashDividendsPaid`，缺失/非有限值保持 `null`；PR CI `34048787892`、合并 SHA CI `34049102211`、Deploy API `34049102223`/`34049102192` 和 Deploy Quant `34049102159` 均通过，Gateway `/quant/` 为 302、匿名股东回报 API 为 401。
 - 2026-09-07 Quant AkShare 现金流来源覆盖已合入 `main`（PR #89，merge SHA `bfbb379e4fd48a89ebc92af7ab239a07cd4998cc`）：接入同花顺 `stock_financial_cash_new_ths` 现金流备用端点，累计 `value` 映射现金流字段；现金流缺失净利润仅从同报告期利润表的净利润总额补入，保留归母净利润口径独立字段；PR CI `34052848071`、合并 SHA CI `34053054393`、Deploy API `34053054428`、Deploy API After PR Merge `34053054478` 均通过，Gateway `/quant/` 为 302、匿名股东回报 API 为 401。
 - 2026-09-07 Quant AkShare 公司股本结构备用来源已合入 `main`（PR #90，merge SHA `e14faac8d5df4af10b6eec558194fdd097be5ee3`）：bridge 接入 CNInfo `stock_share_change_cninfo`，Eastmoney 股本历史为空或失败时回退 AkShare，详情和研究报告保留 `akshare` provider；PR checks `34055767804`、合并 SHA CI `34056015625`、Deploy API `34056015612`、Deploy API After PR Merge `34056015567`、Deploy Quant `34056015583` 均通过；Gateway `/quant/` 为 302、匿名股东回报 API 为 401，刷新入口实测从读取中回到最新观测状态。
+- 2026-09-07 Quant AkShare 盈利预测来源已合入 `main`（PR #91，merge SHA `7748504a06d34432f9527771e5f577515ee62dac`）：bridge 接入同花顺 `stock_profit_forecast_ths` 年度预测 EPS/预测净利润与 Eastmoney 动态年份 EPS fallback，研究报告保留可选预测证据、预测年度和来源 provenance，不改实际财报、价值质量评分或判断；PR CI `34059066513`、合并 SHA CI `34059328406`（重跑后通过）、Deploy API `34059328460`、Deploy API After PR Merge `34059328507`、Deploy Quant `34059328483` 均通过；合并后 Gateway `/quant/` 为 302、匿名股东回报 API 为 401。
 
 ## 延后事项
 
@@ -45,7 +46,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 
 ## 下一步
 
-1. 开发并交付当前 `2026-09-07-quant-akshare-profit-forecast` change；后续来源扩展只针对可验证的真实原始字段缺口。
+1. 从最新 `main` 开始下一项 Quant 来源审计，优先针对可验证的真实原始字段缺口；预测字段继续与实际财报、价值质量评分和判断分开。
 2. 小 bug：定位 → 最小修复 → 定向测试 → Gateway 验证。
 3. crawler/D1：补 Gateway、D1 readback、content integrity 和实际消费层证据。
 4. 完成后更新本文件的当前状态；稳定规则回写对应 canonical owner。
